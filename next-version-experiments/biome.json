@@ -1,0 +1,56 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.3.8/schema.json",
+	"assist": { "actions": { "source": { "organizeImports": "on" } } },
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true,
+		"defaultBranch": "main"
+	},
+	"files": {
+		"includes": ["**/*", "!gitignored", "!node_modules", "!pnpm-lock.yaml"]
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"a11y": {
+				"noSvgWithoutTitle": "off"
+			},
+			"complexity": {
+				"noForEach": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "warn"
+			},
+			"correctness": {
+				"noUnusedImports": { "fix": "safe", "level": "error", "options": {} },
+				"noChildrenProp": "off"
+			},
+			"nursery": {
+				"useSortedClasses": { "fix": "safe", "level": "warn", "options": {} }
+			}
+		},
+		"includes": ["**"]
+	},
+	"formatter": {
+		"enabled": true
+	},
+	"css": {
+		"linter": { "enabled": false },
+		"parser": {
+			"cssModules": true,
+			"tailwindDirectives": true
+		},
+		"formatter": {
+			"indentWidth": 2
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"semicolons": "asNeeded",
+			"quoteStyle": "single",
+			"trailingCommas": "all"
+		}
+	}
+}
