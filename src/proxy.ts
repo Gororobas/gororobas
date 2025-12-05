@@ -1,13 +1,13 @@
 import {
-  type MiddlewareConfig,
-  type NextMiddleware,
+  type NextProxy,
   NextResponse,
+  type ProxyConfig,
 } from 'next/server'
 import { cookieName } from './paraglide/runtime'
 import { paraglideMiddleware } from './paraglide/server'
 import { LOCALE_HEADER_KEY } from './utils/i18n'
 
-export const middleware: NextMiddleware = (request) => {
+export const proxy: NextProxy = (request) => {
   // Don't run in Server Actions - Paraglide's cloning breaks their returns in the client
   if (request.headers.get('next-action')) return NextResponse.next()
 
@@ -19,7 +19,7 @@ export const middleware: NextMiddleware = (request) => {
   })
 }
 
-export const config: MiddlewareConfig = {
+export const config: ProxyConfig = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:

@@ -1,5 +1,5 @@
-import type { ImageUrlBuilder } from '@sanity/image-url/lib/types/builder'
-import type { SanityImageCrop } from '@sanity/image-url/lib/types/types'
+
+import type { ImageUrlBuilder, SanityImageCrop } from '@sanity/image-url';
 import type { ImageForRendering } from '@/types'
 import { imageBuilder } from './imageBuilder'
 

@@ -6,7 +6,7 @@ import * as Mailpit from '../services/mailpit'
 import * as Resend from '../services/resend'
 
 export const sendEmail = (
-  payload: Omit<CreateEmailOptions, 'from'> & { react: React.ReactNode },
+  payload: Omit<CreateEmailOptions, 'from'>,
 ) =>
   Effect.gen(function* () {
     const fromName = m.frail_weary_slug_flop()
@@ -52,7 +52,7 @@ export const sendEmail = (
       client.emails.send({
         ...payload,
         from: `${fromName} <${fromEmail}>`,
-      }),
+      } as  CreateEmailOptions),
     )
     if (!result.data?.id) {
       return yield* Effect.fail(

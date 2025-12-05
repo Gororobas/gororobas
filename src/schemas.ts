@@ -243,9 +243,6 @@ export const NameInArray = S.transform(
 )
 
 export const Handle = S.String.pipe(
-  S.minLength(1, {
-    message: () => 'Obrigatório',
-  }),
   S.minLength(3, {
     message: () => 'Obrigatório (mínimo de 3 caracteres)',
   }),
@@ -363,7 +360,7 @@ export const VegetableData = VegetableCoreData.pipe(
       typeof vegetable.height_min !== 'number' ||
       typeof vegetable.height_max !== 'number'
     )
-      return
+      return undefined
 
     // @TODO: how to return a path to a field?
     return vegetable.height_max < vegetable.height_min

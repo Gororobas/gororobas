@@ -1,7 +1,7 @@
 import type {
   SanityImageCrop,
   SanityImageHotspot,
-} from '@sanity/image-url/lib/types/types'
+} from '@sanity/image-url'
 import type { JSONContent } from '@tiptap/react'
 import type { Image } from '@/gel.interfaces'
 

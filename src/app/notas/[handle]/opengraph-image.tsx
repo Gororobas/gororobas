@@ -1,4 +1,4 @@
-import type { SanityImageHotspot } from '@sanity/image-url/lib/types/types'
+import type { SanityImageHotspot } from '@sanity/image-url'
 import { notFound } from 'next/navigation'
 import { ImageResponse } from 'next/og'
 import type { CSSProperties } from 'react'
