@@ -35,6 +35,7 @@ services:
         BLUESKY_USERNAME: ${{project.BLUESKY_USERNAME}}
         BLUESKY_PASSWORD: ${{project.BLUESKY_PASSWORD}}
         VERCEL_DASHBOARD_URL: ${{project.VERCEL_DASHBOARD_URL}}
+        GEL_PASSWORD: ${{project.GEL_PASSWORD}}
     environment:
       GEL_DSN: gel://edgedb:${{project.GEL_PASSWORD}}@gel:5656/main
       GEL_TLS_SECURITY: insecure
