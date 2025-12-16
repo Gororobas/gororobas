@@ -1,0 +1,69 @@
+services:
+  gel:
+    image: geldata/gel
+    environment:
+      GEL_SERVER_SECURITY: insecure_dev_mode
+      GEL_SERVER_PASSWORD: ${GEL_PASSWORD}
+    volumes:
+      - gel-data:/var/lib/gel/data
+      - ./dbschema:/dbschema
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD', 'gel', '--wait-until-available', '1s']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nextjs-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
+        NEXT_PUBLIC_SANITY_PROJECT_ID: ${NEXT_PUBLIC_SANITY_PROJECT_ID}
+        NEXT_PUBLIC_SANITY_DATASET: ${NEXT_PUBLIC_SANITY_DATASET}
+        SANITY_WRITE_TOKEN: ${SANITY_WRITE_TOKEN}
+        GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        GOOGLE_SECRET: ${GOOGLE_SECRET}
+        MAILPIT_URL: ${MAILPIT_URL}
+        RESEND_API_KEY: ${RESEND_API_KEY}
+        AUTH_WEBHOOK_SECRET: ${AUTH_WEBHOOK_SECRET}
+        GOOGLE_DATA_API_KEY: ${GOOGLE_DATA_API_KEY}
+        HONEYCOMB_API_KEY: ${HONEYCOMB_API_KEY}
+        HONEYCOMB_DATASET: ${HONEYCOMB_DATASET}
+        BLUESKY_USERNAME: ${BLUESKY_USERNAME}
+        BLUESKY_PASSWORD: ${BLUESKY_PASSWORD}
+        VERCEL_DASHBOARD_URL: ${VERCEL_DASHBOARD_URL}
+    environment:
+      GEL_DSN: gel://edgedb:${GEL_PASSWORD}@gel:5656/main
+      GEL_TLS_SECURITY: insecure
+      NODE_ENV: production
+    env_file:
+      - .env
+    depends_on:
+      gel:
+        condition: service_healthy
+    networks:
+      - internal
+      - dokploy-network
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.nextjs.rule=Host(`your-domain.com`)'
+      - 'traefik.http.routers.nextjs.entrypoints=websecure'
+      - 'traefik.http.routers.nextjs.tls.certResolver=letsencrypt'
+      - 'traefik.http.services.nextjs.loadbalancer.server.port=3000'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  gel-data:
+
+networks:
+  internal:
+  dokploy-network:
+    external: true

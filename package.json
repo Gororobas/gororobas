@@ -7,7 +7,6 @@
     "dev": "next dev --webpack",
     "dev:network": "LOCAL_IP=$(ifconfig en0 | grep 'inet ' | awk '{print $2}') && next dev --turbo -H $LOCAL_IP",
     "build": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide && next build --webpack",
-    "prebuild": "npm run generate:all",
     "start": "GEL_CLIENT_SECURITY=insecure_dev_mode next start",
     "buildAndTest": "bun run build && bun run start",
     "format": "prettier src --write",
@@ -16,7 +15,6 @@
     "generate:gel": "npx @gel/generate edgeql-js --out src/edgeql --future-polymorphism-as-discriminated-unions --future-strict-type-names",
     "generate:interfaces": "npx @gel/generate interfaces --file src/gel.interfaces.ts",
     "generate:all": "pnpm generate:gel && pnpm generate:interfaces",
-    "prepare": "husky",
     "machine-translate": "inlang machine translate --project project.inlang"
   },
   "dependencies": {

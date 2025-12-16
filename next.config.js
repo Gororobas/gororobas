@@ -10,6 +10,7 @@ const nextConfig = {
       bodySizeLimit: '40mb',
     },
   },
+  output: "standalone",
   webpack: (config) => {
     config.plugins.push(
       paraglideWebpackPlugin({
