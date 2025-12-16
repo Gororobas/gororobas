@@ -40,8 +40,6 @@ services:
       GEL_DSN: gel://edgedb:${{project.GEL_PASSWORD}}@gel:5656/main
       GEL_TLS_SECURITY: insecure
       NODE_ENV: production
-    env_file:
-      - .env
     depends_on:
       gel:
         condition: service_healthy
