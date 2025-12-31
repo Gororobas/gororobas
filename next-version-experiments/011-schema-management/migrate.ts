@@ -47,7 +47,7 @@ import { SqlClient } from "@effect/sql";
 
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
-${escaped.map((stmt) => `  yield* sql\`${stmt}\`;`).join('\n')}
+${escaped.map((stmt) => `  yield* sql\`${stmt}\`;`).join('\n\n')}
 });
 `
 }
@@ -77,6 +77,25 @@ ${exports}
 }
 
 // --- Main program ---
+
+const formatSchemaSQL = Effect.gen(function* () {
+	yield* Effect.log('Formatting schema file')
+
+	const command = Command.make('sql-formatter', '--fix', 'src/db/schema.sql')
+
+	const result = yield* pipe(
+		command,
+		Command.stdout('inherit'),
+		Command.stderr('inherit'),
+		Command.exitCode,
+	)
+
+	if (result !== 0) {
+		return yield* Effect.fail(
+			new Error(`Formatting exited with code ${result}`),
+		)
+	}
+})
 
 const runAtlasDiff = (migrationName: string) =>
 	Effect.gen(function* () {
@@ -177,6 +196,7 @@ const program = Effect.gen(function* () {
 		),
 	)
 
+	yield* formatSchemaSQL
 	yield* runAtlasDiff(migrationName)
 	yield* convertMigrations
 
