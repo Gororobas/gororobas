@@ -1,134 +1,144 @@
 import { LoroDoc } from 'loro-crdt'
-import { Mirror, SyncDirection, schema } from 'loro-mirror'
+import { schema as loroSchema, Mirror } from 'loro-mirror'
+
+const VegetableTranslation = loroSchema.LoroMap(
+	{
+		gender: loroSchema.String(),
+		origin: loroSchema.LoroText(),
+		content: loroSchema.LoroText(),
+		names: loroSchema.LoroMovableList(
+			loroSchema.LoroMap({
+				value: loroSchema.LoroText(),
+			}),
+			// $cid is the container ID of LoroMap assigned by Loro
+			(t) => t.$cid,
+			{ required: true },
+		),
+	},
+	// At least one locale is required, but not all
+	{ required: false },
+)
 
 // 1) Declare state shape
-const appSchema = schema({
-	names: schema.LoroMovableList(
-		schema.LoroMap({
-			pt: schema.String(),
-			es: schema.String(),
-		}),
-		// $cid is the container ID of LoroMap assigned by Loro
-		(t) => t.$cid,
-	),
-	scientific_names: schema.LoroMovableList(
-		schema.LoroMap({
-			pt: schema.String(),
-			es: schema.String(),
-		}),
-		// $cid is the container ID of LoroMap assigned by Loro
-		(t) => t.$cid,
-	),
-	origin: schema.LoroMap({
-		pt: schema.String(),
-		es: schema.String(),
+const appSchema = loroSchema({
+	metadata: loroSchema.LoroMap({
+		handle: loroSchema.String({ required: true }),
+		scientific_names: loroSchema.LoroMovableList(
+			loroSchema.LoroMap({
+				value: loroSchema.LoroText(),
+			}),
+			// $cid is the container ID of LoroMap assigned by Loro
+			(t) => t.$cid,
+			{ required: true },
+		),
+		strata: loroSchema.LoroList(loroSchema.String(), undefined),
+		planting_methods: loroSchema.LoroList(loroSchema.String(), undefined),
+		edible_parts: loroSchema.LoroList(loroSchema.String(), undefined),
+		lifecycles: loroSchema.LoroList(loroSchema.String(), undefined),
+		uses: loroSchema.LoroList(loroSchema.String(), undefined),
+		development_cycle_max: loroSchema.Number(),
+		development_cycle_min: loroSchema.Number(),
+		height_max: loroSchema.Number(),
+		height_min: loroSchema.Number(),
+		temperature_max: loroSchema.Number(),
+		temperature_min: loroSchema.Number(),
+		main_photo_id: loroSchema.String(),
 	}),
-	// development_cycle_min: schema.Number(),
-
-	// @TODO type enums
-	gender: schema.LoroText(),
+	locales: loroSchema.LoroMap(
+		{
+			pt: VegetableTranslation,
+			es: VegetableTranslation,
+			en: VegetableTranslation,
+		},
+		{ required: true },
+	),
 })
 
-// 2) Create a Loro document and a Mirror store
-const doc = new LoroDoc()
-const docStart = doc.version()
-const docStartFrontier = doc.frontiers()
-const gender = doc.getText('gender')
-gender.insert(0, 'Starting Gender')
-
-const origin = doc.getMap('origin')
-origin.set('pt', 'Origem inicial #0')
-origin.set('es', 'Origen inicial #0')
-
-const names = doc.getMovableList('names')
-names.insert(0, { pt: 'Nome #1.0', es: 'Nombre #1.0' })
-names.insert(1, { pt: 'Nome #2.0', es: 'Nombre #2.0' })
-names.insert(2, { pt: 'Nome #3.0', es: 'Nombre #3.0' })
-
-const scientific_names = doc.getMovableList('scientific_names')
-scientific_names.insert(0, {
-	pt: 'Nome cientifico #1.0',
-	es: 'Nombre cientifico #1.0',
+// 2) Create a Loro document and a Mirror store and set the initial document
+const initialDoc = new LoroDoc()
+const initialDocStore = new Mirror({
+	doc: initialDoc,
+	schema: appSchema,
 })
-scientific_names.insert(1, {
-	pt: 'Nome cientifico #2.0',
-	es: 'Nombre cientifico #2.0',
-})
-scientific_names.insert(2, {
-	pt: 'Nome cientifico #3.0',
-	es: 'Nombre cientifico #3.0',
-})
+initialDocStore.setState(() => ({
+	metadata: {
+		handle: 'zea-mays',
+		scientific_names: [{ value: 'Zea Mays' }],
+		strata: ['EMERGENT'],
+		planting_methods: ['SEED'],
+		edible_parts: ['SEED'],
+		lifecycles: ['SEMIANNUAL'],
+		uses: ['SACRED', 'HUMAN_FEED'],
+		development_cycle_min: 120,
+		development_cycle_max: 210,
+		height_min: 60,
+		height_max: 400,
+		temperature_min: 15,
+		temperature_max: 35,
+		main_photo_id: 'photo-123',
+	},
+	locales: {
+		pt: {
+			gender: 'MALE',
+			origin: 'América Central',
+			content: 'Algo sobre o milho',
+			names: [{ value: 'Milho' }, { value: 'Maíz (Espanhol)' }],
+		},
+		es: {
+			gender: 'MALE',
+			origin: 'America Central',
+			content: 'Algo sobre el maíz',
+			names: [{ value: 'Maíz' }, { value: 'Milho (Português)' }],
+		},
+	},
+}))
 
-Bun.write('.data/004-start-doc.loro', doc.export({ mode: 'snapshot' }))
-
-const store = new Mirror({
-	doc,
+// 3) fork document and make changes
+const editedDoc = initialDoc.fork()
+const editedStore = new Mirror({
+	doc: editedDoc,
 	schema: appSchema,
 })
 
-// 3) Subscribe (optional) – know whether updates came from local or remote
-const unsubscribe = store.subscribe((state, { direction, tags }) => {
-	if (direction === SyncDirection.FROM_LORO) {
-		console.log('Remote update', { state, tags })
-	} else {
-		console.log('Local update', { state, tags })
+editedStore.setState((s) => ({
+	...s,
+	metadata: { ...s.metadata, development_cycle_max: 520 },
+}))
+editedStore.setState((s) => {
+	if (!s.locales.en) {
+		// @TODO: is there a better way to set a missing object?
+		return {
+			...s,
+			locales: {
+				...s.locales,
+				en: { names: [{ value: 'Corn' }, { value: 'Maize' }] },
+			},
+		}
 	}
-
-	// You can use `state` to render directly, it's a new immutable object that shares
-	// the unchanged fields with the old state
-	// setAppState(state);
+	s.locales.en.names.push({ value: 'Corn' })
+	s.locales.en.names.push({ value: 'Maize' })
+})
+editedStore.setState((s) => {
+	s.locales.pt?.names.push({ value: 'Maize' })
 })
 
-const initialJsonData = store.getState()
-const finalJsonData = {
-	origin: {
-		$cid: 'cid:root-origin:Map',
-		es: 'Origen inicial #0',
-		pt: 'Origem inicial #0',
-	},
-	names: [
-		{
-			pt: 'Nome #1.0',
-			es: 'Nombre #1.0',
-		},
-		{
-			pt: 'Nome #2.1',
-			es: 'Nombre #2.1',
-		},
-		{
-			pt: 'Nome #3.0',
-			es: 'Nombre #3.0',
-		},
-	],
-	scientific_names: [
-		{
-			pt: 'Nome cientifico #1.0',
-			es: 'Nombre cientifico #1.0',
-		},
-		{
-			pt: 'Nome cientifico #2.0',
-			es: 'Nombre cientifico #2.0',
-		},
-		{
-			pt: 'Nome cientifico #3.1',
-			es: 'Nombre cientifico #3.1',
-		},
-	],
-	gender: 'Final Gender',
-}
-store.setState((s) => ({ ...s, ...finalJsonData }))
-console.log({ initialJsonData, finalJsonData })
+const finalDoc = initialDoc.fork()
+finalDoc.applyDiff(
+	editedDoc.diff(initialDoc.frontiers(), editedDoc.frontiers()),
+)
+finalDoc.commit({ message: 'commit-message-with-user-id' })
 
+Bun.write('.data/004-initial-doc.loro', initialDoc.export({ mode: 'snapshot' }))
 Bun.write(
-	'.data/004-final-json-updates.json',
-	JSON.stringify(doc.exportJsonUpdates(docStart, undefined, true), null, 2),
+	'.data/004-diff.json',
+	JSON.stringify(
+		editedDoc.diff(initialDoc.frontiers(), editedDoc.frontiers(), true),
+		null,
+		2,
+	),
 )
 Bun.write(
-	'.data/004-final-shallow-snapshot.loro',
-	doc.export({ mode: 'shallow-snapshot', frontiers: docStartFrontier }),
+	'.data/004-final-data.json',
+	JSON.stringify(finalDoc.toJSON(), null, 2),
 )
-Bun.write('.data/004-final-snapshot.loro', doc.export({ mode: 'snapshot' }))
-Bun.write(
-	'.data/004-final-update.loro',
-	doc.export({ mode: 'update', from: docStart }),
-)
+Bun.write('.data/004-final-doc.loro', finalDoc.export({ mode: 'snapshot' }))
