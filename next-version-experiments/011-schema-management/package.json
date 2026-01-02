@@ -5,12 +5,13 @@
 	},
 	"dependencies": {
 		"@effect/experimental": "^0.58.0",
-		"@effect/platform": "^0.94.0",
+		"@effect/platform": "^0.94.1",
 		"@effect/platform-bun": "^0.84.0",
 		"@effect/sql": "^0.49.0",
 		"@effect/sql-sqlite-bun": "^0.49.0",
-		"better-auth": "^1.4.9",
-		"effect": "3.19.6"
+		"better-auth": "^1.4.10",
+		"effect": "3.19.6",
+		"uuid": "^13.0.0"
 	},
 	"devDependencies": {
 		"@ariga/atlas": "^1.0.0",

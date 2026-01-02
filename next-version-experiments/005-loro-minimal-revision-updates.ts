@@ -1,6 +1,18 @@
-// Testing if we can create a snapshot for revisions that doesn't include intermediary updates
-// AKA: can we get the final `Origin: Central America` without capturing the typo `Central Amerika -> Central Ameri -> Central America`?
+// Testing if we can create a snapshot for revisions that doesn't include intermediary updates.
+// AKA: can we get the final `Origin: Central America` without capturing the typos:
+// `Central Amerika -> Central Ameri -> Central America -> Central America my-super-secret -> Central America`?
 // We can use https://inspector.loro.dev/ to inspect the data
+//
+// CONCLUSIONS:
+// - LoroDoc.diff removes intermediary steps and diffs only the final version with the starting.
+// - It's also very compact and would mean very little storage
+// - BUT I don't know how well it fares with branching
+//    - AKA if I have 6 revisions open, will the acceptance order affect the end result?
+//    - With Loro's `.export({ mode: update })`, we know it'll behave like a proper CRDT and be strongly consistent
+//    - But the diff doesn't seem to have enough data to guarantee that
+// - Now, I haven't tested either in these branching scenarios (these things are hard to test without an UI!), so this is just a hunch
+// - But my gut feeling is that we should bet on using the .diff() to remove intermediary steps, then creating a new final doc,
+// then exporting it with `mode: update` for maximum CRDT fidelity.
 
 import { Schema } from 'effect'
 import { LoroDoc } from 'loro-crdt'
@@ -137,6 +149,26 @@ const changesWithCommits = Array.from(finalDoc.getAllChanges().values())
 Bun.write(
 	'.data/005-final-snapshot.loro',
 	finalDoc.export({ mode: 'snapshot' }),
+)
+
+// Another possible approach is doing the diff to remove intermediary changes, and then exporting from the initial doc version
+Bun.write(
+	'.data/005-revision-updates-from-diff.loro',
+	finalDoc.export({
+		mode: 'update',
+		from: initialDoc.version(),
+	}),
+)
+const finalDocViaUpdate = initialDoc.fork()
+finalDocViaUpdate.import(
+	finalDoc.export({
+		mode: 'update',
+		from: initialDoc.version(),
+	}),
+)
+Bun.write(
+	'.data/005-final-doc-via-update.loro',
+	finalDocViaUpdate.export({ mode: 'snapshot' }),
 )
 
 console.log('Merged string: ', finalDoc.getText('origin').toString())
