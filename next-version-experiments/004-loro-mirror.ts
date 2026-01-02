@@ -1,12 +1,20 @@
 import { LoroDoc } from 'loro-crdt'
 import { schema as loroSchema, Mirror } from 'loro-mirror'
+import type {
+	AgroforestryStratum,
+	EdibleVegetablePart,
+	Handle,
+	PlantingMethod,
+	VegetableLifecycle,
+	VegetableUsage,
+} from '@/schema'
 
-const VegetableTranslation = loroSchema.LoroMap(
+export const VegetableLocalizedDataLoro = loroSchema.LoroMap(
 	{
 		gender: loroSchema.String(),
 		origin: loroSchema.LoroText(),
 		content: loroSchema.LoroText(),
-		names: loroSchema.LoroMovableList(
+		common_names: loroSchema.LoroMovableList(
 			loroSchema.LoroMap({
 				value: loroSchema.LoroText(),
 			}),
@@ -20,9 +28,9 @@ const VegetableTranslation = loroSchema.LoroMap(
 )
 
 // 1) Declare state shape
-const appSchema = loroSchema({
+export const VegetableDataLoro = loroSchema({
 	metadata: loroSchema.LoroMap({
-		handle: loroSchema.String({ required: true }),
+		handle: loroSchema.String<Handle>({ required: true }),
 		scientific_names: loroSchema.LoroMovableList(
 			loroSchema.LoroMap({
 				value: loroSchema.LoroText(),
@@ -31,24 +39,36 @@ const appSchema = loroSchema({
 			(t) => t.$cid,
 			{ required: true },
 		),
-		strata: loroSchema.LoroList(loroSchema.String(), undefined),
-		planting_methods: loroSchema.LoroList(loroSchema.String(), undefined),
-		edible_parts: loroSchema.LoroList(loroSchema.String(), undefined),
-		lifecycles: loroSchema.LoroList(loroSchema.String(), undefined),
-		uses: loroSchema.LoroList(loroSchema.String(), undefined),
+		strata: loroSchema.LoroList(
+			loroSchema.String<AgroforestryStratum>(),
+			undefined,
+		),
+		planting_methods: loroSchema.LoroList(
+			loroSchema.String<PlantingMethod>(),
+			undefined,
+		),
+		edible_parts: loroSchema.LoroList(
+			loroSchema.String<EdibleVegetablePart>(),
+			undefined,
+		),
+		lifecycles: loroSchema.LoroList(
+			loroSchema.String<VegetableLifecycle>(),
+			undefined,
+		),
+		uses: loroSchema.LoroList(loroSchema.String<VegetableUsage>(), undefined),
 		development_cycle_max: loroSchema.Number(),
 		development_cycle_min: loroSchema.Number(),
 		height_max: loroSchema.Number(),
 		height_min: loroSchema.Number(),
 		temperature_max: loroSchema.Number(),
 		temperature_min: loroSchema.Number(),
-		main_photo_id: loroSchema.String(),
+		main_photo_id: loroSchema.Number(),
 	}),
 	locales: loroSchema.LoroMap(
 		{
-			pt: VegetableTranslation,
-			es: VegetableTranslation,
-			en: VegetableTranslation,
+			pt: VegetableLocalizedDataLoro,
+			es: VegetableLocalizedDataLoro,
+			en: VegetableLocalizedDataLoro,
 		},
 		{ required: true },
 	),
@@ -58,7 +78,7 @@ const appSchema = loroSchema({
 const initialDoc = new LoroDoc()
 const initialDocStore = new Mirror({
 	doc: initialDoc,
-	schema: appSchema,
+	schema: VegetableDataLoro,
 })
 initialDocStore.setState(() => ({
 	metadata: {
@@ -75,20 +95,20 @@ initialDocStore.setState(() => ({
 		height_max: 400,
 		temperature_min: 15,
 		temperature_max: 35,
-		main_photo_id: 'photo-123',
+		main_photo_id: 123,
 	},
 	locales: {
 		pt: {
 			gender: 'MALE',
 			origin: 'América Central',
 			content: 'Algo sobre o milho',
-			names: [{ value: 'Milho' }, { value: 'Maíz (Espanhol)' }],
+			common_names: [{ value: 'Milho' }, { value: 'Maíz (Espanhol)' }],
 		},
 		es: {
 			gender: 'MALE',
 			origin: 'America Central',
 			content: 'Algo sobre el maíz',
-			names: [{ value: 'Maíz' }, { value: 'Milho (Português)' }],
+			common_names: [{ value: 'Maíz' }, { value: 'Milho (Português)' }],
 		},
 	},
 }))
@@ -97,7 +117,7 @@ initialDocStore.setState(() => ({
 const editedDoc = initialDoc.fork()
 const editedStore = new Mirror({
 	doc: editedDoc,
-	schema: appSchema,
+	schema: VegetableDataLoro,
 })
 
 editedStore.setState((s) => ({
@@ -111,15 +131,15 @@ editedStore.setState((s) => {
 			...s,
 			locales: {
 				...s.locales,
-				en: { names: [{ value: 'Corn' }, { value: 'Maize' }] },
+				en: { common_names: [{ value: 'Corn' }, { value: 'Maize' }] },
 			},
 		}
 	}
-	s.locales.en.names.push({ value: 'Corn' })
-	s.locales.en.names.push({ value: 'Maize' })
+	s.locales.en.common_names.push({ value: 'Corn' })
+	s.locales.en.common_names.push({ value: 'Maize' })
 })
 editedStore.setState((s) => {
-	s.locales.pt?.names.push({ value: 'Maize' })
+	s.locales.pt?.common_names.push({ value: 'Maize' })
 })
 
 const finalDoc = initialDoc.fork()

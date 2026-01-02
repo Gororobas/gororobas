@@ -1,8 +1,19 @@
 import { Database } from 'bun:sqlite'
 import { Model } from '@effect/sql'
-import { randCountry, randFood, randParagraph } from '@ngneat/falso'
+import { randCountry, randFood } from '@ngneat/falso'
 import { Arbitrary, FastCheck, Schema } from 'effect'
 import { LoroDoc } from 'loro-crdt'
+import {
+	AgroforestryStratum,
+	EdibleVegetablePart,
+	Gender,
+	Handle,
+	PlantingMethod,
+	TiptapDocument,
+	VegetableId,
+	VegetableLifecycle,
+	VegetableUsage,
+} from '@/schema'
 
 console.time('Setting up database')
 const db = new Database(':memory:')
@@ -73,122 +84,6 @@ console.timeEnd('Setting up database')
 const insertVegetable =
 	db.prepare(`INSERT INTO VEGETABLE (loro_crdt, handle, scientific_names, strata, lifecycles, uses, edible_parts, planting_methods, height_cm, temp_celsius, cycle_days, photos, common_names, content, origin, gender)
 	VALUES ($loro_crdt, $handle, $scientific_names, $strata, $lifecycles, $uses, $edible_parts, $planting_methods, $height_cm, $temp_celsius, $cycle_days, $photos, $common_names, $content, $origin, $gender)`)
-
-export const VegetableId = Schema.Number.pipe(Schema.brand('VegtableId'))
-export type VegtableId = typeof VegetableId.Type
-
-export const Handle = Schema.String.pipe(
-	Schema.minLength(3, {
-		message: () => 'Obrigatório (mínimo de 3 caracteres)',
-	}),
-	Schema.pattern(/^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/, {
-		message: () =>
-			'O endereço não pode conter caracteres especiais, letras maiúsculas, espaços ou acentos',
-	}),
-)
-
-const AgroforestryStratum = Schema.Literal(
-	'EMERGENT',
-	'HIGH',
-	'%%MIDDLE OR MEDIUM',
-	'LOW',
-	'%%RASTEIRO',
-)
-const VegetableLifecycle = Schema.Literal(
-	'SEMESTRAL',
-	'ANNUAL',
-	'BIANNUAL',
-	'PERENNIAL',
-)
-const VegetableUsage = Schema.Literal(
-	'HUMAN_FEED',
-	'ANIMAL_FEED',
-	'CONSTRUCTION',
-	'COSMETIC',
-	'ORGANIC_MATTER',
-	'%%MEDICINAL',
-	'ORNAMENTAL',
-	'RITUALISTIC',
-	'ECOLOGICAL',
-)
-
-const EdibleVegetablePart = Schema.Literal(
-	'FRUIT',
-	'FLOWER',
-	'LEAF',
-	'%%CAULE',
-	'SEED',
-	'%%BARK',
-	'BULB',
-	'SPROUT',
-	'ROOT',
-	'%%TUBER',
-	'%%RYZOME',
-)
-
-const PlantingMethod = Schema.Literal(
-	'%%TUBER',
-	'%%RYZOME',
-	'%%ESTACA',
-	'SEED',
-	'%%SPROUT or SEEDLING',
-	'%%ENXERTO',
-)
-
-const Gender = Schema.Literal('NEUTRAL', 'MALE', 'FEMALE')
-
-const UnknownTiptapAttrs = Schema.UndefinedOr(
-	Schema.Record({ key: Schema.NonEmptyString, value: Schema.Any }),
-)
-
-const TiptapText = Schema.String.annotations({
-	arbitrary: () => (fc) =>
-		fc.constant(null).map(() => randParagraph({ length: 1 }).join('\n')),
-})
-
-const TiptapMark = Schema.Struct({
-	type: Schema.NonEmptyTrimmedString,
-	attrs: UnknownTiptapAttrs,
-})
-
-const TiptapTextNode = Schema.Struct({
-	type: Schema.Literal('text'),
-	text: TiptapText,
-	marks: Schema.UndefinedOr(Schema.Array(TiptapMark)),
-})
-type TiptapTextNode = typeof TiptapTextNode.Type
-
-// Pattern for typing self-referencing / recursive schema
-// See https://effect.website/docs/schema/advanced-usage/#a-helpful-pattern-to-simplify-schema-definition
-const tiptapNodeFields = {
-	type: Schema.NonEmptyTrimmedString,
-	attrs: UnknownTiptapAttrs,
-	marks: Schema.UndefinedOr(Schema.Array(TiptapMark)),
-	text: Schema.UndefinedOr(TiptapText),
-}
-interface TiptapNode extends Schema.Struct.Type<typeof tiptapNodeFields> {
-	readonly content: ReadonlyArray<TiptapNode> | undefined
-}
-const TiptapNode = Schema.Struct({
-	...tiptapNodeFields,
-	content: Schema.UndefinedOr(
-		Schema.Array(
-			Schema.suspend(
-				(): Schema.Schema<TiptapNode | TiptapTextNode> =>
-					// @ts-expect-error Not sure how to type this correctly
-					Schema.Union(TiptapNode, TiptapTextNode),
-			),
-		),
-	),
-})
-
-const TiptapDocument = Schema.Struct({
-	type: Schema.Literal('doc'),
-	content: Schema.Array(TiptapNode),
-	version: Schema.Literal(1),
-})
-
-Model.FieldOnly
 
 class Vegetable extends Model.Class<Vegetable>('Vegetable')({
 	id: Model.Generated(VegetableId),
