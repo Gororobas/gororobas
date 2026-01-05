@@ -53,11 +53,11 @@ services:
       - 'traefik.http.routers.nextjs.tls.certResolver=letsencrypt'
       - 'traefik.http.services.nextjs.loadbalancer.server.port=3000'
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/health']
+      test: ['CMD', 'gel', 'query', '--wait-until-available', '30s', 'SELECT 1']
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      timeout: 35s
+      retries: 5
+      start_period: 60s # Give Gel time to initialize
 
 volumes:
   gel-data:
