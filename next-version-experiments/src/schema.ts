@@ -1,10 +1,13 @@
 import { randCountry, randFood, randParagraph } from '@ngneat/falso'
 import { Schema } from 'effect'
 
-export const VegetableId = Schema.Number.pipe(Schema.brand('VegetableId'))
+export const VegetableId = Schema.UUID.pipe(Schema.brand('VegetableId'))
 export type VegetableId = typeof VegetableId.Type
 
-export const ImageId = Schema.Number.pipe(Schema.brand('ImageId'))
+export const PersonId = Schema.UUID.pipe(Schema.brand('PersonId'))
+export type PersonId = typeof PersonId.Type
+
+export const ImageId = Schema.UUID.pipe(Schema.brand('ImageId'))
 export type ImageId = typeof ImageId.Type
 
 export const Handle = Schema.String.pipe(
@@ -183,3 +186,9 @@ export const VegetableData = Schema.Struct({
 	}),
 })
 export type VegetableData = typeof VegetableData.Type
+
+export const ApprovalStatus = Schema.Literal(
+	'pending_approval',
+	'approved',
+	'disapproved',
+)

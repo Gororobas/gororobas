@@ -62,7 +62,7 @@ export const VegetableDataLoro = loroSchema({
 		height_min: loroSchema.Number(),
 		temperature_max: loroSchema.Number(),
 		temperature_min: loroSchema.Number(),
-		main_photo_id: loroSchema.Number(),
+		main_photo_id: loroSchema.String(),
 	}),
 	locales: loroSchema.LoroMap(
 		{
@@ -95,7 +95,7 @@ initialDocStore.setState(() => ({
 		height_max: 400,
 		temperature_min: 15,
 		temperature_max: 35,
-		main_photo_id: 123,
+		main_photo_id: '123',
 	},
 	locales: {
 		pt: {

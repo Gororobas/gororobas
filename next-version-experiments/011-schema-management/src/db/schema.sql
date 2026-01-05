@@ -168,6 +168,19 @@ CREATE TABLE vegetable_crdts (
     updated_at text
 ) WITHOUT ROWID;
 
+-- People's edit suggestions that compose the encyclopedia
+CREATE TABLE vegetable_revisions (
+    id text PRIMARY KEY,
+    vegetable_id text,
+    created_by_id text,
+    crdt_update blob NOT NULL,
+    approval_status text NOT NULL, -- ApprovalStatus
+    created_at text,
+    updated_at text,
+    FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
+);
+
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE vegetables (
     id text PRIMARY KEY,
@@ -186,20 +199,6 @@ CREATE TABLE vegetables (
 );
 
 CREATE INDEX idx_vegetables_handle ON vegetables (handle);
-
--- People's edit suggestions that compose the encyclopedia
-CREATE TABLE vegetable_revisions (
-    id text PRIMARY KEY,
-    vegetable_id text,
-    created_by_id text,
-    from_crdt_frontier json NOT NULL,
-    crdt_update blob NOT NULL,
-    approval_status text NOT NULL, -- ApprovalStatus
-    created_at text,
-    updated_at text,
-    FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
-);
 
 -- Per-locale data, materialized from the CRDT
 CREATE TABLE vegetable_translations (
@@ -320,6 +319,19 @@ CREATE TABLE resource_crdts (
     updated_at text
 ) WITHOUT ROWID;
 
+-- People's edit suggestions that compose the library
+CREATE TABLE resource_revisions (
+    id text PRIMARY KEY,
+    resource_id text,
+    created_by_id text,
+    crdt_update blob NOT NULL,
+    approval_status text NOT NULL, -- ApprovalStatus
+    created_at text,
+    updated_at text,
+    FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
+);
+
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE resources (
     id text PRIMARY KEY,
@@ -335,20 +347,6 @@ CREATE TABLE resources (
 );
 
 CREATE INDEX idx_resources_handle ON resources (handle);
-
--- People's edit suggestions that compose the library
-CREATE TABLE resource_revisions (
-    id text PRIMARY KEY,
-    resource_id text,
-    created_by_id text,
-    from_crdt_frontier json NOT NULL,
-    crdt_update blob NOT NULL,
-    approval_status text NOT NULL, -- ApprovalStatus
-    created_at text,
-    updated_at text,
-    FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
-);
 
 -- Per-locale data, materialized from the CRDT
 CREATE TABLE resource_translations (
@@ -395,6 +393,18 @@ CREATE TABLE note_crdts (
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
+-- How notes are modified
+CREATE TABLE note_commits (
+    id text PRIMARY KEY,
+    note_id text,
+    created_by_id text,
+    from_crdt_frontier json NOT NULL,
+    crdt_update blob NOT NULL,
+    created_at text,
+    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
+);
+
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE notes (
     id text PRIMARY KEY,
@@ -407,18 +417,6 @@ CREATE TABLE notes (
     owner_profile_id text NOT NULL,
     FOREIGN KEY (id) REFERENCES note_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
-);
-
--- How notes are modified
-CREATE TABLE note_commits (
-    id text PRIMARY KEY,
-    note_id text,
-    created_by_id text,
-    from_crdt_frontier json NOT NULL,
-    crdt_update blob NOT NULL,
-    created_at text,
-    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_notes_handle ON notes (handle);
@@ -463,6 +461,19 @@ CREATE TABLE event_crdts (
     updated_at text
 ) WITHOUT ROWID;
 
+-- How events are modified
+CREATE TABLE event_commits (
+    id text PRIMARY KEY,
+    event_id text,
+    created_by_id text,
+    from_crdt_frontier json NOT NULL,
+    crdt_update blob NOT NULL,
+    approval_status text NOT NULL, -- ApprovalStatus
+    created_at text,
+    FOREIGN KEY (event_id) REFERENCES event_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
+);
+
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE events (
     id text PRIMARY KEY,
@@ -481,19 +492,6 @@ CREATE TABLE events (
 );
 
 CREATE INDEX idx_events_handle ON events (handle);
-
--- How events are modified
-CREATE TABLE event_commits (
-    id text PRIMARY KEY,
-    event_id text,
-    created_by_id text,
-    from_crdt_frontier json NOT NULL,
-    crdt_update blob NOT NULL,
-    approval_status text NOT NULL, -- ApprovalStatus
-    created_at text,
-    FOREIGN KEY (event_id) REFERENCES event_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
-);
 
 -- Per-locale data, materialized from the CRDT
 CREATE TABLE event_translations (
@@ -543,6 +541,18 @@ CREATE TABLE comment_crdts (
     )
 );
 
+-- How comments are modified
+CREATE TABLE comment_commits (
+    id text PRIMARY KEY,
+    comment_id text,
+    created_by_id text,
+    from_crdt_frontier json NOT NULL,
+    crdt_update blob NOT NULL,
+    created_at text,
+    FOREIGN KEY (comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
+);
+
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE comments (
     id text PRIMARY KEY,
@@ -561,18 +571,6 @@ CREATE TABLE comments (
     CONSTRAINT check_comment_parent CHECK (
         (note_id IS NOT NULL) + (resource_id IS NOT NULL) + (event_id IS NOT NULL) = 1
     )
-);
-
--- How comments are modified
-CREATE TABLE comment_commits (
-    id text PRIMARY KEY,
-    comment_id text,
-    created_by_id text,
-    from_crdt_frontier json NOT NULL,
-    crdt_update blob NOT NULL,
-    created_at text,
-    FOREIGN KEY (comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
 CREATE TABLE comment_translations (

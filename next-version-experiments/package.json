@@ -27,7 +27,7 @@
 		"@tanstack/react-devtools": "^0.7.11",
 		"@tanstack/react-router": "^1.144.0",
 		"@tanstack/react-router-devtools": "^1.144.0",
-		"@tanstack/router-plugin": "^1.145.2",
+		"@tanstack/router-plugin": "^1.145.4",
 		"@tursodatabase/database-wasm": "0.4.0-pre.18",
 		"better-auth": "^1.4.10",
 		"better-sqlite3": "^12.5.0",
@@ -43,7 +43,7 @@
 	},
 	"devDependencies": {
 		"@amiceli/vitest-cucumber": "^6.2.0",
-		"@biomejs/biome": "^2.3.10",
+		"@biomejs/biome": "^2.3.11",
 		"@cucumber/cucumber": "^12.5.0",
 		"@cucumber/gherkin": "^37.0.1",
 		"@cucumber/messages": "^31.1.0",
