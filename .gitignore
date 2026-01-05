@@ -37,9 +37,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-dbschema/edgeql-js
-dbschema/interfaces.ts
-
 src/playground
 
 READMETHAL.md
