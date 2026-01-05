@@ -3,7 +3,7 @@ services:
     image: geldata/gel
     environment:
       GEL_SERVER_SECURITY: insecure_dev_mode
-      GEL_SERVER_PASSWORD: ${GEL_PASSWORD}
+      GEL_SERVER_PASSWORD: ${{project.GEL_PASSWORD}}
     volumes:
       - gel-data:/var/lib/gel/data
       - ./dbschema:/dbschema
