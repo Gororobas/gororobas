@@ -3,7 +3,7 @@ services:
     image: geldata/gel
     environment:
       GEL_SERVER_SECURITY: insecure_dev_mode
-      GEL_SERVER_PASSWORD: ${{project.GEL_PASSWORD}}
+      GEL_SERVER_PASSWORD: ${GEL_PASSWORD}
     volumes:
       - gel-data:/var/lib/gel/data
       - ./dbschema:/dbschema
@@ -20,24 +20,24 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_BASE_URL: ${{project.NEXT_PUBLIC_BASE_URL}}
-        NEXT_PUBLIC_SANITY_PROJECT_ID: ${{project.NEXT_PUBLIC_SANITY_PROJECT_ID}}
-        NEXT_PUBLIC_SANITY_DATASET: ${{project.NEXT_PUBLIC_SANITY_DATASET}}
-        SANITY_WRITE_TOKEN: ${{project.SANITY_WRITE_TOKEN}}
-        GOOGLE_CLIENT_ID: ${{project.GOOGLE_CLIENT_ID}}
-        GOOGLE_SECRET: ${{project.GOOGLE_SECRET}}
-        MAILPIT_URL: ${{project.MAILPIT_URL}}
-        RESEND_API_KEY: ${{project.RESEND_API_KEY}}
-        AUTH_WEBHOOK_SECRET: ${{project.AUTH_WEBHOOK_SECRET}}
-        GOOGLE_DATA_API_KEY: ${{project.GOOGLE_DATA_API_KEY}}
-        HONEYCOMB_API_KEY: ${{project.HONEYCOMB_API_KEY}}
-        HONEYCOMB_DATASET: ${{project.HONEYCOMB_DATASET}}
-        BLUESKY_USERNAME: ${{project.BLUESKY_USERNAME}}
-        BLUESKY_PASSWORD: ${{project.BLUESKY_PASSWORD}}
-        VERCEL_DASHBOARD_URL: ${{project.VERCEL_DASHBOARD_URL}}
-        GEL_PASSWORD: ${{project.GEL_PASSWORD}}
+        NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL}
+        NEXT_PUBLIC_SANITY_PROJECT_ID: ${NEXT_PUBLIC_SANITY_PROJECT_ID}
+        NEXT_PUBLIC_SANITY_DATASET: ${NEXT_PUBLIC_SANITY_DATASET}
+        SANITY_WRITE_TOKEN: ${SANITY_WRITE_TOKEN}
+        GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        GOOGLE_SECRET: ${GOOGLE_SECRET}
+        MAILPIT_URL: ${MAILPIT_URL}
+        RESEND_API_KEY: ${RESEND_API_KEY}
+        AUTH_WEBHOOK_SECRET: ${AUTH_WEBHOOK_SECRET}
+        GOOGLE_DATA_API_KEY: ${GOOGLE_DATA_API_KEY}
+        HONEYCOMB_API_KEY: ${HONEYCOMB_API_KEY}
+        HONEYCOMB_DATASET: ${HONEYCOMB_DATASET}
+        BLUESKY_USERNAME: ${BLUESKY_USERNAME}
+        BLUESKY_PASSWORD: ${BLUESKY_PASSWORD}
+        VERCEL_DASHBOARD_URL: ${VERCEL_DASHBOARD_URL}
+        GEL_PASSWORD: ${GEL_PASSWORD}
     environment:
-      GEL_DSN: gel://edgedb:${{project.GEL_PASSWORD}}@gel:5656/main
+      GEL_DSN: edgedb://edgedb:${GEL_PASSWORD}@gel:5656/main
       GEL_TLS_SECURITY: insecure
       NODE_ENV: production
     depends_on:
