@@ -16,11 +16,10 @@ class GetMentionByIdNotFoundError {
   constructor(readonly id: string) {}
 }
 
-interface GetMentionById
-  extends Request.Request<
-    FreshMentionData,
-    GetMentionByIdError | GetMentionByIdNotFoundError
-  > {
+interface GetMentionById extends Request.Request<
+  FreshMentionData,
+  GetMentionByIdError | GetMentionByIdNotFoundError
+> {
   readonly _tag: 'GetMentionById'
   readonly id: string
 }

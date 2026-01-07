@@ -1,6 +1,6 @@
 @import 'tailwindcss';
-@plugin "@tailwindcss/forms";
-@plugin "tailwindcss-animate";
+@plugin '@tailwindcss/forms';
+@plugin 'tailwindcss-animate';
 
 @theme {
   --background-image-gradient-radial: radial-gradient(var(--tw-gradient-stops));

@@ -38,7 +38,8 @@ const textVariants = tv({
 })
 
 export interface TextProps
-  extends React.ButtonHTMLAttributes<
+  extends
+    React.ButtonHTMLAttributes<
       HTMLParagraphElement | HTMLHeadingElement | HTMLDivElement
     >,
     VariantProps<typeof textVariants> {

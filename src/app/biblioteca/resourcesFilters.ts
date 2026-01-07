@@ -84,7 +84,9 @@ export function queryParamsToSearchParams(
     const { queryKey } = definition
 
     if (Array.isArray(value)) {
-      value.forEach((entry) => {searchParams.append(queryKey, entry)})
+      value.forEach((entry) => {
+        searchParams.append(queryKey, entry)
+      })
     } else {
       searchParams.set(queryKey, String(value))
     }

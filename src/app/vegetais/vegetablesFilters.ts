@@ -117,7 +117,9 @@ export function queryParamsToSearchParams(
         searchParams.set(queryKey, encodeURIComponent(JSON.stringify(value)))
       }
     } else if (Array.isArray(value)) {
-      value.forEach((entry) => {searchParams.append(queryKey, entry)})
+      value.forEach((entry) => {
+        searchParams.append(queryKey, entry)
+      })
     } else {
       searchParams.set(queryKey, String(value))
     }

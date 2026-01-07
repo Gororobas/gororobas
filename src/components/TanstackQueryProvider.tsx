@@ -13,7 +13,7 @@ function makeQueryClient() {
   })
 }
 
-let browserQueryClient: QueryClient | undefined 
+let browserQueryClient: QueryClient | undefined
 
 function getQueryClient() {
   if (typeof window === 'undefined') {
