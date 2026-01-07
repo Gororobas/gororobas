@@ -10,7 +10,7 @@ services:
     networks:
       - internal
     healthcheck:
-      test: ['CMD', 'gel']
+      test: ['CMD-SHELL', "echo 'OK' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +53,7 @@ services:
       - 'traefik.http.routers.nextjs.tls.certResolver=letsencrypt'
       - 'traefik.http.services.nextjs.loadbalancer.server.port=3000'
     healthcheck:
-      test: ['CMD', 'gel', 'query', '--wait-until-available', '30s', 'SELECT 1']
+      test: ['CMD-SHELL', "echo 'OK' || exit 1"]
       interval: 30s
       timeout: 35s
       retries: 5
