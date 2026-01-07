@@ -6,7 +6,10 @@ export const client = createClient({
   // Note: when developing locally you will need to set tls security to
   // insecure, because the development server uses self-signed certificates
   // which will cause api calls with the fetch api to fail.
-  tlsSecurity: process.env.NODE_ENV === 'development' ? 'insecure' : 'default',
+  tlsSecurity: 'insecure',
+  host: 'localhost',
+  port: 5656,
+  password: process.env.GEL_PASSWORD
 }).withTransactionOptions({
   /** @docs https://www.geldata.com/updates#automatically-lower-transaction-isolation */
   isolation: IsolationLevel.PreferRepeatableRead,
