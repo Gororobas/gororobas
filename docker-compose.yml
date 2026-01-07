@@ -37,7 +37,7 @@ services:
         VERCEL_DASHBOARD_URL: ${VERCEL_DASHBOARD_URL}
         GEL_PASSWORD: ${GEL_PASSWORD}
     environment:
-      GEL_DSN: edgedb://edgedb:${GEL_PASSWORD}@gel:5656/main
+      GEL_DSN: gel://edgedb:${GEL_PASSWORD}@gel:5656/main
       GEL_TLS_SECURITY: insecure
       NODE_ENV: production
     depends_on:

@@ -1,5 +1,6 @@
 import { Context, Data, Effect, Layer } from 'effect'
 import { type Client, createClient } from 'gel'
+import { GEL_CONNECTION_OPTIONS } from '@/gel'
 
 export class GelError extends Data.TaggedError('GelError')<{
   cause?: unknown
@@ -52,13 +53,5 @@ const make = (options: GelClientOptions) =>
 
 export const layer = Layer.scoped(
   Gel,
-  Effect.gen(function* () {
-    return yield* make({
-      // Note: when developing locally you will need to set tls security to
-      // insecure, because the development server uses self-signed certificates
-      // which will cause api calls with the fetch api to fail.
-      tlsSecurity:
-        process.env.NODE_ENV === 'development' ? 'insecure' : 'default',
-    })
-  }),
+  make(GEL_CONNECTION_OPTIONS),
 )

@@ -1,16 +1,19 @@
 import createAuth from '@gel/auth-nextjs/app'
-import { createClient, IsolationLevel } from 'gel'
+import { type ConnectOptions, createClient, IsolationLevel } from 'gel'
 import { BASE_URL } from './utils/config'
 
-export const client = createClient({
-  // Note: when developing locally you will need to set tls security to
-  // insecure, because the development server uses self-signed certificates
-  // which will cause api calls with the fetch api to fail.
+export const GEL_CONNECTION_OPTIONS: ConnectOptions = {
   tlsSecurity: 'insecure',
-  host: 'localhost',
+  // host: 'localhost',
+  host: 'gel',
   port: 5656,
+  user: 'edgedb',
   password: process.env.GEL_PASSWORD
-}).withTransactionOptions({
+}
+
+console.log("HERE", GEL_CONNECTION_OPTIONS)
+
+export const client = createClient(GEL_CONNECTION_OPTIONS).withTransactionOptions({
   /** @docs https://www.geldata.com/updates#automatically-lower-transaction-isolation */
   isolation: IsolationLevel.PreferRepeatableRead,
 })
