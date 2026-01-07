@@ -4,16 +4,15 @@ import { BASE_URL } from './utils/config'
 
 export const GEL_CONNECTION_OPTIONS: ConnectOptions = {
   tlsSecurity: 'insecure',
-  // host: 'localhost',
   host: 'gel',
   port: 5656,
   user: 'edgedb',
-  password: process.env.GEL_PASSWORD
+  password: process.env.GEL_PASSWORD,
 }
 
-console.log("HERE", GEL_CONNECTION_OPTIONS)
-
-export const client = createClient(GEL_CONNECTION_OPTIONS).withTransactionOptions({
+export const client = createClient(
+  GEL_CONNECTION_OPTIONS,
+).withTransactionOptions({
   /** @docs https://www.geldata.com/updates#automatically-lower-transaction-isolation */
   isolation: IsolationLevel.PreferRepeatableRead,
 })
