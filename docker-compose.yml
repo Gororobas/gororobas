@@ -9,11 +9,6 @@ services:
       - gel-data:/var/lib/gel/data
     networks:
       - internal
-    healthcheck:
-      test: ['CMD', 'gel', '--wait-until-available', '1s']
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   nextjs-app:
     build:
