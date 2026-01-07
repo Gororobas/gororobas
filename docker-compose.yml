@@ -4,9 +4,9 @@ services:
     environment:
       GEL_SERVER_SECURITY: insecure_dev_mode
       GEL_SERVER_PASSWORD: ${GEL_PASSWORD}
-      GEL_DOCKER_APPLY_MIGRATIONS: never # Don't apply migrations, we'll restore from dump
     volumes:
       - gel-data:/var/lib/gel/data
+      - ./dbschema:/dbschema
     networks:
       - internal
     healthcheck:
