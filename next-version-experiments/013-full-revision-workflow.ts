@@ -464,6 +464,18 @@ export class NotFoundError extends Data.TaggedError('NotFoundError')<{
 	id?: string
 }> {}
 
+class RevisionWorkflowError extends Data.TaggedError('RevisionWorkflowError')<{
+	reason:
+		| 'NOT_FOUND'
+		| 'INVALID_CRDT'
+		| 'ALREADY_EVALUATED'
+		| 'INVALID_EVALUATION'
+		| 'VALIDATION_FAILED'
+	message?: string
+	context?: Record<string, unknown>
+}> {}
+
+// @TODO: can we include reads in the transaction to make this consistent?
 const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 	revision_id: VegetableRevisionId
 	evaluation: RevisionEvaluation
@@ -492,14 +504,46 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 			id: VegetableRevisionId,
 			vegetable_id: VegetableId,
 			crdt_update: Schema.Uint8ArrayFromSelf,
+			evaluation: Schema.NullOr(RevisionEvaluation),
 		}),
 		execute: ({ revision_id }) =>
 			sql`
-        SELECT id, vegetable_id, crdt_update
+        SELECT id, vegetable_id, crdt_update, evaluation
         FROM vegetable_revisions
         WHERE id = ${sql.safe(revision_id)}
       `,
 	})
+
+	// Guard: prevent pending evaluation - only `accepted` or `rejected` modify the state
+	if (data.evaluation === 'pending') {
+		return yield* Effect.fail(
+			new RevisionWorkflowError({
+				reason: 'INVALID_EVALUATION',
+			}),
+		)
+	}
+
+	const revision = yield* fetchRevision({ revision_id: data.revision_id }).pipe(
+		Effect.flatMap(
+			Option.match({
+				onNone: () => Effect.fail(new NotFoundError({ id: data.revision_id })),
+				onSome: Effect.succeed,
+			}),
+		),
+	)
+
+	// Guard: prevent re-evaluation
+	if (revision.evaluation !== 'pending') {
+		return yield* Effect.fail(
+			new RevisionWorkflowError({
+				reason: 'ALREADY_EVALUATED',
+			}),
+		)
+	}
+
+	const now = new Date(yield* Clock.currentTimeMillis)
+	if (data.evaluation !== 'approved')
+		return yield* updateRevision({ ...data, evaluated_at: now.toISOString() })
 
 	const fetchVegetableCRDT = SqlSchema.findOne({
 		Request: Schema.Struct({ vegetable_id: VegetableId }),
@@ -529,15 +573,6 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
       `,
 	})
 
-	const revision = yield* fetchRevision({ revision_id: data.revision_id }).pipe(
-		Effect.flatMap(
-			Option.match({
-				onNone: () => Effect.fail(new NotFoundError({ id: data.revision_id })),
-				onSome: Effect.succeed,
-			}),
-		),
-	)
-
 	const vegetableCRDT = yield* fetchVegetableCRDT({
 		vegetable_id: revision.vegetable_id,
 	}).pipe(
@@ -550,15 +585,16 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 		),
 	)
 
-	// Load current document and apply revision update
-	const currentDoc = new LoroDoc()
-	currentDoc.import(vegetableCRDT.loro_crdt)
-	currentDoc.import(revision.crdt_update)
+	const sourceDocument = new LoroDoc()
+	sourceDocument.import(vegetableCRDT.loro_crdt)
+	const { loroDoc } = yield* parseCrdtUpdate({
+		crdt_update: revision.crdt_update,
+		sourceDocument,
+		targetSchema: VegetableData,
+	})
 
 	// Update the vegetable CRDT with the merged document
-	const updatedSnapshot = currentDoc.export({ mode: 'snapshot' })
-
-	const now = new Date(yield* Clock.currentTimeMillis)
+	const updatedSnapshot = loroDoc.export({ mode: 'snapshot' })
 
 	yield* pipe(
 		updateRevision({ ...data, evaluated_at: now.toISOString() }),
@@ -571,7 +607,7 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 		),
 		Effect.andThen(() =>
 			materializeVegetable({
-				loro_doc: currentDoc,
+				loro_doc: sourceDocument,
 				vegetable_id: revision.vegetable_id,
 			}),
 		),
@@ -622,7 +658,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
 	const Query = SqlSchema.single({
 		Request: FetchVegetableRequest,
 		Result: QueriedVegetableData,
-		execute: () => sql`
+		execute: (req) => sql`
     WITH
     preferred_translation AS (
       SELECT
@@ -637,7 +673,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
           PARTITION BY vegetable_id
           ORDER BY
             CASE locale
-              WHEN ${request.locale} THEN 1
+              WHEN ${req.locale} THEN 1
               WHEN 'en' THEN 2
               WHEN 'pt' THEN 3
               WHEN 'es' THEN 4
@@ -645,7 +681,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
             END
         ) AS rn
       FROM vegetable_translations
-      WHERE vegetable_id = ${request.vegetable_id}
+      WHERE vegetable_id = ${req.vegetable_id}
     )
     SELECT
       v.id,
@@ -687,7 +723,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
     LEFT JOIN vegetable_edible_parts ep ON v.id = ep.vegetable_id
     LEFT JOIN vegetable_lifecycles lc ON v.id = lc.vegetable_id
     LEFT JOIN vegetable_uses u ON v.id = u.vegetable_id
-    WHERE v.id = ${request.vegetable_id}
+    WHERE v.id = ${req.vegetable_id}
     GROUP BY v.id, t.locale, t.common_names, t.searchable_names, t.gender, t.origin, t.content
   `,
 	})

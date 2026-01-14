@@ -162,15 +162,13 @@ export const VegetableMetadata = Schema.Struct({
 export const Locale = Schema.Literal('pt', 'es', 'en')
 export type Locale = typeof Locale.Type
 
+const VegetableOrigin = Schema.String.annotations({
+	arbitrary: () => (fc) => fc.constant(null).map(() => randCountry()),
+})
+
 export const VegetableLocalizedData = Schema.Struct({
 	gender: Gender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
-	origin: Schema.optional(
-		Schema.NullishOr(
-			Schema.String.annotations({
-				arbitrary: () => (fc) => fc.constant(null).map(() => randCountry()),
-			}),
-		),
-	),
+	origin: Schema.optional(Schema.NullishOr(VegetableOrigin)),
 	content: Schema.optional(Schema.NullishOr(TiptapDocument)),
 	common_names: Schema.Array(
 		Schema.Struct({
