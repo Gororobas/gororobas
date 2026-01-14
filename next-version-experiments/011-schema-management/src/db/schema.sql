@@ -207,7 +207,7 @@ CREATE INDEX idx_vegetables_handle ON vegetables (handle);
 CREATE TABLE vegetable_translations (
     vegetable_id text NOT NULL,
     locale text NOT NULL, -- SupportedLocale
-    names json NOT NULL, -- string[]
+    common_names json NOT NULL, -- string[]
     searchable_names text, -- includes scientific names for better FTS search
     gender text, -- Gender
     origin text,
@@ -260,6 +260,7 @@ CREATE TABLE vegetable_varieties (
     id text PRIMARY KEY,
     vegetable_id text NOT NULL,
     handle text NOT NULL UNIQUE,
+    scientific_names json, -- string[]
     created_at text,
     updated_at text,
     created_by_id text,
@@ -271,7 +272,7 @@ CREATE INDEX idx_vegetable_varieties_handle ON vegetable_varieties (handle);
 CREATE TABLE vegetable_variety_translations (
     variety_id text NOT NULL,
     locale text NOT NULL, -- SupportedLocale
-    names json NOT NULL, -- string[]
+    common_names json NOT NULL, -- string[]
     content json, -- Tiptap rich text
     PRIMARY KEY (variety_id, locale),
     FOREIGN KEY (variety_id) REFERENCES vegetable_varieties (id) ON DELETE CASCADE

@@ -1,19 +1,57 @@
 import { DevTools } from '@effect/experimental'
 import { BunRuntime } from '@effect/platform-bun'
 import { SqlClient, SqlResolver, SqlSchema } from '@effect/sql'
-import { VegetableDataLoro } from '004-loro-mirror'
-import { BunSqlEnvLive } from '011-schema-management/src/sql-live'
-import { Data, Effect, Layer, Option, pipe, Schema } from 'effect'
+import {
+	type Brand,
+	Clock,
+	Context,
+	Data,
+	Effect,
+	Layer,
+	Option,
+	pipe,
+	Schema,
+} from 'effect'
 import { LoroDoc, VersionVector } from 'loro-crdt'
 import { Mirror } from 'loro-mirror'
 import {
+	AgroforestryStratum,
+	EdibleVegetablePart,
 	ImageId,
+	Locale,
 	PersonId,
+	PlantingMethod,
+	QueriedVegetableData,
 	RevisionEvaluation,
 	VegetableData,
 	VegetableId,
+	VegetableLifecycle,
 	VegetableRevisionId,
+	VegetableUsage,
 } from '@/schema'
+import { VegetableDataLoro } from './004-loro-mirror.lib'
+import { BunSqlEnvLive } from './011-schema-management/src/sql-live'
+import { parseCrdtUpdate } from './014-validate-crdt-updates'
+
+type BrandedUUID<B extends string> = string & Brand.Brand<B>
+
+interface UUIDGenerator {
+	readonly generate: () => string
+	readonly make: <B extends string>(
+		brand: Schema.brand<Schema.Schema<string, string, never>, B>,
+	) => Effect.Effect<BrandedUUID<B>>
+}
+
+class UUIDGen extends Context.Tag('UUIDGen')<UUIDGen, UUIDGenerator>() {
+	// Convenience method for direct access
+	static make<A extends Brand.Brand<any>>(
+		schema: Schema.Schema<A, string>,
+	): Effect.Effect<A, never, UUIDGen> {
+		return Effect.flatMap(UUIDGen, (gen) =>
+			Effect.sync(() => Schema.decodeSync(schema)(gen.generate())),
+		)
+	}
+}
 
 const CommitMessage = Schema.Union(
 	Schema.Struct({
@@ -30,7 +68,7 @@ const CommitMessage = Schema.Union(
 	}),
 )
 
-function createDocFromVegetableData(data: VegetableData) {
+export function createDocFromVegetableData(data: VegetableData) {
 	const initialDoc = new LoroDoc()
 	const initialDocStore = new Mirror({
 		doc: initialDoc,
@@ -50,7 +88,7 @@ function createDocFromVegetableData(data: VegetableData) {
  [0.38ms] Commiting
  [0.32ms] Exporting
  */
-function editVegetableDoc({
+export const editVegetableDoc = Effect.fn('editVegetableDoc')(function* ({
 	initial_doc,
 	updateData,
 	person_id,
@@ -86,7 +124,7 @@ function editVegetableDoc({
 			type: 'human-action',
 			person_id: person_id,
 		}),
-		timestamp: Date.now(),
+		timestamp: yield* Clock.currentTimeMillis,
 	})
 
 	const toReturn = {
@@ -98,7 +136,7 @@ function editVegetableDoc({
 	}
 
 	return toReturn
-}
+})
 
 const materializeVegetableMain = Effect.fn('materializeVegetableMain')(
 	function* ({
@@ -169,7 +207,7 @@ const materializeVegetableTranslations = Effect.fn(
 
 		yield* sql`
         INSERT INTO vegetable_translations (
-        vegetable_id, locale, names, searchable_names, gender, origin, content
+        vegetable_id, locale, common_names, searchable_names, gender, origin, content
         ) VALUES (
         ${vegetable_id}, ${locale}, ${common_names}, ${searchable_names},
         ${localeData.gender ?? null},
@@ -179,102 +217,85 @@ const materializeVegetableTranslations = Effect.fn(
 	}
 })
 
-const materializeVegetableEdibleParts = Effect.fn(
-	'materializeVegetableEdibleParts',
-)(function* ({
-	vegetable_id,
-	vegetable: { metadata },
-}: {
-	vegetable_id: VegetableId
-	vegetable: VegetableData
-}) {
-	const sql = yield* SqlClient.SqlClient
-	yield* sql`DELETE FROM vegetable_edible_parts WHERE vegetable_id = ${vegetable_id}`
+type JunctionConfig<T extends Schema.Schema.AnyNoContext> = {
+	tableName: string
+	columnName: string
+	valueSchema: T
+	getData: (
+		vegetable: VegetableData,
+	) => ReadonlyArray<Schema.Schema.Type<T>> | null | undefined
+}
 
-	if (metadata.edible_parts) {
-		for (const part of metadata.edible_parts) {
-			yield* sql`
-              INSERT INTO vegetable_edible_parts (vegetable_id, edible_part)
-              VALUES (${vegetable_id}, ${part})`
-		}
-	}
-})
-
-const materializeVegetableLifecycles = Effect.fn(
-	'materializeVegetableLifecycles',
-)(function* ({
-	vegetable_id,
-	vegetable: { metadata },
-}: {
-	vegetable_id: VegetableId
-	vegetable: VegetableData
-}) {
-	const sql = yield* SqlClient.SqlClient
-	yield* sql`DELETE FROM vegetable_lifecycles WHERE vegetable_id = ${vegetable_id}`
-
-	for (const lifecycle of metadata.lifecycles || []) {
-		yield* sql`
-        INSERT INTO vegetable_lifecycles (vegetable_id, lifecycle)
-        VALUES (${vegetable_id}, ${lifecycle})`
-	}
-})
-
-const materializeVegetableUses = Effect.fn('materializeVegetableUses')(
-	function* ({
+const createJunctionMaterializer = <T extends Schema.Schema.AnyNoContext>(
+	config: JunctionConfig<T>,
+) =>
+	Effect.fn(`materialize_${config.tableName}`)(function* ({
 		vegetable_id,
-		vegetable: { metadata },
+		vegetable,
 	}: {
 		vegetable_id: VegetableId
 		vegetable: VegetableData
 	}) {
 		const sql = yield* SqlClient.SqlClient
-		yield* sql`DELETE FROM vegetable_uses WHERE vegetable_id = ${vegetable_id}`
 
-		for (const use of metadata.uses || []) {
-			yield* sql`
-        INSERT INTO vegetable_uses (vegetable_id, usage)
-        VALUES (${vegetable_id}, ${use})`
+		yield* sql`DELETE FROM ${sql.unsafe(config.tableName)} WHERE vegetable_id = ${vegetable_id}`
+
+		const InsertJunction = SqlSchema.void({
+			Request: Schema.Struct({
+				vegetable_id: VegetableId,
+				[config.columnName]: config.valueSchema,
+			}),
+			execute: (requests) =>
+				sql`INSERT INTO ${sql.unsafe(config.tableName)} ${sql.insert(requests)}`,
+		})
+
+		const data = config.getData(vegetable)
+		if (data && data.length > 0) {
+			yield* Effect.forEach(
+				data,
+				(value) =>
+					InsertJunction({
+						vegetable_id,
+						[config.columnName]: value,
+					} as any),
+				{ concurrency: 'unbounded' },
+			)
 		}
-	},
-)
+	})
 
-const materializeVegetableStrata = Effect.fn('materializeVegetableStrata')(
-	function* ({
-		vegetable_id,
-		vegetable: { metadata },
-	}: {
-		vegetable_id: VegetableId
-		vegetable: VegetableData
-	}) {
-		const sql = yield* SqlClient.SqlClient
-		yield* sql`DELETE FROM vegetable_strata WHERE vegetable_id = ${vegetable_id}`
+const materializeVegetableEdibleParts = createJunctionMaterializer({
+	tableName: 'vegetable_edible_parts',
+	columnName: 'edible_part',
+	valueSchema: EdibleVegetablePart,
+	getData: (v) => v.metadata.edible_parts,
+})
 
-		for (const stratum of metadata.strata || []) {
-			yield* sql`
-        INSERT INTO vegetable_strata (vegetable_id, stratum)
-        VALUES (${vegetable_id}, ${stratum})`
-		}
-	},
-)
+const materializeVegetableLifecycles = createJunctionMaterializer({
+	tableName: 'vegetable_lifecycles',
+	columnName: 'lifecycle',
+	valueSchema: VegetableLifecycle,
+	getData: (v) => v.metadata.lifecycles,
+})
 
-const materializeVegetablePlantingMethods = Effect.fn(
-	'materializeVegetablePlantingMethods',
-)(function* ({
-	vegetable_id,
-	vegetable: { metadata },
-}: {
-	vegetable_id: VegetableId
-	vegetable: VegetableData
-}) {
-	const sql = yield* SqlClient.SqlClient
+const materializeVegetableStrata = createJunctionMaterializer({
+	tableName: 'vegetable_strata',
+	columnName: 'stratum',
+	valueSchema: AgroforestryStratum,
+	getData: (v) => v.metadata.strata,
+})
 
-	yield* sql`DELETE FROM vegetable_planting_methods WHERE vegetable_id = ${vegetable_id}`
+const materializeVegetableUses = createJunctionMaterializer({
+	tableName: 'vegetable_uses',
+	columnName: 'usage',
+	valueSchema: VegetableUsage,
+	getData: (v) => v.metadata.uses,
+})
 
-	for (const method of metadata.planting_methods || []) {
-		yield* sql`
-        INSERT INTO vegetable_planting_methods (vegetable_id, planting_method)
-        VALUES (${vegetable_id}, ${method})`
-	}
+const materializeVegetablePlantingMethods = createJunctionMaterializer({
+	tableName: 'vegetable_planting_methods',
+	columnName: 'planting_method',
+	valueSchema: PlantingMethod,
+	getData: (v) => v.metadata.planting_methods,
 })
 
 const materializeVegetable = Effect.fn('materializeVegetable')(
@@ -332,13 +353,14 @@ const createFirstVersion = Effect.fn('createFirstVersion')(function* ({
 	person_id: PersonId
 }) {
 	const sql = yield* SqlClient.SqlClient
-	const vegetable_id = VegetableId.make(Bun.randomUUIDv7())
+
+	const vegetable_id = yield* UUIDGen.make(VegetableId)
 	const snapshot = loro_doc.export({ mode: 'snapshot' })
 	const crdt_update = loro_doc.export({
 		mode: 'update',
 		from: new VersionVector(null),
 	})
-	const now = new Date()
+	const now = new Date(yield* Clock.currentTimeMillis)
 
 	const InsertVegetableCRDT = yield* SqlResolver.void('InsertVegetableCRDT', {
 		Request: Schema.Struct({
@@ -356,6 +378,7 @@ const createFirstVersion = Effect.fn('createFirstVersion')(function* ({
 
 	const InsertVegetableRevision = yield* insertVegetableRevision
 
+	const revision_id = yield* UUIDGen.make(VegetableRevisionId)
 	yield* pipe(
 		InsertVegetableCRDT.execute({
 			created_at: now.toISOString(),
@@ -368,7 +391,7 @@ const createFirstVersion = Effect.fn('createFirstVersion')(function* ({
 				created_at: now.toISOString(),
 				updated_at: now.toISOString(),
 				vegetable_id: vegetable_id,
-				id: VegetableRevisionId.make(Bun.randomUUIDv7()),
+				id: revision_id,
 				evaluation: 'approved',
 				evaluated_by_id: person_id,
 				crdt_update,
@@ -382,22 +405,56 @@ const createFirstVersion = Effect.fn('createFirstVersion')(function* ({
 	return vegetable_id
 })
 
-/** @TODO validate that crdt_update doesn't violate the crdt main trunk */
 const createRevision = Effect.fn('createRevision')(function* (data: {
 	vegetable_id: VegetableId
 	person_id: PersonId
 	crdt_update: Uint8Array
 }) {
 	const InsertVegetableRevision = yield* insertVegetableRevision
+	const sql = yield* SqlClient.SqlClient
 
-	const now = new Date()
+	const fetchVegetableCRDT = SqlSchema.findOne({
+		Request: Schema.Struct({ vegetable_id: VegetableId }),
+		Result: Schema.Struct({
+			id: VegetableId,
+			loro_crdt: Schema.Uint8ArrayFromSelf,
+		}),
+		execute: ({ vegetable_id }) =>
+			sql`
+        SELECT id, loro_crdt
+        FROM vegetable_crdts
+        WHERE id = ${sql.safe(vegetable_id)}
+      `,
+	})
+	const vegetableCRDT = yield* fetchVegetableCRDT({
+		vegetable_id: data.vegetable_id,
+	}).pipe(
+		Effect.flatMap(
+			Option.match({
+				onNone: () => Effect.fail(new NotFoundError({ id: data.vegetable_id })),
+				onSome: Effect.succeed,
+			}),
+		),
+	)
+
+	const sourceDocument = new LoroDoc()
+	sourceDocument.import(vegetableCRDT.loro_crdt)
+	yield* parseCrdtUpdate({
+		crdt_update: data.crdt_update,
+		sourceDocument,
+		targetSchema: VegetableData,
+	})
+
+	const now = new Date(yield* Clock.currentTimeMillis)
+
+	const revision_id = yield* UUIDGen.make(VegetableRevisionId)
 
 	return yield* InsertVegetableRevision({
 		created_at: now.toISOString(),
 		updated_at: now.toISOString(),
 		vegetable_id: data.vegetable_id,
-		id: VegetableRevisionId.make(Bun.randomUUIDv7()),
-		evaluation: 'rejected',
+		id: revision_id,
+		evaluation: 'pending',
 		crdt_update: data.crdt_update,
 		created_by_id: data.person_id,
 	})
@@ -501,13 +558,15 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 	// Update the vegetable CRDT with the merged document
 	const updatedSnapshot = currentDoc.export({ mode: 'snapshot' })
 
+	const now = new Date(yield* Clock.currentTimeMillis)
+
 	yield* pipe(
-		updateRevision({ ...data, evaluated_at: new Date().toISOString() }),
+		updateRevision({ ...data, evaluated_at: now.toISOString() }),
 		Effect.andThen(() =>
 			updateVegetableCRDT({
 				id: revision.vegetable_id,
 				loro_crdt: updatedSnapshot,
-				updated_at: new Date().toISOString(),
+				updated_at: now.toISOString(),
 			}),
 		),
 		Effect.andThen(() =>
@@ -551,19 +610,25 @@ const CORN_INITIAL = VegetableData.make({
 	},
 })
 
-const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
+const FetchVegetableRequest = Schema.Struct({
 	vegetable_id: VegetableId,
-	locale: 'pt' | 'es' | 'en',
+	locale: Locale,
+})
+const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
+	request: typeof FetchVegetableRequest.Type,
 ) {
 	const sql = yield* SqlClient.SqlClient
 
-	const result = yield* sql`
+	const Query = SqlSchema.single({
+		Request: FetchVegetableRequest,
+		Result: QueriedVegetableData,
+		execute: () => sql`
     WITH
     preferred_translation AS (
       SELECT
         vegetable_id,
         locale,
-        names,
+        common_names,
         searchable_names,
         gender,
         origin,
@@ -572,7 +637,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
           PARTITION BY vegetable_id
           ORDER BY
             CASE locale
-              WHEN ${locale} THEN 1
+              WHEN ${request.locale} THEN 1
               WHEN 'en' THEN 2
               WHEN 'pt' THEN 3
               WHEN 'es' THEN 4
@@ -580,7 +645,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
             END
         ) AS rn
       FROM vegetable_translations
-      WHERE vegetable_id = ${vegetable_id}
+      WHERE vegetable_id = ${request.vegetable_id}
     )
     SELECT
       v.id,
@@ -594,12 +659,12 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
       v.temperature_min,
       v.temperature_max,
       v.main_photo_id,
-      t.locale as translation_locale,
-      t.names as translation_names,
-      t.searchable_names as translation_searchable_names,
-      t.gender as translation_gender,
-      t.origin as translation_origin,
-      t.content as translation_content,
+      t.locale as locale,
+      t.common_names as common_names,
+      t.searchable_names as searchable_names,
+      t.gender as gender,
+      t.origin as origin,
+      t.content as content,
       JSON_GROUP_ARRAY(
         CASE WHEN s.stratum IS NOT NULL THEN s.stratum END
       ) FILTER (WHERE s.stratum IS NOT NULL) as strata,
@@ -622,11 +687,12 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
     LEFT JOIN vegetable_edible_parts ep ON v.id = ep.vegetable_id
     LEFT JOIN vegetable_lifecycles lc ON v.id = lc.vegetable_id
     LEFT JOIN vegetable_uses u ON v.id = u.vegetable_id
-    WHERE v.id = ${vegetable_id}
-    GROUP BY v.id, t.locale, t.names, t.searchable_names, t.gender, t.origin, t.content
-  `
+    WHERE v.id = ${request.vegetable_id}
+    GROUP BY v.id, t.locale, t.common_names, t.searchable_names, t.gender, t.origin, t.content
+  `,
+	})
 
-	return result[0]
+	return yield* Query(request)
 })
 
 const program = Effect.gen(function* () {
@@ -635,39 +701,38 @@ const program = Effect.gen(function* () {
 		Effect.withSpan('createDocFromVegetableData'),
 	)
 
-	const person_id = PersonId.make(Bun.randomUUIDv7())
+	const person_id = yield* UUIDGen.make(PersonId)
 	const vegetable_id = yield* createFirstVersion({
 		loro_doc: initialDoc,
 		person_id,
 	})
 	// yield* Effect.logInfo(yield* sql`SELECT * FROM vegetable_crdts;`)
 
-	const updatedDoc = yield* pipe(
-		Effect.sync(() =>
-			editVegetableDoc({
-				initial_doc: initialDoc,
-				person_id,
-				updateData: (current) => ({
-					...current,
-					metadata: { ...current.metadata, height_max: 450 },
-				}),
-			}),
-		),
-		Effect.withSpan('editVegetableDoc'),
-	)
+	const updatedDoc = yield* editVegetableDoc({
+		initial_doc: initialDoc,
+		person_id,
+		updateData: (current) => ({
+			...current,
+			metadata: { ...current.metadata, height_max: 450 },
+		}),
+	})
 	const firstRevision = yield* createRevision({
 		person_id,
 		vegetable_id,
 		crdt_update: updatedDoc.crdt_update,
 	})
 
+	const vegetableRequest = FetchVegetableRequest.make({
+		vegetable_id,
+		locale: 'en',
+	})
 	yield* Effect.log(
 		'Full vegetable',
-		yield* fetchFullVegetable(vegetable_id, 'en'),
+		yield* fetchFullVegetable(vegetableRequest),
 	)
 	yield* Effect.log(
 		'Before revision',
-		(yield* fetchFullVegetable(vegetable_id, 'en')).height_max,
+		(yield* fetchFullVegetable(vegetableRequest)).height_max,
 	)
 	yield* evaluateRevision({
 		evaluated_by_id: person_id,
@@ -676,10 +741,16 @@ const program = Effect.gen(function* () {
 	})
 	yield* Effect.log(
 		'After revision',
-		(yield* fetchFullVegetable(vegetable_id, 'en')).height_max,
+		(yield* fetchFullVegetable(vegetableRequest)).height_max,
 	)
 }).pipe(Effect.withSpan('fullProgram'))
 
-const Services = Layer.mergeAll(DevTools.layer(), BunSqlEnvLive)
+const BunUUIDGenLive = Layer.succeed(UUIDGen, {
+	generate: () => Bun.randomUUIDv7(),
+	make: (brand) =>
+		Effect.sync(() => Schema.decodeSync(brand)(Bun.randomUUIDv7())),
+})
+
+const Services = Layer.mergeAll(DevTools.layer(), BunSqlEnvLive, BunUUIDGenLive)
 
 pipe(program, Effect.provide(Services), BunRuntime.runMain)

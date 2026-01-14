@@ -7,6 +7,11 @@ export type VegetableId = typeof VegetableId.Type
 export const PersonId = Schema.UUID.pipe(Schema.brand('PersonId'))
 export type PersonId = typeof PersonId.Type
 
+export const VegetableRevisionId = Schema.UUID.pipe(
+	Schema.brand('VegetableRevisionId'),
+)
+export type VegetableRevisionId = typeof VegetableRevisionId.Type
+
 export const ImageId = Schema.UUID.pipe(Schema.brand('ImageId'))
 export type ImageId = typeof ImageId.Type
 
@@ -134,7 +139,7 @@ export const TiptapDocument = Schema.Struct({
 
 export const VegetableMetadata = Schema.Struct({
 	handle: Handle,
-	scientific_names: Schema.Array(
+	scientific_names: Schema.NonEmptyArray(
 		Schema.Struct({
 			$cid: Schema.optional(Schema.String),
 			value: Schema.NonEmptyTrimmedString,
@@ -154,7 +159,8 @@ export const VegetableMetadata = Schema.Struct({
 	main_photo_id: Schema.NullishOr(ImageId),
 })
 
-const Locale = Schema.Literal('pt', 'es', 'en')
+export const Locale = Schema.Literal('pt', 'es', 'en')
+export type Locale = typeof Locale.Type
 
 export const VegetableLocalizedData = Schema.Struct({
 	gender: Gender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
@@ -187,8 +193,29 @@ export const VegetableData = Schema.Struct({
 })
 export type VegetableData = typeof VegetableData.Type
 
+export const QueriedVegetableData = Schema.Struct({
+	...VegetableMetadata.fields,
+	...VegetableLocalizedData.fields,
+	scientific_names: Schema.parseJson(Schema.NonEmptyArray(Schema.String)),
+	common_names: Schema.parseJson(Schema.NonEmptyArray(Schema.String)),
+	strata: Schema.parseJson(VegetableMetadata.fields.strata),
+	lifecycles: Schema.parseJson(VegetableMetadata.fields.lifecycles),
+	uses: Schema.parseJson(VegetableMetadata.fields.uses),
+	edible_parts: Schema.parseJson(VegetableMetadata.fields.edible_parts),
+	planting_methods: Schema.parseJson(VegetableMetadata.fields.planting_methods),
+	locale: Locale,
+})
+export type QueriedVegetableData = typeof QueriedVegetableData.Type
+
 export const ApprovalStatus = Schema.Literal(
 	'pending_approval',
 	'approved',
-	'disapproved',
+	'rejected',
 )
+
+export const RevisionEvaluation = Schema.Literal(
+	'pending',
+	'approved',
+	'rejected',
+)
+export type RevisionEvaluation = typeof RevisionEvaluation.Type
