@@ -174,11 +174,14 @@ CREATE TABLE vegetable_revisions (
     vegetable_id text,
     created_by_id text,
     crdt_update blob NOT NULL,
-    approval_status text NOT NULL, -- ApprovalStatus
+    evaluation text NOT NULL, -- RevisionEvaluation
+    evaluated_by_id text,
+    evaluated_at text,
     created_at text,
     updated_at text,
     FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
+    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
+    FOREIGN KEY (evaluated_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
 -- The core queryable data, materialized from the CRDT
@@ -325,11 +328,14 @@ CREATE TABLE resource_revisions (
     resource_id text,
     created_by_id text,
     crdt_update blob NOT NULL,
-    approval_status text NOT NULL, -- ApprovalStatus
+    evaluation text NOT NULL, -- RevisionEvaluation
+    evaluated_by_id text,
+    evaluated_at text,
     created_at text,
     updated_at text,
     FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
+    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
+    FOREIGN KEY (evaluated_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
 -- The core queryable data, materialized from the CRDT
@@ -468,7 +474,6 @@ CREATE TABLE event_commits (
     created_by_id text,
     from_crdt_frontier json NOT NULL,
     crdt_update blob NOT NULL,
-    approval_status text NOT NULL, -- ApprovalStatus
     created_at text,
     FOREIGN KEY (event_id) REFERENCES event_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL

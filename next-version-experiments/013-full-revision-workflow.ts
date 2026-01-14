@@ -1,18 +1,12 @@
 import { DevTools } from '@effect/experimental'
-import { NodeSdk } from '@effect/opentelemetry'
 import { BunRuntime } from '@effect/platform-bun'
 import { SqlClient, SqlResolver, SqlSchema } from '@effect/sql'
-import {
-	BatchSpanProcessor,
-	ConsoleSpanExporter,
-} from '@opentelemetry/sdk-trace-base'
 import { VegetableDataLoro } from '004-loro-mirror'
 import { BunSqlEnvLive } from '011-schema-management/src/sql-live'
-import { Effect, pipe, Schema } from 'effect'
+import { Data, Effect, Layer, Option, pipe, Schema } from 'effect'
 import { LoroDoc, VersionVector } from 'loro-crdt'
 import { Mirror } from 'loro-mirror'
 import {
-	ApprovalStatus,
 	ImageId,
 	PersonId,
 	RevisionEvaluation,
@@ -35,18 +29,6 @@ const CommitMessage = Schema.Union(
 		model: Schema.String,
 	}),
 )
-
-/**
- * #5 function to review a revision
- *    - pulls the revision
- *    - pulls the vegetable's doc & hydrate it (new LoroDoc)
- *    - apply diff
- *    - commit with revision's user id and updated_at
- *    - export snapshot and modify the vegetable's doc in the DB
- *    - mark revision as accepted and closed
- *    - materialize all vegetable tables
- *    - everything in a single transaction
- */
 
 function createDocFromVegetableData(data: VegetableData) {
 	const initialDoc = new LoroDoc()
@@ -327,7 +309,8 @@ const insertVegetableRevision = Effect.gen(function* () {
 			vegetable_id: VegetableId,
 			created_by_id: PersonId,
 			crdt_update: Schema.Uint8ArrayFromSelf,
-			approval_status: ApprovalStatus,
+			evaluation: RevisionEvaluation,
+			evaluated_by_id: Schema.optional(PersonId),
 			created_at: Schema.String,
 			updated_at: Schema.String,
 		}),
@@ -335,8 +318,8 @@ const insertVegetableRevision = Effect.gen(function* () {
 		execute: (requests) =>
 			sql`
          INSERT INTO vegetable_revisions
-			   OUTPUT INSERTED.id
          ${sql.insert(requests)}
+         RETURNING id
        `,
 	})
 })
@@ -386,7 +369,8 @@ const createFirstVersion = Effect.fn('createFirstVersion')(function* ({
 				updated_at: now.toISOString(),
 				vegetable_id: vegetable_id,
 				id: VegetableRevisionId.make(Bun.randomUUIDv7()),
-				approval_status: 'approved',
+				evaluation: 'approved',
+				evaluated_by_id: person_id,
 				crdt_update,
 				created_by_id: person_id,
 			}),
@@ -413,11 +397,15 @@ const createRevision = Effect.fn('createRevision')(function* (data: {
 		updated_at: now.toISOString(),
 		vegetable_id: data.vegetable_id,
 		id: VegetableRevisionId.make(Bun.randomUUIDv7()),
-		approval_status: 'disapproved',
+		evaluation: 'rejected',
 		crdt_update: data.crdt_update,
 		created_by_id: data.person_id,
 	})
 })
+
+export class NotFoundError extends Data.TaggedError('NotFoundError')<{
+	id?: string
+}> {}
 
 const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 	revision_id: VegetableRevisionId
@@ -441,18 +429,93 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
        `,
 	})
 
-	// @TODO: finish revision - import/merge CRDT, upsert CRDT table, materialize tables
-	if (data.evaluation !== 'approved') {
-		return yield* updateRevision({
-			...data,
-			evaluated_at: new Date().toISOString(),
-		})
-	}
+	const fetchRevision = SqlSchema.findOne({
+		Request: Schema.Struct({ revision_id: VegetableRevisionId }),
+		Result: Schema.Struct({
+			id: VegetableRevisionId,
+			vegetable_id: VegetableId,
+			crdt_update: Schema.Uint8ArrayFromSelf,
+		}),
+		execute: ({ revision_id }) =>
+			sql`
+        SELECT id, vegetable_id, crdt_update
+        FROM vegetable_revisions
+        WHERE id = ${sql.safe(revision_id)}
+      `,
+	})
 
-	// const vegetableCrdt = SqlSchema.findOne({})
+	const fetchVegetableCRDT = SqlSchema.findOne({
+		Request: Schema.Struct({ vegetable_id: VegetableId }),
+		Result: Schema.Struct({
+			id: VegetableId,
+			loro_crdt: Schema.Uint8ArrayFromSelf,
+		}),
+		execute: ({ vegetable_id }) =>
+			sql`
+        SELECT id, loro_crdt
+        FROM vegetable_crdts
+        WHERE id = ${sql.safe(vegetable_id)}
+      `,
+	})
+
+	const updateVegetableCRDT = SqlSchema.void({
+		Request: Schema.Struct({
+			id: VegetableId,
+			loro_crdt: Schema.Uint8ArrayFromSelf,
+			updated_at: Schema.String,
+		}),
+		execute: ({ id, ...update }) =>
+			sql`
+        UPDATE vegetable_crdts
+        SET ${sql.update(update)}
+        WHERE id = ${sql.safe(id)}
+      `,
+	})
+
+	const revision = yield* fetchRevision({ revision_id: data.revision_id }).pipe(
+		Effect.flatMap(
+			Option.match({
+				onNone: () => Effect.fail(new NotFoundError({ id: data.revision_id })),
+				onSome: Effect.succeed,
+			}),
+		),
+	)
+
+	const vegetableCRDT = yield* fetchVegetableCRDT({
+		vegetable_id: revision.vegetable_id,
+	}).pipe(
+		Effect.flatMap(
+			Option.match({
+				onNone: () =>
+					Effect.fail(new NotFoundError({ id: revision.vegetable_id })),
+				onSome: Effect.succeed,
+			}),
+		),
+	)
+
+	// Load current document and apply revision update
+	const currentDoc = new LoroDoc()
+	currentDoc.import(vegetableCRDT.loro_crdt)
+	currentDoc.import(revision.crdt_update)
+
+	// Update the vegetable CRDT with the merged document
+	const updatedSnapshot = currentDoc.export({ mode: 'snapshot' })
+
 	yield* pipe(
 		updateRevision({ ...data, evaluated_at: new Date().toISOString() }),
-		// Effect.andThen(() => materializeVegetable({ loro_doc, vegetable_id })),
+		Effect.andThen(() =>
+			updateVegetableCRDT({
+				id: revision.vegetable_id,
+				loro_crdt: updatedSnapshot,
+				updated_at: new Date().toISOString(),
+			}),
+		),
+		Effect.andThen(() =>
+			materializeVegetable({
+				loro_doc: currentDoc,
+				vegetable_id: revision.vegetable_id,
+			}),
+		),
 		sql.withTransaction,
 	)
 })
@@ -567,8 +630,6 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
 })
 
 const program = Effect.gen(function* () {
-	const sql = yield* SqlClient.SqlClient
-
 	const initialDoc = yield* pipe(
 		Effect.sync(() => createDocFromVegetableData(CORN_INITIAL)),
 		Effect.withSpan('createDocFromVegetableData'),
@@ -606,26 +667,19 @@ const program = Effect.gen(function* () {
 	)
 	yield* Effect.log(
 		'Before revision',
-		(yield* fetchFullVegetable(vegetable_id, 'en') as any).metadata.height_max,
+		(yield* fetchFullVegetable(vegetable_id, 'en')).height_max,
 	)
 	yield* evaluateRevision({
 		evaluated_by_id: person_id,
 		evaluation: 'approved',
 		revision_id: firstRevision.id,
 	})
+	yield* Effect.log(
+		'After revision',
+		(yield* fetchFullVegetable(vegetable_id, 'en')).height_max,
+	)
 }).pipe(Effect.withSpan('fullProgram'))
 
-// Set up tracing with the OpenTelemetry SDK
-const NodeSdkLive = NodeSdk.layer(() => ({
-	resource: { serviceName: 'example' },
-	// Export span data to the console
-	spanProcessor: new BatchSpanProcessor(new ConsoleSpanExporter()),
-}))
+const Services = Layer.mergeAll(DevTools.layer(), BunSqlEnvLive)
 
-pipe(
-	program,
-	Effect.provide(BunSqlEnvLive),
-	// Effect.provide(NodeSdkLive),
-	Effect.provide(DevTools.layer()),
-	BunRuntime.runMain,
-)
+pipe(program, Effect.provide(Services), BunRuntime.runMain)
