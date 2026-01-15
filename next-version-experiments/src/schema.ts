@@ -86,6 +86,15 @@ export type PlantingMethod = typeof PlantingMethod.Type
 export const Gender = Schema.Literal('NEUTRAL', 'MALE', 'FEMALE')
 export type Gender = typeof Gender.Type
 
+export const ChineseMedicineElement = Schema.Literal(
+	'FIRE',
+	'EARTH',
+	'METAL',
+	'WATER',
+	'WOOD',
+)
+export type ChineseMedicineElement = typeof ChineseMedicineElement.Type
+
 const UnknownTiptapAttrs = Schema.UndefinedOr(
 	Schema.Record({ key: Schema.NonEmptyString, value: Schema.Any }),
 )
@@ -156,6 +165,7 @@ export const VegetableMetadata = Schema.Struct({
 	height_max: Schema.NullishOr(Schema.Int),
 	temperature_min: Schema.NullishOr(Schema.Number),
 	temperature_max: Schema.NullishOr(Schema.Number),
+	chinese_medicine_element: Schema.NullishOr(ChineseMedicineElement),
 	main_photo_id: Schema.NullishOr(ImageId),
 })
 

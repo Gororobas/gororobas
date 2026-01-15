@@ -196,6 +196,7 @@ CREATE TABLE vegetables (
     height_max real,
     temperature_min real,
     temperature_max real,
+    chinese_medicine_element text, -- ChineseMedicineElement
     main_photo_id text,
     FOREIGN KEY (id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (main_photo_id) REFERENCES images (id) ON DELETE SET NULL
