@@ -1,1 +1,1 @@
-export { Given, When, Then, And, But } from './step'
+export { And, But, Given, Then, When } from './step'

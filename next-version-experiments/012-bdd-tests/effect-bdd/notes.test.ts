@@ -91,7 +91,6 @@ class NoteDeleteDeniedError extends Data.TaggedError('NoteDeleteDeniedError')<{
 // Services
 // ============================================================================
 
-// --- Person Repository ---
 interface PersonRepository {
 	create: (data: {
 		name: string
@@ -106,7 +105,6 @@ interface PersonRepository {
 const PersonRepository =
 	Context.GenericTag<PersonRepository>('PersonRepository')
 
-// --- Organization Repository ---
 interface OrganizationRepository {
 	create: (data: { name: string }) => Effect.Effect<Organization>
 	findByName: (
@@ -118,7 +116,6 @@ const OrganizationRepository = Context.GenericTag<OrganizationRepository>(
 	'OrganizationRepository',
 )
 
-// --- Membership Repository ---
 interface MembershipRepository {
 	create: (data: {
 		personName: string
@@ -139,7 +136,6 @@ const MembershipRepository = Context.GenericTag<MembershipRepository>(
 	'MembershipRepository',
 )
 
-// --- Auth Service ---
 interface AuthService {
 	login: (name: string) => Effect.Effect<Person, PersonNotFoundError>
 	getCurrentUser: () => Effect.Effect<Option.Option<Person>>
@@ -147,7 +143,6 @@ interface AuthService {
 
 const AuthService = Context.GenericTag<AuthService>('AuthService')
 
-// --- Notes Service ---
 interface NotesService {
 	create: (data: {
 		content: string
@@ -224,7 +219,6 @@ const makeTestState = (): TestState => ({
 
 const TestStateRef = Context.GenericTag<Ref.Ref<TestState>>('TestStateRef')
 
-// --- Person Repository Implementation ---
 const PersonRepositoryLive = Layer.effect(
 	PersonRepository,
 	Effect.gen(function* () {
@@ -264,7 +258,6 @@ const PersonRepositoryLive = Layer.effect(
 	}),
 )
 
-// --- Organization Repository Implementation ---
 const OrganizationRepositoryLive = Layer.effect(
 	OrganizationRepository,
 	Effect.gen(function* () {
@@ -296,7 +289,6 @@ const OrganizationRepositoryLive = Layer.effect(
 	}),
 )
 
-// --- Membership Repository Implementation ---
 const MembershipRepositoryLive = Layer.effect(
 	MembershipRepository,
 	Effect.gen(function* () {
@@ -339,7 +331,6 @@ const MembershipRepositoryLive = Layer.effect(
 	}),
 )
 
-// --- Auth Service Implementation ---
 const AuthServiceLive = Layer.effect(
 	AuthService,
 	Effect.gen(function* () {
@@ -365,23 +356,18 @@ const AuthServiceLive = Layer.effect(
 	}),
 )
 
-// --- Notes Service Implementation ---
 const NotesServiceLive = Layer.effect(
 	NotesService,
 	Effect.gen(function* () {
 		const stateRef = yield* TestStateRef
-		const personRepo = yield* PersonRepository
 		const membershipRepo = yield* MembershipRepository
 
-		const canCreateNote = (author: Person, profileType: string): boolean => {
+		const canCreateNote = (author: Person): boolean => {
 			if (author.access === 'disapproved') return false
 			return true
 		}
 
-		const canEditOrgNote = (
-			editorId: string,
-			membership: Option.Option<Membership>,
-		): boolean => {
+		const canEditOrgNote = (membership: Option.Option<Membership>): boolean => {
 			if (Option.isNone(membership)) return false
 			const perm = membership.value.permissions
 			return perm === 'full' || perm === 'edit'
@@ -403,7 +389,7 @@ const NotesServiceLive = Layer.effect(
 						(p) => p.id === data.authorId,
 					)
 
-					if (!author || !canCreateNote(author, data.profileType)) {
+					if (!author || !canCreateNote(author)) {
 						return yield* Effect.fail(
 							new NoteCreationDeniedError({
 								reason: 'User not authorized to create notes',
@@ -441,7 +427,7 @@ const NotesServiceLive = Layer.effect(
 						(p) => p.id === data.authorId,
 					)
 
-					if (!author || !canCreateNote(author, data.profileType)) {
+					if (!author || !canCreateNote(author)) {
 						return yield* Effect.fail(
 							new NoteCreationDeniedError({
 								reason: 'User not authorized to create notes',
@@ -495,13 +481,12 @@ const NotesServiceLive = Layer.effect(
 						)
 					}
 
-					// Check permissions for org notes
 					if (note.profileType === 'organization') {
 						const membership = yield* membershipRepo.findByPersonAndOrg(
 							editorId,
 							note.profileId,
 						)
-						if (!canEditOrgNote(editorId, membership)) {
+						if (!canEditOrgNote(membership)) {
 							return yield* Effect.fail(
 								new NoteEditDeniedError({
 									reason: 'User not authorized to edit this note',
@@ -537,13 +522,12 @@ const NotesServiceLive = Layer.effect(
 						return { success: false, note: note! }
 					}
 
-					// Check permissions for org notes
 					if (note.profileType === 'organization') {
 						const membership = yield* membershipRepo.findByPersonAndOrg(
 							editorId,
 							note.profileId,
 						)
-						if (!canEditOrgNote(editorId, membership)) {
+						if (!canEditOrgNote(membership)) {
 							return { success: false, note }
 						}
 					} else if (note.authorId !== editorId) {
@@ -629,13 +613,11 @@ const NotesServiceLive = Layer.effect(
 				Effect.gen(function* () {
 					const state = yield* Ref.get(stateRef)
 
-					// Get the author to check their access level
 					const author = Array.from(state.people.values()).find(
 						(p) => p.id === note.authorId,
 					)
 
 					if (viewer === 'visitor') {
-						// Visitors can only see public notes from approved users
 						if (note.visibility !== 'public') return false
 						if (author && author.access !== 'approved') return false
 						if (note.profileType === 'organization') return false
@@ -644,17 +626,13 @@ const NotesServiceLive = Layer.effect(
 
 					const viewerPerson = viewer as Person
 
-					// Author can always see their own notes
 					if (note.authorId === viewerPerson.id) return true
 
-					// Handle personal profile notes
 					if (note.profileType === 'person') {
-						// Private notes - only owner
 						if (note.visibility === 'private') {
 							return note.authorId === viewerPerson.id
 						}
 
-						// Author has pending access - only admins/mods can see
 						if (author && author.access === 'pending_approval') {
 							return (
 								viewerPerson.role === 'admin' ||
@@ -662,35 +640,29 @@ const NotesServiceLive = Layer.effect(
 							)
 						}
 
-						// Community notes - only approved users
 						if (note.visibility === 'community') {
 							return viewerPerson.access === 'approved'
 						}
 
-						// Public notes - anyone with approved access can see
 						if (note.visibility === 'public') {
 							return true
 						}
 					}
 
-					// Handle organization profile notes
 					if (note.profileType === 'organization') {
 						const membership = yield* membershipRepo.findByPersonAndOrg(
 							viewerPerson.id,
 							note.profileId,
 						)
 
-						// Private org notes - only members
 						if (note.visibility === 'private') {
 							return Option.isSome(membership)
 						}
 
-						// Community org notes - any approved user
 						if (note.visibility === 'community') {
 							return viewerPerson.access === 'approved'
 						}
 
-						// Public org notes
 						if (note.visibility === 'public') {
 							return true
 						}
@@ -728,17 +700,6 @@ const TestStateLayer = Layer.effect(
 	Ref.make<TestState>(makeTestState()),
 )
 
-const TestStateLayerDebug = Layer.effect(
-	TestStateRef,
-	Effect.gen(function* () {
-		yield* Effect.log('🔧 Building TestStateRef...')
-		const ref = yield* Ref.make<TestState>(makeTestState())
-		yield* Effect.log('✅ TestStateRef created')
-		return ref
-	}),
-)
-
-// TestStateLayer MUST come first - everything else depends on TestStateRef
 const TestLayer = AuthServiceLive.pipe(
 	Layer.provideMerge(NotesServiceLive),
 	Layer.provideMerge(MembershipRepositoryLive),
@@ -770,6 +731,83 @@ const initialContext: NotesTestContext = {
 	lastEditResult: null,
 	lastDeleteResult: null,
 }
+
+// ============================================================================
+// Reusable Step Handlers
+// ============================================================================
+
+const checkVisibilityTable = () =>
+	And('the note should have the following visibility:', {
+		params: Schema.Struct({
+			table: Schema.Array(
+				Schema.Struct({
+					viewer: Schema.String,
+					visible: Schema.String,
+				}),
+			),
+		}),
+		handler: (ctx, { table }) =>
+			Effect.gen(function* () {
+				const typedCtx = ctx as NotesTestContext
+				const notes = yield* NotesService
+
+				for (const row of table) {
+					const viewer =
+						row.viewer === 'visitors'
+							? 'visitor'
+							: typedCtx.people.get(row.viewer)!
+
+					const isVisible = yield* notes.isVisibleTo(typedCtx.lastNote!, viewer)
+					const expected = row.visible === 'yes'
+
+					expect(isVisible, `Visibility for "${row.viewer}"`).toBe(expected)
+				}
+
+				return typedCtx
+			}),
+	})
+
+const userIsLoggedIn = () =>
+	Given('{string:name} is logged in', {
+		params: Schema.Struct({ name: Schema.String }),
+		handler: (_, { name }) =>
+			Effect.gen(function* () {
+				const bgCtx = yield* getBackgroundContext<NotesTestContext>()
+				const auth = yield* AuthService
+				const user = yield* auth.login(name)
+				return { ...bgCtx, currentUser: user }
+			}),
+	})
+
+const createNoteUnderProfile = () =>
+	When('they create a {string:visibility} note under their profile', {
+		params: Schema.Struct({ visibility: Schema.String }),
+		handler: (ctx, { visibility }) =>
+			Effect.gen(function* () {
+				const typedCtx = ctx as NotesTestContext
+				const notes = yield* NotesService
+				const note = yield* notes.create({
+					content: 'Test note content',
+					visibility: visibility as Visibility,
+					profileType: 'person',
+					profileId: typedCtx.currentUser!.id,
+					authorId: typedCtx.currentUser!.id,
+				})
+				return { ...typedCtx, lastNote: note }
+			}),
+	})
+
+const noteIsCreatedInProfile = () =>
+	Then("the note is created in {string:owner}'s profile", {
+		params: Schema.Struct({ owner: Schema.String }),
+		handler: (ctx, { owner }) =>
+			Effect.sync(() => {
+				const typedCtx = ctx as NotesTestContext
+				expect(typedCtx.lastNote).toBeDefined()
+				expect(typedCtx.currentUser?.name).toBe(owner)
+				return typedCtx
+			}),
+	})
 
 // ============================================================================
 // Test Implementation
@@ -819,115 +857,10 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 				layer: TestLayer,
 				steps: () =>
 					runSteps(
-						Given('{string:name} is logged in', {
-							params: Schema.Struct({ name: Schema.String }),
-							handler: (_, { name }) =>
-								Effect.gen(function* () {
-									const bgCtx = yield* getBackgroundContext<NotesTestContext>()
-									const auth = yield* AuthService
-									const user = yield* auth.login(name)
-									return { ...bgCtx, currentUser: user }
-								}),
-						}),
-						When('they create a {string:visibility} note under their profile', {
-							params: Schema.Struct({ visibility: Schema.String }),
-							handler: (ctx, { visibility }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const note = yield* notes.create({
-										content: 'Test note content',
-										visibility: visibility as Visibility,
-										profileType: 'person',
-										profileId: typedCtx.currentUser!.id,
-										authorId: typedCtx.currentUser!.id,
-									})
-									return { ...typedCtx, lastNote: note }
-								}),
-						}),
-						Then("the note is created in {string:owner}'s profile", {
-							params: Schema.Struct({ owner: Schema.String }),
-							handler: (ctx, { owner }) =>
-								Effect.sync(() => {
-									const typedCtx = ctx as NotesTestContext
-									expect(typedCtx.lastNote).toBeDefined()
-									expect(typedCtx.currentUser?.name).toBe(owner)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to visitors', {
-							handler: (ctx) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										'visitor',
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
+						userIsLoggedIn(),
+						createNoteUnderProfile(),
+						noteIsCreatedInProfile(),
+						checkVisibilityTable(),
 					),
 			})
 
@@ -935,72 +868,10 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 				layer: TestLayer,
 				steps: () =>
 					runSteps(
-						Given('{string:name} is logged in', {
-							params: Schema.Struct({ name: Schema.String }),
-							handler: (_, { name }) =>
-								Effect.gen(function* () {
-									const bgCtx = yield* getBackgroundContext<NotesTestContext>()
-									const auth = yield* AuthService
-									const user = yield* auth.login(name)
-									return { ...bgCtx, currentUser: user }
-								}),
-						}),
-						When('they create a {string:visibility} note under their profile', {
-							params: Schema.Struct({ visibility: Schema.String }),
-							handler: (ctx, { visibility }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const note = yield* notes.create({
-										content: 'Community note content',
-										visibility: visibility as Visibility,
-										profileType: 'person',
-										profileId: typedCtx.currentUser!.id,
-										authorId: typedCtx.currentUser!.id,
-									})
-									return { ...typedCtx, lastNote: note }
-								}),
-						}),
-						Then("the note is created in {string:owner}'s profile", {
-							params: Schema.Struct({ owner: Schema.String }),
-							handler: (ctx, { owner }) =>
-								Effect.sync(() => {
-									const typedCtx = ctx as NotesTestContext
-									expect(typedCtx.lastNote).toBeDefined()
-									expect(typedCtx.currentUser?.name).toBe(owner)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
-						And('the note is not visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(false)
-									return typedCtx
-								}),
-						}),
+						userIsLoggedIn(),
+						createNoteUnderProfile(),
+						noteIsCreatedInProfile(),
+						checkVisibilityTable(),
 					),
 			})
 
@@ -1008,72 +879,10 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 				layer: TestLayer,
 				steps: () =>
 					runSteps(
-						Given('{string:name} is logged in', {
-							params: Schema.Struct({ name: Schema.String }),
-							handler: (_, { name }) =>
-								Effect.gen(function* () {
-									const bgCtx = yield* getBackgroundContext<NotesTestContext>()
-									const auth = yield* AuthService
-									const user = yield* auth.login(name)
-									return { ...bgCtx, currentUser: user }
-								}),
-						}),
-						When('they create a {string:visibility} note under their profile', {
-							params: Schema.Struct({ visibility: Schema.String }),
-							handler: (ctx, { visibility }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const note = yield* notes.create({
-										content: 'Private note content',
-										visibility: visibility as Visibility,
-										profileType: 'person',
-										profileId: typedCtx.currentUser!.id,
-										authorId: typedCtx.currentUser!.id,
-									})
-									return { ...typedCtx, lastNote: note }
-								}),
-						}),
-						Then("the note is created in {string:owner}'s profile", {
-							params: Schema.Struct({ owner: Schema.String }),
-							handler: (ctx, { owner }) =>
-								Effect.sync(() => {
-									const typedCtx = ctx as NotesTestContext
-									expect(typedCtx.lastNote).toBeDefined()
-									expect(typedCtx.currentUser?.name).toBe(owner)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
-						And('the note is not visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(false)
-									return typedCtx
-								}),
-						}),
+						userIsLoggedIn(),
+						createNoteUnderProfile(),
+						noteIsCreatedInProfile(),
+						checkVisibilityTable(),
 					),
 			})
 
@@ -1081,72 +890,10 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 				layer: TestLayer,
 				steps: () =>
 					runSteps(
-						Given('{string:name} is logged in', {
-							params: Schema.Struct({ name: Schema.String }),
-							handler: (_, { name }) =>
-								Effect.gen(function* () {
-									const bgCtx = yield* getBackgroundContext<NotesTestContext>()
-									const auth = yield* AuthService
-									const user = yield* auth.login(name)
-									return { ...bgCtx, currentUser: user }
-								}),
-						}),
-						When('they create a {string:visibility} note under their profile', {
-							params: Schema.Struct({ visibility: Schema.String }),
-							handler: (ctx, { visibility }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const note = yield* notes.create({
-										content: 'Pending user note',
-										visibility: visibility as Visibility,
-										profileType: 'person',
-										profileId: typedCtx.currentUser!.id,
-										authorId: typedCtx.currentUser!.id,
-									})
-									return { ...typedCtx, lastNote: note }
-								}),
-						}),
-						Then("the note is created in {string:owner}'s profile", {
-							params: Schema.Struct({ owner: Schema.String }),
-							handler: (ctx, { owner }) =>
-								Effect.sync(() => {
-									const typedCtx = ctx as NotesTestContext
-									expect(typedCtx.lastNote).toBeDefined()
-									expect(typedCtx.currentUser?.name).toBe(owner)
-									return typedCtx
-								}),
-						}),
-						And('the note is visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(true)
-									return typedCtx
-								}),
-						}),
-						And('the note is not visible to {string:viewer}', {
-							params: Schema.Struct({ viewer: Schema.String }),
-							handler: (ctx, { viewer }) =>
-								Effect.gen(function* () {
-									const typedCtx = ctx as NotesTestContext
-									const notes = yield* NotesService
-									const viewerPerson = typedCtx.people.get(viewer)
-									const isVisible = yield* notes.isVisibleTo(
-										typedCtx.lastNote!,
-										viewerPerson!,
-									)
-									expect(isVisible).toBe(false)
-									return typedCtx
-								}),
-						}),
+						userIsLoggedIn(),
+						createNoteUnderProfile(),
+						noteIsCreatedInProfile(),
+						checkVisibilityTable(),
 					),
 			})
 
@@ -1154,16 +901,7 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 				layer: TestLayer,
 				steps: () =>
 					runSteps(
-						Given('{string:name} is logged in', {
-							params: Schema.Struct({ name: Schema.String }),
-							handler: (_, { name }) =>
-								Effect.gen(function* () {
-									const bgCtx = yield* getBackgroundContext<NotesTestContext>()
-									const auth = yield* AuthService
-									const user = yield* auth.login(name)
-									return { ...bgCtx, currentUser: user }
-								}),
-						}),
+						userIsLoggedIn(),
 						When('they create a {string:visibility} note under their profile', {
 							params: Schema.Struct({ visibility: Schema.String }),
 							handler: (ctx, { visibility }) =>
@@ -1241,9 +979,8 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 						handler: (ctx, { table }) =>
 							Effect.gen(function* () {
 								const typedCtx = ctx as NotesTestContext
-								const bgCtx = yield* getBackgroundContext<NotesTestContext>()
 								const personRepo = yield* PersonRepository
-								const peopleMap = new Map(bgCtx.people)
+								const peopleMap = new Map(typedCtx.people)
 
 								for (const row of table) {
 									const person = yield* personRepo.create({
@@ -1255,7 +992,6 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 
 								return {
 									...typedCtx,
-									...bgCtx,
 									people: peopleMap,
 								}
 							}),
@@ -1293,16 +1029,7 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 			layer: TestLayer,
 			steps: () =>
 				runSteps(
-					Given('{string:name} is logged in', {
-						params: Schema.Struct({ name: Schema.String }),
-						handler: (_, { name }) =>
-							Effect.gen(function* () {
-								const bgCtx = yield* getBackgroundContext<NotesTestContext>()
-								const auth = yield* AuthService
-								const user = yield* auth.login(name)
-								return { ...bgCtx, currentUser: user }
-							}),
-					}),
+					userIsLoggedIn(),
 					When(
 						'they create a {string:visibility} note under {string:orgName} profile',
 						{
@@ -1326,44 +1053,36 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 								}),
 						},
 					),
-					Then('the note is visible to {string:viewer}', {
-						params: Schema.Struct({ viewer: Schema.String }),
-						handler: (ctx, { viewer }) =>
-							Effect.gen(function* () {
-								const notes = yield* NotesService
-								const viewerPerson = ctx.people.get(viewer)
-								const isVisible = yield* notes.isVisibleTo(
-									ctx.lastNote!,
-									viewerPerson!,
-								)
-								expect(isVisible).toBe(true)
-								return ctx
-							}),
-					}),
-					Then('the note is visible to {string:viewer}', {
-						params: Schema.Struct({ viewer: Schema.String }),
-						handler: (ctx, { viewer }) =>
-							Effect.gen(function* () {
-								const notes = yield* NotesService
-								const viewerPerson = ctx.people.get(viewer)
-								const isVisible = yield* notes.isVisibleTo(
-									ctx.lastNote!,
-									viewerPerson!,
-								)
-								expect(isVisible).toBe(true)
-								return ctx
-							}),
-					}),
-					And('the note is not visible to visitors', {
-						handler: (ctx) =>
+					Then('the note should have the following visibility:', {
+						params: Schema.Struct({
+							table: Schema.Array(
+								Schema.Struct({
+									viewer: Schema.String,
+									visible: Schema.String,
+								}),
+							),
+						}),
+						handler: (ctx, { table }) =>
 							Effect.gen(function* () {
 								const typedCtx = ctx as NotesTestContext
 								const notes = yield* NotesService
-								const isVisible = yield* notes.isVisibleTo(
-									typedCtx.lastNote!,
-									'visitor',
-								)
-								expect(isVisible).toBe(false)
+
+								for (const row of table) {
+									const viewer =
+										row.viewer === 'visitors'
+											? 'visitor'
+											: typedCtx.people.get(row.viewer)!
+
+									const isVisible = yield* notes.isVisibleTo(
+										typedCtx.lastNote!,
+										viewer,
+									)
+									const expected = row.visible === 'yes'
+									expect(isVisible, `Visibility for "${row.viewer}"`).toBe(
+										expected,
+									)
+								}
+
 								return typedCtx
 							}),
 					}),
@@ -1374,16 +1093,7 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 			layer: TestLayer,
 			steps: () =>
 				runSteps(
-					Given('{string:name} is logged in', {
-						params: Schema.Struct({ name: Schema.String }),
-						handler: (_, { name }) =>
-							Effect.gen(function* () {
-								const bgCtx = yield* getBackgroundContext<NotesTestContext>()
-								const auth = yield* AuthService
-								const user = yield* auth.login(name)
-								return { ...bgCtx, currentUser: user }
-							}),
-					}),
+					userIsLoggedIn(),
 					When(
 						'they create a {string:visibility} note under {string:orgName} profile',
 						{
@@ -1407,63 +1117,36 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 								}),
 						},
 					),
-					Then('the note is visible to {string:viewer}', {
-						params: Schema.Struct({ viewer: Schema.String }),
-						handler: (ctx, { viewer }) =>
+					Then('the note should have the following visibility:', {
+						params: Schema.Struct({
+							table: Schema.Array(
+								Schema.Struct({
+									viewer: Schema.String,
+									visible: Schema.String,
+								}),
+							),
+						}),
+						handler: (ctx, { table }) =>
 							Effect.gen(function* () {
 								const typedCtx = ctx as NotesTestContext
 								const notes = yield* NotesService
-								const viewerPerson = typedCtx.people.get(viewer)
-								const isVisible = yield* notes.isVisibleTo(
-									typedCtx.lastNote!,
-									viewerPerson!,
-								)
-								expect(isVisible).toBe(true)
-								return typedCtx
-							}),
-					}),
-					And('the note is visible to {string:viewer}', {
-						params: Schema.Struct({ viewer: Schema.String }),
-						handler: (ctx, { viewer }) =>
-							Effect.gen(function* () {
-								const typedCtx = ctx as NotesTestContext
-								const notes = yield* NotesService
-								const viewerPerson = typedCtx.people.get(viewer)
-								const isVisible = yield* notes.isVisibleTo(
-									typedCtx.lastNote!,
-									viewerPerson!,
-								)
-								expect(isVisible).toBe(true)
-								return typedCtx
-							}),
-					}),
-					And('the note is visible to {string:viewer}', {
-						params: Schema.Struct({ viewer: Schema.String }),
-						handler: (ctx, { viewer }) =>
-							Effect.gen(function* () {
-								const typedCtx = ctx as NotesTestContext
-								const notes = yield* NotesService
-								const viewerPerson = typedCtx.people.get(viewer)
-								const isVisible = yield* notes.isVisibleTo(
-									typedCtx.lastNote!,
-									viewerPerson!,
-								)
-								expect(isVisible).toBe(true)
-								return typedCtx
-							}),
-					}),
-					And('the note is not visible to {string:viewer}', {
-						params: Schema.Struct({ viewer: Schema.String }),
-						handler: (ctx, { viewer }) =>
-							Effect.gen(function* () {
-								const typedCtx = ctx as NotesTestContext
-								const notes = yield* NotesService
-								const viewerPerson = typedCtx.people.get(viewer)
-								const isVisible = yield* notes.isVisibleTo(
-									typedCtx.lastNote!,
-									viewerPerson!,
-								)
-								expect(isVisible).toBe(false)
+
+								for (const row of table) {
+									const viewer =
+										row.viewer === 'visitors'
+											? 'visitor'
+											: typedCtx.people.get(row.viewer)!
+
+									const isVisible = yield* notes.isVisibleTo(
+										typedCtx.lastNote!,
+										viewer,
+									)
+									const expected = row.visible === 'yes'
+									expect(isVisible, `Visibility for "${row.viewer}"`).toBe(
+										expected,
+									)
+								}
+
 								return typedCtx
 							}),
 					}),
@@ -1554,8 +1237,6 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 								const notes = yield* NotesService
 								const personRepo = yield* PersonRepository
 								const org = bgCtx.organizations.get(orgName)!
-
-								// Create note by someone with full permissions (Maria)
 								const maria = yield* personRepo.findByName('Maria')
 
 								const note = yield* notes.createWithTitle({
@@ -1804,9 +1485,9 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 		})
 	})
 
-	// // -------------------------------------------------------------------------
-	// // Rule: Content Auditability (Who changed what?)
-	// // -------------------------------------------------------------------------
+	// -------------------------------------------------------------------------
+	// Rule: Content Auditability (Who changed what?)
+	// -------------------------------------------------------------------------
 	Rule(
 		'Content Auditability (Who changed what?)',
 		({ Background, Scenario }) => {
@@ -1838,10 +1519,9 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 							handler: (ctx, { table }) =>
 								Effect.gen(function* () {
 									const typedCtx = ctx as NotesTestContext
-									const bgCtx = yield* getBackgroundContext<NotesTestContext>()
 									const personRepo = yield* PersonRepository
 									const membershipRepo = yield* MembershipRepository
-									const peopleMap = new Map(bgCtx.people)
+									const peopleMap = new Map(typedCtx.people)
 									const org = Array.from(typedCtx.organizations.values())[0]
 
 									for (const row of table) {
@@ -1852,7 +1532,6 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 										})
 										peopleMap.set(person.name, person)
 
-										// Create membership
 										yield* membershipRepo.create({
 											personName: row.name,
 											organizationName: org.name,
@@ -1862,7 +1541,6 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 
 									return {
 										...typedCtx,
-										...bgCtx,
 										people: peopleMap,
 									}
 								}),
@@ -1955,56 +1633,44 @@ describeFeature('./012-bdd-tests/notes.feature', ({ Rule }) => {
 									return typedCtx
 								}),
 						}),
-						And(
-							'version {int:version} should be authored by {string:author} with content {string:content}',
-							{
-								params: Schema.Struct({
-									version: Schema.Int,
-									author: Schema.String,
-									content: Schema.String,
-								}),
-								handler: (ctx, { version, author, content }) =>
-									Effect.gen(function* () {
-										const typedCtx = ctx as NotesTestContext
-										const notes = yield* NotesService
-										const personRepo = yield* PersonRepository
-
-										const note = yield* notes.getById(typedCtx.lastNote!.id)
-										const authorPerson = yield* personRepo.findByName(author)
-
-										const noteVersion = note.versions[version - 1]
-										expect(noteVersion.content).toBe(content)
-										expect(noteVersion.authorId).toBe(authorPerson.id)
-
-										return typedCtx
+						And('the note history should match:', {
+							params: Schema.Struct({
+								table: Schema.Array(
+									Schema.Struct({
+										version: Schema.String,
+										author: Schema.String,
+										content: Schema.String,
 									}),
-							},
-						),
-						And(
-							'version {int:version} should be authored by {string:author} with content {string:content}',
-							{
-								params: Schema.Struct({
-									version: Schema.Int,
-									author: Schema.String,
-									content: Schema.String,
+								),
+							}),
+							handler: (ctx, { table }) =>
+								Effect.gen(function* () {
+									const typedCtx = ctx as NotesTestContext
+									const notes = yield* NotesService
+									const personRepo = yield* PersonRepository
+
+									const note = yield* notes.getById(typedCtx.lastNote!.id)
+
+									for (const row of table) {
+										const versionIndex = parseInt(row.version, 10) - 1
+										const authorPerson = yield* personRepo.findByName(
+											row.author,
+										)
+										const noteVersion = note.versions[versionIndex]
+
+										expect(
+											noteVersion.content,
+											`Version ${row.version} content`,
+										).toBe(row.content)
+										expect(
+											noteVersion.authorId,
+											`Version ${row.version} author`,
+										).toBe(authorPerson.id)
+									}
+
+									return typedCtx
 								}),
-								handler: (ctx, { version, author, content }) =>
-									Effect.gen(function* () {
-										const typedCtx = ctx as NotesTestContext
-										const notes = yield* NotesService
-										const personRepo = yield* PersonRepository
-
-										const note = yield* notes.getById(typedCtx.lastNote!.id)
-										const authorPerson = yield* personRepo.findByName(author)
-
-										const noteVersion = note.versions[version - 1]
-										expect(noteVersion.content).toBe(content)
-										expect(noteVersion.authorId).toBe(authorPerson.id)
-
-										return typedCtx
-									}),
-							},
-						),
+						}),
 					),
 			})
 		},

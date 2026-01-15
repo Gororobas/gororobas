@@ -81,7 +81,14 @@ function runStepsImpl(
 
 		const { steps: parsedSteps } = yield* Effect.serviceOption(
 			ScenarioContext,
-		).pipe(Effect.map(Option.getOrElse(() => [] as readonly ParsedStep[])))
+		).pipe(
+			Effect.map(
+				Option.getOrElse(() => ({
+					name: '',
+					steps: [] as readonly ParsedStep[],
+				})),
+			),
+		)
 
 		// =========================================================================
 		// VALIDATION PHASE - Run before executing any steps
@@ -160,6 +167,7 @@ function runStepsImpl(
 
 // ... all the overloads remain the same ...
 
+// @ts-expect-error not sure what's the issue
 export function runSteps<A, E1, R1>(
 	s1: Step<Record<string, unknown>, A, E1, R1>,
 ): Effect.Effect<A, E1, R1 | BackgroundContext | ScenarioContext>

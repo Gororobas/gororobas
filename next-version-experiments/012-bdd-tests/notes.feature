@@ -17,11 +17,13 @@ Feature: Notes
       Given "Ailton" is logged in
       When they create a "public" note under their profile
       Then the note is created in "Ailton"'s profile
-      And the note is visible to "Irene"
-      And the note is visible to "Ailton"
-      And the note is visible to "Pedro"
-      And the note is visible to "Gusttavo"
-      And the note is visible to visitors
+      And the note should have the following visibility:
+        | viewer   | visible |
+        | Irene    | yes     |
+        | Ailton   | yes     |
+        | Pedro    | yes     |
+        | Gusttavo | yes     |
+        | visitors | yes     |
 
     Scenario: Approved person creates community-only notes
       Community notes are safe spaces and can't be accessed by visitors or participants with unapproved access (pending or blocked)
@@ -29,11 +31,13 @@ Feature: Notes
       Given "Ailton" is logged in
       When they create a "community" note under their profile
       Then the note is created in "Ailton"'s profile
-      And the note is visible to "Ailton"
-      And the note is visible to "Ana"
-      And the note is visible to "Irene"
-      And the note is not visible to "Pedro"
-      And the note is not visible to "Gusttavo"
+      And the note should have the following visibility:
+        | viewer   | visible |
+        | Ailton   | yes     |
+        | Ana      | yes     |
+        | Irene    | yes     |
+        | Pedro    | no      |
+        | Gusttavo | no      |
 
     Scenario: Approved person creates private note
       Private means PRIVATE. Not even Admins should snoop
@@ -41,11 +45,13 @@ Feature: Notes
       Given "Irene" is logged in
       When they create a "private" note under their profile
       Then the note is created in "Irene"'s profile
-      And the note is visible to "Irene"
-      And the note is not visible to "Ailton"
-      And the note is not visible to "Ana"
-      And the note is not visible to "Pedro"
-      And the note is not visible to "Gusttavo"
+      And the note should have the following visibility:
+        | viewer   | visible |
+        | Irene    | yes     |
+        | Ailton   | no      |
+        | Ana      | no      |
+        | Pedro    | no      |
+        | Gusttavo | no      |
 
     Scenario: Person with pending access creates note
       However, no participant can see their notes, only admins and moderators.
@@ -54,11 +60,13 @@ Feature: Notes
       Given "Pedro" is logged in
       When they create a "public" note under their profile
       Then the note is created in "Pedro"'s profile
-      And the note is visible to "Pedro"
-      And the note is visible to "Ailton"
-      And the note is visible to "Ana"
-      And the note is not visible to "Irene"
-      And the note is not visible to "Gusttavo"
+      And the note should have the following visibility:
+        | viewer   | visible |
+        | Pedro    | yes     |
+        | Ailton   | yes     |
+        | Ana      | yes     |
+        | Irene    | no      |
+        | Gusttavo | no      |
 
     Scenario: Disapproved person tries to create note
       Given "Gusttavo" is logged in
@@ -85,19 +93,23 @@ Feature: Notes
     Scenario: Editor publishes a community-only note
       Given "Joao" is logged in
       When they create a "community" note under "Sítio Semente" profile
-      Then the note is visible to "Teresa"
-      Then the note is visible to "Xavier"
-      And the note is not visible to visitors
+      Then the note should have the following visibility:
+        | viewer   | visible |
+        | Teresa   | yes     |
+        | Xavier   | yes     |
+        | visitors | no      |
 
     Scenario: Editor publishes an internal note (Private)
       In Organizations, private notes functions as an internal memo or draft for the team
 
       Given "Joao" is logged in
       When they create a "private" note under "Sítio Semente" profile
-      Then the note is visible to "Maria"
-      And the note is visible to "Joao"
-      And the note is visible to "Teresa"
-      And the note is not visible to "Xavier"
+      Then the note should have the following visibility:
+        | viewer | visible |
+        | Maria  | yes     |
+        | Joao   | yes     |
+        | Teresa | yes     |
+        | Xavier | no      |
 
     Scenario: Editor edits an existing organization note
       Editors manage content, so they can edit posts made by others in the organization.
@@ -146,5 +158,7 @@ Feature: Notes
       And they edit the note content to "Reunião adiada para amanhã"
       Then the note content should be "Reunião adiada para amanhã"
       And the note history should contain 2 versions
-      And version 1 should be authored by "Maria" with content "Reunião cancelada"
-      And version 2 should be authored by "Joao" with content "Reunião adiada para amanhã"
+      And the note history should match:
+        | version | author | content                    |
+        | 1       | Maria  | Reunião cancelada          |
+        | 2       | Joao   | Reunião adiada para amanhã |
