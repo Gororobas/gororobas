@@ -13,7 +13,7 @@ export const auth = betterAuth({
 	},
 	// Mapping camelCase to snake_case columns and using consistent plural table names
 	user: {
-		modelName: 'users',
+		modelName: 'accounts', // we want people, not "users"
 		fields: {
 			emailVerified: 'is_email_verified',
 			createdAt: 'created_at',
@@ -21,7 +21,7 @@ export const auth = betterAuth({
 		},
 	},
 	account: {
-		modelName: 'accounts',
+		modelName: 'oauth_accounts', // makes the distinction clearer
 		fields: {
 			userId: 'user_id',
 			accountId: 'account_id',

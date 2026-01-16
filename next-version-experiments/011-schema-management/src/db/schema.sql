@@ -1,7 +1,7 @@
 -- ===========
 -- BETTER AUTH
 -- ===========
-CREATE TABLE users (
+CREATE TABLE accounts (
     id text NOT NULL PRIMARY KEY,
     name text NOT NULL,
     email text NOT NULL UNIQUE,
@@ -19,14 +19,14 @@ CREATE TABLE sessions (
     updated_at text NOT NULL,
     ip_address text,
     user_agent text,
-    user_id text NOT NULL REFERENCES users (id) ON DELETE CASCADE
+    user_id text NOT NULL REFERENCES accounts (id) ON DELETE CASCADE
 );
 
-CREATE TABLE accounts (
+CREATE TABLE oauth_accounts (
     id text NOT NULL PRIMARY KEY,
     account_id text NOT NULL,
     provider_id text NOT NULL,
-    user_id text NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    user_id text NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
     access_token text,
     refresh_token text,
     id_token text,
@@ -49,7 +49,7 @@ CREATE TABLE verifications (
 
 CREATE INDEX session_user_id_idx ON sessions (user_id);
 
-CREATE INDEX account_user_id_idx ON accounts (user_id);
+CREATE INDEX account_user_id_idx ON oauth_accounts (user_id);
 
 CREATE INDEX verification_identifier_idx ON verifications (identifier);
 
@@ -73,14 +73,17 @@ CREATE INDEX idx_profiles_handle ON profiles (handle);
 
 CREATE TABLE people (
     id text PRIMARY KEY,
+    role text NOT NULL, -- PlatformRole
+    community_access text NOT NULL, -- CommunityAccess
     -- People's ids are the same as the corresponding id in `profiles` and `users`
     FOREIGN KEY (id) REFERENCES profiles (id) ON DELETE CASCADE,
-    FOREIGN KEY (id) REFERENCES users (id) ON DELETE CASCADE
+    FOREIGN KEY (id) REFERENCES accounts (id) ON DELETE CASCADE
 );
 
 CREATE TABLE organizations (
     id text PRIMARY KEY,
     type text NOT NULL, -- OrganizationType
+    members_visibility text NOT NULL, -- InformationVisibility
     FOREIGN KEY (id) REFERENCES profiles (id) ON DELETE CASCADE
 );
 
@@ -306,7 +309,7 @@ CREATE TABLE vegetable_photo_metadata (
     id text PRIMARY KEY,
     category text NOT NULL, -- app-controlled: 'seed', 'seedling', 'fruit', etc.
     description json, -- Tiptap rich text
-    approval_status text, -- ApprovalStatus
+    moderation_status text, -- ModerationStatus
     created_at text,
     updated_at text,
     FOREIGN KEY (id) REFERENCES images (id) ON DELETE CASCADE
@@ -418,7 +421,7 @@ CREATE TABLE notes (
     id text PRIMARY KEY,
     current_crdt_frontier json NOT NULL,
     handle text NOT NULL UNIQUE,
-    publish_status text, -- NotePublishStatus
+    visibility text, -- InformationVisibility
     published_at text,
     created_at text,
     updated_at text,
@@ -486,10 +489,12 @@ CREATE TABLE events (
     id text PRIMARY KEY,
     current_crdt_frontier json NOT NULL,
     handle text NOT NULL UNIQUE,
+    visibility text, -- InformationVisibility
     owner_profile_id text NOT NULL,
     start_date text NOT NULL,
     end_date text,
-    modality text NOT NULL, -- EventModality]
+    location_or_url text,
+    attendance_mode text NOT NULL, -- EventAttendanceMode
     thumbnail_id text,
     created_at text,
     updated_at text,
@@ -534,7 +539,7 @@ CREATE TABLE comment_crdts (
     parent_comment_id text,
     loro_crdt blob NOT NULL,
     owner_profile_id text NOT NULL,
-    approval_status text, -- CommentApprovalStatus
+    moderation_status text, -- ModerationStatus
     created_at text,
     updated_at text,
     FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE,
@@ -568,7 +573,7 @@ CREATE TABLE comments (
     event_id text,
     parent_comment_id text,
     current_crdt_frontier json NOT NULL,
-    approval_status text, -- CommentApprovalStatus
+    moderation_status text, -- ModerationStatus
     created_at text,
     updated_at text,
     owner_profile_id text NOT NULL,
@@ -598,7 +603,7 @@ CREATE TABLE comment_translations (
 CREATE TABLE bookmarks_vegetables (
     person_id text NOT NULL,
     vegetable_id text NOT NULL,
-    status text NOT NULL, -- BookmarkStatus
+    state text NOT NULL, -- BookmarkState
     PRIMARY KEY (person_id, vegetable_id),
     FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
     FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
@@ -607,7 +612,7 @@ CREATE TABLE bookmarks_vegetables (
 CREATE TABLE bookmarks_resources (
     person_id text NOT NULL,
     resource_id text NOT NULL,
-    status text NOT NULL, -- BookmarkStatus
+    state text NOT NULL, -- BookmarkState
     PRIMARY KEY (person_id, resource_id),
     FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
     FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE

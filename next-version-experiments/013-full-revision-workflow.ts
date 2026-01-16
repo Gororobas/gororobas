@@ -6,6 +6,7 @@ import {
 	Clock,
 	Context,
 	Data,
+	DateTime,
 	Effect,
 	Layer,
 	Option,
@@ -360,7 +361,7 @@ const createFirstVersion = Effect.fn('createFirstVersion')(function* ({
 		mode: 'update',
 		from: new VersionVector(null),
 	})
-	const now = new Date(yield* Clock.currentTimeMillis)
+	const now = yield* DateTime.nowAsDate
 
 	const InsertVegetableCRDT = yield* SqlResolver.void('InsertVegetableCRDT', {
 		Request: Schema.Struct({
@@ -445,7 +446,7 @@ const createRevision = Effect.fn('createRevision')(function* (data: {
 		targetSchema: VegetableData,
 	})
 
-	const now = new Date(yield* Clock.currentTimeMillis)
+	const now = yield* DateTime.nowAsDate
 
 	const revision_id = yield* UUIDGen.make(VegetableRevisionId)
 
@@ -541,7 +542,7 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 		)
 	}
 
-	const now = new Date(yield* Clock.currentTimeMillis)
+	const now = yield* DateTime.nowAsDate
 	if (data.evaluation !== 'approved')
 		return yield* updateRevision({ ...data, evaluated_at: now.toISOString() })
 

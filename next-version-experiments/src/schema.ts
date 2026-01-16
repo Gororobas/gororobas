@@ -215,10 +215,21 @@ export const QueriedVegetableData = Schema.Struct({
 })
 export type QueriedVegetableData = typeof QueriedVegetableData.Type
 
-export const ApprovalStatus = Schema.Literal(
-	'pending_approval',
-	'approved',
-	'rejected',
+export const CommunityAccess = Schema.Literal(
+	'awaiting_access',
+	'active',
+	'blocked',
+)
+
+export const ModerationStatus = Schema.Literal(
+	'approved_by_default',
+	'censored',
+)
+
+export const InformationVisibility = Schema.Literal(
+	'private',
+	'community',
+	'public',
 )
 
 export const RevisionEvaluation = Schema.Literal(
@@ -227,3 +238,22 @@ export const RevisionEvaluation = Schema.Literal(
 	'rejected',
 )
 export type RevisionEvaluation = typeof RevisionEvaluation.Type
+
+export const PlatformRole = Schema.Literal('participant', 'moderator', 'admin')
+export type PlatformRole = typeof PlatformRole.Type
+
+/** Inspired by https://schema.org/EventAttendanceModeEnumeration */
+export const EventAttendanceMode = Schema.Literal(
+	'in-person',
+	'virtual',
+	'mixed',
+)
+export type EventAttendanceMode = typeof EventAttendanceMode.Type
+
+export const BookmarkState = Schema.Literal(
+	'interested',
+	'active',
+	'previously-active',
+	'indifferent',
+)
+export type BookmarkState = typeof BookmarkState.Type

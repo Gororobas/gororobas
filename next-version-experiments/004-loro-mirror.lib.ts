@@ -1,6 +1,7 @@
 import { schema as loroSchema } from 'loro-mirror'
 import type {
 	AgroforestryStratum,
+	ChineseMedicineElement,
 	EdibleVegetablePart,
 	Handle,
 	PlantingMethod,
@@ -60,6 +61,7 @@ export const VegetableDataLoro = loroSchema({
 		height_min: loroSchema.Number(),
 		temperature_max: loroSchema.Number(),
 		temperature_min: loroSchema.Number(),
+		chinese_medicine_element: loroSchema.String<ChineseMedicineElement>(),
 		main_photo_id: loroSchema.String(),
 	}),
 	locales: loroSchema.LoroMap(
