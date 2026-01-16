@@ -6,21 +6,21 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name     | role        | approval_status |
-        | Maria    | participant | approved        |
-        | Pedro    | participant | pending         |
-        | Gusttavo | participant | disapproved     |
+        | name     | role        | community_access |
+        | Maria    | participant | allowed          |
+        | Pedro    | participant | awaiting_access  |
+        | Gusttavo | participant | blocked          |
 
-    Scenario: Approved member creates a new vegetable
+    Scenario: Person with community access creates a new vegetable
       When "Maria" creates a vegetable
       Then the vegetable is created
       And the vegetable is immediately visible in the encyclopedia
 
-    Scenario: Pending member cannot create vegetables
+    Scenario: Person awaiting community access cannot create vegetables
       When "Pedro" tries to create a vegetable
       Then access is denied
 
-    Scenario: Disapproved member cannot create vegetables
+    Scenario: Blocked person cannot create vegetables
       When "Gusttavo" tries to create a vegetable
       Then access is denied
 
@@ -28,9 +28,9 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | João  | participant | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
+        | João  | participant | allowed          |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Participant submits an edit for review
@@ -51,10 +51,10 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name   | role        | approval_status |
-        | Maria  | participant | approved        |
-        | Ana    | moderator   | approved        |
-        | Ailton | admin       | approved        |
+        | name   | role        | community_access |
+        | Maria  | participant | allowed          |
+        | Ana    | moderator   | allowed          |
+        | Ailton | admin       | allowed          |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Moderator approves a revision
@@ -92,9 +92,9 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name   | role      | approval_status |
-        | Ana    | moderator | approved        |
-        | Ailton | admin     | approved        |
+        | name   | role      | community_access |
+        | Ana    | moderator | allowed          |
+        | Ailton | admin     | allowed          |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Moderator can approve their own revision
@@ -111,7 +111,7 @@ Feature: Vegetables
   Rule: Vegetables support multiple translations
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" has community access
       And the vegetable "Mandioca" exists with Portuguese content "Raiz tuberosa"
 
     Scenario: Add translation to another locale
@@ -134,7 +134,7 @@ Feature: Vegetables
   Rule: Vegetables can have varieties
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" has community access
       And the vegetable "Banana" exists
 
     Scenario: Create a variety
@@ -162,7 +162,7 @@ Feature: Vegetables
   Rule: Vegetables can have categorized photos
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" has community access
       And the vegetable "Mandioca" exists
 
     Scenario: Add photo with category
@@ -196,7 +196,7 @@ Feature: Vegetables
     For vegetables, that's "I want to plant", "Am planting", "Have planted" and "Not interested", respectively.
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" has community access
       And the vegetable "Mandioca" exists
 
     Scenario: Bookmark a vegetable

@@ -6,43 +6,43 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | Pedro | participant | pending         |
-        | Ana   | moderator   | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
+        | Pedro | participant | awaiting_access  |
+        | Ana   | moderator   | allowed          |
       And the following resources exist:
         | title                         | url                              | format  |
         | A Terra Dá, a Terra Quer      | https://example.com/a-terra-da   | book    |
         | Agroecologia não é mercadoria | https://example.com/agro-podcast | podcast |
 
+    Scenario: Person with community access creates a resource
+      Then "Maria" can access the resource "A Terra Dá, a Terra Quer"
+
+    Scenario: Person awaiting access cannot create resources
+      Then "Pedro" can access the resource "A Terra Dá, a Terra Quer"
+
     Scenario: Visitors can access a resource
       Then visitors can access the resource "A Terra Dá, a Terra Quer"
 
-    Scenario: Approved members can access a resource
-      Then "Maria" can access the resource "A Terra Dá, a Terra Quer"
-
-    Scenario: Pending members can access a resource
-      Then "Pedro" can access the resource "A Terra Dá, a Terra Quer"
-
-  Rule: Only approved members can contribute to the library
+  Rule: Only people with community access can contribute to the library
 
     Background:
       Given the following people exist:
-        | name     | role        | approval_status |
-        | Maria    | participant | approved        |
-        | Pedro    | participant | pending         |
-        | Gusttavo | participant | disapproved     |
+        | name     | role        | community_access |
+        | Maria    | participant | allowed          |
+        | Pedro    | participant | awaiting_access  |
+        | Gusttavo | participant | blocked          |
 
-    Scenario: Approved member creates a resource
+    Scenario: Person with community access creates a resource
       When "Maria" creates a resource with url "https://example.com/novo", format "book", and title "Manual de Compostagem"
       Then the resource is created
       And the resource is public
 
-    Scenario: Pending member cannot create resources
+    Scenario: Person awaiting access cannot create resources
       When "Pedro" tries to create a resource
       Then access is denied
 
-    Scenario: Disapproved member cannot create resources
+    Scenario: Blocked person cannot create resources
       When "Gusttavo" tries to create a resource
       Then access is denied
 
@@ -50,9 +50,9 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | João  | participant | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
+        | João  | participant | allowed          |
       And the resource "A Terra Dá, a Terra Quer" exists
 
     Scenario: Participant submits an edit for review
@@ -69,10 +69,10 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name   | role        | approval_status |
-        | Maria  | participant | approved        |
-        | Ana    | moderator   | approved        |
-        | Ailton | admin       | approved        |
+        | name   | role        | community_access |
+        | Maria  | participant | allowed          |
+        | Ana    | moderator   | allowed          |
+        | Ailton | admin       | allowed          |
       And the resource "A Terra Dá, a Terra Quer" exists
 
     Scenario: Moderator approves a revision
@@ -103,7 +103,7 @@ Feature: Resources
   Rule: Resources support translations
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" has community access
       And the resource "A Terra Dá, a Terra Quer" exists with Portuguese title "A Terra Dá, a Terra Quer"
 
     Scenario: Add translation to another locale
@@ -120,7 +120,7 @@ Feature: Resources
   Rule: Resources can be categorized with tags
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" has community access
       And the following tags exist:
         | handle       |
         | agroecologia |
@@ -138,7 +138,7 @@ Feature: Resources
   Rule: Resources can be linked to vegetables
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" has community access
       And the vegetable "Mandioca" exists
       And the resource "A Terra Dá, a Terra Quer" exists
 
@@ -150,17 +150,17 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | Pedro | participant | pending         |
-        | Ana   | moderator   | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
+        | Pedro | participant | awaiting_access  |
+        | Ana   | moderator   | allowed          |
       And the resource "Agroecologia não é mercadoria" exists
 
-    Scenario: Approved member comments on a resource
+    Scenario: Person with community access comments on a resource
       When "Maria" comments on resource "Agroecologia não é mercadoria" with "Excelente episódio"
       Then the comment is visible on the resource
 
-    Scenario: Pending member cannot comment on a resource
+    Scenario: Person awaiting community access cannot comment on a resource
       When "Pedro" tries to comment on resource "Agroecologia não é mercadoria"
       Then access is denied
 
