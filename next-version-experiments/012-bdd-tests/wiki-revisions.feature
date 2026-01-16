@@ -2,7 +2,7 @@ Feature: Revisions
   Revisions allow community members to propose edits to shared knowledge.
   Proposed edits must be evaluated by moderators or admins before becoming visible.
   These workflows apply to vegetables and resources.
-  Notes, events and comments are edited through commits and follow a different set of rules.
+  Posts and comments are edited through commits and follow a different set of rules.
 
   Rule: Only approved members can propose revisions
 

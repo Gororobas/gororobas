@@ -217,7 +217,7 @@ export type QueriedVegetableData = typeof QueriedVegetableData.Type
 
 export const CommunityAccess = Schema.Literal(
 	'awaiting_access',
-	'active',
+	'allowed',
 	'blocked',
 )
 
@@ -257,3 +257,6 @@ export const BookmarkState = Schema.Literal(
 	'indifferent',
 )
 export type BookmarkState = typeof BookmarkState.Type
+
+export const PostType = Schema.Literal('note', 'event')
+export type PostType = typeof PostType.Type

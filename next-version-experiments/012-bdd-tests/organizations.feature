@@ -1,64 +1,64 @@
 Feature: Organizations
   Organizations represent collectives such as territories, social movements and NGOs.
-  They have profiles, memberships with permissions, and a configurable behavior for displaying members.
+  They have profiles, memberships with permissions, and configurable visibility for their members list.
 
-  Rule: Only approved members can create organizations
+  Rule: Only people with allowed community access can create organizations
 
     Background:
       Given the following people exist:
-        | name     | role        | approval_status |
-        | Maria    | participant | approved        |
-        | Pedro    | participant | pending         |
-        | Gusttavo | participant | disapproved     |
+        | name     | role        | community_access |
+        | Maria    | participant | allowed          |
+        | Pedro    | participant | awaiting_access  |
+        | Gusttavo | participant | blocked          |
 
-    Scenario: Approved member creates an organization
+    Scenario: Allowed person creates an organization
       When "Maria" creates an organization named "Sítio Semente" of type "territory"
       Then the organization "Sítio Semente" exists
-      And "Maria" is a member of "Sítio Semente" with "full" permissions
+      And "Maria" is an organization member of "Sítio Semente" with "full" permissions
 
-    Scenario: Pending member cannot create an organization
+    Scenario: Person awaiting access cannot create an organization
       When "Pedro" tries to create an organization
       Then access is denied
 
-    Scenario: Disapproved member cannot create an organization
+    Scenario: Blocked person cannot create an organization
       When "Gusttavo" tries to create an organization
       Then access is denied
 
     Scenario: Visitor cannot create an organization
-      When visitor tries to create an organization
+      When a visitor tries to create an organization
       Then access is denied
 
-  Rule: Organization profile can only be edited by full-permission members
+  Rule: Organization profile can only be edited by full-permissions organization members
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | Joao  | participant | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
+        | Irene | participant | allowed          |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | permissions |
         | Maria | full        |
-        | Joao  | edit        |
+        | Irene | edit        |
 
-    Scenario: Full member edits organization profile
+    Scenario: Full-permissions member edits organization profile
       When "Maria" updates "Sítio Semente" profile name to "Sítio Semente (DF)"
       Then "Sítio Semente" profile name becomes "Sítio Semente (DF)"
 
     Scenario: Editor cannot edit organization profile
-      When "Joao" tries to update "Sítio Semente" profile name
+      When "Irene" tries to update "Sítio Semente" profile name
       Then access is denied
 
   Rule: Organization invitations create memberships
 
     Background:
       Given the following people exist:
-        | name     | role        | approval_status |
-        | Maria    | participant | approved        |
-        | Teresa   | participant | approved        |
-        | João     | participant | approved        |
-        | Pedro    | participant | pending         |
-        | Gusttavo | participant | disapproved     |
+        | name     | role        | community_access |
+        | Maria    | participant | allowed          |
+        | Teresa   | participant | allowed          |
+        | Irene    | participant | allowed          |
+        | Pedro    | participant | awaiting_access  |
+        | Gusttavo | participant | blocked          |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | permissions |
@@ -67,21 +67,21 @@ Feature: Organizations
     Scenario: Invitee accepts an invitation and becomes a member
       Given "Maria" has invited "Teresa" to join "Sítio Semente" with "view" permissions
       When "Teresa" accepts the invitation to join "Sítio Semente"
-      Then "Teresa" is a member of "Sítio Semente" with "view" permissions
+      Then "Teresa" is an organization member of "Sítio Semente" with "view" permissions
 
     Scenario: Non-members can't invite people to an organization
-      When "João" tries to invite "Teresa" to join "Sítio Semente"
+      When "Irene" tries to invite "Teresa" to join "Sítio Semente"
       Then access is denied
 
-    Scenario: Can't invite pending members to an organization
+    Scenario: Can't invite people without allowed community access
       When "Maria" tries to invite "Pedro" to join "Sítio Semente"
       Then access is denied
 
-    Scenario: Can't invite disapproved members to an organization
+    Scenario: Can't invite blocked people
       When "Maria" tries to invite "Gusttavo" to join "Sítio Semente"
       Then access is denied
 
-    Scenario: Can't invite invalid members to an organization
+    Scenario: Can't invite invalid people
       When "Maria" tries to invite "Fulana" to join "Sítio Semente"
       Then access is denied
 
@@ -89,71 +89,71 @@ Feature: Organizations
 
     Background:
       Given the following people exist:
-        | name   | role        | approval_status |
-        | Maria  | participant | approved        |
-        | Joao   | participant | approved        |
-        | Teresa | participant | approved        |
-        | Ana    | moderator   | approved        |
+        | name   | role        | community_access |
+        | Maria  | participant | allowed          |
+        | Irene  | participant | allowed          |
+        | Teresa | participant | allowed          |
+        | Ana    | moderator   | allowed          |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name   | permissions |
         | Maria  | full        |
-        | Joao   | full        |
+        | Irene  | full        |
         | Teresa | view        |
 
-    Scenario: Full member changes another member permissions
+    Scenario: Full-permissions member changes another member permissions
       When "Maria" changes "Teresa" permissions in "Sítio Semente" to "edit"
-      Then "Teresa" is a member of "Sítio Semente" with "edit" permissions
+      Then "Teresa" is an organization member of "Sítio Semente" with "edit" permissions
 
-    Scenario: Non-full member cannot change permissions
-      When "Teresa" tries to change "Joao" permissions in "Sítio Semente"
+    Scenario: Non-full-permissions member cannot change permissions
+      When "Teresa" tries to change "Irene" permissions in "Sítio Semente"
       Then access is denied
 
-    Scenario: Full member removes a member
+    Scenario: Full-permissions member removes a member
       When "Maria" removes "Teresa" from "Sítio Semente"
-      Then "Teresa" is not a member of "Sítio Semente"
+      Then "Teresa" is not an organization member of "Sítio Semente"
 
-    Scenario: Cannot remove the last full member
-      Given "Joao" is removed from "Sítio Semente"
-      And "Maria" is the only full member of "Sítio Semente"
+    Scenario: Cannot remove the last full-permissions member
+      Given "Irene" is removed from "Sítio Semente"
+      And "Maria" is the only full-permissions member of "Sítio Semente"
       When "Maria" tries to remove themselves from "Sítio Semente"
       Then access is denied
 
-    Scenario: Full member can leave if there is another full member
+    Scenario: Full member can leave if there is another full-permissions member
       When "Maria" leaves "Sítio Semente"
       Then "Maria" is not a member of "Sítio Semente"
-      And "Joao" remains a member of "Sítio Semente" with "full" permissions
+      And "Irene" remains a member of "Sítio Semente" with "full" permissions
 
-  Rule: Organizations can be deleted by full-permission members
+  Rule: Organizations can be deleted by full-permission organization members
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | Joao  | participant | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
+        | Irene | participant | allowed          |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | permissions |
         | Maria | full        |
-        | Joao  | edit        |
+        | Irene | edit        |
 
     Scenario: Full member deletes the organization
       When "Maria" deletes the organization "Sítio Semente"
       Then the organization "Sítio Semente" no longer exists
 
     Scenario: Non-full member cannot delete the organization
-      When "Joao" tries to delete the organization "Sítio Semente"
+      When "Irene" tries to delete the organization "Sítio Semente"
       Then access is denied
 
-  Rule: Organizations control how members are displayed
+  Rule: Organizations control the visibility of their members list
 
     Background:
       Given the following people exist:
-        | name   | role        | approval_status |
-        | Maria  | participant | approved        |
-        | Joao   | participant | approved        |
-        | Teresa | participant | approved        |
-        | Pedro  | participant | pending         |
+        | name   | role        | community_access |
+        | Maria  | participant | allowed          |
+        | Irene  | participant | allowed          |
+        | Teresa | participant | allowed          |
+        | Pedro  | participant | awaiting_access  |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name   | permissions |
@@ -166,7 +166,7 @@ Feature: Organizations
         | viewer   | can_access |
         | visitors | no         |
         | Pedro    | no         |
-        | João     | no         |
+        | Irene    | no         |
         | Maria    | yes        |
         | Teresa   | yes        |
 
@@ -176,7 +176,7 @@ Feature: Organizations
         | viewer   | can_access |
         | visitors | no         |
         | Pedro    | no         |
-        | João     | yes        |
+        | Irene    | yes        |
         | Maria    | yes        |
         | Teresa   | yes        |
 
@@ -186,6 +186,6 @@ Feature: Organizations
         | viewer   | can_access |
         | visitors | yes        |
         | Pedro    | yes        |
-        | João     | yes        |
+        | Irene    | yes        |
         | Maria    | yes        |
         | Teresa   | yes        |

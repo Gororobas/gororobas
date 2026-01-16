@@ -391,11 +391,11 @@ CREATE TABLE resource_vegetables (
 ) WITHOUT ROWID;
 
 -- =====
--- NOTES
+-- POSTS
 -- =====
 --
--- The source of truth of all note data
-CREATE TABLE note_crdts (
+-- The source of truth of all post data
+CREATE TABLE post_crdts (
     id text PRIMARY KEY,
     loro_crdt blob NOT NULL,
     owner_profile_id text NOT NULL,
@@ -404,20 +404,20 @@ CREATE TABLE note_crdts (
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- How notes are modified
-CREATE TABLE note_commits (
+-- How posts are modified
+CREATE TABLE post_commits (
     id text PRIMARY KEY,
-    note_id text,
+    post_id text,
     created_by_id text,
     from_crdt_frontier json NOT NULL,
     crdt_update blob NOT NULL,
     created_at text,
-    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
 -- The core queryable data, materialized from the CRDT
-CREATE TABLE notes (
+CREATE TABLE posts (
     id text PRIMARY KEY,
     current_crdt_frontier json NOT NULL,
     handle text NOT NULL UNIQUE,
@@ -426,104 +426,47 @@ CREATE TABLE notes (
     created_at text,
     updated_at text,
     owner_profile_id text NOT NULL,
-    FOREIGN KEY (id) REFERENCES note_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
+    kind: text NOT NULL, -- EventType
+
+    -- EVENT ONLY:
+    start_date text NOT NULL,
+    end_date text,
+    location_or_url text,
+    attendance_mode text NOT NULL, -- EventAttendanceMode
+    thumbnail_image_id text,
+    FOREIGN KEY (id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
+    FOREIGN KEY (thumbnail_image_id) REFERENCES images (id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_notes_handle ON notes (handle);
+CREATE INDEX idx_posts_handle ON posts (handle);
 
-CREATE TABLE note_translations (
-    note_id text NOT NULL,
+CREATE TABLE post_translations (
+    post_id text NOT NULL,
     locale text NOT NULL, -- SupportedLocale
     content json NOT NULL, -- Tiptap Rich Text
     content_plain_text text NOT NULL,
     translated_at_crdt_frontier json NOT NULL,
     translation_source text NOT NULL, -- Original, Automatic, Manual
     original_locale text NOT NULL, -- SupportedLocale
-    PRIMARY KEY (note_id, locale),
-    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE
+    PRIMARY KEY (post_id, locale),
+    FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
-CREATE TABLE note_tags (
-    note_id text NOT NULL,
+CREATE TABLE post_tags (
+    post_id text NOT NULL,
     tag_id text NOT NULL,
-    PRIMARY KEY (note_id, tag_id),
-    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE,
+    PRIMARY KEY (post_id, tag_id),
+    FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
-CREATE TABLE note_vegetables (
-    note_id text NOT NULL,
+CREATE TABLE post_vegetables (
+    post_id text NOT NULL,
     vegetable_id text NOT NULL,
-    PRIMARY KEY (note_id, vegetable_id),
-    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE,
+    PRIMARY KEY (post_id, vegetable_id),
+    FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
--- =========
--- EVENTS
--- =========
---
--- The source of truth of all event data
-CREATE TABLE event_crdts (
-    id text PRIMARY KEY,
-    loro_crdt blob NOT NULL,
-    created_at text,
-    updated_at text
-) WITHOUT ROWID;
-
--- How events are modified
-CREATE TABLE event_commits (
-    id text PRIMARY KEY,
-    event_id text,
-    created_by_id text,
-    from_crdt_frontier json NOT NULL,
-    crdt_update blob NOT NULL,
-    created_at text,
-    FOREIGN KEY (event_id) REFERENCES event_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
-);
-
--- The core queryable data, materialized from the CRDT
-CREATE TABLE events (
-    id text PRIMARY KEY,
-    current_crdt_frontier json NOT NULL,
-    handle text NOT NULL UNIQUE,
-    visibility text, -- InformationVisibility
-    owner_profile_id text NOT NULL,
-    start_date text NOT NULL,
-    end_date text,
-    location_or_url text,
-    attendance_mode text NOT NULL, -- EventAttendanceMode
-    thumbnail_id text,
-    created_at text,
-    updated_at text,
-    FOREIGN KEY (id) REFERENCES event_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
-    FOREIGN KEY (thumbnail_id) REFERENCES images (id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_events_handle ON events (handle);
-
--- Per-locale data, materialized from the CRDT
-CREATE TABLE event_translations (
-    event_id text NOT NULL,
-    locale text NOT NULL, -- SupportedLocale
-    title text NOT NULL,
-    description json, -- Tiptap Rich Text
-    translated_at_crdt_frontier json NOT NULL,
-    translation_source text NOT NULL, -- Original, Automatic, Manual
-    original_locale text NOT NULL, -- SupportedLocale
-    PRIMARY KEY (event_id, locale),
-    FOREIGN KEY (event_id) REFERENCES event_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE event_tags (
-    event_id text NOT NULL,
-    tag_id text NOT NULL,
-    PRIMARY KEY (event_id, tag_id),
-    FOREIGN KEY (event_id) REFERENCES event_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 -- ========
@@ -533,23 +476,21 @@ CREATE TABLE event_tags (
 -- The source of truth of all comment data
 CREATE TABLE comment_crdts (
     id text PRIMARY KEY,
-    note_id text,
+    post_id text,
     resource_id text,
-    event_id text,
     parent_comment_id text,
     loro_crdt blob NOT NULL,
     owner_profile_id text NOT NULL,
     moderation_status text, -- ModerationStatus
     created_at text,
     updated_at text,
-    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (event_id) REFERENCES event_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (parent_comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
-    -- Exactly one of `resource_id`, `event_id` or `note_id` is set:
+    -- Exactly one of `post_id` or `resource_id` is set:
     CONSTRAINT check_comment_parent CHECK (
-        (note_id IS NOT NULL) + (resource_id IS NOT NULL) + (event_id IS NOT NULL) = 1
+        (post_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
     )
 );
 
@@ -568,9 +509,8 @@ CREATE TABLE comment_commits (
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE comments (
     id text PRIMARY KEY,
-    note_id text,
+    post_id text,
     resource_id text,
-    event_id text,
     parent_comment_id text,
     current_crdt_frontier json NOT NULL,
     moderation_status text, -- ModerationStatus
@@ -579,9 +519,11 @@ CREATE TABLE comments (
     owner_profile_id text NOT NULL,
     FOREIGN KEY (id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
-    -- Exactly one of `resource_id`, `event_id` or `note_id` is set:
+    FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+    FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
+    -- Exactly one of `post_id` or `resource_id` is set:
     CONSTRAINT check_comment_parent CHECK (
-        (note_id IS NOT NULL) + (resource_id IS NOT NULL) + (event_id IS NOT NULL) = 1
+        (post_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
     )
 );
 
@@ -633,13 +575,13 @@ CREATE TABLE vegetables_sync_log (
     FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE SET NULL
 );
 
-CREATE TABLE notes_sync_log (
+CREATE TABLE posts_sync_log (
     sequence_id integer PRIMARY KEY AUTOINCREMENT,
-    note_id text,
+    post_id text,
     operation text NOT NULL, -- SyncOperation
     changed_at text NOT NULL,
     relevant_to_profile_id text NOT NULL,
-    FOREIGN KEY (note_id) REFERENCES note_crdts (id) ON DELETE SET NULL,
+    FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE SET NULL,
     FOREIGN KEY (relevant_to_profile_id) REFERENCES profiles (id) ON DELETE SET NULL
 );
 

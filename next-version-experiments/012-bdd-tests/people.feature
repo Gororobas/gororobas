@@ -1,19 +1,17 @@
 Feature: People
-  People are the individual members of the Gororobas community.
-  New members go through an approval process before gaining full access to what's shared by others.
+  People are the individual participants of the Gororobas community.
+  Newcomers go through an approval process before gaining full access to what's shared by others.
   This protects community spaces while still allowing newcomers to explore and contribute.
 
-  Rule: New members start with pending approval status
-
-    Scenario: Person signs up and receives pending status
-      When a person completes signup
-      Then their approval status is "pending"
-      And their role is "participant"
+  Scenario: Newcomers start without access to community content
+    When a person completes signup
+    Then their community access is "awaiting_access"
+    And their role is "participant"
 
   Rule: People can manage their profile
 
     Background:
-      Given "Maria" is an approved member
+      Given "Maria" is allow to community access
 
     Scenario: Person sets up their profile
       When "Maria" updates their profile with:
@@ -33,21 +31,25 @@ Feature: People
     Scenario: Handle must be unique
       Given "João" has handle "joao"
       When "Maria" tries to change their handle to "joao"
-      Then access is denied: handle already taken
+      Then access is denied
 
   Rule: People can set their profile visibility
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | Irene | participant | approved        |
+        | name     | role        | community_access |
+        | Maria    | participant | allowed          |
+        | Irene    | participant | allowed          |
+        | Pedro    | participant | awaiting_access  |
+        | Gusttavo | participant | blocked          |
 
     Scenario: Person sets profile to public
       When "Maria" has set their profile visibility to "public"
       Then "Maria"'s profile should have the following accessibility:
         | viewer   | can_access |
         | Irene    | yes        |
+        | Pedro    | yes        |
+        | Gusttavo | yes        |
         | visitors | yes        |
 
     Scenario: Person sets profile to community-only
@@ -55,47 +57,49 @@ Feature: People
       Then "Maria"'s profile should have the following accessibility:
         | viewer   | can_access |
         | Irene    | yes        |
+        | Pedro    | no         |
+        | Gusttavo | no         |
         | visitors | no         |
 
-  Rule: Moderators and admins manage member approval
+  Rule: Moderators and admins manage community access
 
     Background:
       Given the following people exist:
-        | name   | role        | approval_status |
-        | Ailton | admin       | approved        |
-        | Ana    | moderator   | approved        |
-        | Irene  | participant | approved        |
-        | Pedro  | participant | pending         |
+        | name   | role        | community_access |
+        | Ailton | admin       | allowed          |
+        | Ana    | moderator   | allowed          |
+        | Irene  | participant | allowed          |
+        | Pedro  | participant | awaiting_access  |
 
-    Scenario: Admin approves a pending member
-      When "Ailton" approves "Pedro"
-      Then "Pedro"'s approval status becomes "approved"
+    Scenario: Admin allows a person awaiting access
+      When "Ailton" allows "Pedro"
+      Then "Pedro"'s community access becomes "allowed"
 
-    Scenario: Moderator approves a pending member
-      When "Ana" approves "Pedro"
-      Then "Pedro"'s approval status becomes "approved"
+    Scenario: Moderator allows a person awaiting access
+      When "Ana" allows "Pedro"
+      Then "Pedro"'s community access becomes "allowed"
 
-    Scenario: Participant cannot approve members
-      When "Irene" tries to approve "Pedro"
+    Scenario: Participant cannot allow people
+      When "Irene" tries to allow "Pedro"
       Then access is denied
 
-    Scenario: Admin disapproves a member
-      Given "Pedro" has been approved
-      When "Ailton" disapproves "Pedro"
-      Then "Pedro"'s approval status becomes "disapproved"
+    Scenario: Admin blocks a person from accessing community content
+      Given "Pedro" has been allowed to access community content
+      When "Ailton" blocks "Pedro"
+      Then "Pedro"'s community access becomes "blocked"
 
-    Scenario: Cannot disapprove a moderator without demoting first
-      When "Ailton" tries to disapprove "Ana"
+    Scenario: Cannot block a moderator without demoting first
+      When "Ailton" tries to block "Ana"
       Then access is denied
 
-  Rule: Admins manage member roles
+  Rule: Admins manage people roles
 
     Background:
       Given the following people exist:
-        | name   | role        | approval_status |
-        | Ailton | admin       | approved        |
-        | Ana    | moderator   | approved        |
-        | Maria  | participant | approved        |
+        | name   | role        | community_access |
+        | Ailton | admin       | allowed          |
+        | Ana    | moderator   | allowed          |
+        | Maria  | participant | allowed          |
 
     Scenario: Admin promotes participant to moderator
       When "Ailton" promotes "Maria" to moderator
@@ -113,8 +117,8 @@ Feature: People
       When "Ana" tries to promote "Maria" to moderator
       Then access is denied
 
-    Scenario: Cannot demote the last admin
-      Given "Ailton" is the only admin
+    Scenario: Cannot demote the last full-permissions member
+      Given "Ailton" is the only full-permissions member
       When "Ailton" tries to demote themselves
       Then access is denied
 
@@ -122,28 +126,28 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
 
     Scenario: Person deletes their account
       When "Maria" deletes their account
       Then "Maria"'s profile no longer exists
-      And "Maria"'s personal notes are deleted
+      And "Maria"'s personal posts are deleted
       And "Maria"'s comments are deleted
 
     Scenario: Deleted person's wiki contributions remain but are anonymized
-      Given "Maria" has approved edits on vegetable "Mandioca"
+      Given "Maria" has allowed edits on vegetable "Mandioca"
       When "Maria" deletes their account
       Then "Mandioca" revision history remains the same but no longer shows "Maria"
 
-    Scenario: Cannot delete account while sole admin of an organization
-      Given "Maria" is the only admin of "Sítio Semente"
+    Scenario: Cannot delete account while sole full-permissions member of an organization
+      Given "Maria" is the only full-permissions member of "Sítio Semente"
       When "Maria" tries to delete their account
       Then access is denied
 
     Scenario: Deleting account removes organization memberships
       Given "Maria" is a member of "Sítio Semente" with "edit" permissions
-      And "Sítio Semente" has other admins
+      And "Sítio Semente" has other full-permission members
       When "Maria" deletes their account
       Then "Maria" is no longer a member of "Sítio Semente"
 
