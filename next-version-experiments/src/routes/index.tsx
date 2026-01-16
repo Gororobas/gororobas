@@ -25,6 +25,11 @@ function App() {
 						008: SQLite + Effect Atom
 					</Link>
 				</li>
+				<li>
+					<Link className="text-blue-800 underline" to="/009-turso-browser">
+						009: Using Turso as the database
+					</Link>
+				</li>
 			</ul>
 		</div>
 	)
