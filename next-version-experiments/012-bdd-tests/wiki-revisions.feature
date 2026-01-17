@@ -4,18 +4,18 @@ Feature: Revisions
   These workflows apply to vegetables and resources.
   Posts and comments are edited through commits and follow a different set of rules.
 
-  Rule: Only approved members can propose revisions
+  Rule: Only people with community access can propose revisions
 
     Background:
       Given the following people exist:
-        | name     | role        | approval_status |
-        | Maria    | participant | approved        |
-        | Ana      | moderator   | approved        |
-        | Ailton   | admin       | approved        |
-        | Pedro    | participant | pending         |
-        | Gusttavo | participant | disapproved     |
+        | name     | role        | community_access |
+        | Maria    | participant | allowed          |
+        | Ana      | moderator   | allowed          |
+        | Ailton   | admin       | allowed          |
+        | Pedro    | participant | awaiting_access  |
+        | Gusttavo | participant | blocked          |
 
-    Scenario Outline: Approved member can propose a revision
+    Scenario Outline: Person with community access can propose a revision
       Given a <entity> "<title>" exists
       When "Maria" proposes an edit to <entity> "<title>"
       Then a revision is created with "pending" evaluation, created by "Maria"
@@ -26,7 +26,7 @@ Feature: Revisions
         | vegetable | Mandioca                 |
         | resource  | A Terra Dá, a Terra Quer |
 
-    Scenario Outline: Pending member cannot propose a revision
+    Scenario Outline: Person awaiting access cannot propose a revision
       Given a <entity> "<title>" exists
       When "Pedro" tries to propose an edit to <entity> "<title>"
       Then access is denied
@@ -36,7 +36,7 @@ Feature: Revisions
         | vegetable | Mandioca                 |
         | resource  | A Terra Dá, a Terra Quer |
 
-    Scenario Outline: Disapproved member cannot propose a revision
+    Scenario Outline: Blocked person cannot propose a revision
       Given a <entity> "<title>" exists
       When "Gusttavo" tries to propose an edit to <entity> "<title>"
       Then access is denied
@@ -60,10 +60,10 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name   | role        | approval_status |
-        | Maria  | participant | approved        |
-        | Ana    | moderator   | approved        |
-        | Ailton | admin       | approved        |
+        | name   | role        | community_access |
+        | Maria  | participant | allowed          |
+        | Ana    | moderator   | allowed          |
+        | Ailton | admin       | allowed          |
 
     Scenario Outline: Participant cannot evaluate a revision
       Given a <entity> "<title>" exists
@@ -118,9 +118,9 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name   | role      | approval_status |
-        | Ana    | moderator | approved        |
-        | Ailton | admin     | approved        |
+        | name   | role      | community_access |
+        | Ana    | moderator | allowed          |
+        | Ailton | admin     | allowed          |
 
     Scenario Outline: Moderator can approve their own revision
       Given a <entity> "<title>" exists
@@ -152,9 +152,9 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name  | role        | approval_status |
-        | Maria | participant | approved        |
-        | Ana   | moderator   | approved        |
+        | name  | role        | community_access |
+        | Maria | participant | allowed          |
+        | Ana   | moderator   | allowed          |
 
     Scenario Outline: Rejected revision remains visible in revision history
       Given a <entity> "<title>" exists

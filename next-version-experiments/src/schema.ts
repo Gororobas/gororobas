@@ -1,30 +1,146 @@
 import { randCountry, randFood, randParagraph } from '@ngneat/falso'
 import { Schema } from 'effect'
 
-export const VegetableId = Schema.UUID.pipe(Schema.brand('VegetableId'))
-export type VegetableId = typeof VegetableId.Type
+/**
+ * =======
+ * #1 IDs
+ * =======
+ */
+
+export const AccountId = Schema.UUID.pipe(Schema.brand('AccountId'))
+export type AccountId = typeof AccountId.Type
 
 export const PersonId = Schema.UUID.pipe(Schema.brand('PersonId'))
 export type PersonId = typeof PersonId.Type
+
+export const OrganizationId = Schema.UUID.pipe(Schema.brand('OrganizationId'))
+export type OrganizationId = typeof OrganizationId.Type
+
+export const OrganizationInvitationId = Schema.UUID.pipe(
+	Schema.brand('OrganizationInvitationId'),
+)
+export type OrganizationInvitationId = typeof OrganizationInvitationId.Type
+
+export const TagId = Schema.UUID.pipe(Schema.brand('TagId'))
+export type TagId = typeof TagId.Type
+
+export const ImageId = Schema.UUID.pipe(Schema.brand('ImageId'))
+export type ImageId = typeof ImageId.Type
+
+export const VegetableId = Schema.UUID.pipe(Schema.brand('VegetableId'))
+export type VegetableId = typeof VegetableId.Type
 
 export const VegetableRevisionId = Schema.UUID.pipe(
 	Schema.brand('VegetableRevisionId'),
 )
 export type VegetableRevisionId = typeof VegetableRevisionId.Type
 
-export const ImageId = Schema.UUID.pipe(Schema.brand('ImageId'))
-export type ImageId = typeof ImageId.Type
-
-export const Handle = Schema.String.pipe(
-	Schema.minLength(3, {
-		message: () => 'Obrigatório (mínimo de 3 caracteres)',
-	}),
-	Schema.pattern(/^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/, {
-		message: () =>
-			'O endereço não pode conter caracteres especiais, letras maiúsculas, espaços ou acentos',
-	}),
+export const VegetableVarietyId = Schema.UUID.pipe(
+	Schema.brand('VegetableVarietyId'),
 )
-export type Handle = typeof Handle.Type
+export type VegetableVarietyId = typeof VegetableVarietyId.Type
+
+export const ResourceId = Schema.UUID.pipe(Schema.brand('ResourceId'))
+export type ResourceId = typeof ResourceId.Type
+
+export const ResourceRevisionId = Schema.UUID.pipe(
+	Schema.brand('ResourceRevisionId'),
+)
+export type ResourceRevisionId = typeof ResourceRevisionId.Type
+
+export const PostId = Schema.UUID.pipe(Schema.brand('PostId'))
+export type PostId = typeof PostId.Type
+
+export const PostCommitId = Schema.UUID.pipe(Schema.brand('PostCommitId'))
+export type PostCommitId = typeof PostCommitId.Type
+
+export const CommentId = Schema.UUID.pipe(Schema.brand('CommentId'))
+export type CommentId = typeof CommentId.Type
+
+export const CommentCommitId = Schema.UUID.pipe(Schema.brand('CommentCommitId'))
+export type CommentCommitId = typeof CommentCommitId.Type
+
+/**
+ * ========
+ * #2 ENUMS
+ * ========
+ */
+
+export const Locale = Schema.Literal('PT', 'ES', 'EN')
+export type Locale = typeof Locale.Type
+
+export const PlatformRole = Schema.Literal('PARTICIPANT', 'MODERATOR', 'ADMIN')
+export type PlatformRole = typeof PlatformRole.Type
+
+export const CommunityAccess = Schema.Literal(
+	'AWAITING_ACCESS',
+	'ALLOWED',
+	'BLOCKED',
+)
+export type CommunityAccess = typeof CommunityAccess.Type
+
+export const ModerationStatus = Schema.Literal(
+	'APPROVED_BY_DEFAULT',
+	'CENSORED',
+)
+export type ModerationStatus = typeof ModerationStatus.Type
+
+export const OrganizationInvitationStatus = Schema.Literal(
+	'PENDING',
+	'ACCEPTED',
+	'EXPIRED',
+)
+export type OrganizationInvitationStatus =
+	typeof OrganizationInvitationStatus.Type
+
+export const OrganizationPermissions = Schema.Literal('FULL', 'EDIT', 'VIEW')
+export type OrganizationPermissions = typeof OrganizationPermissions.Type
+
+// @TODO review organization types
+export const OrganizationType = Schema.Literal(
+	'TERRITORY',
+	'SOCIAL_MOVEMENT',
+	'COMMERCIAL',
+	'NGO',
+)
+export type OrganizationType = typeof OrganizationType.Type
+
+/** Profiles can't be private */
+export const ProfileVisibility = Schema.Literal('COMMUNITY', 'PUBLIC')
+export type ProfileVisibility = typeof ProfileVisibility.Type
+
+export const InformationVisibility = Schema.Literal(
+	'PRIVATE',
+	'COMMUNITY',
+	'PUBLIC',
+)
+export type InformationVisibility = typeof InformationVisibility.Type
+
+export const RevisionEvaluation = Schema.Literal(
+	'PENDING',
+	'APPROVED',
+	'REJECTED',
+)
+export type RevisionEvaluation = typeof RevisionEvaluation.Type
+
+/** Inspired by https://schema.org/EventAttendanceModeEnumeration */
+export const EventAttendanceMode = Schema.Literal(
+	'IN_PERSON',
+	'VIRTUAL',
+	'MIXED',
+)
+export type EventAttendanceMode = typeof EventAttendanceMode.Type
+
+export const BookmarkState = Schema.Literal(
+	'INTERESTED', // "Want to plant" for vegetables
+	'ACTIVE', // "Am planting" for vegetables
+	'PREVIOUSLY_ACTIVE', // "Have planted" for vegetables
+	'INDIFFERENT', // "Not interested"
+)
+export type BookmarkState = typeof BookmarkState.Type
+
+export const PostType = Schema.Literal('NOTE', 'EVENT')
+export type PostType = typeof PostType.Type
 
 export const AgroforestryStratum = Schema.Literal(
 	'EMERGENT',
@@ -83,8 +199,8 @@ export const PlantingMethod = Schema.Literal(
 )
 export type PlantingMethod = typeof PlantingMethod.Type
 
-export const Gender = Schema.Literal('NEUTRAL', 'MALE', 'FEMALE')
-export type Gender = typeof Gender.Type
+export const VegetableGender = Schema.Literal('NEUTRAL', 'MALE', 'FEMALE')
+export type VegetableGender = typeof VegetableGender.Type
 
 export const ChineseMedicineElement = Schema.Literal(
 	'FIRE',
@@ -94,6 +210,37 @@ export const ChineseMedicineElement = Schema.Literal(
 	'WOOD',
 )
 export type ChineseMedicineElement = typeof ChineseMedicineElement.Type
+
+export const ResourceUrlState = Schema.Literal(
+	'UNCHECKED',
+	'OK',
+	'BROKEN',
+	'PENDING',
+)
+export type ResourceUrlState = typeof ResourceUrlState.Type
+
+/**
+ * =============
+ * #3 PRIMITIVES
+ * =============
+ */
+
+export const Handle = Schema.String.pipe(
+	Schema.minLength(3, {
+		message: () => 'Obrigatório (mínimo de 3 caracteres)',
+	}),
+	Schema.pattern(/^[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*$/, {
+		message: () =>
+			'O endereço não pode conter caracteres especiais, letras maiúsculas, espaços ou acentos',
+	}),
+)
+export type Handle = typeof Handle.Type
+
+/**
+ * ============
+ * #4 RICH TEXT
+ * ============
+ */
 
 const UnknownTiptapAttrs = Schema.UndefinedOr(
 	Schema.Record({ key: Schema.NonEmptyString, value: Schema.Any }),
@@ -146,6 +293,36 @@ export const TiptapDocument = Schema.Struct({
 	version: Schema.Literal(1),
 })
 
+/**
+ * =========
+ * #5 PEOPLE
+ * =========
+ */
+
+/**
+ * ================
+ * #6 ORGANIZATIONS
+ * ================
+ */
+
+/**
+ * =======
+ * #7 TAGS
+ * =======
+ */
+
+/**
+ * =========
+ * #8 IMAGES
+ * =========
+ */
+
+/**
+ * =============
+ * #9 VEGETABLES
+ * =============
+ */
+
 export const VegetableMetadata = Schema.Struct({
 	handle: Handle,
 	scientific_names: Schema.NonEmptyArray(
@@ -169,15 +346,12 @@ export const VegetableMetadata = Schema.Struct({
 	main_photo_id: Schema.NullishOr(ImageId),
 })
 
-export const Locale = Schema.Literal('pt', 'es', 'en')
-export type Locale = typeof Locale.Type
-
 const VegetableOrigin = Schema.String.annotations({
 	arbitrary: () => (fc) => fc.constant(null).map(() => randCountry()),
 })
 
 export const VegetableLocalizedData = Schema.Struct({
-	gender: Gender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
+	gender: VegetableGender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
 	origin: Schema.optional(Schema.NullishOr(VegetableOrigin)),
 	content: Schema.optional(Schema.NullishOr(TiptapDocument)),
 	common_names: Schema.Array(
@@ -215,48 +389,38 @@ export const QueriedVegetableData = Schema.Struct({
 })
 export type QueriedVegetableData = typeof QueriedVegetableData.Type
 
-export const CommunityAccess = Schema.Literal(
-	'awaiting_access',
-	'allowed',
-	'blocked',
-)
+/**
+ * =============
+ * #10 RESOURCES
+ * =============
+ */
 
-export const ModerationStatus = Schema.Literal(
-	'approved_by_default',
-	'censored',
-)
+/**
+ * =========
+ * #11 POSTS
+ * =========
+ */
 
-export const InformationVisibility = Schema.Literal(
-	'private',
-	'community',
-	'public',
-)
+/**
+ * ==========
+ * #11.1 NOTES
+ * ==========
+ */
 
-export const RevisionEvaluation = Schema.Literal(
-	'pending',
-	'approved',
-	'rejected',
-)
-export type RevisionEvaluation = typeof RevisionEvaluation.Type
+/**
+ * ===========
+ * #11.2 EVENTS
+ * ===========
+ */
 
-export const PlatformRole = Schema.Literal('participant', 'moderator', 'admin')
-export type PlatformRole = typeof PlatformRole.Type
+/**
+ * ============
+ * #12 COMMENTS
+ * ============
+ */
 
-/** Inspired by https://schema.org/EventAttendanceModeEnumeration */
-export const EventAttendanceMode = Schema.Literal(
-	'in-person',
-	'virtual',
-	'mixed',
-)
-export type EventAttendanceMode = typeof EventAttendanceMode.Type
-
-export const BookmarkState = Schema.Literal(
-	'interested',
-	'active',
-	'previously-active',
-	'indifferent',
-)
-export type BookmarkState = typeof BookmarkState.Type
-
-export const PostType = Schema.Literal('note', 'event')
-export type PostType = typeof PostType.Type
+/**
+ * =============
+ * #13 BOOKMARKS
+ * =============
+ */

@@ -11,7 +11,7 @@ Feature: People
   Rule: People can manage their profile
 
     Background:
-      Given "Maria" is allow to community access
+      Given "Maria" has community access
 
     Scenario: Person sets up their profile
       When "Maria" updates their profile with:

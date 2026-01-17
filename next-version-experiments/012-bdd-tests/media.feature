@@ -89,7 +89,7 @@ Feature: Media
     Scenario: Vegetable media is approved by default
       Given "Maria" is logged in
       When they upload media attached to vegetable "Mandioca"
-      Then the media has moderation_status "approved_by_default"
+      Then the media is visible to everyone
 
     Scenario: Moderator can censor vegetable media
       Given "Maria" is logged in

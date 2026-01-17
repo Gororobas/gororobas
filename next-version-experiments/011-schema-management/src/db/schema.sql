@@ -64,6 +64,7 @@ CREATE TABLE profiles (
     bio json, -- Tiptap rich text
     location text,
     photo_id text,
+    visibility text NOT NULL, -- ProfileVisibility
     created_at text,
     updated_at text,
     FOREIGN KEY (photo_id) REFERENCES images (id) ON DELETE SET NULL
@@ -109,6 +110,7 @@ CREATE TABLE organization_invitations (
     organization_id text NOT NULL,
     email text NOT NULL,
     permissions text NOT NULL, -- OrganizationPermission
+    status text NOT NULL, -- OrganizationInvitationStatus
     created_by_id text NOT NULL,
     created_at text,
     updated_at text,
@@ -349,6 +351,8 @@ CREATE TABLE resources (
     current_crdt_frontier json NOT NULL,
     handle text NOT NULL UNIQUE,
     url text NOT NULL UNIQUE,
+    url_state text NOT NULL, -- ResourceURLState
+    last_checked_at text,
     format text NOT NULL, -- ResourceFormat
     thumbnail_id text,
     created_at text,
@@ -426,13 +430,13 @@ CREATE TABLE posts (
     created_at text,
     updated_at text,
     owner_profile_id text NOT NULL,
-    kind: text NOT NULL, -- EventType
+    kind text NOT NULL, -- EventType
 
-    -- EVENT ONLY:
-    start_date text NOT NULL,
+    -- EVENT ONLY - enforced in application level:
+    start_date text,
     end_date text,
     location_or_url text,
-    attendance_mode text NOT NULL, -- EventAttendanceMode
+    attendance_mode text, -- EventAttendanceMode
     thumbnail_image_id text,
     FOREIGN KEY (id) REFERENCES post_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,

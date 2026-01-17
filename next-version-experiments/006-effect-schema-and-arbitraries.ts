@@ -6,10 +6,10 @@ import { LoroDoc } from 'loro-crdt'
 import {
 	AgroforestryStratum,
 	EdibleVegetablePart,
-	Gender,
 	Handle,
 	PlantingMethod,
 	TiptapDocument,
+	VegetableGender,
 	VegetableId,
 	VegetableLifecycle,
 	VegetableUsage,
@@ -92,7 +92,7 @@ class Vegetable extends Model.Class<Vegetable>('Vegetable')({
 	scientific_names: Model.FieldOption(
 		Schema.Array(Schema.NonEmptyTrimmedString),
 	),
-	gender: Gender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
+	gender: VegetableGender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
 
 	// ARRAYS
 	// Do I use JsonFromString?
