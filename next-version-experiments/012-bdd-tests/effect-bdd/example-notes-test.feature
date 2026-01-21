@@ -6,12 +6,12 @@ Feature: Notes
 
     Background:
       Given the following people exist:
-        | name     | role        | access           |
-        | Ailton   | admin       | approved         |
-        | Ana      | moderator   | approved         |
-        | Irene    | participant | approved         |
-        | Pedro    | participant | pending_approval |
-        | Gusttavo | participant | disapproved      |
+        | name     | role      | access           |
+        | Ailton   | admin     | approved         |
+        | Ana      | moderator | approved         |
+        | Irene    | trusted   | approved         |
+        | Pedro    | trusted   | pending_approval |
+        | Gusttavo | trusted   | disapproved      |
 
     Scenario: Approved person creates truly public notes
       Given "Ailton" is logged in
@@ -26,7 +26,7 @@ Feature: Notes
         | visitors | yes     |
 
     Scenario: Approved person creates community-only notes
-      Community notes are safe spaces and can't be accessed by visitors or participants with unapproved access (pending or blocked)
+      Community notes are safe spaces and can't be accessed by visitors or trusteds with unapproved access (pending or blocked)
 
       Given "Ailton" is logged in
       When they create a "community" note under their profile
@@ -54,7 +54,7 @@ Feature: Notes
         | Gusttavo | no      |
 
     Scenario: Person with pending access creates note
-      However, no participant can see their notes, only admins and moderators.
+      However, no trusted participant can see their notes, only admins and moderators.
       Not even public notes become truly public.
 
       Given "Pedro" is logged in

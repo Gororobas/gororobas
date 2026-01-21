@@ -6,12 +6,12 @@ Feature: Media
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Ailton   | admin       | allowed          |
-        | Ana      | moderator   | allowed          |
-        | Irene    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Ailton   | admin        |
+        | Ana      | moderator    |
+        | Irene    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
 
     Scenario: Public post media is visible to the same audience as the post
       Given "Irene" is logged in
@@ -30,6 +30,8 @@ Feature: Media
       And they upload media to the post
       Then the media should have the following visibility:
         | viewer   | visible |
+        | Ailton   | yes     |
+        | Ana      | yes     |
         | Irene    | yes     |
         | Pedro    | no      |
         | Gusttavo | no      |
@@ -45,6 +47,7 @@ Feature: Media
         | Ailton   | no      |
         | Ana      | no      |
         | Pedro    | no      |
+        | Gusttavo | no      |
         | visitors | no      |
 
     Scenario: Person awaiting access can upload media inside posts
@@ -67,20 +70,20 @@ Feature: Media
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
-        | Ana      | moderator   | allowed          |
+        | name     | access_level |
+        | Ana      | moderator    |
+        | Maria    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
       And the vegetables "Mandioca" and "Banana" exist
 
-    Scenario: Allowed person attaches media to a vegetable
+    Scenario: Trusted participant attaches media to a vegetable
       Given "Maria" is logged in
       When they upload media attached to vegetable "Mandioca"
       Then the media is visible on vegetable "Mandioca"
       And visitors can access the media
 
-    Scenario: Allowed person can attach the same media to multiple vegetables
+    Scenario: Trusted participant can attach the same media to multiple vegetables
       Given "Maria" is logged in
       When they upload media attached to vegetables "Mandioca" and "Banana"
       Then the media is visible on vegetable "Mandioca"

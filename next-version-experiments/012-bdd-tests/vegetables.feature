@@ -6,10 +6,10 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Maria    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
 
     Scenario: Person with community access creates a new vegetable
       When "Maria" creates a vegetable
@@ -28,12 +28,12 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | João  | participant | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | João  | trusted      |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
 
-    Scenario: Participant submits an edit for review
+    Scenario: Trusted participant submits an edit for review
       When "Maria" edits "Mandioca" content to "Raiz tuberosa rica em amido"
       Then a revision is created with:
         | field      | value   |
@@ -51,10 +51,10 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name   | role        | community_access |
-        | Maria  | participant | allowed          |
-        | Ana    | moderator   | allowed          |
-        | Ailton | admin       | allowed          |
+        | name   | access_level |
+        | Maria  | trusted      |
+        | Ana    | moderator    |
+        | Ailton | admin        |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Moderator approves a revision
@@ -77,7 +77,7 @@ Feature: Vegetables
       Then the revision evaluation becomes "rejected"
       And the vegetable content remains "Raiz tuberosa"
 
-    Scenario: Participant cannot evaluate revisions
+    Scenario: Trusted participant cannot evaluate revisions
       Given "Maria" has submitted an edit to "Mandioca"
       When "Maria" tries to approve the revision
       Then access is denied
@@ -92,9 +92,9 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name   | role      | community_access |
-        | Ana    | moderator | allowed          |
-        | Ailton | admin     | allowed          |
+        | name   | access_level |
+        | Ana    | moderator    |
+        | Ailton | admin        |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Moderator can approve their own revision
@@ -186,7 +186,7 @@ Feature: Vegetables
       When "Ana" sets a photo as the main photo
       Then that photo appears as "Mandioca"'s thumbnail in listings
 
-    Scenario: Participant can't set main photo for vegetable
+    Scenario: Trusted participant can't set main photo for vegetable
       Given "Mandioca" has approved photos
       When "Maria" sets a photo as the main photo
       Then access is denied

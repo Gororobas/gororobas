@@ -7,12 +7,12 @@ Feature: Posts
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Ailton   | admin       | allowed          |
-        | Ana      | moderator   | allowed          |
-        | Irene    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Ailton   | admin        |
+        | Ana      | moderator    |
+        | Irene    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
 
     Scenario: Person with community access creates truly public note posts
       Given "Ailton" is logged in
@@ -79,10 +79,9 @@ Feature: Posts
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Irene    | participant | allowed          |
-        | visitors | visitor     | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Irene | trusted      |
 
     Scenario: Person with community access creates a public event post with date and location
       Given "Maria" is logged in
@@ -102,13 +101,13 @@ Feature: Posts
     Background:
       Given the organization "Sítio Semente" exists
       And the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Joao     | participant | allowed          |
-        | Teresa   | participant | allowed          |
-        | Xavier   | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Maria    | trusted      |
+        | Joao     | trusted      |
+        | Teresa   | trusted      |
+        | Xavier   | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
       And the following memberships exist for "Sítio Semente":
         | name   | permissions |
         | Maria  | full        |
@@ -151,11 +150,11 @@ Feature: Posts
     Background:
       Given the organization "Sítio Semente" exists
       And the following people exist:
-        | name   | role        | community_access |
-        | Maria  | participant | allowed          |
-        | Joao   | participant | allowed          |
-        | Teresa | participant | allowed          |
-        | Xavier | participant | allowed          |
+        | name   | access_level |
+        | Maria  | trusted      |
+        | Joao   | trusted      |
+        | Teresa | trusted      |
+        | Xavier | trusted      |
       And the following memberships exist for "Sítio Semente":
         | name   | permissions |
         | Maria  | full        |
@@ -200,9 +199,9 @@ Feature: Posts
     Background:
       Given the organization "Sítio Semente" exists
       And the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | Joao  | participant | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Joao  | trusted      |
       And the following memberships exist for "Sítio Semente":
         | name  | permissions |
         | Maria | full        |
@@ -222,10 +221,10 @@ Feature: Posts
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | Pedro | participant | awaiting_access  |
-        | Ana   | moderator   | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Pedro | newcomer     |
+        | Ana   | moderator    |
       And "Maria" has created a "public" note post under their profile with content "Canteiro novo"
       And "Pedro" is logged in
 
@@ -251,11 +250,11 @@ Feature: Posts
     Background:
       Given the organization "Gororobas" exists
       And the following people exist:
-        | name   | role        | community_access |
-        | Maria  | participant | allowed          |
-        | Joao   | participant | allowed          |
-        | Xavier | participant | allowed          |
-        | Pedro  | participant | awaiting_access  |
+        | name   | access_level |
+        | Maria  | trusted      |
+        | Joao   | trusted      |
+        | Xavier | trusted      |
+        | Pedro  | newcomer     |
       And the following memberships exist for "Gororobas":
         | name  | permissions |
         | Maria | full        |

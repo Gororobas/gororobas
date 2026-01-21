@@ -6,12 +6,12 @@ Feature: Organizations
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Maria    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
 
-    Scenario: Allowed person creates an organization
+    Scenario: Trusted participant creates an organization
       When "Maria" creates an organization named "Sítio Semente" of type "territory"
       Then the organization "Sítio Semente" exists
       And "Maria" is an organization member of "Sítio Semente" with "full" permissions
@@ -32,9 +32,9 @@ Feature: Organizations
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | Irene | participant | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Irene | trusted      |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | permissions |
@@ -53,12 +53,12 @@ Feature: Organizations
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Teresa   | participant | allowed          |
-        | Irene    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Maria    | trusted      |
+        | Teresa   | trusted      |
+        | Irene    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | permissions |
@@ -89,11 +89,11 @@ Feature: Organizations
 
     Background:
       Given the following people exist:
-        | name   | role        | community_access |
-        | Maria  | participant | allowed          |
-        | Irene  | participant | allowed          |
-        | Teresa | participant | allowed          |
-        | Ana    | moderator   | allowed          |
+        | name   | access_level |
+        | Maria  | trusted      |
+        | Irene  | trusted      |
+        | Teresa | trusted      |
+        | Ana    | moderator    |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name   | permissions |
@@ -128,9 +128,9 @@ Feature: Organizations
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | Irene | participant | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Irene | trusted      |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | permissions |
@@ -149,11 +149,11 @@ Feature: Organizations
 
     Background:
       Given the following people exist:
-        | name   | role        | community_access |
-        | Maria  | participant | allowed          |
-        | Irene  | participant | allowed          |
-        | Teresa | participant | allowed          |
-        | Pedro  | participant | awaiting_access  |
+        | name   | access_level |
+        | Maria  | trusted      |
+        | Irene  | trusted      |
+        | Teresa | trusted      |
+        | Pedro  | newcomer     |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name   | permissions |

@@ -74,8 +74,7 @@ CREATE INDEX idx_profiles_handle ON profiles (handle);
 
 CREATE TABLE people (
     id text PRIMARY KEY,
-    role text NOT NULL, -- PlatformRole
-    community_access text NOT NULL, -- CommunityAccess
+    access_level text NOT NULL, -- AccessLevel
     -- People's ids are the same as the corresponding id in `profiles` and `users`
     FOREIGN KEY (id) REFERENCES profiles (id) ON DELETE CASCADE,
     FOREIGN KEY (id) REFERENCES accounts (id) ON DELETE CASCADE

@@ -15,7 +15,7 @@ import {
 // ============================================================================
 
 type AccessLevel = 'approved' | 'pending_approval' | 'disapproved'
-type Role = 'admin' | 'moderator' | 'participant'
+type Role = 'admin' | 'moderator' | 'trusted'
 type Visibility = 'public' | 'community' | 'private'
 type OrgPermission = 'full' | 'edit' | 'view'
 
@@ -231,7 +231,7 @@ const PersonRepositoryLive = Layer.effect(
 					const person: Person = {
 						id: crypto.randomUUID(),
 						name: data.name,
-						role: (data.role as Role) ?? 'participant',
+						role: (data.role as Role) ?? 'trusted',
 						access: data.access as AccessLevel,
 					}
 					state.people.set(person.name, person)
@@ -990,7 +990,7 @@ describeFeature(
 									for (const row of table) {
 										const person = yield* personRepo.create({
 											...row,
-											role: 'participant',
+											role: 'trusted',
 										})
 										peopleMap.set(person.name, person)
 									}
@@ -1534,7 +1534,7 @@ describeFeature(
 										for (const row of table) {
 											const person = yield* personRepo.create({
 												name: row.name,
-												role: 'participant',
+												role: 'trusted',
 												access: 'approved',
 											})
 											peopleMap.set(person.name, person)

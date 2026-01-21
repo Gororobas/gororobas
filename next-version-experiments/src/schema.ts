@@ -69,15 +69,14 @@ export type CommentCommitId = typeof CommentCommitId.Type
 export const Locale = Schema.Literal('pt', 'es', 'en')
 export type Locale = typeof Locale.Type
 
-export const PlatformRole = Schema.Literal('PARTICIPANT', 'MODERATOR', 'ADMIN')
-export type PlatformRole = typeof PlatformRole.Type
-
-export const CommunityAccess = Schema.Literal(
-	'AWAITING_ACCESS',
-	'ALLOWED',
-	'BLOCKED',
+export const AccessLevel = Schema.Literal(
+	'NEWCOMER', // Just signed up, limited access
+	'BLOCKED', // Has been blocked by a moderator or admin, same access as visitors
+	'TRUSTED', // Has been approved and has access to public & community content
+	'MODERATOR', // Can trust or block newcomers, flag media and posts, and approve revisions
+	'ADMIN', // Moderator access + manage other moderators and admins
 )
-export type CommunityAccess = typeof CommunityAccess.Type
+export type AccessLevel = typeof AccessLevel.Type
 
 export const ModerationStatus = Schema.Literal(
 	'APPROVED_BY_DEFAULT',
@@ -369,7 +368,9 @@ const VegetableOrigin = Schema.String.annotations({
 })
 
 export const VegetableLocalizedData = Schema.Struct({
-	grammatical_gender: GrammaticalGender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
+	grammatical_gender: GrammaticalGender.pipe(
+		Schema.annotations({ default: 'NEUTRAL' }),
+	),
 	origin: Schema.optional(Schema.NullishOr(VegetableOrigin)),
 	content: Schema.optional(Schema.NullishOr(TiptapDocument)),
 	common_names: Schema.Array(
@@ -469,8 +470,8 @@ export const PostLocalizedData = Schema.Struct({
 })
 
 export const EventMetadata = Schema.Struct({
-  ...CorePostMetadata.fields,
-  kind: Schema.Literal('EVENT' satisfies typeof PostType.literals[1]),
+	...CorePostMetadata.fields,
+	kind: Schema.Literal('EVENT' satisfies (typeof PostType.literals)[1]),
 	start_date: Schema.DateFromString,
 	end_date: Schema.NullishOr(Schema.DateFromString),
 	location_or_url: Schema.NullishOr(Schema.String),
@@ -478,8 +479,8 @@ export const EventMetadata = Schema.Struct({
 })
 
 export const NoteMetadata = Schema.Struct({
-  ...CorePostMetadata.fields,
-  kind: Schema.Literal('NOTE' satisfies typeof PostType.literals[0]),
+	...CorePostMetadata.fields,
+	kind: Schema.Literal('NOTE' satisfies (typeof PostType.literals)[0]),
 })
 
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */

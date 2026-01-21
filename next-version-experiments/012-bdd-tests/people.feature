@@ -1,12 +1,11 @@
 Feature: People
-  People are the individual participants of the Gororobas community.
+  People are the individual trusteds of the Gororobas community.
   Newcomers go through an approval process before gaining full access to what's shared by others.
   This protects community spaces while still allowing newcomers to explore and contribute.
 
   Scenario: Newcomers start without access to community content
     When a person completes signup
-    Then their community access is "awaiting_access"
-    And their role is "participant"
+    Then they're treated as newcomers
 
   Rule: People can manage their profile
 
@@ -37,11 +36,11 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Irene    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Maria    | trusted      |
+        | Irene    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
 
     Scenario: Person sets profile to public
       When "Maria" has set their profile visibility to "public"
@@ -65,60 +64,60 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name   | role        | community_access |
-        | Ailton | admin       | allowed          |
-        | Ana    | moderator   | allowed          |
-        | Irene  | participant | allowed          |
-        | Pedro  | participant | awaiting_access  |
+        | name   | access_level |
+        | Ailton | admin        |
+        | Ana    | moderator    |
+        | Irene  | trusted      |
+        | Pedro  | newcomer     |
 
     Scenario: Admin allows a person awaiting access
-      When "Ailton" allows "Pedro"
-      Then "Pedro"'s community access becomes "allowed"
+      When "Ailton" promotes "Pedro" to trusted
+      Then "Pedro"'s becomes a full trusted
 
     Scenario: Moderator allows a person awaiting access
-      When "Ana" allows "Pedro"
-      Then "Pedro"'s community access becomes "allowed"
+      When "Ana" promotes "Pedro" to trusted
+      Then "Pedro"'s becomes  a full trusted
 
-    Scenario: Participant cannot allow people
-      When "Irene" tries to allow "Pedro"
+    Scenario: Trusted participant cannot allow people
+      When "Irene" tries to promote "Pedro" to trusted
       Then access is denied
 
     Scenario: Admin blocks a person from accessing community content
-      Given "Pedro" has been allowed to access community content
-      When "Ailton" blocks "Pedro"
-      Then "Pedro"'s community access becomes "blocked"
+      Given "Pedro" has been promoted to trusted
+      When "Ailton" blocks "Pedro"'s access
+      Then "Pedro" becomes blocked
 
-    Scenario: Cannot block a moderator without demoting first
-      When "Ailton" tries to block "Ana"
-      Then access is denied
+    Scenario: Admin blocks and demotes a moderator
+      When "Ailton" blocks "Ana"'s access
+      Then "Ana" becomes blocked
 
-  Rule: Admins manage people roles
+  Rule: Admins manage people access levels
 
     Background:
       Given the following people exist:
-        | name   | role        | community_access |
-        | Ailton | admin       | allowed          |
-        | Ana    | moderator   | allowed          |
-        | Maria  | participant | allowed          |
+        | name   | access_level |
+        | Ailton | admin        |
+        | Ana    | moderator    |
+        | Maria  | trusted      |
 
-    Scenario: Admin promotes participant to moderator
+    Scenario: Admin promotes trusted to moderator
       When "Ailton" promotes "Maria" to moderator
-      Then "Maria"'s role becomes "moderator"
+      Then "Maria"'s access_level becomes "moderator"
 
     Scenario: Admin promotes moderator to admin
       When "Ailton" promotes "Ana" to admin
-      Then "Ana"'s role becomes "admin"
+      Then "Ana"'s access_level becomes "admin"
 
-    Scenario: Admin demotes moderator to participant
-      When "Ailton" demotes "Ana" to participant
-      Then "Ana"'s role becomes "participant"
+    Scenario: Admin demotes moderator to trusted
+      When "Ailton" demotes "Ana" to trusted
+      Then "Ana"'s access_level becomes "trusted"
 
-    Scenario: Moderator cannot change roles
+    Scenario: Moderator cannot change access levels
       When "Ana" tries to promote "Maria" to moderator
       Then access is denied
 
-    Scenario: Cannot demote the last full-permissions member
-      Given "Ailton" is the only full-permissions member
+    Scenario: Cannot demote the last admin
+      Given "Ailton" is the only admin
       When "Ailton" tries to demote themselves
       Then access is denied
 
@@ -126,8 +125,8 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
 
     Scenario: Person deletes their account
       When "Maria" deletes their account

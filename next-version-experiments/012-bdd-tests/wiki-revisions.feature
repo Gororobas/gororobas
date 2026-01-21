@@ -8,12 +8,12 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Ana      | moderator   | allowed          |
-        | Ailton   | admin       | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Maria    | trusted      |
+        | Ana      | moderator    |
+        | Ailton   | admin        |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
 
     Scenario Outline: Person with community access can propose a revision
       Given a <entity> "<title>" exists
@@ -60,12 +60,12 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name   | role        | community_access |
-        | Maria  | participant | allowed          |
-        | Ana    | moderator   | allowed          |
-        | Ailton | admin       | allowed          |
+        | name   | access_level |
+        | Maria  | trusted      |
+        | Ana    | moderator    |
+        | Ailton | admin        |
 
-    Scenario Outline: Participant cannot evaluate a revision
+    Scenario Outline: Trusted participant cannot evaluate a revision
       Given a <entity> "<title>" exists
       And "Maria" has proposed a revision to <entity> "<title>"
       When "Maria" tries to approve the revision
@@ -118,9 +118,9 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name   | role      | community_access |
-        | Ana    | moderator | allowed          |
-        | Ailton | admin     | allowed          |
+        | name   | access_level |
+        | Ana    | moderator    |
+        | Ailton | admin        |
 
     Scenario Outline: Moderator can approve their own revision
       Given a <entity> "<title>" exists
@@ -152,9 +152,9 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | Ana   | moderator   | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Ana   | moderator    |
 
     Scenario Outline: Rejected revision remains visible in revision history
       Given a <entity> "<title>" exists

@@ -6,10 +6,10 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | Pedro | participant | awaiting_access  |
-        | Ana   | moderator   | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Pedro | newcomer     |
+        | Ana   | moderator    |
       And the following resources exist:
         | title                         | url                              | format  |
         | A Terra Dá, a Terra Quer      | https://example.com/a-terra-da   | book    |
@@ -28,10 +28,10 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name     | role        | community_access |
-        | Maria    | participant | allowed          |
-        | Pedro    | participant | awaiting_access  |
-        | Gusttavo | participant | blocked          |
+        | name     | access_level |
+        | Maria    | trusted      |
+        | Pedro    | newcomer     |
+        | Gusttavo | blocked      |
 
     Scenario: Person with community access creates a resource
       When "Maria" creates a resource with url "https://example.com/novo", format "book", and title "Manual de Compostagem"
@@ -50,12 +50,12 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | João  | participant | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | João  | trusted      |
       And the resource "A Terra Dá, a Terra Quer" exists
 
-    Scenario: Participant submits an edit for review
+    Scenario: Trusted participant submits an edit for review
       When "Maria" edits resource "A Terra Dá, a Terra Quer" title to "A Terra Dá, a Terra Quer (Edição Revisada)"
       Then a revision is created with "pending" evaluation, created by "Maria"
       And the resource title remains "A Terra Dá, a Terra Quer"
@@ -69,10 +69,10 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name   | role        | community_access |
-        | Maria  | participant | allowed          |
-        | Ana    | moderator   | allowed          |
-        | Ailton | admin       | allowed          |
+        | name   | access_level |
+        | Maria  | trusted      |
+        | Ana    | moderator    |
+        | Ailton | admin        |
       And the resource "A Terra Dá, a Terra Quer" exists
 
     Scenario: Moderator approves a revision
@@ -95,7 +95,7 @@ Feature: Resources
       Then the revision evaluation becomes "rejected"
       And the resource title remains "A Terra Dá, a Terra Quer"
 
-    Scenario: Participant cannot evaluate revisions
+    Scenario: Trusted participant cannot evaluate revisions
       Given "Maria" has submitted an edit to resource "A Terra Dá, a Terra Quer"
       When "Maria" tries to approve the revision
       Then access is denied
@@ -150,10 +150,10 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | role        | community_access |
-        | Maria | participant | allowed          |
-        | Pedro | participant | awaiting_access  |
-        | Ana   | moderator   | allowed          |
+        | name  | access_level |
+        | Maria | trusted      |
+        | Pedro | newcomer     |
+        | Ana   | moderator    |
       And the resource "Agroecologia não é mercadoria" exists
 
     Scenario: Person with community access comments on a resource
