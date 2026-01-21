@@ -66,7 +66,7 @@ export type CommentCommitId = typeof CommentCommitId.Type
  * ========
  */
 
-export const Locale = Schema.Literal('PT', 'ES', 'EN')
+export const Locale = Schema.Literal('pt', 'es', 'en')
 export type Locale = typeof Locale.Type
 
 export const PlatformRole = Schema.Literal('PARTICIPANT', 'MODERATOR', 'ADMIN')
@@ -93,8 +93,8 @@ export const OrganizationInvitationStatus = Schema.Literal(
 export type OrganizationInvitationStatus =
 	typeof OrganizationInvitationStatus.Type
 
-export const OrganizationPermissions = Schema.Literal('FULL', 'EDIT', 'VIEW')
-export type OrganizationPermissions = typeof OrganizationPermissions.Type
+export const OrganizationPermission = Schema.Literal('FULL', 'EDIT', 'VIEW')
+export type OrganizationPermission = typeof OrganizationPermission.Type
 
 // @TODO review organization types
 export const OrganizationType = Schema.Literal(
@@ -199,8 +199,8 @@ export const PlantingMethod = Schema.Literal(
 )
 export type PlantingMethod = typeof PlantingMethod.Type
 
-export const VegetableGender = Schema.Literal('NEUTRAL', 'MALE', 'FEMALE')
-export type VegetableGender = typeof VegetableGender.Type
+export const GrammaticalGender = Schema.Literal('NEUTRAL', 'MALE', 'FEMALE')
+export type GrammaticalGender = typeof GrammaticalGender.Type
 
 export const ChineseMedicineElement = Schema.Literal(
 	'FIRE',
@@ -218,6 +218,24 @@ export const ResourceUrlState = Schema.Literal(
 	'PENDING',
 )
 export type ResourceUrlState = typeof ResourceUrlState.Type
+
+export const ResourceFormat = Schema.Literal(
+	'PDF',
+	'VIDEO',
+	'IMAGE',
+	'WEBSITE',
+	'ARTICLE',
+	'BOOK',
+	'OTHER',
+)
+export type ResourceFormat = typeof ResourceFormat.Type
+
+export const TranslationSource = Schema.Literal(
+	'ORIGINAL',
+	'AUTOMATIC',
+	'MANUAL',
+)
+export type TranslationSource = typeof TranslationSource.Type
 
 /**
  * =============
@@ -351,7 +369,7 @@ const VegetableOrigin = Schema.String.annotations({
 })
 
 export const VegetableLocalizedData = Schema.Struct({
-	gender: VegetableGender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
+	grammatical_gender: GrammaticalGender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
 	origin: Schema.optional(Schema.NullishOr(VegetableOrigin)),
 	content: Schema.optional(Schema.NullishOr(TiptapDocument)),
 	common_names: Schema.Array(
@@ -364,8 +382,8 @@ export const VegetableLocalizedData = Schema.Struct({
 	),
 })
 
-/** Data to be stored in Loro CRDT documents */
-export const VegetableData = Schema.Struct({
+/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+export const SourceVegetableData = Schema.Struct({
 	metadata: VegetableMetadata,
 	locales: Schema.Struct({
 		pt: Schema.optional(VegetableLocalizedData),
@@ -373,11 +391,12 @@ export const VegetableData = Schema.Struct({
 		en: Schema.optional(VegetableLocalizedData),
 	}),
 })
-export type VegetableData = typeof VegetableData.Type
+export type SourceVegetableData = typeof SourceVegetableData.Type
 
 export const QueriedVegetableData = Schema.Struct({
 	...VegetableMetadata.fields,
 	...VegetableLocalizedData.fields,
+	content: Schema.NullishOr(Schema.parseJson(TiptapDocument)),
 	scientific_names: Schema.parseJson(Schema.NonEmptyArray(Schema.String)),
 	common_names: Schema.parseJson(Schema.NonEmptyArray(Schema.String)),
 	strata: Schema.parseJson(VegetableMetadata.fields.strata),
@@ -395,23 +414,113 @@ export type QueriedVegetableData = typeof QueriedVegetableData.Type
  * =============
  */
 
+export const ResourceMetadata = Schema.Struct({
+	handle: Handle,
+	url: Schema.NonEmptyTrimmedString,
+	url_state: ResourceUrlState,
+	format: ResourceFormat,
+	thumbnail_image_id: Schema.NullishOr(ImageId),
+})
+
+export const ResourceLocalizedData = Schema.Struct({
+	title: Schema.NonEmptyTrimmedString,
+	description: Schema.NullishOr(TiptapDocument),
+	credit_line: Schema.NullishOr(Schema.String),
+	translation_source: TranslationSource,
+	original_locale: Locale,
+})
+
+/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+export const SourceResourceData = Schema.Struct({
+	metadata: ResourceMetadata,
+	locales: Schema.Struct({
+		pt: Schema.optional(ResourceLocalizedData),
+		es: Schema.optional(ResourceLocalizedData),
+		en: Schema.optional(ResourceLocalizedData),
+	}),
+})
+export type SourceResourceData = typeof SourceResourceData.Type
+
+export const QueriedResourceData = Schema.Struct({
+	...ResourceMetadata.fields,
+	...ResourceLocalizedData.fields,
+	description: Schema.NullishOr(Schema.parseJson(TiptapDocument)),
+	locale: Locale,
+})
+export type QueriedResourceData = typeof QueriedResourceData.Type
+
 /**
  * =========
  * #11 POSTS
  * =========
  */
 
-/**
- * ==========
- * #11.1 NOTES
- * ==========
- */
+export const CorePostMetadata = Schema.Struct({
+	handle: Handle,
+	visibility: Schema.NullishOr(InformationVisibility),
+	published_at: Schema.NullishOr(Schema.String),
+	owner_profile_id: Schema.UUID, // ProfileId
+})
 
-/**
- * ===========
- * #11.2 EVENTS
- * ===========
- */
+export const PostLocalizedData = Schema.Struct({
+	content: TiptapDocument,
+	translation_source: TranslationSource,
+	original_locale: Locale,
+})
+
+export const EventMetadata = Schema.Struct({
+  ...CorePostMetadata.fields,
+  kind: Schema.Literal('EVENT' satisfies typeof PostType.literals[1]),
+	start_date: Schema.DateFromString,
+	end_date: Schema.NullishOr(Schema.DateFromString),
+	location_or_url: Schema.NullishOr(Schema.String),
+	attendance_mode: Schema.NullishOr(EventAttendanceMode),
+})
+
+export const NoteMetadata = Schema.Struct({
+  ...CorePostMetadata.fields,
+  kind: Schema.Literal('NOTE' satisfies typeof PostType.literals[0]),
+})
+
+/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+export const NoteSourceData = Schema.Struct({
+	metadata: NoteMetadata,
+	locales: Schema.Struct({
+		pt: Schema.optional(PostLocalizedData),
+		es: Schema.optional(PostLocalizedData),
+		en: Schema.optional(PostLocalizedData),
+	}),
+})
+
+/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+export const EventSourceData = Schema.Struct({
+	metadata: EventMetadata,
+	locales: Schema.Struct({
+		pt: Schema.optional(PostLocalizedData),
+		es: Schema.optional(PostLocalizedData),
+		en: Schema.optional(PostLocalizedData),
+	}),
+})
+
+/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+export const SourcePostData = Schema.Union(NoteSourceData, EventSourceData)
+export type SourcePostData = typeof SourcePostData.Type
+
+export const QueriedNoteData = Schema.Struct({
+	...CorePostMetadata.fields,
+	...PostLocalizedData.fields,
+	locale: Locale,
+})
+
+export const QueriedEventData = Schema.Struct({
+	...CorePostMetadata.fields,
+	...EventMetadata.fields,
+	...PostLocalizedData.fields,
+	locale: Locale,
+})
+
+export const QueriedPostData = Schema.Union(QueriedNoteData, QueriedEventData)
+export type QueriedPostData = typeof QueriedPostData.Type
 
 /**
  * ============

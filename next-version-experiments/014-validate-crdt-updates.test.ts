@@ -2,7 +2,7 @@ import { expect, it } from '@effect/vitest'
 import { Effect, Exit } from 'effect'
 import { LoroDoc } from 'loro-crdt'
 import { Mirror } from 'loro-mirror'
-import { Handle, VegetableData } from '@/schema'
+import { Handle, SourceVegetableData } from '@/schema'
 import { VegetableDataLoro } from './004-loro-mirror.lib'
 import {
 	InvalidCrdtUpdateError,
@@ -55,7 +55,7 @@ it.effect('rejects invalid Loro update format', () =>
 		const result = yield* Effect.exit(
 			parseCrdtUpdate({
 				crdt_update: invalidUpdate,
-				targetSchema: VegetableData,
+				targetSchema: SourceVegetableData,
 				sourceDocument: sourceDoc,
 			}),
 		)
@@ -77,7 +77,7 @@ it.effect('accepts valid update from same source document', () =>
 
 		const result = yield* parseCrdtUpdate({
 			crdt_update: validUpdate,
-			targetSchema: VegetableData,
+			targetSchema: SourceVegetableData,
 			sourceDocument: sourceDoc,
 		})
 
@@ -98,7 +98,7 @@ it.effect('Loro quietly rejects updates from different source document', () =>
 
 		const result = yield* parseCrdtUpdate({
 			crdt_update: updateFromDoc2,
-			targetSchema: VegetableData,
+			targetSchema: SourceVegetableData,
 			sourceDocument: sourceDoc1,
 		})
 
@@ -122,7 +122,7 @@ it.effect('rejects update that results in invalid schema', () =>
 		const result = yield* Effect.exit(
 			parseCrdtUpdate({
 				crdt_update: invalidUpdate,
-				targetSchema: VegetableData,
+				targetSchema: SourceVegetableData,
 				sourceDocument: sourceDoc,
 			}),
 		)
@@ -142,7 +142,7 @@ it.effect('accepts update that adds optional locale data', () =>
 			locales: {
 				...current.locales,
 				pt: {
-					gender: 'MALE',
+					grammatical_gender: 'MALE',
 					common_names: [{ value: 'Teste' }],
 				},
 			},
@@ -150,7 +150,7 @@ it.effect('accepts update that adds optional locale data', () =>
 
 		const result = yield* parseCrdtUpdate({
 			crdt_update: validUpdate,
-			targetSchema: VegetableData,
+			targetSchema: SourceVegetableData,
 			sourceDocument: sourceDoc,
 		})
 
@@ -171,7 +171,7 @@ it.effect('handles empty update gracefully', () =>
 
 		const result = yield* parseCrdtUpdate({
 			crdt_update: emptyUpdate,
-			targetSchema: VegetableData,
+			targetSchema: SourceVegetableData,
 			sourceDocument: sourceDoc,
 		})
 

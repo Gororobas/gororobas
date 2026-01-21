@@ -9,10 +9,16 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as R009TursoBrowserRouteImport } from './routes/009-turso-browser'
 import { Route as R008EffectAtomSqliteRouteImport } from './routes/008-effect-atom-sqlite'
 import { Route as R007EffectSqliteBrowserRouteImport } from './routes/007-effect-sqlite-browser'
 import { Route as IndexRouteImport } from './routes/index'
 
+const R009TursoBrowserRoute = R009TursoBrowserRouteImport.update({
+  id: '/009-turso-browser',
+  path: '/009-turso-browser',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const R008EffectAtomSqliteRoute = R008EffectAtomSqliteRouteImport.update({
   id: '/008-effect-atom-sqlite',
   path: '/008-effect-atom-sqlite',
@@ -33,38 +39,58 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/007-effect-sqlite-browser': typeof R007EffectSqliteBrowserRoute
   '/008-effect-atom-sqlite': typeof R008EffectAtomSqliteRoute
+  '/009-turso-browser': typeof R009TursoBrowserRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/007-effect-sqlite-browser': typeof R007EffectSqliteBrowserRoute
   '/008-effect-atom-sqlite': typeof R008EffectAtomSqliteRoute
+  '/009-turso-browser': typeof R009TursoBrowserRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/007-effect-sqlite-browser': typeof R007EffectSqliteBrowserRoute
   '/008-effect-atom-sqlite': typeof R008EffectAtomSqliteRoute
+  '/009-turso-browser': typeof R009TursoBrowserRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/007-effect-sqlite-browser' | '/008-effect-atom-sqlite'
+  fullPaths:
+    | '/'
+    | '/007-effect-sqlite-browser'
+    | '/008-effect-atom-sqlite'
+    | '/009-turso-browser'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/007-effect-sqlite-browser' | '/008-effect-atom-sqlite'
+  to:
+    | '/'
+    | '/007-effect-sqlite-browser'
+    | '/008-effect-atom-sqlite'
+    | '/009-turso-browser'
   id:
     | '__root__'
     | '/'
     | '/007-effect-sqlite-browser'
     | '/008-effect-atom-sqlite'
+    | '/009-turso-browser'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   R007EffectSqliteBrowserRoute: typeof R007EffectSqliteBrowserRoute
   R008EffectAtomSqliteRoute: typeof R008EffectAtomSqliteRoute
+  R009TursoBrowserRoute: typeof R009TursoBrowserRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/009-turso-browser': {
+      id: '/009-turso-browser'
+      path: '/009-turso-browser'
+      fullPath: '/009-turso-browser'
+      preLoaderRoute: typeof R009TursoBrowserRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/008-effect-atom-sqlite': {
       id: '/008-effect-atom-sqlite'
       path: '/008-effect-atom-sqlite'
@@ -93,6 +119,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   R007EffectSqliteBrowserRoute: R007EffectSqliteBrowserRoute,
   R008EffectAtomSqliteRoute: R008EffectAtomSqliteRoute,
+  R009TursoBrowserRoute: R009TursoBrowserRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

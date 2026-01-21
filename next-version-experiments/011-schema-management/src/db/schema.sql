@@ -215,7 +215,7 @@ CREATE TABLE vegetable_translations (
     locale text NOT NULL, -- SupportedLocale
     common_names json NOT NULL, -- string[]
     searchable_names text, -- includes scientific names for better FTS search
-    gender text, -- Gender
+    grammatical_gender text, -- GrammaticalGender
     origin text,
     content json, -- Tiptap rich text
     PRIMARY KEY (vegetable_id, locale),
@@ -354,11 +354,11 @@ CREATE TABLE resources (
     url_state text NOT NULL, -- ResourceURLState
     last_checked_at text,
     format text NOT NULL, -- ResourceFormat
-    thumbnail_id text,
+    thumbnail_image_id text,
     created_at text,
     updated_at text,
     FOREIGN KEY (id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (thumbnail_id) REFERENCES images (id) ON DELETE SET NULL
+    FOREIGN KEY (thumbnail_image_id) REFERENCES images (id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_resources_handle ON resources (handle);
@@ -430,20 +430,19 @@ CREATE TABLE posts (
     created_at text,
     updated_at text,
     owner_profile_id text NOT NULL,
-    kind text NOT NULL, -- EventType
+    type text NOT NULL, -- EventType
 
     -- EVENT ONLY - enforced in application level:
     start_date text,
     end_date text,
     location_or_url text,
     attendance_mode text, -- EventAttendanceMode
-    thumbnail_image_id text,
     FOREIGN KEY (id) REFERENCES post_crdts (id) ON DELETE CASCADE,
-    FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
-    FOREIGN KEY (thumbnail_image_id) REFERENCES images (id) ON DELETE SET NULL
+    FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_posts_handle ON posts (handle);
+CREATE INDEX idx_posts_type ON posts (type);
 
 CREATE TABLE post_translations (
     post_id text NOT NULL,

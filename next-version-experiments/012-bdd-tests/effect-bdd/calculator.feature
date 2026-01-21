@@ -20,6 +20,6 @@ Feature: Calculator
 
     Examples:
       | first | second | result |
-      | 10    | 3      | 7      |
-      | 5     | 5      | 0      |
-      | 0     | 5      | -5     |
+      |    10 |      3 |      7 |
+      |     5 |      5 |      0 |
+      |     0 |      5 |     -5 |

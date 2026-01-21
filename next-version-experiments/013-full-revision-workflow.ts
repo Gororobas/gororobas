@@ -24,7 +24,7 @@ import {
 	PlantingMethod,
 	QueriedVegetableData,
 	RevisionEvaluation,
-	VegetableData,
+	SourceVegetableData,
 	VegetableId,
 	VegetableLifecycle,
 	VegetableRevisionId,
@@ -69,7 +69,7 @@ const CommitMessage = Schema.Union(
 	}),
 )
 
-export function createDocFromVegetableData(data: VegetableData) {
+export function createDocFromVegetableData(data: SourceVegetableData) {
 	const initialDoc = new LoroDoc()
 	const initialDocStore = new Mirror({
 		doc: initialDoc,
@@ -95,7 +95,7 @@ export const editVegetableDoc = Effect.fn('editVegetableDoc')(function* ({
 	person_id,
 }: {
 	initial_doc: LoroDoc
-	updateData: (current: VegetableData) => VegetableData
+	updateData: (current: SourceVegetableData) => SourceVegetableData
 	person_id: PersonId
 }) {
 	const editedDoc = initial_doc.fork()
@@ -147,7 +147,7 @@ const materializeVegetableMain = Effect.fn('materializeVegetableMain')(
 	}: {
 		vegetable_id: VegetableId
 		loro_doc: LoroDoc
-		vegetable: VegetableData
+		vegetable: SourceVegetableData
 	}) {
 		const sql = yield* SqlClient.SqlClient
 		const current_crdt_frontier = JSON.stringify(loro_doc.frontiers())
@@ -191,7 +191,7 @@ const materializeVegetableTranslations = Effect.fn(
 	vegetable: { metadata, locales },
 }: {
 	vegetable_id: VegetableId
-	vegetable: VegetableData
+	vegetable: SourceVegetableData
 }) {
 	const sql = yield* SqlClient.SqlClient
 	yield* sql`DELETE FROM vegetable_translations WHERE vegetable_id = ${vegetable_id}`
@@ -208,10 +208,10 @@ const materializeVegetableTranslations = Effect.fn(
 
 		yield* sql`
         INSERT INTO vegetable_translations (
-        vegetable_id, locale, common_names, searchable_names, gender, origin, content
+        vegetable_id, locale, common_names, searchable_names, grammatical_gender, origin, content
         ) VALUES (
         ${vegetable_id}, ${locale}, ${common_names}, ${searchable_names},
-        ${localeData.gender ?? null},
+        ${localeData.grammatical_gender ?? null},
         ${localeData.origin ?? null},
         ${localeData.content ? JSON.stringify(localeData.content) : null}
         )`
@@ -223,7 +223,7 @@ type JunctionConfig<T extends Schema.Schema.AnyNoContext> = {
 	columnName: string
 	valueSchema: T
 	getData: (
-		vegetable: VegetableData,
+		vegetable: SourceVegetableData,
 	) => ReadonlyArray<Schema.Schema.Type<T>> | null | undefined
 }
 
@@ -235,7 +235,7 @@ const createJunctionMaterializer = <T extends Schema.Schema.AnyNoContext>(
 		vegetable,
 	}: {
 		vegetable_id: VegetableId
-		vegetable: VegetableData
+		vegetable: SourceVegetableData
 	}) {
 		const sql = yield* SqlClient.SqlClient
 
@@ -301,7 +301,7 @@ const materializeVegetablePlantingMethods = createJunctionMaterializer({
 
 const materializeVegetable = Effect.fn('materializeVegetable')(
 	function* (data: { loro_doc: LoroDoc; vegetable_id: VegetableId }) {
-		const vegetable = yield* Schema.decode(VegetableData)(
+		const vegetable = yield* Schema.decode(SourceVegetableData)(
 			data.loro_doc.toJSON(),
 		)
 
@@ -443,7 +443,7 @@ const createRevision = Effect.fn('createRevision')(function* (data: {
 	yield* parseCrdtUpdate({
 		crdt_update: data.crdt_update,
 		sourceDocument,
-		targetSchema: VegetableData,
+		targetSchema: SourceVegetableData,
 	})
 
 	const now = yield* DateTime.nowAsDate
@@ -591,7 +591,7 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 	const { loroDoc } = yield* parseCrdtUpdate({
 		crdt_update: revision.crdt_update,
 		sourceDocument,
-		targetSchema: VegetableData,
+		targetSchema: SourceVegetableData,
 	})
 
 	// Update the vegetable CRDT with the merged document
@@ -616,7 +616,7 @@ const evaluateRevision = Effect.fn('evaluateRevision')(function* (data: {
 	)
 })
 
-const CORN_INITIAL = VegetableData.make({
+const CORN_INITIAL = SourceVegetableData.make({
 	metadata: {
 		handle: 'zea-mays',
 		scientific_names: [{ value: 'Zea Mays' }],
@@ -635,12 +635,12 @@ const CORN_INITIAL = VegetableData.make({
 	},
 	locales: {
 		pt: {
-			gender: 'MALE',
+			grammatical_gender: 'MALE',
 			origin: 'América Central',
 			common_names: [{ value: 'Milho' }, { value: 'Maíz (Espanhol)' }],
 		},
 		es: {
-			gender: 'MALE',
+			grammatical_gender: 'MALE',
 			origin: 'America Central',
 			common_names: [{ value: 'Maíz' }, { value: 'Milho (Português)' }],
 		},
@@ -667,7 +667,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
         locale,
         common_names,
         searchable_names,
-        gender,
+        grammatical_gender,
         origin,
         content,
         ROW_NUMBER() OVER (
@@ -699,7 +699,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
       t.locale as locale,
       t.common_names as common_names,
       t.searchable_names as searchable_names,
-      t.gender as gender,
+      t.grammatical_gender as grammatical_gender,
       t.origin as origin,
       t.content as content,
       JSON_GROUP_ARRAY(
@@ -725,7 +725,7 @@ const fetchFullVegetable = Effect.fn('fetchFullVegetable')(function* (
     LEFT JOIN vegetable_lifecycles lc ON v.id = lc.vegetable_id
     LEFT JOIN vegetable_uses u ON v.id = u.vegetable_id
     WHERE v.id = ${req.vegetable_id}
-    GROUP BY v.id, t.locale, t.common_names, t.searchable_names, t.gender, t.origin, t.content
+    GROUP BY v.id, t.locale, t.common_names, t.searchable_names, t.grammatical_gender, t.origin, t.content
   `,
 	})
 

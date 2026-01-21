@@ -43,7 +43,7 @@ Feature: Vegetables
 
     Scenario: Multiple pending revisions can coexist
       Given "Maria" has submitted an edit to "Mandioca"
-      And "João" has submitted an edit to "Mandioca"
+      When "João" has submitted an edit to "Mandioca"
       Then there are 2 pending revisions for "Mandioca"
       And the vegetable content remains "Raiz tuberosa"
 

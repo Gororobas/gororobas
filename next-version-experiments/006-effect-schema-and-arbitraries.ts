@@ -9,7 +9,7 @@ import {
 	Handle,
 	PlantingMethod,
 	TiptapDocument,
-	VegetableGender,
+	GrammaticalGender,
 	VegetableId,
 	VegetableLifecycle,
 	VegetableUsage,
@@ -92,7 +92,7 @@ class Vegetable extends Model.Class<Vegetable>('Vegetable')({
 	scientific_names: Model.FieldOption(
 		Schema.Array(Schema.NonEmptyTrimmedString),
 	),
-	gender: VegetableGender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
+	gender: GrammaticalGender.pipe(Schema.annotations({ default: 'NEUTRAL' })),
 
 	// ARRAYS
 	// Do I use JsonFromString?
