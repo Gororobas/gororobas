@@ -79,12 +79,19 @@ export const TrustedAccessLevel = Schema.Literal(
 )
 export type TrustedAccessLevel = typeof TrustedAccessLevel.Type
 
-export const AccessLevel = Schema.Literal(
+export const PlatformAccessLevel = Schema.Literal(
 	...TrustedAccessLevel.literals,
 	'MODERATOR', // Can trust or block newcomers, flag media and posts, and approve revisions
 	'ADMIN', // Moderator access + manage other moderators and admins
 )
-export type AccessLevel = typeof AccessLevel.Type
+export type PlatformAccessLevel = typeof PlatformAccessLevel.Type
+
+export const PlatformAccessLevelOrVisitor = Schema.Literal(
+	...PlatformAccessLevel.literals,
+	'VISITOR',
+)
+export type PlatformAccessLevelOrVisitor =
+	typeof PlatformAccessLevelOrVisitor.Type
 
 export const ModerationStatus = Schema.Literal(
 	'APPROVED_BY_DEFAULT',

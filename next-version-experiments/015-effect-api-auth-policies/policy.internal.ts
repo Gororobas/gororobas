@@ -1,87 +1,14 @@
-import { HttpApiMiddleware, HttpApiSchema } from '@effect/platform'
 import { msg } from '@lingui/core/macro'
-import { Context, Effect, Either, Predicate, Schema } from 'effect'
-import { ReadonlySet } from 'effect/Schema'
+import { Effect, Either, Schema } from 'effect'
+import { type OrganizationId, TrustedAccessLevel } from '@/schema'
+import type { I18nMessage } from './i18n'
+import type { OrganizationPermission, PlatformPermission } from './permissions'
 import {
-	AccessLevel,
-	OrganizationAccessLevel,
-	OrganizationId,
-	PersonId,
-	TrustedAccessLevel,
-} from '@/schema'
-import { OrganizationPermission, PlatformPermission } from './permissions'
-
-const VisitorContext = Schema.Struct({
-	type: Schema.Literal('visitor'),
-	platform_permissions: ReadonlySet(PlatformPermission),
-})
-
-const OrganizationMembership = Schema.Struct({
-	organization_id: OrganizationId,
-	access_level: OrganizationAccessLevel,
-})
-const AccountContext = Schema.Struct({
-	type: Schema.Literal('account'),
-	person_id: PersonId,
-	access_level: AccessLevel,
-	platform_permissions: ReadonlySet(PlatformPermission),
-	memberships: Schema.Array(OrganizationMembership),
-	organization_permissions: Schema.Record({
-		key: OrganizationId,
-		value: ReadonlySet(OrganizationPermission),
-	}),
-})
-export type AccountContext = typeof AccountContext.Type
-
-const Session = Schema.Union(VisitorContext, AccountContext)
-type Session = typeof Session.Type
-
-export class SessionContext extends Context.Tag('Session')<
+	type AccountContext,
+	type Session,
 	SessionContext,
-	Session
->() {}
-
-/** MacroMessageDescriptor from @lingui/core/macro */
-const I18nMessage = Schema.Union(
-	Schema.Struct({
-		id: Schema.String,
-		message: Schema.optional(Schema.String),
-	}),
-	Schema.Struct({
-		id: Schema.optional(Schema.String),
-		message: Schema.String,
-	}),
-	Schema.Struct({
-		comment: Schema.optional(Schema.String),
-		context: Schema.optional(Schema.String),
-	}),
-)
-type I18nMessage = typeof I18nMessage.Type
-
-export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
-	'Unauthorized',
-	{
-		session: Session,
-		message: Schema.optional(I18nMessage),
-	},
-	HttpApiSchema.annotations({ status: 403 }),
-) {
-	// get message() {
-	//   return `Actor (${this.actorId}) is not authorized to perform action "${this.action}" on entity "${this.entity}"`
-	// }
-
-	static is(u: unknown): u is Unauthorized {
-		return Predicate.isTagged(u, 'Unauthorized')
-	}
-}
-
-export class AuthMiddleware extends HttpApiMiddleware.Tag<AuthMiddleware>()(
-	'AuthMiddleware',
-	{
-		failure: Unauthorized,
-		provides: SessionContext,
-	},
-) {}
+	Unauthorized,
+} from './session'
 
 /**
  * Policies are evaluated against the current session.
@@ -181,6 +108,20 @@ export const and = <Policies extends readonly Policy<any, any>[]>(
 	return Effect.all(policies) as Policy<TupleOfA<Policies>, UnionOfR<Policies>>
 }
 
+export const toEither = <A, R>(policy: Policy<A, R>) =>
+	policy.pipe(
+		Effect.map((result) => Either.right(result)),
+		Effect.catchTag('Unauthorized', (error) =>
+			Effect.succeed(Either.left(error)),
+		),
+	)
+
+export const check = <A, R>(policy: Policy<A, R>) =>
+	policy.pipe(
+		Effect.map(() => true),
+		Effect.catchAll(() => Effect.succeed(false)),
+	)
+
 export const assertAuthenticated = policy((session) =>
 	session.type === 'account' ? allow(session) : deny(msg`Must be logged-in`),
 )
@@ -196,12 +137,10 @@ export const authenticatedPolicy = <A, R = never>(
 		Effect.flatMap((session) => policy(() => predicate(session))),
 	)
 
-export const assertTrustedPerson = assertAuthenticated.pipe(
-	Effect.flatMap((session) =>
-		Schema.is(TrustedAccessLevel)(session.access_level)
-			? allow({ ...session, access_level: session.access_level })
-			: deny(msg`Can't access community-only content`),
-	),
+export const assertTrustedPerson = authenticatedPolicy((session) =>
+	Schema.is(TrustedAccessLevel)(session.access_level)
+		? allow({ ...session, access_level: session.access_level })
+		: deny(msg`Can't access community-only content`),
 )
 
 /**
@@ -221,13 +160,14 @@ export const organizationPermission = (
 	permission: OrganizationPermission,
 	organization_id: OrganizationId,
 ) =>
-	policy(() =>
-		Effect.gen(function* () {
-			const session = yield* assertTrustedPerson
-			return session.organization_permissions[organization_id]?.has(permission)
-				? allow(session)
-				: deny(
-						msg`Missing permission ${permission} for organization ${organization_id}`,
-					)
-		}),
+	assertTrustedPerson.pipe(
+		Effect.flatMap((session) =>
+			policy(() =>
+				session.organization_permissions[organization_id]?.has(permission)
+					? allow(session)
+					: deny(
+							msg`Missing permission ${permission} for organization ${organization_id}`,
+						),
+			),
+		),
 	)

@@ -1,5 +1,8 @@
 import { Schema } from 'effect'
-import type { AccessLevel, OrganizationAccessLevel } from '@/schema'
+import type {
+	OrganizationAccessLevel,
+	PlatformAccessLevelOrVisitor,
+} from '@/schema'
 
 export const PlatformPermission = Schema.Literal(
 	'people:manage-newcomers',
@@ -27,7 +30,7 @@ export const PlatformPermission = Schema.Literal(
 export type PlatformPermission = typeof PlatformPermission.Type
 
 const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
-	AccessLevel | 'VISITOR',
+	PlatformAccessLevelOrVisitor,
 	ReadonlySet<PlatformPermission>
 > = {
 	ADMIN: new Set(PlatformPermission.literals),
@@ -87,4 +90,16 @@ const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<
 		'members:view',
 	]),
 	VIEWER: new Set(['posts:view', 'members:view']),
+}
+
+export function platformPermissionsFor(
+	accessLevel: PlatformAccessLevelOrVisitor,
+): ReadonlySet<PlatformPermission> {
+	return PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL[accessLevel]
+}
+
+export function orgPermissionsFor(
+	accessLevel: OrganizationAccessLevel,
+): ReadonlySet<OrganizationPermission> {
+	return ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL[accessLevel]
 }

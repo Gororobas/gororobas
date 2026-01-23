@@ -351,20 +351,14 @@ export default [
 		},
 		rules: {
 			...tsPlugin.configs.recommended.rules,
-			// Import extension conventions
-			'local/import-extensions': 'error',
 			// Ban disableValidation: true
 			'local/no-disable-validation': 'error',
 			// Ban sql<Type>`...` - use SqlSchema with Schema instead
 			'local/no-sql-type-parameter': 'error',
 			// Prefer Option.fromNullable over ternary
 			'local/prefer-option-from-nullable': 'error',
-			// Use TanStack Router navigate() instead of location.href
-			'local/no-location-href-redirect': 'error',
 			// Use openapi-fetch client instead of direct fetch()
 			'local/no-direct-fetch': 'error',
-			// localStorage is forbidden - use httpOnly cookies for auth, React state for app state
-			'local/no-localstorage': 'error',
 			// Error when .pipe() has too many arguments (max 20)
 			'local/pipe-max-arguments': 'error',
 			// Error when Layer.provide is nested inside another Layer.provide

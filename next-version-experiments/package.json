@@ -7,7 +7,7 @@
 		"build": "vite build && tsc",
 		"preview": "vite preview",
 		"test": "vitest run",
-		"lint": "biome check --write --diagnostic-level=error",
+		"lint": "biome check --write --diagnostic-level=error && eslint",
 		"type-check": "tsc --noEmit"
 	},
 	"keywords": [],

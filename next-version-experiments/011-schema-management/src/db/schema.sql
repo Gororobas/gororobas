@@ -93,7 +93,7 @@ CREATE TABLE organizations (
 CREATE TABLE organization_memberships (
     person_id text NOT NULL,
     organization_id text NOT NULL,
-    permissions text NOT NULL, -- OrganizationPermission
+    access_level text NOT NULL, -- OrganizationAccessLevel
     created_at text,
     updated_at text,
     PRIMARY KEY (person_id, organization_id),
@@ -108,7 +108,7 @@ CREATE TABLE organization_invitations (
     id text NOT NULL PRIMARY KEY,
     organization_id text NOT NULL,
     email text NOT NULL,
-    permissions text NOT NULL, -- OrganizationPermission
+    access_level text NOT NULL, -- OrganizationAccessLevel
     status text NOT NULL, -- OrganizationInvitationStatus
     created_by_id text NOT NULL,
     created_at text,

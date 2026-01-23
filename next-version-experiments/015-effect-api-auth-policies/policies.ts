@@ -1,6 +1,6 @@
 import { msg } from '@lingui/core/macro'
 import { Effect, Schema } from 'effect'
-import type { CorePostMetadata, PersonId } from '@/schema'
+import type { CorePostMetadata } from '@/schema'
 import { type Organization, OrganizationId } from '@/schema'
 
 import {
@@ -8,17 +8,31 @@ import {
 	assertAuthenticated,
 	assertTrustedPerson,
 	authenticatedPolicy,
+	check,
 	deny,
 	or,
 	organizationPermission,
 	platformPermission,
 	policy,
-	Unauthorized,
 } from './policy.internal'
+import { Unauthorized } from './session'
 
+// Common sub-policies for reusability and readability
 const isPostOwner = (post: CorePostMetadata) =>
 	authenticatedPolicy((session) =>
 		post.owner_profile_id === session.person_id ? allow(session) : deny(),
+	)
+
+const isPersonalPostPublic = (post: CorePostMetadata) =>
+	or(
+		policy((session) =>
+			post.visibility === 'PUBLIC' ? allow(session) : deny(),
+		),
+		policy(() =>
+			post.visibility === 'COMMUNITY'
+				? Effect.map(assertTrustedPerson, allow)
+				: deny(),
+		),
 	)
 
 const postsPolicies = {
@@ -46,38 +60,50 @@ const postsPolicies = {
 			),
 		),
 
-	canDelete: (author_id: PersonId, organization_id?: OrganizationId) =>
-		policy(() =>
-			Effect.gen(function* () {
-				const session = yield* assertAuthenticated
-				if (author_id === session.person_id) return allow(true)
-
-				if (organization_id)
-					return (yield* organizationPermission(
-						'posts:delete',
-						organization_id,
-					)) as any
-
-				return deny(msg`You cannot delete this post`)
-			}),
+	canDelete: (post: CorePostMetadata) =>
+		or(
+			// Post authors are always allowed to delete
+			isPostOwner(post),
+			// Or if part of an org and they have permission
+			organizationPermission(
+				'posts:delete',
+				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
+			),
 		),
 
-	canView: policy((_session) => allow(true)),
+	canView: (post: CorePostMetadata) =>
+		or(
+			isPersonalPostPublic(post),
+			organizationPermission(
+				'posts:view',
+				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
+			),
+		),
+
+	canViewHistory: (post: CorePostMetadata) =>
+		or(
+		  // Only author can see the history of personal posts
+		isPostOwner(post),
+		  // For orgs, any member can view
+			organizationPermission(
+				'members:view',
+				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
+			),
+		),
+
+		// Only applicable to org-owned posts
+		// @TODO need to correct this
+	canViewContributors: (post: CorePostMetadata) =>
+		or(
+		  // For orgs, any member can view
+			organizationPermission(
+				'members:view',
+				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
+			),
+		),
 }
 
 const peoplePolicies = {
-	canUpdateProfile: policy((session) =>
-		session.type === 'account' ? allow(true) : deny(msg`Must be logged in`),
-	),
-
-	canChangeHandle: policy((session) =>
-		session.type === 'account' ? allow(true) : deny(msg`Must be logged in`),
-	),
-
-	canSetProfileVisibility: policy((session) =>
-		session.type === 'account' ? allow(true) : deny(msg`Must be logged in`),
-	),
-
 	canPromoteToTrusted: policy((session) =>
 		session.type === 'account' &&
 		(session.access_level === 'ADMIN' || session.access_level === 'MODERATOR')
@@ -206,10 +232,7 @@ const bookmarksPolicies = {
 }
 
 const Policies = {
-	assertAuthenticated,
-	organizationPermission,
-	platformPermission,
-	Unauthorized,
+	check,
 
 	people: peoplePolicies,
 	organizations: organizationsPolicies,
