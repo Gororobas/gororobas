@@ -2,46 +2,48 @@ import { msg } from '@lingui/core/macro'
 import { Effect, Schema } from 'effect'
 import type { CorePostMetadata, PersonId } from '@/schema'
 import { type Organization, OrganizationId } from '@/schema'
+
 import {
 	allow,
 	assertAuthenticated,
 	assertTrustedPerson,
+	authenticatedPolicy,
 	deny,
+	or,
 	organizationPermission,
 	platformPermission,
 	policy,
 	Unauthorized,
 } from './policy.internal'
 
+const isPostOwner = (post: CorePostMetadata) =>
+	authenticatedPolicy((session) =>
+		post.owner_profile_id === session.person_id ? allow(session) : deny(),
+	)
+
 const postsPolicies = {
 	canCreate: (post: CorePostMetadata) =>
-		policy(() =>
-			Effect.gen(function* () {
-				const session = yield* assertAuthenticated
-				if (post.owner_profile_id === session.person_id)
-					return yield* platformPermission('posts:create:personal')
-
-				return (yield* organizationPermission(
-					'posts:create:organization',
-					Schema.decodeSync(OrganizationId)(post.owner_profile_id),
-				)) as any
-			}),
+		or(
+			// If creating in the user's profile
+			isPostOwner(post),
+			// Or in an org they have the permissions for
+			organizationPermission(
+				'posts:create:organization',
+				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
+			),
 		),
 
-	canEdit: (author_id: PersonId, organization_id?: OrganizationId) =>
-		policy(() =>
-			Effect.gen(function* () {
-				const session = yield* assertAuthenticated
-				if (author_id === session.person_id) return allow(true)
+	canEdit: (post: CorePostMetadata) =>
+		or(
+			// Post owners are always allowed to edit
+			isPostOwner(post),
 
-				if (organization_id)
-					return (yield* organizationPermission(
-						'posts:edit',
-						organization_id,
-					)) as any
-
-				return deny(msg`You cannot edit this post`)
-			}),
+			// If the owner profile is any other, the user can only edit the post
+			// if it's part of an org and they have the require permission
+			organizationPermission(
+				'posts:edit',
+				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
+			),
 		),
 
 	canDelete: (author_id: PersonId, organization_id?: OrganizationId) =>
@@ -132,21 +134,16 @@ const organizationsPolicies = {
 		organizationPermission('members:manage', organization_id),
 
 	canViewMembers: (organization: Organization) =>
-		policy((session) =>
-			Effect.gen(function* () {
-				// @TODO get an OR behavior:
-
-				// Or members_visibility is public
-				if (organization.members_visibility === 'PUBLIC') return allow(session)
-
-				// Or it's COMMUNITY and they are trusted
-				if (organization.members_visibility === 'COMMUNITY') {
-					return yield* assertTrustedPerson
-				}
-
-				// Or the person has the members:view privilege
-				return yield* organizationPermission('members:view', organization.id)
-			}),
+		or(
+			policy((session) =>
+				organization.members_visibility === 'PUBLIC' ? allow(session) : deny(),
+			),
+			policy((_session) =>
+				organization.members_visibility === 'COMMUNITY'
+					? Effect.map(assertTrustedPerson, allow)
+					: deny(),
+			),
+			organizationPermission('members:view', organization.id),
 		),
 
 	canSetVisibility: (organization_id: OrganizationId) =>

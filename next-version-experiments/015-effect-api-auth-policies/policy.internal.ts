@@ -31,11 +31,12 @@ const AccountContext = Schema.Struct({
 		value: ReadonlySet(OrganizationPermission),
 	}),
 })
+export type AccountContext = typeof AccountContext.Type
 
 const Session = Schema.Union(VisitorContext, AccountContext)
 type Session = typeof Session.Type
 
-class SessionContext extends Context.Tag('Session')<
+export class SessionContext extends Context.Tag('Session')<
 	SessionContext,
 	Session
 >() {}
@@ -131,11 +132,69 @@ export const policy = <A, R = never>(
 export const allow = <A = void>(value: A) => Either.right(value)
 
 /** Helper to make policies' negative results explicit */
-export const deny = (message: I18nMessage) => Either.left(message)
+export const deny = (message?: I18nMessage) => Either.left(message)
+
+/**
+ * Utility types for combining policies
+ */
+type UnionOfA<Policies> = Policies extends readonly [infer P, ...infer Rest]
+	? P extends Policy<infer A, any>
+		? A | UnionOfA<Rest>
+		: never
+	: never
+
+type UnionOfR<Policies> = Policies extends readonly [infer P, ...infer Rest]
+	? P extends Policy<any, infer R>
+		? R | UnionOfR<Rest>
+		: never
+	: never
+
+type TupleOfA<Policies> = {
+	[K in keyof Policies]: Policies[K] extends Policy<infer A, any> ? A : never
+}
+
+/**
+ * Combines policies with OR logic: succeeds if any policy succeeds, returning the union of their A types.
+ */
+export const or = <Policies extends readonly Policy<any, any>[]>(
+	...policies: Policies
+): Policy<UnionOfA<Policies>, UnionOfR<Policies>> => {
+	return Effect.firstSuccessOf(policies) as Policy<
+		UnionOfA<Policies>,
+		UnionOfR<Policies>
+	>
+}
+
+/**
+ * Helper for generator patterns that need to return union types from different branches
+ */
+export const unionPolicy = <A, R = never>(
+	generator: () => Effect.Effect<A, Unauthorized, SessionContext | R>,
+): Policy<A, R> => generator()
+
+/**
+ * Combines policies with AND logic: succeeds if all policies succeed, returning a tuple of their A types.
+ */
+export const and = <Policies extends readonly Policy<any, any>[]>(
+	...policies: Policies
+): Policy<TupleOfA<Policies>, UnionOfR<Policies>> => {
+	return Effect.all(policies) as Policy<TupleOfA<Policies>, UnionOfR<Policies>>
+}
 
 export const assertAuthenticated = policy((session) =>
 	session.type === 'account' ? allow(session) : deny(msg`Must be logged-in`),
 )
+
+export const authenticatedPolicy = <A, R = never>(
+	predicate: (
+		session: AccountContext,
+	) =>
+		| Effect.Effect<Either.Either<A, I18nMessage>, unknown, R>
+		| Either.Either<A, I18nMessage>,
+): Policy<A, R> =>
+	assertAuthenticated.pipe(
+		Effect.flatMap((session) => policy(() => predicate(session))),
+	)
 
 export const assertTrustedPerson = assertAuthenticated.pipe(
 	Effect.flatMap((session) =>

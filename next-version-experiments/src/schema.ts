@@ -477,7 +477,7 @@ export type QueriedResourceData = typeof QueriedResourceData.Type
 
 export const CorePostMetadata = Schema.Struct({
 	handle: Handle,
-	visibility: Schema.NullishOr(InformationVisibility),
+	visibility: InformationVisibility,
 	published_at: Schema.NullishOr(Schema.String),
 	owner_profile_id: ProfileId,
 })

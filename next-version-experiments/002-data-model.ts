@@ -1,17 +1,16 @@
-import {
-  randEmail,
-  randFullName,
-  randParagraph,
-  randNumber,
-  randUuid,
-  randWord,
-  randBoolean,
-  randPastDate,
-  randUrl,
-  seed,
-} from '@ngneat/falso'
-
 import { Database } from 'bun:sqlite'
+import {
+	randBoolean,
+	randEmail,
+	randFullName,
+	randNumber,
+	randParagraph,
+	randPastDate,
+	randUrl,
+	randUuid,
+	randWord,
+	seed,
+} from '@ngneat/falso'
 
 seed('Data model seed')
 
@@ -197,207 +196,207 @@ console.time('Generating fake data')
 
 // Users
 const users = Array.from({ length: 100 }).map(() => ({
-  id: randUuid(),
-  email: randEmail(),
-  role:
-    randNumber({ min: 0, max: 2 }) === 0
-      ? 'ADMIN'
-      : randNumber({ min: 0, max: 1 }) === 0
-        ? 'MODERATOR'
-        : 'USER',
+	id: randUuid(),
+	email: randEmail(),
+	role:
+		randNumber({ min: 0, max: 2 }) === 0
+			? 'ADMIN'
+			: randNumber({ min: 0, max: 1 }) === 0
+				? 'MODERATOR'
+				: 'USER',
 }))
 
 // Profiles
 const profiles = users.map((user) => ({
-  id: randUuid(),
-  user_id: user.id,
-  handle: randWord().toLowerCase() + randNumber({ min: 100, max: 999 }),
-  name: randFullName(),
-  bio: randParagraph({ length: randNumber({ min: 1, max: 3 }) }).join(' '),
-  avatar_url: randUrl(),
-  location: JSON.stringify({
-    lat: randNumber({ min: -90, max: 90 }),
-    lng: randNumber({ min: -180, max: 180 }),
-  }),
-  type: randBoolean() ? 'Person' : 'Organization',
-  role:
-    randNumber({ min: 0, max: 2 }) === 0
-      ? 'Admin'
-      : randNumber({ min: 0, max: 1 }) === 0
-        ? 'Guardian'
-        : 'User',
-  created_at: randPastDate().toISOString(),
+	id: randUuid(),
+	user_id: user.id,
+	handle: randWord().toLowerCase() + randNumber({ min: 100, max: 999 }),
+	name: randFullName(),
+	bio: randParagraph({ length: randNumber({ min: 1, max: 3 }) }).join(' '),
+	avatar_url: randUrl(),
+	location: JSON.stringify({
+		lat: randNumber({ min: -90, max: 90 }),
+		lng: randNumber({ min: -180, max: 180 }),
+	}),
+	type: randBoolean() ? 'Person' : 'Organization',
+	role:
+		randNumber({ min: 0, max: 2 }) === 0
+			? 'Admin'
+			: randNumber({ min: 0, max: 1 }) === 0
+				? 'Guardian'
+				: 'User',
+	created_at: randPastDate().toISOString(),
 }))
 
 // Vegetables
 const vegetables = Array.from({ length: 50 }).map(() => ({
-  id: randUuid(),
-  handle: randWord().toLowerCase() + randNumber({ min: 1000, max: 9999 }),
-  scientific_names: JSON.stringify([randWord() + ' ' + randWord()]),
-  stratum: ['Emergent', 'High', 'Medium', 'Low'][
-    randNumber({ min: 0, max: 3 })
-  ],
-  strata: JSON.stringify(
-    ['Emergent', 'High', 'Medium', 'Low'].slice(
-      0,
-      randNumber({ min: 1, max: 4 }),
-    ),
-  ),
-  lifecycles: JSON.stringify(
-    ['Annual', 'Biennial', 'Perennial'].slice(
-      0,
-      randNumber({ min: 1, max: 3 }),
-    ),
-  ),
-  uses: JSON.stringify(
-    ['Food', 'Medicine', 'Ornamental'].slice(0, randNumber({ min: 1, max: 3 })),
-  ),
-  edible_parts: JSON.stringify(
-    ['Leaves', 'Roots', 'Fruits'].slice(0, randNumber({ min: 1, max: 3 })),
-  ),
-  planting_methods: JSON.stringify(
-    ['Seeds', 'Cuttings', 'Transplant'].slice(
-      0,
-      randNumber({ min: 1, max: 3 }),
-    ),
-  ),
-  height_cm: JSON.stringify({
-    min: randNumber({ min: 10, max: 50 }),
-    max: randNumber({ min: 50, max: 200 }),
-  }),
-  temp_celsius: JSON.stringify({
-    min: randNumber({ min: 10, max: 20 }),
-    max: randNumber({ min: 20, max: 30 }),
-  }),
-  cycle_days: JSON.stringify({
-    min: randNumber({ min: 30, max: 60 }),
-    max: randNumber({ min: 60, max: 120 }),
-  }),
-  photos: JSON.stringify([randUrl(), randUrl()]),
-  common_names: JSON.stringify({ pt: [randWord()], es: [randWord()] }),
-  description: JSON.stringify({
-    pt: { json: randParagraph(), text: randParagraph() },
-    es: { json: randParagraph(), text: randParagraph() },
-  }),
-  origin: JSON.stringify({ pt: randWord(), es: randWord() }),
-  gender: JSON.stringify({
-    pt: ['MALE', 'FEMALE', 'NEUTRAL'][randNumber({ min: 0, max: 2 })],
-    es: ['MALE', 'FEMALE', 'NEUTRAL'][randNumber({ min: 0, max: 2 })],
-  }),
+	id: randUuid(),
+	handle: randWord().toLowerCase() + randNumber({ min: 1000, max: 9999 }),
+	scientific_names: JSON.stringify([randWord() + ' ' + randWord()]),
+	stratum: ['Emergent', 'High', 'Medium', 'Low'][
+		randNumber({ min: 0, max: 3 })
+	],
+	strata: JSON.stringify(
+		['Emergent', 'High', 'Medium', 'Low'].slice(
+			0,
+			randNumber({ min: 1, max: 4 }),
+		),
+	),
+	lifecycles: JSON.stringify(
+		['Annual', 'Biennial', 'Perennial'].slice(
+			0,
+			randNumber({ min: 1, max: 3 }),
+		),
+	),
+	uses: JSON.stringify(
+		['Food', 'Medicine', 'Ornamental'].slice(0, randNumber({ min: 1, max: 3 })),
+	),
+	edible_parts: JSON.stringify(
+		['Leaves', 'Roots', 'Fruits'].slice(0, randNumber({ min: 1, max: 3 })),
+	),
+	planting_methods: JSON.stringify(
+		['Seeds', 'Cuttings', 'Transplant'].slice(
+			0,
+			randNumber({ min: 1, max: 3 }),
+		),
+	),
+	height_cm: JSON.stringify({
+		min: randNumber({ min: 10, max: 50 }),
+		max: randNumber({ min: 50, max: 200 }),
+	}),
+	temp_celsius: JSON.stringify({
+		min: randNumber({ min: 10, max: 20 }),
+		max: randNumber({ min: 20, max: 30 }),
+	}),
+	cycle_days: JSON.stringify({
+		min: randNumber({ min: 30, max: 60 }),
+		max: randNumber({ min: 60, max: 120 }),
+	}),
+	photos: JSON.stringify([randUrl(), randUrl()]),
+	common_names: JSON.stringify({ pt: [randWord()], es: [randWord()] }),
+	description: JSON.stringify({
+		pt: { json: randParagraph(), text: randParagraph() },
+		es: { json: randParagraph(), text: randParagraph() },
+	}),
+	origin: JSON.stringify({ pt: randWord(), es: randWord() }),
+	gender: JSON.stringify({
+		pt: ['MALE', 'FEMALE', 'NEUTRAL'][randNumber({ min: 0, max: 2 })],
+		es: ['MALE', 'FEMALE', 'NEUTRAL'][randNumber({ min: 0, max: 2 })],
+	}),
 }))
 
 // Varieties
 const varieties = Array.from({ length: 100 }).map(() => ({
-  id: randUuid(),
-  handle: randWord().toLowerCase() + randNumber({ min: 10000, max: 99999 }),
-  vegetable_id:
-    vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id,
-  scientific_names: JSON.stringify([randWord() + ' ' + randWord()]),
-  common_names: JSON.stringify({ pt: [randWord()], es: [randWord()] }),
-  description: JSON.stringify({
-    pt: { json: randParagraph(), text: randParagraph() },
-    es: { json: randParagraph(), text: randParagraph() },
-  }),
-  stratum: ['Emergent', 'High', 'Medium', 'Low'][
-    randNumber({ min: 0, max: 3 })
-  ],
-  strata: JSON.stringify(
-    ['Emergent', 'High', 'Medium', 'Low'].slice(
-      0,
-      randNumber({ min: 1, max: 4 }),
-    ),
-  ),
-  lifecycles: JSON.stringify(
-    ['Annual', 'Biennial', 'Perennial'].slice(
-      0,
-      randNumber({ min: 1, max: 3 }),
-    ),
-  ),
-  uses: JSON.stringify(
-    ['Food', 'Medicine', 'Ornamental'].slice(0, randNumber({ min: 1, max: 3 })),
-  ),
-  edible_parts: JSON.stringify(
-    ['Leaves', 'Roots', 'Fruits'].slice(0, randNumber({ min: 1, max: 3 })),
-  ),
-  planting_methods: JSON.stringify(
-    ['Seeds', 'Cuttings', 'Transplant'].slice(
-      0,
-      randNumber({ min: 1, max: 3 }),
-    ),
-  ),
-  height_cm: JSON.stringify({
-    min: randNumber({ min: 10, max: 50 }),
-    max: randNumber({ min: 50, max: 200 }),
-  }),
-  temp_celsius: JSON.stringify({
-    min: randNumber({ min: 10, max: 20 }),
-    max: randNumber({ min: 20, max: 30 }),
-  }),
-  cycle_days: JSON.stringify({
-    min: randNumber({ min: 30, max: 60 }),
-    max: randNumber({ min: 60, max: 120 }),
-  }),
-  photos: JSON.stringify([randUrl(), randUrl()]),
+	id: randUuid(),
+	handle: randWord().toLowerCase() + randNumber({ min: 10000, max: 99999 }),
+	vegetable_id:
+		vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id,
+	scientific_names: JSON.stringify([randWord() + ' ' + randWord()]),
+	common_names: JSON.stringify({ pt: [randWord()], es: [randWord()] }),
+	description: JSON.stringify({
+		pt: { json: randParagraph(), text: randParagraph() },
+		es: { json: randParagraph(), text: randParagraph() },
+	}),
+	stratum: ['Emergent', 'High', 'Medium', 'Low'][
+		randNumber({ min: 0, max: 3 })
+	],
+	strata: JSON.stringify(
+		['Emergent', 'High', 'Medium', 'Low'].slice(
+			0,
+			randNumber({ min: 1, max: 4 }),
+		),
+	),
+	lifecycles: JSON.stringify(
+		['Annual', 'Biennial', 'Perennial'].slice(
+			0,
+			randNumber({ min: 1, max: 3 }),
+		),
+	),
+	uses: JSON.stringify(
+		['Food', 'Medicine', 'Ornamental'].slice(0, randNumber({ min: 1, max: 3 })),
+	),
+	edible_parts: JSON.stringify(
+		['Leaves', 'Roots', 'Fruits'].slice(0, randNumber({ min: 1, max: 3 })),
+	),
+	planting_methods: JSON.stringify(
+		['Seeds', 'Cuttings', 'Transplant'].slice(
+			0,
+			randNumber({ min: 1, max: 3 }),
+		),
+	),
+	height_cm: JSON.stringify({
+		min: randNumber({ min: 10, max: 50 }),
+		max: randNumber({ min: 50, max: 200 }),
+	}),
+	temp_celsius: JSON.stringify({
+		min: randNumber({ min: 10, max: 20 }),
+		max: randNumber({ min: 20, max: 30 }),
+	}),
+	cycle_days: JSON.stringify({
+		min: randNumber({ min: 30, max: 60 }),
+		max: randNumber({ min: 60, max: 120 }),
+	}),
+	photos: JSON.stringify([randUrl(), randUrl()]),
 }))
 
 // Notes
 const notes = Array.from({ length: 500 }).map((_, i) => ({
-  id: randUuid(),
-  handle: 'note-' + randNumber({ min: 100000, max: 999999 }),
-  created_at: randPastDate().toISOString(),
-  content_json: JSON.stringify({
-    type: 'doc',
-    content: [
-      {
-        type: 'paragraph',
-        content: [{ type: 'text', text: randParagraph() }],
-      },
-    ],
-  }),
-  content_text: randParagraph({ length: randNumber({ min: 5, max: 20 }) }).join(
-    ' ',
-  ),
-  translations: JSON.stringify({
-    pt: randParagraph(),
-    es: randParagraph(),
-  }),
-  original_language: randBoolean() ? 'pt' : 'es',
-  types: randBoolean() ? 'EXPERIMENT' : 'QUESTION',
-  publish_status: ['PUBLIC', 'PRIVATE', 'COMMUNITY'][
-    randNumber({ min: 0, max: 2 })
-  ],
-  note_index: i,
+	id: randUuid(),
+	handle: 'note-' + randNumber({ min: 100000, max: 999999 }),
+	created_at: randPastDate().toISOString(),
+	content_json: JSON.stringify({
+		type: 'doc',
+		content: [
+			{
+				type: 'paragraph',
+				content: [{ type: 'text', text: randParagraph() }],
+			},
+		],
+	}),
+	content_text: randParagraph({ length: randNumber({ min: 5, max: 20 }) }).join(
+		' ',
+	),
+	translations: JSON.stringify({
+		pt: randParagraph(),
+		es: randParagraph(),
+	}),
+	original_language: randBoolean() ? 'pt' : 'es',
+	types: randBoolean() ? 'EXPERIMENT' : 'QUESTION',
+	publish_status: ['PUBLIC', 'PRIVATE', 'COMMUNITY'][
+		randNumber({ min: 0, max: 2 })
+	],
+	note_index: i,
 }))
 
 // Edit Proposals
 const editProposals = Array.from({ length: 50 }).map(() => ({
-  id: randUuid(),
-  target_id: randBoolean()
-    ? vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
-    : varieties[randNumber({ min: 0, max: varieties.length - 1 })]!.id,
-  author_id: profiles[randNumber({ min: 0, max: profiles.length - 1 })]!.id,
-  operation: 'UPDATE_DESC',
-  payload: JSON.stringify({ description: randParagraph() }),
-  status: ['PENDING', 'APPLIED', 'REJECTED'][randNumber({ min: 0, max: 2 })],
-  reject_reason: randBoolean() ? randParagraph() : null,
-  created_at: randPastDate().toISOString(),
+	id: randUuid(),
+	target_id: randBoolean()
+		? vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
+		: varieties[randNumber({ min: 0, max: varieties.length - 1 })]!.id,
+	author_id: profiles[randNumber({ min: 0, max: profiles.length - 1 })]!.id,
+	operation: 'UPDATE_DESC',
+	payload: JSON.stringify({ description: randParagraph() }),
+	status: ['PENDING', 'APPLIED', 'REJECTED'][randNumber({ min: 0, max: 2 })],
+	reject_reason: randBoolean() ? randParagraph() : null,
+	created_at: randPastDate().toISOString(),
 }))
 
 // Resources
 const resources = Array.from({ length: 30 }).map(() => ({
-  id: randUuid(),
-  handle: 'resource-' + randNumber({ min: 10000, max: 99999 }),
-  url: randUrl(),
-  format: randBoolean() ? 'VIDEO' : 'BOOK',
-  title: JSON.stringify({
-    pt: randWord() + ' ' + randWord(),
-    es: randWord() + ' ' + randWord(),
-  }),
-  description: JSON.stringify({
-    pt: { json: randParagraph(), text: randParagraph() },
-    es: { json: randParagraph(), text: randParagraph() },
-  }),
-  original_language: randBoolean() ? 'pt' : 'es',
+	id: randUuid(),
+	handle: 'resource-' + randNumber({ min: 10000, max: 99999 }),
+	url: randUrl(),
+	format: randBoolean() ? 'VIDEO' : 'BOOK',
+	title: JSON.stringify({
+		pt: randWord() + ' ' + randWord(),
+		es: randWord() + ' ' + randWord(),
+	}),
+	description: JSON.stringify({
+		pt: { json: randParagraph(), text: randParagraph() },
+		es: { json: randParagraph(), text: randParagraph() },
+	}),
+	original_language: randBoolean() ? 'pt' : 'es',
 }))
 
 console.timeEnd('Generating fake data')
@@ -407,134 +406,134 @@ console.time('Inserting data')
 
 // Prepared statements
 const insertUser = db.prepare(
-  'INSERT INTO USER (id, email, role) VALUES (?, ?, ?)',
+	'INSERT INTO USER (id, email, role) VALUES (?, ?, ?)',
 )
 const insertProfile = db.prepare(
-  'INSERT INTO PROFILE (id, user_id, handle, name, bio, avatar_url, location, type, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+	'INSERT INTO PROFILE (id, user_id, handle, name, bio, avatar_url, location, type, role, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 )
 const insertNote = db.prepare(
-  'INSERT INTO NOTE (id, handle, created_at, content_json, content_text, translations, original_language, types, publish_status, note_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+	'INSERT INTO NOTE (id, handle, created_at, content_json, content_text, translations, original_language, types, publish_status, note_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 )
 const insertVegetable = db.prepare(
-  'INSERT INTO VEGETABLE (id, handle, scientific_names, stratum, strata, lifecycles, uses, edible_parts, planting_methods, height_cm, temp_celsius, cycle_days, photos, common_names, description, origin, gender) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+	'INSERT INTO VEGETABLE (id, handle, scientific_names, stratum, strata, lifecycles, uses, edible_parts, planting_methods, height_cm, temp_celsius, cycle_days, photos, common_names, description, origin, gender) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 )
 const insertVariety = db.prepare(
-  'INSERT INTO VARIETY (id, handle, vegetable_id, scientific_names, common_names, description, stratum, strata, lifecycles, uses, edible_parts, planting_methods, height_cm, temp_celsius, cycle_days, photos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+	'INSERT INTO VARIETY (id, handle, vegetable_id, scientific_names, common_names, description, stratum, strata, lifecycles, uses, edible_parts, planting_methods, height_cm, temp_celsius, cycle_days, photos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 )
 const insertEditProposal = db.prepare(
-  'INSERT INTO EDIT_PROPOSAL (id, target_id, author_id, operation, payload, status, reject_reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+	'INSERT INTO EDIT_PROPOSAL (id, target_id, author_id, operation, payload, status, reject_reason, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
 )
 const insertResource = db.prepare(
-  'INSERT INTO RESOURCE (id, handle, url, format, title, description, original_language) VALUES (?, ?, ?, ?, ?, ?, ?)',
+	'INSERT INTO RESOURCE (id, handle, url, format, title, description, original_language) VALUES (?, ?, ?, ?, ?, ?, ?)',
 )
 
 // Transactions
 const insertUsers = db.transaction((users) => {
-  for (const user of users) insertUser.run(user.id, user.email, user.role)
+	for (const user of users) insertUser.run(user.id, user.email, user.role)
 })
 
 const insertProfiles = db.transaction((profiles) => {
-  for (const profile of profiles)
-    insertProfile.run(
-      profile.id,
-      profile.user_id,
-      profile.handle,
-      profile.name,
-      profile.bio,
-      profile.avatar_url,
-      profile.location,
-      profile.type,
-      profile.role,
-      profile.created_at,
-    )
+	for (const profile of profiles)
+		insertProfile.run(
+			profile.id,
+			profile.user_id,
+			profile.handle,
+			profile.name,
+			profile.bio,
+			profile.avatar_url,
+			profile.location,
+			profile.type,
+			profile.role,
+			profile.created_at,
+		)
 })
 
 const insertNotes = db.transaction((notes) => {
-  for (const note of notes)
-    insertNote.run(
-      note.id,
-      note.handle,
-      note.created_at,
-      note.content_json,
-      note.content_text,
-      note.translations,
-      note.original_language,
-      note.types,
-      note.publish_status,
-      note.note_index,
-    )
+	for (const note of notes)
+		insertNote.run(
+			note.id,
+			note.handle,
+			note.created_at,
+			note.content_json,
+			note.content_text,
+			note.translations,
+			note.original_language,
+			note.types,
+			note.publish_status,
+			note.note_index,
+		)
 })
 
 const insertVegetables = db.transaction((vegetables) => {
-  for (const veg of vegetables)
-    insertVegetable.run(
-      veg.id,
-      veg.handle,
-      veg.scientific_names,
-      veg.stratum,
-      veg.strata,
-      veg.lifecycles,
-      veg.uses,
-      veg.edible_parts,
-      veg.planting_methods,
-      veg.height_cm,
-      veg.temp_celsius,
-      veg.cycle_days,
-      veg.photos,
-      veg.common_names,
-      veg.description,
-      veg.origin,
-      veg.gender,
-    )
+	for (const veg of vegetables)
+		insertVegetable.run(
+			veg.id,
+			veg.handle,
+			veg.scientific_names,
+			veg.stratum,
+			veg.strata,
+			veg.lifecycles,
+			veg.uses,
+			veg.edible_parts,
+			veg.planting_methods,
+			veg.height_cm,
+			veg.temp_celsius,
+			veg.cycle_days,
+			veg.photos,
+			veg.common_names,
+			veg.description,
+			veg.origin,
+			veg.gender,
+		)
 })
 
 const insertVarieties = db.transaction((varieties) => {
-  for (const var_ of varieties)
-    insertVariety.run(
-      var_.id,
-      var_.handle,
-      var_.vegetable_id,
-      var_.scientific_names,
-      var_.common_names,
-      var_.description,
-      var_.stratum,
-      var_.strata,
-      var_.lifecycles,
-      var_.uses,
-      var_.edible_parts,
-      var_.planting_methods,
-      var_.height_cm,
-      var_.temp_celsius,
-      var_.cycle_days,
-      var_.photos,
-    )
+	for (const var_ of varieties)
+		insertVariety.run(
+			var_.id,
+			var_.handle,
+			var_.vegetable_id,
+			var_.scientific_names,
+			var_.common_names,
+			var_.description,
+			var_.stratum,
+			var_.strata,
+			var_.lifecycles,
+			var_.uses,
+			var_.edible_parts,
+			var_.planting_methods,
+			var_.height_cm,
+			var_.temp_celsius,
+			var_.cycle_days,
+			var_.photos,
+		)
 })
 
 const insertEditProposals = db.transaction((editProposals) => {
-  for (const ep of editProposals)
-    insertEditProposal.run(
-      ep.id,
-      ep.target_id,
-      ep.author_id,
-      ep.operation,
-      ep.payload,
-      ep.status,
-      ep.reject_reason,
-      ep.created_at,
-    )
+	for (const ep of editProposals)
+		insertEditProposal.run(
+			ep.id,
+			ep.target_id,
+			ep.author_id,
+			ep.operation,
+			ep.payload,
+			ep.status,
+			ep.reject_reason,
+			ep.created_at,
+		)
 })
 
 const insertResources = db.transaction((resources) => {
-  for (const res of resources)
-    insertResource.run(
-      res.id,
-      res.handle,
-      res.url,
-      res.format,
-      res.title,
-      res.description,
-      res.original_language,
-    )
+	for (const res of resources)
+		insertResource.run(
+			res.id,
+			res.handle,
+			res.url,
+			res.format,
+			res.title,
+			res.description,
+			res.original_language,
+		)
 })
 
 insertUsers(users)
@@ -548,29 +547,29 @@ insertResources(resources)
 // Relationships
 // Profile-Note (published)
 const profileNotes = notes.map((note) => ({
-  profile_id: profiles[randNumber({ min: 0, max: profiles.length - 1 })]!.id,
-  note_id: note.id,
+	profile_id: profiles[randNumber({ min: 0, max: profiles.length - 1 })]!.id,
+	note_id: note.id,
 }))
 const insertProfileNote = db.prepare(
-  'INSERT INTO PROFILE_NOTE (profile_id, note_id) VALUES (?, ?)',
+	'INSERT INTO PROFILE_NOTE (profile_id, note_id) VALUES (?, ?)',
 )
 const insertProfileNotes = db.transaction((profileNotes) => {
-  for (const pn of profileNotes)
-    insertProfileNote.run(pn.profile_id, pn.note_id)
+	for (const pn of profileNotes)
+		insertProfileNote.run(pn.profile_id, pn.note_id)
 })
 insertProfileNotes(profileNotes)
 
 // Profile-EditProposal
 const profileEPs = editProposals.map((ep) => ({
-  profile_id: ep.author_id,
-  edit_proposal_id: ep.id,
+	profile_id: ep.author_id,
+	edit_proposal_id: ep.id,
 }))
 const insertProfileEP = db.prepare(
-  'INSERT INTO PROFILE_EDIT_PROPOSAL (profile_id, edit_proposal_id) VALUES (?, ?)',
+	'INSERT INTO PROFILE_EDIT_PROPOSAL (profile_id, edit_proposal_id) VALUES (?, ?)',
 )
 const insertProfileEPs = db.transaction((profileEPs) => {
-  for (const pep of profileEPs)
-    insertProfileEP.run(pep.profile_id, pep.edit_proposal_id)
+	for (const pep of profileEPs)
+		insertProfileEP.run(pep.profile_id, pep.edit_proposal_id)
 })
 insertProfileEPs(profileEPs)
 
@@ -579,80 +578,80 @@ insertProfileEPs(profileEPs)
 // Vegetable Consortium
 const consortiumSet = new Set<string>()
 while (consortiumSet.size < 100) {
-  const v1 = vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
-  let v2 = vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
-  while (v2 === v1)
-    v2 = vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
-  const key = v1 < v2 ? `${v1}|${v2}` : `${v2}|${v1}`
-  consortiumSet.add(key)
+	const v1 = vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
+	let v2 = vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
+	while (v2 === v1)
+		v2 = vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
+	const key = v1 < v2 ? `${v1}|${v2}` : `${v2}|${v1}`
+	consortiumSet.add(key)
 }
 const consortiums = Array.from(consortiumSet).map((key) => {
-  const [v1, v2] = key.split('|')
-  return { vegetable_id: v1, consortium_vegetable_id: v2 }
+	const [v1, v2] = key.split('|')
+	return { vegetable_id: v1, consortium_vegetable_id: v2 }
 })
 const insertConsortium = db.prepare(
-  'INSERT INTO VEGETABLE_CONSORTIUM (vegetable_id, consortium_vegetable_id) VALUES (?, ?)',
+	'INSERT INTO VEGETABLE_CONSORTIUM (vegetable_id, consortium_vegetable_id) VALUES (?, ?)',
 )
 const insertConsortiums = db.transaction((consortiums) => {
-  for (const c of consortiums)
-    insertConsortium.run(c.vegetable_id, c.consortium_vegetable_id)
+	for (const c of consortiums)
+		insertConsortium.run(c.vegetable_id, c.consortium_vegetable_id)
 })
 insertConsortiums(consortiums)
 
 // Note Mentions
 const mentions = []
 for (const note of notes) {
-  const mentionSet = new Set<string>()
-  const numMentions = randNumber({ min: 0, max: 3 })
-  for (let i = 0; i < numMentions; i++) {
-    const types = ['VEGETABLE', 'VARIETY', 'PROFILE', 'RESOURCE', 'NOTE']
-    const type = types[randNumber({ min: 0, max: types.length - 1 })]
-    let entity_id
-    if (type === 'VEGETABLE')
-      entity_id =
-        vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
-    else if (type === 'VARIETY')
-      entity_id =
-        varieties[randNumber({ min: 0, max: varieties.length - 1 })]!.id
-    else if (type === 'PROFILE')
-      entity_id = profiles[randNumber({ min: 0, max: profiles.length - 1 })]!.id
-    else if (type === 'RESOURCE')
-      entity_id =
-        resources[randNumber({ min: 0, max: resources.length - 1 })]!.id
-    else entity_id = notes[randNumber({ min: 0, max: notes.length - 1 })]!.id
-    const key = `${type}|${entity_id}`
-    if (!mentionSet.has(key)) {
-      mentionSet.add(key)
-      mentions.push({ note_id: note.id, entity_type: type, entity_id })
-    }
-  }
+	const mentionSet = new Set<string>()
+	const numMentions = randNumber({ min: 0, max: 3 })
+	for (let i = 0; i < numMentions; i++) {
+		const types = ['VEGETABLE', 'VARIETY', 'PROFILE', 'RESOURCE', 'NOTE']
+		const type = types[randNumber({ min: 0, max: types.length - 1 })]
+		let entity_id
+		if (type === 'VEGETABLE')
+			entity_id =
+				vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id
+		else if (type === 'VARIETY')
+			entity_id =
+				varieties[randNumber({ min: 0, max: varieties.length - 1 })]!.id
+		else if (type === 'PROFILE')
+			entity_id = profiles[randNumber({ min: 0, max: profiles.length - 1 })]!.id
+		else if (type === 'RESOURCE')
+			entity_id =
+				resources[randNumber({ min: 0, max: resources.length - 1 })]!.id
+		else entity_id = notes[randNumber({ min: 0, max: notes.length - 1 })]!.id
+		const key = `${type}|${entity_id}`
+		if (!mentionSet.has(key)) {
+			mentionSet.add(key)
+			mentions.push({ note_id: note.id, entity_type: type, entity_id })
+		}
+	}
 }
 const insertMention = db.prepare(
-  'INSERT INTO NOTE_MENTIONS (note_id, entity_type, entity_id) VALUES (?, ?, ?)',
+	'INSERT INTO NOTE_MENTIONS (note_id, entity_type, entity_id) VALUES (?, ?, ?)',
 )
 const insertMentions = db.transaction((mentions) => {
-  for (const m of mentions)
-    insertMention.run(m.note_id, m.entity_type, m.entity_id)
+	for (const m of mentions)
+		insertMention.run(m.note_id, m.entity_type, m.entity_id)
 })
 insertMentions(mentions)
 
 // Resource-Vegetable
 const resVegs = []
 for (const res of resources) {
-  const num = randNumber({ min: 0, max: 3 })
-  for (let i = 0; i < num; i++) {
-    resVegs.push({
-      resource_id: res.id,
-      vegetable_id:
-        vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id,
-    })
-  }
+	const num = randNumber({ min: 0, max: 3 })
+	for (let i = 0; i < num; i++) {
+		resVegs.push({
+			resource_id: res.id,
+			vegetable_id:
+				vegetables[randNumber({ min: 0, max: vegetables.length - 1 })]!.id,
+		})
+	}
 }
 const insertResVeg = db.prepare(
-  'INSERT INTO RESOURCE_VEGETABLE (resource_id, vegetable_id) VALUES (?, ?)',
+	'INSERT INTO RESOURCE_VEGETABLE (resource_id, vegetable_id) VALUES (?, ?)',
 )
 const insertResVegs = db.transaction((resVegs) => {
-  for (const rv of resVegs) insertResVeg.run(rv.resource_id, rv.vegetable_id)
+	for (const rv of resVegs) insertResVeg.run(rv.resource_id, rv.vegetable_id)
 })
 insertResVegs(resVegs)
 
@@ -666,20 +665,20 @@ console.log('Notes:', db.query('SELECT COUNT(*) FROM NOTE').get())
 console.log('Vegetables:', db.query('SELECT COUNT(*) FROM VEGETABLE').get())
 console.log('Varieties:', db.query('SELECT COUNT(*) FROM VARIETY').get())
 console.log(
-  'Edit Proposals:',
-  db.query('SELECT COUNT(*) FROM EDIT_PROPOSAL').get(),
+	'Edit Proposals:',
+	db.query('SELECT COUNT(*) FROM EDIT_PROPOSAL').get(),
 )
 console.log('Resources:', db.query('SELECT COUNT(*) FROM RESOURCE').get())
 console.log(
-  'Profile-Notes:',
-  db.query('SELECT COUNT(*) FROM PROFILE_NOTE').get(),
+	'Profile-Notes:',
+	db.query('SELECT COUNT(*) FROM PROFILE_NOTE').get(),
 )
 console.log(
-  'Consortiums:',
-  db.query('SELECT COUNT(*) FROM VEGETABLE_CONSORTIUM').get(),
+	'Consortiums:',
+	db.query('SELECT COUNT(*) FROM VEGETABLE_CONSORTIUM').get(),
 )
 console.log('Mentions:', db.query('SELECT COUNT(*) FROM NOTE_MENTIONS').get())
 console.log(
-  'Resource-Vegs:',
-  db.query('SELECT COUNT(*) FROM RESOURCE_VEGETABLE').get(),
+	'Resource-Vegs:',
+	db.query('SELECT COUNT(*) FROM RESOURCE_VEGETABLE').get(),
 )

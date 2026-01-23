@@ -6,10 +6,10 @@ import { LoroDoc } from 'loro-crdt'
 import {
 	AgroforestryStratum,
 	EdibleVegetablePart,
+	GrammaticalGender,
 	Handle,
 	PlantingMethod,
 	TiptapDocument,
-	GrammaticalGender,
 	VegetableId,
 	VegetableLifecycle,
 	VegetableUsage,
