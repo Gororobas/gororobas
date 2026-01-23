@@ -16,6 +16,9 @@ export type PersonId = typeof PersonId.Type
 export const OrganizationId = Schema.UUID.pipe(Schema.brand('OrganizationId'))
 export type OrganizationId = typeof OrganizationId.Type
 
+export const ProfileId = Schema.Union(PersonId, OrganizationId)
+export type ProfileId = typeof ProfileId.Type
+
 export const OrganizationInvitationId = Schema.UUID.pipe(
 	Schema.brand('OrganizationInvitationId'),
 )
@@ -69,10 +72,15 @@ export type CommentCommitId = typeof CommentCommitId.Type
 export const Locale = Schema.Literal('pt', 'es', 'en')
 export type Locale = typeof Locale.Type
 
-export const AccessLevel = Schema.Literal(
+export const TrustedAccessLevel = Schema.Literal(
 	'NEWCOMER', // Just signed up, limited access
 	'BLOCKED', // Has been blocked by a moderator or admin, same access as visitors
 	'TRUSTED', // Has been approved and has access to public & community content
+)
+export type TrustedAccessLevel = typeof TrustedAccessLevel.Type
+
+export const AccessLevel = Schema.Literal(
+	...TrustedAccessLevel.literals,
 	'MODERATOR', // Can trust or block newcomers, flag media and posts, and approve revisions
 	'ADMIN', // Moderator access + manage other moderators and admins
 )
@@ -92,8 +100,12 @@ export const OrganizationInvitationStatus = Schema.Literal(
 export type OrganizationInvitationStatus =
 	typeof OrganizationInvitationStatus.Type
 
-export const OrganizationPermission = Schema.Literal('FULL', 'EDIT', 'VIEW')
-export type OrganizationPermission = typeof OrganizationPermission.Type
+export const OrganizationAccessLevel = Schema.Literal(
+	'MANAGER',
+	'EDITOR',
+	'VIEWER',
+)
+export type OrganizationAccessLevel = typeof OrganizationAccessLevel.Type
 
 // @TODO review organization types
 export const OrganizationType = Schema.Literal(
@@ -322,6 +334,13 @@ export const TiptapDocument = Schema.Struct({
  * ================
  */
 
+export const Organization = Schema.Struct({
+	id: OrganizationId,
+	type: OrganizationType,
+	members_visibility: InformationVisibility,
+})
+export type Organization = typeof Organization.Type
+
 /**
  * =======
  * #7 TAGS
@@ -460,8 +479,9 @@ export const CorePostMetadata = Schema.Struct({
 	handle: Handle,
 	visibility: Schema.NullishOr(InformationVisibility),
 	published_at: Schema.NullishOr(Schema.String),
-	owner_profile_id: Schema.UUID, // ProfileId
+	owner_profile_id: ProfileId,
 })
+export type CorePostMetadata = typeof CorePostMetadata.Type
 
 export const PostLocalizedData = Schema.Struct({
 	content: TiptapDocument,
