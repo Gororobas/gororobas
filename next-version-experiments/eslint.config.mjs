@@ -1,6 +1,7 @@
 import js from '@eslint/js'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
 import tsParser from '@typescript-eslint/parser'
+import importPlugin from 'eslint-plugin-import'
 
 /**
  * Custom ESLint rule to ban { disableValidation: true } in Schema.make() calls.
@@ -345,6 +346,10 @@ export default [
 				sourceType: 'module',
 			},
 		},
+		extends: [
+			importPlugin.flatConfigs.recommended,
+			importPlugin.flatConfigs.typescript,
+		],
 		plugins: {
 			'@typescript-eslint': tsPlugin,
 			local: localPlugin,
