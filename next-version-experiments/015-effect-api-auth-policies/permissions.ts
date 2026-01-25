@@ -96,7 +96,7 @@ export function platformPermissionsFor(
 	return PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL[accessLevel]
 }
 
-export function orgPermissionsFor(
+export function organizationPermissionsFor(
 	accessLevel: OrganizationAccessLevel,
 ): ReadonlySet<OrganizationPermission> {
 	return ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL[accessLevel]

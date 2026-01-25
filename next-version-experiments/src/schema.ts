@@ -335,6 +335,13 @@ export const TiptapDocument = Schema.Struct({
  * =========
  */
 
+export const PersonRow = Schema.Struct({
+	id: PersonId,
+	access_level: PlatformAccessLevel,
+	access_set_by_id: Schema.NullishOr(PersonId),
+	access_set_at: Schema.NullishOr(Schema.DateFromString),
+})
+
 /**
  * ================
  * #6 ORGANIZATIONS
@@ -347,6 +354,14 @@ export const Organization = Schema.Struct({
 	members_visibility: InformationVisibility,
 })
 export type Organization = typeof Organization.Type
+
+export const OrganizationMembershipRow = Schema.Struct({
+	person_id: PersonId,
+	organization_id: OrganizationId,
+	access_level: OrganizationAccessLevel,
+	created_at: Schema.NullishOr(Schema.DateFromString),
+	updated_at: Schema.NullishOr(Schema.DateFromString),
+})
 
 /**
  * =======
@@ -485,7 +500,7 @@ export type QueriedResourceData = typeof QueriedResourceData.Type
 export const CorePostMetadata = Schema.Struct({
 	handle: Handle,
 	visibility: InformationVisibility,
-	published_at: Schema.NullishOr(Schema.String),
+	published_at: Schema.NullishOr(Schema.DateFromString),
 	owner_profile_id: ProfileId,
 })
 export type CorePostMetadata = typeof CorePostMetadata.Type

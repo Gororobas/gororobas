@@ -10,6 +10,8 @@ You can find code-quality for project's best practices in the /code-quality fold
 
 When there are comments in the code, don't delete them if they're still relevant. Only valid case for removing or rewriting comments is for when they become stale (such as in a behavior change or the removal of a @TODO).
 
+Naming: Avoid abbreviations as much as possible. For objects/structs properties, use `snake_case` to comply with SQL tables.
+
 ⚠️ **CRITICAL**: always run the following checks to ensure your contribution is correct:
 
 - `pnpm run type-check`

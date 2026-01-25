@@ -4,7 +4,8 @@ import { type OrganizationId, TrustedAccessLevel } from '@/schema'
 import type { I18nMessage } from './i18n'
 import type { OrganizationPermission, PlatformPermission } from './permissions'
 import {
-	type AccountContext,
+	type AccountSession,
+	isAccountSession,
 	type Session,
 	SessionContext,
 	Unauthorized,
@@ -123,12 +124,12 @@ export const check = <A, R>(policy: Policy<A, R>) =>
 	)
 
 export const assertAuthenticated = policy((session) =>
-	session.type === 'account' ? allow(session) : deny(msg`Must be logged-in`),
+	isAccountSession(session) ? allow(session) : deny(msg`Must be logged-in`),
 )
 
 export const authenticatedPolicy = <A, R = never>(
 	predicate: (
-		session: AccountContext,
+		session: AccountSession,
 	) =>
 		| Effect.Effect<Either.Either<A, I18nMessage>, unknown, R>
 		| Either.Either<A, I18nMessage>,
@@ -139,7 +140,7 @@ export const authenticatedPolicy = <A, R = never>(
 
 export const assertTrustedPerson = authenticatedPolicy((session) =>
 	Schema.is(TrustedAccessLevel)(session.access_level)
-		? allow({ ...session, access_level: session.access_level })
+		? allow(session)
 		: deny(msg`Can't access community-only content`),
 )
 

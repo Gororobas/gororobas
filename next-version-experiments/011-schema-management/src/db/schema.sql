@@ -65,8 +65,8 @@ CREATE TABLE profiles (
     location text,
     photo_id text,
     visibility text NOT NULL, -- ProfileVisibility
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     FOREIGN KEY (photo_id) REFERENCES images (id) ON DELETE SET NULL
 );
 
@@ -97,8 +97,8 @@ CREATE TABLE organization_memberships (
     person_id text NOT NULL,
     organization_id text NOT NULL,
     access_level text NOT NULL, -- OrganizationAccessLevel
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     PRIMARY KEY (person_id, organization_id),
     FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
     FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE
@@ -114,8 +114,8 @@ CREATE TABLE organization_invitations (
     access_level text NOT NULL, -- OrganizationAccessLevel
     status text NOT NULL, -- OrganizationInvitationStatus
     created_by_id text NOT NULL,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     UNIQUE (organization_id, email),
     FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE CASCADE
@@ -129,8 +129,8 @@ CREATE TABLE tags (
     names json NOT NULL,
     description json, -- Tiptap rich text
     cluster text,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     created_by_id text
 );
 
@@ -146,8 +146,8 @@ CREATE TABLE images (
     hotspot json,
     crop json,
     metadata json,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     owner_profile_id text NOT NULL,
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 );
@@ -171,7 +171,7 @@ CREATE TABLE image_credits (
 CREATE TABLE vegetable_crdts (
     id text PRIMARY KEY,
     loro_crdt blob NOT NULL,
-    created_at text,
+    created_at text NOT NULL,
     updated_at text
 ) WITHOUT ROWID;
 
@@ -184,8 +184,8 @@ CREATE TABLE vegetable_revisions (
     evaluation text NOT NULL, -- RevisionEvaluation
     evaluated_by_id text,
     evaluated_at text,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
     FOREIGN KEY (evaluated_by_id) REFERENCES people (id) ON DELETE SET NULL
@@ -269,8 +269,8 @@ CREATE TABLE vegetable_varieties (
     vegetable_id text NOT NULL,
     handle text NOT NULL UNIQUE,
     scientific_names json, -- string[]
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     created_by_id text,
     FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
 );
@@ -314,8 +314,8 @@ CREATE TABLE vegetable_photo_metadata (
     category text NOT NULL, -- app-controlled: 'seed', 'seedling', 'fruit', etc.
     description json, -- Tiptap rich text
     moderation_status text, -- ModerationStatus
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     FOREIGN KEY (id) REFERENCES images (id) ON DELETE CASCADE
 );
 
@@ -327,7 +327,7 @@ CREATE TABLE vegetable_photo_metadata (
 CREATE TABLE resource_crdts (
     id text PRIMARY KEY,
     loro_crdt blob NOT NULL,
-    created_at text,
+    created_at text NOT NULL,
     updated_at text
 ) WITHOUT ROWID;
 
@@ -340,8 +340,8 @@ CREATE TABLE resource_revisions (
     evaluation text NOT NULL, -- RevisionEvaluation
     evaluated_by_id text,
     evaluated_at text,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
     FOREIGN KEY (evaluated_by_id) REFERENCES people (id) ON DELETE SET NULL
@@ -357,8 +357,8 @@ CREATE TABLE resources (
     last_checked_at text,
     format text NOT NULL, -- ResourceFormat
     thumbnail_image_id text,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     FOREIGN KEY (id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (thumbnail_image_id) REFERENCES images (id) ON DELETE SET NULL
 );
@@ -405,8 +405,8 @@ CREATE TABLE post_crdts (
     id text PRIMARY KEY,
     loro_crdt blob NOT NULL,
     owner_profile_id text NOT NULL,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
@@ -417,7 +417,7 @@ CREATE TABLE post_commits (
     created_by_id text,
     from_crdt_frontier json NOT NULL,
     crdt_update blob NOT NULL,
-    created_at text,
+    created_at text NOT NULL,
     FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
@@ -429,8 +429,8 @@ CREATE TABLE posts (
     handle text NOT NULL UNIQUE,
     visibility text, -- InformationVisibility
     published_at text,
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     owner_profile_id text NOT NULL,
     type text NOT NULL, -- EventType
 
@@ -487,8 +487,8 @@ CREATE TABLE comment_crdts (
     loro_crdt blob NOT NULL,
     owner_profile_id text NOT NULL,
     moderation_status text, -- ModerationStatus
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (parent_comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
@@ -506,7 +506,7 @@ CREATE TABLE comment_commits (
     created_by_id text,
     from_crdt_frontier json NOT NULL,
     crdt_update blob NOT NULL,
-    created_at text,
+    created_at text NOT NULL,
     FOREIGN KEY (comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
@@ -519,8 +519,8 @@ CREATE TABLE comments (
     parent_comment_id text,
     current_crdt_frontier json NOT NULL,
     moderation_status text, -- ModerationStatus
-    created_at text,
-    updated_at text,
+    created_at text NOT NULL,
+    updated_at text NOT NULL,
     owner_profile_id text NOT NULL,
     FOREIGN KEY (id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
     FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,

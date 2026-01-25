@@ -15,6 +15,7 @@ import {
 	platformPermission,
 	policy,
 } from './policy.internal'
+import { isAccountSession } from './session'
 
 // Common sub-policies for reusability and readability
 const isPostOwner = (post: CorePostMetadata) =>
@@ -122,9 +123,7 @@ const peoplePolicies = {
 
 	// @TODO need to check the person's memberships and ensure they aren't sole-admins of any organization with 2+ members
 	// If they're admins of orgs they're the only members, these orgs should be returned in allow() so they can be deleted
-	canDeleteOwnAccount: policy((session) =>
-		session.type === 'account' ? allow(true) : deny(msg`Must be logged in`),
-	),
+	canDeleteOwnAccount: assertAuthenticated,
 }
 
 const organizationsPolicies = {
@@ -163,7 +162,7 @@ const organizationsPolicies = {
 
 	canLeave: (organization_id: OrganizationId) =>
 		policy((session) => {
-			if (session.type === 'account') {
+			if (isAccountSession(session)) {
 				const membership = session.memberships.find(
 					(m) => m.organization_id === organization_id,
 				)
@@ -189,8 +188,13 @@ const vegetablesPolicies = {
 	canRevise: platformPermission('vegetables:revise'),
 	canCreateVariety: platformPermission('vegetables:varieties:create'),
 	canSetMainPhoto: platformPermission('vegetables:main-photo:set'),
-	canBookmark: platformPermission('bookmarks:create'), 
-	canRemoveBookmark: (person_id: PersonId) => authenticatedPolicy((session) => session.person_id === person_id ? allow(session) : deny(msg`Must be the bookmark's owner to delete it`)),
+	canBookmark: platformPermission('bookmarks:create'),
+	canRemoveBookmark: (person_id: PersonId) =>
+		authenticatedPolicy((session) =>
+			session.person_id === person_id
+				? allow(session)
+				: deny(msg`Must be the bookmark's owner to delete it`),
+		),
 }
 
 const resourcesPolicies = {
