@@ -108,13 +108,13 @@ Feature: Posts
         | Xavier   | trusted      |
         | Pedro    | newcomer     |
         | Gusttavo | blocked      |
-      And the following memberships exist for "Sítio Semente":
-        | name   | permissions |
-        | Maria  | full        |
-        | Joao   | edit        |
-        | Teresa | view        |
+      And the following members exist for "Sítio Semente":
+        | name   | role    |
+        | Maria  | manager |
+        | Joao   | editor  |
+        | Teresa | viewer  |
 
-    Scenario: Editor publishes a community-only organization note post
+      Scenario: Editor publishes a community-only note
       Given "Joao" is logged in
       When they create a "community" note post under "Sítio Semente" profile
       Then the note post should have the following visibility:
@@ -127,7 +127,7 @@ Feature: Posts
         | Gusttavo | no      |
         | visitors | no      |
 
-    Scenario: Editor publishes an internal organization note post (Private)
+    Scenario: Editor publishes an internal note (Private)
       Given "Joao" is logged in
       When they create a "private" note post under "Sítio Semente" profile
       Then the note post should have the following visibility:
@@ -140,12 +140,12 @@ Feature: Posts
         | Gusttavo | no      |
         | visitors | no      |
 
-    Scenario: Non-member cannot create a note post under an organization profile
+    Scenario: Non-member cannot create notes under organization
       Given "Xavier" is logged in
       When they try to create a "community" note post under "Sítio Semente" profile
       Then access is denied
 
-  Rule: Organization note posts editing and deletion permissions
+  Rule: Organization note editing and deletion
 
     Background:
       Given the organization "Sítio Semente" exists
@@ -155,46 +155,46 @@ Feature: Posts
         | Joao   | trusted      |
         | Teresa | trusted      |
         | Xavier | trusted      |
-      And the following memberships exist for "Sítio Semente":
-        | name   | permissions |
-        | Maria  | full        |
-        | Joao   | edit        |
-        | Teresa | view        |
-      And a note post exists on "Sítio Semente" profile created by "Maria" with content "Mutirão Sábado"
+      And the following members exist for "Sítio Semente":
+        | name   | role    |
+        | Maria  | manager |
+        | Joao   | editor  |
+        | Teresa | viewer  |
+      And a note exists on "Sítio Semente" created by "Maria" with content "Mutirão Sábado"
 
-    Scenario: Editor edits an existing organization note post
+    Scenario: Editor edits an existing note
       Given "Joao" is logged in
       When they edit the note post content to "Mutirão Domingo"
       Then the note post content should be "Mutirão Domingo"
 
-    Scenario: Viewer cannot edit organization note posts
+    Scenario: Viewer cannot edit notes
       Given "Teresa" is logged in
       When they try to edit the note post content to "Tentativa"
       Then access is denied
       And the note post content should be "Mutirão Sábado"
 
-    Scenario: Non-member cannot edit organization note posts
+    Scenario: Non-member cannot edit notes
       Given "Xavier" is logged in
       When they try to edit the note post content to "Tentativa"
       Then access is denied
       And the note post content should be "Mutirão Sábado"
 
-    Scenario: Full permission member deletes any organization note post
+    Scenario: Manager deletes note
       Given "Maria" is logged in
       When they delete the note post
       Then the note post should be deleted
 
-    Scenario: Editor deletes an organization note post
+    Scenario: Editor deletes note
       Given "Joao" is logged in
       When they delete the note post
       Then the note post should be deleted
 
-    Scenario: Viewer cannot delete organization note posts
+    Scenario: Viewer cannot delete notes
       Given "Teresa" is logged in
       When they try to delete the note post
       Then access is denied
 
-  Rule: Note post history provides auditability
+  Rule: Note history tracks changes with author attribution
 
     Background:
       Given the organization "Sítio Semente" exists
@@ -202,13 +202,13 @@ Feature: Posts
         | name  | access_level |
         | Maria | trusted      |
         | Joao  | trusted      |
-      And the following memberships exist for "Sítio Semente":
-        | name  | permissions |
-        | Maria | full        |
-        | Joao  | edit        |
-      And "Maria" has created a "community" note post under "Sítio Semente" profile with content "Reunião cancelada"
+      And the following members exist for "Sítio Semente":
+        | name  | role    |
+        | Maria | manager |
+        | Joao  | editor  |
+      And "Maria" has created a note under "Sítio Semente" with content "Reunião cancelada"
 
-    Scenario: Organization keeps history of edits with author attribution
+    Scenario: Note history shows all edits with authors
       Given "Joao" is logged in
       When they edit the note post content to "Reunião adiada para amanhã"
       Then the note post history should contain 2 versions
@@ -217,7 +217,7 @@ Feature: Posts
         |       1 | Maria  | Reunião cancelada          |
         |       2 | Joao   | Reunião adiada para amanhã |
 
-  Rule: Note posts have comments
+  Rule: Notes have comments
 
     Background:
       Given the following people exist:
@@ -225,16 +225,16 @@ Feature: Posts
         | Maria | trusted      |
         | Pedro | newcomer     |
         | Ana   | moderator    |
-      And "Maria" has created a "public" note post under their profile with content "Canteiro novo"
+      And "Maria" has created a "public" note with content "Canteiro novo"
       And "Pedro" is logged in
 
-    Scenario: Person with community access comments on a note post
+    Scenario: Trusted person can comment on a note
       Given "Maria" is logged in
       When they comment on the note post with "Que massa!"
       Then the comment is visible on the note post
       And the comment has moderation_status "approved_by_default"
 
-    Scenario: Person awaiting access cannot comment on a note post
+    Scenario: Newcomer cannot comment on a note
       When "Pedro" tries to comment on the note post
       Then access is denied
 
@@ -245,7 +245,7 @@ Feature: Posts
       Then the comment becomes hidden on the note post
       And the comment has moderation_status "censored"
 
-  Rule: Organization members visibility affects public attribution
+  Rule: Member visibility affects public attribution
 
     Background:
       Given the organization "Gororobas" exists
@@ -255,38 +255,33 @@ Feature: Posts
         | Joao   | trusted      |
         | Xavier | trusted      |
         | Pedro  | newcomer     |
-      And the following memberships exist for "Gororobas":
-        | name  | permissions |
-        | Maria | full        |
-        | Joao  | edit        |
-      And a "public" note post exists on "Gororobas" profile with contributors "Maria" and "Joao"
+      And the following members exist for "Gororobas":
+        | name  | role    |
+        | Maria | manager |
+        | Joao  | editor  |
+      And a "public" note exists on "Gororobas" with contributors "Maria" and "Joao"
 
-    Scenario: Only organization members can see editors when members are private
-      Given "Gororobas" only displays members in "private"
-      Then the note post contributors should have the following visibility:
-        | viewer   | visible |
-        | visitors | no      |
-        | Pedro    | no      |
-        | Xavier   | no      |
-        | Maria    | yes     |
-        | Joao     | yes     |
+    Scenario: Members see contributors when visibility is private
+      Given "Gororobas" displays members in "private"
+      Then note contributors are visible to:
+        | viewer   |
+        | Maria    |
+        | Joao     |
 
-    Scenario: Only allowed people can see editors when members are community-only
-      Given "Gororobas" only displays members in "community"
-      Then the note post contributors should have the following visibility:
-        | viewer   | visible |
-        | visitors | no      |
-        | Pedro    | no      |
-        | Xavier   | yes     |
-        | Maria    | yes     |
-        | Joao     | yes     |
+    Scenario: Community sees contributors when visibility is community
+      Given "Gororobas" displays members in "community"
+      Then note contributors are visible to:
+        | viewer |
+        | Xavier |
+        | Maria  |
+        | Joao   |
 
-    Scenario: Anyone can see editors when members are public
-      Given "Gororobas" only displays members in "public"
-      Then the note post contributors should have the following visibility:
-        | viewer   | visible |
-        | visitors | yes     |
-        | Pedro    | yes     |
-        | Xavier   | yes     |
-        | Maria    | yes     |
-        | Joao     | yes     |
+    Scenario: Everyone sees contributors when visibility is public
+      Given "Gororobas" displays members in "public"
+      Then note contributors are visible to:
+        | viewer   |
+        | visitors |
+        | Pedro    |
+        | Xavier   |
+        | Maria    |
+        | Joao     |

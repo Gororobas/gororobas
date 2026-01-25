@@ -75,9 +75,12 @@ CREATE INDEX idx_profiles_handle ON profiles (handle);
 CREATE TABLE people (
     id text PRIMARY KEY,
     access_level text NOT NULL, -- AccessLevel
+    access_set_by_id text,
+    access_set_at text,
     -- People's ids are the same as the corresponding id in `profiles` and `users`
     FOREIGN KEY (id) REFERENCES profiles (id) ON DELETE CASCADE,
-    FOREIGN KEY (id) REFERENCES accounts (id) ON DELETE CASCADE
+    FOREIGN KEY (id) REFERENCES accounts (id) ON DELETE CASCADE,
+    FOREIGN KEY (access_set_by_id) REFERENCES profiles (id) ON DELETE SET NULL
 );
 
 CREATE TABLE organizations (

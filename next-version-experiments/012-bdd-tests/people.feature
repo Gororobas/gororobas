@@ -28,8 +28,8 @@ Feature: People
       And their old handle "maria" is no longer valid
 
     Scenario: Handle must be unique
-      Given "João" has handle "joao"
-      When "Maria" tries to change their handle to "joao"
+      Given someone has the handle "maria-brasilia"
+      When "Maria" tries to change their handle to "maria-brasilia"
       Then access is denied
 
   Rule: People can set their profile visibility
@@ -51,8 +51,8 @@ Feature: People
         | Gusttavo | yes        |
         | visitors | yes        |
 
-    Scenario: Person sets profile to community-only
-      When "Maria" has set their profile visibility to "community"
+    Scenario: Person sets profile to trusted-only
+      When "Maria" has set their profile visibility to "trusted"
       Then "Maria"'s profile should have the following accessibility:
         | viewer   | can_access |
         | Irene    | yes        |
@@ -139,14 +139,14 @@ Feature: People
       When "Maria" deletes their account
       Then "Mandioca" revision history remains the same but no longer shows "Maria"
 
-    Scenario: Cannot delete account while sole full-permissions member of an organization
-      Given "Maria" is the only full-permissions member of "Sítio Semente"
+    Scenario: Cannot delete account as sole manager of an organization
+      Given "Maria" is the only manager of "Sítio Semente"
       When "Maria" tries to delete their account
       Then access is denied
 
-    Scenario: Deleting account removes organization memberships
-      Given "Maria" is a member of "Sítio Semente" with "edit" permissions
-      And "Sítio Semente" has other full-permission members
+    Scenario: Deleting account removes organization membership
+      Given "Maria" is an "editor" of "Sítio Semente"
+      And "Sítio Semente" has other managers
       When "Maria" deletes their account
       Then "Maria" is no longer a member of "Sítio Semente"
 

@@ -1,6 +1,6 @@
 import { msg } from '@lingui/core/macro'
 import { Effect, Schema } from 'effect'
-import type { CorePostMetadata } from '@/schema'
+import type { CorePostMetadata, PersonId, PlatformAccessLevel } from '@/schema'
 import { type Organization, OrganizationId } from '@/schema'
 
 import {
@@ -15,7 +15,6 @@ import {
 	platformPermission,
 	policy,
 } from './policy.internal'
-import { Unauthorized } from './session'
 
 // Common sub-policies for reusability and readability
 const isPostOwner = (post: CorePostMetadata) =>
@@ -82,20 +81,19 @@ const postsPolicies = {
 
 	canViewHistory: (post: CorePostMetadata) =>
 		or(
-		  // Only author can see the history of personal posts
-		isPostOwner(post),
-		  // For orgs, any member can view
+			// Only author can see the history of personal posts
+			isPostOwner(post),
+			// For orgs, any member can view
 			organizationPermission(
 				'members:view',
 				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
 			),
 		),
 
-		// Only applicable to org-owned posts
-		// @TODO need to correct this
+	// Only applicable to org-owned posts
 	canViewContributors: (post: CorePostMetadata) =>
 		or(
-		  // For orgs, any member can view
+			// For orgs, any member can view
 			organizationPermission(
 				'members:view',
 				Schema.decodeSync(OrganizationId)(post.owner_profile_id),
@@ -104,38 +102,26 @@ const postsPolicies = {
 }
 
 const peoplePolicies = {
-	canPromoteToTrusted: policy((session) =>
-		session.type === 'account' &&
-		(session.access_level === 'ADMIN' || session.access_level === 'MODERATOR')
-			? allow(true)
-			: deny(msg`Only admins or moderators can promote people`),
-	),
+	canModifyAccessLevel: ({
+		from,
+		to,
+	}: {
+		from: PlatformAccessLevel
+		to: PlatformAccessLevel
+	}) => {
+		if (to === 'MODERATOR' || from === 'MODERATOR') {
+			return platformPermission('people:manage-moderators')
+		}
 
-	canDemoteFromTrusted: policy((session) =>
-		session.type === 'account' && session.access_level === 'ADMIN'
-			? allow(true)
-			: deny(msg`Only admins can demote people`),
-	),
+		if (to === 'ADMIN' || from === 'ADMIN') {
+			return platformPermission('people:manage-admins')
+		}
 
-	canPromoteToModerator: policy((session) =>
-		session.type === 'account' && session.access_level === 'ADMIN'
-			? allow(true)
-			: deny(msg`Only admins can promote moderators`),
-	),
+		return platformPermission('people:manage-trusted')
+	},
 
-	canDemoteFromModerator: policy((session) =>
-		session.type === 'account' && session.access_level === 'ADMIN'
-			? allow(true)
-			: deny(msg`Only admins can demote moderators`),
-	),
-
-	canBlock: policy((session) =>
-		session.type === 'account' &&
-		(session.access_level === 'ADMIN' || session.access_level === 'MODERATOR')
-			? allow(true)
-			: deny(msg`Only admins or moderators can block people`),
-	),
-
+	// @TODO need to check the person's memberships and ensure they aren't sole-admins of any organization with 2+ members
+	// If they're admins of orgs they're the only members, these orgs should be returned in allow() so they can be deleted
 	canDeleteOwnAccount: policy((session) =>
 		session.type === 'account' ? allow(true) : deny(msg`Must be logged in`),
 	),
@@ -145,10 +131,10 @@ const organizationsPolicies = {
 	canCreate: platformPermission('organizations:create'),
 
 	canEditProfile: (organization_id: OrganizationId) =>
-		organizationPermission('organizations:edit-profile', organization_id),
+		organizationPermission('organization:edit-profile', organization_id),
 
 	canDelete: (organization_id: OrganizationId) =>
-		organizationPermission('organizations:delete', organization_id),
+		organizationPermission('organization:delete', organization_id),
 
 	canInviteMember: (organization_id: OrganizationId) =>
 		organizationPermission('members:invite', organization_id),
@@ -173,7 +159,7 @@ const organizationsPolicies = {
 		),
 
 	canSetVisibility: (organization_id: OrganizationId) =>
-		organizationPermission('organizations:manage-visibility', organization_id),
+		organizationPermission('organization:manage-visibility', organization_id),
 
 	canLeave: (organization_id: OrganizationId) =>
 		policy((session) => {
@@ -203,8 +189,8 @@ const vegetablesPolicies = {
 	canRevise: platformPermission('vegetables:revise'),
 	canCreateVariety: platformPermission('vegetables:varieties:create'),
 	canSetMainPhoto: platformPermission('vegetables:main-photo:set'),
-	canBookmark: platformPermission('bookmarks:create'),
-	canRemoveBookmark: assertAuthenticated,
+	canBookmark: platformPermission('bookmarks:create'), 
+	canRemoveBookmark: (person_id: PersonId) => authenticatedPolicy((session) => session.person_id === person_id ? allow(session) : deny(msg`Must be the bookmark's owner to delete it`)),
 }
 
 const resourcesPolicies = {

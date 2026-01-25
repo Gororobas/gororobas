@@ -73,16 +73,16 @@ export const Locale = Schema.Literal('pt', 'es', 'en')
 export type Locale = typeof Locale.Type
 
 export const TrustedAccessLevel = Schema.Literal(
-	'NEWCOMER', // Just signed up, limited access
-	'BLOCKED', // Has been blocked by a moderator or admin, same access as visitors
 	'TRUSTED', // Has been approved and has access to public & community content
+	'MODERATOR', // Can trust or block newcomers, flag media and posts, and approve revisions
+	'ADMIN', // Moderator access + manage other moderators and admins
 )
 export type TrustedAccessLevel = typeof TrustedAccessLevel.Type
 
 export const PlatformAccessLevel = Schema.Literal(
 	...TrustedAccessLevel.literals,
-	'MODERATOR', // Can trust or block newcomers, flag media and posts, and approve revisions
-	'ADMIN', // Moderator access + manage other moderators and admins
+	'NEWCOMER', // Just signed up, limited access
+	'BLOCKED', // Has been blocked by a moderator or admin, same access as visitors
 )
 export type PlatformAccessLevel = typeof PlatformAccessLevel.Type
 

@@ -5,8 +5,7 @@ import type {
 } from '@/schema'
 
 export const PlatformPermission = Schema.Literal(
-	'people:manage-newcomers',
-	'people:manage-blocked',
+	'people:manage-trusted', // trusting newcomers or blocking trusted
 	'people:manage-moderators',
 	'people:manage-admins',
 	'revisions:evaluate',
@@ -35,8 +34,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
 > = {
 	ADMIN: new Set(PlatformPermission.literals),
 	MODERATOR: new Set([
-		'people:manage-newcomers',
-		'people:manage-blocked',
+		'people:manage-trusted',
 		'revisions:evaluate',
 		'posts:create:personal',
 		'media:create',
@@ -62,9 +60,9 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
 }
 
 export const OrganizationPermission = Schema.Literal(
-	'organizations:delete',
-	'organizations:manage-visibility',
-	'organizations:edit-profile',
+	'organization:delete',
+	'organization:manage-visibility',
+	'organization:edit-profile',
 	'members:invite',
 	'members:remove',
 	'members:manage',
@@ -82,7 +80,7 @@ const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<
 > = {
 	MANAGER: new Set(OrganizationPermission.literals),
 	EDITOR: new Set([
-		'organizations:edit-profile',
+		'organization:edit-profile',
 		'posts:create:organization',
 		'posts:edit',
 		'posts:delete',

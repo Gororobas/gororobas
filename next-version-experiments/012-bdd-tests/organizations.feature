@@ -14,7 +14,7 @@ Feature: Organizations
     Scenario: Trusted participant creates an organization
       When "Maria" creates an organization named "Sítio Semente" of type "territory"
       Then the organization "Sítio Semente" exists
-      And "Maria" is an organization member of "Sítio Semente" with "full" permissions
+      And "Maria" is a "manager" of "Sítio Semente"
 
     Scenario: Person awaiting access cannot create an organization
       When "Pedro" tries to create an organization
@@ -28,7 +28,7 @@ Feature: Organizations
       When a visitor tries to create an organization
       Then access is denied
 
-  Rule: Organization profile can only be edited by full-permissions organization members
+  Rule: Organization profile can only be edited by organization managers
 
     Background:
       Given the following people exist:
@@ -37,11 +37,11 @@ Feature: Organizations
         | Irene | trusted      |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
-        | name  | permissions |
-        | Maria | full        |
-        | Irene | edit        |
+        | name  | access_level |
+        | Maria | manager      |
+        | Irene | editor       |
 
-    Scenario: Full-permissions member edits organization profile
+    Scenario: Manager edits organization profile
       When "Maria" updates "Sítio Semente" profile name to "Sítio Semente (DF)"
       Then "Sítio Semente" profile name becomes "Sítio Semente (DF)"
 
@@ -65,9 +65,9 @@ Feature: Organizations
         | Maria | full        |
 
     Scenario: Invitee accepts an invitation and becomes a member
-      Given "Maria" has invited "Teresa" to join "Sítio Semente" with "view" permissions
+      Given "Maria" has invited "Teresa" to join "Sítio Semente" as a "viewer"
       When "Teresa" accepts the invitation to join "Sítio Semente"
-      Then "Teresa" is an organization member of "Sítio Semente" with "view" permissions
+      Then "Teresa" is a "viewer" of "Sítio Semente"
 
     Scenario: Non-members can't invite people to an organization
       When "Irene" tries to invite "Teresa" to join "Sítio Semente"
@@ -85,7 +85,7 @@ Feature: Organizations
       When "Maria" tries to invite "Fulana" to join "Sítio Semente"
       Then access is denied
 
-  Rule: Full members manage organization memberships
+  Rule: Managers handle organization memberships
 
     Background:
       Given the following people exist:
@@ -96,35 +96,35 @@ Feature: Organizations
         | Ana    | moderator    |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
-        | name   | permissions |
-        | Maria  | full        |
-        | Irene  | full        |
-        | Teresa | view        |
+        | name   | access_level |
+        | Maria  | manager      |
+        | Irene  | manager      |
+        | Teresa | viewer       |
 
-    Scenario: Full-permissions member changes another member permissions
-      When "Maria" changes "Teresa" permissions in "Sítio Semente" to "edit"
-      Then "Teresa" is an organization member of "Sítio Semente" with "edit" permissions
+    Scenario: Manager promotes member to editor
+      When "Maria" promotes "Teresa" to "editor" in "Sítio Semente"
+      Then "Teresa" is an "editor" of "Sítio Semente"
 
-    Scenario: Non-full-permissions member cannot change permissions
-      When "Teresa" tries to change "Irene" permissions in "Sítio Semente"
+    Scenario: Non-manager member cannot change roles
+      When "Teresa" tries to change "Irene"'s role in "Sítio Semente"
       Then access is denied
 
-    Scenario: Full-permissions member removes a member
+    Scenario: Manager removes another member
       When "Maria" removes "Teresa" from "Sítio Semente"
-      Then "Teresa" is not an organization member of "Sítio Semente"
+      Then "Teresa" is no longer a member of "Sítio Semente"
 
-    Scenario: Cannot remove the last full-permissions member
+    Scenario: Cannot remove the last manager
       Given "Irene" is removed from "Sítio Semente"
-      And "Maria" is the only full-permissions member of "Sítio Semente"
-      When "Maria" tries to remove themselves from "Sítio Semente"
+      And "Maria" is the only manager of "Sítio Semente"
+      When "Maria" tries to leave "Sítio Semente"
       Then access is denied
 
-    Scenario: Full member can leave if there is another full-permissions member
+    Scenario: Manager can leave if another manager exists
       When "Maria" leaves "Sítio Semente"
-      Then "Maria" is not a member of "Sítio Semente"
-      And "Irene" remains a member of "Sítio Semente" with "full" permissions
+      Then "Maria" is no longer a member of "Sítio Semente"
+      And "Irene" remains a "manager" of "Sítio Semente"
 
-  Rule: Organizations can be deleted by full-permission organization members
+  Rule: Organizations can be deleted by manager organization members
 
     Background:
       Given the following people exist:
@@ -133,15 +133,15 @@ Feature: Organizations
         | Irene | trusted      |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
-        | name  | permissions |
-        | Maria | full        |
-        | Irene | edit        |
+        | name  | access_level |
+        | Maria | manager      |
+        | Irene | editor       |
 
-    Scenario: Full member deletes the organization
+    Scenario: Manager deletes the organization
       When "Maria" deletes the organization "Sítio Semente"
       Then the organization "Sítio Semente" no longer exists
 
-    Scenario: Non-full member cannot delete the organization
+    Scenario: Non-manager cannot delete the organization
       When "Irene" tries to delete the organization "Sítio Semente"
       Then access is denied
 
@@ -155,10 +155,10 @@ Feature: Organizations
         | Teresa | trusted      |
         | Pedro  | newcomer     |
       And the organization "Sítio Semente" exists
-      And the following memberships exist for "Sítio Semente":
-        | name   | permissions |
-        | Maria  | full        |
-        | Teresa | view        |
+      And the following members exist for "Sítio Semente":
+        | name   | role    |
+        | Maria  | manager |
+        | Teresa | viewer  |
 
     Scenario: Organization hides members from people outside the organization
       Given "Sítio Semente" only displays members in "private"
