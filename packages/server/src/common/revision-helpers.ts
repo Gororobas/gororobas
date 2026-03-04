@@ -1,10 +1,10 @@
+import { type PersonId, RevisionEvaluation } from "@gororobas/domain"
+import { Data, DateTime, Effect, Option, Schema } from "effect"
 /**
  * Shared helpers for CRDT-based revision workflows.
  * Used by Vegetables and Resources repositories.
  */
-import { SqlClient, SqlSchema } from "@effect/sql"
-import { type PersonId, RevisionEvaluation } from "@gororobas/domain"
-import { Data, DateTime, Effect, Option, Schema } from "effect"
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 /** Error for revision workflow operations */
 export class RevisionWorkflowError extends Data.TaggedError("RevisionWorkflowError")<{

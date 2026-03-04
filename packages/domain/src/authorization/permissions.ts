@@ -5,7 +5,7 @@ import { Schema } from "effect"
 
 import type { OrganizationAccessLevel, PlatformAccessLevelOrVisitor } from "../common/enums.js"
 
-export const PlatformPermission = Schema.Literal(
+export const PlatformPermission = Schema.Literals([
   "people:manage-trusted", // trusting newcomers or blocking trusted
   "people:manage-moderators",
   "people:manage-admins",
@@ -27,7 +27,7 @@ export const PlatformPermission = Schema.Literal(
   "comments:create",
   "comments:censor",
   "bookmarks:create",
-)
+])
 export type PlatformPermission = typeof PlatformPermission.Type
 
 const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
@@ -68,7 +68,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   VISITOR: new Set([]),
 }
 
-export const OrganizationPermission = Schema.Literal(
+export const OrganizationPermission = Schema.Literals([
   "organization:delete",
   "organization:manage-visibility",
   "organization:edit-profile",
@@ -80,7 +80,7 @@ export const OrganizationPermission = Schema.Literal(
   "posts:edit",
   "posts:delete",
   "posts:view",
-)
+])
 export type OrganizationPermission = typeof OrganizationPermission.Type
 
 const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<

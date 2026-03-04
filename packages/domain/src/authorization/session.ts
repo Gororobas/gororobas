@@ -1,8 +1,8 @@
+import { Context, Predicate, Schema } from "effect"
 /**
  * Session types for authentication.
  */
-import { HttpApiSchema } from "@effect/platform"
-import { Context, Predicate, Schema } from "effect"
+import { HttpApiSchema } from "effect/unstable/httpapi"
 
 import { OrganizationAccessLevel, PlatformAccessLevel } from "../common/enums.js"
 import { OrganizationId, PersonId } from "../common/ids.js"

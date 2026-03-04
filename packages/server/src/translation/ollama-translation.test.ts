@@ -1,8 +1,8 @@
-import { FileSystem, Path } from "@effect/platform"
 import { BunContext } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale } from "@gororobas/domain"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "@gororobas/domain"
+import { FileSystem, Path } from "effect"
 import { Effect } from "effect"
 import { join } from "node:path"
 

@@ -1,4 +1,4 @@
-import { HttpApi } from "@effect/platform"
+import { HttpApi } from "effect/unstable/httpapi"
 
 import { AuthenticationMiddleware } from "./authentication/middleware.js"
 import { UnauthorizedError } from "./authorization/session.js"

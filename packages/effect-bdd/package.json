@@ -30,15 +30,13 @@
   "dependencies": {
     "@cucumber/gherkin": "^38.0.0",
     "@cucumber/messages": "^32.0.1",
-    "@effect/cli": "^0.73.2",
-    "@effect/platform": "latest",
-    "@effect/platform-bun": "latest",
-    "effect": "3.19.19",
+    "@effect/platform-bun": "^4.0.0-beta.27",
+    "effect": "^4.0.0-beta.27",
     "glob": "^11.1.0"
   },
   "devDependencies": {
     "@effect/build-utils": "^0.7.9",
-    "@effect/vitest": "latest",
+    "@effect/vitest": "^4.0.0-beta.27",
     "@types/node": "^25.3.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

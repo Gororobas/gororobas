@@ -1,8 +1,8 @@
+import { Schema } from "effect"
 /**
  * Posts HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "@effect/platform"
-import { Schema } from "effect"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { EventAttendanceMode, InformationVisibility, Locale, PostKind } from "../common/enums.js"
 import { PostId, ProfileId } from "../common/ids.js"

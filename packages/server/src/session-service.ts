@@ -1,8 +1,3 @@
-/**
- * Session resolution service for authentication.
- */
-import { HttpServerRequest } from "@effect/platform"
-import { SqlClient, SqlSchema } from "@effect/sql"
 import type {
   AccountSession,
   OrganizationMembershipSession,
@@ -16,6 +11,11 @@ import {
   UnauthorizedError,
 } from "@gororobas/domain"
 import { Effect, Layer, Option, Schema } from "effect"
+/**
+ * Session resolution service for authentication.
+ */
+import { HttpServerRequest } from "effect/unstable/http"
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 export class AuthenticationFailureError extends Schema.TaggedError<AuthenticationFailureError>()(
   "AuthenticationFailureError",

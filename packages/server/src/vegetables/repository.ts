@@ -1,7 +1,3 @@
-/**
- * Vegetables repository with CRDT-based revision workflow.
- */
-import { SqlClient, SqlSchema } from "@effect/sql"
 import {
   type SourceVegetableData,
   VegetableId,
@@ -11,6 +7,10 @@ import {
   VegetableTranslationRow,
 } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
+/**
+ * Vegetables repository with CRDT-based revision workflow.
+ */
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
   makeFetchCrdt,

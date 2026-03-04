@@ -1,9 +1,9 @@
+import { TagId, TagRow } from "@gororobas/domain"
+import { Effect, Schema } from "effect"
 /**
  * Tags repository with CRDT-based revision workflow.
  */
-import { SqlClient, SqlSchema } from "@effect/sql"
-import { TagId, TagRow } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 export class TagsRepository extends Effect.Service<TagsRepository>()("TagsRepository", {
   effect: Effect.gen(function* () {

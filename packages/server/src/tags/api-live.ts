@@ -1,6 +1,6 @@
-import { HttpApiBuilder } from "@effect/platform"
 import { GororobasApi } from "@gororobas/domain"
 import { Effect } from "effect"
+import { HttpApiBuilder } from "effect/unstable/httpapi"
 
 export const TagsApiLive = HttpApiBuilder.group(GororobasApi, "tags", (handlers) =>
   handlers

@@ -7,9 +7,9 @@
  *   npx tsx scripts/test-auth.ts
  */
 
-import { SqlClient } from "@effect/sql"
 import { serializeSignedCookie } from "better-call"
 import { Effect } from "effect"
+import { SqlClient } from "effect/unstable/sql"
 
 import { AppRuntimeTest } from "../src/app-runtime.js"
 import { createAuth } from "../src/authentication/better-auth.js"

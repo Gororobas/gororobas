@@ -1,4 +1,3 @@
-import { SqlClient, SqlSchema } from "@effect/sql"
 import {
   Handle,
   ProfileContentCounts,
@@ -9,6 +8,7 @@ import {
   TimestampedStruct,
 } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 export class ProfilesRepository extends Effect.Service<ProfilesRepository>()("ProfilesRepository", {
   effect: Effect.gen(function* () {

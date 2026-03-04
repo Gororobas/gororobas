@@ -1,5 +1,5 @@
-import { FileSystem } from "@effect/platform"
 import type { PlatformError } from "@effect/platform/Error"
+import { FileSystem } from "effect"
 import { Console, Duration, Effect, Option, Stream } from "effect"
 
 import type { OutputFormat } from "../types.js"

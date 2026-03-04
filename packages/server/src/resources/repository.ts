@@ -1,7 +1,3 @@
-/**
- * Resources repository with CRDT-based revision workflow.
- */
-import { SqlClient, SqlSchema } from "@effect/sql"
 import {
   Locale,
   ResourceId,
@@ -10,6 +6,10 @@ import {
   type SourceResourceData,
 } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
+/**
+ * Resources repository with CRDT-based revision workflow.
+ */
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
   makeFetchCrdt,

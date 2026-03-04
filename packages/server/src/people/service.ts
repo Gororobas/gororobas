@@ -1,4 +1,3 @@
-import { SqlClient } from "@effect/sql"
 import {
   AccountDeletionConfirmation,
   AccountDeletionError,
@@ -15,6 +14,7 @@ import {
 } from "@gororobas/domain"
 import { HandleTakenError } from "@gororobas/domain/common/errors"
 import { DateTime, Effect, Option } from "effect"
+import { SqlClient } from "effect/unstable/sql"
 
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PeopleRepository } from "./repository.js"

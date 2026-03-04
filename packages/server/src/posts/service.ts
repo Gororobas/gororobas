@@ -1,13 +1,3 @@
-/**
- * Posts service - business operations for posts.
- *
- * Based on BDD features in test/posts.feature:
- * - Create note/event posts with visibility (PUBLIC/COMMUNITY/PRIVATE)
- * - Edit posts with history tracking
- * - Delete posts
- * - View post history
- */
-import { SqlClient } from "@effect/sql"
 import {
   CrdtCommit,
   CreateEventData,
@@ -36,6 +26,16 @@ import {
   nowAsIso,
 } from "@gororobas/domain"
 import { Effect, Option, Schema } from "effect"
+/**
+ * Posts service - business operations for posts.
+ *
+ * Based on BDD features in test/posts.feature:
+ * - Create note/event posts with visibility (PUBLIC/COMMUNITY/PRIVATE)
+ * - Edit posts with history tracking
+ * - Delete posts
+ * - View post history
+ */
+import { SqlClient } from "effect/unstable/sql"
 import { LoroDoc } from "loro-crdt"
 
 import {

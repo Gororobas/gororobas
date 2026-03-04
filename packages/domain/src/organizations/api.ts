@@ -1,8 +1,8 @@
+import { Schema } from "effect"
 /**
  * Organizations HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "@effect/platform"
-import { Schema } from "effect"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { OrganizationAccessLevel } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"

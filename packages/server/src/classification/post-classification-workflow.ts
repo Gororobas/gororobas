@@ -1,6 +1,6 @@
-import { Workflow } from "@effect/workflow"
 import { PostId } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
+import { Workflow } from "effect/unstable/workflow"
 
 import { PostsRepository } from "../posts/repository.js"
 import { postClassificationIdempotencyKey } from "./extract-post-taxonomies.js"

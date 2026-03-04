@@ -1,5 +1,5 @@
-import { HttpApiBuilder, HttpApp } from "@effect/platform"
 import { Effect } from "effect"
+import { HttpApiBuilder, HttpApp } from "effect/unstable/httpapi"
 
 import type { Auth } from "./better-auth.js"
 

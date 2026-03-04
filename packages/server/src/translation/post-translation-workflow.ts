@@ -1,4 +1,3 @@
-import { Activity, Workflow } from "@effect/workflow"
 /**
  * Durable translation workflow backed by Effect Cluster.
  *
@@ -19,6 +18,7 @@ import {
   tiptapFromHtml,
 } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
+import { Activity, Workflow } from "effect/unstable/workflow"
 
 import { PostSourceDataLoro } from "../posts/post-loro.lib.js"
 import { PostsRepository } from "../posts/repository.js"

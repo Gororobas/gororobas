@@ -1,8 +1,8 @@
+import { Schema } from "effect"
 /**
  * Vegetables HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "@effect/platform"
-import { Schema } from "effect"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { HandleTakenError } from "../common/errors.js"
 import { VegetableId, VegetableRevisionId } from "../common/ids.js"

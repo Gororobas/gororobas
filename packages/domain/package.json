@@ -24,9 +24,7 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
-    "@effect/platform": "latest",
-    "@effect/sql": "latest",
-    "effect": "^3.19.19",
+    "effect": "^4.0.0-beta.27",
     "loro-mirror": "^1.2.1"
   },
   "effect": {

@@ -1,9 +1,9 @@
-import { SqlClient, SqlSchema } from "@effect/sql"
 /**
  * MigrationContext service for ID mapping and progress tracking.
  * Adapted from the reference Supabase migration context.
  */
 import { Context, Data, Effect, HashMap, Layer, Option, Ref, Schema } from "effect"
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 // ============ Types ============
 

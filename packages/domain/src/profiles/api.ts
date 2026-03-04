@@ -1,8 +1,8 @@
+import { Schema } from "effect"
 /**
  * Profiles HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "@effect/platform"
-import { Schema } from "effect"
+import { HttpApiEndpoint, HttpApiError, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { Handle } from "../common/primitives.js"
 import { ProfilePageData } from "./domain.js"

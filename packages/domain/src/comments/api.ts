@@ -1,8 +1,8 @@
+import { Schema } from "effect"
 /**
  * Comments HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "@effect/platform"
-import { Schema } from "effect"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { CommentId, PostId, ResourceId } from "../common/ids.js"
 import { PostNotFoundError } from "../posts/errors.js"

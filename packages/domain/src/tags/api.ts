@@ -1,8 +1,8 @@
+import { Schema } from "effect"
 /**
  * Tags HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "@effect/platform"
-import { Schema } from "effect"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { TagId } from "../common/ids.js"
 import { TagRow } from "./domain.js"

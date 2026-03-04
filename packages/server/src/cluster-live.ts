@@ -1,3 +1,6 @@
+import { BunContext } from "@effect/platform-bun"
+import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun"
+import { Config, Effect, Layer } from "effect"
 /**
  * Shared Effect Cluster infrastructure for all durable workflows.
  *
@@ -9,11 +12,8 @@
  * All workflow layers (translation, notifications, etc.) compose on top
  * of this shared layer — they only need WorkflowEngine in their requirements.
  */
-import { ClusterWorkflowEngine, SingleRunner } from "@effect/cluster"
-import { BunContext } from "@effect/platform-bun"
-import { SqlClient } from "@effect/sql"
-import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun"
-import { Config, Effect, Layer } from "effect"
+import { ClusterWorkflowEngine, SingleRunner } from "effect/unstable/cluster"
+import { SqlClient } from "effect/unstable/sql"
 
 // @TODO I need to figure out the proper schema needed by SingleRunner
 const MIGRATIONS = {

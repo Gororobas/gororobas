@@ -1,6 +1,6 @@
-import { HttpApiBuilder, HttpApiError } from "@effect/platform"
 import { GororobasApi, Policies, ProfileNotFoundError } from "@gororobas/domain"
 import { Effect, Option } from "effect"
+import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 
 import { ProfilesRepository } from "./repository.js"
 

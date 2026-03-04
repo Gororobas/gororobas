@@ -1,6 +1,6 @@
-import { HttpApiBuilder, HttpMiddleware } from "@effect/platform"
 import { BunHttpServer } from "@effect/platform-bun"
 import { Layer } from "effect"
+import { HttpApiBuilder, HttpMiddleware } from "effect/unstable/httpapi"
 
 import { ApiLive } from "./api-live.js"
 import { AppRuntimeLive } from "./app-runtime.js"

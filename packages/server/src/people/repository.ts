@@ -1,6 +1,6 @@
-import { SqlClient, SqlSchema } from "@effect/sql"
 import { PersonId, PersonRow, ProfileId, SoleManagerOrganizationMetadata } from "@gororobas/domain"
 import { Effect } from "effect"
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 export class PeopleRepository extends Effect.Service<PeopleRepository>()("PeopleRepository", {
   effect: Effect.gen(function* () {

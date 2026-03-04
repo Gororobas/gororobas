@@ -1,7 +1,3 @@
-/**
- * Posts repository - minimal data access for posts.
- */
-import { SqlClient, SqlSchema } from "@effect/sql"
 import {
   CrdtCommit,
   type EventSourceData,
@@ -22,6 +18,10 @@ import {
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
 import { Data, Effect, Option, Schema } from "effect"
+/**
+ * Posts repository - minimal data access for posts.
+ */
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import { type PostClassification } from "../classification/domain.js"
 

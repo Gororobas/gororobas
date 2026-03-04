@@ -1,8 +1,8 @@
-import { FileSystem, Path } from "@effect/platform"
 import { BunContext } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale, TagRow, VegetableRow } from "@gororobas/domain"
 import { LoroDocFrontier, TiptapDocument } from "@gororobas/domain"
+import { FileSystem, Path } from "effect"
 import { Effect, Layer, Logger, LogLevel, Option, Schema } from "effect"
 import { join } from "node:path"
 
