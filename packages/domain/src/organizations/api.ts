@@ -71,4 +71,4 @@ export class OrganizationsApiGroup extends HttpApiGroup.make("organizations")
       .addSuccess(Schema.Array(OrganizationMembershipData))
       .addError(OrganizationNotFoundError, { status: 404 })
       .setPath(Schema.Struct({ id: OrganizationId })),
-  ) { }
+  ) {}

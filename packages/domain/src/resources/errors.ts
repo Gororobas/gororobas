@@ -10,11 +10,11 @@ export class ResourceNotFoundError extends Schema.TaggedError<ResourceNotFoundEr
   {
     id: ResourceId,
   },
-) { }
+) {}
 
 export class ResourceRevisionNotFoundError extends Schema.TaggedError<ResourceRevisionNotFoundError>()(
   "ResourceRevisionNotFoundError",
   {
     id: ResourceRevisionId,
   },
-) { }
+) {}

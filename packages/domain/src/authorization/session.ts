@@ -51,7 +51,7 @@ export const getSessionOrganizationPermissions = (
 export const Session = Schema.Union(VisitorSession, AccountSession)
 export type Session = typeof Session.Type
 
-export class SessionContext extends Context.Tag("Session")<SessionContext, Session>() { }
+export class SessionContext extends Context.Tag("Session")<SessionContext, Session>() {}
 
 export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
   "UnauthorizedError",

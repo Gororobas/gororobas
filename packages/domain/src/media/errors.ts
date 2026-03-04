@@ -10,4 +10,4 @@ export class MediaNotFoundError extends Schema.TaggedError<MediaNotFoundError>()
   {
     id: ImageId,
   },
-) { }
+) {}

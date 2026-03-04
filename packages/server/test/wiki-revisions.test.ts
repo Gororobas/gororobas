@@ -3,8 +3,6 @@ import { Effect, Schema } from "effect"
 
 import { makeTestLayer, NotImplementedError } from "./bdd.js"
 
-type World = Record<string, never>
-
 const pass = <Ctx>(ctx: Ctx) => Effect.succeed(ctx)
 const fail = <Ctx>(_ctx: Ctx) => Effect.fail(NotImplementedError)
 
@@ -407,5 +405,3 @@ describeFeature("./packages/server/test/wiki-revisions.feature", ({ Rule }) => {
     })
   })
 })
-
-const _unused: World = {}

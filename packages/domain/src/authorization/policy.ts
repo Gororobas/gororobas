@@ -39,7 +39,8 @@ export const policy = <A, R = never>(
         const effectOrEither = predicate(session)
         const result = Either.isEither(effectOrEither) ? effectOrEither : yield* effectOrEither
 
-        if (Either.isLeft(result)) return yield* new UnauthorizedError({ message: result.left, session })
+        if (Either.isLeft(result))
+          return yield* new UnauthorizedError({ message: result.left, session })
 
         return result.right
       }).pipe(
@@ -72,14 +73,14 @@ export const denyPolicy = policy(() => deny())
  */
 type UnionOfA<Policies> = Policies extends readonly [infer P, ...infer Rest]
   ? P extends Policy<infer A, any>
-  ? A | UnionOfA<Rest>
-  : never
+    ? A | UnionOfA<Rest>
+    : never
   : never
 
 type UnionOfR<Policies> = Policies extends readonly [infer P, ...infer Rest]
   ? P extends Policy<any, infer R>
-  ? R | UnionOfR<Rest>
-  : never
+    ? R | UnionOfR<Rest>
+    : never
   : never
 
 type TupleOfA<Policies> = {

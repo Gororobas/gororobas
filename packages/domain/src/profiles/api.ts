@@ -23,4 +23,5 @@ export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
           handle: Handle,
         }),
       ),
-  ).addError(HttpApiError.InternalServerError) { }
+  )
+  .addError(HttpApiError.InternalServerError) {}

@@ -1,19 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "import",
-    "vitest",
-    "react",
-    "eslint",
-    "typescript",
-    "unicorn",
-    "react-perf",
-    "node"
-  ],
-  "jsPlugins": [
-    "@effect/eslint-plugin",
-    "./custom-lint-rules.mjs"
-  ],
+  "plugins": ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
+  "jsPlugins": ["./custom-lint-rules.mjs"],
   "rules": {
     "unicorn/filename-case": [
       "error",
@@ -28,7 +16,16 @@
         "exceptRange": true
       }
     ],
-    "no-unused-vars": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "fix": {
+          "imports": "fix",
+          "variables": "suggestion"
+        }
+      }
+    ],
     // Ban disableValidation: true
     "custom-lint-rules/no-disable-validation": "error",
     // Ban sql<Type>`...` - use SqlSchema with Schema instead
@@ -48,9 +45,7 @@
   },
   "overrides": [
     {
-      "files": [
-        "packages/server/src/db/migrations-effect/**"
-      ],
+      "files": ["packages/server/src/db/migrations-effect/**"],
       "rules": {
         "unicorn/filename-case": "off"
       }

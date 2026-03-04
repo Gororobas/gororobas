@@ -20,7 +20,7 @@ import { Effect, Layer, Option, Schema } from "effect"
 export class AuthenticationFailureError extends Schema.TaggedError<AuthenticationFailureError>()(
   "AuthenticationFailureError",
   {},
-) { }
+) {}
 
 const PersonQueryResult = Schema.Struct({
   accessLevel: PlatformAccessLevel,

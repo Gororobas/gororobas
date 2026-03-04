@@ -10,4 +10,4 @@ export class CommentNotFoundError extends Schema.TaggedError<CommentNotFoundErro
   {
     id: CommentId,
   },
-) { }
+) {}

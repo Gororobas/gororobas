@@ -12,11 +12,11 @@ export class VegetableNotFoundError extends Schema.TaggedError<VegetableNotFound
     id: Schema.optional(VegetableId),
     handle: Schema.optional(Handle),
   },
-) { }
+) {}
 
 export class VegetableRevisionNotFoundError extends Schema.TaggedError<VegetableRevisionNotFoundError>()(
   "VegetableRevisionNotFoundError",
   {
     id: Schema.optional(VegetableRevisionId),
   },
-) { }
+) {}

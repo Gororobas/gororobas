@@ -1,14 +1,13 @@
 import { HttpApiMiddleware, HttpApiSecurity } from "@effect/platform"
 import { Context } from "effect"
 
-import { UnauthorizedError } from "../authorization/session.js"
 import { CurrentAuthenticationData } from "./domain.js"
 
 // Service tag for the current authenticated user
 export class CurrentAuthenticationContext extends Context.Tag("CurrentAuthenticationContext")<
   CurrentAuthenticationContext,
   CurrentAuthenticationData
->() { }
+>() {}
 
 // Middleware that validates BetterAuth sessions
 export class AuthenticationMiddleware extends HttpApiMiddleware.Tag<AuthenticationMiddleware>()(
@@ -27,4 +26,4 @@ export class AuthenticationMiddleware extends HttpApiMiddleware.Tag<Authenticati
       }),
     },
   },
-) { }
+) {}

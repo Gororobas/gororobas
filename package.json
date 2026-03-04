@@ -1,7 +1,7 @@
 {
   "name": "gororobas",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "workspaces": [
     "packages/*"
   ],
@@ -12,7 +12,7 @@
     "build": "tsc -b tsconfig.build.json && pnpm --recursive --parallel run build",
     "type-check": "tsc -b tsconfig.json",
     "type-check-recursive": "pnpm --recursive exec tsc -b tsconfig.json",
-    "lint": "oxlint --fix --type-aware --fix-suggestions",
+    "lint": "oxlint --fix --fix-dangerously --type-aware --fix-suggestions",
     "lint:dangerously": "oxlint --fix --type-aware --fix-suggestions --fix-dangerously",
     "format": "oxfmt",
     "test": "vitest",
@@ -24,7 +24,6 @@
     "@babel/plugin-transform-export-namespace-from": "^7.27.1",
     "@babel/plugin-transform-modules-commonjs": "^7.28.6",
     "@effect/build-utils": "^0.7.9",
-    "@effect/eslint-plugin": "^0.3.2",
     "@effect/language-service": "latest",
     "@effect/vitest": "latest",
     "@manypkg/cli": "^0.25.1",
@@ -32,7 +31,7 @@
     "@vitest/coverage-v8": "3.2.4",
     "babel-plugin-annotate-pure-calls": "^0.5.0",
     "effect": "^3.19.19",
-    "glob": "^11.1.0",
+    "glob": "^13.0.6",
     "lefthook": "^2.1.2",
     "oxfmt": "^0.27.0",
     "oxlint": "^1.51.0",
@@ -47,6 +46,7 @@
     "ignoredBuiltDependencies": [
       "better-sqlite3",
       "msgpackr-extract",
+      "msw",
       "protobufjs",
       "unrs-resolver"
     ],

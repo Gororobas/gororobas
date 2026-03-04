@@ -10,13 +10,13 @@ export class OrganizationNotFoundError extends Schema.TaggedError<OrganizationNo
   "OrganizationNotFoundError",
   {
     id: Schema.optional(OrganizationId),
-    handle: Schema.optional(Handle)
+    handle: Schema.optional(Handle),
   },
-) { }
+) {}
 
 export class LastManagerCannotLeaveError extends Schema.TaggedError<LastManagerCannotLeaveError>()(
   "LastManagerCannotLeaveError",
   {
     organization_id: OrganizationId,
   },
-) { }
+) {}
