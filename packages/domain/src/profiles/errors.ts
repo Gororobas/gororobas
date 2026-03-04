@@ -1,0 +1,15 @@
+/**
+ * Profile-related errors.
+ */
+import { Schema } from "effect"
+
+import { ProfileId } from "../common/ids.js"
+import { Handle } from "../common/primitives.js"
+
+export class ProfileNotFoundError extends Schema.TaggedError<ProfileNotFoundError>()(
+  "ProfileNotFoundError",
+  {
+    id: Schema.optional(ProfileId),
+    handle: Schema.optional(Handle),
+  },
+) {}

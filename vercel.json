@@ -1,9 +1,0 @@
-{
-  "redirects": [
-    {
-      "source": "/hackathon",
-      "destination": "https://hdoro.mmm.page/edgedb-hackathon",
-      "permanent": true
-    }
-  ]
-}

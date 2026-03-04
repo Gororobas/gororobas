@@ -1,0 +1,43 @@
+{
+  "name": "@gororobas/migration",
+  "version": "0.0.0",
+  "description": "Migration from Gel/EdgeDB to SQLite with Effect",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "check": "tsc -b tsconfig.json",
+    "test": "vitest",
+    "migrate": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@effect/platform": "latest",
+    "@effect/sql": "latest",
+    "@effect/sql-sqlite-bun": "latest",
+    "@gororobas/domain": "workspace:^",
+    "@gororobas/server": "workspace:^",
+    "better-auth": "1.4.18",
+    "effect": "^3.19.19",
+    "json-diff-ts": "^2.0.0",
+    "loro-crdt": "^1.10.5",
+    "loro-mirror": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "25.3.0",
+    "tsx": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  },
+  "effect": {
+    "generateExports": {
+      "include": [
+        "**/*.ts"
+      ]
+    },
+    "generateIndex": {
+      "include": [
+        "**/*.ts"
+      ]
+    }
+  }
+}

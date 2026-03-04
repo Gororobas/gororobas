@@ -1,0 +1,84 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "import",
+    "vitest",
+    "react",
+    "eslint",
+    "typescript",
+    "unicorn",
+    "react-perf",
+    "node"
+  ],
+  "jsPlugins": [
+    "@effect/eslint-plugin",
+    "./custom-lint-rules.mjs"
+  ],
+  "rules": {
+    "unicorn/filename-case": [
+      "error",
+      {
+        "case": "kebabCase"
+      }
+    ],
+    "yoda": [
+      "error",
+      "never",
+      {
+        "exceptRange": true
+      }
+    ],
+    "no-unused-vars": "error",
+    // Ban disableValidation: true
+    "custom-lint-rules/no-disable-validation": "error",
+    // Ban sql<Type>`...` - use SqlSchema with Schema instead
+    "custom-lint-rules/no-sql-type-parameter": "error",
+    // Prefer Option.fromNullable over ternary
+    "custom-lint-rules/prefer-option-from-nullable": "error",
+    // Use openapi-fetch client instead of direct fetch()
+    "custom-lint-rules/no-direct-fetch": "error",
+    // Error when .pipe() has too many arguments (max 20)
+    "custom-lint-rules/pipe-max-arguments": "error",
+    // Error when Layer.provide is nested inside another Layer.provide
+    "custom-lint-rules/no-nested-layer-provide": "error",
+    // Require IdGen.make() for ID generation
+    "custom-lint-rules/no-direct-id-construction": "error",
+    // Schema.TaggedError classes must end with "Error" suffix
+    "custom-lint-rules/tagged-error-suffix": "error"
+  },
+  "overrides": [
+    {
+      "files": [
+        "packages/server/src/db/migrations-effect/**"
+      ],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/server/src/durable-streams/router.ts",
+        "packages/server/test/durable-streams/**"
+      ],
+      "rules": {
+        "custom-lint-rules/no-direct-fetch": "off"
+      }
+    }
+  ],
+  "settings": {},
+  "env": {
+    "builtin": true,
+    "es2018": true
+  },
+  "ignorePatterns": [
+    "**/dist",
+    "**/build",
+    "**/docs",
+    "**/*.md",
+    "**/node_modules",
+    "**/ios",
+    "**/android",
+    "**/coverage",
+    "**/.git"
+  ]
+}

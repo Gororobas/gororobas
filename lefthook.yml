@@ -1,0 +1,20 @@
+pre-commit:
+  parallel: true
+  commands:
+    oxlint:
+      glob: "*"
+      run: bun run lint --quiet {staged_files}
+      stage_fixed: true
+    oxfmt:
+      glob: "*"
+      run: bun oxfmt {staged_files}
+      stage_fixed: true
+    beads-export:
+      run: bd export -o .beads/issues.jsonl && git add .beads/issues.jsonl
+    # effect-bdd-check:
+    #   glob: "**/*.feature"
+    #   run: bun run packages/effect-bdd/bin/effect-bdd-check.ts check
+    # type-check:
+    #   run: pnpm run type-check
+    # test:
+    #   run: pnpm run vitest --run

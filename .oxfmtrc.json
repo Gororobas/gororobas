@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "quoteStyle": "single",
+  "trailingComma": "all",
+  "semi": false,
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/build/**",
+    "**/docs/**",
+    "**/*.md",
+    "**/node_modules/**",
+    "**/coverage/**",
+    "**/.git/**",
+    "**/.beads/**"
+  ],
+  "experimentalTailwindcss": {
+    "attributes": ["class", "className"],
+    "functions": ["clsx", "cn"],
+    "preserveWhitespace": false
+  },
+  "experimentalSortImports": {
+    "groups": [["side-effect"], ["builtin", "external"], ["internal", "parent", "sibling", "index"]]
+  }
+}

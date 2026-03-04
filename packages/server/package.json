@@ -1,0 +1,69 @@
+{
+  "name": "@gororobas/server",
+  "version": "0.0.0",
+  "description": "Server-side logic, policies, and repositories for Gororobas",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/hdoro/gororobas-experiments.git",
+    "directory": "packages/server"
+  },
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "directory": "dist"
+  },
+  "scripts": {
+    "codegen": "build-utils prepare-v2",
+    "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs && build-utils pack-v2",
+    "build-esm": "tsc -b tsconfig.build.json",
+    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
+    "check": "tsc -b tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest --coverage",
+    "migrate": "npx tsx scripts/migrate.ts"
+  },
+  "dependencies": {
+    "@durable-streams/server": "^0.2.1",
+    "@effect/cluster": "latest",
+    "@effect/experimental": "latest",
+    "@effect/platform": "latest",
+    "@effect/platform-node": "latest",
+    "@effect/sql": "latest",
+    "@effect/sql-sqlite-bun": "latest",
+    "@effect/workflow": "latest",
+    "@gororobas/domain": "workspace:^",
+    "@tiptap/core": "latest",
+    "@tiptap/html": "latest",
+    "@tiptap/pm": "latest",
+    "@tiptap/starter-kit": "latest",
+    "better-auth": "^1.4.18",
+    "better-auth-effect": "^0.3.3",
+    "better-sqlite3": "latest",
+    "effect": "^3.19.19",
+    "loro-crdt": "^1.10.6",
+    "loro-mirror": "^1.2.1"
+  },
+  "devDependencies": {
+    "@ariga/atlas": "latest",
+    "@durable-streams/client": "^0.2.1",
+    "@effect/vitest": "latest",
+    "@gororobas/effect-bdd": "workspace:^",
+    "@types/bun": "latest",
+    "fast-check": "^3.23.2",
+    "sql-formatter": "latest"
+  },
+  "effect": {
+    "generateExports": {
+      "include": [
+        "**/*.ts"
+      ]
+    },
+    "generateIndex": {
+      "include": [
+        "**/*.ts"
+      ]
+    }
+  }
+}
