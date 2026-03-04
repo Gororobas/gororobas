@@ -32,14 +32,14 @@
     "@cucumber/messages": "^32.0.1",
     "@effect/platform-bun": "^4.0.0-beta.27",
     "effect": "^4.0.0-beta.27",
-    "glob": "^11.1.0"
+    "glob": "^13.0.6"
   },
   "devDependencies": {
     "@effect/build-utils": "^0.7.9",
     "@effect/vitest": "^4.0.0-beta.27",
     "@types/node": "^25.3.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.18"
   },
   "effect": {
     "generateExports": {

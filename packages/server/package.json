@@ -33,7 +33,7 @@
     "@tiptap/html": "latest",
     "@tiptap/pm": "latest",
     "@tiptap/starter-kit": "latest",
-    "better-auth": "^1.4.18",
+    "better-auth": "^1.5.3",
     "better-auth-effect": "^0.3.3",
     "better-sqlite3": "latest",
     "effect": "^4.0.0-beta.27",
