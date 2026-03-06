@@ -1,4 +1,9 @@
-import { AuthenticationMiddleware, CurrentAuthenticationData } from "@gororobas/domain"
+import {
+  AuthenticationMiddleware,
+  CurrentAuthenticationContext,
+  CurrentAuthenticationData,
+  UnauthorizedError,
+} from "@gororobas/domain"
 import { Effect, Layer, Redacted, Schema } from "effect"
 
 import { AuthService } from "./auth-service.js"
@@ -8,17 +13,27 @@ export const AuthenticationMiddlewareLive = Layer.effect(
   Effect.gen(function* () {
     const auth = yield* AuthService
     return AuthenticationMiddleware.of({
-      cookie: (token) =>
-        Effect.promise(async () =>
+      cookie: Effect.fn(function* (httpEffect, { credential }) {
+        const result = yield* Effect.promise(async () =>
           auth.api.getSession({
             headers: new Headers({
-              cookie: `better-auth.session_token=${Redacted.value(token)}`,
+              cookie: `better-auth.session_token=${Redacted.value(credential)}`,
             }),
           }),
-        ).pipe(
-          Effect.andThen(Schema.decodeUnknownSync(CurrentAuthenticationData)),
+        ).pipe(Effect.catchCause(() => Effect.succeed(null)))
+
+        const data = yield* Schema.decodeUnknownEffect(CurrentAuthenticationData)(result).pipe(
           Effect.catchCause(() => Effect.succeed(null)),
-        ),
+        )
+
+        if (data === null) {
+          return yield* new UnauthorizedError({
+            session: { type: "VISITOR" },
+          })
+        }
+
+        return yield* Effect.provideService(httpEffect, CurrentAuthenticationContext, data)
+      }),
     })
   }),
 )

@@ -1,5 +1,4 @@
-import { defaultTeardown, Teardown } from "@effect/platform/Runtime"
-import { Effect, ManagedRuntime } from "effect"
+import { Effect, ManagedRuntime, Runtime } from "effect"
 import { constVoid } from "effect/Function"
 
 /**
@@ -10,7 +9,7 @@ import { constVoid } from "effect/Function"
 export const runMainWithCustomRuntime = <E, R>(
   runtime: ManagedRuntime.ManagedRuntime<R, E>,
   program: Effect.Effect<unknown, E, R>,
-  teardown: Teardown = defaultTeardown,
+  teardown: Runtime.Teardown = Runtime.defaultTeardown,
 ) => {
   const fiber = runtime.runFork(program)
 

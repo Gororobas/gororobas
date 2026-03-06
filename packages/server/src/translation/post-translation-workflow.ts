@@ -88,7 +88,7 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
       initialDoc: currentLoroDoc,
       schema: PostSourceDataLoro,
       // @TODO better type loro-mirror schemas
-      newData: updatedSourceData,
+      newData: updatedSourceData as any,
     })
 
     // @TODO: how much of the above should be moved into here? Or perhaps a separate activity for creating the updated doc?

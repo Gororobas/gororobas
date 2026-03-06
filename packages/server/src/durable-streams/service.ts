@@ -49,6 +49,6 @@ export const DurableStreamsServiceLive = (config: DurableStreamsConfig) =>
         ),
       )
 
-      return ServiceMap.makeUnsafe(new Map([[DurableStreamsService.key, { internalUrl, server }]]))
+      return ServiceMap.make(DurableStreamsService, { internalUrl, server })
     }),
   )

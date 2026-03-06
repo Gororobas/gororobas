@@ -1,5 +1,5 @@
 import { stream } from "@durable-streams/client"
-import { BunServices } from "@effect/platform-bun"
+import { BunHttpServer } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Schema } from "effect"
 import { FastCheck } from "effect/testing"
@@ -27,18 +27,9 @@ const config: DurableStreamsConfig = {
 
 const ServiceLayer = DurableStreamsServiceLive(config)
 
-const ServerLayer = Layer.provide(
-  Layer.unwrap(
-    Effect.gen(function* () {
-      const router = yield* makeDurableStreamRouter
-      const httpApp = yield* HttpRouter.toHttpApp(router)
-      return HttpServer.serve(httpApp)
-    }),
-  ),
-  ServiceLayer,
-)
+const RouterLayer = HttpRouter.serve(makeDurableStreamRouter).pipe(Layer.provide(ServiceLayer))
 
-const TestLayers = Layer.provideMerge(ServerLayer, BunServices.layer)
+const TestLayers = Layer.provideMerge(RouterLayer, BunHttpServer.layerTest)
 
 const getBaseUrl = Effect.gen(function* () {
   const server = yield* HttpServer.HttpServer
