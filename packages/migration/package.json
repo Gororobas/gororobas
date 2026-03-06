@@ -11,20 +11,20 @@
     "migrate": "tsx src/index.ts"
   },
   "dependencies": {
-    "@effect/sql-sqlite-bun": "^4.0.0-beta.27",
+    "@effect/sql-sqlite-bun": "^4.0.0-beta.28",
     "@gororobas/domain": "workspace:^",
     "@gororobas/server": "workspace:^",
     "better-auth": "1.5.3",
-    "effect": "^4.0.0-beta.27",
+    "effect": "catalog:",
     "json-diff-ts": "^2.0.0",
-    "loro-crdt": "^1.10.6",
-    "loro-mirror": "^1.2.1"
+    "loro-crdt": "catalog:",
+    "loro-mirror": "catalog:"
   },
   "devDependencies": {
     "@types/node": "25.3.0",
     "tsx": "latest",
-    "typescript": "latest",
-    "vitest": "latest"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "effect": {
     "generateExports": {

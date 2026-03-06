@@ -2,3 +2,16 @@ packages:
   - packages/*
 
 nodeLinker: hoisted
+
+catalog:
+  effect: ^4.0.0-beta.28
+  vitest: ^4.0.18
+  typescript: ^5.9.3
+  uuid: ^13.0.0
+  loro-crdt: ^1.10.6
+  loro-mirror: ^1.2.1
+  "@effect/vitest": ^4.0.0-beta.28
+  "@tiptap/core": latest
+  "@tiptap/html": latest
+  "@tiptap/pm": latest
+  "@tiptap/starter-kit": latest

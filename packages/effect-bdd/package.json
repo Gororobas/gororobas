@@ -31,15 +31,15 @@
     "@cucumber/gherkin": "^38.0.0",
     "@cucumber/messages": "^32.0.1",
     "@effect/platform-bun": "^4.0.0-beta.28",
-    "effect": "^4.0.0-beta.28",
+    "effect": "catalog:",
     "glob": "^13.0.6"
   },
   "devDependencies": {
     "@effect/build-utils": "^0.7.9",
-    "@effect/vitest": "^4.0.0-beta.28",
+    "@effect/vitest": "catalog:",
     "@types/node": "^25.3.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "effect": {
     "generateExports": {

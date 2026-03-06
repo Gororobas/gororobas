@@ -24,9 +24,9 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
-    "effect": "^4.0.0-beta.28",
-    "loro-mirror": "^1.2.1",
-    "uuid": "^13.0.0"
+    "effect": "catalog:",
+    "loro-mirror": "catalog:",
+    "uuid": "catalog:"
   },
   "effect": {
     "generateExports": {
