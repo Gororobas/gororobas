@@ -238,6 +238,13 @@ const TestVegetablesRepository = Layer.succeed(VegetablesRepository)({
     return Effect.succeed(match ? Option.some(match) : Option.none())
   },
   findTranslations: () => Effect.succeed([]),
+  getCrdt: () => Effect.die(new Error("Not implemented in test")),
+  insertCrdt: (() => Effect.die(new Error("Not implemented in test"))) as never,
+  updateCrdt: (() => Effect.die(new Error("Not implemented in test"))) as never,
+  insertRevision: (() => Effect.die(new Error("Not implemented in test"))) as never,
+  fetchRevision: () => Effect.succeed(Option.none()),
+  updateRevision: (() => Effect.die(new Error("Not implemented in test"))) as never,
+  materialize: (() => Effect.die(new Error("Not implemented in test"))) as never,
 })
 
 const RESULTS_DIR = join(import.meta.dirname, "extraction-results")
