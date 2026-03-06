@@ -1,8 +1,9 @@
 /**
  * Test helpers for policy property-based testing.
  */
-import { Cause, Effect, Exit, FastCheck, Layer } from "effect"
-import { UnknownException } from "effect/Cause"
+import { Cause, Effect, Exit, Layer } from "effect"
+import { UnknownError } from "effect/Cause"
+import { FastCheck } from "effect/testing"
 
 import type { Session } from "../src/authorization/session.js"
 import { SessionContext } from "../src/authorization/session.js"
@@ -33,7 +34,7 @@ export class PropertyTestFailure extends Error {
 export const checkPropertyEffect = <A, E>(
   arbitrary: FastCheck.Arbitrary<A>,
   predicate: (value: A) => Effect.Effect<boolean, E, never>,
-): Effect.Effect<PropertyResult<A>, E | UnknownException, never> =>
+): Effect.Effect<PropertyResult<A>, E | UnknownError, never> =>
   Effect.gen(function* () {
     let counterexample: A | undefined
     let lastError: unknown
@@ -56,7 +57,7 @@ export const checkPropertyEffect = <A, E>(
     })
 
     const checkResult = yield* Effect.tryPromise({
-      catch: (unknown) => new UnknownException({ cause: unknown }),
+      catch: (unknown) => new UnknownError({ cause: unknown }),
       try: () => FastCheck.check(asyncProp),
     })
 
@@ -75,7 +76,7 @@ export const checkPropertyEffect = <A, E>(
 export const assertPropertyEffect = <A, E>(
   arbitrary: FastCheck.Arbitrary<A>,
   predicate: (value: A) => Effect.Effect<boolean, E, never>,
-): Effect.Effect<void, E | PropertyTestFailure | UnknownException, never> =>
+): Effect.Effect<void, E | PropertyTestFailure | UnknownError, never> =>
   Effect.gen(function* () {
     const result = yield* checkPropertyEffect(arbitrary, predicate)
 
@@ -97,7 +98,7 @@ export const propertyWithPrecondition = <A, E>(
   arbitrary: FastCheck.Arbitrary<A>,
   precondition: (value: A) => boolean,
   predicate: (value: A) => Effect.Effect<boolean, E, never>,
-): Effect.Effect<void, E | PropertyTestFailure | UnknownException, never> =>
+): Effect.Effect<void, E | PropertyTestFailure | UnknownError, never> =>
   assertPropertyEffect(arbitrary.filter(precondition), predicate)
 
 /**

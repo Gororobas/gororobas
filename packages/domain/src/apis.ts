@@ -1,7 +1,6 @@
 import { HttpApi } from "effect/unstable/httpapi"
 
 import { AuthenticationMiddleware } from "./authentication/middleware.js"
-import { UnauthorizedError } from "./authorization/session.js"
 import { CommentsApiGroup } from "./comments/api.js"
 import { MediaApiGroup } from "./media/api.js"
 import { OrganizationsApiGroup } from "./organizations/api.js"
@@ -23,4 +22,3 @@ export const GororobasApi = HttpApi.make("GororobasApi")
   .add(ProfilesApiGroup)
   .add(TagsApiGroup)
   .middleware(AuthenticationMiddleware)
-  .addError(UnauthorizedError)

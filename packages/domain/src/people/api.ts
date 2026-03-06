@@ -13,22 +13,24 @@ import { AccountDeletionError, PersonNotFoundError } from "./errors.js"
 
 export class PeopleApiGroup extends HttpApiGroup.make("people")
   .add(
-    HttpApiEndpoint.post("setAccessLevel", "/people/:id/access-level")
-      .addSuccess(Schema.Void)
-      .addError(PersonNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: PersonId }))
-      .setPayload(Schema.Struct({ accessLevel: PlatformAccessLevel })),
+    HttpApiEndpoint.post("setAccessLevel", "/people/:id/access-level", {
+      success: Schema.Void,
+      error: PersonNotFoundError,
+      params: Schema.Struct({ id: PersonId }),
+      payload: Schema.Struct({ accessLevel: PlatformAccessLevel }),
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deletePerson", "/people/me")
-      .addSuccess(AccountDeletionResult)
-      .addError(AccountDeletionError)
-      .setPayload(Schema.Struct({ confirm: Schema.optional(AccountDeletionConfirmation) })),
+    HttpApiEndpoint.delete("deletePerson", "/people/me", {
+      success: AccountDeletionResult,
+      error: AccountDeletionError,
+      payload: Schema.Struct({ confirm: Schema.optional(AccountDeletionConfirmation) }),
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateProfile", "/people/me/profile")
-      .addSuccess(Schema.Void)
-      .addError(PersonNotFoundError, { status: 404 })
-      .addError(HandleTakenError, { status: 409 })
-      .setPayload(ProfileRowUpdate),
+    HttpApiEndpoint.patch("updateProfile", "/people/me/profile", {
+      success: Schema.Void,
+      error: [PersonNotFoundError, HandleTakenError],
+      payload: ProfileRowUpdate,
+    }),
   ) {}

@@ -4,19 +4,36 @@ import { Schema } from "effect"
  */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
+import { Locale } from "../common/enums.js"
 import { TagId } from "../common/ids.js"
+import { TiptapDocument } from "../rich-text/domain.js"
 import { TagRow } from "./domain.js"
+import { TagNotFoundError } from "./errors.js"
+
+const CreateTagData = Schema.Struct({
+  id: TagId,
+  cluster: Schema.NullishOr(Schema.String),
+  description: Schema.NullishOr(TiptapDocument),
+  names: Schema.fromJsonString(Schema.Record(Locale, Schema.Trimmed.check(Schema.isNonEmpty()))),
+})
 
 export class TagsApiGroup extends HttpApiGroup.make("tags")
-  .add(HttpApiEndpoint.get("getAllTags", "/tags").addSuccess(Schema.Array(TagRow)))
   .add(
-    HttpApiEndpoint.post("createTag", "/tags")
-      .addSuccess(Schema.Struct({ id: TagId }))
-      .setPayload(TagRow.omit("createdAt", "createdById", "updatedAt", "handle")),
+    HttpApiEndpoint.get("getAllTags", "/tags", {
+      success: Schema.Array(TagRow),
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("editTag", "/tags/:id")
-      .addSuccess(Schema.Struct({ id: TagId }))
-      .setPath(Schema.Struct({ id: TagId }))
-      .setPayload(TagRow.omit("createdAt", "createdById", "updatedAt", "handle")),
+    HttpApiEndpoint.post("createTag", "/tags", {
+      success: Schema.Struct({ id: TagId }),
+      payload: CreateTagData,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.patch("editTag", "/tags/:id", {
+      success: Schema.Struct({ id: TagId }),
+      params: Schema.Struct({ id: TagId }),
+      error: TagNotFoundError,
+      payload: CreateTagData,
+    }),
   ) {}

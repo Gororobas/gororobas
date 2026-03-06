@@ -5,11 +5,12 @@ import { Schema } from "effect"
 
 import { PlatformAccessLevel } from "../common/enums.js"
 import { OrganizationId, PersonId } from "../common/ids.js"
+import { TimestampColumn } from "../common/primitives.js"
 import { ProfileContentCounts } from "../profiles/domain.js"
 
 export const PersonRow = Schema.Struct({
   accessLevel: PlatformAccessLevel,
-  accessSetAt: Schema.NullishOr(Schema.DateFromString),
+  accessSetAt: Schema.NullishOr(TimestampColumn),
   accessSetById: Schema.NullishOr(PersonId),
   id: PersonId,
 })
@@ -44,11 +45,11 @@ export const AccountDeletionResultConfirmContentDeletion = Schema.TaggedStruct(
   },
 )
 
-export const AccountDeletionResult = Schema.Union(
+export const AccountDeletionResult = Schema.Union([
   AccountDeletionResultSuccess,
   AccountDeletionResultConfirmOrgDeletion,
   AccountDeletionResultConfirmContentDeletion,
-)
+])
 
 export const SoleManagerOrganizationMetadata = Schema.Struct({
   organizationId: OrganizationId,

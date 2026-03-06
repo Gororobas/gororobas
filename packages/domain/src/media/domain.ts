@@ -14,7 +14,7 @@ export const ImageRow = Schema.Struct({
   label: Schema.NullishOr(Schema.String),
   metadata: Schema.NullishOr(Schema.Unknown),
   ownerProfileId: ProfileId,
-  sanityId: Schema.NonEmptyTrimmedString,
+  sanityId: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 export type ImageRow = typeof ImageRow.Type
 

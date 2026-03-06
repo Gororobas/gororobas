@@ -11,7 +11,8 @@
     "**/node_modules/**",
     "**/coverage/**",
     "**/.git/**",
-    "**/.beads/**"
+    "**/.beads/**",
+    "**/effect-v4/**"
   ],
   "experimentalTailwindcss": {
     "attributes": ["class", "className"],

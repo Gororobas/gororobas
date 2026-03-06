@@ -1,7 +1,7 @@
 /**
  * Policy utilities for authorization checks.
  */
-import { Effect, Either, Schema } from "effect"
+import { Effect, Result, Schema } from "effect"
 
 import { TrustedAccessLevel } from "../common/enums.js"
 import { OrganizationId } from "../common/ids.js"
@@ -30,35 +30,31 @@ type Policy<A, R = never> = Effect.Effect<A, UnauthorizedError, SessionContext |
 export const policy = <A, R = never>(
   predicate: (
     session: Session,
-  ) => Effect.Effect<Either.Either<A, string>, unknown, R> | Either.Either<A, string>,
+  ) => Effect.Effect<Result.Result<A, string>, unknown, R> | Result.Result<A, string>,
 ): Policy<A, R> =>
-  SessionContext.pipe(
-    Effect.flatMap((session) =>
-      Effect.gen(function* () {
-        const session = yield* SessionContext
-        const effectOrEither = predicate(session)
-        const result = Either.isEither(effectOrEither) ? effectOrEither : yield* effectOrEither
+  Effect.gen(function* () {
+    const session = yield* SessionContext
+    const effectOrResult = predicate(session)
+    const result = Result.isResult(effectOrResult) ? effectOrResult : yield* effectOrResult
 
-        if (Either.isLeft(result))
-          return yield* new UnauthorizedError({ message: result.left, session })
+    if (Result.isFailure(result))
+      return yield* new UnauthorizedError({ message: result.failure, session })
 
-        return result.right
-      }).pipe(
-        // Policies should always error with Unauthorized
-        Effect.catchAll((e) =>
-          typeof e === "object" && !!e && "_tag" in e && e._tag === "Unauthorized"
-            ? (e as UnauthorizedError)
-            : new UnauthorizedError({ session }),
-        ),
-      ),
+    return result.success
+  }).pipe(
+    // Policies should always error with Unauthorized
+    Effect.mapError((e) =>
+      typeof e === "object" && !!e && "_tag" in e && e._tag === "UnauthorizedError"
+        ? (e as UnauthorizedError)
+        : new UnauthorizedError({ session: { type: "VISITOR" } }),
     ),
   )
 
 /** Helper to make policies' positive results explicit */
-export const allow = <A = void>(value: A) => Either.right(value)
+export const allow = <A = void>(value: A) => Result.succeed(value)
 
 /** Helper to make policies' negative results explicit */
-export const deny = (message?: string) => Either.left(message)
+export const deny = (message: string = "Denied") => Result.fail(message)
 
 /** Always-deny policy for usage in ternaries
  * @example
@@ -93,7 +89,10 @@ type TupleOfA<Policies> = {
 export const or = <Policies extends ReadonlyArray<Policy<any, any>>>(
   ...policies: Policies
 ): Policy<UnionOfA<Policies>, UnionOfR<Policies>> => {
-  return Effect.firstSuccessOf(policies) as Policy<UnionOfA<Policies>, UnionOfR<Policies>>
+  return policies.reduce((acc, p) => acc.pipe(Effect.catch(() => p))) as Policy<
+    UnionOfA<Policies>,
+    UnionOfR<Policies>
+  >
 }
 
 /**
@@ -112,10 +111,10 @@ export const and = <Policies extends ReadonlyArray<Policy<any, any>>>(
   return Effect.all(policies) as Policy<TupleOfA<Policies>, UnionOfR<Policies>>
 }
 
-export const toEither = <A, R>(policy: Policy<A, R>) =>
+export const toResult = <A, R>(policy: Policy<A, R>) =>
   policy.pipe(
-    Effect.map((result) => Either.right(result)),
-    Effect.catchTag("Unauthorized", (error) => Effect.succeed(Either.left(error))),
+    Effect.map((value) => Result.succeed(value)),
+    Effect.catchTag("UnauthorizedError", (error) => Effect.succeed(Result.fail(error))),
   )
 
 /**
@@ -125,7 +124,7 @@ export const toEither = <A, R>(policy: Policy<A, R>) =>
 export const check = <A, R>(policy: Policy<A, R>) =>
   policy.pipe(
     Effect.map(() => true),
-    Effect.catchAll(() => Effect.succeed(false)),
+    Effect.catch(() => Effect.succeed(false)),
   )
 
 export const assertAuthenticated = policy((session) =>
@@ -135,7 +134,7 @@ export const assertAuthenticated = policy((session) =>
 export const authenticatedPolicy = <A, R = never>(
   predicate: (
     session: AccountSession,
-  ) => Effect.Effect<Either.Either<A, string>, unknown, R> | Either.Either<A, string>,
+  ) => Effect.Effect<Result.Result<A, string>, unknown, R> | Result.Result<A, string>,
 ): Policy<A, R> =>
   assertAuthenticated.pipe(Effect.flatMap((session) => policy(() => predicate(session))))
 

@@ -1,8 +1,7 @@
-import { Context, Predicate, Schema } from "effect"
+import { Predicate, Schema, ServiceMap } from "effect"
 /**
  * Session types for authentication.
  */
-import { HttpApiSchema } from "effect/unstable/httpapi"
 
 import { OrganizationAccessLevel, PlatformAccessLevel } from "../common/enums.js"
 import { OrganizationId, PersonId } from "../common/ids.js"
@@ -20,7 +19,7 @@ export type VisitorSession = typeof VisitorSession.Type
 
 export const OrganizationMembershipSession = Schema.Struct({
   accessLevel: OrganizationAccessLevel,
-  organizationId: Schema.UUID.pipe(Schema.brand("OrganizationId")),
+  organizationId: OrganizationId,
 })
 export type OrganizationMembershipSession = typeof OrganizationMembershipSession.Type
 
@@ -48,18 +47,18 @@ export const getSessionOrganizationPermissions = (
     session.memberships.map((m) => [m.organizationId, organizationPermissionsFor(m.accessLevel)]),
   ) as Record<OrganizationId, ReadonlySet<OrganizationPermission>>
 
-export const Session = Schema.Union(VisitorSession, AccountSession)
+export const Session = Schema.Union([VisitorSession, AccountSession])
 export type Session = typeof Session.Type
 
-export class SessionContext extends Context.Tag("Session")<SessionContext, Session>() {}
+export class SessionContext extends ServiceMap.Service<SessionContext, Session>()("Session") {}
 
-export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
+export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError>()(
   "UnauthorizedError",
   {
     message: Schema.optional(Schema.String),
     session: Session,
   },
-  HttpApiSchema.annotations({ status: 403 }),
+  { httpApiStatus: 403 },
 ) {
   static is(u: unknown): u is UnauthorizedError {
     return Predicate.isTagged(u, "Unauthorized")

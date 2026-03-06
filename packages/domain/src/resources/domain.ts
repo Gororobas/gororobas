@@ -12,7 +12,7 @@ import {
   TranslationSource,
 } from "../common/enums.js"
 import { ImageId, PersonId, ResourceId, ResourceRevisionId, TagId } from "../common/ids.js"
-import { Handle } from "../common/primitives.js"
+import { Handle, TimestampColumn } from "../common/primitives.js"
 import { LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
@@ -20,7 +20,7 @@ export const ResourceMetadata = Schema.Struct({
   format: ResourceFormat,
   handle: Handle,
   thumbnailImageId: Schema.NullishOr(ImageId),
-  url: Schema.NonEmptyTrimmedString,
+  url: Schema.Trimmed.check(Schema.isNonEmpty()),
   urlState: ResourceUrlState,
 })
 export type ResourceMetadata = typeof ResourceMetadata.Type
@@ -29,7 +29,7 @@ export const ResourceLocalizedData = Schema.Struct({
   creditLine: Schema.NullishOr(Schema.String),
   description: Schema.NullishOr(TiptapDocument),
   originalLocale: Locale,
-  title: Schema.NonEmptyTrimmedString,
+  title: Schema.Trimmed.check(Schema.isNonEmpty()),
   translationSource: TranslationSource,
 })
 export type ResourceLocalizedData = typeof ResourceLocalizedData.Type
@@ -48,15 +48,15 @@ export type SourceResourceData = typeof SourceResourceData.Type
 export const QueriedResourceData = Schema.Struct({
   ...ResourceMetadata.fields,
   ...ResourceLocalizedData.fields,
-  description: Schema.NullishOr(Schema.parseJson(TiptapDocument)),
+  description: Schema.NullishOr(Schema.fromJsonString(TiptapDocument)),
   locale: Locale,
 })
 export type QueriedResourceData = typeof QueriedResourceData.Type
 
 export const ResourceRevisionData = Schema.Struct({
-  updatedAt: Schema.DateFromString,
-  createdAt: Schema.DateFromString,
-  evaluatedAt: Schema.NullishOr(Schema.DateFromString),
+  updatedAt: TimestampColumn,
+  createdAt: TimestampColumn,
+  evaluatedAt: Schema.NullishOr(TimestampColumn),
   evaluatedById: Schema.NullishOr(PersonId),
   evaluation: RevisionEvaluation,
   id: ResourceRevisionId,
@@ -73,28 +73,28 @@ export const ResourceCardData = Schema.Struct({
   id: ResourceId,
   locale: Locale,
   thumbnailImageId: Schema.NullishOr(ImageId),
-  title: Schema.NonEmptyTrimmedString,
+  title: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 export type ResourceCardData = typeof ResourceCardData.Type
 
 export const ResourcePageData = Schema.Struct({
   creditLine: Schema.NullishOr(Schema.String),
-  description: Schema.NullishOr(Schema.parseJson(TiptapDocument)),
+  description: Schema.NullishOr(Schema.fromJsonString(TiptapDocument)),
   format: ResourceFormat,
   handle: Handle,
   id: ResourceId,
   locale: Locale,
   tags: Schema.Array(
     Schema.Struct({
-      handle: Schema.NonEmptyTrimmedString,
+      handle: Schema.Trimmed.check(Schema.isNonEmpty()),
       id: TagId,
     }),
   ),
   thumbnailImageId: Schema.NullishOr(ImageId),
-  title: Schema.NonEmptyTrimmedString,
-  url: Schema.NonEmptyTrimmedString,
+  title: Schema.Trimmed.check(Schema.isNonEmpty()),
+  url: Schema.Trimmed.check(Schema.isNonEmpty()),
   urlState: Schema.String,
-  vegetableHandles: Schema.Array(Schema.NonEmptyTrimmedString),
+  vegetableHandles: Schema.Array(Schema.Trimmed.check(Schema.isNonEmpty())),
 })
 export type ResourcePageData = typeof ResourcePageData.Type
 
@@ -104,8 +104,8 @@ export const CreateResourceData = Schema.Struct({
   format: ResourceFormat,
   handle: Handle,
   thumbnailImageId: Schema.optional(Schema.NullishOr(ImageId)),
-  title: Schema.NonEmptyTrimmedString,
-  url: Schema.NonEmptyTrimmedString,
+  title: Schema.Trimmed.check(Schema.isNonEmpty()),
+  url: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 export type CreateResourceData = typeof CreateResourceData.Type
 
@@ -115,8 +115,8 @@ export const UpdateResourceData = Schema.Struct({
   format: Schema.optional(ResourceFormat),
   handle: Schema.optional(Handle),
   thumbnailImageId: Schema.optional(Schema.NullishOr(ImageId)),
-  title: Schema.optional(Schema.NonEmptyTrimmedString),
-  url: Schema.optional(Schema.NonEmptyTrimmedString),
+  title: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
+  url: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
 })
 export type UpdateResourceData = typeof UpdateResourceData.Type
 
@@ -124,14 +124,14 @@ export const ResourceSearchParams = Schema.Struct({
   format: Schema.optional(ResourceFormat),
   page: Schema.NumberFromString,
   query: Schema.optional(Schema.String),
-  tagIds: Schema.optional(Schema.parseJson(Schema.Array(TagId))),
+  tagIds: Schema.optional(Schema.fromJsonString(Schema.Array(TagId))),
 })
 
 export const ResourceTranslationData = Schema.Struct({
   creditLine: Schema.NullishOr(Schema.String),
   description: Schema.NullishOr(TiptapDocument),
   locale: Locale,
-  title: Schema.NonEmptyTrimmedString,
+  title: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 export type ResourceTranslationData = typeof ResourceTranslationData.Type
 

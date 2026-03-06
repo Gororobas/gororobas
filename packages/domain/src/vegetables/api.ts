@@ -13,48 +13,52 @@ import { VegetableNotFoundError } from "./errors.js"
 
 export class VegetablesApiGroup extends HttpApiGroup.make("vegetables")
   .add(
-    HttpApiEndpoint.get("searchVegetables", "/vegetables")
-      .addSuccess(Schema.Array(VegetableCardData))
-      .setUrlParams(VegetableSearchParams),
+    HttpApiEndpoint.get("searchVegetables", "/vegetables", {
+      success: Schema.Array(VegetableCardData),
+      query: VegetableSearchParams,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("getVegetableByHandle", "/vegetables/:handle")
-      .addSuccess(VegetablePageData)
-      .addError(VegetableNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ handle: Handle })),
+    HttpApiEndpoint.get("getVegetableByHandle", "/vegetables/:handle", {
+      success: VegetablePageData,
+      error: VegetableNotFoundError,
+      params: Schema.Struct({ handle: Handle }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createVegetable", "/vegetables")
-      .addSuccess(Schema.Struct({ id: VegetableId, handle: Handle }))
-      .addError(HandleTakenError, { status: 409 })
-      .setPayload(
-        Schema.Struct({
-          loroDoc: LoroDocSnapshot,
-        }),
-      ),
+    HttpApiEndpoint.post("createVegetable", "/vegetables", {
+      success: Schema.Struct({ id: VegetableId, handle: Handle }),
+      error: HandleTakenError,
+      payload: Schema.Struct({
+        loroDoc: LoroDocSnapshot,
+      }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createVegetableRevision", "/vegetables/:handle/revisions")
-      .addSuccess(Schema.Struct({ id: VegetableRevisionId }))
-      .addError(VegetableNotFoundError, { status: 404 })
-      .setPayload(Schema.Struct({ crdtUpdate: LoroDocUpdate }))
-      .setPath(Schema.Struct({ handle: Handle })),
+    HttpApiEndpoint.post("createVegetableRevision", "/vegetables:handle/revisions", {
+      success: Schema.Struct({ id: VegetableRevisionId }),
+      error: VegetableNotFoundError,
+      payload: Schema.Struct({
+        crdtUpdate: LoroDocUpdate,
+      }),
+      params: Schema.Struct({ handle: Handle }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("evaluateVegetableRevision", "/vegetables/:handle/revision/:revision_id")
-      .addSuccess(Schema.Struct({ id: VegetableRevisionId }))
-      .addError(VegetableNotFoundError, { status: 404 })
-      .setPayload(
-        Schema.Struct({
-          approved: Schema.Boolean,
-          reason: Schema.optional(Schema.NonEmptyTrimmedString),
-        }),
-      )
-      .setPath(Schema.Struct({ handle: Handle, revisionId: VegetableRevisionId })),
+    HttpApiEndpoint.post("evaluateVegetableRevision", "/vegetables/:handle/revision/:revision_id", {
+      success: Schema.Struct({ id: VegetableRevisionId }),
+      error: VegetableNotFoundError,
+      payload: Schema.Struct({
+        approved: Schema.Boolean,
+        reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
+      }),
+      params: Schema.Struct({ handle: Handle, revisionId: VegetableRevisionId }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("toggleVegetableBookmark", "/vegetables/:handle/bookmark")
-      .addSuccess(Schema.Literal(true))
-      .addError(VegetableNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: VegetableId })),
+    HttpApiEndpoint.post("toggleVegetableBookmark", "/vegetables/:handle/bookmark", {
+      success: Schema.Literal(true),
+      error: VegetableNotFoundError,
+      params: Schema.Struct({ id: VegetableId }),
+    }),
   ) {}

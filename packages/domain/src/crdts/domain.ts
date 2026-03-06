@@ -10,10 +10,10 @@ import {
 import { PersonId, ProfileId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 
-export const LoroDocUpdate = Schema.Uint8ArrayFromSelf.pipe(Schema.brand("LoroCrdtUpdateEncoded"))
+export const LoroDocUpdate = Schema.Uint8Array.pipe(Schema.brand("LoroCrdtUpdateEncoded"))
 export type LoroDocUpdate = typeof LoroDocUpdate.Type
 
-export const LoroDocSnapshot = Schema.Uint8ArrayFromSelf.pipe(Schema.brand("LoroDocEncoded"))
+export const LoroDocSnapshot = Schema.Uint8Array.pipe(Schema.brand("LoroDocEncoded"))
 export type LoroDocSnapshot = typeof LoroDocSnapshot.Type
 
 export const LoroDocFrontier = Schema.Array(
@@ -36,10 +36,10 @@ export const SystemCommit = Schema.TaggedStruct("SystemCommit", {
 })
 export type SystemCommit = typeof SystemCommit.Type
 
-export const CrdtCommit = Schema.Union(HumanCommit, SystemCommit)
+export const CrdtCommit = Schema.Union([HumanCommit, SystemCommit])
 export type CrdtCommit = typeof CrdtCommit.Type
 
-export const CrdtCommitEncoded = Schema.parseJson(CrdtCommit)
+export const CrdtCommitEncoded = Schema.fromJsonString(CrdtCommit)
 
 export const PostLocalizedDataLoro = loroSchema.LoroMap(
   {

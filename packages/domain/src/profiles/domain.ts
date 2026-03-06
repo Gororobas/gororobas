@@ -1,7 +1,7 @@
 /**
  * Profile domain entity - base for Person and Organization.
  */
-import { Schema } from "effect"
+import { Schema, Struct } from "effect"
 
 import { ProfileType, ProfileVisibility } from "../common/enums.js"
 import { ImageId, OrganizationId, PersonId } from "../common/ids.js"
@@ -14,7 +14,7 @@ const CoreProfileRow = Schema.Struct({
   bio: Schema.NullishOr(TiptapDocument),
   handle: Handle,
   location: Schema.NullishOr(Schema.String),
-  name: Schema.NonEmptyTrimmedString,
+  name: Schema.Trimmed.check(Schema.isNonEmpty()),
   photoId: Schema.NullishOr(ImageId),
   visibility: ProfileVisibility,
 })
@@ -31,13 +31,13 @@ export const OrganizationProfileRow = Schema.Struct({
   type: Schema.Literal("ORGANIZATION" satisfies (typeof ProfileType.literals)[1]),
 })
 
-export const ProfileRow = Schema.Union(PersonProfileRow, OrganizationProfileRow)
+export const ProfileRow = Schema.Union([PersonProfileRow, OrganizationProfileRow])
 export type ProfileRow = typeof ProfileRow.Type
 
-export const ProfileRowUpdate = ProfileRow.pipe(
-  Schema.omit("createdAt", "id", "type", "updatedAt"),
-  Schema.partial,
-)
+export const ProfileRowUpdate = CoreProfileRow.mapFields(
+  Struct.omit(["createdAt", "updatedAt"]),
+).mapFields(Struct.map(Schema.optional))
+
 export type ProfileRowUpdate = typeof ProfileRowUpdate.Type
 
 export const OrganizationProfilePageData = Schema.Struct({
@@ -50,7 +50,7 @@ export const PersonProfilePageData = Schema.Struct({
 })
 export type PersonProfilePageData = typeof PersonProfilePageData.Type
 
-export const ProfilePageData = Schema.Union(OrganizationProfilePageData, PersonProfilePageData)
+export const ProfilePageData = Schema.Union([OrganizationProfilePageData, PersonProfilePageData])
 export type ProfilePageData = typeof ProfilePageData.Type
 
 export const ProfileMetadataResult = Schema.Struct({

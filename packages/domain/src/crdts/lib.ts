@@ -67,11 +67,11 @@ export const modifyLoroDocWithCommit = Effect.fn("modifyLoroDocWithCommit")(func
   cleanFinalDocument.applyDiff(diff)
 
   cleanFinalDocument.commit({
-    message: yield* Schema.encode(CrdtCommitEncoded)(commit),
+    message: yield* Schema.encodeEffect(CrdtCommitEncoded)(commit),
     timestamp: yield* Clock.currentTimeMillis,
   })
 
   return cleanFinalDocument
 })
 
-export const EMPTY_LORO_DOC_FRONTIER = LoroDocFrontier.make([])
+export const EMPTY_LORO_DOC_FRONTIER = LoroDocFrontier.makeUnsafe([])

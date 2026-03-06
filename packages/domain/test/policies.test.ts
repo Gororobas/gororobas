@@ -2,19 +2,21 @@
  * Policy tests using property-based testing.
  */
 import { describe, it } from "@effect/vitest"
-import { Arbitrary, Effect, FastCheck } from "effect"
+import { Effect, Layer, Schema } from "effect"
+import { FastCheck } from "effect/testing"
+import { v7 } from "uuid"
 
 import Policies from "../src/authorization/policies.js"
 import {
   AccountSession,
-  type CorePostMetadata,
+  CorePostMetadata,
+  IdGen,
   InformationVisibility,
-  type OrganizationRow,
-  OrganizationAccessLevel,
   OrganizationId,
+  OrganizationRow,
   OrganizationType,
-  PlatformAccessLevel,
   PersonId,
+  PlatformAccessLevel,
   ProfileId,
   Session,
 } from "../src/index.js"
@@ -24,24 +26,27 @@ import {
   runPolicySuccess,
 } from "./policy-test-helpers.js"
 
+const IdGenTest = Layer.succeed(IdGen, {
+  generate: () => v7(),
+})
+
 // ─── Arbitraries ───────────────────────────────────────────────────────────────
 
-const sessionArbitrary = Arbitrary.make(Session)
-const accountSessionArbitrary = Arbitrary.make(AccountSession)
-const personIdArbitrary = Arbitrary.make(PersonId)
-const visibilityArbitrary = Arbitrary.make(InformationVisibility)
+const sessionArbitrary = Schema.toArbitrary(Session)
+const accountSessionArbitrary = Schema.toArbitrary(AccountSession)
+const personIdArbitrary = Schema.toArbitrary(PersonId)
+const visibilityArbitrary = Schema.toArbitrary(InformationVisibility)
 
-const organizationTypeArbitrary = Arbitrary.make(OrganizationType)
-const platformAccessLevelArbitrary = Arbitrary.make(PlatformAccessLevel)
-
-
+const organizationTypeArbitrary = Schema.toArbitrary(OrganizationType)
+const platformAccessLevelArbitrary = Schema.toArbitrary(PlatformAccessLevel)
+const organizationIdArbitrary = Schema.toArbitrary(OrganizationId)
 
 const organizationArbitrary = FastCheck.tuple(
-  Arbitrary.make(OrganizationId),
+  organizationIdArbitrary,
   visibilityArbitrary,
   organizationTypeArbitrary,
-).map(
-  ([id, membersVisibility, type]): OrganizationRow => ({
+).map(([id, membersVisibility, type]) =>
+  OrganizationRow.makeUnsafe({
     id,
     membersVisibility,
     type,
@@ -50,16 +55,13 @@ const organizationArbitrary = FastCheck.tuple(
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
 
-function createTestPost(
-  ownerProfileId: PersonId  ,
-  visibility: InformationVisibility = "PUBLIC",
-): CorePostMetadata {
-  return {
+function createTestPost(ownerProfileId: PersonId, visibility: InformationVisibility = "PUBLIC") {
+  return CorePostMetadata.makeUnsafe({
     handle: "test-post" as CorePostMetadata["handle"],
     ownerProfileId: ownerProfileId as ProfileId,
     publishedAt: null,
     visibility,
-  }
+  })
 }
 
 // ─── Preconditions ─────────────────────────────────────────────────────────────
@@ -134,18 +136,20 @@ describe("Policies", () => {
     it.effect("public posts are viewable by anyone", () =>
       assertPropertyEffect(sessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const post = createTestPost(PersonId.make(crypto.randomUUID()), "PUBLIC")
+          const personId = yield* IdGen.make(PersonId)
+          const post = createTestPost(personId, "PUBLIC")
           return yield* runPolicySuccess(Policies.posts.canView(post), session)
-        }),
+        }).pipe(Effect.provide(IdGenTest)),
       ),
     )
 
     it.effect("community posts are viewable by trusted users", () =>
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
         Effect.gen(function* () {
-          const post = createTestPost(PersonId.make(crypto.randomUUID()), "COMMUNITY")
+          const personId = yield* IdGen.make(PersonId)
+          const post = createTestPost(personId, "COMMUNITY")
           return yield* runPolicySuccess(Policies.posts.canView(post), session)
-        }),
+        }).pipe(Effect.provide(IdGenTest)),
       ),
     )
 
@@ -349,26 +353,28 @@ describe("Policies", () => {
     it.effect("public organization members are viewable by anyone", () =>
       assertPropertyEffect(sessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const org: OrganizationRow = {
-            id: OrganizationId.make(crypto.randomUUID()),
+          const orgId = yield* IdGen.make(OrganizationId)
+          const org = OrganizationRow.makeUnsafe({
+            id: orgId,
             membersVisibility: "PUBLIC",
             type: "COMMERCIAL",
-          }
+          })
           return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
-        }),
+        }).pipe(Effect.provide(IdGenTest)),
       ),
     )
 
     it.effect("community organization members are viewable by trusted users", () =>
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
         Effect.gen(function* () {
-          const org: OrganizationRow = {
-            id: OrganizationId.make(crypto.randomUUID()),
+          const orgId = yield* IdGen.make(OrganizationId)
+          const org = OrganizationRow.makeUnsafe({
+            id: orgId,
             membersVisibility: "COMMUNITY",
             type: "COMMERCIAL",
-          }
+          })
           return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
-        }),
+        }).pipe(Effect.provide(IdGenTest)),
       ),
     )
 

@@ -74,6 +74,7 @@
     "**/ios",
     "**/android",
     "**/coverage",
-    "**/.git"
+    "**/.git",
+    "**/effect-v4/**"
   ]
 }

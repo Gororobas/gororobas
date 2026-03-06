@@ -14,47 +14,49 @@ import { ResourceNotFoundError } from "./errors.js"
 
 export class ResourcesApiGroup extends HttpApiGroup.make("resources")
   .add(
-    HttpApiEndpoint.get("searchResources", "/resources")
-      .addSuccess(Schema.Array(ResourceCardData))
-      .setUrlParams(ResourceSearchParams),
+    HttpApiEndpoint.get("searchResources", "/resources", {
+      success: Schema.Array(ResourceCardData),
+      query: ResourceSearchParams,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("getResourceByHandle", "/resources/:handle")
-      .addSuccess(ResourcePageData)
-      .addError(ResourceNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ handle: Handle })),
+    HttpApiEndpoint.get("getResourceByHandle", "/resources/:handle", {
+      success: ResourcePageData,
+      error: ResourceNotFoundError,
+      params: Schema.Struct({ handle: Handle }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createResource", "/resources")
-      .addSuccess(Schema.Struct({ id: ResourceId, handle: Handle }))
-      .addError(HandleTakenError, { status: 409 })
-      .setPayload(
-        Schema.Struct({
-          loroDoc: LoroDocSnapshot,
-        }),
-      ),
+    HttpApiEndpoint.post("createResource", "/resources", {
+      success: Schema.Struct({ id: ResourceId, handle: Handle }),
+      error: HandleTakenError,
+      payload: Schema.Struct({
+        loroDoc: LoroDocSnapshot,
+      }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("proposeResourceRevision", "/resources/:id/revisions")
-      .addSuccess(Schema.Struct({ id: Schema.String }))
-      .addError(ResourceNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: ResourceId }))
-      .setPayload(
-        Schema.Struct({
-          crdtUpdate: LoroDocUpdate,
-          locale: Schema.optional(Locale),
-        }),
-      ),
+    HttpApiEndpoint.post("proposeResourceRevision", "/resources/:id/revisions", {
+      success: Schema.Struct({ id: Schema.String }),
+      error: ResourceNotFoundError.pipe(HttpApiSchema.status(404)),
+      params: Schema.Struct({ id: ResourceId }),
+      payload: Schema.Struct({
+        crdtUpdate: LoroDocUpdate,
+        locale: Schema.optional(Locale),
+      }),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("getResourceLink", "/go/:id")
-      .addSuccess(Schema.Struct({ url: Schema.NonEmptyTrimmedString }))
-      .addError(ResourceNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: ResourceId })),
+    HttpApiEndpoint.get("getResourceLink", "/go/:id", {
+      success: Schema.Struct({ url: Schema.Trimmed.check(Schema.isNonEmpty()) }),
+      error: ResourceNotFoundError,
+      params: Schema.Struct({ id: ResourceId }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("toggleResourceBookmark", "/resources/:id/bookmark")
-      .addSuccess(Schema.Literal(true))
-      .addError(ResourceNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: ResourceId })),
+    HttpApiEndpoint.post("toggleResourceBookmark", "/resources/:id/bookmark", {
+      success: Schema.Literal(true),
+      error: ResourceNotFoundError,
+      params: Schema.Struct({ id: ResourceId }),
+    }),
   ) {}

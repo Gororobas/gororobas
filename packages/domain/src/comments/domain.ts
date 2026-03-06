@@ -5,10 +5,11 @@ import { Schema } from "effect"
 
 import { Locale, ModerationStatus, TranslationSource } from "../common/enums.js"
 import { CommentId, PostId, ProfileId, ResourceId } from "../common/ids.js"
+import { TimestampColumn } from "../common/primitives.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const Comment = Schema.Struct({
-  createdAt: Schema.DateFromString,
+  createdAt: TimestampColumn,
   currentCrdtFrontier: Schema.Unknown,
   id: CommentId,
   moderationStatus: Schema.NullishOr(ModerationStatus),
@@ -16,7 +17,7 @@ export const Comment = Schema.Struct({
   parentCommentId: Schema.NullishOr(CommentId),
   postId: Schema.NullishOr(PostId),
   resourceId: Schema.NullishOr(ResourceId),
-  updatedAt: Schema.DateFromString,
+  updatedAt: TimestampColumn,
 })
 export type Comment = typeof Comment.Type
 
@@ -33,15 +34,15 @@ export type CommentTranslation = typeof CommentTranslation.Type
 
 /** API response schemas */
 export const CommentData = Schema.Struct({
-  content: Schema.parseJson(TiptapDocument),
-  createdAt: Schema.DateFromString,
+  content: Schema.fromJsonString(TiptapDocument),
+  createdAt: TimestampColumn,
   id: CommentId,
   moderationStatus: Schema.NullishOr(ModerationStatus),
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullishOr(CommentId),
   postId: Schema.NullishOr(PostId),
   resourceId: Schema.NullishOr(ResourceId),
-  updatedAt: Schema.DateFromString,
+  updatedAt: TimestampColumn,
 })
 export type CommentData = typeof CommentData.Type
 

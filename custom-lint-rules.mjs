@@ -314,7 +314,11 @@ const noDirectIdConstructionRule = {
 
         const callee = node.callee
         if (callee.type !== "MemberExpression") return
-        if (callee.property.type !== "Identifier" || callee.property.name !== "make") return
+        if (
+          callee.property.type !== "Identifier" ||
+          (callee.property.name !== "makeUnsafe" && callee.property.name !== "makeOption")
+        )
+          return
 
         const obj = callee.object
         if (obj.type !== "Identifier") return
@@ -346,7 +350,7 @@ const noDirectIdConstructionRule = {
     },
     messages: {
       noDirectIdMake:
-        "Do not use {{idType}}.make() directly. Use yield* IdGen.make({{idType}}) to generate IDs through the IdGen service.",
+        "Do not use {{idType}}.makeUnsafe/makeOption() directly. Use yield* IdGen.make({{idType}}) to generate IDs through the IdGen service.",
       noHardcodedUuid:
         "Hardcoded UUID detected. Use yield* IdGen.make(XxxId) to generate IDs through the IdGen service.",
     },
@@ -356,10 +360,10 @@ const noDirectIdConstructionRule = {
 }
 
 /**
- * Custom ESLint rule to ensure Schema.TaggedError classes end with "Error" suffix.
+ * Custom ESLint rule to ensure Schema.TaggedErrorClass classes end with "Error" suffix.
  * Consistent naming convention: ProfileNotFoundError, not ProfileNotFound.
  */
-const taggedErrorSuffixRule = {
+const taggedErrorClassSuffixRule = {
   create(context) {
     return {
       ClassDeclaration(node) {
@@ -368,9 +372,9 @@ const taggedErrorSuffixRule = {
         const heritage = node.superClass
         if (!heritage) return
 
-        // Check if extends Schema.TaggedError
-        // Pattern: Schema.TaggedError<...>()("...", ...)
-        let isTaggedError = false
+        // Check if extends Schema.TaggedErrorClass
+        // Pattern: Schema.TaggedErrorClass<...>()("...", ...)
+        let isTaggedErrorClass = false
 
         if (
           heritage.type === "CallExpression" &&
@@ -379,12 +383,12 @@ const taggedErrorSuffixRule = {
           heritage.callee.callee.object.type === "Identifier" &&
           heritage.callee.callee.object.name === "Schema" &&
           heritage.callee.callee.property.type === "Identifier" &&
-          heritage.callee.callee.property.name === "TaggedError"
+          heritage.callee.callee.property.name === "TaggedErrorClass"
         ) {
-          isTaggedError = true
+          isTaggedErrorClass = true
         }
 
-        if (!isTaggedError) return
+        if (!isTaggedErrorClass) return
 
         const className = node.id.name
         if (!className.endsWith("Error")) {
@@ -399,11 +403,11 @@ const taggedErrorSuffixRule = {
   },
   meta: {
     docs: {
-      description: "Require Schema.TaggedError class names to end with 'Error' suffix",
+      description: "Require Schema.TaggedErrorClass class names to end with 'Error' suffix",
     },
     messages: {
       missingErrorSuffix:
-        "Schema.TaggedError class '{{name}}' should end with 'Error' suffix (e.g., ProfileNotFoundError, not ProfileNotFound).",
+        "Schema.TaggedErrorClass class '{{name}}' should end with 'Error' suffix (e.g., ProfileNotFoundError, not ProfileNotFound).",
     },
     schema: [],
     type: "problem",
@@ -420,6 +424,6 @@ export default {
     "no-sql-type-parameter": noSqlTypeParameterRule,
     "pipe-max-arguments": pipeMaxArgumentsRule,
     "prefer-option-from-nullable": preferOptionFromNullableRule,
-    "tagged-error-suffix": taggedErrorSuffixRule,
+    "tagged-error-suffix": taggedErrorClassSuffixRule,
   },
 }

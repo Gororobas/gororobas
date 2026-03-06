@@ -6,7 +6,7 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { EventAttendanceMode, InformationVisibility, Locale, PostKind } from "../common/enums.js"
 import { PostId, ProfileId } from "../common/ids.js"
-import { Handle, PaginationOptions } from "../common/primitives.js"
+import { Handle, PaginationOptions, TimestampColumn } from "../common/primitives.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const PostSearchParams = Schema.Struct({
@@ -26,45 +26,45 @@ export const PostCardData = Schema.Struct({
   handle: Handle,
   id: PostId,
   owner_profile_id: ProfileId,
-  published_at: Schema.NullishOr(Schema.DateFromString),
+  published_at: Schema.NullishOr(TimestampColumn),
   kind: PostKind,
   visibility: InformationVisibility,
 })
 export type PostCardData = typeof PostCardData.Type
 
 export const NoteData = Schema.Struct({
-  content: Schema.parseJson(TiptapDocument),
-  created_at: Schema.DateFromString,
+  content: Schema.fromJsonString(TiptapDocument),
+  created_at: TimestampColumn,
   handle: Handle,
   id: PostId,
   locale: Locale,
   owner_profile_id: ProfileId,
-  published_at: Schema.NullishOr(Schema.DateFromString),
+  published_at: Schema.NullishOr(TimestampColumn),
   kind: Schema.Literal("NOTE" satisfies (typeof PostKind.literals)[0]),
-  updated_at: Schema.DateFromString,
+  updated_at: TimestampColumn,
   visibility: InformationVisibility,
 })
 export type NoteData = typeof NoteData.Type
 
 export const EventData = Schema.Struct({
   attendance_mode: Schema.NullishOr(EventAttendanceMode),
-  content: Schema.parseJson(TiptapDocument),
-  created_at: Schema.DateFromString,
-  end_date: Schema.NullishOr(Schema.DateFromString),
+  content: Schema.fromJsonString(TiptapDocument),
+  created_at: TimestampColumn,
+  end_date: Schema.NullishOr(TimestampColumn),
   handle: Handle,
   id: PostId,
   locale: Locale,
   location_or_url: Schema.NullishOr(Schema.String),
   owner_profile_id: ProfileId,
-  published_at: Schema.NullishOr(Schema.DateFromString),
-  start_date: Schema.DateFromString,
+  published_at: Schema.NullishOr(TimestampColumn),
+  start_date: TimestampColumn,
   kind: Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1]),
-  updated_at: Schema.DateFromString,
+  updated_at: TimestampColumn,
   visibility: InformationVisibility,
 })
 export type EventData = typeof EventData.Type
 
-export const PostData = Schema.Union(NoteData, EventData)
+export const PostData = Schema.Union([NoteData, EventData])
 export type PostData = typeof PostData.Type
 
 export const CreateNoteData = Schema.Struct({
@@ -77,10 +77,10 @@ export type CreateNoteData = typeof CreateNoteData.Type
 export const CreateEventData = Schema.Struct({
   attendance_mode: Schema.optional(Schema.NullishOr(EventAttendanceMode)),
   content: TiptapDocument,
-  end_date: Schema.optional(Schema.NullishOr(Schema.DateFromString)),
+  end_date: Schema.optional(Schema.NullishOr(TimestampColumn)),
   handle: Handle,
   location_or_url: Schema.optional(Schema.NullishOr(Schema.String)),
-  start_date: Schema.DateFromString,
+  start_date: TimestampColumn,
   visibility: InformationVisibility,
 })
 export type CreateEventData = typeof CreateEventData.Type
@@ -93,61 +93,69 @@ export type UpdateNoteData = typeof UpdateNoteData.Type
 export const PostHistoryEntry = Schema.Struct({
   author_id: ProfileId,
   content: TiptapDocument,
-  created_at: Schema.DateFromString,
+  created_at: TimestampColumn,
   version: Schema.Int,
 })
 export type PostHistoryEntry = typeof PostHistoryEntry.Type
 
 export class PostsApiGroup extends HttpApiGroup.make("posts")
   .add(
-    HttpApiEndpoint.get("searchPosts", "/posts")
-      .addSuccess(Schema.Array(PostCardData))
-      .setUrlParams(PostSearchParams),
+    HttpApiEndpoint.get("searchPosts", "/posts", {
+      success: Schema.Array(PostCardData),
+      query: PostSearchParams,
+    }),
   )
   .add(
-    HttpApiEndpoint.get("getPost", "/posts/:id")
-      .addSuccess(PostData)
-      .addError(PostNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: PostId })),
+    HttpApiEndpoint.get("getPost", "/posts/:id", {
+      success: PostData,
+      error: PostNotFoundError,
+      params: Schema.Struct({ id: PostId }),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("getPostByHandle", "/posts/handle/:handle")
-      .addSuccess(PostData)
-      .addError(PostNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ handle: Handle })),
+    HttpApiEndpoint.get("getPostByHandle", "/posts/handle/:handle", {
+      success: PostData,
+      error: PostNotFoundError,
+      params: Schema.Struct({ handle: Handle }),
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createNote", "/profiles/:profile_id/notes")
-      .addSuccess(NoteData)
-      .addError(ProfileNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ profileId: ProfileId }))
-      .setPayload(CreateNoteData),
+    HttpApiEndpoint.post("createNote", "/profiles/:profile_id/notes", {
+      success: NoteData,
+      error: ProfileNotFoundError,
+      params: Schema.Struct({ profileId: ProfileId }),
+      payload: CreateNoteData,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("createEvent", "/profiles/:profile_id/events")
-      .addSuccess(EventData)
-      .addError(ProfileNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ profileId: ProfileId }))
-      .setPayload(CreateEventData),
+    HttpApiEndpoint.post("createEvent", "/profiles/:profile_id/events", {
+      success: EventData,
+      error: ProfileNotFoundError,
+      params: Schema.Struct({ profileId: ProfileId }),
+      payload: CreateEventData,
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateNote", "/posts/:id")
-      .addSuccess(NoteData)
-      .addError(PostNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: PostId }))
-      .setPayload(UpdateNoteData),
+    HttpApiEndpoint.patch("updateNote", "/posts/:id", {
+      success: NoteData,
+      error: PostNotFoundError,
+      params: Schema.Struct({ id: PostId }),
+      payload: UpdateNoteData,
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deletePost", "/posts/:id")
-      .addSuccess(Schema.Void)
-      .addError(PostNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: PostId })),
+    HttpApiEndpoint.delete("deletePost", "/posts/:id", {
+      success: Schema.Void,
+      error: PostNotFoundError,
+      params: Schema.Struct({ id: PostId }),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("getPostHistory", "/posts/:id/history")
-      .addSuccess(Schema.Array(PostHistoryEntry))
-      .addError(PostNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: PostId })),
+    HttpApiEndpoint.get("getPostHistory", "/posts/:id/history", {
+      success: Schema.Array(PostHistoryEntry),
+      error: PostNotFoundError,
+      params: Schema.Struct({ id: PostId }),
+    }),
   ) {}
 
 import { ProfileNotFoundError } from "../profiles/errors.js"

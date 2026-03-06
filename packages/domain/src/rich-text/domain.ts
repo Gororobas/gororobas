@@ -3,15 +3,13 @@
  */
 import { Schema } from "effect"
 
-const UnknownTiptapAttrs = Schema.UndefinedOr(
-  Schema.Record({ key: Schema.NonEmptyString, value: Schema.Any }),
-)
+const UnknownTiptapAttrs = Schema.UndefinedOr(Schema.Record(Schema.NonEmptyString, Schema.Any))
 
 const TiptapText = Schema.String
 
 const TiptapMark = Schema.Struct({
   attrs: Schema.optional(UnknownTiptapAttrs),
-  type: Schema.NonEmptyTrimmedString,
+  type: Schema.Trimmed.pipe(Schema.check(Schema.isNonEmpty())),
 })
 
 export const TiptapTextNode = Schema.Struct({
@@ -25,7 +23,7 @@ const tiptapNodeFields = {
   attrs: Schema.optional(UnknownTiptapAttrs),
   marks: Schema.optional(Schema.Array(TiptapMark)),
   text: Schema.optional(TiptapText),
-  type: Schema.NonEmptyTrimmedString,
+  type: Schema.Trimmed.pipe(Schema.check(Schema.isNonEmpty())),
 }
 
 export interface TiptapNode extends Schema.Struct.Type<typeof tiptapNodeFields> {
@@ -38,7 +36,7 @@ export const TiptapNode = Schema.Struct({
       Schema.suspend(
         (): Schema.Schema<TiptapNode | TiptapTextNode> =>
           // @ts-expect-error Not sure how to type this correctly
-          Schema.Union(TiptapNode, TiptapTextNode),
+          Schema.Union([TiptapNode, TiptapTextNode]),
       ),
     ),
   ),

@@ -15,7 +15,7 @@ export const TagRow = Schema.Struct({
   createdById: Schema.NullishOr(PersonId),
   description: Schema.NullishOr(TiptapDocument),
   handle: Handle,
-  names: Schema.parseJson(Schema.Record({ key: Locale, value: Schema.NonEmptyTrimmedString })),
+  names: Schema.fromJsonString(Schema.Record(Locale, Schema.Trimmed.check(Schema.isNonEmpty()))),
 })
 export type TagRow = typeof TagRow.Type
 

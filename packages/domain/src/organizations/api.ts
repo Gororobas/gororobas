@@ -18,57 +18,61 @@ import { LastManagerCannotLeaveError, OrganizationNotFoundError } from "./errors
 
 export class OrganizationsApiGroup extends HttpApiGroup.make("organizations")
   .add(
-    HttpApiEndpoint.post("createOrganization", "/organizations")
-      .addSuccess(Schema.Struct({ id: OrganizationId, handle: Handle }))
-      .addError(HandleTakenError, { status: 409 })
-      .setPayload(CreateOrganizationData),
+    HttpApiEndpoint.post("createOrganization", "/organizations", {
+      success: Schema.Struct({ id: OrganizationId, handle: Handle }),
+      error: HandleTakenError,
+      payload: CreateOrganizationData,
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateOrganization", "/organizations/:id")
-      .addSuccess(Schema.Literal(true))
-      .addError(OrganizationNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: OrganizationId }))
-      .setPayload(UpdateOrganizationData),
+    HttpApiEndpoint.patch("updateOrganization", "/organizations/:id", {
+      success: Schema.Literal(true),
+      error: OrganizationNotFoundError,
+      params: Schema.Struct({ id: OrganizationId }),
+      payload: UpdateOrganizationData,
+    }),
   )
   .add(
-    HttpApiEndpoint.post("inviteMember", "/organizations/:id/members")
-      .addSuccess(OrganizationMembershipData)
-      .addError(OrganizationNotFoundError, { status: 404 })
-      .addError(PersonNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: OrganizationId }))
-      .setPayload(Schema.Struct({ person_id: PersonId, access_level: OrganizationAccessLevel })),
+    HttpApiEndpoint.post("inviteMember", "/organizations/:id/members", {
+      success: OrganizationMembershipData,
+      error: [OrganizationNotFoundError, PersonNotFoundError],
+      params: Schema.Struct({ id: OrganizationId }),
+      payload: Schema.Struct({ person_id: PersonId, access_level: OrganizationAccessLevel }),
+    }),
   )
   .add(
-    HttpApiEndpoint.patch("updateMemberRole", "/organizations/:id/members/:person_id")
-      .addSuccess(OrganizationMembershipData)
-      .addError(OrganizationNotFoundError, { status: 404 })
-      .addError(PersonNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: OrganizationId, person_id: PersonId }))
-      .setPayload(Schema.Struct({ access_level: OrganizationAccessLevel })),
+    HttpApiEndpoint.patch("updateMemberRole", "/organizations/:id/members/:person_id", {
+      success: OrganizationMembershipData,
+      error: [OrganizationNotFoundError, PersonNotFoundError],
+      params: Schema.Struct({ id: OrganizationId, person_id: PersonId }),
+      payload: Schema.Struct({ access_level: OrganizationAccessLevel }),
+    }),
   )
   .add(
-    HttpApiEndpoint.del("removeMember", "/organizations/:id/members/:person_id")
-      .addSuccess(Schema.Void)
-      .addError(OrganizationNotFoundError, { status: 404 })
-      .addError(LastManagerCannotLeaveError, { status: 400 })
-      .setPath(Schema.Struct({ id: OrganizationId, person_id: PersonId })),
+    HttpApiEndpoint.delete("removeMember", "/organizations/:id/members/:person_id", {
+      success: Schema.Void,
+      error: [OrganizationNotFoundError, LastManagerCannotLeaveError],
+      params: Schema.Struct({ id: OrganizationId, person_id: PersonId }),
+    }),
   )
   .add(
-    HttpApiEndpoint.del("leaveOrganization", "/organizations/:id/members/me")
-      .addSuccess(Schema.Void)
-      .addError(OrganizationNotFoundError, { status: 404 })
-      .addError(LastManagerCannotLeaveError, { status: 400 })
-      .setPath(Schema.Struct({ id: OrganizationId })),
+    HttpApiEndpoint.delete("leaveOrganization", "/organizations/:id/members/me", {
+      success: Schema.Void,
+      error: [OrganizationNotFoundError, LastManagerCannotLeaveError],
+      params: Schema.Struct({ id: OrganizationId }),
+    }),
   )
   .add(
-    HttpApiEndpoint.del("deleteOrganization", "/organizations/:id")
-      .addSuccess(Schema.Void)
-      .addError(OrganizationNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: OrganizationId })),
+    HttpApiEndpoint.delete("deleteOrganization", "/organizations/:id", {
+      success: Schema.Void,
+      error: OrganizationNotFoundError,
+      params: Schema.Struct({ id: OrganizationId }),
+    }),
   )
   .add(
-    HttpApiEndpoint.get("listMembers", "/organizations/:id/members")
-      .addSuccess(Schema.Array(OrganizationMembershipData))
-      .addError(OrganizationNotFoundError, { status: 404 })
-      .setPath(Schema.Struct({ id: OrganizationId })),
+    HttpApiEndpoint.get("listMembers", "/organizations/:id/members", {
+      success: Schema.Array(OrganizationMembershipData),
+      error: OrganizationNotFoundError,
+      params: Schema.Struct({ id: OrganizationId }),
+    }),
   ) {}
