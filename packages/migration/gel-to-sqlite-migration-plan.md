@@ -276,7 +276,7 @@ export const auth = betterAuth({
 
 ### Step 1: Setup Migration Infrastructure
 1. Create `packages/migration/package.json` with dependencies:
-   - `effect`, `@effect/sql`, `@effect/sql-sqlite-bun`
+   - `effect`, `@effect/sql-sqlite-bun`
    - `loro-crdt`, `loro-mirror`
    - `better-auth`
    - `json-diff-ts` for reading existing diffs

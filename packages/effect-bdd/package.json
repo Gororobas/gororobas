@@ -30,9 +30,9 @@
   "dependencies": {
     "@cucumber/gherkin": "^38.0.0",
     "@cucumber/messages": "^32.0.1",
-    "@effect/platform-bun": "^4.0.0-beta.28",
+    "@effect/platform-bun": "catalog:",
     "effect": "catalog:",
-    "glob": "^13.0.6"
+    "glob": "catalog:"
   },
   "devDependencies": {
     "@effect/build-utils": "^0.7.9",

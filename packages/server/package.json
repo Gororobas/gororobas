@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@durable-streams/server": "^0.2.1",
-    "@effect/platform-bun": "^4.0.0-beta.28",
+    "@effect/platform-bun": "catalog:",
     "@effect/sql-sqlite-bun": "^4.0.0-beta.28",
     "@gororobas/domain": "workspace:^",
     "@tiptap/core": "catalog:",
@@ -35,7 +35,7 @@
     "@tiptap/pm": "catalog:",
     "@tiptap/starter-kit": "catalog:",
     "better-auth": "^1.5.4",
-    "better-auth-effect": "^0.3.3",
+    "better-auth-effect": "^0.4.1",
     "effect": "catalog:",
     "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
