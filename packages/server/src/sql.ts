@@ -1,7 +1,7 @@
 /**
  * SQL client and migrator for application-level data.
  */
-import { BunContext } from "@effect/platform-bun"
+import { BunServices } from "@effect/platform-bun"
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun"
 import { Layer } from "effect"
 
@@ -20,7 +20,7 @@ const makeAppSql = (filename: string | ":memory:") => {
 
   const migrator = SqliteMigrator.layer({
     loader: SqliteMigrator.fromRecord(migrations),
-  }).pipe(Layer.provide(BunContext.layer))
+  }).pipe(Layer.provide(BunServices.layer))
   return migrator.pipe(Layer.provideMerge(client))
 }
 

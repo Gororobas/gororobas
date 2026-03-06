@@ -2,7 +2,7 @@ import { Schema } from "effect"
 /**
  * Profiles HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { Handle } from "../common/primitives.js"
 import { ProfilePageData } from "./domain.js"
@@ -12,7 +12,7 @@ export class ProfilesApiGroup extends HttpApiGroup.make("profiles")
   .add(
     HttpApiEndpoint.get("getProfileByHandle", "/profiles/:handle", {
       success: ProfilePageData,
-      error: ProfileNotFoundError.pipe(HttpApiSchema.status(404)),
+      error: ProfileNotFoundError,
       params: Schema.Struct({ handle: Handle }),
     }),
   )

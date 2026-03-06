@@ -13,15 +13,14 @@ import {
   type PlatformAccessLevel,
 } from "@gororobas/domain"
 import { HandleTakenError } from "@gororobas/domain/common/errors"
-import { DateTime, Effect, Option } from "effect"
+import { DateTime, Effect, Option, ServiceMap } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PeopleRepository } from "./repository.js"
 
-export class People extends Effect.Service<People>()("People", {
-  dependencies: [PeopleRepository.Default],
-  effect: Effect.gen(function* () {
+export class People extends ServiceMap.Service<People>()("People", {
+  make: Effect.gen(function* () {
     const repo = yield* PeopleRepository
     const profilesRepo = yield* ProfilesRepository
     const sql = yield* SqlClient.SqlClient
@@ -38,7 +37,7 @@ export class People extends Effect.Service<People>()("People", {
         return yield* profilesRepo.updateProfileRow({
           id: personId,
           ...data,
-          updatedAt: yield* DateTime.nowAsDate,
+          updatedAt: yield* DateTime.now,
         })
       })
 
@@ -58,7 +57,7 @@ export class People extends Effect.Service<People>()("People", {
         })
 
         const currentSession = yield* Policies.common.assertAuthenticated
-        const now = yield* DateTime.nowAsDate
+        const now = yield* DateTime.now
 
         yield* repo.updateRow({
           id: personId,
@@ -83,7 +82,7 @@ export class People extends Effect.Service<People>()("People", {
         // 1.1. Prohibit if these orgs have 2+ members
         if (orgsWithOtherMembers.length > 0) {
           return yield* new AccountDeletionError({
-            reason: AccountDeletionErrorReason.make({
+            reason: AccountDeletionErrorReason.makeUnsafe({
               organizations: orgsWithOtherMembers.map((o) => o.organizationId),
             }),
           })
@@ -91,7 +90,7 @@ export class People extends Effect.Service<People>()("People", {
 
         // 1.2. Ask for confirmation if they have a single member (the user to be deleted)
         if (confirmation?.deleteOrgs !== true && orgsWhereSoleManager.length > 1) {
-          return AccountDeletionResultConfirmOrgDeletion.make({
+          return AccountDeletionResultConfirmOrgDeletion.makeUnsafe({
             organizations: orgsWhereSoleManager.map((o) => o.organizationId),
           })
         }
@@ -110,7 +109,7 @@ export class People extends Effect.Service<People>()("People", {
               (org) =>
                 profilesRepo.fetchProfileContentCounts(org.organizationId).pipe(
                   Effect.map((contentCount) =>
-                    OrganizationContentCount.make({
+                    OrganizationContentCount.makeUnsafe({
                       organizationId: org.organizationId,
                       contentCount,
                     }),
@@ -122,7 +121,7 @@ export class People extends Effect.Service<People>()("People", {
           { concurrency: "unbounded" },
         )
         if (confirmation?.deleteContent !== true) {
-          return AccountDeletionResultConfirmContentDeletion.make({
+          return AccountDeletionResultConfirmContentDeletion.makeUnsafe({
             personalContentCount,
             organizationContent,
           })
@@ -144,7 +143,7 @@ export class People extends Effect.Service<People>()("People", {
           { concurrency: "unbounded" },
         )
 
-        return AccountDeletionResultSuccess.make({})
+        return AccountDeletionResultSuccess.makeUnsafe({})
       }).pipe(sql.withTransaction)
 
     return {
@@ -154,5 +153,3 @@ export class People extends Effect.Service<People>()("People", {
     } as const
   }),
 }) {}
-
-export const PeopleLive = People.Default

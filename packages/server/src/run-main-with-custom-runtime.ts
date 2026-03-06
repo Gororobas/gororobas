@@ -34,7 +34,7 @@ export const runMainWithCustomRuntime = <E, R>(
     receivedSignal = true
     process.removeListener("SIGINT", onSigint)
     process.removeListener("SIGTERM", onSigint)
-    fiber.unsafeInterruptAsFork(fiber.id())
+    fiber.interruptUnsafe(fiber.id)
   }
 
   process.on("SIGINT", onSigint)

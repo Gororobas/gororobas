@@ -1,6 +1,8 @@
 import { BunHttpServer } from "@effect/platform-bun"
+import { GororobasApi } from "@gororobas/domain"
 import { Layer } from "effect"
-import { HttpApiBuilder, HttpMiddleware } from "effect/unstable/httpapi"
+import { HttpRouter } from "effect/unstable/http"
+import { HttpApiBuilder } from "effect/unstable/httpapi"
 
 import { ApiLive } from "./api-live.js"
 import { AppRuntimeLive } from "./app-runtime.js"
@@ -22,15 +24,18 @@ const Services = Layer.mergeAll(WorkflowsLive).pipe(
   Layer.provideMerge(AuthService.make(auth)),
 )
 
-const HttpLive = HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
+const HttpLive = HttpRouter.serve(
+  HttpApiBuilder.layer(GororobasApi).pipe(
+    Layer.provide(makeBetterAuthRouter(auth)),
+    Layer.provide(Services),
+  ),
+).pipe(
   Layer.provide(
-    HttpApiBuilder.middlewareCors({
+    HttpRouter.cors({
       allowedOrigins: ["http://localhost:5173"],
       credentials: true,
     }),
   ),
-  Layer.provide(makeBetterAuthRouter(auth)),
-  Layer.provide(Services),
   Layer.provide(BunHttpServer.layer({ port: 4000 })),
 )
 

@@ -12,12 +12,12 @@ export const AuthenticationMiddlewareLive = Layer.effect(
         Effect.promise(async () =>
           auth.api.getSession({
             headers: new Headers({
-              cookie: `better-auth.session_token=${Redacted.value<string>(token)}`,
+              cookie: `better-auth.session_token=${Redacted.value(token)}`,
             }),
           }),
         ).pipe(
-          Effect.andThen(Schema.decodeUnknown(CurrentAuthenticationData)),
-          Effect.catchAll(() => Effect.succeed(null)),
+          Effect.andThen(Schema.decodeUnknownSync(CurrentAuthenticationData)),
+          Effect.catchCause(() => Effect.succeed(null)),
         ),
     })
   }),

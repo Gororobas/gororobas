@@ -1,4 +1,4 @@
-import { BunContext } from "@effect/platform-bun"
+import { BunServices } from "@effect/platform-bun"
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun"
 import { Config, Effect, Layer } from "effect"
 /**
@@ -32,12 +32,12 @@ const makeWorkflowsSqlLive = (filename: string) => {
   const client = SqliteClient.layer({ filename })
   const migrator = SqliteMigrator.layer({
     loader: SqliteMigrator.fromRecord(MIGRATIONS),
-  }).pipe(Layer.provide(BunContext.layer))
+  }).pipe(Layer.provide(BunServices.layer))
   return migrator.pipe(Layer.provideMerge(client))
 }
 
 /** SQLite database for production workflows state */
-const WorkflowsSqlLive = Layer.unwrapEffect(
+const WorkflowsSqlLive = Layer.unwrap(
   Effect.gen(function* () {
     const filename = yield* Config.string("WORKFLOWS_DB_FILENAME").pipe(
       Config.withDefault("workflows.db"),

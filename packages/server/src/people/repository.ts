@@ -1,12 +1,12 @@
 import { PersonId, PersonRow, ProfileId, SoleManagerOrganizationMetadata } from "@gororobas/domain"
-import { Effect } from "effect"
+import { Effect, ServiceMap } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-export class PeopleRepository extends Effect.Service<PeopleRepository>()("PeopleRepository", {
-  effect: Effect.gen(function* () {
+export class PeopleRepository extends ServiceMap.Service<PeopleRepository>()("PeopleRepository", {
+  make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
-    const findById = SqlSchema.findOne({
+    const findById = SqlSchema.findOneOption({
       Request: ProfileId,
       Result: PersonRow,
       execute: (id) => sql`SELECT * FROM people WHERE id = ${id}`,

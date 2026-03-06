@@ -1,8 +1,9 @@
 import { stream } from "@durable-streams/client"
-import { HttpRouter, HttpServer } from "@effect/platform"
-import { layerTest as NodeHttpServerLayerTest } from "@effect/platform-node/NodeHttpServer"
-import { describe, it, expect } from "@effect/vitest"
-import { Arbitrary, Effect, FastCheck, Layer, Schema } from "effect"
+import { BunServices } from "@effect/platform-bun"
+import { describe, expect, it } from "@effect/vitest"
+import { Effect, Layer, Schema } from "effect"
+import { FastCheck } from "effect/testing"
+import { HttpRouter, HttpServer } from "effect/unstable/http"
 
 import { makeDurableStreamRouter } from "../../src/durable-streams/router.js"
 import {
@@ -14,10 +15,10 @@ import {
   DurableStreamsServiceLive,
 } from "../../src/durable-streams/service.js"
 
-const VegetableStreamEventArbitrary = Arbitrary.make(VegetableStreamEvent)
+const VegetableStreamEventArbitrary = Schema.toArbitrary(VegetableStreamEvent)
 
-const generateTestEvent = () => {
-  return FastCheck.sample(VegetableStreamEventArbitrary, 1)[0]
+const generateTestEvent = (): VegetableStreamEvent => {
+  return FastCheck.sample(VegetableStreamEventArbitrary, 1)[0] as VegetableStreamEvent
 }
 
 const config: DurableStreamsConfig = {
@@ -27,7 +28,7 @@ const config: DurableStreamsConfig = {
 const ServiceLayer = DurableStreamsServiceLive(config)
 
 const ServerLayer = Layer.provide(
-  Layer.unwrapScoped(
+  Layer.unwrap(
     Effect.gen(function* () {
       const router = yield* makeDurableStreamRouter
       const httpApp = yield* HttpRouter.toHttpApp(router)
@@ -37,7 +38,7 @@ const ServerLayer = Layer.provide(
   ServiceLayer,
 )
 
-const TestLayers = Layer.provideMerge(ServerLayer, NodeHttpServerLayerTest)
+const TestLayers = Layer.provideMerge(ServerLayer, BunServices.layer)
 
 const getBaseUrl = Effect.gen(function* () {
   const server = yield* HttpServer.HttpServer
@@ -93,7 +94,7 @@ const collectBodyAndParseJson = (response: Awaited<ReturnType<typeof stream>>) =
 
 const appendEvent = (baseUrl: string, streamName: string, event: VegetableStreamEvent) =>
   Effect.gen(function* () {
-    const encoded = yield* Schema.encode(VegetableStreamEventBinary)(event)
+    const encoded = yield* Schema.encodeEffect(VegetableStreamEventBinary)(event)
     const response = yield* Effect.tryPromise({
       try: () =>
         fetch(`${baseUrl}/stream/${streamName}`, {
@@ -157,7 +158,7 @@ describe("DurableStream proxy integration", () => {
       const jsonMessages = yield* collectBodyAndParseJson(response)
       expect(jsonMessages).toHaveLength(1)
 
-      const decoded = yield* Schema.decodeUnknown(VegetableStreamEvent)(jsonMessages[0])
+      const decoded = yield* Schema.decodeUnknownEffect(VegetableStreamEvent)(jsonMessages[0])
       expect(decoded.event).toBe(event.event)
       expect(decoded.vegetable_id).toBe(event.vegetable_id)
     }).pipe(Effect.provide(TestLayers)),
@@ -201,7 +202,7 @@ describe("DurableStream proxy integration", () => {
       const secondMessages = yield* collectBodyAndParseJson(secondRead)
       expect(secondMessages).toHaveLength(1)
 
-      const decoded = yield* Schema.decodeUnknown(VegetableStreamEvent)(secondMessages[0])
+      const decoded = yield* Schema.decodeUnknownEffect(VegetableStreamEvent)(secondMessages[0])
       expect(decoded.event).toBe(event2.event)
     }).pipe(Effect.provide(TestLayers)),
   )
@@ -232,7 +233,7 @@ describe("DurableStream proxy integration", () => {
       expect(jsonMessages).toHaveLength(3)
 
       for (let i = 0; i < events.length; i++) {
-        const decoded = yield* Schema.decodeUnknown(VegetableStreamEvent)(jsonMessages[i])
+        const decoded = yield* Schema.decodeUnknownEffect(VegetableStreamEvent)(jsonMessages[i])
         expect(decoded.event).toBe(events[i].event)
         expect(decoded.vegetable_id).toBe(events[i].vegetable_id)
       }
@@ -266,7 +267,7 @@ describe("DurableStream proxy integration", () => {
 
       expect(text.trim()).toBeTruthy()
       const parsed = JSON.parse(text)
-      const decoded = yield* Schema.decodeUnknown(VegetableStreamEvent)(parsed)
+      const decoded = yield* Schema.decodeUnknownEffect(VegetableStreamEvent)(parsed)
       expect(decoded.event).toBe(event.event)
 
       response.cancel()

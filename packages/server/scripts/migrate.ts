@@ -8,10 +8,10 @@ const EFFECT_DIR = "src/db/migrations-effect"
 const ATLAS_ENV = "local"
 
 const MigrationNameArg = Schema.String.pipe(
-  Schema.minLength(1),
-  Schema.pattern(/^[a-z][a-z0-9_]*$/),
-  Schema.annotations({
-    message: () => "Migration name must be lowercase alphanumeric with underscores",
+  Schema.check(Schema.isMinLength(1)),
+  Schema.check(Schema.isPattern(/^[a-z][a-z0-9_]*$/)),
+  Schema.annotate({
+    message: "Migration name must be lowercase alphanumeric with underscores",
   }),
 )
 
@@ -122,7 +122,7 @@ const convertMigrations = Effect.gen(function* () {
     EffectArray.sort(EffectString.Order),
   )
 
-  if (EffectArray.isEmptyArray(sqlFiles)) {
+  if (EffectArray.isEmptyArray(sqlFiles) === true) {
     yield* Effect.log("No SQL migration files found")
     return
   }
@@ -162,7 +162,7 @@ const program = Effect.gen(function* () {
     return yield* Effect.fail(new Error("Missing migration name"))
   }
 
-  const migrationName = yield* Schema.decodeUnknown(MigrationNameArg)(args[0]).pipe(
+  const migrationName = yield* Schema.decodeUnknownEffect(MigrationNameArg)(args[0]).pipe(
     Effect.mapError(
       () => new Error("Invalid migration name. Use lowercase alphanumeric with underscores."),
     ),

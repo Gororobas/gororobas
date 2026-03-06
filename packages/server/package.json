@@ -20,6 +20,7 @@
     "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
     "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "type-check": "tsc -b tsconfig.json",
+    "type-check:watch": "tsc -b tsconfig.json -w",
     "test": "vitest",
     "coverage": "vitest --coverage",
     "migrate": "npx tsx scripts/migrate.ts"
@@ -36,8 +37,10 @@
     "better-auth": "^1.5.4",
     "better-auth-effect": "^0.3.3",
     "effect": "catalog:",
+    "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
-    "loro-mirror": "catalog:"
+    "loro-mirror": "catalog:",
+    "ollama": "^0.6.3"
   },
   "devDependencies": {
     "@ariga/atlas": "latest",
@@ -45,7 +48,7 @@
     "@effect/vitest": "catalog:",
     "@gororobas/effect-bdd": "workspace:^",
     "@types/bun": "latest",
-    "fast-check": "^3.23.2",
+    "fast-check": "latest",
     "sql-formatter": "latest"
   },
   "effect": {

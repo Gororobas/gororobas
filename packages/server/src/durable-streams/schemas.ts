@@ -1,11 +1,17 @@
 import { LoroDocFrontier, VegetableId } from "@gororobas/domain"
-import { Schema } from "effect"
+import { Schema, SchemaGetter } from "effect"
 
-export const createEventBinary = <S extends Schema.Schema.Any>(schema: S) =>
-  Schema.transform(Schema.Uint8ArrayFromSelf, schema, {
-    decode: (bytes) => JSON.parse(new TextDecoder().decode(bytes)),
-    encode: (data) => new TextEncoder().encode(JSON.stringify(data)),
-  })
+export const createEventBinary = <S extends Schema.Top>(schema: S) =>
+  Schema.Uint8Array.pipe(
+    Schema.decodeTo(schema, {
+      decode: SchemaGetter.transform((bytes: Uint8Array) =>
+        JSON.parse(new TextDecoder().decode(bytes)),
+      ),
+      encode: SchemaGetter.transform((data: S["Type"]) =>
+        new TextEncoder().encode(JSON.stringify(data)),
+      ),
+    }),
+  )
 
 export const VegetablesCreate = Schema.Struct({
   event: Schema.Literal("vegetables.create"),
@@ -29,18 +35,18 @@ export const VegetablesDelete = Schema.Struct({
   vegetable_id: VegetableId,
 })
 
-export const VegetableStreamEvent = Schema.Union(
+export const VegetableStreamEvent = Schema.Union([
   VegetablesCreate,
   VegetablesUpdate,
   VegetablesDelete,
-)
+])
 export type VegetableStreamEvent = typeof VegetableStreamEvent.Type
 
 export const VegetableStreamEventBinary = createEventBinary(VegetableStreamEvent)
 
 export const PostsCreate = Schema.Struct({
   event: Schema.Literal("posts.create"),
-  post_id: Schema.UUID.pipe(Schema.brand("PostId")),
+  post_id: Schema.String.pipe(Schema.check(Schema.isUUID(undefined)), Schema.brand("PostId")),
   loro_snapshot: Schema.Uint8ArrayFromBase64,
   materialized_view: Schema.Struct({
     handle: Schema.String,
@@ -52,14 +58,14 @@ export const PostsCreate = Schema.Struct({
 
 export const PostsUpdate = Schema.Struct({
   event: Schema.Literal("posts.update"),
-  post_id: Schema.UUID.pipe(Schema.brand("PostId")),
+  post_id: Schema.String.pipe(Schema.check(Schema.isUUID(undefined)), Schema.brand("PostId")),
   crdt_update: Schema.Uint8ArrayFromBase64,
   from_frontier: LoroDocFrontier,
 })
 
 export const PostsDelete = Schema.Struct({
   event: Schema.Literal("posts.delete"),
-  post_id: Schema.UUID.pipe(Schema.brand("PostId")),
+  post_id: Schema.String.pipe(Schema.check(Schema.isUUID(undefined)), Schema.brand("PostId")),
 })
 
 export const BookmarksVegetablesCreate = Schema.Struct({
@@ -88,7 +94,7 @@ export const BookmarksResourcesDelete = Schema.Struct({
   entity_id: Schema.String,
 })
 
-export const ProfileStreamEvent = Schema.Union(
+export const ProfileStreamEvent = Schema.Union([
   PostsCreate,
   PostsUpdate,
   PostsDelete,
@@ -96,7 +102,7 @@ export const ProfileStreamEvent = Schema.Union(
   BookmarksVegetablesDelete,
   BookmarksResourcesCreate,
   BookmarksResourcesDelete,
-)
+])
 export type ProfileStreamEvent = typeof ProfileStreamEvent.Type
 
 export const ProfileStreamEventBinary = createEventBinary(ProfileStreamEvent)

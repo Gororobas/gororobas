@@ -38,7 +38,7 @@ export class ResourcesApiGroup extends HttpApiGroup.make("resources")
   .add(
     HttpApiEndpoint.post("proposeResourceRevision", "/resources/:id/revisions", {
       success: Schema.Struct({ id: Schema.String }),
-      error: ResourceNotFoundError.pipe(HttpApiSchema.status(404)),
+      error: ResourceNotFoundError,
       params: Schema.Struct({ id: ResourceId }),
       payload: Schema.Struct({
         crdtUpdate: LoroDocUpdate,

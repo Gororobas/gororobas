@@ -21,17 +21,17 @@ export class RevisionWorkflowError extends Data.TaggedError("RevisionWorkflowErr
 /** Create a CRDT fetch function for an entity */
 export const makeFetchCrdt = <EntityId extends string>(config: {
   crdtTableName: string
-  entityIdSchema: Schema.Schema<EntityId, string>
+  entityIdSchema: Schema.Schema<EntityId>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
     const CrdtRow = Schema.Struct({
       id: config.entityIdSchema,
-      loroCrdt: Schema.Uint8ArrayFromSelf,
+      loroCrdt: Schema.Uint8Array,
     })
 
-    return SqlSchema.findOne({
+    return SqlSchema.findOneOption({
       execute: ({ id }) =>
         sql`
           SELECT id, loro_crdt
@@ -46,7 +46,7 @@ export const makeFetchCrdt = <EntityId extends string>(config: {
 /** Create a CRDT insert function for an entity */
 export const makeInsertCrdt = <EntityId extends string>(config: {
   crdtTableName: string
-  entityIdSchema: Schema.Schema<EntityId, string>
+  entityIdSchema: Schema.Schema<EntityId>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
@@ -61,7 +61,7 @@ export const makeInsertCrdt = <EntityId extends string>(config: {
 /** Create a CRDT update function for an entity */
 export const makeUpdateCrdt = <EntityId extends string>(config: {
   crdtTableName: string
-  entityIdSchema: Schema.Schema<EntityId, string>
+  entityIdSchema: Schema.Schema<EntityId>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
@@ -78,8 +78,8 @@ export const makeUpdateCrdt = <EntityId extends string>(config: {
 export const makeInsertRevision = <EntityId extends string, RevisionId extends string>(config: {
   revisionsTableName: string
   entityIdColumn: string
-  entityIdSchema: Schema.Schema<EntityId, string>
-  revisionIdSchema: Schema.Schema<RevisionId, string>
+  entityIdSchema: Schema.Schema<EntityId>
+  revisionIdSchema: Schema.Schema<RevisionId>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
@@ -110,20 +110,20 @@ export const makeInsertRevision = <EntityId extends string, RevisionId extends s
 export const makeFetchRevision = <EntityId extends string, RevisionId extends string>(config: {
   revisionsTableName: string
   entityIdColumn: string
-  entityIdSchema: Schema.Schema<EntityId, string>
-  revisionIdSchema: Schema.Schema<RevisionId, string>
+  entityIdSchema: Schema.Schema<EntityId>
+  revisionIdSchema: Schema.Schema<RevisionId>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
     const RevisionRow = Schema.Struct({
-      crdtUpdate: Schema.Uint8ArrayFromSelf,
+      crdtUpdate: Schema.Uint8Array,
       entityId: config.entityIdSchema,
       evaluation: Schema.NullOr(RevisionEvaluation),
       id: config.revisionIdSchema,
     })
 
-    return SqlSchema.findOne({
+    return SqlSchema.findOneOption({
       execute: ({ revisionId }) =>
         sql`
           SELECT id, ${sql.unsafe(config.entityIdColumn)} as entityId, crdt_update, evaluation
@@ -138,7 +138,7 @@ export const makeFetchRevision = <EntityId extends string, RevisionId extends st
 /** Create a revision update function */
 export const makeUpdateRevision = <RevisionId extends string>(config: {
   revisionsTableName: string
-  revisionIdSchema: Schema.Schema<RevisionId, string>
+  revisionIdSchema: Schema.Schema<RevisionId>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient

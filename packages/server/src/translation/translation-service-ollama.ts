@@ -1,5 +1,5 @@
 import { Locale } from "@gororobas/domain"
-import { Effect, Layer } from "effect"
+import { Effect, ServiceMap } from "effect"
 import ollama from "ollama"
 
 import { CODE_TO_LANG, TranslationError, TranslationService } from "./translation-service.js"
@@ -19,7 +19,8 @@ function generatePrompt({
   ${text}`
 }
 
-export const TranslationServiceOllama = Layer.succeed(TranslationService, {
+export const TranslationServiceOllama = ServiceMap.make(TranslationService, {
+  getServiceId: () => "ollama",
   translate: Effect.fn("TranslationServiceOllama.translate")(function* (
     text: string,
     sourceLocale: Locale,

@@ -6,7 +6,7 @@ import {
   VegetableRow,
   VegetableTranslationRow,
 } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { Effect, Schema, ServiceMap } from "effect"
 /**
  * Vegetables repository with CRDT-based revision workflow.
  */
@@ -28,10 +28,10 @@ const REVISION_CONFIG = {
   revisionsTableName: "vegetable_revisions",
 }
 
-export class VegetablesRepository extends Effect.Service<VegetablesRepository>()(
+export class VegetablesRepository extends ServiceMap.Service<VegetablesRepository>()(
   "VegetablesRepository",
   {
-    effect: Effect.gen(function* () {
+    make: Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
 
       // Query helpers
@@ -70,13 +70,13 @@ export class VegetablesRepository extends Effect.Service<VegetablesRepository>()
       })
 
       // Materialized data queries
-      const findById = SqlSchema.findOne({
+      const findById = SqlSchema.findOneOption({
         execute: (id) => sql`SELECT * FROM vegetables WHERE id = ${id}`,
         Request: VegetableId,
         Result: VegetableRow,
       })
 
-      const findByHandle = SqlSchema.findOne({
+      const findByHandle = SqlSchema.findOneOption({
         execute: (handle) => sql`SELECT * FROM vegetables WHERE handle = ${handle}`,
         Request: Schema.String,
         Result: VegetableRow,
@@ -88,7 +88,7 @@ export class VegetablesRepository extends Effect.Service<VegetablesRepository>()
         Result: VegetableRow,
       })
 
-      const findBySearchableName = SqlSchema.findOne({
+      const findBySearchableName = SqlSchema.findOneOption({
         execute: (pattern) => sql`
           SELECT vt.vegetableId, v.handle
           FROM vegetable_translations vt

@@ -18,7 +18,7 @@ export type LoroDocSnapshot = typeof LoroDocSnapshot.Type
 
 export const LoroDocFrontier = Schema.Array(
   Schema.Struct({
-    peer: Schema.String,
+    peer: Schema.TemplateLiteral([Schema.Number]),
     counter: Schema.Number,
   }),
 ).pipe(Schema.brand("LoroDocFrontier"))

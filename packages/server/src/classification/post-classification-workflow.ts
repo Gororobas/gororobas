@@ -12,7 +12,7 @@ export const PostClassificationWorkflow = Workflow.make({
     content_hash: Schema.String,
   },
   success: Schema.Null,
-  error: Schema.Any, // @TODO how to type errors as schemas for stuff like SqlError?
+  error: Schema.Unknown, // @TODO how to type errors as schemas for stuff like SqlError?
   idempotencyKey: ({ post_id, content_hash }) =>
     postClassificationIdempotencyKey(post_id, content_hash),
 })

@@ -20,12 +20,12 @@ export const LangExtractCharInterval = Schema.Struct({
 })
 export type LangExtractCharInterval = typeof LangExtractCharInterval.Type
 
-export const LangExtractAlignmentStatus = Schema.Literal(
+export const LangExtractAlignmentStatus = Schema.Literals([
   "match_exact",
   "match_greater",
   "match_lesser",
   "match_fuzzy",
-)
+])
 export type LangExtractAlignmentStatus = typeof LangExtractAlignmentStatus.Type
 
 export const CommonExtractionData = Schema.Struct({
@@ -35,10 +35,10 @@ export const CommonExtractionData = Schema.Struct({
   alignment_status: Schema.optional(LangExtractAlignmentStatus),
   description: Schema.optional(Schema.String),
   handle: Handle,
-  attributes: Schema.Record({
-    key: Schema.String,
-    value: Schema.Union(Schema.String, Schema.Array(Schema.String)),
-  }),
+  attributes: Schema.Record(
+    Schema.String,
+    Schema.Union([Schema.String, Schema.Array(Schema.String)]),
+  ),
 })
 
 export const ResolvedExistingVegetableExtraction = Schema.TaggedStruct(
@@ -60,10 +60,10 @@ export const SuggestedVegetableExtraction = Schema.TaggedStruct("SuggestedVegeta
 })
 export type SuggestedVegetableExtraction = typeof SuggestedVegetableExtraction.Type
 
-export const ResolvedVegetableExtraction = Schema.Union(
+export const ResolvedVegetableExtraction = Schema.Union([
   ResolvedExistingVegetableExtraction,
   SuggestedVegetableExtraction,
-)
+])
 export type ResolvedVegetableExtraction = typeof ResolvedVegetableExtraction.Type
 
 export const ResolvedExistingTagExtraction = Schema.TaggedStruct("ResolvedExistingTagExtraction", {
@@ -78,10 +78,10 @@ export const SuggestedTagExtraction = Schema.TaggedStruct("SuggestedTagExtractio
 })
 export type SuggestedTagExtraction = typeof SuggestedTagExtraction.Type
 
-export const ResolvedTagExtraction = Schema.Union(
+export const ResolvedTagExtraction = Schema.Union([
   ResolvedExistingTagExtraction,
   SuggestedTagExtraction,
-)
+])
 export type ResolvedTagExtraction = typeof ResolvedTagExtraction.Type
 
 /**

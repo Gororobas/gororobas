@@ -1,18 +1,18 @@
 import { GororobasApi, Policies, ProfileNotFoundError } from "@gororobas/domain"
 import { Effect, Option } from "effect"
-import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/unstable/httpapi"
 
 import { ProfilesRepository } from "./repository.js"
 
 export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (handlers) =>
   handlers
-    .handle("getProfileByHandle", ({ path }) =>
+    .handle("getProfileByHandle", ({ params }) =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
-        const profile = yield* repo.findByHandle(path.handle).pipe(
+        const profile = yield* repo.findByHandle(params.handle).pipe(
           Effect.flatMap(
             Option.match({
-              onNone: () => Effect.fail(new ProfileNotFoundError({ handle: path.handle })),
+              onNone: () => Effect.fail(new ProfileNotFoundError({ handle: params.handle })),
               onSome: Effect.succeed,
             }),
           ),
@@ -21,25 +21,15 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
         yield* Policies.profiles.canRead(profile)
 
         return profile
-      }).pipe(
-        Effect.catchTags({
-          SqlError: () => new HttpApiError.InternalServerError(),
-          ParseError: () => new HttpApiError.InternalServerError(),
-        }),
-      ),
+      }),
     )
-    .handle("handleAvailability", ({ urlParams }) =>
+    .handle("handleAvailability", ({ query }) =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
 
         return yield* repo
-          .isHandleInUse(urlParams.handle)
-          .pipe(Effect.catchTag("NoSuchElementException", () => Effect.succeed(false)))
-      }).pipe(
-        Effect.catchTags({
-          SqlError: () => new HttpApiError.InternalServerError(),
-          ParseError: () => new HttpApiError.InternalServerError(),
-        }),
-      ),
+          .isHandleInUse(query.handle)
+          .pipe(Effect.catchTag("NoSuchElementError", () => Effect.succeed(false)))
+      }),
     ),
 )

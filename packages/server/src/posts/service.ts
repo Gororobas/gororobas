@@ -5,27 +5,26 @@ import {
   EMPTY_LORO_DOC_FRONTIER,
   type EventData,
   type EventSourceData,
+  HumanCommit,
+  IdGen,
+  type Locale,
   loroDocToSnapshot,
   loroDocToUpdate,
-  HumanCommit,
-  type Locale,
-  LoroDocFrontier,
   LoroDocUpdate,
   type NoteData,
   type NoteSourceData,
-  type PostHistoryEntry,
-  type PostRow,
-  type PostTranslationRow,
+  nowAsIso,
   PersonId,
+  type PostHistoryEntry,
   PostId,
   PostNotFoundError,
+  type PostRow,
+  type PostTranslationRow,
   ProfileId,
   SystemCommit,
   UpdateNoteData,
-  IdGen,
-  nowAsIso,
 } from "@gororobas/domain"
-import { Effect, Option, Schema } from "effect"
+import { DateTime, Effect, Option, Schema, ServiceMap } from "effect"
 /**
  * Posts service - business operations for posts.
  *
@@ -107,15 +106,14 @@ const rowToEventData = (
   visibility: row.visibility!,
 })
 
-export class Posts extends Effect.Service<Posts>()("Posts", {
-  dependencies: [PostsRepository.Default],
-  effect: Effect.gen(function* () {
+export class Posts extends ServiceMap.Service<Posts>()("Posts", {
+  make: Effect.gen(function* () {
     const repo = yield* PostsRepository
     const sql = yield* SqlClient.SqlClient
 
     const createNote = (input: CreateNoteInput) =>
       Effect.gen(function* () {
-        const now = yield* nowAsIso
+        const now = yield* DateTime.now
         const postId = yield* IdGen.make(PostId)
 
         const sourceData: NoteSourceData = {
@@ -130,14 +128,14 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
             handle: input.handle,
             kind: "NOTE",
             ownerProfileId: input.ownerProfileId,
-            publishedAt: new Date(now),
+            publishedAt: now,
             visibility: input.visibility,
           },
         }
 
         const loroDoc = createDocFromNoteData(sourceData)
         const crdtBlob = loroDocToSnapshot(loroDoc)
-        const frontier = JSON.stringify(loroDoc.frontiers())
+        const frontier = loroDoc.frontiers()
 
         yield* sql.withTransaction(
           Effect.gen(function* () {
@@ -149,7 +147,7 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
               updatedAt: now,
             })
 
-            const commit = HumanCommit.make({ personId: input.authorId })
+            const commit = HumanCommit.makeUnsafe({ personId: input.authorId })
             yield* repo.insertCommit({
               commit,
               crdtUpdate: loroDocToUpdate(loroDoc),
@@ -161,7 +159,6 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
               currentCrdtFrontier: frontier,
               locales: sourceData.locales,
               metadata: sourceData.metadata,
-              now,
               ownerProfileId: input.ownerProfileId,
               postId,
             })
@@ -186,7 +183,7 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
 
     const createEvent = (input: CreateEventInput) =>
       Effect.gen(function* () {
-        const now = yield* nowAsIso
+        const now = yield* DateTime.now
         const postId = yield* IdGen.make(PostId)
 
         const sourceData: EventSourceData = {
@@ -204,7 +201,7 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
             kind: "EVENT",
             locationOrUrl: input.locationOrUrl ?? null,
             ownerProfileId: input.ownerProfileId,
-            publishedAt: new Date(now),
+            publishedAt: now,
             startDate: input.startDate,
             visibility: input.visibility,
           },
@@ -212,7 +209,7 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
 
         const loroDoc = createDocFromEventData(sourceData)
         const crdtBlob = loroDocToSnapshot(loroDoc)
-        const frontier = JSON.stringify(loroDoc.frontiers())
+        const frontier = loroDoc.frontiers()
 
         yield* sql.withTransaction(
           Effect.gen(function* () {
@@ -224,7 +221,7 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
               updatedAt: now,
             })
 
-            const commit = HumanCommit.make({ personId: input.authorId })
+            const commit = HumanCommit.makeUnsafe({ personId: input.authorId })
             yield* repo.insertCommit({
               commit,
               crdtUpdate: loroDocToUpdate(loroDoc),
@@ -236,7 +233,6 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
               currentCrdtFrontier: frontier,
               locales: sourceData.locales,
               metadata: sourceData.metadata,
-              now,
               ownerProfileId: input.ownerProfileId,
               postId,
             })
@@ -267,8 +263,8 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
         const sourceDoc = importDoc(existingCrdt.loroCrdt)
 
         const { doc: updatedDoc, crdt_update } = yield* editPostDoc({
-          initial_doc: sourceDoc,
-          person_id: input.authorId,
+          initialDoc: sourceDoc,
+          personId: input.authorId,
           updateData: (current) => ({
             ...current,
             locales: {
@@ -281,19 +277,17 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
         })
 
         const crdtBlob = loroDocToSnapshot(updatedDoc)
-        const newFrontier = JSON.stringify(updatedDoc.frontiers())
+        const newFrontier = updatedDoc.frontiers()
 
         yield* sql.withTransaction(
           Effect.gen(function* () {
             yield* repo.updateCrdt({ id: input.postId, loroCrdt: crdtBlob, updatedAt: now })
 
-            const commit = HumanCommit.make({ personId: input.authorId })
+            const commit = HumanCommit.makeUnsafe({ personId: input.authorId })
             yield* repo.insertCommit({
               commit,
-              crdtUpdate: LoroDocUpdate.make(crdt_update),
-              fromCrdtFrontier: LoroDocFrontier.make(
-                sourceDoc.frontiers() as Array<{ peer: string; counter: number }>,
-              ),
+              crdtUpdate: LoroDocUpdate.makeUnsafe(crdt_update),
+              fromCrdtFrontier: sourceDoc.frontiers(),
               postId: input.postId,
             })
 
@@ -302,7 +296,6 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
               currentCrdtFrontier: newFrontier,
               locales: updatedSourceData.locales,
               metadata: updatedSourceData.metadata,
-              now,
               ownerProfileId: existingCrdt.ownerProfileId,
               postId: input.postId,
             })
@@ -384,13 +377,17 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
           const parsed = accumulatedDoc.toJSON() as NoteSourceData | EventSourceData
 
           const author: CrdtCommit = commit.createdById
-            ? HumanCommit.make({ personId: commit.createdById })
-            : SystemCommit.make({ workflowName: "unknown", workflowVersion: "0", model: "unknown" })
+            ? HumanCommit.makeUnsafe({ personId: commit.createdById })
+            : SystemCommit.makeUnsafe({
+                workflowName: "unknown",
+                workflowVersion: "0",
+                model: "unknown",
+              })
 
           history.push({
             author,
             content: parsed.locales?.pt?.content ?? emptyContent,
-            createdAt: new Date(commit.createdAt),
+            createdAt: commit.createdAt,
             version: i + 1,
           })
         }
@@ -409,5 +406,3 @@ export class Posts extends Effect.Service<Posts>()("Posts", {
     } as const
   }),
 }) {}
-
-export const PostsLive = Posts.Default

@@ -1,5 +1,6 @@
-import type {
+import {
   AccountSession,
+  OrganizationId,
   OrganizationMembershipSession,
   VisitorSession,
 } from "@gororobas/domain"
@@ -17,7 +18,7 @@ import { Effect, Layer, Option, Schema } from "effect"
 import { HttpServerRequest } from "effect/unstable/http"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-export class AuthenticationFailureError extends Schema.TaggedError<AuthenticationFailureError>()(
+export class AuthenticationFailureError extends Schema.TaggedErrorClass<AuthenticationFailureError>()(
   "AuthenticationFailureError",
   {},
 ) {}
@@ -29,7 +30,7 @@ const PersonQueryResult = Schema.Struct({
 
 const MembershipQueryResult = Schema.Struct({
   accessLevel: OrganizationAccessLevel,
-  organizationId: Schema.UUID.pipe(Schema.brand("OrganizationId")),
+  organizationId: OrganizationId,
 })
 
 const getAccount = (request: HttpServerRequest.HttpServerRequest): Effect.Effect<string | null> =>
@@ -53,7 +54,7 @@ export const resolveSession = Effect.gen(function* () {
 
   const sql = yield* SqlClient.SqlClient
 
-  const fetchPerson = SqlSchema.findOne({
+  const fetchPerson = SqlSchema.findOneOption({
     execute: (id) => sql`SELECT id, access_level FROM people WHERE id = ${id}`,
     Request: Schema.String,
     Result: PersonQueryResult,
@@ -68,7 +69,7 @@ export const resolveSession = Effect.gen(function* () {
 
   const personOption = yield* fetchPerson(accountId)
 
-  if (Option.isNone(personOption)) {
+  if (Option.isNone(personOption) === true) {
     return yield* new UnauthorizedError({
       message: "Account not found",
       session: visitorSession,
@@ -80,8 +81,8 @@ export const resolveSession = Effect.gen(function* () {
 
   const account: AccountSession = {
     accessLevel: person.accessLevel,
-    memberships: memberships.map(
-      (m): OrganizationMembershipSession => ({
+    memberships: memberships.map((m) =>
+      OrganizationMembershipSession.makeUnsafe({
         accessLevel: m.accessLevel,
         organizationId: m.organizationId,
       }),
@@ -92,8 +93,8 @@ export const resolveSession = Effect.gen(function* () {
   return account
 }).pipe(
   Effect.catchTags({
-    ParseError: () => new AuthenticationFailureError(),
-    SqlError: () => new AuthenticationFailureError(),
+    SchemaError: () => Effect.fail(new AuthenticationFailureError()),
+    SqlError: () => Effect.fail(new AuthenticationFailureError()),
   }),
 )
 

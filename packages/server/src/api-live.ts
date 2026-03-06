@@ -14,7 +14,7 @@ import { ResourcesApiLive } from "./resources/api-live.js"
 import { TagsApiLive } from "./tags/api-live.js"
 import { VegetablesApiLive } from "./vegetables/api-live.js"
 
-export const ApiLive = Layer.provide(HttpApiBuilder.api(GororobasApi), [
+export const ApiLive = Layer.provide(HttpApiBuilder.layer(GororobasApi), [
   AuthenticationMiddlewareLive,
   CommentsApiLive,
   MediaApiLive,
@@ -25,6 +25,6 @@ export const ApiLive = Layer.provide(HttpApiBuilder.api(GororobasApi), [
   ResourcesApiLive,
   TagsApiLive,
   VegetablesApiLive,
-]).pipe(Layer.provideMerge(PostsRepository.Default))
+]).pipe(Layer.provideMerge(Layer.effect(PostsRepository, PostsRepository.make)))
 
 export const ApiTest = ApiLive

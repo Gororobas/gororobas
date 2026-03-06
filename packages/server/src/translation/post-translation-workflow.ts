@@ -14,6 +14,7 @@ import {
   snapshotToLoroDoc,
   SourcePostData,
   SystemCommit,
+  TimestampColumn,
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
@@ -35,7 +36,7 @@ export const PostTranslationWorkflow = Workflow.make({
   name: "PostTranslationWorkflow",
   payload: {
     postId: PostId,
-    updatedAt: Schema.DateFromString,
+    updatedAt: TimestampColumn,
     sourceLocale: Locale,
     targetLocale: Locale,
     sourceContent: TiptapDocument,
@@ -43,7 +44,7 @@ export const PostTranslationWorkflow = Workflow.make({
   success: Schema.Null,
   error: Schema.Unknown, // @TODO: How to type TranslationError | SqlError | ParseError as schemas?
   idempotencyKey: ({ postId, targetLocale, updatedAt }) =>
-    `${postId}:${targetLocale}:${updatedAt.toISOString()}`,
+    `${postId}:${targetLocale}:${updatedAt.epochMillis}`,
 })
 
 export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
@@ -62,13 +63,13 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
     const repo = yield* PostsRepository
     const crdt = yield* repo.getCrdt(payload.postId)
     const currentLoroDoc = snapshotToLoroDoc(crdt.loroCrdt)
-    const currentSourceData = yield* Schema.decode(SourcePostData)(currentLoroDoc.toJSON())
+    const currentSourceData = yield* Schema.decodeEffect(SourcePostData)(currentLoroDoc.toJSON())
 
     const updatedSourceData: SourcePostData = {
       ...currentSourceData,
       locales: {
         ...currentSourceData.locales,
-        [payload.targetLocale]: PostLocalizedData.make({
+        [payload.targetLocale]: PostLocalizedData.makeUnsafe({
           content: tiptapFromHtml(translationResult.html),
           originalLocale: payload.sourceLocale,
           translationSource: "AUTOMATIC",
@@ -76,7 +77,7 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
       },
     }
 
-    const commit = SystemCommit.make({
+    const commit = SystemCommit.makeUnsafe({
       workflowName: "PostTranslationWorkflow",
       workflowVersion: WORKFLOW_VERSION,
       model: `translation/${translationResult.serviceId}`,
@@ -98,7 +99,7 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
       execute: repo.insertCommit({
         commit,
         postId: payload.postId,
-        fromCrdtFrontier: LoroDocFrontier.make(currentLoroDoc.frontiers()),
+        fromCrdtFrontier: LoroDocFrontier.makeUnsafe(currentLoroDoc.frontiers()),
         crdtUpdate: loroDocToUpdate(updatedDoc),
       }),
     })

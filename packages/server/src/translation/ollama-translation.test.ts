@@ -1,4 +1,4 @@
-import { BunContext } from "@effect/platform-bun"
+import { BunServices } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale } from "@gororobas/domain"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "@gororobas/domain"
@@ -95,7 +95,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "simple paragraph (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -115,7 +115,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "bold and italic marks (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -136,7 +136,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "heading + paragraph (es→en)": {
     sourceLocale: "es",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -161,7 +161,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "blockquote (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -186,7 +186,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "bullet list (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -219,7 +219,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "ordered list (es→en)": {
     sourceLocale: "es",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -263,7 +263,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "link mark preservation (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -296,7 +296,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "image node preservation (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -326,7 +326,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "complex mixed content (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -402,7 +402,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "nested bold inside link (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -436,7 +436,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
   "empty paragraphs preserved (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
-    document: TiptapDocument.make({
+    document: TiptapDocument.makeUnsafe({
       type: "doc",
       version: 1,
       content: [
@@ -488,7 +488,7 @@ describe(
             expect(translatedText).not.toBe(originalText)
             expect(translatedText.trim().length).toBeGreaterThan(0)
           }
-        }).pipe(Effect.provide(TranslationServiceOllama), Effect.provide(BunContext.layer)),
+        }).pipe(Effect.provide(TranslationServiceOllama), Effect.provide(BunServices.layer)),
       )
     }
   },

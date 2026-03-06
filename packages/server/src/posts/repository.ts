@@ -1,9 +1,9 @@
 import {
   CrdtCommit,
-  type EventSourceData,
+  EventSourceData,
   IdGen,
+  LoroDocFrontier,
   type NoteSourceData,
-  nowAsIso,
   PostCommitId,
   PostCommitRow,
   PostCrdtRow,
@@ -14,10 +14,11 @@ import {
   ProfileId,
   QueriedPostData,
   TagId,
+  TimestampColumn,
   VegetableId,
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
-import { Data, Effect, Option, Schema } from "effect"
+import { Data, DateTime, Effect, Option, Schema, ServiceMap } from "effect"
 /**
  * Posts repository - minimal data access for posts.
  */
@@ -31,23 +32,23 @@ export class PostRepositoryError extends Data.TaggedError("PostRepositoryError")
   context?: Record<string, unknown>
 }> {}
 
-export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRepository", {
-  effect: Effect.gen(function* () {
+export class PostsRepository extends ServiceMap.Service<PostsRepository>()("PostsRepository", {
+  make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
-    const findById = SqlSchema.findOne({
+    const findById = SqlSchema.findOneOption({
       Request: PostId,
       Result: PostRow,
       execute: (id) => sql`SELECT * FROM posts WHERE id = ${id}`,
     })
 
-    const findByHandle = SqlSchema.findOne({
+    const findByHandle = SqlSchema.findOneOption({
       Request: Schema.String,
       Result: PostRow,
       execute: (handle) => sql`SELECT * FROM posts WHERE handle = ${handle}`,
     })
 
-    const getPageData = SqlSchema.single({
+    const getPageData = SqlSchema.findOneOption({
       execute: (req) => sql`
         WITH
         p AS (
@@ -124,7 +125,7 @@ export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRep
       Result: QueriedPostData,
     })
 
-    const findTranslation = SqlSchema.findOne({
+    const findTranslation = SqlSchema.findOneOption({
       Request: Schema.Struct({ postId: PostId, locale: Schema.String }),
       Result: PostTranslationRow,
       execute: ({ locale, postId }) =>
@@ -138,7 +139,7 @@ export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRep
         sql`SELECT * FROM post_commits WHERE post_id = ${post_id} ORDER BY created_at ASC`,
     })
 
-    const fetchCrdt = SqlSchema.findOne({
+    const fetchCrdt = SqlSchema.findOneOption({
       Request: Schema.Struct({ id: PostId }),
       Result: PostCrdtRow,
       execute: ({ id }) =>
@@ -159,8 +160,8 @@ export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRep
       id: PostId
       loroCrdt: Uint8Array
       ownerProfileId: ProfileId
-      createdAt: string
-      updatedAt: string
+      createdAt: TimestampColumn
+      updatedAt: TimestampColumn
     }) =>
       sql`INSERT INTO post_crdts (id, loro_crdt, owner_profile_id, created_at, updated_at) VALUES (${input.id}, ${input.loroCrdt}, ${input.ownerProfileId}, ${input.createdAt}, ${input.updatedAt})`
 
@@ -179,7 +180,7 @@ export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRep
     const insertCommit = (input: InsertCommitInput) =>
       Effect.gen(function* () {
         const id = yield* IdGen.make(PostCommitId)
-        const createdAt = yield* nowAsIso
+        const now = yield* DateTime.now
         const createdById = input.commit._tag === "HumanCommit" ? input.commit.personId : null
 
         yield* insertCommitRow({
@@ -188,8 +189,8 @@ export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRep
           createdById,
           crdtUpdate: input.crdtUpdate,
           fromCrdtFrontier: input.fromCrdtFrontier,
-          createdAt: new Date(createdAt),
-          updatedAt: new Date(createdAt),
+          createdAt: now,
+          updatedAt: now,
         })
       })
 
@@ -203,49 +204,38 @@ export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRep
         yield* sql`DELETE FROM post_crdts WHERE id = ${id}`
       })
 
-    const materializeMain = (data: {
-      currentCrdtFrontier: string
+    const InsertMain = SqlSchema.void({
+      Request: PostRow,
+      execute: (request) =>
+        sql`INSERT INTO posts ${sql.insert(request)} ON CONFLICT(id) DO UPDATE SET ${sql.update}`,
+    })
+
+    const materializeMain = Effect.fn("a")(function* (data: {
+      currentCrdtFrontier: LoroDocFrontier
       metadata: NoteSourceData["metadata"] | EventSourceData["metadata"]
       postId: PostId
-      now: string
       ownerProfileId: ProfileId
-    }) => {
-      const { metadata, postId, now, ownerProfileId, currentCrdtFrontier } = data
+    }) {
+      const now = yield* DateTime.now
+      const { metadata } = data
       const isEvent = metadata.kind === "EVENT"
       const eventMeta = isEvent ? (metadata as EventSourceData["metadata"]) : null
 
-      const formatDate = (date: Date | null | undefined): string | null =>
-        date ? date.toISOString() : null
-
-      return sql`
-        INSERT INTO posts (
-          id, current_crdt_frontier, handle, visibility, published_at,
-          created_at, updated_at, owner_profile_id, type,
-          start_date, end_date, location_or_url, attendance_mode
-        ) VALUES (
-          ${postId}, ${currentCrdtFrontier}, ${metadata.handle}, ${metadata.visibility},
-          ${formatDate(metadata.publishedAt)},
-          ${now}, ${now}, ${ownerProfileId}, ${metadata.kind},
-          ${eventMeta ? formatDate(eventMeta.startDate) : null},
-          ${eventMeta ? formatDate(eventMeta.endDate) : null},
-          ${eventMeta?.locationOrUrl ?? null},
-          ${eventMeta?.attendanceMode ?? null}
-        )
-        ON CONFLICT(id) DO UPDATE SET
-          current_crdt_frontier = excluded.current_crdt_frontier,
-          handle = excluded.handle,
-          visibility = excluded.visibility,
-          published_at = excluded.published_at,
-          updated_at = excluded.updated_at,
-          start_date = excluded.start_date,
-          end_date = excluded.end_date,
-          location_or_url = excluded.location_or_url,
-          attendance_mode = excluded.attendance_mode
-      `
-    }
+      return yield* InsertMain({
+        ...metadata,
+        createdAt: now,
+        updatedAt: now,
+        currentCrdtFrontier: data.currentCrdtFrontier,
+        id: data.postId,
+        attendanceMode: eventMeta?.attendanceMode,
+        endDate: eventMeta?.endDate,
+        startDate: eventMeta?.startDate,
+        locationOrUrl: eventMeta?.locationOrUrl,
+      })
+    })
 
     const materializeTranslations = (data: {
-      currentCrdtFrontier: string
+      currentCrdtFrontier: LoroDocFrontier
       locales: NoteSourceData["locales"] | EventSourceData["locales"]
       postId: PostId
     }) =>
@@ -350,10 +340,9 @@ export class PostsRepository extends Effect.Service<PostsRepository>()("PostsRep
 
     const materialize = (data: {
       classification?: PostClassification | null
-      currentCrdtFrontier: string
+      currentCrdtFrontier: LoroDocFrontier
       locales: NoteSourceData["locales"] | EventSourceData["locales"]
       metadata: NoteSourceData["metadata"] | EventSourceData["metadata"]
-      now: string
       ownerProfileId: ProfileId
       postId: PostId
     }) =>

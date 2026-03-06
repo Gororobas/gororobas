@@ -26,21 +26,19 @@ const tiptapNodeFields = {
   type: Schema.Trimmed.pipe(Schema.check(Schema.isNonEmpty())),
 }
 
-export interface TiptapNode extends Schema.Struct.Type<typeof tiptapNodeFields> {
-  readonly content: ReadonlyArray<TiptapNode | TiptapTextNode> | undefined
-}
-export const TiptapNode = Schema.Struct({
-  ...tiptapNodeFields,
-  content: Schema.optional(
-    Schema.Array(
-      Schema.suspend(
-        (): Schema.Schema<TiptapNode | TiptapTextNode> =>
-          // @ts-expect-error Not sure how to type this correctly
-          Schema.Union([TiptapNode, TiptapTextNode]),
+export class TiptapNode extends Schema.Opaque<TiptapNode>()(
+  Schema.Struct({
+    ...tiptapNodeFields,
+    content: Schema.optional(
+      Schema.Array(
+        Schema.suspend(
+          (): Schema.Codec<TiptapNode | TiptapTextNode> =>
+            Schema.Union([TiptapNode, TiptapTextNode]),
+        ),
       ),
     ),
-  ),
-})
+  }),
+) {}
 
 export const TiptapDocument = Schema.Struct({
   content: Schema.Array(TiptapNode),

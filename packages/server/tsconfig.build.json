@@ -3,6 +3,9 @@
   "references": [
     {
       "path": "../domain/tsconfig.build.json"
+    },
+    {
+      "path": "../effect-bdd/tsconfig.build.json"
     }
   ],
   "compilerOptions": {

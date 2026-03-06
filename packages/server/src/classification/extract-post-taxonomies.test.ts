@@ -1,9 +1,8 @@
-import { BunContext } from "@effect/platform-bun"
+import { BunServices } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
-import type { Locale, TagRow, VegetableRow } from "@gororobas/domain"
+import type { Locale, TagRow, VegetableId, VegetableRow } from "@gororobas/domain"
 import { LoroDocFrontier, TiptapDocument } from "@gororobas/domain"
-import { FileSystem, Path } from "effect"
-import { Effect, Layer, Logger, LogLevel, Option, Schema } from "effect"
+import { DateTime, Effect, FileSystem, Layer, Option, Path, Schema } from "effect"
 import { join } from "node:path"
 
 import { TagsRepository } from "../tags/repository.js"
@@ -13,7 +12,7 @@ import { LangExtractService } from "./langextract-service.js"
 
 const TEST_FRONTIER = Schema.decodeSync(LoroDocFrontier)([])
 
-const now = new Date()
+const now = Effect.runSync(DateTime.now)
 
 const TEST_TAGS: ReadonlyArray<TagRow> = [
   {
@@ -164,11 +163,11 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
   },
 ]
 
-const TestTagsRepository = Layer.succeed(TagsRepository, {
+const TestTagsRepository = Layer.succeed(TagsRepository)({
   findAll: () => Effect.succeed(TEST_TAGS as Array<TagRow>),
   findById: () => Effect.succeed(Option.none()),
   findByHandle: (handle: string) =>
-    Effect.succeed(Option.fromNullable(TEST_TAGS.find((t) => t.handle === handle))),
+    Effect.succeed(Option.fromNullishOr(TEST_TAGS.find((t) => t.handle === handle))),
   findByName: (pattern: string) => {
     const searchTerm = pattern.replace(/%/g, "").toLowerCase()
     const match = TEST_TAGS.find((t) =>
@@ -176,7 +175,7 @@ const TestTagsRepository = Layer.succeed(TagsRepository, {
     )
     return Effect.succeed(match ? Option.some(match) : Option.none())
   },
-} as unknown as TagsRepository)
+})
 
 const TEST_VEGETABLES: ReadonlyArray<VegetableRow> = [
   {
@@ -205,21 +204,33 @@ const TEST_VEGETABLES: ReadonlyArray<VegetableRow> = [
   },
 ]
 
-const TEST_VEGETABLE_SEARCHABLE_NAMES: Record<string, { vegetableId: string; handle: string }> = {
-  milho: { vegetableId: "10000000-0000-0000-0000-000000000001", handle: "milho" },
-  corn: { vegetableId: "10000000-0000-0000-0000-000000000001", handle: "milho" },
-  maiz: { vegetableId: "10000000-0000-0000-0000-000000000001", handle: "milho" },
-  mandioca: { vegetableId: "10000000-0000-0000-0000-000000000002", handle: "mandioca" },
-  cassava: { vegetableId: "10000000-0000-0000-0000-000000000002", handle: "mandioca" },
-  yuca: { vegetableId: "10000000-0000-0000-0000-000000000002", handle: "mandioca" },
-  aipim: { vegetableId: "10000000-0000-0000-0000-000000000002", handle: "mandioca" },
-  macaxeira: { vegetableId: "10000000-0000-0000-0000-000000000002", handle: "mandioca" },
+const TEST_VEGETABLE_SEARCHABLE_NAMES: Record<
+  string,
+  { vegetableId: VegetableId; handle: string }
+> = {
+  milho: { vegetableId: "10000000-0000-0000-0000-000000000001" as VegetableId, handle: "milho" },
+  corn: { vegetableId: "10000000-0000-0000-0000-000000000001" as VegetableId, handle: "milho" },
+  maiz: { vegetableId: "10000000-0000-0000-0000-000000000001" as VegetableId, handle: "milho" },
+  mandioca: {
+    vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId,
+    handle: "mandioca",
+  },
+  cassava: {
+    vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId,
+    handle: "mandioca",
+  },
+  yuca: { vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId, handle: "mandioca" },
+  aipim: { vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId, handle: "mandioca" },
+  macaxeira: {
+    vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId,
+    handle: "mandioca",
+  },
 }
 
-const TestVegetablesRepository = Layer.succeed(VegetablesRepository, {
+const TestVegetablesRepository = Layer.succeed(VegetablesRepository)({
   findById: () => Effect.succeed(Option.none()),
   findByHandle: (handle: string) =>
-    Effect.succeed(Option.fromNullable(TEST_VEGETABLES.find((v) => v.handle === handle))),
+    Effect.succeed(Option.fromNullishOr(TEST_VEGETABLES.find((v) => v.handle === handle))),
   findAll: () => Effect.succeed([...TEST_VEGETABLES]),
   findBySearchableName: (pattern: string) => {
     const searchTerm = pattern.replace(/%/g, "").toLowerCase()
@@ -227,7 +238,7 @@ const TestVegetablesRepository = Layer.succeed(VegetablesRepository, {
     return Effect.succeed(match ? Option.some(match) : Option.none())
   },
   findTranslations: () => Effect.succeed([]),
-} as unknown as VegetablesRepository)
+})
 
 const RESULTS_DIR = join(import.meta.dirname, "extraction-results")
 
@@ -249,7 +260,7 @@ const saveExtractionResult = (
   })
 
 const makeDocument = (text: string): TiptapDocument =>
-  TiptapDocument.make({
+  TiptapDocument.makeUnsafe({
     type: "doc",
     version: 1,
     content: text.split("\n\n").map((paragraph) => ({
@@ -341,12 +352,12 @@ const FIXTURES: Record<string, ExtractionFixture> = {
 }
 
 const TestLayer = Layer.mergeAll(
-  ExtractPostTaxonomiesService.Default,
-  LangExtractService.Default,
+  Layer.effect(ExtractPostTaxonomiesService, ExtractPostTaxonomiesService.make),
+  Layer.effect(LangExtractService, LangExtractService.make),
   TestTagsRepository,
   TestVegetablesRepository,
-  BunContext.layer,
-).pipe(Layer.provide(Logger.minimumLogLevel(LogLevel.Debug)))
+  BunServices.layer,
+)
 
 describe(
   "note taxonomy extraction (manual QA — requires Ollama running)",

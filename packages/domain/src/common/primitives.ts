@@ -4,6 +4,7 @@
 import { Schema, SchemaTransformation } from "effect"
 
 export const TimestampColumn = Schema.DateTimeUtcFromString
+export type TimestampColumn = typeof TimestampColumn.Type
 
 export const TimestampedStruct = Schema.Struct({
   createdAt: TimestampColumn,

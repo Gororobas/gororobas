@@ -1,22 +1,18 @@
 import { TagId, TagRow } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
-/**
- * Tags repository with CRDT-based revision workflow.
- */
+import { Effect, Schema, ServiceMap } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-export class TagsRepository extends Effect.Service<TagsRepository>()("TagsRepository", {
-  effect: Effect.gen(function* () {
+export class TagsRepository extends ServiceMap.Service<TagsRepository>()("TagsRepository", {
+  make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
-    // Materialized data queries
-    const findById = SqlSchema.findOne({
-      execute: (id) => sql`SELECT * FROM tags WHERE id = ${id}`,
+    const findById = SqlSchema.findOneOption({
       Request: TagId,
       Result: TagRow,
+      execute: (id) => sql`SELECT * FROM tags WHERE id = ${id}`,
     })
 
-    const findByHandle = SqlSchema.findOne({
+    const findByHandle = SqlSchema.findOneOption({
       execute: (handle) => sql`SELECT * FROM tags WHERE handle = ${handle}`,
       Request: Schema.String,
       Result: TagRow,
@@ -28,7 +24,7 @@ export class TagsRepository extends Effect.Service<TagsRepository>()("TagsReposi
       Result: TagRow,
     })
 
-    const findByName = SqlSchema.findOne({
+    const findByName = SqlSchema.findOneOption({
       execute: (pattern) => sql`
           SELECT id, handle FROM tags
           WHERE LOWER(names) LIKE ${pattern}

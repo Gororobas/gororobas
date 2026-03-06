@@ -1,7 +1,7 @@
 import { TiptapDocument, tiptapToHtml } from "@gororobas/domain"
 import type { TagRow } from "@gororobas/domain"
 import { createHash } from "crypto"
-import { Config, DateTime, Effect } from "effect"
+import { Config, DateTime, Effect, ServiceMap } from "effect"
 
 import { TagsRepository } from "../tags/repository.js"
 import { type PostClassification } from "./domain.js"
@@ -78,10 +78,10 @@ const extractTags = Effect.fn("extractTags")(function* (html: string) {
   })
 })
 
-export class ExtractPostTaxonomiesService extends Effect.Service<ExtractPostTaxonomiesService>()(
+export class ExtractPostTaxonomiesService extends ServiceMap.Service<ExtractPostTaxonomiesService>()(
   "ExtractPostTaxonomiesService",
   {
-    effect: Effect.succeed({
+    make: Effect.succeed({
       extract: (input: TiptapDocument, crdt_frontier: PostClassification["crdt_frontier"]) =>
         Effect.gen(function* () {
           const langExtract = yield* LangExtractService

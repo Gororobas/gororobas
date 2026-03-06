@@ -7,6 +7,9 @@
     },
     {
       "path": "../domain"
+    },
+    {
+      "path": "../effect-bdd"
     }
   ],
   "compilerOptions": {

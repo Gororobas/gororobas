@@ -5,7 +5,7 @@ import {
   ResourceRevisionId,
   type SourceResourceData,
 } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { Effect, Schema, ServiceMap } from "effect"
 /**
  * Resources repository with CRDT-based revision workflow.
  */
@@ -51,10 +51,10 @@ const REVISION_CONFIG = {
   revisionsTableName: "resource_revisions",
 }
 
-export class ResourcesRepository extends Effect.Service<ResourcesRepository>()(
+export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>()(
   "ResourcesRepository",
   {
-    effect: Effect.gen(function* () {
+    make: Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
 
       // Query helpers
