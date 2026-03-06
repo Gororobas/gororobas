@@ -1,15 +1,15 @@
-import { Context, Layer } from "effect"
+import { Layer, ServiceMap } from "effect"
 import * as ts from "typescript"
 
 import type { StepKeyword } from "../../parser/types.js"
 import type { DiscoveredStep, StepScope } from "../types.js"
 
-export class StepDiscovery extends Context.Tag("StepDiscovery")<
+export class StepDiscovery extends ServiceMap.Service<
   StepDiscovery,
   {
     discoverSteps: (files: Array<string>) => Array<DiscoveredStep>
   }
->() {}
+>()("StepDiscovery") {}
 
 const STEP_KEYWORDS: Array<StepKeyword> = ["Given", "When", "Then", "And", "But"]
 

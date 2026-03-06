@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect"
+import { Effect, Layer, ServiceMap } from "effect"
 
 import type {
   CheckResult,
@@ -9,12 +9,12 @@ import type {
   ScenarioResult,
 } from "../types.js"
 
-export class Reporter extends Context.Tag("Reporter")<
+export class Reporter extends ServiceMap.Service<
   Reporter,
   {
     report: (result: CheckResult) => Effect.Effect<void>
   }
->() {}
+>()("Reporter") {}
 
 const ANSI = {
   bold: "\x1b[1m",

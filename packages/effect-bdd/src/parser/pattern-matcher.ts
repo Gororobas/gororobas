@@ -87,16 +87,8 @@ export function matchPattern(pattern: string, text: string): Record<string, unkn
   return result
 }
 
-export function decodeParams<A>(
-  schema: Schema.Schema<A>,
-  params: unknown,
-  stepText: string,
-): Effect.Effect<A, StepParamsDecodeError> {
-  return Schema.decodeUnknown(schema)(params).pipe(
-    Effect.tapError((error) => {
-      console.log("AQUI", error.issue, params)
-      return Effect.succeed("")
-    }),
+export function decodeParams<A>(schema: Schema.Schema<A>, params: unknown, stepText: string) {
+  return Schema.decodeUnknownEffect(schema)(params).pipe(
     Effect.mapError(
       (error) =>
         new StepParamsDecodeError({

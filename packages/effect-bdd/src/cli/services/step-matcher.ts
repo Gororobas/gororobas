@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect"
+import { Effect, Layer, ServiceMap } from "effect"
 
 import { matchPattern } from "../../parser/pattern-matcher.js"
 import type {
@@ -18,7 +18,7 @@ import type {
   FeatureStep,
 } from "../types.js"
 
-export class StepMatcher extends Context.Tag("StepMatcher")<
+export class StepMatcher extends ServiceMap.Service<
   StepMatcher,
   {
     checkFeature: (
@@ -27,7 +27,7 @@ export class StepMatcher extends Context.Tag("StepMatcher")<
       featurePath: string,
     ) => Effect.Effect<FeatureResult>
   }
->() {}
+>()("StepMatcher") {}
 
 function filterStepsByScope(
   discoveredSteps: Array<DiscoveredStep>,

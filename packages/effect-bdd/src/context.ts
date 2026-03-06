@@ -1,23 +1,19 @@
-import { Context, Effect } from "effect"
+import { Effect, ServiceMap } from "effect"
 
 import type { ParsedStep } from "./parser/types.js"
 
-export class BackgroundContext extends Context.Tag("BackgroundContext")<
-  BackgroundContext,
-  Record<any, any>
->() {}
+export class BackgroundContext extends ServiceMap.Service<BackgroundContext, Record<any, any>>()(
+  "BackgroundContext",
+) {}
 
-/** Generic accessor for typed background context */
-export const getBackgroundContext = <T extends Record<any, any>>(): Effect.Effect<
-  T,
-  never,
-  BackgroundContext
-> => Effect.map(BackgroundContext, (ctx) => ctx as T)
+export const getBackgroundContext = Effect.fnUntraced(function* <T extends Record<any, any>>() {
+  return (yield* BackgroundContext) as T
+})
 
-export class ScenarioContext extends Context.Tag("ScenarioContext")<
+export class ScenarioContext extends ServiceMap.Service<
   ScenarioContext,
   {
     readonly name: string
     readonly steps: ReadonlyArray<ParsedStep>
   }
->() {}
+>()("ScenarioContext") {}

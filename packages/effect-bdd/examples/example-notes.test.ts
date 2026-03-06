@@ -1,5 +1,5 @@
 import { expect } from "@effect/vitest"
-import { Context, Data, Effect, Layer, Option, Ref, Schema } from "effect"
+import { Data, Effect, Layer, Option, Ref, Schema, ServiceMap } from "effect"
 
 import {
   And,
@@ -99,14 +99,14 @@ interface PersonRepository {
   getAll: () => Effect.Effect<Array<Person>>
 }
 
-const PersonRepository = Context.GenericTag<PersonRepository>("PersonRepository")
+const PersonRepository = ServiceMap.Service<PersonRepository>("PersonRepository")
 
 interface OrganizationRepository {
   create: (data: { name: string }) => Effect.Effect<Organization>
   findByName: (name: string) => Effect.Effect<Organization, OrganizationNotFoundError>
 }
 
-const OrganizationRepository = Context.GenericTag<OrganizationRepository>("OrganizationRepository")
+const OrganizationRepository = ServiceMap.Service<OrganizationRepository>("OrganizationRepository")
 
 interface MembershipRepository {
   create: (data: {
@@ -118,14 +118,14 @@ interface MembershipRepository {
   findByOrg: (orgId: string) => Effect.Effect<Array<Membership>>
 }
 
-const MembershipRepository = Context.GenericTag<MembershipRepository>("MembershipRepository")
+const MembershipRepository = ServiceMap.Service<MembershipRepository>("MembershipRepository")
 
 interface AuthService {
   login: (name: string) => Effect.Effect<Person, PersonNotFoundError>
   getCurrentUser: () => Effect.Effect<Option.Option<Person>>
 }
 
-const AuthService = Context.GenericTag<AuthService>("AuthService")
+const AuthService = ServiceMap.Service<AuthService>("AuthService")
 
 interface NotesService {
   create: (data: {
@@ -173,7 +173,7 @@ interface NotesService {
   exists: (id: string) => Effect.Effect<boolean>
 }
 
-const NotesService = Context.GenericTag<NotesService>("NotesService")
+const NotesService = ServiceMap.Service<NotesService>("NotesService")
 
 // ============================================================================
 // In-Memory Test Implementations
@@ -195,7 +195,7 @@ const makeTestState = (): TestState => ({
   people: new Map(),
 })
 
-const TestStateRef = Context.GenericTag<Ref.Ref<TestState>>("TestStateRef")
+const TestStateRef = ServiceMap.Service<Ref.Ref<TestState>>("TestStateRef")
 
 const PersonRepositoryLive = Layer.effect(
   PersonRepository,

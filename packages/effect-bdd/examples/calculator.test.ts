@@ -1,5 +1,5 @@
 import { expect } from "@effect/vitest"
-import { Context, Effect, Layer, Ref, Schema } from "effect"
+import { Effect, Layer, Ref, Schema, ServiceMap } from "effect"
 
 import {
   And,
@@ -20,10 +20,9 @@ interface CalculatorState {
   history: Array<number>
 }
 
-class CalculatorStateRef extends Context.Tag("CalculatorStateRef")<
-  CalculatorStateRef,
-  Ref.Ref<CalculatorState>
->() {}
+class CalculatorStateRef extends ServiceMap.Service<CalculatorStateRef, Ref.Ref<CalculatorState>>()(
+  "CalculatorStateRef",
+) {}
 
 interface CalculatorService {
   getValue: () => Effect.Effect<number>
@@ -33,7 +32,7 @@ interface CalculatorService {
   getHistory: () => Effect.Effect<Array<number>>
 }
 
-const CalculatorService = Context.GenericTag<CalculatorService>("CalculatorService")
+const CalculatorService = ServiceMap.Service<CalculatorService>("CalculatorService")
 
 const CalculatorStateLayer = Layer.effect(
   CalculatorStateRef,

@@ -1,4 +1,5 @@
-import { Data, type ParseResult } from "effect"
+import { Data } from "effect"
+import { SchemaError } from "effect/Schema"
 
 export class FeatureParseError extends Data.TaggedError("FeatureParseError")<{
   path: string
@@ -14,7 +15,7 @@ export class StepMatchError extends Data.TaggedError("StepMatchError")<{
 export class StepParamsDecodeError extends Data.TaggedError("StepParamsDecodeError")<{
   step: string
   params: unknown
-  error: ParseResult.ParseError
+  error: SchemaError
 }> {}
 
 export class ScenarioNotFoundError extends Data.TaggedError("ScenarioNotFoundError")<{

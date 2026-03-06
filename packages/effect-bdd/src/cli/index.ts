@@ -1,39 +1,39 @@
-import { Command, Options } from "@effect/cli"
-import { BunContext } from "@effect/platform-bun"
+import { BunServices } from "@effect/platform-bun"
 import { Effect, Layer, Option } from "effect"
+import { Command, Flag } from "effect/unstable/cli"
 
 import { runCheck } from "./commands/check-impl.js"
 import { runWatchCommand } from "./commands/watch.js"
 import type { OutputFormat } from "./types.js"
 
-const patternsOption = Options.text("patterns").pipe(
-  Options.withAlias("p"),
-  Options.withDescription("Glob patterns for feature files (comma-separated)"),
-  Options.withDefault("**/*.feature"),
+const patternsOption = Flag.string("patterns").pipe(
+  Flag.withAlias("p"),
+  Flag.withDescription("Glob patterns for feature files (comma-separated)"),
+  Flag.withDefault("**/*.feature"),
 )
 
-const testPatternOption = Options.text("test-pattern").pipe(
-  Options.withAlias("t"),
-  Options.withDescription("Glob patterns for test files (comma-separated)"),
-  Options.withDefault("**/*.test.ts,**/*.spec.ts"),
+const testPatternOption = Flag.string("test-pattern").pipe(
+  Flag.withAlias("t"),
+  Flag.withDescription("Glob patterns for test files (comma-separated)"),
+  Flag.withDefault("**/*.test.ts,**/*.spec.ts"),
 )
 
-const formatOption = Options.choice("format", ["pretty", "json", "github-actions"]).pipe(
-  Options.withAlias("f"),
-  Options.withDescription("Output format: pretty, json, github-actions"),
-  Options.withDefault<OutputFormat>("pretty"),
+const formatOption = Flag.choice("format", ["pretty", "json", "github-actions"]).pipe(
+  Flag.withAlias("f"),
+  Flag.withDescription("Output format: pretty, json, github-actions"),
+  Flag.withDefault<OutputFormat>("pretty"),
 )
 
-const ignoreOption = Options.text("ignore").pipe(
-  Options.withAlias("i"),
-  Options.withDescription("Patterns to ignore (comma-separated)"),
-  Options.optional,
+const ignoreOption = Flag.string("ignore").pipe(
+  Flag.withAlias("i"),
+  Flag.withDescription("Patterns to ignore (comma-separated)"),
+  Flag.optional,
 )
 
-const debounceOption = Options.integer("debounce").pipe(
-  Options.withAlias("d"),
-  Options.withDescription("Debounce time in milliseconds (watch only)"),
-  Options.withDefault(200),
+const debounceOption = Flag.integer("debounce").pipe(
+  Flag.withAlias("d"),
+  Flag.withDescription("Debounce time in milliseconds (watch only)"),
+  Flag.withDefault(200),
 )
 
 const checkOptions = {
@@ -89,14 +89,13 @@ const rootCommand = Command.make("effect-bdd-check", {}).pipe(
 )
 
 const cli = Command.run(rootCommand, {
-  name: "effect-bdd-check",
   version: "0.0.0",
 })
 
-export function run(args: Array<string>): void {
-  const program = cli(args).pipe(
-    Effect.provide(Layer.mergeAll(BunContext.layer)),
-    Effect.catchAll(() => Effect.sync(() => process.exit(1))),
+export function run(): void {
+  const program = cli.pipe(
+    Effect.provide(Layer.mergeAll(BunServices.layer)),
+    Effect.catch(() => Effect.sync(() => process.exit(1))),
   )
 
   Effect.runPromise(program).then(

@@ -1,6 +1,5 @@
-import type { PlatformError } from "@effect/platform/Error"
-import { FileSystem } from "effect"
 import { Console, Duration, Effect, Option, Stream } from "effect"
+import { FileSystem } from "effect"
 
 import type { OutputFormat } from "../types.js"
 import { runCheck, splitPatterns } from "./check-impl.js"
@@ -24,7 +23,7 @@ function performCheck(args: WatchArgs): Effect.Effect<void> {
     patterns: args.patterns,
     testPattern: args.testPattern,
   }).pipe(
-    Effect.catchAll(() =>
+    Effect.catch(() =>
       Effect.sync(() => {
         process.exitCode = 1
       }),
@@ -49,9 +48,7 @@ function extractWatchDirectories(patterns: Array<string>): Array<string> {
   return Array.from(directories)
 }
 
-export function runWatchCommand(
-  args: WatchArgs,
-): Effect.Effect<void, PlatformError, FileSystem.FileSystem> {
+export function runWatchCommand(args: WatchArgs) {
   const featurePatterns = splitPatterns(args.patterns)
   const testPatterns = splitPatterns(args.testPattern)
   const allPatterns = [...featurePatterns, ...testPatterns]
@@ -69,9 +66,7 @@ export function runWatchCommand(
     yield* Console.log(`  Tests: ${testPatterns.join(", ")}`)
     yield* Console.log(`\nPress Ctrl+C to exit`)
 
-    const watchStreams = watchDirectories.map((directory) =>
-      fileSystem.watch(directory, { recursive: true }),
-    )
+    const watchStreams = watchDirectories.map((directory) => fileSystem.watch(directory))
 
     yield* Stream.mergeAll(watchStreams, { concurrency: "unbounded" }).pipe(
       Stream.debounce(Duration.millis(args.debounce)),
