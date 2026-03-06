@@ -6,11 +6,17 @@ import { postsPolicies } from "../posts/policies.js"
 import { profilePolicies } from "../profiles/policies.js"
 import { resourcesPolicies } from "../resources/policies.js"
 import { vegetablesPolicies } from "../vegetables/policies.js"
-import { assertAuthenticated, assertTrustedPerson, check, platformPermission } from "./policy.js"
+import {
+  assertAuthenticated,
+  assertNonBlockedPerson,
+  assertTrustedPerson,
+  check,
+  platformPermission,
+} from "./policy.js"
 
 const Policies = {
   helpers: { check },
-  common: { assertTrustedPerson, assertAuthenticated },
+  common: { assertTrustedPerson, assertAuthenticated, assertNonBlockedPerson },
 
   // Cross-cutting
   revisions: {

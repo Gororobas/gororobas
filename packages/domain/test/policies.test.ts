@@ -12,6 +12,7 @@ import {
   CorePostMetadata,
   IdGen,
   InformationVisibility,
+  OrganizationAccessLevel,
   OrganizationId,
   OrganizationRow,
   OrganizationType,
@@ -19,6 +20,7 @@ import {
   PlatformAccessLevel,
   ProfileId,
   Session,
+  VisitorSession,
 } from "../src/index.js"
 import {
   assertPropertyEffect,
@@ -30,16 +32,20 @@ const IdGenTest = Layer.succeed(IdGen, {
   generate: () => v7(),
 })
 
-// ─── Arbitraries ───────────────────────────────────────────────────────────────
+// ─── Constructive Arbitraries (no filtering) ───────────────────────────────
 
-const sessionArbitrary = Schema.toArbitrary(Session)
+const visitorSessionArbitrary = Schema.toArbitrary(VisitorSession)
 const accountSessionArbitrary = Schema.toArbitrary(AccountSession)
-const personIdArbitrary = Schema.toArbitrary(PersonId)
-const visibilityArbitrary = Schema.toArbitrary(InformationVisibility)
+const trustedAccountSessionArbitrary = accountSessionArbitrary.filter(
+  (s) => s.accessLevel !== "BLOCKED" && s.accessLevel !== "NEWCOMER",
+)
+const sessionArbitrary = Schema.toArbitrary(Session)
 
+const personIdArbitrary = Schema.toArbitrary(PersonId)
+const organizationIdArbitrary = Schema.toArbitrary(OrganizationId)
+const visibilityArbitrary = Schema.toArbitrary(InformationVisibility)
 const organizationTypeArbitrary = Schema.toArbitrary(OrganizationType)
 const platformAccessLevelArbitrary = Schema.toArbitrary(PlatformAccessLevel)
-const organizationIdArbitrary = Schema.toArbitrary(OrganizationId)
 
 const organizationArbitrary = FastCheck.tuple(
   organizationIdArbitrary,
@@ -53,18 +59,33 @@ const organizationArbitrary = FastCheck.tuple(
   }),
 )
 
-// ─── Factories ─────────────────────────────────────────────────────────────────
+// ─── Session Helpers ───────────────────────────────
 
-function createTestPost(ownerProfileId: PersonId, visibility: InformationVisibility = "PUBLIC") {
-  return CorePostMetadata.makeUnsafe({
-    handle: "test-post" as CorePostMetadata["handle"],
-    ownerProfileId: ownerProfileId as ProfileId,
-    publishedAt: null,
-    visibility,
-  })
-}
+const sessionWithAccessLevel = (
+  baseSession: AccountSession,
+  accessLevel: AccountSession["accessLevel"],
+): AccountSession => ({ ...baseSession, accessLevel })
 
-// ─── Preconditions ─────────────────────────────────────────────────────────────
+const sessionWithOrgMembership = (
+  baseSession: AccountSession,
+  organizationId: OrganizationId,
+  accessLevel: OrganizationAccessLevel,
+): AccountSession => ({
+  ...baseSession,
+  memberships: [...baseSession.memberships, { accessLevel, organizationId }],
+})
+
+// ─── Constants ─────────────────────────────────────────────────
+
+const ACCESS_LEVEL_ORDER: ReadonlyArray<AccountSession["accessLevel"]> = [
+  "BLOCKED",
+  "NEWCOMER",
+  "COMMUNITY",
+  "MODERATOR",
+  "ADMIN",
+]
+
+// ─── Preconditions ───────────────────────────────────────────────────────
 
 const isTrustedOrHigher = (session: AccountSession) =>
   session.accessLevel === "COMMUNITY" ||
@@ -75,24 +96,177 @@ const isModeratorOrAdmin = (session: AccountSession) =>
   session.accessLevel === "MODERATOR" || session.accessLevel === "ADMIN"
 
 const isAdmin = (session: AccountSession) => session.accessLevel === "ADMIN"
-
 const isNewcomer = (session: AccountSession) => session.accessLevel === "NEWCOMER"
-
 const isBlocked = (session: AccountSession) => session.accessLevel === "BLOCKED"
-
 const isNewcomerOrBlocked = (session: AccountSession) => isNewcomer(session) || isBlocked(session)
-
 const hasManagerMembership = (session: AccountSession) =>
   session.memberships.some((m) => m.accessLevel === "MANAGER")
 
-// ─── Tests ─────────────────────────────────────────────────────────────────────
+// ─── Monotonicity Framework ────────────────────────────────────────────
+
+const assertMonotonic = (
+  policyEffect: Effect.Effect<
+    unknown,
+    unknown,
+    import("../src/authorization/session.js").SessionContext
+  >,
+  description: string,
+) =>
+  it.effect(`${description} is monotonic`, () =>
+    assertPropertyEffect(accountSessionArbitrary, (baseSession) =>
+      Effect.gen(function* () {
+        const results = yield* Effect.all(
+          ACCESS_LEVEL_ORDER.map((level) =>
+            runPolicySuccess(policyEffect, sessionWithAccessLevel(baseSession, level)),
+          ),
+          { concurrency: "unbounded" },
+        )
+
+        let seenTrue = false
+        for (const result of results) {
+          if (seenTrue === true && result === false) return false
+          if (result === true) seenTrue = true
+        }
+        return true
+      }),
+    ),
+  )
+
+// ─── Tests ─────────────────────────────────────────────────────────────────
 
 describe("Policies", () => {
+  describe("security invariants", () => {
+    it.effect("blocked users can never perform write operations", () =>
+      assertPropertyEffect(accountSessionArbitrary, (session) =>
+        Effect.gen(function* () {
+          const blockedSession = sessionWithAccessLevel(session, "BLOCKED")
+
+          const writePolicies = [
+            Policies.posts.canCreate(
+              CorePostMetadata.makeUnsafe({
+                handle: "test" as CorePostMetadata["handle"],
+                ownerProfileId: session.personId as ProfileId,
+                publishedAt: null,
+                visibility: "PUBLIC",
+              }),
+            ),
+            Policies.vegetables.canCreate,
+            Policies.comments.canCreate,
+            Policies.resources.canCreate,
+            Policies.organizations.canCreate,
+            Policies.media.canCreate,
+          ]
+
+          for (const policy of writePolicies) {
+            const canWrite = yield* runPolicySuccess(policy, blockedSession)
+            if (canWrite === true) return false
+          }
+          return true
+        }).pipe(Effect.provide(IdGenTest)),
+      ),
+    )
+
+    it.effect("permission checks are idempotent", () =>
+      assertPropertyEffect(accountSessionArbitrary, (session) =>
+        Effect.gen(function* () {
+          const policies = [
+            Policies.vegetables.canCreate,
+            Policies.resources.canCreate,
+            Policies.comments.canCreate,
+            Policies.media.canCreate,
+          ]
+
+          for (const policy of policies) {
+            const result1 = yield* runPolicySuccess(policy, session)
+            const result2 = yield* runPolicySuccess(policy, session)
+            if (result1 !== result2) return false
+          }
+          return true
+        }),
+      ),
+    )
+  })
+
+  describe("monotonicity", () => {
+    assertMonotonic(Policies.vegetables.canCreate, "vegetables:canCreate")
+    assertMonotonic(Policies.vegetables.canRevise, "vegetables:canRevise")
+    assertMonotonic(Policies.resources.canCreate, "resources:canCreate")
+    assertMonotonic(Policies.resources.canRevise, "resources:canRevise")
+    assertMonotonic(Policies.organizations.canCreate, "organizations:canCreate")
+    assertMonotonic(Policies.comments.canCreate, "comments:canCreate")
+    assertMonotonic(Policies.vegetables.canBookmark, "bookmarks:canCreate")
+    assertMonotonic(Policies.media.canCreate, "media:canCreate")
+  })
+
+  describe("implications", () => {
+    it.effect("canEdit implies canView (for owned posts)", () =>
+      assertPropertyEffect(
+        FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
+        ([session, visibility]) =>
+          Effect.gen(function* () {
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: session.personId as ProfileId,
+              publishedAt: null,
+              visibility,
+            })
+            const canEdit = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
+            const canView = yield* runPolicySuccess(Policies.posts.canView(post), session)
+            if (canEdit === true) return canView
+            return true
+          }),
+      ),
+    )
+
+    it.effect("canDelete implies canView (for owned posts)", () =>
+      assertPropertyEffect(
+        FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
+        ([session, visibility]) =>
+          Effect.gen(function* () {
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: session.personId as ProfileId,
+              publishedAt: null,
+              visibility,
+            })
+            const canDelete = yield* runPolicySuccess(Policies.posts.canDelete(post), session)
+            const canView = yield* runPolicySuccess(Policies.posts.canView(post), session)
+            return !canDelete || canView
+          }),
+      ),
+    )
+
+    it.effect("canCreate implies canRevise for vegetables", () =>
+      assertPropertyEffect(accountSessionArbitrary, (session) =>
+        Effect.gen(function* () {
+          const canCreate = yield* runPolicySuccess(Policies.vegetables.canCreate, session)
+          const canRevise = yield* runPolicySuccess(Policies.vegetables.canRevise, session)
+          return !canCreate || canRevise
+        }),
+      ),
+    )
+
+    it.effect("canCreate implies canRevise for resources", () =>
+      assertPropertyEffect(accountSessionArbitrary, (session) =>
+        Effect.gen(function* () {
+          const canCreate = yield* runPolicySuccess(Policies.resources.canCreate, session)
+          const canRevise = yield* runPolicySuccess(Policies.resources.canRevise, session)
+          return !canCreate || canRevise
+        }),
+      ),
+    )
+  })
+
   describe("posts", () => {
     it.effect("owner can always edit their own post", () =>
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const post = createTestPost(session.personId)
+          const post = CorePostMetadata.makeUnsafe({
+            handle: "test" as CorePostMetadata["handle"],
+            ownerProfileId: session.personId as ProfileId,
+            publishedAt: null,
+            visibility: "PUBLIC",
+          })
           return yield* runPolicySuccess(Policies.posts.canEdit(post), session)
         }),
       ),
@@ -101,7 +275,12 @@ describe("Policies", () => {
     it.effect("owner can always delete their own post", () =>
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const post = createTestPost(session.personId)
+          const post = CorePostMetadata.makeUnsafe({
+            handle: "test" as CorePostMetadata["handle"],
+            ownerProfileId: session.personId as ProfileId,
+            publishedAt: null,
+            visibility: "PUBLIC",
+          })
           return yield* runPolicySuccess(Policies.posts.canDelete(post), session)
         }),
       ),
@@ -113,7 +292,12 @@ describe("Policies", () => {
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = createTestPost(otherPersonId)
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: otherPersonId as ProfileId,
+              publishedAt: null,
+              visibility: "PUBLIC",
+            })
             const result = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
             return !result
           }),
@@ -126,7 +310,12 @@ describe("Policies", () => {
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = createTestPost(otherPersonId)
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: otherPersonId as ProfileId,
+              publishedAt: null,
+              visibility: "PUBLIC",
+            })
             const result = yield* runPolicySuccess(Policies.posts.canDelete(post), session)
             return !result
           }),
@@ -137,7 +326,12 @@ describe("Policies", () => {
       assertPropertyEffect(sessionArbitrary, (session) =>
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
-          const post = createTestPost(personId, "PUBLIC")
+          const post = CorePostMetadata.makeUnsafe({
+            handle: "test" as CorePostMetadata["handle"],
+            ownerProfileId: personId as ProfileId,
+            publishedAt: null,
+            visibility: "PUBLIC",
+          })
           return yield* runPolicySuccess(Policies.posts.canView(post), session)
         }).pipe(Effect.provide(IdGenTest)),
       ),
@@ -147,7 +341,12 @@ describe("Policies", () => {
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
-          const post = createTestPost(personId, "COMMUNITY")
+          const post = CorePostMetadata.makeUnsafe({
+            handle: "test" as CorePostMetadata["handle"],
+            ownerProfileId: personId as ProfileId,
+            publishedAt: null,
+            visibility: "COMMUNITY",
+          })
           return yield* runPolicySuccess(Policies.posts.canView(post), session)
         }).pipe(Effect.provide(IdGenTest)),
       ),
@@ -155,12 +354,15 @@ describe("Policies", () => {
 
     it.effect("visitors cannot view community posts", () =>
       assertPropertyEffect(
-        FastCheck.tuple(sessionArbitrary, personIdArbitrary).filter(
-          ([session]) => session.type === "VISITOR",
-        ),
+        FastCheck.tuple(visitorSessionArbitrary, personIdArbitrary),
         ([session, ownerId]) =>
           Effect.gen(function* () {
-            const post = createTestPost(ownerId, "COMMUNITY")
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: ownerId as ProfileId,
+              publishedAt: null,
+              visibility: "COMMUNITY",
+            })
             const result = yield* runPolicySuccess(Policies.posts.canView(post), session)
             return !result
           }),
@@ -173,35 +375,44 @@ describe("Policies", () => {
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = createTestPost(otherPersonId, "PRIVATE")
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: otherPersonId as ProfileId,
+              publishedAt: null,
+              visibility: "PRIVATE",
+            })
             const result = yield* runPolicySuccess(Policies.posts.canView(post), session)
             return !result
           }),
       ),
     )
 
-    it.effect("canEdit implies canView (for owned posts)", () =>
+    it.effect("public post viewing is monotonic", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
-        ([session, visibility]) =>
+        FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
+        ([baseSession, ownerId]) =>
           Effect.gen(function* () {
-            const post = createTestPost(session.personId, visibility)
-            const canEdit = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
-            const canView = yield* runPolicySuccess(Policies.posts.canView(post), session)
-            return !canEdit || canView
-          }),
-      ),
-    )
-
-    it.effect("canDelete implies canView (for owned posts)", () =>
-      assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
-        ([session, visibility]) =>
-          Effect.gen(function* () {
-            const post = createTestPost(session.personId, visibility)
-            const canDelete = yield* runPolicySuccess(Policies.posts.canDelete(post), session)
-            const canView = yield* runPolicySuccess(Policies.posts.canView(post), session)
-            return !canDelete || canView
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: ownerId as ProfileId,
+              publishedAt: null,
+              visibility: "PUBLIC",
+            })
+            const results = yield* Effect.all(
+              ACCESS_LEVEL_ORDER.map((level) =>
+                runPolicySuccess(
+                  Policies.posts.canView(post),
+                  sessionWithAccessLevel(baseSession, level),
+                ),
+              ),
+              { concurrency: "unbounded" },
+            )
+            let seenTrue = false
+            for (const result of results) {
+              if (seenTrue === true && result === false) return false
+              if (result === true) seenTrue = true
+            }
+            return true
           }),
       ),
     )
@@ -272,8 +483,7 @@ describe("Policies", () => {
               session,
             )
 
-            if (isAdmin(session)) return true
-            // Non-admins should be denied
+            if (isAdmin(session) === true) return true
             return !toModerator && !fromModerator
           }),
       ),
@@ -301,7 +511,7 @@ describe("Policies", () => {
               session,
             )
 
-            if (isAdmin(session)) return true
+            if (isAdmin(session) === true) return true
             return !toAdmin && !fromAdmin
           }),
       ),
@@ -325,13 +535,11 @@ describe("Policies", () => {
     )
 
     it.effect("visitors cannot create organizations", () =>
-      assertPropertyEffect(
-        sessionArbitrary.filter((s) => s.type === "VISITOR"),
-        (session) =>
-          Effect.map(
-            runPolicySuccess(Policies.organizations.canCreate, session),
-            (allowed) => !allowed,
-          ),
+      assertPropertyEffect(visitorSessionArbitrary, (session) =>
+        Effect.map(
+          runPolicySuccess(Policies.organizations.canCreate, session),
+          (allowed) => !allowed,
+        ),
       ),
     )
 
@@ -380,15 +588,16 @@ describe("Policies", () => {
 
     it.effect("visitors cannot view private organization members", () =>
       assertPropertyEffect(
-        FastCheck.tuple(
-          sessionArbitrary.filter((s) => s.type === "VISITOR"),
-          organizationArbitrary,
-        ).map(
-          ([session, org]) => [session, { ...org, membersVisibility: "PRIVATE" as const }] as const,
-        ),
+        FastCheck.tuple(visitorSessionArbitrary, organizationArbitrary),
         ([session, org]) =>
           Effect.map(
-            runPolicySuccess(Policies.organizations.canViewMembers(org), session),
+            runPolicySuccess(
+              Policies.organizations.canViewMembers({
+                ...org,
+                membersVisibility: "PRIVATE",
+              }),
+              session,
+            ),
             (allowed) => !allowed,
           ),
       ),
@@ -411,6 +620,162 @@ describe("Policies", () => {
             ),
             (allowed) => !allowed,
           ),
+      ),
+    )
+  })
+
+  describe("organization membership", () => {
+    const memberWithLevel = (
+      level: OrganizationAccessLevel,
+      sessionArbitrary: typeof accountSessionArbitrary = accountSessionArbitrary,
+    ) =>
+      FastCheck.tuple(sessionArbitrary, organizationIdArbitrary).map(([session, orgId]) => ({
+        session: sessionWithOrgMembership(session, orgId, level),
+        orgId,
+      }))
+
+    it.effect("managers can delete their organization", () =>
+      assertPropertyEffect(
+        memberWithLevel("MANAGER", trustedAccountSessionArbitrary),
+        ({ session, orgId }) => runPolicySuccess(Policies.organizations.canDelete(orgId), session),
+      ),
+    )
+
+    it.effect("editors can create organization posts", () =>
+      assertPropertyEffect(
+        memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
+        ({ session, orgId }) =>
+          Effect.gen(function* () {
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: orgId as ProfileId,
+              publishedAt: null,
+              visibility: "PUBLIC",
+            })
+            return yield* runPolicySuccess(Policies.posts.canCreate(post), session)
+          }),
+      ),
+    )
+
+    it.effect("editors can edit organization posts", () =>
+      assertPropertyEffect(
+        memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
+        ({ session, orgId }) =>
+          Effect.gen(function* () {
+            const post = CorePostMetadata.makeUnsafe({
+              handle: "test" as CorePostMetadata["handle"],
+              ownerProfileId: orgId as ProfileId,
+              publishedAt: null,
+              visibility: "PUBLIC",
+            })
+            return yield* runPolicySuccess(Policies.posts.canEdit(post), session)
+          }),
+      ),
+    )
+
+    it.effect("viewers cannot delete organization", () =>
+      assertPropertyEffect(memberWithLevel("VIEWER"), ({ session, orgId }) =>
+        Effect.map(
+          runPolicySuccess(Policies.organizations.canDelete(orgId), session),
+          (allowed) => !allowed,
+        ),
+      ),
+    )
+
+    it.effect("viewers cannot create organization posts", () =>
+      assertPropertyEffect(memberWithLevel("VIEWER"), ({ session, orgId }) =>
+        Effect.gen(function* () {
+          const post = CorePostMetadata.makeUnsafe({
+            handle: "test" as CorePostMetadata["handle"],
+            ownerProfileId: orgId as ProfileId,
+            publishedAt: null,
+            visibility: "PUBLIC",
+          })
+          const canCreate = yield* runPolicySuccess(Policies.posts.canCreate(post), session)
+          return !canCreate
+        }),
+      ),
+    )
+
+    it.effect("organization membership does not grant platform admin rights", () =>
+      assertPropertyEffect(memberWithLevel("MANAGER"), ({ session }) =>
+        Effect.gen(function* () {
+          if (session.accessLevel === "ADMIN") return true
+
+          const canManageAdmins = yield* runPolicySuccess(
+            Policies.people.canModifyAccessLevel({
+              from: "MODERATOR",
+              to: "ADMIN",
+            }),
+            session,
+          )
+          return !canManageAdmins
+        }),
+      ),
+    )
+  })
+
+  describe("permission composition", () => {
+    it.effect("post owner + org member has both permissions", () =>
+      assertPropertyEffect(trustedAccountSessionArbitrary, (session) =>
+        Effect.gen(function* () {
+          const orgId = yield* IdGen.make(OrganizationId)
+          const sessionWithMembership = sessionWithOrgMembership(session, orgId, "EDITOR")
+
+          const ownPost = CorePostMetadata.makeUnsafe({
+            handle: "test" as CorePostMetadata["handle"],
+            ownerProfileId: session.personId as ProfileId,
+            publishedAt: null,
+            visibility: "PRIVATE",
+          })
+          const canEditOwn = yield* runPolicySuccess(
+            Policies.posts.canEdit(ownPost),
+            sessionWithMembership,
+          )
+          if (canEditOwn === false) return false
+
+          const orgPost = CorePostMetadata.makeUnsafe({
+            handle: "test" as CorePostMetadata["handle"],
+            ownerProfileId: orgId as ProfileId,
+            publishedAt: null,
+            visibility: "PUBLIC",
+          })
+          const canEditOrg = yield* runPolicySuccess(
+            Policies.posts.canEdit(orgPost),
+            sessionWithMembership,
+          )
+
+          return canEditOrg
+        }).pipe(Effect.provide(IdGenTest)),
+      ),
+    )
+
+    it.effect("multiple organization memberships work independently", () =>
+      assertPropertyEffect(trustedAccountSessionArbitrary, (session) =>
+        Effect.gen(function* () {
+          const org1 = yield* IdGen.make(OrganizationId)
+          const org2 = yield* IdGen.make(OrganizationId)
+
+          const sessionWithMemberships = AccountSession.makeUnsafe({
+            ...session,
+            memberships: [
+              { accessLevel: "MANAGER", organizationId: org1 },
+              { accessLevel: "VIEWER", organizationId: org2 },
+            ],
+          })
+
+          const canDeleteOrg1 = yield* runPolicySuccess(
+            Policies.organizations.canDelete(org1),
+            sessionWithMemberships,
+          )
+
+          const canDeleteOrg2 = yield* runPolicySuccess(
+            Policies.organizations.canDelete(org2),
+            sessionWithMemberships,
+          )
+
+          return canDeleteOrg1 && !canDeleteOrg2
+        }).pipe(Effect.provide(IdGenTest)),
       ),
     )
   })
@@ -447,23 +812,8 @@ describe("Policies", () => {
     )
 
     it.effect("visitors cannot create vegetables", () =>
-      assertPropertyEffect(
-        sessionArbitrary.filter((s) => s.type === "VISITOR"),
-        (session) =>
-          Effect.map(
-            runPolicySuccess(Policies.vegetables.canCreate, session),
-            (allowed) => !allowed,
-          ),
-      ),
-    )
-
-    it.effect("canCreate implies canRevise for vegetables", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const canCreate = yield* runPolicySuccess(Policies.vegetables.canCreate, session)
-          const canRevise = yield* runPolicySuccess(Policies.vegetables.canRevise, session)
-          return !canCreate || canRevise
-        }),
+      assertPropertyEffect(visitorSessionArbitrary, (session) =>
+        Effect.map(runPolicySuccess(Policies.vegetables.canCreate, session), (allowed) => !allowed),
       ),
     )
   })
@@ -498,16 +848,6 @@ describe("Policies", () => {
         Effect.map(runPolicySuccess(Policies.resources.canCreate, session), (allowed) => !allowed),
       ),
     )
-
-    it.effect("canCreate implies canRevise for resources", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const canCreate = yield* runPolicySuccess(Policies.resources.canCreate, session)
-          const canRevise = yield* runPolicySuccess(Policies.resources.canRevise, session)
-          return !canCreate || canRevise
-        }),
-      ),
-    )
   })
 
   describe("bookmarks", () => {
@@ -518,13 +858,11 @@ describe("Policies", () => {
     )
 
     it.effect("visitors cannot create bookmarks", () =>
-      assertPropertyEffect(
-        sessionArbitrary.filter((s) => s.type === "VISITOR"),
-        (session) =>
-          Effect.map(
-            runPolicySuccess(Policies.vegetables.canBookmark, session),
-            (allowed) => !allowed,
-          ),
+      assertPropertyEffect(visitorSessionArbitrary, (session) =>
+        Effect.map(
+          runPolicySuccess(Policies.vegetables.canBookmark, session),
+          (allowed) => !allowed,
+        ),
       ),
     )
 
@@ -561,10 +899,8 @@ describe("Policies", () => {
     )
 
     it.effect("visitors cannot create comments", () =>
-      assertPropertyEffect(
-        sessionArbitrary.filter((s) => s.type === "VISITOR"),
-        (session) =>
-          Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
+      assertPropertyEffect(visitorSessionArbitrary, (session) =>
+        Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
       ),
     )
 
@@ -572,8 +908,7 @@ describe("Policies", () => {
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
           const canCensor = yield* runPolicySuccess(Policies.comments.canCensor, session)
-          // Only ADMIN has comments:censor permission
-          if (isAdmin(session)) return true
+          if (isAdmin(session) === true) return true
           return !canCensor
         }),
       ),
@@ -596,10 +931,8 @@ describe("Policies", () => {
     )
 
     it.effect("visitors cannot create media", () =>
-      assertPropertyEffect(
-        sessionArbitrary.filter((s) => s.type === "VISITOR"),
-        (session) =>
-          Effect.map(runPolicySuccess(Policies.media.canCreate, session), (allowed) => !allowed),
+      assertPropertyEffect(visitorSessionArbitrary, (session) =>
+        Effect.map(runPolicySuccess(Policies.media.canCreate, session), (allowed) => !allowed),
       ),
     )
 
@@ -607,7 +940,7 @@ describe("Policies", () => {
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
           const canCensor = yield* runPolicySuccess(Policies.media.canCensor, session)
-          if (isAdmin(session)) return true
+          if (isAdmin(session) === true) return true
           return !canCensor
         }),
       ),
@@ -619,118 +952,18 @@ describe("Policies", () => {
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
           const canEvaluate = yield* runPolicySuccess(Policies.revisions.canEvaluate, session)
-          if (isModeratorOrAdmin(session)) return canEvaluate
+          if (isModeratorOrAdmin(session) === true) return canEvaluate
           return !canEvaluate
         }),
       ),
     )
 
     it.effect("visitors cannot evaluate revisions", () =>
-      assertPropertyEffect(
-        sessionArbitrary.filter((s) => s.type === "VISITOR"),
-        (session) =>
-          Effect.map(
-            runPolicySuccess(Policies.revisions.canEvaluate, session),
-            (allowed) => !allowed,
-          ),
-      ),
-    )
-  })
-
-  describe("access level monotonicity", () => {
-    /**
-     * Helper: create an AccountSession at a specific access level, keeping
-     * everything else from the source session (memberships, personId).
-     */
-    const withAccessLevel = (
-      session: AccountSession,
-      accessLevel: AccountSession["accessLevel"],
-    ): AccountSession => ({ ...session, accessLevel })
-
-    const ACCESS_LEVEL_ORDER: ReadonlyArray<AccountSession["accessLevel"]> = [
-      "BLOCKED",
-      "NEWCOMER",
-      "COMMUNITY",
-      "MODERATOR",
-      "ADMIN",
-    ]
-
-    /**
-     * For a given policy, assert that if a lower access level is allowed,
-     * then all higher access levels are also allowed.
-     */
-    const assertMonotonicity = (
-      policyEffect: Effect.Effect<
-        unknown,
-        unknown,
-        import("../src/authorization/session.js").SessionContext
-      >,
-    ) =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const results: boolean[] = []
-          for (const level of ACCESS_LEVEL_ORDER) {
-            const s = withAccessLevel(session, level)
-            results.push(yield* runPolicySuccess(policyEffect, s))
-          }
-          // Once we see a true, all subsequent must be true
-          let seenTrue = false
-          for (const result of results) {
-            if (seenTrue && !result) return false
-            if (result) seenTrue = true
-          }
-          return true
-        }),
-      )
-
-    it.effect("vegetables:canCreate is monotonic", () =>
-      assertMonotonicity(Policies.vegetables.canCreate),
-    )
-
-    it.effect("vegetables:canRevise is monotonic", () =>
-      assertMonotonicity(Policies.vegetables.canRevise),
-    )
-
-    it.effect("resources:canCreate is monotonic", () =>
-      assertMonotonicity(Policies.resources.canCreate),
-    )
-
-    it.effect("resources:canRevise is monotonic", () =>
-      assertMonotonicity(Policies.resources.canRevise),
-    )
-
-    it.effect("organizations:canCreate is monotonic", () =>
-      assertMonotonicity(Policies.organizations.canCreate),
-    )
-
-    it.effect("comments:canCreate is monotonic", () =>
-      assertMonotonicity(Policies.comments.canCreate),
-    )
-
-    it.effect("bookmarks:canCreate is monotonic", () =>
-      assertMonotonicity(Policies.vegetables.canBookmark),
-    )
-
-    it.effect("media:canCreate is monotonic", () => assertMonotonicity(Policies.media.canCreate))
-
-    it.effect("public post viewing is monotonic", () =>
-      assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
-        ([session, ownerId]) =>
-          Effect.gen(function* () {
-            const post = createTestPost(ownerId, "PUBLIC")
-            const results: boolean[] = []
-            for (const level of ACCESS_LEVEL_ORDER) {
-              const s = withAccessLevel(session, level)
-              results.push(yield* runPolicySuccess(Policies.posts.canView(post), s))
-            }
-            let seenTrue = false
-            for (const result of results) {
-              if (seenTrue && !result) return false
-              if (result) seenTrue = true
-            }
-            return true
-          }),
+      assertPropertyEffect(visitorSessionArbitrary, (session) =>
+        Effect.map(
+          runPolicySuccess(Policies.revisions.canEvaluate, session),
+          (allowed) => !allowed,
+        ),
       ),
     )
   })

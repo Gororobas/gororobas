@@ -128,7 +128,7 @@ export const check = <A, R>(policy: Policy<A, R>) =>
   )
 
 export const assertAuthenticated = policy((session) =>
-  isAccountSession(session) ? allow(session) : deny("Must be logged-in"),
+  isAccountSession(session) === true ? allow(session) : deny("Must be logged-in"),
 )
 
 export const authenticatedPolicy = <A, R = never>(
@@ -139,9 +139,11 @@ export const authenticatedPolicy = <A, R = never>(
   assertAuthenticated.pipe(Effect.flatMap((session) => policy(() => predicate(session))))
 
 export const assertTrustedPerson = authenticatedPolicy((session) =>
-  Schema.is(TrustedAccessLevel)(session.accessLevel)
-    ? allow(session)
-    : deny("Can't access community-only content"),
+  Schema.is(TrustedAccessLevel)(session.accessLevel) ? allow(session) : deny(),
+)
+
+export const assertNonBlockedPerson = authenticatedPolicy((session) =>
+  session.accessLevel !== "BLOCKED" ? allow(session) : deny(),
 )
 
 /**
@@ -150,7 +152,9 @@ export const assertTrustedPerson = authenticatedPolicy((session) =>
 export const platformPermission = (permission: PlatformPermission) =>
   policy((session) => {
     const permissions = getSessionPlatformPermissions(session)
-    return permissions.has(permission) ? allow(session) : deny(`Missing permission ${permission}`)
+    return permissions.has(permission) === true
+      ? allow(session)
+      : deny(`Missing permission ${permission}`)
   })
 
 /**

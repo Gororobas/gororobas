@@ -2,11 +2,12 @@ import { Effect, Schema } from "effect"
 
 import {
   allow,
+  assertNonBlockedPerson,
   assertTrustedPerson,
   authenticatedPolicy,
   deny,
-  organizationPermission,
   or,
+  organizationPermission,
   policy,
 } from "../authorization/policy.js"
 import { OrganizationId } from "../common/ids.js"
@@ -27,11 +28,15 @@ const isPersonalPostPublic = (post: Pick<CorePostMetadata, "visibility">) =>
 
 export const postsPolicies = {
   canCreate: (post: Pick<CorePostMetadata, "ownerProfileId">) =>
-    or(
-      isPostOwner(post),
-      organizationPermission(
-        "posts:create:organization",
-        Schema.decodeSync(OrganizationId)(post.ownerProfileId),
+    assertNonBlockedPerson.pipe(
+      Effect.flatMap(() =>
+        or(
+          isPostOwner(post),
+          organizationPermission(
+            "posts:create:organization",
+            Schema.decodeSync(OrganizationId)(post.ownerProfileId),
+          ),
+        ),
       ),
     ),
 
@@ -52,6 +57,7 @@ export const postsPolicies = {
 
   canView: (post: Pick<CorePostMetadata, "ownerProfileId" | "visibility">) =>
     or(
+      isPostOwner(post),
       isPersonalPostPublic(post),
       organizationPermission("posts:view", Schema.decodeSync(OrganizationId)(post.ownerProfileId)),
     ),
