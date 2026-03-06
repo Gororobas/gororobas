@@ -1,6 +1,6 @@
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "@effect/platform"
 import type { HttpApp } from "@effect/platform"
-import { Effect, Stream } from "effect"
+import { Effect, ServiceMap, Stream } from "effect"
 
 import { DurableStreamsService } from "./service.js"
 
@@ -9,7 +9,8 @@ export const makeDurableStreamRouter: Effect.Effect<
   never,
   DurableStreamsService
 > = Effect.gen(function* () {
-  const { internalUrl } = yield* DurableStreamsService
+  const services = yield* Effect.services<DurableStreamsService>()
+  const { internalUrl } = ServiceMap.get(services, DurableStreamsService)
 
   const proxyApp: HttpApp.Default = Effect.gen(function* () {
     const request = yield* HttpServerRequest.HttpServerRequest

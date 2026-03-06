@@ -9,7 +9,10 @@ import {
   VegetableStreamEvent,
   VegetableStreamEventBinary,
 } from "../../src/durable-streams/schemas.js"
-import { DurableStreamsConfig, DurableStreamsService } from "../../src/durable-streams/service.js"
+import {
+  DurableStreamsConfig,
+  DurableStreamsServiceLive,
+} from "../../src/durable-streams/service.js"
 
 const VegetableStreamEventArbitrary = Arbitrary.make(VegetableStreamEvent)
 
@@ -17,11 +20,11 @@ const generateTestEvent = () => {
   return FastCheck.sample(VegetableStreamEventArbitrary, 1)[0]
 }
 
-const ConfigLayer = Layer.succeed(DurableStreamsConfig, {
+const config: DurableStreamsConfig = {
   dataDir: "./test/durable-streams/data",
-})
+}
 
-const ServiceLayer = Layer.provide(DurableStreamsService.Default, ConfigLayer)
+const ServiceLayer = DurableStreamsServiceLive(config)
 
 const ServerLayer = Layer.provide(
   Layer.unwrapScoped(

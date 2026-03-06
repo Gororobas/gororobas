@@ -1,24 +1,28 @@
 import { DurableStreamTestServer } from "@durable-streams/server"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Effect, Layer, Schema, ServiceMap } from "effect"
 
-export class DurableStreamServerError extends Schema.TaggedError<DurableStreamServerError>()(
+export class DurableStreamServerError extends Schema.TaggedErrorClass<DurableStreamServerError>()(
   "DurableStreamServerError",
   {
     message: Schema.String,
   },
 ) {}
 
-export class DurableStreamsConfig extends Context.Tag("DurableStreamsConfig")<
-  DurableStreamsConfig,
-  { dataDir: string }
->() {}
+export interface DurableStreamsConfig {
+  readonly dataDir: string
+}
 
-export class DurableStreamsService extends Effect.Service<DurableStreamsService>()(
-  "DurableStreamsService",
-  {
-    scoped: Effect.gen(function* () {
-      const config = yield* DurableStreamsConfig
+export interface DurableStreamsService {
+  readonly internalUrl: string
+  readonly server: DurableStreamTestServer
+}
 
+export const DurableStreamsService =
+  ServiceMap.Service<DurableStreamsService>("DurableStreamsService")
+
+export const DurableStreamsServiceLive = (config: DurableStreamsConfig) =>
+  Layer.effectServices(
+    Effect.gen(function* () {
       const server = new DurableStreamTestServer({
         dataDir: config.dataDir,
         port: 0,
@@ -45,14 +49,6 @@ export class DurableStreamsService extends Effect.Service<DurableStreamsService>
         ),
       )
 
-      return {
-        internalUrl,
-        server,
-      } as const
+      return ServiceMap.makeUnsafe(new Map([[DurableStreamsService.key, { internalUrl, server }]]))
     }),
-    dependencies: [],
-  },
-) {}
-
-export const DurableStreamsServiceLive = (dataDir: string) =>
-  Layer.provide(DurableStreamsService.Default, Layer.succeed(DurableStreamsConfig, { dataDir }))
+  )
