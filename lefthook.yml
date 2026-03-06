@@ -9,8 +9,6 @@ pre-commit:
       glob: "*"
       run: bun oxfmt {staged_files}
       stage_fixed: true
-    beads-export:
-      run: bd export -o .beads/issues.jsonl && git add .beads/issues.jsonl
     # effect-bdd-check:
     #   glob: "**/*.feature"
     #   run: bun run packages/effect-bdd/bin/effect-bdd-check.ts check

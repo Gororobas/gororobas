@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
-  "jsPlugins": ["./custom-lint-rules.mjs"],
+  "jsPlugins": ["./linting/index.mjs"],
   "rules": {
     "unicorn/filename-case": [
       "error",
@@ -26,6 +26,8 @@
         }
       }
     ],
+    // Enforce explicit boolean comparisons
+    "custom-lint-rules/explicit-boolean-compare": "error",
     // Ban disableValidation: true
     "custom-lint-rules/no-disable-validation": "error",
     // Ban sql<Type>`...` - use SqlSchema with Schema instead

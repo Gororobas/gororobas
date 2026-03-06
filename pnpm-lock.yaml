@@ -7,7 +7,7 @@ settings:
 catalogs:
   default:
     '@effect/vitest':
-      specifier: ^4.0.0-beta.28
+      specifier: 4.0.0-beta.28
       version: 4.0.0-beta.28
     '@tiptap/core':
       specifier: latest
@@ -22,7 +22,7 @@ catalogs:
       specifier: latest
       version: 3.20.1
     effect:
-      specifier: ^4.0.0-beta.28
+      specifier: 4.0.0-beta.28
       version: 4.0.0-beta.28
     loro-crdt:
       specifier: ^1.10.6
@@ -248,8 +248,8 @@ importers:
         specifier: latest
         version: 1.3.10
       fast-check:
-        specifier: ^3.23.2
-        version: 3.23.2
+        specifier: latest
+        version: 4.5.3
       sql-formatter:
         specifier: latest
         version: 15.7.2
