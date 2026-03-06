@@ -26,8 +26,7 @@
         }
       }
     ],
-    // Enforce explicit boolean comparisons
-    "custom-lint-rules/explicit-boolean-compare": "error",
+    "typescript/no-unnecessary-boolean-literal-compare": "off",
     // Ban disableValidation: true
     "custom-lint-rules/no-disable-validation": "error",
     // Ban sql<Type>`...` - use SqlSchema with Schema instead

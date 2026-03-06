@@ -1,4 +1,3 @@
-import { explicitBooleanCompareRule } from "./explicit-boolean-compare.mjs"
 import { noDirectFetchRule } from "./no-direct-fetch.mjs"
 import { noDirectIdConstructionRule } from "./no-direct-id-construction.mjs"
 import { noDisableValidationRule } from "./no-disable-validation.mjs"
@@ -11,7 +10,6 @@ import { taggedErrorSuffixRule } from "./tagged-error-suffix.mjs"
 export default {
   meta: { name: "custom-lint-rules" },
   rules: {
-    "explicit-boolean-compare": explicitBooleanCompareRule,
     "no-direct-fetch": noDirectFetchRule,
     "no-direct-id-construction": noDirectIdConstructionRule,
     "no-disable-validation": noDisableValidationRule,
