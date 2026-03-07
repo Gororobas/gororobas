@@ -111,106 +111,103 @@ const initialContext: CalculatorContext = {
 // Tests
 // ============================================================================
 
-describeFeature(
-  "./packages/effect-bdd/examples/calculator.feature",
-  ({ Background, Scenario, ScenarioOutline }) => {
-    Background({
-      layer: TestLayer,
-      steps: () =>
-        runSteps(
-          Given("the calculator is reset", {
-            handler: () =>
-              Effect.gen(function* () {
-                const calc = yield* CalculatorService
-                yield* calc.setValue(0)
-                return initialContext
-              }),
-          }),
-        ),
-    })
+describeFeature("./calculator.feature", ({ Background, Scenario, ScenarioOutline }) => {
+  Background({
+    layer: TestLayer,
+    steps: () =>
+      runSteps(
+        Given("the calculator is reset", {
+          handler: () =>
+            Effect.gen(function* () {
+              const calc = yield* CalculatorService
+              yield* calc.setValue(0)
+              return initialContext
+            }),
+        }),
+      ),
+  })
 
-    Scenario("Adding two numbers", {
-      layer: TestLayer,
-      steps: () =>
-        runSteps(
-          Given("I have entered {int:first} into the calculator", {
-            handler: (_, { first }) =>
-              Effect.gen(function* () {
-                const bgCtx = yield* getBackgroundContext<CalculatorContext>()
-                const calc = yield* CalculatorService
-                const newValue = yield* calc.add(first)
-                return { ...bgCtx, value: newValue }
-              }),
-            params: Schema.Struct({ first: Schema.Int }),
-          }),
-          And("I have entered {int:second} into the calculator", {
-            handler: (ctx, { second }) =>
-              Effect.gen(function* () {
-                const calc = yield* CalculatorService
-                const newValue = yield* calc.add(second)
-                return { ...ctx, value: newValue }
-              }),
-            params: Schema.Struct({ second: Schema.Int }),
-          }),
-          When("I press add", {
-            handler: (ctx) =>
-              Effect.gen(function* () {
-                const calc = yield* CalculatorService
-                const history = yield* calc.getHistory()
-                return { ...ctx, history }
-              }),
-          }),
-          Then("the result should be {int:result}", {
-            handler: (ctx, { result }) =>
-              Effect.gen(function* () {
-                const calc = yield* CalculatorService
-                const value = yield* calc.getValue()
-                expect(value).toBe(result)
-                return ctx
-              }),
-            params: Schema.Struct({ result: Schema.Int }),
-          }),
-        ),
-    })
+  Scenario("Adding two numbers", {
+    layer: TestLayer,
+    steps: () =>
+      runSteps(
+        Given("I have entered {int:first} into the calculator", {
+          handler: (_, { first }) =>
+            Effect.gen(function* () {
+              const bgCtx = yield* getBackgroundContext<CalculatorContext>()
+              const calc = yield* CalculatorService
+              const newValue = yield* calc.add(first)
+              return { ...bgCtx, value: newValue }
+            }),
+          params: Schema.Struct({ first: Schema.Int }),
+        }),
+        And("I have entered {int:second} into the calculator", {
+          handler: (ctx, { second }) =>
+            Effect.gen(function* () {
+              const calc = yield* CalculatorService
+              const newValue = yield* calc.add(second)
+              return { ...ctx, value: newValue }
+            }),
+          params: Schema.Struct({ second: Schema.Int }),
+        }),
+        When("I press add", {
+          handler: (ctx) =>
+            Effect.gen(function* () {
+              const calc = yield* CalculatorService
+              const history = yield* calc.getHistory()
+              return { ...ctx, history }
+            }),
+        }),
+        Then("the result should be {int:result}", {
+          handler: (ctx, { result }) =>
+            Effect.gen(function* () {
+              const calc = yield* CalculatorService
+              const value = yield* calc.getValue()
+              expect(value).toBe(result)
+              return ctx
+            }),
+          params: Schema.Struct({ result: Schema.Int }),
+        }),
+      ),
+  })
 
-    ScenarioOutline("Subtracting numbers", {
-      layer: TestLayer,
-      steps: () =>
-        runSteps(
-          Given("I have entered {int:first} into the calculator", {
-            params: Schema.Struct({ first: Schema.Int }),
-            // `first` now comes from params (extracted from substituted step text)
-            handler: (_, { first }) =>
-              Effect.gen(function* () {
-                const bgCtx = yield* getBackgroundContext<CalculatorContext>()
-                const calc = yield* CalculatorService
-                yield* calc.setValue(first)
-                return { ...bgCtx, value: first }
-              }),
-          }),
-          And("I have entered {int:second} into the calculator", {
-            handler: (ctx, { second }) =>
-              Effect.gen(function* () {
-                const calc = yield* CalculatorService
-                const newValue = yield* calc.subtract(second)
-                return { ...ctx, value: newValue }
-              }),
-            params: Schema.Struct({ second: Schema.Int }),
-          }),
-          When("I press subtract", {
-            handler: (ctx) => Effect.succeed(ctx),
-          }),
-          Then("the result should be {int:result}", {
-            handler: (ctx, { result }) =>
-              Effect.gen(function* () {
-                const calc = yield* CalculatorService
-                const value = yield* calc.getValue()
-                expect(value).toBe(result)
-                return ctx
-              }),
-            params: Schema.Struct({ result: Schema.Int }),
-          }),
-        ),
-    })
-  },
-)
+  ScenarioOutline("Subtracting numbers", {
+    layer: TestLayer,
+    steps: () =>
+      runSteps(
+        Given("I have entered {int:first} into the calculator", {
+          params: Schema.Struct({ first: Schema.Int }),
+          // `first` now comes from params (extracted from substituted step text)
+          handler: (_, { first }) =>
+            Effect.gen(function* () {
+              const bgCtx = yield* getBackgroundContext<CalculatorContext>()
+              const calc = yield* CalculatorService
+              yield* calc.setValue(first)
+              return { ...bgCtx, value: first }
+            }),
+        }),
+        And("I have entered {int:second} into the calculator", {
+          handler: (ctx, { second }) =>
+            Effect.gen(function* () {
+              const calc = yield* CalculatorService
+              const newValue = yield* calc.subtract(second)
+              return { ...ctx, value: newValue }
+            }),
+          params: Schema.Struct({ second: Schema.Int }),
+        }),
+        When("I press subtract", {
+          handler: (ctx) => Effect.succeed(ctx),
+        }),
+        Then("the result should be {int:result}", {
+          handler: (ctx, { result }) =>
+            Effect.gen(function* () {
+              const calc = yield* CalculatorService
+              const value = yield* calc.getValue()
+              expect(value).toBe(result)
+              return ctx
+            }),
+          params: Schema.Struct({ result: Schema.Int }),
+        }),
+      ),
+  })
+})

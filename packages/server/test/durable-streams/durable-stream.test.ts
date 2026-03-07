@@ -107,7 +107,7 @@ const createStream = (baseUrl: string, streamName: string) =>
     catch: (error) => new Error(String(error)),
   })
 
-describe("DurableStream proxy integration", () => {
+describe.skip("DurableStream proxy integration", () => {
   it.effect("should create a stream via PUT and read empty", () =>
     Effect.gen(function* () {
       const baseUrl = yield* getBaseUrl

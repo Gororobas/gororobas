@@ -1,5 +1,7 @@
 import { describe, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
+import { dirname, isAbsolute } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import { BackgroundContext, ScenarioContext } from "../context.js"
 import { ScenarioNotFoundError } from "../errors.js"
@@ -13,6 +15,26 @@ import {
   listScenarioOutlines,
   listScenarios,
 } from "./helpers.js"
+
+function getCallerDir(): string {
+  const previousPrepareStackTrace = Error.prepareStackTrace
+  Error.prepareStackTrace = (_err, stack) => stack
+  const stack = new Error().stack as unknown as NodeJS.CallSite[]
+  Error.prepareStackTrace = previousPrepareStackTrace
+
+  const callerFrame = stack[2]
+  const callerFile = callerFrame.getFileName()
+
+  if (!callerFile) {
+    throw new Error("Could not determine caller file path")
+  }
+
+  if (callerFile.startsWith("file://")) {
+    return dirname(fileURLToPath(callerFile))
+  }
+
+  return dirname(callerFile)
+}
 
 // ============================================================================
 // Type-safe Layer Handling
@@ -343,7 +365,11 @@ export function describeFeature(
   featurePath: string,
   callback: (ctx: FeatureContext) => void,
 ): void {
-  const feature = parseFeatureFileSync(featurePath)
+  const absoluteFeaturePath = isAbsolute(featurePath)
+    ? featurePath
+    : `${getCallerDir()}/${featurePath}`
+
+  const feature = parseFeatureFileSync(absoluteFeaturePath)
 
   describe(feature.name, () => {
     const featureBgRef: BackgroundRef = {
@@ -353,13 +379,13 @@ export function describeFeature(
     }
 
     const featureCtx: FeatureContext = {
-      ...createRuleContext(feature, featurePath, featureBgRef),
+      ...createRuleContext(feature, absoluteFeaturePath, featureBgRef),
 
       Rule: (name, ruleCallback) => {
         const parsedRule = findRule(feature, name)
         if (!parsedRule) {
           throw new Error(
-            `Rule "${name}" not found in ${featurePath}. Available rules: ${listRules(feature).join(", ")}`,
+            `Rule "${name}" not found in ${absoluteFeaturePath}. Available rules: ${listRules(feature).join(", ")}`,
           )
         }
 
@@ -369,7 +395,9 @@ export function describeFeature(
             layer: undefined,
             parsedSteps: [],
           }
-          ruleCallback(createRuleContext(feature, featurePath, featureBgRef, ruleBgRef, name))
+          ruleCallback(
+            createRuleContext(feature, absoluteFeaturePath, featureBgRef, ruleBgRef, name),
+          )
         })
       },
     }

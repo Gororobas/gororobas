@@ -8,7 +8,7 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name     | access_level |
+        | name     | accessLevel |
         | Maria    | COMMUNITY    |
         | Ana      | MODERATOR    |
         | Ailton   | ADMIN        |
@@ -60,7 +60,7 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name   | access_level |
+        | name   | accessLevel |
         | Maria  | COMMUNITY    |
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
@@ -118,7 +118,7 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name   | access_level |
+        | name   | accessLevel |
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
 
@@ -152,7 +152,7 @@ Feature: Revisions
 
     Background:
       Given the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
         | Ana   | MODERATOR    |
 
