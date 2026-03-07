@@ -10,6 +10,7 @@ import { v7 } from "uuid"
 import { PeopleRepository } from "../src/people/repository.js"
 import { ProfilesRepository } from "../src/profiles/repository.js"
 import { AppSqlTest } from "../src/sql.js"
+import { getTelemetryLayer } from "./telemetry.js"
 
 /**
  * Test database layer using AppSqlTest (in-memory SQLite with migrations).
@@ -110,7 +111,14 @@ export const resetDatabase = Effect.gen(function* () {
   // Reset any sequences if needed
   // SQLite doesn't have sequences, but if using AUTOINCREMENT:
   // yield* sql`DELETE FROM sqlite_sequence`
-})
+}).pipe(
+  Effect.withSpan("test.resetDatabase", {
+    attributes: {
+      "db.operation": "cleanup",
+      "test.phase": "reset",
+    },
+  }),
+)
 
 /**
  * Run an effect with a test session context.
@@ -136,17 +144,18 @@ export const IdGenTest = Layer.succeed(IdGen, {
  * Compose test layers for common test scenarios.
  *
  * Includes:
+ * - getTelemetryLayer(): Optional OpenTelemetry instrumentation (enabled via ENABLE_TELEMETRY)
  * - TestSqlLayer: In-memory SQLite with migrations
  * - IdGenTest: UUID generation
  * - PeopleRepository: People data access layer
  * - ProfilesRepository: Profiles data access layer
  */
 export const TestLayer = Layer.mergeAll(
-  TestSqlLayer,
+  getTelemetryLayer(),
   IdGenTest,
-  PeopleRepository.Default,
-  ProfilesRepository.Default,
-)
+  Layer.effect(PeopleRepository, PeopleRepository.make),
+  Layer.effect(ProfilesRepository, ProfilesRepository.make),
+).pipe(Layer.provideMerge(TestSqlLayer))
 
 /**
  * Helper to run tests with automatic database reset.
