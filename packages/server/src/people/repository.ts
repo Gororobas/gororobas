@@ -1,4 +1,4 @@
-import { PersonId, PersonRow, ProfileId, SoleManagerOrganizationMetadata } from "@gororobas/domain"
+import { PersonId, PersonRow } from "@gororobas/domain"
 import { Effect, ServiceMap } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
@@ -7,7 +7,7 @@ export class PeopleRepository extends ServiceMap.Service<PeopleRepository>()("Pe
     const sql = yield* SqlClient.SqlClient
 
     const findById = SqlSchema.findOneOption({
-      Request: ProfileId,
+      Request: PersonId,
       Result: PersonRow,
       execute: (id) => sql`SELECT * FROM people WHERE id = ${id}`,
     })
@@ -20,31 +20,17 @@ export class PeopleRepository extends ServiceMap.Service<PeopleRepository>()("Pe
         WHERE id = ${id};`,
     })
 
-    const findOrganizationsWhereSoleManager = SqlSchema.findAll({
-      Request: PersonId,
-      Result: SoleManagerOrganizationMetadata,
-      execute: (personId) => sql`
-        SELECT
-          om.organization_id AS organizationId,
-          COUNT(*) AS memberCount
-        FROM organization_memberships om
-        WHERE om.person_id = ${personId}
-          AND om.access_level = 'MANAGER'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM organization_memberships om2
-            WHERE om2.organization_id = om.organization_id
-              AND om2.access_level = 'MANAGER'
-              AND om2.person_id != ${personId}
-          )
-        GROUP BY om.organization_id
+    const insertRow = SqlSchema.void({
+      Request: PersonRow,
+      execute: (person) => sql`
+        INSERT INTO people ${sql.insert(person)}
       `,
     })
 
     return {
       findById,
       updateRow,
-      findOrganizationsWhereSoleManager,
+      insertRow,
     } as const
   }),
 }) {}

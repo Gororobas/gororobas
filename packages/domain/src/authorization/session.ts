@@ -50,6 +50,9 @@ export const getSessionOrganizationPermissions = (
 export const Session = Schema.Union([VisitorSession, AccountSession])
 export type Session = typeof Session.Type
 
+/**
+ * @effect-leakable-service
+ */
 export class SessionContext extends ServiceMap.Service<SessionContext, Session>()("Session") {}
 
 export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError>()(

@@ -14,6 +14,7 @@ import {
  */
 import { DateTime, Effect, Schema } from "effect"
 import { SchemaError } from "effect/Schema"
+import { FastCheck } from "effect/testing"
 
 /**
  * Generate arbitraries from schemas using Schema.toArbitrary().
@@ -39,6 +40,18 @@ export const timestampColumnArbitrary = Schema.toArbitrary(TimestampColumn)
 export const personProfileRowArbitrary = Schema.toArbitrary(PersonProfileRow).map((profile) => ({
   ...profile,
   photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
+}))
+
+export const personWithProfileArbitrary = FastCheck.tuple(
+  personRowArbitrary,
+  personProfileRowArbitrary,
+).map(([person, profile]) => ({
+  person: {
+    ...person,
+    id: profile.id,
+    accessSetById: person.accessSetById === person.id ? profile.id : person.accessSetById,
+  },
+  profile,
 }))
 
 /**

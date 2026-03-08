@@ -36,6 +36,7 @@ export class PropertyTestFailure extends Error {
 export const checkPropertyEffect = <A, E>(
   arbitrary: FastCheck.Arbitrary<A>,
   predicate: (value: A) => Effect.Effect<boolean, E, never>,
+  options?: Parameters<typeof FastCheck.check>[1],
 ): Effect.Effect<PropertyResult<A>, E | UnknownError, never> =>
   Effect.gen(function* () {
     let counterexample: A | undefined
@@ -60,7 +61,7 @@ export const checkPropertyEffect = <A, E>(
 
     const checkResult = yield* Effect.tryPromise({
       catch: (unknown) => new UnknownError({ cause: unknown }),
-      try: () => FastCheck.check(asyncProp),
+      try: () => FastCheck.check(asyncProp, options),
     })
 
     return {
@@ -78,9 +79,10 @@ export const checkPropertyEffect = <A, E>(
 export const assertPropertyEffect = <A, E>(
   arbitrary: FastCheck.Arbitrary<A>,
   predicate: (value: A) => Effect.Effect<boolean, E, never>,
+  options?: Parameters<typeof FastCheck.check>[1],
 ): Effect.Effect<void, E | PropertyTestFailure | UnknownError, never> =>
   Effect.gen(function* () {
-    const result = yield* checkPropertyEffect(arbitrary, predicate)
+    const result = yield* checkPropertyEffect(arbitrary, predicate, options)
 
     if (!result.success) {
       return yield* Effect.fail(

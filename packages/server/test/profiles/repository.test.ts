@@ -7,43 +7,43 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Handle, ProfileRow } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
-import { DateTime, Effect, Option, Schema } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { DateTime, Effect, Exit, Option, Schema } from "effect"
 
 import { ProfilesRepository } from "../../src/profiles/repository.js"
-import {
-  makePersonFixture,
-  makeProfileFixture,
-  personProfileRowArbitrary,
-  profileRowArbitrary,
-} from "../fixtures.js"
-import { TestLayer } from "../test-helpers.js"
+import { makeProfileFixture, personProfileRowArbitrary, profileRowArbitrary } from "../fixtures.js"
+import { assertTransactionProperty, runTransactionScenario, TestLayer } from "../test-helpers.js"
+
+const DATABASE_PROPERTY_TEST_CONFIG = { numRuns: 30 } as const
 
 describe("ProfilesRepository", () => {
   describe("findByHandle", () => {
     it.effect("returns profile when exists and preserves schema", () =>
-      assertPropertyEffect(profileRowArbitrary, (profile) =>
-        Effect.gen(function* () {
-          const repo = yield* ProfilesRepository
+      assertPropertyEffect(
+        profileRowArbitrary,
+        (profile) =>
+          Effect.gen(function* () {
+            const repo = yield* ProfilesRepository
 
-          yield* repo.insertProfile(profile)
+            yield* repo.insertProfile(profile)
 
-          const result = yield* repo.findByHandle(profile.handle)
-          const retrieved = Option.getOrThrow(result)
+            const result = yield* repo.findByHandle(profile.handle)
+            const retrieved = Option.getOrThrow(result)
 
-          // Verify schema round-trip: encode → decode should preserve data
-          const encoded = yield* Schema.encodeEffect(ProfileRow)(retrieved)
-          const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
+            // Verify schema round-trip: encode → decode should preserve data
+            const encoded = yield* Schema.encodeEffect(ProfileRow)(retrieved)
+            const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
 
-          return deepEquals(retrieved, decoded)
-        }).pipe(Effect.provide(TestLayer)),
+            return deepEquals(retrieved, decoded)
+          }).pipe(Effect.provide(TestLayer)),
+        DATABASE_PROPERTY_TEST_CONFIG,
       ),
     )
 
     it.effect("returns None when profile does not exist", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
-        const result = yield* repo.findByHandle("nonexistent" as Handle)
+        const missingProfile = yield* makeProfileFixture()
+        const result = yield* repo.findByHandle(missingProfile.handle)
         expect(Option.isNone(result)).toBe(true)
       }).pipe(Effect.provide(TestLayer)),
     )
@@ -51,30 +51,35 @@ describe("ProfilesRepository", () => {
 
   describe("Property 9: Handle Uniqueness Invariant", () => {
     it.effect("isHandleInUse returns true for existing handle", () =>
-      // Feature: people-profiles-testing-strategy, Property 9: Handle Uniqueness Invariant
-      assertPropertyEffect(profileRowArbitrary, (profile) =>
-        Effect.gen(function* () {
-          const repo = yield* ProfilesRepository
+      assertPropertyEffect(
+        profileRowArbitrary,
+        (profile) =>
+          Effect.gen(function* () {
+            const repo = yield* ProfilesRepository
 
-          // Insert profile
-          yield* repo.insertProfile(profile)
+            // Insert profile
+            yield* repo.insertProfile(profile)
 
-          // Verify handle is in use
-          const inUse = yield* repo.isHandleInUse(profile.handle)
-          return inUse === true
-        }).pipe(Effect.provide(TestLayer)),
+            // Verify handle is in use
+            const inUse = yield* repo.isHandleInUse(profile.handle)
+            return inUse === true
+          }).pipe(Effect.provide(TestLayer)),
+        DATABASE_PROPERTY_TEST_CONFIG,
       ),
     )
 
     it.effect("isHandleInUse returns false for non-existent handle", () =>
-      assertPropertyEffect(Schema.toArbitrary(Handle), (handle: Handle) =>
-        Effect.gen(function* () {
-          const repo = yield* ProfilesRepository
+      assertPropertyEffect(
+        Schema.toArbitrary(Handle),
+        (handle: Handle) =>
+          Effect.gen(function* () {
+            const repo = yield* ProfilesRepository
 
-          // Verify handle is not in use (no profiles exist)
-          const inUse = yield* repo.isHandleInUse(handle)
-          return inUse === false
-        }).pipe(Effect.provide(TestLayer)),
+            // Verify handle is not in use (no profiles exist)
+            const inUse = yield* repo.isHandleInUse(handle)
+            return inUse === false
+          }).pipe(Effect.provide(TestLayer)),
+        DATABASE_PROPERTY_TEST_CONFIG,
       ),
     )
   })
@@ -106,30 +111,39 @@ describe("ProfilesRepository", () => {
 
   describe("Property 5: Repository Update Idempotence", () => {
     it.effect("applying same update twice produces same result", () =>
-      assertPropertyEffect(personProfileRowArbitrary, (profile) =>
-        Effect.gen(function* () {
-          const repo = yield* ProfilesRepository
-          yield* repo.insertProfile(profile)
+      assertPropertyEffect(
+        personProfileRowArbitrary,
+        (profile) =>
+          Effect.gen(function* () {
+            const repo = yield* ProfilesRepository
+            yield* repo.insertProfile(profile)
 
-          const now = yield* DateTime.now
-          const updateData = {
-            id: profile.id,
-            name: "Idempotent Name",
-            updatedAt: now,
-          }
+            const now = yield* DateTime.now
+            const updateData = {
+              id: profile.id,
+              name: "Idempotent Name",
+              updatedAt: now,
+            }
 
-          yield* repo.updateProfileRow(updateData)
-          yield* repo.updateProfileRow(updateData)
+            yield* repo.updateProfileRow(updateData)
+            const afterFirstUpdate = yield* repo.findById(profile.id)
 
-          const result1 = yield* repo.findById(profile.id)
-          expect(Option.isSome(result1)).toBe(true)
-          const final = Option.getOrThrow(result1)
+            yield* repo.updateProfileRow(updateData)
+            const afterSecondUpdate = yield* repo.findById(profile.id)
 
-          expect(final.name).toBe("Idempotent Name")
-          expect(DateTime.Equivalence(final.updatedAt, now)).toBe(true)
-
-          return true
-        }).pipe(Effect.provide(TestLayer)),
+            return Option.match(afterFirstUpdate, {
+              onNone: () => false,
+              onSome: (firstValue) =>
+                Option.match(afterSecondUpdate, {
+                  onNone: () => false,
+                  onSome: (secondValue) =>
+                    firstValue.name === "Idempotent Name" &&
+                    DateTime.Equivalence(firstValue.updatedAt, now) &&
+                    deepEquals(firstValue, secondValue),
+                }),
+            })
+          }).pipe(Effect.provide(TestLayer)),
+        DATABASE_PROPERTY_TEST_CONFIG,
       ),
     )
   })
@@ -138,128 +152,119 @@ describe("ProfilesRepository", () => {
     it.effect("transaction rolls back all changes on failure", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
-        const sql = yield* SqlClient.SqlClient
+        const scenario = yield* runTransactionScenario({
+          setup: Effect.gen(function* () {
+            const profile = yield* makeProfileFixture({ name: "Original Name" })
+            yield* repo.insertProfile(profile)
+            return profile
+          }),
+          readState: (profile) => repo.findById(profile.id),
+          transaction: (profile) =>
+            Effect.gen(function* () {
+              const now = yield* DateTime.now
+              yield* repo.updateProfileRow({
+                id: profile.id,
+                name: "Updated Name",
+                updatedAt: now,
+              })
 
-        // Setup: Create initial person and profile
-        const person = yield* makePersonFixture()
+              const intermediate = yield* repo.findById(profile.id)
+              expect(Option.isSome(intermediate)).toBe(true)
+              expect(Option.getOrThrow(intermediate).name).toBe("Updated Name")
 
-        const profile = yield* makeProfileFixture({
-          id: person.id,
-          name: "Original Name",
+              // @effect-diagnostics-next-line globalErrorInEffectFailure:off
+              // @effect-diagnostics-next-line missingReturnYieldStar:off
+              yield* Effect.fail(new Error("Intentional failure"))
+            }),
         })
-        yield* repo.insertProfile(profile)
 
-        // Action: Attempt multi-step operation in transaction that fails
-        yield* Effect.gen(function* () {
-          // Step 1: Update profile name
-          const now = yield* DateTime.now
-          yield* repo.updateProfileRow({
-            id: profile.id,
-            name: "Updated Name",
-            updatedAt: now,
-          })
-
-          // Step 2: Verify update succeeded within transaction
-          const intermediate = yield* repo.findById(profile.id)
-          expect(Option.isSome(intermediate)).toBe(true)
-          expect(Option.getOrThrow(intermediate).name).toBe("Updated Name")
-
-          // Step 3: Intentionally fail to trigger rollback
-          // @effect-diagnostics-next-line globalErrorInEffectFailure:off
-          // @effect-diagnostics-next-line missingReturnYieldStar:off
-          yield* Effect.fail(new Error("Intentional failure"))
-        }).pipe(sql.withTransaction, Effect.exit)
-
-        // Verify: Database state rolled back to original
-        const finalProfile = yield* repo.findById(profile.id)
-        expect(Option.isSome(finalProfile)).toBe(true)
-        expect(Option.getOrThrow(finalProfile).name).toBe("Original Name")
+        expect(Exit.isFailure(scenario.transactionExit)).toBe(true)
+        expect(Option.isSome(scenario.stateBefore)).toBe(true)
+        expect(Option.isSome(scenario.stateAfter)).toBe(true)
+        expect(Option.getOrThrow(scenario.stateBefore).name).toBe("Original Name")
+        expect(Option.getOrThrow(scenario.stateAfter).name).toBe("Original Name")
       }).pipe(Effect.provide(TestLayer)),
     )
 
     it.effect("transaction commits all changes on success", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
-        const sql = yield* SqlClient.SqlClient
+        const scenario = yield* runTransactionScenario({
+          setup: Effect.gen(function* () {
+            const profile = yield* makeProfileFixture({ name: "Original Name" })
+            yield* repo.insertProfile(profile)
+            return profile
+          }),
+          readState: (profile) => repo.findById(profile.id),
+          transaction: (profile) =>
+            Effect.gen(function* () {
+              const now = yield* DateTime.now
+              yield* repo.updateProfileRow({
+                id: profile.id,
+                name: "First Update",
+                updatedAt: now,
+              })
 
-        // Setup: Create initial person and profile
-        const person = yield* makePersonFixture()
-
-        const profile = yield* makeProfileFixture({
-          id: person.id,
-          name: "Original Name",
+              yield* repo.updateProfileRow({
+                id: profile.id,
+                name: "Second Update",
+                updatedAt: now,
+              })
+            }),
         })
-        yield* repo.insertProfile(profile)
 
-        // Action: Multi-step operation in transaction that succeeds
-        yield* Effect.gen(function* () {
-          // Step 1: Update profile name
-          const now = yield* DateTime.now
-          yield* repo.updateProfileRow({
-            id: profile.id,
-            name: "First Update",
-            updatedAt: now,
-          })
-
-          // Step 2: Update profile name again
-          yield* repo.updateProfileRow({
-            id: profile.id,
-            name: "Second Update",
-            updatedAt: now,
-          })
-        }).pipe(sql.withTransaction)
-
-        // Verify: Both updates committed
-        const finalProfile = yield* repo.findById(profile.id)
-        expect(Option.isSome(finalProfile)).toBe(true)
-        expect(Option.getOrThrow(finalProfile).name).toBe("Second Update")
+        expect(Exit.isSuccess(scenario.transactionExit)).toBe(true)
+        expect(Option.isSome(scenario.stateAfter)).toBe(true)
+        expect(Option.getOrThrow(scenario.stateAfter).name).toBe("Second Update")
       }).pipe(Effect.provide(TestLayer)),
     )
 
-    it.effect("multi-step operations maintain consistency", () =>
-      assertPropertyEffect(profileRowArbitrary, (profile) =>
-        Effect.gen(function* () {
-          const repo = yield* ProfilesRepository
-          const sql = yield* SqlClient.SqlClient
+    it.effect("property: rollbacks on failure and commits on success", () =>
+      assertTransactionProperty({
+        arbitrary: profileRowArbitrary,
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+        scenario: (profile) => {
+          const withTestLayer = <Value, Error, Requirements>(
+            effect: Effect.Effect<Value, Error, Requirements>,
+          ) => effect.pipe(Effect.provide(TestLayer))
 
-          yield* repo.insertProfile(profile)
+          return {
+            setup: withTestLayer(
+              Effect.gen(function* () {
+                const repo = yield* ProfilesRepository
+                yield* repo.insertProfile(profile)
+                return profile
+              }),
+            ),
+            readState: (persistedProfile: typeof profile) =>
+              withTestLayer(
+                Effect.gen(function* () {
+                  const repo = yield* ProfilesRepository
+                  return yield* repo.findById(persistedProfile.id)
+                }),
+              ),
+            transaction: (persistedProfile: typeof profile) =>
+              withTestLayer(
+                Effect.gen(function* () {
+                  const repo = yield* ProfilesRepository
+                  const now = yield* DateTime.now
 
-          const originalName = profile.name
-
-          // Action: Multi-step transaction with conditional failure
-          const shouldFail = profile.name.length % 2 === 0 // Arbitrary condition
-          yield* Effect.gen(function* () {
-            const now = yield* DateTime.now
-
-            // Step 1: Update name
-            yield* repo.updateProfileRow({
-              id: profile.id,
-              name: "Transaction Name",
-              updatedAt: now,
-            })
-
-            // Step 2: Conditionally fail
-            if (shouldFail) {
-              // @effect-diagnostics-next-line globalErrorInEffectFailure:off
-              // @effect-diagnostics-next-line missingReturnYieldStar:off
-              yield* Effect.fail(new Error("Conditional failure"))
-            }
-          }).pipe(sql.withTransaction, Effect.exit)
-
-          // Verify: Check final state matches transaction outcome
-          const finalProfile = yield* repo.findById(profile.id)
-          expect(Option.isSome(finalProfile)).toBe(true)
-          const final = Option.getOrThrow(finalProfile)
-
-          if (shouldFail) {
-            // Transaction failed: should have original name
-            return final.name === originalName
-          } else {
-            // Transaction succeeded: should have updated name
-            return final.name === "Transaction Name"
+                  yield* repo.updateProfileRow({
+                    id: persistedProfile.id,
+                    name: "Transaction Name",
+                    updatedAt: now,
+                  })
+                }),
+              ),
           }
-        }).pipe(Effect.provide(TestLayer)),
-      ),
+        },
+        validateRollback: (before, after) => deepEquals(before, after),
+        validateCommit: (stateAfter) =>
+          Option.match(stateAfter, {
+            onNone: () => false,
+            onSome: (profile) => profile.name === "Transaction Name",
+          }),
+      }),
     )
   })
 })

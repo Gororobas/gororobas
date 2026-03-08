@@ -9,37 +9,21 @@ import {
   PersonId,
   PersonNotFoundError,
   Policies,
-  ProfileRowUpdate,
   type PlatformAccessLevel,
 } from "@gororobas/domain"
-import { HandleTakenError } from "@gororobas/domain/common/errors"
 import { DateTime, Effect, Option, ServiceMap } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
+import { OrganizationsRepository } from "../organizations/repository.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PeopleRepository } from "./repository.js"
 
-export class People extends ServiceMap.Service<People>()("People", {
+export class PeopleService extends ServiceMap.Service<PeopleService>()("PeopleService", {
   make: Effect.gen(function* () {
     const repo = yield* PeopleRepository
+    const organizationsRepository = yield* OrganizationsRepository
     const profilesRepo = yield* ProfilesRepository
     const sql = yield* SqlClient.SqlClient
-
-    const updateProfile = (personId: PersonId, data: ProfileRowUpdate) =>
-      Effect.gen(function* () {
-        if (data.handle !== undefined) {
-          const inUse = yield* profilesRepo.isHandleInUse(data.handle)
-          if (inUse) {
-            return yield* new HandleTakenError({ handle: data.handle, entity: "profile" })
-          }
-        }
-
-        return yield* profilesRepo.updateProfileRow({
-          id: personId,
-          ...data,
-          updatedAt: yield* DateTime.now,
-        })
-      })
 
     const setAccessLevel = (personId: PersonId, newAccessLevel: PlatformAccessLevel) =>
       Effect.gen(function* () {
@@ -76,7 +60,8 @@ export class People extends ServiceMap.Service<People>()("People", {
         /**
          * 1. IN CASE OF BEING THE SOLE MANAGER OF AN ORG
          */
-        const orgsWhereSoleManager = yield* repo.findOrganizationsWhereSoleManager(session.personId)
+        const orgsWhereSoleManager =
+          yield* organizationsRepository.findOrganizationsWhereSoleManager(session.personId)
         const orgsWithOtherMembers = orgsWhereSoleManager.filter((org) => org.memberCount > 1)
 
         // 1.1. Prohibit if these orgs have 2+ members
@@ -89,7 +74,7 @@ export class People extends ServiceMap.Service<People>()("People", {
         }
 
         // 1.2. Ask for confirmation if they have a single member (the user to be deleted)
-        if (confirmation?.deleteOrgs !== true && orgsWhereSoleManager.length > 1) {
+        if (confirmation?.deleteOrgs !== true && orgsWhereSoleManager.length > 0) {
           return AccountDeletionResultConfirmOrgDeletion.makeUnsafe({
             organizations: orgsWhereSoleManager.map((o) => o.organizationId),
           })
@@ -149,7 +134,6 @@ export class People extends ServiceMap.Service<People>()("People", {
     return {
       deleteCurrentPerson,
       setAccessLevel,
-      updateProfile,
     } as const
   }),
 }) {}
