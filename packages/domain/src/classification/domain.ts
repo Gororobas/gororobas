@@ -1,4 +1,3 @@
-import { Handle, LoroDocFrontier, TagId, TagRow, VegetableId } from "@gororobas/domain"
 /**
  * Classification domain types.
  *
@@ -8,6 +7,11 @@ import { Handle, LoroDocFrontier, TagId, TagRow, VegetableId } from "@gororobas/
  */
 import { Schema } from "effect"
 
+import { TagId, VegetableId } from "../common/ids.js"
+import { Handle, TimestampColumn } from "../common/primitives.js"
+import { LoroDocFrontier } from "../crdts/domain.js"
+import { TagRow } from "../tags/domain.js"
+
 export const ModelInfo = Schema.Struct({
   model_id: Schema.String,
   model_type: Schema.Literal("ollama"),
@@ -15,8 +19,8 @@ export const ModelInfo = Schema.Struct({
 export type ModelInfo = typeof ModelInfo.Type
 
 export const LangExtractCharInterval = Schema.Struct({
-  start_pos: Schema.optional(Schema.Number),
-  end_pos: Schema.optional(Schema.Number),
+  start_pos: Schema.NullOr(Schema.Number),
+  end_pos: Schema.NullOr(Schema.Number),
 })
 export type LangExtractCharInterval = typeof LangExtractCharInterval.Type
 
@@ -31,9 +35,9 @@ export type LangExtractAlignmentStatus = typeof LangExtractAlignmentStatus.Type
 export const CommonExtractionData = Schema.Struct({
   extraction_text: Schema.String,
   extraction_class: Schema.String,
-  char_interval: Schema.optional(LangExtractCharInterval),
-  alignment_status: Schema.optional(LangExtractAlignmentStatus),
-  description: Schema.optional(Schema.String),
+  char_interval: Schema.NullOr(LangExtractCharInterval),
+  alignment_status: Schema.NullOr(LangExtractAlignmentStatus),
+  description: Schema.NullOr(Schema.String),
   handle: Handle,
   attributes: Schema.Record(
     Schema.String,
@@ -93,8 +97,8 @@ export const PostClassification = Schema.Struct({
   model_info: ModelInfo,
   content_hash: Schema.String,
   crdt_frontier: LoroDocFrontier,
-  started_at: Schema.DateTimeUtc,
-  finished_at: Schema.DateTimeUtc,
+  started_at: TimestampColumn,
+  finished_at: TimestampColumn,
   vegetables: Schema.Array(ResolvedVegetableExtraction),
   tags: Schema.Array(ResolvedTagExtraction),
 })

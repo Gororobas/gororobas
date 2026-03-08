@@ -29,6 +29,9 @@ export const Email = Schema.String.pipe(
       message: "Invalid email format",
     }),
   ),
+  Schema.annotate({
+    toArbitrary: () => (fc) => fc.emailAddress().map((s) => s.toLowerCase()),
+  }),
   Schema.brand("Email"),
 )
 export type Email = typeof Email.Type

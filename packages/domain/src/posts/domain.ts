@@ -3,6 +3,7 @@
  */
 import { Schema } from "effect"
 
+import { PostClassification } from "../classification/domain.js"
 import {
   EventAttendanceMode,
   InformationVisibility,
@@ -192,7 +193,7 @@ export type PostHistoryEntry = typeof PostHistoryEntry.Type
 
 export const PostCrdtRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  classification: Schema.NullOr(Schema.fromJsonString(Schema.Unknown)),
+  classification: Schema.NullOr(Schema.fromJsonString(PostClassification)),
   id: PostId,
   loroCrdt: LoroDocSnapshot,
   ownerProfileId: ProfileId,

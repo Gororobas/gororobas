@@ -47,5 +47,7 @@ export const TiptapDocument = Schema.Struct({
 })
 export type TiptapDocument = typeof TiptapDocument.Type
 
+export const RichTextColumn = Schema.fromJsonString(TiptapDocument)
+
 export const TiptapAsHtml = Schema.String.pipe(Schema.brand("TiptapAsHtml"))
 export type TiptapAsHtml = typeof TiptapAsHtml.Type

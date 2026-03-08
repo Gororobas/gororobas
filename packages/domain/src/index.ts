@@ -3,6 +3,7 @@ export * from "./apis.js"
 
 // Domain entities
 export * from "./crdts/domain.js"
+export * from "./classification/domain.js"
 export * from "./comments/domain.js"
 export * from "./media/domain.js"
 export * from "./organizations/domain.js"

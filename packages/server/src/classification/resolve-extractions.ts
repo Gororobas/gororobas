@@ -15,18 +15,18 @@
  *   3. No match → suggested (with names from extraction attributes)
  */
 import { stringToHandle, type Handle } from "@gororobas/domain"
-import { Effect, Option, Struct } from "effect"
-import type { Extraction } from "langextract"
-
-import { TagsRepository } from "../tags/repository.js"
-import { VegetablesRepository } from "../vegetables/repository.js"
 import {
   CommonExtractionData,
   ResolvedExistingTagExtraction,
   ResolvedExistingVegetableExtraction,
   SuggestedTagExtraction,
   SuggestedVegetableExtraction,
-} from "./domain.js"
+} from "@gororobas/domain"
+import { Effect, Option, Struct } from "effect"
+import type { Extraction } from "langextract"
+
+import { TagsRepository } from "../tags/repository.js"
+import { VegetablesRepository } from "../vegetables/repository.js"
 
 function toCommonExtractionFields(extraction: Extraction) {
   return CommonExtractionData.mapFields(Struct.omit(["handle"])).makeUnsafe({

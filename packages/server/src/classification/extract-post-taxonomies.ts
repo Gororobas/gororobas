@@ -1,10 +1,10 @@
 import { TiptapDocument, tiptapToHtml } from "@gororobas/domain"
 import type { TagRow } from "@gororobas/domain"
+import { type PostClassification } from "@gororobas/domain"
 import { createHash } from "crypto"
 import { Config, DateTime, Effect, ServiceMap } from "effect"
 
 import { TagsRepository } from "../tags/repository.js"
-import { type PostClassification } from "./domain.js"
 import { LangExtractService } from "./langextract-service.js"
 import { langExtractExamples } from "./langextract.examples.js"
 import { resolveTagExtraction, resolveVegetableExtraction } from "./resolve-extractions.js"

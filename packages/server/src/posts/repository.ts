@@ -17,14 +17,13 @@ import {
   TimestampColumn,
   VegetableId,
 } from "@gororobas/domain"
+import { type PostClassification } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
 import { Data, DateTime, Effect, Option, Schema, ServiceMap } from "effect"
 /**
  * Posts repository - minimal data access for posts.
  */
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
-
-import { type PostClassification } from "../classification/domain.js"
 
 export class PostRepositoryError extends Data.TaggedError("PostRepositoryError")<{
   reason: "NOT_FOUND" | "INVALID_CRDT" | "VALIDATION_FAILED"

@@ -16,6 +16,10 @@ const makeAppSql = (filename: string | ":memory:") => {
     // Transform column names automatically
     transformResultNames: snakeToCamel, // DB → JS (snake_case → camelCase)
     transformQueryNames: camelToSnake, // JS → DB (camelCase → snake_case)
+    // Add span attributes for telemetry
+    spanAttributes: {
+      "db.system": "sqlite",
+    },
   })
 
   const migrator = SqliteMigrator.layer({

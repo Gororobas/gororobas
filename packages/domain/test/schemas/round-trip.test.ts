@@ -7,43 +7,48 @@
 import { describe, it } from "@effect/vitest"
 import { DateTime, Effect, Schema } from "effect"
 
-import { OAuthAccountRow, SessionRow, VerificationRow } from "../../src/authentication/domain.js"
+import {
+  AccountRow,
+  OAuthAccountRow,
+  SessionRow,
+  VerificationRow,
+} from "../../src/authentication/domain.js"
 import { Handle, TimestampColumn } from "../../src/common/primitives.js"
 import { ImageRow } from "../../src/media/domain.js"
 import { OrganizationRow } from "../../src/organizations/domain.js"
 import { PersonRow } from "../../src/people/domain.js"
-import { PostTagRow, PostVegetableRow } from "../../src/posts/domain.js"
+import {
+  PostCommitRow,
+  PostCrdtRow,
+  PostRow,
+  PostTagRow,
+  PostTranslationRow,
+  PostVegetableRow,
+} from "../../src/posts/domain.js"
 import { ProfileRow } from "../../src/profiles/domain.js"
 import { SuggestedTagRow, SuggestedTagSourceRow, TagRow } from "../../src/tags/domain.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
-import { VegetableTranslationRow } from "../../src/vegetables/domain.js"
+import { VegetableRow, VegetableTranslationRow } from "../../src/vegetables/domain.js"
 
-// Define all Row schemas to test
-// Note: Some schemas are excluded due to issues with Schema.toArbitrary() generating invalid data:
-// - AccountRow: NullishOr fields don't round-trip correctly (undefined vs missing)
-// - PostRow, PostCommitRow: LoroDocFrontier arbitrary generates null counters (schema expects number)
-// - PostCrdtRow: classification field arbitrary generates invalid data
-// - PostTranslationRow: Complex nested TiptapDocument doesn't round-trip correctly
-// - VegetableRow: Number fields can generate NaN which doesn't round-trip
 const rowSchemas = [
+  { name: "AccountRow", schema: AccountRow },
   { name: "PersonRow", schema: PersonRow },
   { name: "ProfileRow", schema: ProfileRow },
-  // { name: "AccountRow", schema: AccountRow }, // Excluded: NullishOr undefined issue
   { name: "SessionRow", schema: SessionRow },
   { name: "OAuthAccountRow", schema: OAuthAccountRow },
   { name: "VerificationRow", schema: VerificationRow },
   { name: "ImageRow", schema: ImageRow },
   { name: "OrganizationRow", schema: OrganizationRow },
-  // { name: "PostRow", schema: PostRow }, // Excluded: LoroDocFrontier arbitrary issue
-  // { name: "PostCommitRow", schema: PostCommitRow }, // Excluded: LoroDocFrontier arbitrary issue
-  // { name: "PostCrdtRow", schema: PostCrdtRow }, // Excluded: classification arbitrary issue
-  // { name: "PostTranslationRow", schema: PostTranslationRow }, // Excluded: TiptapDocument arbitrary issue
+  { name: "PostRow", schema: PostRow },
+  { name: "PostCrdtRow", schema: PostCrdtRow },
+  { name: "PostCommitRow", schema: PostCommitRow },
+  { name: "PostTranslationRow", schema: PostTranslationRow },
   { name: "PostTagRow", schema: PostTagRow },
   { name: "PostVegetableRow", schema: PostVegetableRow },
   { name: "TagRow", schema: TagRow },
   { name: "SuggestedTagRow", schema: SuggestedTagRow },
   { name: "SuggestedTagSourceRow", schema: SuggestedTagSourceRow },
-  // { name: "VegetableRow", schema: VegetableRow }, // Excluded: NaN generation issue
+  { name: "VegetableRow", schema: VegetableRow },
   { name: "VegetableTranslationRow", schema: VegetableTranslationRow },
 ] as const
 
