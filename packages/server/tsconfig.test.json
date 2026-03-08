@@ -13,6 +13,7 @@
     }
   ],
   "compilerOptions": {
+    "composite": false,
     "types": ["node"],
     "tsBuildInfoFile": ".tsbuildinfo/test.tsbuildinfo",
     "rootDir": "test",

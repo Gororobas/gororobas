@@ -7,7 +7,7 @@ import {
   ProfileRowUpdate,
   TimestampedStruct,
 } from "@gororobas/domain"
-import { Effect, Schema, ServiceMap } from "effect"
+import { Effect, Schema, SchemaGetter, ServiceMap } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 export class ProfilesRepository extends ServiceMap.Service<ProfilesRepository>()(
@@ -30,7 +30,12 @@ export class ProfilesRepository extends ServiceMap.Service<ProfilesRepository>()
 
       const isHandleInUse = SqlSchema.findOne({
         Request: Schema.String,
-        Result: Schema.Boolean,
+        Result: Schema.Struct({ result: Schema.BooleanFromBit }).pipe(
+          Schema.decodeTo(Schema.Boolean, {
+            decode: SchemaGetter.transform((row) => row.result),
+            encode: SchemaGetter.transform((val) => ({ result: val })),
+          }),
+        ),
         execute: (handle) => sql`
         SELECT EXISTS(SELECT 1 FROM profiles WHERE handle = ${handle}) as result
       `,
@@ -45,6 +50,13 @@ export class ProfilesRepository extends ServiceMap.Service<ProfilesRepository>()
           UPDATE profiles
           SET ${sql.update(update)}
           WHERE id = ${sql.safe(id)}
+        `,
+      })
+
+      const insertProfile = SqlSchema.void({
+        Request: ProfileRow,
+        execute: (profile) => sql`
+            INSERT INTO profiles ${sql.insert(profile)}
         `,
       })
 
@@ -133,6 +145,7 @@ export class ProfilesRepository extends ServiceMap.Service<ProfilesRepository>()
         fetchProfileWishlist,
         findByHandle,
         findById,
+        insertProfile,
         isHandleInUse,
         updateProfileRow,
       } as const

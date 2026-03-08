@@ -2,6 +2,7 @@ import {
   Handle,
   IdGen,
   PersonId,
+  PersonProfileRow,
   PersonRow,
   PlatformAccessLevel,
   ProfileRow,
@@ -12,6 +13,7 @@ import {
  * Fixture factories and arbitraries for property-based testing.
  */
 import { DateTime, Effect, Schema } from "effect"
+import { SchemaError } from "effect/Schema"
 
 /**
  * Generate arbitraries from schemas using Schema.toArbitrary().
@@ -19,9 +21,24 @@ import { DateTime, Effect, Schema } from "effect"
  * These arbitraries can be used with FastCheck for property-based testing.
  */
 export const personRowArbitrary = Schema.toArbitrary(PersonRow)
-export const profileRowArbitrary = Schema.toArbitrary(ProfileRow)
+export const profileRowArbitrary = Schema.toArbitrary(ProfileRow).map((profile) => ({
+  ...profile,
+  photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
+}))
 export const handleArbitrary = Schema.toArbitrary(Handle)
 export const timestampColumnArbitrary = Schema.toArbitrary(TimestampColumn)
+
+/**
+ * Constrained arbitrary for person profiles only (not organizations).
+ *
+ * Useful for testing person-specific profile features.
+ *
+ * Generated directly from PersonProfileRow schema to ensure correct id type (PersonId).
+ */
+export const personProfileRowArbitrary = Schema.toArbitrary(PersonProfileRow).map((profile) => ({
+  ...profile,
+  photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
+}))
 
 /**
  * Constrained arbitrary for trusted persons (COMMUNITY, MODERATOR, or ADMIN access).
@@ -82,12 +99,14 @@ export const makePersonFixture = (overrides?: Partial<PersonRow>) =>
  * })
  * ```
  */
-export const makeProfileFixture = (overrides?: Partial<ProfileRow>) =>
+export const makeProfileFixture = (
+  overrides?: Partial<Extract<ProfileRow, { type: "PERSON" }>>,
+): Effect.Effect<Extract<ProfileRow, { type: "PERSON" }>, SchemaError, IdGen> =>
   Effect.gen(function* () {
     const id = yield* IdGen.make(PersonId)
     const now = yield* DateTime.now
 
-    const base: ProfileRow = {
+    const base: Extract<ProfileRow, { type: "PERSON" }> = {
       type: "PERSON",
       id,
       handle: `user-${id.slice(0, 8)}` as Handle,

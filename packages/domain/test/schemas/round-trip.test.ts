@@ -3,8 +3,6 @@
  *
  * These tests validate that schemas correctly encode and decode values
  * without data loss, ensuring data integrity across the application stack.
- *
- * Feature: people-profiles-testing-strategy
  */
 import { describe, it } from "@effect/vitest"
 import { DateTime, Effect, Schema } from "effect"
@@ -17,59 +15,8 @@ import { PersonRow } from "../../src/people/domain.js"
 import { PostTagRow, PostVegetableRow } from "../../src/posts/domain.js"
 import { ProfileRow } from "../../src/profiles/domain.js"
 import { SuggestedTagRow, SuggestedTagSourceRow, TagRow } from "../../src/tags/domain.js"
+import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import { VegetableTranslationRow } from "../../src/vegetables/domain.js"
-import { assertPropertyEffect } from "../policy-test-helpers.js"
-
-/**
- * Deep equality check that handles special types like Uint8Array and DateTime.
- * This is needed because Equal.equals() doesn't handle all schema types correctly.
- */
-function deepEquals(a: unknown, b: unknown): boolean {
-  // Handle null/undefined
-  if (a === b) return true
-  if (a == null || b == null) return false
-
-  // Handle DateTime using DateTime.Equivalence
-  if (DateTime.isDateTime(a) && DateTime.isDateTime(b)) {
-    return DateTime.Equivalence(a, b)
-  }
-
-  // Handle Uint8Array
-  if (a instanceof Uint8Array && b instanceof Uint8Array) {
-    if (a.length !== b.length) return false
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false
-    }
-    return true
-  }
-
-  // Handle arrays
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false
-    for (let i = 0; i < a.length; i++) {
-      if (!deepEquals(a[i], b[i])) return false
-    }
-    return true
-  }
-
-  // Handle objects
-  if (typeof a === "object" && typeof b === "object") {
-    const aKeys = Object.keys(a as object)
-    const bKeys = Object.keys(b as object)
-
-    if (aKeys.length !== bKeys.length) return false
-
-    for (const key of aKeys) {
-      if (!bKeys.includes(key)) return false
-      if (!deepEquals((a as any)[key], (b as any)[key])) return false
-    }
-
-    return true
-  }
-
-  // Fallback to strict equality
-  return false
-}
 
 // Define all Row schemas to test
 // Note: Some schemas are excluded due to issues with Schema.toArbitrary() generating invalid data:
