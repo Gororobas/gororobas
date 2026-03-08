@@ -9,7 +9,7 @@ import {
   OrganizationType,
 } from "../common/enums.js"
 import { OrganizationId, PersonId } from "../common/ids.js"
-import { Handle, TimestampColumn } from "../common/primitives.js"
+import { Handle, TimestampedStruct } from "../common/primitives.js"
 
 export const OrganizationRow = Schema.Struct({
   id: OrganizationId,
@@ -19,11 +19,10 @@ export const OrganizationRow = Schema.Struct({
 export type OrganizationRow = typeof OrganizationRow.Type
 
 export const OrganizationMembership = Schema.Struct({
-  accessLevel: OrganizationAccessLevel,
-  createdAt: Schema.NullishOr(TimestampColumn),
+  ...TimestampedStruct.fields,
+  accessLevel: Schema.NullOr(OrganizationAccessLevel),
   organizationId: OrganizationId,
-  personId: PersonId,
-  updatedAt: Schema.NullishOr(TimestampColumn),
+  personId: Schema.NullOr(PersonId),
 })
 export type OrganizationMembership = typeof OrganizationMembership.Type
 

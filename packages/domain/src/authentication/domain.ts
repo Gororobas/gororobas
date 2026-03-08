@@ -9,7 +9,7 @@ export const AccountRow = Schema.Struct({
   name: Schema.String,
   email: Email,
   isEmailVerified: Schema.Boolean,
-  image: Schema.NullishOr(Schema.String),
+  image: Schema.NullOr(Schema.String),
 })
 export type AccountRow = typeof AccountRow.Type
 
@@ -19,8 +19,8 @@ export const SessionRow = Schema.Struct({
   accountId: AccountId,
   expiresAt: TimestampColumn,
   token: Schema.String,
-  ipAddress: Schema.NullishOr(Schema.String),
-  userAgent: Schema.NullishOr(Schema.String),
+  ipAddress: Schema.NullOr(Schema.String),
+  userAgent: Schema.NullOr(Schema.String),
 })
 export type SessionRow = typeof SessionRow.Type
 
@@ -30,13 +30,13 @@ export const OAuthAccountRow = Schema.Struct({
   accountId: AccountId,
   providerId: Schema.String,
   oauthAccountId: Schema.String,
-  accessToken: Schema.NullishOr(Schema.String),
-  refreshToken: Schema.NullishOr(Schema.String),
-  idToken: Schema.NullishOr(Schema.String),
-  scope: Schema.NullishOr(Schema.String),
-  password: Schema.NullishOr(Schema.String),
-  accessTokenExpiresAt: Schema.NullishOr(TimestampColumn),
-  refreshTokenExpiresAt: Schema.NullishOr(TimestampColumn),
+  accessToken: Schema.NullOr(Schema.String),
+  refreshToken: Schema.NullOr(Schema.String),
+  idToken: Schema.NullOr(Schema.String),
+  scope: Schema.NullOr(Schema.String),
+  password: Schema.NullOr(Schema.String),
+  accessTokenExpiresAt: Schema.NullOr(TimestampColumn),
+  refreshTokenExpiresAt: Schema.NullOr(TimestampColumn),
 })
 export type OAuthAccountRow = typeof OAuthAccountRow.Type
 

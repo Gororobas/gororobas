@@ -11,15 +11,15 @@ import { TiptapDocument } from "../rich-text/domain.js"
 
 const CoreProfileRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  bio: Schema.NullishOr(TiptapDocument),
+  bio: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
   handle: Handle,
-  location: Schema.NullishOr(Schema.String),
+  location: Schema.NullOr(Schema.Trimmed.check(Schema.isNonEmpty())),
   name: Schema.Trimmed.check(Schema.isNonEmpty()),
-  photoId: Schema.NullishOr(ImageId),
+  photoId: Schema.NullOr(ImageId),
   visibility: ProfileVisibility,
 })
 
-const PersonProfileRow = Schema.Struct({
+export const PersonProfileRow = Schema.Struct({
   ...CoreProfileRow.fields,
   id: PersonId,
   type: Schema.Literal("PERSON" satisfies (typeof ProfileType.literals)[0]),
@@ -54,7 +54,7 @@ export const ProfilePageData = Schema.Union([OrganizationProfilePageData, Person
 export type ProfilePageData = typeof ProfilePageData.Type
 
 export const ProfileMetadataResult = Schema.Struct({
-  organization: Schema.NullishOr(OrganizationRow),
+  organization: Schema.NullOr(OrganizationRow),
   profile: ProfileRow,
 })
 export type ProfileMetadataResult = typeof ProfileMetadataResult.Type

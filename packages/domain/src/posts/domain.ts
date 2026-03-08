@@ -19,7 +19,7 @@ import { TiptapDocument } from "../rich-text/domain.js"
 export const CorePostMetadata = Schema.Struct({
   handle: Handle,
   ownerProfileId: ProfileId,
-  publishedAt: Schema.NullishOr(TimestampColumn),
+  publishedAt: Schema.NullOr(TimestampColumn),
   visibility: InformationVisibility,
 })
 export type CorePostMetadata = typeof CorePostMetadata.Type
@@ -35,9 +35,9 @@ export const EventMetadata = Schema.Struct({
   ...CorePostMetadata.fields,
   kind: Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1]),
   startDate: TimestampColumn,
-  endDate: Schema.NullishOr(TimestampColumn),
-  locationOrUrl: Schema.NullishOr(Schema.String),
-  attendanceMode: Schema.NullishOr(EventAttendanceMode),
+  endDate: Schema.NullOr(TimestampColumn),
+  locationOrUrl: Schema.NullOr(Schema.String),
+  attendanceMode: Schema.NullOr(EventAttendanceMode),
 })
 export type EventMetadata = typeof EventMetadata.Type
 
@@ -118,7 +118,7 @@ export const PostCardData = Schema.Struct({
   handle: Handle,
   id: PostId,
   ownerProfileId: ProfileId,
-  publishedAt: Schema.NullishOr(TimestampColumn),
+  publishedAt: Schema.NullOr(TimestampColumn),
   kind: PostKind,
   visibility: InformationVisibility,
 })
@@ -131,7 +131,7 @@ export const NoteData = Schema.Struct({
   id: PostId,
   locale: Locale,
   ownerProfileId: ProfileId,
-  publishedAt: Schema.NullishOr(TimestampColumn),
+  publishedAt: Schema.NullOr(TimestampColumn),
   kind: Schema.Literal("NOTE" satisfies (typeof PostKind.literals)[0]),
   updatedAt: TimestampColumn,
   visibility: InformationVisibility,
@@ -139,16 +139,16 @@ export const NoteData = Schema.Struct({
 export type NoteData = typeof NoteData.Type
 
 export const EventData = Schema.Struct({
-  attendanceMode: Schema.NullishOr(EventAttendanceMode),
+  attendanceMode: Schema.NullOr(EventAttendanceMode),
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
-  endDate: Schema.NullishOr(TimestampColumn),
+  endDate: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PostId,
   locale: Locale,
-  locationOrUrl: Schema.NullishOr(Schema.String),
+  locationOrUrl: Schema.NullOr(Schema.String),
   ownerProfileId: ProfileId,
-  publishedAt: Schema.NullishOr(TimestampColumn),
+  publishedAt: Schema.NullOr(TimestampColumn),
   startDate: TimestampColumn,
   kind: Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1]),
   updatedAt: TimestampColumn,
@@ -167,11 +167,11 @@ export const CreateNoteData = Schema.Struct({
 export type CreateNoteData = typeof CreateNoteData.Type
 
 export const CreateEventData = Schema.Struct({
-  attendanceMode: Schema.optional(Schema.NullishOr(EventAttendanceMode)),
+  attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,
-  endDate: Schema.optional(Schema.NullishOr(TimestampColumn)),
+  endDate: Schema.optional(Schema.NullOr(TimestampColumn)),
   handle: Handle,
-  locationOrUrl: Schema.optional(Schema.NullishOr(Schema.String)),
+  locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
   startDate: TimestampColumn,
   visibility: InformationVisibility,
 })
@@ -192,7 +192,7 @@ export type PostHistoryEntry = typeof PostHistoryEntry.Type
 
 export const PostCrdtRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  classification: Schema.NullishOr(Schema.fromJsonString(Schema.Unknown)),
+  classification: Schema.NullOr(Schema.fromJsonString(Schema.Unknown)),
   id: PostId,
   loroCrdt: LoroDocSnapshot,
   ownerProfileId: ProfileId,
@@ -210,7 +210,7 @@ export const PostCommitRow = Schema.Struct({
   ...TimestampedStruct.fields,
   id: PostCommitId,
   postId: PostId,
-  createdById: Schema.NullishOr(PersonId),
+  createdById: Schema.NullOr(PersonId),
   crdtUpdate: LoroDocUpdate,
   fromCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
 })
@@ -218,17 +218,17 @@ export type PostCommitRow = typeof PostCommitRow.Type
 
 export const PostRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  attendanceMode: Schema.NullishOr(EventAttendanceMode),
+  attendanceMode: Schema.NullOr(EventAttendanceMode),
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
-  endDate: Schema.NullishOr(TimestampColumn),
+  endDate: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PostId,
-  locationOrUrl: Schema.NullishOr(Schema.String),
+  locationOrUrl: Schema.NullOr(Schema.String),
   ownerProfileId: ProfileId,
-  publishedAt: Schema.NullishOr(TimestampColumn),
-  startDate: Schema.NullishOr(TimestampColumn),
+  publishedAt: Schema.NullOr(TimestampColumn),
+  startDate: Schema.NullOr(TimestampColumn),
   kind: PostKind,
-  visibility: Schema.NullishOr(InformationVisibility),
+  visibility: Schema.NullOr(InformationVisibility),
 })
 export type PostRow = typeof PostRow.Type
 
@@ -244,14 +244,14 @@ export const PostTranslationRow = Schema.Struct({
 export type PostTranslationRow = typeof PostTranslationRow.Type
 
 export const PostTagRow = Schema.Struct({
-  extractionText: Schema.NullishOr(Schema.String),
+  extractionText: Schema.NullOr(Schema.String),
   postId: PostId,
   tagId: TagId,
 })
 export type PostTagRow = typeof PostTagRow.Type
 
 export const PostVegetableRow = Schema.Struct({
-  extractionText: Schema.NullishOr(Schema.String),
+  extractionText: Schema.NullOr(Schema.String),
   postId: PostId,
   vegetableId: VegetableId,
 })

@@ -8,21 +8,21 @@ import { TimestampedStruct } from "../common/primitives.js"
 
 export const ImageRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  crop: Schema.NullishOr(Schema.Unknown),
-  hotspot: Schema.NullishOr(Schema.Unknown),
+  crop: Schema.NullOr(Schema.Unknown),
+  hotspot: Schema.NullOr(Schema.Unknown),
   id: ImageId,
-  label: Schema.NullishOr(Schema.String),
-  metadata: Schema.NullishOr(Schema.Unknown),
+  label: Schema.NullOr(Schema.String),
+  metadata: Schema.NullOr(Schema.Unknown),
   ownerProfileId: ProfileId,
   sanityId: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 export type ImageRow = typeof ImageRow.Type
 
 export const ImageCredit = Schema.Struct({
-  creditLine: Schema.NullishOr(Schema.String),
-  creditUrl: Schema.NullishOr(Schema.String),
+  creditLine: Schema.NullOr(Schema.String),
+  creditUrl: Schema.NullOr(Schema.String),
   imageId: ImageId,
   orderIndex: Schema.Int,
-  personId: Schema.NullishOr(PersonId),
+  personId: Schema.NullOr(PersonId),
 })
 export type ImageCredit = typeof ImageCredit.Type

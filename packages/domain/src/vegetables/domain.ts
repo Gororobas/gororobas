@@ -21,26 +21,26 @@ import { LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const VegetableMetadata = Schema.Struct({
-  chineseMedicineElement: Schema.NullishOr(ChineseMedicineElement),
-  developmentCycleMax: Schema.NullishOr(Schema.Int),
-  developmentCycleMin: Schema.NullishOr(Schema.Int),
-  edibleParts: Schema.NullishOr(Schema.Array(EdibleVegetablePart)),
+  chineseMedicineElement: Schema.NullOr(ChineseMedicineElement),
+  developmentCycleMax: Schema.NullOr(Schema.Int),
+  developmentCycleMin: Schema.NullOr(Schema.Int),
+  edibleParts: Schema.NullOr(Schema.Array(EdibleVegetablePart)),
   handle: Handle,
-  heightMax: Schema.NullishOr(Schema.Int),
-  heightMin: Schema.NullishOr(Schema.Int),
-  lifecycles: Schema.NullishOr(Schema.Array(VegetableLifecycle)),
-  mainPhotoId: Schema.NullishOr(ImageId),
-  plantingMethods: Schema.NullishOr(Schema.Array(PlantingMethod)),
+  heightMax: Schema.NullOr(Schema.Int),
+  heightMin: Schema.NullOr(Schema.Int),
+  lifecycles: Schema.NullOr(Schema.Array(VegetableLifecycle)),
+  mainPhotoId: Schema.NullOr(ImageId),
+  plantingMethods: Schema.NullOr(Schema.Array(PlantingMethod)),
   scientificNames: Schema.NonEmptyArray(
     Schema.Struct({
       $cid: Schema.optional(Schema.String),
       value: Schema.Trimmed.check(Schema.isNonEmpty()),
     }),
   ),
-  strata: Schema.NullishOr(Schema.Array(AgroforestryStratum)),
-  temperatureMax: Schema.NullishOr(Schema.Number),
-  temperatureMin: Schema.NullishOr(Schema.Number),
-  uses: Schema.NullishOr(Schema.Array(VegetableUsage)),
+  strata: Schema.NullOr(Schema.Array(AgroforestryStratum)),
+  temperatureMax: Schema.NullOr(Schema.Number),
+  temperatureMin: Schema.NullOr(Schema.Number),
+  uses: Schema.NullOr(Schema.Array(VegetableUsage)),
 })
 export type VegetableMetadata = typeof VegetableMetadata.Type
 
@@ -51,9 +51,9 @@ export const VegetableLocalizedData = Schema.Struct({
       value: Schema.Trimmed.check(Schema.isNonEmpty()),
     }),
   ),
-  content: Schema.optional(Schema.NullishOr(TiptapDocument)),
+  content: Schema.optional(Schema.NullOr(TiptapDocument)),
   grammaticalGender: GrammaticalGender.pipe(Schema.annotate({ default: "NEUTRAL" })),
-  origin: Schema.optional(Schema.NullishOr(Schema.String)),
+  origin: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type VegetableLocalizedData = typeof VegetableLocalizedData.Type
 
@@ -79,41 +79,41 @@ export type VegetableCardData = typeof VegetableCardData.Type
 export const VegetablePageData = Schema.Struct({
   vegetable: Schema.Struct({
     handle: Handle,
-    chineseMedicineElement: Schema.NullishOr(
+    chineseMedicineElement: Schema.NullOr(
       Schema.fromJsonString(
-        Schema.Array(Schema.NullishOr(Schema.Literals(["COLD", "COOL", "NEUTRAL", "WARM", "HOT"]))),
+        Schema.Array(Schema.NullOr(Schema.Literals(["COLD", "COOL", "NEUTRAL", "WARM", "HOT"]))),
       ),
     ),
     commonNames: Schema.fromJsonString(Schema.NonEmptyArray(Schema.String)),
-    content: Schema.NullishOr(Schema.fromJsonString(TiptapDocument)),
-    developmentCycleMax: Schema.NullishOr(Schema.Int),
-    developmentCycleMin: Schema.NullishOr(Schema.Int),
-    edibleParts: Schema.NullishOr(
+    content: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
+    developmentCycleMax: Schema.NullOr(Schema.Int),
+    developmentCycleMin: Schema.NullOr(Schema.Int),
+    edibleParts: Schema.NullOr(
       Schema.fromJsonString(
         Schema.Array(Schema.Literals(["BULB", "FLOWER", "FRUIT", "LEAF", "ROOT", "STEM", "SEED"])),
       ),
     ),
     grammaticalGender: Schema.Literals(["FEMININE", "MASCULINE", "NEUTRAL"]),
-    heightMax: Schema.NullishOr(Schema.Int),
-    heightMin: Schema.NullishOr(Schema.Int),
-    lifecycles: Schema.NullishOr(
+    heightMax: Schema.NullOr(Schema.Int),
+    heightMin: Schema.NullOr(Schema.Int),
+    lifecycles: Schema.NullOr(
       Schema.fromJsonString(Schema.Array(Schema.Literals(["ANNUAL", "BIENNIAL", "PERENNIAL"]))),
     ),
     locale: Locale,
-    mainPhotoId: Schema.NullishOr(Schema.String),
-    origin: Schema.NullishOr(Schema.String),
-    plantingMethods: Schema.NullishOr(
+    mainPhotoId: Schema.NullOr(Schema.String),
+    origin: Schema.NullOr(Schema.String),
+    plantingMethods: Schema.NullOr(
       Schema.fromJsonString(Schema.Array(Schema.Literals(["DIRECT_SOWING", "SEEDLING", "BOTH"]))),
     ),
     scientificNames: Schema.fromJsonString(Schema.NonEmptyArray(Schema.String)),
-    strata: Schema.NullishOr(
+    strata: Schema.NullOr(
       Schema.fromJsonString(
         Schema.Array(Schema.Literals(["CANOPY", "UNDERSTORY", "HERBACEOUS", "RHIZOSPHERE"])),
       ),
     ),
-    temperatureMax: Schema.NullishOr(Schema.Number),
-    temperatureMin: Schema.NullishOr(Schema.Number),
-    uses: Schema.NullishOr(
+    temperatureMax: Schema.NullOr(Schema.Number),
+    temperatureMin: Schema.NullOr(Schema.Number),
+    uses: Schema.NullOr(
       Schema.fromJsonString(Schema.Array(Schema.Literals(["CULINARY", "MEDICINAL", "ORNAMENTAL"]))),
     ),
   }),
@@ -157,8 +157,8 @@ export type VegetableSearchParams = typeof VegetableSearchParams.Type
 export const VegetableRevisionData = Schema.Struct({
   updatedAt: TimestampColumn,
   createdAt: TimestampColumn,
-  evaluatedAt: Schema.NullishOr(TimestampColumn),
-  evaluatedById: Schema.NullishOr(PersonId),
+  evaluatedAt: Schema.NullOr(TimestampColumn),
+  evaluatedById: Schema.NullOr(PersonId),
   evaluation: RevisionEvaluation,
   id: VegetableRevisionId,
   vegetableId: VegetableId,

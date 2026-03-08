@@ -26,7 +26,7 @@ export const PostCardData = Schema.Struct({
   handle: Handle,
   id: PostId,
   owner_profile_id: ProfileId,
-  published_at: Schema.NullishOr(TimestampColumn),
+  published_at: Schema.NullOr(TimestampColumn),
   kind: PostKind,
   visibility: InformationVisibility,
 })
@@ -39,7 +39,7 @@ export const NoteData = Schema.Struct({
   id: PostId,
   locale: Locale,
   owner_profile_id: ProfileId,
-  published_at: Schema.NullishOr(TimestampColumn),
+  published_at: Schema.NullOr(TimestampColumn),
   kind: Schema.Literal("NOTE" satisfies (typeof PostKind.literals)[0]),
   updated_at: TimestampColumn,
   visibility: InformationVisibility,
@@ -47,16 +47,16 @@ export const NoteData = Schema.Struct({
 export type NoteData = typeof NoteData.Type
 
 export const EventData = Schema.Struct({
-  attendance_mode: Schema.NullishOr(EventAttendanceMode),
+  attendance_mode: Schema.NullOr(EventAttendanceMode),
   content: Schema.fromJsonString(TiptapDocument),
   created_at: TimestampColumn,
-  end_date: Schema.NullishOr(TimestampColumn),
+  end_date: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PostId,
   locale: Locale,
-  location_or_url: Schema.NullishOr(Schema.String),
+  location_or_url: Schema.NullOr(Schema.String),
   owner_profile_id: ProfileId,
-  published_at: Schema.NullishOr(TimestampColumn),
+  published_at: Schema.NullOr(TimestampColumn),
   start_date: TimestampColumn,
   kind: Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1]),
   updated_at: TimestampColumn,
@@ -75,11 +75,11 @@ export const CreateNoteData = Schema.Struct({
 export type CreateNoteData = typeof CreateNoteData.Type
 
 export const CreateEventData = Schema.Struct({
-  attendance_mode: Schema.optional(Schema.NullishOr(EventAttendanceMode)),
+  attendance_mode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,
-  end_date: Schema.optional(Schema.NullishOr(TimestampColumn)),
+  end_date: Schema.optional(Schema.NullOr(TimestampColumn)),
   handle: Handle,
-  location_or_url: Schema.optional(Schema.NullishOr(Schema.String)),
+  location_or_url: Schema.optional(Schema.NullOr(Schema.String)),
   start_date: TimestampColumn,
   visibility: InformationVisibility,
 })

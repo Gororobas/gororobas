@@ -12,7 +12,7 @@ export const MediaUploadData = Schema.Struct({
   content_type: Schema.Trimmed.check(Schema.isNonEmpty()),
   file_name: Schema.Trimmed.check(Schema.isNonEmpty()),
   id: ImageId,
-  moderation_status: Schema.NullishOr(ModerationStatus),
+  moderation_status: Schema.NullOr(ModerationStatus),
   size_bytes: Schema.Int,
   url: Schema.URLFromString,
 })

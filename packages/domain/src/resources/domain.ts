@@ -19,15 +19,15 @@ import { TiptapDocument } from "../rich-text/domain.js"
 export const ResourceMetadata = Schema.Struct({
   format: ResourceFormat,
   handle: Handle,
-  thumbnailImageId: Schema.NullishOr(ImageId),
+  thumbnailImageId: Schema.NullOr(ImageId),
   url: Schema.Trimmed.check(Schema.isNonEmpty()),
   urlState: ResourceUrlState,
 })
 export type ResourceMetadata = typeof ResourceMetadata.Type
 
 export const ResourceLocalizedData = Schema.Struct({
-  creditLine: Schema.NullishOr(Schema.String),
-  description: Schema.NullishOr(TiptapDocument),
+  creditLine: Schema.NullOr(Schema.String),
+  description: Schema.NullOr(TiptapDocument),
   originalLocale: Locale,
   title: Schema.Trimmed.check(Schema.isNonEmpty()),
   translationSource: TranslationSource,
@@ -48,7 +48,7 @@ export type SourceResourceData = typeof SourceResourceData.Type
 export const QueriedResourceData = Schema.Struct({
   ...ResourceMetadata.fields,
   ...ResourceLocalizedData.fields,
-  description: Schema.NullishOr(Schema.fromJsonString(TiptapDocument)),
+  description: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
   locale: Locale,
 })
 export type QueriedResourceData = typeof QueriedResourceData.Type
@@ -56,8 +56,8 @@ export type QueriedResourceData = typeof QueriedResourceData.Type
 export const ResourceRevisionData = Schema.Struct({
   updatedAt: TimestampColumn,
   createdAt: TimestampColumn,
-  evaluatedAt: Schema.NullishOr(TimestampColumn),
-  evaluatedById: Schema.NullishOr(PersonId),
+  evaluatedAt: Schema.NullOr(TimestampColumn),
+  evaluatedById: Schema.NullOr(PersonId),
   evaluation: RevisionEvaluation,
   id: ResourceRevisionId,
   resourceId: ResourceId,
@@ -72,14 +72,14 @@ export const ResourceCardData = Schema.Struct({
   handle: Handle,
   id: ResourceId,
   locale: Locale,
-  thumbnailImageId: Schema.NullishOr(ImageId),
+  thumbnailImageId: Schema.NullOr(ImageId),
   title: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 export type ResourceCardData = typeof ResourceCardData.Type
 
 export const ResourcePageData = Schema.Struct({
-  creditLine: Schema.NullishOr(Schema.String),
-  description: Schema.NullishOr(Schema.fromJsonString(TiptapDocument)),
+  creditLine: Schema.NullOr(Schema.String),
+  description: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
   format: ResourceFormat,
   handle: Handle,
   id: ResourceId,
@@ -90,7 +90,7 @@ export const ResourcePageData = Schema.Struct({
       id: TagId,
     }),
   ),
-  thumbnailImageId: Schema.NullishOr(ImageId),
+  thumbnailImageId: Schema.NullOr(ImageId),
   title: Schema.Trimmed.check(Schema.isNonEmpty()),
   url: Schema.Trimmed.check(Schema.isNonEmpty()),
   urlState: Schema.String,
@@ -99,22 +99,22 @@ export const ResourcePageData = Schema.Struct({
 export type ResourcePageData = typeof ResourcePageData.Type
 
 export const CreateResourceData = Schema.Struct({
-  creditLine: Schema.optional(Schema.NullishOr(Schema.String)),
-  description: Schema.optional(Schema.NullishOr(TiptapDocument)),
+  creditLine: Schema.optional(Schema.NullOr(Schema.String)),
+  description: Schema.optional(Schema.NullOr(TiptapDocument)),
   format: ResourceFormat,
   handle: Handle,
-  thumbnailImageId: Schema.optional(Schema.NullishOr(ImageId)),
+  thumbnailImageId: Schema.optional(Schema.NullOr(ImageId)),
   title: Schema.Trimmed.check(Schema.isNonEmpty()),
   url: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 export type CreateResourceData = typeof CreateResourceData.Type
 
 export const UpdateResourceData = Schema.Struct({
-  creditLine: Schema.optional(Schema.NullishOr(Schema.String)),
-  description: Schema.optional(Schema.NullishOr(TiptapDocument)),
+  creditLine: Schema.optional(Schema.NullOr(Schema.String)),
+  description: Schema.optional(Schema.NullOr(TiptapDocument)),
   format: Schema.optional(ResourceFormat),
   handle: Schema.optional(Handle),
-  thumbnailImageId: Schema.optional(Schema.NullishOr(ImageId)),
+  thumbnailImageId: Schema.optional(Schema.NullOr(ImageId)),
   title: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
   url: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
 })
@@ -128,8 +128,8 @@ export const ResourceSearchParams = Schema.Struct({
 })
 
 export const ResourceTranslationData = Schema.Struct({
-  creditLine: Schema.NullishOr(Schema.String),
-  description: Schema.NullishOr(TiptapDocument),
+  creditLine: Schema.NullOr(Schema.String),
+  description: Schema.NullOr(TiptapDocument),
   locale: Locale,
   title: Schema.Trimmed.check(Schema.isNonEmpty()),
 })

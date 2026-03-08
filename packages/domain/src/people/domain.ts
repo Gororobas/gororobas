@@ -10,8 +10,8 @@ import { ProfileContentCounts } from "../profiles/domain.js"
 
 export const PersonRow = Schema.Struct({
   accessLevel: PlatformAccessLevel,
-  accessSetAt: Schema.NullishOr(TimestampColumn),
-  accessSetById: Schema.NullishOr(PersonId),
+  accessSetAt: Schema.NullOr(TimestampColumn),
+  accessSetById: Schema.NullOr(PersonId),
   id: PersonId,
 })
 export type PersonRow = typeof PersonRow.Type

@@ -22,11 +22,7 @@ import {
   Session,
   VisitorSession,
 } from "../src/index.js"
-import {
-  assertPropertyEffect,
-  propertyWithPrecondition,
-  runPolicySuccess,
-} from "./policy-test-helpers.js"
+import { assertPropertyEffect, propertyWithPrecondition, runPolicySuccess } from "../src/testing.js"
 
 const IdGenTest = Layer.succeed(IdGen, {
   generate: () => v7(),

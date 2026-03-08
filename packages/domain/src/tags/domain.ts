@@ -11,9 +11,9 @@ import { TiptapDocument } from "../rich-text/domain.js"
 export const TagRow = Schema.Struct({
   ...TimestampedStruct.fields,
   id: TagId,
-  cluster: Schema.NullishOr(Schema.String),
-  createdById: Schema.NullishOr(PersonId),
-  description: Schema.NullishOr(TiptapDocument),
+  cluster: Schema.NullOr(Schema.String),
+  createdById: Schema.NullOr(PersonId),
+  description: Schema.NullOr(TiptapDocument),
   handle: Handle,
   names: Schema.fromJsonString(Schema.Record(Locale, Schema.Trimmed.check(Schema.isNonEmpty()))),
 })
@@ -24,7 +24,7 @@ export const SuggestedTagRow = Schema.Struct({
   id: SuggestedTagId,
   handle: Handle,
   status: SuggestedTagStatus,
-  approvedTagId: Schema.NullishOr(TagId),
+  approvedTagId: Schema.NullOr(TagId),
 })
 export type SuggestedTagRow = typeof SuggestedTagRow.Type
 

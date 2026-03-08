@@ -12,11 +12,11 @@ export const Comment = Schema.Struct({
   createdAt: TimestampColumn,
   currentCrdtFrontier: Schema.Unknown,
   id: CommentId,
-  moderationStatus: Schema.NullishOr(ModerationStatus),
+  moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
-  parentCommentId: Schema.NullishOr(CommentId),
-  postId: Schema.NullishOr(PostId),
-  resourceId: Schema.NullishOr(ResourceId),
+  parentCommentId: Schema.NullOr(CommentId),
+  postId: Schema.NullOr(PostId),
+  resourceId: Schema.NullOr(ResourceId),
   updatedAt: TimestampColumn,
 })
 export type Comment = typeof Comment.Type
@@ -37,11 +37,11 @@ export const CommentData = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
   id: CommentId,
-  moderationStatus: Schema.NullishOr(ModerationStatus),
+  moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
-  parentCommentId: Schema.NullishOr(CommentId),
-  postId: Schema.NullishOr(PostId),
-  resourceId: Schema.NullishOr(ResourceId),
+  parentCommentId: Schema.NullOr(CommentId),
+  postId: Schema.NullOr(PostId),
+  resourceId: Schema.NullOr(ResourceId),
   updatedAt: TimestampColumn,
 })
 export type CommentData = typeof CommentData.Type

@@ -12,8 +12,8 @@ import { TagNotFoundError } from "./errors.js"
 
 const CreateTagData = Schema.Struct({
   id: TagId,
-  cluster: Schema.NullishOr(Schema.String),
-  description: Schema.NullishOr(TiptapDocument),
+  cluster: Schema.NullOr(Schema.String),
+  description: Schema.NullOr(TiptapDocument),
   names: Schema.fromJsonString(Schema.Record(Locale, Schema.Trimmed.check(Schema.isNonEmpty()))),
 })
 
