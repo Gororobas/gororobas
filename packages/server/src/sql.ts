@@ -3,7 +3,8 @@
  */
 import { BunServices } from "@effect/platform-bun"
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun"
-import { Layer } from "effect"
+import { Effect, Layer } from "effect"
+import { SqlClient } from "effect/unstable/sql"
 
 import { migrations } from "./db/migrations-effect/index.js"
 
@@ -21,11 +22,17 @@ const makeAppSql = (filename: string | ":memory:") => {
       "db.system": "sqlite",
     },
   })
+  const clientWithPragmas = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient
+      yield* sql`PRAGMA foreign_keys = ON`
+    }),
+  ).pipe(Layer.provideMerge(client))
 
   const migrator = SqliteMigrator.layer({
     loader: SqliteMigrator.fromRecord(migrations),
   }).pipe(Layer.provide(BunServices.layer))
-  return migrator.pipe(Layer.provideMerge(client))
+  return migrator.pipe(Layer.provideMerge(clientWithPragmas))
 }
 
 export const AppSqlLive = makeAppSql("gororobas.db")
