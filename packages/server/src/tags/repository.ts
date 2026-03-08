@@ -37,12 +37,20 @@ export class TagsRepository extends ServiceMap.Service<TagsRepository>()("TagsRe
       }),
     })
 
+    const insertRow = SqlSchema.void({
+      Request: TagRow,
+      execute: (tag) => sql`
+        INSERT INTO tags ${sql.insert(tag)}
+      `,
+    })
+
     return {
       // Query operations
       findById,
       findByHandle,
       findByName,
       findAll,
+      insertRow,
     } as const
   }),
 }) {}
