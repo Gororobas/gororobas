@@ -5,12 +5,11 @@
  * - Property-based tests for invariants
  */
 import { describe, expect, it } from "@effect/vitest"
-import { Handle, PersonRow, ProfileRow } from "@gororobas/domain"
-import { assertPropertyEffect } from "@gororobas/domain/testing"
+import { Handle, ProfileRow } from "@gororobas/domain"
+import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
 import { DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
-import { PeopleRepository } from "../../src/people/repository.js"
 import { ProfilesRepository } from "../../src/profiles/repository.js"
 import {
   makePersonFixture,
@@ -19,41 +18,6 @@ import {
   profileRowArbitrary,
 } from "../fixtures.js"
 import { TestLayer } from "../test-helpers.js"
-
-/**
- * Deep equality check that handles special types like DateTime.
- * Needed because Equal.equals() doesn't handle all schema types correctly.
- */
-function deepEquals(a: unknown, b: unknown): boolean {
-  if (a === b) return true
-  if (a == null || b == null) return false
-
-  if (DateTime.isDateTime(a) && DateTime.isDateTime(b)) {
-    return DateTime.Equivalence(a, b)
-  }
-
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false
-    for (let i = 0; i < a.length; i++) {
-      if (!deepEquals(a[i], b[i])) return false
-    }
-    return true
-  }
-
-  if (typeof a === "object" && typeof b === "object") {
-    const aKeys = Object.keys(a as object)
-    const bKeys = Object.keys(b as object)
-    if (aKeys.length !== bKeys.length) return false
-    for (const key of aKeys) {
-      if (!bKeys.includes(key)) return false
-      if (!deepEquals((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
-        return false
-    }
-    return true
-  }
-
-  return false
-}
 
 describe("ProfilesRepository", () => {
   describe("findByHandle", () => {
@@ -88,7 +52,7 @@ describe("ProfilesRepository", () => {
   describe("Property 9: Handle Uniqueness Invariant", () => {
     it.effect("isHandleInUse returns true for existing handle", () =>
       // Feature: people-profiles-testing-strategy, Property 9: Handle Uniqueness Invariant
-      assertPropertyEffect(personProfileRowArbitrary, (profile) =>
+      assertPropertyEffect(profileRowArbitrary, (profile) =>
         Effect.gen(function* () {
           const repo = yield* ProfilesRepository
 
@@ -119,13 +83,8 @@ describe("ProfilesRepository", () => {
     it.effect("modifies database state", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
-        const peopleRepo = yield* PeopleRepository
 
-        // Setup: Create person and profile
-        const person = yield* makePersonFixture()
-        yield* peopleRepo.insertPerson(person)
-
-        const profile = yield* makeProfileFixture({ id: person.id })
+        const profile = yield* makeProfileFixture()
         yield* repo.insertProfile(profile)
 
         // Action: Update profile
@@ -150,20 +109,8 @@ describe("ProfilesRepository", () => {
       assertPropertyEffect(personProfileRowArbitrary, (profile) =>
         Effect.gen(function* () {
           const repo = yield* ProfilesRepository
-          const peopleRepo = yield* PeopleRepository
-
-          // Setup: Insert person and profile
-          yield* peopleRepo.insertPerson(
-            PersonRow.makeUnsafe({
-              id: profile.id,
-              accessLevel: "COMMUNITY",
-              accessSetAt: null,
-              accessSetById: null,
-            }),
-          )
           yield* repo.insertProfile(profile)
 
-          // Create update data
           const now = yield* DateTime.now
           const updateData = {
             id: profile.id,
@@ -171,16 +118,13 @@ describe("ProfilesRepository", () => {
             updatedAt: now,
           }
 
-          // Apply update twice
           yield* repo.updateProfileRow(updateData)
           yield* repo.updateProfileRow(updateData)
 
-          // Verify: Check final state
           const result1 = yield* repo.findById(profile.id)
           expect(Option.isSome(result1)).toBe(true)
           const final = Option.getOrThrow(result1)
 
-          // Verify idempotence: applying update twice should produce same result
           expect(final.name).toBe("Idempotent Name")
           expect(DateTime.Equivalence(final.updatedAt, now)).toBe(true)
 
@@ -194,12 +138,10 @@ describe("ProfilesRepository", () => {
     it.effect("transaction rolls back all changes on failure", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
-        const peopleRepo = yield* PeopleRepository
         const sql = yield* SqlClient.SqlClient
 
         // Setup: Create initial person and profile
         const person = yield* makePersonFixture()
-        yield* peopleRepo.insertPerson(person)
 
         const profile = yield* makeProfileFixture({
           id: person.id,
@@ -238,12 +180,10 @@ describe("ProfilesRepository", () => {
     it.effect("transaction commits all changes on success", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
-        const peopleRepo = yield* PeopleRepository
         const sql = yield* SqlClient.SqlClient
 
         // Setup: Create initial person and profile
         const person = yield* makePersonFixture()
-        yield* peopleRepo.insertPerson(person)
 
         const profile = yield* makeProfileFixture({
           id: person.id,
@@ -277,21 +217,11 @@ describe("ProfilesRepository", () => {
     )
 
     it.effect("multi-step operations maintain consistency", () =>
-      assertPropertyEffect(personProfileRowArbitrary, (profile) =>
+      assertPropertyEffect(profileRowArbitrary, (profile) =>
         Effect.gen(function* () {
           const repo = yield* ProfilesRepository
-          const peopleRepo = yield* PeopleRepository
           const sql = yield* SqlClient.SqlClient
 
-          // Setup: Insert person and profile
-          yield* peopleRepo.insertPerson(
-            PersonRow.makeUnsafe({
-              id: profile.id,
-              accessLevel: "COMMUNITY",
-              accessSetAt: null,
-              accessSetById: null,
-            }),
-          )
           yield* repo.insertProfile(profile)
 
           const originalName = profile.name

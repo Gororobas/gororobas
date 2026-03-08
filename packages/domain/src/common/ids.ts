@@ -3,7 +3,13 @@
  */
 import { Schema } from "effect"
 
-const UUID = Schema.String.check(Schema.isUUID(7))
+const UUID = Schema.String.check(
+  Schema.isUUID(7),
+  // For some reason, isUUID accepts uppercased IDs, which somehow break SQLite updates
+  Schema.isLowercased(),
+).annotate({
+  toArbitrary: () => (fc) => fc.uuid({ version: [7] }),
+})
 
 export const AccountId = UUID.pipe(Schema.brand("AccountId"))
 export type AccountId = typeof AccountId.Type

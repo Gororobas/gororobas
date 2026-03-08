@@ -12,10 +12,10 @@ export const TimestampedStruct = Schema.Struct({
 })
 
 /** A username handle (e.g., @username) */
-export const Handle = Schema.String.pipe(
+export const Handle = Schema.Trim.pipe(
   Schema.check(Schema.isMinLength(3)),
   Schema.check(Schema.isMaxLength(30)),
-  Schema.check(Schema.isPattern(/^[a-z0-9_-]+$/)),
+  Schema.check(Schema.isPattern(/^[a-z0-9-]+$/)),
   Schema.brand("Handle"),
 )
 export type Handle = typeof Handle.Type

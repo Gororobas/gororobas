@@ -226,10 +226,10 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
         updatedAt: now,
         currentCrdtFrontier: data.currentCrdtFrontier,
         id: data.postId,
-        attendanceMode: eventMeta?.attendanceMode,
-        endDate: eventMeta?.endDate,
-        startDate: eventMeta?.startDate,
-        locationOrUrl: eventMeta?.locationOrUrl,
+        attendanceMode: eventMeta?.attendanceMode || null,
+        endDate: eventMeta?.endDate || null,
+        startDate: eventMeta?.startDate || null,
+        locationOrUrl: eventMeta?.locationOrUrl || null,
       })
     })
 

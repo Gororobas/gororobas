@@ -21,6 +21,7 @@ import { SchemaError } from "effect/Schema"
  * These arbitraries can be used with FastCheck for property-based testing.
  */
 export const personRowArbitrary = Schema.toArbitrary(PersonRow)
+
 export const profileRowArbitrary = Schema.toArbitrary(ProfileRow).map((profile) => ({
   ...profile,
   photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId

@@ -32,14 +32,14 @@ function toCommonExtractionFields(extraction: Extraction) {
   return CommonExtractionData.mapFields(Struct.omit(["handle"])).makeUnsafe({
     extraction_text: extraction.extractionText,
     extraction_class: extraction.extractionClass,
-    alignment_status: extraction.alignmentStatus,
+    alignment_status: extraction.alignmentStatus ?? null,
     char_interval: extraction.charInterval
       ? {
-          start_pos: extraction.charInterval.startPos,
-          end_pos: extraction.charInterval.endPos,
+          start_pos: extraction.charInterval.startPos ?? null,
+          end_pos: extraction.charInterval.endPos ?? null,
         }
-      : undefined,
-    description: extraction.description,
+      : null,
+    description: extraction.description || null,
     attributes: extraction.attributes ?? {},
   })
 }
