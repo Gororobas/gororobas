@@ -1,7 +1,8 @@
 #!/usr/bin/env npx tsx
+import { BunServices, BunRuntime } from "@effect/platform-bun"
 import { FileSystem, Path } from "effect"
 import { Array as EffectArray, Console, Effect, pipe, Schema, String as EffectString } from "effect"
-import { Command } from "effect/unstable/cli"
+import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 
 const ATLAS_DIR = "src/db/migrations-sql"
 const EFFECT_DIR = "src/db/migrations-effect"
@@ -64,16 +65,15 @@ ${exports}
 const formatSchemaSQL = Effect.gen(function* () {
   yield* Effect.log("Formatting schema file")
 
-  const command = Command.make("sql-formatter", "--fix", "src/db/schema.sql")
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+  const command = ChildProcess.make("sql-formatter", ["--fix", "src/db/schema.sql"], {
+    stdout: "inherit",
+    stderr: "inherit",
+  })
 
-  const result = yield* pipe(
-    command,
-    Command.stdout("inherit"),
-    Command.stderr("inherit"),
-    Command.exitCode,
-  )
+  const result = yield* spawner.exitCode(command)
 
-  if (result !== 0) {
+  if (result !== ChildProcessSpawner.ExitCode(0)) {
     yield* Effect.log("sql-formatter not found or failed, skipping formatting")
   }
 })
@@ -82,24 +82,19 @@ const runAtlasDiff = (migrationName: string) =>
   Effect.gen(function* () {
     yield* Effect.log(`Running atlas migrate diff: ${migrationName}`)
 
-    const command = Command.make(
+    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+    const command = ChildProcess.make(
       "npx",
-      "@ariga/atlas",
-      "migrate",
-      "diff",
-      migrationName,
-      "--env",
-      ATLAS_ENV,
+      ["@ariga/atlas", "migrate", "diff", migrationName, "--env", ATLAS_ENV],
+      {
+        stdout: "inherit",
+        stderr: "inherit",
+      },
     )
 
-    const result = yield* pipe(
-      command,
-      Command.stdout("inherit"),
-      Command.stderr("inherit"),
-      Command.exitCode,
-    )
+    const result = yield* spawner.exitCode(command)
 
-    if (result !== 0) {
+    if (result !== ChildProcessSpawner.ExitCode(0)) {
       return yield* Effect.fail(new Error(`Atlas exited with code ${result}`))
     }
 
@@ -122,7 +117,7 @@ const convertMigrations = Effect.gen(function* () {
     EffectArray.sort(EffectString.Order),
   )
 
-  if (EffectArray.isEmptyArray(sqlFiles) === true) {
+  if (EffectArray.isArrayEmpty(sqlFiles) === true) {
     yield* Effect.log("No SQL migration files found")
     return
   }
@@ -175,4 +170,4 @@ const program = Effect.gen(function* () {
   yield* Effect.log("\nMigration complete!")
 })
 
-pipe(program, Effect.provide(NodeContext.layer), NodeRuntime.runMain)
+pipe(program, Effect.provide(BunServices.layer), BunRuntime.runMain)
