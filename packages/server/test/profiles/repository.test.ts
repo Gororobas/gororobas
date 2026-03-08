@@ -18,7 +18,7 @@ import {
   personProfileRowArbitrary,
   profileRowArbitrary,
 } from "../fixtures.js"
-import { TestLayer, withCleanDatabase } from "../test-helpers.js"
+import { TestLayer } from "../test-helpers.js"
 
 /**
  * Deep equality check that handles special types like DateTime.
@@ -59,22 +59,20 @@ describe("ProfilesRepository", () => {
   describe("findByHandle", () => {
     it.effect("returns profile when exists and preserves schema", () =>
       assertPropertyEffect(profileRowArbitrary, (profile) =>
-        withCleanDatabase(
-          Effect.gen(function* () {
-            const repo = yield* ProfilesRepository
+        Effect.gen(function* () {
+          const repo = yield* ProfilesRepository
 
-            yield* repo.insertProfile(profile)
+          yield* repo.insertProfile(profile)
 
-            const result = yield* repo.findByHandle(profile.handle)
-            const retrieved = Option.getOrThrow(result)
+          const result = yield* repo.findByHandle(profile.handle)
+          const retrieved = Option.getOrThrow(result)
 
-            // Verify schema round-trip: encode → decode should preserve data
-            const encoded = yield* Schema.encodeEffect(ProfileRow)(retrieved)
-            const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
+          // Verify schema round-trip: encode → decode should preserve data
+          const encoded = yield* Schema.encodeEffect(ProfileRow)(retrieved)
+          const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
 
-            return deepEquals(retrieved, decoded)
-          }),
-        ).pipe(Effect.provide(TestLayer)),
+          return deepEquals(retrieved, decoded)
+        }).pipe(Effect.provide(TestLayer)),
       ),
     )
 
@@ -91,33 +89,28 @@ describe("ProfilesRepository", () => {
     it.effect("isHandleInUse returns true for existing handle", () =>
       // Feature: people-profiles-testing-strategy, Property 9: Handle Uniqueness Invariant
       assertPropertyEffect(personProfileRowArbitrary, (profile) =>
-        withCleanDatabase(
-          Effect.gen(function* () {
-            const repo = yield* ProfilesRepository
+        Effect.gen(function* () {
+          const repo = yield* ProfilesRepository
 
-            // Insert profile
-            yield* repo.insertProfile(profile)
+          // Insert profile
+          yield* repo.insertProfile(profile)
 
-            // Verify handle is in use
-            const inUse = yield* repo.isHandleInUse(profile.handle)
-            return inUse === true
-          }),
-        ).pipe(Effect.provide(TestLayer)),
+          // Verify handle is in use
+          const inUse = yield* repo.isHandleInUse(profile.handle)
+          return inUse === true
+        }).pipe(Effect.provide(TestLayer)),
       ),
     )
 
     it.effect("isHandleInUse returns false for non-existent handle", () =>
-      // Feature: people-profiles-testing-strategy, Property 9: Handle Uniqueness Invariant
       assertPropertyEffect(Schema.toArbitrary(Handle), (handle: Handle) =>
-        withCleanDatabase(
-          Effect.gen(function* () {
-            const repo = yield* ProfilesRepository
+        Effect.gen(function* () {
+          const repo = yield* ProfilesRepository
 
-            // Verify handle is not in use (no profiles exist)
-            const inUse = yield* repo.isHandleInUse(handle)
-            return inUse === false
-          }),
-        ).pipe(Effect.provide(TestLayer)),
+          // Verify handle is not in use (no profiles exist)
+          const inUse = yield* repo.isHandleInUse(handle)
+          return inUse === false
+        }).pipe(Effect.provide(TestLayer)),
       ),
     )
   })
@@ -154,48 +147,45 @@ describe("ProfilesRepository", () => {
 
   describe("Property 5: Repository Update Idempotence", () => {
     it.effect("applying same update twice produces same result", () =>
-      // Feature: people-profiles-testing-strategy, Property 5: Repository Update Idempotence
       assertPropertyEffect(personProfileRowArbitrary, (profile) =>
-        withCleanDatabase(
-          Effect.gen(function* () {
-            const repo = yield* ProfilesRepository
-            const peopleRepo = yield* PeopleRepository
+        Effect.gen(function* () {
+          const repo = yield* ProfilesRepository
+          const peopleRepo = yield* PeopleRepository
 
-            // Setup: Insert person and profile
-            yield* peopleRepo.insertPerson(
-              PersonRow.makeUnsafe({
-                id: profile.id,
-                accessLevel: "COMMUNITY",
-                accessSetAt: null,
-                accessSetById: null,
-              }),
-            )
-            yield* repo.insertProfile(profile)
-
-            // Create update data
-            const now = yield* DateTime.now
-            const updateData = {
+          // Setup: Insert person and profile
+          yield* peopleRepo.insertPerson(
+            PersonRow.makeUnsafe({
               id: profile.id,
-              name: "Idempotent Name",
-              updatedAt: now,
-            }
+              accessLevel: "COMMUNITY",
+              accessSetAt: null,
+              accessSetById: null,
+            }),
+          )
+          yield* repo.insertProfile(profile)
 
-            // Apply update twice
-            yield* repo.updateProfileRow(updateData)
-            yield* repo.updateProfileRow(updateData)
+          // Create update data
+          const now = yield* DateTime.now
+          const updateData = {
+            id: profile.id,
+            name: "Idempotent Name",
+            updatedAt: now,
+          }
 
-            // Verify: Check final state
-            const result1 = yield* repo.findById(profile.id)
-            expect(Option.isSome(result1)).toBe(true)
-            const final = Option.getOrThrow(result1)
+          // Apply update twice
+          yield* repo.updateProfileRow(updateData)
+          yield* repo.updateProfileRow(updateData)
 
-            // Verify idempotence: applying update twice should produce same result
-            expect(final.name).toBe("Idempotent Name")
-            expect(DateTime.Equivalence(final.updatedAt, now)).toBe(true)
+          // Verify: Check final state
+          const result1 = yield* repo.findById(profile.id)
+          expect(Option.isSome(result1)).toBe(true)
+          const final = Option.getOrThrow(result1)
 
-            return true
-          }),
-        ).pipe(Effect.provide(TestLayer)),
+          // Verify idempotence: applying update twice should produce same result
+          expect(final.name).toBe("Idempotent Name")
+          expect(DateTime.Equivalence(final.updatedAt, now)).toBe(true)
+
+          return true
+        }).pipe(Effect.provide(TestLayer)),
       ),
     )
   })
@@ -287,61 +277,58 @@ describe("ProfilesRepository", () => {
     )
 
     it.effect("multi-step operations maintain consistency", () =>
-      // Feature: people-profiles-testing-strategy, Property 7: Transaction Rollback on Failure
       assertPropertyEffect(personProfileRowArbitrary, (profile) =>
-        withCleanDatabase(
-          Effect.gen(function* () {
-            const repo = yield* ProfilesRepository
-            const peopleRepo = yield* PeopleRepository
-            const sql = yield* SqlClient.SqlClient
+        Effect.gen(function* () {
+          const repo = yield* ProfilesRepository
+          const peopleRepo = yield* PeopleRepository
+          const sql = yield* SqlClient.SqlClient
 
-            // Setup: Insert person and profile
-            yield* peopleRepo.insertPerson(
-              PersonRow.makeUnsafe({
-                id: profile.id,
-                accessLevel: "COMMUNITY",
-                accessSetAt: null,
-                accessSetById: null,
-              }),
-            )
-            yield* repo.insertProfile(profile)
+          // Setup: Insert person and profile
+          yield* peopleRepo.insertPerson(
+            PersonRow.makeUnsafe({
+              id: profile.id,
+              accessLevel: "COMMUNITY",
+              accessSetAt: null,
+              accessSetById: null,
+            }),
+          )
+          yield* repo.insertProfile(profile)
 
-            const originalName = profile.name
+          const originalName = profile.name
 
-            // Action: Multi-step transaction with conditional failure
-            const shouldFail = profile.name.length % 2 === 0 // Arbitrary condition
-            yield* Effect.gen(function* () {
-              const now = yield* DateTime.now
+          // Action: Multi-step transaction with conditional failure
+          const shouldFail = profile.name.length % 2 === 0 // Arbitrary condition
+          yield* Effect.gen(function* () {
+            const now = yield* DateTime.now
 
-              // Step 1: Update name
-              yield* repo.updateProfileRow({
-                id: profile.id,
-                name: "Transaction Name",
-                updatedAt: now,
-              })
+            // Step 1: Update name
+            yield* repo.updateProfileRow({
+              id: profile.id,
+              name: "Transaction Name",
+              updatedAt: now,
+            })
 
-              // Step 2: Conditionally fail
-              if (shouldFail) {
-                // @effect-diagnostics-next-line globalErrorInEffectFailure:off
-                // @effect-diagnostics-next-line missingReturnYieldStar:off
-                yield* Effect.fail(new Error("Conditional failure"))
-              }
-            }).pipe(sql.withTransaction, Effect.exit)
-
-            // Verify: Check final state matches transaction outcome
-            const finalProfile = yield* repo.findById(profile.id)
-            expect(Option.isSome(finalProfile)).toBe(true)
-            const final = Option.getOrThrow(finalProfile)
-
+            // Step 2: Conditionally fail
             if (shouldFail) {
-              // Transaction failed: should have original name
-              return final.name === originalName
-            } else {
-              // Transaction succeeded: should have updated name
-              return final.name === "Transaction Name"
+              // @effect-diagnostics-next-line globalErrorInEffectFailure:off
+              // @effect-diagnostics-next-line missingReturnYieldStar:off
+              yield* Effect.fail(new Error("Conditional failure"))
             }
-          }),
-        ).pipe(Effect.provide(TestLayer)),
+          }).pipe(sql.withTransaction, Effect.exit)
+
+          // Verify: Check final state matches transaction outcome
+          const finalProfile = yield* repo.findById(profile.id)
+          expect(Option.isSome(finalProfile)).toBe(true)
+          const final = Option.getOrThrow(finalProfile)
+
+          if (shouldFail) {
+            // Transaction failed: should have original name
+            return final.name === originalName
+          } else {
+            // Transaction succeeded: should have updated name
+            return final.name === "Transaction Name"
+          }
+        }).pipe(Effect.provide(TestLayer)),
       ),
     )
   })
