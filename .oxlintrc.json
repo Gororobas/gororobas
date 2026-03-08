@@ -42,7 +42,9 @@
     // Require IdGen.make() for ID generation
     "custom-lint-rules/no-direct-id-construction": "error",
     // Schema.TaggedError classes must end with "Error" suffix
-    "custom-lint-rules/tagged-error-suffix": "error"
+    "custom-lint-rules/tagged-error-suffix": "error",
+    // ServiceMap classes in service.ts/repository.ts must use canonical suffixes
+    "custom-lint-rules/service-map-class-suffix-by-file": "error"
   },
   "overrides": [
     {

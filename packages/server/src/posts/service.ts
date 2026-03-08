@@ -106,7 +106,7 @@ const rowToEventData = (
   visibility: row.visibility!,
 })
 
-export class Posts extends ServiceMap.Service<Posts>()("Posts", {
+export class PostsService extends ServiceMap.Service<PostsService>()("PostsService", {
   make: Effect.gen(function* () {
     const repo = yield* PostsRepository
     const sql = yield* SqlClient.SqlClient
