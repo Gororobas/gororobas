@@ -6,7 +6,7 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
         | Pedro | NEWCOMER     |
         | Ana   | MODERATOR    |
@@ -28,7 +28,7 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name     | access_level |
+        | name     | accessLevel |
         | Maria    | COMMUNITY    |
         | Pedro    | NEWCOMER     |
         | Gusttavo | BLOCKED      |
@@ -50,26 +50,26 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
-        | João  | COMMUNITY    |
+        | Carlos | COMMUNITY   |
       And the resource "A Terra Dá, a Terra Quer" exists
 
-    Scenario: Trusted participant submits an edit for review
+    Scenario: Member with community access submits an edit for review
       When "Maria" edits resource "A Terra Dá, a Terra Quer" title to "A Terra Dá, a Terra Quer (Edição Revisada)"
       Then a revision is created with "PENDING" evaluation, created by "Maria"
       And the resource title remains "A Terra Dá, a Terra Quer"
 
     Scenario: Multiple pending revisions can coexist
       Given "Maria" has submitted an edit to resource "A Terra Dá, a Terra Quer"
-      And "João" has submitted an edit to resource "A Terra Dá, a Terra Quer"
+      And "Carlos" has submitted an edit to resource "A Terra Dá, a Terra Quer"
       Then there are 2 PENDING revisions for resource "A Terra Dá, a Terra Quer"
 
   Rule: Moderators and admins evaluate revisions
 
     Background:
       Given the following people exist:
-        | name   | access_level |
+        | name   | accessLevel |
         | Maria  | COMMUNITY    |
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
@@ -95,7 +95,7 @@ Feature: Resources
       Then the revision evaluation becomes "REJECTED"
       And the resource title remains "A Terra Dá, a Terra Quer"
 
-    Scenario: Trusted participant cannot evaluate revisions
+    Scenario: Member with community access cannot evaluate revisions
       Given "Maria" has submitted an edit to resource "A Terra Dá, a Terra Quer"
       When "Maria" tries to approve the revision
       Then access is denied
@@ -150,7 +150,7 @@ Feature: Resources
 
     Background:
       Given the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
         | Pedro | NEWCOMER     |
         | Ana   | MODERATOR    |

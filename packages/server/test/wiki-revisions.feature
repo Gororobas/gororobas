@@ -65,7 +65,7 @@ Feature: Revisions
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
 
-    Scenario Outline: Trusted participant cannot evaluate a revision
+    Scenario Outline: Member with community access cannot evaluate a revision
       Given a <entity> "<title>" exists
       And "Maria" has proposed a revision to <entity> "<title>"
       When "Maria" tries to approve the revision

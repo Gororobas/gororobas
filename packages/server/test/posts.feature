@@ -7,7 +7,7 @@ Feature: Posts
 
     Background:
       Given the following people exist:
-        | name     | access_level |
+        | name     | accessLevel |
         | Ailton   | ADMIN        |
         | Ana      | MODERATOR    |
         | Irene    | COMMUNITY    |
@@ -79,7 +79,7 @@ Feature: Posts
 
     Background:
       Given the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
         | Irene | COMMUNITY    |
 
@@ -101,26 +101,26 @@ Feature: Posts
     Background:
       Given the organization "Sítio Semente" exists
       And the following people exist:
-        | name     | access_level |
+        | name     | accessLevel |
         | Maria    | COMMUNITY    |
-        | Joao     | COMMUNITY    |
+        | Carlos   | COMMUNITY    |
         | Teresa   | COMMUNITY    |
         | Xavier   | COMMUNITY    |
         | Pedro    | NEWCOMER     |
         | Gusttavo | BLOCKED      |
       And the following members exist for "Sítio Semente":
-        | name   | role    |
-        | Maria  | MANAGER |
-        | Joao   | EDITOR  |
-        | Teresa | VIEWER  |
+        | name   | organizationAccessLevel |
+        | Maria  | MANAGER                 |
+        | Carlos | EDITOR                  |
+        | Teresa | VIEWER                  |
 
       Scenario: Editor publishes a community-only note
-      Given "Joao" is logged in
+      Given "Carlos" is logged in
       When they create a "COMMUNITY" note post under "Sítio Semente" profile
       Then the note post should have the following visibility:
         | viewer   | visible |
         | Maria    | yes     |
-        | Joao     | yes     |
+        | Carlos   | yes     |
         | Teresa   | yes     |
         | Xavier   | yes     |
         | Pedro    | no      |
@@ -128,12 +128,12 @@ Feature: Posts
         | visitors | no      |
 
     Scenario: Editor publishes an internal note (Private)
-      Given "Joao" is logged in
+      Given "Carlos" is logged in
       When they create a "PRIVATE" note post under "Sítio Semente" profile
       Then the note post should have the following visibility:
         | viewer   | visible |
         | Maria    | yes     |
-        | Joao     | yes     |
+        | Carlos   | yes     |
         | Teresa   | yes     |
         | Xavier   | no      |
         | Pedro    | no      |
@@ -150,20 +150,20 @@ Feature: Posts
     Background:
       Given the organization "Sítio Semente" exists
       And the following people exist:
-        | name   | access_level |
+        | name   | accessLevel |
         | Maria  | COMMUNITY    |
-        | Joao   | COMMUNITY    |
+        | Carlos | COMMUNITY    |
         | Teresa | COMMUNITY    |
         | Xavier | COMMUNITY    |
       And the following members exist for "Sítio Semente":
-        | name   | role    |
-        | Maria  | MANAGER |
-        | Joao   | EDITOR  |
-        | Teresa | VIEWER  |
+        | name   | organizationAccessLevel |
+        | Maria  | MANAGER                 |
+        | Carlos | EDITOR                  |
+        | Teresa | VIEWER                  |
       And a note exists on "Sítio Semente" created by "Maria" with content "Mutirão Sábado"
 
     Scenario: Editor edits an existing note
-      Given "Joao" is logged in
+      Given "Carlos" is logged in
       When they edit the note post content to "Mutirão Domingo"
       Then the note post content should be "Mutirão Domingo"
 
@@ -185,7 +185,7 @@ Feature: Posts
       Then the note post should be deleted
 
     Scenario: Editor deletes note
-      Given "Joao" is logged in
+      Given "Carlos" is logged in
       When they delete the note post
       Then the note post should be deleted
 
@@ -199,36 +199,36 @@ Feature: Posts
     Background:
       Given the organization "Sítio Semente" exists
       And the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
-        | Joao  | COMMUNITY    |
+        | Carlos | COMMUNITY    |
       And the following members exist for "Sítio Semente":
-        | name  | role    |
-        | Maria | MANAGER |
-        | Joao  | EDITOR  |
+        | name   | organizationAccessLevel |
+        | Maria  | MANAGER                 |
+        | Carlos | EDITOR                  |
       And "Maria" has created a note under "Sítio Semente" with content "Reunião cancelada"
 
     Scenario: Note history shows all edits with authors
-      Given "Joao" is logged in
+      Given "Carlos" is logged in
       When they edit the note post content to "Reunião adiada para amanhã"
       Then the note post history should contain 2 versions
       And the note post history should match:
         | version | author | content                    |
         |       1 | Maria  | Reunião cancelada          |
-        |       2 | Joao   | Reunião adiada para amanhã |
+        |       2 | Carlos | Reunião adiada para amanhã |
 
   Rule: Notes have comments
 
     Background:
       Given the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
         | Pedro | NEWCOMER     |
         | Ana   | MODERATOR    |
       And "Maria" has created a "PUBLIC" note with content "Canteiro novo"
       And "Pedro" is logged in
 
-    Scenario: Trusted person can comment on a note
+    Scenario: Person with community access can comment on a note
       Given "Maria" is logged in
       When they comment on the note post with "Que massa!"
       Then the comment is visible on the note post
@@ -250,23 +250,23 @@ Feature: Posts
     Background:
       Given the organization "Gororobas" exists
       And the following people exist:
-        | name   | access_level |
+        | name   | accessLevel |
         | Maria  | COMMUNITY    |
-        | Joao   | COMMUNITY    |
+        | Carlos | COMMUNITY    |
         | Xavier | COMMUNITY    |
         | Pedro  | NEWCOMER     |
       And the following members exist for "Gororobas":
-        | name  | role    |
-        | Maria | MANAGER |
-        | Joao  | EDITOR  |
-      And a "PUBLIC" note exists on "Gororobas" with contributors "Maria" and "Joao"
+        | name   | organizationAccessLevel |
+        | Maria  | MANAGER                 |
+        | Carlos | EDITOR                  |
+      And a "PUBLIC" note exists on "Gororobas" with contributors "Maria" and "Carlos"
 
     Scenario: Members see contributors when visibility is private
       Given "Gororobas" displays members in "PRIVATE"
       Then note contributors are visible to:
         | viewer   |
         | Maria    |
-        | Joao     |
+        | Carlos   |
 
     Scenario: Community sees contributors when visibility is community
       Given "Gororobas" displays members in "COMMUNITY"
@@ -274,7 +274,7 @@ Feature: Posts
         | viewer |
         | Xavier |
         | Maria  |
-        | Joao   |
+        | Carlos |
 
     Scenario: Everyone sees contributors when visibility is public
       Given "Gororobas" displays members in "PUBLIC"
@@ -284,4 +284,4 @@ Feature: Posts
         | Pedro    |
         | Xavier   |
         | Maria    |
-        | Joao     |
+        | Carlos   |

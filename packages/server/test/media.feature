@@ -6,7 +6,7 @@ Feature: Media
 
     Background:
       Given the following people exist:
-        | name     | access_level |
+        | name     | accessLevel |
         | Ailton   | ADMIN        |
         | Ana      | MODERATOR    |
         | Irene    | COMMUNITY    |
@@ -70,20 +70,20 @@ Feature: Media
 
     Background:
       Given the following people exist:
-        | name     | access_level |
+        | name     | accessLevel |
         | Ana      | MODERATOR    |
         | Maria    | COMMUNITY    |
         | Pedro    | NEWCOMER     |
         | Gusttavo | BLOCKED      |
       And the vegetables "Mandioca" and "Banana" exist
 
-    Scenario: Trusted participant attaches media to a vegetable
+    Scenario: Member with community access attaches media to a vegetable
       Given "Maria" is logged in
       When they upload media attached to vegetable "Mandioca"
       Then the media is visible on vegetable "Mandioca"
       And visitors can access the media
 
-    Scenario: Trusted participant can attach the same media to multiple vegetables
+    Scenario: Member with community access can attach the same media to multiple vegetables
       Given "Maria" is logged in
       When they upload media attached to vegetables "Mandioca" and "Banana"
       Then the media is visible on vegetable "Mandioca"

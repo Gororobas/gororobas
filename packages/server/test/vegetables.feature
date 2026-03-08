@@ -6,7 +6,7 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name     | access_level |
+        | name     | accessLevel |
         | Maria    | COMMUNITY    |
         | Pedro    | NEWCOMER     |
         | Gusttavo | BLOCKED      |
@@ -28,12 +28,12 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name  | access_level |
+        | name  | accessLevel |
         | Maria | COMMUNITY    |
-        | João  | COMMUNITY    |
+        | Carlos | COMMUNITY   |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
 
-    Scenario: Trusted participant submits an edit for review
+    Scenario: Member with community access submits an edit for review
       When "Maria" edits "Mandioca" content to "Raiz tuberosa rica em amido"
       Then a revision is created with:
         | field      | value   |
@@ -43,7 +43,7 @@ Feature: Vegetables
 
     Scenario: Multiple pending revisions can coexist
       Given "Maria" has submitted an edit to "Mandioca"
-      When "João" has submitted an edit to "Mandioca"
+      When "Carlos" has submitted an edit to "Mandioca"
       Then there are 2 PENDING revisions for "Mandioca"
       And the vegetable content remains "Raiz tuberosa"
 
@@ -51,7 +51,7 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name   | access_level |
+        | name   | accessLevel |
         | Maria  | COMMUNITY    |
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
@@ -77,7 +77,7 @@ Feature: Vegetables
       Then the revision evaluation becomes "REJECTED"
       And the vegetable content remains "Raiz tuberosa"
 
-    Scenario: Trusted participant cannot evaluate revisions
+    Scenario: Member with community access cannot evaluate revisions
       Given "Maria" has submitted an edit to "Mandioca"
       When "Maria" tries to approve the revision
       Then access is denied
@@ -92,7 +92,7 @@ Feature: Vegetables
 
     Background:
       Given the following people exist:
-        | name   | access_level |
+        | name   | accessLevel |
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
       And the vegetable "Mandioca" exists with content "Raiz tuberosa"
@@ -186,7 +186,7 @@ Feature: Vegetables
       When "Ana" sets a photo as the main photo
       Then that photo appears as "Mandioca"'s thumbnail in listings
 
-    Scenario: Trusted participant can't set main photo for vegetable
+    Scenario: Member with community access can't set main photo for vegetable
       Given "Mandioca" has approved photos
       When "Maria" sets a photo as the main photo
       Then access is denied
@@ -214,7 +214,7 @@ Feature: Vegetables
       Given the vegetable "Mandioca" exists with the following revision history:
         | editor | action                       | evaluation | evaluated_by |
         | Maria  | created with "Raiz tuberosa" | APPROVED   | Ana          |
-        | João   | changed to "Raiz rica"       | APPROVED   | Ana          |
+        | Carlos | changed to "Raiz rica"       | APPROVED   | Ana          |
         | Maria  | changed to "Info incorreta"  | REJECTED   | Ailton       |
 
     Scenario: View complete revision history

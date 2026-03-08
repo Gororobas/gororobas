@@ -1,5 +1,5 @@
 Feature: People
-  People are the individual trusteds of the Gororobas community.
+  People are individual members with community access in the Gororobas community.
   Newcomers go through an approval process before gaining full access to what's shared by others.
   This protects community spaces while still allowing newcomers to explore and contribute.
 
@@ -10,7 +10,7 @@ Feature: People
   Rule: People can manage their profile
 
     Background:
-      Given "Maria" has community access
+      Given "Maria" has COMMUNITY access
 
     Scenario: Person sets up their profile
       When "Maria" updates their profile with:
@@ -36,14 +36,14 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name     | access_level |
-        | Maria    | trusted      |
-        | Irene    | trusted      |
-        | Pedro    | newcomer     |
-        | Gusttavo | blocked      |
+        | name     | accessLevel |
+        | Maria    | COMMUNITY    |
+        | Irene    | COMMUNITY    |
+        | Pedro    | NEWCOMER     |
+        | Gusttavo | BLOCKED      |
 
     Scenario: Person sets profile to public
-      When "Maria" has set their profile visibility to "public"
+      When "Maria" has set their profile visibility to "PUBLIC"
       Then "Maria"'s profile should have the following accessibility:
         | viewer   | can_access |
         | Irene    | yes        |
@@ -51,8 +51,8 @@ Feature: People
         | Gusttavo | yes        |
         | visitors | yes        |
 
-    Scenario: Person sets profile to trusted-only
-      When "Maria" has set their profile visibility to "trusted"
+    Scenario: Person sets profile to community-only
+      When "Maria" has set their profile visibility to "COMMUNITY"
       Then "Maria"'s profile should have the following accessibility:
         | viewer   | can_access |
         | Irene    | yes        |
@@ -64,30 +64,30 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name   | access_level |
-        | Ailton | admin        |
-        | Ana    | moderator    |
-        | Irene  | trusted      |
-        | Pedro  | newcomer     |
+        | name   | accessLevel |
+        | Ailton | ADMIN        |
+        | Ana    | MODERATOR    |
+        | Irene  | COMMUNITY    |
+        | Pedro  | NEWCOMER     |
 
     Scenario: Admin allows a person awaiting access
-      When "Ailton" promotes "Pedro" to trusted
-      Then "Pedro"'s becomes a full trusted
+      When "Ailton" promotes "Pedro" to COMMUNITY
+      Then "Pedro" becomes a member with community access
 
     Scenario: Moderator allows a person awaiting access
-      When "Ana" promotes "Pedro" to trusted
-      Then "Pedro"'s becomes  a full trusted
+      When "Ana" promotes "Pedro" to COMMUNITY
+      Then "Pedro" becomes a member with community access
 
-    Scenario: Trusted participant cannot allow people
-      When "Irene" tries to promote "Pedro" to trusted
+    Scenario: Member with community access cannot allow people
+      When "Irene" tries to promote "Pedro" to COMMUNITY
       Then access is denied
 
     Scenario: Admin blocks a person from accessing community content
-      Given "Pedro" has been promoted to trusted
+      Given "Pedro" has been promoted to COMMUNITY
       When "Ailton" blocks "Pedro"'s access
       Then "Pedro" becomes blocked
 
-    Scenario: Admin blocks and demotes a moderator
+    Scenario: Admin blocks and demotes a MODERATOR
       When "Ailton" blocks "Ana"'s access
       Then "Ana" becomes blocked
 
@@ -95,29 +95,29 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name   | access_level |
-        | Ailton | admin        |
-        | Ana    | moderator    |
-        | Maria  | trusted      |
+        | name   | accessLevel |
+        | Ailton | ADMIN        |
+        | Ana    | MODERATOR    |
+        | Maria  | COMMUNITY    |
 
-    Scenario: Admin promotes trusted to moderator
-      When "Ailton" promotes "Maria" to moderator
-      Then "Maria"'s access_level becomes "moderator"
+    Scenario: Admin promotes member with community access to MODERATOR
+      When "Ailton" promotes "Maria" to MODERATOR
+      Then "Maria"'s accessLevel becomes "MODERATOR"
 
-    Scenario: Admin promotes moderator to admin
-      When "Ailton" promotes "Ana" to admin
-      Then "Ana"'s access_level becomes "admin"
+    Scenario: Admin promotes MODERATOR to ADMIN
+      When "Ailton" promotes "Ana" to ADMIN
+      Then "Ana"'s accessLevel becomes "ADMIN"
 
-    Scenario: Admin demotes moderator to trusted
-      When "Ailton" demotes "Ana" to trusted
-      Then "Ana"'s access_level becomes "trusted"
+    Scenario: Admin demotes MODERATOR to COMMUNITY
+      When "Ailton" demotes "Ana" to COMMUNITY
+      Then "Ana"'s accessLevel becomes "COMMUNITY"
 
-    Scenario: Moderator cannot change access levels
-      When "Ana" tries to promote "Maria" to moderator
+    Scenario: MODERATOR cannot change access levels
+      When "Ana" tries to promote "Maria" to MODERATOR
       Then access is denied
 
-    Scenario: Cannot demote the last admin
-      Given "Ailton" is the only admin
+    Scenario: Cannot demote the last ADMIN
+      Given "Ailton" is the only ADMIN
       When "Ailton" tries to demote themselves
       Then access is denied
 
@@ -125,8 +125,8 @@ Feature: People
 
     Background:
       Given the following people exist:
-        | name  | access_level |
-        | Maria | trusted      |
+        | name  | accessLevel |
+        | Maria | COMMUNITY    |
 
     Scenario: Person deletes their account
       When "Maria" deletes their account
@@ -139,14 +139,14 @@ Feature: People
       When "Maria" deletes their account
       Then "Mandioca" revision history remains the same but no longer shows "Maria"
 
-    Scenario: Cannot delete account as sole manager of an organization
-      Given "Maria" is the only manager of "Sítio Semente"
+    Scenario: Cannot delete account as sole MANAGER of an organization
+      Given "Maria" is the only MANAGER of "Sítio Semente"
       When "Maria" tries to delete their account
       Then access is denied
 
     Scenario: Deleting account removes organization membership
-      Given "Maria" is an "editor" of "Sítio Semente"
-      And "Sítio Semente" has other managers
+      Given "Maria" is an "EDITOR" of "Sítio Semente"
+      And "Sítio Semente" has other MANAGERs
       When "Maria" deletes their account
       Then "Maria" is no longer a member of "Sítio Semente"
 
