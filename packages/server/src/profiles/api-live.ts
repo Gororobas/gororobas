@@ -2,6 +2,7 @@ import { GororobasApi, Policies, ProfileNotFoundError } from "@gororobas/domain"
 import { Effect, Option } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 
+import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
 import { ProfilesRepository } from "./repository.js"
 
 export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (handlers) =>
@@ -21,7 +22,12 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
         yield* Policies.profiles.canRead(profile)
 
         return profile
-      }),
+      }).pipe(
+        withApiInfrastructureErrors({
+          endpoint: "getProfileByHandle",
+          group: "profiles",
+        }),
+      ),
     )
     .handle("handleAvailability", ({ query }) =>
       Effect.gen(function* () {
@@ -30,6 +36,11 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
         return yield* repo
           .isHandleInUse(query.handle)
           .pipe(Effect.catchTag("NoSuchElementError", () => Effect.succeed(false)))
-      }),
+      }).pipe(
+        withApiInfrastructureErrors({
+          endpoint: "handleAvailability",
+          group: "profiles",
+        }),
+      ),
     ),
 )
