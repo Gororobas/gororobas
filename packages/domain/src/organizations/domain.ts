@@ -18,13 +18,13 @@ export const OrganizationRow = Schema.Struct({
 })
 export type OrganizationRow = typeof OrganizationRow.Type
 
-export const OrganizationMembership = Schema.Struct({
+export const OrganizationMembershipRow = Schema.Struct({
   ...TimestampedStruct.fields,
   accessLevel: Schema.NullOr(OrganizationAccessLevel),
   organizationId: OrganizationId,
   personId: Schema.NullOr(PersonId),
 })
-export type OrganizationMembership = typeof OrganizationMembership.Type
+export type OrganizationMembershipRow = typeof OrganizationMembershipRow.Type
 
 export const OrganizationMembershipData = Schema.Struct({
   accessLevel: OrganizationAccessLevel,

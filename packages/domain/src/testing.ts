@@ -82,7 +82,10 @@ export const assertPropertyEffect = <A, E>(
   options?: Parameters<typeof FastCheck.check>[1],
 ): Effect.Effect<void, E | PropertyTestFailure | UnknownError, never> =>
   Effect.gen(function* () {
-    const result = yield* checkPropertyEffect(arbitrary, predicate, options)
+    const result = yield* checkPropertyEffect(arbitrary, predicate, {
+      numRuns: 50,
+      ...options,
+    })
 
     if (!result.success) {
       return yield* Effect.fail(

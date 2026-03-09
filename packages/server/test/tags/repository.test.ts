@@ -12,8 +12,7 @@ import { v7 } from "uuid"
 
 import { AppSqlTest } from "../../src/sql.js"
 import { TagsRepository } from "../../src/tags/repository.js"
-
-const DATABASE_PROPERTY_TEST_CONFIG = { numRuns: 30 } as const
+import { DATABASE_PROPERTY_TEST_CONFIG } from "../test-helpers.js"
 
 const IdGenTest = Layer.succeed(IdGen, {
   generate: () => v7(),

@@ -13,12 +13,11 @@ import { PeopleRepository } from "../../src/people/repository.js"
 import { makePersonFixture, makeProfileFixture, personWithProfileArbitrary } from "../fixtures.js"
 import {
   assertTransactionProperty,
+  DATABASE_PROPERTY_TEST_CONFIG,
   insertPersonWithDependencies,
   runTransactionScenario,
   TestLayer,
 } from "../test-helpers.js"
-
-const DATABASE_PROPERTY_TEST_CONFIG = { numRuns: 30 } as const
 
 describe("PeopleRepository", () => {
   describe("findById", () => {

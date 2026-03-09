@@ -7,11 +7,11 @@ settings:
 catalogs:
   default:
     '@effect/platform-bun':
-      specifier: ^4.0.0-beta.28
-      version: 4.0.0-beta.28
+      specifier: ^4.0.0-beta.29
+      version: 4.0.0-beta.29
     '@effect/vitest':
-      specifier: 4.0.0-beta.28
-      version: 4.0.0-beta.28
+      specifier: 4.0.0-beta.29
+      version: 4.0.0-beta.29
     '@tiptap/core':
       specifier: latest
       version: 3.20.1
@@ -25,8 +25,8 @@ catalogs:
       specifier: latest
       version: 3.20.1
     effect:
-      specifier: 4.0.0-beta.28
-      version: 4.0.0-beta.28
+      specifier: 4.0.0-beta.29
+      version: 4.0.0-beta.29
     glob:
       specifier: ^13.0.6
       version: 13.0.6
@@ -67,7 +67,7 @@ importers:
         version: 0.77.0
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-beta.28(effect@4.0.0-beta.28)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.0.0-beta.29(effect@4.0.0-beta.29)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       '@manypkg/cli':
         specifier: ^0.25.1
         version: 0.25.1
@@ -82,13 +82,13 @@ importers:
         version: 0.5.0(@babel/core@7.29.0)
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.28
+        version: 4.0.0-beta.29
       glob:
         specifier: 'catalog:'
         version: 13.0.6
       lefthook:
-        specifier: ^2.1.2
-        version: 2.1.2
+        specifier: ^2.1.3
+        version: 2.1.3
       oxfmt:
         specifier: ^0.36.0
         version: 0.36.0
@@ -112,7 +112,7 @@ importers:
     dependencies:
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.28
+        version: 4.0.0-beta.29
       loro-mirror:
         specifier: 'catalog:'
         version: 1.2.1(loro-crdt@1.10.6)
@@ -131,10 +131,10 @@ importers:
         version: 32.2.0
       '@effect/platform-bun':
         specifier: 'catalog:'
-        version: 4.0.0-beta.28(effect@4.0.0-beta.28)
+        version: 4.0.0-beta.29(effect@4.0.0-beta.29)
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.28
+        version: 4.0.0-beta.29
       glob:
         specifier: 'catalog:'
         version: 13.0.6
@@ -144,7 +144,7 @@ importers:
         version: 0.7.9
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-beta.28(effect@4.0.0-beta.28)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.0.0-beta.29(effect@4.0.0-beta.29)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       '@types/node':
         specifier: ^25.3.0
         version: 25.3.5
@@ -160,7 +160,7 @@ importers:
     dependencies:
       '@effect/sql-sqlite-bun':
         specifier: ^4.0.0-beta.28
-        version: 4.0.0-beta.28(effect@4.0.0-beta.28)
+        version: 4.0.0-beta.28(effect@4.0.0-beta.29)
       '@gororobas/domain':
         specifier: workspace:^
         version: link:../domain/dist
@@ -172,7 +172,7 @@ importers:
         version: 1.5.3(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(bun-types@1.3.10)(kysely@0.28.11)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.0)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.28
+        version: 4.0.0-beta.29
       json-diff-ts:
         specifier: ^2.0.0
         version: 2.2.1
@@ -203,13 +203,13 @@ importers:
         version: 0.2.1(@tanstack/db@0.5.30(typescript@5.9.3))
       '@effect/opentelemetry':
         specifier: ^4.0.0-beta.28
-        version: 4.0.0-beta.28(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(effect@4.0.0-beta.28)
+        version: 4.0.0-beta.28(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(effect@4.0.0-beta.29)
       '@effect/platform-bun':
         specifier: 'catalog:'
-        version: 4.0.0-beta.28(effect@4.0.0-beta.28)
+        version: 4.0.0-beta.29(effect@4.0.0-beta.29)
       '@effect/sql-sqlite-bun':
         specifier: ^4.0.0-beta.28
-        version: 4.0.0-beta.28(effect@4.0.0-beta.28)
+        version: 4.0.0-beta.28(effect@4.0.0-beta.29)
       '@gororobas/domain':
         specifier: workspace:^
         version: link:../domain/dist
@@ -248,10 +248,10 @@ importers:
         version: 1.5.4(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(bun-types@1.3.10)(kysely@0.28.11)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       better-auth-effect:
         specifier: ^0.4.1
-        version: 0.4.1(a31995be0fc819f57be33019294531dc)
+        version: 0.4.1(543d95c04683f79a7d9fe0eb88dd9ed7)
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-beta.28
+        version: 4.0.0-beta.29
       langextract:
         specifier: ^1.2.0
         version: 1.2.0
@@ -273,7 +273,7 @@ importers:
         version: 0.2.1
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-beta.28(effect@4.0.0-beta.28)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 4.0.0-beta.29(effect@4.0.0-beta.29)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       '@gororobas/effect-bdd':
         specifier: workspace:^
         version: link:../effect-bdd/dist
@@ -568,16 +568,16 @@ packages:
       '@opentelemetry/sdk-trace-web':
         optional: true
 
-  '@effect/platform-bun@4.0.0-beta.28':
-    resolution: {integrity: sha512-hOGvSA4xZ8VHBic8/hzXiCuN1Xx7oUTUNZLxyXN84Nvaed2iq4dBlJiLuxiSmd2I5gOfTkdMHyN4FgyJoN0XQg==}
+  '@effect/platform-bun@4.0.0-beta.29':
+    resolution: {integrity: sha512-Yd7VTbbRjqkfrYu63bJbg/4w4sax8By6y9FHrbkZ9hCpDxF+Imcg3cMeoUcRlwgd4elyn+cSPFWS9CGh3eYqRw==}
     peerDependencies:
-      effect: ^4.0.0-beta.28
+      effect: ^4.0.0-beta.29
 
-  '@effect/platform-node-shared@4.0.0-beta.28':
-    resolution: {integrity: sha512-k3HAbzlUEA7pEtfmMr8lTWzhamn7a1jEmg4Te+p/rJwu2ZjYBg2vSa/FoIjQQPXo+morqLUIUqosY3vDub/+XQ==}
+  '@effect/platform-node-shared@4.0.0-beta.29':
+    resolution: {integrity: sha512-6nV/yI1LgYJ1PzTjb20Ar4a+Z9dBltd2QCNzLj9NmdBQusJO9ve7qk0GBa3IFkmAVAqUfCVXEwhYz3TjnP+lrA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
-      effect: ^4.0.0-beta.28
+      effect: ^4.0.0-beta.29
 
   '@effect/platform@0.94.5':
     resolution: {integrity: sha512-z05APUiDDPbodhTkH/RJqOLoCU11bU2IZLfcwLFrld03+ob1VeqRnELQlmueLIYm6NZifHAtjl32V+GRt34y4A==}
@@ -596,10 +596,10 @@ packages:
       '@effect/platform': ^0.94.0
       effect: ^3.19.13
 
-  '@effect/vitest@4.0.0-beta.28':
-    resolution: {integrity: sha512-18Li/g0dtJ9w74dQXWcDsiJS4t+NJJoQy7Naf6iFrdMUEFkxEM7uc+2XGoO97NNV9/4UQdzbKtU4VLdrDRuf+g==}
+  '@effect/vitest@4.0.0-beta.29':
+    resolution: {integrity: sha512-5HoZOUd82lpEoiTuWUw0lWxudaT1xY6kKd3KFNI1Kpg12uKd4Oh9gXrMncIuHxDKhrvVP6yerEIg13L3gZNshQ==}
     peerDependencies:
-      effect: ^4.0.0-beta.28
+      effect: ^4.0.0-beta.29
       vitest: ^3.0.0 || ^4.0.0
 
   '@electric-sql/pglite-socket@0.0.20':
@@ -2201,8 +2201,8 @@ packages:
   effect@3.18.4:
     resolution: {integrity: sha512-b1LXQJLe9D11wfnOKAk3PKxuqYshQ0Heez+y5pnkd3jLj1yx9QhM72zZ9uUrOQyNvrs2GZZd/3maL0ZV18YuDA==}
 
-  effect@4.0.0-beta.28:
-    resolution: {integrity: sha512-9T/LPIF/t54DN/z1gTnJ3Jwv4s6iWlN3w8Jvg7koDLI4whLXDEsnXWhMf05yQZUSNRJ0naVV1Ltwr2+cEj0HZA==}
+  effect@4.0.0-beta.29:
+    resolution: {integrity: sha512-7UoBAEiktoS81XLMX/39Mq/Ymq8whxmqFpsI0MEYdMlbDcbytzQlyuyhvrwEIdrd9qrqa8DZ5mKblWasamryqw==}
 
   electron-to-chromium@1.5.307:
     resolution: {integrity: sha512-5z3uFKBWjiNR44nFcYdkcXjKMbg5KXNdciu7mhTPo9tB7NbqSNP2sSnGR+fqknZSCwKkBN+oxiiajWs4dT6ORg==}
@@ -2273,6 +2273,10 @@ packages:
 
   fast-check@4.5.3:
     resolution: {integrity: sha512-IE9csY7lnhxBnA8g/WI5eg/hygA6MGWJMSNfFRrBlXUciADEhS1EDB0SIsMSvzubzIlOBbVITSsypCsW717poA==}
+    engines: {node: '>=12.17.0'}
+
+  fast-check@4.6.0:
+    resolution: {integrity: sha512-h7H6Dm0Fy+H4ciQYFxFjXnXkzR2kr9Fb22c0UBpHnm59K2zpr2t13aPTHlltFiNT6zuxp6HMPAVVvgur4BLdpA==}
     engines: {node: '>=12.17.0'}
 
   fastq@1.20.1:
@@ -2530,58 +2534,58 @@ packages:
   langextract@1.2.0:
     resolution: {integrity: sha512-ejS3dRyYRQPRKmjnE+EwjgS/fL0DHbyeq9PDo/mZ8fcYbi8n118Eu3L83oL71D99EGrWEeNW6BO60/q5Tyy/3g==}
 
-  lefthook-darwin-arm64@2.1.2:
-    resolution: {integrity: sha512-AgHu93YuJtj1l9bcKlCbo4Tg8N8xFl9iD6BjXCGaGMu46LSjFiXbJFlkUdpgrL8fIbwoCjJi5FNp3POpqs4Wdw==}
+  lefthook-darwin-arm64@2.1.3:
+    resolution: {integrity: sha512-VMSQK5ZUh66mKrEpHt5U81BxOg5xAXLoLZIK6e++4uc28tj8zGBqV9+tZqSRElXXzlnHbfdDVCMaKlTuqUy0Rg==}
     cpu: [arm64]
     os: [darwin]
 
-  lefthook-darwin-x64@2.1.2:
-    resolution: {integrity: sha512-exooc9Ectz13OLJJOXM9AzaFQbqzf9QCF8JuVvGfbr4RYABYK+BwwtydjlPQrA76/n/h4tsS11MH5bBULnLkYA==}
+  lefthook-darwin-x64@2.1.3:
+    resolution: {integrity: sha512-4QhepF4cf+fa7sDow29IEuCfm/6LuV+oVyQGpnr5it1DEZIEEoa6vdH/x4tutYhAg/HH7I2jHq6FGz96HRiJEQ==}
     cpu: [x64]
     os: [darwin]
 
-  lefthook-freebsd-arm64@2.1.2:
-    resolution: {integrity: sha512-E1QMlJPEU21n9eewv6ePfh+JmoTSg5R1jaYcKCky10kfbMdohNucI3xV91F2LcerE+p3UejKDqr/1wWO2RMGeQ==}
+  lefthook-freebsd-arm64@2.1.3:
+    resolution: {integrity: sha512-kysx/9pjifOgcTZOj1bR0i74FAbMv3BDfrpZDKniBOo4Dp0hXhyOtUmRn4nWKL0bN+cqc4ZePAq4Qdm4fxWafA==}
     cpu: [arm64]
     os: [freebsd]
 
-  lefthook-freebsd-x64@2.1.2:
-    resolution: {integrity: sha512-/5zp+x8055Thj46x9S7hgnneZxvWhHQvPWkkgISCab1Lh6eLrbxvhE1qTb1lU3DqTnNmH9NeXdq1xPHc9uGluA==}
+  lefthook-freebsd-x64@2.1.3:
+    resolution: {integrity: sha512-TLuPHQNg6iihShchrh5DrHvoCZO8FajZBMAEwLIKWlm6bkCcXbYNxy4dBaVK8lzHtS/Kv1bnH0D3BcK65iZFVQ==}
     cpu: [x64]
     os: [freebsd]
 
-  lefthook-linux-arm64@2.1.2:
-    resolution: {integrity: sha512-UK5FvDTkwKO7tOznY8iEZzuTsM1jXMZAG5BMRs7olN1k1K6m2unR6oKABP0hCd0wDErK6DZKDJDJfB564Rzqtw==}
+  lefthook-linux-arm64@2.1.3:
+    resolution: {integrity: sha512-e5x4pq1aZAXc0C642V4HaUoKtcHVmGW1HBIDNfWUhtsThBKjhZBXPspecaAHIRA/8VtsXS3RnJ4VhQpgfrCbww==}
     cpu: [arm64]
     os: [linux]
 
-  lefthook-linux-x64@2.1.2:
-    resolution: {integrity: sha512-4eOtz4PNh8GbJ+nA8YVDfW/eMirQWdZqMP/V/MVtoVBGobf6oXvvuDOySvAPOgNYEFN0Boegytmuji/851Vstg==}
+  lefthook-linux-x64@2.1.3:
+    resolution: {integrity: sha512-yeVAiV5hoE6Qq8dQDB4XC14x4N9mhn+FetxzqDu5LVci0/sOPqyPq2b0YUtNwJ1ZUKawTz4I/oqnUsHkQrGH0w==}
     cpu: [x64]
     os: [linux]
 
-  lefthook-openbsd-arm64@2.1.2:
-    resolution: {integrity: sha512-lJXRJ6iJIBKwomuNBA3CUNSclj2/rKuxGAQoUra214B92VB6jL9zaY5YEs6h/ie9jQrzSnllEeg7xyDIsuVCrQ==}
+  lefthook-openbsd-arm64@2.1.3:
+    resolution: {integrity: sha512-8QVvRxIosV6NL2XrbifOPGVhMFE43h02BUNEHYhZhyad7BredfAakg9dA9J/NO0I3eMdvCYU50ubFyDGIqUJog==}
     cpu: [arm64]
     os: [openbsd]
 
-  lefthook-openbsd-x64@2.1.2:
-    resolution: {integrity: sha512-GyOje4W0DIqkmR7/Of5D+mZ0vWqMvtGAVedtJR6d1239xNeMzCS8Q+/a3O1xigceZa5xhlqq0BWlssB/QYPQnA==}
+  lefthook-openbsd-x64@2.1.3:
+    resolution: {integrity: sha512-YTS9qeW9PzzKg9Rk55mQprLIl1OdAIIjeOH8DF+MPWoAPkRqeUyq8Q2Bdlf3+Swy+kJOjoiU1pKvpjjc8upv9Q==}
     cpu: [x64]
     os: [openbsd]
 
-  lefthook-windows-arm64@2.1.2:
-    resolution: {integrity: sha512-MZKMqTULEpX/8N3fKXAR0A9RjsGKkEEY0japLqrHOIpxsJXry1DRz0FvQo2kkY4WW3rtFegV9m6eesOymuDrUg==}
+  lefthook-windows-arm64@2.1.3:
+    resolution: {integrity: sha512-Nlp80pWyF67GmxgM5NQmL7JTTccbJAvCNtS5QwHmKq3pJ9Xi0UegP9pGME520n06Rhp+gX7H4boXhm2D5hAghg==}
     cpu: [arm64]
     os: [win32]
 
-  lefthook-windows-x64@2.1.2:
-    resolution: {integrity: sha512-NZUgObuaSxc0EXAwC/CzkMf7TuQc++GGIk6TLPdaUpoSsNSJSZEwBVz5DtFB1cG+eMkfO/wOKplls+yjimTTtQ==}
+  lefthook-windows-x64@2.1.3:
+    resolution: {integrity: sha512-KByBhvqgUNhjO/03Mr0y66D9B1ZnII7AB0x17cumwHMOYoDaPJh/AlgmEduqUpatqli3lnFzWD0DUkAY6pq/SA==}
     cpu: [x64]
     os: [win32]
 
-  lefthook@2.1.2:
-    resolution: {integrity: sha512-HdAMl4g47kbWSkrUkCx3Kucq54omFS6piMJtXwXNtmCAfB40UaybTJuYtFW4hNzZ5SvaEimtxTp7P/MNIkEfsA==}
+  lefthook@2.1.3:
+    resolution: {integrity: sha512-2W8PP/EGCvyS/x+Xza0Lgvn/EM3FKnr6m6xkfzpl6RKHl8TwPvs9iYZFQL99CnWTTvO+1mtQvIxGE/bD05038Q==}
     hasBin: true
 
   lilconfig@2.1.0:
@@ -2971,6 +2975,9 @@ packages:
 
   pure-rand@7.0.1:
     resolution: {integrity: sha512-oTUZM/NAZS8p7ANR3SHh30kXB+zK2r2BPcEn/awJIbOvq82WoMN4p62AWWp3Hhw50G0xMsw1mhIBLqHw64EcNQ==}
+
+  pure-rand@8.0.0:
+    resolution: {integrity: sha512-7rgWlxG2gAvFPIQfUreo1XYlNvrQ9VnQPFWdncPkdl3icucLK0InOxsaafbvxGTnI6Bk/Rxmslg0lQlRCuzOXw==}
 
   railroad-diagrams@1.0.0:
     resolution: {integrity: sha512-cz93DjNeLY0idrCNOH6PviZGRN9GJhsdm9hpn1YCS879fj4W+x5IFJhhkRZcwVgMmFF7R82UA/7Oh+R8lLZg6A==}
@@ -3639,20 +3646,20 @@ snapshots:
 
   '@effect/build-utils@0.7.9': {}
 
-  '@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.28))(effect@4.0.0-beta.28)(lmdb@3.5.1)':
+  '@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.29))(effect@4.0.0-beta.29)(lmdb@3.5.1)':
     dependencies:
-      '@effect/platform': 0.94.5(effect@4.0.0-beta.28)
-      effect: 4.0.0-beta.28
+      '@effect/platform': 0.94.5(effect@4.0.0-beta.29)
+      effect: 4.0.0-beta.29
       uuid: 11.1.0
     optionalDependencies:
       lmdb: 3.5.1
 
   '@effect/language-service@0.77.0': {}
 
-  '@effect/opentelemetry@4.0.0-beta.28(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(effect@4.0.0-beta.28)':
+  '@effect/opentelemetry@4.0.0-beta.28(@opentelemetry/api@1.9.0)(@opentelemetry/resources@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-node@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-web@2.6.0(@opentelemetry/api@1.9.0))(@opentelemetry/semantic-conventions@1.40.0)(effect@4.0.0-beta.29)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.40.0
-      effect: 4.0.0-beta.28
+      effect: 4.0.0-beta.29
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       '@opentelemetry/resources': 2.6.0(@opentelemetry/api@1.9.0)
@@ -3662,44 +3669,44 @@ snapshots:
       '@opentelemetry/sdk-trace-node': 2.6.0(@opentelemetry/api@1.9.0)
       '@opentelemetry/sdk-trace-web': 2.6.0(@opentelemetry/api@1.9.0)
 
-  '@effect/platform-bun@4.0.0-beta.28(effect@4.0.0-beta.28)':
+  '@effect/platform-bun@4.0.0-beta.29(effect@4.0.0-beta.29)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-beta.28(effect@4.0.0-beta.28)
-      effect: 4.0.0-beta.28
+      '@effect/platform-node-shared': 4.0.0-beta.29(effect@4.0.0-beta.29)
+      effect: 4.0.0-beta.29
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node-shared@4.0.0-beta.28(effect@4.0.0-beta.28)':
+  '@effect/platform-node-shared@4.0.0-beta.29(effect@4.0.0-beta.29)':
     dependencies:
       '@types/ws': 8.18.1
-      effect: 4.0.0-beta.28
+      effect: 4.0.0-beta.29
       ws: 8.19.0
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform@0.94.5(effect@4.0.0-beta.28)':
+  '@effect/platform@0.94.5(effect@4.0.0-beta.29)':
     dependencies:
-      effect: 4.0.0-beta.28
+      effect: 4.0.0-beta.29
       find-my-way-ts: 0.1.6
       msgpackr: 1.11.8
       multipasta: 0.2.7
 
-  '@effect/sql-sqlite-bun@4.0.0-beta.28(effect@4.0.0-beta.28)':
+  '@effect/sql-sqlite-bun@4.0.0-beta.28(effect@4.0.0-beta.29)':
     dependencies:
-      effect: 4.0.0-beta.28
+      effect: 4.0.0-beta.29
 
-  '@effect/sql@0.49.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.28))(effect@4.0.0-beta.28)(lmdb@3.5.1))(@effect/platform@0.94.5(effect@4.0.0-beta.28))(effect@4.0.0-beta.28)':
+  '@effect/sql@0.49.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.29))(effect@4.0.0-beta.29)(lmdb@3.5.1))(@effect/platform@0.94.5(effect@4.0.0-beta.29))(effect@4.0.0-beta.29)':
     dependencies:
-      '@effect/experimental': 0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.28))(effect@4.0.0-beta.28)(lmdb@3.5.1)
-      '@effect/platform': 0.94.5(effect@4.0.0-beta.28)
-      effect: 4.0.0-beta.28
+      '@effect/experimental': 0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.29))(effect@4.0.0-beta.29)(lmdb@3.5.1)
+      '@effect/platform': 0.94.5(effect@4.0.0-beta.29)
+      effect: 4.0.0-beta.29
       uuid: 11.1.0
 
-  '@effect/vitest@4.0.0-beta.28(effect@4.0.0-beta.28)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
+  '@effect/vitest@4.0.0-beta.29(effect@4.0.0-beta.29)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
-      effect: 4.0.0-beta.28
+      effect: 4.0.0-beta.29
       vitest: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
 
   '@electric-sql/pglite-socket@0.0.20(@electric-sql/pglite@0.3.15)':
@@ -4562,6 +4569,14 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.0.3
 
+  '@vitest/mocker@4.0.18(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
+    dependencies:
+      '@vitest/spy': 4.0.18
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 7.3.1(@types/node@25.3.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)
+
   '@vitest/mocker@4.0.18(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.0.18
@@ -4640,11 +4655,11 @@ snapshots:
 
   baseline-browser-mapping@2.10.0: {}
 
-  better-auth-effect@0.4.1(a31995be0fc819f57be33019294531dc):
+  better-auth-effect@0.4.1(543d95c04683f79a7d9fe0eb88dd9ed7):
     dependencies:
-      '@effect/sql': 0.49.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.28))(effect@4.0.0-beta.28)(lmdb@3.5.1))(@effect/platform@0.94.5(effect@4.0.0-beta.28))(effect@4.0.0-beta.28)
+      '@effect/sql': 0.49.0(@effect/experimental@0.58.0(@effect/platform@0.94.5(effect@4.0.0-beta.29))(effect@4.0.0-beta.29)(lmdb@3.5.1))(@effect/platform@0.94.5(effect@4.0.0-beta.29))(effect@4.0.0-beta.29)
       better-auth: 1.5.4(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(bun-types@1.3.10)(kysely@0.28.11)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.5)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
-      effect: 4.0.0-beta.28
+      effect: 4.0.0-beta.29
 
   better-auth@1.5.3(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(drizzle-orm@0.45.1(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.4.2(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(bun-types@1.3.10)(kysely@0.28.11)(mysql2@3.15.3)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(mongodb@7.1.0)(mysql2@3.15.3)(prisma@7.4.2(@types/react@19.2.14)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.0)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
@@ -4894,10 +4909,10 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       fast-check: 3.23.2
 
-  effect@4.0.0-beta.28:
+  effect@4.0.0-beta.29:
     dependencies:
       '@standard-schema/spec': 1.1.0
-      fast-check: 4.5.3
+      fast-check: 4.6.0
       find-my-way-ts: 0.1.6
       ini: 6.0.0
       kubernetes-types: 1.30.0
@@ -4984,6 +4999,10 @@ snapshots:
   fast-check@4.5.3:
     dependencies:
       pure-rand: 7.0.1
+
+  fast-check@4.6.0:
+    dependencies:
+      pure-rand: 8.0.0
 
   fastq@1.20.1:
     dependencies:
@@ -5236,48 +5255,48 @@ snapshots:
     transitivePeerDependencies:
       - debug
 
-  lefthook-darwin-arm64@2.1.2:
+  lefthook-darwin-arm64@2.1.3:
     optional: true
 
-  lefthook-darwin-x64@2.1.2:
+  lefthook-darwin-x64@2.1.3:
     optional: true
 
-  lefthook-freebsd-arm64@2.1.2:
+  lefthook-freebsd-arm64@2.1.3:
     optional: true
 
-  lefthook-freebsd-x64@2.1.2:
+  lefthook-freebsd-x64@2.1.3:
     optional: true
 
-  lefthook-linux-arm64@2.1.2:
+  lefthook-linux-arm64@2.1.3:
     optional: true
 
-  lefthook-linux-x64@2.1.2:
+  lefthook-linux-x64@2.1.3:
     optional: true
 
-  lefthook-openbsd-arm64@2.1.2:
+  lefthook-openbsd-arm64@2.1.3:
     optional: true
 
-  lefthook-openbsd-x64@2.1.2:
+  lefthook-openbsd-x64@2.1.3:
     optional: true
 
-  lefthook-windows-arm64@2.1.2:
+  lefthook-windows-arm64@2.1.3:
     optional: true
 
-  lefthook-windows-x64@2.1.2:
+  lefthook-windows-x64@2.1.3:
     optional: true
 
-  lefthook@2.1.2:
+  lefthook@2.1.3:
     optionalDependencies:
-      lefthook-darwin-arm64: 2.1.2
-      lefthook-darwin-x64: 2.1.2
-      lefthook-freebsd-arm64: 2.1.2
-      lefthook-freebsd-x64: 2.1.2
-      lefthook-linux-arm64: 2.1.2
-      lefthook-linux-x64: 2.1.2
-      lefthook-openbsd-arm64: 2.1.2
-      lefthook-openbsd-x64: 2.1.2
-      lefthook-windows-arm64: 2.1.2
-      lefthook-windows-x64: 2.1.2
+      lefthook-darwin-arm64: 2.1.3
+      lefthook-darwin-x64: 2.1.3
+      lefthook-freebsd-arm64: 2.1.3
+      lefthook-freebsd-x64: 2.1.3
+      lefthook-linux-arm64: 2.1.3
+      lefthook-linux-x64: 2.1.3
+      lefthook-openbsd-arm64: 2.1.3
+      lefthook-openbsd-x64: 2.1.3
+      lefthook-windows-arm64: 2.1.3
+      lefthook-windows-x64: 2.1.3
 
   lilconfig@2.1.0: {}
 
@@ -5741,6 +5760,8 @@ snapshots:
 
   pure-rand@7.0.1: {}
 
+  pure-rand@8.0.0: {}
+
   railroad-diagrams@1.0.0: {}
 
   randexp@0.4.6:
@@ -6004,7 +6025,7 @@ snapshots:
   vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.0)(happy-dom@20.8.3)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@25.3.5)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitest/mocker': 4.0.18(vite@7.3.1(@types/node@25.3.0)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/pretty-format': 4.0.18
       '@vitest/runner': 4.0.18
       '@vitest/snapshot': 4.0.18

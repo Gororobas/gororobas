@@ -2,13 +2,13 @@ packages:
   - packages/*
 
 catalog:
-  "@effect/platform-bun": ^4.0.0-beta.28
-  "@effect/vitest": 4.0.0-beta.28
+  "@effect/platform-bun": ^4.0.0-beta.29
+  "@effect/vitest": 4.0.0-beta.29
   "@tiptap/core": latest
   "@tiptap/html": latest
   "@tiptap/pm": latest
   "@tiptap/starter-kit": latest
-  effect: 4.0.0-beta.28
+  effect: 4.0.0-beta.29
   glob: ^13.0.6
   loro-crdt: ^1.10.6
   loro-mirror: ^1.2.1

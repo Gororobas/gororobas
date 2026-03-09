@@ -5,6 +5,8 @@ import {
   Handle,
   IdGen,
   SessionContext,
+  type OrganizationMembershipRow,
+  type OrganizationRow,
   type PersonRow,
   type ProfileRow,
   type Session,
@@ -23,6 +25,8 @@ import { ProfileService } from "../src/profiles/service.js"
 import { AppSqlTest } from "../src/sql.js"
 import { makeProfileFixture } from "./fixtures.js"
 import { getTelemetryLayer } from "./telemetry.js"
+
+export const DATABASE_PROPERTY_TEST_CONFIG = { numRuns: 50 } as const
 
 /**
  * Run an effect with a test session context.
@@ -237,4 +241,56 @@ export const insertPersonWithDependencies = ({
     }
 
     yield* peopleRepository.insertRow(person)
+  })
+
+/**
+ * Insert an organization and its profile dependency into the test database.
+ *
+ * Organizations require a profile row (type: ORGANIZATION) to exist first due to FK constraints.
+ */
+export const insertOrganizationWithDependencies = ({
+  organization,
+  profile,
+}: {
+  organization: OrganizationRow
+  profile: Extract<ProfileRow, { type: "ORGANIZATION" }>
+}) =>
+  Effect.gen(function* () {
+    if (organization.id !== profile.id) {
+      return yield* Effect.fail(
+        new Error(
+          `Organization/Profile id mismatch in test setup: ${organization.id} !== ${profile.id}`,
+        ),
+      )
+    }
+
+    const profilesRepository = yield* ProfilesRepository
+    const organizationsRepository = yield* OrganizationsRepository
+
+    yield* profilesRepository.insertProfile(profile)
+    yield* organizationsRepository.insertRow(organization)
+  })
+
+/**
+ * Insert a membership and all its dependencies (person + account + profile, organization + profile) into the test database.
+ */
+export const insertMembershipWithDependencies = ({
+  membership,
+  person,
+  personProfile,
+  organization,
+  organizationProfile,
+}: {
+  membership: OrganizationMembershipRow
+  person: PersonRow
+  personProfile: Extract<ProfileRow, { type: "PERSON" }>
+  organization: OrganizationRow
+  organizationProfile: Extract<ProfileRow, { type: "ORGANIZATION" }>
+}) =>
+  Effect.gen(function* () {
+    yield* insertPersonWithDependencies({ person, profile: personProfile })
+    yield* insertOrganizationWithDependencies({ organization, profile: organizationProfile })
+
+    const organizationsRepository = yield* OrganizationsRepository
+    yield* organizationsRepository.insertMembership(membership)
   })

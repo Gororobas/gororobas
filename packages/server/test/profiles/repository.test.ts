@@ -11,9 +11,12 @@ import { DateTime, Effect, Exit, Option, Schema } from "effect"
 
 import { ProfilesRepository } from "../../src/profiles/repository.js"
 import { makeProfileFixture, personProfileRowArbitrary, profileRowArbitrary } from "../fixtures.js"
-import { assertTransactionProperty, runTransactionScenario, TestLayer } from "../test-helpers.js"
-
-const DATABASE_PROPERTY_TEST_CONFIG = { numRuns: 30 } as const
+import {
+  assertTransactionProperty,
+  DATABASE_PROPERTY_TEST_CONFIG,
+  runTransactionScenario,
+  TestLayer,
+} from "../test-helpers.js"
 
 describe("ProfilesRepository", () => {
   describe("findByHandle", () => {
