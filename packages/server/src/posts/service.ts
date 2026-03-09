@@ -13,7 +13,6 @@ import {
   LoroDocUpdate,
   type NoteData,
   type NoteSourceData,
-  nowAsIso,
   PersonId,
   type PostHistoryEntry,
   PostId,
@@ -21,6 +20,7 @@ import {
   type PostRow,
   type PostTranslationRow,
   ProfileId,
+  snapshotToLoroDoc,
   SystemCommit,
   UpdateNoteData,
 } from "@gororobas/domain"
@@ -37,12 +37,7 @@ import { DateTime, Effect, Option, Schema, ServiceMap } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 import { LoroDoc } from "loro-crdt"
 
-import {
-  createDocFromEventData,
-  createDocFromNoteData,
-  editPostDoc,
-  importDoc,
-} from "./post-crdt.js"
+import { createDocFromEventData, createDocFromNoteData, editPostDoc } from "./post-crdt.js"
 import { PostsRepository } from "./repository.js"
 
 export const CreateNoteInput = Schema.Struct({
@@ -139,7 +134,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
         yield* sql.withTransaction(
           Effect.gen(function* () {
-            yield* repo.insertCrdt({
+            yield* repo.insertPostCrdtRow({
               createdAt: now,
               id: postId,
               loroCrdt: crdtBlob,
@@ -148,7 +143,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
             })
 
             const commit = HumanCommit.makeUnsafe({ personId: input.authorId })
-            yield* repo.insertCommit({
+            yield* repo.insertPostCommit({
               commit,
               crdtUpdate: loroDocToUpdate(loroDoc),
               fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
@@ -159,13 +154,12 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
               currentCrdtFrontier: frontier,
               locales: sourceData.locales,
               metadata: sourceData.metadata,
-              ownerProfileId: input.ownerProfileId,
               postId,
             })
           }),
         )
 
-        const row = yield* repo.findById(postId).pipe(
+        const row = yield* repo.findPostRowById(postId).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new PostNotFoundError({ id: postId })),
@@ -175,7 +169,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         )
 
         const translation = yield* repo
-          .findTranslation({ locale: "pt", postId })
+          .findPostTranslationRow({ locale: "pt", postId })
           .pipe(Effect.map(Option.getOrNull))
 
         return rowToNoteData(row, translation?.content ?? emptyContent, "pt")
@@ -213,7 +207,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
         yield* sql.withTransaction(
           Effect.gen(function* () {
-            yield* repo.insertCrdt({
+            yield* repo.insertPostCrdtRow({
               createdAt: now,
               id: postId,
               loroCrdt: crdtBlob,
@@ -222,7 +216,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
             })
 
             const commit = HumanCommit.makeUnsafe({ personId: input.authorId })
-            yield* repo.insertCommit({
+            yield* repo.insertPostCommit({
               commit,
               crdtUpdate: loroDocToUpdate(loroDoc),
               fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
@@ -233,13 +227,12 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
               currentCrdtFrontier: frontier,
               locales: sourceData.locales,
               metadata: sourceData.metadata,
-              ownerProfileId: input.ownerProfileId,
               postId,
             })
           }),
         )
 
-        const row = yield* repo.findById(postId).pipe(
+        const row = yield* repo.findPostRowById(postId).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new PostNotFoundError({ id: postId })),
@@ -249,7 +242,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         )
 
         const translation = yield* repo
-          .findTranslation({ locale: "pt", postId })
+          .findPostTranslationRow({ locale: "pt", postId })
           .pipe(Effect.map(Option.getOrNull))
 
         return rowToEventData(row, translation?.content ?? emptyContent, "pt")
@@ -257,10 +250,17 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
     const updateNote = (input: UpdateNoteInput) =>
       Effect.gen(function* () {
-        const now = yield* nowAsIso
+        const now = yield* DateTime.now
 
-        const existingCrdt = yield* repo.getCrdt(input.postId)
-        const sourceDoc = importDoc(existingCrdt.loroCrdt)
+        const existingCrdt = yield* repo.findPostCrdtRowById({ id: input.postId }).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.fail(new PostNotFoundError({ id: input.postId })),
+              onSome: Effect.succeed,
+            }),
+          ),
+        )
+        const sourceDoc = snapshotToLoroDoc(existingCrdt.loroCrdt)
 
         const { doc: updatedDoc, crdt_update } = yield* editPostDoc({
           initialDoc: sourceDoc,
@@ -281,10 +281,10 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
         yield* sql.withTransaction(
           Effect.gen(function* () {
-            yield* repo.updateCrdt({ id: input.postId, loroCrdt: crdtBlob, updatedAt: now })
+            yield* repo.updatePostCrdtRow({ id: input.postId, loroCrdt: crdtBlob, updatedAt: now })
 
             const commit = HumanCommit.makeUnsafe({ personId: input.authorId })
-            yield* repo.insertCommit({
+            yield* repo.insertPostCommit({
               commit,
               crdtUpdate: LoroDocUpdate.makeUnsafe(crdt_update),
               fromCrdtFrontier: sourceDoc.frontiers(),
@@ -296,13 +296,12 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
               currentCrdtFrontier: newFrontier,
               locales: updatedSourceData.locales,
               metadata: updatedSourceData.metadata,
-              ownerProfileId: existingCrdt.ownerProfileId,
               postId: input.postId,
             })
           }),
         )
 
-        const row = yield* repo.findById(input.postId).pipe(
+        const row = yield* repo.findPostRowById(input.postId).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new PostNotFoundError({ id: input.postId })),
@@ -312,7 +311,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         )
 
         const translation = yield* repo
-          .findTranslation({ locale: "pt", postId: input.postId })
+          .findPostTranslationRow({ locale: "pt", postId: input.postId })
           .pipe(Effect.map(Option.getOrNull))
 
         return rowToNoteData(row, translation?.content ?? emptyContent, "pt")
@@ -322,7 +321,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
     const findById = (id: PostId, locale: Locale = "pt") =>
       Effect.gen(function* () {
-        const row = yield* repo.findById(id).pipe(
+        const row = yield* repo.findPostRowById(id).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new PostNotFoundError({ id })),
@@ -332,7 +331,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         )
 
         const translation = yield* repo
-          .findTranslation({ locale, postId: id })
+          .findPostTranslationRow({ locale, postId: id })
           .pipe(Effect.map(Option.getOrNull))
 
         if (row.kind === "NOTE") {
@@ -344,7 +343,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
     const findByHandle = (handle: string, locale: Locale = "pt") =>
       Effect.gen(function* () {
-        const row = yield* repo.findByHandle(handle).pipe(
+        const row = yield* repo.findPostRowByHandle(handle).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new PostNotFoundError({ id: handle as any })),
@@ -354,7 +353,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         )
 
         const translation = yield* repo
-          .findTranslation({ locale, postId: row.id })
+          .findPostTranslationRow({ locale, postId: row.id })
           .pipe(Effect.map(Option.getOrNull))
 
         if (row.kind === "NOTE") {
@@ -366,7 +365,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
     const getHistory = (postId: PostId) =>
       Effect.gen(function* () {
-        const commits = yield* repo.findCommits(postId)
+        const commits = yield* repo.listPostCommitRowsByPostId(postId)
 
         const history: Array<PostHistoryEntry> = []
         const accumulatedDoc = new LoroDoc()

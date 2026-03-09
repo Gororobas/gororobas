@@ -36,37 +36,36 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
      * QUERYING SPECIFIC TABLES
      * ========================
      **/
-    const findById = SqlSchema.findOneOption({
+    const findPostRowById = SqlSchema.findOneOption({
       Request: PostId,
       Result: PostRow,
       execute: (id) => sql`SELECT * FROM posts WHERE id = ${id}`,
     })
 
-    const findByHandle = SqlSchema.findOneOption({
+    const findPostRowByHandle = SqlSchema.findOneOption({
       Request: Schema.String,
       Result: PostRow,
       execute: (handle) => sql`SELECT * FROM posts WHERE handle = ${handle}`,
     })
 
-    const findTranslation = SqlSchema.findOneOption({
-      Request: Schema.Struct({ postId: PostId, locale: Schema.String }),
+    const findPostTranslationRow = SqlSchema.findOneOption({
+      Request: Schema.Struct({ postId: PostId, locale: Locale }),
       Result: PostTranslationRow,
       execute: ({ locale, postId }) =>
         sql`SELECT * FROM post_translations WHERE post_id = ${postId} AND locale = ${locale}`,
     })
 
-    const findCommits = SqlSchema.findAll({
+    const listPostCommitRowsByPostId = SqlSchema.findAll({
       Request: PostId,
       Result: PostCommitRow,
       execute: (post_id) =>
         sql`SELECT * FROM post_commits WHERE post_id = ${post_id} ORDER BY created_at ASC`,
     })
 
-    const findCrdtById = SqlSchema.findOneOption({
+    const findPostCrdtRowById = SqlSchema.findOneOption({
       Request: Schema.Struct({ id: PostId }),
       Result: PostCrdtRow,
-      execute: ({ id }) =>
-        sql`SELECT id, loro_crdt, owner_profile_id, classification FROM post_crdts WHERE id = ${id}`,
+      execute: ({ id }) => sql`SELECT * FROM post_crdts WHERE id = ${id}`,
     })
 
     /**
@@ -74,7 +73,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
      * INSERTING TO SPECIFIC TABLES
      * ============================
      **/
-    const insertCrdt = (input: {
+    const insertPostCrdtRow = (input: {
       id: PostId
       loroCrdt: Uint8Array
       ownerProfileId: ProfileId
@@ -87,18 +86,18 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
       commit: CrdtCommit
     }
 
-    const insertCommitRow = SqlSchema.void({
+    const insertPostCommitRow = SqlSchema.void({
       Request: PostCommitRow,
       execute: (row) => sql`INSERT INTO post_commits ${sql.insert(row)}`,
     })
 
-    const insertCommit = (input: InsertCommitInput) =>
+    const insertPostCommit = (input: InsertCommitInput) =>
       Effect.gen(function* () {
         const id = yield* IdGen.make(PostCommitId)
         const now = yield* DateTime.now
         const createdById = input.commit._tag === "HumanCommit" ? input.commit.personId : null
 
-        yield* insertCommitRow({
+        yield* insertPostCommitRow({
           id,
           postId: input.postId,
           createdById,
@@ -109,23 +108,64 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
         })
       })
 
-    const upsertMain = SqlSchema.void({
+    const upsertPostRow = SqlSchema.void({
       Request: PostRow,
-      execute: (request) =>
-        sql`INSERT INTO posts ${sql.insert(request)} ON CONFLICT(id) DO UPDATE SET ${sql.update}`,
+      execute: (row) => sql`
+        INSERT INTO posts (
+          id,
+          current_crdt_frontier,
+          handle,
+          visibility,
+          published_at,
+          created_at,
+          updated_at,
+          owner_profile_id,
+          kind,
+          start_date,
+          end_date,
+          location_or_url,
+          attendance_mode
+        ) VALUES (
+          ${row.id},
+          ${row.currentCrdtFrontier},
+          ${row.handle},
+          ${row.visibility},
+          ${row.publishedAt},
+          ${row.createdAt},
+          ${row.updatedAt},
+          ${row.ownerProfileId},
+          ${row.kind},
+          ${row.startDate},
+          ${row.endDate},
+          ${row.locationOrUrl},
+          ${row.attendanceMode}
+        )
+        ON CONFLICT(id) DO UPDATE SET
+          current_crdt_frontier = excluded.current_crdt_frontier,
+          handle = excluded.handle,
+          visibility = excluded.visibility,
+          published_at = excluded.published_at,
+          updated_at = excluded.updated_at,
+          owner_profile_id = excluded.owner_profile_id,
+          kind = excluded.kind,
+          start_date = excluded.start_date,
+          end_date = excluded.end_date,
+          location_or_url = excluded.location_or_url,
+          attendance_mode = excluded.attendance_mode
+      `,
     })
 
-    const insertTranslations = SqlSchema.void({
+    const insertPostTranslationRows = SqlSchema.void({
       Request: Schema.Array(PostTranslationRow),
       execute: (rows) => sql`INSERT INTO post_translations ${sql.insert(rows)}`,
     })
 
-    const insertTags = SqlSchema.void({
+    const insertPostTagRows = SqlSchema.void({
       Request: Schema.Array(PostTagRow),
       execute: (rows) => sql`INSERT INTO post_tags ${sql.insert(rows)}`,
     })
 
-    const insertVegetables = SqlSchema.void({
+    const insertPostVegetableRows = SqlSchema.void({
       Request: Schema.Array(PostVegetableRow),
       execute: (rows) => sql`INSERT INTO post_vegetables ${sql.insert(rows)}`,
     })
@@ -140,28 +180,34 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
       currentCrdtFrontier: LoroDocFrontier
       metadata: NoteSourceData["metadata"] | EventSourceData["metadata"]
       postId: PostId
-      ownerProfileId: ProfileId
     }) {
       const now = yield* DateTime.now
       const { metadata } = data
-      const isEvent = metadata.kind === "EVENT"
-      const eventMeta = isEvent ? (metadata as EventSourceData["metadata"]) : null
 
-      return yield* upsertMain({
+      if (metadata.kind === "EVENT") {
+        return yield* upsertPostRow({
+          ...metadata,
+          createdAt: now,
+          updatedAt: now,
+          currentCrdtFrontier: data.currentCrdtFrontier,
+          id: data.postId,
+        })
+      }
+
+      return yield* upsertPostRow({
         ...metadata,
         createdAt: now,
         updatedAt: now,
         currentCrdtFrontier: data.currentCrdtFrontier,
         id: data.postId,
-        attendanceMode: eventMeta?.attendanceMode || null,
-        endDate: eventMeta?.endDate || null,
-        startDate: eventMeta?.startDate || null,
-        locationOrUrl: eventMeta?.locationOrUrl || null,
+        attendanceMode: null,
+        endDate: null,
+        startDate: null,
+        locationOrUrl: null,
       })
     })
 
     const materializeTranslations = (data: {
-      currentCrdtFrontier: LoroDocFrontier
       locales: NoteSourceData["locales"] | EventSourceData["locales"]
       postId: PostId
     }) =>
@@ -170,7 +216,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
 
         yield* sql`DELETE FROM post_translations WHERE post_id = ${postId}`
 
-        const translationsToInsert = Object.entries(locales).flatMap(([locale, localeData]) => {
+        const translationRows = Object.entries(locales).flatMap(([locale, localeData]) => {
           if (!localeData || !Schema.is(Locale)(locale)) return []
 
           return PostTranslationRow.makeUnsafe({
@@ -184,8 +230,8 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
           })
         })
 
-        if (translationsToInsert.length === 0) return
-        yield* insertTranslations(translationsToInsert)
+        if (translationRows.length === 0) return
+        yield* insertPostTranslationRows(translationRows)
       })
 
     const materializeTags = (data: { classification: PostClassification | null; postId: PostId }) =>
@@ -194,20 +240,18 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
 
         yield* sql`DELETE FROM post_tags WHERE post_id = ${postId}`
 
-        if (!classification) return
+        const postTagRows = (classification?.tags || []).flatMap((tag) => {
+          if (tag._tag !== "ResolvedExistingTagExtraction") return []
 
-        const existingTags = classification.tags.flatMap((t) =>
-          t._tag === "ResolvedExistingTagExtraction"
-            ? PostTagRow.makeUnsafe({
-                postId,
-                tagId: t.tagId,
-                extractionText: t.extractionText,
-              })
-            : [],
-        )
+          return PostTagRow.makeUnsafe({
+            postId,
+            tagId: tag.tagId,
+            extractionText: tag.extractionText,
+          })
+        })
 
-        if (existingTags.length === 0) return
-        yield* insertTags(existingTags)
+        if (postTagRows.length === 0) return
+        yield* insertPostTagRows(postTagRows)
       })
 
     const materializeVegetables = (data: {
@@ -219,20 +263,19 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
 
         yield* sql`DELETE FROM post_vegetables WHERE post_id = ${postId}`
 
-        if (!classification) return
+        const postVegetableRows =
+          classification?.vegetables.flatMap((vegetable) => {
+            if (vegetable._tag !== "ResolvedExistingVegetableExtraction") return []
 
-        const existingVegetables = classification.vegetables.flatMap((veg) => {
-          if (veg._tag !== "ResolvedExistingVegetableExtraction") return []
+            return PostVegetableRow.makeUnsafe({
+              postId,
+              vegetableId: vegetable.vegetableId,
+              extractionText: vegetable.extractionText,
+            })
+          }) ?? []
 
-          return PostVegetableRow.makeUnsafe({
-            postId,
-            vegetableId: veg.vegetableId,
-            extractionText: veg.extractionText,
-          })
-        })
-
-        if (existingVegetables.length === 0) return
-        yield* insertVegetables(existingVegetables)
+        if (postVegetableRows.length === 0) return
+        yield* insertPostVegetableRows(postVegetableRows)
       })
 
     const materialize = (data: {
@@ -240,22 +283,21 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
       currentCrdtFrontier: LoroDocFrontier
       locales: NoteSourceData["locales"] | EventSourceData["locales"]
       metadata: NoteSourceData["metadata"] | EventSourceData["metadata"]
-      ownerProfileId: ProfileId
       postId: PostId
     }) =>
       sql.withTransaction(
-        Effect.all(
-          [
-            materializePostRow(data),
-            materializeTranslations(data),
-            materializeTags({ classification: data.classification ?? null, postId: data.postId }),
-            materializeVegetables({
-              classification: data.classification ?? null,
-              postId: data.postId,
-            }),
-          ],
-          { concurrency: "unbounded" },
-        ),
+        Effect.gen(function* () {
+          yield* materializePostRow(data)
+          yield* materializeTranslations(data)
+          yield* materializeTags({
+            classification: data.classification ?? null,
+            postId: data.postId,
+          })
+          yield* materializeVegetables({
+            classification: data.classification ?? null,
+            postId: data.postId,
+          })
+        }),
       )
 
     /**
@@ -264,7 +306,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
      * ==========================
      **/
 
-    const updateCrdt = SqlSchema.void({
+    const updatePostCrdtRow = SqlSchema.void({
       Request: Schema.Struct({
         id: PostId,
         loroCrdt: LoroDocSnapshot,
@@ -286,35 +328,35 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
      * =========================
      **/
 
-    const getCommitHistory = SqlSchema.findAll({
+    const listPostCommitRowsByPostIdDesc = SqlSchema.findAll({
       Request: PostId,
       Result: PostCommitRow,
       execute: (postId) =>
         sql`SELECT * FROM post_commits WHERE post_id = ${postId} ORDER BY created_at DESC`,
     })
 
-    const getContributors = SqlSchema.findAll({
+    const listPostContributorIdsByPostId = SqlSchema.findAll({
       Request: PostId,
       Result: Schema.Struct({ createdById: Schema.NullOr(ProfileId) }),
       execute: (postId) =>
         sql`SELECT DISTINCT created_by_id FROM post_commits WHERE post_id = ${postId} AND created_by_id IS NOT NULL`,
     })
 
-    const findByOwner = SqlSchema.findAll({
+    const listPostRowsByOwnerProfileId = SqlSchema.findAll({
       Request: ProfileId,
       Result: PostRow,
       execute: (ownerProfileId) =>
         sql`SELECT * FROM posts WHERE owner_profile_id = ${ownerProfileId} ORDER BY updated_at DESC`,
     })
 
-    const countByOwner = SqlSchema.findOne({
+    const countPostRowsByOwnerProfileId = SqlSchema.findOne({
       Request: ProfileId,
       Result: Schema.Struct({ count: Schema.Number }),
       execute: (ownerProfileId) =>
         sql`SELECT COUNT(*) as count FROM posts WHERE owner_profile_id = ${ownerProfileId}`,
     })
 
-    const getPageData = SqlSchema.findOneOption({
+    const findPostPageData = SqlSchema.findOneOption({
       execute: (req) => sql`
         WITH
         -- Step 1: Find the target post by handle
@@ -401,21 +443,21 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
     })
 
     return {
-      countByOwner,
+      countPostRowsByOwnerProfileId,
       delete: deletePost,
-      findByHandle,
-      findById,
-      findByOwner,
-      findCommits,
-      findCrdtById,
-      findTranslation,
-      getCommitHistory,
-      getContributors,
-      getPageData,
-      insertCommit,
-      insertCrdt,
+      findPostCrdtRowById,
+      findPostPageData,
+      findPostRowByHandle,
+      findPostRowById,
+      findPostTranslationRow,
+      insertPostCommit,
+      insertPostCrdtRow,
+      listPostCommitRowsByPostId,
+      listPostCommitRowsByPostIdDesc,
+      listPostContributorIdsByPostId,
+      listPostRowsByOwnerProfileId,
       materialize,
-      updateCrdt,
+      updatePostCrdtRow,
     } as const
   }),
 }) {}

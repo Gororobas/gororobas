@@ -11,6 +11,7 @@ import {
   modifyLoroDocWithCommit,
   PostId,
   PostLocalizedData,
+  PostNotFoundError,
   snapshotToLoroDoc,
   SourcePostData,
   SystemCommit,
@@ -18,7 +19,7 @@ import {
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
 import { PostSourceDataLoro } from "../posts/post-loro.lib.js"
@@ -61,7 +62,14 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
     })
 
     const repo = yield* PostsRepository
-    const crdt = yield* repo.getCrdt(payload.postId)
+    const crdt = yield* repo.findPostCrdtRowById({ id: payload.postId }).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new PostNotFoundError({ id: payload.postId })),
+          onSome: Effect.succeed,
+        }),
+      ),
+    )
     const currentLoroDoc = snapshotToLoroDoc(crdt.loroCrdt)
     const currentSourceData = yield* Schema.decodeEffect(SourcePostData)(currentLoroDoc.toJSON())
 
@@ -96,7 +104,7 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
       name: "persist",
       success: Schema.Void,
       error: Schema.Unknown, // @TODO: How to type SqlError | ParseError as schemas?
-      execute: repo.insertCommit({
+      execute: repo.insertPostCommit({
         commit,
         postId: payload.postId,
         fromCrdtFrontier: LoroDocFrontier.makeUnsafe(currentLoroDoc.frontiers()),

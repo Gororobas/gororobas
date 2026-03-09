@@ -6,7 +6,7 @@ import {
   type PersonId,
 } from "@gororobas/domain"
 import { Effect } from "effect"
-import { LoroDoc, VersionVector } from "loro-crdt"
+import { LoroDoc } from "loro-crdt"
 import { Mirror } from "loro-mirror"
 
 import { EventSourceDataLoro, NoteSourceDataLoro } from "./post-loro.lib.js"
@@ -59,20 +59,3 @@ export const editPostDoc = Effect.fn("editPostDoc")(function* ({
     doc: updatedDoc,
   }
 })
-
-export function exportSnapshot(doc: LoroDoc): Uint8Array {
-  return doc.export({ mode: "snapshot" })
-}
-
-export function exportUpdate(doc: LoroDoc): Uint8Array {
-  return doc.export({
-    from: new VersionVector(null),
-    mode: "update",
-  })
-}
-
-export function importDoc(crdtBlob: Uint8Array): LoroDoc {
-  const doc = new LoroDoc()
-  doc.import(crdtBlob)
-  return doc
-}
