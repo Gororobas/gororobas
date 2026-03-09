@@ -30,13 +30,13 @@ import { VegetablesRepository } from "../vegetables/repository.js"
 
 function toCommonExtractionFields(extraction: Extraction) {
   return CommonExtractionData.mapFields(Struct.omit(["handle"])).makeUnsafe({
-    extraction_text: extraction.extractionText,
-    extraction_class: extraction.extractionClass,
-    alignment_status: extraction.alignmentStatus ?? null,
-    char_interval: extraction.charInterval
+    extractionText: extraction.extractionText,
+    extractionClass: extraction.extractionClass,
+    alignmentStatus: extraction.alignmentStatus ?? null,
+    charInterval: extraction.charInterval
       ? {
-          start_pos: extraction.charInterval.startPos ?? null,
-          end_pos: extraction.charInterval.endPos ?? null,
+          startPos: extraction.charInterval.startPos ?? null,
+          endPos: extraction.charInterval.endPos ?? null,
         }
       : null,
     description: extraction.description || null,
@@ -81,7 +81,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
       yield* Effect.logDebug(`Found existing vegetable by handle: "${handle}" -> ${match.value.id}`)
       return ResolvedExistingVegetableExtraction.makeUnsafe({
         ...common,
-        vegetable_id: match.value.id,
+        vegetableId: match.value.id,
         handle: match.value.handle as Handle,
       })
     }
@@ -100,7 +100,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
       )
       return ResolvedExistingVegetableExtraction.makeUnsafe({
         ...common,
-        vegetable_id: match.value.vegetableId,
+        vegetableId: match.value.vegetableId,
         handle: match.value.handle as Handle,
       })
     }
@@ -153,7 +153,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
       )
       return ResolvedExistingTagExtraction.makeUnsafe({
         ...common,
-        tag_id: handleMatch.value.id,
+        tagId: handleMatch.value.id,
         handle: stringToHandle(handleMatch.value.handle),
       })
     }
@@ -165,7 +165,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
       yield* Effect.logDebug(`Found existing tag by name: "${tagHandle}" -> ${nameMatch.value.id}`)
       return ResolvedExistingTagExtraction.makeUnsafe({
         ...common,
-        tag_id: nameMatch.value.id,
+        tagId: nameMatch.value.id,
         handle: stringToHandle(nameMatch.value.handle),
       })
     }

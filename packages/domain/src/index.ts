@@ -41,9 +41,10 @@ export * from "./common/ids.js"
 export * from "./common/primitives.js"
 export * from "./common/id-gen.js"
 
-// Rich-text types
+// Rich-text
 export * from "./rich-text/domain.js"
 export * from "./rich-text/tiptap-to-html.js"
+export * from "./rich-text/tiptap-to-text.js"
 
 // Utilities
 export * from "./common/utils/strings.js"

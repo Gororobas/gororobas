@@ -29,6 +29,7 @@ export const PostLocalizedData = Schema.Struct({
   content: TiptapDocument,
   originalLocale: Locale,
   translationSource: TranslationSource,
+  translatedAtCrdtFrontier: LoroDocFrontier,
 })
 export type PostLocalizedData = typeof PostLocalizedData.Type
 
