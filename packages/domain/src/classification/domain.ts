@@ -13,14 +13,14 @@ import { LoroDocFrontier } from "../crdts/domain.js"
 import { TagRow } from "../tags/domain.js"
 
 export const ModelInfo = Schema.Struct({
-  model_id: Schema.String,
-  model_type: Schema.Literal("ollama"),
+  modelId: Schema.String,
+  modelType: Schema.Literal("ollama"),
 })
 export type ModelInfo = typeof ModelInfo.Type
 
 export const LangExtractCharInterval = Schema.Struct({
-  start_pos: Schema.NullOr(Schema.Number),
-  end_pos: Schema.NullOr(Schema.Number),
+  startPos: Schema.NullOr(Schema.Number),
+  endPos: Schema.NullOr(Schema.Number),
 })
 export type LangExtractCharInterval = typeof LangExtractCharInterval.Type
 
@@ -33,10 +33,10 @@ export const LangExtractAlignmentStatus = Schema.Literals([
 export type LangExtractAlignmentStatus = typeof LangExtractAlignmentStatus.Type
 
 export const CommonExtractionData = Schema.Struct({
-  extraction_text: Schema.String,
-  extraction_class: Schema.String,
-  char_interval: Schema.NullOr(LangExtractCharInterval),
-  alignment_status: Schema.NullOr(LangExtractAlignmentStatus),
+  extractionText: Schema.String,
+  extractionClass: Schema.String,
+  charInterval: Schema.NullOr(LangExtractCharInterval),
+  alignmentStatus: Schema.NullOr(LangExtractAlignmentStatus),
   description: Schema.NullOr(Schema.String),
   handle: Handle,
   attributes: Schema.Record(
@@ -49,7 +49,7 @@ export const ResolvedExistingVegetableExtraction = Schema.TaggedStruct(
   "ResolvedExistingVegetableExtraction",
   {
     ...CommonExtractionData.fields,
-    vegetable_id: VegetableId,
+    vegetableId: VegetableId,
   },
 )
 export type ResolvedExistingVegetableExtraction = typeof ResolvedExistingVegetableExtraction.Type
@@ -72,7 +72,7 @@ export type ResolvedVegetableExtraction = typeof ResolvedVegetableExtraction.Typ
 
 export const ResolvedExistingTagExtraction = Schema.TaggedStruct("ResolvedExistingTagExtraction", {
   ...CommonExtractionData.fields,
-  tag_id: TagId,
+  tagId: TagId,
 })
 export type ResolvedExistingTagExtraction = typeof ResolvedExistingTagExtraction.Type
 
@@ -94,11 +94,11 @@ export type ResolvedTagExtraction = typeof ResolvedTagExtraction.Type
  */
 export const PostClassification = Schema.Struct({
   version: Schema.String,
-  model_info: ModelInfo,
-  content_hash: Schema.String,
-  crdt_frontier: LoroDocFrontier,
-  started_at: TimestampColumn,
-  finished_at: TimestampColumn,
+  modelInfo: ModelInfo,
+  contentHash: Schema.String,
+  crdtFrontier: LoroDocFrontier,
+  startedAt: TimestampColumn,
+  finishedAt: TimestampColumn,
   vegetables: Schema.Array(ResolvedVegetableExtraction),
   tags: Schema.Array(ResolvedTagExtraction),
 })

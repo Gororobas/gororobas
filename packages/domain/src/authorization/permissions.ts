@@ -6,7 +6,7 @@ import { Schema } from "effect"
 import type { OrganizationAccessLevel, PlatformAccessLevelOrVisitor } from "../common/enums.js"
 
 export const PlatformPermission = Schema.Literals([
-  "people:manage-trusted", // trusting newcomers or blocking trusted
+  "people:manage-community-access", // trusting newcomers or blocking members with community access
   "people:manage-moderators",
   "people:manage-admins",
   "revisions:evaluate",
@@ -37,7 +37,8 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   ADMIN: new Set(PlatformPermission.literals),
   BLOCKED: new Set([]),
   MODERATOR: new Set([
-    "people:manage-trusted",
+    "people:manage-community-access",
+    "people:manage-moderators",
     "revisions:evaluate",
     "posts:create:personal",
     "media:create",
