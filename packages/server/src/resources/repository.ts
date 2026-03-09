@@ -6,9 +6,6 @@ import {
   type SourceResourceData,
 } from "@gororobas/domain"
 import { Effect, Schema, ServiceMap } from "effect"
-/**
- * Resources repository with CRDT-based revision workflow.
- */
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {

@@ -25,12 +25,30 @@ export const CorePostMetadata = Schema.Struct({
 })
 export type CorePostMetadata = typeof CorePostMetadata.Type
 
-export const PostLocalizedData = Schema.Struct({
+const PostLocalizedDataCommonFields = {
   content: TiptapDocument,
   originalLocale: Locale,
-  translationSource: TranslationSource,
+}
+
+const OriginalPostLocalizedData = Schema.Struct({
+  ...PostLocalizedDataCommonFields,
+  translationSource: Schema.Literal("ORIGINAL" satisfies (typeof TranslationSource.literals)[0]),
+  translatedAtCrdtFrontier: Schema.Null,
+})
+
+const TranslatedPostLocalizedData = Schema.Struct({
+  ...PostLocalizedDataCommonFields,
+  translationSource: Schema.Literals([
+    "AUTOMATIC" satisfies (typeof TranslationSource.literals)[1],
+    "MANUAL" satisfies (typeof TranslationSource.literals)[2],
+  ]),
   translatedAtCrdtFrontier: LoroDocFrontier,
 })
+
+export const PostLocalizedData = Schema.Union([
+  OriginalPostLocalizedData,
+  TranslatedPostLocalizedData,
+])
 export type PostLocalizedData = typeof PostLocalizedData.Type
 
 export const EventMetadata = Schema.Struct({
@@ -89,7 +107,9 @@ const CoreQueriedPostData = Schema.Struct({
   locale: Locale,
   tags: Schema.fromJsonString(Schema.Array(MatchedTag)),
   vegetables: Schema.fromJsonString(Schema.Array(MatchedVegetable)),
-  ...PostLocalizedData.fields,
+  ...PostLocalizedDataCommonFields,
+  translationSource: TranslationSource,
+  translatedAtCrdtFrontier: Schema.NullOr(LoroDocFrontier),
 })
 
 export const QueriedNoteData = Schema.Struct({
@@ -240,7 +260,7 @@ export const PostTranslationRow = Schema.Struct({
   locale: Locale,
   originalLocale: Locale,
   postId: PostId,
-  translatedAtCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
+  translatedAtCrdtFrontier: Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
   translationSource: TranslationSource,
 })
 export type PostTranslationRow = typeof PostTranslationRow.Type

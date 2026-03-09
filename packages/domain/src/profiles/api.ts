@@ -1,7 +1,4 @@
 import { Schema } from "effect"
-/**
- * Profiles HTTP API endpoints.
- */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
 import { Handle } from "../common/primitives.js"

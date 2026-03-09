@@ -1,5 +1,5 @@
-import { PostId } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { PostId, PostNotFoundError } from "@gororobas/domain"
+import { Effect, Option, Schema } from "effect"
 import { Workflow } from "effect/unstable/workflow"
 
 import { PostsRepository } from "../posts/repository.js"
@@ -20,7 +20,14 @@ export const PostClassificationWorkflow = Workflow.make({
 export const PostClassificationWorkflowLayer = PostClassificationWorkflow.toLayer(
   Effect.fn("PostClassificationWorkflow")(function* (payload, _executionId) {
     const posts = yield* PostsRepository
-    yield* posts.getCrdt(payload.post_id)
+    yield* posts.findPostCrdtRowById({ id: payload.post_id }).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new PostNotFoundError({ id: payload.post_id })),
+          onSome: Effect.succeed,
+        }),
+      ),
+    )
 
     // @TODO: get the tiptap document from the CRDT, hash it, skip if not equal payload.hash, then extract, then materialize, then create suggested tags and vegetables
     // const currentHash = post.value.

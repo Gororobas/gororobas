@@ -80,6 +80,7 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
         [payload.targetLocale]: PostLocalizedData.makeUnsafe({
           content: tiptapFromHtml(translationResult.html),
           originalLocale: payload.sourceLocale,
+          translatedAtCrdtFrontier: LoroDocFrontier.makeUnsafe(currentLoroDoc.frontiers()),
           translationSource: "AUTOMATIC",
         }),
       },

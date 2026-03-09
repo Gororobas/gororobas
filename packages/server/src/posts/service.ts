@@ -116,6 +116,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
             pt: {
               content: input.content,
               originalLocale: "pt",
+              translatedAtCrdtFrontier: null,
               translationSource: "ORIGINAL",
             },
           },
@@ -185,6 +186,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
             pt: {
               content: input.content,
               originalLocale: "pt",
+              translatedAtCrdtFrontier: null,
               translationSource: "ORIGINAL",
             },
           },
@@ -271,7 +273,12 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
               ...current.locales,
               pt: current.locales.pt
                 ? { ...current.locales.pt, content: input.content }
-                : { content: input.content, originalLocale: "pt", translationSource: "ORIGINAL" },
+                : {
+                    content: input.content,
+                    originalLocale: "pt",
+                    translatedAtCrdtFrontier: null,
+                    translationSource: "ORIGINAL",
+                  },
             },
           }),
         })
