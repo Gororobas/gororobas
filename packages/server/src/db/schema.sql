@@ -191,7 +191,7 @@ CREATE TABLE image_credits (
 -- The source of truth of core vegetable data (except photos and varieties)
 CREATE TABLE vegetable_crdts (
   id text PRIMARY KEY,
-  loro_crdt blob NOT NULL,
+  crdt_snapshot blob NOT NULL, -- LoroSnapshot
   created_at text NOT NULL,
   updated_at text
 ) WITHOUT ROWID;
@@ -346,7 +346,7 @@ CREATE TABLE vegetable_photo_metadata (
 -- The source of truth of all resource data
 CREATE TABLE resource_crdts (
   id text PRIMARY KEY,
-  loro_crdt blob NOT NULL,
+  crdt_snapshot blob NOT NULL, -- LoroSnapshot
   created_at text NOT NULL,
   updated_at text
 ) WITHOUT ROWID;
@@ -424,7 +424,7 @@ CREATE TABLE resource_vegetables (
 -- The source of truth of all post data
 CREATE TABLE post_crdts (
   id text PRIMARY KEY,
-  loro_crdt blob NOT NULL,
+  crdt_snapshot blob NOT NULL, -- LoroSnapshot
   classification json,
   owner_profile_id text NOT NULL,
   created_at text NOT NULL,
@@ -508,7 +508,7 @@ CREATE TABLE comment_crdts (
   post_id text,
   resource_id text,
   parent_comment_id text,
-  loro_crdt blob NOT NULL,
+  crdt_snapshot blob NOT NULL, -- LoroSnapshot
   owner_profile_id text NOT NULL,
   moderation_status text,
   created_at text NOT NULL,

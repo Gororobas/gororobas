@@ -193,7 +193,7 @@ CREATE TABLE `image_credits` (
 -- Create "vegetable_crdts" table
 CREATE TABLE `vegetable_crdts` (
   `id` text NOT NULL,
-  `loro_crdt` blob NOT NULL,
+  `crdt_snapshot` blob NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NULL,
   PRIMARY KEY (`id`)
@@ -343,7 +343,7 @@ CREATE TABLE `vegetable_photo_metadata` (
 -- Create "resource_crdts" table
 CREATE TABLE `resource_crdts` (
   `id` text NOT NULL,
-  `loro_crdt` blob NOT NULL,
+  `crdt_snapshot` blob NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NULL,
   PRIMARY KEY (`id`)
@@ -420,7 +420,7 @@ CREATE TABLE `resource_vegetables` (
 -- Create "post_crdts" table
 CREATE TABLE `post_crdts` (
   `id` text NOT NULL,
-  `loro_crdt` blob NOT NULL,
+  `crdt_snapshot` blob NOT NULL,
   `classification` json NULL,
   `owner_profile_id` text NOT NULL,
   `created_at` text NOT NULL,
@@ -502,7 +502,7 @@ CREATE TABLE `comment_crdts` (
   `post_id` text NULL,
   `resource_id` text NULL,
   `parent_comment_id` text NULL,
-  `loro_crdt` blob NOT NULL,
+  `crdt_snapshot` blob NOT NULL,
   `owner_profile_id` text NOT NULL,
   `moderation_status` text NULL,
   `created_at` text NOT NULL,
