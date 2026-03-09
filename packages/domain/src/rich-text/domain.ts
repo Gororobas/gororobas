@@ -47,6 +47,12 @@ export const TiptapDocument = Schema.Struct({
 })
 export type TiptapDocument = typeof TiptapDocument.Type
 
+export const EMPTY_TIPTAP_DOCUMENT: TiptapDocument = TiptapDocument.makeUnsafe({
+  content: [],
+  type: "doc",
+  version: 1,
+})
+
 export const RichTextColumn = Schema.fromJsonString(TiptapDocument)
 
 export const TiptapAsHtml = Schema.String.pipe(Schema.brand("TiptapAsHtml"))

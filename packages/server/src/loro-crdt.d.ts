@@ -1,8 +1,11 @@
-import { LoroDocFrontier } from "@gororobas/domain"
+import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "@gororobas/domain"
 import "loro-crdt"
 
 declare module "loro-crdt" {
   interface LoroDoc {
+    export(config: { mode: "snapshot" }): LoroDocSnapshot
+    export(config: { from: VersionVector; mode: "update" }): LoroDocUpdate
+
     frontiers(): LoroDocFrontier
 
     diff(from: LoroDocFrontier, to: LoroDocFrontier, for_json: false): [ContainerID, Diff][]

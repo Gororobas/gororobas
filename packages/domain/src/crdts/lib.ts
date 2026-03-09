@@ -2,23 +2,17 @@ import { Clock, Effect, Schema } from "effect"
 import { LoroDoc, VersionVector } from "loro-crdt"
 import { Mirror, SchemaType as LoroMirrorSchema, InferInputType } from "loro-mirror"
 
-import {
-  LoroDocUpdate,
-  LoroDocFrontier,
-  LoroDocSnapshot,
-  CrdtCommit,
-  CrdtCommitEncoded,
-} from "../crdts/domain.js"
+import { LoroDocFrontier, LoroDocSnapshot, CrdtCommit, CrdtCommitEncoded } from "../crdts/domain.js"
 
 export function loroDocToSnapshot(doc: LoroDoc) {
-  return doc.export({ mode: "snapshot" }) as LoroDocSnapshot
+  return doc.export({ mode: "snapshot" })
 }
 
 export function loroDocToUpdate(doc: LoroDoc) {
   return doc.export({
     from: new VersionVector(null),
     mode: "update",
-  }) as LoroDocUpdate
+  })
 }
 
 export function snapshotToLoroDoc(crdtBlob: LoroDocSnapshot): LoroDoc {
@@ -54,12 +48,12 @@ export const modifyLoroDocWithCommit = Effect.fn("modifyLoroDocWithCommit")(func
   commit: CrdtCommit
 }) {
   const editedDoc = initialDoc.fork()
-  const initialDocStore = new Mirror({
-    doc: initialDoc,
+  const editedDocStore = new Mirror({
+    doc: editedDoc,
     schema,
   })
-  initialDocStore.setState(() => newData)
-  initialDocStore.dispose()
+  editedDocStore.setState(() => newData)
+  editedDocStore.dispose()
 
   const diff = editedDoc.diff(initialDoc.frontiers(), editedDoc.frontiers())
 

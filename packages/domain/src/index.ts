@@ -2,9 +2,9 @@
 export * from "./apis.js"
 
 // Domain entities
-export * from "./crdts/domain.js"
 export * from "./classification/domain.js"
 export * from "./comments/domain.js"
+export * from "./crdts/domain.js"
 export * from "./media/domain.js"
 export * from "./organizations/domain.js"
 export * from "./people/domain.js"
@@ -31,15 +31,15 @@ export * from "./authentication/middleware.js"
 
 // Authorization
 export * from "./authorization/permissions.js"
+export { default as Policies } from "./authorization/policies.js"
 export * from "./authorization/policy.js"
 export * from "./authorization/session.js"
-export { default as Policies } from "./authorization/policies.js"
 
 // Common types
 export * from "./common/enums.js"
+export * from "./common/id-gen.js"
 export * from "./common/ids.js"
 export * from "./common/primitives.js"
-export * from "./common/id-gen.js"
 
 // Rich-text
 export * from "./rich-text/domain.js"
@@ -47,6 +47,7 @@ export * from "./rich-text/tiptap-to-html.js"
 export * from "./rich-text/tiptap-to-text.js"
 
 // Utilities
-export * from "./common/utils/strings.js"
 export * from "./common/utils/dates.js"
+export * from "./common/utils/handles.js"
+export * from "./common/utils/strings.js"
 export * from "./crdts/lib.js"
