@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { DateTime, Schema } from "effect"
 import { schema as loroSchema } from "loro-mirror"
 
 import {
@@ -8,12 +8,13 @@ import {
   TranslationSource,
 } from "../common/enums.js"
 import { PersonId, ProfileId } from "../common/ids.js"
-import { Handle } from "../common/primitives.js"
+import { Handle, TimestampColumn } from "../common/primitives.js"
+import { TiptapDocument } from "../rich-text/domain.js"
 
 export const LoroDocUpdate = Schema.Uint8Array.pipe(Schema.brand("LoroCrdtUpdateEncoded"))
 export type LoroDocUpdate = typeof LoroDocUpdate.Type
 
-export const LoroDocSnapshot = Schema.Uint8Array.pipe(Schema.brand("LoroDocEncoded"))
+export const LoroDocSnapshot = Schema.Uint8Array.pipe(Schema.brand("LoroDocSnapshotEncoded"))
 export type LoroDocSnapshot = typeof LoroDocSnapshot.Type
 
 export const LoroDocFrontier = Schema.Array(
@@ -92,4 +93,114 @@ export const EventSourceDataLoro = loroSchema({
     { required: true },
   ),
   metadata: EventMetadataLoro,
+})
+
+const PostLocalizedDataStorageLoro = loroSchema.LoroMap(
+  {
+    content: loroSchema.String({ required: false }),
+    originalLocale: loroSchema.String<Locale>({ required: false }),
+    translatedAtCrdtFrontier: loroSchema.String({ required: false }),
+    translationSource: loroSchema.String<TranslationSource>({ required: false }),
+  },
+  { required: false },
+)
+
+export const PostMetadataStorageLoro = loroSchema.LoroMap({
+  attendanceMode: loroSchema.String<EventAttendanceMode>({ required: false }),
+  endDate: loroSchema.String({ required: false }),
+  handle: loroSchema.String<Handle>({ required: true }),
+  kind: loroSchema.String<"NOTE" | "EVENT">({ required: true }),
+  locationOrUrl: loroSchema.String({ required: false }),
+  ownerProfileId: loroSchema.String<ProfileId>({ required: true }),
+  publishedAt: loroSchema.String({ required: true }),
+  startDate: loroSchema.String({ required: false }),
+  visibility: loroSchema.String<InformationVisibility>({ required: true }),
+})
+
+export const PostSourceDataStorageLoro = loroSchema({
+  locales: loroSchema.LoroMap(
+    {
+      en: PostLocalizedDataStorageLoro,
+      es: PostLocalizedDataStorageLoro,
+      pt: PostLocalizedDataStorageLoro,
+    },
+    { required: true },
+  ),
+  metadata: PostMetadataStorageLoro,
+})
+
+type CrdtLocalizedData = {
+  content: TiptapDocument
+  originalLocale: Locale
+  translatedAtCrdtFrontier: LoroDocFrontier | null
+  translationSource: TranslationSource
+}
+
+type CrdtSourcePostData = {
+  locales: {
+    en?: CrdtLocalizedData | undefined
+    es?: CrdtLocalizedData | undefined
+    pt?: CrdtLocalizedData | undefined
+  }
+  metadata:
+    | {
+        attendanceMode: EventAttendanceMode | null
+        endDate: TimestampColumn | string | null
+        handle: Handle
+        kind: "EVENT"
+        locationOrUrl: string | null
+        ownerProfileId: ProfileId
+        publishedAt: TimestampColumn | string
+        startDate: TimestampColumn | string
+        visibility: InformationVisibility
+      }
+    | {
+        handle: Handle
+        kind: "NOTE"
+        ownerProfileId: ProfileId
+        publishedAt: TimestampColumn | string
+        visibility: InformationVisibility
+      }
+}
+
+const encodeDateOrUndefined = (value: TimestampColumn | string | null | undefined) => {
+  if (value == null) return undefined
+  if (typeof value === "string") return value
+  return DateTime.formatIso(value)
+}
+
+const encodeLocalizedData = (localeData: CrdtLocalizedData) => ({
+  content: JSON.stringify(localeData.content),
+  originalLocale: localeData.originalLocale,
+  translatedAtCrdtFrontier: JSON.stringify(localeData.translatedAtCrdtFrontier),
+  translationSource: localeData.translationSource,
+})
+
+export const sourcePostDataToCrdtStorage = (sourceData: CrdtSourcePostData) => ({
+  locales: {
+    en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : {},
+    es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : {},
+    pt: sourceData.locales.pt ? encodeLocalizedData(sourceData.locales.pt) : {},
+  },
+  metadata: {
+    attendanceMode:
+      sourceData.metadata.kind === "EVENT" ? sourceData.metadata.attendanceMode : undefined,
+    endDate:
+      sourceData.metadata.kind === "EVENT"
+        ? encodeDateOrUndefined(sourceData.metadata.endDate)
+        : undefined,
+    handle: sourceData.metadata.handle,
+    kind: sourceData.metadata.kind,
+    locationOrUrl:
+      sourceData.metadata.kind === "EVENT"
+        ? (sourceData.metadata.locationOrUrl ?? undefined)
+        : undefined,
+    ownerProfileId: sourceData.metadata.ownerProfileId,
+    publishedAt: encodeDateOrUndefined(sourceData.metadata.publishedAt),
+    startDate:
+      sourceData.metadata.kind === "EVENT"
+        ? encodeDateOrUndefined(sourceData.metadata.startDate)
+        : undefined,
+    visibility: sourceData.metadata.visibility,
+  },
 })

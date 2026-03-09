@@ -20,7 +20,7 @@ export const PostClassificationWorkflow = Workflow.make({
 export const PostClassificationWorkflowLayer = PostClassificationWorkflow.toLayer(
   Effect.fn("PostClassificationWorkflow")(function* (payload, _executionId) {
     const posts = yield* PostsRepository
-    yield* posts.findPostCrdtRowById({ id: payload.post_id }).pipe(
+    yield* posts.findPostRowById(payload.post_id).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.fail(new PostNotFoundError({ id: payload.post_id })),
@@ -31,7 +31,7 @@ export const PostClassificationWorkflowLayer = PostClassificationWorkflow.toLaye
 
     // @TODO: get the tiptap document from the CRDT, hash it, skip if not equal payload.hash, then extract, then materialize, then create suggested tags and vegetables
     // const currentHash = post.value.
-    //
+
     return null
   }),
 )

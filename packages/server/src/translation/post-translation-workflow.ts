@@ -6,23 +6,18 @@
  */
 import {
   Locale,
-  LoroDocFrontier,
-  loroDocToUpdate,
-  modifyLoroDocWithCommit,
   PostId,
-  PostLocalizedData,
   PostNotFoundError,
-  snapshotToLoroDoc,
-  SourcePostData,
   SystemCommit,
   TimestampColumn,
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
-import { PostSourceDataLoro } from "../posts/post-loro.lib.js"
+import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
+import { SystemUpsertTranslation } from "../posts/post-repository-inputs.js"
 import { PostsRepository } from "../posts/repository.js"
 import { translateTiptapContent, TranslationResult } from "./translate-tiptap-content.js"
 import { TranslationError } from "./translation-service.js"
@@ -61,56 +56,34 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
       }),
     })
 
-    const repo = yield* PostsRepository
-    const crdt = yield* repo.findPostCrdtRowById({ id: payload.postId }).pipe(
-      Effect.flatMap(
-        Option.match({
-          onNone: () => Effect.fail(new PostNotFoundError({ id: payload.postId })),
-          onSome: Effect.succeed,
-        }),
-      ),
-    )
-    const currentLoroDoc = snapshotToLoroDoc(crdt.loroCrdt)
-    const currentSourceData = yield* Schema.decodeEffect(SourcePostData)(currentLoroDoc.toJSON())
-
-    const updatedSourceData: SourcePostData = {
-      ...currentSourceData,
-      locales: {
-        ...currentSourceData.locales,
-        [payload.targetLocale]: PostLocalizedData.makeUnsafe({
-          content: tiptapFromHtml(translationResult.html),
-          originalLocale: payload.sourceLocale,
-          translatedAtCrdtFrontier: LoroDocFrontier.makeUnsafe(currentLoroDoc.frontiers()),
-          translationSource: "AUTOMATIC",
-        }),
-      },
-    }
-
     const commit = SystemCommit.makeUnsafe({
       workflowName: "PostTranslationWorkflow",
       workflowVersion: WORKFLOW_VERSION,
       model: `translation/${translationResult.serviceId}`,
     })
 
-    const updatedDoc = yield* modifyLoroDocWithCommit({
-      commit,
-      initialDoc: currentLoroDoc,
-      schema: PostSourceDataLoro,
-      // @TODO better type loro-mirror schemas
-      newData: updatedSourceData as any,
-    })
+    const repository = yield* PostsRepository
 
-    // @TODO: how much of the above should be moved into here? Or perhaps a separate activity for creating the updated doc?
     yield* Activity.make({
       name: "persist",
       success: Schema.Void,
-      error: Schema.Unknown, // @TODO: How to type SqlError | ParseError as schemas?
-      execute: repo.insertPostCommit({
-        commit,
-        postId: payload.postId,
-        fromCrdtFrontier: LoroDocFrontier.makeUnsafe(currentLoroDoc.frontiers()),
-        crdtUpdate: loroDocToUpdate(updatedDoc),
-      }),
+      error: PostNotFoundError,
+      execute: repository
+        .updatePost(
+          SystemUpsertTranslation.makeUnsafe({
+            commit,
+            postId: payload.postId,
+            sourceLocale: payload.sourceLocale,
+            targetLocale: payload.targetLocale,
+            translatedContent: tiptapFromHtml(translationResult.html),
+          }),
+        )
+        .pipe(
+          withApiInfrastructureErrors({
+            endpoint: "PostTranslationWorkflow/persist",
+            group: "PostTranslationWorkflow",
+          }),
+        ),
     })
 
     return null

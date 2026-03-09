@@ -1,8 +1,8 @@
 import { Clock, Effect, Schema } from "effect"
 import { LoroDoc, VersionVector } from "loro-crdt"
-import { Mirror, SchemaType as LoroMirrorSchema, InferInputType } from "loro-mirror"
+import { InferInputType, SchemaType as LoroMirrorSchema, Mirror } from "loro-mirror"
 
-import { LoroDocFrontier, LoroDocSnapshot, CrdtCommit, CrdtCommitEncoded } from "../crdts/domain.js"
+import { CrdtCommit, CrdtCommitEncoded, LoroDocFrontier, LoroDocSnapshot } from "../crdts/domain.js"
 
 export function loroDocToSnapshot(doc: LoroDoc) {
   return doc.export({ mode: "snapshot" })

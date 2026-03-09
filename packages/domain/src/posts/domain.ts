@@ -13,14 +13,13 @@ import {
 } from "../common/enums.js"
 import { PersonId, PostCommitId, PostId, ProfileId, TagId, VegetableId } from "../common/ids.js"
 import { Handle, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
-import { LoroDocUpdate, LoroDocSnapshot, LoroDocFrontier } from "../crdts/domain.js"
-import { CrdtCommit } from "../crdts/domain.js"
+import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const CorePostMetadata = Schema.Struct({
   handle: Handle,
   ownerProfileId: ProfileId,
-  publishedAt: Schema.NullOr(TimestampColumn),
+  publishedAt: TimestampColumn,
   visibility: InformationVisibility,
 })
 export type CorePostMetadata = typeof CorePostMetadata.Type
@@ -127,6 +126,33 @@ export type QueriedEventData = typeof QueriedEventData.Type
 export const QueriedPostData = Schema.Union([QueriedNoteData, QueriedEventData])
 export type QueriedPostData = typeof QueriedPostData.Type
 
+const PostPageDataCommonFields = {
+  ...CorePostMetadata.fields,
+  content: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
+  currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
+  id: PostId,
+  locale: Schema.NullOr(Locale),
+  originalLocale: Schema.NullOr(Locale),
+  tags: Schema.fromJsonString(Schema.Array(MatchedTag)),
+  updatedAt: TimestampColumn,
+  vegetables: Schema.fromJsonString(Schema.Array(MatchedVegetable)),
+}
+
+export const PostPageNoteData = Schema.Struct({
+  ...PostPageDataCommonFields,
+  ...NoteMetadata.fields,
+})
+export type PostPageNoteData = typeof PostPageNoteData.Type
+
+export const PostPageEventData = Schema.Struct({
+  ...PostPageDataCommonFields,
+  ...EventMetadata.fields,
+})
+export type PostPageEventData = typeof PostPageEventData.Type
+
+export const PostPageData = Schema.Union([PostPageNoteData, PostPageEventData])
+export type PostPageData = typeof PostPageData.Type
+
 /** API response schemas */
 export const PostSearchParams = Schema.Struct({
   ownerProfileId: Schema.optional(ProfileId),
@@ -182,17 +208,17 @@ export const PostData = Schema.Union([NoteData, EventData])
 export type PostData = typeof PostData.Type
 
 export const CreateNoteData = Schema.Struct({
+  locale: Locale,
   content: TiptapDocument,
-  handle: Handle,
   visibility: InformationVisibility,
 })
 export type CreateNoteData = typeof CreateNoteData.Type
 
 export const CreateEventData = Schema.Struct({
+  locale: Locale,
   attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,
   endDate: Schema.optional(Schema.NullOr(TimestampColumn)),
-  handle: Handle,
   locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
   startDate: TimestampColumn,
   visibility: InformationVisibility,
@@ -216,7 +242,7 @@ export const PostCrdtRow = Schema.Struct({
   ...TimestampedStruct.fields,
   classification: Schema.NullOr(Schema.fromJsonString(PostClassification)),
   id: PostId,
-  loroCrdt: LoroDocSnapshot,
+  crdtSnapshot: LoroDocSnapshot,
   ownerProfileId: ProfileId,
 })
 export type PostCrdtRow = typeof PostCrdtRow.Type
@@ -240,17 +266,19 @@ export type PostCommitRow = typeof PostCommitRow.Type
 
 export const PostRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  attendanceMode: Schema.NullOr(EventAttendanceMode),
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
-  endDate: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PostId,
-  locationOrUrl: Schema.NullOr(Schema.String),
   ownerProfileId: ProfileId,
-  publishedAt: Schema.NullOr(TimestampColumn),
-  startDate: Schema.NullOr(TimestampColumn),
+  publishedAt: TimestampColumn,
   kind: PostKind,
-  visibility: Schema.NullOr(InformationVisibility),
+  visibility: InformationVisibility,
+
+  // Event-specific - always `null` for notes
+  startDate: Schema.NullOr(TimestampColumn),
+  endDate: Schema.NullOr(TimestampColumn),
+  locationOrUrl: Schema.NullOr(Schema.String),
+  attendanceMode: Schema.NullOr(EventAttendanceMode),
 })
 export type PostRow = typeof PostRow.Type
 

@@ -8,6 +8,7 @@ import {
   type OrganizationMembershipRow,
   type OrganizationRow,
   type PersonRow,
+  type PlatformAccessLevel,
   type ProfileRow,
   type Session,
 } from "@gororobas/domain"
@@ -23,7 +24,7 @@ import { PeopleService } from "../src/people/service.js"
 import { ProfilesRepository } from "../src/profiles/repository.js"
 import { ProfileService } from "../src/profiles/service.js"
 import { AppSqlTest } from "../src/sql.js"
-import { makeProfileFixture } from "./fixtures.js"
+import { makePersonFixture, makeProfileFixture } from "./fixtures.js"
 import { getTelemetryLayer } from "./telemetry.js"
 
 export const DATABASE_PROPERTY_TEST_CONFIG = { numRuns: 50 } as const
@@ -293,4 +294,20 @@ export const insertMembershipWithDependencies = ({
 
     const organizationsRepository = yield* OrganizationsRepository
     yield* organizationsRepository.insertMembership(membership)
+  })
+
+/**
+ * Helper to seed a person with profile in a single operation.
+ *
+ * This reduces the repetitive pattern of:
+ * - makePersonFixture
+ * - makeProfileFixture
+ * - insertPersonWithDependencies
+ */
+export const seedPerson = (accessLevel: PlatformAccessLevel) =>
+  Effect.gen(function* () {
+    const person = yield* makePersonFixture({ accessLevel })
+    const profile = yield* makeProfileFixture({ id: person.id })
+    yield* insertPersonWithDependencies({ person, profile })
+    return { person, profile }
   })
