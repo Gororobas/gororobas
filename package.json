@@ -10,14 +10,15 @@
     "clean": "node scripts/clean.mjs",
     "codegen": "pnpm --recursive --parallel run codegen",
     "build": "tsc -b tsconfig.build.json && pnpm --recursive --parallel run build",
-    "type-check": "tsc -b tsconfig.json",
+    "type-check": "./node_modules/.bin/tsc -b tsconfig.json",
     "type-check-recursive": "pnpm --recursive exec tsc -b tsconfig.json",
-    "lint": "oxlint --fix --fix-dangerously --type-aware --fix-suggestions --config=./.oxlintrc.json",
+    "lint": "./node_modules/.bin/oxlint --fix --fix-dangerously --type-aware --fix-suggestions --config=./.oxlintrc.json",
     "lint:dangerously": "oxlint --fix --type-aware --fix-suggestions --fix-dangerously",
     "format": "oxfmt",
-    "test": "vitest",
+    "test": "./node_modules/.bin/vitest",
     "check-bdd": "bun run packages/effect-bdd/bin/effect-bdd-check.ts check",
-    "coverage": "vitest --coverage"
+    "coverage": "./node_modules/.bin/vitest --coverage",
+    "quality-gates": "pnpm run type-check && pnpm run lint && pnpm run test"
   },
   "devDependencies": {
     "@babel/cli": "^7.28.6",
@@ -40,7 +41,7 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "packageManager": "pnpm@10.30.3+sha512.c961d1e0a2d8e354ecaa5166b822516668b7f44cb5bd95122d590dd81922f606f5473b6d23ec4a5be05e7fcd18e8488d47d978bbe981872f1145d06e9a740017",
+  "packageManager": "pnpm@10.30.3",
   "pnpm": {
     "patchedDependencies": {},
     "ignoredBuiltDependencies": [
@@ -61,5 +62,8 @@
       "lefthook",
       "lmdb"
     ]
+  },
+  "engines": {
+    "pnpm": ">=10.30.3 <11"
   }
 }

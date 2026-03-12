@@ -12,7 +12,7 @@ import {
   TranslationSource,
 } from "../common/enums.js"
 import { PersonId, PostCommitId, PostId, ProfileId, TagId, VegetableId } from "../common/ids.js"
-import { Handle, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
+import { Handle, PaginationOptions, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
@@ -28,6 +28,9 @@ const PostLocalizedDataCommonFields = {
   content: TiptapDocument,
   originalLocale: Locale,
 }
+
+const NoteKind = Schema.Literal("NOTE" satisfies (typeof PostKind.literals)[0])
+const EventKind = Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1])
 
 const OriginalPostLocalizedData = Schema.Struct({
   ...PostLocalizedDataCommonFields,
@@ -52,7 +55,7 @@ export type PostLocalizedData = typeof PostLocalizedData.Type
 
 export const EventMetadata = Schema.Struct({
   ...CorePostMetadata.fields,
-  kind: Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1]),
+  kind: EventKind,
   startDate: TimestampColumn,
   endDate: Schema.NullOr(TimestampColumn),
   locationOrUrl: Schema.NullOr(Schema.String),
@@ -62,28 +65,26 @@ export type EventMetadata = typeof EventMetadata.Type
 
 export const NoteMetadata = Schema.Struct({
   ...CorePostMetadata.fields,
-  kind: Schema.Literal("NOTE" satisfies (typeof PostKind.literals)[0]),
+  kind: NoteKind,
 })
 export type NoteMetadata = typeof NoteMetadata.Type
 
+const PostSourceLocales = Schema.Struct({
+  en: Schema.optional(PostLocalizedData),
+  es: Schema.optional(PostLocalizedData),
+  pt: Schema.optional(PostLocalizedData),
+})
+
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
 export const NoteSourceData = Schema.Struct({
-  locales: Schema.Struct({
-    en: Schema.optional(PostLocalizedData),
-    es: Schema.optional(PostLocalizedData),
-    pt: Schema.optional(PostLocalizedData),
-  }),
+  locales: PostSourceLocales,
   metadata: NoteMetadata,
 })
 export type NoteSourceData = typeof NoteSourceData.Type
 
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
 export const EventSourceData = Schema.Struct({
-  locales: Schema.Struct({
-    en: Schema.optional(PostLocalizedData),
-    es: Schema.optional(PostLocalizedData),
-    pt: Schema.optional(PostLocalizedData),
-  }),
+  locales: PostSourceLocales,
   metadata: EventMetadata,
 })
 export type EventSourceData = typeof EventSourceData.Type
@@ -102,29 +103,8 @@ const MatchedVegetable = Schema.Struct({
   extraction_text: Schema.NullOr(Schema.String),
 })
 
-const CoreQueriedPostData = Schema.Struct({
-  locale: Locale,
-  tags: Schema.fromJsonString(Schema.Array(MatchedTag)),
-  vegetables: Schema.fromJsonString(Schema.Array(MatchedVegetable)),
-  ...PostLocalizedDataCommonFields,
-  translationSource: TranslationSource,
-  translatedAtCrdtFrontier: Schema.NullOr(LoroDocFrontier),
-})
-
-export const QueriedNoteData = Schema.Struct({
-  ...CoreQueriedPostData.fields,
-  ...NoteMetadata.fields,
-})
-export type QueriedNoteData = typeof QueriedNoteData.Type
-
-export const QueriedEventData = Schema.Struct({
-  ...CoreQueriedPostData.fields,
-  ...EventMetadata.fields,
-})
-export type QueriedEventData = typeof QueriedEventData.Type
-
-export const QueriedPostData = Schema.Union([QueriedNoteData, QueriedEventData])
-export type QueriedPostData = typeof QueriedPostData.Type
+const MatchedTagsAsJson = Schema.fromJsonString(Schema.Array(MatchedTag))
+const MatchedVegetablesAsJson = Schema.fromJsonString(Schema.Array(MatchedVegetable))
 
 const PostPageDataCommonFields = {
   ...CorePostMetadata.fields,
@@ -133,79 +113,113 @@ const PostPageDataCommonFields = {
   id: PostId,
   locale: Schema.NullOr(Locale),
   originalLocale: Schema.NullOr(Locale),
-  tags: Schema.fromJsonString(Schema.Array(MatchedTag)),
+  tags: MatchedTagsAsJson,
   updatedAt: TimestampColumn,
-  vegetables: Schema.fromJsonString(Schema.Array(MatchedVegetable)),
+  vegetables: MatchedVegetablesAsJson,
 }
 
-export const PostPageNoteData = Schema.Struct({
+const PostPageNoteData = Schema.Struct({
   ...PostPageDataCommonFields,
   ...NoteMetadata.fields,
 })
-export type PostPageNoteData = typeof PostPageNoteData.Type
 
-export const PostPageEventData = Schema.Struct({
+const PostPageEventData = Schema.Struct({
   ...PostPageDataCommonFields,
   ...EventMetadata.fields,
 })
-export type PostPageEventData = typeof PostPageEventData.Type
 
 export const PostPageData = Schema.Union([PostPageNoteData, PostPageEventData])
 export type PostPageData = typeof PostPageData.Type
 
-/** API response schemas */
-export const PostSearchParams = Schema.Struct({
-  ownerProfileId: Schema.optional(ProfileId),
-  page: Schema.NumberFromString,
+/** API contract schemas (snake_case). */
+export const ApiPostSearchParams = Schema.Struct({
+  owner_profile_id: Schema.optional(ProfileId),
   type: Schema.optional(PostKind),
   visibility: Schema.optional(InformationVisibility),
+  ...PaginationOptions.fields,
 })
-export type PostSearchParams = typeof PostSearchParams.Type
 
-export const PostCardData = Schema.Struct({
+export const ApiGetPostPageParams = Schema.Struct({
+  handle: Handle,
+  locale: Locale,
+})
+export type ApiGetPostPageParams = typeof ApiGetPostPageParams.Type
+
+export const ApiPostCardData = Schema.Struct({
   handle: Handle,
   id: PostId,
-  ownerProfileId: ProfileId,
-  publishedAt: Schema.NullOr(TimestampColumn),
+  owner_profile_id: ProfileId,
+  published_at: Schema.NullOr(TimestampColumn),
   kind: PostKind,
   visibility: InformationVisibility,
 })
-export type PostCardData = typeof PostCardData.Type
+export type ApiPostCardData = typeof ApiPostCardData.Type
 
-export const NoteData = Schema.Struct({
+export const ApiNoteData = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
-  createdAt: TimestampColumn,
+  created_at: TimestampColumn,
   handle: Handle,
   id: PostId,
   locale: Locale,
-  ownerProfileId: ProfileId,
-  publishedAt: Schema.NullOr(TimestampColumn),
-  kind: Schema.Literal("NOTE" satisfies (typeof PostKind.literals)[0]),
-  updatedAt: TimestampColumn,
+  owner_profile_id: ProfileId,
+  published_at: Schema.NullOr(TimestampColumn),
+  kind: NoteKind,
+  updated_at: TimestampColumn,
   visibility: InformationVisibility,
 })
-export type NoteData = typeof NoteData.Type
+export type ApiNoteData = typeof ApiNoteData.Type
 
-export const EventData = Schema.Struct({
-  attendanceMode: Schema.NullOr(EventAttendanceMode),
+export const ApiEventData = Schema.Struct({
+  attendance_mode: Schema.NullOr(EventAttendanceMode),
   content: Schema.fromJsonString(TiptapDocument),
-  createdAt: TimestampColumn,
-  endDate: Schema.NullOr(TimestampColumn),
+  created_at: TimestampColumn,
+  end_date: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PostId,
   locale: Locale,
-  locationOrUrl: Schema.NullOr(Schema.String),
-  ownerProfileId: ProfileId,
-  publishedAt: Schema.NullOr(TimestampColumn),
-  startDate: TimestampColumn,
-  kind: Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1]),
-  updatedAt: TimestampColumn,
+  location_or_url: Schema.NullOr(Schema.String),
+  owner_profile_id: ProfileId,
+  published_at: Schema.NullOr(TimestampColumn),
+  start_date: TimestampColumn,
+  kind: EventKind,
+  updated_at: TimestampColumn,
   visibility: InformationVisibility,
 })
-export type EventData = typeof EventData.Type
+export type ApiEventData = typeof ApiEventData.Type
 
-export const PostData = Schema.Union([NoteData, EventData])
-export type PostData = typeof PostData.Type
+export const ApiPostData = Schema.Union([ApiNoteData, ApiEventData])
+export type ApiPostData = typeof ApiPostData.Type
+
+export const ApiCreateNoteData = Schema.Struct({
+  content: TiptapDocument,
+  handle: Handle,
+  visibility: InformationVisibility,
+})
+export type ApiCreateNoteData = typeof ApiCreateNoteData.Type
+
+export const ApiCreateEventData = Schema.Struct({
+  attendance_mode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
+  content: TiptapDocument,
+  end_date: Schema.optional(Schema.NullOr(TimestampColumn)),
+  handle: Handle,
+  location_or_url: Schema.optional(Schema.NullOr(Schema.String)),
+  start_date: TimestampColumn,
+  visibility: InformationVisibility,
+})
+export type ApiCreateEventData = typeof ApiCreateEventData.Type
+
+export const ApiUpdateNoteData = Schema.Struct({
+  content: TiptapDocument,
+})
+export type ApiUpdateNoteData = typeof ApiUpdateNoteData.Type
+
+export const ApiPostHistoryEntry = Schema.Struct({
+  author_id: ProfileId,
+  content: TiptapDocument,
+  created_at: TimestampColumn,
+  version: Schema.Int,
+})
+export type ApiPostHistoryEntry = typeof ApiPostHistoryEntry.Type
 
 export const CreateNoteData = Schema.Struct({
   locale: Locale,
@@ -246,13 +260,6 @@ export const PostCrdtRow = Schema.Struct({
   ownerProfileId: ProfileId,
 })
 export type PostCrdtRow = typeof PostCrdtRow.Type
-
-export const AiTranslationMetadata = Schema.Struct({
-  model: Schema.String,
-  workflowName: Schema.String,
-  workflowVersion: Schema.String,
-})
-export type AiTranslationMetadata = typeof AiTranslationMetadata.Type
 
 export const PostCommitRow = Schema.Struct({
   ...TimestampedStruct.fields,

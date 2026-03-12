@@ -6,6 +6,16 @@ This project uses pnpm.
 
 Do not commit or modify the git history on your own.
 
+## Dependency installation
+
+Use **pnpm** for dependency installation and updates.
+
+- ✅ `pnpm install`
+- 🚫 do not run `bun install`
+
+Use `pnpm run` to execute project scripts (type-check/lint/test).
+
+
 ## Philosophy
 
 This codebase will outlive you. Every shortcut becomes someone else's burden. Every hack compounds into technical debt that slows the whole team down.
@@ -73,9 +83,9 @@ Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/
 
 ⚠️ **CRITICAL**: always run the following checks (in order) to ensure your contribution is correct:
 
-1. `bun run type-check`
-2. `bun run lint`
-3. `bun --bun vitest`
+1. `pnpm run type-check`
+2. `pnpm run lint`
+3. `pnpm run test`
 
 ## Session Completion
 
