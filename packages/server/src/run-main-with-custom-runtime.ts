@@ -6,12 +6,14 @@ import { constVoid } from "effect/Function"
  *
  * In use because we need a shared runtime with better-auth in order to re-use the same database connection.
  */
-export const runMainWithCustomRuntime = <E, R>(
-  runtime: ManagedRuntime.ManagedRuntime<R, E>,
-  program: Effect.Effect<unknown, E, R>,
+export const runMainWithCustomRuntime = <RuntimeServices, RuntimeError, ProgramServices, ProgramError>(
+  runtime: ManagedRuntime.ManagedRuntime<RuntimeServices, RuntimeError>,
+  program: Effect.Effect<unknown, ProgramError, ProgramServices>,
   teardown: Runtime.Teardown = Runtime.defaultTeardown,
 ) => {
-  const fiber = runtime.runFork(program)
+  const fiber = runtime.runFork(
+    program as unknown as Effect.Effect<unknown, RuntimeError, RuntimeServices>,
+  )
 
   const keepAlive = setInterval(constVoid, 2 ** 31 - 1)
   let receivedSignal = false
