@@ -38,7 +38,6 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   BLOCKED: new Set([]),
   MODERATOR: new Set([
     "people:manage-community-access",
-    "people:manage-moderators",
     "revisions:evaluate",
     "posts:create:personal",
     "media:create",

@@ -82,7 +82,7 @@ export class ExtractPostTaxonomiesService extends ServiceMap.Service<ExtractPost
   "ExtractPostTaxonomiesService",
   {
     make: Effect.succeed({
-      extract: (input: TiptapDocument, crdt_frontier: PostClassification["crdt_frontier"]) =>
+      extract: (input: TiptapDocument, crdtFrontier: PostClassification["crdtFrontier"]) =>
         Effect.gen(function* () {
           const langExtract = yield* LangExtractService
           const started_at = yield* DateTime.now
@@ -104,11 +104,14 @@ export class ExtractPostTaxonomiesService extends ServiceMap.Service<ExtractPost
 
           return {
             version: CLASSIFICATION_VERSION,
-            model_info: langExtract.model_info,
-            content_hash: hash,
-            crdt_frontier,
-            started_at,
-            finished_at,
+            modelInfo: {
+              modelId: langExtract.model_info.model_id,
+              modelType: langExtract.model_info.model_type,
+            },
+            contentHash: hash,
+            crdtFrontier,
+            startedAt: started_at,
+            finishedAt: finished_at,
             vegetables,
             tags,
           } satisfies PostClassification

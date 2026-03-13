@@ -209,7 +209,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
       })
 
     const materializeTranslations = (input: {
-      locales: NoteSourceData["locales"] | EventSourceData["locales"]
+      locales: NoteSourceData["locales"]
       postId: PostId
     }) =>
       Effect.gen(function* () {
