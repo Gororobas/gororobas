@@ -15,9 +15,9 @@
     "lint": "./node_modules/.bin/oxlint --fix --fix-dangerously --type-aware --fix-suggestions --config=./.oxlintrc.json",
     "lint:dangerously": "oxlint --fix --type-aware --fix-suggestions --fix-dangerously",
     "format": "oxfmt",
-    "test": "bun --bun vitest",
+    "test": "bun --bun ./node_modules/vitest/vitest.mjs",
     "check-bdd": "bun run packages/effect-bdd/bin/effect-bdd-check.ts check",
-    "coverage": "bun --bun vitest --coverage",
+    "coverage": "bun --bun ./node_modules/vitest/vitest.mjs --coverage",
     "quality-gates": "pnpm run type-check && pnpm run lint && pnpm run test"
   },
   "devDependencies": {
