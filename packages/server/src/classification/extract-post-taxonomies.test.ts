@@ -168,6 +168,7 @@ const TestTagsRepository = Layer.succeed(TagsRepository)({
   findById: () => Effect.succeed(Option.none()),
   findByHandle: (handle: string) =>
     Effect.succeed(Option.fromNullishOr(TEST_TAGS.find((t) => t.handle === handle))),
+  insertRow: (() => Effect.die(new Error("Not implemented in test"))) as never,
   findByName: (pattern: string) => {
     const searchTerm = pattern.replace(/%/g, "").toLowerCase()
     const match = TEST_TAGS.find((t) =>

@@ -2,7 +2,7 @@
  * Policy tests using property-based testing.
  */
 import { describe, it } from "@effect/vitest"
-import { Effect, Layer, Schema } from "effect"
+import { DateTime, Effect, Layer, Schema } from "effect"
 import { FastCheck } from "effect/testing"
 import { v7 } from "uuid"
 
@@ -27,6 +27,8 @@ import { assertPropertyEffect, propertyWithPrecondition, runPolicySuccess } from
 const IdGenTest = Layer.succeed(IdGen, {
   generate: () => v7(),
 })
+
+const TEST_PUBLISHED_AT = Effect.runSync(DateTime.now)
 
 // ─── Constructive Arbitraries (no filtering) ───────────────────────────────
 
@@ -142,7 +144,7 @@ describe("Policies", () => {
               CorePostMetadata.makeUnsafe({
                 handle: "test" as CorePostMetadata["handle"],
                 ownerProfileId: session.personId as ProfileId,
-                publishedAt: null,
+                publishedAt: TEST_PUBLISHED_AT,
                 visibility: "PUBLIC",
               }),
             ),
@@ -203,7 +205,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: session.personId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
             const canEdit = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
@@ -222,7 +224,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: session.personId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
             const canDelete = yield* runPolicySuccess(Policies.posts.canDelete(post), session)
@@ -260,7 +262,7 @@ describe("Policies", () => {
           const post = CorePostMetadata.makeUnsafe({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: session.personId as ProfileId,
-            publishedAt: null,
+            publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
           return yield* runPolicySuccess(Policies.posts.canEdit(post), session)
@@ -274,7 +276,7 @@ describe("Policies", () => {
           const post = CorePostMetadata.makeUnsafe({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: session.personId as ProfileId,
-            publishedAt: null,
+            publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
           return yield* runPolicySuccess(Policies.posts.canDelete(post), session)
@@ -291,7 +293,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: otherPersonId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
             const result = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
@@ -309,7 +311,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: otherPersonId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
             const result = yield* runPolicySuccess(Policies.posts.canDelete(post), session)
@@ -325,7 +327,7 @@ describe("Policies", () => {
           const post = CorePostMetadata.makeUnsafe({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: personId as ProfileId,
-            publishedAt: null,
+            publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
           return yield* runPolicySuccess(Policies.posts.canView(post), session)
@@ -340,7 +342,7 @@ describe("Policies", () => {
           const post = CorePostMetadata.makeUnsafe({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: personId as ProfileId,
-            publishedAt: null,
+            publishedAt: TEST_PUBLISHED_AT,
             visibility: "COMMUNITY",
           })
           return yield* runPolicySuccess(Policies.posts.canView(post), session)
@@ -356,7 +358,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: ownerId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility: "COMMUNITY",
             })
             const result = yield* runPolicySuccess(Policies.posts.canView(post), session)
@@ -374,7 +376,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: otherPersonId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility: "PRIVATE",
             })
             const result = yield* runPolicySuccess(Policies.posts.canView(post), session)
@@ -391,7 +393,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: ownerId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
             const results = yield* Effect.all(
@@ -645,7 +647,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: orgId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
             return yield* runPolicySuccess(Policies.posts.canCreate(post), session)
@@ -661,7 +663,7 @@ describe("Policies", () => {
             const post = CorePostMetadata.makeUnsafe({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: orgId as ProfileId,
-              publishedAt: null,
+              publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
             return yield* runPolicySuccess(Policies.posts.canEdit(post), session)
@@ -684,7 +686,7 @@ describe("Policies", () => {
           const post = CorePostMetadata.makeUnsafe({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: orgId as ProfileId,
-            publishedAt: null,
+            publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
           const canCreate = yield* runPolicySuccess(Policies.posts.canCreate(post), session)
@@ -721,7 +723,7 @@ describe("Policies", () => {
           const ownPost = CorePostMetadata.makeUnsafe({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: session.personId as ProfileId,
-            publishedAt: null,
+            publishedAt: TEST_PUBLISHED_AT,
             visibility: "PRIVATE",
           })
           const canEditOwn = yield* runPolicySuccess(
@@ -733,7 +735,7 @@ describe("Policies", () => {
           const orgPost = CorePostMetadata.makeUnsafe({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: orgId as ProfileId,
-            publishedAt: null,
+            publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
           const canEditOrg = yield* runPolicySuccess(

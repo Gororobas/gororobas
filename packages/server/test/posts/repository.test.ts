@@ -106,7 +106,7 @@ describe("PostsRepository", () => {
       })
 
       const postId = yield* repository.createPost({
-        authorId: person.id,
+        createdById: person.id,
         sourceData,
       })
 
@@ -114,7 +114,7 @@ describe("PostsRepository", () => {
       expect(Option.isSome(post)).toBe(true)
       expect(Option.getOrThrow(post).handle).toBe(sourceData.metadata.handle)
 
-      const commits = yield* repository.listPostCommitRowsByPostIdDesc(postId)
+      const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
       expect(commits).toHaveLength(1)
       expect(commits[0]?.createdById).toBe(person.id)
 
@@ -148,7 +148,7 @@ describe("PostsRepository", () => {
 
         const now = yield* DateTime.now
         const postId = yield* repository.createPost({
-          authorId: person.id,
+          createdById: person.id,
           sourceData: makeNoteSourceData({
             content: makeDocument("Antes"),
             handle: `post-${person.id.slice(0, 8)}-update`,
@@ -165,7 +165,7 @@ describe("PostsRepository", () => {
           }),
         )
 
-        const commits = yield* repository.listPostCommitRowsByPostIdDesc(postId)
+        const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
         expect(commits).toHaveLength(2)
         expect(commits[0]?.createdById).toBe(person.id)
 
@@ -192,7 +192,7 @@ describe("PostsRepository", () => {
 
       const now = yield* DateTime.now
       const postId = yield* repository.createPost({
-        authorId: person.id,
+        createdById: person.id,
         sourceData: makeNoteSourceData({
           content: makeDocument("Texto original"),
           handle: `post-${person.id.slice(0, 8)}-translate`,
@@ -215,7 +215,7 @@ describe("PostsRepository", () => {
         }),
       )
 
-      const commits = yield* repository.listPostCommitRowsByPostIdDesc(postId)
+      const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
       expect(commits).toHaveLength(2)
       expect(commits.some((commit) => commit.createdById === null)).toBe(true)
 
@@ -243,7 +243,7 @@ describe("PostsRepository", () => {
 
       const now = yield* DateTime.now
       const postId = yield* repository.createPost({
-        authorId: person.id,
+        createdById: person.id,
         sourceData: makeNoteSourceData({
           content: makeDocument("Texto original"),
           handle: `post-${person.id.slice(0, 8)}-frontier`,
@@ -302,7 +302,7 @@ describe("PostsRepository", () => {
       const endDate = DateTime.add(startDate, { days: 1 })
 
       const postId = yield* repository.createPost({
-        authorId: person.id,
+        createdById: person.id,
         sourceData: makeEventSourceData({
           content: makeDocument("Feira agroecológica"),
           endDate,
@@ -334,7 +334,7 @@ describe("PostsRepository", () => {
 
       const now = yield* DateTime.now
       const postId = yield* repository.createPost({
-        authorId: person.id,
+        createdById: person.id,
         sourceData: makeNoteSourceData({
           content: makeDocument("Para remover"),
           handle: `post-${person.id.slice(0, 8)}-delete`,
@@ -348,7 +348,7 @@ describe("PostsRepository", () => {
       const row = yield* repository.findPostRowById(postId)
       expect(Option.isNone(row)).toBe(true)
 
-      const commits = yield* repository.listPostCommitRowsByPostIdDesc(postId)
+      const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
       expect(commits).toHaveLength(0)
     }).pipe(Effect.provide(TestLayerWithPostsRepository)),
   )

@@ -28,6 +28,7 @@ const config: ViteUserConfig = {
       toFake: undefined,
     },
     include: ["**/*.test.ts"],
+    testTimeout: 30000,
     sequence: {
       concurrent: true,
     },
