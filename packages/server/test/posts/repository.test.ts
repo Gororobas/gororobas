@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
   Handle,
+  PostConcurrentUpdateError,
   SystemCommit,
   type SourcePostData,
   type TiptapDocument,
@@ -157,10 +158,14 @@ describe("PostsRepository", () => {
           }),
         })
 
+        const beforeUpdate = yield* repository.findPostRowById(postId)
+        expect(Option.isSome(beforeUpdate)).toBe(true)
+
         yield* repository.updatePost(
           HumanUpdatePtContent.makeUnsafe({
             authorId: person.id,
             content: makeDocument("Depois"),
+            expectedCurrentCrdtFrontier: Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
             postId,
           }),
         )
@@ -201,6 +206,9 @@ describe("PostsRepository", () => {
         }),
       })
 
+      const beforeTranslation = yield* repository.findPostRowById(postId)
+      expect(Option.isSome(beforeTranslation)).toBe(true)
+
       yield* repository.updatePost(
         SystemUpsertTranslation.makeUnsafe({
           commit: SystemCommit.makeUnsafe({
@@ -208,6 +216,7 @@ describe("PostsRepository", () => {
             workflowName: "PostTranslationWorkflow",
             workflowVersion: "test",
           }),
+          expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
           postId,
           sourceLocale: "pt",
           targetLocale: "en",
@@ -252,6 +261,9 @@ describe("PostsRepository", () => {
         }),
       })
 
+      const beforeTranslation = yield* repository.findPostRowById(postId)
+      expect(Option.isSome(beforeTranslation)).toBe(true)
+
       yield* repository.updatePost(
         SystemUpsertTranslation.makeUnsafe({
           commit: SystemCommit.makeUnsafe({
@@ -259,6 +271,7 @@ describe("PostsRepository", () => {
             workflowName: "PostTranslationWorkflow",
             workflowVersion: "test",
           }),
+          expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
           postId,
           sourceLocale: "pt",
           targetLocale: "en",
@@ -321,6 +334,60 @@ describe("PostsRepository", () => {
       expect(Option.getOrThrow(row).locationOrUrl).toBe("Sítio Semente, Brasília")
       expect(Option.getOrThrow(row).startDate).not.toBeNull()
       expect(Option.getOrThrow(row).endDate).not.toBeNull()
+    }).pipe(Effect.provide(TestLayerWithPostsRepository)),
+  )
+
+  it.effect("updatePost fails when expected frontier is stale", () =>
+    Effect.gen(function* () {
+      const repository = yield* PostsRepository
+
+      const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
+      const profile = yield* makeProfileFixture({ id: person.id })
+      yield* insertPersonWithDependencies({ person, profile })
+
+      const now = yield* DateTime.now
+      const postId = yield* repository.createPost({
+        createdById: person.id,
+        sourceData: makeNoteSourceData({
+          content: makeDocument("Versao 1"),
+          handle: `post-${person.id.slice(0, 8)}-stale-frontier`,
+          ownerProfileId: profile.id,
+          publishedAt: now,
+        }),
+      })
+
+      const initialRow = yield* repository.findPostRowById(postId)
+      expect(Option.isSome(initialRow)).toBe(true)
+      const expectedCurrentCrdtFrontier = Option.getOrThrow(initialRow).currentCrdtFrontier
+
+      yield* repository.updatePost(
+        HumanUpdatePtContent.makeUnsafe({
+          authorId: person.id,
+          content: makeDocument("Versao 2"),
+          expectedCurrentCrdtFrontier,
+          postId,
+        }),
+      )
+
+      const staleUpdate = repository.updatePost(
+        HumanUpdatePtContent.makeUnsafe({
+          authorId: person.id,
+          content: makeDocument("Versao 3"),
+          expectedCurrentCrdtFrontier,
+          postId,
+        }),
+      )
+
+      yield* Effect.flip(staleUpdate).pipe(
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            expect(error).toBeInstanceOf(PostConcurrentUpdateError)
+          }),
+        ),
+      )
+
+      const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
+      expect(commits).toHaveLength(2)
     }).pipe(Effect.provide(TestLayerWithPostsRepository)),
   )
 

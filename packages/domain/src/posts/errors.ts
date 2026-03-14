@@ -14,3 +14,11 @@ export class PostNotFoundError extends Schema.TaggedErrorClass<PostNotFoundError
   },
   { httpApiStatus: 404 },
 ) {}
+
+export class PostConcurrentUpdateError extends Schema.TaggedErrorClass<PostConcurrentUpdateError>()(
+  "PostConcurrentUpdateError",
+  {
+    id: PostId,
+  },
+  { httpApiStatus: 409 },
+) {}

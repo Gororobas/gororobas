@@ -26,6 +26,9 @@ export type VerificationId = typeof VerificationId.Type
 export const CommentId = UUID.pipe(Schema.brand("CommentId"))
 export type CommentId = typeof CommentId.Type
 
+export const CommentCommitId = UUID.pipe(Schema.brand("CommentCommitId"))
+export type CommentCommitId = typeof CommentCommitId.Type
+
 export const ImageId = UUID.pipe(Schema.brand("ImageId"))
 export type ImageId = typeof ImageId.Type
 

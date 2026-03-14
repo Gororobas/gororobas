@@ -13,10 +13,9 @@ import {
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
-import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
 import { SystemUpsertTranslation } from "../posts/post-repository-inputs.js"
 import { PostsRepository } from "../posts/repository.js"
 import { translateTiptapContent, TranslationResult } from "./translate-tiptap-content.js"
@@ -64,26 +63,29 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
 
     const repository = yield* PostsRepository
 
+    const post = yield* repository.findPostRowById(payload.postId).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.fail(new PostNotFoundError({ id: payload.postId })),
+          onSome: Effect.succeed,
+        }),
+      ),
+    )
+
     yield* Activity.make({
       name: "persist",
       success: Schema.Void,
-      error: PostNotFoundError,
-      execute: repository
-        .updatePost(
-          SystemUpsertTranslation.makeUnsafe({
-            commit,
-            postId: payload.postId,
-            sourceLocale: payload.sourceLocale,
-            targetLocale: payload.targetLocale,
-            translatedContent: tiptapFromHtml(translationResult.html),
-          }),
-        )
-        .pipe(
-          withApiInfrastructureErrors({
-            endpoint: "PostTranslationWorkflow/persist",
-            group: "PostTranslationWorkflow",
-          }),
-        ),
+      error: Schema.Unknown,
+      execute: repository.updatePost(
+        SystemUpsertTranslation.makeUnsafe({
+          commit,
+          expectedCurrentCrdtFrontier: post.currentCrdtFrontier,
+          postId: payload.postId,
+          sourceLocale: payload.sourceLocale,
+          targetLocale: payload.targetLocale,
+          translatedContent: tiptapFromHtml(translationResult.html),
+        }),
+      ),
     })
 
     return null

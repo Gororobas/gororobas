@@ -1,37 +1,44 @@
 import {
-  Locale,
+  CommentId,
   LoroDocFrontier,
+  Locale,
   PersonId,
-  SourcePostData,
+  PostId,
+  ProfileId,
+  ResourceId,
+  SourceCommentData,
   SystemCommit,
   TiptapDocument,
-  PostId,
 } from "@gororobas/domain"
 import { Schema } from "effect"
 
 export const HumanUpdatePtContent = Schema.TaggedStruct("HumanUpdatePtContent", {
   authorId: PersonId,
-  expectedCurrentCrdtFrontier: LoroDocFrontier,
-  postId: PostId,
+  commentId: CommentId,
   content: TiptapDocument,
+  expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 export type HumanUpdatePtContent = typeof HumanUpdatePtContent.Type
 
 export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslation", {
+  commentId: CommentId,
+  commit: SystemCommit,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
-  postId: PostId,
   sourceLocale: Locale,
   targetLocale: Locale,
   translatedContent: TiptapDocument,
-  commit: SystemCommit,
 })
 export type SystemUpsertTranslation = typeof SystemUpsertTranslation.Type
 
-export const UpdatePostInput = Schema.Union([HumanUpdatePtContent, SystemUpsertTranslation])
-export type UpdatePostInput = typeof UpdatePostInput.Type
+export const UpdateCommentInput = Schema.Union([HumanUpdatePtContent, SystemUpsertTranslation])
+export type UpdateCommentInput = typeof UpdateCommentInput.Type
 
-export const CreatePostInput = Schema.Struct({
+export const CreateCommentInput = Schema.Struct({
   createdById: PersonId,
-  sourceData: SourcePostData,
+  ownerProfileId: ProfileId,
+  parentCommentId: Schema.NullOr(CommentId),
+  postId: Schema.NullOr(PostId),
+  resourceId: Schema.NullOr(ResourceId),
+  sourceData: SourceCommentData,
 })
-export type CreatePostInput = typeof CreatePostInput.Type
+export type CreateCommentInput = typeof CreateCommentInput.Type
