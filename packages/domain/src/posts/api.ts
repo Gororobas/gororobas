@@ -62,7 +62,7 @@ export class PostsApiGroup extends HttpApiGroup.make("posts")
   .add(
     HttpApiEndpoint.patch("updateNote", "/posts/:id", {
       success: ApiNoteData,
-      error: PostNotFoundError,
+      error: Schema.Union([PostNotFoundError, PostConcurrentUpdateError]),
       params: Schema.Struct({ id: PostId }),
       payload: ApiUpdateNoteData,
     }),
@@ -84,4 +84,4 @@ export class PostsApiGroup extends HttpApiGroup.make("posts")
 
 import { ProfileNotFoundError } from "../profiles/errors.js"
 // Import errors to avoid circular dependencies
-import { PostNotFoundError } from "./errors.js"
+import { PostConcurrentUpdateError, PostNotFoundError } from "./errors.js"

@@ -129,6 +129,27 @@ export const PostSourceDataStorageLoro = loroSchema({
   metadata: PostMetadataStorageLoro,
 })
 
+const CommentLocalizedDataStorageLoro = loroSchema.LoroMap(
+  {
+    content: loroSchema.String({ required: false }),
+    originalLocale: loroSchema.String<Locale>({ required: false }),
+    translatedAtCrdtFrontier: loroSchema.String({ required: false }),
+    translationSource: loroSchema.String<TranslationSource>({ required: false }),
+  },
+  { required: false },
+)
+
+export const CommentSourceDataStorageLoro = loroSchema({
+  locales: loroSchema.LoroMap(
+    {
+      en: CommentLocalizedDataStorageLoro,
+      es: CommentLocalizedDataStorageLoro,
+      pt: CommentLocalizedDataStorageLoro,
+    },
+    { required: true },
+  ),
+})
+
 type CrdtLocalizedData = {
   content: TiptapDocument
   originalLocale: Locale
@@ -202,5 +223,22 @@ export const sourcePostDataToCrdtStorage = (sourceData: CrdtSourcePostData) => (
         ? encodeDateOrUndefined(sourceData.metadata.startDate)
         : undefined,
     visibility: sourceData.metadata.visibility,
+  },
+})
+
+
+type CrdtSourceCommentData = {
+  locales: {
+    en?: CrdtLocalizedData | undefined
+    es?: CrdtLocalizedData | undefined
+    pt?: CrdtLocalizedData | undefined
+  }
+}
+
+export const sourceCommentDataToCrdtStorage = (sourceData: CrdtSourceCommentData) => ({
+  locales: {
+    en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : {},
+    es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : {},
+    pt: sourceData.locales.pt ? encodeLocalizedData(sourceData.locales.pt) : {},
   },
 })

@@ -12,6 +12,7 @@ import {
   type PostClassification,
   PostCommitId,
   PostCommitRow,
+  PostConcurrentUpdateError,
   PostId,
   PostNotFoundError,
   PostPageData,
@@ -20,7 +21,6 @@ import {
   PostTranslationRow,
   PostVegetableRow,
   ProfileId,
-  snapshotToLoroDoc,
   type SourcePostData,
   TimestampColumn,
   tiptapToText,
@@ -29,6 +29,10 @@ import { GetPostPageParams } from "@gororobas/domain/posts/api"
 import { DateTime, Effect, Option, Schema, ServiceMap } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
+import {
+  persistCrdtAggregateCreation,
+  persistCrdtAggregateUpdate,
+} from "../common/crdt-aggregate-persistence.js"
 import { createPostSnapshot, evolvePostSnapshot } from "./post-crdt-orchestration.js"
 import {
   type CreatePostInput as CreatePostInputType,
@@ -82,15 +86,34 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
     }) =>
       sql`INSERT INTO post_crdts (id, crdt_snapshot, owner_profile_id, created_at, updated_at) VALUES (${input.id}, ${input.crdtSnapshot}, ${input.ownerProfileId}, ${DateTime.formatIso(input.createdAt)}, ${DateTime.formatIso(input.updatedAt)})`
 
-    const updatePostCrdtRow = SqlSchema.void({
-      Request: Schema.Struct({
-        id: PostId,
-        crdtSnapshot: LoroDocSnapshot,
-        updatedAt: TimestampColumn,
-      }),
-      execute: (input) =>
-        sql`UPDATE post_crdts SET crdt_snapshot = ${input.crdtSnapshot}, updated_at = ${input.updatedAt} WHERE id = ${input.id}`,
-    })
+    const updatePostCrdtRowWithExpectedFrontier = (input: {
+      id: PostId
+      crdtSnapshot: LoroDocSnapshot
+      expectedCurrentCrdtFrontier: LoroDocFrontier
+      nextCurrentCrdtFrontier: LoroDocFrontier
+      updatedAt: TimestampColumn
+    }) =>
+      Effect.gen(function* () {
+        yield* sql`
+          UPDATE post_crdts
+          SET crdt_snapshot = ${input.crdtSnapshot}, updated_at = ${DateTime.formatIso(input.updatedAt)}
+          WHERE id = ${input.id}
+        `
+
+        yield* sql`
+          UPDATE posts
+          SET current_crdt_frontier = ${JSON.stringify(input.nextCurrentCrdtFrontier)}
+          WHERE id = ${input.id} AND current_crdt_frontier = ${JSON.stringify(input.expectedCurrentCrdtFrontier)}
+        `
+
+        const { count } = yield* SqlSchema.findOne({
+          Request: Schema.Null,
+          Result: Schema.Struct({ count: Schema.Number }),
+          execute: () => sql`SELECT changes() as count`,
+        })(null)
+
+        return count === 1
+      })
 
     const insertPostCommit = (input: {
       commit: CrdtCommit
@@ -368,32 +391,28 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
         const now = yield* DateTime.now
         const created = createPostSnapshot(input.sourceData)
 
-        yield* sql.withTransaction(
-          Effect.gen(function* () {
-            yield* insertPostCrdtRow({
-              createdAt: now,
-              id: postId,
-              crdtSnapshot: created.crdtSnapshot,
-              ownerProfileId: input.sourceData.metadata.ownerProfileId,
-              updatedAt: now,
-            })
-
-            yield* insertPostCommit({
-              commit: HumanCommit.makeUnsafe({ personId: input.createdById }),
-              crdtUpdate: created.initialCrdtUpdate,
-              fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
-              postId,
-            })
-
-            yield* materialize({
-              currentCrdtFrontier: created.currentCrdtFrontier,
-              postId,
-              sourceData: created.sourceData,
-            })
+        return yield* persistCrdtAggregateCreation({
+          insertCrdt: insertPostCrdtRow({
+            createdAt: now,
+            id: postId,
+            crdtSnapshot: created.crdtSnapshot,
+            ownerProfileId: input.sourceData.metadata.ownerProfileId,
+            updatedAt: now,
           }),
-        )
-
-        return postId
+          insertInitialCommit: insertPostCommit({
+            commit: HumanCommit.makeUnsafe({ personId: input.createdById }),
+            crdtUpdate: created.initialCrdtUpdate,
+            fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
+            postId,
+          }),
+          materialize: materialize({
+            currentCrdtFrontier: created.currentCrdtFrontier,
+            postId,
+            sourceData: created.sourceData,
+          }),
+          result: postId,
+          sql,
+        })
       })
 
     const updatePost = (input: UpdatePostInputType) =>
@@ -419,10 +438,6 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
           postRow,
           translationRows,
         })
-        const currentFrontier = LoroDocFrontier.makeUnsafe(
-          snapshotToLoroDoc(current.crdtSnapshot).frontiers(),
-        )
-
         const nextSourceData: SourcePostData =
           input._tag === "HumanUpdatePtContent"
             ? {
@@ -446,7 +461,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
                   [input.targetLocale]: {
                     content: input.translatedContent,
                     originalLocale: input.sourceLocale,
-                    translatedAtCrdtFrontier: currentFrontier,
+                    translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
                     translationSource: "AUTOMATIC",
                   },
                 },
@@ -465,28 +480,28 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
 
         const now = yield* DateTime.now
 
-        yield* sql.withTransaction(
-          Effect.gen(function* () {
-            yield* updatePostCrdtRow({
-              id: input.postId,
-              crdtSnapshot: evolved.nextSnapshot,
-              updatedAt: now,
-            })
-
-            yield* insertPostCommit({
-              commit: evolved.commit,
-              crdtUpdate: evolved.crdtUpdate,
-              fromCrdtFrontier: evolved.fromCrdtFrontier,
-              postId: input.postId,
-            })
-
-            yield* materialize({
-              currentCrdtFrontier: evolved.nextFrontier,
-              postId: input.postId,
-              sourceData: evolved.sourceData,
-            })
+        yield* persistCrdtAggregateUpdate({
+          ensureSnapshotUpdated: updatePostCrdtRowWithExpectedFrontier({
+            crdtSnapshot: evolved.nextSnapshot,
+            expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
+            id: input.postId,
+            nextCurrentCrdtFrontier: evolved.nextFrontier,
+            updatedAt: now,
           }),
-        )
+          insertCommit: insertPostCommit({
+            commit: evolved.commit,
+            crdtUpdate: evolved.crdtUpdate,
+            fromCrdtFrontier: evolved.fromCrdtFrontier,
+            postId: input.postId,
+          }),
+          materialize: materialize({
+            currentCrdtFrontier: evolved.nextFrontier,
+            postId: input.postId,
+            sourceData: evolved.sourceData,
+          }),
+          onConflict: Effect.fail(new PostConcurrentUpdateError({ id: input.postId })),
+          sql,
+        })
       })
 
     const deletePost = SqlSchema.void({

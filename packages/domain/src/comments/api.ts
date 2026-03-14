@@ -7,8 +7,8 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 import { CommentId, PostId, ResourceId } from "../common/ids.js"
 import { PostNotFoundError } from "../posts/errors.js"
 import { ResourceNotFoundError } from "../resources/errors.js"
-import { CommentData, CommentSearchParams, CreateCommentData, UpdateCommentData } from "./domain.js"
-import { CommentNotFoundError } from "./errors.js"
+import { ApiUpdateCommentData, CommentData, CommentSearchParams, CreateCommentData } from "./domain.js"
+import { CommentConcurrentUpdateError, CommentNotFoundError } from "./errors.js"
 
 export class CommentsApiGroup extends HttpApiGroup.make("comments")
   .add(
@@ -51,9 +51,9 @@ export class CommentsApiGroup extends HttpApiGroup.make("comments")
   .add(
     HttpApiEndpoint.patch("updateComment", "/comments/:id", {
       success: CommentData,
-      error: CommentNotFoundError,
+      error: Schema.Union([CommentNotFoundError, CommentConcurrentUpdateError]),
       params: Schema.Struct({ id: CommentId }),
-      payload: UpdateCommentData,
+      payload: ApiUpdateCommentData,
     }),
   )
   .add(

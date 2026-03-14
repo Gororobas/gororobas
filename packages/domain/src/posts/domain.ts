@@ -12,7 +12,12 @@ import {
   TranslationSource,
 } from "../common/enums.js"
 import { PersonId, PostCommitId, PostId, ProfileId, TagId, VegetableId } from "../common/ids.js"
-import { Handle, PaginationOptions, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
+import {
+  Handle,
+  PaginationOptions,
+  TimestampColumn,
+  TimestampedStruct,
+} from "../common/primitives.js"
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
@@ -210,6 +215,7 @@ export type ApiCreateEventData = typeof ApiCreateEventData.Type
 
 export const ApiUpdateNoteData = Schema.Struct({
   content: TiptapDocument,
+  expected_current_crdt_frontier: LoroDocFrontier,
 })
 export type ApiUpdateNoteData = typeof ApiUpdateNoteData.Type
 
@@ -241,6 +247,7 @@ export type CreateEventData = typeof CreateEventData.Type
 
 export const UpdateNoteData = Schema.Struct({
   content: TiptapDocument,
+  expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 export type UpdateNoteData = typeof UpdateNoteData.Type
 

@@ -17,7 +17,6 @@ import {
   Handle,
   Locale,
   NoteSourceData,
-  PersonId,
   Policies,
   PostId,
   PostLocalizedData,
@@ -49,7 +48,6 @@ export type CreatePostInput = typeof CreatePostInput.Type
 
 export const UpdatePostInput = Schema.Struct({
   ...UpdateNoteData.fields,
-  authorId: PersonId,
   postId: PostId,
 })
 export type UpdatePostInput = typeof UpdatePostInput.Type
@@ -136,12 +134,14 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
     const updatePost = (input: UpdatePostInput) =>
       Effect.gen(function* () {
+        const session = yield* assertAuthenticated
         yield* Policies.posts.canEdit(yield* getPostById(input.postId))
 
         yield* repo.updatePost(
           HumanUpdatePtContent.makeUnsafe({
-            authorId: input.authorId,
+            authorId: session.personId,
             content: input.content,
+            expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
             postId: input.postId,
           }),
         )
