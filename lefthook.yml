@@ -1,18 +1,15 @@
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
-    oxlint:
-      glob: "*"
-      run: bun run lint --quiet {staged_files}
-      stage_fixed: true
     oxfmt:
       glob: "*"
-      run: bun oxfmt {staged_files}
+      run: pnpm exec oxfmt {staged_files}
       stage_fixed: true
-    # effect-bdd-check:
-    #   glob: "**/*.feature"
-    #   run: bun run packages/effect-bdd/bin/effect-bdd-check.ts check
-    # type-check:
-    #   run: pnpm run type-check
-    # test:
-    #   run: pnpm run vitest --run
+    oxlint:
+      glob: "*"
+      run: pnpm run lint --quiet {staged_files}
+      stage_fixed: true
+    type-check:
+      run: pnpm run type-check
+    test:
+      run: pnpm run test -- --run

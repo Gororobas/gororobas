@@ -136,9 +136,9 @@ const PostPageEventData = Schema.Struct({
 export const PostPageData = Schema.Union([PostPageNoteData, PostPageEventData])
 export type PostPageData = typeof PostPageData.Type
 
-/** API contract schemas (snake_case). */
+/** API contract schemas (camelCase). */
 export const ApiPostSearchParams = Schema.Struct({
-  owner_profile_id: Schema.optional(ProfileId),
+  ownerProfileId: Schema.optional(ProfileId),
   type: Schema.optional(PostKind),
   visibility: Schema.optional(InformationVisibility),
   ...PaginationOptions.fields,
@@ -153,8 +153,8 @@ export type ApiGetPostPageParams = typeof ApiGetPostPageParams.Type
 export const ApiPostCardData = Schema.Struct({
   handle: Handle,
   id: PostId,
-  owner_profile_id: ProfileId,
-  published_at: Schema.NullOr(TimestampColumn),
+  ownerProfileId: ProfileId,
+  publishedAt: Schema.NullOr(TimestampColumn),
   kind: PostKind,
   visibility: InformationVisibility,
 })
@@ -162,32 +162,32 @@ export type ApiPostCardData = typeof ApiPostCardData.Type
 
 export const ApiNoteData = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
-  created_at: TimestampColumn,
+  createdAt: TimestampColumn,
   handle: Handle,
   id: PostId,
   locale: Locale,
-  owner_profile_id: ProfileId,
-  published_at: Schema.NullOr(TimestampColumn),
+  ownerProfileId: ProfileId,
+  publishedAt: Schema.NullOr(TimestampColumn),
   kind: NoteKind,
-  updated_at: TimestampColumn,
+  updatedAt: TimestampColumn,
   visibility: InformationVisibility,
 })
 export type ApiNoteData = typeof ApiNoteData.Type
 
 export const ApiEventData = Schema.Struct({
-  attendance_mode: Schema.NullOr(EventAttendanceMode),
+  attendanceMode: Schema.NullOr(EventAttendanceMode),
   content: Schema.fromJsonString(TiptapDocument),
-  created_at: TimestampColumn,
-  end_date: Schema.NullOr(TimestampColumn),
+  createdAt: TimestampColumn,
+  endDate: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PostId,
   locale: Locale,
-  location_or_url: Schema.NullOr(Schema.String),
-  owner_profile_id: ProfileId,
-  published_at: Schema.NullOr(TimestampColumn),
-  start_date: TimestampColumn,
+  locationOrUrl: Schema.NullOr(Schema.String),
+  ownerProfileId: ProfileId,
+  publishedAt: Schema.NullOr(TimestampColumn),
+  startDate: TimestampColumn,
   kind: EventKind,
-  updated_at: TimestampColumn,
+  updatedAt: TimestampColumn,
   visibility: InformationVisibility,
 })
 export type ApiEventData = typeof ApiEventData.Type
@@ -203,26 +203,26 @@ export const ApiCreateNoteData = Schema.Struct({
 export type ApiCreateNoteData = typeof ApiCreateNoteData.Type
 
 export const ApiCreateEventData = Schema.Struct({
-  attendance_mode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
+  attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,
-  end_date: Schema.optional(Schema.NullOr(TimestampColumn)),
+  endDate: Schema.optional(Schema.NullOr(TimestampColumn)),
   handle: Handle,
-  location_or_url: Schema.optional(Schema.NullOr(Schema.String)),
-  start_date: TimestampColumn,
+  locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
+  startDate: TimestampColumn,
   visibility: InformationVisibility,
 })
 export type ApiCreateEventData = typeof ApiCreateEventData.Type
 
 export const ApiUpdateNoteData = Schema.Struct({
   content: TiptapDocument,
-  expected_current_crdt_frontier: LoroDocFrontier,
+  expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 export type ApiUpdateNoteData = typeof ApiUpdateNoteData.Type
 
 export const ApiPostHistoryEntry = Schema.Struct({
-  author_id: ProfileId,
+  authorId: ProfileId,
   content: TiptapDocument,
-  created_at: TimestampColumn,
+  createdAt: TimestampColumn,
   version: Schema.Int,
 })
 export type ApiPostHistoryEntry = typeof ApiPostHistoryEntry.Type
