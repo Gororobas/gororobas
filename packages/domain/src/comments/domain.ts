@@ -4,7 +4,14 @@
 import { Schema } from "effect"
 
 import { Locale, ModerationStatus, TranslationSource } from "../common/enums.js"
-import { CommentCommitId, CommentId, PersonId, PostId, ProfileId, ResourceId } from "../common/ids.js"
+import {
+  CommentCommitId,
+  CommentId,
+  PersonId,
+  PostId,
+  ProfileId,
+  ResourceId,
+} from "../common/ids.js"
 import { TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
@@ -119,7 +126,7 @@ export type UpdateCommentData = typeof UpdateCommentData.Type
 
 export const ApiUpdateCommentData = Schema.Struct({
   content: TiptapDocument,
-  expected_current_crdt_frontier: LoroDocFrontier,
+  expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 export type ApiUpdateCommentData = typeof ApiUpdateCommentData.Type
 
