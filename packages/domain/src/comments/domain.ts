@@ -102,6 +102,7 @@ export type CommentTranslationRow = typeof CommentTranslationRow.Type
 export const CommentData = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
+  currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   id: CommentId,
   moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
