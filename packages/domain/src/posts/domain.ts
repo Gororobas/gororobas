@@ -163,6 +163,7 @@ export type ApiPostCardData = typeof ApiPostCardData.Type
 export const ApiNoteData = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
+  currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   handle: Handle,
   id: PostId,
   locale: Locale,
@@ -178,6 +179,7 @@ export const ApiEventData = Schema.Struct({
   attendanceMode: Schema.NullOr(EventAttendanceMode),
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
+  currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   endDate: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PostId,

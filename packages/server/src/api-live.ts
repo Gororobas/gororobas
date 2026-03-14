@@ -4,6 +4,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 
 import { AuthenticationMiddlewareLive } from "./authentication/authentication-middleware-live.js"
 import { CommentsApiLive } from "./comments/api-live.js"
+import { CommentsRepository } from "./comments/repository.js"
 import { MediaApiLive } from "./media/api-live.js"
 import { OrganizationsApiLive } from "./organizations/api-live.js"
 import { PeopleApiLive } from "./people/api-live.js"
@@ -25,6 +26,9 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(GororobasApi), [
   ResourcesApiLive,
   TagsApiLive,
   VegetablesApiLive,
-]).pipe(Layer.provideMerge(Layer.effect(PostsRepository, PostsRepository.make)))
+]).pipe(
+  Layer.provideMerge(Layer.effect(PostsRepository, PostsRepository.make)),
+  Layer.provideMerge(Layer.effect(CommentsRepository, CommentsRepository.make)),
+)
 
 export const ApiTest = ApiLive
