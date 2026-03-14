@@ -139,6 +139,37 @@ const CommentLocalizedDataStorageLoro = loroSchema.LoroMap(
   { required: false },
 )
 
+const ResourceLocalizedDataStorageLoro = loroSchema.LoroMap(
+  {
+    title: loroSchema.String({ required: false }),
+    description: loroSchema.String({ required: false }),
+    creditLine: loroSchema.String({ required: false }),
+    originalLocale: loroSchema.String<Locale>({ required: false }),
+    translatedAtCrdtFrontier: loroSchema.String({ required: false }),
+    translationSource: loroSchema.String<TranslationSource>({ required: false }),
+  },
+  { required: false },
+)
+
+export const ResourceMetadataStorageLoro = loroSchema.LoroMap({
+  format: loroSchema.String({ required: true }),
+  handle: loroSchema.String<Handle>({ required: true }),
+  thumbnailImageId: loroSchema.String({ required: false }),
+  url: loroSchema.String({ required: true }),
+  urlState: loroSchema.String({ required: true }),
+})
+
+export const ResourceSourceDataStorageLoro = loroSchema({
+  locales: loroSchema.LoroMap(
+    {
+      en: ResourceLocalizedDataStorageLoro,
+      es: ResourceLocalizedDataStorageLoro,
+      pt: ResourceLocalizedDataStorageLoro,
+    },
+    { required: true },
+  ),
+  metadata: ResourceMetadataStorageLoro,
+})
 export const CommentSourceDataStorageLoro = loroSchema({
   locales: loroSchema.LoroMap(
     {
@@ -153,7 +184,7 @@ export const CommentSourceDataStorageLoro = loroSchema({
 type CrdtLocalizedData = {
   content: TiptapDocument
   originalLocale: Locale
-  translatedAtCrdtFrontier: LoroDocFrontier | null
+  translatedAtCrdtFrontier?: LoroDocFrontier | null
   translationSource: TranslationSource
 }
 
@@ -193,7 +224,7 @@ const encodeDateOrUndefined = (value: TimestampColumn | string | null | undefine
 const encodeLocalizedData = (localeData: CrdtLocalizedData) => ({
   content: JSON.stringify(localeData.content),
   originalLocale: localeData.originalLocale,
-  translatedAtCrdtFrontier: JSON.stringify(localeData.translatedAtCrdtFrontier),
+  translatedAtCrdtFrontier: JSON.stringify(localeData.translatedAtCrdtFrontier ?? null),
   translationSource: localeData.translationSource,
 })
 
@@ -226,7 +257,6 @@ export const sourcePostDataToCrdtStorage = (sourceData: CrdtSourcePostData) => (
   },
 })
 
-
 type CrdtSourceCommentData = {
   locales: {
     en?: CrdtLocalizedData | undefined
@@ -240,5 +270,53 @@ export const sourceCommentDataToCrdtStorage = (sourceData: CrdtSourceCommentData
     en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : {},
     es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : {},
     pt: sourceData.locales.pt ? encodeLocalizedData(sourceData.locales.pt) : {},
+  },
+})
+
+type CrdtResourceLocalizedData = {
+  title: string
+  description: TiptapDocument | null
+  creditLine: string | null
+  originalLocale: Locale
+  translatedAtCrdtFrontier?: LoroDocFrontier | null
+  translationSource: TranslationSource
+}
+
+type CrdtSourceResourceData = {
+  locales: {
+    en?: CrdtResourceLocalizedData | undefined
+    es?: CrdtResourceLocalizedData | undefined
+    pt?: CrdtResourceLocalizedData | undefined
+  }
+  metadata: {
+    format: string
+    handle: Handle
+    thumbnailImageId: string | null
+    url: string
+    urlState: string
+  }
+}
+
+const encodeResourceLocalizedData = (localeData: CrdtResourceLocalizedData) => ({
+  title: localeData.title,
+  description: localeData.description === null ? undefined : JSON.stringify(localeData.description),
+  creditLine: localeData.creditLine ?? undefined,
+  originalLocale: localeData.originalLocale,
+  translatedAtCrdtFrontier: JSON.stringify(localeData.translatedAtCrdtFrontier ?? null),
+  translationSource: localeData.translationSource,
+})
+
+export const sourceResourceDataToCrdtStorage = (sourceData: CrdtSourceResourceData) => ({
+  locales: {
+    en: sourceData.locales.en ? encodeResourceLocalizedData(sourceData.locales.en) : {},
+    es: sourceData.locales.es ? encodeResourceLocalizedData(sourceData.locales.es) : {},
+    pt: sourceData.locales.pt ? encodeResourceLocalizedData(sourceData.locales.pt) : {},
+  },
+  metadata: {
+    format: sourceData.metadata.format,
+    handle: sourceData.metadata.handle,
+    thumbnailImageId: sourceData.metadata.thumbnailImageId ?? undefined,
+    url: sourceData.metadata.url,
+    urlState: sourceData.metadata.urlState,
   },
 })

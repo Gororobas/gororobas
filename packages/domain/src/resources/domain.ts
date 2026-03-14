@@ -12,8 +12,8 @@ import {
   TranslationSource,
 } from "../common/enums.js"
 import { ImageId, PersonId, ResourceId, ResourceRevisionId, TagId } from "../common/ids.js"
-import { Handle, TimestampColumn } from "../common/primitives.js"
-import { LoroDocUpdate } from "../crdts/domain.js"
+import { Handle, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
+import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const ResourceMetadata = Schema.Struct({
@@ -141,3 +141,48 @@ export const ResourceBookmark = Schema.Struct({
   state: BookmarkState,
 })
 export type ResourceBookmark = typeof ResourceBookmark.Type
+
+export const ResourceCrdtRow = Schema.Struct({
+  ...TimestampedStruct.fields,
+  id: ResourceId,
+  crdtSnapshot: LoroDocSnapshot,
+})
+export type ResourceCrdtRow = typeof ResourceCrdtRow.Type
+
+export const ResourceRevisionRow = Schema.Struct({
+  ...TimestampedStruct.fields,
+  id: ResourceRevisionId,
+  resourceId: ResourceId,
+  createdById: Schema.NullOr(PersonId),
+  crdtUpdate: LoroDocUpdate,
+  fromCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
+  evaluation: RevisionEvaluation,
+  evaluatedById: Schema.NullOr(PersonId),
+  evaluatedAt: Schema.NullOr(TimestampColumn),
+})
+export type ResourceRevisionRow = typeof ResourceRevisionRow.Type
+
+export const ResourceRow = Schema.Struct({
+  ...TimestampedStruct.fields,
+  id: ResourceId,
+  currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
+  handle: Handle,
+  url: Schema.Trimmed.check(Schema.isNonEmpty()),
+  urlState: ResourceUrlState,
+  lastCheckedAt: Schema.NullOr(TimestampColumn),
+  format: ResourceFormat,
+  thumbnailImageId: Schema.NullOr(ImageId),
+})
+export type ResourceRow = typeof ResourceRow.Type
+
+export const ResourceTranslationRow = Schema.Struct({
+  resourceId: ResourceId,
+  locale: Locale,
+  title: Schema.Trimmed.check(Schema.isNonEmpty()),
+  description: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
+  creditLine: Schema.NullOr(Schema.String),
+  translatedAtCrdtFrontier: Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
+  translationSource: TranslationSource,
+  originalLocale: Locale,
+})
+export type ResourceTranslationRow = typeof ResourceTranslationRow.Type
