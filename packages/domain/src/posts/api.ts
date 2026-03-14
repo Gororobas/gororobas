@@ -44,7 +44,7 @@ export class PostsApiGroup extends HttpApiGroup.make("posts")
     }),
   )
   .add(
-    HttpApiEndpoint.post("createNote", "/profiles/:profile_id/notes", {
+    HttpApiEndpoint.post("createNote", "/profiles/:profileId/notes", {
       success: ApiNoteData,
       error: ProfileNotFoundError,
       params: Schema.Struct({ profileId: ProfileId }),
@@ -52,7 +52,7 @@ export class PostsApiGroup extends HttpApiGroup.make("posts")
     }),
   )
   .add(
-    HttpApiEndpoint.post("createEvent", "/profiles/:profile_id/events", {
+    HttpApiEndpoint.post("createEvent", "/profiles/:profileId/events", {
       success: ApiEventData,
       error: ProfileNotFoundError,
       params: Schema.Struct({ profileId: ProfileId }),
