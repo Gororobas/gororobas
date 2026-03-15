@@ -67,9 +67,41 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
       }) =>
         sql`INSERT INTO resource_crdts (id, crdt_snapshot, created_at, updated_at) VALUES (${input.id}, ${input.crdtSnapshot}, ${DateTime.formatIso(input.createdAt)}, ${DateTime.formatIso(input.updatedAt)})`
 
-      const insertResourceRow = SqlSchema.void({
+      const upsertResourceRow = SqlSchema.void({
         Request: ResourceRow,
-        execute: (row) => sql`INSERT INTO resources ${sql.insert(row)}`,
+        execute: (row) => sql`
+          INSERT INTO resources (
+            id,
+            current_crdt_frontier,
+            handle,
+            url,
+            url_state,
+            last_checked_at,
+            format,
+            thumbnail_image_id,
+            created_at,
+            updated_at
+          ) VALUES (
+            ${row.id},
+            ${row.currentCrdtFrontier},
+            ${row.handle},
+            ${row.url},
+            ${row.urlState},
+            ${row.lastCheckedAt},
+            ${row.format},
+            ${row.thumbnailImageId},
+            ${row.createdAt},
+            ${row.updatedAt}
+          )
+          ON CONFLICT(id) DO UPDATE SET
+            current_crdt_frontier = excluded.current_crdt_frontier,
+            handle = excluded.handle,
+            url = excluded.url,
+            url_state = excluded.url_state,
+            format = excluded.format,
+            thumbnail_image_id = excluded.thumbnail_image_id,
+            updated_at = excluded.updated_at
+        `,
       })
 
       const updateResourceSnapshot = (input: {
@@ -140,7 +172,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
         Effect.gen(function* () {
           const now = yield* DateTime.now
 
-          yield* insertResourceRow(
+          yield* upsertResourceRow(
             ResourceRow.makeUnsafe({
               id: input.resourceId,
               currentCrdtFrontier: input.currentCrdtFrontier,
@@ -153,20 +185,6 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
               createdAt: now,
               updatedAt: now,
             }),
-          ).pipe(
-            Effect.catchTag("SqlError", () =>
-              sql`
-                UPDATE resources
-                SET current_crdt_frontier = ${JSON.stringify(input.currentCrdtFrontier)},
-                    handle = ${input.sourceData.metadata.handle},
-                    url = ${input.sourceData.metadata.url},
-                    url_state = ${input.sourceData.metadata.urlState},
-                    format = ${input.sourceData.metadata.format},
-                    thumbnail_image_id = ${input.sourceData.metadata.thumbnailImageId},
-                    updated_at = ${DateTime.formatIso(now)}
-                WHERE id = ${input.resourceId}
-              `.pipe(Effect.asVoid),
-            ),
           )
 
           yield* materializeTranslations({
@@ -335,16 +353,19 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
           const revision = Option.getOrThrow(revisionOption)
           const now = yield* DateTime.now
 
-          yield* sql`
+          const markRevisionAsEvaluated = sql`
             UPDATE resource_revisions
             SET evaluation = ${input.evaluation},
                 evaluated_by_id = ${input.evaluatedById},
                 evaluated_at = ${DateTime.formatIso(now)},
                 updated_at = ${DateTime.formatIso(now)}
             WHERE id = ${input.revisionId}
-          `
+          `.pipe(Effect.asVoid)
 
-          if (input.evaluation === "REJECTED") return
+          if (input.evaluation === "REJECTED") {
+            yield* sql.withTransaction(markRevisionAsEvaluated)
+            return
+          }
 
           const rowOption = yield* findResourceRowById(revision.resourceId)
           if (Option.isNone(rowOption)) {
@@ -372,7 +393,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
                 }),
               ),
             ),
-            insertCommit: Effect.void,
+            insertCommit: markRevisionAsEvaluated,
             materialize: materializeResource({
               resourceId: revision.resourceId,
               currentCrdtFrontier: nextSnapshotCreated.currentCrdtFrontier,

@@ -3,6 +3,7 @@ import { Handle, SourceResourceData } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, Layer, Option, Schema } from "effect"
 import { FastCheck } from "effect/testing"
+import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import { ResourcesRepository } from "../../src/resources/repository.js"
 import {
@@ -104,6 +105,66 @@ describe("ResourcesRepository", () => {
       const translations = yield* resources.listResourceTranslationRowsByResourceId(resourceId)
       expect(translations).toHaveLength(1)
       expect(translations[0]?.title).toBe("A Terra Dá")
+    }).pipe(Effect.provide(TestLayerWithRepository)),
+  )
+
+  it.effect("createResource does not persist partial state when handle is duplicated", () =>
+    Effect.gen(function* () {
+      const resources = yield* ResourcesRepository
+      const sql = yield* SqlClient.SqlClient
+
+      const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
+      const profile = yield* makeProfileFixture({ id: person.id })
+      yield* insertPersonWithDependencies({ person, profile })
+
+      const duplicatedHandle = `resource-${person.id.slice(0, 8)}-duplicate`
+
+      yield* resources.createResource({
+        createdById: person.id,
+        sourceData: makeResourceSourceData({
+          title: "Primeiro recurso",
+          handle: duplicatedHandle,
+          url: `https://example.com/${person.id}/duplicate-1`,
+        }),
+      })
+
+      const secondCreationFailed = yield* resources
+        .createResource({
+          createdById: person.id,
+          sourceData: makeResourceSourceData({
+            title: "Segundo recurso",
+            handle: duplicatedHandle,
+            url: `https://example.com/${person.id}/duplicate-2`,
+          }),
+        })
+        .pipe(
+          Effect.as(false),
+          Effect.catch(() => Effect.succeed(true)),
+        )
+
+      expect(secondCreationFailed).toBe(true)
+
+      const { count: resourcesCount } = yield* SqlSchema.findOne({
+        Request: Schema.Null,
+        Result: Schema.Struct({ count: Schema.Number }),
+        execute: () => sql`SELECT COUNT(*) as count FROM resources`,
+      })(null)
+
+      const { count: resourceCrdtsCount } = yield* SqlSchema.findOne({
+        Request: Schema.Null,
+        Result: Schema.Struct({ count: Schema.Number }),
+        execute: () => sql`SELECT COUNT(*) as count FROM resource_crdts`,
+      })(null)
+
+      const { count: revisionsCount } = yield* SqlSchema.findOne({
+        Request: Schema.Null,
+        Result: Schema.Struct({ count: Schema.Number }),
+        execute: () => sql`SELECT COUNT(*) as count FROM resource_revisions`,
+      })(null)
+
+      expect(resourcesCount).toBe(1)
+      expect(resourceCrdtsCount).toBe(1)
+      expect(revisionsCount).toBe(1)
     }).pipe(Effect.provide(TestLayerWithRepository)),
   )
 
