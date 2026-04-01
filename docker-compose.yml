@@ -4,13 +4,25 @@ services:
     environment:
       GEL_SERVER_SECURITY: insecure_dev_mode
       GEL_SERVER_PASSWORD: ${GEL_PASSWORD}
+      GEL_SERVER_ADMIN_UI: enabled
     volumes:
       - gel-data:/var/lib/gel/data
       - ./dbschema:/dbschema
     networks:
       - internal
+      - dokploy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gel-auth.rule=Host(`${GEL_AUTH_DOMAIN:-api.gororobas.com}`)"
+      - "traefik.http.routers.gel-auth.entrypoints=websecure"
+      - "traefik.http.routers.gel-auth.tls.certResolver=letsencrypt"
+      - "traefik.http.routers.gel-auth.service=gel-auth"
+      - "traefik.http.services.gel-auth.loadbalancer.server.port=5656"
+      - "traefik.http.services.gel-auth.loadbalancer.server.scheme=https"
+      - "traefik.http.services.gel-auth.loadbalancer.serversTransport=gel-auth-transport"
+      - "traefik.http.serversTransports.gel-auth-transport.insecureSkipVerify=true"
     healthcheck:
-      test: ['CMD-SHELL', "echo 'OK' || exit 1"]
+      test: ["CMD-SHELL", "echo 'OK' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -47,13 +59,13 @@ services:
       - internal
       - dokploy-network
     labels:
-      - 'traefik.enable=true'
-      - 'traefik.http.routers.nextjs.rule=Host(`your-domain.com`)'
-      - 'traefik.http.routers.nextjs.entrypoints=websecure'
-      - 'traefik.http.routers.nextjs.tls.certResolver=letsencrypt'
-      - 'traefik.http.services.nextjs.loadbalancer.server.port=3000'
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextjs.rule=Host(`${APP_DOMAIN:-gororobas.com}`) || Host(`${APP_WWW_DOMAIN:-www.gororobas.com}`)"
+      - "traefik.http.routers.nextjs.entrypoints=websecure"
+      - "traefik.http.routers.nextjs.tls.certResolver=letsencrypt"
+      - "traefik.http.services.nextjs.loadbalancer.server.port=3000"
     healthcheck:
-      test: ['CMD-SHELL', "echo 'OK' || exit 1"]
+      test: ["CMD-SHELL", "echo 'OK' || exit 1"]
       interval: 30s
       timeout: 35s
       retries: 5

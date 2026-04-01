@@ -5,6 +5,20 @@ import process from 'node:process'
 
 const client = createClient()
 
+const APP_BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
+const AUTH_WEBHOOK_URL =
+  process.env.AUTH_WEBHOOK_URL || `${APP_BASE_URL}/auth/webhook`
+const ALLOWED_REDIRECT_URLS = Array.from(
+  new Set([
+    APP_BASE_URL,
+    `${APP_BASE_URL}/auth/`,
+    ...(process.env.ADDITIONAL_ALLOWED_REDIRECT_URLS
+      ?.split(',')
+      .map((url) => url.trim())
+      .filter(Boolean) ?? []),
+  ]),
+)
+
 if (!!process.env.EDGEDB_INSTANCE || !!process.env.EDGEDB_SECRET_KEY) {
   throw new Error(
     'EDGEDB_INSTANCE environment variable is set, which could mean connecting to a remote database - run this script *only* in the local database',
@@ -25,16 +39,11 @@ const CONFIG = {
   ],
   appName: APP_NAME,
   webhooks: {
-    url: 'http://localhost:3000/auth/webhook',
+    url: AUTH_WEBHOOK_URL,
     events: ['MagicLinkRequested'],
     signing_key: process.env.AUTH_WEBHOOK_SECRET,
   },
-  redirect_urls: [
-    'https://www.gororobas.com',
-    'https://gororobas.com',
-    'https://gororobas.com/auth/',
-    'http://localhost:3000',
-  ],
+  redirect_urls: ALLOWED_REDIRECT_URLS,
 } as const
 
 let query = `
