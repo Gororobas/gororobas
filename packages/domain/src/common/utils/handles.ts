@@ -9,7 +9,7 @@ const nanoid = customAlphabet(urlAlphabet, 10)
 
 /** Transforms a piece of content into a human-readable URL with a unique ID at the end */
 export function contentToHandle(content: TiptapDocument) {
-  return Handle.makeUnsafe(
+  return Handle.make(
     `${truncate(stringToHandle(tiptapToText(content)), 30)}-${nanoid(8).toLowerCase()}`,
   )
 }

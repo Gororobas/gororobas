@@ -1,8 +1,18 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Handle, HumanCommit, PersonId, SourceResourceData, TiptapDocument, TiptapNode } from "@gororobas/domain"
+import {
+  Handle,
+  HumanCommit,
+  PersonId,
+  SourceResourceData,
+  TiptapDocument,
+  TiptapNode,
+} from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 
-import { createResourceSnapshot, evolveResourceSnapshot } from "../../src/resources/resource-crdt-orchestration.js"
+import {
+  createResourceSnapshot,
+  evolveResourceSnapshot,
+} from "../../src/resources/resource-crdt-orchestration.js"
 
 const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
 
@@ -21,7 +31,7 @@ const makePersonId = () =>
   Schema.decodeUnknownSync(PersonId)("01956f35-57e0-7f4e-8aef-9da46f1a20b3")
 
 const makeSourceData = (descriptionText: string): SourceResourceData =>
-  SourceResourceData.makeUnsafe({
+  SourceResourceData.make({
     locales: {
       pt: {
         title: "Manual de Agroecologia",
@@ -48,7 +58,7 @@ describe("loro-mirror playground for resource updates", () => {
       )
 
       const smallEdit = yield* evolveResourceSnapshot({
-        commit: HumanCommit.makeUnsafe({ personId: makePersonId() }),
+        commit: HumanCommit.make({ personId: makePersonId() }),
         nextSourceData: makeSourceData(
           "Texto base com muitas palavras para avaliar a granularidade do diff com ajuste mínimo.",
         ),
@@ -66,13 +76,13 @@ describe("loro-mirror playground for resource updates", () => {
       const initial = createResourceSnapshot(makeSourceData("Descrição inicial de referência."))
 
       const smallEdit = yield* evolveResourceSnapshot({
-        commit: HumanCommit.makeUnsafe({ personId: makePersonId() }),
+        commit: HumanCommit.make({ personId: makePersonId() }),
         nextSourceData: makeSourceData("Descrição inicial de referência com ajuste."),
         snapshot: initial.crdtSnapshot,
       })
 
       const largeEdit = yield* evolveResourceSnapshot({
-        commit: HumanCommit.makeUnsafe({ personId: makePersonId() }),
+        commit: HumanCommit.make({ personId: makePersonId() }),
         nextSourceData: makeSourceData(
           "Nova descrição extensa. Inclui mudanças estruturais, mais contexto, novos termos e trechos adicionais para simular uma reescrita completa.",
         ),

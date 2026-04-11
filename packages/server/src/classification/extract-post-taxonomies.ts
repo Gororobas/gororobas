@@ -2,7 +2,7 @@ import { TiptapDocument, tiptapToHtml } from "@gororobas/domain"
 import type { TagRow } from "@gororobas/domain"
 import { type PostClassification } from "@gororobas/domain"
 import { createHash } from "crypto"
-import { Config, DateTime, Effect, ServiceMap } from "effect"
+import { Config, DateTime, Effect, Context } from "effect"
 
 import { TagsRepository } from "../tags/repository.js"
 import { LangExtractService } from "./langextract-service.js"
@@ -78,7 +78,7 @@ const extractTags = Effect.fn("extractTags")(function* (html: string) {
   })
 })
 
-export class ExtractPostTaxonomiesService extends ServiceMap.Service<ExtractPostTaxonomiesService>()(
+export class ExtractPostTaxonomiesService extends Context.Service<ExtractPostTaxonomiesService>()(
   "ExtractPostTaxonomiesService",
   {
     make: Effect.succeed({

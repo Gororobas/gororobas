@@ -26,7 +26,7 @@ import {
   tiptapToText,
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
-import { DateTime, Effect, Option, Schema, ServiceMap } from "effect"
+import { DateTime, Effect, Option, Schema, Context } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -44,7 +44,7 @@ import {
  * - public read queries for the front-end and policy checks
  * - createPost/updatePost/deletePost as the write surface
  */
-export class PostsRepository extends ServiceMap.Service<PostsRepository>()("PostsRepository", {
+export class PostsRepository extends Context.Service<PostsRepository>()("PostsRepository", {
   make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
@@ -241,7 +241,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
         const translationRows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
           if (!localeData || !Schema.is(Locale)(locale)) return []
 
-          return PostTranslationRow.makeUnsafe({
+          return PostTranslationRow.make({
             content: localeData.content,
             contentPlainText: tiptapToText(localeData.content),
             locale,
@@ -266,7 +266,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
         const postTagRows = (input.classification?.tags ?? []).flatMap((tag) => {
           if (tag._tag !== "ResolvedExistingTagExtraction") return []
 
-          return PostTagRow.makeUnsafe({
+          return PostTagRow.make({
             extractionText: tag.extractionText,
             postId: input.postId,
             tagId: tag.tagId,
@@ -287,7 +287,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
         const rows = (input.classification?.vegetables ?? []).flatMap((vegetable) => {
           if (vegetable._tag !== "ResolvedExistingVegetableExtraction") return []
 
-          return PostVegetableRow.makeUnsafe({
+          return PostVegetableRow.make({
             extractionText: vegetable.extractionText,
             postId: input.postId,
             vegetableId: vegetable.vegetableId,
@@ -342,8 +342,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
           : {
               content: row.content,
               originalLocale: row.originalLocale,
-              translatedAtCrdtFrontier:
-                row.translatedAtCrdtFrontier ?? LoroDocFrontier.makeUnsafe([]),
+              translatedAtCrdtFrontier: row.translatedAtCrdtFrontier ?? LoroDocFrontier.make([]),
               translationSource: row.translationSource,
             }
 
@@ -400,7 +399,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
             updatedAt: now,
           }),
           insertInitialCommit: insertPostCommit({
-            commit: HumanCommit.makeUnsafe({ personId: input.createdById }),
+            commit: HumanCommit.make({ personId: input.createdById }),
             crdtUpdate: created.initialCrdtUpdate,
             fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
             postId,
@@ -469,7 +468,7 @@ export class PostsRepository extends ServiceMap.Service<PostsRepository>()("Post
 
         const commit: CrdtCommit =
           input._tag === "HumanUpdatePtContent"
-            ? HumanCommit.makeUnsafe({ personId: input.authorId })
+            ? HumanCommit.make({ personId: input.authorId })
             : input.commit
 
         const evolved = yield* evolvePostSnapshot({

@@ -68,4 +68,4 @@ export const modifyLoroDocWithCommit = Effect.fn("modifyLoroDocWithCommit")(func
   return cleanFinalDocument
 })
 
-export const EMPTY_LORO_DOC_FRONTIER = LoroDocFrontier.makeUnsafe([])
+export const EMPTY_LORO_DOC_FRONTIER = LoroDocFrontier.make([])

@@ -20,7 +20,7 @@ export const createResourceSnapshot = (sourceData: SourceResourceData) => {
   )
 
   return {
-    currentCrdtFrontier: LoroDocFrontier.makeUnsafe(sourceDoc.frontiers()),
+    currentCrdtFrontier: LoroDocFrontier.make(sourceDoc.frontiers()),
     crdtSnapshot: loroDocToSnapshot(sourceDoc),
     initialCrdtUpdate: loroDocToUpdate(sourceDoc),
     sourceData,
@@ -34,7 +34,7 @@ export const evolveResourceSnapshot = (params: {
 }) =>
   Effect.gen(function* () {
     const currentDoc = snapshotToLoroDoc(params.snapshot)
-    const currentFrontier = LoroDocFrontier.makeUnsafe(currentDoc.frontiers())
+    const currentFrontier = LoroDocFrontier.make(currentDoc.frontiers())
 
     const nextDoc = yield* modifyLoroDocWithCommit({
       commit: params.commit,
@@ -50,7 +50,7 @@ export const evolveResourceSnapshot = (params: {
         mode: "update",
       }),
       fromCrdtFrontier: currentFrontier,
-      nextFrontier: LoroDocFrontier.makeUnsafe(nextDoc.frontiers()),
+      nextFrontier: LoroDocFrontier.make(nextDoc.frontiers()),
       nextSnapshot: loroDocToSnapshot(nextDoc),
       sourceData: params.nextSourceData,
     } as const

@@ -1,12 +1,11 @@
-import { Effect, ServiceMap, Stream } from "effect"
+import { Effect, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 
 import { DurableStreamsService } from "./service.js"
 
 export const makeDurableStreamRouter = HttpRouter.use((router) =>
   Effect.gen(function* () {
-    const services = yield* Effect.services<DurableStreamsService>()
-    const { internalUrl } = ServiceMap.get(services, DurableStreamsService)
+    const { internalUrl } = yield* DurableStreamsService
 
     const prefixedRouter = router.prefixed("/stream")
 

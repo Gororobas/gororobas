@@ -13,7 +13,7 @@ import {
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
-import { Duration, Effect, Option, Schema } from "effect"
+import { DateTime, Duration, Effect, Option, Schema } from "effect"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
 import { SystemUpsertTranslation } from "../comments/comment-repository-inputs.js"
@@ -39,7 +39,7 @@ export const CommentTranslationWorkflow = Workflow.make({
   success: Schema.Null,
   error: Schema.Unknown,
   idempotencyKey: ({ commentId, targetLocale, updatedAt }) =>
-    `${commentId}:${targetLocale}:${updatedAt.epochMillis}`,
+    `${commentId}:${targetLocale}:${DateTime.toEpochMillis(updatedAt)}`,
 })
 
 export const CommentTranslationWorkflowLayer = CommentTranslationWorkflow.toLayer(
@@ -55,7 +55,7 @@ export const CommentTranslationWorkflowLayer = CommentTranslationWorkflow.toLaye
       }),
     })
 
-    const commit = SystemCommit.makeUnsafe({
+    const commit = SystemCommit.make({
       workflowName: "CommentTranslationWorkflow",
       workflowVersion: WORKFLOW_VERSION,
       model: `translation/${translationResult.serviceId}`,
@@ -85,7 +85,7 @@ export const CommentTranslationWorkflowLayer = CommentTranslationWorkflow.toLaye
 
             return yield* repository
               .updateComment(
-                SystemUpsertTranslation.makeUnsafe({
+                SystemUpsertTranslation.make({
                   commentId: payload.commentId,
                   commit,
                   expectedCurrentCrdtFrontier: currentComment.currentCrdtFrontier,

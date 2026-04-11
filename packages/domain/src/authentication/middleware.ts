@@ -1,10 +1,10 @@
-import { ServiceMap } from "effect"
+import { Context } from "effect"
 import { HttpApiMiddleware, HttpApiSecurity } from "effect/unstable/httpapi"
 
 import { UnauthorizedError } from "../authorization/session.js"
 import { CurrentAuthenticationData } from "./domain.js"
 
-export class CurrentAuthenticationContext extends ServiceMap.Service<
+export class CurrentAuthenticationContext extends Context.Service<
   CurrentAuthenticationContext,
   CurrentAuthenticationData
 >()("CurrentAuthenticationContext") {}

@@ -1,8 +1,8 @@
-import { Effect, ServiceMap } from "effect"
+import { Context, Effect } from "effect"
 
 import type { ParsedStep } from "./parser/types.js"
 
-export class BackgroundContext extends ServiceMap.Service<BackgroundContext, Record<any, any>>()(
+export class BackgroundContext extends Context.Service<BackgroundContext, Record<any, any>>()(
   "BackgroundContext",
 ) {}
 
@@ -10,7 +10,7 @@ export const getBackgroundContext = Effect.fnUntraced(function* <T extends Recor
   return (yield* BackgroundContext) as T
 })
 
-export class ScenarioContext extends ServiceMap.Service<
+export class ScenarioContext extends Context.Service<
   ScenarioContext,
   {
     readonly name: string

@@ -29,7 +29,7 @@ import { TagsRepository } from "../tags/repository.js"
 import { VegetablesRepository } from "../vegetables/repository.js"
 
 function toCommonExtractionFields(extraction: Extraction) {
-  return CommonExtractionData.mapFields(Struct.omit(["handle"])).makeUnsafe({
+  return CommonExtractionData.mapFields(Struct.omit(["handle"])).make({
     extractionText: extraction.extractionText,
     extractionClass: extraction.extractionClass,
     alignmentStatus: extraction.alignmentStatus ?? null,
@@ -79,7 +79,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
     const match = yield* vegetablesRepository.findByHandle(handle)
     if (Option.isSome(match) === true) {
       yield* Effect.logDebug(`Found existing vegetable by handle: "${handle}" -> ${match.value.id}`)
-      return ResolvedExistingVegetableExtraction.makeUnsafe({
+      return ResolvedExistingVegetableExtraction.make({
         ...common,
         vegetableId: match.value.id,
         handle: match.value.handle as Handle,
@@ -98,7 +98,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
       yield* Effect.logDebug(
         `Found existing vegetable by searchable_name: "${handle}" -> ${match.value.vegetableId}`,
       )
-      return ResolvedExistingVegetableExtraction.makeUnsafe({
+      return ResolvedExistingVegetableExtraction.make({
         ...common,
         vegetableId: match.value.vegetableId,
         handle: match.value.handle as Handle,
@@ -109,7 +109,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
   yield* Effect.logDebug(
     `No match found for vegetable "${extraction.extractionText}" (candidates: ${candidates.join(", ")}) -> creating suggested`,
   )
-  return SuggestedVegetableExtraction.makeUnsafe({
+  return SuggestedVegetableExtraction.make({
     ...common,
     handle: stringToHandle(extraction.extractionText),
     names: {
@@ -151,7 +151,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
       yield* Effect.logDebug(
         `Found existing tag by handle: "${tagHandle}" -> ${handleMatch.value.id}`,
       )
-      return ResolvedExistingTagExtraction.makeUnsafe({
+      return ResolvedExistingTagExtraction.make({
         ...common,
         tagId: handleMatch.value.id,
         handle: stringToHandle(handleMatch.value.handle),
@@ -163,7 +163,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
     const nameMatch = yield* tagsRepository.findByName(namePattern)
     if (Option.isSome(nameMatch) === true) {
       yield* Effect.logDebug(`Found existing tag by name: "${tagHandle}" -> ${nameMatch.value.id}`)
-      return ResolvedExistingTagExtraction.makeUnsafe({
+      return ResolvedExistingTagExtraction.make({
         ...common,
         tagId: nameMatch.value.id,
         handle: stringToHandle(nameMatch.value.handle),
@@ -174,7 +174,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
   yield* Effect.logDebug(
     `No match found for tag "${extraction.extractionText}" -> creating suggested`,
   )
-  return SuggestedTagExtraction.makeUnsafe({
+  return SuggestedTagExtraction.make({
     ...common,
     handle: tagHandle,
     names: {

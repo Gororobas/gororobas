@@ -1,8 +1,8 @@
 import { TagId, TagRow } from "@gororobas/domain"
-import { Effect, Schema, ServiceMap } from "effect"
+import { Effect, Schema, Context } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-export class TagsRepository extends ServiceMap.Service<TagsRepository>()("TagsRepository", {
+export class TagsRepository extends Context.Service<TagsRepository>()("TagsRepository", {
   make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 

@@ -21,17 +21,17 @@ import {
   TimestampColumn,
   tiptapToText,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, Schema, ServiceMap } from "effect"
+import { DateTime, Effect, Option, Schema, Context } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-import { persistCrdtAggregateCreation, persistCrdtAggregateUpdate } from "../common/crdt-aggregate-persistence.js"
-import { createCommentSnapshot, evolveCommentSnapshot } from "./comment-crdt-orchestration.js"
 import {
-  type CreateCommentInput,
-  type UpdateCommentInput,
-} from "./comment-repository-inputs.js"
+  persistCrdtAggregateCreation,
+  persistCrdtAggregateUpdate,
+} from "../common/crdt-aggregate-persistence.js"
+import { createCommentSnapshot, evolveCommentSnapshot } from "./comment-crdt-orchestration.js"
+import { type CreateCommentInput, type UpdateCommentInput } from "./comment-repository-inputs.js"
 
-export class CommentsRepository extends ServiceMap.Service<CommentsRepository>()(
+export class CommentsRepository extends Context.Service<CommentsRepository>()(
   "CommentsRepository",
   {
     make: Effect.gen(function* () {
@@ -195,7 +195,7 @@ export class CommentsRepository extends ServiceMap.Service<CommentsRepository>()
           const translationRows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
             if (!localeData || !Schema.is(Locale)(locale)) return []
 
-            return CommentTranslationRow.makeUnsafe({
+            return CommentTranslationRow.make({
               commentId: input.commentId,
               content: localeData.content,
               contentPlainText: tiptapToText(localeData.content),
@@ -237,7 +237,9 @@ export class CommentsRepository extends ServiceMap.Service<CommentsRepository>()
           })
         })
 
-      const buildSourceDataFromMaterializedRows = (translationRows: Array<CommentTranslationRow>) => {
+      const buildSourceDataFromMaterializedRows = (
+        translationRows: Array<CommentTranslationRow>,
+      ) => {
         const toLocalizedData = (row: CommentTranslationRow) =>
           row.translationSource === "ORIGINAL"
             ? {
@@ -249,8 +251,7 @@ export class CommentsRepository extends ServiceMap.Service<CommentsRepository>()
             : {
                 content: row.content,
                 originalLocale: row.originalLocale,
-                translatedAtCrdtFrontier:
-                  row.translatedAtCrdtFrontier ?? LoroDocFrontier.makeUnsafe([]),
+                translatedAtCrdtFrontier: row.translatedAtCrdtFrontier ?? LoroDocFrontier.make([]),
                 translationSource: row.translationSource,
               }
 
@@ -287,7 +288,7 @@ export class CommentsRepository extends ServiceMap.Service<CommentsRepository>()
             }),
             insertInitialCommit: insertCommentCommit({
               commentId,
-              commit: HumanCommit.makeUnsafe({ personId: input.createdById }),
+              commit: HumanCommit.make({ personId: input.createdById }),
               crdtUpdate: created.initialCrdtUpdate,
               fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
             }),
@@ -360,7 +361,7 @@ export class CommentsRepository extends ServiceMap.Service<CommentsRepository>()
 
           const commit: CrdtCommit =
             input._tag === "HumanUpdatePtContent"
-              ? HumanCommit.makeUnsafe({ personId: input.authorId })
+              ? HumanCommit.make({ personId: input.authorId })
               : input.commit
 
           const evolved = yield* evolveCommentSnapshot({

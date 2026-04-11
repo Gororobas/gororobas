@@ -103,7 +103,7 @@ describe("Schema Round-Trip Properties", () => {
       assertPropertyEffect(Schema.toArbitrary(PersonRow), (original) =>
         Effect.gen(function* () {
           // Create version with null nullable fields
-          const withNulls = PersonRow.makeUnsafe({
+          const withNulls = PersonRow.make({
             ...original,
             accessSetAt: null,
             accessSetById: null,

@@ -1,4 +1,4 @@
-import { Predicate, Schema, ServiceMap } from "effect"
+import { Context, Predicate, Schema } from "effect"
 /**
  * Session types for authentication.
  */
@@ -53,7 +53,7 @@ export type Session = typeof Session.Type
 /**
  * @effect-leakable-service
  */
-export class SessionContext extends ServiceMap.Service<SessionContext, Session>()("Session") {}
+export class SessionContext extends Context.Service<SessionContext, Session>()("Session") {}
 
 export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError>()(
   "UnauthorizedError",
@@ -64,6 +64,6 @@ export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError
   { httpApiStatus: 403 },
 ) {
   static is(u: unknown): u is UnauthorizedError {
-    return Predicate.isTagged(u, "Unauthorized")
+    return Predicate.isTagged(u, "UnauthorizedError")
   }
 }

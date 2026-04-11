@@ -7,10 +7,10 @@ import {
   ProfileRowUpdate,
   TimestampedStruct,
 } from "@gororobas/domain"
-import { Effect, Schema, SchemaGetter, ServiceMap } from "effect"
+import { Effect, Schema, SchemaGetter, Context } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-export class ProfilesRepository extends ServiceMap.Service<ProfilesRepository>()(
+export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
   "ProfilesRepository",
   {
     make: Effect.gen(function* () {

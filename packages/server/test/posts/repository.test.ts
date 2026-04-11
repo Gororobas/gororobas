@@ -162,7 +162,7 @@ describe("PostsRepository", () => {
         expect(Option.isSome(beforeUpdate)).toBe(true)
 
         yield* repository.updatePost(
-          HumanUpdatePtContent.makeUnsafe({
+          HumanUpdatePtContent.make({
             authorId: person.id,
             content: makeDocument("Depois"),
             expectedCurrentCrdtFrontier: Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
@@ -210,8 +210,8 @@ describe("PostsRepository", () => {
       expect(Option.isSome(beforeTranslation)).toBe(true)
 
       yield* repository.updatePost(
-        SystemUpsertTranslation.makeUnsafe({
-          commit: SystemCommit.makeUnsafe({
+        SystemUpsertTranslation.make({
+          commit: SystemCommit.make({
             model: "translation/test",
             workflowName: "PostTranslationWorkflow",
             workflowVersion: "test",
@@ -265,8 +265,8 @@ describe("PostsRepository", () => {
       expect(Option.isSome(beforeTranslation)).toBe(true)
 
       yield* repository.updatePost(
-        SystemUpsertTranslation.makeUnsafe({
-          commit: SystemCommit.makeUnsafe({
+        SystemUpsertTranslation.make({
+          commit: SystemCommit.make({
             model: "translation/test",
             workflowName: "PostTranslationWorkflow",
             workflowVersion: "test",
@@ -361,7 +361,7 @@ describe("PostsRepository", () => {
       const expectedCurrentCrdtFrontier = Option.getOrThrow(initialRow).currentCrdtFrontier
 
       yield* repository.updatePost(
-        HumanUpdatePtContent.makeUnsafe({
+        HumanUpdatePtContent.make({
           authorId: person.id,
           content: makeDocument("Versao 2"),
           expectedCurrentCrdtFrontier,
@@ -370,7 +370,7 @@ describe("PostsRepository", () => {
       )
 
       const staleUpdate = repository.updatePost(
-        HumanUpdatePtContent.makeUnsafe({
+        HumanUpdatePtContent.make({
           authorId: person.id,
           content: makeDocument("Versao 3"),
           expectedCurrentCrdtFrontier,

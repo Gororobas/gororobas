@@ -1,7 +1,7 @@
 import type { Handle, VegetableId, VegetableRow, VegetableTranslationRow } from "@gororobas/domain"
-import { Effect, Option, ServiceMap } from "effect"
+import { Effect, Option, Context } from "effect"
 
-export class VegetablesRepository extends ServiceMap.Service<VegetablesRepository>()(
+export class VegetablesRepository extends Context.Service<VegetablesRepository>()(
   "VegetablesRepository",
   {
     make: Effect.succeed({

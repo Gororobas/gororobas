@@ -268,7 +268,7 @@ const saveExtractionResult = (
   })
 
 const makeDocument = (text: string): TiptapDocument =>
-  TiptapDocument.makeUnsafe({
+  TiptapDocument.make({
     type: "doc",
     version: 1,
     content: text.split("\n\n").map((paragraph) => ({

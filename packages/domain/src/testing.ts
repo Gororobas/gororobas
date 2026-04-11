@@ -115,7 +115,7 @@ export const runPolicy = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   session: Session,
 ): Effect.Effect<Exit.Exit<A, E>, never, Exclude<R, SessionContext>> =>
-  effect.pipe(Effect.provide(Layer.succeed(SessionContext, session)), Effect.exit)
+  effect.pipe(Effect.provide(Layer.succeed(SessionContext)(session)), Effect.exit)
 
 /**
  * Run a policy effect with a session and return whether it succeeded

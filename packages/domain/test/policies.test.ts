@@ -50,7 +50,7 @@ const organizationArbitrary = FastCheck.tuple(
   visibilityArbitrary,
   organizationTypeArbitrary,
 ).map(([id, membersVisibility, type]) =>
-  OrganizationRow.makeUnsafe({
+  OrganizationRow.make({
     id,
     membersVisibility,
     type,
@@ -141,7 +141,7 @@ describe("Policies", () => {
 
           const writePolicies = [
             Policies.posts.canCreate(
-              CorePostMetadata.makeUnsafe({
+              CorePostMetadata.make({
                 handle: "test" as CorePostMetadata["handle"],
                 ownerProfileId: session.personId as ProfileId,
                 publishedAt: TEST_PUBLISHED_AT,
@@ -202,7 +202,7 @@ describe("Policies", () => {
         FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
         ([session, visibility]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: session.personId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -221,7 +221,7 @@ describe("Policies", () => {
         FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
         ([session, visibility]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: session.personId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -259,7 +259,7 @@ describe("Policies", () => {
     it.effect("owner can always edit their own post", () =>
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const post = CorePostMetadata.makeUnsafe({
+          const post = CorePostMetadata.make({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: session.personId as ProfileId,
             publishedAt: TEST_PUBLISHED_AT,
@@ -273,7 +273,7 @@ describe("Policies", () => {
     it.effect("owner can always delete their own post", () =>
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const post = CorePostMetadata.makeUnsafe({
+          const post = CorePostMetadata.make({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: session.personId as ProfileId,
             publishedAt: TEST_PUBLISHED_AT,
@@ -290,7 +290,7 @@ describe("Policies", () => {
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: otherPersonId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -308,7 +308,7 @@ describe("Policies", () => {
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: otherPersonId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -324,7 +324,7 @@ describe("Policies", () => {
       assertPropertyEffect(sessionArbitrary, (session) =>
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
-          const post = CorePostMetadata.makeUnsafe({
+          const post = CorePostMetadata.make({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: personId as ProfileId,
             publishedAt: TEST_PUBLISHED_AT,
@@ -339,7 +339,7 @@ describe("Policies", () => {
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
-          const post = CorePostMetadata.makeUnsafe({
+          const post = CorePostMetadata.make({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: personId as ProfileId,
             publishedAt: TEST_PUBLISHED_AT,
@@ -355,7 +355,7 @@ describe("Policies", () => {
         FastCheck.tuple(visitorSessionArbitrary, personIdArbitrary),
         ([session, ownerId]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: ownerId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -373,7 +373,7 @@ describe("Policies", () => {
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: otherPersonId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -390,7 +390,7 @@ describe("Policies", () => {
         FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
         ([baseSession, ownerId]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: ownerId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -560,7 +560,7 @@ describe("Policies", () => {
       assertPropertyEffect(sessionArbitrary, (session) =>
         Effect.gen(function* () {
           const orgId = yield* IdGen.make(OrganizationId)
-          const org = OrganizationRow.makeUnsafe({
+          const org = OrganizationRow.make({
             id: orgId,
             membersVisibility: "PUBLIC",
             type: "COMMERCIAL",
@@ -574,7 +574,7 @@ describe("Policies", () => {
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
         Effect.gen(function* () {
           const orgId = yield* IdGen.make(OrganizationId)
-          const org = OrganizationRow.makeUnsafe({
+          const org = OrganizationRow.make({
             id: orgId,
             membersVisibility: "COMMUNITY",
             type: "COMMERCIAL",
@@ -644,7 +644,7 @@ describe("Policies", () => {
         memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
         ({ session, orgId }) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: orgId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -660,7 +660,7 @@ describe("Policies", () => {
         memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
         ({ session, orgId }) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.makeUnsafe({
+            const post = CorePostMetadata.make({
               handle: "test" as CorePostMetadata["handle"],
               ownerProfileId: orgId as ProfileId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -683,7 +683,7 @@ describe("Policies", () => {
     it.effect("viewers cannot create organization posts", () =>
       assertPropertyEffect(memberWithLevel("VIEWER"), ({ session, orgId }) =>
         Effect.gen(function* () {
-          const post = CorePostMetadata.makeUnsafe({
+          const post = CorePostMetadata.make({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: orgId as ProfileId,
             publishedAt: TEST_PUBLISHED_AT,
@@ -720,7 +720,7 @@ describe("Policies", () => {
           const orgId = yield* IdGen.make(OrganizationId)
           const sessionWithMembership = sessionWithOrgMembership(session, orgId, "EDITOR")
 
-          const ownPost = CorePostMetadata.makeUnsafe({
+          const ownPost = CorePostMetadata.make({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: session.personId as ProfileId,
             publishedAt: TEST_PUBLISHED_AT,
@@ -732,7 +732,7 @@ describe("Policies", () => {
           )
           if (canEditOwn === false) return false
 
-          const orgPost = CorePostMetadata.makeUnsafe({
+          const orgPost = CorePostMetadata.make({
             handle: "test" as CorePostMetadata["handle"],
             ownerProfileId: orgId as ProfileId,
             publishedAt: TEST_PUBLISHED_AT,
@@ -754,7 +754,7 @@ describe("Policies", () => {
           const org1 = yield* IdGen.make(OrganizationId)
           const org2 = yield* IdGen.make(OrganizationId)
 
-          const sessionWithMemberships = AccountSession.makeUnsafe({
+          const sessionWithMemberships = AccountSession.make({
             ...session,
             memberships: [
               { accessLevel: "MANAGER", organizationId: org1 },

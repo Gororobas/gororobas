@@ -13,7 +13,7 @@ import {
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
-import { Duration, Effect, Option, Schema } from "effect"
+import { DateTime, Duration, Effect, Option, Schema } from "effect"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
 import { SystemUpsertTranslation } from "../posts/post-repository-inputs.js"
@@ -39,7 +39,7 @@ export const PostTranslationWorkflow = Workflow.make({
   success: Schema.Null,
   error: Schema.Unknown, // @TODO: How to type TranslationError | SqlError | ParseError as schemas?
   idempotencyKey: ({ postId, targetLocale, updatedAt }) =>
-    `${postId}:${targetLocale}:${updatedAt.epochMillis}`,
+    `${postId}:${targetLocale}:${DateTime.toEpochMillis(updatedAt)}`,
 })
 
 export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
@@ -55,7 +55,7 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
       }),
     })
 
-    const commit = SystemCommit.makeUnsafe({
+    const commit = SystemCommit.make({
       workflowName: "PostTranslationWorkflow",
       workflowVersion: WORKFLOW_VERSION,
       model: `translation/${translationResult.serviceId}`,
@@ -85,7 +85,7 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
 
             return yield* repository
               .updatePost(
-                SystemUpsertTranslation.makeUnsafe({
+                SystemUpsertTranslation.make({
                   commit,
                   expectedCurrentCrdtFrontier: currentPost.currentCrdtFrontier,
                   postId: payload.postId,

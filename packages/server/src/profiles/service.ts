@@ -1,11 +1,11 @@
 import { Policies, ProfileId, ProfileNotFoundError, ProfileRowUpdate } from "@gororobas/domain"
 import { HandleTakenError } from "@gororobas/domain/common/errors"
-import { DateTime, Effect, Option, ServiceMap } from "effect"
+import { DateTime, Effect, Option, Context } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
 import { ProfilesRepository } from "./repository.js"
 
-export class ProfileService extends ServiceMap.Service<ProfileService>()("ProfileService", {
+export class ProfileService extends Context.Service<ProfileService>()("ProfileService", {
   make: Effect.gen(function* () {
     const repo = yield* ProfilesRepository
     const sql = yield* SqlClient.SqlClient

@@ -9,8 +9,11 @@ import {
 } from "@gororobas/domain"
 import { DateTime, Effect, Layer, Option, Schema } from "effect"
 
+import {
+  HumanUpdatePtContent,
+  SystemUpsertTranslation,
+} from "../../src/comments/comment-repository-inputs.js"
 import { CommentsRepository } from "../../src/comments/repository.js"
-import { HumanUpdatePtContent, SystemUpsertTranslation } from "../../src/comments/comment-repository-inputs.js"
 import { PostsRepository } from "../../src/posts/repository.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
 import { insertPersonWithDependencies, TestLayer } from "../test-helpers.js"
@@ -152,7 +155,7 @@ describe("CommentsRepository", () => {
       expect(Option.isSome(beforeUpdate)).toBe(true)
 
       yield* comments.updateComment(
-        HumanUpdatePtContent.makeUnsafe({
+        HumanUpdatePtContent.make({
           authorId: person.id,
           commentId,
           content: makeDocument("Depois"),
@@ -217,7 +220,7 @@ describe("CommentsRepository", () => {
       const expectedCurrentCrdtFrontier = Option.getOrThrow(row).currentCrdtFrontier
 
       yield* comments.updateComment(
-        HumanUpdatePtContent.makeUnsafe({
+        HumanUpdatePtContent.make({
           authorId: person.id,
           commentId,
           content: makeDocument("Versao 2"),
@@ -226,7 +229,7 @@ describe("CommentsRepository", () => {
       )
 
       const staleUpdate = comments.updateComment(
-        HumanUpdatePtContent.makeUnsafe({
+        HumanUpdatePtContent.make({
           authorId: person.id,
           commentId,
           content: makeDocument("Versao 3"),
@@ -288,9 +291,9 @@ describe("CommentsRepository", () => {
       expect(Option.isSome(beforeTranslation)).toBe(true)
 
       yield* comments.updateComment(
-        SystemUpsertTranslation.makeUnsafe({
+        SystemUpsertTranslation.make({
           commentId,
-          commit: SystemCommit.makeUnsafe({
+          commit: SystemCommit.make({
             model: "translation/test",
             workflowName: "CommentTranslationWorkflow",
             workflowVersion: "test",

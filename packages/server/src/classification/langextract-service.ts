@@ -1,4 +1,4 @@
-import { Config, Data, Duration, Effect, Schedule, Semaphore, ServiceMap } from "effect"
+import { Config, Data, Duration, Effect, Schedule, Semaphore, Context } from "effect"
 import { type AnnotatedDocument, type ExampleData, extract, FormatType } from "langextract"
 
 export class LangExtractError extends Data.TaggedError("LangExtractError")<{
@@ -8,7 +8,7 @@ export class LangExtractError extends Data.TaggedError("LangExtractError")<{
   prompt: string
 }> {}
 
-export class LangExtractService extends ServiceMap.Service<LangExtractService>()(
+export class LangExtractService extends Context.Service<LangExtractService>()(
   "LangExtractService",
   {
     make: Effect.gen(function* () {
@@ -58,9 +58,7 @@ export class LangExtractService extends ServiceMap.Service<LangExtractService>()
             }),
         }).pipe(
           Effect.retry(
-            Schedule.exponential(Duration.millis(100), 2).pipe(
-              Schedule.compose(Schedule.recurs(3)),
-            ),
+            Schedule.exponential(Duration.millis(100), 2).pipe(Schedule.both(Schedule.recurs(3))),
           ),
           semaphore.withPermits(1),
         )

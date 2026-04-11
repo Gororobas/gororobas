@@ -11,12 +11,12 @@
     "migrate": "tsx src/index.ts"
   },
   "dependencies": {
-    "@effect/sql-sqlite-bun": "^4.0.0-beta.28",
+    "@effect/sql-sqlite-bun": "4.0.0-beta.47",
     "@gororobas/domain": "workspace:^",
     "@gororobas/server": "workspace:^",
     "better-auth": "1.5.3",
     "effect": "catalog:",
-    "json-diff-ts": "^2.0.0",
+    "json-diff-ts": "^2.2.1",
     "loro-crdt": "catalog:",
     "loro-mirror": "catalog:"
   },

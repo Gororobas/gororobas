@@ -15,7 +15,7 @@ import {
   SourceResourceData,
   TimestampColumn,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, Schema, ServiceMap } from "effect"
+import { DateTime, Effect, Option, Schema, Context } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -29,7 +29,7 @@ import {
   type EvaluateResourceRevisionInput,
 } from "./resource-repository-inputs.js"
 
-export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>()(
+export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
   "ResourcesRepository",
   {
     make: Effect.gen(function* () {
@@ -147,7 +147,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
           const translationRows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
             if (!localeData || !Schema.is(Locale)(locale)) return []
 
-            return ResourceTranslationRow.makeUnsafe({
+            return ResourceTranslationRow.make({
               resourceId: input.resourceId,
               locale,
               title: localeData.title,
@@ -173,7 +173,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
           const now = yield* DateTime.now
 
           yield* upsertResourceRow(
-            ResourceRow.makeUnsafe({
+            ResourceRow.make({
               id: input.resourceId,
               currentCrdtFrontier: input.currentCrdtFrontier,
               handle: input.sourceData.metadata.handle,
@@ -209,7 +209,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
         const esRow = input.translationRows.find((row) => row.locale === "es")
         const ptRow = input.translationRows.find((row) => row.locale === "pt")
 
-        return SourceResourceData.makeUnsafe({
+        return SourceResourceData.make({
           locales: {
             en: enRow ? toLocalizedData(enRow) : undefined,
             es: esRow ? toLocalizedData(esRow) : undefined,
@@ -242,7 +242,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
             insertInitialCommit: Effect.gen(function* () {
               const revisionId = yield* IdGen.make(ResourceRevisionId)
               yield* insertResourceRevisionRow(
-                ResourceRevisionRow.makeUnsafe({
+                ResourceRevisionRow.make({
                   id: revisionId,
                   resourceId,
                   createdById: input.createdById,
@@ -280,7 +280,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
             translationRows: translations,
           })
 
-          const nextSourceData = SourceResourceData.makeUnsafe({
+          const nextSourceData = SourceResourceData.make({
             ...currentSourceData,
             locales: {
               ...currentSourceData.locales,
@@ -311,7 +311,7 @@ export class ResourcesRepository extends ServiceMap.Service<ResourcesRepository>
           const now = yield* DateTime.now
 
           yield* insertResourceRevisionRow(
-            ResourceRevisionRow.makeUnsafe({
+            ResourceRevisionRow.make({
               id: revisionId,
               resourceId: input.resourceId,
               createdById: input.createdById,

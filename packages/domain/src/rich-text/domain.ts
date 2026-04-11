@@ -47,7 +47,7 @@ export const TiptapDocument = Schema.Struct({
 })
 export type TiptapDocument = typeof TiptapDocument.Type
 
-export const EMPTY_TIPTAP_DOCUMENT: TiptapDocument = TiptapDocument.makeUnsafe({
+export const EMPTY_TIPTAP_DOCUMENT: TiptapDocument = TiptapDocument.make({
   content: [],
   type: "doc",
   version: 1,

@@ -1,5 +1,5 @@
 import { DurableStreamTestServer } from "@durable-streams/server"
-import { Effect, Layer, Schema, ServiceMap } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 
 export class DurableStreamServerError extends Schema.TaggedErrorClass<DurableStreamServerError>()(
   "DurableStreamServerError",
@@ -17,11 +17,10 @@ export interface DurableStreamsService {
   readonly server: DurableStreamTestServer
 }
 
-export const DurableStreamsService =
-  ServiceMap.Service<DurableStreamsService>("DurableStreamsService")
+export const DurableStreamsService = Context.Service<DurableStreamsService>("DurableStreamsService")
 
 export const DurableStreamsServiceLive = (config: DurableStreamsConfig) =>
-  Layer.effectServices(
+  Layer.effect(DurableStreamsService)(
     Effect.gen(function* () {
       const server = new DurableStreamTestServer({
         dataDir: config.dataDir,
@@ -49,6 +48,6 @@ export const DurableStreamsServiceLive = (config: DurableStreamsConfig) =>
         ),
       )
 
-      return ServiceMap.make(DurableStreamsService, { internalUrl, server })
+      return { internalUrl, server }
     }),
   )

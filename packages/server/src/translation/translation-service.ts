@@ -1,5 +1,5 @@
 import { Locale } from "@gororobas/domain"
-import { Effect, Schema, ServiceMap } from "effect"
+import { Effect, Schema, Context } from "effect"
 
 export const CODE_TO_LANG: Record<Locale, string> = {
   en: "English",
@@ -20,4 +20,4 @@ export interface TranslationServiceApi {
   getServiceId(): string
 }
 
-export const TranslationService = ServiceMap.Service<TranslationServiceApi>("TranslationService")
+export const TranslationService = Context.Service<TranslationServiceApi>("TranslationService")

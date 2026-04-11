@@ -2,18 +2,20 @@ packages:
   - packages/*
 
 catalog:
-  "@effect/platform-bun": ^4.0.0-beta.29
-  "@effect/vitest": 4.0.0-beta.29
-  "@tiptap/core": latest
-  "@tiptap/html": latest
-  "@tiptap/pm": latest
-  "@tiptap/starter-kit": latest
-  effect: 4.0.0-beta.29
+  "@effect/opentelemetry": "4.0.0-beta.47"
+  "@effect/platform-bun": 4.0.0-beta.47
+  "@effect/sql-sqlite-bun": "4.0.0-beta.47"
+  "@effect/vitest": 4.0.0-beta.47
+  "@tiptap/core": ^3.22.3
+  "@tiptap/html": ^3.22.3
+  "@tiptap/pm": ^3.22.3
+  "@tiptap/starter-kit": ^3.22.3
+  effect: 4.0.0-beta.47
   glob: ^13.0.6
-  loro-crdt: ^1.10.6
+  loro-crdt: ^1.10.8
   loro-mirror: ^1.2.1
   typescript: ^5.9.3
   uuid: ^13.0.0
-  vitest: ^4.0.18
+  vitest: ^4.1.4
 
 nodeLinker: hoisted

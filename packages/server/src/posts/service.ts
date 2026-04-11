@@ -24,7 +24,7 @@ import {
   ProfileId,
   UpdateNoteData,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, Schema, ServiceMap } from "effect"
+import { DateTime, Effect, Option, Schema, Context } from "effect"
 
 import { HumanUpdatePtContent } from "./post-repository-inputs.js"
 import { PostsRepository } from "./repository.js"
@@ -52,7 +52,7 @@ export const UpdatePostInput = Schema.Struct({
 })
 export type UpdatePostInput = typeof UpdatePostInput.Type
 
-export class PostsService extends ServiceMap.Service<PostsService>()("PostsService", {
+export class PostsService extends Context.Service<PostsService>()("PostsService", {
   make: Effect.gen(function* () {
     const repo = yield* PostsRepository
 
@@ -82,7 +82,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         yield* Policies.posts.canCreate(input)
 
         const { locale } = input
-        const localeData = PostLocalizedData.makeUnsafe({
+        const localeData = PostLocalizedData.make({
           content: input.content,
           originalLocale: locale,
           translatedAtCrdtFrontier: null,
@@ -92,7 +92,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         const handle = contentToHandle(input.content)
 
         const now = yield* DateTime.now
-        const coreMetadata = CorePostMetadata.makeUnsafe({
+        const coreMetadata = CorePostMetadata.make({
           handle,
           ownerProfileId: input.ownerProfileId,
           publishedAt: now,
@@ -101,7 +101,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
 
         const sourceData: NoteSourceData | EventSourceData =
           input.kind === "NOTE"
-            ? NoteSourceData.makeUnsafe({
+            ? NoteSourceData.make({
                 locales: {
                   [locale]: localeData,
                 },
@@ -110,7 +110,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
                   kind: "NOTE",
                 },
               })
-            : EventSourceData.makeUnsafe({
+            : EventSourceData.make({
                 locales: {
                   [locale]: localeData,
                 },
@@ -138,7 +138,7 @@ export class PostsService extends ServiceMap.Service<PostsService>()("PostsServi
         yield* Policies.posts.canEdit(yield* getPostById(input.postId))
 
         yield* repo.updatePost(
-          HumanUpdatePtContent.makeUnsafe({
+          HumanUpdatePtContent.make({
             authorId: session.personId,
             content: input.content,
             expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,

@@ -8,13 +8,13 @@ import {
   ResourceId,
   SourceCommentData,
 } from "@gororobas/domain"
-import { Effect, Option, ServiceMap } from "effect"
+import { Effect, Option, Context } from "effect"
 
 import { PostsRepository } from "../posts/repository.js"
 import { HumanUpdatePtContent } from "./comment-repository-inputs.js"
 import { CommentsRepository } from "./repository.js"
 
-export class CommentsService extends ServiceMap.Service<CommentsService>()("CommentsService", {
+export class CommentsService extends Context.Service<CommentsService>()("CommentsService", {
   make: Effect.gen(function* () {
     const commentsRepository = yield* CommentsRepository
     const postsRepository = yield* PostsRepository
@@ -107,7 +107,7 @@ export class CommentsService extends ServiceMap.Service<CommentsService>()("Comm
         const session = yield* Policies.comments.canEdit(row.ownerProfileId)
 
         yield* commentsRepository.updateComment(
-          HumanUpdatePtContent.makeUnsafe({
+          HumanUpdatePtContent.make({
             authorId: session.personId,
             commentId: input.commentId,
             content: input.content,

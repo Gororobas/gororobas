@@ -1,4 +1,4 @@
-import { Effect, Layer, ServiceMap } from "effect"
+import { Effect, Layer, Context } from "effect"
 
 import { matchPattern } from "../../parser/pattern-matcher.js"
 import type {
@@ -18,7 +18,7 @@ import type {
   FeatureStep,
 } from "../types.js"
 
-export class StepMatcher extends ServiceMap.Service<
+export class StepMatcher extends Context.Service<
   StepMatcher,
   {
     checkFeature: (

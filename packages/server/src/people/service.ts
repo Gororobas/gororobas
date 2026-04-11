@@ -11,14 +11,14 @@ import {
   Policies,
   type PlatformAccessLevel,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, ServiceMap } from "effect"
+import { DateTime, Effect, Option, Context } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
 import { OrganizationsRepository } from "../organizations/repository.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PeopleRepository } from "./repository.js"
 
-export class PeopleService extends ServiceMap.Service<PeopleService>()("PeopleService", {
+export class PeopleService extends Context.Service<PeopleService>()("PeopleService", {
   make: Effect.gen(function* () {
     const repo = yield* PeopleRepository
     const organizationsRepository = yield* OrganizationsRepository
@@ -67,7 +67,7 @@ export class PeopleService extends ServiceMap.Service<PeopleService>()("PeopleSe
         // 1.1. Prohibit if these orgs have 2+ members
         if (orgsWithOtherMembers.length > 0) {
           return yield* new AccountDeletionError({
-            reason: AccountDeletionErrorReason.makeUnsafe({
+            reason: AccountDeletionErrorReason.make({
               organizations: orgsWithOtherMembers.map((o) => o.organizationId),
             }),
           })
@@ -75,7 +75,7 @@ export class PeopleService extends ServiceMap.Service<PeopleService>()("PeopleSe
 
         // 1.2. Ask for confirmation if they have a single member (the user to be deleted)
         if (confirmation?.deleteOrgs !== true && orgsWhereSoleManager.length > 0) {
-          return AccountDeletionResultConfirmOrgDeletion.makeUnsafe({
+          return AccountDeletionResultConfirmOrgDeletion.make({
             organizations: orgsWhereSoleManager.map((o) => o.organizationId),
           })
         }
@@ -94,7 +94,7 @@ export class PeopleService extends ServiceMap.Service<PeopleService>()("PeopleSe
               (org) =>
                 profilesRepo.fetchProfileContentCounts(org.organizationId).pipe(
                   Effect.map((contentCount) =>
-                    OrganizationContentCount.makeUnsafe({
+                    OrganizationContentCount.make({
                       organizationId: org.organizationId,
                       contentCount,
                     }),
@@ -106,7 +106,7 @@ export class PeopleService extends ServiceMap.Service<PeopleService>()("PeopleSe
           { concurrency: "unbounded" },
         )
         if (confirmation?.deleteContent !== true) {
-          return AccountDeletionResultConfirmContentDeletion.makeUnsafe({
+          return AccountDeletionResultConfirmContentDeletion.make({
             personalContentCount,
             organizationContent,
           })
@@ -128,7 +128,7 @@ export class PeopleService extends ServiceMap.Service<PeopleService>()("PeopleSe
           { concurrency: "unbounded" },
         )
 
-        return AccountDeletionResultSuccess.makeUnsafe({})
+        return AccountDeletionResultSuccess.make({})
       }).pipe(sql.withTransaction)
 
     return {

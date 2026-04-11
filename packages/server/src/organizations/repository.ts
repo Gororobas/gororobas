@@ -5,7 +5,7 @@ import {
   PersonId,
   SoleManagerOrganizationMetadata,
 } from "@gororobas/domain"
-import { Effect, Schema, ServiceMap } from "effect"
+import { Effect, Schema, Context } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 const MembershipKey = Schema.Struct({
@@ -13,7 +13,7 @@ const MembershipKey = Schema.Struct({
   personId: PersonId,
 })
 
-export class OrganizationsRepository extends ServiceMap.Service<OrganizationsRepository>()(
+export class OrganizationsRepository extends Context.Service<OrganizationsRepository>()(
   "OrganizationsRepository",
   {
     make: Effect.gen(function* () {

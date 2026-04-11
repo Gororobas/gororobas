@@ -1,8 +1,8 @@
 import { PersonId, PersonRow } from "@gororobas/domain"
-import { Effect, ServiceMap } from "effect"
+import { Effect, Context } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-export class PeopleRepository extends ServiceMap.Service<PeopleRepository>()("PeopleRepository", {
+export class PeopleRepository extends Context.Service<PeopleRepository>()("PeopleRepository", {
   make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 

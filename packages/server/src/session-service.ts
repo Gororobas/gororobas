@@ -82,7 +82,7 @@ export const resolveSession = Effect.gen(function* () {
   const account: AccountSession = {
     accessLevel: person.accessLevel,
     memberships: memberships.map((m) =>
-      OrganizationMembershipSession.makeUnsafe({
+      OrganizationMembershipSession.make({
         accessLevel: m.accessLevel,
         organizationId: m.organizationId,
       }),

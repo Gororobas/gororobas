@@ -31,7 +31,7 @@ const makeResourceSourceData = (input: {
   handle: string
   url: string
 }): SourceResourceData =>
-  SourceResourceData.makeUnsafe({
+  SourceResourceData.make({
     locales: {
       pt: {
         title: input.title,
@@ -62,7 +62,7 @@ const withNormalizedResourceData = (input: {
     translationSource: "ORIGINAL" as const,
   }
 
-  return SourceResourceData.makeUnsafe({
+  return SourceResourceData.make({
     ...input.sourceData,
     metadata: {
       ...input.sourceData.metadata,

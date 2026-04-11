@@ -1,4 +1,4 @@
-import { Effect, Layer, ServiceMap } from "effect"
+import { Effect, Layer, Context } from "effect"
 
 import type {
   CheckResult,
@@ -9,7 +9,7 @@ import type {
   ScenarioResult,
 } from "../types.js"
 
-export class Reporter extends ServiceMap.Service<
+export class Reporter extends Context.Service<
   Reporter,
   {
     report: (result: CheckResult) => Effect.Effect<void>

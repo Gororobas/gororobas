@@ -1,5 +1,5 @@
 import { Locale } from "@gororobas/domain"
-import { Effect, ServiceMap } from "effect"
+import { Effect, Context } from "effect"
 import ollama from "ollama"
 
 import { CODE_TO_LANG, TranslationError, TranslationService } from "./translation-service.js"
@@ -19,7 +19,7 @@ function generatePrompt({
   ${text}`
 }
 
-export const TranslationServiceOllama = ServiceMap.make(TranslationService, {
+export const TranslationServiceOllama = Context.make(TranslationService, {
   getServiceId: () => "ollama",
   translate: Effect.fn("TranslationServiceOllama.translate")(function* (
     text: string,
