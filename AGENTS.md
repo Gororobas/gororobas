@@ -6,6 +6,8 @@ This project uses pnpm.
 
 Do not commit or modify the git history on your own.
 
+This project uses a CLI ticket system for task and issue management. Run `tk help` when you need to use it.
+
 ## Dependency installation
 
 Use **pnpm** for dependency installation and updates.
@@ -93,6 +95,6 @@ Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/
 
 **MANDATORY WORKFLOW:**
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
+1. **File issues for remaining work** - Create issues for anything that needs follow-up. Refer to `tk help` if needed
 2. **Run quality gates** (if code changed) - Tests, linters, builds
 3. **Update issue status** - Close finished work, update in-progress items
