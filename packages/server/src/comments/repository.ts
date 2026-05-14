@@ -21,12 +21,12 @@ import {
   TimestampColumn,
   tiptapToText,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, Schema, Context } from "effect"
+import { Context, DateTime, Effect, Option, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
-  persistCrdtAggregateCreation,
-  persistCrdtAggregateUpdate,
+  persistCrdtDocumentCreation,
+  persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { createCommentSnapshot, evolveCommentSnapshot } from "./comment-crdt-orchestration.js"
 import { type CreateCommentInput, type UpdateCommentInput } from "./comment-repository-inputs.js"
@@ -56,6 +56,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           sql`SELECT * FROM comment_translations WHERE comment_id = ${commentId}`,
       })
 
+      /** @todo refactor to SqlSchema.void + `sql.insert()` */
       const insertCommentCrdtRow = (input: {
         createdAt: TimestampColumn
         id: CommentId
@@ -69,34 +70,20 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
       }) =>
         sql`INSERT INTO comment_crdts (id, post_id, resource_id, parent_comment_id, crdt_snapshot, owner_profile_id, moderation_status, created_at, updated_at) VALUES (${input.id}, ${input.postId}, ${input.resourceId}, ${input.parentCommentId}, ${input.crdtSnapshot}, ${input.ownerProfileId}, ${input.moderationStatus}, ${DateTime.formatIso(input.createdAt)}, ${DateTime.formatIso(input.updatedAt)})`
 
-      const updateCommentCrdtRowWithExpectedFrontier = (input: {
-        id: CommentId
-        crdtSnapshot: LoroDocSnapshot
-        expectedCurrentCrdtFrontier: LoroDocFrontier
-        nextCurrentCrdtFrontier: LoroDocFrontier
-        updatedAt: TimestampColumn
-      }) =>
-        Effect.gen(function* () {
-          yield* sql`
-            UPDATE comment_crdts
-            SET crdt_snapshot = ${input.crdtSnapshot}, updated_at = ${DateTime.formatIso(input.updatedAt)}
-            WHERE id = ${input.id}
-          `
-
-          yield* sql`
-            UPDATE comments
-            SET current_crdt_frontier = ${JSON.stringify(input.nextCurrentCrdtFrontier)}
-            WHERE id = ${input.id} AND current_crdt_frontier = ${JSON.stringify(input.expectedCurrentCrdtFrontier)}
-          `
-
-          const { count } = yield* SqlSchema.findOne({
-            Request: Schema.Null,
-            Result: Schema.Struct({ count: Schema.Number }),
-            execute: () => sql`SELECT changes() as count`,
-          })(null)
-
-          return count === 1
-        })
+      const updateCommentCrdtRow = SqlSchema.void({
+        Request: CommentCrdtRow.mapFields(
+          Struct.omit([
+            "createdAt",
+            "moderationStatus",
+            "ownerProfileId",
+            "parentCommentId",
+            "postId",
+            "resourceId",
+          ]),
+        ),
+        execute: ({ id, ...update }) =>
+          sql`UPDATE comment_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+      })
 
       const insertCommentCommitRow = SqlSchema.void({
         Request: CommentCommitRow,
@@ -274,7 +261,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           const now = yield* DateTime.now
           const created = createCommentSnapshot(input.sourceData)
 
-          return yield* persistCrdtAggregateCreation({
+          yield* persistCrdtDocumentCreation({
             insertCrdt: insertCommentCrdtRow({
               createdAt: now,
               id: commentId,
@@ -286,7 +273,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               resourceId: input.resourceId,
               updatedAt: now,
             }),
-            insertInitialCommit: insertCommentCommit({
+            insertCommitOrRevision: insertCommentCommit({
               commentId,
               commit: HumanCommit.make({ personId: input.createdById }),
               crdtUpdate: created.initialCrdtUpdate,
@@ -302,9 +289,9 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               resourceId: input.resourceId,
               sourceData: created.sourceData,
             }),
-            result: commentId,
-            sql,
           })
+
+          return commentId
         })
 
       const updateComment = (input: UpdateCommentInput) =>
@@ -326,6 +313,13 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               }),
             ),
           )
+
+          if (
+            JSON.stringify(row.currentCrdtFrontier) !==
+            JSON.stringify(input.expectedCurrentCrdtFrontier)
+          ) {
+            return yield* new CommentConcurrentUpdateError({ id: input.commentId })
+          }
 
           const translationRows = yield* listCommentTranslationRowsByCommentId(input.commentId)
           const currentSourceData = buildSourceDataFromMaterializedRows(translationRows)
@@ -372,15 +366,13 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
 
           const now = yield* DateTime.now
 
-          yield* persistCrdtAggregateUpdate({
-            ensureSnapshotUpdated: updateCommentCrdtRowWithExpectedFrontier({
+          yield* persistCrdtDocumentUpdate({
+            updateCrdtRow: updateCommentCrdtRow({
               crdtSnapshot: evolved.nextSnapshot,
-              expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
               id: input.commentId,
-              nextCurrentCrdtFrontier: evolved.nextFrontier,
               updatedAt: now,
             }),
-            insertCommit: insertCommentCommit({
+            insertCommitOrUpdateRevision: insertCommentCommit({
               commentId: input.commentId,
               commit: evolved.commit,
               crdtUpdate: evolved.crdtUpdate,
@@ -396,8 +388,6 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               resourceId: row.resourceId,
               sourceData: evolved.sourceData,
             }),
-            onConflict: Effect.fail(new CommentConcurrentUpdateError({ id: input.commentId })),
-            sql,
           })
         })
 

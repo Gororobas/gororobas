@@ -40,7 +40,7 @@ export const evolveCommentSnapshot = (params: {
       commit: params.commit,
       initialDoc: currentDoc,
       newData: sourceCommentDataToCrdtStorage(params.nextSourceData),
-      schema: CommentSourceDataStorageLoro,
+      loroMirrorSchema: CommentSourceDataStorageLoro,
     })
 
     return {

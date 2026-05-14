@@ -4,7 +4,6 @@ import { Schema } from "effect"
  */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
-import { Locale } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { ResourceId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
@@ -42,7 +41,6 @@ export class ResourcesApiGroup extends HttpApiGroup.make("resources")
       params: Schema.Struct({ id: ResourceId }),
       payload: Schema.Struct({
         crdtUpdate: LoroDocUpdate,
-        locale: Schema.optional(Locale),
       }),
     }),
   )

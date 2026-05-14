@@ -12,6 +12,7 @@ import {
   type PostClassification,
   PostCommitId,
   PostCommitRow,
+  PostCrdtRow,
   PostConcurrentUpdateError,
   PostId,
   PostNotFoundError,
@@ -26,12 +27,12 @@ import {
   tiptapToText,
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
-import { DateTime, Effect, Option, Schema, Context } from "effect"
+import { Context, DateTime, Effect, Option, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
-  persistCrdtAggregateCreation,
-  persistCrdtAggregateUpdate,
+  persistCrdtDocumentCreation,
+  persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { createPostSnapshot, evolvePostSnapshot } from "./post-crdt-orchestration.js"
 import {
@@ -86,34 +87,13 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
     }) =>
       sql`INSERT INTO post_crdts (id, crdt_snapshot, owner_profile_id, created_at, updated_at) VALUES (${input.id}, ${input.crdtSnapshot}, ${input.ownerProfileId}, ${DateTime.formatIso(input.createdAt)}, ${DateTime.formatIso(input.updatedAt)})`
 
-    const updatePostCrdtRowWithExpectedFrontier = (input: {
-      id: PostId
-      crdtSnapshot: LoroDocSnapshot
-      expectedCurrentCrdtFrontier: LoroDocFrontier
-      nextCurrentCrdtFrontier: LoroDocFrontier
-      updatedAt: TimestampColumn
-    }) =>
-      Effect.gen(function* () {
-        yield* sql`
-          UPDATE post_crdts
-          SET crdt_snapshot = ${input.crdtSnapshot}, updated_at = ${DateTime.formatIso(input.updatedAt)}
-          WHERE id = ${input.id}
-        `
-
-        yield* sql`
-          UPDATE posts
-          SET current_crdt_frontier = ${JSON.stringify(input.nextCurrentCrdtFrontier)}
-          WHERE id = ${input.id} AND current_crdt_frontier = ${JSON.stringify(input.expectedCurrentCrdtFrontier)}
-        `
-
-        const { count } = yield* SqlSchema.findOne({
-          Request: Schema.Null,
-          Result: Schema.Struct({ count: Schema.Number }),
-          execute: () => sql`SELECT changes() as count`,
-        })(null)
-
-        return count === 1
-      })
+    const updatePostCrdtRow = SqlSchema.void({
+      Request: PostCrdtRow.mapFields(
+        Struct.omit(["classification", "createdAt", "ownerProfileId"]),
+      ),
+      execute: ({ id, ...update }) =>
+        sql`UPDATE post_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+    })
 
     const insertPostCommit = (input: {
       commit: CrdtCommit
@@ -390,7 +370,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
         const now = yield* DateTime.now
         const created = createPostSnapshot(input.sourceData)
 
-        return yield* persistCrdtAggregateCreation({
+        yield* persistCrdtDocumentCreation({
           insertCrdt: insertPostCrdtRow({
             createdAt: now,
             id: postId,
@@ -398,7 +378,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
             ownerProfileId: input.sourceData.metadata.ownerProfileId,
             updatedAt: now,
           }),
-          insertInitialCommit: insertPostCommit({
+          insertCommitOrRevision: insertPostCommit({
             commit: HumanCommit.make({ personId: input.createdById }),
             crdtUpdate: created.initialCrdtUpdate,
             fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
@@ -409,9 +389,9 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
             postId,
             sourceData: created.sourceData,
           }),
-          result: postId,
-          sql,
         })
+
+        return postId
       })
 
     const updatePost = (input: UpdatePostInputType) =>
@@ -432,6 +412,14 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
             }),
           ),
         )
+
+        if (
+          JSON.stringify(postRow.currentCrdtFrontier) !==
+          JSON.stringify(input.expectedCurrentCrdtFrontier)
+        ) {
+          return yield* new PostConcurrentUpdateError({ id: input.postId })
+        }
+
         const translationRows = yield* listPostTranslationRowsByPostId(input.postId)
         const currentSourceData = buildSourceDataFromMaterializedRows({
           postRow,
@@ -479,15 +467,13 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
         const now = yield* DateTime.now
 
-        yield* persistCrdtAggregateUpdate({
-          ensureSnapshotUpdated: updatePostCrdtRowWithExpectedFrontier({
+        yield* persistCrdtDocumentUpdate({
+          updateCrdtRow: updatePostCrdtRow({
             crdtSnapshot: evolved.nextSnapshot,
-            expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
             id: input.postId,
-            nextCurrentCrdtFrontier: evolved.nextFrontier,
             updatedAt: now,
           }),
-          insertCommit: insertPostCommit({
+          insertCommitOrUpdateRevision: insertPostCommit({
             commit: evolved.commit,
             crdtUpdate: evolved.crdtUpdate,
             fromCrdtFrontier: evolved.fromCrdtFrontier,
@@ -498,8 +484,6 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
             postId: input.postId,
             sourceData: evolved.sourceData,
           }),
-          onConflict: Effect.fail(new PostConcurrentUpdateError({ id: input.postId })),
-          sql,
         })
       })
 

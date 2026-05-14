@@ -1,14 +1,20 @@
 import {
   LoroDocFrontier,
+  LoroDocUpdate,
   PersonId,
   ResourceId,
   ResourceRevisionId,
   RevisionEvaluation,
   SourceResourceData,
-  TiptapDocument,
+  createLoroDocFromData,
+  sourceResourceDataToCrdtStorage,
+  ResourceSourceDataStorageLoro,
+  loroDocToUpdate,
+  loroDocToSnapshot,
 } from "@gororobas/domain"
 import { Schema } from "effect"
 
+/** @todo shouldn't these schemas live in resources/domain? */
 export const CreateResourceInput = Schema.Struct({
   createdById: PersonId,
   sourceData: SourceResourceData,
@@ -16,12 +22,10 @@ export const CreateResourceInput = Schema.Struct({
 export type CreateResourceInput = typeof CreateResourceInput.Type
 
 export const CreateResourceRevisionInput = Schema.Struct({
+  crdtUpdate: LoroDocUpdate,
   createdById: PersonId,
   resourceId: ResourceId,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
-  title: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
-  description: Schema.optional(Schema.NullOr(TiptapDocument)),
-  creditLine: Schema.optional(Schema.NullOr(Schema.String)),
 })
 export type CreateResourceRevisionInput = typeof CreateResourceRevisionInput.Type
 
@@ -31,3 +35,17 @@ export const EvaluateResourceRevisionInput = Schema.Struct({
   evaluation: RevisionEvaluation,
 })
 export type EvaluateResourceRevisionInput = typeof EvaluateResourceRevisionInput.Type
+
+export const createResourceSnapshot = (sourceData: SourceResourceData) => {
+  const sourceDoc = createLoroDocFromData(
+    sourceResourceDataToCrdtStorage(sourceData),
+    ResourceSourceDataStorageLoro,
+  )
+
+  return {
+    currentCrdtFrontier: LoroDocFrontier.make(sourceDoc.frontiers()),
+    crdtSnapshot: loroDocToSnapshot(sourceDoc),
+    initialCrdtUpdate: loroDocToUpdate(sourceDoc),
+    sourceData,
+  } as const
+}

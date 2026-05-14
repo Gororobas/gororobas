@@ -1,7 +1,7 @@
 /**
  * Resource domain entity and related types.
  */
-import { Schema } from "effect"
+import { Schema, Struct } from "effect"
 
 import {
   BookmarkState,
@@ -11,10 +11,18 @@ import {
   RevisionEvaluation,
   TranslationSource,
 } from "../common/enums.js"
-import { ImageId, PersonId, ResourceId, ResourceRevisionId, TagId } from "../common/ids.js"
+import {
+  ImageId,
+  PersonId,
+  ResourceId,
+  ResourceRevisionId,
+  TagId,
+  VegetableId,
+} from "../common/ids.js"
 import { Handle, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
+import { TagRow } from "../tags/domain.js"
 
 export const ResourceMetadata = Schema.Struct({
   format: ResourceFormat,
@@ -22,6 +30,8 @@ export const ResourceMetadata = Schema.Struct({
   thumbnailImageId: Schema.NullOr(ImageId),
   url: Schema.Trimmed.check(Schema.isNonEmpty()),
   urlState: ResourceUrlState,
+  relatedTagIds: Schema.Array(TagId),
+  relatedVegetableIds: Schema.Array(VegetableId),
 })
 export type ResourceMetadata = typeof ResourceMetadata.Type
 
@@ -84,12 +94,7 @@ export const ResourcePageData = Schema.Struct({
   handle: Handle,
   id: ResourceId,
   locale: Locale,
-  tags: Schema.Array(
-    Schema.Struct({
-      handle: Schema.Trimmed.check(Schema.isNonEmpty()),
-      id: TagId,
-    }),
-  ),
+  tags: Schema.Array(TagRow.mapFields(Struct.pick(["handle", "id"]))),
   thumbnailImageId: Schema.NullOr(ImageId),
   title: Schema.Trimmed.check(Schema.isNonEmpty()),
   url: Schema.Trimmed.check(Schema.isNonEmpty()),
@@ -186,3 +191,16 @@ export const ResourceTranslationRow = Schema.Struct({
   originalLocale: Locale,
 })
 export type ResourceTranslationRow = typeof ResourceTranslationRow.Type
+
+export const ResourceTagRow = Schema.Struct({
+  resourceId: ResourceId,
+  tagId: TagId,
+})
+export type ResourceTagRow = typeof ResourceTagRow.Type
+
+export const ResourceVegetableRow = Schema.Struct({
+  resourceId: ResourceId,
+  vegetableId: VegetableId,
+  orderIndex: Schema.Int,
+})
+export type ResourceVegetableRow = typeof ResourceVegetableRow.Type

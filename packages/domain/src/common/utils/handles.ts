@@ -1,4 +1,4 @@
-import { customAlphabet } from "nanoid/non-secure"
+import { customAlphabet, urlAlphabet } from "nanoid/non-secure"
 
 import { TiptapDocument } from "../../rich-text/domain.js"
 import { tiptapToText } from "../../rich-text/tiptap-to-text.js"

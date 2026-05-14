@@ -1,39 +1,53 @@
 import { Effect } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
-export const persistCrdtAggregateCreation = <A, R1, E1, R2, E2, R3, E3>(input: {
+/**
+ * API to remind that creating crdt-based documents always requires:
+ *
+ * 1. Persisting the CRDT row
+ * 2. Adding an initial commit or revision
+ * 3. Materializing the indexed tables to query the source data through SQL
+ *
+ * This method is mostly for documentation and doesn't do anything fancy,
+ * it just wraps them in a SQL transaction to ensure operation consistency.
+ */
+export const persistCrdtDocumentCreation = <R1, E1, R2, E2, R3, E3>(input: {
   insertCrdt: Effect.Effect<void, E1, R1>
-  insertInitialCommit: Effect.Effect<void, E2, R2>
+  insertCommitOrRevision: Effect.Effect<void, E2, R2>
   materialize: Effect.Effect<void, E3, R3>
-  result: A
-  sql: SqlClient.SqlClient
 }) =>
-  input.sql.withTransaction(
-    Effect.gen(function* () {
-      yield* input.insertCrdt
-      yield* input.insertInitialCommit
-      yield* input.materialize
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
 
-      return input.result
-    }),
-  )
+    yield* sql.withTransaction(
+      Effect.all([input.insertCrdt, input.insertCommitOrRevision, input.materialize]),
+    )
+  })
 
-export const persistCrdtAggregateUpdate = <R1, E1, R2, E2, R3, E3, R4, E4>(input: {
-  ensureSnapshotUpdated: Effect.Effect<boolean, E1, R1>
-  insertCommit: Effect.Effect<void, E2, R2>
+/**
+ * API to remind that updating crdt-based documents always requires:
+ *
+ * 1. Persisting the CRDT row
+ * 2. Adding a commit or revision
+ * 3. Materializing the indexed tables to query the source data through SQL
+ *
+ * This method is mostly for documentation and doesn't do anything fancy,
+ * it just wraps them in a SQL transaction to ensure operation consistency.
+ */
+export const persistCrdtDocumentUpdate = <R1, E1, R2, E2, R3, E3>(input: {
+  /**
+   * For commits, there's a chance of race conditions where the document changes while the user is submitting
+   * the commit. To to prevent race conditions, the update function should take the document's frontier
+   * into consideration and error out if the frontier changed before the request could complete.
+   */
+  updateCrdtRow: Effect.Effect<void, E1, R1>
+  insertCommitOrUpdateRevision: Effect.Effect<void, E2, R2>
   materialize: Effect.Effect<void, E3, R3>
-  onConflict: Effect.Effect<never, E4, R4>
-  sql: SqlClient.SqlClient
 }) =>
-  input.sql.withTransaction(
-    Effect.gen(function* () {
-      const updated = yield* input.ensureSnapshotUpdated
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
 
-      if (!updated) {
-        yield* input.onConflict
-      }
-
-      yield* input.insertCommit
-      yield* input.materialize
-    }),
-  )
+    yield* sql.withTransaction(
+      Effect.all([input.updateCrdtRow, input.insertCommitOrUpdateRevision, input.materialize]),
+    )
+  })

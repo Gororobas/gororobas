@@ -1,40 +1,60 @@
 import {
+  applyCrdtUpdateWithCommit,
   EMPTY_LORO_DOC_FRONTIER,
   Handle,
+  HumanCommit,
   IdGen,
   Locale,
   LoroDocFrontier,
-  LoroDocUpdate,
+  loroDocToSnapshot,
+  parseCrdtUpdate,
+  ResourceCrdtRow,
   ResourceId,
   ResourceNotFoundError,
+  ResourceRevisionEvaluationWindowExpiredError,
   ResourceRevisionId,
   ResourceRevisionNotFoundError,
   ResourceRevisionRow,
   ResourceRow,
   ResourceTranslationRow,
+  ResourceTagRow,
+  ResourceVegetableRow,
+  snapshotToLoroDoc,
   SourceResourceData,
-  TimestampColumn,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, Schema, Context } from "effect"
+import { Context, DateTime, Duration, Effect, Option, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
-  persistCrdtAggregateCreation,
-  persistCrdtAggregateUpdate,
+  persistCrdtDocumentCreation,
+  persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
-import { createResourceSnapshot } from "./resource-crdt-orchestration.js"
+import { materializeJunctionTable } from "../common/table-materialization.js"
 import {
+  createResourceSnapshot,
   type CreateResourceInput,
   type CreateResourceRevisionInput,
   type EvaluateResourceRevisionInput,
-} from "./resource-repository-inputs.js"
+} from "./resource-repository-helpers.js"
 
+const RESOURCE_REVISION_REEVALUATION_WINDOW = {
+  weeks: 2,
+} as const satisfies Duration.DurationObject
+
+/** @todo potentially extract sql table names into a `RESOURCE_TABLES` object in `resources/domain.ts`? */
 export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
   "ResourcesRepository",
   {
     make: Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
 
+      /**
+       * ======================
+       *         READS
+       * ======================
+       */
+
+      /** */
       const findResourceRowById = SqlSchema.findOneOption({
         Request: ResourceId,
         Result: ResourceRow,
@@ -47,6 +67,25 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
         execute: (handle) => sql`SELECT * FROM resources WHERE handle = ${handle}`,
       })
 
+      const findResourceCrdtSnapshotById = SqlSchema.findOneOption({
+        Request: ResourceId,
+        Result: ResourceCrdtRow.mapFields(Struct.pick(["crdtSnapshot"])),
+        execute: (id) => sql`SELECT crdt_snapshot FROM resource_crdts WHERE id = ${id}`,
+      })
+
+      const findRevisionById = SqlSchema.findOneOption({
+        Request: ResourceRevisionId,
+        Result: ResourceRevisionRow,
+        execute: (id) => sql`SELECT * FROM resource_revisions WHERE id = ${id}`,
+      })
+
+      const listPendingRevisionsByResourceId = SqlSchema.findAll({
+        Request: ResourceId,
+        Result: ResourceRevisionRow,
+        execute: (resourceId) =>
+          sql`SELECT * FROM resource_revisions WHERE resource_id = ${resourceId} AND evaluation = 'PENDING' ORDER BY created_at ASC`,
+      })
+
       const listResourceTranslationRowsByResourceId = SqlSchema.findAll({
         Request: ResourceId,
         Result: ResourceTranslationRow,
@@ -54,19 +93,53 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
           sql`SELECT * FROM resource_translations WHERE resource_id = ${resourceId}`,
       })
 
+      /**
+       * ======================
+       *        WRITES
+       * ======================
+       */
+
+      /** */
       const insertResourceRevisionRow = SqlSchema.void({
         Request: ResourceRevisionRow,
         execute: (row) => sql`INSERT INTO resource_revisions ${sql.insert(row)}`,
       })
 
-      const insertResourceCrdtRow = (input: {
-        createdAt: TimestampColumn
-        id: ResourceId
-        crdtSnapshot: Uint8Array
-        updatedAt: TimestampColumn
-      }) =>
-        sql`INSERT INTO resource_crdts (id, crdt_snapshot, created_at, updated_at) VALUES (${input.id}, ${input.crdtSnapshot}, ${DateTime.formatIso(input.createdAt)}, ${DateTime.formatIso(input.updatedAt)})`
+      const insertResourceCrdtRow = SqlSchema.void({
+        Request: ResourceCrdtRow,
+        execute: (row) => sql`INSERT INTO resource_crdts ${sql.insert(row)}`,
+      })
 
+      const insertResourceTranslationRows = SqlSchema.void({
+        Request: Schema.Array(ResourceTranslationRow),
+        execute: (rows) => sql`INSERT INTO resource_translations ${sql.insert(rows)}`,
+      })
+
+      const insertResourceTagRows = SqlSchema.void({
+        Request: Schema.Array(ResourceTagRow),
+        execute: (rows) => sql`INSERT INTO resource_tags ${sql.insert(rows)}`,
+      })
+
+      const insertResourceVegetableRows = SqlSchema.void({
+        Request: Schema.Array(ResourceVegetableRow),
+        execute: (rows) => sql`INSERT INTO resource_vegetables ${sql.insert(rows)}`,
+      })
+
+      const updateResourceCrdtRow = SqlSchema.void({
+        Request: ResourceCrdtRow.mapFields(Struct.omit(["createdAt"])),
+        execute: ({ id, ...update }) =>
+          sql`UPDATE resource_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+      })
+
+      const updateRevisionEvaluationRow = SqlSchema.void({
+        Request: ResourceRevisionRow.mapFields(
+          Struct.omit(["createdAt", "createdById", "fromCrdtFrontier", "resourceId", "crdtUpdate"]),
+        ),
+        execute: ({ id, ...update }) =>
+          sql`UPDATE resource_revisions SET ${sql.update(update)} WHERE id = ${id}`,
+      })
+
+      /** @todo can this be more concise and better leverage Effect sql? */
       const upsertResourceRow = SqlSchema.void({
         Request: ResourceRow,
         execute: (row) => sql`
@@ -104,64 +177,65 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
         `,
       })
 
-      const updateResourceSnapshot = (input: {
-        id: ResourceId
-        crdtSnapshot: Uint8Array
-        updatedAt: TimestampColumn
-      }) =>
-        sql`UPDATE resource_crdts SET crdt_snapshot = ${input.crdtSnapshot}, updated_at = ${DateTime.formatIso(input.updatedAt)} WHERE id = ${input.id}`
+      /**
+       * ======================
+       *    MATERIALIZATION
+       * ======================
+       */
 
-      const updateResourceFrontierWithExpected = (input: {
-        id: ResourceId
-        expectedCurrentCrdtFrontier: LoroDocFrontier
-        nextCurrentCrdtFrontier: LoroDocFrontier
-      }) =>
-        Effect.gen(function* () {
-          yield* sql`
-            UPDATE resources
-            SET current_crdt_frontier = ${JSON.stringify(input.nextCurrentCrdtFrontier)}
-            WHERE id = ${input.id} AND current_crdt_frontier = ${JSON.stringify(input.expectedCurrentCrdtFrontier)}
-          `
-
-          const { count } = yield* SqlSchema.findOne({
-            Request: Schema.Null,
-            Result: Schema.Struct({ count: Schema.Number }),
-            execute: () => sql`SELECT changes() as count`,
-          })(null)
-
-          return count === 1
-        })
-
-      const insertResourceTranslationRows = SqlSchema.void({
-        Request: Schema.Array(ResourceTranslationRow),
-        execute: (rows) => sql`INSERT INTO resource_translations ${sql.insert(rows)}`,
-      })
-
+      /** */
       const materializeTranslations = (input: {
         resourceId: ResourceId
         locales: SourceResourceData["locales"]
       }) =>
-        Effect.gen(function* () {
-          yield* sql`DELETE FROM resource_translations WHERE resource_id = ${input.resourceId}`
+        materializeJunctionTable({
+          deleteRows: sql`DELETE FROM resource_translations WHERE resource_id = ${input.resourceId}`,
+          insertRows: insertResourceTranslationRows(
+            Object.entries(input.locales).flatMap(([locale, localeData]) => {
+              if (!localeData || !Schema.is(Locale)(locale)) return []
 
-          const translationRows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
-            if (!localeData || !Schema.is(Locale)(locale)) return []
+              return ResourceTranslationRow.make({
+                resourceId: input.resourceId,
+                locale,
+                title: localeData.title,
+                description: localeData.description,
+                creditLine: localeData.creditLine,
+                originalLocale: localeData.originalLocale,
+                translatedAtCrdtFrontier:
+                  localeData.translationSource === "ORIGINAL" ? null : EMPTY_LORO_DOC_FRONTIER,
+                translationSource: localeData.translationSource,
+              })
+            }),
+          ),
+        })
 
-            return ResourceTranslationRow.make({
+      const materializeTags = (input: {
+        resourceId: ResourceId
+        metadata: SourceResourceData["metadata"]
+      }) =>
+        materializeJunctionTable({
+          deleteRows: sql`DELETE FROM resource_tags WHERE resource_id = ${input.resourceId}`,
+          insertRows: insertResourceTagRows(
+            (input.metadata.relatedTagIds || []).map((tagId) => ({
+              tagId,
               resourceId: input.resourceId,
-              locale,
-              title: localeData.title,
-              description: localeData.description,
-              creditLine: localeData.creditLine,
-              originalLocale: localeData.originalLocale,
-              translatedAtCrdtFrontier:
-                localeData.translationSource === "ORIGINAL" ? null : EMPTY_LORO_DOC_FRONTIER,
-              translationSource: localeData.translationSource,
-            })
-          })
+            })),
+          ),
+        })
 
-          if (translationRows.length === 0) return
-          yield* insertResourceTranslationRows(translationRows)
+      const materializeVegetables = (input: {
+        resourceId: ResourceId
+        metadata: SourceResourceData["metadata"]
+      }) =>
+        materializeJunctionTable({
+          deleteRows: sql`DELETE FROM resource_vegetables WHERE resource_id = ${input.resourceId}`,
+          insertRows: insertResourceVegetableRows(
+            (input.metadata.relatedVegetableIds || []).map((vegetableId, index) => ({
+              vegetableId,
+              resourceId: input.resourceId,
+              orderIndex: index,
+            })),
+          ),
         })
 
       const materializeResource = (input: {
@@ -191,120 +265,85 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
             resourceId: input.resourceId,
             locales: input.sourceData.locales,
           })
+
+          yield* materializeTags({
+            resourceId: input.resourceId,
+            metadata: input.sourceData.metadata,
+          })
+
+          yield* materializeVegetables({
+            resourceId: input.resourceId,
+            metadata: input.sourceData.metadata,
+          })
         })
 
-      const buildSourceDataFromMaterializedRows = (input: {
-        resourceRow: ResourceRow
-        translationRows: Array<ResourceTranslationRow>
-      }): SourceResourceData => {
-        const toLocalizedData = (row: ResourceTranslationRow) => ({
-          title: row.title,
-          description: row.description,
-          creditLine: row.creditLine,
-          originalLocale: row.originalLocale,
-          translationSource: row.translationSource,
-        })
-
-        const enRow = input.translationRows.find((row) => row.locale === "en")
-        const esRow = input.translationRows.find((row) => row.locale === "es")
-        const ptRow = input.translationRows.find((row) => row.locale === "pt")
-
-        return SourceResourceData.make({
-          locales: {
-            en: enRow ? toLocalizedData(enRow) : undefined,
-            es: esRow ? toLocalizedData(esRow) : undefined,
-            pt: ptRow ? toLocalizedData(ptRow) : undefined,
-          },
-          metadata: {
-            format: input.resourceRow.format,
-            handle: input.resourceRow.handle,
-            thumbnailImageId: input.resourceRow.thumbnailImageId,
-            url: input.resourceRow.url,
-            urlState: input.resourceRow.urlState,
-          },
-        })
-      }
+      /**
+       * ======================
+       *    BUSINESS LOGIC
+       *     (PUBLIC API)
+       * ======================
+       */
 
       const createResource = (input: CreateResourceInput) =>
         Effect.gen(function* () {
           const resourceId = yield* IdGen.make(ResourceId)
+          const revisionId = yield* IdGen.make(ResourceRevisionId)
           const now = yield* DateTime.now
           const created = createResourceSnapshot(input.sourceData)
 
-          return yield* persistCrdtAggregateCreation({
-            sql,
+          yield* persistCrdtDocumentCreation({
             insertCrdt: insertResourceCrdtRow({
               createdAt: now,
               crdtSnapshot: created.crdtSnapshot,
               id: resourceId,
               updatedAt: now,
             }),
-            insertInitialCommit: Effect.gen(function* () {
-              const revisionId = yield* IdGen.make(ResourceRevisionId)
-              yield* insertResourceRevisionRow(
-                ResourceRevisionRow.make({
-                  id: revisionId,
-                  resourceId,
-                  createdById: input.createdById,
-                  crdtUpdate: created.initialCrdtUpdate,
-                  fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
-                  evaluation: "APPROVED",
-                  evaluatedById: input.createdById,
-                  evaluatedAt: now,
-                  createdAt: now,
-                  updatedAt: now,
-                }),
-              )
-            }),
+            insertCommitOrRevision: insertResourceRevisionRow(
+              ResourceRevisionRow.make({
+                id: revisionId,
+                resourceId,
+                createdById: input.createdById,
+                crdtUpdate: created.initialCrdtUpdate,
+                fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
+                evaluation: "APPROVED",
+                evaluatedById: input.createdById,
+                evaluatedAt: now,
+                createdAt: now,
+                updatedAt: now,
+              }),
+            ),
             materialize: materializeResource({
               resourceId,
               currentCrdtFrontier: created.currentCrdtFrontier,
               sourceData: created.sourceData,
             }),
-            result: resourceId,
           })
-        })
 
+          return revisionId
+        }).pipe(sql.withTransaction)
+
+      /**
+       * Resources aren't modified directly. Instead, users create revisions, which need to be evaluated
+       * by moderators or admins.
+       */
       const createRevision = (input: CreateResourceRevisionInput) =>
         Effect.gen(function* () {
-          const resourceRowOption = yield* findResourceRowById(input.resourceId)
-          if (Option.isNone(resourceRowOption)) {
-            return yield* Effect.fail(new ResourceNotFoundError({ id: input.resourceId }))
-          }
+          const resourceSnapshot = yield* findResourceCrdtSnapshotById(input.resourceId).pipe(
+            Effect.flatMap(
+              Option.match({
+                onNone: () => Effect.fail(new ResourceNotFoundError({ id: input.resourceId })),
+                onSome: Effect.succeed,
+              }),
+            ),
+          )
 
-          const translations = yield* listResourceTranslationRowsByResourceId(input.resourceId)
-          const resourceRow = Option.getOrThrow(resourceRowOption)
-
-          const currentSourceData = buildSourceDataFromMaterializedRows({
-            resourceRow,
-            translationRows: translations,
-          })
-
-          const nextSourceData = SourceResourceData.make({
-            ...currentSourceData,
-            locales: {
-              ...currentSourceData.locales,
-              pt: {
-                ...(currentSourceData.locales.pt ?? {
-                  title: "",
-                  description: null,
-                  creditLine: null,
-                  originalLocale: "pt" as const,
-                  translationSource: "ORIGINAL" as const,
-                }),
-                title: input.title ?? currentSourceData.locales.pt?.title ?? "",
-                description:
-                  input.description === undefined
-                    ? (currentSourceData.locales.pt?.description ?? null)
-                    : input.description,
-                creditLine:
-                  input.creditLine === undefined
-                    ? (currentSourceData.locales.pt?.creditLine ?? null)
-                    : input.creditLine,
-                originalLocale: "pt",
-                translationSource: "ORIGINAL",
-              },
-            },
+          const { crdtUpdate } = yield* applyCrdtUpdateWithCommit({
+            commit: HumanCommit.make({
+              personId: input.createdById,
+            }),
+            crdtUpdate: input.crdtUpdate,
+            snapshot: resourceSnapshot.crdtSnapshot,
+            targetSchema: SourceResourceData,
           })
 
           const revisionId = yield* IdGen.make(ResourceRevisionId)
@@ -315,9 +354,7 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
               id: revisionId,
               resourceId: input.resourceId,
               createdById: input.createdById,
-              crdtUpdate: Schema.decodeUnknownSync(LoroDocUpdate)(
-                new TextEncoder().encode(JSON.stringify(nextSourceData)),
-              ),
+              crdtUpdate,
               fromCrdtFrontier: input.expectedCurrentCrdtFrontier,
               evaluation: "PENDING",
               evaluatedById: null,
@@ -328,80 +365,72 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
           )
 
           return revisionId
-        })
-
-      const findRevisionById = SqlSchema.findOneOption({
-        Request: ResourceRevisionId,
-        Result: ResourceRevisionRow,
-        execute: (id) => sql`SELECT * FROM resource_revisions WHERE id = ${id}`,
-      })
-
-      const listPendingRevisionsByResourceId = SqlSchema.findAll({
-        Request: ResourceId,
-        Result: ResourceRevisionRow,
-        execute: (resourceId) =>
-          sql`SELECT * FROM resource_revisions WHERE resource_id = ${resourceId} AND evaluation = 'PENDING' ORDER BY created_at ASC`,
-      })
+        }).pipe(sql.withTransaction)
 
       const evaluateRevision = (input: EvaluateResourceRevisionInput) =>
         Effect.gen(function* () {
-          const revisionOption = yield* findRevisionById(input.revisionId)
-          if (Option.isNone(revisionOption)) {
-            return yield* Effect.fail(new ResourceRevisionNotFoundError({ id: input.revisionId }))
-          }
-
-          const revision = Option.getOrThrow(revisionOption)
           const now = yield* DateTime.now
 
-          const markRevisionAsEvaluated = sql`
-            UPDATE resource_revisions
-            SET evaluation = ${input.evaluation},
-                evaluated_by_id = ${input.evaluatedById},
-                evaluated_at = ${DateTime.formatIso(now)},
-                updated_at = ${DateTime.formatIso(now)}
-            WHERE id = ${input.revisionId}
-          `.pipe(Effect.asVoid)
-
-          if (input.evaluation === "REJECTED") {
-            yield* sql.withTransaction(markRevisionAsEvaluated)
-            return
-          }
-
-          const rowOption = yield* findResourceRowById(revision.resourceId)
-          if (Option.isNone(rowOption)) {
-            return yield* Effect.fail(new ResourceNotFoundError({ id: revision.resourceId }))
-          }
-
-          const currentResource = Option.getOrThrow(rowOption)
-          const sourceData = Schema.decodeUnknownSync(SourceResourceData)(
-            JSON.parse(new TextDecoder().decode(revision.crdtUpdate)),
-          )
-          const nextSnapshotCreated = createResourceSnapshot(sourceData)
-
-          yield* persistCrdtAggregateUpdate({
-            sql,
-            ensureSnapshotUpdated: updateResourceSnapshot({
-              id: revision.resourceId,
-              crdtSnapshot: nextSnapshotCreated.crdtSnapshot,
-              updatedAt: now,
-            }).pipe(
-              Effect.flatMap(() =>
-                updateResourceFrontierWithExpected({
-                  id: revision.resourceId,
-                  expectedCurrentCrdtFrontier: currentResource.currentCrdtFrontier,
-                  nextCurrentCrdtFrontier: nextSnapshotCreated.currentCrdtFrontier,
-                }),
-              ),
+          const revision = yield* findRevisionById(input.revisionId).pipe(
+            Effect.flatMap(
+              Option.match({
+                onNone: () =>
+                  Effect.fail(new ResourceRevisionNotFoundError({ id: input.revisionId })),
+                onSome: Effect.succeed,
+              }),
             ),
-            insertCommit: markRevisionAsEvaluated,
+          )
+
+          // Revisions that have already been evaluated can't be re-evaluated after `RESOURCE_REVISION_REEVALUATION_WINDOW` */
+          if (
+            revision.evaluation !== "PENDING" &&
+            (!revision.evaluatedAt ||
+              // Is the window of reevaluation is in the past?
+              revision.evaluatedAt.pipe(
+                DateTime.add(RESOURCE_REVISION_REEVALUATION_WINDOW),
+                DateTime.isPast,
+              ))
+          ) {
+            return yield* new ResourceRevisionEvaluationWindowExpiredError({ id: revision.id })
+          }
+
+          const resource = yield* findResourceCrdtSnapshotById(revision.resourceId).pipe(
+            Effect.flatMap(
+              Option.match({
+                onNone: () => Effect.fail(new ResourceNotFoundError({ id: revision.resourceId })),
+                onSome: Effect.succeed,
+              }),
+            ),
+          )
+
+          const currentDoc = snapshotToLoroDoc(resource.crdtSnapshot)
+
+          const { data: updatedResourceData, loroDoc: updatedDoc } = yield* parseCrdtUpdate({
+            crdtUpdate: revision.crdtUpdate,
+            sourceDocument: currentDoc,
+            targetSchema: SourceResourceData,
+          })
+
+          yield* persistCrdtDocumentUpdate({
+            updateCrdtRow: updateResourceCrdtRow({
+              crdtSnapshot: loroDocToSnapshot(updatedDoc),
+              id: revision.resourceId,
+              updatedAt: now,
+            }),
+            insertCommitOrUpdateRevision: updateRevisionEvaluationRow({
+              id: revision.id,
+              updatedAt: now,
+              evaluatedAt: now,
+              evaluatedById: input.evaluatedById,
+              evaluation: input.evaluation,
+            }),
             materialize: materializeResource({
               resourceId: revision.resourceId,
-              currentCrdtFrontier: nextSnapshotCreated.currentCrdtFrontier,
-              sourceData,
+              currentCrdtFrontier: updatedDoc.frontiers(),
+              sourceData: updatedResourceData,
             }),
-            onConflict: Effect.fail(new ResourceNotFoundError({ id: revision.resourceId })),
           })
-        })
+        }).pipe(sql.withTransaction)
 
       return {
         createResource,

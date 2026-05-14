@@ -5,23 +5,36 @@
  */
 export const noSqlTypeParameterRule = {
   create(context) {
+    const unwrapTypeInstantiation = (tag) =>
+      tag.type === "TSInstantiationExpression" ? tag.expression : tag
+
+    const hasTypeArguments = (node) =>
+      Boolean(
+        node.typeArguments ||
+          node.typeParameters ||
+          (node.tag.type === "TSInstantiationExpression" && node.tag.typeArguments),
+      )
+
+    const isSqlTag = (tag) => {
+      const unwrappedTag = unwrapTypeInstantiation(tag)
+
+      return (
+        (unwrappedTag.type === "Identifier" && unwrappedTag.name === "sql") ||
+        (unwrappedTag.type === "MemberExpression" &&
+          unwrappedTag.property.type === "Identifier" &&
+          unwrappedTag.property.name === "sql")
+      )
+    }
+
     return {
       TaggedTemplateExpression(node) {
-        const tag = node.tag
-        // Check for sql<Type>`...` - typeArguments on TaggedTemplateExpression
-        if (node.typeArguments || node.typeParameters) {
-          // Check if tag is sql or ends with .sql
-          const isSql =
-            (tag.type === "Identifier" && tag.name === "sql") ||
-            (tag.type === "MemberExpression" &&
-              tag.property.type === "Identifier" &&
-              tag.property.name === "sql")
-          if (isSql) {
-            context.report({
-              messageId: "noSqlTypeParam",
-              node,
-            })
-          }
+        // oxlint parses sql<Type>`...` as type arguments either on the tagged
+        // template node or on a TSInstantiationExpression wrapping the tag.
+        if (hasTypeArguments(node) && isSqlTag(node.tag)) {
+          context.report({
+            messageId: "noSqlTypeParam",
+            node,
+          })
         }
       },
     }
