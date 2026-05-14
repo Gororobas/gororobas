@@ -19,7 +19,7 @@ import {
   TiptapDocument,
   tiptapToText,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Option, Schema, Struct } from "effect"
+import { Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -336,7 +336,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             ),
           )
 
-          const row = yield* findCommentRowById(input.commentId).pipe(
+          const commentRow = yield* findCommentRowById(input.commentId).pipe(
             Effect.flatMap(
               Option.match({
                 onNone: () => Effect.fail(new CommentNotFoundError({ id: input.commentId })),
@@ -345,10 +345,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             ),
           )
 
-          if (
-            JSON.stringify(row.currentCrdtFrontier) !==
-            JSON.stringify(input.expectedCurrentCrdtFrontier)
-          ) {
+          if (!Equal.equals(commentRow.currentCrdtFrontier, input.expectedCurrentCrdtFrontier)) {
             return yield* new CommentConcurrentUpdateError({ id: input.commentId })
           }
 
@@ -412,11 +409,11 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             materialize: materializeComment({
               commentId: input.commentId,
               currentCrdtFrontier: evolved.nextFrontier,
-              moderationStatus: row.moderationStatus,
-              ownerProfileId: row.ownerProfileId,
-              parentCommentId: row.parentCommentId,
-              postId: row.postId,
-              resourceId: row.resourceId,
+              moderationStatus: commentRow.moderationStatus,
+              ownerProfileId: commentRow.ownerProfileId,
+              parentCommentId: commentRow.parentCommentId,
+              postId: commentRow.postId,
+              resourceId: commentRow.resourceId,
               sourceData: evolved.sourceData,
             }),
           })

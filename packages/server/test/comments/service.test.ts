@@ -4,7 +4,7 @@ import {
   Handle,
   UnauthorizedError,
   type SourceCommentData,
-  type SourcePostData,
+  type PostSourceData,
   type TiptapDocument,
   type TiptapNode,
 } from "@gororobas/domain"
@@ -50,9 +50,9 @@ const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
 const makeNoteSourceData = (input: {
   content: TiptapDocument
   handle: string
-  ownerProfileId: SourcePostData["metadata"]["ownerProfileId"]
-  publishedAt: SourcePostData["metadata"]["publishedAt"]
-}): SourcePostData => ({
+  ownerProfileId: PostSourceData["metadata"]["ownerProfileId"]
+  publishedAt: PostSourceData["metadata"]["publishedAt"]
+}): PostSourceData => ({
   locales: {
     pt: {
       content: input.content,

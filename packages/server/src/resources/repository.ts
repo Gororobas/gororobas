@@ -289,7 +289,7 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
             }),
           })
 
-          return revisionId
+          return resourceId
         }).pipe(sql.withTransaction)
 
       /**

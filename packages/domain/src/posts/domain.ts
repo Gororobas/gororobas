@@ -95,8 +95,116 @@ export const EventSourceData = Schema.Struct({
 export type EventSourceData = typeof EventSourceData.Type
 
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
-export const SourcePostData = Schema.Union([NoteSourceData, EventSourceData])
-export type SourcePostData = typeof SourcePostData.Type
+export const PostSourceData = Schema.Union([NoteSourceData, EventSourceData])
+export type PostSourceData = typeof PostSourceData.Type
+
+/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PostLocalizedData` */
+export const PostLocalizedDataStorage = Schema.Struct({
+  content: Schema.optional(Schema.String),
+  originalLocale: Schema.optional(Locale),
+  translatedAtCrdtFrontier: Schema.optional(Schema.String),
+  translationSource: Schema.optional(TranslationSource),
+})
+export type PostLocalizedDataStorage = typeof PostLocalizedDataStorage.Type
+
+/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PostSourceData` */
+export const PostSourceDataStorage = Schema.Struct({
+  locales: Schema.Struct({
+    en: PostLocalizedDataStorage,
+    es: PostLocalizedDataStorage,
+    pt: PostLocalizedDataStorage,
+  }),
+  metadata: Schema.Struct({
+    attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
+    endDate: Schema.optional(Schema.NullOr(Schema.String)),
+    handle: Handle,
+    kind: Schema.Literals(["NOTE", "EVENT"]),
+    locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
+    ownerProfileId: ProfileId,
+    publishedAt: Schema.String,
+    startDate: Schema.optional(Schema.NullOr(Schema.String)),
+    visibility: InformationVisibility,
+  }),
+})
+export type PostSourceDataStorage = typeof PostSourceDataStorage.Type
+
+/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
+const decodeTiptapDocumentStorage = Schema.decodeUnknownSync(Schema.fromJsonString(TiptapDocument))
+const decodeLoroDocFrontierStorage = Schema.decodeUnknownSync(
+  Schema.fromJsonString(LoroDocFrontier),
+)
+
+/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
+const postLocalizedDataStorageToSourceData = (
+  localeData: PostSourceDataStorage["locales"][Locale],
+) => {
+  if (!localeData.content) return undefined
+  if (!localeData.originalLocale || !localeData.translationSource) {
+    throw new Error("Invalid localized post storage data")
+  }
+
+  const content = decodeTiptapDocumentStorage(localeData.content)
+
+  if (localeData.translationSource === "ORIGINAL") {
+    return PostLocalizedData.make({
+      content,
+      originalLocale: localeData.originalLocale,
+      translatedAtCrdtFrontier: null,
+      translationSource: "ORIGINAL",
+    })
+  }
+
+  if (!localeData.translatedAtCrdtFrontier) {
+    throw new Error("Invalid translated post storage data")
+  }
+
+  return PostLocalizedData.make({
+    content,
+    originalLocale: localeData.originalLocale,
+    translatedAtCrdtFrontier: decodeLoroDocFrontierStorage(localeData.translatedAtCrdtFrontier),
+    translationSource: localeData.translationSource,
+  })
+}
+
+/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
+export const postSourceDataStorageToSourcePostData = (
+  storageData: PostSourceDataStorage,
+): PostSourceData => {
+  const locales = {
+    en: postLocalizedDataStorageToSourceData(storageData.locales.en),
+    es: postLocalizedDataStorageToSourceData(storageData.locales.es),
+    pt: postLocalizedDataStorageToSourceData(storageData.locales.pt),
+  }
+
+  const sourceData =
+    storageData.metadata.kind === "EVENT"
+      ? {
+          locales,
+          metadata: {
+            attendanceMode: storageData.metadata.attendanceMode ?? null,
+            endDate: storageData.metadata.endDate ?? null,
+            handle: storageData.metadata.handle,
+            kind: "EVENT" as const,
+            locationOrUrl: storageData.metadata.locationOrUrl ?? null,
+            ownerProfileId: storageData.metadata.ownerProfileId,
+            publishedAt: storageData.metadata.publishedAt,
+            startDate: storageData.metadata.startDate,
+            visibility: storageData.metadata.visibility,
+          },
+        }
+      : {
+          locales,
+          metadata: {
+            handle: storageData.metadata.handle,
+            kind: "NOTE" as const,
+            ownerProfileId: storageData.metadata.ownerProfileId,
+            publishedAt: storageData.metadata.publishedAt,
+            visibility: storageData.metadata.visibility,
+          },
+        }
+
+  return Schema.decodeUnknownSync(PostSourceData)(sourceData)
+}
 
 const MatchedTag = Schema.Struct({
   tag_id: Schema.String,
@@ -216,7 +324,7 @@ export const ApiCreateEventData = Schema.Struct({
 export type ApiCreateEventData = typeof ApiCreateEventData.Type
 
 export const ApiUpdateNoteData = Schema.Struct({
-  content: TiptapDocument,
+  crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 export type ApiUpdateNoteData = typeof ApiUpdateNoteData.Type
@@ -246,12 +354,6 @@ export const CreateEventData = Schema.Struct({
   visibility: InformationVisibility,
 })
 export type CreateEventData = typeof CreateEventData.Type
-
-export const UpdateNoteData = Schema.Struct({
-  content: TiptapDocument,
-  expectedCurrentCrdtFrontier: LoroDocFrontier,
-})
-export type UpdateNoteData = typeof UpdateNoteData.Type
 
 export const PostHistoryEntry = Schema.Struct({
   author: CrdtCommit,

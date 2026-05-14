@@ -1,21 +1,22 @@
 import {
   Locale,
   LoroDocFrontier,
+  LoroDocUpdate,
   PersonId,
-  SourcePostData,
+  PostSourceData,
   SystemCommit,
   TiptapDocument,
   PostId,
 } from "@gororobas/domain"
 import { Schema } from "effect"
 
-export const HumanUpdatePtContent = Schema.TaggedStruct("HumanUpdatePtContent", {
+export const HumanCrdtUpdate = Schema.TaggedStruct("HumanCrdtUpdate", {
   authorId: PersonId,
+  crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
   postId: PostId,
-  content: TiptapDocument,
 })
-export type HumanUpdatePtContent = typeof HumanUpdatePtContent.Type
+export type HumanCrdtUpdate = typeof HumanCrdtUpdate.Type
 
 export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslation", {
   expectedCurrentCrdtFrontier: LoroDocFrontier,
@@ -27,11 +28,11 @@ export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslat
 })
 export type SystemUpsertTranslation = typeof SystemUpsertTranslation.Type
 
-export const UpdatePostInput = Schema.Union([HumanUpdatePtContent, SystemUpsertTranslation])
+export const UpdatePostInput = Schema.Union([HumanCrdtUpdate, SystemUpsertTranslation])
 export type UpdatePostInput = typeof UpdatePostInput.Type
 
 export const CreatePostInput = Schema.Struct({
   createdById: PersonId,
-  sourceData: SourcePostData,
+  sourceData: PostSourceData,
 })
 export type CreatePostInput = typeof CreatePostInput.Type

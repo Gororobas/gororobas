@@ -1,5 +1,4 @@
 import {
-  type CrdtCommit,
   EMPTY_LORO_DOC_FRONTIER,
   type EventSourceData,
   Handle,
@@ -21,11 +20,11 @@ import {
   PostTranslationRow,
   PostVegetableRow,
   ProfileId,
-  type SourcePostData,
+  type PostSourceData,
   tiptapToText,
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
-import { Context, DateTime, Effect, Option, Schema, Struct } from "effect"
+import { Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -33,7 +32,11 @@ import {
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { materializeJunctionTable } from "../common/table-materialization.js"
-import { createPostSnapshot, evolvePostSnapshot } from "./post-crdt-orchestration.js"
+import {
+  applyPostCrdtUpdateWithCommit,
+  createPostSnapshot,
+  createSystemTranslationCrdtUpdate,
+} from "./post-crdt-orchestration.js"
 import {
   type CreatePostInput as CreatePostInputType,
   type UpdatePostInput as UpdatePostInputType,
@@ -73,12 +76,6 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       Result: PostRow,
       execute: (ownerProfileId) =>
         sql`SELECT * FROM posts WHERE owner_profile_id = ${ownerProfileId} ORDER BY updated_at DESC`,
-    })
-
-    const listPostTranslationRowsByPostId = SqlSchema.findAll({
-      Request: PostId,
-      Result: PostTranslationRow,
-      execute: (postId) => sql`SELECT * FROM post_translations WHERE post_id = ${postId}`,
     })
 
     const countPostRowsByOwnerProfileId = SqlSchema.findOne({
@@ -203,30 +200,6 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       Request: PostCrdtRow,
       execute: (row) => sql`INSERT INTO post_crdts ${sql.insert(row)}`,
     })
-
-    const insertPostCommit = (input: {
-      commit: CrdtCommit
-      crdtUpdate: PostCommitRow["crdtUpdate"]
-      fromCrdtFrontier: PostCommitRow["fromCrdtFrontier"]
-      postId: PostId
-    }) =>
-      Effect.gen(function* () {
-        const id = yield* IdGen.make(PostCommitId)
-        const now = yield* DateTime.now
-        const createdById = input.commit._tag === "HumanCommit" ? input.commit.personId : null
-
-        yield* insertPostCommitRow(
-          PostCommitRow.make({
-            createdAt: now,
-            createdById,
-            crdtUpdate: input.crdtUpdate,
-            fromCrdtFrontier: input.fromCrdtFrontier,
-            id,
-            postId: input.postId,
-            updatedAt: now,
-          }),
-        )
-      })
 
     const insertPostTranslationRows = SqlSchema.void({
       Request: Schema.Array(PostTranslationRow),
@@ -365,7 +338,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       classification?: PostClassification | null
       currentCrdtFrontier: LoroDocFrontier
       postId: PostId
-      sourceData: SourcePostData
+      sourceData: PostSourceData
     }) =>
       Effect.gen(function* () {
         yield* materializePostRow({
@@ -397,66 +370,10 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
      * ======================
      */
 
-    const buildSourceDataFromMaterializedRows = (input: {
-      postRow: PostRow
-      translationRows: Array<PostTranslationRow>
-    }): SourcePostData => {
-      const toPostLocalizedData = (row: PostTranslationRow) =>
-        row.translationSource === "ORIGINAL"
-          ? {
-              content: row.content,
-              originalLocale: row.originalLocale,
-              translatedAtCrdtFrontier: null,
-              translationSource: "ORIGINAL" as const,
-            }
-          : {
-              content: row.content,
-              originalLocale: row.originalLocale,
-              translatedAtCrdtFrontier: row.translatedAtCrdtFrontier ?? LoroDocFrontier.make([]),
-              translationSource: row.translationSource,
-            }
-
-      const enRow = input.translationRows.find((row) => row.locale === "en")
-      const esRow = input.translationRows.find((row) => row.locale === "es")
-      const ptRow = input.translationRows.find((row) => row.locale === "pt")
-      const locales: SourcePostData["locales"] = {
-        en: enRow ? toPostLocalizedData(enRow) : undefined,
-        es: esRow ? toPostLocalizedData(esRow) : undefined,
-        pt: ptRow ? toPostLocalizedData(ptRow) : undefined,
-      }
-
-      if (input.postRow.kind === "EVENT") {
-        return {
-          locales,
-          metadata: {
-            attendanceMode: input.postRow.attendanceMode,
-            endDate: input.postRow.endDate,
-            handle: input.postRow.handle,
-            kind: "EVENT",
-            locationOrUrl: input.postRow.locationOrUrl,
-            ownerProfileId: input.postRow.ownerProfileId,
-            publishedAt: input.postRow.publishedAt,
-            startDate: input.postRow.startDate!,
-            visibility: input.postRow.visibility!,
-          },
-        }
-      }
-
-      return {
-        locales,
-        metadata: {
-          handle: input.postRow.handle,
-          kind: "NOTE",
-          ownerProfileId: input.postRow.ownerProfileId,
-          publishedAt: input.postRow.publishedAt,
-          visibility: input.postRow.visibility!,
-        },
-      }
-    }
-
     const createPost = (input: CreatePostInputType) =>
       Effect.gen(function* () {
         const postId = yield* IdGen.make(PostId)
+        const commitId = yield* IdGen.make(PostCommitId)
         const now = yield* DateTime.now
         const created = createPostSnapshot(input.sourceData)
 
@@ -471,11 +388,14 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
               updatedAt: now,
             }),
           ),
-          insertCommitOrRevision: insertPostCommit({
-            commit: HumanCommit.make({ personId: input.createdById }),
+          insertCommitOrRevision: insertPostCommitRow({
+            postId,
+            id: commitId,
+            createdAt: now,
+            updatedAt: now,
+            createdById: input.createdById,
             crdtUpdate: created.initialCrdtUpdate,
             fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
-            postId,
           }),
           materialize: materializePost({
             currentCrdtFrontier: created.currentCrdtFrontier,
@@ -506,76 +426,54 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
           ),
         )
 
-        if (
-          JSON.stringify(postRow.currentCrdtFrontier) !==
-          JSON.stringify(input.expectedCurrentCrdtFrontier)
-        ) {
+        if (!Equal.equals(postRow.currentCrdtFrontier, input.expectedCurrentCrdtFrontier)) {
           return yield* new PostConcurrentUpdateError({ id: input.postId })
         }
 
-        const translationRows = yield* listPostTranslationRowsByPostId(input.postId)
-        const currentSourceData = buildSourceDataFromMaterializedRows({
-          postRow,
-          translationRows,
-        })
-        const nextSourceData: SourcePostData =
-          input._tag === "HumanUpdatePtContent"
-            ? {
-                ...currentSourceData,
-                locales: {
-                  ...currentSourceData.locales,
-                  pt: currentSourceData.locales.pt
-                    ? { ...currentSourceData.locales.pt, content: input.content }
-                    : {
-                        content: input.content,
-                        originalLocale: "pt",
-                        translatedAtCrdtFrontier: null,
-                        translationSource: "ORIGINAL",
-                      },
-                },
-              }
-            : {
-                ...currentSourceData,
-                locales: {
-                  ...currentSourceData.locales,
-                  [input.targetLocale]: {
-                    content: input.translatedContent,
-                    originalLocale: input.sourceLocale,
-                    translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
-                    translationSource: "AUTOMATIC",
-                  },
-                },
-              }
-
-        const commit: CrdtCommit =
-          input._tag === "HumanUpdatePtContent"
+        const commit =
+          input._tag === "HumanCrdtUpdate"
             ? HumanCommit.make({ personId: input.authorId })
             : input.commit
+        const crdtUpdate =
+          input._tag === "HumanCrdtUpdate"
+            ? input.crdtUpdate
+            : yield* createSystemTranslationCrdtUpdate({
+                commit: input.commit,
+                expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
+                snapshot: current.crdtSnapshot,
+                sourceLocale: input.sourceLocale,
+                targetLocale: input.targetLocale,
+                translatedContent: input.translatedContent,
+              })
 
-        const evolved = yield* evolvePostSnapshot({
+        const applied = yield* applyPostCrdtUpdateWithCommit({
           commit,
-          nextSourceData,
+          crdtUpdate,
           snapshot: current.crdtSnapshot,
         })
 
+        const commitId = yield* IdGen.make(PostCommitId)
         const now = yield* DateTime.now
 
         yield* persistCrdtDocumentUpdate({
           updateCrdtRow: updatePostCrdtRow({
-            crdtSnapshot: evolved.nextSnapshot,
+            crdtSnapshot: applied.nextSnapshot,
             id: input.postId,
             updatedAt: now,
           }),
-          insertCommitOrUpdateRevision: insertPostCommit({
-            commit: evolved.commit,
-            crdtUpdate: evolved.crdtUpdate,
-            fromCrdtFrontier: evolved.fromCrdtFrontier,
+          insertCommitOrUpdateRevision: insertPostCommitRow({
+            id: commitId,
             postId: input.postId,
+            createdAt: now,
+            updatedAt: now,
+            crdtUpdate: applied.crdtUpdate,
+            fromCrdtFrontier: applied.fromCrdtFrontier,
+            createdById: commit._tag === "HumanCommit" ? commit.personId : null,
           }),
           materialize: materializePost({
-            currentCrdtFrontier: evolved.nextFrontier,
+            currentCrdtFrontier: applied.nextCrdtFrontier,
             postId: input.postId,
-            sourceData: evolved.sourceData,
+            sourceData: applied.sourceData,
           }),
         })
       })

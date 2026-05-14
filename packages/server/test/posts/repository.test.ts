@@ -1,19 +1,25 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
   Handle,
+  InvalidCrdtUpdateError,
+  LoroDocFrontier,
+  LoroDocSnapshot,
+  LoroDocUpdate,
+  PostSourceDataStorageLoro,
   PostConcurrentUpdateError,
+  PostCrdtRow,
   SystemCommit,
-  type SourcePostData,
+  type PostSourceData,
   type TiptapDocument,
   type TiptapNode,
+  sourcePostDataToCrdtStorage,
+  snapshotToLoroDoc,
 } from "@gororobas/domain"
-import { DateTime, Effect, Layer, Option, Schema } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { DateTime, Effect, Equal, Layer, Option, Schema, Struct } from "effect"
+import { SqlClient } from "effect/unstable/sql"
+import { Mirror } from "loro-mirror"
 
-import {
-  HumanUpdatePtContent,
-  SystemUpsertTranslation,
-} from "../../src/posts/post-repository-inputs.js"
+import { HumanCrdtUpdate, SystemUpsertTranslation } from "../../src/posts/post-repository-inputs.js"
 import { PostsRepository } from "../../src/posts/repository.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
 import { insertPersonWithDependencies, TestLayer } from "../test-helpers.js"
@@ -22,6 +28,7 @@ const PostsRepositoryTestLayer = Layer.effect(PostsRepository, PostsRepository.m
   Layer.provide(TestLayer),
 )
 const TestLayerWithPostsRepository = Layer.mergeAll(TestLayer, PostsRepositoryTestLayer)
+const PostCrdtSnapshotRow = PostCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
 const paragraph = (text: string): TiptapNode => ({
   content: [{ text, type: "text" }],
@@ -36,12 +43,53 @@ const makeDocument = (text: string): TiptapDocument => ({
 
 const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
 
+const makePostCrdtUpdate = (input: {
+  nextSourceData: PostSourceData
+  snapshot: LoroDocSnapshot
+}) => {
+  const currentDoc = snapshotToLoroDoc(input.snapshot)
+  const nextDoc = currentDoc.fork()
+  const store = new Mirror({
+    doc: nextDoc,
+    schema: PostSourceDataStorageLoro,
+  })
+
+  store.setState(() => sourcePostDataToCrdtStorage(input.nextSourceData))
+  store.dispose()
+
+  return Schema.decodeUnknownSync(LoroDocUpdate)(
+    nextDoc.export({
+      from: currentDoc.version(),
+      mode: "update",
+    }),
+  )
+}
+
+const applyUpdateToSnapshot = (input: { crdtUpdate: LoroDocUpdate; snapshot: LoroDocSnapshot }) => {
+  const doc = snapshotToLoroDoc(input.snapshot)
+  const importStatus = doc.import(input.crdtUpdate)
+  expect(importStatus.success).toBeTruthy()
+  return doc
+}
+
+const getPtContentFromStorageJson = (json: unknown) => {
+  const storage = json as {
+    locales?: {
+      pt?: {
+        content?: string
+      }
+    }
+  }
+
+  return storage.locales?.pt?.content ? JSON.parse(storage.locales.pt.content) : undefined
+}
+
 const makeNoteSourceData = (input: {
   content: TiptapDocument
   handle: string
-  ownerProfileId: SourcePostData["metadata"]["ownerProfileId"]
-  publishedAt: SourcePostData["metadata"]["publishedAt"]
-}): SourcePostData => ({
+  ownerProfileId: PostSourceData["metadata"]["ownerProfileId"]
+  publishedAt: PostSourceData["metadata"]["publishedAt"]
+}): PostSourceData => ({
   locales: {
     pt: {
       content: input.content,
@@ -61,13 +109,13 @@ const makeNoteSourceData = (input: {
 
 const makeEventSourceData = (input: {
   content: TiptapDocument
-  endDate: SourcePostData["metadata"]["publishedAt"]
+  endDate: PostSourceData["metadata"]["publishedAt"]
   handle: string
   locationOrUrl: string | null
-  ownerProfileId: SourcePostData["metadata"]["ownerProfileId"]
-  publishedAt: SourcePostData["metadata"]["publishedAt"]
-  startDate: SourcePostData["metadata"]["publishedAt"]
-}): SourcePostData => ({
+  ownerProfileId: PostSourceData["metadata"]["ownerProfileId"]
+  publishedAt: PostSourceData["metadata"]["publishedAt"]
+  startDate: PostSourceData["metadata"]["publishedAt"]
+}): PostSourceData => ({
   locales: {
     pt: {
       content: input.content,
@@ -138,33 +186,54 @@ describe("PostsRepository", () => {
   )
 
   it.effect(
-    "updatePost with HumanUpdatePtContent appends commit and rematerializes note content",
+    "updatePost with HumanCrdtUpdate appends replayable commit and rematerializes note content",
     () =>
       Effect.gen(function* () {
         const repository = yield* PostsRepository
+        const sql = yield* SqlClient.SqlClient
 
         const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
         const profile = yield* makeProfileFixture({ id: person.id })
         yield* insertPersonWithDependencies({ person, profile })
 
         const now = yield* DateTime.now
+        const initialSourceData = makeNoteSourceData({
+          content: makeDocument("Antes"),
+          handle: `post-${person.id.slice(0, 8)}-update`,
+          ownerProfileId: profile.id,
+          publishedAt: now,
+        })
         const postId = yield* repository.createPost({
           createdById: person.id,
-          sourceData: makeNoteSourceData({
-            content: makeDocument("Antes"),
-            handle: `post-${person.id.slice(0, 8)}-update`,
-            ownerProfileId: profile.id,
-            publishedAt: now,
-          }),
+          sourceData: initialSourceData,
         })
 
         const beforeUpdate = yield* repository.findPostRowById(postId)
         expect(Option.isSome(beforeUpdate)).toBe(true)
+        const beforeSnapshotRows = Schema.decodeUnknownSync(Schema.Array(PostCrdtSnapshotRow))(
+          yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
+        )
+        expect(beforeSnapshotRows).toHaveLength(1)
+        const beforeSnapshot = beforeSnapshotRows[0]!
+        const nextSourceData: PostSourceData = {
+          ...initialSourceData,
+          locales: {
+            ...initialSourceData.locales,
+            pt: {
+              ...initialSourceData.locales.pt!,
+              content: makeDocument("Depois"),
+            },
+          },
+        }
+        const crdtUpdate = makePostCrdtUpdate({
+          nextSourceData,
+          snapshot: beforeSnapshot.crdtSnapshot,
+        })
 
         yield* repository.updatePost(
-          HumanUpdatePtContent.make({
+          HumanCrdtUpdate.make({
             authorId: person.id,
-            content: makeDocument("Depois"),
+            crdtUpdate,
             expectedCurrentCrdtFrontier: Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
             postId,
           }),
@@ -172,10 +241,25 @@ describe("PostsRepository", () => {
 
         const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
         expect(commits).toHaveLength(2)
-        expect(commits[0]?.createdById).toBe(person.id)
+        expect(commits[1]?.createdById).toBe(person.id)
+        expect(commits[1]?.fromCrdtFrontier).toEqual(
+          Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
+        )
+
+        const replayedDoc = applyUpdateToSnapshot({
+          crdtUpdate: commits[1]!.crdtUpdate,
+          snapshot: beforeSnapshot.crdtSnapshot,
+        })
+        expect(getPtContentFromStorageJson(replayedDoc.toJSON())).toEqual(makeDocument("Depois"))
 
         const row = yield* repository.findPostRowById(postId)
         expect(Option.isSome(row)).toBe(true)
+        expect(
+          Equal.equals(
+            Option.getOrThrow(row).currentCrdtFrontier,
+            LoroDocFrontier.make(replayedDoc.frontiers()),
+          ),
+        ).toBe(true)
 
         const pageData = yield* repository.findPostPageData({
           handle: Option.getOrThrow(row).handle,
@@ -190,6 +274,7 @@ describe("PostsRepository", () => {
   it.effect("updatePost with SystemUpsertTranslation creates system commit and translation", () =>
     Effect.gen(function* () {
       const repository = yield* PostsRepository
+      const sql = yield* SqlClient.SqlClient
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const profile = yield* makeProfileFixture({ id: person.id })
@@ -208,6 +293,11 @@ describe("PostsRepository", () => {
 
       const beforeTranslation = yield* repository.findPostRowById(postId)
       expect(Option.isSome(beforeTranslation)).toBe(true)
+      const beforeSnapshotRows = Schema.decodeUnknownSync(Schema.Array(PostCrdtSnapshotRow))(
+        yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
+      )
+      expect(beforeSnapshotRows).toHaveLength(1)
+      const beforeSnapshot = beforeSnapshotRows[0]!
 
       yield* repository.updatePost(
         SystemUpsertTranslation.make({
@@ -227,6 +317,21 @@ describe("PostsRepository", () => {
       const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
       expect(commits).toHaveLength(2)
       expect(commits.some((commit) => commit.createdById === null)).toBe(true)
+      const replayedDoc = applyUpdateToSnapshot({
+        crdtUpdate: commits[1]!.crdtUpdate,
+        snapshot: beforeSnapshot.crdtSnapshot,
+      })
+      const replayedStorage = replayedDoc.toJSON() as {
+        locales?: { en?: { content?: string; translatedAtCrdtFrontier?: string } }
+      }
+      expect(
+        replayedStorage.locales?.en?.content
+          ? JSON.parse(replayedStorage.locales.en.content)
+          : undefined,
+      ).toEqual(makeDocument("Translated text"))
+      expect(replayedStorage.locales?.en?.translatedAtCrdtFrontier).toBe(
+        JSON.stringify(Option.getOrThrow(beforeTranslation).currentCrdtFrontier),
+      )
 
       const row = yield* repository.findPostRowById(postId)
       expect(Option.isSome(row)).toBe(true)
@@ -279,21 +384,18 @@ describe("PostsRepository", () => {
         }),
       )
 
-      const findTranslatedFrontier = SqlSchema.findAll({
-        Request: Schema.Struct({ postId: Schema.String }),
-        Result: Schema.Struct({
-          translatedAtCrdtFrontier: Schema.fromJsonString(
-            Schema.NullOr(Schema.Array(Schema.Unknown)),
-          ),
-        }),
-        execute: (request) =>
-          sql`
-            SELECT translated_at_crdt_frontier
-            FROM post_translations
-            WHERE post_id = ${request.postId} AND locale = 'en'
-          `,
+      const TranslatedFrontierRow = Schema.Struct({
+        translatedAtCrdtFrontier: Schema.fromJsonString(
+          Schema.NullOr(Schema.Array(Schema.Unknown)),
+        ),
       })
-      const translationRows = yield* findTranslatedFrontier({ postId })
+      const translationRows = Schema.decodeUnknownSync(Schema.Array(TranslatedFrontierRow))(
+        yield* sql`
+          SELECT translated_at_crdt_frontier
+          FROM post_translations
+          WHERE post_id = ${postId} AND locale = 'en'
+        `,
+      )
 
       expect(translationRows).toHaveLength(1)
       const frontier = translationRows[0]?.translatedAtCrdtFrontier
@@ -340,39 +442,60 @@ describe("PostsRepository", () => {
   it.effect("updatePost fails when expected frontier is stale", () =>
     Effect.gen(function* () {
       const repository = yield* PostsRepository
+      const sql = yield* SqlClient.SqlClient
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const profile = yield* makeProfileFixture({ id: person.id })
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+      const initialSourceData = makeNoteSourceData({
+        content: makeDocument("Versao 1"),
+        handle: `post-${person.id.slice(0, 8)}-stale-frontier`,
+        ownerProfileId: profile.id,
+        publishedAt: now,
+      })
       const postId = yield* repository.createPost({
         createdById: person.id,
-        sourceData: makeNoteSourceData({
-          content: makeDocument("Versao 1"),
-          handle: `post-${person.id.slice(0, 8)}-stale-frontier`,
-          ownerProfileId: profile.id,
-          publishedAt: now,
-        }),
+        sourceData: initialSourceData,
       })
 
       const initialRow = yield* repository.findPostRowById(postId)
       expect(Option.isSome(initialRow)).toBe(true)
       const expectedCurrentCrdtFrontier = Option.getOrThrow(initialRow).currentCrdtFrontier
+      const initialSnapshotRows = Schema.decodeUnknownSync(Schema.Array(PostCrdtSnapshotRow))(
+        yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
+      )
+      expect(initialSnapshotRows).toHaveLength(1)
+      const initialSnapshot = initialSnapshotRows[0]!
+      const makeUpdateWithContent = (content: TiptapDocument) =>
+        makePostCrdtUpdate({
+          nextSourceData: {
+            ...initialSourceData,
+            locales: {
+              ...initialSourceData.locales,
+              pt: {
+                ...initialSourceData.locales.pt!,
+                content,
+              },
+            },
+          },
+          snapshot: initialSnapshot.crdtSnapshot,
+        })
 
       yield* repository.updatePost(
-        HumanUpdatePtContent.make({
+        HumanCrdtUpdate.make({
           authorId: person.id,
-          content: makeDocument("Versao 2"),
+          crdtUpdate: makeUpdateWithContent(makeDocument("Versao 2")),
           expectedCurrentCrdtFrontier,
           postId,
         }),
       )
 
       const staleUpdate = repository.updatePost(
-        HumanUpdatePtContent.make({
+        HumanCrdtUpdate.make({
           authorId: person.id,
-          content: makeDocument("Versao 3"),
+          crdtUpdate: makeUpdateWithContent(makeDocument("Versao 3")),
           expectedCurrentCrdtFrontier,
           postId,
         }),
@@ -388,6 +511,58 @@ describe("PostsRepository", () => {
 
       const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
       expect(commits).toHaveLength(2)
+    }).pipe(Effect.provide(TestLayerWithPostsRepository)),
+  )
+
+  it.effect("updatePost with invalid CRDT update does not persist partial changes", () =>
+    Effect.gen(function* () {
+      const repository = yield* PostsRepository
+
+      const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
+      const profile = yield* makeProfileFixture({ id: person.id })
+      yield* insertPersonWithDependencies({ person, profile })
+
+      const now = yield* DateTime.now
+      const sourceData = makeNoteSourceData({
+        content: makeDocument("Permanece"),
+        handle: `post-${person.id.slice(0, 8)}-invalid-update`,
+        ownerProfileId: profile.id,
+        publishedAt: now,
+      })
+      const postId = yield* repository.createPost({
+        createdById: person.id,
+        sourceData,
+      })
+
+      const beforeUpdate = yield* repository.findPostRowById(postId)
+      expect(Option.isSome(beforeUpdate)).toBe(true)
+
+      const invalidUpdate = repository.updatePost(
+        HumanCrdtUpdate.make({
+          authorId: person.id,
+          crdtUpdate: Schema.decodeUnknownSync(LoroDocUpdate)(new Uint8Array([1, 2, 3])),
+          expectedCurrentCrdtFrontier: Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
+          postId,
+        }),
+      )
+
+      yield* Effect.flip(invalidUpdate).pipe(
+        Effect.tap((error) =>
+          Effect.sync(() => {
+            expect(error).toBeInstanceOf(InvalidCrdtUpdateError)
+          }),
+        ),
+      )
+
+      const commits = yield* repository.listPostCommitRowsByPostIdAsc(postId)
+      expect(commits).toHaveLength(1)
+
+      const pageData = yield* repository.findPostPageData({
+        handle: sourceData.metadata.handle,
+        locale: "pt",
+      })
+      expect(Option.isSome(pageData)).toBe(true)
+      expect(Option.getOrThrow(pageData).content).toEqual(makeDocument("Permanece"))
     }).pipe(Effect.provide(TestLayerWithPostsRepository)),
   )
 

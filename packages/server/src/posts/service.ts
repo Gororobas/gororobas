@@ -16,17 +16,18 @@ import {
   EventSourceData,
   Handle,
   Locale,
+  LoroDocFrontier,
+  LoroDocUpdate,
   NoteSourceData,
   Policies,
   PostId,
   PostLocalizedData,
   PostNotFoundError,
   ProfileId,
-  UpdateNoteData,
 } from "@gororobas/domain"
 import { DateTime, Effect, Option, Schema, Context } from "effect"
 
-import { HumanUpdatePtContent } from "./post-repository-inputs.js"
+import { HumanCrdtUpdate } from "./post-repository-inputs.js"
 import { PostsRepository } from "./repository.js"
 
 export const CreateNoteInput = Schema.Struct({
@@ -45,6 +46,11 @@ export type CreateEventInput = typeof CreateEventInput.Type
 
 export const CreatePostInput = Schema.Union([CreateNoteInput, CreateEventInput])
 export type CreatePostInput = typeof CreatePostInput.Type
+
+const UpdateNoteData = Schema.Struct({
+  crdtUpdate: LoroDocUpdate,
+  expectedCurrentCrdtFrontier: LoroDocFrontier,
+})
 
 export const UpdatePostInput = Schema.Struct({
   ...UpdateNoteData.fields,
@@ -138,9 +144,9 @@ export class PostsService extends Context.Service<PostsService>()("PostsService"
         yield* Policies.posts.canEdit(yield* getPostById(input.postId))
 
         yield* repo.updatePost(
-          HumanUpdatePtContent.make({
+          HumanCrdtUpdate.make({
             authorId: session.personId,
-            content: input.content,
+            crdtUpdate: input.crdtUpdate,
             expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
             postId: input.postId,
           }),
