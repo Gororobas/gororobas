@@ -210,8 +210,6 @@ export const makeMembershipFixture = (
     return { ...base, ...overrides }
   })
 
-
-
 export const resourceLocalizedDataArbitrary = Schema.toArbitrary(ResourceLocalizedData)
 
 export const sourceResourceDataArbitrary = Schema.toArbitrary(SourceResourceData).filter(

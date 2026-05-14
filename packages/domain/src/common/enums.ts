@@ -122,9 +122,6 @@ export type PlantingMethod = typeof PlantingMethod.Type
 export const GrammaticalGender = Schema.Literals(["NEUTRAL", "MALE", "FEMALE"])
 export type GrammaticalGender = typeof GrammaticalGender.Type
 
-export const ChineseMedicineElement = Schema.Literals(["FIRE", "EARTH", "METAL", "WATER", "WOOD"])
-export type ChineseMedicineElement = typeof ChineseMedicineElement.Type
-
 export const ResourceUrlState = Schema.Literals(["UNCHECKED", "OK", "BROKEN", "PENDING"])
 export type ResourceUrlState = typeof ResourceUrlState.Type
 

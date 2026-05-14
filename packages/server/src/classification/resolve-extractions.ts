@@ -51,7 +51,7 @@ function collectVegetableCandidates(extraction: Extraction): string[] {
     const value = attributes[key]
     if (typeof value === "string") {
       candidates.push(value)
-    } else if (Array.isArray(value) === true) {
+    } else if (Array.isArray(value)) {
       candidates.push(...value)
     }
   }
@@ -77,7 +77,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
     const handle = stringToHandle(candidate)
     yield* Effect.logDebug(`Trying handle match for "${candidate}" -> "${handle}"`)
     const match = yield* vegetablesRepository.findByHandle(handle)
-    if (Option.isSome(match) === true) {
+    if (Option.isSome(match)) {
       yield* Effect.logDebug(`Found existing vegetable by handle: "${handle}" -> ${match.value.id}`)
       return ResolvedExistingVegetableExtraction.make({
         ...common,
@@ -94,7 +94,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
       `Trying searchable_name match for "${candidate}" -> pattern "${pattern}"`,
     )
     const match = yield* vegetablesRepository.findBySearchableName(pattern)
-    if (Option.isSome(match) === true) {
+    if (Option.isSome(match)) {
       yield* Effect.logDebug(
         `Found existing vegetable by searchable_name: "${handle}" -> ${match.value.vegetableId}`,
       )
@@ -147,7 +147,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
   if (status === "existing" || !status) {
     yield* Effect.logDebug(`Trying handle match for tag "${tagHandle}"`)
     const handleMatch = yield* tagsRepository.findByHandle(tagHandle)
-    if (Option.isSome(handleMatch) === true) {
+    if (Option.isSome(handleMatch)) {
       yield* Effect.logDebug(
         `Found existing tag by handle: "${tagHandle}" -> ${handleMatch.value.id}`,
       )
@@ -161,7 +161,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
     const namePattern = `%${tagHandle}%`
     yield* Effect.logDebug(`Trying name match for tag with pattern "${namePattern}"`)
     const nameMatch = yield* tagsRepository.findByName(namePattern)
-    if (Option.isSome(nameMatch) === true) {
+    if (Option.isSome(nameMatch)) {
       yield* Effect.logDebug(`Found existing tag by name: "${tagHandle}" -> ${nameMatch.value.id}`)
       return ResolvedExistingTagExtraction.make({
         ...common,

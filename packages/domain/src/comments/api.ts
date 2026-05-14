@@ -7,7 +7,12 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 import { CommentId, PostId, ResourceId } from "../common/ids.js"
 import { PostNotFoundError } from "../posts/errors.js"
 import { ResourceNotFoundError } from "../resources/errors.js"
-import { ApiUpdateCommentData, CommentData, CommentSearchParams, CreateCommentData } from "./domain.js"
+import {
+  ApiUpdateCommentData,
+  CommentData,
+  CommentSearchParams,
+  CreateCommentData,
+} from "./domain.js"
 import { CommentConcurrentUpdateError, CommentNotFoundError } from "./errors.js"
 
 export class CommentsApiGroup extends HttpApiGroup.make("comments")

@@ -13,7 +13,6 @@ export class CommentNotFoundError extends Schema.TaggedErrorClass<CommentNotFoun
   { httpApiStatus: 404 },
 ) {}
 
-
 export class CommentConcurrentUpdateError extends Schema.TaggedErrorClass<CommentConcurrentUpdateError>()(
   "CommentConcurrentUpdateError",
   {
