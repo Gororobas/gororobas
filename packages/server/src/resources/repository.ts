@@ -139,41 +139,11 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
           sql`UPDATE resource_revisions SET ${sql.update(update)} WHERE id = ${id}`,
       })
 
-      /** @todo can this be more concise and better leverage Effect sql? */
       const upsertResourceRow = SqlSchema.void({
         Request: ResourceRow,
         execute: (row) => sql`
-          INSERT INTO resources (
-            id,
-            current_crdt_frontier,
-            handle,
-            url,
-            url_state,
-            last_checked_at,
-            format,
-            thumbnail_image_id,
-            created_at,
-            updated_at
-          ) VALUES (
-            ${row.id},
-            ${row.currentCrdtFrontier},
-            ${row.handle},
-            ${row.url},
-            ${row.urlState},
-            ${row.lastCheckedAt},
-            ${row.format},
-            ${row.thumbnailImageId},
-            ${row.createdAt},
-            ${row.updatedAt}
-          )
-          ON CONFLICT(id) DO UPDATE SET
-            current_crdt_frontier = excluded.current_crdt_frontier,
-            handle = excluded.handle,
-            url = excluded.url,
-            url_state = excluded.url_state,
-            format = excluded.format,
-            thumbnail_image_id = excluded.thumbnail_image_id,
-            updated_at = excluded.updated_at
+          INSERT INTO resources ${sql.insert(row)}
+          ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt", "lastCheckedAt"])}
         `,
       })
 

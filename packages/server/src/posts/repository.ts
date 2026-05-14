@@ -7,7 +7,6 @@ import {
   IdGen,
   Locale,
   LoroDocFrontier,
-  LoroDocSnapshot,
   type NoteSourceData,
   type PostClassification,
   PostCommitId,
@@ -23,7 +22,6 @@ import {
   PostVegetableRow,
   ProfileId,
   type SourcePostData,
-  TimestampColumn,
   tiptapToText,
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
@@ -34,6 +32,7 @@ import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
+import { materializeJunctionTable } from "../common/table-materialization.js"
 import { createPostSnapshot, evolvePostSnapshot } from "./post-crdt-orchestration.js"
 import {
   type CreatePostInput as CreatePostInputType,
@@ -49,6 +48,123 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
   make: Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
+    /**
+     * ======================
+     *         READS
+     * ======================
+     */
+
+    const listPostCommitRowsByPostIdAsc = SqlSchema.findAll({
+      Request: PostId,
+      Result: PostCommitRow,
+      execute: (postId) =>
+        sql`SELECT * FROM post_commits WHERE post_id = ${postId} ORDER BY created_at ASC`,
+    })
+
+    const listPostContributorIdsByPostId = SqlSchema.findAll({
+      Request: PostId,
+      Result: Schema.Struct({ createdById: Schema.NullOr(ProfileId) }),
+      execute: (postId) =>
+        sql`SELECT DISTINCT created_by_id FROM post_commits WHERE post_id = ${postId} AND created_by_id IS NOT NULL`,
+    })
+
+    const listPostRowsByOwnerProfileId = SqlSchema.findAll({
+      Request: ProfileId,
+      Result: PostRow,
+      execute: (ownerProfileId) =>
+        sql`SELECT * FROM posts WHERE owner_profile_id = ${ownerProfileId} ORDER BY updated_at DESC`,
+    })
+
+    const listPostTranslationRowsByPostId = SqlSchema.findAll({
+      Request: PostId,
+      Result: PostTranslationRow,
+      execute: (postId) => sql`SELECT * FROM post_translations WHERE post_id = ${postId}`,
+    })
+
+    const countPostRowsByOwnerProfileId = SqlSchema.findOne({
+      Request: ProfileId,
+      Result: Schema.Struct({ count: Schema.Number }),
+      execute: (ownerProfileId) =>
+        sql`SELECT COUNT(*) as count FROM posts WHERE owner_profile_id = ${ownerProfileId}`,
+    })
+
+    const findPostPageData = SqlSchema.findOneOption({
+      execute: (req) => sql`
+         WITH
+         target_post AS (
+             SELECT *
+             FROM posts
+             WHERE handle = ${req.handle}
+             LIMIT 1
+         ),
+         best_translation AS (
+             SELECT
+                 pt.post_id,
+                 pt.locale,
+                 pt.original_locale,
+                 pt.content,
+                 ROW_NUMBER() OVER (
+                     ORDER BY
+                         CASE pt.locale
+                             WHEN ${req.locale} THEN 1
+                             WHEN 'en' THEN 2
+                             WHEN 'pt' THEN 3
+                             WHEN 'es' THEN 4
+                             ELSE 5
+                         END
+                 ) AS priority_rank
+             FROM post_translations pt
+             INNER JOIN target_post ON target_post.id = pt.post_id
+         ),
+         aggregated_tags AS (
+             SELECT
+                 JSON_GROUP_ARRAY(
+                     JSON_OBJECT(
+                         'tag_id', pt.tag_id,
+                         'extraction_text', pt.extraction_text
+                     )
+                 ) AS tags
+             FROM post_tags pt
+             INNER JOIN target_post ON target_post.id = pt.post_id
+         ),
+         aggregated_vegetables AS (
+             SELECT
+                 JSON_GROUP_ARRAY(
+                     JSON_OBJECT(
+                         'vegetable_id', pv.vegetable_id,
+                         'extraction_text', pv.extraction_text
+                     )
+                 ) AS vegetables
+             FROM post_vegetables pv
+             INNER JOIN target_post ON target_post.id = pv.post_id
+         )
+         SELECT
+             p.id,
+             p.current_crdt_frontier,
+             p.handle,
+             p.visibility,
+             p.published_at,
+             p.updated_at,
+             p.owner_profile_id,
+             p.kind,
+             p.start_date,
+             p.end_date,
+             p.location_or_url,
+             p.attendance_mode,
+             t.locale,
+             t.original_locale,
+             t.content,
+             tags.tags,
+             vegs.vegetables
+         FROM target_post p
+         LEFT JOIN best_translation t ON t.priority_rank = 1
+         LEFT JOIN aggregated_tags tags ON TRUE
+         LEFT JOIN aggregated_vegetables vegs ON TRUE
+       `,
+      Request: GetPostPageParams,
+      Result: PostPageData,
+    })
+
     const findPostRowById = SqlSchema.findOneOption({
       Request: PostId,
       Result: PostRow,
@@ -63,14 +179,19 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
     const findPostCrdtSnapshotById = SqlSchema.findOneOption({
       Request: PostId,
-      Result: Schema.Struct({ crdtSnapshot: LoroDocSnapshot }),
+      Result: PostCrdtRow.mapFields(Struct.pick(["crdtSnapshot"])),
       execute: (id) => sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${id}`,
     })
 
-    const listPostTranslationRowsByPostId = SqlSchema.findAll({
+    /**
+     * ======================
+     *        WRITES
+     * ======================
+     */
+
+    const deletePost = SqlSchema.void({
       Request: PostId,
-      Result: PostTranslationRow,
-      execute: (postId) => sql`SELECT * FROM post_translations WHERE post_id = ${postId}`,
+      execute: (postId) => sql`DELETE FROM post_crdts WHERE id = ${postId}`,
     })
 
     const insertPostCommitRow = SqlSchema.void({
@@ -78,21 +199,9 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       execute: (row) => sql`INSERT INTO post_commits ${sql.insert(row)}`,
     })
 
-    const insertPostCrdtRow = (input: {
-      createdAt: TimestampColumn
-      id: PostId
-      crdtSnapshot: LoroDocSnapshot
-      ownerProfileId: ProfileId
-      updatedAt: TimestampColumn
-    }) =>
-      sql`INSERT INTO post_crdts (id, crdt_snapshot, owner_profile_id, created_at, updated_at) VALUES (${input.id}, ${input.crdtSnapshot}, ${input.ownerProfileId}, ${DateTime.formatIso(input.createdAt)}, ${DateTime.formatIso(input.updatedAt)})`
-
-    const updatePostCrdtRow = SqlSchema.void({
-      Request: PostCrdtRow.mapFields(
-        Struct.omit(["classification", "createdAt", "ownerProfileId"]),
-      ),
-      execute: ({ id, ...update }) =>
-        sql`UPDATE post_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+    const insertPostCrdtRow = SqlSchema.void({
+      Request: PostCrdtRow,
+      execute: (row) => sql`INSERT INTO post_crdts ${sql.insert(row)}`,
     })
 
     const insertPostCommit = (input: {
@@ -106,63 +215,18 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
         const now = yield* DateTime.now
         const createdById = input.commit._tag === "HumanCommit" ? input.commit.personId : null
 
-        yield* insertPostCommitRow({
-          createdAt: now,
-          createdById,
-          crdtUpdate: input.crdtUpdate,
-          fromCrdtFrontier: input.fromCrdtFrontier,
-          id,
-          postId: input.postId,
-          updatedAt: now,
-        })
-      })
-
-    const upsertPostRow = SqlSchema.void({
-      Request: PostRow,
-      execute: (row) => sql`
-        INSERT INTO posts (
-          id,
-          current_crdt_frontier,
-          handle,
-          visibility,
-          published_at,
-          created_at,
-          updated_at,
-          owner_profile_id,
-          kind,
-          start_date,
-          end_date,
-          location_or_url,
-          attendance_mode
-        ) VALUES (
-          ${row.id},
-          ${row.currentCrdtFrontier},
-          ${row.handle},
-          ${row.visibility},
-          ${row.publishedAt},
-          ${row.createdAt},
-          ${row.updatedAt},
-          ${row.ownerProfileId},
-          ${row.kind},
-          ${row.startDate},
-          ${row.endDate},
-          ${row.locationOrUrl},
-          ${row.attendanceMode}
+        yield* insertPostCommitRow(
+          PostCommitRow.make({
+            createdAt: now,
+            createdById,
+            crdtUpdate: input.crdtUpdate,
+            fromCrdtFrontier: input.fromCrdtFrontier,
+            id,
+            postId: input.postId,
+            updatedAt: now,
+          }),
         )
-        ON CONFLICT(id) DO UPDATE SET
-          current_crdt_frontier = excluded.current_crdt_frontier,
-          handle = excluded.handle,
-          visibility = excluded.visibility,
-          published_at = excluded.published_at,
-          updated_at = excluded.updated_at,
-          owner_profile_id = excluded.owner_profile_id,
-          kind = excluded.kind,
-          start_date = excluded.start_date,
-          end_date = excluded.end_date,
-          location_or_url = excluded.location_or_url,
-          attendance_mode = excluded.attendance_mode
-      `,
-    })
+      })
 
     const insertPostTranslationRows = SqlSchema.void({
       Request: Schema.Array(PostTranslationRow),
@@ -178,6 +242,28 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       Request: Schema.Array(PostVegetableRow),
       execute: (rows) => sql`INSERT INTO post_vegetables ${sql.insert(rows)}`,
     })
+
+    const updatePostCrdtRow = SqlSchema.void({
+      Request: PostCrdtRow.mapFields(
+        Struct.omit(["classification", "createdAt", "ownerProfileId"]),
+      ),
+      execute: ({ id, ...update }) =>
+        sql`UPDATE post_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+    })
+
+    const upsertPostRow = SqlSchema.void({
+      Request: PostRow,
+      execute: (row) => sql`
+        INSERT INTO posts ${sql.insert(row)}
+        ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt"])}
+      `,
+    })
+
+    /**
+     * ======================
+     *    MATERIALIZATION
+     * ======================
+     */
 
     const materializePostRow = (input: {
       currentCrdtFrontier: LoroDocFrontier
@@ -214,71 +300,68 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
     const materializeTranslations = (input: {
       locales: NoteSourceData["locales"]
       postId: PostId
-    }) =>
-      Effect.gen(function* () {
-        yield* sql`DELETE FROM post_translations WHERE post_id = ${input.postId}`
+    }) => {
+      const rows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
+        if (!localeData || !Schema.is(Locale)(locale)) return []
 
-        const translationRows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
-          if (!localeData || !Schema.is(Locale)(locale)) return []
-
-          return PostTranslationRow.make({
-            content: localeData.content,
-            contentPlainText: tiptapToText(localeData.content),
-            locale,
-            originalLocale: localeData.originalLocale,
-            postId: input.postId,
-            translatedAtCrdtFrontier: localeData.translatedAtCrdtFrontier,
-            translationSource: localeData.translationSource,
-          })
+        return PostTranslationRow.make({
+          content: localeData.content,
+          contentPlainText: tiptapToText(localeData.content),
+          locale,
+          originalLocale: localeData.originalLocale,
+          postId: input.postId,
+          translatedAtCrdtFrontier: localeData.translatedAtCrdtFrontier,
+          translationSource: localeData.translationSource,
         })
-
-        if (translationRows.length === 0) return
-        yield* insertPostTranslationRows(translationRows)
       })
+
+      return materializeJunctionTable({
+        deleteRows: sql`DELETE FROM post_translations WHERE post_id = ${input.postId}`,
+        insertRows: rows.length > 0 ? insertPostTranslationRows(rows) : Effect.void,
+      })
+    }
 
     const materializeTags = (input: {
       classification: PostClassification | null
       postId: PostId
-    }) =>
-      Effect.gen(function* () {
-        yield* sql`DELETE FROM post_tags WHERE post_id = ${input.postId}`
+    }) => {
+      const rows = (input.classification?.tags ?? []).flatMap((tag) => {
+        if (tag._tag !== "ResolvedExistingTagExtraction") return []
 
-        const postTagRows = (input.classification?.tags ?? []).flatMap((tag) => {
-          if (tag._tag !== "ResolvedExistingTagExtraction") return []
-
-          return PostTagRow.make({
-            extractionText: tag.extractionText,
-            postId: input.postId,
-            tagId: tag.tagId,
-          })
+        return PostTagRow.make({
+          extractionText: tag.extractionText,
+          postId: input.postId,
+          tagId: tag.tagId,
         })
-
-        if (postTagRows.length === 0) return
-        yield* insertPostTagRows(postTagRows)
       })
+
+      return materializeJunctionTable({
+        deleteRows: sql`DELETE FROM post_tags WHERE post_id = ${input.postId}`,
+        insertRows: rows.length > 0 ? insertPostTagRows(rows) : Effect.void,
+      })
+    }
 
     const materializeVegetables = (input: {
       classification: PostClassification | null
       postId: PostId
-    }) =>
-      Effect.gen(function* () {
-        yield* sql`DELETE FROM post_vegetables WHERE post_id = ${input.postId}`
+    }) => {
+      const rows = (input.classification?.vegetables ?? []).flatMap((vegetable) => {
+        if (vegetable._tag !== "ResolvedExistingVegetableExtraction") return []
 
-        const rows = (input.classification?.vegetables ?? []).flatMap((vegetable) => {
-          if (vegetable._tag !== "ResolvedExistingVegetableExtraction") return []
-
-          return PostVegetableRow.make({
-            extractionText: vegetable.extractionText,
-            postId: input.postId,
-            vegetableId: vegetable.vegetableId,
-          })
+        return PostVegetableRow.make({
+          extractionText: vegetable.extractionText,
+          postId: input.postId,
+          vegetableId: vegetable.vegetableId,
         })
-
-        if (rows.length === 0) return
-        yield* insertPostVegetableRows(rows)
       })
 
-    const materialize = (input: {
+      return materializeJunctionTable({
+        deleteRows: sql`DELETE FROM post_vegetables WHERE post_id = ${input.postId}`,
+        insertRows: rows.length > 0 ? insertPostVegetableRows(rows) : Effect.void,
+      })
+    }
+
+    const materializePost = (input: {
       classification?: PostClassification | null
       currentCrdtFrontier: LoroDocFrontier
       postId: PostId
@@ -306,6 +389,13 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
           postId: input.postId,
         })
       })
+
+    /**
+     * ======================
+     *    BUSINESS LOGIC
+     *     (PUBLIC API)
+     * ======================
+     */
 
     const buildSourceDataFromMaterializedRows = (input: {
       postRow: PostRow
@@ -371,20 +461,23 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
         const created = createPostSnapshot(input.sourceData)
 
         yield* persistCrdtDocumentCreation({
-          insertCrdt: insertPostCrdtRow({
-            createdAt: now,
-            id: postId,
-            crdtSnapshot: created.crdtSnapshot,
-            ownerProfileId: input.sourceData.metadata.ownerProfileId,
-            updatedAt: now,
-          }),
+          insertCrdt: insertPostCrdtRow(
+            PostCrdtRow.make({
+              classification: null,
+              createdAt: now,
+              crdtSnapshot: created.crdtSnapshot,
+              id: postId,
+              ownerProfileId: input.sourceData.metadata.ownerProfileId,
+              updatedAt: now,
+            }),
+          ),
           insertCommitOrRevision: insertPostCommit({
             commit: HumanCommit.make({ personId: input.createdById }),
             crdtUpdate: created.initialCrdtUpdate,
             fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
             postId,
           }),
-          materialize: materialize({
+          materialize: materializePost({
             currentCrdtFrontier: created.currentCrdtFrontier,
             postId,
             sourceData: created.sourceData,
@@ -479,123 +572,13 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
             fromCrdtFrontier: evolved.fromCrdtFrontier,
             postId: input.postId,
           }),
-          materialize: materialize({
+          materialize: materializePost({
             currentCrdtFrontier: evolved.nextFrontier,
             postId: input.postId,
             sourceData: evolved.sourceData,
           }),
         })
       })
-
-    const deletePost = SqlSchema.void({
-      Request: PostId,
-      execute: (postId) => sql`DELETE FROM post_crdts WHERE id = ${postId}`,
-    })
-
-    const listPostCommitRowsByPostIdAsc = SqlSchema.findAll({
-      Request: PostId,
-      Result: PostCommitRow,
-      execute: (postId) =>
-        sql`SELECT * FROM post_commits WHERE post_id = ${postId} ORDER BY created_at ASC`,
-    })
-
-    const listPostContributorIdsByPostId = SqlSchema.findAll({
-      Request: PostId,
-      Result: Schema.Struct({ createdById: Schema.NullOr(ProfileId) }),
-      execute: (postId) =>
-        sql`SELECT DISTINCT created_by_id FROM post_commits WHERE post_id = ${postId} AND created_by_id IS NOT NULL`,
-    })
-
-    const listPostRowsByOwnerProfileId = SqlSchema.findAll({
-      Request: ProfileId,
-      Result: PostRow,
-      execute: (ownerProfileId) =>
-        sql`SELECT * FROM posts WHERE owner_profile_id = ${ownerProfileId} ORDER BY updated_at DESC`,
-    })
-
-    const countPostRowsByOwnerProfileId = SqlSchema.findOne({
-      Request: ProfileId,
-      Result: Schema.Struct({ count: Schema.Number }),
-      execute: (ownerProfileId) =>
-        sql`SELECT COUNT(*) as count FROM posts WHERE owner_profile_id = ${ownerProfileId}`,
-    })
-
-    const findPostPageData = SqlSchema.findOneOption({
-      execute: (req) => sql`
-        WITH
-        target_post AS (
-            SELECT *
-            FROM posts
-            WHERE handle = ${req.handle}
-            LIMIT 1
-        ),
-        best_translation AS (
-            SELECT
-                pt.post_id,
-                pt.locale,
-                pt.original_locale,
-                pt.content,
-                ROW_NUMBER() OVER (
-                    ORDER BY
-                        CASE pt.locale
-                            WHEN ${req.locale} THEN 1
-                            WHEN 'en' THEN 2
-                            WHEN 'pt' THEN 3
-                            WHEN 'es' THEN 4
-                            ELSE 5
-                        END
-                ) AS priority_rank
-            FROM post_translations pt
-            INNER JOIN target_post ON target_post.id = pt.post_id
-        ),
-        aggregated_tags AS (
-            SELECT
-                JSON_GROUP_ARRAY(
-                    JSON_OBJECT(
-                        'tag_id', pt.tag_id,
-                        'extraction_text', pt.extraction_text
-                    )
-                ) AS tags
-            FROM post_tags pt
-            INNER JOIN target_post ON target_post.id = pt.post_id
-        ),
-        aggregated_vegetables AS (
-            SELECT
-                JSON_GROUP_ARRAY(
-                    JSON_OBJECT(
-                        'vegetable_id', pv.vegetable_id,
-                        'extraction_text', pv.extraction_text
-                    )
-                ) AS vegetables
-            FROM post_vegetables pv
-            INNER JOIN target_post ON target_post.id = pv.post_id
-        )
-        SELECT
-            p.id,
-            p.current_crdt_frontier,
-            p.handle,
-            p.visibility,
-            p.published_at,
-            p.updated_at,
-            p.owner_profile_id,
-            p.kind,
-            p.start_date,
-            p.end_date,
-            p.location_or_url,
-            p.attendance_mode,
-            t.locale,
-            t.original_locale,
-            t.content,
-            tags.tags,
-            vegs.vegetables
-        FROM target_post p
-        LEFT JOIN best_translation t ON t.priority_rank = 1
-        LEFT JOIN aggregated_tags tags ON TRUE
-        LEFT JOIN aggregated_vegetables vegs ON TRUE
-      `,
-      Request: GetPostPageParams,
-      Result: PostPageData,
-    })
 
     return {
       countPostRowsByOwnerProfileId,

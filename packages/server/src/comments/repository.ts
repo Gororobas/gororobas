@@ -13,12 +13,10 @@ import {
   IdGen,
   Locale,
   LoroDocFrontier,
-  LoroDocSnapshot,
   PostId,
   ResourceId,
   SourceCommentData,
   TiptapDocument,
-  TimestampColumn,
   tiptapToText,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Option, Schema, Struct } from "effect"
@@ -28,6 +26,7 @@ import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
+import { materializeJunctionTable } from "../common/table-materialization.js"
 import { createCommentSnapshot, evolveCommentSnapshot } from "./comment-crdt-orchestration.js"
 import { type CreateCommentInput, type UpdateCommentInput } from "./comment-repository-inputs.js"
 
@@ -37,6 +36,12 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
     make: Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
 
+      /**
+       * ======================
+       *         READS
+       * ======================
+       */
+
       const findCommentRowById = SqlSchema.findOneOption({
         Request: CommentId,
         Result: CommentRow,
@@ -45,8 +50,18 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
 
       const findCommentCrdtSnapshotById = SqlSchema.findOneOption({
         Request: CommentId,
-        Result: Schema.Struct({ crdtSnapshot: LoroDocSnapshot }),
+        Result: CommentCrdtRow.mapFields(Struct.pick(["crdtSnapshot"])),
         execute: (id) => sql`SELECT crdt_snapshot FROM comment_crdts WHERE id = ${id}`,
+      })
+
+      const findCommentContentByIdAndLocale = SqlSchema.findOneOption({
+        Request: Schema.Struct({ commentId: CommentId, locale: Locale }),
+        Result: Schema.Struct({ content: Schema.fromJsonString(TiptapDocument) }),
+        execute: (request) => sql`
+          SELECT content
+          FROM comment_translations
+          WHERE comment_id = ${request.commentId} AND locale = ${request.locale}
+        `,
       })
 
       const listCommentTranslationRowsByCommentId = SqlSchema.findAll({
@@ -56,33 +71,41 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           sql`SELECT * FROM comment_translations WHERE comment_id = ${commentId}`,
       })
 
-      /** @todo refactor to SqlSchema.void + `sql.insert()` */
-      const insertCommentCrdtRow = (input: {
-        createdAt: TimestampColumn
-        id: CommentId
-        crdtSnapshot: LoroDocSnapshot
-        moderationStatus: CommentCrdtRow["moderationStatus"]
-        ownerProfileId: CommentCrdtRow["ownerProfileId"]
-        parentCommentId: CommentCrdtRow["parentCommentId"]
-        postId: CommentCrdtRow["postId"]
-        resourceId: CommentCrdtRow["resourceId"]
-        updatedAt: TimestampColumn
-      }) =>
-        sql`INSERT INTO comment_crdts (id, post_id, resource_id, parent_comment_id, crdt_snapshot, owner_profile_id, moderation_status, created_at, updated_at) VALUES (${input.id}, ${input.postId}, ${input.resourceId}, ${input.parentCommentId}, ${input.crdtSnapshot}, ${input.ownerProfileId}, ${input.moderationStatus}, ${DateTime.formatIso(input.createdAt)}, ${DateTime.formatIso(input.updatedAt)})`
+      const listCommentCommitRowsByCommentIdAsc = SqlSchema.findAll({
+        Request: CommentId,
+        Result: CommentCommitRow,
+        execute: (commentId) =>
+          sql`SELECT * FROM comment_commits WHERE comment_id = ${commentId} ORDER BY created_at ASC`,
+      })
 
-      const updateCommentCrdtRow = SqlSchema.void({
-        Request: CommentCrdtRow.mapFields(
-          Struct.omit([
-            "createdAt",
-            "moderationStatus",
-            "ownerProfileId",
-            "parentCommentId",
-            "postId",
-            "resourceId",
-          ]),
-        ),
-        execute: ({ id, ...update }) =>
-          sql`UPDATE comment_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+      const listCommentRowsByPostId = SqlSchema.findAll({
+        Request: PostId,
+        Result: CommentRow,
+        execute: (postId) =>
+          sql`SELECT * FROM comments WHERE post_id = ${postId} ORDER BY created_at ASC`,
+      })
+
+      const listCommentRowsByResourceId = SqlSchema.findAll({
+        Request: ResourceId,
+        Result: CommentRow,
+        execute: (resourceId) =>
+          sql`SELECT * FROM comments WHERE resource_id = ${resourceId} ORDER BY created_at ASC`,
+      })
+
+      /**
+       * ======================
+       *        WRITES
+       * ======================
+       */
+
+      const deleteComment = SqlSchema.void({
+        Request: CommentId,
+        execute: (commentId) => sql`DELETE FROM comment_crdts WHERE id = ${commentId}`,
+      })
+
+      const insertCommentCrdtRow = SqlSchema.void({
+        Request: CommentCrdtRow,
+        execute: (row) => sql`INSERT INTO comment_crdts ${sql.insert(row)}`,
       })
 
       const insertCommentCommitRow = SqlSchema.void({
@@ -101,51 +124,51 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           const now = yield* DateTime.now
           const createdById = input.commit._tag === "HumanCommit" ? input.commit.personId : null
 
-          yield* insertCommentCommitRow({
-            commentId: input.commentId,
-            createdAt: now,
-            createdById,
-            crdtUpdate: input.crdtUpdate,
-            fromCrdtFrontier: input.fromCrdtFrontier,
-            id,
-          })
-        })
-
-      const upsertCommentRow = SqlSchema.void({
-        Request: CommentRow,
-        execute: (row) => sql`
-          INSERT INTO comments (
-            id,
-            post_id,
-            resource_id,
-            parent_comment_id,
-            current_crdt_frontier,
-            moderation_status,
-            created_at,
-            updated_at,
-            owner_profile_id
-          ) VALUES (
-            ${row.id},
-            ${row.postId},
-            ${row.resourceId},
-            ${row.parentCommentId},
-            ${row.currentCrdtFrontier},
-            ${row.moderationStatus},
-            ${row.createdAt},
-            ${row.updatedAt},
-            ${row.ownerProfileId}
+          yield* insertCommentCommitRow(
+            CommentCommitRow.make({
+              commentId: input.commentId,
+              createdAt: now,
+              createdById,
+              crdtUpdate: input.crdtUpdate,
+              fromCrdtFrontier: input.fromCrdtFrontier,
+              id,
+            }),
           )
-          ON CONFLICT(id) DO UPDATE SET
-            current_crdt_frontier = excluded.current_crdt_frontier,
-            moderation_status = excluded.moderation_status,
-            updated_at = excluded.updated_at
-        `,
-      })
+        })
 
       const insertCommentTranslationRows = SqlSchema.void({
         Request: Schema.Array(CommentTranslationRow),
         execute: (rows) => sql`INSERT INTO comment_translations ${sql.insert(rows)}`,
       })
+
+      const updateCommentCrdtRow = SqlSchema.void({
+        Request: CommentCrdtRow.mapFields(
+          Struct.omit([
+            "createdAt",
+            "moderationStatus",
+            "ownerProfileId",
+            "parentCommentId",
+            "postId",
+            "resourceId",
+          ]),
+        ),
+        execute: ({ id, ...update }) =>
+          sql`UPDATE comment_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+      })
+
+      const upsertCommentRow = SqlSchema.void({
+        Request: CommentRow,
+        execute: (row) => sql`
+            INSERT INTO comments ${sql.insert(row)}
+            ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt", "postId", "resourceId", "parentCommentId", "ownerProfileId"])}
+        `,
+      })
+
+      /**
+       * ======================
+       *    MATERIALIZATION
+       * ======================
+       */
 
       const materializeCommentRow = (input: {
         commentId: CommentId
@@ -175,29 +198,28 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
       const materializeTranslations = (input: {
         commentId: CommentId
         locales: SourceCommentData["locales"]
-      }) =>
-        Effect.gen(function* () {
-          yield* sql`DELETE FROM comment_translations WHERE comment_id = ${input.commentId}`
+      }) => {
+        const rows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
+          if (!localeData || !Schema.is(Locale)(locale)) return []
 
-          const translationRows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
-            if (!localeData || !Schema.is(Locale)(locale)) return []
-
-            return CommentTranslationRow.make({
-              commentId: input.commentId,
-              content: localeData.content,
-              contentPlainText: tiptapToText(localeData.content),
-              locale,
-              originalLocale: localeData.originalLocale,
-              translatedAtCrdtFrontier: localeData.translatedAtCrdtFrontier,
-              translationSource: localeData.translationSource,
-            })
+          return CommentTranslationRow.make({
+            commentId: input.commentId,
+            content: localeData.content,
+            contentPlainText: tiptapToText(localeData.content),
+            locale,
+            originalLocale: localeData.originalLocale,
+            translatedAtCrdtFrontier: localeData.translatedAtCrdtFrontier,
+            translationSource: localeData.translationSource,
           })
-
-          if (translationRows.length === 0) return
-          yield* insertCommentTranslationRows(translationRows)
         })
 
-      const materialize = (input: {
+        return materializeJunctionTable({
+          deleteRows: sql`DELETE FROM comment_translations WHERE comment_id = ${input.commentId}`,
+          insertRows: rows.length > 0 ? insertCommentTranslationRows(rows) : Effect.void,
+        })
+      }
+
+      const materializeComment = (input: {
         commentId: CommentId
         currentCrdtFrontier: LoroDocFrontier
         moderationStatus: CommentRow["moderationStatus"]
@@ -255,6 +277,13 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         } as const
       }
 
+      /**
+       * ======================
+       *    BUSINESS LOGIC
+       *     (PUBLIC API)
+       * ======================
+       */
+
       const createComment = (input: CreateCommentInput) =>
         Effect.gen(function* () {
           const commentId = yield* IdGen.make(CommentId)
@@ -262,24 +291,26 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           const created = createCommentSnapshot(input.sourceData)
 
           yield* persistCrdtDocumentCreation({
-            insertCrdt: insertCommentCrdtRow({
-              createdAt: now,
-              id: commentId,
-              crdtSnapshot: created.crdtSnapshot,
-              moderationStatus: "APPROVED_BY_DEFAULT",
-              ownerProfileId: input.ownerProfileId,
-              parentCommentId: input.parentCommentId,
-              postId: input.postId,
-              resourceId: input.resourceId,
-              updatedAt: now,
-            }),
+            insertCrdt: insertCommentCrdtRow(
+              CommentCrdtRow.make({
+                createdAt: now,
+                crdtSnapshot: created.crdtSnapshot,
+                id: commentId,
+                moderationStatus: "APPROVED_BY_DEFAULT",
+                ownerProfileId: input.ownerProfileId,
+                parentCommentId: input.parentCommentId,
+                postId: input.postId,
+                resourceId: input.resourceId,
+                updatedAt: now,
+              }),
+            ),
             insertCommitOrRevision: insertCommentCommit({
               commentId,
               commit: HumanCommit.make({ personId: input.createdById }),
               crdtUpdate: created.initialCrdtUpdate,
               fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
             }),
-            materialize: materialize({
+            materialize: materializeComment({
               commentId,
               currentCrdtFrontier: created.currentCrdtFrontier,
               moderationStatus: "APPROVED_BY_DEFAULT",
@@ -378,7 +409,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               crdtUpdate: evolved.crdtUpdate,
               fromCrdtFrontier: evolved.fromCrdtFrontier,
             }),
-            materialize: materialize({
+            materialize: materializeComment({
               commentId: input.commentId,
               currentCrdtFrontier: evolved.nextFrontier,
               moderationStatus: row.moderationStatus,
@@ -390,42 +421,6 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             }),
           })
         })
-
-      const deleteComment = SqlSchema.void({
-        Request: CommentId,
-        execute: (commentId) => sql`DELETE FROM comment_crdts WHERE id = ${commentId}`,
-      })
-
-      const listCommentCommitRowsByCommentIdAsc = SqlSchema.findAll({
-        Request: CommentId,
-        Result: CommentCommitRow,
-        execute: (commentId) =>
-          sql`SELECT * FROM comment_commits WHERE comment_id = ${commentId} ORDER BY created_at ASC`,
-      })
-
-      const listCommentRowsByPostId = SqlSchema.findAll({
-        Request: PostId,
-        Result: CommentRow,
-        execute: (postId) =>
-          sql`SELECT * FROM comments WHERE post_id = ${postId} ORDER BY created_at ASC`,
-      })
-
-      const listCommentRowsByResourceId = SqlSchema.findAll({
-        Request: ResourceId,
-        Result: CommentRow,
-        execute: (resourceId) =>
-          sql`SELECT * FROM comments WHERE resource_id = ${resourceId} ORDER BY created_at ASC`,
-      })
-
-      const findCommentContentByIdAndLocale = SqlSchema.findOneOption({
-        Request: Schema.Struct({ commentId: CommentId, locale: Locale }),
-        Result: Schema.Struct({ content: Schema.fromJsonString(TiptapDocument) }),
-        execute: (request) => sql`
-          SELECT content
-          FROM comment_translations
-          WHERE comment_id = ${request.commentId} AND locale = ${request.locale}
-        `,
-      })
 
       return {
         createComment,
