@@ -82,60 +82,35 @@ export const VegetablePageData = Schema.Struct({
     developmentCycleMax: Schema.NullOr(Schema.Int),
     developmentCycleMin: Schema.NullOr(Schema.Int),
     edibleParts: Schema.NullOr(Schema.fromJsonString(Schema.Array(EdibleVegetablePart))),
-    /** @todo clean up this mess - always use established enums */
-    grammaticalGender: Schema.Literals(["FEMININE", "MASCULINE", "NEUTRAL"]),
+    grammaticalGender: GrammaticalGender,
     heightMax: Schema.NullOr(Schema.Int),
     heightMin: Schema.NullOr(Schema.Int),
-    lifecycles: Schema.NullOr(
-      Schema.fromJsonString(Schema.Array(Schema.Literals(["ANNUAL", "BIENNIAL", "PERENNIAL"]))),
-    ),
+    lifecycles: Schema.NullOr(Schema.fromJsonString(Schema.Array(VegetableLifecycle))),
     locale: Locale,
     mainPhotoId: Schema.NullOr(Schema.String),
     origin: Schema.NullOr(Schema.String),
-    plantingMethods: Schema.NullOr(
-      Schema.fromJsonString(Schema.Array(Schema.Literals(["DIRECT_SOWING", "SEEDLING", "BOTH"]))),
-    ),
+    plantingMethods: Schema.NullOr(Schema.fromJsonString(Schema.Array(PlantingMethod))),
     scientificNames: Schema.fromJsonString(Schema.NonEmptyArray(Schema.String)),
-    strata: Schema.NullOr(
-      Schema.fromJsonString(
-        Schema.Array(Schema.Literals(["CANOPY", "UNDERSTORY", "HERBACEOUS", "RHIZOSPHERE"])),
-      ),
-    ),
+    strata: Schema.NullOr(Schema.fromJsonString(Schema.Array(AgroforestryStratum))),
     temperatureMax: Schema.NullOr(Schema.Number),
     temperatureMin: Schema.NullOr(Schema.Number),
-    uses: Schema.NullOr(
-      Schema.fromJsonString(Schema.Array(Schema.Literals(["CULINARY", "MEDICINAL", "ORNAMENTAL"]))),
-    ),
+    uses: Schema.NullOr(Schema.fromJsonString(Schema.Array(VegetableUsage))),
   }),
 })
 export type VegetablePageData = typeof VegetablePageData.Type
 
 export const VegetableSearchParams = Schema.Struct({
-  edibleParts: Schema.optional(
-    Schema.fromJsonString(
-      Schema.Array(Schema.Literals(["BULB", "FLOWER", "FRUIT", "LEAF", "ROOT", "STEM", "SEED"])),
-    ),
-  ),
+  edibleParts: Schema.optional(Schema.fromJsonString(Schema.Array(EdibleVegetablePart))),
   heightMax: Schema.optional(Schema.NumberFromString),
   heightMin: Schema.optional(Schema.NumberFromString),
-  lifecycles: Schema.optional(
-    Schema.fromJsonString(Schema.Array(Schema.Literals(["ANNUAL", "BIENNIAL", "PERENNIAL"]))),
-  ),
+  lifecycles: Schema.optional(Schema.fromJsonString(Schema.Array(VegetableLifecycle))),
   page: Schema.NumberFromString,
-  plantingMethods: Schema.optional(
-    Schema.fromJsonString(Schema.Array(Schema.Literals(["DIRECT_SOWING", "SEEDLING", "BOTH"]))),
-  ),
+  plantingMethods: Schema.optional(Schema.fromJsonString(Schema.Array(PlantingMethod))),
   query: Schema.optional(Schema.String),
-  strata: Schema.optional(
-    Schema.fromJsonString(
-      Schema.Array(Schema.Literals(["CANOPY", "UNDERSTORY", "HERBACEOUS", "RHIZOSPHERE"])),
-    ),
-  ),
+  strata: Schema.optional(Schema.fromJsonString(Schema.Array(AgroforestryStratum))),
   temperatureMax: Schema.optional(Schema.NumberFromString),
   temperatureMin: Schema.optional(Schema.NumberFromString),
-  uses: Schema.optional(
-    Schema.fromJsonString(Schema.Array(Schema.Literals(["CULINARY", "MEDICINAL", "ORNAMENTAL"]))),
-  ),
+  uses: Schema.optional(Schema.fromJsonString(Schema.Array(VegetableUsage))),
 })
 export type VegetableSearchParams = typeof VegetableSearchParams.Type
 
@@ -179,7 +154,7 @@ export type VegetableRow = typeof VegetableRow.Type
 export const VegetableTranslationRow = Schema.Struct({
   commonNames: Schema.String,
   content: Schema.NullOr(Schema.String),
-  grammaticalGender: Schema.NullOr(Schema.String),
+  grammaticalGender: Schema.NullOr(GrammaticalGender),
   locale: Locale,
   origin: Schema.NullOr(Schema.String),
   searchableNames: Schema.NullOr(Schema.String),
