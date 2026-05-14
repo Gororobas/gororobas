@@ -227,7 +227,6 @@ CREATE TABLE `vegetables` (
   `height_max` real NULL,
   `temperature_min` real NULL,
   `temperature_max` real NULL,
-  `chinese_medicine_element` text NULL,
   `main_photo_id` text NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`main_photo_id`) REFERENCES `images` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,

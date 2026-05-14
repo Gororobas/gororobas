@@ -6,7 +6,6 @@ import { Schema } from "effect"
 import {
   AgroforestryStratum,
   BookmarkState,
-  ChineseMedicineElement,
   EdibleVegetablePart,
   GrammaticalGender,
   Locale,
@@ -21,7 +20,6 @@ import { LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const VegetableMetadata = Schema.Struct({
-  chineseMedicineElement: Schema.NullOr(ChineseMedicineElement),
   developmentCycleMax: Schema.NullOr(Schema.Int),
   developmentCycleMin: Schema.NullOr(Schema.Int),
   edibleParts: Schema.NullOr(Schema.Array(EdibleVegetablePart)),
@@ -79,20 +77,12 @@ export type VegetableCardData = typeof VegetableCardData.Type
 export const VegetablePageData = Schema.Struct({
   vegetable: Schema.Struct({
     handle: Handle,
-    chineseMedicineElement: Schema.NullOr(
-      Schema.fromJsonString(
-        Schema.Array(Schema.NullOr(Schema.Literals(["COLD", "COOL", "NEUTRAL", "WARM", "HOT"]))),
-      ),
-    ),
     commonNames: Schema.fromJsonString(Schema.NonEmptyArray(Schema.String)),
     content: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
     developmentCycleMax: Schema.NullOr(Schema.Int),
     developmentCycleMin: Schema.NullOr(Schema.Int),
-    edibleParts: Schema.NullOr(
-      Schema.fromJsonString(
-        Schema.Array(Schema.Literals(["BULB", "FLOWER", "FRUIT", "LEAF", "ROOT", "STEM", "SEED"])),
-      ),
-    ),
+    edibleParts: Schema.NullOr(Schema.fromJsonString(Schema.Array(EdibleVegetablePart))),
+    /** @todo clean up this mess - always use established enums */
     grammaticalGender: Schema.Literals(["FEMININE", "MASCULINE", "NEUTRAL"]),
     heightMax: Schema.NullOr(Schema.Int),
     heightMin: Schema.NullOr(Schema.Int),
@@ -121,11 +111,6 @@ export const VegetablePageData = Schema.Struct({
 export type VegetablePageData = typeof VegetablePageData.Type
 
 export const VegetableSearchParams = Schema.Struct({
-  chineseMedicineElement: Schema.optional(
-    Schema.fromJsonString(
-      Schema.Array(Schema.Literals(["COLD", "COOL", "NEUTRAL", "WARM", "HOT"])),
-    ),
-  ),
   edibleParts: Schema.optional(
     Schema.fromJsonString(
       Schema.Array(Schema.Literals(["BULB", "FLOWER", "FRUIT", "LEAF", "ROOT", "STEM", "SEED"])),
