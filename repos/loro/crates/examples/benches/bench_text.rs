@@ -1,0 +1,323 @@
+use std::{
+    cell::{LazyCell, OnceCell},
+    ops::Deref,
+    time::Instant,
+};
+
+use bench_utils::TextAction;
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use dev_utils::ByteSize;
+use loro::{LoroDoc, LoroList, LoroMap, LoroText, ToJson};
+use rand::Rng;
+
+fn bench_text(c: &mut Criterion) {
+    use bench_utils::TextAction;
+
+    let actions = LazyCell::new(bench_utils::get_automerge_actions);
+    let doc: OnceCell<LoroDoc> = OnceCell::new();
+    let doc_snapshot: OnceCell<Vec<u8>> = OnceCell::new();
+    let doc_x100_snapshot: OnceCell<Vec<u8>> = OnceCell::new();
+    let mut g = c.benchmark_group("text");
+    g.bench_function("B4 apply", |b| {
+        b.iter_custom(|iters| {
+            let start = Instant::now();
+            let actions: &Vec<TextAction> = actions.deref();
+            for _ in 0..iters {
+                let loro = apply_text_actions(actions, 1);
+                if doc.get().is_none() {
+                    doc.set(loro).unwrap();
+                }
+            }
+
+            start.elapsed()
+        });
+    });
+
+    g.bench_function("B4 export fast snapshot (has cache)", |b| {
+        b.iter_batched(
+            || {
+                if doc.get().is_none() {
+                    let the_doc = apply_text_actions(&actions, 1);
+                    doc.set(the_doc).unwrap();
+                }
+                let doc = doc.get().unwrap();
+                doc
+            },
+            |doc| {
+                doc.export(loro::ExportMode::Snapshot).unwrap();
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+
+    g.bench_function("B4 export fast snapshot (no cache)", |b| {
+        b.iter_batched(
+            || apply_text_actions(&actions, 1),
+            |doc| {
+                doc.export(loro::ExportMode::Snapshot).unwrap();
+            },
+            criterion::BatchSize::SmallInput,
+        )
+    });
+
+    g.bench_function("B4 load", |b| {
+        b.iter_batched(
+            || {
+                if doc.get().is_none() {
+                    let the_doc = apply_text_actions(&actions, 1);
+                    doc.set(the_doc).unwrap();
+                }
+                if doc_snapshot.get().is_none() {
+                    let doc = doc.get().unwrap();
+                    let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+                    println!("B4 fast_snapshot size: {:?}", ByteSize(snapshot.len()));
+                    doc_snapshot.set(snapshot).unwrap();
+                }
+                doc_snapshot.get().unwrap()
+            },
+            |snapshot| {
+                let doc = LoroDoc::new();
+                doc.import(snapshot).unwrap();
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+
+    g.bench_function("B4x100 load", |b| {
+        b.iter_batched(
+            || {
+                if doc_x100_snapshot.get().is_none() {
+                    let doc = apply_text_actions(&actions, 100);
+                    let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+                    println!("B4x100 fast_snapshot size: {:?}", ByteSize(snapshot.len()));
+                    doc_x100_snapshot.set(snapshot).unwrap();
+                }
+
+                doc_x100_snapshot.get().unwrap()
+            },
+            |snapshot| {
+                let doc = LoroDoc::new();
+                doc.import(snapshot).unwrap();
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+
+    g.bench_function("B4x100 load and get value", |b| {
+        b.iter_batched(
+            || {
+                if doc_x100_snapshot.get().is_none() {
+                    let doc = apply_text_actions(&actions, 100);
+                    let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+                    println!("B4x100 fast_snapshot size: {:?}", ByteSize(snapshot.len()));
+                    doc_x100_snapshot.set(snapshot).unwrap();
+                }
+
+                doc_x100_snapshot.get().unwrap()
+            },
+            |snapshot| {
+                let doc = LoroDoc::new();
+                doc.import(snapshot).unwrap();
+                let text = doc.get_text("text");
+                black_box(text.to_string());
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+}
+
+fn bench_update_text(c: &mut Criterion) {
+    let mut g = c.benchmark_group("update_text");
+    g.bench_function("Update 1024x1024 total different text", |b| {
+        b.iter_batched(
+            || {
+                let from = "a".repeat(1024);
+                let to = "b".repeat(1024);
+                (from, to)
+            },
+            |(from, to)| {
+                let doc = LoroDoc::new();
+                let text = doc.get_text("text");
+                text.update(&from, Default::default()).unwrap();
+                text.update(&to, Default::default()).unwrap();
+                assert_eq!(&text.to_string(), &to);
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+
+    g.bench_function("Update 1024x1024 random diff", |b| {
+        b.iter_batched(
+            || {
+                fn rand_str(len: usize, seed: u64) -> String {
+                    let mut rng: rand::rngs::StdRng = rand::SeedableRng::seed_from_u64(seed);
+                    let mut s = String::new();
+                    for _ in 0..len {
+                        s.push(rng.gen_range(b'a'..=b'z') as char);
+                    }
+                    s
+                }
+
+                let from = rand_str(1024, 42);
+                let mut to = from.clone();
+                to.insert_str(0, &rand_str(100, 43));
+                to.replace_range(100..200, &rand_str(100, 44)); // Make some differences
+                to.replace_range(500..504, &rand_str(4, 45));
+                to.replace_range(600..700, &rand_str(5, 46));
+                (from, to)
+            },
+            |(from, to)| {
+                let doc = LoroDoc::new();
+                let text = doc.get_text("text");
+                text.update(&from, Default::default()).unwrap();
+                text.update(&to, Default::default()).unwrap();
+                assert_eq!(&text.to_string(), &to);
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+
+    g.bench_function("Update 1024x1024 text with 16 inserted chars", |b| {
+        b.iter_batched(
+            || {
+                let from = "a".repeat(1024);
+                let mut to = from.clone();
+                to.insert_str(504, "b".repeat(16).as_str());
+                (from, to)
+            },
+            |(from, to)| {
+                let doc = LoroDoc::new();
+                let text = doc.get_text("text");
+                text.update(&from, Default::default()).unwrap();
+                text.update(&to, Default::default()).unwrap();
+                assert_eq!(&text.to_string(), &to);
+            },
+            criterion::BatchSize::SmallInput,
+        );
+    });
+}
+
+fn bench_large_snapshot_decode(c: &mut Criterion) {
+    let snapshot: OnceCell<Vec<u8>> = OnceCell::new();
+    let mut g = c.benchmark_group("large_snapshot_decode");
+    g.sample_size(10);
+
+    g.bench_function("mixed doc import snapshot", |b| {
+        b.iter_batched(
+            || large_doc_snapshot(&snapshot),
+            |snapshot| {
+                let doc = LoroDoc::new();
+                doc.import(snapshot).unwrap();
+                black_box(doc);
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+
+    g.bench_function("mixed doc from_snapshot", |b| {
+        b.iter_batched(
+            || large_doc_snapshot(&snapshot),
+            |snapshot| {
+                let doc = LoroDoc::from_snapshot(snapshot).unwrap();
+                black_box(doc);
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+
+    g.bench_function("mixed doc from_snapshot + toJSON", |b| {
+        b.iter_batched(
+            || large_doc_snapshot(&snapshot),
+            |snapshot| {
+                let doc = LoroDoc::from_snapshot(snapshot).unwrap();
+                black_box(doc.get_deep_value().to_json_value());
+            },
+            criterion::BatchSize::LargeInput,
+        )
+    });
+}
+
+fn large_doc_snapshot(snapshot: &OnceCell<Vec<u8>>) -> &[u8] {
+    snapshot
+        .get_or_init(|| {
+            let doc = build_large_mixed_doc();
+            let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
+            println!(
+                "large mixed doc snapshot size: {:?}",
+                ByteSize(snapshot.len())
+            );
+            snapshot
+        })
+        .as_slice()
+}
+
+fn build_large_mixed_doc() -> LoroDoc {
+    const SECTIONS: usize = 256;
+    const ITEMS_PER_SECTION: usize = 64;
+    const BODY_REPEAT: usize = 8;
+
+    let doc = LoroDoc::new();
+    let root = doc.get_map("workspace");
+    root.insert("title", "large snapshot decode fixture")
+        .unwrap();
+    root.insert("section_count", SECTIONS as i64).unwrap();
+    let sections = root.insert_container("sections", LoroList::new()).unwrap();
+
+    for section_idx in 0..SECTIONS {
+        let section = sections.push_container(LoroMap::new()).unwrap();
+        section
+            .insert("id", format!("section-{section_idx:04}"))
+            .unwrap();
+        section.insert("archived", section_idx % 11 == 0).unwrap();
+        let body = section.insert_container("body", LoroText::new()).unwrap();
+        body.insert(0, &large_body(section_idx, BODY_REPEAT))
+            .unwrap();
+
+        let items = section.insert_container("items", LoroList::new()).unwrap();
+        for item_idx in 0..ITEMS_PER_SECTION {
+            let item = items.push_container(LoroMap::new()).unwrap();
+            item.insert("id", format!("{section_idx:04}-{item_idx:02}"))
+                .unwrap();
+            item.insert("rank", item_idx as i64).unwrap();
+            item.insert("done", (section_idx + item_idx) % 7 == 0)
+                .unwrap();
+            item.insert(
+                "label",
+                format!("section {section_idx} item {item_idx} repeated metadata"),
+            )
+            .unwrap();
+        }
+    }
+
+    doc
+}
+
+fn large_body(section_idx: usize, repeat: usize) -> String {
+    let mut body = String::new();
+    for i in 0..repeat {
+        body.push_str(&format!(
+            "section={section_idx}; paragraph={i}; lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+        ));
+    }
+    body
+}
+
+fn apply_text_actions(actions: &[bench_utils::TextAction], n: usize) -> LoroDoc {
+    let loro = LoroDoc::new();
+    let text = loro.get_text("text");
+    for _ in 0..n {
+        for TextAction { del, ins, pos } in actions.iter() {
+            text.delete(*pos, *del).unwrap();
+            text.insert(*pos, ins).unwrap();
+        }
+    }
+    loro
+}
+
+criterion_group!(
+    benches,
+    bench_text,
+    bench_update_text,
+    bench_large_snapshot_decode
+);
+criterion_main!(benches);

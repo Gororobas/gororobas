@@ -1,0 +1,93 @@
+{
+  "cSpell.words": [
+    "arbtest",
+    "bolds",
+    "bools",
+    "cids",
+    "clippy",
+    "collab",
+    "curr",
+    "dhat",
+    "flate",
+    "fuzzer",
+    "gmax",
+    "GPUI",
+    "heapless",
+    "Helloii",
+    "Hoexllo",
+    "idlp",
+    "idspan",
+    "insta",
+    "Itertools",
+    "Kleppmann",
+    "lamports",
+    "Leeeon",
+    "Liangrun",
+    "LOGSTORE",
+    "Merkle",
+    "napi",
+    "nextest",
+    "opgroup",
+    "oplog",
+    "opset",
+    "peekable",
+    "Peritext",
+    "pointee",
+    "reparent",
+    "RUSTFLAGS",
+    "serde",
+    "smstring",
+    "sstable",
+    "Stewen",
+    "thiserror",
+    "tinyvec",
+    "txns",
+    "typeparam",
+    "unbold",
+    "Uncreate",
+    "unexist",
+    "unmark",
+    "unmergeable",
+    "Unsubscriber",
+    "yspan"
+  ],
+  "rust-analyzer.runnableEnv": {
+    "RUST_BACKTRACE": "full",
+    "DEBUG": "*"
+  },
+  "rust-analyzer.cargo.features": [
+    "jsonpath",
+    "counter",
+    "test_utils"
+  ],
+  "editor.defaultFormatter": "rust-lang.rust-analyzer",
+  "rust-analyzer.server.extraEnv": {
+    "RUSTUP_TOOLCHAIN": "stable"
+  },
+  "editor.formatOnSave": true,
+  "todo-tree.general.tags": [
+    "BUG",
+    "HACK",
+    "FIXME",
+    "TODO",
+    "FUTURE",
+    "PERF",
+    "XXX",
+    "[ ]",
+    "[x]"
+  ],
+  "explorer.fileNesting.patterns": {
+    "*.rs": "${capture}.excalidraw"
+  },
+  "excalidraw.theme": "dark",
+  "deno.enable": false,
+  "cortex-debug.variableUseNaturalFormat": true,
+  "[markdown]": {},
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "vitest.enable": true,
+  "[shellscript]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  }
+}

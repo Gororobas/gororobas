@@ -1,0 +1,1951 @@
+# Changelog
+
+## 1.14.1
+
+### Patch Changes
+
+- 76cc0f9: Make `importBatch` atomic and never leave the document detached.
+
+  `importBatch` force-detaches the document so each blob only touches the OpLog, then
+  reattaches with a single checkout at the end. Two exits skipped that reattach and
+  stranded the document in detached mode, where later imports stop being reflected in
+  the state, local edits branch off a stale version, and every later `attach()` re-runs
+  the same failing checkout:
+
+  - The closing checkout was `expect`ed to succeed. Remote ops that decode fine but are
+    rejected by state validation (for example a list insert past the end of the list)
+    only reach that validation here, because the blobs were imported while detached, so
+    a malformed blob turned into a panic — a `RuntimeError: unreachable` trap in WASM —
+    after the document had already been left detached.
+  - Any other panic while decoding or applying a blob unwound past the reattach.
+
+  The batch now runs inside an OpLog rollback scope. If the closing checkout cannot
+  apply the accumulated changes, the whole batch is rolled back and `importBatch`
+  returns the state-apply error with the document still attached and unchanged, instead
+  of trapping. A panic inside the batch reattaches before it is re-raised.
+
+  The pending-changes rollback journal now snapshots each touched slot as it was when
+  the scope began, instead of undoing individual mutations. The previous two-phase undo
+  resurrected changes that the same import both parked and unlocked — routine across a
+  batch — leaving pending entries that referenced container registrations the rollback
+  had already discarded, and pre-batch pending changes unlocked by a rolled-back batch
+  are now re-parked instead of silently dropped.
+
+  `importBatch` of out-of-order updates is also considerably faster: the import preflight
+  no longer rescans the whole pending set once per blob, which made such a batch
+  quadratic. Draining 12000 out-of-order updates in one `importBatch` goes from ~3.4s to
+  ~0.45s, with peak memory unchanged. In-order batches and single `import` calls are
+  unaffected.
+
+## 1.14.0
+
+### Minor Changes
+
+- bbf21c3: fix: avoid unreadable WASM traps (`RuntimeError: unreachable executed`) on invalid arguments. `getCursor` with an invalid `side`, `getEditorOf` at an out-of-range position, and accessing an unknown container (created by a newer version of loro-crdt) now throw catchable JS errors with readable messages or return `undefined` instead of trapping the WASM instance.
+
+  feat: on a Rust panic, the full panic info (message, `file:line`, and the complete stack including the Rust call path) is now stored as a JS `Error` on `globalThis.__LORO_WASM_LAST_PANIC__` before the instance traps, so applications can recover readable diagnostics from a caught `RuntimeError`.
+
+  fix: the WASM start hook was never invoked in the `bundler`/`browser`/`base64` builds (the glue checked the JS namespace instead of the wasm exports for `__wbindgen_start`), so no panic hook was installed there at all. The start hook now runs in every build target.
+
+  feat: out-of-memory failures are now reported too. Allocation failure in WASM bypasses the panic hook and traps silently; the package now wraps the global allocator so OOM stores `loro-crdt: out of WASM memory: allocation of N bytes failed` on `globalThis.__LORO_WASM_LAST_PANIC__` and prints it to `console.error` before trapping.
+
+### Patch Changes
+
+- bbcaef6: Fix a panic on import that could permanently break a document's sync.
+
+  `import_changes_to_oplog` defers the changes whose deps are not yet in the DAG
+  and hands them to `extend_pending_changes_with_unknown_lamport` to be parked.
+  `try_apply_pending` runs in between and applies changes parked by earlier
+  imports, which advances the oplog version, so a deferred change can become
+  applicable — or already applied — by the time it is parked. Both outcomes used
+  to hit `unreachable!`, compiling to `RuntimeError: unreachable` in WASM.
+
+  The re-classification is now handled instead of asserted: a change that became
+  applicable is applied and cascaded into whatever it unblocks, an already-applied
+  one is skipped, and `ImportStatus` reports only what genuinely stayed pending.
+
+  This mattered most through `import_batch`, which force-detaches the document for
+  the duration of the batch and reattaches after the loop. The panic unwound past
+  the reattach and left the document detached, so every later import and export
+  failed and the document stopped syncing until the process restarted.
+
+## 1.13.9
+
+### Patch Changes
+
+- ddc47ec: Retreat the conservative replay base to the latest single-head critical
+  version of the two versions' combined history instead of the beginning of
+  history. When an import or checkout involves a genuinely concurrent branch,
+  the causal replay now starts at the most recent point that no concurrency
+  crosses (in the sense of Eg-walker's critical versions), skipping the
+  fully-synced common prefix that the old empty-version fallback replayed.
+- ddc47ec: Fix a convergence bug where a movable tree's incrementally maintained state
+  could diverge from a full replay of its own oplog. When newly imported
+  operations were concurrent with part of the receiving peer's multi-head
+  frontier, the diff mode was misclassified as concurrency-free and the tree
+  fast path applied the new moves without adjudicating them against the
+  existing concurrent branch. The classifier now verifies that every entry
+  point of the imported region causally covers the whole current frontier,
+  and otherwise retreats the replay base to the latest critical version so
+  the competing branches are replayed together.
+- ddc47ec: Correct LCA unmatched-branch detection when an explicit dependency already
+  covers the same peer's implicit predecessor. Keep those causally newer imports
+  on the current replay base, and avoid rebuilding unchanged list-like containers
+  when a genuinely concurrent update needs a conservative base containing a large
+  common history.
+
+## 1.13.8
+
+### Patch Changes
+
+- ac1feb6: Reduce peak memory across large snapshot import, `toJSON`, update import, and
+  snapshot export by preserving lazy state, bounding the decompressed SSTable
+  block cache by bytes, and preallocating the snapshot output exactly. Snapshot
+  import now validates every embedded SSTable block checksum before accepting
+  external bytes.
+
+  Full snapshot export no longer walks the alive-container graph: store entries
+  for referenced containers are created when the creating op or imported diff is
+  applied, so a cold export after a large import is a flush plus KV export
+  instead of re-reading every container from compressed blocks. As part of this,
+  full export round-trips imported state bytes faithfully (inconsistent
+  alive-container parent metadata is now rejected by shallow export, which still
+  walks, rather than by full export), and an ensured-but-empty mergeable child is
+  no longer materialized into the KV store by a full export — importers resolve
+  it from its parent map marker. First `toJSON` after import also avoids decoding
+  each lazy container twice.
+
+## 1.13.7
+
+### Patch Changes
+
+- 3986805: Speed up snapshot import. When decoding a Loro snapshot, the redundant per-block SSTable validation (eager block-metadata decode and per-block checksums) is now skipped, because the whole snapshot body is already protected by the document-level checksum verified during decoding. This removes a second hash pass over the data (roughly halving B4 snapshot import time) while preserving integrity guarantees.
+
+  This fast path is internal to Loro's snapshot decoding. The public `MemKvStore::import_all` still verifies every block's checksum; a separate `import_all_unchecked` opts into the unchecked path and is only used where an outer checksum already guarantees integrity.
+
+- 9b6330d: Speed up local text editing (~35% faster on the B4 editing trace). Three hot-path
+  changes: the lock-order debug instrumentation is now compiled out of release
+  builds (it ran on every per-op lock acquisition); the visible-op count is bumped
+  incrementally for local ops instead of recomputing it from the version vectors
+  (which also allocated) on every op; and a couple of per-op allocations on the
+  text insert/delete path were removed (lazy error-context formatting and inline
+  storage for entity ranges).
+- c37e76a: Fix a checkout hang after snapshot import. Change-store blocks decoded from a snapshot recorded a wrong end lamport (`lamport_range.1` was set to the start lamport of the block's last change instead of its end). When a change was split across multiple blocks and a lamport-based lookup engaged the binary search path in `ChangeStore::get_change_by_lamport_lte` — e.g. the movable-list diff calculator resolving historical positions during `checkout` — the degenerate range made the search loop forever. The binary search now also caps its steps and falls back to a scan if it ever fails to converge; the fallback considers both unflushed in-memory blocks and the underlying kv store, so lamport lookups (e.g. `getChangeAtLamport`) stay correct for local changes that have not been flushed yet.
+
+## 1.13.6
+
+### Patch Changes
+
+- a4e6174: Fix undo/redo restoring mergeable map children as regular non-mergeable containers.
+- 78f6c8a: Fix a potential deadlock when lazy snapshot loading resolves mergeable container parent depths.
+
+## 1.13.5
+
+### Patch Changes
+
+- 1727258: Improve text insert and snapshot import performance by avoiding duplicate text boundary validation and skipping eager imported change block parsing.
+- 52d8168: Recover two per-operation editing slowdowns regressed since 1.11.
+
+  Both are constant-factor regressions on the per-op (auto-commit) editing path
+  introduced by the lazy-snapshot work in #985, measured against the 1.11.1
+  release.
+
+  1. Every `MapHandler`/`ListHandler`/`MovableListHandler` insert validated its
+     value with `ensure_no_regular_container_value`, which heap-allocated a `Vec`
+     on each call even for scalar values (the common case). A scalar fast-path now
+     skips the allocation and traversal entirely. `map create 10^4 key`:
+     ~19.4ms -> ~10.7ms.
+  2. The per-op text bounds check (`TextHandler::len`/`len_unicode`/`len_utf16`)
+     took two `DocState` locks — one to check whether the container state was
+     decoded, then another to query the length. These are now consolidated into a
+     single `DocState::get_text_len` that takes one lock and one container-store
+     lookup. The lazy-snapshot memory behavior is preserved: a still-lazy
+     container reads its cached length metadata without materializing the full
+     richtext state. `bench_text B4 apply` (per-op text editing): ~389ms -> ~352ms.
+
+## 1.13.4
+
+### Patch Changes
+
+- 4d577ad: Fix two O(n^2) editing slowdowns.
+
+  1. Editing with UTF-16 / UTF-8 (byte) positions (the default in the JS binding)
+     validated each position by materializing the entire `[0, pos)` prefix string,
+     making every `insert`/`delete`/`splice`/`mark` O(n) and a run of edits O(n^2)
+     (regression since 1.12.0). The boundary check now reads the rope's prefix
+     caches via the cursor (O(log n)). Unicode-indexed editing was unaffected.
+  2. When a subscriber is attached and many edits land on the same container within
+     one event batch (e.g. random-position inserts, or many distinct map-key
+     writes), building the event cloned the growing accumulated diff on every
+     compose — O(n^2) in the number of fragments. The diffs are now composed in
+     place. This affected text, map and list events.
+  3. Converting a UTF-16 / UTF-8 position within a text chunk to a unicode offset
+     scanned the chunk char-by-char, so editing/slicing a large contiguous chunk
+     (a big insert, a loaded document, or a long run of typed text that merges into
+     one chunk) was O(chunk length) per op. Chunks that contain no astral-plane
+     characters (UTF-16) or are pure ASCII (UTF-8) now convert in O(1), covering
+     essentially all real-world text (ASCII/Latin/CJK).
+
+## 1.13.3
+
+### Patch Changes
+
+- 8d258cb: Fix `unreachable` panic when importing an out-of-order update whose op targets a mergeable child container before its creation (or its parent map) has arrived. Such ops are now buffered as pending and applied once the creating change is imported.
+- 32700ba: Fix undo recording for the first local commit after importing shallow snapshots that need import-time state materialization.
+
+## 1.13.2
+
+### Patch Changes
+
+- 9d7d5c8: Fix `getContainerById` / `hasContainer` for ensured-but-empty mergeable containers.
+  After `ensureMergeableMap` (and friends), the child was visible via `map.get(key)`
+  and `toJSON()` but its id did not resolve until the first op was written into it —
+  locally and on remote peers after sync. The id now resolves as long as the parent
+  map's child ref is alive; a mergeable cid that was never ensured still resolves to
+  `undefined`.
+
+## 1.13.1
+
+### Patch Changes
+
+- c1e05bf: Fix Node and Vitest bare imports by resolving the package root to the Node.js
+  WASM entry under the `node` export condition.
+
+## 1.13.0
+
+### Minor Changes
+
+- fa888d8: Add mergeable child containers: child containers created under a map key that converge across peers on concurrent first-write instead of forking. Exposed as `ensureMergeable{Counter,Map,List,MovableList,Text,Tree}` on `LoroMap`. A mergeable child lives at a deterministic `ContainerID` derived from `(parent, key, kind)`, and its visibility is driven by a binary ref the parent map stores at the key, so deletes and kind conflicts resolve through the map's regular LWW. `getOrCreateContainer` is deprecated for lazy map-child creation; migrate those call sites to `ensureMergeable*`. `setContainer` and `insertContainer` regular semantics are unchanged.
+
+## 1.12.5
+
+### Patch Changes
+
+- bd10411: Fix Vite dev server WASM resolution for bare `loro-crdt` imports by using conditional exports for browser development builds.
+
+## 1.12.4
+
+### Patch Changes
+
+- a6e23b6: Optimize snapshot export for shallow documents by reusing cached shallow-root state instead of checking out to the shallow root and back to latest.
+
+## 1.12.3
+
+### Patch Changes
+
+- ebee770: Fix the browser WASM loader for remapped bundler builds. The browser entry now avoids setting `XMLHttpRequest.responseType` on synchronous document requests, which browsers reject, reads the WASM bytes through a one-byte text decoding path, and emits explicit WASM re-exports so Parcel scope-hoisted builds can run in the browser.
+- f3ece99: Fix published sourcemap `sources` pointing outside the package. The rollup TypeScript plugin's emitted maps were resolved by rollup against the `.ts` source directory, leaving `../../index.ts` in the published `sources`. Vite/Vitest warned about source files escaping the package. The sourcemap now resolves inside the package and `sourcesContent` is included so debuggers don't need to fetch the TypeScript source.
+
+## 1.12.2
+
+### Patch Changes
+
+- cc587ed: Add a browser package remapping so Vite/Rolldown production builds load WASM without top-level await or circular wasm wrapper chunks.
+
+  Also make the base64 entry easier to bundle with plain esbuild, Rollup, and Next.js Webpack by avoiding static Node builtin `require()` calls and top-level await in browser bundles.
+
+- 5bfffd7: Fix panic in `UndoManager` when `maxUndoSteps` trimming encounters an empty front stack row left by a prior undo with remote diffs.
+- 8f57f4c: Reduce memory usage for read-only access to snapshot-imported documents by avoiding unnecessary lazy container state initialization.
+- eb9c18a: Fix WASI builds by using native calls instead of js-only wasm32 bindings (`Date.now`, `getrandom`)
+
+## 1.12.1
+
+### Patch Changes
+
+- 2159110: Fix Emscripten builds by using the native system timestamp path instead of the wasm-bindgen Date.now binding.
+- 658fdc6: Reject malformed import blob metadata instead of panicking when decoding unchecked import blobs.
+- 4d35808: Prefer non-empty root containers when reading documents that contain same-name roots with different container types.
+
+## 1.12.0
+
+### Minor Changes
+
+- 7dfda87: Make update imports atomic across oplog and document state application.
+
+  - `import` and `import_json_updates` now roll back imported oplog changes when state application fails, so malformed updates do not leave the document with oplog/state divergence.
+  - Pending changes that are activated during import are included in the rollback boundary when they can affect state application.
+  - Import rollback uses conditional guards to avoid adding fixed overhead to successful detached or no-op imports.
+
+### Patch Changes
+
+- 64aa97c: Harden encoding, snapshot, and import paths against malformed input
+
+  - JSON schema import (`import_json_updates`): out-of-range compressed peer indices now return `DecodeError` instead of being silently accepted as raw peer IDs; mismatched `JsonOpContent` vs container type returns `DecodeError` instead of panicking.
+  - Outdated binary encoding decoder (`decode_op`): malformed op streams (missing delete iterators, type mismatches) now return `DecodeDataCorruptionError` instead of panicking.
+  - Fast snapshot decoder (`decode_snapshot_blob_meta`): truncated or oversized section lengths now return `DecodeDataCorruptionError` instead of panicking on slice indexing.
+  - Change store KV import (`import_all`): corrupted `VersionVector`/`Frontiers` metadata now returns `DecodeDataCorruptionError` instead of panicking.
+  - Value encoding (`LoroValueKind::from_u8`, `read_str`): invalid byte values and invalid UTF-8 now return `DecodeDataCorruptionError` instead of panicking.
+  - `LoroDoc::diff()`: checkout failures during diff calculation are now propagated as `LoroError` instead of panicking; state restore uses `unwrap()` to fail-fast on internal errors.
+  - `try_get_text/list/map/tree/movable_list/counter`: now return `None` for wrong root container types instead of panicking.
+  - Detached list insert out-of-bounds: returns `LoroError::OutOfBound` instead of panicking.
+  - Tree `mov_after`/`mov_before` on deleted node: returns `TreeNodeDeletedOrNotExist` instead of panicking.
+  - `JsonChange::op_len`: empty ops array returns `0` instead of panicking.
+  - `renew_peer_id`: avoids theoretical collision with `PeerID::MAX`.
+
+- 0977ad1: Fix lock-order panics when JavaScript callbacks re-enter Loro APIs.
+
+  - `opCount()` no longer reacquires the OpLog lock while the current thread already holds a higher-order lock.
+  - `LoroText.iter()` snapshots text chunks before invoking the user callback, so callback code can safely read or mutate the document.
+
+- ef100e6: Reduce memory spikes when exporting snapshots from shallow documents.
+
+  When a shallow document is re-exported from its existing shallow root with only a small tail of updates, Loro now reuses the stored shallow-root state instead of decoding all containers just to re-encode the same state.
+
+- 933d5d6: feat: add clearRedo and clearUndo methods
+  #921
+- 17dc6c0: Fix several edge-case contract violations in document, text, and JSONPath APIs.
+
+  - JSONPath `value(...)` comparisons now handle boolean values consistently with other scalar comparisons.
+  - Rich text mark expansion now follows `ExpandType::Before` and `ExpandType::Both` at documented insertion boundaries.
+  - Text delta slicing now validates invalid ranges and UTF-8/UTF-16 boundaries before slicing, and public deltas omit removed-style tombstones after unmarking.
+  - Detached list and movable-list out-of-bounds operations now return `LoroError::OutOfBound` instead of panicking.
+
+## 1.11.1
+
+### Patch Changes
+
+- 6f5b7a9: Fix production panic regressions
+
+## 1.11.0
+
+### Minor Changes
+
+- 33d5e51: Disable WebAssembly reference-types in the wasm build for compatibility with devices like iOS 16.
+
+### Patch Changes
+
+- 41c687b: Fix forkAt to return errors instead of panicking on invalid frontiers and shallow docs.
+
+## 1.10.8
+
+### Patch Changes
+
+- 9f68a57: Return errors instead of panicking when diff or checkout targets frontiers before a shallow snapshot root.
+
+## 1.10.7
+
+### Patch Changes
+
+- e030672: Fix a panic when calling `fork()` on a document imported from a `shallow-snapshot`.
+
+## 1.10.6
+
+### Patch Changes
+
+- 85921d7: fix: don't hang when remapping nested containers w same ID (#911)
+
+## 1.10.5
+
+### Patch Changes
+
+- 2d6c235: Fix counter undo after remote updates #906
+
+## 1.10.4
+
+### Patch Changes
+
+- 864b5ca: perf(loro-internal): remove quadratic slow paths in text import/checkout #895
+- a34134d: perf: rm the event calling wrapper for ops that will not trigger events
+
+## 1.10.3
+
+### Patch Changes
+
+- 2800a4c: perf: skip useless unmark op #878
+- fffaf45: feat: add JSONPath subscription #883
+
+## 1.10.2
+
+### Patch Changes
+
+- 53635dd: fix: toDelta should ignore null style entries #875
+
+## 1.10.1
+
+### Patch Changes
+
+- ca76d86: fix: Empty LoroText attach error #873
+
+## 1.10.0
+
+### Minor Changes
+
+- ce16b52: feat: add sliceDelta method to slice a span of richtext #862
+
+  Use `text.sliceDelta(start, end)` when you need a Quill-style delta for only part of a rich text field (for example, to copy a styled snippet). The method takes UTF-16 indices; use `sliceDeltaUtf8` if you want to slice by UTF-8 byte offsets instead.
+
+  ```ts
+  import { LoroDoc } from "loro-crdt";
+
+  const doc = new LoroDoc();
+  doc.configTextStyle({
+    bold: { expand: "after" },
+    comment: { expand: "none" },
+  });
+  const text = doc.getText("text");
+
+  text.insert(0, "Hello World!");
+  text.mark({ start: 0, end: 5 }, "bold", true);
+  text.mark({ start: 6, end: 11 }, "comment", "greeting");
+
+  const snippet = text.sliceDelta(1, 8);
+  console.log(snippet);
+  // [
+  //   { insert: "ello", attributes: { bold: true } },
+  //   { insert: " " },
+  //   { insert: "Wo", attributes: { comment: "greeting" } },
+  // ]
+  ```
+
+### Patch Changes
+
+- a78d70f: fix: avoid convert panic #858
+- ee94ee4: fix: EphemeralStore apply should ignore timeout entries #865
+- 9e0a613: fix: Reject symbol-keyed map objects in wasm conversion #855
+
+## 1.9.0
+
+### Minor Changes
+
+- 10a405b: feat: JSONPath rfc9535 #848
+
+  Thanks to @zolero for the thorough implementation of JSONPath support!
+
+  LoroDoc now supports querying and mutating document data using **JSONPath**, following the [RFC 9535](https://www.rfc-editor.org/rfc/rfc9535) specification.
+
+  ### 🧩 API
+
+  ```ts
+  // Execute a JSONPath query on the document
+  doc.JSONPath(path: string): any[];
+  ```
+
+  ### 📚 Query Examples
+
+  Example data setup
+
+  ```ts
+  const doc = new LoroDoc();
+  const store = doc.getMap("store");
+
+  // Simplified setup for illustration purposes
+  store.set("books", [
+    {
+      title: "1984",
+      author: "George Orwell",
+      price: 10,
+      available: true,
+      isbn: "978-0451524935",
+    },
+    {
+      title: "Animal Farm",
+      author: "George Orwell",
+      price: 8,
+      available: true,
+    },
+    {
+      title: "Brave New World",
+      author: "Aldous Huxley",
+      price: 12,
+      available: false,
+    },
+    {
+      title: "Fahrenheit 451",
+      author: "Ray Bradbury",
+      price: 9,
+      available: true,
+    },
+    {
+      title: "The Great Gatsby",
+      author: "F. Scott Fitzgerald",
+      price: null,
+      available: true,
+    },
+    {
+      title: "To Kill a Mockingbird",
+      author: "Harper Lee",
+      price: 11,
+      available: true,
+    },
+    {
+      title: "The Catcher in the Rye",
+      author: "J.D. Salinger",
+      price: 10,
+      available: false,
+    },
+    {
+      title: "Lord of the Flies",
+      author: "William Golding",
+      price: 9,
+      available: true,
+    },
+    {
+      title: "Pride and Prejudice",
+      author: "Jane Austen",
+      price: 7,
+      available: true,
+    },
+    {
+      title: "The Hobbit",
+      author: "J.R.R. Tolkien",
+      price: 14,
+      available: true,
+    },
+  ]);
+  store.set("featured_authors", ["George Orwell", "Jane Austen"]);
+  ```
+
+  ```ts
+  // 1. Get all book titles
+  doc.JSONPath("$.store.books[*].title");
+  // → ["1984", "Animal Farm", "Brave New World", "The Hobbit"]
+
+  // 2. Filter: available books only
+  doc.JSONPath("$.store.books[?(@.available)].title");
+  // → ["1984", "Animal Farm", "The Hobbit"]
+
+  // 3. Filter: books with price > 10
+  doc.JSONPath("$.store.books[?(@.price > 10)].title");
+  // → ["The Hobbit"]
+
+  // 4. Use recursive descent to get all prices
+  doc.JSONPath("$..price");
+  // → [10, 8, 12, 9, null, 11, 14]
+
+  // 5. Slice syntax: first three books
+  doc.JSONPath("$.store.books[0:3].title");
+  // → ["1984", "Animal Farm", "Brave New World"]
+
+  // 6. Membership test: authors in featured list
+  doc.JSONPath("$.store.books[?(@.author in $.store.featured_authors)].title");
+  // → ["1984", "Animal Farm", "Pride and Prejudice"]
+
+  // 7. String match using `contains`
+  doc.JSONPath("$.store.books[?(@.title contains 'The')].author");
+  // → ["F. Scott Fitzgerald", "J.R.R. Tolkien"]
+  ```
+
+- 10a405b: refactor!: remove deprecated encoding format in v0.x #849
+
+### Patch Changes
+
+- 3af6a85: fix: WASM loading compatibility for esbuild and rsbuild #851
+
+## 1.8.9
+
+### Patch Changes
+
+- 53f5533: Extract sourcemap to another package
+
+## 1.8.8
+
+### Patch Changes
+
+- 35d9064: Fix several places that may panic #840
+
+## 1.8.7
+
+### Patch Changes
+
+- 6f98702: Add WASM sourcemap support #836
+
+## 1.8.6
+
+### Patch Changes
+
+- e97e605: fix: should not panic when getting unknown cursor #835
+
+## 1.8.5
+
+### Patch Changes
+
+- a39daf8: fix: call callbacks on undoManager non-recursively to avoid Rust alias issue #831
+- 865bccb: fix: rm useless patch for wasm loading #834
+
+## 1.8.4
+
+### Patch Changes
+
+- cf12345: fix: seed wasm externref table for Bun and integrate bun tests #828
+
+## 1.8.3
+
+### Patch Changes
+
+- 3afc4d5: fix: LoroMap entries showing null after applyDiff #825
+
+## 1.8.2
+
+### Patch Changes
+
+- b72a759: fix: register container id err when using shallow snapshot #823
+
+## 1.8.1
+
+### Patch Changes
+
+- 60287cd: perf(js): optimize js event calling speed by only converting event once (#820)
+- 338c2ce: fix: serde compatibility
+- 60287cd: fix: undo tree move between siblings (#821)
+
+## 1.8.0
+
+### Minor Changes
+
+- be09e65: feat!: events are not async anymore
+
+## 1.7.3
+
+### Patch Changes
+
+- 4ccf048: fix: propagate errors instead of unwrap #808
+
+## 1.7.2
+
+### Patch Changes
+
+- 20d8309: fix: a get_dpeth issue that may be triggered when importing snapshot #805
+
+## 1.7.1
+
+### Patch Changes
+
+- 6d308d1: fix: use null when export json update with undefined value
+- 1aad1d5: Add toJSON to LoroCounter
+
+## 1.7.0
+
+### Minor Changes
+
+- 3a0db5b: feat: add APIs to fetch values associated with the top Undo and Redo stack entries (#790)
+
+  - JS/WASM: `undo.topUndoValue()` and `undo.topRedoValue()` return the `value` from the top undo/redo item (or `undefined` when empty).
+  - Rust: `UndoManager::{top_undo_meta, top_redo_meta, top_undo_value, top_redo_value}` to inspect top-of-stack metadata and values.
+  - Internal: stack now supports peeking the top item metadata without mutation.
+
+  This enables attaching human-readable labels via `onPush`/`onPop` and retrieving them to keep Undo/Redo menu items up to date.
+
+- 9a98e8d: Distinguish explicit vs implicit empty commit behavior for commit options.
+
+  - Explicit commits (user-invoked `commit()` / `commit_with(...)`): if the transaction is empty, commit options (message/timestamp/origin) are swallowed and will NOT carry over.
+  - Implicit commits (e.g., `export`, `checkout` internal barriers): if the transaction is empty, message/timestamp/origin are preserved for the next transaction.
+
+  Rationale: align behavior with intent. Explicit commits “finalize now”, so empty commits should not leak options. Implicit commits act as processing barriers and should not destroy user-provided options for the next real change.
+
+  Note: This refines behavior without changing the API.
+
+### Patch Changes
+
+- 0fe9681: fix: handle default values for fractionalIndex and index in LoroTreeNode
+
+## 1.6.0
+
+### Minor Changes
+
+- 8c898ee: Perf: faster snapshot import speed
+
+## 1.5.13
+
+### Patch Changes
+
+- 578bfe3: fix(undo): should not transform cursors w/o id #785
+
+## 1.5.12
+
+### Patch Changes
+
+- ec95b50: Fix local event error
+
+## 1.5.11
+
+### Patch Changes
+
+- 34180e7: Fix(js): delete an entry in map should emit an event that set the field as undefined instead of null
+- 0bb9786: Fix: avoid panic when importing data to ephemeral store
+
+## 1.5.10
+
+### Patch Changes
+
+- f8bef58: Fix local event error (#763)
+
+## 1.5.9
+
+### Patch Changes
+
+- c2e6d49: fix(wasm): serialize op with bigint support @synoet
+
+## 1.5.8
+
+### Patch Changes
+
+- 19c064a: fix: snapshot origin of event
+
+## 1.5.7
+
+### Patch Changes
+
+- 70a3bf3: Feat: support `group_start` and `group_end` for UndoManager #720
+- 24a7f53: fix: panic when calling get_deep_value with an empty tree #740
+
+## 1.5.6
+
+### Patch Changes
+
+- 60876bb: Feat: redact
+
+## 1.5.5
+
+### Patch Changes
+
+- 0bfbb3b: fix: update EphemeralStore to support generic types (#718)
+
+## 1.5.4
+
+### Patch Changes
+
+- 37c2a17: fix: checkout should renew txn if not detached
+
+## 1.5.3
+
+### Patch Changes
+
+- ed4fe83: fix: from_snapshot with shallow snapshot err #712
+
+## 1.5.2
+
+### Patch Changes
+
+- 81c7bb7: fix ephemeral store recursive use by adding mutex in the inner
+- bf94a03: feat: add functionality to delete and hide empty root containers #708
+
+## 1.5.1
+
+### Patch Changes
+
+- 742cf7d: Fix memory leak caused by wasm-bindgen
+  - https://github.com/rustwasm/wasm-bindgen/issues/3854
+
+## 1.5.0
+
+### Minor Changes
+
+- 8dfcad4: # New Hooks: `pre-commit` and `first-commit-from-peer`
+
+  ## `doc.subscribePreCommit(listener)`
+
+  The `pre-commit` hook enables users to modify commit options before any commit is processed.
+
+  This hook is particularly useful because `doc.commit()` is often invoked implicitly in various methods such as `doc.import`, `doc.export`, `doc.checkout`, and `doc.exportJsonUpdates`. Without this hook, users attempting to add custom messages to each commit might miss these implicit commit triggers.
+
+  ```ts
+  const doc = new LoroDoc();
+  doc.setPeerId(0);
+  doc.subscribePreCommit((e) => {
+    e.modifier.setMessage("test").setTimestamp(Date.now());
+  });
+  doc.getList("list").insert(0, 100);
+  doc.commit();
+  expect(doc.getChangeAt({ peer: "0", counter: 0 }).message).toBe("test");
+  ```
+
+  ### Advanced Example: Creating a Merkle DAG
+
+  By combining `doc.subscribePreCommit` with `doc.exportJsonInIdSpan`, you can implement advanced features like representing Loro's editing history as a Merkle DAG:
+
+  ```ts
+  const doc = new LoroDoc();
+  doc.setPeerId(0);
+  doc.subscribePreCommit((e) => {
+    const changes = doc.exportJsonInIdSpan(e.changeMeta);
+    expect(changes).toHaveLength(1);
+    const hash = crypto.createHash("sha256");
+    const change = {
+      ...changes[0],
+      deps: changes[0].deps.map((d) => {
+        const depChange = doc.getChangeAt(idStrToId(d));
+        return depChange.message;
+      }),
+    };
+    hash.update(JSON.stringify(change));
+    const sha256Hash = hash.digest("hex");
+    e.modifier.setMessage(sha256Hash);
+  });
+
+  console.log(change); // The output is shown below
+  doc.getList("list").insert(0, 100);
+  doc.commit();
+  // Change 0
+  // {
+  //   id: '0@0',
+  //   timestamp: 0,
+  //   deps: [],
+  //   lamport: 0,
+  //   msg: undefined,
+  //   ops: [
+  //     {
+  //       container: 'cid:root-list:List',
+  //       content: { type: 'insert', pos: 0, value: [100] },
+  //       counter: 0
+  //     }
+  //   ]
+  // }
+
+  doc.getList("list").insert(0, 200);
+  doc.commit();
+  // Change 1
+  // {
+  //   id: '1@0',
+  //   timestamp: 0,
+  //   deps: [
+  //     '2af99cf93869173984bcf6b1ce5412610b0413d027a5511a8f720a02a4432853'
+  //   ],
+  //   lamport: 1,
+  //   msg: undefined,
+  //   ops: [
+  //     {
+  //       container: 'cid:root-list:List',
+  //       content: { type: 'insert', pos: 0, value: [200] },
+  //       counter: 1
+  //     }
+  //   ]
+  // }
+
+  expect(doc.getChangeAt({ peer: "0", counter: 0 }).message).toBe(
+    "2af99cf93869173984bcf6b1ce5412610b0413d027a5511a8f720a02a4432853",
+  );
+  expect(doc.getChangeAt({ peer: "0", counter: 1 }).message).toBe(
+    "aedbb442c554ecf59090e0e8339df1d8febf647f25cc37c67be0c6e27071d37f",
+  );
+  ```
+
+  ## `doc.subscribeFirstCommitFromPeer(listener)`
+
+  The `first-commit-from-peer` event triggers when a peer performs operations on the document for the first time.
+  This provides an ideal point to associate peer information (such as author identity) with the document.
+
+  ```ts
+  const doc = new LoroDoc();
+  doc.setPeerId(0);
+  doc.subscribeFirstCommitFromPeer((e) => {
+    doc.getMap("users").set(e.peer, "user-" + e.peer);
+  });
+  doc.getList("list").insert(0, 100);
+  doc.commit();
+  expect(doc.getMap("users").get("0")).toBe("user-0");
+  ```
+
+- a997885: # `EphemeralStore`: An Alternative to Awareness
+
+  Awareness is commonly used as a state-based CRDT for handling ephemeral states in real-time collaboration scenarios, such as cursor positions and application component highlights. As application complexity grows, Awareness may be set in multiple places, from cursor positions to user presence. However, the current version of Awareness doesn't support partial state updates, which means even minor mouse movements require synchronizing the entire Awareness state.
+
+  ```ts
+  awareness.setLocalState({
+    ...awareness.getLocalState(),
+    x: 167,
+  });
+  ```
+
+  Since Awareness is primarily used in real-time collaboration scenarios where consistency requirements are relatively low, we can make it more flexible. We've introduced `EphemeralStore` as an alternative to `Awareness`. Think of it as a simple key-value store that uses timestamp-based last-write-wins for conflict resolution. You can choose the appropriate granularity for your key-value pairs based on your application's needs, and only modified key-value pairs are synchronized.
+
+  ## Examples
+
+  ```ts
+  import {
+      EphemeralStore,
+      EphemeralListener,
+      EphemeralStoreEvent,
+  } from "loro-crdt";
+
+  const store = new EphemeralStore();
+  // Set ephemeral data
+  store.set("loro-prosemirror", {
+      anchor: ...,
+      focus: ...,
+      user: "Alice"
+  });
+  store.set("online-users", ["Alice", "Bob"]);
+
+  expect(storeB.get("online-users")).toEqual(["Alice", "Bob"]);
+  // Encode only the data for `loro-prosemirror`
+  const encoded = store.encode("loro-prosemirror")
+
+  store.subscribe((e: EphemeralStoreEvent) => {
+      // Listen to changes from `local`, `remote`, or `timeout` events
+  });
+  ```
+
+### Patch Changes
+
+- 742842f: fix: apply multiple styles via text delta at the end "\n" char #692
+- 4cb7ae3: feat: get ops from current txn as json #676
+
+## 1.4.6
+
+### Patch Changes
+
+- 0b0ac7c: fix: entity index when the tree is empty
+
+## 1.4.5
+
+### Patch Changes
+
+- aab07c6: feat: set default config for text style #669
+- 6cf06e5: fix: detached loro text issues #665
+
+## 1.4.4
+
+### Patch Changes
+
+- 28d1264: feat(wasm): enhance toJsonWithReplacer to handle nested containers in replacer returned value
+- 28d1264: fix(wasm): add toJSON to LoroText
+
+  Now all containers have toJSON method.
+
+## 1.4.3
+
+### Patch Changes
+
+- 2a82396: feat: add new ways to control commit options (#656)
+- 2a82396: fix: mark err on detached LoroText (#659)
+
+## 1.4.2
+
+### Patch Changes
+
+- e0948d8: feat: add container existence check methods & avoid panic in wasm/js #651
+- 9955500: fix: an internal iter_change err that may cause fork_at panic #649
+
+## 1.4.1
+
+### Patch Changes
+
+- 9090c4d: fix: memory leak issue
+
+## 1.4.0
+
+### Minor Changes
+
+- 2f3364a: refactor!: use better data type for doc.diff #646
+
+### Patch Changes
+
+- 72699ae: fix: getting values by path in LoroTree (#643)
+
+## 1.3.5
+
+### Patch Changes
+
+- c2a61f3: fix: improve shallow snapshot and JSON export handling #639
+
+## 1.3.4
+
+### Patch Changes
+
+- b58e6bd: fix: should be able to call subscription after diffing #637
+
+## 1.3.3
+
+### Patch Changes
+
+- 8fdb25e: fix: move tree node within the self parent with 16 siblings #635
+
+## 1.3.2
+
+### Patch Changes
+
+- a168063: refactor: hold doc reference in handler (#624)
+- a168063: fix: a few LoroCounter errors (#626)
+
+## 1.3.1
+
+### Patch Changes
+
+- 07500da: fix: map.keys() may return keys from deleted entries #618
+
+## 1.3.0
+
+### Minor Changes
+
+- ddafb7e: feat: diff, applyDiff, and revertTo #610
+
+  Add new version-control-related primitives:
+
+  - **`diff(from, to)`**: calculate the difference between two versions. The returned results have similar structures to the differences in events.
+  - **`revertTo(targetVersion)`**: revert the document back to the target version. The difference between this and `checkout(targetVersion)` is this method will generate a series of new operations, which will transform the current doc into the same as the target version.
+  - **`applyDiff(diff)`**: you can use it to apply the differences generated from `diff(from, to)`.
+
+  You can use these primitives to implement version-control functions like `squash` and `revert`.
+
+  # Examples
+
+  `revertTo`
+
+  ```ts
+  const doc = new LoroDoc();
+  doc.setPeerId("1");
+  doc.getText("text").update("Hello");
+  doc.commit();
+  doc.revertTo([{ peer: "1", counter: 1 }]);
+  expect(doc.getText("text").toString()).toBe("He");
+  ```
+
+  `diff`
+
+  ```ts
+  const doc = new LoroDoc();
+  doc.setPeerId("1");
+  // Text edits with formatting
+  const text = doc.getText("text");
+  text.update("Hello");
+  text.mark({ start: 0, end: 5 }, "bold", true);
+  doc.commit();
+
+  // Map edits
+  const map = doc.getMap("map");
+  map.set("key1", "value1");
+  map.set("key2", 42);
+  doc.commit();
+
+  // List edits
+  const list = doc.getList("list");
+  list.insert(0, "item1");
+  list.insert(1, "item2");
+  list.delete(1, 1);
+  doc.commit();
+
+  // Tree edits
+  const tree = doc.getTree("tree");
+  const a = tree.createNode();
+  a.createNode();
+  doc.commit();
+
+  const diff = doc.diff([], doc.frontiers());
+  expect(diff).toMatchSnapshot();
+  ```
+
+  ```js
+  {
+    "cid:root-list:List": {
+      "diff": [
+        {
+          "insert": [
+            "item1",
+          ],
+        },
+      ],
+      "type": "list",
+    },
+    "cid:root-map:Map": {
+      "type": "map",
+      "updated": {
+        "key1": "value1",
+        "key2": 42,
+      },
+    },
+    "cid:root-text:Text": {
+      "diff": [
+        {
+          "attributes": {
+            "bold": true,
+          },
+          "insert": "Hello",
+        },
+      ],
+      "type": "text",
+    },
+    "cid:root-tree:Tree": {
+      "diff": [
+        {
+          "action": "create",
+          "fractionalIndex": "80",
+          "index": 0,
+          "parent": undefined,
+          "target": "12@1",
+        },
+        {
+          "action": "create",
+          "fractionalIndex": "80",
+          "index": 0,
+          "parent": "12@1",
+          "target": "13@1",
+        },
+      ],
+      "type": "tree",
+    },
+  }
+  ```
+
+- ac51ceb: feat: add exportJsonInIdSpan and make peer compression optional
+- 8039e44: feat: find id spans between #607
+
+### Patch Changes
+
+- 9c1005d: fix: should not merge remote changes due to small interval
+
+## 1.2.7
+
+### Patch Changes
+
+- da24910: fix: should commit before travel_change_ancestors #599
+
+## 1.2.6
+
+### Patch Changes
+
+- d552955: Make getByPath work for "tree/0/key"
+- df81aec: Better event ordering
+
+## 1.2.5
+
+### Patch Changes
+
+- 9faa149: Fix detach + attach error
+
+## 1.2.4
+
+### Patch Changes
+
+- 5aa7985: Fixed LoroTree's incorrect index when moving a node within its current parent
+
+## 1.2.3
+
+### Patch Changes
+
+- 42949c0: Fix VersionVector ownership issue in WASM binding
+- 1ca1275: feat: UndoManager's onPush now can access the change event
+
+## 1.2.2
+
+### Patch Changes
+
+- 3b7a738: Add getShallowValue and toJsonWIthReplacer
+  - Add getShallowValue for each container (#581)
+  - Implement toJsonWithReplacer method for LoroDoc to customize JSON serialization (#582)
+  - Rename importUpdateBatch into importBatch & refine type (#580)
+
+## 1.2.1
+
+### Patch Changes
+
+- adb6ab8: fix: panic when returned non-boolean value from text.iter(f) #578
+
+## 1.2.0
+
+### Minor Changes
+
+- 01fccc5: Return ImportStatus in the import_batch method
+
+### Patch Changes
+
+- d08a865: fix: getOrCreateContainer should not throw if value is null #576
+
+## 1.1.4
+
+### Patch Changes
+
+- 0325061: Fix a deadloop case when importing updates (#570)
+
+## 1.1.3
+
+### Patch Changes
+
+- d6966ac: The fractional index in LoroTree is now enabled by default with jitter=0.
+
+  To reduce the cost of LoroTree, if the `index` property in LoroTree is unused, users can still
+  call `tree.disableFractionalIndex()`. However, in the new version, after disabling the fractional
+  index, `tree.moveTo()`, `tree.moveBefore()`, `tree.moveAfter()`, and `tree.createAt()` will
+  throw an error
+
+## 1.1.2
+
+### Patch Changes
+
+- 70c4942: Add base64 build target
+- 35e7ea5: Add changeCount and opCount methods
+
+## 1.1.1
+
+### Patch Changes
+
+- 9abeb81: Add methods to modify VV
+- ee26952: Add isDeleted() method to each container
+
+## 1.1.0
+
+### Minor Changes
+
+- 6e878d2: Feat add API to query creators, the last editors/movers
+- 778ca54: Feat: allow users to query the changed containers in the target id range
+
+### Patch Changes
+
+- 6616101: Perf: optimize importBatch
+
+  When using importBatch to import a series of snapshots and updates, we should import the snapshot with the greatest version first.
+
+- 6e878d2: Feat: getLastEditor on LoroMap
+- 8486234: Fix get encoded blob meta
+
+## 1.0.9
+
+### Patch Changes
+
+- 7bf6db7: Add `push` to LoroText and `pushContainer` to LoroList LoroMovableList
+- 9b60d01: Define the behavior of `doc.fork()` when the doc is detached
+
+  It will fork at the current state_frontiers, which is equivalent to calling `doc.fork_at(&doc.state_frontiers())`
+
+## 1.0.8
+
+### Patch Changes
+
+- 62a3a93: Merge two js packages
+
+## 1.0.8-alpha.3
+
+### Patch Changes
+
+- Fix build for bundler
+
+## 1.0.8-alpha.2
+
+### Patch Changes
+
+- Fix build script for web target
+
+## 1.0.8-alpha.1
+
+### Patch Changes
+
+- Include the build for web
+
+## 1.0.8-alpha.0
+
+### Patch Changes
+
+- Refactor simplify js binding
+
+## 1.0.7
+
+### Patch Changes
+
+- Skip published version
+
+## 1.0.1
+
+### Patch Changes
+
+- Release v1.0.1
+
+## 1.0.0
+
+### Patch Changes
+
+- dd3bd92: Release v1.0
+
+## 1.0.0-beta.5
+
+### Patch Changes
+
+- - Fork at should restore detached state (#523)
+  - Subscription convert error (#525)
+
+## 1.0.0-beta.4
+
+### Patch Changes
+
+- Fix: ForkAt should inherit the config and auto commit from the original doc
+
+## 1.0.0-beta.3
+
+### Patch Changes
+
+- - Wasm api 1.0 (#521)
+  - Rename wasm export from (#519)
+  - Rename tree event (#520)
+
+## 1.0.0-beta.2
+
+### Patch Changes
+
+- _(wasm)_ Add methods to encode and decode Frontiers (#517)
+- Avoid auto unsubscribe (due to gc) in js env (#516)
+
+## 1.0.0-beta.1
+
+### Patch Changes
+
+- Performance improvement and bug fixes
+
+  ### 🚀 Features
+
+  - Redact (#504)
+
+  ### 🐛 Bug Fixes
+
+  - Ffi Subscription (#505)
+  - Ffi remove try unwrap (#506)
+  - Movable list undo impl (#509)
+  - Tracker skip applied deletion error (#512)
+  - IsContainerDeleted cache err (#513)
+
+  ### 📚 Documentation
+
+  - Refine wasm docs
+
+  ### ⚡ Performance
+
+  - Optimize shrink frontiers
+  - Optimize batch container registrations on arena (#510)
+  - Optimize high concurrency performance (#514)
+  - Use better data structure for frontiers (#515)
+
+  ### Perf
+
+  - Commit speed & text insert cache (#511)
+
+## 1.0.0-alpha.5
+
+### Patch Changes
+
+- ## Fix
+
+  - Use release build
+
+  ## Test
+
+  - Add compatibility tests (#503)
+
+## 1.0.0-alpha.4
+
+### Patch Changes
+
+- ### 🚀 Features
+
+  - _(wasm)_ Commit message & get pending ops length (#477)
+  - Update text by line (#480)
+  - Add clear methods (#478)
+  - Travel change's ancestors (#483)
+  - Compact state store
+  - Add FFI for Loro (#420)
+  - Add dag allocation tree algorithm (#415)
+  - Add import status (#494)
+
+  ### 🐛 Bug Fixes
+
+  - Get correct tree_cache current vv when retreating (#476)
+  - Gc snapshot error (#481)
+  - Checkout into middle of marks
+  - Checkout diff-calc cache issue
+  - Return err if snapshot container has unknown container (#488)
+  - Do not set peer id with max (#491)
+  - Fork error (#493)
+  - FFI new sub import status (#497)
+  - Create event cannot find parent (#498)
+
+  ### 🚜 Refactor
+
+  - [**breaking**] Don't wait for `commit` to update version info
+  - Avoid footgun of impl ord for cid
+  - Loro import function should return LoroEncodeError (#487)
+  - [**breaking**] Better event api (#489)
+  - Change the first param of travel change from id to ids (#492)
+  - [**breaking**] List state snapshot schema for v1.0 (#485)
+
+  ### ⚡ Performance
+
+  - Make shrink frontiers faster when the peer num is large (#482)
+  - Optimize tree cache find children speed
+  - Avoid memory leak when forking repeatedly (#500)
+  - Optimize kv export_all by reusing encoded block (#501)
+  - Optimize speed of large maps (#496)
+  - Optimize diff calc cache use (#475)
+
+  ### 🧪 Testing
+
+  - Make awareness more robust
+  - Bench large folder with 1M files & 100M ops (#495)
+
+  ### ⚙️ Miscellaneous Tasks
+
+  - Use cached diff calc
+
+## 1.0.0-alpha.3
+
+### Patch Changes
+
+- ### 🐛 Bug Fixes
+
+  - Cursor behavior when using gc-snapshot (#472)
+  - _(wasm)_ Type err
+
+  ### ⚙️ Miscellaneous Tasks
+
+  - Make tree parent id pub on loro crate
+
+  ### Feat
+
+  - Allow editing on detached mode (#473)
+
+  ### Fix
+
+  - Get tree's alive children correctly (#474)
+  - Should not emit event when exporting gc-snapshot (#471)
+
+## 1.0.0-alpha.2
+
+### Patch Changes
+
+- ### 🚀 Features
+
+  - Fork doc at the target version (#469)
+
+  ### 🚜 Refactor
+
+  - BREAKING CHANGE: Use hierarchy value for tree value (#470)
+
+## 1.0.0-alpha.1
+
+### Patch Changes
+
+- ### 🚀 Features
+
+  - Get shallow value of doc (#463)
+  - Add state only snapshot & refine check slow test
+  - Add new cid method to js binding
+  - Jsonpath experimental support (#466)
+
+  ### 🐛 Bug Fixes
+
+  - Raise error if perform action on a deleted container (#465)
+  - Raise error if moving a deleted node
+  - Export snapshot error on a gc doc
+
+  ### 🚜 Refactor
+
+  - Tree contains & isDeleted (#467)
+
+  ### 🧪 Testing
+
+  - Check state correctness on shallow doc
+
+## 1.0.0-alpha.0
+
+- Better encode schema that can be 100x faster
+- Less memory usage
+- You can trim needless history in snapshot now
+- Better architecture and extensibility
+
+## 0.16.12
+
+### Patch Changes
+
+- 46e21fc: Fix tree move issues
+
+## 0.16.11
+
+### Patch Changes
+
+- dce00ab: Make loro-wasm work in cloudflare worker
+
+## 0.16.10
+
+### Patch Changes
+
+- 7cf54e8: Fix batch importing with snapshot
+
+## 0.16.9
+
+### Patch Changes
+
+- a761430: Fix build script
+
+## 0.16.8
+
+### Patch Changes
+
+- 38b4bcf: Add text update API
+
+  - Remove the patch for crypto
+  - Add text update API (#404)
+  - Check invalid root container name (#411)
+
+  ### 🐛 Bug Fixes
+
+  - Workaround lldb bug make loro crate debuggable (#414)
+  - Delete the **bring back** tree node from the undo container remap (#423)
+
+  ### 📚 Documentation
+
+  - Fix typo
+  - Refine docs about event (#417)
+
+  ### 🎨 Styling
+
+  - Use clippy to perf code (#407)
+
+  ### ⚙️ Miscellaneous Tasks
+
+  - Add test tools (#410)
+
+## 0.16.7
+
+### Patch Changes
+
+- 45c98d5: Better text APIs and bug fixes
+
+  ### 🚀 Features
+
+  - Add insert_utf8 and delete_utf8 for Rust Text API (#396)
+  - Add text iter (#400)
+  - Add more text api (#398)
+
+  ### 🐛 Bug Fixes
+
+  - Tree undo when processing deleted node (#399)
+  - Tree diff calc children should be sorted by idlp (#401)
+  - When computing the len of the map, do not count elements that are None (#402)
+
+  ### 📚 Documentation
+
+  - Update wasm docs
+  - Rm experimental warning
+
+  ### ⚙️ Miscellaneous Tasks
+
+  - Update fuzz config
+  - Pnpm
+  - Rename position to fractional_index (#381)
+
+## 0.16.6
+
+### Patch Changes
+
+- 1e94248: Add `.fork()` to duplicate the doc
+
+## 0.16.5
+
+### Patch Changes
+
+- 439e4e9: Update pkg desc
+
+## 0.16.4
+
+### Patch Changes
+
+- afac347: feat: implement `Counter` and expose it to js side
+
+## 0.16.4-alpha.0
+
+### Patch Changes
+
+- Export/import JSON schema
+
+## 0.16.3
+
+### Patch Changes
+
+- 6d47015: Make cursors transformation better in undo/redo loop
+- dc55055: Perf(wasm) cache text.toDelta
+
+## 0.16.2
+
+### Patch Changes
+
+- 34f6064: Better undo events & transform cursors by undo manager (#369)
+
+  #### 🧪 Testing
+
+  - Enable compatibility test (#367)
+
+## 0.16.1
+
+### Patch Changes
+
+- 5cd80b0: Refine undo impl
+  - Add "undo" origin for undo and redo event
+  - Allow users to skip certain local operations
+  - Skip undo/redo ops that are not visible to users
+  - Add returned bool value to indicate whether undo/redo is executed
+
+## 0.16.0
+
+### Minor Changes
+
+- c12c2b9: Movable Tree Children & Undo
+
+  #### 🐛 Bug Fixes
+
+  - Refine error message on corrupted data (#356)
+  - Add MovableList to CONTAINER_TYPES (#359)
+  - Better jitter for fractional index (#360)
+
+  #### 🧪 Testing
+
+  - Add compatibility tests (#357)
+
+  #### Feat
+
+  - Make the encoding format forward and backward compatible (#329)
+  - Undo (#361)
+  - Use fractional index to order the children of the tree (#298)
+
+  #### 🐛 Bug Fixes
+
+  - Tree fuzz sort value (#351)
+  - Upgrade wasm-bindgen to fix str free err (#353)
+
+## 0.15.3
+
+### Patch Changes
+
+- 43506cc: Fix unsound issue caused by wasm-bindgen
+
+  #### 🐛 Bug Fixes
+
+  - Fix potential movable list bug (#354)
+  - Tree fuzz sort value (#351)
+  - Upgrade wasm-bindgen to fix str free err (#353)
+
+  #### 📚 Documentation
+
+  - Simplify readme (#352)
+
+## 0.15.2
+
+### Patch Changes
+
+- e30678d: Perf: fix deletions merge
+
+  #### 🐛 Bug Fixes
+
+  - _(wasm)_ Movable list .kind() (#342)
+
+  #### ⚡ Performance
+
+  - Delete span merge err (#348)
+
+  #### ⚙️ Miscellaneous Tasks
+
+  - Warn missing debug impl (#347)
+
+  <!-- generated by git-cliff -->
+
+## 0.15.1
+
+### Patch Changes
+
+- 04c6290: Bug fixes and improvements.
+
+  #### 🐛 Bug Fixes
+
+  - Impl a few unimplemented! for movable tree (#335)
+  - Refine ts type; reject invalid operations (#334)
+  - Get cursor err on text and movable list (#337)
+  - Missing MovableList in all container type (#343)
+  - Upgrade generic-btree to allow large btree (#344)
+
+  #### 📚 Documentation
+
+  - Add warn(missing_docs) to loro and loro-wasm (#339)
+  - Minor fix on set_change_merge_interval api (#341)
+
+  #### ⚙️ Miscellaneous Tasks
+
+  - Skip the checking if not debug_assertions (#340)
+
+  <!-- generated by git-cliff -->
+
+## 0.15.0
+
+### Minor Changes
+
+- 35b9b6e: Movable List (#293)
+
+  Loro's List supports insert and delete operations but lacks built-in methods for `set` and `move`. To simulate set and move, developers might combine delete and insert. However, this approach can lead to issues during concurrent operations on the same element, often resulting in duplicate entries upon merging.
+
+  For instance, consider a list [0, 1, 2]. If user A moves the element '0' to position 1, while user B moves it to position 2, the ideal merged outcome should be either [1, 0, 2] or [1, 2, 0]. However, using the delete-insert method to simulate a move results in [1, 0, 2, 0], as both users delete '0' from its original position and insert it independently at new positions.
+
+  To address this, we introduce a MovableList container. This new container type directly supports move and set operations, aligning more closely with user expectations and preventing the issues associated with simulated moves.
+
+  ## Example
+
+  ```ts
+  import { Loro } from "loro-crdt";
+  import { expect } from "vitest";
+
+  const doc = new Loro();
+  const list = doc.getMovableList("list");
+  list.push("a");
+  list.push("b");
+  list.push("c");
+  expect(list.toArray()).toEqual(["a", "b", "c"]);
+  list.set(2, "d");
+  list.move(0, 1);
+  const doc2 = new Loro();
+  const list2 = doc2.getMovableList("list");
+  expect(list2.length).toBe(0);
+  doc2.import(doc.exportFrom());
+  expect(list2.length).toBe(3);
+  expect(list2.get(0)).toBe("b");
+  expect(list2.get(1)).toBe("a");
+  expect(list2.get(2)).toBe("d");
+  ```
+
+## 0.14.6
+
+### Patch Changes
+
+- 24cf9b9: Bug Fix
+
+  #### 🐛 Bug Fixes
+
+  - Attached container can be inserted to `Map` or `List` (#331)
+
+## 0.14.5
+
+### Patch Changes
+
+- 73e3ba5: Bug Fix
+
+  #### 🐛 Bug Fixes
+
+  - _(js)_ Allow convert from undefined to LoroValue (#323)
+
+  #### 🚜 Refactor
+
+  - Refine ts type (#322)
+
+## 0.14.4
+
+### Patch Changes
+
+- 598d97e: ### 🚜 Refactor
+
+  - Refine the TS Type of Awareness
+  - Parse Uint8array to LoroValue::Binary (#320)
+
+  ### 📚 Documentation
+
+  - Update how to publish new npm pkgs
+
+## 0.14.3
+
+### Patch Changes
+
+- a1fc2e3: Feat: Awareness (#318)
+
+## 0.14.2
+
+### Patch Changes
+
+- Refactor rename `StablePosition` to `Cursor`
+
+  - Rename stable pos to cursor (#317)
+
+  <!-- generated by git-cliff -->
+
+## 0.14.1
+
+### Patch Changes
+
+- Supports Cursors
+
+  #### 🚀 Features
+
+  - Cursors (#290)
+
+## 0.14.0
+
+### Minor Changes
+
+- Improved API
+
+  ### 🚀 Features
+
+  - Access value/container by path (#308)
+  - Decode import blob meta (#307)
+
+  ### 🐛 Bug Fixes
+
+  - Decode iter return result by updating columnar to 0.3.4 (#309)
+
+  ### 🚜 Refactor
+
+  - Replace "local" and "fromCheckout" in event with "triggeredBy" (#312)
+  - Add concrete type for each different container (#313)
+  - _(ts)_ Make types better (#315)
+
+  ### 📚 Documentation
+
+  - Refine wasm docs (#304)
+  - Clarify that peer id should be convertible to a u64 (#306)
+
+  ### ⚙️ Miscellaneous Tasks
+
+  - Add coverage report cli (#311)
+
+## 0.13.1
+
+### Patch Changes
+
+- Fix type errors and conversion from js->rust error
+
+## 0.13.0
+
+### Minor Changes
+
+- BREAKING CHANGE: `detached` mode for Containers #300
+
+  Now creating sub-containers is much easier.
+
+  A container can be either attached to a document or detached. When it's detached, its history/state is not persisted. You can attach a container to a document by inserting it into an existing attached container. Once a container is attached, its state, along with all of its descendants's states, will be recreated in the document. After attaching, the container and its descendants will each have their corresponding "attached" version of themselves.
+
+  When a detached container x is attached to a document, you can use `x.getAttached()` to obtain the corresponding attached container.
+
+  When we use const text = new LoroList(), it's not attached to a doc. But we can insert it into a doc by map.insertContainer(”t”, text), where the map is attached. But if we want the operations on the text to be recorded to the doc, we now need to get its attached version. So we can use “let attachedText = text.getAttached()”
+
+## 0.12.0
+
+### Minor Changes
+
+- Add getParent and getOrCreate
+
+## 0.11.1
+
+### Patch Changes
+
+- Fix batch import
+
+## 0.11.0
+
+### Minor Changes
+
+- Fix a few bugs and include BREAKING CHANG refactors
+  - fix: should not reset the state when calling checkout to latest (#265)
+  - refactor: only send a event for one `import`/`transaction`/`checkout` (#263)
+  - perf: optimize snapshot encoding speed (#264)
+  - feat: remove deleted set in tree state and optimize api (#259)
+
+## 0.10.1
+
+### Patch Changes
+
+- fix: remove checking after checkout
+
+## 0.10.0
+
+### Minor Changes
+
+- New encoding schema
+  - BREAKING CHANGE: refactor: Optimizing Encoding Representation for Child Container Creation to Reduce Document Size (#247)
+  - feat: compare frontiers causal order (#257)
+  - docs: update docs about rich text style (#258)
+
+## 0.9.4
+
+### Patch Changes
+
+- Fix a few richtext time travel issues
+
+## 0.9.3
+
+### Patch Changes
+
+- feat: add getChangeAtLamport
+
+## 0.9.2
+
+### Patch Changes
+
+- Fix a few rich text issue
+  - fix: time travel back should be able to nullify rich text span (#254)
+  - fix: formalize apply delta method (#252)
+  - fix: how to find best insert pos for richtext & expand type reverse behavior (#250)
+
+## 0.9.1
+
+### Patch Changes
+
+- Fix use consistnt peer id repr and expose VersionVector type
+
+## 0.9.0
+
+### Minor Changes
+
+- Refine the rich text CRDT in Loro
+
+## 0.8.0
+
+### Minor Changes
+
+- Stabilize encoding and fix several issues related to time travel
+
+## 0.7.2-alpha.4
+
+### Patch Changes
+
+- Fix encoding value err
+
+## 0.7.2-alpha.3
+
+### Patch Changes
+
+- Fix export compressed snapshot
+
+## 0.7.2-alpha.2
+
+### Patch Changes
+
+- Add compressed method
+
+## 0.7.2-alpha.1
+
+### Patch Changes
+
+- Fix v0 exports
+
+## 0.7.2-alpha.0
+
+### Patch Changes
+
+- Add experimental encode methods
+
+## 0.7.1
+
+### Patch Changes
+
+- Fix a few richtext errors
+
+## 0.7.0
+
+### Minor Changes
+
+- refactor: remove setPanicHook and call it internally when loaded
+
+## 0.6.5
+
+### Patch Changes
+
+- Fix checkout err on seq data
+
+## 0.6.4
+
+### Patch Changes
+
+- Fix time travel issue #211
+
+## 0.6.1
+
+### Patch Changes
+
+- 6753c2f: Refine loro-crdt api
+
+## 0.6.0
+
+### Minor Changes
+
+- Improve API of event
+
+All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.

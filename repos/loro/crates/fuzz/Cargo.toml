@@ -1,0 +1,45 @@
+[package]
+name = "fuzz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[package.metadata.release]
+release = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+# Enable the mergeable-container fuzz surface (MapAction::GetMergeable etc.).
+# Off by default so the saved-seed corpus decodes identically to today.
+mergeable = []
+
+[dependencies]
+loro = { path = "../loro", features = ["counter", "logging"], package = "loro" }
+loro-without-counter = { git = "https://github.com/loro-dev/loro.git", rev = "c897c346d9fd46dccf44de7ef4e72799fa9c9769", package = "loro", default-features = false }
+rustc-hash = { workspace = true }
+enum_dispatch = { workspace = true }
+enum-as-inner = { workspace = true }
+tracing = { workspace = true }
+itertools = { workspace = true }
+arbitrary = "1"
+tabled = "0.10"
+rand = "0.8.5"
+serde_json = "1"
+num_cpus = "1.16.0"
+rayon = "1.10.0"
+bytes = "1"
+ensure-cov = { workspace = true }
+pretty_assertions = "1.4.0"
+loro-alpha-4 = { git = "https://github.com/loro-dev/loro.git", tag = "loro-crdt@1.0.0-alpha.4", package = "loro" }
+
+[dev-dependencies]
+ctor = "0.2"
+arbtest = "^0.2.0"
+dev-utils = { path = "../dev-utils" }
+tracing-subscriber = "0.3.18"
+tracing-chrome = "0.7.1"
+color-backtrace = "0.6.1"
+serde_json = "1"
+assert_unordered = "0.3.5"

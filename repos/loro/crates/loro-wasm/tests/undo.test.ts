@@ -1,0 +1,437 @@
+import { Cursor, LoroDoc, UndoManager } from "../bundler/index";
+import { describe, expect, test } from "vitest";
+import { expectDefined } from "./helpers";
+
+describe("undo", () => {
+  test("basic text undo", () => {
+    const doc = new LoroDoc();
+    doc.setPeerId(1);
+    const undo = new UndoManager(doc, { maxUndoSteps: 100, mergeInterval: 0 });
+    expect(undo.canRedo()).toBeFalsy();
+    expect(undo.canUndo()).toBeFalsy();
+    doc.getText("text").insert(0, "hello");
+    doc.commit();
+    doc.getText("text").insert(5, " world!");
+    doc.commit();
+    expect(undo.canRedo()).toBeFalsy();
+    expect(undo.canUndo()).toBeTruthy();
+    undo.undo();
+    expect(undo.canRedo()).toBeTruthy();
+    expect(undo.canUndo()).toBeTruthy();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "hello",
+    });
+    undo.undo();
+    expect(undo.canRedo()).toBeTruthy();
+    expect(undo.canUndo()).toBeFalsy();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "",
+    });
+    undo.redo();
+    expect(undo.canRedo()).toBeTruthy();
+    expect(undo.canUndo()).toBeTruthy();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "hello",
+    });
+    undo.redo();
+    expect(undo.canRedo()).toBeFalsy();
+    expect(undo.canUndo()).toBeTruthy();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "hello world!",
+    });
+  });
+
+  test("merge", async () => {
+    const doc = new LoroDoc();
+    const undo = new UndoManager(doc, { maxUndoSteps: 100, mergeInterval: 50 });
+    for (let i = 0; i < 10; i++) {
+      doc.getText("text").insert(i, i.toString());
+      doc.commit();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    for (let i = 0; i < 10; i++) {
+      doc.getText("text").insert(i, i.toString());
+      doc.commit();
+    }
+    expect(doc.toJSON()).toStrictEqual({
+      text: "01234567890123456789",
+    });
+    undo.undo();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "0123456789",
+    });
+    undo.undo();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "",
+    });
+  });
+
+  test("max undo steps", () => {
+    const doc = new LoroDoc();
+    const undo = new UndoManager(doc, { maxUndoSteps: 100, mergeInterval: 0 });
+    for (let i = 0; i < 200; i++) {
+      doc.getText("text").insert(0, "0");
+      doc.commit();
+    }
+    expect(doc.getText("text").length).toBe(200);
+    while (undo.canUndo()) {
+      undo.undo();
+    }
+    expect(doc.getText("text").length).toBe(100);
+  });
+
+  test("max undo steps after remote update and undo", () => {
+    const doc = new LoroDoc();
+    doc.setPeerId(1);
+    const text = doc.getText("text");
+    const undo = new UndoManager(doc, { maxUndoSteps: 3, mergeInterval: 0 });
+
+    text.insert(0, "A");
+    doc.commit();
+
+    const remote = new LoroDoc();
+    remote.setPeerId(2);
+    remote.import(doc.export({ mode: "snapshot" }));
+    remote.getText("text").insert(0, "R");
+    remote.commit();
+
+    doc.import(remote.export({ mode: "update" }));
+    expect(undo.undo()).toBeTruthy();
+    expect(text.toString()).toBe("R");
+
+    for (let i = 0; i < 4; i++) {
+      text.insert(text.length, i.toString());
+      doc.commit();
+    }
+
+    expect(doc.toJSON()).toStrictEqual({
+      text: "R0123",
+    });
+  });
+
+  test("Skip chosen events", () => {
+    const doc = new LoroDoc();
+    const undo = new UndoManager(doc, {
+      maxUndoSteps: 100,
+      mergeInterval: 0,
+      excludeOriginPrefixes: ["sys:"],
+    });
+    doc.getText("text").insert(0, "hello");
+    doc.commit();
+    doc.getText("text").insert(0, "1");
+    doc.commit({ origin: "sys:test" });
+    doc.getText("text").insert(2, "2");
+    doc.commit({ origin: "sys:test" });
+    doc.getText("text").insert(4, "3");
+    doc.commit({ origin: "sys:test" });
+    doc.getText("text").insert(8, " world!");
+    doc.commit();
+    doc.getText("text").insert(0, "Alice ");
+    doc.commit();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "Alice 1h2e3llo world!",
+    });
+    undo.undo();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "1h2e3llo world!",
+    });
+    undo.undo();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "1h2e3llo",
+    });
+    undo.undo();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "123",
+    });
+    expect(undo.canUndo()).toBeFalsy();
+    undo.redo();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "1h2e3llo",
+    });
+    undo.redo();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "1h2e3llo world!",
+    });
+    expect(undo.redo()).toBeTruthy();
+    expect(doc.toJSON()).toStrictEqual({
+      text: "Alice 1h2e3llo world!",
+    });
+    expect(undo.redo()).toBeFalsy();
+  });
+
+  test("undo event's origin", async () => {
+    const doc = new LoroDoc();
+    let undoing = false;
+    let ran = false;
+    doc.subscribe((e) => {
+      if (undoing) {
+        expect(e.origin).toBe("undo");
+        ran = true;
+      }
+    });
+
+    const undo = new UndoManager(doc, {});
+    doc.getText("text").insert(0, "hello");
+    doc.commit();
+    await new Promise((r) => setTimeout(r, 10));
+    undoing = true;
+    undo.undo();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ran).toBeTruthy();
+  });
+
+  test("undo event listener", async () => {
+    const doc = new LoroDoc();
+    let pushReturn: null | number = null;
+    let expectedValue: null | number = null;
+
+    let pushTimes = 0;
+    let popTimes = 0;
+    const undo = new UndoManager(doc, {
+      mergeInterval: 0,
+      onPop: (isUndo, value, counterRange) => {
+        expect(value.value).toBe(expectedValue);
+        expect(value.cursors).toStrictEqual([]);
+        popTimes += 1;
+      },
+      onPush: (isUndo, counterRange) => {
+        pushTimes += 1;
+        return { value: pushReturn, cursors: [] };
+      },
+    });
+
+    doc.getText("text").insert(0, "hello");
+    pushReturn = 1;
+    doc.commit();
+    doc.getText("text").insert(5, " world");
+    pushReturn = 2;
+    doc.commit();
+    doc.getText("text").insert(0, "alice ");
+    pushReturn = 3;
+    doc.commit();
+    expect(pushTimes).toBe(3);
+    expect(popTimes).toBe(0);
+
+    expectedValue = 3;
+    undo.undo();
+    expect(pushTimes).toBe(4);
+    expect(popTimes).toBe(1);
+
+    expectedValue = 2;
+    undo.undo();
+    expect(pushTimes).toBe(5);
+    expect(popTimes).toBe(2);
+
+    expectedValue = 1;
+    undo.undo();
+    expect(pushTimes).toBe(6);
+    expect(popTimes).toBe(3);
+  });
+
+  test("undo cursor transform", async () => {
+    const doc = new LoroDoc();
+    let cursors: Cursor[] = [];
+    let poppedCursors: Cursor[] = [];
+    const undo = new UndoManager(doc, {
+      mergeInterval: 0,
+      onPop: (isUndo, value, counterRange) => {
+        poppedCursors = value.cursors;
+      },
+      onPush: () => {
+        return { value: null, cursors: cursors };
+      },
+    });
+
+    doc.getText("text").insert(0, "hello world");
+    doc.commit();
+    cursors = [
+      doc.getText("text").getCursor(0)!,
+      doc.getText("text").getCursor(5)!,
+      doc.getText("text").getCursor(100)!,
+    ];
+    doc.getText("text").delete(0, 6);
+    doc.commit();
+    expect(poppedCursors.length).toBe(0);
+    undo.undo();
+    expect(poppedCursors.length).toBe(3);
+    expect(doc.toJSON()).toStrictEqual({
+      text: "hello world",
+    });
+    const cursor0 = expectDefined(
+      doc.getCursorPos(poppedCursors[0]),
+      "cursor pos missing",
+    );
+    const cursor1 = expectDefined(
+      doc.getCursorPos(poppedCursors[1]),
+      "cursor pos missing",
+    );
+    const cursor2 = expectDefined(
+      doc.getCursorPos(poppedCursors[2]),
+      "cursor pos missing",
+    );
+    expect(cursor0.offset).toBe(0);
+    expect(cursor1.offset).toBe(5);
+    expect(cursor2.offset).toBe(11);
+  });
+
+  test("it can retrieve event in onPush event", async () => {
+    const doc = new LoroDoc();
+    let ran = false;
+    const undo = new UndoManager(doc, {
+      mergeInterval: 0,
+      onPush: (isUndo, counterRange, event) => {
+        expect(event).toBeDefined();
+        expect(event?.by).toBe("local");
+        expect(event?.origin).toBe("test");
+        ran = true;
+        return { value: null, cursors: [] };
+      },
+    });
+
+    doc.getText("text").insert(0, "hello");
+    doc.commit({ origin: "test" });
+    await new Promise((r) => setTimeout(r, 1));
+    expect(ran).toBeTruthy();
+  });
+
+  test("should automatically push to undo stack", async () => {
+    const doc = new LoroDoc();
+    let counter = 0;
+    new UndoManager(doc, {
+      onPush: () => {
+        counter += 1;
+        return { value: null, cursors: [] };
+      },
+    });
+
+    doc.getText("text").insert(0, "hello");
+    doc.commit();
+    expect(counter).toBe(1);
+
+    doc.getText("text").insert(0, "world");
+    doc.commit();
+    expect(counter).toBe(2);
+  });
+
+  test("should group together local changes", async () => {
+    const doc = new LoroDoc();
+    const undoManager = new UndoManager(doc, {});
+    const text = doc.getText("text");
+
+    undoManager.groupStart();
+
+    text.update("hello", undefined);
+    doc.commit();
+
+    text.update("world", undefined);
+    doc.commit();
+
+    undoManager.groupEnd();
+
+    undoManager.undo();
+
+    expect(text.toString()).toBe("");
+  });
+
+  test("should groups should split on conflicting remote changes", async () => {
+    const doc = new LoroDoc();
+    const undoManager = new UndoManager(doc, {});
+
+    undoManager.groupStart();
+
+    let text = doc.getText("text");
+    text.update("hello", undefined);
+    doc.commit();
+    text.update("hello world", undefined);
+    doc.commit();
+
+    let snapshot = doc.export({ mode: "snapshot" });
+
+    const doc2 = new LoroDoc();
+    doc2.import(snapshot);
+    doc2.getText("text").update("hello world world", undefined);
+    doc2.commit();
+    const update = doc2.export({ mode: "update" });
+
+    doc.import(update);
+
+    doc.getText("text").update("hello world world world", undefined);
+
+    doc.commit();
+
+    undoManager.groupEnd();
+
+    undoManager.undo();
+
+    expect(text.toString()).toBe("hello world world");
+  });
+
+  test("should groups should not split on non-conflicting remote changes", () => {
+    const doc = new LoroDoc();
+    const undoManager = new UndoManager(doc, {});
+    undoManager.groupStart();
+
+    let text = doc.getText("text");
+    text.update("hello", undefined);
+    doc.commit();
+    text.update("hello world", undefined);
+    doc.commit();
+
+    let snapshot = doc.export({ mode: "snapshot" });
+
+    const doc2 = new LoroDoc();
+    doc2.import(snapshot);
+    doc2.getText("text2").update("hello world world", undefined);
+    doc2.commit();
+    const update = doc2.export({ mode: "update" });
+
+    doc.import(update);
+
+    doc.getText("text").update("hello world world world", undefined);
+
+    doc.commit();
+
+    undoManager.groupEnd();
+
+    undoManager.undo();
+
+    expect(text.toString()).toBe("");
+  });
+
+  test("undo tree move", () => {
+    const doc = new LoroDoc();
+    doc.setPeerId(1);
+    const undo = new UndoManager(doc, {
+      mergeInterval: 0,
+      maxUndoSteps: 100,
+    });
+
+    const tree = doc.getTree("1");
+    tree.enableFractionalIndex(3);
+
+    const a = tree.createNode(undefined, 0);
+    a.data.set("title", "a");
+    doc.commit();
+
+    const b = tree.createNode(undefined, 1);
+    b.data.set("title", "b");
+    doc.commit();
+    const docJson = doc.toJSON();
+    tree.move(a.id, undefined, 1);
+    doc.commit();
+    undo.undo();
+    const docJson1 = doc.toJSON();
+    expect(docJson).toStrictEqual(docJson1);
+  });
+
+  test("avoid rust recursive use error", () => {
+    const doc = new LoroDoc();
+    const undoManager = new UndoManager(doc, {});
+    undoManager.setOnPush(() => {
+      undoManager.canUndo();
+      return { cursors: [], value: null };
+    });
+    doc.getText("text").insert(0, "hello");
+    doc.commit();
+  });
+});
