@@ -1,0 +1,96 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript"],
+  "jsPlugins": [
+    {
+      "name": "foldkit",
+      "specifier": "./packages/oxlint-plugin-foldkit/dist/index.js"
+    }
+  ],
+  "categories": {
+    "correctness": "off"
+  },
+  "rules": {
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_",
+        "destructuredArrayIgnorePattern": "^_"
+      }
+    ],
+    "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-assertions": [
+      "error",
+      { "assertionStyle": "never" }
+    ],
+    "foldkit/no-noop-message": "error",
+    "foldkit/got-submodel-message-name": "error",
+    "foldkit/message-binding-matches-tag": "error",
+    "foldkit/got-prefix-requires-submodel-payload": "error",
+    "foldkit/no-empty-children-array": "error",
+    "foldkit/no-empty-object-tagged-call": "error",
+    "foldkit/prefer-callable-message-constructor": "error",
+    "foldkit/command-binding-matches-name": "error",
+    "foldkit/no-module-level-mutable-state": "error"
+  },
+  "overrides": [
+    {
+      "files": ["packages/foldkit/src/**/*.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off",
+        "foldkit/no-module-level-mutable-state": "off"
+      }
+    },
+    {
+      "files": [
+        "examples/**/*.ts",
+        "examples/**/*.tsx",
+        "packages/website/src/**/*.ts",
+        "packages/website/src/**/*.tsx",
+        "packages/typing-game/client/src/**/*.ts",
+        "packages/typing-game/client/src/**/*.tsx"
+      ],
+      "rules": {
+        "foldkit/command-define-pascal-const": "error",
+        "foldkit/got-wrapper-carries-only-routing": "error",
+        "foldkit/keyed-required-for-mapped-rows": "error",
+        "foldkit/lazy-view-stable-references": "error",
+        "foldkit/mount-factory-must-use-element": "error",
+        "foldkit/no-array-index-view-keys": "error",
+        "foldkit/no-child-message-construction-in-root": "error",
+        "foldkit/no-disabling-dev-guardrails": "error",
+        "foldkit/no-duplicate-onmount-per-element": "error",
+        "foldkit/no-hand-rolled-command-struct": "error",
+        "foldkit/no-hardcoded-route-strings": "error",
+        "foldkit/no-raw-dom-event-attributes": "error",
+        "foldkit/no-spread-in-evo": "error",
+        "foldkit/require-rel-for-external-link": "error",
+        "foldkit/selection-submodel-factory-at-module-scope": "error",
+        "foldkit/wrap-child-output-in-got-message": "error"
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "repos/",
+    "comparisons/",
+    "internal/",
+    "scripts/",
+    "packages/create-foldkit-app/",
+    "packages/devtools-mcp/",
+    "packages/oxlint-plugin-foldkit/",
+    "packages/typing-game/shared/",
+    "packages/vite-plugin-foldkit/",
+    "**/*.d.ts",
+    "**/vite.config.ts",
+    "**/*.config.js",
+    "**/*.config.mjs",
+    "packages/website/public/example-apps-embed/",
+    "packages/website/playwright-report/",
+    "packages/website/test-results/",
+    "packages/website/src/snippet/"
+  ]
+}

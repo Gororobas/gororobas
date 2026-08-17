@@ -1,0 +1,96 @@
+import { Effect, Match as M, Schema as S, pipe } from 'effect'
+import { Command, Navigation, Route, Url } from 'foldkit'
+import { m } from 'foldkit/message'
+import { int, literal, r, slash } from 'foldkit/route'
+import { evo } from 'foldkit/struct'
+
+// ROUTE
+
+const HomeRoute = r('Home')
+const PersonRoute = r('Person', { personId: S.Number })
+const NotFoundRoute = r('NotFound', { path: S.String })
+const AppRoute = S.Union([HomeRoute, PersonRoute, NotFoundRoute])
+type AppRoute = typeof AppRoute.Type
+
+const homeRouter = pipe(Route.root, Route.mapTo(HomeRoute))
+const personRouter = pipe(
+  literal('people'),
+  slash(int('personId')),
+  Route.mapTo(PersonRoute),
+)
+const routeParser = Route.oneOf(personRouter, homeRouter)
+const urlToAppRoute = Route.parseUrlWithFallback(routeParser, NotFoundRoute)
+
+// MODEL
+
+const Model = S.Struct({ route: AppRoute })
+type Model = typeof Model.Type
+
+// MESSAGE
+
+const CompletedNavigateInternal = m('CompletedNavigateInternal')
+const CompletedLoadExternal = m('CompletedLoadExternal')
+const ClickedLink = m('ClickedLink', { request: Navigation.UrlRequest })
+const ChangedUrl = m('ChangedUrl', { url: Url.Url })
+
+const Message = S.Union([
+  CompletedNavigateInternal,
+  CompletedLoadExternal,
+  ClickedLink,
+  ChangedUrl,
+])
+type Message = typeof Message.Type
+
+// COMMAND
+
+const NavigateInternal = Command.define('NavigateInternal', {
+  args: { url: S.String },
+  messages: [CompletedNavigateInternal],
+  execute: ({ url }) =>
+    Navigation.pushUrl(url).pipe(Effect.as(CompletedNavigateInternal())),
+})
+
+const LoadExternal = Command.define('LoadExternal', {
+  args: { href: S.String },
+  messages: [CompletedLoadExternal],
+  execute: ({ href }) =>
+    Navigation.load(href).pipe(Effect.as(CompletedLoadExternal())),
+})
+
+// UPDATE
+
+const update = (model: Model, message: Message) =>
+  M.value(message).pipe(
+    M.withReturnType<
+      readonly [Model, ReadonlyArray<Command.Command<Message>>]
+    >(),
+    M.tagsExhaustive({
+      CompletedNavigateInternal: () => [model, []],
+      CompletedLoadExternal: () => [model, []],
+
+      ClickedLink: ({ request }) =>
+        M.value(request).pipe(
+          M.tagsExhaustive({
+            Internal: ({
+              url,
+            }): readonly [Model, ReadonlyArray<Command.Command<Message>>] => [
+              model,
+              [NavigateInternal({ url: Url.toString(url) })],
+            ],
+            External: ({
+              href,
+            }): readonly [Model, ReadonlyArray<Command.Command<Message>>] => [
+              model,
+              [LoadExternal({ href })],
+            ],
+          }),
+        ),
+
+      ChangedUrl: ({ url }) => [
+        evo(model, {
+          route: () => urlToAppRoute(url),
+        }),
+        [],
+      ],
+    }),
+  )

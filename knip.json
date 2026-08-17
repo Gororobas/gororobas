@@ -1,0 +1,128 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.{ts,js,mjs,sh}", "scripts/**/*.test.mjs"],
+      "project": ["scripts/**"]
+    },
+    "packages/foldkit": {
+      "entry": [
+        "src/index.ts",
+        "src/brand/public.ts",
+        "src/experimental/public.ts",
+        "src/experimental/machine/public.ts",
+        "src/experimental/server/public.ts",
+        "src/html/public.ts",
+        "src/devTools/public.ts",
+        "src/devTools/host.ts",
+        "src/runtime/hmrProtocolPublic.ts",
+        "src/scene/public.ts",
+        "src/story/public.ts",
+        "src/test/public.ts",
+        "src/test/apps/**/*.ts"
+      ]
+    },
+    "packages/ui": {
+      "entry": ["typedoc-entry.ts", "src/index.ts"]
+    },
+    "packages/devtools": {
+      "entry": ["src/vite.ts"]
+    },
+    "packages/vite-plugin-foldkit": {
+      "ignoreFiles": ["test/fixtures/**"]
+    },
+    "packages/markdown": {
+      "entry": ["src/index.ts", "src/vite/public.ts"]
+    },
+    "packages/examples-e2e": {
+      "entry": ["page.ts", "e2e/**/*.spec.ts"],
+      "ignoreFiles": ["playwright.config.ts"],
+      "playwright": false
+    },
+    "packages/create-foldkit-app": {
+      "ignore": ["templates/**"],
+      "ignoreDependencies": ["@effect/platform-node-shared"]
+    },
+    "packages/website": {
+      "entry": [
+        "src/main.ts",
+        "src/entry.server.ts",
+        "src/**/*.test.ts",
+        "scripts/**/*.test.ts"
+      ],
+      "ignore": ["src/snippet/**", "public/**"],
+      "ignoreDependencies": ["@foldkit/devtools"]
+    },
+    "packages/typing-game/client": {
+      "ignoreDependencies": ["@foldkit/devtools"]
+    },
+    "packages/oxlint-plugin-foldkit": {
+      "ignore": ["test/integration/fixtures/**"]
+    },
+    "examples/*": {
+      "ignoreDependencies": [
+        "@foldkit/devtools",
+        "@trivago/prettier-plugin-sort-imports",
+        "prettier",
+        "tailwindcss"
+      ]
+    },
+    "examples/charting": {
+      "entry": [],
+      "ignoreDependencies": [
+        "@foldkit/devtools",
+        "@trivago/prettier-plugin-sort-imports",
+        "prettier",
+        "tailwindcss"
+      ]
+    },
+    "examples/ssr": {
+      "entry": ["server/main.ts", "src/entry.server.ts"],
+      "ignoreFiles": ["vite.config.playground.ts"],
+      "ignoreDependencies": [
+        "@foldkit/devtools",
+        "@trivago/prettier-plugin-sort-imports",
+        "prettier",
+        "tailwindcss"
+      ]
+    },
+    "examples/ssg": {
+      "entry": ["src/entry.server.ts"],
+      "ignoreFiles": ["vite.config.playground.ts"],
+      "ignoreDependencies": [
+        "@foldkit/devtools",
+        "@trivago/prettier-plugin-sort-imports",
+        "prettier",
+        "tailwindcss"
+      ]
+    },
+    "examples/personal-blog": {
+      "entry": ["src/**/*.test.ts", "src/vitest-*.ts"],
+      "ignoreFiles": ["vite.config.playground.ts"],
+      "ignoreDependencies": [
+        "@foldkit/devtools",
+        "@trivago/prettier-plugin-sort-imports",
+        "prettier",
+        "tailwindcss"
+      ]
+    },
+    "comparisons/*": {
+      "ignoreDependencies": ["tailwindcss"]
+    },
+    "internal/lustre-benchmark": {
+      "entry": ["src/main.ts", "src/entry.optimised.ts", "bench/*.mjs"]
+    },
+    "internal/performance-harness": {
+      "entry": ["src/main.ts"],
+      "ignoreDependencies": ["tailwindcss"]
+    }
+  },
+  "ignore": ["**/*.css", "packages/website/public/**"],
+  "ignoreDependencies": [
+    "@effect/platform-browser",
+    "@foldkit/oxlint-plugin",
+    "tailwindcss",
+    "madge"
+  ],
+  "ignoreBinaries": ["typecheck"]
+}

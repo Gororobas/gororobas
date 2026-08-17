@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.changeset/**'
+      - 'packages/foldkit/**'
+      - 'packages/ui/**'
+      - 'packages/devtools/**'
+      - 'packages/markdown/**'
+      - 'packages/vite-plugin-foldkit/**'
+      - 'packages/create-foldkit-app/**'
+      - 'packages/oxlint-plugin-foldkit/**'
+      - 'packages/devtools-mcp/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'scripts/check-changeset-ignore.ts'
+      - 'scripts/check-create-foldkit-app-smoke.ts'
+      - 'scripts/reset-peer-deps.ts'
+      - '.github/workflows/release.yml'
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Upgrade npm for OIDC trusted publishing
+        run: |
+          NPM_DIR="$(npm config get prefix)/lib/node_modules/npm"
+          rm -rf "$NPM_DIR"
+          curl -sL https://registry.npmjs.org/npm/-/npm-11.12.1.tgz | tar xz -C "$(dirname "$NPM_DIR")"
+          mv "$(dirname "$NPM_DIR")/package" "$NPM_DIR"
+          npm --version
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify changeset ignore list
+        run: pnpm check:changeset-ignore
+
+      - name: Smoke test create-foldkit-app
+        run: pnpm check:create-foldkit-app-smoke
+
+      - name: Create Release Pull Request or Publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm version-packages
+          publish: pnpm release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
+          SKIP_SIMPLE_GIT_HOOKS: '1'

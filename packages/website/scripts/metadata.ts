@@ -1,0 +1,486 @@
+import { Array, Match as M, Option } from 'effect'
+
+import {
+  BLOG_DESCRIPTION,
+  BLOG_SECTION,
+  BLOG_TITLE,
+} from '../src/page/blog/meta'
+import { findBySlug } from '../src/page/example/meta'
+import { type AppRoute } from '../src/route'
+import { blogPosts } from './blogPosts'
+
+// PAGE METADATA
+
+export type PageMetadata = Readonly<{
+  title: string
+  description: string
+  section: string
+}>
+
+export type ApiModuleNameResolver = (slug: string) => string
+
+const SITE_DESCRIPTION =
+  'A TypeScript frontend framework built on Effect-TS, using The Elm Architecture (TEA). Single state tree, pure update functions, explicit side effects, and type-safe routing. An alternative to React for teams that value correctness.'
+
+const docs = (
+  title: string,
+  description: string,
+  section: string,
+): PageMetadata => ({
+  title,
+  description,
+  section,
+})
+
+const core = (title: string, description: string): PageMetadata =>
+  docs(title, description, 'Core Concepts')
+
+const ui = (title: string, description: string): PageMetadata =>
+  docs(title, description, 'Foldkit UI')
+
+const pattern = (title: string, description: string): PageMetadata =>
+  docs(title, description, 'Patterns')
+
+const tooling = (title: string, description: string): PageMetadata =>
+  docs(title, description, 'Tooling')
+
+type StaticRouteTag = Exclude<
+  AppRoute['_tag'],
+  'ApiModule' | 'BlogPost' | 'ExampleDetail' | 'Playground'
+>
+
+const METADATA_BY_TAG: Record<StaticRouteTag, PageMetadata> = {
+  Home: {
+    title: 'Foldkit',
+    description: SITE_DESCRIPTION,
+    section: '',
+  },
+  Manifesto: docs(
+    'Manifesto',
+    'Why Foldkit exists and the principles behind its design.',
+    'Docs',
+  ),
+  WhyNoJsx: docs(
+    'Why no JSX?',
+    'Why Foldkit uses a typed function-call DSL instead of JSX, with side-by-side comparisons of buttons, inputs, and conditional rendering.',
+    'FAQ',
+  ),
+  WhatAboutSsr: docs(
+    'What about SSR?',
+    'Foldkit is client-first by design. What server rendering actually buys you, the kind of app Foldkit is for, the tradeoff, and how the Foldkit website pre-renders every route at build time using the runtime in headless Chromium.',
+    'FAQ',
+  ),
+  Performance: docs(
+    'Performance',
+    'How Foldkit performs and why: the rendering cost model, TodoMVC benchmark numbers against React, Elm, Svelte, Solid, and Lustre, what development mode costs that production does not, and the optimization toolkit.',
+    'FAQ',
+  ),
+  GettingStarted: docs(
+    'Getting Started',
+    'Set up your first Foldkit application in minutes. Install, scaffold with create-foldkit-app, and build a TypeScript frontend with Effect-TS.',
+    'Docs',
+  ),
+  Roadmap: docs(
+    'Roadmap',
+    'Where Foldkit is headed: the blocks of work that gate a production-ready 1.0, the directions under exploration after it, and the stances that will not change.',
+    'Docs',
+  ),
+  ComingFromReact: docs(
+    'Coming from React',
+    'Moving from React to a principled architecture? Foldkit replaces hooks, useEffect, and component state with The Elm Architecture: one Model, one update function, explicit effects. Built on Effect-TS.',
+    'Docs',
+  ),
+  ComingFromTanStackQuery: docs(
+    'Coming from TanStack Query',
+    'Coming from TanStack Query? Foldkit has no useQuery. AsyncData ships the six query states, with stale-while-revalidate built in, and caching, background refetch, deduplication, and invalidation stay ordinary Model state and a pure update function. Maps query status flags onto the six states and includes the latest-request-wins pattern for response races.',
+    'Docs',
+  ),
+  ReactComparison: docs(
+    'Foldkit vs React: Side by Side',
+    'A side-by-side comparison of the same pixel art editor built in both Foldkit and React. Covers state management, side effects, testing, performance, and architectural tradeoffs.',
+    'Guides',
+  ),
+  EffectAtomComparison: docs(
+    'Foldkit vs React + Effect Atom',
+    'Two Effect-native ways to build a frontend, compared. Effect Atom distributes state across reactive cells wired into React; Foldkit centralizes it into one Model changed by one update function. Covers state, async data, side effects, testing with Story and Scene, debugging, scaling, and AI-assisted development.',
+    'Guides',
+  ),
+  ElmComparison: docs(
+    'Foldkit vs Elm: Side by Side',
+    'A side-by-side comparison of the same pixel art editor built in both Foldkit and Elm. Same architecture, different host: ports vs Commands, decoders vs Schema, and what each side gives up.',
+    'Guides',
+  ),
+  RoutingAndNavigation: docs(
+    'Routing and Navigation',
+    'Type-safe routing with bidirectional parser combinators in Foldkit. URLs parse into typed routes and build back. No string matching, built on Effect-TS.',
+    'Docs',
+  ),
+  FieldValidation: docs(
+    'Field Validation',
+    'Per-field form validation in Foldkit using a four-state discriminated union. Built-in validation rules, Effect-TS powered, no impossible states.',
+    'Docs',
+  ),
+  Testing: docs(
+    'Testing',
+    'Test Foldkit programs with Story and Scene. Story simulates the update loop. Scene tests features through the rendered view with accessible locators.',
+    'Docs',
+  ),
+  TestingStory: docs(
+    'Story',
+    'Test the state machine with Story. Send Messages, resolve Commands inline, and assert on the Model. Pure, deterministic, fast.',
+    'Testing',
+  ),
+  TestingScene: docs(
+    'Scene',
+    'Test features through the rendered view with Scene. Click buttons, type into inputs, and assert on the HTML using accessible locators.',
+    'Testing',
+  ),
+  Examples: docs(
+    'Example Apps',
+    'Working Foldkit example apps: counter, forms, routing, auth, websocket chat, and more. Each demonstrates Effect-TS and Elm Architecture patterns.',
+    'Docs',
+  ),
+  TypingTerminal: docs(
+    'Typing Terminal',
+    'A production real-time multiplayer typing speed game. Full-stack Effect app with an RPC backend, streaming room subscriptions, and a Foldkit frontend that share schemas across the wire.',
+    'Examples',
+  ),
+  BestPracticesSideEffects: docs(
+    'Side Effects & Purity',
+    'Why Foldkit programs should have zero side effects outside of Commands.',
+    'Best Practices',
+  ),
+  BestPracticesMessages: docs(
+    'Messages',
+    'Name messages as past-tense events, not imperative commands.',
+    'Best Practices',
+  ),
+  BestPracticesKeying: docs(
+    'Keying',
+    'Key branch points to prevent stale DOM when views switch between different trees.',
+    'Best Practices',
+  ),
+  BestPracticesImmutability: docs(
+    'Immutability',
+    'Immutable model updates with evo for predictable state transitions.',
+    'Best Practices',
+  ),
+  ProjectOrganization: docs(
+    'Project Organization',
+    'How to structure a Foldkit project for maintainability.',
+    'Docs',
+  ),
+  ToolingLinting: tooling(
+    'Oxlint Plugin',
+    'Use the Foldkit oxlint plugin to enforce Foldkit-specific naming and message conventions, with examples for each custom rule.',
+  ),
+  CoreArchitecture: core(
+    'Architecture',
+    'How Foldkit implements The Elm Architecture (TEA) with Effect-TS: Model, update, view, Commands, and Subscriptions.',
+  ),
+  CoreCounterExample: core(
+    'Counter Example',
+    'A minimal Foldkit application explained step by step.',
+  ),
+  CoreModel: core(
+    'Model',
+    "Define your entire application state as a single Effect-TS Schema. Learn how Foldkit's Model replaces useState, Redux, and Zustand.",
+  ),
+  CoreMessages: core(
+    'Messages',
+    'Type-safe events that drive state changes in Foldkit. Messages replace React event handlers with a declarative, traceable pattern.',
+  ),
+  CoreUpdate: core(
+    'Update',
+    "Pure functions that transform the Model and return Commands in response to Messages. Foldkit's update replaces useReducer and useEffect with a single, exhaustive pattern match.",
+  ),
+  CoreView: core(
+    'View',
+    'Render your UI as a pure function of the Model. Foldkit views are plain TypeScript functions. No JSX, no hooks, no component lifecycle.',
+  ),
+  CoreCommands: core(
+    'Commands',
+    'Model side effects as values returned from update. Commands replace useEffect with explicit, testable Effect-TS operations.',
+  ),
+  CoreMount: core(
+    'Mount',
+    'OnMount: the single mount-time DOM hook for integrating third-party libraries with paired cleanup. Keeps imperative work confined to the seam where the virtual DOM meets the real one.',
+  ),
+  CoreCustomElement: core(
+    'CustomElement',
+    'Bind native web components to Foldkit with CustomElement.define. Declare properties and events with Schema once and get a typed builder back.',
+  ),
+  CoreSubscriptions: core(
+    'Subscriptions',
+    'Declarative streams that start and stop based on Model state, with built-in helpers like Subscription.animationFrame for requestAnimationFrame-driven motion. Foldkit Subscriptions replace useEffect cleanup patterns with automatic lifecycle management.',
+  ),
+  CoreInitAndFlags: core(
+    'Init & Flags',
+    'Set up the initial Model, pass external data via flags, and run startup Commands.',
+  ),
+  CoreDom: core(
+    'Dom',
+    'Effects for common DOM operations like focus, scroll, dialog open/close, scroll lock, and inert isolation.',
+  ),
+  CoreRender: core(
+    'Render',
+    'Primitives for synchronizing with the browser render cycle so DOM reads and CSS transitions land on the right frame.',
+  ),
+  CoreFile: core(
+    'File',
+    'Read and select files from the browser using an opaque File type and event attributes for inputs and drop zones.',
+  ),
+  CoreHttp: core(
+    'Http',
+    'Provide a Fetch-backed HttpClient to a Command with trace header propagation disabled by default, so browser requests stay CORS-simple instead of triggering preflights.',
+  ),
+  CoreCanvas: core(
+    'Canvas',
+    'Declarative 2D rendering with a Schema-defined Shape AST and pointer events translated to canvas-local coordinates.',
+  ),
+  CoreRuntime: core(
+    'Runtime',
+    'Mount and run a Foldkit application in the browser.',
+  ),
+  CoreServerRendering: core(
+    'Server Rendering',
+    'Render a request to HTML with renderToString and hydrate the DOM in place on boot.',
+  ),
+  CoreResources: core(
+    'Resources',
+    'Long-lived browser singletons shared across Commands.',
+  ),
+  CoreManagedResources: core(
+    'Managed Resources',
+    'Resources that activate and release based on Model state.',
+  ),
+  CoreDevTools: core(
+    'DevTools',
+    'A built-in overlay for inspecting Messages and Model state.',
+  ),
+  CoreCrashView: core(
+    'Crash View',
+    'A fallback UI and crash reporting for unrecoverable runtime errors.',
+  ),
+  CoreViewTransitions: core(
+    'View Transitions',
+    'Animated renders via the View Transitions API, with direction-aware types and shared-element morphs.',
+  ),
+  CoreSlowWarnings: core(
+    'Slow Warnings',
+    'Per-phase performance warnings for update, view, patch, and subscription dependencies.',
+  ),
+  CoreFreezeModel: core(
+    'Freeze Model',
+    'Catch accidental Model mutations at the write site in development.',
+  ),
+  CorePreserveScroll: core(
+    'Preserve Scroll',
+    'Keep the window scroll position across Vite HMR reloads in development.',
+  ),
+  CoreViewMemoization: core(
+    'View Memoization',
+    'Optimize rendering performance with memoized views.',
+  ),
+  CoreEmbedding: core(
+    'Embedding',
+    'Run a Foldkit app inside a host application with a typed lifecycle handle and Ports.',
+  ),
+  CoreSubmodel: core(
+    'Submodel',
+    'Compose applications from independent, encapsulated modules.',
+  ),
+  AsyncData: core(
+    'Async Data',
+    'A six-state value type for asynchronously loaded data in the Model: Idle, Loading, Refreshing, Failure, Stale, and Success, with stale-while-revalidate and keep-stale-on-failure built in.',
+  ),
+  PatternsInformingSubmodels: pattern(
+    'Informing Submodels',
+    'Relay a change a Submodel does not own (a URL, a server push, an auth change) through a helper it exposes, so it can update its own state in response.',
+  ),
+  PatternsSubscriptionOrganization: pattern(
+    'Subscription Organization',
+    'Canonical layout for subscription wiring across nested submodels.',
+  ),
+  UiOverview: ui(
+    'Foldkit UI',
+    'Headless, accessible UI components for Foldkit: dialog, menu, tabs, listbox, and more. Built for The Elm Architecture with Effect-TS.',
+  ),
+  UiSelectionSubmodels: ui(
+    'Selection Submodels',
+    'How Foldkit UI components expose create<Item>() factories that pair view and update behind one type parameter so Item types cannot drift between the rendered list and the selection handler.',
+  ),
+  UiAnchor: ui(
+    'Anchor',
+    'The Floating UI positioning runtime behind Foldkit UI’s floating components, exported so you can anchor and portal a panel of your own from a Mount.',
+  ),
+  UiButton: ui(
+    'Button',
+    'A thin wrapper around the native button with accessibility attributes and styling hooks.',
+  ),
+  UiCalendar: ui(
+    'Calendar',
+    'Accessible inline calendar grid with 2D keyboard navigation, locale-aware headers, and min/max/disabled-date constraints.',
+  ),
+  UiDatePicker: ui(
+    'Date Picker',
+    'Accessible date picker that wraps Calendar in a Popover. Focus choreography, click-outside dismissal, and hidden form input for native form submission.',
+  ),
+  UiCheckbox: ui(
+    'Checkbox',
+    'Accessible checkbox with indeterminate state support.',
+  ),
+  UiTabs: ui('Tabs', 'Accessible tabbed interface with keyboard navigation.'),
+  UiNav: ui(
+    'Nav',
+    'URL-driven navigation between routes with aria-current page semantics.',
+  ),
+  UiDisclosure: ui(
+    'Disclosure',
+    'An accessible show/hide foundation for toggleable content sections.',
+  ),
+  UiDialog: ui(
+    'Dialog',
+    'A modal dialog backed by the native dialog element with focus trapping and scroll locking.',
+  ),
+  UiMenu: ui('Menu', 'Accessible dropdown menu with keyboard navigation.'),
+  UiPopover: ui(
+    'Popover',
+    'Floating content panels anchored to trigger elements.',
+  ),
+  UiToast: ui(
+    'Toast',
+    'Stack of transient notifications anchored to a corner of the viewport with per-entry enter/leave animations and auto-dismiss.',
+  ),
+  UiTooltip: ui(
+    'Tooltip',
+    'Non-interactive floating label that appears on hover or focus and hides on leave, blur, or Escape.',
+  ),
+  UiListbox: ui(
+    'Listbox',
+    'Accessible list selection with single and multi-select modes.',
+  ),
+  UiRadioGroup: ui(
+    'Radio Group',
+    'Accessible radio button group with keyboard navigation.',
+  ),
+  UiSelect: ui(
+    'Select',
+    'A thin wrapper around the native select with ARIA linking and styling hooks.',
+  ),
+  UiSlider: ui(
+    'Slider',
+    'Accessible slider for numeric range input. Pointer drag, keyboard navigation, ARIA slider semantics.',
+  ),
+  UiSwitch: ui('Switch', 'Accessible toggle switch for boolean settings.'),
+  UiCombobox: ui(
+    'Combobox',
+    'Accessible autocomplete input with filtering and selection.',
+  ),
+  UiInput: ui(
+    'Input',
+    'A thin wrapper around the native input with ARIA linking and styling hooks.',
+  ),
+  UiTextarea: ui(
+    'Textarea',
+    'A thin wrapper around the native textarea with ARIA linking and styling hooks.',
+  ),
+  UiFieldset: ui(
+    'Fieldset',
+    'Group related form fields with accessible labeling.',
+  ),
+  UiDragAndDrop: ui(
+    'Drag and Drop',
+    'Accessible drag and drop with keyboard support, auto-scrolling, and screen reader announcements.',
+  ),
+  UiFileDrop: ui(
+    'File Drop',
+    'Headless file drop zone that accepts drag-and-drop plus click-to-browse via a hidden native file input.',
+  ),
+  UiAnimation: ui(
+    'Animation',
+    'Coordinates CSS enter/leave animations via a state machine and data attributes. Works with both CSS transitions and keyframe animations.',
+  ),
+  UiVirtualList: ui(
+    'Virtual List',
+    'Virtualization primitive for large lists. Only items inside the viewport plus an overscan buffer are mounted; spacers above and below keep the scrollbar physically correct.',
+  ),
+  AiOverview: docs(
+    'AI',
+    'Why Foldkit\u2019s architecture makes AI-assisted development uniquely effective.',
+    'AI',
+  ),
+  AiSkills: docs(
+    'Skills',
+    'Agent skills for generating, scaffolding, and auditing Foldkit programs.',
+    'AI',
+  ),
+  AiMcp: docs(
+    'DevTools MCP',
+    'Expose a running Foldkit app to AI agents over the Model Context Protocol.',
+    'AI',
+  ),
+  NotFound: {
+    title: 'Page Not Found',
+    description: SITE_DESCRIPTION,
+    section: '',
+  },
+  Newsletter: {
+    title: 'Newsletter',
+    description:
+      'Subscribe to the Foldkit newsletter for new releases, patterns, and the occasional deep dive.',
+    section: '',
+  },
+  Blog: docs(BLOG_TITLE, BLOG_DESCRIPTION, BLOG_SECTION),
+}
+
+export const routeToMetadata = (
+  route: AppRoute,
+  resolveApiModuleName: ApiModuleNameResolver,
+): PageMetadata =>
+  M.value(route).pipe(
+    M.withReturnType<PageMetadata>(),
+    M.tag('ApiModule', ({ moduleSlug }) => {
+      const moduleName = resolveApiModuleName(moduleSlug)
+      return docs(
+        moduleName,
+        `API documentation for the ${moduleName} module.`,
+        'API Reference',
+      )
+    }),
+    M.tag('BlogPost', ({ postSlug }) => {
+      const { frontmatter } = Option.getOrThrowWith(
+        Array.findFirst(blogPosts, ({ slug }) => slug === postSlug),
+        () =>
+          new Error(
+            `Blog post "${postSlug}" is missing from the blog post registry.`,
+          ),
+      )
+      return docs(frontmatter.title, frontmatter.description, BLOG_SECTION)
+    }),
+    M.tag('ExampleDetail', ({ exampleSlug }) => {
+      const example = Option.getOrThrowWith(
+        findBySlug(exampleSlug),
+        () =>
+          new Error(
+            `Example "${exampleSlug}" is missing from the example registry.`,
+          ),
+      )
+      return docs(example.title, example.description, 'Examples')
+    }),
+    M.tag('Playground', ({ exampleSlug }) => {
+      const example = Option.getOrThrowWith(
+        findBySlug(exampleSlug),
+        () =>
+          new Error(
+            `Playground example "${exampleSlug}" is missing from the example registry.`,
+          ),
+      )
+      return docs(
+        `${example.title} playground`,
+        `Edit and run the ${example.title} example live in your browser.`,
+        'Playground',
+      )
+    }),
+    M.orElse(({ _tag }) => METADATA_BY_TAG[_tag]),
+  )

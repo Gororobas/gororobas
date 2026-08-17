@@ -1,0 +1,180 @@
+import { Array, Match as M, Option, Schema as S, pipe } from 'effect'
+import { Command, Runtime, Update } from 'foldkit'
+import { Document, Html, HtmlBuilder } from 'foldkit/html'
+import { m } from 'foldkit/message'
+import { evo } from 'foldkit/struct'
+
+import { Button } from '@foldkit/ui'
+
+import * as Counter from './counter'
+
+// MODEL
+
+const Row = S.Struct({
+  id: S.String,
+  counter: Counter.Model,
+})
+type Row = typeof Row.Type
+
+export const Model = S.Struct({
+  rows: S.Array(Row),
+  nextRowId: S.Number,
+})
+export type Model = typeof Model.Type
+
+// MESSAGE
+
+export const ClickedAddRow = m('ClickedAddRow')
+export const ClickedRemoveRow = m('ClickedRemoveRow', { id: S.String })
+
+export const GotCounterMessage = m('GotCounterMessage', {
+  id: S.String,
+  message: Counter.Message,
+})
+
+export const Message = S.Union([
+  ClickedAddRow,
+  ClickedRemoveRow,
+  GotCounterMessage,
+])
+export type Message = typeof Message.Type
+
+// UPDATE
+
+const foldCounter = (id: string) =>
+  Update.foldChild({
+    update: Counter.update,
+    read: (model: Model) =>
+      pipe(
+        Array.findFirst(model.rows, row => row.id === id),
+        Option.map(row => row.counter),
+      ),
+    write: (model, nextCounter) =>
+      evo(model, {
+        rows: Array.map(row =>
+          row.id === id ? evo(row, { counter: () => nextCounter }) : row,
+        ),
+      }),
+    toParentMessage: message => GotCounterMessage({ id, message }),
+  })
+
+export const update = (
+  model: Model,
+  message: Message,
+): readonly [Model, ReadonlyArray<Command.Command<Message>>] =>
+  M.value(message).pipe(
+    M.withReturnType<
+      readonly [Model, ReadonlyArray<Command.Command<Message>>]
+    >(),
+    M.tagsExhaustive({
+      ClickedAddRow: () => [
+        evo(model, {
+          rows: Array.append({
+            id: `counter-${model.nextRowId}`,
+            counter: Counter.init,
+          }),
+          nextRowId: nextRowId => nextRowId + 1,
+        }),
+        [],
+      ],
+      ClickedRemoveRow: ({ id }) => [
+        evo(model, {
+          rows: Array.filter(row => row.id !== id),
+        }),
+        [],
+      ],
+      GotCounterMessage: ({ id, message }) => foldCounter(id)(model, message),
+    }),
+  )
+
+// INIT
+
+export const init: Runtime.ApplicationInit<Model, Message> = () => [
+  {
+    rows: [
+      { id: 'counter-0', counter: Counter.init },
+      { id: 'counter-1', counter: Counter.init },
+      { id: 'counter-2', counter: Counter.init },
+    ],
+    nextRowId: 3,
+  },
+  [],
+]
+
+// VIEW
+
+const rowView = (row: Row, h: HtmlBuilder<Message>): Html =>
+  h.keyed('div')(
+    row.id,
+    [h.Class('flex items-center gap-2')],
+    [
+      h.div(
+        [h.Class('flex-1')],
+        [
+          h.submodel({
+            slotId: row.id,
+            model: row.counter,
+            view: Counter.view,
+            toParentMessage: message =>
+              GotCounterMessage({ id: row.id, message }),
+          }),
+        ],
+      ),
+      Button.view(
+        {
+          onClick: ClickedRemoveRow({ id: row.id }),
+          toView: attributes =>
+            h.button(
+              [
+                ...attributes.button,
+                h.Class(
+                  'rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:border-red-300 hover:text-red-600 transition cursor-pointer',
+                ),
+              ],
+              ['Remove'],
+            ),
+        },
+        h,
+      ),
+    ],
+  )
+
+export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
+  title: `Counters (${model.rows.length})`,
+  body: h.div(
+    [
+      h.Class(
+        'min-h-screen bg-white flex flex-col items-center py-12 px-6 gap-6',
+      ),
+    ],
+    [
+      h.h1([h.Class('text-2xl font-semibold text-gray-900')], ['Counters']),
+      h.p(
+        [h.Class('text-sm text-gray-500 max-w-md text-center')],
+        [
+          'Each row is a Counter Submodel. The parent has no awareness of Counter internals; it just embeds the Submodel via h.submodel and routes dispatched messages back to the right row via the GotCounterMessage wrapper.',
+        ],
+      ),
+      h.div(
+        [h.Class('flex flex-col gap-3 w-full max-w-md')],
+        model.rows.map(row => rowView(row, h)),
+      ),
+      Button.view(
+        {
+          onClick: ClickedAddRow(),
+          toView: attributes =>
+            h.button(
+              [
+                ...attributes.button,
+                h.Class(
+                  'rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 transition cursor-pointer',
+                ),
+              ],
+              ['+ Add Counter'],
+            ),
+        },
+        h,
+      ),
+    ],
+  ),
+})
