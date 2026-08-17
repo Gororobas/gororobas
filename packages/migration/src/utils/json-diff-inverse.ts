@@ -262,5 +262,5 @@ export const applyInverseDiff = (currentState: any, originalDiff: JsonDiff): any
 export const applyInverseDiffE = (currentState: any, originalDiff: JsonDiff) =>
   Effect.try({
     try: () => applyInverseDiff(currentState, originalDiff),
-    catch: (error) => new Error("Failed to apply inverse diff: ", error),
+    catch: (error) => new Error("Failed to apply inverse diff", { cause: error }),
   })

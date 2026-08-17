@@ -1,7 +1,7 @@
-import type { TiptapDocument } from "@gororobas/domain"
 import { generateText } from "@tiptap/core"
 import StarterKit from "@tiptap/starter-kit"
 
+import type { TiptapDocument } from "./domain.js"
 import { Image } from "./image-extension.js"
 
 const extensions = [StarterKit, Image]

@@ -5,16 +5,15 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
-    "check": "tsc -b tsconfig.json",
+    "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest",
     "migrate": "tsx src/index.ts"
   },
   "dependencies": {
-    "@effect/sql-sqlite-bun": "4.0.0-beta.47",
+    "@effect/sql-sqlite-bun": "catalog:",
     "@gororobas/domain": "workspace:^",
     "@gororobas/server": "workspace:^",
-    "better-auth": "1.5.3",
+    "better-auth": "catalog:",
     "effect": "catalog:",
     "json-diff-ts": "^2.2.1",
     "loro-crdt": "catalog:",

@@ -1,10 +1,16 @@
 {
-  "extends": "./tsconfig.src.json",
+  "extends": "../../tsconfig.base.json",
+  "include": ["src"],
   "compilerOptions": {
+    "composite": true,
     "types": ["node"],
     "tsBuildInfoFile": ".tsbuildinfo/build.tsbuildinfo",
+    "rootDir": "src",
     "outDir": "build/esm",
     "declarationDir": "build/dts",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
     "stripInternal": true
   }
 }

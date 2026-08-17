@@ -1,5 +1,8 @@
 import { Layer, Context } from "effect"
-import * as ts from "typescript"
+import { resolve } from "node:path"
+import * as ts from "typescript/unstable/ast"
+import type { CallExpression, Node, SourceFile } from "typescript/unstable/ast"
+import { API } from "typescript/unstable/sync"
 
 import type { StepKeyword } from "../../parser/types.js"
 import type { DiscoveredStep, StepScope } from "../types.js"
@@ -13,27 +16,14 @@ export class StepDiscovery extends Context.Service<
 
 const STEP_KEYWORDS: Array<StepKeyword> = ["Given", "When", "Then", "And", "But"]
 
-function createCompilerOptions(): ts.CompilerOptions {
-  return {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
-    allowJs: true,
-    allowSyntheticDefaultImports: true,
-    esModuleInterop: true,
-    skipLibCheck: true,
-    noEmit: true,
-  }
-}
-
-function extractStringLiteral(node: ts.Node): string | null {
+function extractStringLiteral(node: Node): string | null {
   if (ts.isStringLiteral(node)) {
     return node.text
   }
   return null
 }
 
-function isStepCallExpression(node: ts.Node): node is ts.CallExpression {
+function isStepCallExpression(node: Node): node is CallExpression {
   if (!ts.isCallExpression(node)) {
     return false
   }
@@ -47,7 +37,7 @@ function isStepCallExpression(node: ts.Node): node is ts.CallExpression {
   return false
 }
 
-function getStepKeyword(node: ts.CallExpression): StepKeyword | null {
+function getStepKeyword(node: CallExpression): StepKeyword | null {
   const expression = node.expression
   if (ts.isIdentifier(expression)) {
     const keyword = expression.text as StepKeyword
@@ -58,7 +48,7 @@ function getStepKeyword(node: ts.CallExpression): StepKeyword | null {
   return null
 }
 
-function detectScope(node: ts.Node): StepScope | undefined {
+function detectScope(node: Node): StepScope | undefined {
   if (!ts.isCallExpression(node)) return undefined
   const expression = node.expression
   if (!ts.isIdentifier(expression)) return undefined
@@ -83,8 +73,8 @@ function detectScope(node: ts.Node): StepScope | undefined {
 }
 
 function visitNode(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
+  node: Node,
+  sourceFile: SourceFile,
   filePath: string,
   currentScope: StepScope | undefined,
 ): Array<DiscoveredStep> {
@@ -122,15 +112,17 @@ function visitNode(
     }
   }
 
-  ts.forEachChild(node, (child) => {
+  node.forEachChild((child) => {
     steps.push(...visitNode(child, sourceFile, filePath, scope))
   })
 
   return steps
 }
 
-function discoverStepsInFile(filePath: string, program: ts.Program): Array<DiscoveredStep> {
-  const sourceFile = program.getSourceFile(filePath)
+function discoverStepsInFile(
+  filePath: string,
+  sourceFile: SourceFile | undefined,
+): Array<DiscoveredStep> {
   if (!sourceFile) {
     return []
   }
@@ -146,13 +138,26 @@ export const StepDiscoveryLive = Layer.succeed(
         return []
       }
 
-      // Create a single program for all files to avoid per-file overhead
-      const program = ts.createProgram(files, createCompilerOptions())
       const allSteps: Array<DiscoveredStep> = []
+      const absoluteFiles = files.map((file) => resolve(file))
+      const api = new API({ cwd: process.cwd() })
 
-      for (const file of files) {
-        const steps = discoverStepsInFile(file, program)
-        allSteps.push(...steps)
+      try {
+        const snapshot = api.updateSnapshot({ openFiles: absoluteFiles })
+
+        try {
+          for (const [index, file] of files.entries()) {
+            const absoluteFile = absoluteFiles[index]
+            const project = snapshot.getDefaultProjectForFile(absoluteFile)
+            const sourceFile = project?.program.getSourceFile(absoluteFile)
+            const steps = discoverStepsInFile(file, sourceFile)
+            allSteps.push(...steps)
+          }
+        } finally {
+          snapshot.dispose()
+        }
+      } finally {
+        api.close()
       }
 
       return allSteps

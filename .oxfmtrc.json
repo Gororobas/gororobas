@@ -12,7 +12,7 @@
     "**/coverage/**",
     "**/.git/**",
     "**/.beads/**",
-    "**/effect-v4/**"
+    "**/repos/**"
   ],
   "experimentalTailwindcss": {
     "attributes": ["class", "className"],

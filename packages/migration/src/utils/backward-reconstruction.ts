@@ -46,10 +46,10 @@ export const transformEditSuggestion = (
       target_object: editSuggestion.target_object,
       diff: editSuggestion.diff as JsonDiff,
       snapshot: editSuggestion.snapshot,
-      status: editSuggestion.status,
+      status: editSuggestion.status as EditSuggestionEvent["status"],
       created_at: editSuggestion.created_at,
     }),
-    catch: (error) => new Error("Failed to transform EditSuggestion: ", error),
+    catch: (error) => new Error("Failed to transform EditSuggestion", { cause: error }),
   })
 
 /**

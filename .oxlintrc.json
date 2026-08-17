@@ -78,6 +78,6 @@
     "**/android",
     "**/coverage",
     "**/.git",
-    "**/effect-v4/**"
+    "**/repos/**"
   ]
 }

@@ -267,9 +267,9 @@ type CrdtSourceCommentData = {
 
 export const sourceCommentDataToCrdtStorage = (sourceData: CrdtSourceCommentData) => ({
   locales: {
-    en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : {},
-    es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : {},
-    pt: sourceData.locales.pt ? encodeLocalizedData(sourceData.locales.pt) : {},
+    en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : undefined,
+    es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : undefined,
+    pt: sourceData.locales.pt ? encodeLocalizedData(sourceData.locales.pt) : undefined,
   },
 })
 

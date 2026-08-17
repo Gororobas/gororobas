@@ -1,12 +1,19 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": [],
-  "references": [
-    {
-      "path": "tsconfig.src.json"
-    },
-    {
-      "path": "tsconfig.test.json"
+  "include": ["src", "test"],
+  "compilerOptions": {
+    "types": ["node"],
+    "noEmit": true,
+    "paths": {
+      "@gororobas/domain": ["../domain/src/index.ts"],
+      "@gororobas/domain/*": ["../domain/src/*.ts"],
+      "@gororobas/domain/test/*": ["../domain/test/*.ts"],
+      "@gororobas/effect-bdd": ["../effect-bdd/src/index.js"],
+      "@gororobas/effect-bdd/*": ["../effect-bdd/src/*.js"],
+      "@gororobas/effect-bdd/test/*": ["../effect-bdd/test/*.js"],
+      "@gororobas/server": ["./src/index.js"],
+      "@gororobas/server/*": ["./src/*.js"],
+      "@gororobas/server/test/*": ["./test/*.js"]
     }
-  ]
+  }
 }

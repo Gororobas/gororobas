@@ -3,7 +3,7 @@
  * Adapted from the reference Supabase migration context.
  */
 import { Context, Data, Effect, HashMap, Layer, Option, Ref, Schema } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql"
 
 // ============ Types ============
 
@@ -21,14 +21,14 @@ export type MigrationOp =
       op: "create"
       execute: <R>(
         createInSqlite: (data: { contentHash: string }) => Effect.Effect<string, R>,
-      ) => Effect.Effect<void, R>
+      ) => Effect.Effect<void, R | SqlError.SqlError>
     }
   | {
       op: "update"
       sqliteId: string
       execute: <R>(
         updateInSqlite: (data: { contentHash: string; sqliteId: string }) => Effect.Effect<void, R>,
-      ) => Effect.Effect<void, R>
+      ) => Effect.Effect<void, R | SqlError.SqlError>
     }
 
 export type IdMap = HashMap.HashMap<string, MappingEntry>
@@ -58,28 +58,23 @@ export interface MigrationContextService {
   readonly planMigrationOp: <GelRecord extends { id: string }>(
     sourceRecord: GelRecord,
     entityType: string,
-  ) => Effect.Effect<MigrationOp>
+  ) => Effect.Effect<MigrationOp, Schema.SchemaError | SqlError.SqlError>
 
   /**
    * Register a new ID mapping.
    */
-  readonly registerMapping: (mapping: MappingEntry) => Effect.Effect<void>
+  readonly registerMapping: (mapping: MappingEntry) => Effect.Effect<void, SqlError.SqlError>
 }
 
 // ============ Service Tag ============
 
-export class MigrationContext extends Context.Tag("MigrationContext")<
-  MigrationContext,
-  MigrationContextService
->() {}
+export class MigrationContext extends Context.Service<MigrationContext, MigrationContextService>()(
+  "MigrationContext",
+) {}
 
 // ============ Implementation ============
 
-const makeMigrationContext = ({
-  initialMap = HashMap.empty(),
-}: {
-  initialMap?: IdMap
-}): Effect.Effect<MigrationContextService> =>
+const makeMigrationContext = ({ initialMap = HashMap.empty() }: { initialMap?: IdMap }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
     const idMapRef = yield* Ref.make(initialMap)
@@ -153,7 +148,9 @@ const makeMigrationContext = ({
           const entry = HashMap.get(map, gelId)
 
           if (Option.isNone(entry)) {
-            return yield* Effect.fail(new GelIdNotMappedError({ gelId, entityType }))
+            return yield* Effect.fail(
+              new GelIdNotMappedError(entityType === undefined ? { gelId } : { gelId, entityType }),
+            )
           }
 
           return entry.value.sqliteId as T
@@ -181,7 +178,12 @@ const makeMigrationContext = ({
             return {
               op: "update",
               sqliteId: mappingEntry.sqliteId,
-              execute: (updateInSqlite) =>
+              execute: <R>(
+                updateInSqlite: (data: {
+                  contentHash: string
+                  sqliteId: string
+                }) => Effect.Effect<void, R>,
+              ) =>
                 Effect.gen(function* () {
                   yield* updateInSqlite({
                     contentHash: newHash,
@@ -198,7 +200,9 @@ const makeMigrationContext = ({
 
           return {
             op: "create",
-            execute: (createInSqlite) =>
+            execute: <R>(
+              createInSqlite: (data: { contentHash: string }) => Effect.Effect<string, R>,
+            ) =>
               Effect.gen(function* () {
                 const sqliteId = yield* createInSqlite({ contentHash: newHash })
                 yield* registerMapping({

@@ -5,27 +5,27 @@ import { Schema } from "effect"
 
 // ============ Scalar Types ============
 
-export const Role = Schema.Enums({
+export const Role = Schema.Enum({
   ADMIN: "ADMIN",
   USER: "USER",
   MODERATOR: "MODERATOR",
 })
 export type Role = typeof Role.Type
 
-export const SourceType = Schema.Enums({
+export const SourceType = Schema.Enum({
   GOROROBAS: "GOROROBAS",
   EXTERNAL: "EXTERNAL",
 })
 export type SourceType = typeof SourceType.Type
 
-export const Gender = Schema.Enums({
+export const Gender = Schema.Enum({
   FEMININO: "FEMININO",
   MASCULINO: "MASCULINO",
   NEUTRO: "NEUTRO",
 })
 export type Gender = typeof Gender.Type
 
-export const VegetableUsage = Schema.Enums({
+export const VegetableUsage = Schema.Enum({
   ALIMENTO_ANIMAL: "ALIMENTO_ANIMAL",
   ALIMENTO_HUMANO: "ALIMENTO_HUMANO",
   CONSTRUCAO: "CONSTRUCAO",
@@ -38,7 +38,7 @@ export const VegetableUsage = Schema.Enums({
 })
 export type VegetableUsage = typeof VegetableUsage.Type
 
-export const EdiblePart = Schema.Enums({
+export const EdiblePart = Schema.Enum({
   FRUTO: "FRUTO",
   FLOR: "FLOR",
   FOLHA: "FOLHA",
@@ -53,7 +53,7 @@ export const EdiblePart = Schema.Enums({
 })
 export type EdiblePart = typeof EdiblePart.Type
 
-export const VegetableLifeCycle = Schema.Enums({
+export const VegetableLifeCycle = Schema.Enum({
   SEMESTRAL: "SEMESTRAL",
   ANUAL: "ANUAL",
   BIENAL: "BIENAL",
@@ -61,7 +61,7 @@ export const VegetableLifeCycle = Schema.Enums({
 })
 export type VegetableLifeCycle = typeof VegetableLifeCycle.Type
 
-export const Stratum = Schema.Enums({
+export const Stratum = Schema.Enum({
   EMERGENTE: "EMERGENTE",
   ALTO: "ALTO",
   MEDIO: "MEDIO",
@@ -70,7 +70,7 @@ export const Stratum = Schema.Enums({
 })
 export type Stratum = typeof Stratum.Type
 
-export const PlantingMethod = Schema.Enums({
+export const PlantingMethod = Schema.Enum({
   BROTO: "BROTO",
   ENXERTO: "ENXERTO",
   ESTACA: "ESTACA",
@@ -80,14 +80,14 @@ export const PlantingMethod = Schema.Enums({
 })
 export type PlantingMethod = typeof PlantingMethod.Type
 
-export const TipSubject = Schema.Enums({
+export const TipSubject = Schema.Enum({
   PLANTIO: "PLANTIO",
   CRESCIMENTO: "CRESCIMENTO",
   COLHEITA: "COLHEITA",
 })
 export type TipSubject = typeof TipSubject.Type
 
-export const VegetableWishlistStatus = Schema.Enums({
+export const VegetableWishlistStatus = Schema.Enum({
   QUERO_CULTIVAR: "QUERO_CULTIVAR",
   SEM_INTERESSE: "SEM_INTERESSE",
   JA_CULTIVEI: "JA_CULTIVEI",
@@ -95,21 +95,21 @@ export const VegetableWishlistStatus = Schema.Enums({
 })
 export type VegetableWishlistStatus = typeof VegetableWishlistStatus.Type
 
-export const EditSuggestionStatus = Schema.Enums({
+export const EditSuggestionStatus = Schema.Enum({
   PENDING_REVIEW: "PENDING_REVIEW",
   MERGED: "MERGED",
   REJECTED: "REJECTED",
 })
 export type EditSuggestionStatus = typeof EditSuggestionStatus.Type
 
-export const NotePublishStatus = Schema.Enums({
+export const NotePublishStatus = Schema.Enum({
   PRIVATE: "PRIVATE",
   COMMUNITY: "COMMUNITY",
   PUBLIC: "PUBLIC",
 })
 export type NotePublishStatus = typeof NotePublishStatus.Type
 
-export const ResourceFormat = Schema.Enums({
+export const ResourceFormat = Schema.Enum({
   BOOK: "BOOK",
   FILM: "FILM",
   SOCIAL_MEDIA: "SOCIAL_MEDIA",
@@ -124,7 +124,7 @@ export const ResourceFormat = Schema.Enums({
 })
 export type ResourceFormat = typeof ResourceFormat.Type
 
-export const NoteType = Schema.Enums({
+export const NoteType = Schema.Enum({
   EXPERIMENTO: "EXPERIMENTO",
   ENSINAMENTO: "ENSINAMENTO",
   DESCOBERTA: "DESCOBERTA",
@@ -133,7 +133,7 @@ export const NoteType = Schema.Enums({
 })
 export type NoteType = typeof NoteType.Type
 
-export const HistoryAction = Schema.Enums({
+export const HistoryAction = Schema.Enum({
   INSERT: "INSERT",
   UPDATE: "UPDATE",
   DELETE: "DELETE",
