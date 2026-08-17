@@ -1,0 +1,110 @@
+{
+  "name": "loro-crdt",
+  "version": "1.14.1",
+  "description": "Loro CRDTs is a high-performance CRDT framework that makes your app state synchronized, collaborative and maintainable effortlessly.",
+  "keywords": [
+    "crdt",
+    "CRDTs",
+    "realtime",
+    "collaboration",
+    "sync",
+    "p2p"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loro-dev/loro.git"
+  },
+  "main": "nodejs/index.js",
+  "browser": "browser/index.js",
+  "module": "bundler/index.js",
+  "types": "bundler/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./bundler/index.d.ts",
+      "browser": {
+        "development": "./bundler/index.js",
+        "default": "./browser/index.js"
+      },
+      "node": "./nodejs/index.js",
+      "import": "./bundler/index.js",
+      "require": "./nodejs/index.js",
+      "default": "./bundler/index.js"
+    },
+    "./web": {
+      "types": "./web/index.d.ts",
+      "import": "./web/index.js",
+      "default": "./web/index.js"
+    },
+    "./base64": {
+      "types": "./base64/index.d.ts",
+      "import": "./base64/index.js",
+      "default": "./base64/index.js"
+    },
+    "./bundler": {
+      "types": "./bundler/index.d.ts",
+      "import": "./bundler/index.js",
+      "default": "./bundler/index.js"
+    },
+    "./browser": {
+      "types": "./browser/index.d.ts",
+      "import": "./browser/index.js",
+      "default": "./browser/index.js"
+    },
+    "./nodejs": {
+      "types": "./nodejs/index.d.ts",
+      "import": "./nodejs/index.js",
+      "require": "./nodejs/index.js",
+      "default": "./nodejs/index.js"
+    },
+    "./bundler/*": "./bundler/*",
+    "./browser/*": "./browser/*",
+    "./web/*": "./web/*",
+    "./base64/*": "./base64/*",
+    "./nodejs/*": "./nodejs/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "./bundler",
+    "./browser",
+    "./nodejs",
+    "./web",
+    "./base64",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "scripts": {
+    "build-dev": "deno run -A ./scripts/build.ts dev && rollup -c && deno run -A ./scripts/post-rollup.ts && npm run test",
+    "build-release": "deno run -A ./scripts/build.ts release && rollup -c && deno run -A ./scripts/post-rollup.ts && npm run test",
+    "test": "node --expose-gc ./node_modules/vitest/vitest.mjs run && npx tsc --noEmit && cd ./deno_tests && deno test -A && cd ../bun_tests && bun test",
+    "test:snapshot-memory": "node --expose-gc ./scripts/measure-snapshot-round-memory.cjs"
+  },
+  "homepage": "https://loro.dev",
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.1",
+    "@rollup/plugin-alias": "^5.1.1",
+    "@rollup/plugin-node-resolve": "^15.0.1",
+    "@rollup/plugin-typescript": "^12.1.1",
+    "@rollup/plugin-wasm": "^6.2.2",
+    "@typescript-eslint/parser": "^6.2.0",
+    "@vitest/ui": "^1.0.4",
+    "brotli-wasm": "^3.0.1",
+    "esbuild": "^0.18.20",
+    "eslint": "^8.46.0",
+    "loro-crdt-alpha-4": "npm:loro-crdt@=1.0.0-alpha.4",
+    "prettier": "^3.0.0",
+    "rollup": "^3.20.1",
+    "rollup-plugin-dts": "^5.3.0",
+    "rollup-plugin-esbuild": "^5.0.0",
+    "tslib": "^2.8.0",
+    "typescript": "^5.6.3",
+    "vite": "^4.2.1",
+    "vite-plugin-top-level-await": "^1.2.2",
+    "vite-plugin-wasm": "^3.1.0",
+    "vitest": "^1.4.0"
+  }
+}

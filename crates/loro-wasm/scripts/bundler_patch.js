@@ -1,0 +1,89 @@
+import * as rawWasm from "./loro_wasm_bg.wasm";
+import * as imports from "./loro_wasm_bg.js";
+
+// Normalize how bundlers expose the wasm module/exports.
+const toModuleOrExports = (wasm) => {
+  if (!wasm) return wasm;
+  if (wasm instanceof WebAssembly.Module) return wasm;
+  if (typeof wasm === "object" && "default" in wasm) {
+    return wasm.default ?? wasm;
+  }
+  // rsbuild doesn't provide a default export when importing wasm.
+  return wasm;
+};
+
+const wasmModuleOrExports = toModuleOrExports(rawWasm);
+
+// Helper: ensure we end up with exports and run the start hook when needed.
+const finalize = (exports) => {
+  imports.__wbg_set_wasm(exports);
+  tryStart(exports);
+};
+
+function tryStart(exports) {
+  // `__wbindgen_start` is an export of the wasm module, not of the JS glue
+  // namespace; checking the JS namespace would silently skip the start hook.
+  if (typeof exports.__wbindgen_start === "function") {
+    // Some bundlers require explicit start invocation.
+    exports.__wbindgen_start();
+  }
+}
+
+if (wasmModuleOrExports && wasmModuleOrExports.__wbindgen_start) {
+  // See https://github.com/loro-dev/loro/issues/440
+  // Without this patch, Cloudflare Worker would raise issue like: "Uncaught TypeError: wasm2.__wbindgen_start is not a function"
+  // Already the initialized exports object (Cloudflare Workers path).
+  finalize(wasmModuleOrExports);
+} else if ("Bun" in globalThis) {
+  // Bun may expose the imported wasm as a file path. Instantiate it directly so
+  // the shared finalization path receives WebAssembly exports.
+  let instance;
+  if (wasmModuleOrExports instanceof WebAssembly.Module) {
+    ({ instance } = await WebAssembly.instantiate(wasmModuleOrExports, {
+      "./loro_wasm_bg.js": imports,
+    }));
+  } else {
+    const url = Bun.pathToFileURL(wasmModuleOrExports);
+    ({ instance } = await WebAssembly.instantiateStreaming(fetch(url), {
+      "./loro_wasm_bg.js": imports,
+    }));
+  }
+  finalize(instance.exports);
+} else {
+  // Browser/node-like bundlers: either we already have exports, or a Module/URL.
+  const wkmod = wasmModuleOrExports instanceof WebAssembly.Module
+    ? wasmModuleOrExports
+    : await import("./loro_wasm_bg.wasm");
+  const module = wkmod instanceof WebAssembly.Module
+    ? wkmod
+    : (wkmod && wkmod.default) || wkmod;
+  let instance;
+  if (module instanceof WebAssembly.Instance) {
+    instance = module;
+  } else if (module instanceof WebAssembly.Module) {
+    instance = await WebAssembly.instantiate(module, {
+      "./loro_wasm_bg.js": imports,
+    });
+  } else if (module instanceof ArrayBuffer || ArrayBuffer.isView(module)) {
+    const { instance: inst } = await WebAssembly.instantiate(module, {
+      "./loro_wasm_bg.js": imports,
+    });
+    instance = inst;
+  } else if (typeof module === "string" || module instanceof URL) {
+    const response = await fetch(module);
+    const { instance: inst } = await WebAssembly.instantiateStreaming(
+      response,
+      {
+        "./loro_wasm_bg.js": imports,
+      },
+    );
+    instance = inst;
+  } else {
+    console.error("Unsupported wasm import type:", module);
+    throw new Error("Unsupported wasm import type: " + typeof module);
+  }
+
+  finalize(instance.exports ?? instance);
+}
+
+export * from "./loro_wasm_bg.js";

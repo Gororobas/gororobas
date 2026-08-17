@@ -1,0 +1,80 @@
+name: Create Release PR
+
+on:
+  push:
+    tags:
+      - 'rust-pre-release@*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name (e.g., rust-pre-release@1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Extract version from manual input
+            TAG="${{ github.event.inputs.tag }}"
+            VERSION=${TAG#rust-pre-release@}
+            echo "Manual trigger detected, using input tag: $TAG"
+          else
+            # Extract version from pushed tag
+            VERSION=${GITHUB_REF#refs/tags/rust-pre-release@}
+            echo "Tag push detected, using pushed tag"
+          fi
+          echo "version=$VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release PR
+        id: release
+        run: |
+          cargo install cargo-release
+          # Run cargo release and capture the output
+          echo "Starting release process..."
+          echo "Running deno script with version: ${{ steps.version.outputs.version }}"
+          deno run -A scripts/cargo-release.ts ${{ steps.version.outputs.version }} 2>&1 | tee debug_output.log
+          RELEASE_OUTPUT=$(tail -n 1 debug_output.log)
+          # Check if the output contains any error messages
+          if echo "$RELEASE_OUTPUT" | grep -i "error" > /dev/null; then
+            echo "Error detected in release output"
+            echo "$RELEASE_OUTPUT"
+            exit 1
+          fi
+          echo "EXCLUDED_FLAGS=$RELEASE_OUTPUT"
+          echo "EXCLUDED_FLAGS=$RELEASE_OUTPUT" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "chore: release rust crates v${{ steps.version.outputs.version }}"
+          body: |
+            This PR is automatically created to release version ${{ steps.version.outputs.version }}.
+            Please review the changes and merge to trigger the release.
+            
+            <!-- RELEASE_FLAGS: ${{ steps.release.outputs.EXCLUDED_FLAGS }} -->
+          branch: release-rust
+          add-paths: |
+            .
+          base: main
+          commit-message: "chore: bump version to ${{ steps.version.outputs.version }}" 

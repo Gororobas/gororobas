@@ -1,0 +1,106 @@
+[package]
+name = "fuzz-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.fuzz]
+path = ".."
+
+[features]
+mergeable = ["fuzz/mergeable"]
+
+[dependencies.loro]
+path = "../../loro"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+
+[[bin]]
+name = "all"
+path = "fuzz_targets/all.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "diff_calc"
+path = "fuzz_targets/diff_calc.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "gc_fuzz"
+path = "fuzz_targets/gc_fuzz.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "one_doc_fuzz"
+path = "fuzz_targets/one_doc_fuzz.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "mov"
+path = "fuzz_targets/mov.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "local_events"
+path = "fuzz_targets/local_events.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "movable_list"
+path = "fuzz_targets/movable_list.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "tree"
+path = "fuzz_targets/tree.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "counter"
+path = "fuzz_targets/counter.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "text-update"
+path = "fuzz_targets/text-update.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "kv_store"
+path = "fuzz_targets/kv_store.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "random_import"
+path = "fuzz_targets/random_import.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "mergeable"
+path = "fuzz_targets/mergeable.rs"
+test = false
+doc = false

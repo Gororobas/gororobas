@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
+  "changelog": "@changesets/changelog-git",
+  "commit": false,
+  "fixed": [],
+  "linked": [
+    [
+      "loro-crdt",
+      "loro-crdt-map"
+    ]
+  ],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "loro-quill",
+    "loro-test-esbuild",
+    "loro-test-rsbuild"
+  ]
+}
