@@ -1,22 +1,10 @@
 # Gororobas.com
 
-Gororobas is social network for agroecology built with React Native, EffectTS and SQLite.
+Gororobas is social network for agroecology built with Foldkit, EffectTS and Turso (the SQLite-compatible database).
 
 This project uses pnpm.
 
 Do not commit or modify the git history on your own.
-
-This project uses a CLI ticket system for task and issue management. Run `tk help` when you need to use it.
-
-## Dependency installation
-
-Use **pnpm** for dependency installation and updates.
-
-- ✅ `pnpm install`
-- 🚫 do not run `bun install`
-
-Use `pnpm run` to execute project scripts (type-check/lint/test).
-
 
 ## Philosophy
 
@@ -30,9 +18,11 @@ Fight entropy. Leave the codebase better than you found it.
 
 Do not set `as any`, `@ts-ignore` or `@ts-expect-error` when you're stuck. Think hard about types and find ways to make them work.
 
-## Effect v4 beta
+## Effect v4 RC and vendors
 
-We're using the Effect v4 beta, which includes some breaking changes from Effect v3. Make sure to read the effect-v4 folder  (which a git submodule) to go through the new version's source code when proposing changes.
+We're using the Effect v4 RC, which includes some breaking changes from Effect v3. Make sure to read the repos/effect folder  (which is a git submodule) to go through the new version's source code when proposing changes.
+
+Foldkit, Loro and Turso also have their monorepos available for reference under the `./repos` folder.
 
 ## Database
 
@@ -81,20 +71,12 @@ Avoid abbreviations as much as possible. For objects/structs properties, use `sn
 
 Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/repositores/resources-repository.ts`
 
+## Testing
+
+Where possible, use Property-Based Testing (PBT) with Effect Schema and its arbitraries integration with fast-check. These tests better explore the state space.
+
 ## Ensuring quality
 
-⚠️ **CRITICAL**: always run the following checks (in order) to ensure your contribution is correct:
+⚠️ **CRITICAL**: always run the following to ensure your contribution is correct:
 
-1. `pnpm run type-check`
-2. `pnpm run lint`
-3. `pnpm run test`
-
-## Session Completion
-
-**When ending a work session**, you MUST complete ALL steps below.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up. Refer to `tk help` if needed
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
+`pnpm run quality-gates`
