@@ -1,0 +1,147 @@
+import { Effect, Match as M, Option, Schema as S } from 'effect'
+import { Command, Update, Url } from 'foldkit'
+import { load, pushUrl } from 'foldkit/navigation'
+import { evo } from 'foldkit/struct'
+
+import * as Shared from '@typing-game/shared'
+
+import { NavigateToRoom } from './command'
+import {
+  CompletedLoadExternal,
+  CompletedNavigateInternal,
+  GotHomeMessage,
+  GotRoomMessage,
+  Message,
+} from './message'
+import { Model } from './model'
+import { Home, Room } from './page'
+import { urlToAppRoute } from './route'
+import { RoomsClient } from './rpc'
+
+const NavigateInternal = Command.define('NavigateInternal', {
+  args: { url: S.String },
+  messages: [CompletedNavigateInternal],
+  execute: ({ url }) =>
+    pushUrl(url).pipe(Effect.as(CompletedNavigateInternal())),
+})
+
+const LoadExternal = Command.define('LoadExternal', {
+  args: { href: S.String },
+  messages: [CompletedLoadExternal],
+  execute: ({ href }) => load(href).pipe(Effect.as(CompletedLoadExternal())),
+})
+
+export type UpdateReturn<Model, Message> = readonly [
+  Model,
+  ReadonlyArray<Command.Command<Message, never, RoomsClient>>,
+]
+const withUpdateReturn = M.withReturnType<UpdateReturn<Model, Message>>()
+
+type UpdateStep = Update.Step<Model, Message, RoomsClient>
+
+const readHome = (model: Model): Option.Option<Home.Model.Model> =>
+  Option.some(model.home)
+
+const writeHome = (model: Model, nextHome: Home.Model.Model): Model =>
+  evo(model, { home: () => nextHome })
+
+const toGotHomeMessage = (message: Home.Message.Message): Message =>
+  GotHomeMessage({ message })
+
+const readRoom = (model: Model): Option.Option<Room.Model.Model> =>
+  Option.some(model.room)
+
+const writeRoom = (model: Model, nextRoom: Room.Model.Model): Model =>
+  evo(model, { room: () => nextRoom })
+
+const toGotRoomMessage = (message: Room.Message.Message): Message =>
+  GotRoomMessage({ message })
+
+const navigateToRoom =
+  (roomId: string): UpdateStep =>
+  model => [model, [NavigateToRoom({ roomId })]]
+
+const enterJoinedRoom = (roomId: string, player: Shared.Player): UpdateStep =>
+  Update.combine([
+    navigateToRoom(roomId),
+    Update.foldChild({
+      update: (roomModel: Room.Model.Model, joinedPlayer: Shared.Player) =>
+        Room.informJoined(roomModel, joinedPlayer, { roomId }),
+      read: readRoom,
+      write: writeRoom,
+      toParentMessage: toGotRoomMessage,
+    })(player),
+  ])
+
+const foldHomeOutMessage: (outMessage: Home.Message.OutMessage) => UpdateStep =
+  outMessage => model =>
+    M.value(outMessage).pipe(
+      withUpdateReturn,
+      M.tag('SucceededCreateRoom', 'SucceededJoinRoom', ({ roomId, player }) =>
+        enterJoinedRoom(roomId, player)(model),
+      ),
+      M.exhaustive,
+    )
+
+const foldHomeMessage = Update.foldChild({
+  update: Home.update,
+  read: readHome,
+  write: writeHome,
+  toParentMessage: toGotHomeMessage,
+  foldOutMessage: foldHomeOutMessage,
+})
+
+const foldRoomMessage = (roomId: string) =>
+  Update.foldChild({
+    update: (roomModel: Room.Model.Model, message: Room.Message.Message) =>
+      Room.update(roomModel, message, { roomId }),
+    read: readRoom,
+    write: writeRoom,
+    toParentMessage: toGotRoomMessage,
+  })
+
+export const update = (
+  model: Model,
+  message: Message,
+): UpdateReturn<Model, Message> =>
+  M.value(message).pipe(
+    withUpdateReturn,
+    M.tags({
+      ClickedLink: ({ request }) =>
+        M.value(request).pipe(
+          withUpdateReturn,
+          M.tagsExhaustive({
+            Internal: ({ url }) => [
+              model,
+              [NavigateInternal({ url: Url.toString(url) })],
+            ],
+            External: ({ href }) => [model, [LoadExternal({ href })]],
+          }),
+        ),
+
+      ChangedUrl: ({ url }) => [
+        evo(model, {
+          route: () => urlToAppRoute(url),
+        }),
+        [],
+      ],
+
+      GotHomeMessage: ({ message }) => foldHomeMessage(model, message),
+
+      GotRoomMessage: ({ message }) =>
+        M.value(model.route).pipe(
+          withUpdateReturn,
+          M.tag('Room', ({ roomId }) =>
+            foldRoomMessage(roomId)(model, message),
+          ),
+          M.orElse(() => [model, []]),
+        ),
+    }),
+    M.tag(
+      'CompletedNavigateInternal',
+      'CompletedLoadExternal',
+      'CompletedNavigateToRoom',
+      () => [model, []],
+    ),
+    M.exhaustive,
+  )

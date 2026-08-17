@@ -1,0 +1,230 @@
+import type { HtmlBuilder } from 'foldkit/html'
+import * as Scene from 'foldkit/scene'
+import { expect } from 'vitest'
+
+import { describe, it } from '@effect/vitest'
+
+import type { Message, Model, ViewInputs } from './index.js'
+import {
+  AnchorPopover,
+  CompletedAnchorPopover,
+  CompletedPortalPopoverBackdrop,
+  PortalPopoverBackdrop,
+  RequestedOpen,
+  buttonId,
+  init,
+  update,
+  view,
+} from './index.js'
+
+const acknowledgeAnchor = Scene.Mount.resolve(
+  AnchorPopover,
+  CompletedAnchorPopover(),
+)
+const acknowledgeBackdrop = Scene.Mount.resolve(
+  PortalPopoverBackdrop,
+  CompletedPortalPopoverBackdrop(),
+)
+
+const sceneView =
+  (overrides: Omit<Partial<ViewInputs>, 'toView' | 'anchor'> = {}) =>
+  (model: Model, h: HtmlBuilder<Message>) =>
+    view(
+      model,
+      {
+        anchor: { placement: 'bottom-start' },
+        toView: ({ button, panel, backdrop, isVisible }) =>
+          h.div(
+            [],
+            [
+              h.keyed('button')('test-button', [...button]),
+              ...(isVisible
+                ? [
+                    h.keyed('div')('test-backdrop', [...backdrop]),
+                    h.keyed('div')('test-panel-container', [...panel]),
+                  ]
+                : []),
+            ],
+          ),
+        ...overrides,
+      },
+      h,
+    )
+
+const button = Scene.selector('[key="test-button"]')
+const panel = Scene.selector('[key="test-panel-container"]')
+const backdrop = Scene.selector('[key="test-backdrop"]')
+
+const closedModel = init({ id: 'test' })
+const [openModel] = update(init({ id: 'test' }), RequestedOpen())
+const [openContentFocusModel] = update(
+  init({ id: 'test', contentFocus: true }),
+  RequestedOpen(),
+)
+
+describe('Popover', () => {
+  describe('view', () => {
+    it('renders button with aria-expanded false when closed', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(closedModel),
+        Scene.expect(button).toHaveAttr('aria-expanded', 'false'),
+        Scene.expect(button).toHaveAttr('aria-controls', 'test-panel'),
+      )
+    })
+
+    it('renders button with aria-expanded true when open', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(openModel),
+        Scene.expect(button).toHaveAttr('aria-expanded', 'true'),
+        acknowledgeAnchor,
+        acknowledgeBackdrop,
+      )
+    })
+
+    it('renders panel when open', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(openModel),
+        Scene.expect(panel).toExist(),
+        Scene.expect(panel).toHaveAttr('tabIndex', '0'),
+        acknowledgeAnchor,
+        acknowledgeBackdrop,
+      )
+    })
+
+    it('does not render panel when closed', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(closedModel),
+        Scene.expect(panel).toBeAbsent(),
+      )
+    })
+
+    it('renders backdrop when open', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(openModel),
+        Scene.expect(backdrop).toExist(),
+        acknowledgeAnchor,
+        acknowledgeBackdrop,
+      )
+    })
+
+    it('does not have aria-haspopup on the button', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(closedModel),
+        Scene.expect(button).toExist(),
+        Scene.expect(button).not.toHaveAttr('aria-haspopup'),
+      )
+    })
+
+    it('does not have role on the panel', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(openModel),
+        Scene.expect(panel).toExist(),
+        Scene.expect(panel).not.toHaveAttr('role'),
+        acknowledgeAnchor,
+        acknowledgeBackdrop,
+      )
+    })
+
+    it('adds anchor positioning styles and hooks', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(openModel),
+        Scene.expect(panel).toHaveStyle('position', 'absolute'),
+        Scene.expect(panel).toHaveStyle('margin', '0'),
+        Scene.expect(panel).toHaveStyle('visibility', 'hidden'),
+        Scene.expect(panel).toHaveHook('insert'),
+        Scene.expect(panel).toHaveHook('destroy'),
+        acknowledgeAnchor,
+        acknowledgeBackdrop,
+      )
+    })
+
+    describe('contentFocus mode', () => {
+      it('renders panel without tabindex when contentFocus is enabled', () => {
+        Scene.scene(
+          { update, view: sceneView() },
+          Scene.given(openContentFocusModel),
+          Scene.expect(panel).toExist(),
+          Scene.expect(panel).not.toHaveAttr('tabIndex'),
+          acknowledgeAnchor,
+          acknowledgeBackdrop,
+        )
+      })
+
+      it('renders panel without blur handler when contentFocus is enabled', () => {
+        Scene.scene(
+          { update, view: sceneView() },
+          Scene.given(openContentFocusModel),
+          Scene.expect(panel).not.toHaveHandler('blur'),
+          acknowledgeAnchor,
+          acknowledgeBackdrop,
+        )
+      })
+
+      it('keeps the panel keydown handler when contentFocus is enabled', () => {
+        Scene.scene(
+          { update, view: sceneView() },
+          Scene.given(openContentFocusModel),
+          Scene.expect(panel).toHaveHandler('keydown'),
+          acknowledgeAnchor,
+          acknowledgeBackdrop,
+        )
+      })
+    })
+
+    describe('button labeling', () => {
+      it('no aria-label or aria-labelledby on the button by default', () => {
+        Scene.scene(
+          { update, view: sceneView() },
+          Scene.given(closedModel),
+          Scene.expect(button).not.toHaveAttr('aria-label'),
+          Scene.expect(button).not.toHaveAttr('aria-labelledby'),
+        )
+      })
+
+      it('applies aria-label to the button when ariaLabel is provided', () => {
+        Scene.scene(
+          { update, view: sceneView({ ariaLabel: 'Options' }) },
+          Scene.given(closedModel),
+          Scene.expect(button).toHaveAttr('aria-label', 'Options'),
+          Scene.expect(button).not.toHaveAttr('aria-labelledby'),
+        )
+      })
+
+      it('applies aria-labelledby to the button when ariaLabelledBy is provided', () => {
+        Scene.scene(
+          { update, view: sceneView({ ariaLabelledBy: 'options-label' }) },
+          Scene.given(closedModel),
+          Scene.expect(button).toHaveAttr('aria-labelledby', 'options-label'),
+          Scene.expect(button).not.toHaveAttr('aria-label'),
+        )
+      })
+
+      it('prefers aria-label over aria-labelledby when both are provided', () => {
+        Scene.scene(
+          {
+            update,
+            view: sceneView({
+              ariaLabel: 'Options',
+              ariaLabelledBy: 'options-label',
+            }),
+          },
+          Scene.given(closedModel),
+          Scene.expect(button).toHaveAttr('aria-label', 'Options'),
+          Scene.expect(button).not.toHaveAttr('aria-labelledby'),
+        )
+      })
+
+      it('buttonId derives the trigger id from the base id', () => {
+        expect(buttonId('test')).toBe('test-button')
+      })
+    })
+  })
+})

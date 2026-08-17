@@ -1,0 +1,33 @@
+import { Schema as S } from 'effect'
+import { m } from 'foldkit/message'
+
+import { DragAndDrop } from '@foldkit/ui'
+
+export const GotDragAndDropMessage = m('GotDragAndDropMessage', {
+  message: DragAndDrop.Message,
+})
+export const ClickedAddCard = m('ClickedAddCard', { columnId: S.String })
+export const ChangedNewCardTitle = m('ChangedNewCardTitle', {
+  value: S.String,
+})
+export const SubmittedNewCard = m('SubmittedNewCard')
+export const CancelledNewCard = m('CancelledNewCard')
+export const CompletedGenerateCardId = m('CompletedGenerateCardId', {
+  cardId: S.String,
+  columnId: S.String,
+  title: S.String,
+})
+export const CompletedSaveBoard = m('CompletedSaveBoard')
+export const CompletedFocusAddCardInput = m('CompletedFocusAddCardInput')
+
+export const Message = S.Union([
+  GotDragAndDropMessage,
+  ClickedAddCard,
+  ChangedNewCardTitle,
+  SubmittedNewCard,
+  CancelledNewCard,
+  CompletedGenerateCardId,
+  CompletedSaveBoard,
+  CompletedFocusAddCardInput,
+])
+export type Message = typeof Message.Type

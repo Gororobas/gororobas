@@ -1,0 +1,502 @@
+@import 'tailwindcss';
+
+@theme {
+  --breakpoint-playground-wide: 1780px;
+}
+
+@font-face {
+  font-family: 'ABC Favorit';
+  src: url('/fonts/ABCFavorit-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'ABC Favorit';
+  src: url('/fonts/ABCFavorit-Book.woff2') format('woff2');
+  font-weight: 350;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Variable.woff2') format('woff2');
+  font-weight: 300 600;
+  font-display: swap;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant hover-capable {
+  @media (hover: hover) {
+    @slot;
+  }
+}
+
+@theme {
+  --color-cream: #f8f7fb;
+  --color-gray-50: #f5f4f8;
+  --color-gray-100: #eeedf2;
+  --color-gray-200: #e0dfe6;
+  --color-gray-300: #cdcbd4;
+  --color-gray-400: #9e9baa;
+  --color-gray-500: #716e7e;
+  --color-gray-600: #534f60;
+  --color-gray-700: #3e3a4a;
+  --color-gray-800: #2a2833;
+  --color-gray-850: #232129;
+  --color-gray-900: #1e1c21;
+  --color-gray-950: #13121a;
+  --color-accent-100: #e8f5d0;
+  --color-accent-200: #c8e494;
+  --color-accent-300: #a3d154;
+  --color-accent-400: #82b536;
+  --color-accent-500: #82b536;
+  --color-accent-600: #4d7a15;
+  --color-accent-700: #416812;
+  --color-accent-800: #365610;
+  --color-accent-900: #253b0a;
+  --font-sans: 'ABC Favorit', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-weight-normal: 350;
+  --font-weight-code: 400;
+}
+
+:root {
+  --header-height: calc(3.5rem + env(safe-area-inset-top, 0px));
+  --mobile-toc-height: 2.75rem;
+}
+
+@media (min-width: theme(--breakpoint-md)) {
+  :root {
+    --header-height: calc(4.5rem + env(safe-area-inset-top, 0px));
+  }
+}
+
+@media (min-width: theme(--breakpoint-xl)) {
+  :root {
+    --mobile-toc-height: 0rem;
+  }
+}
+
+@layer base {
+  [tabindex='-1']:focus {
+    outline: none;
+  }
+
+  html {
+    color-scheme: light;
+    scroll-padding-top: calc(var(--header-height) + var(--mobile-toc-height));
+  }
+
+  html.dark {
+    color-scheme: dark;
+    --font-weight-code: 300;
+  }
+
+  body {
+    @apply text-base leading-relaxed font-light tracking-[0.01em] text-gray-800 dark:text-gray-200 bg-cream dark:bg-gray-900;
+  }
+
+  strong {
+    font-weight: 350;
+  }
+
+  :is(h1, h2, h3, h4).font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .list-disc {
+    padding-left: 2rem;
+  }
+
+  .list-disc li {
+    list-style-type: '=> ';
+  }
+
+  .list-disc li::marker {
+    @apply font-mono font-normal text-accent-500 dark:text-accent-400 text-sm;
+  }
+
+  pre {
+    @apply pr-14 pl-2.75 py-4 rounded-lg overflow-x-auto border border-gray-200 dark:border-gray-700/50 font-code text-sm;
+  }
+
+  .dark .shiki {
+    background-color: var(--shiki-dark-bg) !important;
+  }
+
+  .dark .shiki,
+  .dark .shiki span {
+    color: var(--shiki-dark) !important;
+  }
+
+  pre code {
+    @apply block;
+  }
+
+  pre code .line {
+    @apply leading-6;
+  }
+
+  pre code .line[data-line]::before {
+    content: attr(data-line);
+    @apply inline-block mr-4 text-right text-gray-500 select-none border-r border-gray-300 pr-4;
+  }
+
+  .dark pre code .line[data-line]::before {
+    border-color: #332f3b;
+  }
+
+  pre[data-line-digits='1'] code .line[data-line]::before {
+    @apply w-8;
+  }
+
+  pre[data-line-digits='2'] code .line[data-line]::before {
+    @apply w-10;
+  }
+
+  pre[data-line-digits='3'] code .line[data-line]::before {
+    @apply w-12;
+  }
+
+  .code-embed {
+    pre {
+      @apply rounded-none border-0 text-xs;
+
+      code .line {
+        @apply leading-5;
+      }
+    }
+  }
+
+  .code-embed-panel {
+    @apply flex-1 min-w-0 relative flex flex-col;
+
+    .code-embed-copy {
+      @apply right-6!;
+    }
+  }
+
+  .code-embed-scroll {
+    @apply flex-1 min-h-0 max-h-[80vh] overflow-y-auto flex flex-col;
+
+    > div {
+      @apply flex-1 flex flex-col;
+      position: static !important;
+    }
+
+    .code-embed {
+      @apply flex-1 flex flex-col;
+
+      pre {
+        @apply flex-1;
+      }
+    }
+  }
+}
+
+@layer components {
+  .landing-section {
+    @apply px-6 py-10 md:px-12 md:py-24 lg:px-20;
+  }
+
+  [data-glyph]::before {
+    content: attr(data-glyph);
+  }
+
+  .landing-section + .landing-section {
+    border: none;
+  }
+
+  .landing-section-narrow {
+    @apply max-w-6xl mx-auto;
+  }
+
+  .cta-primary {
+    @apply inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-accent-600 dark:bg-accent-500 text-white dark:text-accent-900 font-normal text-base transition hover:bg-accent-700 dark:hover:bg-accent-600 active:bg-accent-800 dark:active:bg-accent-700;
+  }
+
+  .cta-secondary {
+    @apply inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-cream dark:bg-gray-900 text-gray-900 dark:text-white font-normal text-base transition hover:bg-gray-200 hover:border-gray-400 dark:hover:bg-gray-800 dark:hover:border-gray-400;
+  }
+
+  .cta-amber {
+    @apply inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-amber-500 dark:bg-amber-400 text-amber-950 font-normal text-base transition hover:bg-amber-400 dark:hover:bg-amber-300 active:bg-amber-600 dark:active:bg-amber-500;
+  }
+
+  .cta-amber-sm {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 dark:bg-amber-400 text-amber-950 font-normal text-sm transition hover:bg-amber-400 dark:hover:bg-amber-300 active:bg-amber-600 dark:active:bg-amber-500;
+  }
+
+  .landing-card {
+    @apply relative;
+  }
+
+  @media (min-width: theme(--breakpoint-lg)) {
+    .demo-viewport-constraint {
+      max-height: calc(100vh - var(--header-height) - 2rem);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .demo-viewport-constraint > div {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .demo-viewport-constraint [role='tabpanel'] {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .demo-viewport-constraint .demo-container {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .demo-viewport-constraint .demo-code-panel,
+    .demo-viewport-constraint .note-demo-code-panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .demo-viewport-constraint .demo-code-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+    }
+  }
+
+  /* NOTE: the base `pre` rule sets overflow-x, which computes overflow-y to
+     auto and makes `pre` look like a scroll container to scroll-into-view
+     lookups. The surrounding .demo-code-scroll owns both axes here. */
+  .demo-code-panel pre,
+  .note-demo-code-panel pre {
+    background: transparent !important;
+    border-radius: 0;
+    border: none;
+    overflow: visible;
+  }
+
+  .demo-code-panel pre code .line[data-line]::before,
+  .note-demo-code-panel pre code .line[data-line]::before {
+    @apply hidden;
+  }
+
+  .demo-code-panel pre {
+    @apply pr-4 py-3 text-sm;
+  }
+
+  .demo-code-panel pre code .line {
+    @apply transition-all duration-200 rounded-sm leading-5;
+    border-left: 3px solid transparent;
+    padding-left: 4px;
+  }
+
+  .demo-progress-bar {
+    width: 0%;
+    transition: none;
+  }
+
+  .demo-progress-bar-active {
+    width: 100%;
+    transition: width calc(var(--reset-duration) * 1s) linear;
+  }
+
+  /* Demo line highlights: message (emerald), update (amber), model (blue), command (violet) */
+  .demo-code-panel[data-demo-phase='IncrementMessage']
+    [data-phases~='IncrementMessage'] {
+    @apply bg-emerald-500/15;
+    border-left-color: theme(--color-emerald-400);
+  }
+
+  .demo-code-panel[data-demo-phase='IncrementUpdate']
+    [data-phases~='IncrementUpdate'] {
+    @apply bg-amber-500/15;
+    border-left-color: theme(--color-amber-400);
+  }
+
+  .demo-code-panel[data-demo-phase='IncrementModel']
+    [data-phases~='IncrementModel'] {
+    @apply bg-blue-500/15;
+    border-left-color: theme(--color-blue-400);
+  }
+
+  .demo-code-panel[data-demo-phase='DurationMessage']
+    [data-phases~='DurationMessage'] {
+    @apply bg-emerald-500/15;
+    border-left-color: theme(--color-emerald-400);
+  }
+
+  .demo-code-panel[data-demo-phase='DurationUpdate']
+    [data-phases~='DurationUpdate'] {
+    @apply bg-amber-500/15;
+    border-left-color: theme(--color-amber-400);
+  }
+
+  .demo-code-panel[data-demo-phase='DurationModel']
+    [data-phases~='DurationModel'] {
+    @apply bg-blue-500/15;
+    border-left-color: theme(--color-blue-400);
+  }
+
+  .demo-code-panel[data-demo-phase='ResetMessage']
+    [data-phases~='ResetMessage'] {
+    @apply bg-emerald-500/15;
+    border-left-color: theme(--color-emerald-400);
+  }
+
+  .demo-code-panel[data-demo-phase='ResetUpdate'] [data-phases~='ResetUpdate'] {
+    @apply bg-amber-500/15;
+    border-left-color: theme(--color-amber-400);
+  }
+
+  .demo-code-panel[data-demo-phase='ResetCommand']
+    [data-phases~='ResetCommand'] {
+    @apply bg-violet-500/15;
+    border-left-color: theme(--color-violet-400);
+    animation: demo-pulse 1s ease-in-out infinite;
+  }
+
+  .demo-code-panel[data-demo-phase='ResetCommandMessage']
+    [data-phases~='ResetCommandMessage'] {
+    @apply bg-emerald-500/15;
+    border-left-color: theme(--color-emerald-400);
+  }
+
+  .demo-code-panel[data-demo-phase='ResetCommandUpdate']
+    [data-phases~='ResetCommandUpdate'] {
+    @apply bg-amber-500/15;
+    border-left-color: theme(--color-amber-400);
+  }
+
+  .demo-code-panel[data-demo-phase='ResetModel'] [data-phases~='ResetModel'] {
+    @apply bg-blue-500/15;
+    border-left-color: theme(--color-blue-400);
+  }
+
+  /* Note player demo base styles */
+  .note-demo-code-panel pre {
+    @apply pr-4 py-3 text-sm;
+  }
+
+  .note-demo-code-panel pre code .line {
+    @apply transition-all duration-200 rounded-sm leading-5;
+    border-left: 3px solid transparent;
+    padding-left: 4px;
+  }
+
+  /* Note player demo line highlights: message (emerald), update (amber), model (blue), command (violet) */
+  .note-demo-code-panel[data-note-demo-phase='PlayMessage']
+    [data-phases~='PlayMessage'] {
+    @apply bg-emerald-500/15;
+    border-left-color: theme(--color-emerald-400);
+  }
+
+  .note-demo-code-panel[data-note-demo-phase='PauseMessage']
+    [data-phases~='PauseMessage'] {
+    @apply bg-emerald-500/15;
+    border-left-color: theme(--color-emerald-400);
+  }
+
+  .note-demo-code-panel[data-note-demo-phase='PlayUpdate']
+    [data-phases~='PlayUpdate'] {
+    @apply bg-amber-500/15;
+    border-left-color: theme(--color-amber-400);
+  }
+
+  .note-demo-code-panel[data-note-demo-phase='PlayModel']
+    [data-phases~='PlayModel'] {
+    @apply bg-blue-500/15;
+    border-left-color: theme(--color-blue-400);
+  }
+
+  .note-demo-code-panel[data-note-demo-phase='NoteMessage']
+    [data-phases~='NoteMessage'] {
+    @apply bg-emerald-500/15;
+    border-left-color: theme(--color-emerald-400);
+  }
+
+  .note-demo-code-panel[data-note-demo-phase='NoteUpdate']
+    [data-phases~='NoteUpdate'] {
+    @apply bg-amber-500/15;
+    border-left-color: theme(--color-amber-400);
+  }
+
+  .note-demo-code-panel[data-note-demo-phase='NoteModel']
+    [data-phases~='NoteModel'] {
+    @apply bg-blue-500/15;
+    border-left-color: theme(--color-blue-400);
+  }
+
+  .note-demo-code-panel[data-note-demo-phase='NoteCommand']
+    [data-phases~='NoteCommand'] {
+    @apply bg-violet-500/15;
+    border-left-color: theme(--color-violet-400);
+  }
+
+  @keyframes demo-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+.solari-break {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .solari-break {
+    display: block;
+  }
+}
+
+.solari-character-static {
+  display: inline-block;
+}
+
+.solari-character {
+  display: inline-block;
+  position: relative;
+  transform: perspective(600px) rotateX(0deg);
+  transition: transform 0.3s ease-in-out;
+  transform-style: preserve-3d;
+}
+
+.solari-character-flipped {
+  transform: perspective(600px) rotateX(180deg);
+}
+
+.solari-face {
+  display: block;
+  backface-visibility: hidden;
+}
+
+.solari-face-front {
+  position: relative;
+}
+
+.solari-face-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateX(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .solari-character {
+    transition: none;
+  }
+
+  .demo-code-panel [data-line],
+  .note-demo-code-panel [data-line] {
+    transition: none;
+  }
+}

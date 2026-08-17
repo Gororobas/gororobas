@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*",
+    "vite.config.ts",
+    "playwright.config.ts",
+    "scripts/**/*",
+    "e2e/**/*"
+  ],
+  "exclude": ["src/snippet/**/*"]
+}
