@@ -1,7 +1,7 @@
 import { DurableStreamTestServer } from "@durable-streams/server"
 import { Context, Effect, Layer, Schema } from "effect"
 
-export class DurableStreamServerError extends Schema.TaggedErrorClass<DurableStreamServerError>()(
+export class DurableStreamServerError extends Schema.TaggedError<DurableStreamServerError>()(
   "DurableStreamServerError",
   {
     message: Schema.String,

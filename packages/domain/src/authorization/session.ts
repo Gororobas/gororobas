@@ -55,7 +55,7 @@ export type Session = typeof Session.Type
  */
 export class SessionContext extends Context.Service<SessionContext, Session>()("Session") {}
 
-export class UnauthorizedError extends Schema.TaggedErrorClass<UnauthorizedError>()(
+export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
   "UnauthorizedError",
   {
     message: Schema.optional(Schema.String),

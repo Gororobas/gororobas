@@ -5,8 +5,7 @@ import { Workflow } from "effect/unstable/workflow"
 import { PostsRepository } from "../posts/repository.js"
 import { postClassificationIdempotencyKey } from "./extract-post-taxonomies.js"
 
-export const PostClassificationWorkflow = Workflow.make({
-  name: "PostClassification",
+export const PostClassificationWorkflow = Workflow.make("PostClassification", {
   payload: {
     post_id: PostId,
     content_hash: Schema.String,

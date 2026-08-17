@@ -6,6 +6,7 @@
  */
 import { describe, it } from "@effect/vitest"
 import { DateTime, Effect, Schema } from "effect"
+import { FastCheck } from "effect/testing"
 
 import {
   AccountRow,
@@ -58,7 +59,7 @@ describe("Schema Round-Trip Properties", () => {
     for (const { name, schema } of rowSchemas) {
       it.effect(`${name} round-trip preserves data`, () =>
         // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation
-        assertPropertyEffect(Schema.toArbitrary(schema), (original) =>
+        assertPropertyEffect(Schema.toArbitrary(schema)(FastCheck), (original) =>
           Effect.gen(function* () {
             const encoded = yield* Schema.encodeEffect(schema)(original)
             const decoded = yield* Schema.decodeEffect(schema)(encoded)
@@ -72,7 +73,7 @@ describe("Schema Round-Trip Properties", () => {
 
     it.effect("Handle validation and transformation round-trip", () =>
       // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation
-      assertPropertyEffect(Schema.toArbitrary(Handle), (original) =>
+      assertPropertyEffect(Schema.toArbitrary(Handle)(FastCheck), (original) =>
         Effect.gen(function* () {
           const encoded = yield* Schema.encodeEffect(Handle)(original)
           const decoded = yield* Schema.decodeEffect(Handle)(encoded)
@@ -85,7 +86,7 @@ describe("Schema Round-Trip Properties", () => {
 
     it.effect("TimestampColumn encoding/decoding round-trip", () =>
       // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation
-      assertPropertyEffect(Schema.toArbitrary(TimestampColumn), (original) =>
+      assertPropertyEffect(Schema.toArbitrary(TimestampColumn)(FastCheck), (original) =>
         Effect.gen(function* () {
           const encoded = yield* Schema.encodeEffect(TimestampColumn)(original)
           const decoded = yield* Schema.decodeEffect(TimestampColumn)(encoded)
@@ -100,7 +101,7 @@ describe("Schema Round-Trip Properties", () => {
   describe("Property 2: Nullable Fields Preserve Null", () => {
     it.effect("PersonRow nullable fields preserve null values", () =>
       // Feature: people-profiles-testing-strategy, Property 2: Nullable Fields Preserve Null
-      assertPropertyEffect(Schema.toArbitrary(PersonRow), (original) =>
+      assertPropertyEffect(Schema.toArbitrary(PersonRow)(FastCheck), (original) =>
         Effect.gen(function* () {
           // Create version with null nullable fields
           const withNulls = PersonRow.make({
@@ -119,7 +120,7 @@ describe("Schema Round-Trip Properties", () => {
 
     it.effect("ProfileRow nullable fields preserve null values", () =>
       // Feature: people-profiles-testing-strategy, Property 2: Nullable Fields Preserve Null
-      assertPropertyEffect(Schema.toArbitrary(ProfileRow), (original) =>
+      assertPropertyEffect(Schema.toArbitrary(ProfileRow)(FastCheck), (original) =>
         Effect.gen(function* () {
           // Create version with null nullable fields
           const withNulls = {
@@ -141,7 +142,7 @@ describe("Schema Round-Trip Properties", () => {
   describe("Property 4: Nested Schema Composition", () => {
     it.effect("ProfileRow preserves nested TimestampedStruct fields", () =>
       // Feature: people-profiles-testing-strategy, Property 4: Nested Schema Composition
-      assertPropertyEffect(Schema.toArbitrary(ProfileRow), (original) =>
+      assertPropertyEffect(Schema.toArbitrary(ProfileRow)(FastCheck), (original) =>
         Effect.gen(function* () {
           const encoded = yield* Schema.encodeEffect(ProfileRow)(original)
           const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
@@ -157,7 +158,7 @@ describe("Schema Round-Trip Properties", () => {
 
     it.effect("ProfileRow preserves all nested schema fields together", () =>
       // Feature: people-profiles-testing-strategy, Property 4: Nested Schema Composition
-      assertPropertyEffect(Schema.toArbitrary(ProfileRow), (original) =>
+      assertPropertyEffect(Schema.toArbitrary(ProfileRow)(FastCheck), (original) =>
         Effect.gen(function* () {
           const encoded = yield* Schema.encodeEffect(ProfileRow)(original)
           const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)

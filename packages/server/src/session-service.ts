@@ -18,7 +18,7 @@ import { Effect, Layer, Option, Schema } from "effect"
 import { HttpServerRequest } from "effect/unstable/http"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
-export class AuthenticationFailureError extends Schema.TaggedErrorClass<AuthenticationFailureError>()(
+export class AuthenticationFailureError extends Schema.TaggedError<AuthenticationFailureError>()(
   "AuthenticationFailureError",
   {},
 ) {}

@@ -15,7 +15,7 @@ import {
   DurableStreamsServiceLive,
 } from "../../src/durable-streams/service.js"
 
-const VegetableStreamEventArbitrary = Schema.toArbitrary(VegetableStreamEvent)
+const VegetableStreamEventArbitrary = Schema.toArbitrary(VegetableStreamEvent)(FastCheck)
 
 const generateTestEvent = (): VegetableStreamEvent => {
   return FastCheck.sample(VegetableStreamEventArbitrary, 1)[0] as VegetableStreamEvent

@@ -30,14 +30,14 @@ import { FastCheck } from "effect/testing"
  *
  * These arbitraries can be used with FastCheck for property-based testing.
  */
-export const personRowArbitrary = Schema.toArbitrary(PersonRow)
+export const personRowArbitrary = Schema.toArbitrary(PersonRow)(FastCheck)
 
-export const profileRowArbitrary = Schema.toArbitrary(ProfileRow).map((profile) => ({
+export const profileRowArbitrary = Schema.toArbitrary(ProfileRow)(FastCheck).map((profile) => ({
   ...profile,
   photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
 }))
-export const handleArbitrary = Schema.toArbitrary(Handle)
-export const timestampColumnArbitrary = Schema.toArbitrary(TimestampColumn)
+export const handleArbitrary = Schema.toArbitrary(Handle)(FastCheck)
+export const timestampColumnArbitrary = Schema.toArbitrary(TimestampColumn)(FastCheck)
 
 /**
  * Constrained arbitrary for person profiles only (not organizations).
@@ -46,10 +46,12 @@ export const timestampColumnArbitrary = Schema.toArbitrary(TimestampColumn)
  *
  * Generated directly from PersonProfileRow schema to ensure correct id type (PersonId).
  */
-export const personProfileRowArbitrary = Schema.toArbitrary(PersonProfileRow).map((profile) => ({
-  ...profile,
-  photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
-}))
+export const personProfileRowArbitrary = Schema.toArbitrary(PersonProfileRow)(FastCheck).map(
+  (profile) => ({
+    ...profile,
+    photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
+  }),
+)
 
 export const personWithProfileArbitrary = FastCheck.tuple(
   personRowArbitrary,
@@ -210,22 +212,22 @@ export const makeMembershipFixture = (
     return { ...base, ...overrides }
   })
 
-export const resourceLocalizedDataArbitrary = Schema.toArbitrary(ResourceLocalizedData)
+export const resourceLocalizedDataArbitrary = Schema.toArbitrary(ResourceLocalizedData)(FastCheck)
 
-export const sourceResourceDataArbitrary = Schema.toArbitrary(SourceResourceData).filter(
+export const sourceResourceDataArbitrary = Schema.toArbitrary(SourceResourceData)(FastCheck).filter(
   (sourceData) =>
     sourceData.locales.pt !== undefined ||
     sourceData.locales.en !== undefined ||
     sourceData.locales.es !== undefined,
 )
 
-export const organizationRowArbitrary = Schema.toArbitrary(OrganizationRow)
-export const organizationProfileRowArbitrary = Schema.toArbitrary(OrganizationProfileRow).map(
-  (profile) => ({
-    ...profile,
-    photoId: null,
-  }),
-)
+export const organizationRowArbitrary = Schema.toArbitrary(OrganizationRow)(FastCheck)
+export const organizationProfileRowArbitrary = Schema.toArbitrary(OrganizationProfileRow)(
+  FastCheck,
+).map((profile) => ({
+  ...profile,
+  photoId: null,
+}))
 
 /**
  * Composite arbitrary for an organization with its profile dependency.
@@ -243,7 +245,7 @@ export const organizationWithProfileArbitrary = FastCheck.tuple(
   profile,
 }))
 
-const organizationMembershipRowArbitrary = Schema.toArbitrary(OrganizationMembershipRow)
+const organizationMembershipRowArbitrary = Schema.toArbitrary(OrganizationMembershipRow)(FastCheck)
 
 /**
  * Composite arbitrary for a membership with all its dependencies (person + profile, organization + profile).

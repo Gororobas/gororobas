@@ -58,7 +58,7 @@ export class LangExtractService extends Context.Service<LangExtractService>()(
             }),
         }).pipe(
           Effect.retry(
-            Schedule.exponential(Duration.millis(100), 2).pipe(Schedule.both(Schedule.recurs(3))),
+            Schedule.max([Schedule.exponential(Duration.millis(100), 2), Schedule.recurs(3)]),
           ),
           semaphore.withPermits(1),
         )

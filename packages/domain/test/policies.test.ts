@@ -32,18 +32,18 @@ const TEST_PUBLISHED_AT = Effect.runSync(DateTime.now)
 
 // ─── Constructive Arbitraries (no filtering) ───────────────────────────────
 
-const visitorSessionArbitrary = Schema.toArbitrary(VisitorSession)
-const accountSessionArbitrary = Schema.toArbitrary(AccountSession)
+const visitorSessionArbitrary = Schema.toArbitrary(VisitorSession)(FastCheck)
+const accountSessionArbitrary = Schema.toArbitrary(AccountSession)(FastCheck)
 const trustedAccountSessionArbitrary = accountSessionArbitrary.filter(
   (s) => s.accessLevel !== "BLOCKED" && s.accessLevel !== "NEWCOMER",
 )
-const sessionArbitrary = Schema.toArbitrary(Session)
+const sessionArbitrary = Schema.toArbitrary(Session)(FastCheck)
 
-const personIdArbitrary = Schema.toArbitrary(PersonId)
-const organizationIdArbitrary = Schema.toArbitrary(OrganizationId)
-const visibilityArbitrary = Schema.toArbitrary(InformationVisibility)
-const organizationTypeArbitrary = Schema.toArbitrary(OrganizationType)
-const platformAccessLevelArbitrary = Schema.toArbitrary(PlatformAccessLevel)
+const personIdArbitrary = Schema.toArbitrary(PersonId)(FastCheck)
+const organizationIdArbitrary = Schema.toArbitrary(OrganizationId)(FastCheck)
+const visibilityArbitrary = Schema.toArbitrary(InformationVisibility)(FastCheck)
+const organizationTypeArbitrary = Schema.toArbitrary(OrganizationType)(FastCheck)
+const platformAccessLevelArbitrary = Schema.toArbitrary(PlatformAccessLevel)(FastCheck)
 
 const organizationArbitrary = FastCheck.tuple(
   organizationIdArbitrary,

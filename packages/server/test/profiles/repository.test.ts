@@ -8,6 +8,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { Handle, ProfileRow } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
 import { DateTime, Effect, Exit, Option, Schema } from "effect"
+import { FastCheck } from "effect/testing"
 
 import { ProfilesRepository } from "../../src/profiles/repository.js"
 import { makeProfileFixture, personProfileRowArbitrary, profileRowArbitrary } from "../fixtures.js"
@@ -73,7 +74,7 @@ describe("ProfilesRepository", () => {
 
     it.effect("isHandleInUse returns false for non-existent handle", () =>
       assertPropertyEffect(
-        Schema.toArbitrary(Handle),
+        Schema.toArbitrary(Handle)(FastCheck),
         (handle: Handle) =>
           Effect.gen(function* () {
             const repo = yield* ProfilesRepository

@@ -5,7 +5,7 @@ import { Schema } from "effect"
 
 import { CommentId } from "../common/ids.js"
 
-export class CommentNotFoundError extends Schema.TaggedErrorClass<CommentNotFoundError>()(
+export class CommentNotFoundError extends Schema.TaggedError<CommentNotFoundError>()(
   "CommentNotFoundError",
   {
     id: CommentId,
@@ -13,7 +13,7 @@ export class CommentNotFoundError extends Schema.TaggedErrorClass<CommentNotFoun
   { httpApiStatus: 404 },
 ) {}
 
-export class CommentConcurrentUpdateError extends Schema.TaggedErrorClass<CommentConcurrentUpdateError>()(
+export class CommentConcurrentUpdateError extends Schema.TaggedError<CommentConcurrentUpdateError>()(
   "CommentConcurrentUpdateError",
   {
     id: CommentId,

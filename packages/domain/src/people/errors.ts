@@ -7,7 +7,7 @@ import { PersonId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { AccountDeletionErrorReason } from "./domain.js"
 
-export class PersonNotFoundError extends Schema.TaggedErrorClass<PersonNotFoundError>()(
+export class PersonNotFoundError extends Schema.TaggedError<PersonNotFoundError>()(
   "PersonNotFoundError",
   {
     id: Schema.optional(PersonId),
@@ -17,7 +17,7 @@ export class PersonNotFoundError extends Schema.TaggedErrorClass<PersonNotFoundE
 ) {}
 
 /** Can't delete an organization when the sol */
-export class AccountDeletionError extends Schema.TaggedErrorClass<AccountDeletionError>()(
+export class AccountDeletionError extends Schema.TaggedError<AccountDeletionError>()(
   "AccountDeletionError",
   {
     reason: AccountDeletionErrorReason,

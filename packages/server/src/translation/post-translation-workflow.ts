@@ -27,8 +27,7 @@ import { TranslationError } from "./translation-service.js"
  */
 const WORKFLOW_VERSION = "2026-02-25.1" as const
 
-export const PostTranslationWorkflow = Workflow.make({
-  name: "PostTranslationWorkflow",
+export const PostTranslationWorkflow = Workflow.make("PostTranslationWorkflow", {
   payload: {
     postId: PostId,
     updatedAt: TimestampColumn,

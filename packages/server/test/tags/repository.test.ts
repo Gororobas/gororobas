@@ -22,7 +22,7 @@ const TestLayer = Layer.mergeAll(IdGenTest, Layer.effect(TagsRepository, TagsRep
   Layer.provideMerge(AppSqlTest),
 )
 
-const tagRowArbitrary = Schema.toArbitrary(TagRow).map((tag) => ({
+const tagRowArbitrary = Schema.toArbitrary(TagRow)(FastCheck).map((tag) => ({
   ...tag,
   cluster: null,
   createdById: null,
@@ -83,7 +83,7 @@ describe("TagsRepository", () => {
 
     it.effect("returns None when handle does not exist", () =>
       assertPropertyEffect(
-        Schema.toArbitrary(Handle),
+        Schema.toArbitrary(Handle)(FastCheck),
         (handle) =>
           Effect.gen(function* () {
             const repo = yield* TagsRepository

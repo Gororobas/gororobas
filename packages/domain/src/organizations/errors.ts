@@ -6,7 +6,7 @@ import { Schema } from "effect"
 import { OrganizationId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 
-export class OrganizationNotFoundError extends Schema.TaggedErrorClass<OrganizationNotFoundError>()(
+export class OrganizationNotFoundError extends Schema.TaggedError<OrganizationNotFoundError>()(
   "OrganizationNotFoundError",
   {
     id: Schema.optional(OrganizationId),
@@ -15,7 +15,7 @@ export class OrganizationNotFoundError extends Schema.TaggedErrorClass<Organizat
   { httpApiStatus: 404 },
 ) {}
 
-export class LastManagerCannotLeaveError extends Schema.TaggedErrorClass<LastManagerCannotLeaveError>()(
+export class LastManagerCannotLeaveError extends Schema.TaggedError<LastManagerCannotLeaveError>()(
   "LastManagerCannotLeaveError",
   {
     organization_id: OrganizationId,

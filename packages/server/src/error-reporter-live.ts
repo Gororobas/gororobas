@@ -1,10 +1,10 @@
-import { OtelLoggerProvider } from "@effect/opentelemetry/Logger"
-import { ErrorReporter, LogLevel, Context, Tracer } from "effect"
+import { OtelLogger } from "@effect/opentelemetry"
+import { ErrorReporter, Context, Tracer } from "effect"
 
 const RuntimeErrorReporter = ErrorReporter.make(
   ({ attributes, error, fiber, severity, timestamp }) => {
     const span = Context.getOrUndefined(fiber.context, Tracer.ParentSpan)
-    const loggerProvider = Context.getOrUndefined(fiber.context, OtelLoggerProvider)
+    const loggerProvider = Context.getOrUndefined(fiber.context, OtelLogger.OtelLoggerProvider)
 
     // Mirror the current span context into emitted error events so OTEL backends can correlate them.
     const payload = {
@@ -21,7 +21,7 @@ const RuntimeErrorReporter = ErrorReporter.make(
       loggerProvider.getLogger("gororobas-runtime-errors").emit({
         attributes: payload,
         body: error.stack ?? error.message,
-        severityNumber: LogLevel.getOrdinal(severity),
+        severityNumber: OtelLogger.logLevelToSeverityNumber(severity),
         severityText: severity,
       })
       return
