@@ -1,7 +1,7 @@
 /**
  * Permission definitions for platform and organization access control.
  */
-import { Schema } from "effect"
+import { HashSet, Schema } from "effect"
 
 import type { OrganizationAccessLevel, PlatformAccessLevelOrVisitor } from "../common/enums.js"
 
@@ -32,11 +32,11 @@ export type PlatformPermission = typeof PlatformPermission.Type
 
 const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   PlatformAccessLevelOrVisitor,
-  ReadonlySet<PlatformPermission>
+  HashSet.HashSet<PlatformPermission>
 > = {
-  ADMIN: new Set(PlatformPermission.literals),
-  BLOCKED: new Set([]),
-  MODERATOR: new Set([
+  ADMIN: HashSet.fromIterable(PlatformPermission.literals),
+  BLOCKED: HashSet.empty(),
+  MODERATOR: HashSet.fromIterable([
     "people:manage-community-access",
     "revisions:evaluate",
     "posts:create:personal",
@@ -51,8 +51,8 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
     "comments:create",
     "bookmarks:create",
   ]),
-  NEWCOMER: new Set(["posts:create:personal", "media:create"]),
-  COMMUNITY: new Set([
+  NEWCOMER: HashSet.fromIterable(["posts:create:personal", "media:create"]),
+  COMMUNITY: HashSet.fromIterable([
     "organizations:create",
     "posts:create:personal",
     "media:create",
@@ -65,7 +65,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
     "comments:create",
     "bookmarks:create",
   ]),
-  VISITOR: new Set([]),
+  VISITOR: HashSet.empty(),
 }
 
 export const OrganizationPermission = Schema.Literals([
@@ -85,9 +85,9 @@ export type OrganizationPermission = typeof OrganizationPermission.Type
 
 const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   OrganizationAccessLevel,
-  ReadonlySet<OrganizationPermission>
+  HashSet.HashSet<OrganizationPermission>
 > = {
-  EDITOR: new Set([
+  EDITOR: HashSet.fromIterable([
     "organization:edit-profile",
     "posts:create:organization",
     "posts:edit",
@@ -95,18 +95,18 @@ const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<
     "posts:view",
     "members:view",
   ]),
-  MANAGER: new Set(OrganizationPermission.literals),
-  VIEWER: new Set(["posts:view", "members:view"]),
+  MANAGER: HashSet.fromIterable(OrganizationPermission.literals),
+  VIEWER: HashSet.fromIterable(["posts:view", "members:view"]),
 }
 
 export function platformPermissionsFor(
   accessLevel: PlatformAccessLevelOrVisitor,
-): ReadonlySet<PlatformPermission> {
+): HashSet.HashSet<PlatformPermission> {
   return PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL[accessLevel]
 }
 
 export function organizationPermissionsFor(
   accessLevel: OrganizationAccessLevel,
-): ReadonlySet<OrganizationPermission> {
+): HashSet.HashSet<OrganizationPermission> {
   return ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL[accessLevel]
 }

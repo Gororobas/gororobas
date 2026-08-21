@@ -12,6 +12,7 @@ export default defineConfig({
         "effect/no-barrel-imports": "off",
         "effect/prefer-namespace-imports": "off",
         "effect/avoid-ts-ignore": "off",
+        "effect/avoid-direct-tag-checks": "off",
       },
     },
   ],
@@ -76,7 +77,7 @@ export default defineConfig({
       },
     },
     {
-      files: ["packages/effect-bdd/**/*", "**/*.test.ts"],
+      files: ["packages/effect-bdd/**/*", "**/*.test.ts", "packages/server/test/**/*"],
       rules: {
         "effect/effect-run-in-body": "off",
       },
@@ -111,5 +112,6 @@ export default defineConfig({
     "repos/**",
     "**/repos/**",
     "oxlint.config.ts",
+    "packages/server/scripts/test-auth.ts",
   ],
 })

@@ -25,7 +25,17 @@ import {
   ResolvedExistingTagExtraction,
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
-import { Array as Arr, Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
+import {
+  Array as Arr,
+  Context,
+  DateTime,
+  Effect,
+  Equal,
+  Option,
+  Record as R,
+  Schema,
+  Struct,
+} from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -276,7 +286,11 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       locales: NoteSourceData["locales"]
       postId: PostId
     }) => {
-      const rows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
+      const rows = R.toEntries({
+        en: input.locales.en,
+        es: input.locales.es,
+        pt: input.locales.pt,
+      }).flatMap(([locale, localeData]) => {
         if (!localeData || !Schema.is(Locale)(locale)) return []
 
         return PostTranslationRow.make({
@@ -298,10 +312,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       })
     }
 
-    const materializeTags = (input: {
-      classification: PostClassification | null
-      postId: PostId
-    }) => {
+    const materializeTags = (input: { classification?: PostClassification; postId: PostId }) => {
       const rows = (input.classification?.tags ?? []).flatMap((tag) => {
         if (!Schema.is(ResolvedExistingTagExtraction)(tag)) return []
 
@@ -319,7 +330,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
     }
 
     const materializeVegetables = (input: {
-      classification: PostClassification | null
+      classification?: PostClassification
       postId: PostId
     }) => {
       const rows = (input.classification?.vegetables ?? []).flatMap((vegetable) => {
@@ -339,7 +350,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
     }
 
     const materializePost = (input: {
-      classification?: PostClassification | null
+      classification?: PostClassification
       currentCrdtFrontier: LoroDocFrontier
       postId: PostId
       sourceData: PostSourceData
@@ -357,12 +368,12 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
         })
 
         yield* materializeTags({
-          classification: input.classification ?? null,
+          ...(input.classification ? { classification: input.classification } : {}),
           postId: input.postId,
         })
 
         yield* materializeVegetables({
-          classification: input.classification ?? null,
+          ...(input.classification ? { classification: input.classification } : {}),
           postId: input.postId,
         })
       })

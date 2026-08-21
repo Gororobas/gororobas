@@ -19,7 +19,17 @@ import {
   TiptapDocument,
   tiptapToText,
 } from "@gororobas/domain"
-import { Array as Arr, Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
+import {
+  Array as Arr,
+  Context,
+  DateTime,
+  Effect,
+  Equal,
+  Option,
+  Record as R,
+  Schema,
+  Struct,
+} from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -199,7 +209,11 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         commentId: CommentId
         locales: SourceCommentData["locales"]
       }) => {
-        const rows = Object.entries(input.locales).flatMap(([locale, localeData]) => {
+        const rows = R.toEntries({
+          en: input.locales.en,
+          es: input.locales.es,
+          pt: input.locales.pt,
+        }).flatMap(([locale, localeData]) => {
           if (!localeData || !Schema.is(Locale)(locale)) return []
 
           return CommentTranslationRow.make({

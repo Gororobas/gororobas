@@ -2,7 +2,7 @@ import { type SourceVegetableData } from "@gororobas/domain"
 /**
  * Backward reconstruction algorithm for vegetable edit history.
  */
-import { Effect } from "effect"
+import { Effect, Option } from "effect"
 
 import { type EditSuggestion } from "../schemas/gel/entities.js"
 import { applyInverseDiffE, type JsonDiff } from "./json-diff-inverse.js"
@@ -26,7 +26,7 @@ export interface ReconstructedHistory {
     event: EditSuggestionEvent
     previousState: SourceVegetableData
     newState: SourceVegetableData
-    crdtUpdate: Uint8Array | null
+    crdtUpdate: Option.Option<Uint8Array>
   }>
 }
 
@@ -104,7 +104,7 @@ export const reconstructHistory = (
                 event: edit,
                 previousState: stateBeforeEdit,
                 newState: accumulator.previousState,
-                crdtUpdate: null,
+                crdtUpdate: Option.none(),
               },
             ],
           })),

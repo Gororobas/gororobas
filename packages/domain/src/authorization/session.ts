@@ -1,4 +1,4 @@
-import { Context, Predicate, Schema } from "effect"
+import { Context, HashSet, Predicate, Record as R, Schema } from "effect"
 /**
  * Session types for authentication.
  */
@@ -35,17 +35,19 @@ export const isAccountSession = (session: Session): session is AccountSession =>
   session.type === "ACCOUNT"
 
 /** Get platform permissions for a session */
-export const getSessionPlatformPermissions = (session: Session): ReadonlySet<PlatformPermission> =>
+export const getSessionPlatformPermissions = (
+  session: Session,
+): HashSet.HashSet<PlatformPermission> =>
   session.type === "VISITOR"
     ? platformPermissionsFor("VISITOR")
     : platformPermissionsFor(session.accessLevel)
 
 export const getSessionOrganizationPermissions = (
   session: AccountSession,
-): Record<OrganizationId, ReadonlySet<OrganizationPermission>> =>
-  Object.fromEntries(
+): Record<OrganizationId, HashSet.HashSet<OrganizationPermission>> =>
+  R.fromEntries(
     session.memberships.map((m) => [m.organizationId, organizationPermissionsFor(m.accessLevel)]),
-  ) as Record<OrganizationId, ReadonlySet<OrganizationPermission>>
+  )
 
 export const Session = Schema.Union([VisitorSession, AccountSession])
 export type Session = typeof Session.Type

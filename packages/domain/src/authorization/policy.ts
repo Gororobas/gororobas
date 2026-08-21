@@ -1,7 +1,7 @@
 /**
  * Policy utilities for authorization checks.
  */
-import { Effect, Result, Schema } from "effect"
+import { Effect, HashSet, Result, Schema } from "effect"
 
 import { TrustedAccessLevel } from "../common/enums.js"
 import { OrganizationId } from "../common/ids.js"
@@ -152,7 +152,7 @@ export const assertNonBlockedPerson = authenticatedPolicy((session) =>
 export const platformPermission = (permission: PlatformPermission) =>
   policy((session) => {
     const permissions = getSessionPlatformPermissions(session)
-    return permissions.has(permission) === true
+    return HashSet.has(permissions, permission)
       ? allow(session)
       : deny(`Missing permission ${permission}`)
   })
@@ -168,7 +168,10 @@ export const organizationPermission = (
     Effect.flatMap((session) =>
       policy(() => {
         const orgPermissions = getSessionOrganizationPermissions(session)
-        return orgPermissions[organization_id]?.has(permission)
+        const hasPermission = orgPermissions[organization_id]
+          ? HashSet.has(orgPermissions[organization_id], permission)
+          : false
+        return hasPermission
           ? allow(session)
           : deny(`Missing permission ${permission} for organization ${organization_id}`)
       }),

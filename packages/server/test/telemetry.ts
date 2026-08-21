@@ -11,7 +11,10 @@ import * as NodeSdk from "@effect/opentelemetry/NodeSdk"
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http"
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base/build/src/export/ConsoleSpanExporter.js"
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base/build/src/export/SimpleSpanProcessor.js"
-import { Array as Arr, Effect, Layer } from "effect"
+import { Array as Arr, Effect, Layer, Record as R } from "effect"
+
+const logWarningSync = (message: string) => Effect.runSync(Effect.logWarning(message))
+const logErrorSync = (message: string) => Effect.runSync(Effect.logError(message))
 
 /**
  * Telemetry export configuration.
@@ -44,7 +47,7 @@ const readEnabledConfig = (): boolean => {
   if (value === "false" || value === "0") {
     return false
   }
-  console.warn(`Invalid ENABLE_TELEMETRY: ${value}, using default: false`)
+  logWarningSync(`Invalid ENABLE_TELEMETRY: ${value}, using default: false`)
   return false
 }
 
@@ -60,7 +63,7 @@ const readExportConfig = (): TelemetryExport => {
     return value
   }
   if (value !== undefined) {
-    console.warn(`Invalid TELEMETRY_EXPORT: ${value}, using default: console`)
+    logWarningSync(`Invalid TELEMETRY_EXPORT: ${value}, using default: console`)
   }
   return "console"
 }
@@ -107,8 +110,8 @@ const createSpanExporter = (exportMode: TelemetryExport) => {
     return new OTLPTraceExporter()
   } catch (error: unknown) {
     // Log error to stderr but don't fail - use no-op exporter instead
-    console.error("Failed to create telemetry exporter:", error)
-    console.error("Falling back to no-op exporter - telemetry will be disabled")
+    logErrorSync(`Failed to create telemetry exporter: ${String(error)}`)
+    logErrorSync("Falling back to no-op exporter - telemetry will be disabled")
     return new NoOpSpanExporter()
   }
 }
@@ -137,16 +140,17 @@ export const TelemetryLayer = Layer.unwrap(
     },
     catch: (error: unknown) => {
       // Log error to stderr but don't fail - return empty layer instead
-      console.error("Failed to create telemetry layer:", error)
-      console.error("Telemetry will be disabled for this test run")
+      logErrorSync(`Failed to create telemetry layer: ${String(error)}`)
+      logErrorSync("Telemetry will be disabled for this test run")
       return Layer.empty
     },
   }).pipe(
     Effect.catch((error: unknown) => {
       // Catch any Effect errors and return empty layer
-      console.error("Failed to create telemetry layer:", error)
-      console.error("Telemetry will be disabled for this test run")
-      return Effect.succeed(Layer.empty)
+      return Effect.logError(`Failed to create telemetry layer: ${String(error)}`).pipe(
+        Effect.andThen(Effect.logError("Telemetry will be disabled for this test run")),
+        Effect.as(Layer.empty),
+      )
     }),
   ),
 )
@@ -183,7 +187,7 @@ export const withTestSpan = <A, E, R>(
 ): Effect.Effect<A, E, R> => {
   try {
     // If no attributes, just use Effect.withSpan directly
-    if (!attributes || Arr.isReadonlyArrayEmpty(Object.keys(attributes))) {
+    if (!attributes || Arr.isReadonlyArrayEmpty(R.keys(attributes))) {
       return Effect.withSpan(effect, name) as Effect.Effect<A, E, R>
     }
 
@@ -193,7 +197,7 @@ export const withTestSpan = <A, E, R>(
     }) as Effect.Effect<A, E, R>
   } catch (error: unknown) {
     // If span creation fails, log error and execute effect without instrumentation
-    console.error("Failed to create test span:", error)
+    logErrorSync(`Failed to create test span: ${String(error)}`)
     return effect
   }
 }

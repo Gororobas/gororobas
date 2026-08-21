@@ -2,7 +2,7 @@ import { TiptapDocument, tiptapToHtml } from "@gororobas/domain"
 import type { TagRow } from "@gororobas/domain"
 import { type PostClassification } from "@gororobas/domain"
 import { createHash } from "crypto"
-import { Config, DateTime, Effect, Context } from "effect"
+import { Config, DateTime, Effect, Context, Record as R } from "effect"
 
 import { TagsRepository } from "../tags/repository.js"
 import { LangExtractService } from "./langextract-service.js"
@@ -47,7 +47,7 @@ const extractVegetables = Effect.fn("extractVegetables")(function* (html: string
 
 function buildTagExtractionPrompt(existingTags: ReadonlyArray<TagRow>): string {
   const tagsForPrompt = existingTags.map((t) => {
-    const names = Object.entries(t.names).flatMap(([locale, name]) =>
+    const names = R.toEntries(t.names).flatMap(([locale, name]) =>
       name ? `${name} (${locale})` : [],
     )
     return `- ${t.handle} (handle) - ${names.join("; ")}`

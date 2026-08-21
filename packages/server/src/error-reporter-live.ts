@@ -1,5 +1,5 @@
 import { OtelLogger } from "@effect/opentelemetry"
-import { ErrorReporter, Context, Tracer } from "effect"
+import { Context, Effect, ErrorReporter, Tracer } from "effect"
 
 const RuntimeErrorReporter = ErrorReporter.make(
   ({ attributes, error, fiber, severity, timestamp }) => {
@@ -27,7 +27,9 @@ const RuntimeErrorReporter = ErrorReporter.make(
       return
     }
 
-    console.error(`[${severity}]`, payload, error.stack ?? error.message)
+    // ErrorReporter callbacks are synchronous, so execute the structured log at this boundary.
+    // oxlint-disable-next-line effect/effect-run-in-body
+    Effect.runSync(Effect.logError(`[${severity}] ${error.stack ?? error.message}`, payload))
   },
 )
 

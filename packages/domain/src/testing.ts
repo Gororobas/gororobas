@@ -3,7 +3,7 @@
  *
  * Import from `@gororobas/domain/testing` in downstream packages.
  */
-import { Cause, DateTime, Effect, Exit, Layer } from "effect"
+import { Cause, DateTime, Effect, Exit, Layer, Option, Record as R } from "effect"
 import { UnknownError } from "effect/Cause"
 import { FastCheck } from "effect/testing"
 
@@ -13,8 +13,8 @@ import { SessionContext } from "./authorization/session.js"
 export interface PropertyResult<A> {
   readonly success: boolean
   readonly numRuns: number
-  readonly counterexample: A | undefined
-  readonly seed: number | undefined
+  readonly counterexample: Option.Option<A>
+  readonly seed: Option.Option<number>
   readonly error: unknown
 }
 
@@ -39,7 +39,7 @@ export const checkPropertyEffect = <A, E>(
   options?: Parameters<typeof FastCheck.check>[1],
 ): Effect.Effect<PropertyResult<A>, E | UnknownError, never> =>
   Effect.gen(function* () {
-    let counterexample: A | undefined
+    let counterexample = Option.none<A>()
     let lastError: unknown
 
     const asyncProp = FastCheck.asyncProperty(arbitrary, async (value) => {
@@ -47,12 +47,12 @@ export const checkPropertyEffect = <A, E>(
 
       if (result._tag === "Failure") {
         lastError = Cause.squash(result.cause)
-        counterexample = value
+        counterexample = Option.some(value)
         return false
       }
 
       if (!result.value) {
-        counterexample = value
+        counterexample = Option.some(value)
         return false
       }
 
@@ -68,7 +68,7 @@ export const checkPropertyEffect = <A, E>(
       counterexample,
       error: lastError,
       numRuns: checkResult.numRuns,
-      seed: checkResult.seed,
+      seed: Option.fromNullishOr(checkResult.seed),
       success: !checkResult.failed,
     }
   })
@@ -90,8 +90,8 @@ export const assertPropertyEffect = <A, E>(
     if (!result.success) {
       return yield* Effect.fail(
         new PropertyTestFailure(
-          result.counterexample,
-          result.seed ?? 0,
+          Option.getOrUndefined(result.counterexample),
+          Option.getOrElse(result.seed, () => 0),
           result.error?.toString() ?? "",
         ),
       )
@@ -166,8 +166,7 @@ export function deepEquals(a: unknown, b: unknown): boolean {
   if (typeof a === "object" && typeof b === "object") {
     // Filter out keys with undefined values since JSON round-trips erase
     // the distinction between {key: undefined} and a missing key.
-    const definedKeys = (obj: object) =>
-      Object.keys(obj).filter((k) => (obj as any)[k] !== undefined)
+    const definedKeys = (obj: object) => R.keys(obj).filter((k) => (obj as any)[k] !== undefined)
     const aKeys = definedKeys(a as object)
     const bKeys = definedKeys(b as object)
 

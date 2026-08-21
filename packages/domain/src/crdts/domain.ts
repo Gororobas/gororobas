@@ -1,6 +1,7 @@
-import { DateTime, Schema } from "effect"
+import { DateTime, Predicate, Schema } from "effect"
 import { schema as loroSchema } from "loro-mirror"
 
+import type { SourceCommentData } from "../comments/domain.js"
 import {
   EventAttendanceMode,
   InformationVisibility,
@@ -9,7 +10,8 @@ import {
 } from "../common/enums.js"
 import { PersonId, ProfileId } from "../common/ids.js"
 import { Handle, TimestampColumn } from "../common/primitives.js"
-import { TiptapDocument } from "../rich-text/domain.js"
+import type { PostLocalizedData, PostSourceData } from "../posts/domain.js"
+import type { ResourceLocalizedData, SourceResourceData } from "../resources/domain.js"
 
 export const LoroDocUpdate = Schema.Uint8Array.pipe(Schema.brand("LoroCrdtUpdateEncoded"))
 export type LoroDocUpdate = typeof LoroDocUpdate.Type
@@ -181,54 +183,23 @@ export const CommentSourceDataStorageLoro = loroSchema({
   ),
 })
 
-type CrdtLocalizedData = {
-  content: TiptapDocument
-  originalLocale: Locale
-  translatedAtCrdtFrontier?: LoroDocFrontier | null
-  translationSource: TranslationSource
-}
-
-type CrdtSourcePostData = {
-  locales: {
-    en?: CrdtLocalizedData | undefined
-    es?: CrdtLocalizedData | undefined
-    pt?: CrdtLocalizedData | undefined
-  }
-  metadata:
-    | {
-        attendanceMode: EventAttendanceMode | null
-        endDate: TimestampColumn | string | null
-        handle: Handle
-        kind: "EVENT"
-        locationOrUrl: string | null
-        ownerProfileId: ProfileId
-        publishedAt: TimestampColumn | string
-        startDate: TimestampColumn | string
-        visibility: InformationVisibility
-      }
-    | {
-        handle: Handle
-        kind: "NOTE"
-        ownerProfileId: ProfileId
-        publishedAt: TimestampColumn | string
-        visibility: InformationVisibility
-      }
-}
-
-const encodeDateOrUndefined = (value: TimestampColumn | string | null | undefined) => {
+const encodeDateOrUndefined = (value: unknown) => {
   if (value == null) return undefined
-  if (typeof value === "string") return value
-  return DateTime.formatIso(value)
+  if (Predicate.isString(value)) return value
+  if (Schema.is(TimestampColumn)(value)) return DateTime.formatIso(value)
+  return undefined
 }
 
-const encodeLocalizedData = (localeData: CrdtLocalizedData) => ({
+const encodeLocalizedData = (localeData: PostLocalizedData) => ({
   content: JSON.stringify(localeData.content),
   originalLocale: localeData.originalLocale,
-  translatedAtCrdtFrontier: JSON.stringify(localeData.translatedAtCrdtFrontier ?? null),
+  translatedAtCrdtFrontier: JSON.stringify(
+    "translatedAtCrdtFrontier" in localeData ? localeData.translatedAtCrdtFrontier : null,
+  ),
   translationSource: localeData.translationSource,
 })
 
-export const sourcePostDataToCrdtStorage = (sourceData: CrdtSourcePostData) => ({
+export const sourcePostDataToCrdtStorage = (sourceData: PostSourceData) => ({
   locales: {
     en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : {},
     es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : {},
@@ -257,15 +228,7 @@ export const sourcePostDataToCrdtStorage = (sourceData: CrdtSourcePostData) => (
   },
 })
 
-type CrdtSourceCommentData = {
-  locales: {
-    en?: CrdtLocalizedData | undefined
-    es?: CrdtLocalizedData | undefined
-    pt?: CrdtLocalizedData | undefined
-  }
-}
-
-export const sourceCommentDataToCrdtStorage = (sourceData: CrdtSourceCommentData) => ({
+export const sourceCommentDataToCrdtStorage = (sourceData: SourceCommentData) => ({
   locales: {
     en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : undefined,
     es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : undefined,
@@ -273,40 +236,16 @@ export const sourceCommentDataToCrdtStorage = (sourceData: CrdtSourceCommentData
   },
 })
 
-type CrdtResourceLocalizedData = {
-  title: string
-  description: TiptapDocument | null
-  creditLine: string | null
-  originalLocale: Locale
-  translatedAtCrdtFrontier?: LoroDocFrontier | null
-  translationSource: TranslationSource
-}
-
-type CrdtSourceResourceData = {
-  locales: {
-    en?: CrdtResourceLocalizedData | undefined
-    es?: CrdtResourceLocalizedData | undefined
-    pt?: CrdtResourceLocalizedData | undefined
-  }
-  metadata: {
-    format: string
-    handle: Handle
-    thumbnailImageId: string | null
-    url: string
-    urlState: string
-  }
-}
-
-const encodeResourceLocalizedData = (localeData: CrdtResourceLocalizedData) => ({
+const encodeResourceLocalizedData = (localeData: ResourceLocalizedData) => ({
   title: localeData.title,
   description: localeData.description === null ? undefined : JSON.stringify(localeData.description),
   creditLine: localeData.creditLine ?? undefined,
   originalLocale: localeData.originalLocale,
-  translatedAtCrdtFrontier: JSON.stringify(localeData.translatedAtCrdtFrontier ?? null),
+  translatedAtCrdtFrontier: JSON.stringify(null),
   translationSource: localeData.translationSource,
 })
 
-export const sourceResourceDataToCrdtStorage = (sourceData: CrdtSourceResourceData) => ({
+export const sourceResourceDataToCrdtStorage = (sourceData: SourceResourceData) => ({
   locales: {
     en: sourceData.locales.en ? encodeResourceLocalizedData(sourceData.locales.en) : {},
     es: sourceData.locales.es ? encodeResourceLocalizedData(sourceData.locales.es) : {},

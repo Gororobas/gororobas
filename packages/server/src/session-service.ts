@@ -33,11 +33,13 @@ const MembershipQueryResult = Schema.Struct({
   organizationId: OrganizationId,
 })
 
-const getAccount = (request: HttpServerRequest.HttpServerRequest): Effect.Effect<string | null> =>
+const getAccount = (
+  request: HttpServerRequest.HttpServerRequest,
+): Effect.Effect<Option.Option<string>> =>
   Effect.sync(() => {
     const authHeader = request.headers.authorization
-    if (!authHeader?.startsWith("Bearer ")) return null
-    return authHeader.slice(7) || null
+    if (!authHeader?.startsWith("Bearer ")) return Option.none()
+    return Option.fromNullishOr(authHeader.slice(7) || undefined)
   })
 
 export const resolveSession = Effect.gen(function* () {
@@ -48,7 +50,7 @@ export const resolveSession = Effect.gen(function* () {
     type: "VISITOR",
   }
 
-  if (accountId === null) {
+  if (Option.isNone(accountId)) {
     return visitorSession
   }
 
@@ -67,7 +69,7 @@ export const resolveSession = Effect.gen(function* () {
     Result: MembershipQueryResult,
   })
 
-  const personOption = yield* fetchPerson(accountId)
+  const personOption = yield* fetchPerson(accountId.value)
 
   if (Option.isNone(personOption) === true) {
     return yield* new UnauthorizedError({
@@ -77,7 +79,7 @@ export const resolveSession = Effect.gen(function* () {
   }
 
   const person = personOption.value
-  const memberships = yield* fetchMemberships(accountId)
+  const memberships = yield* fetchMemberships(accountId.value)
 
   const account: AccountSession = {
     accessLevel: person.accessLevel,
