@@ -16,7 +16,7 @@ This plan outlines the comprehensive migration from Gel/EdgeDB to SQLite with Ef
 ### Target SQLite Schema Structure
 - **Authentication**: Better Auth with accounts, sessions, oauth_accounts
 - **Profiles**: Unified `profiles` table with people/organizations
-- **CRDT-based**: vegetable_crdts, resource_crdts, post_crdts with Loro documents
+- **CRDT-based**: vegetable_crdts, resource_crdts, publication_crdts with Loro documents
 - **Revisions**: vegetable_revisions, resource_revisions for contribution workflow
 - **Materialized**: Queryable tables derived from CRDTs
 - **Junction Tables**: Normalized many-to-many relationships
@@ -32,10 +32,10 @@ This plan outlines the comprehensive migration from Gel/EdgeDB to SQLite with Ef
 | `Image` | `images` + `image_credits` | Main image data + separate credits table |
 | `Vegetable` | `vegetable_crdts` + `vegetables` + `vegetable_translations` + junction tables | CRDT-based with materialized views |
 | `VegetableVariety` | `vegetable_varieties` + `vegetable_variety_translations` + `vegetable_variety_photos` | Standalone with translations and photos |
-| `VegetableTip` | `post_crdts` + `posts` + `post_translations` + `post_tags` | Tips become note posts with tip subject becoming tag |
+| `VegetableTip` | `publication_crdts` + `publications` + `publication_translations` + `publication_tags` | Tips become post publications with tip subject becoming tag |
 | `VegetableFriendship` | **Dropped** | Feature removed in new schema |
 | `UserWishlist` | `bookmarks_vegetables` | Renamed to bookmarks pattern |
-| `Note` | `post_crdts` + `posts` + `post_translations` + `post_vegetables` | Notes become posts of type "NOTE" |
+| `Note` | `publication_crdts` + `publications` + `publication_translations` + `publication_vegetables` | Posts become publications of type "POST" |
 | `EditSuggestion` | `vegetable_revisions` | Convert JSON diffs to CRDT updates via backward reconstruction |
 | `Resource` | `resource_crdts` + `resources` + `resource_translations` + `resource_tags` + `resource_vegetables` | CRDT-based with tags and vegetable relationships |
 | `BlueskyPost` | **Dropped** | Feature removed |

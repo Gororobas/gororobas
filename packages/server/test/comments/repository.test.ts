@@ -14,20 +14,21 @@ import {
   SystemUpsertTranslation,
 } from "../../src/comments/comment-repository-inputs.js"
 import { CommentsRepository } from "../../src/comments/repository.js"
-import { PostsRepository } from "../../src/posts/repository.js"
+import { PublicationsRepository } from "../../src/publications/repository.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
 import { insertPersonWithDependencies, TestLayer } from "../test-helpers.js"
 
 const CommentsRepositoryTestLayer = Layer.effect(CommentsRepository, CommentsRepository.make).pipe(
   Layer.provide(TestLayer),
 )
-const PostsRepositoryTestLayer = Layer.effect(PostsRepository, PostsRepository.make).pipe(
-  Layer.provide(TestLayer),
-)
+const PublicationsRepositoryTestLayer = Layer.effect(
+  PublicationsRepository,
+  PublicationsRepository.make,
+).pipe(Layer.provide(TestLayer))
 const TestLayerWithRepositories = Layer.mergeAll(
   TestLayer,
   CommentsRepositoryTestLayer,
-  PostsRepositoryTestLayer,
+  PublicationsRepositoryTestLayer,
 )
 
 const paragraph = (text: string): TiptapNode => ({
@@ -58,19 +59,19 @@ describe("CommentsRepository", () => {
   it.effect("createComment persists materialized row and first commit", () =>
     Effect.gen(function* () {
       const comments = yield* CommentsRepository
-      const posts = yield* PostsRepository
+      const publications = yield* PublicationsRepository
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const profile = yield* makeProfileFixture({ id: person.id })
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
-      const postId = yield* posts.createPost({
+      const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
           locales: {
             pt: {
-              content: makeDocument("Post base"),
+              content: makeDocument("Publication base"),
               originalLocale: "pt",
               translatedAtCrdtFrontier: null,
               translationSource: "ORIGINAL",
@@ -78,7 +79,7 @@ describe("CommentsRepository", () => {
           },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-b`),
-            kind: "NOTE",
+            kind: "POST",
             ownerProfileId: profile.id,
             publishedAt: now,
             visibility: "PUBLIC",
@@ -90,7 +91,7 @@ describe("CommentsRepository", () => {
         createdById: person.id,
         ownerProfileId: profile.id,
         parentCommentId: null,
-        postId,
+        publicationId,
         resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Primeiro comentario")),
       })
@@ -114,19 +115,19 @@ describe("CommentsRepository", () => {
   it.effect("updateComment applies human content update and appends commit", () =>
     Effect.gen(function* () {
       const comments = yield* CommentsRepository
-      const posts = yield* PostsRepository
+      const publications = yield* PublicationsRepository
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const profile = yield* makeProfileFixture({ id: person.id })
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
-      const postId = yield* posts.createPost({
+      const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
           locales: {
             pt: {
-              content: makeDocument("Post base"),
+              content: makeDocument("Publication base"),
               originalLocale: "pt",
               translatedAtCrdtFrontier: null,
               translationSource: "ORIGINAL",
@@ -134,7 +135,7 @@ describe("CommentsRepository", () => {
           },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-u`),
-            kind: "NOTE",
+            kind: "POST",
             ownerProfileId: profile.id,
             publishedAt: now,
             visibility: "PUBLIC",
@@ -146,7 +147,7 @@ describe("CommentsRepository", () => {
         createdById: person.id,
         ownerProfileId: profile.id,
         parentCommentId: null,
-        postId,
+        publicationId,
         resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Antes")),
       })
@@ -178,19 +179,19 @@ describe("CommentsRepository", () => {
   it.effect("updateComment rejects stale expected frontier", () =>
     Effect.gen(function* () {
       const comments = yield* CommentsRepository
-      const posts = yield* PostsRepository
+      const publications = yield* PublicationsRepository
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const profile = yield* makeProfileFixture({ id: person.id })
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
-      const postId = yield* posts.createPost({
+      const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
           locales: {
             pt: {
-              content: makeDocument("Post base"),
+              content: makeDocument("Publication base"),
               originalLocale: "pt",
               translatedAtCrdtFrontier: null,
               translationSource: "ORIGINAL",
@@ -198,7 +199,7 @@ describe("CommentsRepository", () => {
           },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-s`),
-            kind: "NOTE",
+            kind: "POST",
             ownerProfileId: profile.id,
             publishedAt: now,
             visibility: "PUBLIC",
@@ -210,7 +211,7 @@ describe("CommentsRepository", () => {
         createdById: person.id,
         ownerProfileId: profile.id,
         parentCommentId: null,
-        postId,
+        publicationId,
         resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Versao 1")),
       })
@@ -250,19 +251,19 @@ describe("CommentsRepository", () => {
   it.effect("updateComment with SystemUpsertTranslation writes translated locale", () =>
     Effect.gen(function* () {
       const comments = yield* CommentsRepository
-      const posts = yield* PostsRepository
+      const publications = yield* PublicationsRepository
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const profile = yield* makeProfileFixture({ id: person.id })
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
-      const postId = yield* posts.createPost({
+      const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
           locales: {
             pt: {
-              content: makeDocument("Post base"),
+              content: makeDocument("Publication base"),
               originalLocale: "pt",
               translatedAtCrdtFrontier: null,
               translationSource: "ORIGINAL",
@@ -270,7 +271,7 @@ describe("CommentsRepository", () => {
           },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-t`),
-            kind: "NOTE",
+            kind: "POST",
             ownerProfileId: profile.id,
             publishedAt: now,
             visibility: "PUBLIC",
@@ -282,7 +283,7 @@ describe("CommentsRepository", () => {
         createdById: person.id,
         ownerProfileId: profile.id,
         parentCommentId: null,
-        postId,
+        publicationId,
         resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Texto original")),
       })

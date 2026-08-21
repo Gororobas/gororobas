@@ -9,7 +9,7 @@ export type Locale = typeof Locale.Type
 
 export const TrustedAccessLevel = Schema.Literals([
   "COMMUNITY", // Has been approved and has access to public & community content
-  "MODERATOR", // Can trust or block newcomers, flag media and posts, and approve revisions
+  "MODERATOR", // Can trust or block newcomers, flag media and publications, and approve revisions
   "ADMIN", // Moderator access + manage other moderators and admins
 ])
 export type TrustedAccessLevel = typeof TrustedAccessLevel.Type
@@ -70,8 +70,8 @@ export const BookmarkState = Schema.Literals([
 ])
 export type BookmarkState = typeof BookmarkState.Type
 
-export const PostKind = Schema.Literals(["NOTE", "EVENT"])
-export type PostKind = typeof PostKind.Type
+export const PublicationKind = Schema.Literals(["POST", "EVENT"])
+export type PublicationKind = typeof PublicationKind.Type
 
 export const AgroforestryStratum = Schema.Literals(["EMERGENT", "HIGH", "MEDIUM", "LOW", "GROUND"])
 export type AgroforestryStratum = typeof AgroforestryStratum.Type

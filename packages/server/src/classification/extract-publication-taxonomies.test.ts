@@ -13,7 +13,7 @@ import { v7 } from "uuid"
 
 import { TagsRepository } from "../tags/repository.js"
 import { VegetablesRepository } from "../vegetables/repository.js"
-import { ExtractPostTaxonomiesService } from "./extract-post-taxonomies.js"
+import { ExtractPublicationTaxonomiesService } from "./extract-publication-taxonomies.js"
 import { LangExtractService } from "./langextract-service.js"
 
 const TEST_FRONTIER = Schema.decodeSync(LoroDocFrontier)([])
@@ -379,7 +379,7 @@ const FIXTURES: Record<string, ExtractionFixture> = {
 }
 
 const TestLayer = Layer.mergeAll(
-  Layer.effect(ExtractPostTaxonomiesService, ExtractPostTaxonomiesService.make),
+  Layer.effect(ExtractPublicationTaxonomiesService, ExtractPublicationTaxonomiesService.make),
   Layer.effect(LangExtractService, LangExtractService.make),
   TestTagsRepository,
   TestVegetablesRepository,
@@ -387,13 +387,13 @@ const TestLayer = Layer.mergeAll(
 )
 
 describe(
-  "note taxonomy extraction (manual QA — requires Ollama running)",
+  "post taxonomy extraction (manual QA — requires Ollama running)",
   { timeout: 180_000, sequential: true },
   () => {
     Record.toEntries(FIXTURES).forEach(([name, fixture]) => {
       it.effect.skip(name, () =>
         Effect.gen(function* () {
-          const service = yield* ExtractPostTaxonomiesService
+          const service = yield* ExtractPublicationTaxonomiesService
           const result = yield* service.extract(fixture.document, TEST_FRONTIER)
 
           yield* saveExtractionResult(name, fixture.document, result)

@@ -40,9 +40,12 @@ export type VegetableStreamEvent = typeof VegetableStreamEvent.Type
 
 export const VegetableStreamEventBinary = createEventBinary(VegetableStreamEvent)
 
-export const PostsCreate = Schema.Struct({
-  event: Schema.Literal("posts.create"),
-  post_id: Schema.String.pipe(Schema.check(Schema.isUUID(undefined)), Schema.brand("PostId")),
+export const PublicationsCreate = Schema.Struct({
+  event: Schema.Literal("publications.create"),
+  publication_id: Schema.String.pipe(
+    Schema.check(Schema.isUUID(undefined)),
+    Schema.brand("PublicationId"),
+  ),
   loro_snapshot: Schema.Uint8ArrayFromBase64,
   materialized_view: Schema.Struct({
     handle: Schema.String,
@@ -52,16 +55,22 @@ export const PostsCreate = Schema.Struct({
   }),
 })
 
-export const PostsUpdate = Schema.Struct({
-  event: Schema.Literal("posts.update"),
-  post_id: Schema.String.pipe(Schema.check(Schema.isUUID(undefined)), Schema.brand("PostId")),
+export const PublicationsUpdate = Schema.Struct({
+  event: Schema.Literal("publications.update"),
+  publication_id: Schema.String.pipe(
+    Schema.check(Schema.isUUID(undefined)),
+    Schema.brand("PublicationId"),
+  ),
   crdt_update: Schema.Uint8ArrayFromBase64,
   from_frontier: LoroDocFrontier,
 })
 
-export const PostsDelete = Schema.Struct({
-  event: Schema.Literal("posts.delete"),
-  post_id: Schema.String.pipe(Schema.check(Schema.isUUID(undefined)), Schema.brand("PostId")),
+export const PublicationsDelete = Schema.Struct({
+  event: Schema.Literal("publications.delete"),
+  publication_id: Schema.String.pipe(
+    Schema.check(Schema.isUUID(undefined)),
+    Schema.brand("PublicationId"),
+  ),
 })
 
 export const BookmarksVegetablesCreate = Schema.Struct({
@@ -91,9 +100,9 @@ export const BookmarksResourcesDelete = Schema.Struct({
 })
 
 export const ProfileStreamEvent = Schema.Union([
-  PostsCreate,
-  PostsUpdate,
-  PostsDelete,
+  PublicationsCreate,
+  PublicationsUpdate,
+  PublicationsDelete,
   BookmarksVegetablesCreate,
   BookmarksVegetablesDelete,
   BookmarksResourcesCreate,

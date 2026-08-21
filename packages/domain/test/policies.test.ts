@@ -10,7 +10,7 @@ import Policies from "../src/authorization/policies.js"
 import { Handle } from "../src/common/primitives.js"
 import {
   AccountSession,
-  CorePostMetadata,
+  CorePublicationMetadata,
   IdGen,
   InformationVisibility,
   OrganizationAccessLevel,
@@ -139,8 +139,8 @@ describe("Policies", () => {
           const blockedSession = sessionWithAccessLevel(session, "BLOCKED")
 
           const writePolicies = [
-            Policies.posts.canCreate(
-              CorePostMetadata.make({
+            Policies.publications.canCreate(
+              CorePublicationMetadata.make({
                 handle: TEST_HANDLE,
                 ownerProfileId: session.personId,
                 publishedAt: TEST_PUBLISHED_AT,
@@ -200,38 +200,50 @@ describe("Policies", () => {
   })
 
   describe("implications", () => {
-    it.effect("canEdit implies canView (for owned posts)", () =>
+    it.effect("canEdit implies canView (for owned publications)", () =>
       assertPropertyEffect(
         FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
         ([session, visibility]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: session.personId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
-            const canEdit = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
-            const canView = yield* runPolicySuccess(Policies.posts.canView(post), session)
+            const canEdit = yield* runPolicySuccess(
+              Policies.publications.canEdit(publication),
+              session,
+            )
+            const canView = yield* runPolicySuccess(
+              Policies.publications.canView(publication),
+              session,
+            )
             if (canEdit === true) return canView
             return true
           }),
       ),
     )
 
-    it.effect("canDelete implies canView (for owned posts)", () =>
+    it.effect("canDelete implies canView (for owned publications)", () =>
       assertPropertyEffect(
         FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
         ([session, visibility]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: session.personId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
-            const canDelete = yield* runPolicySuccess(Policies.posts.canDelete(post), session)
-            const canView = yield* runPolicySuccess(Policies.posts.canView(post), session)
+            const canDelete = yield* runPolicySuccess(
+              Policies.publications.canDelete(publication),
+              session,
+            )
+            const canView = yield* runPolicySuccess(
+              Policies.publications.canView(publication),
+              session,
+            )
             return !canDelete || canView
           }),
       ),
@@ -258,142 +270,154 @@ describe("Policies", () => {
     )
   })
 
-  describe("posts", () => {
-    it.effect("owner can always edit their own post", () =>
+  describe("publications", () => {
+    it.effect("owner can always edit their own publication", () =>
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const post = CorePostMetadata.make({
+          const publication = CorePublicationMetadata.make({
             handle: TEST_HANDLE,
             ownerProfileId: session.personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
-          return yield* runPolicySuccess(Policies.posts.canEdit(post), session)
+          return yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
         }),
       ),
     )
 
-    it.effect("owner can always delete their own post", () =>
+    it.effect("owner can always delete their own publication", () =>
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const post = CorePostMetadata.make({
+          const publication = CorePublicationMetadata.make({
             handle: TEST_HANDLE,
             ownerProfileId: session.personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
-          return yield* runPolicySuccess(Policies.posts.canDelete(post), session)
+          return yield* runPolicySuccess(Policies.publications.canDelete(publication), session)
         }),
       ),
     )
 
-    it.effect("non-owners cannot edit posts", () =>
+    it.effect("non-owners cannot edit publications", () =>
       assertPropertyEffect(
         FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
-            const result = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
+            const result = yield* runPolicySuccess(
+              Policies.publications.canEdit(publication),
+              session,
+            )
             return !result
           }),
       ),
     )
 
-    it.effect("non-owners cannot delete posts", () =>
+    it.effect("non-owners cannot delete publications", () =>
       assertPropertyEffect(
         FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
-            const result = yield* runPolicySuccess(Policies.posts.canDelete(post), session)
+            const result = yield* runPolicySuccess(
+              Policies.publications.canDelete(publication),
+              session,
+            )
             return !result
           }),
       ),
     )
 
-    it.effect("public posts are viewable by anyone", () =>
+    it.effect("public publications are viewable by anyone", () =>
       assertPropertyEffect(sessionArbitrary, (session) =>
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
-          const post = CorePostMetadata.make({
+          const publication = CorePublicationMetadata.make({
             handle: TEST_HANDLE,
             ownerProfileId: personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
-          return yield* runPolicySuccess(Policies.posts.canView(post), session)
+          return yield* runPolicySuccess(Policies.publications.canView(publication), session)
         }).pipe(Effect.provide(IdGenTest)),
       ),
     )
 
-    it.effect("community posts are viewable by trusted users", () =>
+    it.effect("community publications are viewable by trusted users", () =>
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
-          const post = CorePostMetadata.make({
+          const publication = CorePublicationMetadata.make({
             handle: TEST_HANDLE,
             ownerProfileId: personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "COMMUNITY",
           })
-          return yield* runPolicySuccess(Policies.posts.canView(post), session)
+          return yield* runPolicySuccess(Policies.publications.canView(publication), session)
         }).pipe(Effect.provide(IdGenTest)),
       ),
     )
 
-    it.effect("visitors cannot view community posts", () =>
+    it.effect("visitors cannot view community publications", () =>
       assertPropertyEffect(
         FastCheck.tuple(visitorSessionArbitrary, personIdArbitrary),
         ([session, ownerId]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: ownerId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "COMMUNITY",
             })
-            const result = yield* runPolicySuccess(Policies.posts.canView(post), session)
+            const result = yield* runPolicySuccess(
+              Policies.publications.canView(publication),
+              session,
+            )
             return !result
           }),
       ),
     )
 
-    it.effect("private posts are not viewable by non-owners", () =>
+    it.effect("private publications are not viewable by non-owners", () =>
       assertPropertyEffect(
         FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PRIVATE",
             })
-            const result = yield* runPolicySuccess(Policies.posts.canView(post), session)
+            const result = yield* runPolicySuccess(
+              Policies.publications.canView(publication),
+              session,
+            )
             return !result
           }),
       ),
     )
 
-    it.effect("public post viewing is monotonic", () =>
+    it.effect("public publication viewing is monotonic", () =>
       assertPropertyEffect(
         FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
         ([baseSession, ownerId]) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: ownerId,
               publishedAt: TEST_PUBLISHED_AT,
@@ -402,7 +426,7 @@ describe("Policies", () => {
             const results = yield* Effect.all(
               ACCESS_LEVEL_ORDER.map((level) =>
                 runPolicySuccess(
-                  Policies.posts.canView(post),
+                  Policies.publications.canView(publication),
                   sessionWithAccessLevel(baseSession, level),
                 ),
               ),
@@ -642,34 +666,34 @@ describe("Policies", () => {
       ),
     )
 
-    it.effect("editors can create organization posts", () =>
+    it.effect("editors can create organization publications", () =>
       assertPropertyEffect(
         memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
         ({ session, orgId }) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: orgId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
-            return yield* runPolicySuccess(Policies.posts.canCreate(post), session)
+            return yield* runPolicySuccess(Policies.publications.canCreate(publication), session)
           }),
       ),
     )
 
-    it.effect("editors can edit organization posts", () =>
+    it.effect("editors can edit organization publications", () =>
       assertPropertyEffect(
         memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
         ({ session, orgId }) =>
           Effect.gen(function* () {
-            const post = CorePostMetadata.make({
+            const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: orgId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
-            return yield* runPolicySuccess(Policies.posts.canEdit(post), session)
+            return yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
           }),
       ),
     )
@@ -683,16 +707,19 @@ describe("Policies", () => {
       ),
     )
 
-    it.effect("viewers cannot create organization posts", () =>
+    it.effect("viewers cannot create organization publications", () =>
       assertPropertyEffect(memberWithLevel("VIEWER"), ({ session, orgId }) =>
         Effect.gen(function* () {
-          const post = CorePostMetadata.make({
+          const publication = CorePublicationMetadata.make({
             handle: TEST_HANDLE,
             ownerProfileId: orgId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
-          const canCreate = yield* runPolicySuccess(Policies.posts.canCreate(post), session)
+          const canCreate = yield* runPolicySuccess(
+            Policies.publications.canCreate(publication),
+            session,
+          )
           return !canCreate
         }),
       ),
@@ -717,32 +744,32 @@ describe("Policies", () => {
   })
 
   describe("permission composition", () => {
-    it.effect("post owner + org member has both permissions", () =>
+    it.effect("publication owner + org member has both permissions", () =>
       assertPropertyEffect(trustedAccountSessionArbitrary, (session) =>
         Effect.gen(function* () {
           const orgId = yield* IdGen.make(OrganizationId)
           const sessionWithMembership = sessionWithOrgMembership(session, orgId, "EDITOR")
 
-          const ownPost = CorePostMetadata.make({
+          const ownPublication = CorePublicationMetadata.make({
             handle: TEST_HANDLE,
             ownerProfileId: session.personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PRIVATE",
           })
           const canEditOwn = yield* runPolicySuccess(
-            Policies.posts.canEdit(ownPost),
+            Policies.publications.canEdit(ownPublication),
             sessionWithMembership,
           )
           if (canEditOwn === false) return false
 
-          const orgPost = CorePostMetadata.make({
+          const orgPublication = CorePublicationMetadata.make({
             handle: TEST_HANDLE,
             ownerProfileId: orgId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
           const canEditOrg = yield* runPolicySuccess(
-            Policies.posts.canEdit(orgPost),
+            Policies.publications.canEdit(orgPublication),
             sessionWithMembership,
           )
 

@@ -4,7 +4,7 @@
 import { Schema } from "effect"
 
 import { Locale, SuggestedTagStatus } from "../common/enums.js"
-import { PersonId, PostId, SuggestedTagId, TagId } from "../common/ids.js"
+import { PersonId, PublicationId, SuggestedTagId, TagId } from "../common/ids.js"
 import { Handle, TimestampedStruct } from "../common/primitives.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
@@ -30,6 +30,6 @@ export type SuggestedTagRow = typeof SuggestedTagRow.Type
 
 export const SuggestedTagSourceRow = Schema.Struct({
   suggestedTagId: SuggestedTagId,
-  postId: PostId,
+  publicationId: PublicationId,
 })
 export type SuggestedTagSourceRow = typeof SuggestedTagSourceRow.Type

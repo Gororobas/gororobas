@@ -4,11 +4,11 @@ import type {
   TranslationSource,
   Locale,
   EventAttendanceMode,
-  PostKind,
+  PublicationKind,
 } from "@gororobas/domain"
 import { schema as loroSchema } from "loro-mirror"
 
-export const PostLocalizedDataLoro = loroSchema.LoroMap(
+export const PublicationLocalizedDataLoro = loroSchema.LoroMap(
   {
     content: loroSchema.String({ required: true }),
     original_locale: loroSchema.String<Locale>({ required: true }),
@@ -24,7 +24,7 @@ export const CoreMetadataLoro = {
   visibility: loroSchema.String<InformationVisibility>({ required: true }),
 }
 
-export const NoteMetadataLoro = loroSchema.LoroMap({
+export const PostMetadataLoro = loroSchema.LoroMap({
   ...CoreMetadataLoro,
   kind: loroSchema.String({ required: true }),
 })
@@ -40,16 +40,16 @@ export const EventMetadataLoro = loroSchema.LoroMap({
 
 const LocalesLoro = loroSchema.LoroMap(
   {
-    en: PostLocalizedDataLoro,
-    es: PostLocalizedDataLoro,
-    pt: PostLocalizedDataLoro,
+    en: PublicationLocalizedDataLoro,
+    es: PublicationLocalizedDataLoro,
+    pt: PublicationLocalizedDataLoro,
   },
   { required: true },
 )
 
-export const NoteSourceDataLoro = loroSchema({
+export const PostSourceDataLoro = loroSchema({
   locales: LocalesLoro,
-  metadata: NoteMetadataLoro,
+  metadata: PostMetadataLoro,
 })
 
 export const EventSourceDataLoro = loroSchema({
@@ -57,16 +57,16 @@ export const EventSourceDataLoro = loroSchema({
   metadata: EventMetadataLoro,
 })
 
-export const PostMetadataLoro = loroSchema.LoroMap({
+export const PublicationMetadataLoro = loroSchema.LoroMap({
   ...CoreMetadataLoro,
-  kind: loroSchema.String<PostKind>({ required: true }),
+  kind: loroSchema.String<PublicationKind>({ required: true }),
   start_date: loroSchema.String({ required: false }),
   end_date: loroSchema.String({ required: false }),
   location_or_url: loroSchema.String({ required: false }),
   attendance_mode: loroSchema.String<EventAttendanceMode>({ required: false }),
 })
 
-export const PostSourceDataLoro = loroSchema({
+export const PublicationSourceDataLoro = loroSchema({
   locales: LocalesLoro,
-  metadata: PostMetadataLoro,
+  metadata: PublicationMetadataLoro,
 })

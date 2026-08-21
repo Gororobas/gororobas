@@ -136,7 +136,7 @@ CREATE TABLE tags (
 
 CREATE INDEX idx_tags_handle ON tags (handle);
 
--- Suggested tags (moderation queue, independent of posts)
+-- Suggested tags (moderation queue, independent of publications)
 CREATE TABLE suggested_tags (
   id text PRIMARY KEY,
   handle text NOT NULL UNIQUE,
@@ -148,13 +148,13 @@ CREATE TABLE suggested_tags (
   FOREIGN KEY (approved_tag_id) REFERENCES tags (id) ON DELETE SET NULL
 );
 
--- Link suggested tags back to source posts.
+-- Link suggested tags back to source publications.
 CREATE TABLE suggested_tag_sources (
   suggested_tag_id text NOT NULL,
-  post_id text NOT NULL,
-  PRIMARY KEY (suggested_tag_id, post_id),
+  publication_id text NOT NULL,
+  PRIMARY KEY (suggested_tag_id, publication_id),
   FOREIGN KEY (suggested_tag_id) REFERENCES suggested_tags (id) ON DELETE CASCADE,
-  FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 -- ======
@@ -418,11 +418,11 @@ CREATE TABLE resource_vegetables (
 ) WITHOUT ROWID;
 
 -- =====
--- POSTS
+-- PUBLICATIONS
 -- =====
 --
--- The source of truth of all post data
-CREATE TABLE post_crdts (
+-- The source of truth of all publication data
+CREATE TABLE publication_crdts (
   id text PRIMARY KEY,
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
   classification json,
@@ -432,21 +432,21 @@ CREATE TABLE post_crdts (
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- How posts are modified
-CREATE TABLE post_commits (
+-- How publications are modified
+CREATE TABLE publication_commits (
   id text PRIMARY KEY,
-  post_id text NOT NULL,
+  publication_id text NOT NULL,
   created_by_id text,
   from_crdt_frontier json NOT NULL,
   crdt_update blob NOT NULL,
   updated_at text NOT NULL,
   created_at text NOT NULL,
-  FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
 -- The core queryable data, materialized from the CRDT
-CREATE TABLE posts (
+CREATE TABLE publications (
   id text PRIMARY KEY,
   current_crdt_frontier json NOT NULL,
   handle text NOT NULL UNIQUE,
@@ -460,41 +460,41 @@ CREATE TABLE posts (
   end_date text,
   location_or_url text,
   attendance_mode text,
-  FOREIGN KEY (id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+  FOREIGN KEY (id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_posts_handle ON posts (handle);
+CREATE INDEX idx_publications_handle ON publications (handle);
 
-CREATE INDEX idx_posts_kind ON posts (kind);
+CREATE INDEX idx_publications_kind ON publications (kind);
 
-CREATE TABLE post_translations (
-  post_id text NOT NULL,
+CREATE TABLE publication_translations (
+  publication_id text NOT NULL,
   locale text NOT NULL,
   content json NOT NULL,
   content_plain_text text NOT NULL,
   translated_at_crdt_frontier json NOT NULL,
   translation_source text NOT NULL,
   original_locale text NOT NULL,
-  PRIMARY KEY (post_id, locale),
-  FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE
+  PRIMARY KEY (publication_id, locale),
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
-CREATE TABLE post_tags (
-  post_id text NOT NULL,
+CREATE TABLE publication_tags (
+  publication_id text NOT NULL,
   tag_id text NOT NULL,
   extraction_text text,
-  PRIMARY KEY (post_id, tag_id),
-  FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+  PRIMARY KEY (publication_id, tag_id),
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
-CREATE TABLE post_vegetables (
-  post_id text NOT NULL,
+CREATE TABLE publication_vegetables (
+  publication_id text NOT NULL,
   vegetable_id text NOT NULL,
   extraction_text text,
-  PRIMARY KEY (post_id, vegetable_id),
-  FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+  PRIMARY KEY (publication_id, vegetable_id),
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
@@ -505,7 +505,7 @@ CREATE TABLE post_vegetables (
 -- The source of truth of all comment data
 CREATE TABLE comment_crdts (
   id text PRIMARY KEY,
-  post_id text,
+  publication_id text,
   resource_id text,
   parent_comment_id text,
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
@@ -513,12 +513,12 @@ CREATE TABLE comment_crdts (
   moderation_status text,
   created_at text NOT NULL,
   updated_at text NOT NULL,
-  FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (parent_comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
   CONSTRAINT check_comment_parent CHECK (
-    (post_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
+    (publication_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
   )
 );
 
@@ -537,7 +537,7 @@ CREATE TABLE comment_commits (
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE comments (
   id text PRIMARY KEY,
-  post_id text,
+  publication_id text,
   resource_id text,
   parent_comment_id text,
   current_crdt_frontier json NOT NULL,
@@ -547,10 +547,10 @@ CREATE TABLE comments (
   owner_profile_id text NOT NULL,
   FOREIGN KEY (id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
-  FOREIGN KEY (post_id) REFERENCES post_crdts (id) ON DELETE CASCADE,
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
   CONSTRAINT check_comment_parent CHECK (
-    (post_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
+    (publication_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
   )
 );
 

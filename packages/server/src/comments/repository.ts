@@ -13,7 +13,7 @@ import {
   IdGen,
   Locale,
   LoroDocFrontier,
-  PostId,
+  PublicationId,
   ResourceId,
   SourceCommentData,
   TiptapDocument,
@@ -88,11 +88,11 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           sql`SELECT * FROM comment_commits WHERE comment_id = ${commentId} ORDER BY created_at ASC`,
       })
 
-      const listCommentRowsByPostId = SqlSchema.findAll({
-        Request: PostId,
+      const listCommentRowsByPublicationId = SqlSchema.findAll({
+        Request: PublicationId,
         Result: CommentRow,
-        execute: (postId) =>
-          sql`SELECT * FROM comments WHERE post_id = ${postId} ORDER BY created_at ASC`,
+        execute: (publicationId) =>
+          sql`SELECT * FROM comments WHERE publication_id = ${publicationId} ORDER BY created_at ASC`,
       })
 
       const listCommentRowsByResourceId = SqlSchema.findAll({
@@ -158,7 +158,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             "moderationStatus",
             "ownerProfileId",
             "parentCommentId",
-            "postId",
+            "publicationId",
             "resourceId",
           ]),
         ),
@@ -170,7 +170,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         Request: CommentRow,
         execute: (row) => sql`
             INSERT INTO comments ${sql.insert(row)}
-            ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt", "postId", "resourceId", "parentCommentId", "ownerProfileId"])}
+            ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt", "publicationId", "resourceId", "parentCommentId", "ownerProfileId"])}
         `,
       })
 
@@ -186,7 +186,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         moderationStatus: CommentRow["moderationStatus"]
         ownerProfileId: CommentRow["ownerProfileId"]
         parentCommentId: CommentRow["parentCommentId"]
-        postId: CommentRow["postId"]
+        publicationId: CommentRow["publicationId"]
         resourceId: CommentRow["resourceId"]
       }) =>
         Effect.gen(function* () {
@@ -199,7 +199,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             moderationStatus: input.moderationStatus,
             ownerProfileId: input.ownerProfileId,
             parentCommentId: input.parentCommentId,
-            postId: input.postId,
+            publicationId: input.publicationId,
             resourceId: input.resourceId,
             updatedAt: now,
           })
@@ -241,7 +241,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         moderationStatus: CommentRow["moderationStatus"]
         ownerProfileId: CommentRow["ownerProfileId"]
         parentCommentId: CommentRow["parentCommentId"]
-        postId: CommentRow["postId"]
+        publicationId: CommentRow["publicationId"]
         resourceId: CommentRow["resourceId"]
         sourceData: SourceCommentData
       }) =>
@@ -252,7 +252,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             moderationStatus: input.moderationStatus,
             ownerProfileId: input.ownerProfileId,
             parentCommentId: input.parentCommentId,
-            postId: input.postId,
+            publicationId: input.publicationId,
             resourceId: input.resourceId,
           })
 
@@ -315,7 +315,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
                 moderationStatus: "APPROVED_BY_DEFAULT",
                 ownerProfileId: input.ownerProfileId,
                 parentCommentId: input.parentCommentId,
-                postId: input.postId,
+                publicationId: input.publicationId,
                 resourceId: input.resourceId,
                 updatedAt: now,
               }),
@@ -332,7 +332,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               moderationStatus: "APPROVED_BY_DEFAULT",
               ownerProfileId: input.ownerProfileId,
               parentCommentId: input.parentCommentId,
-              postId: input.postId,
+              publicationId: input.publicationId,
               resourceId: input.resourceId,
               sourceData: created.sourceData,
             }),
@@ -428,7 +428,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               moderationStatus: commentRow.moderationStatus,
               ownerProfileId: commentRow.ownerProfileId,
               parentCommentId: commentRow.parentCommentId,
-              postId: commentRow.postId,
+              publicationId: commentRow.publicationId,
               resourceId: commentRow.resourceId,
               sourceData: evolved.sourceData,
             }),
@@ -441,7 +441,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         findCommentContentByIdAndLocale,
         findCommentRowById,
         listCommentCommitRowsByCommentIdAsc,
-        listCommentRowsByPostId,
+        listCommentRowsByPublicationId,
         listCommentRowsByResourceId,
         updateComment,
       } as const

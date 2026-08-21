@@ -3,21 +3,21 @@ import {
   CommentId,
   CommentNotFoundError,
   Policies,
-  PostId,
-  PostNotFoundError,
+  PublicationId,
+  PublicationNotFoundError,
   ResourceId,
   SourceCommentData,
 } from "@gororobas/domain"
 import { Effect, Option, Context } from "effect"
 
-import { PostsRepository } from "../posts/repository.js"
+import { PublicationsRepository } from "../publications/repository.js"
 import { HumanUpdatePtContent } from "./comment-repository-inputs.js"
 import { CommentsRepository } from "./repository.js"
 
 export class CommentsService extends Context.Service<CommentsService>()("CommentsService", {
   make: Effect.gen(function* () {
     const commentsRepository = yield* CommentsRepository
-    const postsRepository = yield* PostsRepository
+    const publicationsRepository = yield* PublicationsRepository
 
     const getCommentById = (commentId: CommentId) =>
       commentsRepository.findCommentRowById(commentId).pipe(
@@ -29,29 +29,32 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
         ),
       )
 
-    const getPostById = (postId: PostId) =>
-      postsRepository.findPostRowById(postId).pipe(
+    const getPublicationById = (publicationId: PublicationId) =>
+      publicationsRepository.findPublicationRowById(publicationId).pipe(
         Effect.flatMap(
           Option.match({
-            onNone: () => Effect.fail(new PostNotFoundError({ id: postId })),
+            onNone: () => Effect.fail(new PublicationNotFoundError({ id: publicationId })),
             onSome: Effect.succeed,
           }),
         ),
       )
 
-    const createPostComment = (input: { content: SourceCommentData; postId: PostId }) =>
+    const createPublicationComment = (input: {
+      content: SourceCommentData
+      publicationId: PublicationId
+    }) =>
       Effect.gen(function* () {
         const session = yield* assertAuthenticated
-        const post = yield* getPostById(input.postId)
+        const publication = yield* getPublicationById(input.publicationId)
 
         yield* Policies.comments.canCreate
-        yield* Policies.posts.canView(post)
+        yield* Policies.publications.canView(publication)
 
         return yield* commentsRepository.createComment({
           createdById: session.personId,
           ownerProfileId: session.personId,
           parentCommentId: null,
-          postId: input.postId,
+          publicationId: input.publicationId,
           resourceId: null,
           sourceData: input.content,
         })
@@ -67,7 +70,7 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
           createdById: session.personId,
           ownerProfileId: session.personId,
           parentCommentId: null,
-          postId: null,
+          publicationId: null,
           resourceId: input.resourceId,
           sourceData: input.content,
         })
@@ -83,15 +86,15 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
 
         yield* Policies.comments.canCreate
 
-        if (parent.postId !== null) {
-          yield* Policies.posts.canView(yield* getPostById(parent.postId))
+        if (parent.publicationId !== null) {
+          yield* Policies.publications.canView(yield* getPublicationById(parent.publicationId))
         }
 
         return yield* commentsRepository.createComment({
           createdById: session.personId,
           ownerProfileId: session.personId,
           parentCommentId: input.parentCommentId,
-          postId: parent.postId,
+          publicationId: parent.publicationId,
           resourceId: parent.resourceId,
           sourceData: input.content,
         })
@@ -133,12 +136,12 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
 
     return {
       censorComment,
-      createPostComment,
+      createPublicationComment,
       createReplyComment,
       createResourceComment,
       deleteComment,
       getCommentById,
-      listByPostId: commentsRepository.listCommentRowsByPostId,
+      listByPublicationId: commentsRepository.listCommentRowsByPublicationId,
       listByResourceId: commentsRepository.listCommentRowsByResourceId,
       updateComment,
     } as const

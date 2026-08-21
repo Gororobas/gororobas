@@ -8,9 +8,9 @@ import {
   IdGen,
   InvalidCrdtUpdateError,
   Locale,
-  PostConcurrentUpdateError,
-  PostId,
-  PostNotFoundError,
+  PublicationConcurrentUpdateError,
+  PublicationId,
+  PublicationNotFoundError,
   SystemCommit,
   TimestampColumn,
   TiptapDocument,
@@ -21,8 +21,8 @@ import { SchemaError } from "effect/Schema"
 import { SqlClient, SqlError } from "effect/unstable/sql"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
-import { SystemUpsertTranslation } from "../posts/post-repository-inputs.js"
-import { PostsRepository } from "../posts/repository.js"
+import { SystemUpsertTranslation } from "../publications/publication-repository-inputs.js"
+import { PublicationsRepository } from "../publications/repository.js"
 import { translateTiptapContent, TranslationResult } from "./translate-tiptap-content.js"
 import { TranslationError } from "./translation-service.js"
 
@@ -32,9 +32,9 @@ import { TranslationError } from "./translation-service.js"
  */
 const WORKFLOW_VERSION = "2026-02-25.1" as const
 
-export const PostTranslationWorkflow = Workflow.make("PostTranslationWorkflow", {
+export const PublicationTranslationWorkflow = Workflow.make("PublicationTranslationWorkflow", {
   payload: {
-    postId: PostId,
+    publicationId: PublicationId,
     updatedAt: TimestampColumn,
     sourceLocale: Locale,
     targetLocale: Locale,
@@ -42,12 +42,12 @@ export const PostTranslationWorkflow = Workflow.make("PostTranslationWorkflow", 
   },
   success: Schema.Null,
   error: Schema.Unknown, // @TODO: How to type TranslationError | SqlError | ParseError as schemas?
-  idempotencyKey: ({ postId, targetLocale, updatedAt }) =>
-    `${postId}:${targetLocale}:${DateTime.toEpochMillis(updatedAt)}`,
+  idempotencyKey: ({ publicationId, targetLocale, updatedAt }) =>
+    `${publicationId}:${targetLocale}:${DateTime.toEpochMillis(updatedAt)}`,
 })
 
-export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
-  Effect.fn("PostTranslationWorkflow")(function* (payload, _executionId) {
+export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflow.toLayer(
+  Effect.fn("PublicationTranslationWorkflow")(function* (payload, _executionId) {
     const translationResult = yield* Activity.make({
       name: "translate",
       success: TranslationResult,
@@ -60,12 +60,12 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
     })
 
     const commit = SystemCommit.make({
-      workflowName: "PostTranslationWorkflow",
+      workflowName: "PublicationTranslationWorkflow",
       workflowVersion: WORKFLOW_VERSION,
       model: `translation/${translationResult.serviceId}`,
     })
 
-    const repository = yield* PostsRepository
+    const repository = yield* PublicationsRepository
 
     yield* Activity.make({
       name: "persist",
@@ -79,35 +79,38 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
         ): Effect.Effect<
           void,
           | InvalidCrdtUpdateError
-          | PostConcurrentUpdateError
-          | PostNotFoundError
+          | PublicationConcurrentUpdateError
+          | PublicationNotFoundError
           | SchemaError
           | SqlError.SqlError,
           IdGen | SqlClient.SqlClient
         > =>
           Effect.gen(function* () {
-            const currentPost = yield* repository.findPostRowById(payload.postId).pipe(
-              Effect.flatMap(
-                Option.match({
-                  onNone: () => Effect.fail(new PostNotFoundError({ id: payload.postId })),
-                  onSome: Effect.succeed,
-                }),
-              ),
-            )
+            const currentPublication = yield* repository
+              .findPublicationRowById(payload.publicationId)
+              .pipe(
+                Effect.flatMap(
+                  Option.match({
+                    onNone: () =>
+                      Effect.fail(new PublicationNotFoundError({ id: payload.publicationId })),
+                    onSome: Effect.succeed,
+                  }),
+                ),
+              )
 
             return yield* repository
-              .updatePost(
+              .updatePublication(
                 SystemUpsertTranslation.make({
                   commit,
-                  expectedCurrentCrdtFrontier: currentPost.currentCrdtFrontier,
-                  postId: payload.postId,
+                  expectedCurrentCrdtFrontier: currentPublication.currentCrdtFrontier,
+                  publicationId: payload.publicationId,
                   sourceLocale: payload.sourceLocale,
                   targetLocale: payload.targetLocale,
                   translatedContent,
                 }),
               )
               .pipe(
-                Effect.catchTag("PostConcurrentUpdateError", (error) =>
+                Effect.catchTag("PublicationConcurrentUpdateError", (error) =>
                   remainingAttempts > 0
                     ? Effect.sleep(Duration.millis(100)).pipe(
                         Effect.flatMap(() => persistWithRetry(remainingAttempts - 1)),

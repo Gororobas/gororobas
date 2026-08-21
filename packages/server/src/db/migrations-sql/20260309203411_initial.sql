@@ -158,9 +158,9 @@ CREATE UNIQUE INDEX `suggested_tags_handle` ON `suggested_tags` (`handle`);
 -- Create "suggested_tag_sources" table
 CREATE TABLE `suggested_tag_sources` (
   `suggested_tag_id` text NOT NULL,
-  `post_id` text NOT NULL,
-  PRIMARY KEY (`suggested_tag_id`, `post_id`),
-  CONSTRAINT `0` FOREIGN KEY (`post_id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  `publication_id` text NOT NULL,
+  PRIMARY KEY (`suggested_tag_id`, `publication_id`),
+  CONSTRAINT `0` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`suggested_tag_id`) REFERENCES `suggested_tags` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
 -- Create "images" table
@@ -416,8 +416,8 @@ CREATE TABLE `resource_vegetables` (
   CONSTRAINT `0` FOREIGN KEY (`vegetable_id`) REFERENCES `vegetable_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`resource_id`) REFERENCES `resource_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create "post_crdts" table
-CREATE TABLE `post_crdts` (
+-- Create "publication_crdts" table
+CREATE TABLE `publication_crdts` (
   `id` text NOT NULL,
   `crdt_snapshot` blob NOT NULL,
   `classification` json NULL,
@@ -427,10 +427,10 @@ CREATE TABLE `post_crdts` (
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create "post_commits" table
-CREATE TABLE `post_commits` (
+-- Create "publication_commits" table
+CREATE TABLE `publication_commits` (
   `id` text NULL,
-  `post_id` text NOT NULL,
+  `publication_id` text NOT NULL,
   `created_by_id` text NULL,
   `from_crdt_frontier` json NOT NULL,
   `crdt_update` blob NOT NULL,
@@ -438,10 +438,10 @@ CREATE TABLE `post_commits` (
   `created_at` text NOT NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`created_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
-  CONSTRAINT `1` FOREIGN KEY (`post_id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
--- Create "posts" table
-CREATE TABLE `posts` (
+-- Create "publications" table
+CREATE TABLE `publications` (
   `id` text NULL,
   `current_crdt_frontier` json NOT NULL,
   `handle` text NOT NULL,
@@ -457,48 +457,48 @@ CREATE TABLE `posts` (
   `attendance_mode` text NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `1` FOREIGN KEY (`id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
--- Create index "posts_handle" to table: "posts"
-CREATE UNIQUE INDEX `posts_handle` ON `posts` (`handle`);
--- Create index "idx_posts_handle" to table: "posts"
-CREATE INDEX `idx_posts_handle` ON `posts` (`handle`);
--- Create index "idx_posts_kind" to table: "posts"
-CREATE INDEX `idx_posts_kind` ON `posts` (`kind`);
--- Create "post_translations" table
-CREATE TABLE `post_translations` (
-  `post_id` text NOT NULL,
+-- Create index "publications_handle" to table: "publications"
+CREATE UNIQUE INDEX `publications_handle` ON `publications` (`handle`);
+-- Create index "idx_publications_handle" to table: "publications"
+CREATE INDEX `idx_publications_handle` ON `publications` (`handle`);
+-- Create index "idx_publications_kind" to table: "publications"
+CREATE INDEX `idx_publications_kind` ON `publications` (`kind`);
+-- Create "publication_translations" table
+CREATE TABLE `publication_translations` (
+  `publication_id` text NOT NULL,
   `locale` text NOT NULL,
   `content` json NOT NULL,
   `content_plain_text` text NOT NULL,
   `translated_at_crdt_frontier` json NOT NULL,
   `translation_source` text NOT NULL,
   `original_locale` text NOT NULL,
-  PRIMARY KEY (`post_id`, `locale`),
-  CONSTRAINT `0` FOREIGN KEY (`post_id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  PRIMARY KEY (`publication_id`, `locale`),
+  CONSTRAINT `0` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create "post_tags" table
-CREATE TABLE `post_tags` (
-  `post_id` text NOT NULL,
+-- Create "publication_tags" table
+CREATE TABLE `publication_tags` (
+  `publication_id` text NOT NULL,
   `tag_id` text NOT NULL,
   `extraction_text` text NULL,
-  PRIMARY KEY (`post_id`, `tag_id`),
+  PRIMARY KEY (`publication_id`, `tag_id`),
   CONSTRAINT `0` FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`post_id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create "post_vegetables" table
-CREATE TABLE `post_vegetables` (
-  `post_id` text NOT NULL,
+-- Create "publication_vegetables" table
+CREATE TABLE `publication_vegetables` (
+  `publication_id` text NOT NULL,
   `vegetable_id` text NOT NULL,
   `extraction_text` text NULL,
-  PRIMARY KEY (`post_id`, `vegetable_id`),
+  PRIMARY KEY (`publication_id`, `vegetable_id`),
   CONSTRAINT `0` FOREIGN KEY (`vegetable_id`) REFERENCES `vegetable_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`post_id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
 -- Create "comment_crdts" table
 CREATE TABLE `comment_crdts` (
   `id` text NULL,
-  `post_id` text NULL,
+  `publication_id` text NULL,
   `resource_id` text NULL,
   `parent_comment_id` text NULL,
   `crdt_snapshot` blob NOT NULL,
@@ -510,9 +510,9 @@ CREATE TABLE `comment_crdts` (
   CONSTRAINT `0` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`parent_comment_id`) REFERENCES `comment_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `2` FOREIGN KEY (`resource_id`) REFERENCES `resource_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `3` FOREIGN KEY (`post_id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `3` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `check_comment_parent` CHECK (
-    (post_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
+    (publication_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
   )
 );
 -- Create "comment_commits" table
@@ -530,7 +530,7 @@ CREATE TABLE `comment_commits` (
 -- Create "comments" table
 CREATE TABLE `comments` (
   `id` text NULL,
-  `post_id` text NULL,
+  `publication_id` text NULL,
   `resource_id` text NULL,
   `parent_comment_id` text NULL,
   `current_crdt_frontier` json NOT NULL,
@@ -540,11 +540,11 @@ CREATE TABLE `comments` (
   `owner_profile_id` text NOT NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`resource_id`) REFERENCES `resource_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`post_id`) REFERENCES `post_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `2` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `3` FOREIGN KEY (`id`) REFERENCES `comment_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `check_comment_parent` CHECK (
-    (post_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
+    (publication_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
   )
 );
 -- Create "comment_translations" table

@@ -60,7 +60,7 @@ export const ProfileMetadataResult = Schema.Struct({
 export type ProfileMetadataResult = typeof ProfileMetadataResult.Type
 
 export const ProfileContentCounts = Schema.Struct({
-  notes: Schema.Number,
+  posts: Schema.Number,
   events: Schema.Number,
   vegetableBookmarks: Schema.Number,
   resourceBookmarks: Schema.Number,

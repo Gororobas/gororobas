@@ -3,35 +3,40 @@ import {
   Handle,
   LoroDocSnapshot,
   LoroDocUpdate,
-  PostCrdtRow,
-  PostSourceDataStorageLoro,
+  PublicationCrdtRow,
+  PublicationSourceDataStorageLoro,
   UnauthorizedError,
-  type PostSourceData,
+  type PublicationSourceData,
   type TiptapDocument,
   type TiptapNode,
-  sourcePostDataToCrdtStorage,
+  sourcePublicationDataToCrdtStorage,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 import { Mirror } from "loro-mirror"
 
-import { PostsRepository } from "../../src/posts/repository.js"
-import { PostsService } from "../../src/posts/service.js"
+import { PublicationsRepository } from "../../src/publications/repository.js"
+import { PublicationsService } from "../../src/publications/service.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
 import { makeAccountSession } from "../session-builders.js"
 import { insertPersonWithDependencies, TestLayer, withSession } from "../test-helpers.js"
 
-const PostsRepositoryLayer = Layer.effect(PostsRepository, PostsRepository.make).pipe(
-  Layer.provide(TestLayer),
+const PublicationsRepositoryLayer = Layer.effect(
+  PublicationsRepository,
+  PublicationsRepository.make,
+).pipe(Layer.provide(TestLayer))
+
+const PublicationsServiceLayer = Layer.effect(PublicationsService, PublicationsService.make).pipe(
+  Layer.provide(PublicationsRepositoryLayer),
 )
 
-const PostsServiceLayer = Layer.effect(PostsService, PostsService.make).pipe(
-  Layer.provide(PostsRepositoryLayer),
+const TestLayerWithPublicationsService = Layer.mergeAll(
+  TestLayer,
+  PublicationsRepositoryLayer,
+  PublicationsServiceLayer,
 )
-
-const TestLayerWithPostsService = Layer.mergeAll(TestLayer, PostsRepositoryLayer, PostsServiceLayer)
-const PostCrdtSnapshotRow = PostCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
+const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
 const paragraph = (text: string): TiptapNode => ({
   content: [{ text, type: "text" }],
@@ -46,18 +51,18 @@ const makeDocument = (text: string): TiptapDocument => ({
 
 const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
 
-const makePostCrdtUpdate = (input: {
-  nextSourceData: PostSourceData
+const makePublicationCrdtUpdate = (input: {
+  nextSourceData: PublicationSourceData
   snapshot: LoroDocSnapshot
 }) => {
   const currentDoc = snapshotToLoroDoc(input.snapshot)
   const nextDoc = currentDoc.fork()
   const store = new Mirror({
     doc: nextDoc,
-    schema: PostSourceDataStorageLoro,
+    schema: PublicationSourceDataStorageLoro,
   })
 
-  store.setState(() => sourcePostDataToCrdtStorage(input.nextSourceData))
+  store.setState(() => sourcePublicationDataToCrdtStorage(input.nextSourceData))
   store.dispose()
 
   return Schema.decodeUnknownSync(LoroDocUpdate)(
@@ -68,12 +73,12 @@ const makePostCrdtUpdate = (input: {
   )
 }
 
-const makeNoteSourceData = (input: {
+const makePostSourceData = (input: {
   content: TiptapDocument
   handle: string
-  ownerProfileId: PostSourceData["metadata"]["ownerProfileId"]
-  publishedAt: PostSourceData["metadata"]["publishedAt"]
-}): PostSourceData => ({
+  ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
+  publishedAt: PublicationSourceData["metadata"]["publishedAt"]
+}): PublicationSourceData => ({
   locales: {
     pt: {
       content: input.content,
@@ -84,18 +89,18 @@ const makeNoteSourceData = (input: {
   },
   metadata: {
     handle: makeHandle(input.handle),
-    kind: "NOTE",
+    kind: "POST",
     ownerProfileId: input.ownerProfileId,
     publishedAt: input.publishedAt,
     visibility: "PUBLIC",
   },
 })
 
-describe("PostsService", () => {
-  it.effect("updatePost denies edits from non-owners", () =>
+describe("PublicationsService", () => {
+  it.effect("updatePublication denies edits from non-owners", () =>
     Effect.gen(function* () {
-      const service = yield* PostsService
-      const repository = yield* PostsRepository
+      const service = yield* PublicationsService
+      const repository = yield* PublicationsRepository
       const sql = yield* SqlClient.SqlClient
 
       const owner = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
@@ -107,21 +112,21 @@ describe("PostsService", () => {
       yield* insertPersonWithDependencies({ person: other, profile: otherProfile })
 
       const now = yield* DateTime.now
-      const sourceData = makeNoteSourceData({
+      const sourceData = makePostSourceData({
         content: makeDocument("Nota do dono"),
-        handle: `svc-post-${owner.id.slice(0, 8)}`,
+        handle: `svc-publication-${owner.id.slice(0, 8)}`,
         ownerProfileId: ownerProfile.id,
         publishedAt: now,
       })
-      const postId = yield* repository.createPost({
+      const publicationId = yield* repository.createPublication({
         createdById: owner.id,
         sourceData,
       })
 
-      const before = yield* repository.findPostRowById(postId)
+      const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
-      const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PostCrdtSnapshotRow))(
-        yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
+      const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
+        yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
       )
       expect(snapshotRows).toHaveLength(1)
       const snapshot = snapshotRows[0]
@@ -132,8 +137,8 @@ describe("PostsService", () => {
       if (ptLocale === undefined) return
 
       const result = yield* withSession(
-        service.updatePost({
-          crdtUpdate: makePostCrdtUpdate({
+        service.updatePublication({
+          crdtUpdate: makePublicationCrdtUpdate({
             nextSourceData: {
               ...sourceData,
               locales: {
@@ -147,19 +152,19 @@ describe("PostsService", () => {
             snapshot: snapshot.crdtSnapshot,
           }),
           expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
-          postId,
+          publicationId,
         }),
         makeAccountSession(other.id),
       ).pipe(Effect.flip)
 
       expect(result).toBeInstanceOf(UnauthorizedError)
-    }).pipe(Effect.provide(TestLayerWithPostsService)),
+    }).pipe(Effect.provide(TestLayerWithPublicationsService)),
   )
 
-  it.effect("updatePost updates post content with a fresh frontier", () =>
+  it.effect("updatePublication updates publication content with a fresh frontier", () =>
     Effect.gen(function* () {
-      const service = yield* PostsService
-      const repository = yield* PostsRepository
+      const service = yield* PublicationsService
+      const repository = yield* PublicationsRepository
       const sql = yield* SqlClient.SqlClient
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
@@ -167,21 +172,21 @@ describe("PostsService", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
-      const sourceData = makeNoteSourceData({
+      const sourceData = makePostSourceData({
         content: makeDocument("Antes"),
-        handle: `service-post-${person.id.slice(0, 8)}`,
+        handle: `service-publication-${person.id.slice(0, 8)}`,
         ownerProfileId: profile.id,
         publishedAt: now,
       })
-      const postId = yield* repository.createPost({
+      const publicationId = yield* repository.createPublication({
         createdById: person.id,
         sourceData,
       })
 
-      const before = yield* repository.findPostRowById(postId)
+      const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
-      const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PostCrdtSnapshotRow))(
-        yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
+      const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
+        yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
       )
       expect(snapshotRows).toHaveLength(1)
       const snapshot = snapshotRows[0]
@@ -192,8 +197,8 @@ describe("PostsService", () => {
       if (ptLocale === undefined) return
 
       yield* withSession(
-        service.updatePost({
-          crdtUpdate: makePostCrdtUpdate({
+        service.updatePublication({
+          crdtUpdate: makePublicationCrdtUpdate({
             nextSourceData: {
               ...sourceData,
               locales: {
@@ -207,15 +212,17 @@ describe("PostsService", () => {
             snapshot: snapshot.crdtSnapshot,
           }),
           expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
-          postId,
+          publicationId,
         }),
         makeAccountSession(person.id),
       )
 
-      const handle = Option.getOrThrow(yield* repository.findPostRowById(postId)).handle
-      const page = yield* repository.findPostPageData({ handle, locale: "pt" })
+      const handle = Option.getOrThrow(
+        yield* repository.findPublicationRowById(publicationId),
+      ).handle
+      const page = yield* repository.findPublicationPageData({ handle, locale: "pt" })
       expect(Option.isSome(page)).toBe(true)
       expect(Option.getOrThrow(page).content).toEqual(makeDocument("Depois"))
-    }).pipe(Effect.provide(TestLayerWithPostsService)),
+    }).pipe(Effect.provide(TestLayerWithPublicationsService)),
   )
 })

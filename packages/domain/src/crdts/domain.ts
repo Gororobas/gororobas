@@ -10,7 +10,7 @@ import {
 } from "../common/enums.js"
 import { PersonId, ProfileId } from "../common/ids.js"
 import { Handle, TimestampColumn } from "../common/primitives.js"
-import type { PostLocalizedData, PostSourceData } from "../posts/domain.js"
+import type { PublicationLocalizedData, PublicationSourceData } from "../publications/domain.js"
 import type { ResourceLocalizedData, SourceResourceData } from "../resources/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
@@ -45,7 +45,7 @@ export type CrdtCommit = typeof CrdtCommit.Type
 
 export const CrdtCommitEncoded = Schema.fromJsonString(CrdtCommit)
 
-export const PostLocalizedDataLoro = loroSchema.LoroMap(
+export const PublicationLocalizedDataLoro = loroSchema.LoroMap(
   {
     content: loroSchema.LoroText(),
     original_locale: loroSchema.String<Locale>(),
@@ -54,9 +54,9 @@ export const PostLocalizedDataLoro = loroSchema.LoroMap(
   { required: true },
 )
 
-export const NoteMetadataLoro = loroSchema.LoroMap({
+export const PostMetadataLoro = loroSchema.LoroMap({
   handle: loroSchema.String<Handle>({ required: true }),
-  kind: loroSchema.String<"NOTE">(),
+  kind: loroSchema.String<"POST">(),
   owner_profile_id: loroSchema.String<ProfileId>({ required: true }),
   published_at: loroSchema.String(),
   visibility: loroSchema.String<InformationVisibility>({ required: true }),
@@ -74,31 +74,31 @@ export const EventMetadataLoro = loroSchema.LoroMap({
   visibility: loroSchema.String<InformationVisibility>({ required: true }),
 })
 
-export const NoteSourceDataLoro = loroSchema({
+export const PostSourceDataLoro = loroSchema({
   locales: loroSchema.LoroMap(
     {
-      en: PostLocalizedDataLoro,
-      es: PostLocalizedDataLoro,
-      pt: PostLocalizedDataLoro,
+      en: PublicationLocalizedDataLoro,
+      es: PublicationLocalizedDataLoro,
+      pt: PublicationLocalizedDataLoro,
     },
     { required: true },
   ),
-  metadata: NoteMetadataLoro,
+  metadata: PostMetadataLoro,
 })
 
 export const EventSourceDataLoro = loroSchema({
   locales: loroSchema.LoroMap(
     {
-      en: PostLocalizedDataLoro,
-      es: PostLocalizedDataLoro,
-      pt: PostLocalizedDataLoro,
+      en: PublicationLocalizedDataLoro,
+      es: PublicationLocalizedDataLoro,
+      pt: PublicationLocalizedDataLoro,
     },
     { required: true },
   ),
   metadata: EventMetadataLoro,
 })
 
-const PostLocalizedDataStorageLoro = loroSchema.LoroMap(
+const PublicationLocalizedDataStorageLoro = loroSchema.LoroMap(
   {
     content: loroSchema.String({ required: false }),
     originalLocale: loroSchema.String<Locale>({ required: false }),
@@ -108,11 +108,11 @@ const PostLocalizedDataStorageLoro = loroSchema.LoroMap(
   { required: false },
 )
 
-export const PostMetadataStorageLoro = loroSchema.LoroMap({
+export const PublicationMetadataStorageLoro = loroSchema.LoroMap({
   attendanceMode: loroSchema.String<EventAttendanceMode>({ required: false }),
   endDate: loroSchema.String({ required: false }),
   handle: loroSchema.String<Handle>({ required: true }),
-  kind: loroSchema.String<"NOTE" | "EVENT">({ required: true }),
+  kind: loroSchema.String<"POST" | "EVENT">({ required: true }),
   locationOrUrl: loroSchema.String({ required: false }),
   ownerProfileId: loroSchema.String<ProfileId>({ required: true }),
   publishedAt: loroSchema.String({ required: true }),
@@ -120,16 +120,16 @@ export const PostMetadataStorageLoro = loroSchema.LoroMap({
   visibility: loroSchema.String<InformationVisibility>({ required: true }),
 })
 
-export const PostSourceDataStorageLoro = loroSchema({
+export const PublicationSourceDataStorageLoro = loroSchema({
   locales: loroSchema.LoroMap(
     {
-      en: PostLocalizedDataStorageLoro,
-      es: PostLocalizedDataStorageLoro,
-      pt: PostLocalizedDataStorageLoro,
+      en: PublicationLocalizedDataStorageLoro,
+      es: PublicationLocalizedDataStorageLoro,
+      pt: PublicationLocalizedDataStorageLoro,
     },
     { required: true },
   ),
-  metadata: PostMetadataStorageLoro,
+  metadata: PublicationMetadataStorageLoro,
 })
 
 const CommentLocalizedDataStorageLoro = loroSchema.LoroMap(
@@ -191,7 +191,7 @@ const encodeDateOrUndefined = (value: unknown) => {
   return undefined
 }
 
-const encodeLocalizedData = (localeData: PostLocalizedData) => ({
+const encodeLocalizedData = (localeData: PublicationLocalizedData) => ({
   content: Schema.encodeSync(Schema.fromJsonString(TiptapDocument))(localeData.content),
   originalLocale: localeData.originalLocale,
   translatedAtCrdtFrontier: Schema.encodeSync(
@@ -200,7 +200,7 @@ const encodeLocalizedData = (localeData: PostLocalizedData) => ({
   translationSource: localeData.translationSource,
 })
 
-export const sourcePostDataToCrdtStorage = (sourceData: PostSourceData) => ({
+export const sourcePublicationDataToCrdtStorage = (sourceData: PublicationSourceData) => ({
   locales: {
     en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : {},
     es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : {},

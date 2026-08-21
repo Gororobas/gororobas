@@ -457,7 +457,7 @@ module default {
   type BlueskyPost extending Auditable, AdminCanDoAnything {
     required text: str;
     required content: PostableToBluesky {
-      # single post per content
+      # single publication per content
       constraint exclusive;
       # allow deletion of content
       on target delete allow;

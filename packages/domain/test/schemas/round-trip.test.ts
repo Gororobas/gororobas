@@ -18,15 +18,15 @@ import { Handle, TimestampColumn } from "../../src/common/primitives.js"
 import { ImageRow } from "../../src/media/domain.js"
 import { OrganizationRow } from "../../src/organizations/domain.js"
 import { PersonRow } from "../../src/people/domain.js"
-import {
-  PostCommitRow,
-  PostCrdtRow,
-  PostRow,
-  PostTagRow,
-  PostTranslationRow,
-  PostVegetableRow,
-} from "../../src/posts/domain.js"
 import { ProfileRow } from "../../src/profiles/domain.js"
+import {
+  PublicationCommitRow,
+  PublicationCrdtRow,
+  PublicationRow,
+  PublicationTagRow,
+  PublicationTranslationRow,
+  PublicationVegetableRow,
+} from "../../src/publications/domain.js"
 import { SuggestedTagRow, SuggestedTagSourceRow, TagRow } from "../../src/tags/domain.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import { VegetableRow, VegetableTranslationRow } from "../../src/vegetables/domain.js"
@@ -40,12 +40,12 @@ const rowSchemas = [
   { name: "VerificationRow", schema: VerificationRow },
   { name: "ImageRow", schema: ImageRow },
   { name: "OrganizationRow", schema: OrganizationRow },
-  { name: "PostRow", schema: PostRow },
-  { name: "PostCrdtRow", schema: PostCrdtRow },
-  { name: "PostCommitRow", schema: PostCommitRow },
-  { name: "PostTranslationRow", schema: PostTranslationRow },
-  { name: "PostTagRow", schema: PostTagRow },
-  { name: "PostVegetableRow", schema: PostVegetableRow },
+  { name: "PublicationRow", schema: PublicationRow },
+  { name: "PublicationCrdtRow", schema: PublicationCrdtRow },
+  { name: "PublicationCommitRow", schema: PublicationCommitRow },
+  { name: "PublicationTranslationRow", schema: PublicationTranslationRow },
+  { name: "PublicationTagRow", schema: PublicationTagRow },
+  { name: "PublicationVegetableRow", schema: PublicationVegetableRow },
   { name: "TagRow", schema: TagRow },
   { name: "SuggestedTagRow", schema: SuggestedTagRow },
   { name: "SuggestedTagSourceRow", schema: SuggestedTagSourceRow },

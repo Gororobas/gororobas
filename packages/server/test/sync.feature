@@ -21,32 +21,32 @@ Feature: Sync
       When the person is offline
       Then they can still access vegetables
 
-  Rule: Posts are partially synced based on relevance
+  Rule: Publications are partially synced based on relevance
 
-    Scenario: Person can access their own posts offline
+    Scenario: Person can access their own publications offline
       Given "Maria" is logged in
-      And "Maria" has created posts under their profile
-      And posts relevant to "Maria" have been synced to the device
+      And "Maria" has created publications under their profile
+      And publications relevant to "Maria" have been synced to the device
       When "Maria" is offline
-      Then "Maria" can still access their own synced posts
+      Then "Maria" can still access their own synced publications
 
-    Scenario: Person has offline access posts of the organizations they're members of
+    Scenario: Person has offline access publications of the organizations they're members of
       Given "Maria" is logged in
       And "Maria" is part of "Gororobas"
-      And posts relevant to "Gororobas" have been synced to the device
+      And publications relevant to "Gororobas" have been synced to the device
       When "Maria" is offline
-      Then "Maria" can still access synced posts from "Gororobas"
+      Then "Maria" can still access synced publications from "Gororobas"
 
-    Scenario: Person cannot access unrelated posts offline
+    Scenario: Person cannot access unrelated publications offline
       Given "Maria" is logged in
-      And posts unrelated to "Maria" exist
+      And publications unrelated to "Maria" exist
       When "Maria" is offline
-      Then "Maria" cannot access unrelated posts
+      Then "Maria" cannot access unrelated publications
 
   Rule: Sync resolves conflicts automatically
 
     Scenario: Offline edits sync without losing data
-      Given "Maria" edits a post while offline
-      And another edit exists on the server for the same post
+      Given "Maria" edits a publication while offline
+      And another edit exists on the server for the same publication
       When "Maria" goes online and sync runs
       Then both edits are preserved according to an algorithm (CRDT)

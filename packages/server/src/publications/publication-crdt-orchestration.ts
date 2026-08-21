@@ -7,31 +7,31 @@ import {
   LoroDocFrontier,
   LoroDocSnapshot,
   LoroDocUpdate,
-  PostSourceDataStorage,
-  PostSourceDataStorageLoro,
-  PostSourceData,
+  PublicationSourceDataStorage,
+  PublicationSourceDataStorageLoro,
+  PublicationSourceData,
   SystemCommit,
   TiptapDocument,
   loroDocToSnapshot,
   loroDocToUpdate,
-  postSourceDataStorageToSourcePostData,
-  sourcePostDataToCrdtStorage,
+  publicationSourceDataStorageToSourcePublicationData,
+  sourcePublicationDataToCrdtStorage,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 import { Mirror } from "loro-mirror"
 
 /** @todo pretty sure this is vibe slop and is not needed */
-const decodePostStorageDataEffect = (storageData: PostSourceDataStorage) =>
+const decodePublicationStorageDataEffect = (storageData: PublicationSourceDataStorage) =>
   Effect.try({
-    try: () => postSourceDataStorageToSourcePostData(storageData),
+    try: () => publicationSourceDataStorageToSourcePublicationData(storageData),
     catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
   })
 
-export const createPostSnapshot = (sourceData: PostSourceData) => {
+export const createPublicationSnapshot = (sourceData: PublicationSourceData) => {
   const sourceDoc = createLoroDocFromData(
-    sourcePostDataToCrdtStorage(sourceData),
-    PostSourceDataStorageLoro,
+    sourcePublicationDataToCrdtStorage(sourceData),
+    PublicationSourceDataStorageLoro,
   )
 
   return {
@@ -43,7 +43,7 @@ export const createPostSnapshot = (sourceData: PostSourceData) => {
 }
 
 /** @todo pretty sure this is vibe slop and is not needed */
-export const applyPostCrdtUpdateWithCommit = (params: {
+export const applyPublicationCrdtUpdateWithCommit = (params: {
   commit: CrdtCommit
   crdtUpdate: LoroDocUpdate
   snapshot: LoroDocSnapshot
@@ -53,10 +53,10 @@ export const applyPostCrdtUpdateWithCommit = (params: {
       commit: params.commit,
       crdtUpdate: params.crdtUpdate,
       snapshot: params.snapshot,
-      targetSchema: PostSourceDataStorage,
+      targetSchema: PublicationSourceDataStorage,
     })
 
-    const sourceData = yield* decodePostStorageDataEffect(applied.data)
+    const sourceData = yield* decodePublicationStorageDataEffect(applied.data)
 
     return {
       ...applied,
@@ -64,7 +64,7 @@ export const applyPostCrdtUpdateWithCommit = (params: {
     } as const
   })
 
-/** @todo split the update method in the posts repository to have the translation update be a dedicated function */
+/** @todo split the update method in the publications repository to have the translation update be a dedicated function */
 export const createSystemTranslationCrdtUpdate = (params: {
   expectedCurrentCrdtFrontier: LoroDocFrontier
   snapshot: LoroDocSnapshot
@@ -76,11 +76,11 @@ export const createSystemTranslationCrdtUpdate = (params: {
   Effect.gen(function* () {
     const currentDoc = snapshotToLoroDoc(params.snapshot)
     const currentStorageData = yield* Effect.try({
-      try: () => Schema.decodeUnknownSync(PostSourceDataStorage)(currentDoc.toJSON()),
+      try: () => Schema.decodeUnknownSync(PublicationSourceDataStorage)(currentDoc.toJSON()),
       catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
     })
-    const currentSourceData = yield* decodePostStorageDataEffect(currentStorageData)
-    const nextSourceData = PostSourceData.make({
+    const currentSourceData = yield* decodePublicationStorageDataEffect(currentStorageData)
+    const nextSourceData = PublicationSourceData.make({
       ...currentSourceData,
       locales: {
         ...currentSourceData.locales,
@@ -96,10 +96,10 @@ export const createSystemTranslationCrdtUpdate = (params: {
     const nextDoc = currentDoc.fork()
     const nextDocStore = new Mirror({
       doc: nextDoc,
-      schema: PostSourceDataStorageLoro,
+      schema: PublicationSourceDataStorageLoro,
     })
 
-    nextDocStore.setState(() => sourcePostDataToCrdtStorage(nextSourceData))
+    nextDocStore.setState(() => sourcePublicationDataToCrdtStorage(nextSourceData))
     nextDocStore.dispose()
 
     return nextDoc.export({

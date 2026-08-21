@@ -131,7 +131,7 @@ Feature: People
     Scenario: Person deletes their account
       When "Maria" deletes their account
       Then "Maria"'s profile no longer exists
-      And "Maria"'s personal posts are deleted
+      And "Maria"'s personal publications are deleted
       And "Maria"'s comments are deleted
 
     Scenario: Deleted person's wiki contributions remain but are anonymized

@@ -3,7 +3,7 @@ import {
   LoroDocFrontier,
   Locale,
   PersonId,
-  PostId,
+  PublicationId,
   ProfileId,
   ResourceId,
   SourceCommentData,
@@ -37,7 +37,7 @@ export const CreateCommentInput = Schema.Struct({
   createdById: PersonId,
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  postId: Schema.NullOr(PostId),
+  publicationId: Schema.NullOr(PublicationId),
   resourceId: Schema.NullOr(ResourceId),
   sourceData: SourceCommentData,
 })

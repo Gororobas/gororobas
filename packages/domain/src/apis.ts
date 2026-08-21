@@ -5,8 +5,8 @@ import { CommentsApiGroup } from "./comments/api.js"
 import { MediaApiGroup } from "./media/api.js"
 import { OrganizationsApiGroup } from "./organizations/api.js"
 import { PeopleApiGroup } from "./people/api.js"
-import { PostsApiGroup } from "./posts/api.js"
 import { ProfilesApiGroup } from "./profiles/api.js"
+import { PublicationsApiGroup } from "./publications/api.js"
 import { ResourcesApiGroup } from "./resources/api.js"
 import { TagsApiGroup } from "./tags/api.js"
 import { VegetablesApiGroup } from "./vegetables/api.js"
@@ -16,7 +16,7 @@ export const GororobasApi = HttpApi.make("GororobasApi")
   .add(MediaApiGroup)
   .add(OrganizationsApiGroup)
   .add(PeopleApiGroup)
-  .add(PostsApiGroup)
+  .add(PublicationsApiGroup)
   .add(ResourcesApiGroup)
   .add(VegetablesApiGroup)
   .add(ProfilesApiGroup)

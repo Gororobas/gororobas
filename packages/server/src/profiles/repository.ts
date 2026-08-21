@@ -85,9 +85,9 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
       `,
       })
 
-      const fetchProfileNotes = (_handle: string) =>
+      const fetchProfilePosts = (_handle: string) =>
         Effect.gen(function* () {
-          yield* Effect.logDebug("fetchProfileNotes: stub")
+          yield* Effect.logDebug("fetchProfilePosts: stub")
           return []
         })
 
@@ -120,8 +120,8 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
         Result: ProfileContentCounts,
         execute: (id) => sql`
         SELECT
-          (SELECT COUNT(*) FROM posts WHERE owner_profile_id = ${id} AND kind = 'note') as notes,
-          (SELECT COUNT(*) FROM posts WHERE owner_profile_id = ${id} AND kind = 'event') as events,
+          (SELECT COUNT(*) FROM publications WHERE owner_profile_id = ${id} AND kind = 'POST') as posts,
+          (SELECT COUNT(*) FROM publications WHERE owner_profile_id = ${id} AND kind = 'EVENT') as events,
           (SELECT COUNT(*) FROM bookmarks_vegetables WHERE person_id = ${id}) as vegetable_bookmarks,
           (SELECT COUNT(*) FROM bookmarks_resources WHERE person_id = ${id}) as resource_bookmarks,
           (SELECT COUNT(*) FROM comments WHERE owner_profile_id = ${id}) as comments,
@@ -140,7 +140,7 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
         fetchProfileContentCounts,
         fetchProfileEvents,
         fetchProfileMetadata,
-        fetchProfileNotes,
+        fetchProfilePosts,
         fetchProfilePhotos,
         fetchProfileWishlist,
         findByHandle,

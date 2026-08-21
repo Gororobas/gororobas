@@ -6,7 +6,7 @@ export const CommentsApiLive = HttpApiBuilder.group(GororobasApi, "comments", (h
   handlers
     .handle("getComments", () => Effect.succeed([]))
     .handle("getComment", () => Effect.die("stub"))
-    .handle("createPostComment", () => Effect.die("stub"))
+    .handle("createPublicationComment", () => Effect.die("stub"))
     .handle("createResourceComment", () => Effect.die("stub"))
     .handle("createReplyComment", () => Effect.die("stub"))
     .handle("updateComment", () => Effect.die("stub"))

@@ -1,9 +1,9 @@
 /**
  * Classification domain types.
  *
- * Defines the shape of the classification JSON stored on `post_crdts.classification`.
+ * Defines the shape of the classification JSON stored on `publication_crdts.classification`.
  * This data is derived (not user-authored) and stored outside the LoroDoc to avoid
- * CRDT merge complications. It gets materialized into `post_tags` and `post_vegetables`.
+ * CRDT merge complications. It gets materialized into `publication_tags` and `publication_vegetables`.
  */
 import { Schema } from "effect"
 
@@ -89,10 +89,10 @@ export const ResolvedTagExtraction = Schema.Union([
 export type ResolvedTagExtraction = typeof ResolvedTagExtraction.Type
 
 /**
- * The full classification stored as JSON on `post_crdts.classification`.
+ * The full classification stored as JSON on `publication_crdts.classification`.
  * Pinned to a specific content snapshot via `content_hash` and `crdt_frontier`.
  */
-export const PostClassification = Schema.Struct({
+export const PublicationClassification = Schema.Struct({
   version: Schema.String,
   modelInfo: ModelInfo,
   contentHash: Schema.String,
@@ -102,4 +102,4 @@ export const PostClassification = Schema.Struct({
   vegetables: Schema.Array(ResolvedVegetableExtraction),
   tags: Schema.Array(ResolvedTagExtraction),
 })
-export type PostClassification = typeof PostClassification.Type
+export type PublicationClassification = typeof PublicationClassification.Type

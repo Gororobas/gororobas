@@ -1,13 +1,13 @@
 import { Layer } from "effect"
 
-import { PostClassificationWorkflowLayer } from "./classification/post-classification-workflow.js"
+import { PublicationClassificationWorkflowLayer } from "./classification/publication-classification-workflow.js"
 import { CommentTranslationWorkflowLayer } from "./translation/comment-translation-workflow.js"
-import { PostTranslationWorkflowLayer } from "./translation/post-translation-workflow.js"
+import { PublicationTranslationWorkflowLayer } from "./translation/publication-translation-workflow.js"
 
 export const WorkflowsLive = Layer.mergeAll(
-  PostTranslationWorkflowLayer,
+  PublicationTranslationWorkflowLayer,
   CommentTranslationWorkflowLayer,
-  PostClassificationWorkflowLayer,
+  PublicationClassificationWorkflowLayer,
 )
 
 // @TODO: how does WorkflowsTest need to be different from WorkflowsLive?

@@ -2,8 +2,8 @@ import { commentsPolicies } from "../comments/policies.js"
 import { mediaPolicies } from "../media/policies.js"
 import { organizationsPolicies } from "../organizations/policies.js"
 import { peoplePolicies } from "../people/policies.js"
-import { postsPolicies } from "../posts/policies.js"
 import { profilePolicies } from "../profiles/policies.js"
+import { publicationsPolicies } from "../publications/policies.js"
 import { resourcesPolicies } from "../resources/policies.js"
 import { vegetablesPolicies } from "../vegetables/policies.js"
 import {
@@ -28,7 +28,7 @@ const Policies = {
   media: mediaPolicies,
   organizations: organizationsPolicies,
   people: peoplePolicies,
-  posts: postsPolicies,
+  publications: publicationsPolicies,
   resources: resourcesPolicies,
   vegetables: vegetablesPolicies,
   profiles: profilePolicies,

@@ -4,8 +4,8 @@ import { Schema } from "effect"
  */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
-import { CommentId, PostId, ResourceId } from "../common/ids.js"
-import { PostNotFoundError } from "../posts/errors.js"
+import { CommentId, PublicationId, ResourceId } from "../common/ids.js"
+import { PublicationNotFoundError } from "../publications/errors.js"
 import { ResourceNotFoundError } from "../resources/errors.js"
 import {
   ApiUpdateCommentData,
@@ -30,10 +30,10 @@ export class CommentsApiGroup extends HttpApiGroup.make("comments")
     }),
   )
   .add(
-    HttpApiEndpoint.post("createPostComment", "/posts/:id/comments", {
+    HttpApiEndpoint.post("createPublicationComment", "/publications/:id/comments", {
       success: CommentData,
-      error: PostNotFoundError,
-      params: Schema.Struct({ id: PostId }),
+      error: PublicationNotFoundError,
+      params: Schema.Struct({ id: PublicationId }),
       payload: CreateCommentData,
     }),
   )

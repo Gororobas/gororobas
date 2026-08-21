@@ -1,17 +1,24 @@
 /**
- * Post domain entity and related types.
+ * Publication domain entity and related types.
  */
 import { Schema } from "effect"
 
-import { PostClassification } from "../classification/domain.js"
+import { PublicationClassification } from "../classification/domain.js"
 import {
   EventAttendanceMode,
   InformationVisibility,
   Locale,
-  PostKind,
+  PublicationKind,
   TranslationSource,
 } from "../common/enums.js"
-import { PersonId, PostCommitId, PostId, ProfileId, TagId, VegetableId } from "../common/ids.js"
+import {
+  PersonId,
+  PublicationCommitId,
+  PublicationId,
+  ProfileId,
+  TagId,
+  VegetableId,
+} from "../common/ids.js"
 import {
   Handle,
   PaginationOptions,
@@ -21,35 +28,35 @@ import {
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
-class InvalidPostStorageError extends Schema.TaggedError<InvalidPostStorageError>()(
-  "InvalidPostStorageError",
+class InvalidPublicationStorageError extends Schema.TaggedError<InvalidPublicationStorageError>()(
+  "InvalidPublicationStorageError",
   { message: Schema.String },
 ) {}
 
-export const CorePostMetadata = Schema.Struct({
+export const CorePublicationMetadata = Schema.Struct({
   handle: Handle,
   ownerProfileId: ProfileId,
   publishedAt: TimestampColumn,
   visibility: InformationVisibility,
 })
-export type CorePostMetadata = typeof CorePostMetadata.Type
+export type CorePublicationMetadata = typeof CorePublicationMetadata.Type
 
-const PostLocalizedDataCommonFields = {
+const PublicationLocalizedDataCommonFields = {
   content: TiptapDocument,
   originalLocale: Locale,
 }
 
-const NoteKind = Schema.Literal("NOTE" satisfies (typeof PostKind.literals)[0])
-const EventKind = Schema.Literal("EVENT" satisfies (typeof PostKind.literals)[1])
+const PostKind = Schema.Literal("POST" satisfies (typeof PublicationKind.literals)[0])
+const EventKind = Schema.Literal("EVENT" satisfies (typeof PublicationKind.literals)[1])
 
-const OriginalPostLocalizedData = Schema.Struct({
-  ...PostLocalizedDataCommonFields,
+const OriginalPublicationLocalizedData = Schema.Struct({
+  ...PublicationLocalizedDataCommonFields,
   translationSource: Schema.Literal("ORIGINAL" satisfies (typeof TranslationSource.literals)[0]),
   translatedAtCrdtFrontier: Schema.Null,
 })
 
-const TranslatedPostLocalizedData = Schema.Struct({
-  ...PostLocalizedDataCommonFields,
+const TranslatedPublicationLocalizedData = Schema.Struct({
+  ...PublicationLocalizedDataCommonFields,
   translationSource: Schema.Literals([
     "AUTOMATIC" satisfies (typeof TranslationSource.literals)[1],
     "MANUAL" satisfies (typeof TranslationSource.literals)[2],
@@ -57,14 +64,14 @@ const TranslatedPostLocalizedData = Schema.Struct({
   translatedAtCrdtFrontier: LoroDocFrontier,
 })
 
-export const PostLocalizedData = Schema.Union([
-  OriginalPostLocalizedData,
-  TranslatedPostLocalizedData,
+export const PublicationLocalizedData = Schema.Union([
+  OriginalPublicationLocalizedData,
+  TranslatedPublicationLocalizedData,
 ])
-export type PostLocalizedData = typeof PostLocalizedData.Type
+export type PublicationLocalizedData = typeof PublicationLocalizedData.Type
 
 export const EventMetadata = Schema.Struct({
-  ...CorePostMetadata.fields,
+  ...CorePublicationMetadata.fields,
   kind: EventKind,
   startDate: TimestampColumn,
   endDate: Schema.NullOr(TimestampColumn),
@@ -73,57 +80,57 @@ export const EventMetadata = Schema.Struct({
 })
 export type EventMetadata = typeof EventMetadata.Type
 
-export const NoteMetadata = Schema.Struct({
-  ...CorePostMetadata.fields,
-  kind: NoteKind,
+export const PostMetadata = Schema.Struct({
+  ...CorePublicationMetadata.fields,
+  kind: PostKind,
 })
-export type NoteMetadata = typeof NoteMetadata.Type
+export type PostMetadata = typeof PostMetadata.Type
 
-const PostSourceLocales = Schema.Struct({
-  en: Schema.optional(PostLocalizedData),
-  es: Schema.optional(PostLocalizedData),
-  pt: Schema.optional(PostLocalizedData),
+const PublicationSourceLocales = Schema.Struct({
+  en: Schema.optional(PublicationLocalizedData),
+  es: Schema.optional(PublicationLocalizedData),
+  pt: Schema.optional(PublicationLocalizedData),
 })
 
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
-export const NoteSourceData = Schema.Struct({
-  locales: PostSourceLocales,
-  metadata: NoteMetadata,
+export const PostSourceData = Schema.Struct({
+  locales: PublicationSourceLocales,
+  metadata: PostMetadata,
 })
-export type NoteSourceData = typeof NoteSourceData.Type
+export type PostSourceData = typeof PostSourceData.Type
 
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
 export const EventSourceData = Schema.Struct({
-  locales: PostSourceLocales,
+  locales: PublicationSourceLocales,
   metadata: EventMetadata,
 })
 export type EventSourceData = typeof EventSourceData.Type
 
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
-export const PostSourceData = Schema.Union([NoteSourceData, EventSourceData])
-export type PostSourceData = typeof PostSourceData.Type
+export const PublicationSourceData = Schema.Union([PostSourceData, EventSourceData])
+export type PublicationSourceData = typeof PublicationSourceData.Type
 
-/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PostLocalizedData` */
-export const PostLocalizedDataStorage = Schema.Struct({
+/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PublicationLocalizedData` */
+export const PublicationLocalizedDataStorage = Schema.Struct({
   content: Schema.optional(Schema.String),
   originalLocale: Schema.optional(Locale),
   translatedAtCrdtFrontier: Schema.optional(Schema.String),
   translationSource: Schema.optional(TranslationSource),
 })
-export type PostLocalizedDataStorage = typeof PostLocalizedDataStorage.Type
+export type PublicationLocalizedDataStorage = typeof PublicationLocalizedDataStorage.Type
 
-/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PostSourceData` */
-export const PostSourceDataStorage = Schema.Struct({
+/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PublicationSourceData` */
+export const PublicationSourceDataStorage = Schema.Struct({
   locales: Schema.Struct({
-    en: PostLocalizedDataStorage,
-    es: PostLocalizedDataStorage,
-    pt: PostLocalizedDataStorage,
+    en: PublicationLocalizedDataStorage,
+    es: PublicationLocalizedDataStorage,
+    pt: PublicationLocalizedDataStorage,
   }),
   metadata: Schema.Struct({
     attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
     endDate: Schema.optional(Schema.NullOr(Schema.String)),
     handle: Handle,
-    kind: Schema.Literals(["NOTE", "EVENT"]),
+    kind: Schema.Literals(["POST", "EVENT"]),
     locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
     ownerProfileId: ProfileId,
     publishedAt: Schema.String,
@@ -131,7 +138,7 @@ export const PostSourceDataStorage = Schema.Struct({
     visibility: InformationVisibility,
   }),
 })
-export type PostSourceDataStorage = typeof PostSourceDataStorage.Type
+export type PublicationSourceDataStorage = typeof PublicationSourceDataStorage.Type
 
 /** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
 const decodeTiptapDocumentStorage = Schema.decodeUnknownSync(Schema.fromJsonString(TiptapDocument))
@@ -140,18 +147,20 @@ const decodeLoroDocFrontierStorage = Schema.decodeUnknownSync(
 )
 
 /** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
-const postLocalizedDataStorageToSourceData = (
-  localeData: PostSourceDataStorage["locales"][Locale],
+const publicationLocalizedDataStorageToSourceData = (
+  localeData: PublicationSourceDataStorage["locales"][Locale],
 ) => {
   if (!localeData.content) return undefined
   if (!localeData.originalLocale || !localeData.translationSource) {
-    throw new InvalidPostStorageError({ message: "Invalid localized post storage data" })
+    throw new InvalidPublicationStorageError({
+      message: "Invalid localized publication storage data",
+    })
   }
 
   const content = decodeTiptapDocumentStorage(localeData.content)
 
   if (localeData.translationSource === "ORIGINAL") {
-    return PostLocalizedData.make({
+    return PublicationLocalizedData.make({
       content,
       originalLocale: localeData.originalLocale,
       translatedAtCrdtFrontier: null,
@@ -160,10 +169,12 @@ const postLocalizedDataStorageToSourceData = (
   }
 
   if (!localeData.translatedAtCrdtFrontier) {
-    throw new InvalidPostStorageError({ message: "Invalid translated post storage data" })
+    throw new InvalidPublicationStorageError({
+      message: "Invalid translated publication storage data",
+    })
   }
 
-  return PostLocalizedData.make({
+  return PublicationLocalizedData.make({
     content,
     originalLocale: localeData.originalLocale,
     translatedAtCrdtFrontier: decodeLoroDocFrontierStorage(localeData.translatedAtCrdtFrontier),
@@ -172,13 +183,13 @@ const postLocalizedDataStorageToSourceData = (
 }
 
 /** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
-export const postSourceDataStorageToSourcePostData = (
-  storageData: PostSourceDataStorage,
-): PostSourceData => {
+export const publicationSourceDataStorageToSourcePublicationData = (
+  storageData: PublicationSourceDataStorage,
+): PublicationSourceData => {
   const locales = {
-    en: postLocalizedDataStorageToSourceData(storageData.locales.en),
-    es: postLocalizedDataStorageToSourceData(storageData.locales.es),
-    pt: postLocalizedDataStorageToSourceData(storageData.locales.pt),
+    en: publicationLocalizedDataStorageToSourceData(storageData.locales.en),
+    es: publicationLocalizedDataStorageToSourceData(storageData.locales.es),
+    pt: publicationLocalizedDataStorageToSourceData(storageData.locales.pt),
   }
 
   const sourceData =
@@ -201,14 +212,14 @@ export const postSourceDataStorageToSourcePostData = (
           locales,
           metadata: {
             handle: storageData.metadata.handle,
-            kind: "NOTE" as const,
+            kind: "POST" as const,
             ownerProfileId: storageData.metadata.ownerProfileId,
             publishedAt: storageData.metadata.publishedAt,
             visibility: storageData.metadata.visibility,
           },
         }
 
-  return Schema.decodeUnknownSync(PostSourceData)(sourceData)
+  return Schema.decodeUnknownSync(PublicationSourceData)(sourceData)
 }
 
 const MatchedTag = Schema.Struct({
@@ -224,11 +235,11 @@ const MatchedVegetable = Schema.Struct({
 const MatchedTagsAsJson = Schema.fromJsonString(Schema.Array(MatchedTag))
 const MatchedVegetablesAsJson = Schema.fromJsonString(Schema.Array(MatchedVegetable))
 
-const PostPageDataCommonFields = {
-  ...CorePostMetadata.fields,
+const PublicationPageDataCommonFields = {
+  ...CorePublicationMetadata.fields,
   content: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
-  id: PostId,
+  id: PublicationId,
   locale: Schema.NullOr(Locale),
   originalLocale: Schema.NullOr(Locale),
   tags: MatchedTagsAsJson,
@@ -236,57 +247,57 @@ const PostPageDataCommonFields = {
   vegetables: MatchedVegetablesAsJson,
 }
 
-const PostPageNoteData = Schema.Struct({
-  ...PostPageDataCommonFields,
-  ...NoteMetadata.fields,
+const PublicationPagePostData = Schema.Struct({
+  ...PublicationPageDataCommonFields,
+  ...PostMetadata.fields,
 })
 
-const PostPageEventData = Schema.Struct({
-  ...PostPageDataCommonFields,
+const PublicationPageEventData = Schema.Struct({
+  ...PublicationPageDataCommonFields,
   ...EventMetadata.fields,
 })
 
-export const PostPageData = Schema.Union([PostPageNoteData, PostPageEventData])
-export type PostPageData = typeof PostPageData.Type
+export const PublicationPageData = Schema.Union([PublicationPagePostData, PublicationPageEventData])
+export type PublicationPageData = typeof PublicationPageData.Type
 
 /** API contract schemas (camelCase). */
-export const ApiPostSearchParams = Schema.Struct({
+export const ApiPublicationSearchParams = Schema.Struct({
   ownerProfileId: Schema.optional(ProfileId),
-  type: Schema.optional(PostKind),
+  type: Schema.optional(PublicationKind),
   visibility: Schema.optional(InformationVisibility),
   ...PaginationOptions.fields,
 })
 
-export const ApiGetPostPageParams = Schema.Struct({
+export const ApiGetPublicationPageParams = Schema.Struct({
   handle: Handle,
   locale: Locale,
 })
-export type ApiGetPostPageParams = typeof ApiGetPostPageParams.Type
+export type ApiGetPublicationPageParams = typeof ApiGetPublicationPageParams.Type
 
-export const ApiPostCardData = Schema.Struct({
+export const ApiPublicationCardData = Schema.Struct({
   handle: Handle,
-  id: PostId,
+  id: PublicationId,
   ownerProfileId: ProfileId,
   publishedAt: Schema.NullOr(TimestampColumn),
-  kind: PostKind,
+  kind: PublicationKind,
   visibility: InformationVisibility,
 })
-export type ApiPostCardData = typeof ApiPostCardData.Type
+export type ApiPublicationCardData = typeof ApiPublicationCardData.Type
 
-export const ApiNoteData = Schema.Struct({
+export const ApiPostData = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   handle: Handle,
-  id: PostId,
+  id: PublicationId,
   locale: Locale,
   ownerProfileId: ProfileId,
   publishedAt: Schema.NullOr(TimestampColumn),
-  kind: NoteKind,
+  kind: PostKind,
   updatedAt: TimestampColumn,
   visibility: InformationVisibility,
 })
-export type ApiNoteData = typeof ApiNoteData.Type
+export type ApiPostData = typeof ApiPostData.Type
 
 export const ApiEventData = Schema.Struct({
   attendanceMode: Schema.NullOr(EventAttendanceMode),
@@ -295,7 +306,7 @@ export const ApiEventData = Schema.Struct({
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   endDate: Schema.NullOr(TimestampColumn),
   handle: Handle,
-  id: PostId,
+  id: PublicationId,
   locale: Locale,
   locationOrUrl: Schema.NullOr(Schema.String),
   ownerProfileId: ProfileId,
@@ -307,15 +318,15 @@ export const ApiEventData = Schema.Struct({
 })
 export type ApiEventData = typeof ApiEventData.Type
 
-export const ApiPostData = Schema.Union([ApiNoteData, ApiEventData])
-export type ApiPostData = typeof ApiPostData.Type
+export const ApiPublicationData = Schema.Union([ApiPostData, ApiEventData])
+export type ApiPublicationData = typeof ApiPublicationData.Type
 
-export const ApiCreateNoteData = Schema.Struct({
+export const ApiCreatePostData = Schema.Struct({
   content: TiptapDocument,
   handle: Handle,
   visibility: InformationVisibility,
 })
-export type ApiCreateNoteData = typeof ApiCreateNoteData.Type
+export type ApiCreatePostData = typeof ApiCreatePostData.Type
 
 export const ApiCreateEventData = Schema.Struct({
   attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
@@ -328,26 +339,26 @@ export const ApiCreateEventData = Schema.Struct({
 })
 export type ApiCreateEventData = typeof ApiCreateEventData.Type
 
-export const ApiUpdateNoteData = Schema.Struct({
+export const ApiUpdatePostData = Schema.Struct({
   crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
-export type ApiUpdateNoteData = typeof ApiUpdateNoteData.Type
+export type ApiUpdatePostData = typeof ApiUpdatePostData.Type
 
-export const ApiPostHistoryEntry = Schema.Struct({
+export const ApiPublicationHistoryEntry = Schema.Struct({
   authorId: ProfileId,
   content: TiptapDocument,
   createdAt: TimestampColumn,
   version: Schema.Int,
 })
-export type ApiPostHistoryEntry = typeof ApiPostHistoryEntry.Type
+export type ApiPublicationHistoryEntry = typeof ApiPublicationHistoryEntry.Type
 
-export const CreateNoteData = Schema.Struct({
+export const CreatePostData = Schema.Struct({
   locale: Locale,
   content: TiptapDocument,
   visibility: InformationVisibility,
 })
-export type CreateNoteData = typeof CreateNoteData.Type
+export type CreatePostData = typeof CreatePostData.Type
 
 export const CreateEventData = Schema.Struct({
   locale: Locale,
@@ -360,72 +371,72 @@ export const CreateEventData = Schema.Struct({
 })
 export type CreateEventData = typeof CreateEventData.Type
 
-export const PostHistoryEntry = Schema.Struct({
+export const PublicationHistoryEntry = Schema.Struct({
   author: CrdtCommit,
   content: TiptapDocument,
   createdAt: TimestampColumn,
   version: Schema.Int,
 })
-export type PostHistoryEntry = typeof PostHistoryEntry.Type
+export type PublicationHistoryEntry = typeof PublicationHistoryEntry.Type
 
-export const PostCrdtRow = Schema.Struct({
+export const PublicationCrdtRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  classification: Schema.NullOr(Schema.fromJsonString(PostClassification)),
-  id: PostId,
+  classification: Schema.NullOr(Schema.fromJsonString(PublicationClassification)),
+  id: PublicationId,
   crdtSnapshot: LoroDocSnapshot,
   ownerProfileId: ProfileId,
 })
-export type PostCrdtRow = typeof PostCrdtRow.Type
+export type PublicationCrdtRow = typeof PublicationCrdtRow.Type
 
-export const PostCommitRow = Schema.Struct({
+export const PublicationCommitRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  id: PostCommitId,
-  postId: PostId,
+  id: PublicationCommitId,
+  publicationId: PublicationId,
   createdById: Schema.NullOr(PersonId),
   crdtUpdate: LoroDocUpdate,
   fromCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
 })
-export type PostCommitRow = typeof PostCommitRow.Type
+export type PublicationCommitRow = typeof PublicationCommitRow.Type
 
-export const PostRow = Schema.Struct({
+export const PublicationRow = Schema.Struct({
   ...TimestampedStruct.fields,
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   handle: Handle,
-  id: PostId,
+  id: PublicationId,
   ownerProfileId: ProfileId,
   publishedAt: TimestampColumn,
-  kind: PostKind,
+  kind: PublicationKind,
   visibility: InformationVisibility,
 
-  // Event-specific - always `null` for notes
+  // Event-specific - always `null` for posts
   startDate: Schema.NullOr(TimestampColumn),
   endDate: Schema.NullOr(TimestampColumn),
   locationOrUrl: Schema.NullOr(Schema.String),
   attendanceMode: Schema.NullOr(EventAttendanceMode),
 })
-export type PostRow = typeof PostRow.Type
+export type PublicationRow = typeof PublicationRow.Type
 
-export const PostTranslationRow = Schema.Struct({
+export const PublicationTranslationRow = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   contentPlainText: Schema.String,
   locale: Locale,
   originalLocale: Locale,
-  postId: PostId,
+  publicationId: PublicationId,
   translatedAtCrdtFrontier: Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
   translationSource: TranslationSource,
 })
-export type PostTranslationRow = typeof PostTranslationRow.Type
+export type PublicationTranslationRow = typeof PublicationTranslationRow.Type
 
-export const PostTagRow = Schema.Struct({
+export const PublicationTagRow = Schema.Struct({
   extractionText: Schema.NullOr(Schema.String),
-  postId: PostId,
+  publicationId: PublicationId,
   tagId: TagId,
 })
-export type PostTagRow = typeof PostTagRow.Type
+export type PublicationTagRow = typeof PublicationTagRow.Type
 
-export const PostVegetableRow = Schema.Struct({
+export const PublicationVegetableRow = Schema.Struct({
   extractionText: Schema.NullOr(Schema.String),
-  postId: PostId,
+  publicationId: PublicationId,
   vegetableId: VegetableId,
 })
-export type PostVegetableRow = typeof PostVegetableRow.Type
+export type PublicationVegetableRow = typeof PublicationVegetableRow.Type

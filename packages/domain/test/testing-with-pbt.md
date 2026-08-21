@@ -49,9 +49,9 @@ _"For all sessions: if allowed(X) then allowed(Y)."_ The property `!A || B` enco
 it.effect("canEdit implies canView", () =>
   assertPropertyEffect(accountSessionArbitrary, (session) =>
     Effect.gen(function* () {
-      const post = createTestPost(session.personId)
-      const canEdit = yield* runPolicySuccess(Policies.posts.canEdit(post), session)
-      const canView = yield* runPolicySuccess(Policies.posts.canView(post), session)
+      const publication = createTestPublication(session.personId)
+      const canEdit = yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
+      const canView = yield* runPolicySuccess(Policies.publications.canView(publication), session)
       // Logical implication: if canEdit then canView must also hold
       return !canEdit || canView
     }),

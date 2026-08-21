@@ -41,17 +41,17 @@ export type OrganizationId = typeof OrganizationId.Type
 export const PersonId = ProfileId.pipe(Schema.brand("PersonId"))
 export type PersonId = typeof PersonId.Type
 
-export const PostId = UUID.pipe(Schema.brand("PostId"))
+export const PublicationId = UUID.pipe(Schema.brand("PublicationId"))
+export type PublicationId = typeof PublicationId.Type
+
+export const PostId = PublicationId.pipe(Schema.brand("PostId"))
 export type PostId = typeof PostId.Type
 
-export const NoteId = PostId.pipe(Schema.brand("NoteId"))
-export type NoteId = typeof NoteId.Type
-
-export const EventId = PostId.pipe(Schema.brand("EventId"))
+export const EventId = PublicationId.pipe(Schema.brand("EventId"))
 export type EventId = typeof EventId.Type
 
-export const PostCommitId = UUID.pipe(Schema.brand("PostCommitId"))
-export type PostCommitId = typeof PostCommitId.Type
+export const PublicationCommitId = UUID.pipe(Schema.brand("PublicationCommitId"))
+export type PublicationCommitId = typeof PublicationCommitId.Type
 
 export const ResourceId = UUID.pipe(Schema.brand("ResourceId"))
 export type ResourceId = typeof ResourceId.Type

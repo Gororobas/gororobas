@@ -8,7 +8,7 @@ import {
   CommentCommitId,
   CommentId,
   PersonId,
-  PostId,
+  PublicationId,
   ProfileId,
   ResourceId,
 } from "../common/ids.js"
@@ -60,7 +60,7 @@ export const CommentCrdtRow = Schema.Struct({
   moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  postId: Schema.NullOr(PostId),
+  publicationId: Schema.NullOr(PublicationId),
   resourceId: Schema.NullOr(ResourceId),
 })
 export type CommentCrdtRow = typeof CommentCrdtRow.Type
@@ -82,7 +82,7 @@ export const CommentRow = Schema.Struct({
   moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  postId: Schema.NullOr(PostId),
+  publicationId: Schema.NullOr(PublicationId),
   resourceId: Schema.NullOr(ResourceId),
 })
 export type CommentRow = typeof CommentRow.Type
@@ -107,7 +107,7 @@ export const CommentData = Schema.Struct({
   moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  postId: Schema.NullOr(PostId),
+  publicationId: Schema.NullOr(PublicationId),
   resourceId: Schema.NullOr(ResourceId),
   updatedAt: TimestampColumn,
 })
@@ -132,7 +132,7 @@ export const ApiUpdateCommentData = Schema.Struct({
 export type ApiUpdateCommentData = typeof ApiUpdateCommentData.Type
 
 export const CommentSearchParams = Schema.Struct({
-  postId: Schema.optional(PostId),
+  publicationId: Schema.optional(PublicationId),
   resourceId: Schema.optional(ResourceId),
 })
 export type CommentSearchParams = typeof CommentSearchParams.Type

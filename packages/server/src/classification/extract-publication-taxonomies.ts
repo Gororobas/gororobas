@@ -1,6 +1,6 @@
 import { TiptapDocument, tiptapToHtml } from "@gororobas/domain"
 import type { TagRow } from "@gororobas/domain"
-import { type PostClassification } from "@gororobas/domain"
+import { type PublicationClassification } from "@gororobas/domain"
 import { createHash } from "crypto"
 import { Config, DateTime, Effect, Context, Record } from "effect"
 
@@ -22,8 +22,11 @@ export const CLASSIFICATION_VERSION = "2026-02-19.1" as const
  * Builds the idempotency key for a classification workflow run.
  * Same content + same prompts + same model = skip.
  */
-export function postClassificationIdempotencyKey(post_id: string, content_hash: string): string {
-  return `post-classification:${post_id}:${content_hash}:${CLASSIFICATION_VERSION}`
+export function publicationClassificationIdempotencyKey(
+  publication_id: string,
+  content_hash: string,
+): string {
+  return `publication-classification:${publication_id}:${content_hash}:${CLASSIFICATION_VERSION}`
 }
 
 const VEGETABLE_EXTRACTION_PROMPT =
@@ -78,11 +81,11 @@ const extractTags = Effect.fn("extractTags")(function* (html: string) {
   })
 })
 
-export class ExtractPostTaxonomiesService extends Context.Service<ExtractPostTaxonomiesService>()(
-  "ExtractPostTaxonomiesService",
+export class ExtractPublicationTaxonomiesService extends Context.Service<ExtractPublicationTaxonomiesService>()(
+  "ExtractPublicationTaxonomiesService",
   {
     make: Effect.succeed({
-      extract: (input: TiptapDocument, crdtFrontier: PostClassification["crdtFrontier"]) =>
+      extract: (input: TiptapDocument, crdtFrontier: PublicationClassification["crdtFrontier"]) =>
         Effect.gen(function* () {
           const langExtract = yield* LangExtractService
           const started_at = yield* DateTime.now
@@ -114,7 +117,7 @@ export class ExtractPostTaxonomiesService extends Context.Service<ExtractPostTax
             finishedAt: finished_at,
             vegetables,
             tags,
-          } satisfies PostClassification
+          } satisfies PublicationClassification
         }),
     }),
   },

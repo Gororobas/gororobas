@@ -1,8 +1,8 @@
 Feature: Media
   People can upload media (images, audio, video).
-  Media can be uploaded inside posts or attached to vegetables.
+  Media can be uploaded inside publications or attached to vegetables.
 
-  Rule: Media uploaded inside posts inherits the post visibility
+  Rule: Media uploaded inside publications inherits the publication visibility
 
     Background:
       Given the following people exist:
@@ -13,10 +13,10 @@ Feature: Media
         | Pedro    | NEWCOMER     |
         | Gusttavo | BLOCKED      |
 
-    Scenario: Public post media is visible to the same audience as the post
+    Scenario: Public publication media is visible to the same audience as the publication
       Given "Irene" is logged in
-      When they create a "PUBLIC" post under their profile
-      And they upload media to the post
+      When they create a "PUBLIC" publication under their profile
+      And they upload media to the publication
       Then the media should have the following visibility:
         | viewer   | visible |
         | Irene    | yes     |
@@ -24,10 +24,10 @@ Feature: Media
         | Gusttavo | yes     |
         | visitors | yes     |
 
-    Scenario: Community post media is visible to the same audience as the post
+    Scenario: Community publication media is visible to the same audience as the publication
       Given "Irene" is logged in
-      When they create a "COMMUNITY" post under their profile
-      And they upload media to the post
+      When they create a "COMMUNITY" publication under their profile
+      And they upload media to the publication
       Then the media should have the following visibility:
         | viewer   | visible |
         | Ailton   | yes     |
@@ -37,10 +37,10 @@ Feature: Media
         | Gusttavo | no      |
         | visitors | no      |
 
-    Scenario: Private post media is visible to the same audience as the post
+    Scenario: Private publication media is visible to the same audience as the publication
       Given "Irene" is logged in
-      When they create a "PRIVATE" post under their profile
-      And they upload media to the post
+      When they create a "PRIVATE" publication under their profile
+      And they upload media to the publication
       Then the media should have the following visibility:
         | viewer   | visible |
         | Irene    | yes     |
@@ -50,20 +50,20 @@ Feature: Media
         | Gusttavo | no      |
         | visitors | no      |
 
-    Scenario: Person awaiting access can upload media inside posts
+    Scenario: Person awaiting access can upload media inside publications
       Given "Pedro" is logged in
-      When they create a "PUBLIC" post under their profile
-      And they upload media to the post
-      Then the post is created in "Pedro"'s profile
+      When they create a "PUBLIC" publication under their profile
+      And they upload media to the publication
+      Then the publication is created in "Pedro"'s profile
 
-    Scenario: Blocked person cannot upload media inside posts
+    Scenario: Blocked person cannot upload media inside publications
       Given "Gusttavo" is logged in
-      When they try to upload media to a post
+      When they try to upload media to a publication
       Then access is denied
 
-    Scenario: Visitors cannot upload media inside posts
+    Scenario: Visitors cannot upload media inside publications
       Given a visitor is browsing
-      When they try to upload media to a post
+      When they try to upload media to a publication
       Then access is denied
 
   Rule: Vegetable media is always public and can be moderated

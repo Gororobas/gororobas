@@ -10,8 +10,8 @@ export const PlatformPermission = Schema.Literals([
   "people:manage-moderators",
   "people:manage-admins",
   "revisions:evaluate",
-  "posts:read:community",
-  "posts:create:personal",
+  "publications:read:community",
+  "publications:create:personal",
   "profiles:read:community",
   "profiles:read:all",
   "media:create",
@@ -39,9 +39,9 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   MODERATOR: HashSet.fromIterable([
     "people:manage-community-access",
     "revisions:evaluate",
-    "posts:create:personal",
+    "publications:create:personal",
     "media:create",
-    "posts:read:community",
+    "publications:read:community",
     "profiles:read:community",
     "vegetables:create",
     "vegetables:revise",
@@ -51,12 +51,12 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
     "comments:create",
     "bookmarks:create",
   ]),
-  NEWCOMER: HashSet.fromIterable(["posts:create:personal", "media:create"]),
+  NEWCOMER: HashSet.fromIterable(["publications:create:personal", "media:create"]),
   COMMUNITY: HashSet.fromIterable([
     "organizations:create",
-    "posts:create:personal",
+    "publications:create:personal",
     "media:create",
-    "posts:read:community",
+    "publications:read:community",
     "profiles:read:community",
     "vegetables:create",
     "vegetables:revise",
@@ -76,10 +76,10 @@ export const OrganizationPermission = Schema.Literals([
   "members:remove",
   "members:manage",
   "members:view",
-  "posts:create:organization",
-  "posts:edit",
-  "posts:delete",
-  "posts:view",
+  "publications:create:organization",
+  "publications:edit",
+  "publications:delete",
+  "publications:view",
 ])
 export type OrganizationPermission = typeof OrganizationPermission.Type
 
@@ -89,14 +89,14 @@ const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<
 > = {
   EDITOR: HashSet.fromIterable([
     "organization:edit-profile",
-    "posts:create:organization",
-    "posts:edit",
-    "posts:delete",
-    "posts:view",
+    "publications:create:organization",
+    "publications:edit",
+    "publications:delete",
+    "publications:view",
     "members:view",
   ]),
   MANAGER: HashSet.fromIterable(OrganizationPermission.literals),
-  VIEWER: HashSet.fromIterable(["posts:view", "members:view"]),
+  VIEWER: HashSet.fromIterable(["publications:view", "members:view"]),
 }
 
 export function platformPermissionsFor(

@@ -4,7 +4,7 @@ import {
   Handle,
   UnauthorizedError,
   type SourceCommentData,
-  type PostSourceData,
+  type PublicationSourceData,
   type TiptapDocument,
   type TiptapNode,
 } from "@gororobas/domain"
@@ -12,24 +12,25 @@ import { DateTime, Effect, Layer, Option, Schema } from "effect"
 
 import { CommentsRepository } from "../../src/comments/repository.js"
 import { CommentsService } from "../../src/comments/service.js"
-import { PostsRepository } from "../../src/posts/repository.js"
+import { PublicationsRepository } from "../../src/publications/repository.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
 import { makeAccountSession } from "../session-builders.js"
 import { insertPersonWithDependencies, TestLayer, withSession } from "../test-helpers.js"
 
-const PostsRepositoryLayer = Layer.effect(PostsRepository, PostsRepository.make).pipe(
-  Layer.provide(TestLayer),
-)
+const PublicationsRepositoryLayer = Layer.effect(
+  PublicationsRepository,
+  PublicationsRepository.make,
+).pipe(Layer.provide(TestLayer))
 const CommentsRepositoryLayer = Layer.effect(CommentsRepository, CommentsRepository.make).pipe(
   Layer.provide(TestLayer),
 )
 const CommentsServiceLayer = Layer.effect(CommentsService, CommentsService.make).pipe(
-  Layer.provide(Layer.mergeAll(PostsRepositoryLayer, CommentsRepositoryLayer)),
+  Layer.provide(Layer.mergeAll(PublicationsRepositoryLayer, CommentsRepositoryLayer)),
 )
 
 const TestLayerWithCommentsService = Layer.mergeAll(
   TestLayer,
-  PostsRepositoryLayer,
+  PublicationsRepositoryLayer,
   CommentsRepositoryLayer,
   CommentsServiceLayer,
 )
@@ -47,12 +48,12 @@ const makeDocument = (text: string): TiptapDocument => ({
 
 const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
 
-const makeNoteSourceData = (input: {
+const makePostSourceData = (input: {
   content: TiptapDocument
   handle: string
-  ownerProfileId: PostSourceData["metadata"]["ownerProfileId"]
-  publishedAt: PostSourceData["metadata"]["publishedAt"]
-}): PostSourceData => ({
+  ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
+  publishedAt: PublicationSourceData["metadata"]["publishedAt"]
+}): PublicationSourceData => ({
   locales: {
     pt: {
       content: input.content,
@@ -63,7 +64,7 @@ const makeNoteSourceData = (input: {
   },
   metadata: {
     handle: makeHandle(input.handle),
-    kind: "NOTE",
+    kind: "POST",
     ownerProfileId: input.ownerProfileId,
     publishedAt: input.publishedAt,
     visibility: "PUBLIC",
@@ -82,10 +83,10 @@ const makeCommentSourceData = (content: TiptapDocument): SourceCommentData => ({
 })
 
 describe("CommentsService", () => {
-  it.effect("createPostComment persists a comment linked to the post", () =>
+  it.effect("createPublicationComment persists a comment linked to the publication", () =>
     Effect.gen(function* () {
       const service = yield* CommentsService
-      const postsRepository = yield* PostsRepository
+      const publicationsRepository = yield* PublicationsRepository
       const commentsRepository = yield* CommentsRepository
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
@@ -93,27 +94,27 @@ describe("CommentsService", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
-      const postId = yield* postsRepository.createPost({
+      const publicationId = yield* publicationsRepository.createPublication({
         createdById: person.id,
-        sourceData: makeNoteSourceData({
-          content: makeDocument("Post para comentar"),
-          handle: `cmt-post-${person.id.slice(0, 8)}`,
+        sourceData: makePostSourceData({
+          content: makeDocument("Publication para comentar"),
+          handle: `cmt-publication-${person.id.slice(0, 8)}`,
           ownerProfileId: profile.id,
           publishedAt: now,
         }),
       })
 
       const commentId = yield* withSession(
-        service.createPostComment({
+        service.createPublicationComment({
           content: makeCommentSourceData(makeDocument("Primeiro comentario")),
-          postId,
+          publicationId,
         }),
         makeAccountSession(person.id),
       )
 
       const row = yield* commentsRepository.findCommentRowById(commentId)
       expect(Option.isSome(row)).toBe(true)
-      expect(Option.getOrThrow(row).postId).toBe(postId)
+      expect(Option.getOrThrow(row).publicationId).toBe(publicationId)
       expect(Option.getOrThrow(row).ownerProfileId).toBe(person.id)
     }).pipe(Effect.provide(TestLayerWithCommentsService)),
   )
@@ -121,7 +122,7 @@ describe("CommentsService", () => {
   it.effect("updateComment denies updates from non-owners", () =>
     Effect.gen(function* () {
       const service = yield* CommentsService
-      const postsRepository = yield* PostsRepository
+      const publicationsRepository = yield* PublicationsRepository
 
       const owner = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const ownerProfile = yield* makeProfileFixture({ id: owner.id })
@@ -132,10 +133,10 @@ describe("CommentsService", () => {
       yield* insertPersonWithDependencies({ person: other, profile: otherProfile })
 
       const now = yield* DateTime.now
-      const postId = yield* postsRepository.createPost({
+      const publicationId = yield* publicationsRepository.createPublication({
         createdById: owner.id,
-        sourceData: makeNoteSourceData({
-          content: makeDocument("Post para comentario"),
+        sourceData: makePostSourceData({
+          content: makeDocument("Publication para comentario"),
           handle: `cmt-oth-${owner.id.slice(0, 8)}`,
           ownerProfileId: ownerProfile.id,
           publishedAt: now,
@@ -143,9 +144,9 @@ describe("CommentsService", () => {
       })
 
       const commentId = yield* withSession(
-        service.createPostComment({
+        service.createPublicationComment({
           content: makeCommentSourceData(makeDocument("Comentario original")),
-          postId,
+          publicationId,
         }),
         makeAccountSession(owner.id),
       )
@@ -168,17 +169,17 @@ describe("CommentsService", () => {
   it.effect("deleteComment removes a comment for the owner", () =>
     Effect.gen(function* () {
       const service = yield* CommentsService
-      const postsRepository = yield* PostsRepository
+      const publicationsRepository = yield* PublicationsRepository
 
       const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
       const profile = yield* makeProfileFixture({ id: person.id })
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
-      const postId = yield* postsRepository.createPost({
+      const publicationId = yield* publicationsRepository.createPublication({
         createdById: person.id,
-        sourceData: makeNoteSourceData({
-          content: makeDocument("Post para apagar comentario"),
+        sourceData: makePostSourceData({
+          content: makeDocument("Publication para apagar comentario"),
           handle: `cmt-del-${person.id.slice(0, 8)}`,
           ownerProfileId: profile.id,
           publishedAt: now,
@@ -186,9 +187,9 @@ describe("CommentsService", () => {
       })
 
       const commentId = yield* withSession(
-        service.createPostComment({
+        service.createPublicationComment({
           content: makeCommentSourceData(makeDocument("Comentario para deletar")),
-          postId,
+          publicationId,
         }),
         makeAccountSession(person.id),
       )

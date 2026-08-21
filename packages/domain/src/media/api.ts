@@ -18,10 +18,10 @@ export const MediaUploadData = Schema.Struct({
 })
 export type MediaUploadData = typeof MediaUploadData.Type
 
-export const AttachMediaToPostData = Schema.Struct({
+export const AttachMediaToPublicationData = Schema.Struct({
   media_ids: Schema.NonEmptyArray(ImageId),
 })
-export type AttachMediaToPostData = typeof AttachMediaToPostData.Type
+export type AttachMediaToPublicationData = typeof AttachMediaToPublicationData.Type
 
 export const AttachMediaToVegetableData = Schema.Struct({
   media_ids: Schema.NonEmptyArray(ImageId),
