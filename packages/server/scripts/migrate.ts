@@ -122,26 +122,27 @@ const convertMigrations = Effect.gen(function* () {
     return
   }
 
-  const migrationNames: Array<string> = []
+  const migrationNames = yield* Effect.forEach(
+    sqlFiles,
+    (file) =>
+      Effect.gen(function* () {
+        const content = yield* fs.readFileString(path.join(atlasPath, file))
+        const baseName = file.replace(".sql", "")
+        const statements = parseSqlStatements(content)
 
-  for (const file of sqlFiles) {
-    const content = yield* fs.readFileString(path.join(atlasPath, file))
-    const baseName = file.replace(".sql", "")
-    const statements = parseSqlStatements(content)
+        if (EffectArray.isReadonlyArrayEmpty(statements)) {
+          yield* Effect.log(`Skipping ${file} (no statements)`)
+          return undefined
+        }
 
-    if (EffectArray.isReadonlyArrayEmpty(statements)) {
-      yield* Effect.log(`Skipping ${file} (no statements)`)
-      continue
-    }
-
-    const effectCode = generateEffectMigration(statements, baseName)
-    const outputPath = path.join(effectPath, `${baseName}.ts`)
-
-    yield* fs.writeFileString(outputPath, effectCode)
-    yield* Effect.log(`${file} -> ${baseName}.ts (${statements.length} statements)`)
-
-    migrationNames.push(baseName)
-  }
+        const effectCode = generateEffectMigration(statements, baseName)
+        const outputPath = path.join(effectPath, `${baseName}.ts`)
+        yield* fs.writeFileString(outputPath, effectCode)
+        yield* Effect.log(`${file} -> ${baseName}.ts (${statements.length} statements)`)
+        return baseName
+      }),
+    { concurrency: 1 },
+  ).pipe(Effect.map((names) => names.filter((name): name is string => name !== undefined)))
 
   const indexContent = generateIndexFile(migrationNames)
   yield* fs.writeFileString(path.join(effectPath, "index.ts"), indexContent)

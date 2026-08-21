@@ -91,22 +91,27 @@ export const reconstructHistory = (
     const sortedEdits = sortEventsReverseChronological(approvedEdits)
 
     // 4. Walk backwards applying inverse diffs
-    let previousState = currentState
-    const historicalEdits: ReconstructedHistory["edits"] = []
-
-    for (const edit of sortedEdits) {
-      // Apply inverse diff to get state before this edit
-      const stateBeforeEdit = yield* applyInverseDiffE(previousState, edit.diff)
-
-      historicalEdits.push({
-        event: edit,
-        previousState: stateBeforeEdit,
-        newState: previousState,
-        crdtUpdate: null, // Will be generated in forward pass
-      })
-
-      previousState = stateBeforeEdit
-    }
+    const reconstruction = yield* Effect.reduce(
+      sortedEdits,
+      () => ({ previousState: currentState, edits: [] as ReconstructedHistory["edits"] }),
+      (accumulator, edit) =>
+        applyInverseDiffE(accumulator.previousState, edit.diff).pipe(
+          Effect.map((stateBeforeEdit) => ({
+            previousState: stateBeforeEdit,
+            edits: [
+              ...accumulator.edits,
+              {
+                event: edit,
+                previousState: stateBeforeEdit,
+                newState: accumulator.previousState,
+                crdtUpdate: null,
+              },
+            ],
+          })),
+        ),
+    )
+    const previousState = reconstruction.previousState
+    const historicalEdits = reconstruction.edits
 
     // 5. Reverse to get chronological order
     historicalEdits.reverse()

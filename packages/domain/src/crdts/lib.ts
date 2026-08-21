@@ -166,12 +166,17 @@ export const rebuildLoroDocFromUpdates = Effect.fn("rebuildLoroDocFromUpdates")(
 }) {
   const rebuiltDoc = new LoroDoc()
 
-  for (const update of params.updates) {
-    const importStatus = rebuiltDoc.import(update)
-    if (!importStatus.success) {
-      return yield* Effect.fail(new InvalidCrdtUpdateError({ reason: "InvalidFormat" }))
-    }
-  }
+  yield* Effect.forEach(
+    params.updates,
+    (update) =>
+      Effect.gen(function* () {
+        const importStatus = rebuiltDoc.import(update)
+        if (!importStatus.success) {
+          return yield* new InvalidCrdtUpdateError({ reason: "InvalidFormat" })
+        }
+      }),
+    { concurrency: 1 },
+  )
 
   return {
     currentCrdtFrontier: LoroDocFrontier.make(rebuiltDoc.frontiers()),

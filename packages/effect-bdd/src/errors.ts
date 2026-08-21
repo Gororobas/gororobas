@@ -1,43 +1,57 @@
-import { Data } from "effect"
-import { SchemaError } from "effect/Schema"
+import { Schema } from "effect"
 
-export class FeatureParseError extends Data.TaggedError("FeatureParseError")<{
-  path: string
-  message: string
-}> {}
+export class FeatureParseError extends Schema.TaggedError<FeatureParseError>()(
+  "FeatureParseError",
+  {
+    path: Schema.String,
+    message: Schema.String,
+  },
+) {}
 
-export class StepMatchError extends Data.TaggedError("StepMatchError")<{
-  pattern: string
-  text: string
-  feature: string
-}> {}
+export class StepMatchError extends Schema.TaggedError<StepMatchError>()("StepMatchError", {
+  pattern: Schema.String,
+  text: Schema.String,
+  feature: Schema.String,
+}) {}
 
-export class StepParamsDecodeError extends Data.TaggedError("StepParamsDecodeError")<{
-  step: string
-  params: unknown
-  error: SchemaError
-}> {}
+export class StepParamsDecodeError extends Schema.TaggedError<StepParamsDecodeError>()(
+  "StepParamsDecodeError",
+  {
+    step: Schema.String,
+    params: Schema.Unknown,
+    error: Schema.Unknown,
+  },
+) {}
 
-export class ScenarioNotFoundError extends Data.TaggedError("ScenarioNotFoundError")<{
-  scenario: string
-  feature: string
-  availableScenarios: Array<string>
-}> {}
+export class ScenarioNotFoundError extends Schema.TaggedError<ScenarioNotFoundError>()(
+  "ScenarioNotFoundError",
+  {
+    scenario: Schema.String,
+    feature: Schema.String,
+    availableScenarios: Schema.Array(Schema.String),
+  },
+) {}
 
-export class PatternMismatchError extends Data.TaggedError("PatternMismatchError")<{
-  pattern: string
-  featureText: string
-  suggestion?: string
-}> {}
+export class PatternMismatchError extends Schema.TaggedError<PatternMismatchError>()(
+  "PatternMismatchError",
+  {
+    pattern: Schema.String,
+    featureText: Schema.String,
+    suggestion: Schema.Option(Schema.String),
+  },
+) {}
 
-export class StepCountMismatchError extends Data.TaggedError("StepCountMismatchError")<{
-  feature: string
-  scenario: string
-  expectedCount: number
-  actualCount: number
-  featureSteps: Array<string>
-  providedPatterns: Array<string>
-}> {
+export class StepCountMismatchError extends Schema.TaggedError<StepCountMismatchError>()(
+  "StepCountMismatchError",
+  {
+    feature: Schema.String,
+    scenario: Schema.String,
+    expectedCount: Schema.Int,
+    actualCount: Schema.Int,
+    featureSteps: Schema.Array(Schema.String),
+    providedPatterns: Schema.Array(Schema.String),
+  },
+) {
   get message() {
     return [
       `Step count mismatch in "${this.scenario}"`,
@@ -55,17 +69,22 @@ export class StepCountMismatchError extends Data.TaggedError("StepCountMismatchE
   }
 }
 
-export class StepValidationError extends Data.TaggedError("StepValidationError")<{
-  scenario: string
-  mismatches: Array<{
-    index: number
-    featureStep: string
-    providedPattern: string
-    reason: string
-  }>
-  featureSteps: Array<string>
-  providedPatterns: Array<string>
-}> {
+export class StepValidationError extends Schema.TaggedError<StepValidationError>()(
+  "StepValidationError",
+  {
+    scenario: Schema.String,
+    mismatches: Schema.Array(
+      Schema.Struct({
+        index: Schema.Int,
+        featureStep: Schema.String,
+        providedPattern: Schema.String,
+        reason: Schema.String,
+      }),
+    ),
+    featureSteps: Schema.Array(Schema.String),
+    providedPatterns: Schema.Array(Schema.String),
+  },
+) {
   get message() {
     const mismatchDetails = this.mismatches
       .map(

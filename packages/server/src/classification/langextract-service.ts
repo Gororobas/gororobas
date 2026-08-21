@@ -1,12 +1,12 @@
-import { Config, Data, Duration, Effect, Schedule, Semaphore, Context } from "effect"
+import { Config, Context, Duration, Effect, Schedule, Schema, Semaphore } from "effect"
 import { type AnnotatedDocument, type ExampleData, extract, FormatType } from "langextract"
 
-export class LangExtractError extends Data.TaggedError("LangExtractError")<{
-  error: unknown
-  html: string
-  model_id: string
-  prompt: string
-}> {}
+export class LangExtractError extends Schema.TaggedError<LangExtractError>()("LangExtractError", {
+  error: Schema.Unknown,
+  html: Schema.String,
+  model_id: Schema.String,
+  prompt: Schema.String,
+}) {}
 
 export class LangExtractService extends Context.Service<LangExtractService>()(
   "LangExtractService",

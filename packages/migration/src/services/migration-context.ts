@@ -2,7 +2,7 @@
  * MigrationContext service for ID mapping and progress tracking.
  * Adapted from the reference Supabase migration context.
  */
-import { Context, Data, Effect, HashMap, Layer, Option, Ref, Schema } from "effect"
+import { Context, DateTime, Effect, HashMap, Layer, Option, Ref, Schema } from "effect"
 import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql"
 
 // ============ Types ============
@@ -35,10 +35,13 @@ export type IdMap = HashMap.HashMap<string, MappingEntry>
 
 // ============ Errors ============
 
-export class GelIdNotMappedError extends Data.TaggedError("GelIdNotMappedError")<{
-  gelId: string
-  entityType?: string
-}> {}
+export class GelIdNotMappedError extends Schema.TaggedError<GelIdNotMappedError>()(
+  "GelIdNotMappedError",
+  {
+    gelId: Schema.String,
+    entityType: Schema.Option(Schema.String),
+  },
+) {}
 
 // ============ Service Interface ============
 
@@ -128,13 +131,13 @@ const makeMigrationContext = ({ initialMap = HashMap.empty() }: { initialMap?: I
 
         // Persist to database
         yield* sql`
-          INSERT OR REPLACE INTO id_mappings 
+          INSERT OR REPLACE INTO id_mappings
           (gel_id, sqlite_id, entity_type, content_hash, last_synced_at, updated_at)
           VALUES (
-            ${mapping.gelId}, 
-            ${mapping.sqliteId}, 
-            ${mapping.entityType}, 
-            ${mapping.contentHash}, 
+            ${mapping.gelId},
+            ${mapping.sqliteId},
+            ${mapping.entityType},
+            ${mapping.contentHash},
             ${mapping.lastSyncedAt},
             datetime('now')
           )
@@ -149,7 +152,7 @@ const makeMigrationContext = ({ initialMap = HashMap.empty() }: { initialMap?: I
 
           if (Option.isNone(entry)) {
             return yield* Effect.fail(
-              new GelIdNotMappedError(entityType === undefined ? { gelId } : { gelId, entityType }),
+              new GelIdNotMappedError({ gelId, entityType: Option.fromUndefinedOr(entityType) }),
             )
           }
 
@@ -167,7 +170,7 @@ const makeMigrationContext = ({ initialMap = HashMap.empty() }: { initialMap?: I
 
           // Simple hash for now - can be improved with proper content hashing
           const newHash = yield* Effect.succeed(JSON.stringify(sourceRecord))
-          const now = new Date().toISOString()
+          const now = (yield* DateTime.nowAsDate).toISOString()
 
           if (Option.isSome(existing)) {
             if (existing.value.contentHash === newHash) {

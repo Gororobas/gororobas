@@ -14,7 +14,7 @@
  *   2. Name match in tag names JSON → existing
  *   3. No match → suggested (with names from extraction attributes)
  */
-import { stringToHandle, type Handle } from "@gororobas/domain"
+import { stringToHandle, type Handle, type VegetableId, type VegetableRow } from "@gororobas/domain"
 import {
   CommonExtractionData,
   ResolvedExistingTagExtraction,
@@ -73,37 +73,53 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
 
   const common = toCommonExtractionFields(extraction)
 
-  for (const candidate of candidates) {
-    const handle = stringToHandle(candidate)
-    yield* Effect.logDebug(`Trying handle match for "${candidate}" -> "${handle}"`)
-    const match = yield* vegetablesRepository.findByHandle(handle)
-    if (Option.isSome(match)) {
-      yield* Effect.logDebug(`Found existing vegetable by handle: "${handle}" -> ${match.value.id}`)
-      return ResolvedExistingVegetableExtraction.make({
-        ...common,
-        vegetableId: match.value.id,
-        handle: match.value.handle as Handle,
+  const handleMatch = yield* Effect.reduce(
+    () => Option.none<VegetableRow>(),
+    (found: Option.Option<VegetableRow>, candidate: string) => {
+      if (Option.isSome(found)) return Effect.succeed(found)
+
+      const handle = stringToHandle(candidate)
+      return Effect.gen(function* () {
+        yield* Effect.logDebug(`Trying handle match for "${candidate}" -> "${handle}"`)
+        return yield* vegetablesRepository.findByHandle(handle)
       })
-    }
+    },
+  )(candidates)
+  if (Option.isSome(handleMatch)) {
+    yield* Effect.logDebug(
+      `Found existing vegetable by handle: "${handleMatch.value.handle}" -> ${handleMatch.value.id}`,
+    )
+    return ResolvedExistingVegetableExtraction.make({
+      ...common,
+      vegetableId: handleMatch.value.id,
+      handle: handleMatch.value.handle as Handle,
+    })
   }
 
-  for (const candidate of candidates) {
-    const handle = stringToHandle(candidate)
-    const pattern = `%${handle}%`
-    yield* Effect.logDebug(
-      `Trying searchable_name match for "${candidate}" -> pattern "${pattern}"`,
-    )
-    const match = yield* vegetablesRepository.findBySearchableName(pattern)
-    if (Option.isSome(match)) {
-      yield* Effect.logDebug(
-        `Found existing vegetable by searchable_name: "${handle}" -> ${match.value.vegetableId}`,
-      )
-      return ResolvedExistingVegetableExtraction.make({
-        ...common,
-        vegetableId: match.value.vegetableId,
-        handle: match.value.handle as Handle,
+  const searchableNameMatch = yield* Effect.reduce(
+    () => Option.none<{ vegetableId: VegetableId; handle: string }>(),
+    (found: Option.Option<{ vegetableId: VegetableId; handle: string }>, candidate: string) => {
+      if (Option.isSome(found)) return Effect.succeed(found)
+
+      const handle = stringToHandle(candidate)
+      const pattern = `%${handle}%`
+      return Effect.gen(function* () {
+        yield* Effect.logDebug(
+          `Trying searchable_name match for "${candidate}" -> pattern "${pattern}"`,
+        )
+        return yield* vegetablesRepository.findBySearchableName(pattern)
       })
-    }
+    },
+  )(candidates)
+  if (Option.isSome(searchableNameMatch)) {
+    yield* Effect.logDebug(
+      `Found existing vegetable by searchable_name: "${searchableNameMatch.value.handle}" -> ${searchableNameMatch.value.vegetableId}`,
+    )
+    return ResolvedExistingVegetableExtraction.make({
+      ...common,
+      vegetableId: searchableNameMatch.value.vegetableId,
+      handle: searchableNameMatch.value.handle as Handle,
+    })
   }
 
   yield* Effect.logDebug(

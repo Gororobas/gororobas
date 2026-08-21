@@ -82,30 +82,26 @@ function runStepsImpl(
 
     // 1. Check step count
     if (Arr.isReadonlyArrayNonEmpty(parsedSteps) && steps.length !== parsedSteps.length) {
-      return yield* Effect.fail(
-        new StepCountMismatchError({
-          actualCount: steps.length,
-          expectedCount: parsedSteps.length,
-          feature: "unknown",
-          featureSteps: parsedSteps.map((s) => `[${s.keyword}] ${s.text}`),
-          providedPatterns: steps.map((s) => `[${s._tag}] ${s.pattern}`),
-          scenario: "unknown",
-        }),
-      )
+      return yield* new StepCountMismatchError({
+        actualCount: steps.length,
+        expectedCount: parsedSteps.length,
+        feature: "unknown",
+        featureSteps: parsedSteps.map((s) => `[${s.keyword}] ${s.text}`),
+        providedPatterns: steps.map((s) => `[${s._tag}] ${s.pattern}`),
+        scenario: "unknown",
+      })
     }
 
     // 2. Validate all step patterns match before running any
     if (Arr.isReadonlyArrayNonEmpty(parsedSteps)) {
       const validation = validateSteps(steps, parsedSteps)
       if (!validation.valid) {
-        return yield* Effect.fail(
-          new StepValidationError({
-            featureSteps: parsedSteps.map((s) => `[${s.keyword}] ${s.text}`),
-            mismatches: validation.mismatches,
-            providedPatterns: steps.map((s) => `[${s._tag}] ${s.pattern}`),
-            scenario: "unknown",
-          }),
-        )
+        return yield* new StepValidationError({
+          featureSteps: parsedSteps.map((s) => `[${s.keyword}] ${s.text}`),
+          mismatches: validation.mismatches,
+          providedPatterns: steps.map((s) => `[${s._tag}] ${s.pattern}`),
+          scenario: "unknown",
+        })
       }
     }
 
@@ -113,37 +109,37 @@ function runStepsImpl(
     // EXECUTION PHASE - All validations passed
     // =========================================================================
 
-    let ctx: unknown = bgCtx
+    const initialContext: unknown = bgCtx
+    return yield* Effect.reduce(
+      steps,
+      () => initialContext,
+      (ctx, step, index) => {
+        const parsedStep = parsedSteps[index]
 
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i]
-      const parsedStep = parsedSteps[i]
+        return Effect.gen(function* () {
+          let extractedParams: Record<string, unknown> = {}
 
-      let extractedParams: Record<string, unknown> = {}
+          if (parsedStep) {
+            const matched = extractParams(step.pattern, parsedStep.text, parsedStep.dataTable)
 
-      if (parsedStep) {
-        const matched = extractParams(step.pattern, parsedStep.text, parsedStep.dataTable)
+            // This shouldn't happen after validation, but keep as safety net
+            if (matched === null) {
+              return yield* new StepMatchError({
+                feature: "unknown",
+                pattern: step.pattern,
+                text: parsedStep.text,
+              })
+            }
 
-        // This shouldn't happen after validation, but keep as safety net
-        if (matched === null) {
-          return yield* Effect.fail(
-            new StepMatchError({
-              feature: "unknown",
-              pattern: step.pattern,
-              text: parsedStep.text,
-            }),
-          )
-        }
+            extractedParams = matched
+          }
 
-        extractedParams = matched
-      }
-
-      const schema = step.config.params ?? Schema.Struct({})
-      const params = yield* decodeParams(schema, extractedParams, step.pattern)
-      ctx = yield* step.config.handler(ctx, params)
-    }
-
-    return ctx
+          const schema = step.config.params ?? Schema.Struct({})
+          const params = yield* decodeParams(schema, extractedParams, step.pattern)
+          return yield* step.config.handler(ctx, params)
+        })
+      },
+    )
   })
 }
 

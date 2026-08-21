@@ -170,7 +170,7 @@ export function parseFeatureFile(
       Effect.mapError(
         (error) =>
           new FeatureParseError({
-            message: error instanceof Error ? error.message : String(error),
+            message: error.message,
             path: featurePath,
           }),
       ),
