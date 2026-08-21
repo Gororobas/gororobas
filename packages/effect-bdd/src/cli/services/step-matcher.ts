@@ -1,4 +1,4 @@
-import { Effect, Layer, Context } from "effect"
+import { Context, Effect, Layer, Option } from "effect"
 
 import { matchPattern } from "../../parser/pattern-matcher.js"
 import type {
@@ -47,14 +47,10 @@ function filterStepsByScope(
 function matchStep(
   stepText: string,
   discoveredSteps: Array<DiscoveredStep>,
-): DiscoveredStep | null {
-  for (const discovered of discoveredSteps) {
-    const result = matchPattern(discovered.pattern, stepText)
-    if (result !== null) {
-      return discovered
-    }
-  }
-  return null
+): Option.Option<DiscoveredStep> {
+  return Option.fromNullishOr(
+    discoveredSteps.find((discovered) => Option.isSome(matchPattern(discovered.pattern, stepText))),
+  )
 }
 
 /**
@@ -69,18 +65,17 @@ function normalizePatternToOutlineText(pattern: string): string {
 function matchOutlineStep(
   stepText: string,
   discoveredSteps: Array<DiscoveredStep>,
-): DiscoveredStep | null {
+): Option.Option<DiscoveredStep> {
   // First try exact/regex match (works for steps without angle-bracket placeholders)
   const exactMatch = matchStep(stepText, discoveredSteps)
-  if (exactMatch) return exactMatch
+  if (Option.isSome(exactMatch)) return exactMatch
 
   // For outline steps with <placeholder>, normalize patterns and compare structurally
-  for (const discovered of discoveredSteps) {
-    if (normalizePatternToOutlineText(discovered.pattern) === stepText) {
-      return discovered
-    }
-  }
-  return null
+  return Option.fromNullishOr(
+    discoveredSteps.find(
+      (discovered) => normalizePatternToOutlineText(discovered.pattern) === stepText,
+    ),
+  )
 }
 
 function matchSteps(
@@ -95,9 +90,9 @@ function matchSteps(
       text: step.text,
     }
     return {
-      matched: implementation !== null,
+      matched: Option.isSome(implementation),
       step: featureStep,
-      implementation: implementation ?? undefined,
+      ...(Option.isSome(implementation) ? { implementation: implementation.value } : {}),
     }
   })
 }
@@ -126,9 +121,9 @@ function matchOutlineSteps(
       text: step.text,
     }
     return {
-      matched: implementation !== null,
+      matched: Option.isSome(implementation),
       step: featureStep,
-      implementation: implementation ?? undefined,
+      ...(Option.isSome(implementation) ? { implementation: implementation.value } : {}),
     }
   })
 }
@@ -147,15 +142,10 @@ function checkScenarioOutline(
 }
 
 function checkRule(rule: ParsedRule, discoveredSteps: Array<DiscoveredStep>): RuleResult {
-  const scenarios: Array<ScenarioResult> = []
-
-  for (const scenario of rule.scenarios) {
-    scenarios.push(checkScenario(scenario, discoveredSteps))
-  }
-
-  for (const outline of rule.scenarioOutlines) {
-    scenarios.push(checkScenarioOutline(outline, discoveredSteps))
-  }
+  const scenarios = [
+    ...rule.scenarios.map((scenario) => checkScenario(scenario, discoveredSteps)),
+    ...rule.scenarioOutlines.map((outline) => checkScenarioOutline(outline, discoveredSteps)),
+  ]
 
   const backgroundScopedSteps = filterStepsByScope(discoveredSteps, "background")
   const backgroundSteps = rule.background
@@ -163,7 +153,7 @@ function checkRule(rule: ParsedRule, discoveredSteps: Array<DiscoveredStep>): Ru
     : undefined
 
   return {
-    backgroundSteps,
+    ...(backgroundSteps ? { backgroundSteps } : {}),
     name: rule.name,
     scenarios,
   }
@@ -174,20 +164,13 @@ export const StepMatcherLive = Layer.succeed(
   StepMatcher.of({
     checkFeature: (feature, discoveredSteps, featurePath) =>
       Effect.sync(() => {
-        const scenarios: Array<ScenarioResult> = []
-
-        for (const scenario of feature.scenarios) {
-          scenarios.push(checkScenario(scenario, discoveredSteps))
-        }
-
-        for (const outline of feature.scenarioOutlines) {
-          scenarios.push(checkScenarioOutline(outline, discoveredSteps))
-        }
-
-        const rules: Array<RuleResult> = []
-        for (const rule of feature.rules) {
-          rules.push(checkRule(rule, discoveredSteps))
-        }
+        const scenarios = [
+          ...feature.scenarios.map((scenario) => checkScenario(scenario, discoveredSteps)),
+          ...feature.scenarioOutlines.map((outline) =>
+            checkScenarioOutline(outline, discoveredSteps),
+          ),
+        ]
+        const rules = feature.rules.map((rule) => checkRule(rule, discoveredSteps))
 
         const backgroundScopedSteps = filterStepsByScope(discoveredSteps, "background")
         const backgroundSteps = feature.background
@@ -195,7 +178,7 @@ export const StepMatcherLive = Layer.succeed(
           : undefined
 
         return {
-          backgroundSteps,
+          ...(backgroundSteps ? { backgroundSteps } : {}),
           file: featurePath,
           name: feature.name,
           rules,
@@ -209,41 +192,20 @@ function countSteps(
   scenarios: Array<ScenarioResult>,
   backgroundSteps?: Array<MatchedStep>,
 ): { total: number; undefined: number } {
-  let total = 0
-  let undefined_ = 0
-
-  if (backgroundSteps) {
-    for (const step of backgroundSteps) {
-      total++
-      if (!step.matched) undefined_++
-    }
+  const steps = [...(backgroundSteps ?? []), ...scenarios.flatMap((scenario) => scenario.steps)]
+  return {
+    total: steps.length,
+    undefined: steps.filter((step) => !step.matched).length,
   }
-
-  for (const scenario of scenarios) {
-    for (const step of scenario.steps) {
-      total++
-      if (!step.matched) undefined_++
-    }
-  }
-
-  return { total, undefined: undefined_ }
 }
 
 export function aggregateResults(features: Array<FeatureResult>): CheckResult {
-  let totalSteps = 0
-  let undefinedSteps = 0
-
-  for (const feature of features) {
-    const featureCounts = countSteps(feature.scenarios, feature.backgroundSteps)
-    totalSteps += featureCounts.total
-    undefinedSteps += featureCounts.undefined
-
-    for (const rule of feature.rules) {
-      const ruleCounts = countSteps(rule.scenarios, rule.backgroundSteps)
-      totalSteps += ruleCounts.total
-      undefinedSteps += ruleCounts.undefined
-    }
-  }
+  const counts = features.flatMap((feature) => [
+    countSteps(feature.scenarios, feature.backgroundSteps),
+    ...feature.rules.map((rule) => countSteps(rule.scenarios, rule.backgroundSteps)),
+  ])
+  const totalSteps = counts.reduce((total, count) => total + count.total, 0)
+  const undefinedSteps = counts.reduce((total, count) => total + count.undefined, 0)
 
   return {
     features,

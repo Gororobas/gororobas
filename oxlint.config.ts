@@ -76,6 +76,12 @@ export default defineConfig({
       },
     },
     {
+      files: ["packages/effect-bdd/**/*", "**/*.test.ts"],
+      rules: {
+        "effect/effect-run-in-body": "off",
+      },
+    },
+    {
       files: ["**/*.test.ts", "**/*.test.tsx", "**/test/**/*.ts", "**/test/**/*.tsx"],
       rules: {
         "effect/avoid-option-getorthrow": "off",

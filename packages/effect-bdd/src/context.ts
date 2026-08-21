@@ -6,9 +6,14 @@ export class BackgroundContext extends Context.Service<BackgroundContext, Record
   "BackgroundContext",
 ) {}
 
-export const getBackgroundContext = Effect.fnUntraced(function* <T extends Record<any, any>>() {
-  return (yield* BackgroundContext) as T
-})
+export function getBackgroundContext<T extends Record<any, any>>(): Effect.Effect<
+  T,
+  never,
+  BackgroundContext
+>
+export function getBackgroundContext() {
+  return BackgroundContext
+}
 
 export class ScenarioContext extends Context.Service<
   ScenarioContext,

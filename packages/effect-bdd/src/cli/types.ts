@@ -10,7 +10,7 @@ export interface DiscoveredStep {
   keyword: StepKeyword
   file: string
   line: number
-  scope?: StepScope | undefined
+  scope?: StepScope
 }
 
 export interface FeatureStep {
@@ -22,20 +22,20 @@ export interface FeatureStep {
 export interface MatchedStep {
   step: FeatureStep
   matched: boolean
-  implementation?: DiscoveredStep | undefined
+  implementation?: DiscoveredStep
 }
 
 export interface ScenarioResult {
   name: string
   type: "Scenario" | "ScenarioOutline"
   steps: Array<MatchedStep>
-  examplesCount?: number | undefined
+  examplesCount?: number
 }
 
 export interface RuleResult {
   name: string
   scenarios: Array<ScenarioResult>
-  backgroundSteps?: Array<MatchedStep> | undefined
+  backgroundSteps?: Array<MatchedStep>
 }
 
 export interface FeatureResult {
@@ -43,7 +43,7 @@ export interface FeatureResult {
   name: string
   scenarios: Array<ScenarioResult>
   rules: Array<RuleResult>
-  backgroundSteps?: Array<MatchedStep> | undefined
+  backgroundSteps?: Array<MatchedStep>
 }
 
 export interface CheckResult {

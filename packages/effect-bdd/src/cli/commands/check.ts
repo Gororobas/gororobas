@@ -7,7 +7,7 @@ export interface CheckArgs {
   patterns: string
   testPattern: string
   format: OutputFormat
-  ignore: string | undefined
+  ignore?: string
 }
 
 export function runCheckCommand(args: CheckArgs) {

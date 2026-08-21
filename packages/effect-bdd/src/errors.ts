@@ -32,6 +32,14 @@ export class ScenarioNotFoundError extends Schema.TaggedError<ScenarioNotFoundEr
   },
 ) {}
 
+export class ScenarioOutlineExamplesError extends Schema.TaggedError<ScenarioOutlineExamplesError>()(
+  "ScenarioOutlineExamplesError",
+  {
+    scenario: Schema.String,
+    feature: Schema.String,
+  },
+) {}
+
 export class PatternMismatchError extends Schema.TaggedError<PatternMismatchError>()(
   "PatternMismatchError",
   {

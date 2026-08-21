@@ -24,12 +24,11 @@ function validateSteps(
 
   // Check each step pair
   const minLength = Math.min(steps.length, parsedSteps.length)
-  for (let i = 0; i < minLength; i++) {
-    const step = steps[i]
-    const parsedStep = parsedSteps[i]
+  steps.slice(0, minLength).forEach((step, index) => {
+    const parsedStep = parsedSteps[index]
 
     const matched = matchPattern(step.pattern, parsedStep.text)
-    if (matched === null) {
+    if (Option.isNone(matched)) {
       // Try to provide a helpful reason
       let reason = "Pattern does not match step text"
 
@@ -46,12 +45,12 @@ function validateSteps(
 
       mismatches.push({
         featureStep: parsedStep.text,
-        index: i,
+        index,
         providedPattern: step.pattern,
         reason,
       })
     }
-  }
+  })
 
   return {
     mismatches,
@@ -71,7 +70,7 @@ function runStepsImpl(
       Effect.map(
         Option.getOrElse(() => ({
           name: "",
-          steps: [] as ReadonlyArray<ParsedStep>,
+          steps: [],
         })),
       ),
     )
@@ -123,7 +122,7 @@ function runStepsImpl(
             const matched = extractParams(step.pattern, parsedStep.text, parsedStep.dataTable)
 
             // This shouldn't happen after validation, but keep as safety net
-            if (matched === null) {
+            if (Option.isNone(matched)) {
               return yield* new StepMatchError({
                 feature: "unknown",
                 pattern: step.pattern,
@@ -131,7 +130,7 @@ function runStepsImpl(
               })
             }
 
-            extractedParams = matched
+            extractedParams = Option.getOrElse(matched, () => ({}))
           }
 
           const schema = step.config.params ?? Schema.Struct({})
@@ -145,7 +144,6 @@ function runStepsImpl(
 
 // ... all the overloads remain the same ...
 
-// @ts-expect-error not sure what's the issue
 export function runSteps<A, E1, R1>(
   s1: Step<Record<string, unknown>, A, E1, R1>,
 ): Effect.Effect<A, E1, R1 | BackgroundContext | ScenarioContext>

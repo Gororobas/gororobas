@@ -28,17 +28,20 @@ function clearScreen(): Effect.Effect<void> {
 function performCheck(
   args: WatchArgs,
 ): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> {
-  return runCheck({
-    format: args.format,
-    ignore: args.ignore,
-    patterns: args.patterns,
-    testPattern: args.testPattern,
-  }).pipe(
-    Effect.catch(() =>
-      Effect.sync(() => {
-        process.exitCode = 1
-      }),
-    ),
+  return Effect.matchEffect(
+    runCheck({
+      format: args.format,
+      ignore: args.ignore,
+      patterns: args.patterns,
+      testPattern: args.testPattern,
+    }),
+    {
+      onFailure: () =>
+        Effect.sync(() => {
+          process.exitCode = 1
+        }),
+      onSuccess: Effect.succeed,
+    },
   )
 }
 

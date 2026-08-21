@@ -1,3 +1,5 @@
+import { Option } from "effect"
+
 import type {
   ParsedFeature,
   ParsedRule,
@@ -9,46 +11,40 @@ export function findScenario(
   feature: ParsedFeature,
   name: string,
   ruleName?: string,
-): ParsedScenario | undefined {
+): Option.Option<ParsedScenario> {
   if (ruleName) {
     const rule = feature.rules.find((r) => r.name === ruleName)
-    return rule?.scenarios.find((s) => s.name === name)
+    return Option.fromNullishOr(rule?.scenarios.find((s) => s.name === name))
   }
 
   const featureScenario = feature.scenarios.find((s) => s.name === name)
-  if (featureScenario) return featureScenario
+  if (featureScenario) return Option.some(featureScenario)
 
-  for (const rule of feature.rules) {
-    const ruleScenario = rule.scenarios.find((s) => s.name === name)
-    if (ruleScenario) return ruleScenario
-  }
-
-  return undefined
+  return Option.fromNullishOr(
+    feature.rules.flatMap((rule) => rule.scenarios).find((scenario) => scenario.name === name),
+  )
 }
 
 export function findScenarioOutline(
   feature: ParsedFeature,
   name: string,
   ruleName?: string,
-): ParsedScenarioOutline | undefined {
+): Option.Option<ParsedScenarioOutline> {
   if (ruleName) {
     const rule = feature.rules.find((r) => r.name === ruleName)
-    return rule?.scenarioOutlines.find((s) => s.name === name)
+    return Option.fromNullishOr(rule?.scenarioOutlines.find((s) => s.name === name))
   }
 
   const featureOutline = feature.scenarioOutlines.find((s) => s.name === name)
-  if (featureOutline) return featureOutline
+  if (featureOutline) return Option.some(featureOutline)
 
-  for (const rule of feature.rules) {
-    const ruleOutline = rule.scenarioOutlines.find((s) => s.name === name)
-    if (ruleOutline) return ruleOutline
-  }
-
-  return undefined
+  return Option.fromNullishOr(
+    feature.rules.flatMap((rule) => rule.scenarioOutlines).find((outline) => outline.name === name),
+  )
 }
 
-export function findRule(feature: ParsedFeature, name: string): ParsedRule | undefined {
-  return feature.rules.find((r) => r.name === name)
+export function findRule(feature: ParsedFeature, name: string): Option.Option<ParsedRule> {
+  return Option.fromNullishOr(feature.rules.find((r) => r.name === name))
 }
 
 export function listScenarios(feature: ParsedFeature): Array<string> {

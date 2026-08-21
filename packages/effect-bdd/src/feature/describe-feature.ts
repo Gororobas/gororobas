@@ -1,10 +1,23 @@
 import { describe, it } from "@effect/vitest"
-import { Array as Arr, Effect, FileSystem, Layer, Path } from "effect"
+import {
+  Array as Arr,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Predicate as P,
+  Record as EffectRecord,
+} from "effect"
 import { dirname, isAbsolute } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { BackgroundContext, ScenarioContext } from "../context.js"
-import { FeatureParseError, ScenarioNotFoundError } from "../errors.js"
+import {
+  FeatureParseError,
+  ScenarioNotFoundError,
+  ScenarioOutlineExamplesError,
+} from "../errors.js"
 import { parseFeatureFile } from "../parser/feature-parser.js"
 import type { ParsedFeature, ParsedStep } from "../parser/types.js"
 import {
@@ -18,22 +31,16 @@ import {
 
 function getCallerDir(): string {
   const previousPrepareStackTrace = Error.prepareStackTrace
-  Error.prepareStackTrace = (_err, stack) => stack
+  Error.prepareStackTrace = (_error, stack) => stack
   const stack = new Error().stack as unknown as NodeJS.CallSite[]
   Error.prepareStackTrace = previousPrepareStackTrace
 
-  const callerFrame = stack[2]
-  const callerFile = callerFrame.getFileName()
-
+  const callerFile = stack[2]?.getFileName()
   if (!callerFile) {
     throw new Error("Could not determine caller file path")
   }
 
-  if (callerFile.startsWith("file://")) {
-    return dirname(fileURLToPath(callerFile))
-  }
-
-  return dirname(callerFile)
+  return dirname(callerFile.startsWith("file://") ? fileURLToPath(callerFile) : callerFile)
 }
 
 // ============================================================================
@@ -66,7 +73,7 @@ interface BackgroundConfigWithLayer<ROut, E> {
  * Background config WITHOUT a layer - steps can only use internal services
  */
 interface BackgroundConfigWithoutLayer<E> {
-  layer?: undefined
+  layer?: never
   steps: () => Effect.Effect<unknown, E, InternalServices>
 }
 
@@ -89,7 +96,7 @@ interface ScenarioConfigWithLayer<ROut, E> {
  * Scenario config WITHOUT a layer - steps can only use internal services
  */
 interface ScenarioConfigWithoutLayer<E> {
-  layer?: undefined
+  layer?: never
   steps: () => Effect.Effect<unknown, E, InternalServices>
 }
 
@@ -112,7 +119,7 @@ interface ScenarioOutlineConfigWithLayer<ROut, E> {
  * ScenarioOutline config WITHOUT a layer
  */
 interface ScenarioOutlineConfigWithoutLayer<E> {
-  layer?: undefined
+  layer?: never
   steps: () => Effect.Effect<unknown, E, InternalServices>
 }
 
@@ -128,9 +135,9 @@ type ScenarioOutlineConfig<ROut = never, E = never> =
 // ============================================================================
 
 interface BackgroundRef {
-  effect: (() => Effect.Effect<unknown, unknown, unknown>) | undefined
+  effect: Option.Option<() => Effect.Effect<unknown, unknown, unknown>>
   parsedSteps: Array<ParsedStep>
-  layer: SelfContainedLayer<unknown, unknown> | undefined
+  layer: Option.Option<SelfContainedLayer<unknown, unknown>>
 }
 
 interface RuleContext {
@@ -173,14 +180,21 @@ interface FeatureContext extends RuleContext {
 // Helper Functions
 // ============================================================================
 
-function provideLayer<A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  layer: Layer.Layer<unknown, unknown, never> | undefined,
-): Effect.Effect<A, unknown, unknown> {
-  if (!layer) {
-    return effect as Effect.Effect<A, unknown, unknown>
+function provideLayer<T, E, R, LO, LE>(
+  effect: Effect.Effect<T, E, R>,
+  layer?:
+    | Layer.Layer<unknown, unknown, never>
+    | Layer.Layer<LO, LE, never>
+    | Layer.Layer<never, unknown, unknown>,
+) {
+  if (layer === undefined) {
+    return effect
   }
-  return effect.pipe(Effect.provide(layer)) as Effect.Effect<A, unknown, unknown>
+  return effect.pipe(Effect.provide(layer))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return P.isObject(value)
 }
 
 function createRunWithBackgrounds({
@@ -188,54 +202,55 @@ function createRunWithBackgrounds({
   ruleBgRef,
 }: {
   featureBgRef: BackgroundRef
-  ruleBgRef: BackgroundRef | undefined
+  ruleBgRef?: BackgroundRef
 }) {
   return function runWithBackgrounds<ROut, E>(scenario: {
     name: string
     steps: Array<ParsedStep>
-    layer: SelfContainedLayer<ROut, E> | undefined
+    layer?: SelfContainedLayer<ROut, E>
     effect: Effect.Effect<unknown, E, ROut | InternalServices>
   }): Effect.Effect<unknown, unknown, unknown> {
-    const allLayers = [featureBgRef.layer, ruleBgRef?.layer, scenario.layer].filter(
-      (l): l is Layer.Layer<unknown, unknown, never> => l !== undefined,
-    )
+    const allLayers = [
+      ...Arr.fromOption(featureBgRef.layer),
+      ...(ruleBgRef ? Arr.fromOption(ruleBgRef.layer) : []),
+      ...(scenario.layer ? [scenario.layer] : []),
+    ]
 
-    const uniqueLayers = [...new Set(allLayers)]
+    const uniqueLayers = Arr.dedupe(allLayers)
 
-    const combinedLayer: Layer.Layer<unknown, unknown, never> | undefined =
-      Arr.isReadonlyArrayEmpty(uniqueLayers)
-        ? undefined
-        : uniqueLayers.length === 1
-          ? uniqueLayers[0]
-          : (uniqueLayers.reduce((acc, layer) => Layer.merge(acc, layer)) as Layer.Layer<
-              unknown,
-              unknown,
-              never
-            >)
+    const combinedLayer = Arr.match(uniqueLayers, {
+      onEmpty: () => undefined,
+      onNonEmpty: (layers) =>
+        layers.length === 1
+          ? layers[0]
+          : layers.length === 2
+            ? Layer.merge(layers[0], layers[1])
+            : Layer.merge(Layer.merge(layers[0], layers[1]), layers[2]),
+    })
 
     const execution = Effect.gen(function* () {
       let ctx: Record<string, unknown> = {}
 
-      if (featureBgRef.effect) {
-        const featureResult = yield* featureBgRef.effect().pipe(
+      if (Option.isSome(featureBgRef.effect)) {
+        const featureResult = yield* featureBgRef.effect.value().pipe(
           Effect.provideService(BackgroundContext, {}),
           Effect.provideService(ScenarioContext, {
             name: "Background",
             steps: featureBgRef.parsedSteps,
           }),
         )
-        ctx = featureResult as Record<string, unknown>
+        ctx = isRecord(featureResult) ? featureResult : {}
       }
 
-      if (ruleBgRef?.effect) {
-        const ruleResult = yield* ruleBgRef.effect().pipe(
+      if (ruleBgRef && Option.isSome(ruleBgRef.effect)) {
+        const ruleResult = yield* ruleBgRef.effect.value().pipe(
           Effect.provideService(BackgroundContext, ctx),
           Effect.provideService(ScenarioContext, {
             name: "Rule/Background",
             steps: ruleBgRef.parsedSteps,
           }),
         )
-        ctx = { ...ctx, ...(ruleResult as Record<string, unknown>) }
+        ctx = { ...ctx, ...(isRecord(ruleResult) ? ruleResult : {}) }
       }
 
       yield* scenario.effect.pipe(
@@ -252,11 +267,10 @@ function createRunWithBackgrounds({
 }
 
 function substituteOutlinePlaceholders(text: string, example: Record<string, string>): string {
-  let result = text
-  for (const [key, value] of Object.entries(example)) {
-    result = result.replace(new RegExp(`<${key}>`, "g"), String(value))
-  }
-  return result
+  return EffectRecord.toEntries(example).reduce(
+    (result, [key, value]) => result.replace(new RegExp(`<${key}>`, "g"), String(value)),
+    text,
+  )
 }
 
 function createRuleContext(
@@ -268,37 +282,37 @@ function createRuleContext(
 ): RuleContext {
   const runWithBackgrounds = createRunWithBackgrounds({
     featureBgRef,
-    ruleBgRef,
+    ...(ruleBgRef ? { ruleBgRef } : {}),
   })
 
   return {
     Background: (config) => {
       const parsedBackground = ruleName
-        ? findRule(feature, ruleName)?.background
+        ? Option.getOrElse(findRule(feature, ruleName), () => ({ background: undefined }))
+            .background
         : feature.background
 
       if (ruleBgRef) {
-        ruleBgRef.effect = config.steps
+        ruleBgRef.effect = Option.some(config.steps)
         ruleBgRef.parsedSteps = parsedBackground?.steps ?? []
         // @ts-expect-error test runner is working, it's AI generated and I don't fully comprehend it
-        ruleBgRef.layer = config.layer
+        ruleBgRef.layer = Option.fromNullishOr(config.layer)
       } else {
-        featureBgRef.effect = config.steps
+        featureBgRef.effect = Option.some(config.steps)
         featureBgRef.parsedSteps = parsedBackground?.steps ?? []
         // @ts-expect-error test runner is working, it's AI generated and I don't fully comprehend it
-        featureBgRef.layer = config.layer
+        featureBgRef.layer = Option.fromNullishOr(config.layer)
       }
     },
 
     Scenario: (name, config) => {
-      const parsedScenario = findScenario(feature, name, ruleName)
-      if (!parsedScenario) {
+      const parsedScenario = Option.getOrElse(findScenario(feature, name, ruleName), () => {
         throw new ScenarioNotFoundError({
           availableScenarios: listScenarios(feature),
           feature: featurePath,
           scenario: name,
         })
-      }
+      })
 
       it.effect(
         name,
@@ -306,7 +320,7 @@ function createRuleContext(
         () => {
           return runWithBackgrounds({
             effect: config.steps(),
-            layer: config.layer,
+            ...(config.layer ? { layer: config.layer } : {}),
             name,
             steps: parsedScenario.steps,
           })
@@ -315,22 +329,21 @@ function createRuleContext(
     },
 
     ScenarioOutline: (name, config) => {
-      const parsedOutline = findScenarioOutline(feature, name, ruleName)
-      if (!parsedOutline) {
+      const parsedOutline = Option.getOrElse(findScenarioOutline(feature, name, ruleName), () => {
         throw new ScenarioNotFoundError({
           availableScenarios: listScenarioOutlines(feature),
           feature: featurePath,
           scenario: name,
         })
-      }
+      })
 
       if (Arr.isReadonlyArrayEmpty(parsedOutline.examples)) {
-        throw new Error(`ScenarioOutline "${name}" has no examples in ${featurePath}`)
+        throw new ScenarioOutlineExamplesError({ feature: featurePath, scenario: name })
       }
 
       describe(name, () => {
         parsedOutline.examples.forEach((example, index) => {
-          const label = Object.entries(example)
+          const label = EffectRecord.toEntries(example)
             .map(([k, v]) => `${k}=${String(v)}`)
             .join(", ")
 
@@ -345,7 +358,7 @@ function createRuleContext(
             () => {
               return runWithBackgrounds({
                 effect: config.steps(),
-                layer: config.layer,
+                ...(config.layer ? { layer: config.layer } : {}),
                 name: `${name} - Example ${index + 1}`,
                 steps: substitutedSteps,
               })
@@ -357,6 +370,14 @@ function createRuleContext(
   }
 }
 
+function missingRule(name: string, feature: string, availableRules: Array<string>): never {
+  throw new ScenarioNotFoundError({
+    availableScenarios: availableRules,
+    feature,
+    scenario: name,
+  })
+}
+
 // ============================================================================
 // Main Export
 // ============================================================================
@@ -365,18 +386,19 @@ export function describeFeature(
   featurePath: string,
   callback: (ctx: FeatureContext) => void,
 ): Effect.Effect<void, FeatureParseError, FileSystem.FileSystem | Path.Path> {
+  const featureBasePath = isAbsolute(featurePath) ? process.cwd() : getCallerDir()
   const absoluteFeaturePath = isAbsolute(featurePath)
     ? featurePath
-    : `${getCallerDir()}/${featurePath}`
+    : `${featureBasePath}/${featurePath}`
 
   return Effect.gen(function* () {
-    const feature = yield* parseFeatureFile(absoluteFeaturePath)
+    const feature = yield* parseFeatureFile(featurePath, featureBasePath)
 
     yield* Effect.sync(() => {
       describe(feature.name, () => {
         const featureBgRef: BackgroundRef = {
-          effect: undefined,
-          layer: undefined,
+          effect: Option.none(),
+          layer: Option.none(),
           parsedSteps: [],
         }
 
@@ -384,17 +406,15 @@ export function describeFeature(
           ...createRuleContext(feature, absoluteFeaturePath, featureBgRef),
 
           Rule: (name, ruleCallback) => {
-            const parsedRule = findRule(feature, name)
-            if (!parsedRule) {
-              throw new Error(
-                `Rule "${name}" not found in ${absoluteFeaturePath}. Available rules: ${listRules(feature).join(", ")}`,
-              )
-            }
+            Option.match(findRule(feature, name), {
+              onNone: () => missingRule(name, absoluteFeaturePath, listRules(feature)),
+              onSome: () => undefined,
+            })
 
             describe(name, () => {
               const ruleBgRef: BackgroundRef = {
-                effect: undefined,
-                layer: undefined,
+                effect: Option.none(),
+                layer: Option.none(),
                 parsedSteps: [],
               }
               ruleCallback(

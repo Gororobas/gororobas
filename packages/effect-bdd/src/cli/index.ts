@@ -95,7 +95,10 @@ const cli = Command.run(rootCommand, {
 export function run(): void {
   const program = cli.pipe(
     Effect.provide(Layer.mergeAll(BunServices.layer)),
-    Effect.catch(() => Effect.sync(() => process.exit(1))),
+    Effect.matchEffect({
+      onFailure: () => Effect.sync(() => process.exit(1)),
+      onSuccess: Effect.succeed,
+    }),
   )
 
   Effect.runPromise(program).then(

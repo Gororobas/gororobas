@@ -4,7 +4,7 @@ export type StepTag = "Given" | "When" | "Then" | "And" | "But"
 
 export interface StepConfig<Params extends Record<string, unknown>, CtxIn, CtxOut, E, R> {
   params?: Schema.Schema<Params>
-  handler: (ctx: CtxIn, params: Params) => Effect.Effect<CtxOut, E, R>
+  handler(ctx: CtxIn, params: Params): Effect.Effect<CtxOut, E, R>
 }
 
 export interface Step<CtxIn, CtxOut, E, R> {
@@ -19,7 +19,7 @@ function createStepConstructor(tag: StepTag) {
     config: StepConfig<Params, CtxIn, CtxOut, E, R>,
   ): Step<CtxIn, CtxOut, E, R> => ({
     _tag: tag,
-    config: config as StepConfig<Record<string, unknown>, CtxIn, CtxOut, E, R>,
+    config,
     pattern,
   })
 }

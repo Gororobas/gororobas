@@ -1,5 +1,4 @@
-import { Array as Arr, Layer, Context } from "effect"
-import { resolve } from "node:path"
+import { Array as Arr, Context, Layer, Option } from "effect"
 import * as ts from "typescript/unstable/ast"
 import type { CallExpression, Node, SourceFile } from "typescript/unstable/ast"
 import { API } from "typescript/unstable/sync"
@@ -16,11 +15,11 @@ export class StepDiscovery extends Context.Service<
 
 const STEP_KEYWORDS: Array<StepKeyword> = ["Given", "When", "Then", "And", "But"]
 
-function extractStringLiteral(node: Node): string | null {
+function extractStringLiteral(node: Node): Option.Option<string> {
   if (ts.isStringLiteral(node)) {
-    return node.text
+    return Option.some(node.text)
   }
-  return null
+  return Option.none()
 }
 
 function isStepCallExpression(node: Node): node is CallExpression {
@@ -31,83 +30,72 @@ function isStepCallExpression(node: Node): node is CallExpression {
   const expression = node.expression
 
   if (ts.isIdentifier(expression)) {
-    return STEP_KEYWORDS.includes(expression.text as StepKeyword)
+    return Option.isSome(
+      Option.fromNullishOr(STEP_KEYWORDS.find((keyword) => keyword === expression.text)),
+    )
   }
 
   return false
 }
 
-function getStepKeyword(node: CallExpression): StepKeyword | null {
+function getStepKeyword(node: CallExpression): Option.Option<StepKeyword> {
   const expression = node.expression
   if (ts.isIdentifier(expression)) {
-    const keyword = expression.text as StepKeyword
-    if (STEP_KEYWORDS.includes(keyword)) {
-      return keyword
-    }
+    return Option.fromNullishOr(STEP_KEYWORDS.find((keyword) => keyword === expression.text))
   }
-  return null
+  return Option.none()
 }
 
-function detectScope(node: Node): StepScope | undefined {
-  if (!ts.isCallExpression(node)) return undefined
+function detectScope(node: Node): Option.Option<StepScope> {
+  if (!ts.isCallExpression(node)) return Option.none()
   const expression = node.expression
-  if (!ts.isIdentifier(expression)) return undefined
+  if (!ts.isIdentifier(expression)) return Option.none()
 
   const name = expression.text
   if (name === "Background") {
-    return { type: "background" }
+    return Option.some({ type: "background" })
   }
   if (name === "Scenario" && Arr.isReadonlyArrayNonEmpty(node.arguments)) {
     const scenarioName = extractStringLiteral(node.arguments[0])
-    if (scenarioName !== null) {
-      return { type: "scenario", name: scenarioName }
+    if (Option.isSome(scenarioName)) {
+      return Option.some({ type: "scenario", name: scenarioName.value })
     }
   }
   if (name === "ScenarioOutline" && Arr.isReadonlyArrayNonEmpty(node.arguments)) {
     const outlineName = extractStringLiteral(node.arguments[0])
-    if (outlineName !== null) {
-      return { type: "scenario_outline", name: outlineName }
+    if (Option.isSome(outlineName)) {
+      return Option.some({ type: "scenario_outline", name: outlineName.value })
     }
   }
-  return undefined
+  return Option.none()
 }
 
 function visitNode(
   node: Node,
   sourceFile: SourceFile,
   filePath: string,
-  currentScope: StepScope | undefined,
+  currentScope: Option.Option<StepScope>,
 ): Array<DiscoveredStep> {
   const steps: Array<DiscoveredStep> = []
 
   const detectedScope = detectScope(node)
-  const scope = detectedScope ?? currentScope
+  const scope = Option.isSome(detectedScope) ? detectedScope : currentScope
 
   if (isStepCallExpression(node)) {
     const keyword = getStepKeyword(node)
-    if (keyword && Arr.isReadonlyArrayNonEmpty(node.arguments)) {
+    if (Option.isSome(keyword) && Arr.isReadonlyArrayNonEmpty(node.arguments)) {
       const firstArg = node.arguments[0]
       const pattern = extractStringLiteral(firstArg)
-      if (pattern !== null) {
-        try {
-          const position = node.getStart(sourceFile)
-          const { line } = sourceFile.getLineAndCharacterOfPosition(position)
-          steps.push({
-            file: filePath,
-            keyword,
-            line: line + 1,
-            pattern,
-            scope,
-          })
-        } catch {
-          steps.push({
-            file: filePath,
-            keyword,
-            line: 0,
-            pattern,
-            scope,
-          })
-        }
+      if (Option.isSome(pattern)) {
+        const position = node.getStart(sourceFile)
+        const { line } = sourceFile.getLineAndCharacterOfPosition(position)
+        steps.push({
+          file: filePath,
+          keyword: keyword.value,
+          line: line + 1,
+          pattern: pattern.value,
+          ...Option.match(scope, { onNone: () => ({}), onSome: (value) => ({ scope: value }) }),
+        })
       }
     }
   }
@@ -121,13 +109,13 @@ function visitNode(
 
 function discoverStepsInFile(
   filePath: string,
-  sourceFile: SourceFile | undefined,
+  sourceFile: Option.Option<SourceFile>,
 ): Array<DiscoveredStep> {
-  if (!sourceFile) {
+  if (Option.isNone(sourceFile)) {
     return []
   }
 
-  return visitNode(sourceFile, sourceFile, filePath, undefined)
+  return visitNode(sourceFile.value, sourceFile.value, filePath, Option.none())
 }
 
 export const StepDiscoveryLive = Layer.succeed(
@@ -139,26 +127,20 @@ export const StepDiscoveryLive = Layer.succeed(
       }
 
       const allSteps: Array<DiscoveredStep> = []
-      const absoluteFiles = files.map((file) => resolve(file))
+      const absoluteFiles = files.map((file) =>
+        file.startsWith("/") ? file : `${process.cwd()}/${file}`,
+      )
       const api = new API({ cwd: process.cwd() })
 
-      try {
-        const snapshot = api.updateSnapshot({ openFiles: absoluteFiles })
-
-        try {
-          for (const [index, file] of files.entries()) {
-            const absoluteFile = absoluteFiles[index]
-            const project = snapshot.getDefaultProjectForFile(absoluteFile)
-            const sourceFile = project?.program.getSourceFile(absoluteFile)
-            const steps = discoverStepsInFile(file, sourceFile)
-            allSteps.push(...steps)
-          }
-        } finally {
-          snapshot.dispose()
-        }
-      } finally {
-        api.close()
-      }
+      const snapshot = api.updateSnapshot({ openFiles: absoluteFiles })
+      files.forEach((file, index) => {
+        const absoluteFile = absoluteFiles[index]
+        const project = snapshot.getDefaultProjectForFile(absoluteFile)
+        const sourceFile = project?.program.getSourceFile(absoluteFile)
+        allSteps.push(...discoverStepsInFile(file, Option.fromNullishOr(sourceFile)))
+      })
+      snapshot.dispose()
+      api.close()
 
       return allSteps
     },
