@@ -1,5 +1,5 @@
 import { Config, Context, Duration, Effect, Schedule, Schema, Semaphore } from "effect"
-import { type AnnotatedDocument, type ExampleData, extract, FormatType } from "langextract"
+import { type ExampleData, extract, FormatType } from "langextract"
 
 export class LangExtractError extends Schema.TaggedError<LangExtractError>()("LangExtractError", {
   error: Schema.Unknown,
@@ -63,7 +63,7 @@ export class LangExtractService extends Context.Service<LangExtractService>()(
           semaphore.withPermits(1),
         )
 
-        return (Array.isArray(result) ? result[0] : result) as AnnotatedDocument
+        return Array.isArray(result) ? result[0] : result
       })
 
       return { extract: extractFromHtml, model_info }

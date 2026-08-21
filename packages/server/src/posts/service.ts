@@ -9,7 +9,7 @@
  */
 import {
   assertAuthenticated,
-  contentToHandle,
+  richTextToHandle,
   CorePostMetadata,
   CreateEventData,
   CreateNoteData,
@@ -25,7 +25,7 @@ import {
   PostNotFoundError,
   ProfileId,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, Schema, Context } from "effect"
+import { Context, DateTime, Effect, Option, Schema } from "effect"
 
 import { HumanCrdtUpdate } from "./post-repository-inputs.js"
 import { PostsRepository } from "./repository.js"
@@ -95,7 +95,7 @@ export class PostsService extends Context.Service<PostsService>()("PostsService"
           translationSource: "ORIGINAL",
         })
 
-        const handle = contentToHandle(input.content)
+        const handle = yield* richTextToHandle(input.content)
 
         const now = yield* DateTime.now
         const coreMetadata = CorePostMetadata.make({

@@ -139,7 +139,7 @@ export type VegetableBookmark = typeof VegetableBookmark.Type
 export const VegetableRow = Schema.Struct({
   developmentCycleMax: Schema.NullOr(Schema.Number),
   developmentCycleMin: Schema.NullOr(Schema.Number),
-  handle: Schema.String,
+  handle: Handle,
   heightMax: Schema.NullOr(Schema.Number),
   heightMin: Schema.NullOr(Schema.Number),
   id: VegetableId,

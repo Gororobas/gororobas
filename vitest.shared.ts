@@ -11,9 +11,6 @@ const alias = (name: string) => {
 
 // This is a workaround, see https://github.com/vitest-dev/vitest/issues/4744
 const config: ViteUserConfig = {
-  esbuild: {
-    target: "es2020",
-  },
   optimizeDeps: {
     exclude: ["bun:sqlite"],
   },

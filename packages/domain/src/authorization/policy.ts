@@ -1,3 +1,4 @@
+/* oxlint-disable effect/casting-awareness -- variadic policy combinators need tuple-level type reconstruction. */
 /**
  * Policy utilities for authorization checks.
  */
@@ -87,10 +88,9 @@ type TupleOfA<Policies> = {
 export const or = <Policies extends ReadonlyArray<Policy<any, any>>>(
   ...policies: Policies
 ): Policy<UnionOfA<Policies>, UnionOfR<Policies>> => {
-  return policies.reduce((acc, p) => acc.pipe(Effect.catch(() => p))) as Policy<
-    UnionOfA<Policies>,
-    UnionOfR<Policies>
-  >
+  return policies.reduce((acc, p) =>
+    acc.pipe(Effect.catchTag("UnauthorizedError", () => p)),
+  ) as Policy<UnionOfA<Policies>, UnionOfR<Policies>>
 }
 
 /**
@@ -106,7 +106,7 @@ export const unionPolicy = <A, R = never>(
 export const and = <Policies extends ReadonlyArray<Policy<any, any>>>(
   ...policies: Policies
 ): Policy<TupleOfA<Policies>, UnionOfR<Policies>> => {
-  return Effect.all(policies) as Policy<TupleOfA<Policies>, UnionOfR<Policies>>
+  return Effect.all(policies, { concurrency: 1 }) as Policy<TupleOfA<Policies>, UnionOfR<Policies>>
 }
 
 export const toResult = <A, R>(policy: Policy<A, R>) =>
@@ -122,7 +122,7 @@ export const toResult = <A, R>(policy: Policy<A, R>) =>
 export const check = <A, R>(policy: Policy<A, R>) =>
   policy.pipe(
     Effect.map(() => true),
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
   )
 
 export const assertAuthenticated = policy((session) =>

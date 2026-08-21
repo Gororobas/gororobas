@@ -17,8 +17,8 @@ export const PersonRow = Schema.Struct({
 export type PersonRow = typeof PersonRow.Type
 
 export const AccountDeletionConfirmation = Schema.Struct({
-  deleteOrgs: Schema.Boolean,
-  deleteContent: Schema.Boolean,
+  shouldDeleteOrgs: Schema.Boolean,
+  shouldDeleteContent: Schema.Boolean,
 })
 export type AccountDeletionConfirmation = typeof AccountDeletionConfirmation.Type
 

@@ -17,6 +17,7 @@ export const runMainWithCustomRuntime = <
   teardown: Runtime.Teardown = Runtime.defaultTeardown,
 ) => {
   const fiber = runtime.runFork(
+    // oxlint-disable-next-line effect/casting-awareness, effect/avoid-any -- the custom runtime is the application boundary.
     program as unknown as Effect.Effect<unknown, RuntimeError, RuntimeServices>,
   )
 

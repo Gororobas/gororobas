@@ -2,6 +2,7 @@
  * MigrationContext service for ID mapping and progress tracking.
  * Adapted from the reference Supabase migration context.
  */
+/* oxlint-disable effect/casting-awareness -- generic migration IDs are branded by each caller. */
 import { Context, DateTime, Effect, HashMap, Layer, Option, Ref, Schema } from "effect"
 import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql"
 

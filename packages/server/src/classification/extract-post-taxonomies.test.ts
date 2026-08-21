@@ -192,7 +192,7 @@ const TestTagsRepository = Layer.succeed(TagsRepository)({
 const TEST_VEGETABLES: ReadonlyArray<VegetableRow> = [
   {
     id: TEST_MILHO_ID,
-    handle: "milho",
+    handle: Handle.make("milho"),
     developmentCycleMax: 120,
     developmentCycleMin: 90,
     heightMax: 300,
@@ -204,7 +204,7 @@ const TEST_VEGETABLES: ReadonlyArray<VegetableRow> = [
   },
   {
     id: TEST_MANDIOCA_ID,
-    handle: "mandioca",
+    handle: Handle.make("mandioca"),
     developmentCycleMax: 365,
     developmentCycleMin: 180,
     heightMax: 300,
@@ -218,30 +218,30 @@ const TEST_VEGETABLES: ReadonlyArray<VegetableRow> = [
 
 const TEST_VEGETABLE_SEARCHABLE_NAMES: Record<
   string,
-  { vegetableId: VegetableId; handle: string }
+  { vegetableId: VegetableId; handle: Handle }
 > = {
-  milho: { vegetableId: TEST_MILHO_ID, handle: "milho" },
-  corn: { vegetableId: TEST_MILHO_ID, handle: "milho" },
-  maiz: { vegetableId: TEST_MILHO_ID, handle: "milho" },
+  milho: { vegetableId: TEST_MILHO_ID, handle: Handle.make("milho") },
+  corn: { vegetableId: TEST_MILHO_ID, handle: Handle.make("milho") },
+  maiz: { vegetableId: TEST_MILHO_ID, handle: Handle.make("milho") },
   mandioca: {
     vegetableId: TEST_MANDIOCA_ID,
-    handle: "mandioca",
+    handle: Handle.make("mandioca"),
   },
   cassava: {
     vegetableId: TEST_MANDIOCA_ID,
-    handle: "mandioca",
+    handle: Handle.make("mandioca"),
   },
   yuca: {
     vegetableId: TEST_MANDIOCA_ID,
-    handle: "mandioca",
+    handle: Handle.make("mandioca"),
   },
   aipim: {
     vegetableId: TEST_MANDIOCA_ID,
-    handle: "mandioca",
+    handle: Handle.make("mandioca"),
   },
   macaxeira: {
     vegetableId: TEST_MANDIOCA_ID,
-    handle: "mandioca",
+    handle: Handle.make("mandioca"),
   },
 }
 

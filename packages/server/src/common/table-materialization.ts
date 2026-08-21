@@ -15,5 +15,5 @@ export const materializeJunctionTable = <R1, E1, R2, E2>(input: {
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
-    yield* sql.withTransaction(Effect.all([input.deleteRows, input.insertRows]))
+    yield* sql.withTransaction(Effect.all([input.deleteRows, input.insertRows], { concurrency: 1 }))
   })

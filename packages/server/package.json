@@ -41,7 +41,6 @@
     "@tiptap/pm": "catalog:",
     "@tiptap/starter-kit": "catalog:",
     "better-auth": "catalog:",
-    "better-auth-effect": "^0.4.1",
     "bun": "catalog:",
     "effect": "catalog:",
     "langextract": "^1.2.0",

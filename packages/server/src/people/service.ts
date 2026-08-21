@@ -75,7 +75,7 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
 
         // 1.2. Ask for confirmation if they have a single member (the user to be deleted)
         if (
-          confirmation?.deleteOrgs !== true &&
+          confirmation?.shouldDeleteOrgs !== true &&
           Arr.isReadonlyArrayNonEmpty(orgsWhereSoleManager)
         ) {
           return AccountDeletionResultConfirmOrgDeletion.make({
@@ -108,7 +108,7 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
           ],
           { concurrency: "unbounded" },
         )
-        if (confirmation?.deleteContent !== true) {
+        if (confirmation?.shouldDeleteContent !== true) {
           return AccountDeletionResultConfirmContentDeletion.make({
             personalContentCount,
             organizationContent,

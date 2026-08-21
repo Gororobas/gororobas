@@ -20,7 +20,9 @@ export const persistCrdtDocumentCreation = <R1, E1, R2, E2, R3, E3>(input: {
     const sql = yield* SqlClient.SqlClient
 
     yield* sql.withTransaction(
-      Effect.all([input.insertCrdt, input.insertCommitOrRevision, input.materialize]),
+      Effect.all([input.insertCrdt, input.insertCommitOrRevision, input.materialize], {
+        concurrency: 1,
+      }),
     )
   })
 
@@ -48,6 +50,8 @@ export const persistCrdtDocumentUpdate = <R1, E1, R2, E2, R3, E3>(input: {
     const sql = yield* SqlClient.SqlClient
 
     yield* sql.withTransaction(
-      Effect.all([input.updateCrdtRow, input.insertCommitOrUpdateRevision, input.materialize]),
+      Effect.all([input.updateCrdtRow, input.insertCommitOrUpdateRevision, input.materialize], {
+        concurrency: 1,
+      }),
     )
   })

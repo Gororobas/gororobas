@@ -42,6 +42,7 @@ export default defineConfig({
     ],
     "typescript/no-unnecessary-boolean-literal-compare": "off",
     "vitest/no-standalone-expect": "off",
+    "vitest/valid-title": "off",
     "custom-lint-rules/no-disable-validation": "error",
     "custom-lint-rules/no-sql-type-parameter": "error",
     "custom-lint-rules/prefer-option-from-nullable": "error",
@@ -112,6 +113,7 @@ export default defineConfig({
     "repos/**",
     "**/repos/**",
     "oxlint.config.ts",
+    "vitest.shared.ts",
     "packages/server/scripts/test-auth.ts",
   ],
 })

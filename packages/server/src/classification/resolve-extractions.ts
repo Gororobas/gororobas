@@ -73,8 +73,8 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
     (found: Option.Option<VegetableRow>, candidate: string) => {
       if (Option.isSome(found)) return Effect.succeed(found)
 
-      const handle = stringToHandle(candidate)
       return Effect.gen(function* () {
+        const handle = yield* stringToHandle(candidate)
         yield* Effect.logDebug(`Trying handle match for "${candidate}" -> "${handle}"`)
         return yield* vegetablesRepository.findByHandle(handle)
       })
@@ -87,18 +87,18 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
     return ResolvedExistingVegetableExtraction.make({
       ...common,
       vegetableId: handleMatch.value.id,
-      handle: handleMatch.value.handle as Handle,
+      handle: handleMatch.value.handle,
     })
   }
 
   const searchableNameMatch = yield* Effect.reduce(
-    () => Option.none<{ vegetableId: VegetableId; handle: string }>(),
-    (found: Option.Option<{ vegetableId: VegetableId; handle: string }>, candidate: string) => {
+    () => Option.none<{ vegetableId: VegetableId; handle: Handle }>(),
+    (found: Option.Option<{ vegetableId: VegetableId; handle: Handle }>, candidate: string) => {
       if (Option.isSome(found)) return Effect.succeed(found)
 
-      const handle = stringToHandle(candidate)
-      const pattern = `%${handle}%`
       return Effect.gen(function* () {
+        const handle = yield* stringToHandle(candidate)
+        const pattern = `%${handle}%`
         yield* Effect.logDebug(
           `Trying searchable_name match for "${candidate}" -> pattern "${pattern}"`,
         )
@@ -113,7 +113,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
     return ResolvedExistingVegetableExtraction.make({
       ...common,
       vegetableId: searchableNameMatch.value.vegetableId,
-      handle: searchableNameMatch.value.handle as Handle,
+      handle: searchableNameMatch.value.handle,
     })
   }
 
@@ -122,7 +122,7 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
   )
   return SuggestedVegetableExtraction.make({
     ...common,
-    handle: stringToHandle(extraction.extractionText),
+    handle: yield* stringToHandle(extraction.extractionText),
     names: {
       pt: P.isString(common.attributes.vegetable_pt)
         ? common.attributes.vegetable_pt
@@ -144,7 +144,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
   const common = toCommonExtractionFields(extraction)
   const { attributes } = common
   const status = attributes.status
-  const tagHandle = stringToHandle(
+  const tagHandle = yield* stringToHandle(
     P.isString(attributes.tag) ? attributes.tag : extraction.extractionText,
   )
 
@@ -162,7 +162,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
       return ResolvedExistingTagExtraction.make({
         ...common,
         tagId: handleMatch.value.id,
-        handle: stringToHandle(handleMatch.value.handle),
+        handle: yield* stringToHandle(handleMatch.value.handle),
       })
     }
 
@@ -174,7 +174,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
       return ResolvedExistingTagExtraction.make({
         ...common,
         tagId: nameMatch.value.id,
-        handle: stringToHandle(nameMatch.value.handle),
+        handle: yield* stringToHandle(nameMatch.value.handle),
       })
     }
   }

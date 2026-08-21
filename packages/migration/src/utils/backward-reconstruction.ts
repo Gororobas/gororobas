@@ -1,8 +1,9 @@
+/* oxlint-disable effect/casting-awareness -- reconstruction accumulators preserve a recursive domain shape. */
 import { type SourceVegetableData } from "@gororobas/domain"
 /**
  * Backward reconstruction algorithm for vegetable edit history.
  */
-import { Effect, Option, Schema } from "effect"
+import { Array as Arr, Effect, Option, Order, Schema } from "effect"
 
 import { type EditSuggestion } from "../schemas/gel/entities.js"
 import { applyInverseDiffE, type JsonDiff } from "./json-diff-inverse.js"
@@ -62,8 +63,9 @@ export const transformEditSuggestion = (
 export const sortEventsReverseChronological = (
   events: EditSuggestionEvent[],
 ): EditSuggestionEvent[] => {
-  return [...events].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  return Arr.sort(
+    [...events],
+    Order.mapInput(Order.flip(Order.String), (event: EditSuggestionEvent) => event.timestamp),
   )
 }
 

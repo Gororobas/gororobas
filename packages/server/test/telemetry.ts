@@ -1,3 +1,4 @@
+/* oxlint-disable effect/avoid-process-env, effect/avoid-try-catch, effect/casting-awareness -- test-only telemetry adapter wraps third-party Node exporters. */
 /**
  * OpenTelemetry instrumentation for test infrastructure.
  *

@@ -21,5 +21,6 @@ export function tiptapToHtml(json: TiptapDocument): string {
 }
 
 export function tiptapFromHtml(html: string): TiptapDocument {
+  // oxlint-disable-next-line effect/casting-awareness Tiptap's runtime parser lacks the readonly domain type.
   return generateJSON(html, extensions) as TiptapDocument
 }

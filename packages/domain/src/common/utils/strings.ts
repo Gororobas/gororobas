@@ -1,6 +1,5 @@
-import { Predicate as P, String as EffectString } from "effect"
-
-import { Handle } from "../primitives.js"
+/* oxlint-disable effect/casting-awareness -- normalization establishes the Handle invariant. */
+import { String as EffectString, Predicate as P } from "effect"
 
 /**
  * Limits a string to a certain length for UI or SEO purposes.
@@ -34,26 +33,4 @@ export function capitalize(str: string, allWords = true): string {
   }
 
   return `${str[0].toUpperCase()}${str.slice(1) || ""}`
-}
-
-/**
- * Makes a string URL-friendly.
- * Removes special characters, spaces, upper-cased letters.
- */
-export function stringToHandle(str: string) {
-  return (
-    str
-      .toString()
-      .normalize("NFD") // split an accented letter in the base letter and the acent
-      // Replace unicode characters, such as accents
-      .replace(/[\u0300-\u036f\u0023]/g, "") // remove all previously split accents
-      .toLowerCase()
-      // Replace any character that isn't accepted
-      .replace(/[^a-z0-9 -]/g, "-")
-      .replace(/\s+/g, "-")
-      .replace(/-{2,}/g, "-")
-      .replace(/-$/g, "")
-      .replace(/^-/g, "")
-      .trim() as Handle
-  )
 }

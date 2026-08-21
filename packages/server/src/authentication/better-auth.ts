@@ -1,22 +1,24 @@
 import { betterAuth } from "better-auth"
-import { effectSqlAdapter } from "better-auth-effect"
 import { magicLink } from "better-auth/plugins"
+import { Database } from "bun:sqlite"
 import { v7 } from "uuid"
 
 import type { AppRuntime } from "../app-runtime.js"
 
 export const createAuth = (runtime: AppRuntime, baseUrl?: string, secret?: string) =>
   betterAuth({
-    database: effectSqlAdapter({
-      runtime,
-      dialect: "sqlite",
-    }),
-    secret:
-      secret ?? process.env.BETTER_AUTH_SECRET ?? "default-dev-secret-do-not-use-in-production",
+    // @TODO can we use the Effect SQL DB here instead? `alex-golubev/better-auth-effect-adapter` is stuck in Effect v3
+    database: new Database("gororobas.db"),
+    // database: effectSqlAdapter({
+    //   runtime,
+    //   dialect: "sqlite",
+    // }),
+    secret: secret ?? "default-dev-secret-do-not-use-in-production",
     baseURL: baseUrl ?? "http://localhost:3000",
     advanced: {
       database: {
         generateId: () => v7(),
+        joins: true,
       },
     },
     user: {
@@ -60,9 +62,6 @@ export const createAuth = (runtime: AppRuntime, baseUrl?: string, secret?: strin
         updatedAt: "updated_at",
       },
       modelName: "verifications",
-    },
-    experimental: {
-      joins: true,
     },
     emailAndPassword: { enabled: false },
     socialProviders: {

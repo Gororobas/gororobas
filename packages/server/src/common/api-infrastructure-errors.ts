@@ -57,6 +57,7 @@ export const withApiInfrastructureErrors =
   <A, E, R>(
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A | HttpServerResponse.HttpServerResponse, Exclude<E, InfrastructureError>, R> =>
+    /* oxlint-disable effect/casting-awareness -- this adapter narrows a generic Effect at an API boundary. */
     protectApiOperation(
       operation,
       effect as Effect.Effect<A, Exclude<E, InfrastructureError> | InfrastructureError, R>,

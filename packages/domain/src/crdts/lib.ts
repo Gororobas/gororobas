@@ -94,7 +94,9 @@ const validateSchema = <S extends Schema.Schema<any>>(
   targetSchema: S,
 ): Effect.Effect<S["Type"], InvalidCrdtUpdateError, never> =>
   Effect.try({
-    try: () => Schema.decodeUnknownSync(targetSchema as never)(updatedDoc.toJSON()) as S["Type"],
+    try: () =>
+      // oxlint-disable-next-line effect/casting-awareness -- Effect Schema's decoder constraint is stricter than its generic schema input.
+      Schema.decodeUnknownSync(targetSchema as never)(updatedDoc.toJSON()),
     catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
   })
 

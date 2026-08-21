@@ -49,7 +49,7 @@ export class VegetablesApiGroup extends HttpApiGroup.make("vegetables")
       success: Schema.Struct({ id: VegetableRevisionId }),
       error: VegetableNotFoundError,
       payload: Schema.Struct({
-        approved: Schema.Boolean,
+        isApproved: Schema.Boolean,
         reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
       }),
       params: Schema.Struct({ handle: Handle, revisionId: VegetableRevisionId }),

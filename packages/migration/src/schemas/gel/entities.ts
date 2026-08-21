@@ -156,6 +156,7 @@ export type UserWishlist = typeof UserWishlist.Type
 
 export const Note = Schema.Struct({
   id: Schema.String,
+  // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field
   public: Schema.Boolean,
   publish_status: Enums.NotePublishStatus.pipe(Schema.optional),
   published_at: Schema.String,

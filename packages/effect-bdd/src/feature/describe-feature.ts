@@ -2,15 +2,13 @@ import { describe, it } from "@effect/vitest"
 import {
   Array as Arr,
   Effect,
+  Record as EffectRecord,
   FileSystem,
   Layer,
   Option,
-  Path,
   Predicate as P,
-  Record as EffectRecord,
+  Path,
 } from "effect"
-import { dirname, isAbsolute } from "node:path"
-import { fileURLToPath } from "node:url"
 
 import { BackgroundContext, ScenarioContext } from "../context.js"
 import {
@@ -31,20 +29,21 @@ import {
 
 function getCallerDir(): string {
   const previousPrepareStackTrace = Error.prepareStackTrace
-  let callerFile: string | undefined
+  let callerFile = Option.none<string>()
   Error.prepareStackTrace = (_error, stack) => {
-    callerFile = stack[2]?.getFileName() ?? undefined
+    const fileName = stack[2]?.getFileName()
+    callerFile = Option.fromNullishOr(fileName)
     return ""
   }
   const callerError = new FeatureParseError({ path: "caller", message: "Call site lookup" })
   void callerError.stack
   Error.prepareStackTrace = previousPrepareStackTrace
 
-  if (!callerFile) {
+  if (Option.isNone(callerFile)) {
     throw new FeatureParseError({ path: "caller", message: "Could not determine caller file path" })
   }
 
-  return dirname(callerFile.startsWith("file://") ? fileURLToPath(callerFile) : callerFile)
+  return callerFile.value
 }
 
 // ============================================================================
@@ -389,13 +388,17 @@ function missingRule(name: string, feature: string, availableRules: Array<string
 export function describeFeature(
   featurePath: string,
   callback: (ctx: FeatureContext) => void,
-): Effect.Effect<void, FeatureParseError, FileSystem.FileSystem | Path.Path> {
-  const featureBasePath = isAbsolute(featurePath) ? process.cwd() : getCallerDir()
-  const absoluteFeaturePath = isAbsolute(featurePath)
-    ? featurePath
-    : `${featureBasePath}/${featurePath}`
+): Effect.Effect<void, FeatureParseError, FileSystem.FileSystem> {
+  // Capture the call site before the Effect program runs; executing this lookup
+  // inside Effect.gen would return an Effect runtime frame instead of the test file.
+  const callerFile = getCallerDir()
 
+  // oxlint-disable-next-line effect/casting-awareness the BDD callback intentionally hides its internal requirements.
   return Effect.gen(function* () {
+    const path = yield* Path.Path
+    const absolute = path.isAbsolute(featurePath)
+    const featureBasePath = absolute ? path.resolve(".") : path.dirname(callerFile)
+    const absoluteFeaturePath = absolute ? featurePath : path.join(featureBasePath, featurePath)
     const feature = yield* parseFeatureFile(featurePath, featureBasePath)
 
     yield* Effect.sync(() => {
@@ -431,5 +434,12 @@ export function describeFeature(
         callback(featureCtx)
       })
     })
-  })
+  }).pipe(
+    Effect.provide(Path.layer),
+    Effect.mapError((error) =>
+      error instanceof FeatureParseError
+        ? error
+        : new FeatureParseError({ message: String(error), path: featurePath }),
+    ),
+  ) as Effect.Effect<void, FeatureParseError, FileSystem.FileSystem>
 }

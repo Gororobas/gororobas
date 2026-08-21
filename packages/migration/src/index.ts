@@ -1,13 +1,13 @@
 /**
  * Gel to SQLite Migration CLI
  */
-import { main } from "./migration.js"
+import { BunRuntime } from "@effect/platform-bun"
+import { Effect } from "effect"
 
-// Configuration - in a real implementation, this would come from environment variables or config file
-const config = {
-  gelConnectionString: process.env.GEL_CONNECTION_STRING || "gel://localhost:5656/gororobas",
-  sqliteConnectionString: process.env.SQLITE_CONNECTION_STRING || "file:migration.db",
-}
+import { runMigration } from "./migration.js"
 
-// Run the migration
-void main(config)
+BunRuntime.runMain(
+  runMigration.pipe(
+    Effect.catchCause((cause) => Effect.logError("Migration failed", cause).pipe(Effect.asVoid)),
+  ),
+)

@@ -18,6 +18,7 @@ import {
   type OrganizationAccessLevel,
   type OrganizationType,
 } from "@gororobas/domain"
+/* oxlint-disable effect/casting-awareness -- fixture IDs use validated domain brands. */
 /**
  * Fixture factories and arbitraries for property-based testing.
  */

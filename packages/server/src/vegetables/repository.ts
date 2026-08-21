@@ -9,7 +9,7 @@ export class VegetablesRepository extends Context.Service<VegetablesRepository>(
       findByHandle: (_handle: Handle | string) => Effect.succeed(Option.none<VegetableRow>()),
       findAll: () => Effect.succeed<Array<VegetableRow>>([]),
       findBySearchableName: (_pattern: string) =>
-        Effect.succeed(Option.none<{ vegetableId: VegetableId; handle: string }>()),
+        Effect.succeed(Option.none<{ vegetableId: VegetableId; handle: Handle }>()),
       findTranslations: (_vegetableId: VegetableId) =>
         Effect.succeed<Array<VegetableTranslationRow>>([]),
       getCrdt: (_vegetableId: VegetableId) => Effect.succeed(Option.none<unknown>()),
