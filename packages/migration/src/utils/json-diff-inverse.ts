@@ -2,7 +2,7 @@
  * JSON diff inverse operations for backward reconstruction.
  * Based on json-diff-ts format.
  */
-import { Effect } from "effect"
+import { Array as Arr, Effect, Match, Schema } from "effect"
 
 // ============ Types ============
 
@@ -21,66 +21,54 @@ export interface InverseDiff {
   ops: JsonDiffOperation[]
 }
 
+class JsonDiffError extends Schema.TaggedError<JsonDiffError>()("JsonDiffError", {
+  message: Schema.String,
+}) {}
+
 // ============ Inverse Operations ============
 
 /**
  * Inverse a JSON diff operation.
  */
 const inverseOperation = (op: JsonDiffOperation): JsonDiffOperation => {
-  switch (op.op) {
-    case "add":
-      // Adding can be inverted by removing
-      return {
-        op: "remove",
-        path: op.path,
-      }
-
-    case "remove":
+  return Match.value(op.op).pipe(
+    Match.when(
+      "add",
+      () =>
+        // Adding can be inverted by removing
+        ({
+          op: "remove",
+          path: op.path,
+        }) as const,
+    ),
+    Match.when("remove", () => {
       // Removing can be inverted by adding back the original value
       if (op.value === undefined) {
-        throw new Error("Remove operation must have a value for inversion")
+        throw new JsonDiffError({ message: "Remove operation must have a value for inversion" })
       }
-      return {
-        op: "add",
-        path: op.path,
-        value: op.value,
-      }
-
-    case "replace":
+      return { op: "add" as const, path: op.path, value: op.value }
+    }),
+    Match.when("replace", () => {
       // Replace can be inverted by replacing with the old value
       if (op.value === undefined) {
-        throw new Error("Replace operation must have a value for inversion")
+        throw new JsonDiffError({ message: "Replace operation must have a value for inversion" })
       }
-      return {
-        op: "replace",
-        path: op.path,
-        value: op.value,
-      }
-
-    case "move":
+      return { op: "replace" as const, path: op.path, value: op.value }
+    }),
+    Match.when("move", () => {
       // Move can be inverted by moving back
       if (op.from === undefined) {
-        throw new Error("Move operation must have 'from' for inversion")
+        throw new JsonDiffError({ message: "Move operation must have 'from' for inversion" })
       }
-      return {
-        op: "move",
-        path: op.from,
-        from: op.path,
-      }
-
-    case "copy":
+      return { op: "move" as const, path: op.from, from: op.path }
+    }),
+    Match.when("copy", () => {
       // Copy operations are not invertible in a meaningful way
-      // For our use case, we'll skip them
-      throw new Error("Copy operations are not invertible")
-
-    case "test":
-      // Test operations are assertions, not modifications
-      // They don't need inversion
-      return op
-
-    default:
-      throw new Error(`Unknown operation type: ${(op as any).op}`)
-  }
+      throw new JsonDiffError({ message: "Copy operations are not invertible" })
+    }),
+    Match.when("test", () => op),
+    Match.exhaustive,
+  )
 }
 
 /**
@@ -88,9 +76,7 @@ const inverseOperation = (op: JsonDiffOperation): JsonDiffOperation => {
  */
 const getValueAtPath = (obj: any, path: string): any => {
   const parts = path.split("/").filter(Boolean)
-  let current = obj
-
-  for (const part of parts) {
+  return parts.reduce((current, part) => {
     if (current === null || current === undefined) {
       return undefined
     }
@@ -98,15 +84,14 @@ const getValueAtPath = (obj: any, path: string): any => {
     if (Array.isArray(current)) {
       const index = parseInt(part, 10)
       if (isNaN(index)) {
-        throw new Error(`Invalid array index in path: ${part}`)
+        throw new JsonDiffError({ message: `Invalid array index in path: ${part}` })
       }
       current = current[index]
     } else {
       current = current[part]
     }
-  }
-
-  return current
+    return current
+  }, obj)
 }
 
 /**
@@ -116,35 +101,23 @@ const setValueAtPath = (obj: any, path: string, value: any): void => {
   const parts = path.split("/").filter(Boolean)
   let current = obj
 
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i]
-
-    if (current === null || current === undefined) {
-      current = {}
-    }
-
+  current = parts.slice(0, -1).reduce((current, part) => {
+    if (current === null || current === undefined) current = {}
     if (Array.isArray(current)) {
       const index = parseInt(part, 10)
-      if (isNaN(index)) {
-        throw new Error(`Invalid array index in path: ${part}`)
-      }
-      if (current[index] === null || current[index] === undefined) {
-        current[index] = {}
-      }
-      current = current[index]
-    } else {
-      if (current[part] === null || current[part] === undefined) {
-        current[part] = {}
-      }
-      current = current[part]
+      if (isNaN(index)) throw new JsonDiffError({ message: `Invalid array index in path: ${part}` })
+      if (current[index] === null || current[index] === undefined) current[index] = {}
+      return current[index]
     }
-  }
+    if (current[part] === null || current[part] === undefined) current[part] = {}
+    return current[part]
+  }, obj)
 
   const lastPart = parts[parts.length - 1]
   if (Array.isArray(current)) {
     const index = parseInt(lastPart, 10)
     if (isNaN(index)) {
-      throw new Error(`Invalid array index in path: ${lastPart}`)
+      throw new JsonDiffError({ message: `Invalid array index in path: ${lastPart}` })
     }
     current[index] = value
   } else {
@@ -159,10 +132,7 @@ const removeValueAtPath = (obj: any, path: string): void => {
   const parts = path.split("/").filter(Boolean)
   let current = obj
 
-  for (let i = 0; i < parts.length - 1; i++) {
-    const part = parts[i]
-    current = current[part]
-  }
+  current = parts.slice(0, -1).reduce((current, part) => current[part], obj)
 
   const lastPart = parts[parts.length - 1]
   if (Array.isArray(current)) {
@@ -179,47 +149,31 @@ const removeValueAtPath = (obj: any, path: string): void => {
  * Apply a JSON diff to an object.
  */
 export const applyDiff = (obj: any, diff: JsonDiff): any => {
-  const result = JSON.parse(JSON.stringify(obj)) // Deep clone
+  const result = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(
+    Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(obj),
+  ) // Deep clone
 
-  for (const op of diff.ops) {
-    switch (op.op) {
-      case "add":
-        setValueAtPath(result, op.path, op.value)
-        break
-
-      case "remove":
-        removeValueAtPath(result, op.path)
-        break
-
-      case "replace":
-        setValueAtPath(result, op.path, op.value)
-        break
-
-      case "move":
-        if (op.from === undefined) {
-          throw new Error("Move operation must have 'from' path")
-        }
+  Arr.forEach(diff.ops, (op) => {
+    Match.value(op.op).pipe(
+      Match.when("add", () => setValueAtPath(result, op.path, op.value)),
+      Match.when("remove", () => removeValueAtPath(result, op.path)),
+      Match.when("replace", () => setValueAtPath(result, op.path, op.value)),
+      Match.when("move", () => {
+        if (op.from === undefined)
+          throw new JsonDiffError({ message: "Move operation must have 'from' path" })
         const value = getValueAtPath(result, op.from)
         removeValueAtPath(result, op.from)
         setValueAtPath(result, op.path, value)
-        break
-
-      case "copy":
-        if (op.from === undefined) {
-          throw new Error("Copy operation must have 'from' path")
-        }
-        const copyValue = getValueAtPath(result, op.from)
-        setValueAtPath(result, op.path, copyValue)
-        break
-
-      case "test":
-        // Test operations are assertions - skip them
-        break
-
-      default:
-        throw new Error(`Unknown operation type: ${(op as any).op}`)
-    }
-  }
+      }),
+      Match.when("copy", () => {
+        if (op.from === undefined)
+          throw new JsonDiffError({ message: "Copy operation must have 'from' path" })
+        setValueAtPath(result, op.path, getValueAtPath(result, op.from))
+      }),
+      Match.when("test", () => undefined),
+      Match.exhaustive,
+    )
+  })
 
   return result
 }
@@ -229,21 +183,19 @@ export const applyDiff = (obj: any, diff: JsonDiff): any => {
  * For remove operations, we need to capture the value being removed.
  */
 export const createInverseDiff = (obj: any, diff: JsonDiff): InverseDiff => {
-  const inverseOps: JsonDiffOperation[] = []
-
-  for (const op of diff.ops) {
+  const inverseOps = diff.ops.map((op) => {
     // For remove operations, we need to capture the value being removed
     if (op.op === "remove") {
       const value = getValueAtPath(obj, op.path)
-      inverseOps.push({
-        op: "remove",
+      return {
+        op: "remove" as const,
         path: op.path,
         value,
-      })
+      }
     } else {
-      inverseOps.push(inverseOperation(op))
+      return inverseOperation(op)
     }
-  }
+  })
 
   return { ops: inverseOps }
 }
@@ -262,5 +214,5 @@ export const applyInverseDiff = (currentState: any, originalDiff: JsonDiff): any
 export const applyInverseDiffE = (currentState: any, originalDiff: JsonDiff) =>
   Effect.try({
     try: () => applyInverseDiff(currentState, originalDiff),
-    catch: (error) => new Error("Failed to apply inverse diff", { cause: error }),
+    catch: () => new JsonDiffError({ message: "Failed to apply inverse diff" }),
   })

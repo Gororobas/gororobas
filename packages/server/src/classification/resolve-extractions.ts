@@ -22,7 +22,7 @@ import {
   SuggestedTagExtraction,
   SuggestedVegetableExtraction,
 } from "@gororobas/domain"
-import { Array as Arr, Effect, Option, Struct } from "effect"
+import { Array as Arr, Effect, Option, Predicate as P, Struct } from "effect"
 import type { Extraction } from "langextract"
 
 import { TagsRepository } from "../tags/repository.js"
@@ -45,18 +45,13 @@ function toCommonExtractionFields(extraction: Extraction) {
 }
 
 function collectVegetableCandidates(extraction: Extraction): string[] {
-  const candidates: string[] = []
   const attributes = extraction.attributes ?? {}
-  for (const key of ["vegetable_pt", "vegetable_es", "vegetable_en"]) {
+  const candidates = ["vegetable_pt", "vegetable_es", "vegetable_en"].flatMap((key) => {
     const value = attributes[key]
-    if (typeof value === "string") {
-      candidates.push(value)
-    } else if (Array.isArray(value)) {
-      candidates.push(...value)
-    }
-  }
+    return P.isString(value) ? [value] : Array.isArray(value) ? value : []
+  })
   if (Arr.isReadonlyArrayEmpty(candidates) && extraction.extractionText) {
-    candidates.push(extraction.extractionText)
+    return [extraction.extractionText]
   }
   return candidates
 }
@@ -129,18 +124,15 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
     ...common,
     handle: stringToHandle(extraction.extractionText),
     names: {
-      pt:
-        typeof common.attributes.vegetable_pt === "string"
-          ? common.attributes.vegetable_pt
-          : extraction.extractionText,
-      es:
-        typeof common.attributes.vegetable_es === "string"
-          ? common.attributes.vegetable_es
-          : extraction.extractionText,
-      en:
-        typeof common.attributes.vegetable_en === "string"
-          ? common.attributes.vegetable_en
-          : extraction.extractionText,
+      pt: P.isString(common.attributes.vegetable_pt)
+        ? common.attributes.vegetable_pt
+        : extraction.extractionText,
+      es: P.isString(common.attributes.vegetable_es)
+        ? common.attributes.vegetable_es
+        : extraction.extractionText,
+      en: P.isString(common.attributes.vegetable_en)
+        ? common.attributes.vegetable_en
+        : extraction.extractionText,
     },
   })
 })
@@ -153,7 +145,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
   const { attributes } = common
   const status = attributes.status
   const tagHandle = stringToHandle(
-    typeof attributes.tag === "string" ? attributes.tag : extraction.extractionText,
+    P.isString(attributes.tag) ? attributes.tag : extraction.extractionText,
   )
 
   yield* Effect.logDebug(
@@ -194,9 +186,9 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
     ...common,
     handle: tagHandle,
     names: {
-      pt: typeof attributes.name_pt === "string" ? attributes.name_pt : extraction.extractionText,
-      es: typeof attributes.name_es === "string" ? attributes.name_es : extraction.extractionText,
-      en: typeof attributes.name_en === "string" ? attributes.name_en : extraction.extractionText,
+      pt: P.isString(attributes.name_pt) ? attributes.name_pt : extraction.extractionText,
+      es: P.isString(attributes.name_es) ? attributes.name_es : extraction.extractionText,
+      en: P.isString(attributes.name_en) ? attributes.name_en : extraction.extractionText,
     },
   })
 })

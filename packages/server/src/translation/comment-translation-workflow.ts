@@ -5,8 +5,11 @@
  * Each activity is memoized, so a crash mid-workflow won't re-invoke the translation API.
  */
 import {
+  CommentConcurrentUpdateError,
   CommentId,
   CommentNotFoundError,
+  IdGen,
+  InvalidCrdtUpdateError,
   Locale,
   SystemCommit,
   TimestampColumn,
@@ -14,6 +17,8 @@ import {
   tiptapFromHtml,
 } from "@gororobas/domain"
 import { DateTime, Duration, Effect, Option, Schema } from "effect"
+import { SchemaError } from "effect/Schema"
+import { SqlClient, SqlError } from "effect/unstable/sql"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
 import { SystemUpsertTranslation } from "../comments/comment-repository-inputs.js"
@@ -71,7 +76,15 @@ export const CommentTranslationWorkflowLayer = CommentTranslationWorkflow.toLaye
 
         const persistWithRetry = (
           remainingAttempts: number,
-        ): Effect.Effect<void, unknown, unknown> =>
+        ): Effect.Effect<
+          undefined,
+          | CommentConcurrentUpdateError
+          | CommentNotFoundError
+          | InvalidCrdtUpdateError
+          | SchemaError
+          | SqlError.SqlError,
+          IdGen | SqlClient.SqlClient
+        > =>
           Effect.gen(function* () {
             const currentComment = yield* repository.findCommentRowById(payload.commentId).pipe(
               Effect.flatMap(

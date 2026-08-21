@@ -11,11 +11,8 @@ interface ApiOperation {
 
 const internalServerErrorResponse = HttpServerResponse.empty({ status: 500 })
 
-const isSqlError = (error: unknown): error is SqlError.SqlError =>
-  typeof error === "object" && error !== null && "_tag" in error && error._tag === "SqlError"
-
 const isInfrastructureError = (error: unknown): error is InfrastructureError =>
-  Schema.isSchemaError(error) || isSqlError(error)
+  Schema.isSchemaError(error) || Schema.is(SqlError.SqlError)(error)
 
 const annotateOperationSpan = (operation: ApiOperation, attributes: Record<string, unknown>) =>
   Effect.annotateCurrentSpan({
@@ -42,7 +39,7 @@ const protectApiOperation = <A, E, R>(
 ): Effect.Effect<A | HttpServerResponse.HttpServerResponse, E, R> =>
   effect.pipe(
     Effect.tapError((error) =>
-      isSqlError(error)
+      Schema.is(SqlError.SqlError)(error)
         ? annotateOperationSpan(operation, { "gororobas.sql.retrying": true })
         : Effect.void,
     ),

@@ -1,3 +1,5 @@
+import { Predicate as P, String as EffectString } from "effect"
+
 import { Handle } from "../primitives.js"
 
 /**
@@ -20,7 +22,7 @@ export function truncate(str: string, maxLength: number) {
 }
 
 export function capitalize(str: string, allWords = true): string {
-  if (typeof str !== "string" || !str[0]) {
+  if (!P.isString(str) || EffectString.isEmpty(str)) {
     return str
   }
 

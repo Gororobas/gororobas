@@ -5,7 +5,10 @@
  * Each activity is memoized, so a crash mid-workflow won't re-invoke the translation API.
  */
 import {
+  IdGen,
+  InvalidCrdtUpdateError,
   Locale,
+  PostConcurrentUpdateError,
   PostId,
   PostNotFoundError,
   SystemCommit,
@@ -14,6 +17,8 @@ import {
   tiptapFromHtml,
 } from "@gororobas/domain"
 import { DateTime, Duration, Effect, Option, Schema } from "effect"
+import { SchemaError } from "effect/Schema"
+import { SqlClient, SqlError } from "effect/unstable/sql"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
 import { SystemUpsertTranslation } from "../posts/post-repository-inputs.js"
@@ -71,7 +76,15 @@ export const PostTranslationWorkflowLayer = PostTranslationWorkflow.toLayer(
 
         const persistWithRetry = (
           remainingAttempts: number,
-        ): Effect.Effect<void, unknown, unknown> =>
+        ): Effect.Effect<
+          void,
+          | InvalidCrdtUpdateError
+          | PostConcurrentUpdateError
+          | PostNotFoundError
+          | SchemaError
+          | SqlError.SqlError,
+          IdGen | SqlClient.SqlClient
+        > =>
           Effect.gen(function* () {
             const currentPost = yield* repository.findPostRowById(payload.postId).pipe(
               Effect.flatMap(

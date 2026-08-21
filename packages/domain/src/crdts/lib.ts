@@ -82,7 +82,7 @@ const applyUpdate = (crdt_update: Uint8Array<ArrayBufferLike>, sourceDocument: L
       const forkedDoc = sourceDocument.fork()
 
       const importStatus = forkedDoc.import(crdt_update)
-      if (!importStatus.success) throw new Error("Invalid CRDT update")
+      if (!importStatus.success) throw new InvalidCrdtUpdateError({ reason: "InvalidFormat" })
 
       return forkedDoc
     },

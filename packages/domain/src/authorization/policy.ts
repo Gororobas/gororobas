@@ -44,9 +44,7 @@ export const policy = <A, R = never>(
   }).pipe(
     // Policies should always error with Unauthorized
     Effect.mapError((e) =>
-      typeof e === "object" && !!e && "_tag" in e && e._tag === "UnauthorizedError"
-        ? (e as UnauthorizedError)
-        : new UnauthorizedError({ session: { type: "VISITOR" } }),
+      Schema.is(UnauthorizedError)(e) ? e : new UnauthorizedError({ session: { type: "VISITOR" } }),
     ),
   )
 

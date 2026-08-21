@@ -8,6 +8,13 @@ const ATLAS_DIR = "src/db/migrations-sql"
 const EFFECT_DIR = "src/db/migrations-effect"
 const ATLAS_ENV = "local"
 
+class MigrationScriptError extends Schema.TaggedError<MigrationScriptError>()(
+  "MigrationScriptError",
+  {
+    message: Schema.String,
+  },
+) {}
+
 const MigrationNameArg = Schema.String.pipe(
   Schema.check(Schema.isMinLength(1)),
   Schema.check(Schema.isPattern(/^[a-z][a-z0-9_]*$/)),
@@ -95,7 +102,9 @@ const runAtlasDiff = (migrationName: string) =>
     const result = yield* spawner.exitCode(command)
 
     if (result !== ChildProcessSpawner.ExitCode(0)) {
-      return yield* Effect.fail(new Error(`Atlas exited with code ${result}`))
+      return yield* Effect.fail(
+        new MigrationScriptError({ message: `Atlas exited with code ${result}` }),
+      )
     }
 
     yield* Effect.log("Atlas migration generated successfully")
@@ -155,12 +164,15 @@ const program = Effect.gen(function* () {
   if (EffectArray.isReadonlyArrayEmpty(args)) {
     yield* Console.error("Usage: npx tsx scripts/migrate.ts <migration_name>")
     yield* Console.error("Example: npx tsx scripts/migrate.ts add_users_table")
-    return yield* Effect.fail(new Error("Missing migration name"))
+    return yield* Effect.fail(new MigrationScriptError({ message: "Missing migration name" }))
   }
 
   const migrationName = yield* Schema.decodeUnknownEffect(MigrationNameArg)(args[0]).pipe(
     Effect.mapError(
-      () => new Error("Invalid migration name. Use lowercase alphanumeric with underscores."),
+      () =>
+        new MigrationScriptError({
+          message: "Invalid migration name. Use lowercase alphanumeric with underscores.",
+        }),
     ),
   )
 

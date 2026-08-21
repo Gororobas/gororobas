@@ -12,6 +12,7 @@ import { PersonId, ProfileId } from "../common/ids.js"
 import { Handle, TimestampColumn } from "../common/primitives.js"
 import type { PostLocalizedData, PostSourceData } from "../posts/domain.js"
 import type { ResourceLocalizedData, SourceResourceData } from "../resources/domain.js"
+import { TiptapDocument } from "../rich-text/domain.js"
 
 export const LoroDocUpdate = Schema.Uint8Array.pipe(Schema.brand("LoroCrdtUpdateEncoded"))
 export type LoroDocUpdate = typeof LoroDocUpdate.Type
@@ -191,11 +192,11 @@ const encodeDateOrUndefined = (value: unknown) => {
 }
 
 const encodeLocalizedData = (localeData: PostLocalizedData) => ({
-  content: JSON.stringify(localeData.content),
+  content: Schema.encodeSync(Schema.fromJsonString(TiptapDocument))(localeData.content),
   originalLocale: localeData.originalLocale,
-  translatedAtCrdtFrontier: JSON.stringify(
-    "translatedAtCrdtFrontier" in localeData ? localeData.translatedAtCrdtFrontier : null,
-  ),
+  translatedAtCrdtFrontier: Schema.encodeSync(
+    Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
+  )("translatedAtCrdtFrontier" in localeData ? localeData.translatedAtCrdtFrontier : null),
   translationSource: localeData.translationSource,
 })
 
@@ -236,12 +237,18 @@ export const sourceCommentDataToCrdtStorage = (sourceData: SourceCommentData) =>
   },
 })
 
+// @todo refactor to be an Effect schema
 const encodeResourceLocalizedData = (localeData: ResourceLocalizedData) => ({
   title: localeData.title,
-  description: localeData.description === null ? undefined : JSON.stringify(localeData.description),
+  description:
+    localeData.description === null
+      ? undefined
+      : Schema.encodeSync(Schema.fromJsonString(TiptapDocument))(localeData.description),
   creditLine: localeData.creditLine ?? undefined,
   originalLocale: localeData.originalLocale,
-  translatedAtCrdtFrontier: JSON.stringify(null),
+  translatedAtCrdtFrontier: Schema.encodeSync(
+    Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
+  )(null),
   translationSource: localeData.translationSource,
 })
 

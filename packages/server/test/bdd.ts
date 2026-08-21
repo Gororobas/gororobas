@@ -14,15 +14,19 @@ import {
   Then,
   When,
 } from "@gororobas/effect-bdd"
-import { Effect, Record as R } from "effect"
+import { Effect, Record as R, Schema } from "effect"
 
 import { AppSqlTest } from "../src/sql.js"
 
-export const NotImplementedError = new Error("NotImplemented")
+export class NotImplementedError extends Schema.TaggedError<NotImplementedError>()(
+  "NotImplementedError",
+  { message: Schema.String },
+) {}
 
 export const makeTestLayer = () => AppSqlTest
 
-export const notImplemented = <Ctx>(_ctx: Ctx) => Effect.fail(NotImplementedError)
+export const notImplemented = <Ctx>(_ctx: Ctx) =>
+  Effect.fail(new NotImplementedError({ message: "NotImplemented" }))
 
 const stepConstructorByTag: Record<StepTag, typeof Given> = {
   And,

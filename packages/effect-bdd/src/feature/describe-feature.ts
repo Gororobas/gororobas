@@ -31,13 +31,17 @@ import {
 
 function getCallerDir(): string {
   const previousPrepareStackTrace = Error.prepareStackTrace
-  Error.prepareStackTrace = (_error, stack) => stack
-  const stack = new Error().stack as unknown as NodeJS.CallSite[]
+  let callerFile: string | undefined
+  Error.prepareStackTrace = (_error, stack) => {
+    callerFile = stack[2]?.getFileName() ?? undefined
+    return ""
+  }
+  const callerError = new FeatureParseError({ path: "caller", message: "Call site lookup" })
+  void callerError.stack
   Error.prepareStackTrace = previousPrepareStackTrace
 
-  const callerFile = stack[2]?.getFileName()
   if (!callerFile) {
-    throw new Error("Could not determine caller file path")
+    throw new FeatureParseError({ path: "caller", message: "Could not determine caller file path" })
   }
 
   return dirname(callerFile.startsWith("file://") ? fileURLToPath(callerFile) : callerFile)

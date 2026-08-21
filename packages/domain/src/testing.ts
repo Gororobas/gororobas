@@ -3,7 +3,18 @@
  *
  * Import from `@gororobas/domain/testing` in downstream packages.
  */
-import { Cause, DateTime, Effect, Exit, Layer, Option, Record as R } from "effect"
+import {
+  Array as Arr,
+  Cause,
+  DateTime,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Predicate as P,
+  Record as R,
+  Schema,
+} from "effect"
 import { UnknownError } from "effect/Cause"
 import { FastCheck } from "effect/testing"
 
@@ -25,7 +36,9 @@ export class PropertyTestFailure extends Error {
     readonly seed: number,
     readonly path: string,
   ) {
-    super(`Property failed with counterexample: ${JSON.stringify(counterexample)}`)
+    super(
+      `Property failed with counterexample: ${Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(counterexample)}`,
+    )
   }
 }
 
@@ -134,7 +147,7 @@ export function deepEquals(a: unknown, b: unknown): boolean {
   // Handle null/undefined/NaN — JSON.stringify converts undefined (in arrays)
   // and NaN to null, and strips undefined-valued object keys.
   const isNullish = (v: unknown) =>
-    v === null || v === undefined || (typeof v === "number" && !Number.isFinite(v))
+    v === null || v === undefined || (P.isNumber(v) && !Number.isFinite(v))
   if (a === b) return true
   if (isNullish(a) && isNullish(b)) return true
   if (a == null || b == null) return false
@@ -147,37 +160,27 @@ export function deepEquals(a: unknown, b: unknown): boolean {
   // Handle Uint8Array
   if (a instanceof Uint8Array && b instanceof Uint8Array) {
     if (a.length !== b.length) return false
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false
-    }
-    return true
+    return Array.from(a).every((value, index) => value === b[index])
   }
 
   // Handle arrays
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false
-    for (let i = 0; i < a.length; i++) {
-      if (!deepEquals(a[i], b[i])) return false
-    }
-    return true
+    return Arr.every(a, (value, index) => deepEquals(value, b[index]))
   }
 
   // Handle objects
-  if (typeof a === "object" && typeof b === "object") {
+  if (P.isObject(a) && P.isObject(b)) {
     // Filter out keys with undefined values since JSON round-trips erase
     // the distinction between {key: undefined} and a missing key.
-    const definedKeys = (obj: object) => R.keys(obj).filter((k) => (obj as any)[k] !== undefined)
-    const aKeys = definedKeys(a as object)
-    const bKeys = definedKeys(b as object)
+    const definedKeys = (obj: Record<PropertyKey, unknown>) =>
+      R.keys(obj).filter((k) => obj[k] !== undefined)
+    const aKeys = definedKeys(a)
+    const bKeys = definedKeys(b)
 
     if (aKeys.length !== bKeys.length) return false
 
-    for (const key of aKeys) {
-      if (!bKeys.includes(key)) return false
-      if (!deepEquals((a as any)[key], (b as any)[key])) return false
-    }
-
-    return true
+    return Arr.every(aKeys, (key) => bKeys.includes(key) && deepEquals(a[key], b[key]))
   }
 
   // Fallback to strict equality

@@ -21,6 +21,11 @@ import {
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
+class InvalidPostStorageError extends Schema.TaggedError<InvalidPostStorageError>()(
+  "InvalidPostStorageError",
+  { message: Schema.String },
+) {}
+
 export const CorePostMetadata = Schema.Struct({
   handle: Handle,
   ownerProfileId: ProfileId,
@@ -140,7 +145,7 @@ const postLocalizedDataStorageToSourceData = (
 ) => {
   if (!localeData.content) return undefined
   if (!localeData.originalLocale || !localeData.translationSource) {
-    throw new Error("Invalid localized post storage data")
+    throw new InvalidPostStorageError({ message: "Invalid localized post storage data" })
   }
 
   const content = decodeTiptapDocumentStorage(localeData.content)
@@ -155,7 +160,7 @@ const postLocalizedDataStorageToSourceData = (
   }
 
   if (!localeData.translatedAtCrdtFrontier) {
-    throw new Error("Invalid translated post storage data")
+    throw new InvalidPostStorageError({ message: "Invalid translated post storage data" })
   }
 
   return PostLocalizedData.make({

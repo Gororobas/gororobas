@@ -203,7 +203,7 @@ export const insertPersonWithDependencies = ({
   Effect.gen(function* () {
     if (person.id !== profile.id) {
       return yield* Effect.fail(
-        new Error(`Person/Profile id mismatch in test setup: ${person.id} !== ${profile.id}`),
+        Error(`Person/Profile id mismatch in test setup: ${person.id} !== ${profile.id}`),
       )
     }
 
@@ -259,7 +259,7 @@ export const insertOrganizationWithDependencies = ({
   Effect.gen(function* () {
     if (organization.id !== profile.id) {
       return yield* Effect.fail(
-        new Error(
+        Error(
           `Organization/Profile id mismatch in test setup: ${organization.id} !== ${profile.id}`,
         ),
       )

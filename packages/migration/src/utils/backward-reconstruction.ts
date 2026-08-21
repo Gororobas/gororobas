@@ -2,7 +2,7 @@ import { type SourceVegetableData } from "@gororobas/domain"
 /**
  * Backward reconstruction algorithm for vegetable edit history.
  */
-import { Effect, Option } from "effect"
+import { Effect, Option, Schema } from "effect"
 
 import { type EditSuggestion } from "../schemas/gel/entities.js"
 import { applyInverseDiffE, type JsonDiff } from "./json-diff-inverse.js"
@@ -30,6 +30,10 @@ export interface ReconstructedHistory {
   }>
 }
 
+class ReconstructionError extends Schema.TaggedError<ReconstructionError>()("ReconstructionError", {
+  message: Schema.String,
+}) {}
+
 // ============ Data Transformation ============
 
 /**
@@ -49,7 +53,7 @@ export const transformEditSuggestion = (
       status: editSuggestion.status as EditSuggestionEvent["status"],
       created_at: editSuggestion.created_at,
     }),
-    catch: (error) => new Error("Failed to transform EditSuggestion", { cause: error }),
+    catch: () => new ReconstructionError({ message: "Failed to transform EditSuggestion" }),
   })
 
 /**
@@ -131,16 +135,12 @@ export const validateReconstructedHistory = (
 ): Effect.Effect<boolean, Error> =>
   Effect.gen(function* () {
     // Apply all diffs forward to see if we get the expected final state
-    let state = history.initialState
-
-    for (const edit of history.edits) {
-      // This would use the forward diff application
-      // For now, we'll just check if the final state matches
-      state = edit.newState
-    }
+    // The forward application is represented by each edit's already-materialized new state.
+    const state = history.edits.reduce((_currentState, edit) => edit.newState, history.initialState)
 
     // Simple deep equality check
-    const finalStateMatches = JSON.stringify(state) === JSON.stringify(expectedFinalState)
+    const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
+    const finalStateMatches = encodeJson(state) === encodeJson(expectedFinalState)
 
     if (!finalStateMatches) {
       yield* Effect.logWarning("Reconstructed history validation failed", {

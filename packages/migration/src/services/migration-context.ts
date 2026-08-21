@@ -169,7 +169,9 @@ const makeMigrationContext = ({ initialMap = HashMap.empty() }: { initialMap?: I
           const existing = HashMap.get(map, gelId)
 
           // Simple hash for now - can be improved with proper content hashing
-          const newHash = yield* Effect.succeed(JSON.stringify(sourceRecord))
+          const newHash = yield* Effect.succeed(
+            Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(sourceRecord),
+          )
           const now = (yield* DateTime.nowAsDate).toISOString()
 
           if (Option.isSome(existing)) {
