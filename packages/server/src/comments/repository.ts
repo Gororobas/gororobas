@@ -19,7 +19,7 @@ import {
   TiptapDocument,
   tiptapToText,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
+import { Array as Arr, Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -215,7 +215,9 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
 
         return materializeJunctionTable({
           deleteRows: sql`DELETE FROM comment_translations WHERE comment_id = ${input.commentId}`,
-          insertRows: rows.length > 0 ? insertCommentTranslationRows(rows) : Effect.void,
+          insertRows: Arr.isReadonlyArrayNonEmpty(rows)
+            ? insertCommentTranslationRows(rows)
+            : Effect.void,
         })
       }
 

@@ -6,7 +6,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Handle, IdGen, TagRow } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
-import { Effect, Layer, Option, Schema } from "effect"
+import { Array as Arr, Effect, HashSet, Layer, Option, Order, Schema } from "effect"
 import { FastCheck } from "effect/testing"
 import { v7 } from "uuid"
 
@@ -39,8 +39,8 @@ const uniqueTagRowsArbitrary = FastCheck.array(tagRowArbitrary, {
   maxLength: 10,
 }).filter(
   (tags) =>
-    new Set(tags.map((tag) => tag.id)).size === tags.length &&
-    new Set(tags.map((tag) => tag.handle)).size === tags.length,
+    HashSet.size(HashSet.fromIterable(tags.map((tag) => tag.id))) === tags.length &&
+    HashSet.size(HashSet.fromIterable(tags.map((tag) => tag.handle))) === tags.length,
 )
 
 describe("TagsRepository", () => {
@@ -105,10 +105,10 @@ describe("TagsRepository", () => {
             yield* Effect.forEach(tags, (tag) => repo.insertRow(tag), { concurrency: "unbounded" })
 
             const persisted = yield* repo.findAll()
-            const expectedHandles = tags
-              .map((tag) => tag.handle)
-              .slice()
-              .sort()
+            const expectedHandles = Arr.sort(
+              tags.map((tag) => tag.handle),
+              Order.String,
+            )
 
             return (
               persisted.length === tags.length &&

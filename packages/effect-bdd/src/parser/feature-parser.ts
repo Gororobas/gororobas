@@ -1,8 +1,7 @@
 import * as Gherkin from "@cucumber/gherkin"
 import * as Messages from "@cucumber/messages"
-import { Effect } from "effect"
-import * as fs from "node:fs"
-import * as path from "node:path"
+import { BunServices } from "@effect/platform-bun"
+import { Array as Arr, Effect, FileSystem, Path } from "effect"
 
 import { FeatureParseError } from "../errors.js"
 import type {
@@ -108,7 +107,7 @@ function parseRule(rule: Messages.Rule): ParsedRule {
     if (child.background) {
       background = parseBackground(child.background)
     } else if (child.scenario) {
-      if (child.scenario.examples && child.scenario.examples.length > 0) {
+      if (Arr.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])) {
         scenarioOutlines.push(parseScenarioOutline(child.scenario))
       } else {
         scenarios.push(parseScenario(child.scenario))
@@ -140,7 +139,7 @@ function parseGherkinDocument(document: Messages.GherkinDocument): ParsedFeature
     if (child.background) {
       background = parseBackground(child.background)
     } else if (child.scenario) {
-      if (child.scenario.examples && child.scenario.examples.length > 0) {
+      if (Arr.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])) {
         scenarioOutlines.push(parseScenarioOutline(child.scenario))
       } else {
         scenarios.push(parseScenario(child.scenario))
@@ -162,37 +161,40 @@ function parseGherkinDocument(document: Messages.GherkinDocument): ParsedFeature
 
 export function parseFeatureFile(
   featurePath: string,
-): Effect.Effect<ParsedFeature, FeatureParseError> {
-  return Effect.try({
-    catch: (error) =>
-      new FeatureParseError({
-        message: error instanceof Error ? error.message : String(error),
-        path: featurePath,
-      }),
-    try: () => {
-      const resolvedPath = path.resolve(process.cwd(), featurePath)
-      const content = fs.readFileSync(resolvedPath, "utf-8")
+): Effect.Effect<ParsedFeature, FeatureParseError, FileSystem.FileSystem | Path.Path> {
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const resolvedPath = path.resolve(process.cwd(), featurePath)
+    const content = yield* fileSystem.readFileString(resolvedPath).pipe(
+      Effect.mapError(
+        (error) =>
+          new FeatureParseError({
+            message: error instanceof Error ? error.message : String(error),
+            path: featurePath,
+          }),
+      ),
+    )
 
-      const uuidFn = Messages.IdGenerator.uuid()
-      const builder = new Gherkin.AstBuilder(uuidFn)
-      const matcher = new Gherkin.GherkinClassicTokenMatcher()
-      const parser = new Gherkin.Parser(builder, matcher)
+    return yield* Effect.try({
+      catch: (error) =>
+        new FeatureParseError({
+          message: error instanceof Error ? error.message : String(error),
+          path: featurePath,
+        }),
+      try: () => {
+        const uuidFn = Messages.IdGenerator.uuid()
+        const builder = new Gherkin.AstBuilder(uuidFn)
+        const matcher = new Gherkin.GherkinClassicTokenMatcher()
+        const parser = new Gherkin.Parser(builder, matcher)
 
-      const document = parser.parse(content)
-      return parseGherkinDocument(document)
-    },
+        const document = parser.parse(content)
+        return parseGherkinDocument(document)
+      },
+    })
   })
 }
 
 export function parseFeatureFileSync(featurePath: string): ParsedFeature {
-  const resolvedPath = path.resolve(process.cwd(), featurePath)
-  const content = fs.readFileSync(resolvedPath, "utf-8")
-
-  const uuidFn = Messages.IdGenerator.uuid()
-  const builder = new Gherkin.AstBuilder(uuidFn)
-  const matcher = new Gherkin.GherkinClassicTokenMatcher()
-  const parser = new Gherkin.Parser(builder, matcher)
-
-  const document = parser.parse(content)
-  return parseGherkinDocument(document)
+  return Effect.runSync(parseFeatureFile(featurePath).pipe(Effect.provide(BunServices.layer)))
 }

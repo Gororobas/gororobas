@@ -124,7 +124,12 @@ describe("PostsService", () => {
         yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
       )
       expect(snapshotRows).toHaveLength(1)
-      const snapshot = snapshotRows[0]!
+      const snapshot = snapshotRows[0]
+      expect(snapshot).toBeDefined()
+      if (snapshot === undefined) return
+      const ptLocale = sourceData.locales.pt
+      expect(ptLocale).toBeDefined()
+      if (ptLocale === undefined) return
 
       const result = yield* withSession(
         service.updatePost({
@@ -134,7 +139,7 @@ describe("PostsService", () => {
               locales: {
                 ...sourceData.locales,
                 pt: {
-                  ...sourceData.locales.pt!,
+                  ...ptLocale,
                   content: makeDocument("Tentativa sem permissao"),
                 },
               },
@@ -179,7 +184,12 @@ describe("PostsService", () => {
         yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
       )
       expect(snapshotRows).toHaveLength(1)
-      const snapshot = snapshotRows[0]!
+      const snapshot = snapshotRows[0]
+      expect(snapshot).toBeDefined()
+      if (snapshot === undefined) return
+      const ptLocale = sourceData.locales.pt
+      expect(ptLocale).toBeDefined()
+      if (ptLocale === undefined) return
 
       yield* withSession(
         service.updatePost({
@@ -189,7 +199,7 @@ describe("PostsService", () => {
               locales: {
                 ...sourceData.locales,
                 pt: {
-                  ...sourceData.locales.pt!,
+                  ...ptLocale,
                   content: makeDocument("Depois"),
                 },
               },

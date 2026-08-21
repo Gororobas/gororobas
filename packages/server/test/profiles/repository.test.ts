@@ -19,6 +19,11 @@ import {
   TestLayer,
 } from "../test-helpers.js"
 
+class IntentionalFailure extends Schema.TaggedError<IntentionalFailure>()(
+  "ProfilesRepositoryTestIntentionalFailure",
+  { message: Schema.String },
+) {}
+
 describe("ProfilesRepository", () => {
   describe("findByHandle", () => {
     it.effect("returns profile when exists and preserves schema", () =>
@@ -178,7 +183,7 @@ describe("ProfilesRepository", () => {
 
               // @effect-diagnostics-next-line globalErrorInEffectFailure:off
               // @effect-diagnostics-next-line missingReturnYieldStar:off
-              yield* Effect.fail(new Error("Intentional failure"))
+              yield* Effect.fail(new IntentionalFailure({ message: "Intentional failure" }))
             }),
         })
 

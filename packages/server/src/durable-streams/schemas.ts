@@ -3,13 +3,9 @@ import { Schema, SchemaGetter } from "effect"
 
 export const createEventBinary = <S extends Schema.Top>(schema: S) =>
   Schema.Uint8Array.pipe(
-    Schema.decodeTo(schema, {
-      decode: SchemaGetter.transform((bytes: Uint8Array) =>
-        JSON.parse(new TextDecoder().decode(bytes)),
-      ),
-      encode: SchemaGetter.transform((data: S["Type"]) =>
-        new TextEncoder().encode(JSON.stringify(data)),
-      ),
+    Schema.decodeTo(Schema.fromJsonString(schema), {
+      decode: SchemaGetter.transform((bytes: Uint8Array) => new TextDecoder().decode(bytes)),
+      encode: SchemaGetter.transform((json: string) => new TextEncoder().encode(json)),
     }),
   )
 

@@ -1,5 +1,5 @@
 import { Locale } from "@gororobas/domain"
-import { Config, Effect, Layer, Redacted, Schema } from "effect"
+import { Array as Arr, Config, Effect, Layer, Redacted, Schema } from "effect"
 import {
   FetchHttpClient,
   HttpClient,
@@ -55,7 +55,7 @@ export const TranslationServiceDeepl = Layer.effect(TranslationService)(
         ),
       )
 
-      if (response.translations.length === 0) {
+      if (Arr.isReadonlyArrayEmpty(response.translations)) {
         return yield* new TranslationError({
           message: "DeepL returned no translations",
         })

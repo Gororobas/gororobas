@@ -73,15 +73,20 @@ const applyUpdateToSnapshot = (input: { crdtUpdate: LoroDocUpdate; snapshot: Lor
 }
 
 const getPtContentFromStorageJson = (json: unknown) => {
-  const storage = json as {
-    locales?: {
-      pt?: {
-        content?: string
-      }
-    }
-  }
+  const storage = Schema.decodeUnknownSync(
+    Schema.Struct({
+      locales: Schema.optional(
+        Schema.Struct({
+          pt: Schema.optional(Schema.Struct({ content: Schema.optional(Schema.String) })),
+        }),
+      ),
+    }),
+  )(json)
 
-  return storage.locales?.pt?.content ? JSON.parse(storage.locales.pt.content) : undefined
+  return Option.match(Option.fromNullishOr(storage.locales?.pt?.content), {
+    onNone: () => undefined,
+    onSome: (content) => Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
+  })
 }
 
 const makeNoteSourceData = (input: {
@@ -111,7 +116,7 @@ const makeEventSourceData = (input: {
   content: TiptapDocument
   endDate: PostSourceData["metadata"]["publishedAt"]
   handle: string
-  locationOrUrl: string | null
+  locationOrUrl?: string
   ownerProfileId: PostSourceData["metadata"]["ownerProfileId"]
   publishedAt: PostSourceData["metadata"]["publishedAt"]
   startDate: PostSourceData["metadata"]["publishedAt"]
@@ -129,10 +134,10 @@ const makeEventSourceData = (input: {
     endDate: input.endDate,
     handle: makeHandle(input.handle),
     kind: "EVENT",
-    locationOrUrl: input.locationOrUrl,
+    locationOrUrl: input.locationOrUrl ?? null,
     ownerProfileId: input.ownerProfileId,
     publishedAt: input.publishedAt,
-    startDate: input.startDate!,
+    startDate: input.startDate,
     visibility: "PUBLIC",
   },
 })
@@ -214,13 +219,13 @@ describe("PostsRepository", () => {
           yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
         )
         expect(beforeSnapshotRows).toHaveLength(1)
-        const beforeSnapshot = beforeSnapshotRows[0]!
+        const beforeSnapshot = Option.getOrThrow(Option.fromNullishOr(beforeSnapshotRows[0]))
         const nextSourceData: PostSourceData = {
           ...initialSourceData,
           locales: {
             ...initialSourceData.locales,
             pt: {
-              ...initialSourceData.locales.pt!,
+              ...Option.getOrThrow(Option.fromNullishOr(initialSourceData.locales.pt)),
               content: makeDocument("Depois"),
             },
           },
@@ -247,7 +252,7 @@ describe("PostsRepository", () => {
         )
 
         const replayedDoc = applyUpdateToSnapshot({
-          crdtUpdate: commits[1]!.crdtUpdate,
+          crdtUpdate: Option.getOrThrow(Option.fromNullishOr(commits[1])).crdtUpdate,
           snapshot: beforeSnapshot.crdtSnapshot,
         })
         expect(getPtContentFromStorageJson(replayedDoc.toJSON())).toEqual(makeDocument("Depois"))
@@ -297,7 +302,7 @@ describe("PostsRepository", () => {
         yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
       )
       expect(beforeSnapshotRows).toHaveLength(1)
-      const beforeSnapshot = beforeSnapshotRows[0]!
+      const beforeSnapshot = Option.getOrThrow(Option.fromNullishOr(beforeSnapshotRows[0]))
 
       yield* repository.updatePost(
         SystemUpsertTranslation.make({
@@ -318,19 +323,34 @@ describe("PostsRepository", () => {
       expect(commits).toHaveLength(2)
       expect(commits.some((commit) => commit.createdById === null)).toBe(true)
       const replayedDoc = applyUpdateToSnapshot({
-        crdtUpdate: commits[1]!.crdtUpdate,
+        crdtUpdate: Option.getOrThrow(Option.fromNullishOr(commits[1])).crdtUpdate,
         snapshot: beforeSnapshot.crdtSnapshot,
       })
-      const replayedStorage = replayedDoc.toJSON() as {
-        locales?: { en?: { content?: string; translatedAtCrdtFrontier?: string } }
-      }
+      const replayedStorage = Schema.decodeUnknownSync(
+        Schema.Struct({
+          locales: Schema.optional(
+            Schema.Struct({
+              en: Schema.optional(
+                Schema.Struct({
+                  content: Schema.optional(Schema.String),
+                  translatedAtCrdtFrontier: Schema.optional(Schema.String),
+                }),
+              ),
+            }),
+          ),
+        }),
+      )(replayedDoc.toJSON())
       expect(
-        replayedStorage.locales?.en?.content
-          ? JSON.parse(replayedStorage.locales.en.content)
-          : undefined,
+        Option.match(Option.fromNullishOr(replayedStorage.locales?.en?.content), {
+          onNone: () => undefined,
+          onSome: (content) =>
+            Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
+        }),
       ).toEqual(makeDocument("Translated text"))
       expect(replayedStorage.locales?.en?.translatedAtCrdtFrontier).toBe(
-        JSON.stringify(Option.getOrThrow(beforeTranslation).currentCrdtFrontier),
+        Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(
+          Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
+        ),
       )
 
       const row = yield* repository.findPostRowById(postId)
@@ -467,7 +487,7 @@ describe("PostsRepository", () => {
         yield* sql`SELECT crdt_snapshot FROM post_crdts WHERE id = ${postId}`,
       )
       expect(initialSnapshotRows).toHaveLength(1)
-      const initialSnapshot = initialSnapshotRows[0]!
+      const initialSnapshot = Option.getOrThrow(Option.fromNullishOr(initialSnapshotRows[0]))
       const makeUpdateWithContent = (content: TiptapDocument) =>
         makePostCrdtUpdate({
           nextSourceData: {
@@ -475,7 +495,7 @@ describe("PostsRepository", () => {
             locales: {
               ...initialSourceData.locales,
               pt: {
-                ...initialSourceData.locales.pt!,
+                ...Option.getOrThrow(Option.fromNullishOr(initialSourceData.locales.pt)),
                 content,
               },
             },

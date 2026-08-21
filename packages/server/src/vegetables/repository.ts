@@ -7,11 +7,11 @@ export class VegetablesRepository extends Context.Service<VegetablesRepository>(
     make: Effect.succeed({
       findById: (_id: VegetableId) => Effect.succeed(Option.none<VegetableRow>()),
       findByHandle: (_handle: Handle | string) => Effect.succeed(Option.none<VegetableRow>()),
-      findAll: () => Effect.succeed([] as Array<VegetableRow>),
+      findAll: () => Effect.succeed<Array<VegetableRow>>([]),
       findBySearchableName: (_pattern: string) =>
         Effect.succeed(Option.none<{ vegetableId: VegetableId; handle: string }>()),
       findTranslations: (_vegetableId: VegetableId) =>
-        Effect.succeed([] as Array<VegetableTranslationRow>),
+        Effect.succeed<Array<VegetableTranslationRow>>([]),
       getCrdt: (_vegetableId: VegetableId) => Effect.succeed(Option.none<unknown>()),
       insertCrdt: (_input: unknown) => Effect.void,
       updateCrdt: (_input: unknown) => Effect.void,

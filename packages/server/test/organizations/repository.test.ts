@@ -8,7 +8,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { IdGen, OrganizationId, PersonId } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
-import { DateTime, Effect, Option } from "effect"
+import { Array as Arr, DateTime, Effect, Option, Order } from "effect"
 
 import { OrganizationsRepository } from "../../src/organizations/repository.js"
 import {
@@ -194,7 +194,10 @@ describe("OrganizationsRepository", () => {
         const members = yield* repo.listMembers(organization.id)
         expect(members).toHaveLength(2)
 
-        const accessLevels = members.map((m) => m.accessLevel).sort()
+        const accessLevels = Arr.sort(
+          members.map((m) => m.accessLevel ?? ""),
+          Order.String,
+        )
         expect(accessLevels).toEqual(["MANAGER", "VIEWER"])
       }).pipe(Effect.provide(TestLayer)),
     )
@@ -209,7 +212,7 @@ describe("OrganizationsRepository", () => {
             yield* insertOrganizationWithDependencies({ organization, profile })
 
             const members = yield* repo.listMembers(organization.id)
-            return members.length === 0
+            return Arr.isReadonlyArrayEmpty(members)
           }).pipe(Effect.provide(TestLayer)),
         DATABASE_PROPERTY_TEST_CONFIG,
       ),
@@ -298,10 +301,12 @@ describe("OrganizationsRepository", () => {
             })
 
             const result = yield* repo.findOrganizationsWhereSoleManager(person.id)
+            const firstResult = result[0]
             return (
               result.length === 1 &&
-              result[0]!.organizationId === organization.id &&
-              result[0]!.memberCount === 1
+              firstResult !== undefined &&
+              firstResult.organizationId === organization.id &&
+              firstResult.memberCount === 1
             )
           }).pipe(Effect.provide(TestLayer)),
         DATABASE_PROPERTY_TEST_CONFIG,

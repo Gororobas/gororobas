@@ -7,6 +7,7 @@ import { FastCheck } from "effect/testing"
 import { v7 } from "uuid"
 
 import Policies from "../src/authorization/policies.js"
+import { Handle } from "../src/common/primitives.js"
 import {
   AccountSession,
   CorePostMetadata,
@@ -18,7 +19,6 @@ import {
   OrganizationType,
   PersonId,
   PlatformAccessLevel,
-  ProfileId,
   Session,
   VisitorSession,
 } from "../src/index.js"
@@ -28,7 +28,8 @@ const IdGenTest = Layer.succeed(IdGen, {
   generate: () => v7(),
 })
 
-const TEST_PUBLISHED_AT = Effect.runSync(DateTime.now)
+const TEST_PUBLISHED_AT = DateTime.nowUnsafe()
+const TEST_HANDLE = Schema.decodeSync(Handle)("test")
 
 // ─── Constructive Arbitraries (no filtering) ───────────────────────────────
 
@@ -120,12 +121,10 @@ const assertMonotonic = (
           { concurrency: "unbounded" },
         )
 
-        let seenTrue = false
-        for (const result of results) {
-          if (seenTrue === true && result === false) return false
-          if (result === true) seenTrue = true
-        }
-        return true
+        return results.every(
+          (result, index) =>
+            result || results.slice(0, index).every((previousResult) => previousResult === false),
+        )
       }),
     ),
   )
@@ -142,8 +141,8 @@ describe("Policies", () => {
           const writePolicies = [
             Policies.posts.canCreate(
               CorePostMetadata.make({
-                handle: "test" as CorePostMetadata["handle"],
-                ownerProfileId: session.personId as ProfileId,
+                handle: TEST_HANDLE,
+                ownerProfileId: session.personId,
                 publishedAt: TEST_PUBLISHED_AT,
                 visibility: "PUBLIC",
               }),
@@ -155,11 +154,12 @@ describe("Policies", () => {
             Policies.media.canCreate,
           ]
 
-          for (const policy of writePolicies) {
-            const canWrite = yield* runPolicySuccess(policy, blockedSession)
-            if (canWrite === true) return false
-          }
-          return true
+          const canWriteResults = yield* Effect.forEach(
+            writePolicies,
+            (policy) => runPolicySuccess(policy, blockedSession),
+            { concurrency: 50 },
+          )
+          return canWriteResults.every((canWrite) => canWrite === false)
         }).pipe(Effect.provide(IdGenTest)),
       ),
     )
@@ -174,12 +174,15 @@ describe("Policies", () => {
             Policies.media.canCreate,
           ]
 
-          for (const policy of policies) {
-            const result1 = yield* runPolicySuccess(policy, session)
-            const result2 = yield* runPolicySuccess(policy, session)
-            if (result1 !== result2) return false
-          }
-          return true
+          const results = yield* Effect.forEach(
+            policies,
+            (policy) =>
+              Effect.all([runPolicySuccess(policy, session), runPolicySuccess(policy, session)], {
+                concurrency: 50,
+              }),
+            { concurrency: 1 },
+          )
+          return results.every(([result1, result2]) => result1 === result2)
         }),
       ),
     )
@@ -203,8 +206,8 @@ describe("Policies", () => {
         ([session, visibility]) =>
           Effect.gen(function* () {
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: session.personId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: session.personId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
@@ -222,8 +225,8 @@ describe("Policies", () => {
         ([session, visibility]) =>
           Effect.gen(function* () {
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: session.personId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: session.personId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
@@ -260,8 +263,8 @@ describe("Policies", () => {
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
           const post = CorePostMetadata.make({
-            handle: "test" as CorePostMetadata["handle"],
-            ownerProfileId: session.personId as ProfileId,
+            handle: TEST_HANDLE,
+            ownerProfileId: session.personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
@@ -274,8 +277,8 @@ describe("Policies", () => {
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
           const post = CorePostMetadata.make({
-            handle: "test" as CorePostMetadata["handle"],
-            ownerProfileId: session.personId as ProfileId,
+            handle: TEST_HANDLE,
+            ownerProfileId: session.personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
@@ -291,8 +294,8 @@ describe("Policies", () => {
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: otherPersonId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
@@ -309,8 +312,8 @@ describe("Policies", () => {
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: otherPersonId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
@@ -325,8 +328,8 @@ describe("Policies", () => {
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
           const post = CorePostMetadata.make({
-            handle: "test" as CorePostMetadata["handle"],
-            ownerProfileId: personId as ProfileId,
+            handle: TEST_HANDLE,
+            ownerProfileId: personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
@@ -340,8 +343,8 @@ describe("Policies", () => {
         Effect.gen(function* () {
           const personId = yield* IdGen.make(PersonId)
           const post = CorePostMetadata.make({
-            handle: "test" as CorePostMetadata["handle"],
-            ownerProfileId: personId as ProfileId,
+            handle: TEST_HANDLE,
+            ownerProfileId: personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "COMMUNITY",
           })
@@ -356,8 +359,8 @@ describe("Policies", () => {
         ([session, ownerId]) =>
           Effect.gen(function* () {
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: ownerId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: ownerId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "COMMUNITY",
             })
@@ -374,8 +377,8 @@ describe("Policies", () => {
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: otherPersonId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PRIVATE",
             })
@@ -391,8 +394,8 @@ describe("Policies", () => {
         ([baseSession, ownerId]) =>
           Effect.gen(function* () {
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: ownerId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: ownerId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
@@ -405,12 +408,11 @@ describe("Policies", () => {
               ),
               { concurrency: "unbounded" },
             )
-            let seenTrue = false
-            for (const result of results) {
-              if (seenTrue === true && result === false) return false
-              if (result === true) seenTrue = true
-            }
-            return true
+            return results.every(
+              (result, index) =>
+                result ||
+                results.slice(0, index).every((previousResult) => previousResult === false),
+            )
           }),
       ),
     )
@@ -547,9 +549,10 @@ describe("Policies", () => {
         (s) => isTrustedOrHigher(s) && hasManagerMembership(s),
         (session) =>
           Effect.gen(function* () {
-            const managerMembership = session.memberships.find((m) => m.accessLevel === "MANAGER")!
+            const managerMembership = session.memberships.find((m) => m.accessLevel === "MANAGER")
+            if (managerMembership === undefined) return false
             return yield* runPolicySuccess(
-              Policies.organizations.canDelete(managerMembership.organizationId as OrganizationId),
+              Policies.organizations.canDelete(managerMembership.organizationId),
               session,
             )
           }),
@@ -645,8 +648,8 @@ describe("Policies", () => {
         ({ session, orgId }) =>
           Effect.gen(function* () {
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: orgId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: orgId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
@@ -661,8 +664,8 @@ describe("Policies", () => {
         ({ session, orgId }) =>
           Effect.gen(function* () {
             const post = CorePostMetadata.make({
-              handle: "test" as CorePostMetadata["handle"],
-              ownerProfileId: orgId as ProfileId,
+              handle: TEST_HANDLE,
+              ownerProfileId: orgId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
@@ -684,8 +687,8 @@ describe("Policies", () => {
       assertPropertyEffect(memberWithLevel("VIEWER"), ({ session, orgId }) =>
         Effect.gen(function* () {
           const post = CorePostMetadata.make({
-            handle: "test" as CorePostMetadata["handle"],
-            ownerProfileId: orgId as ProfileId,
+            handle: TEST_HANDLE,
+            ownerProfileId: orgId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })
@@ -721,8 +724,8 @@ describe("Policies", () => {
           const sessionWithMembership = sessionWithOrgMembership(session, orgId, "EDITOR")
 
           const ownPost = CorePostMetadata.make({
-            handle: "test" as CorePostMetadata["handle"],
-            ownerProfileId: session.personId as ProfileId,
+            handle: TEST_HANDLE,
+            ownerProfileId: session.personId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PRIVATE",
           })
@@ -733,8 +736,8 @@ describe("Policies", () => {
           if (canEditOwn === false) return false
 
           const orgPost = CorePostMetadata.make({
-            handle: "test" as CorePostMetadata["handle"],
-            ownerProfileId: orgId as ProfileId,
+            handle: TEST_HANDLE,
+            ownerProfileId: orgId,
             publishedAt: TEST_PUBLISHED_AT,
             visibility: "PUBLIC",
           })

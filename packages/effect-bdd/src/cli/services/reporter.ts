@@ -1,4 +1,4 @@
-import { Effect, Layer, Context } from "effect"
+import { Array as Arr, Effect, Layer, Context } from "effect"
 
 import type {
   CheckResult,
@@ -65,7 +65,7 @@ function formatRulePretty(rule: RuleResult, indent: string): string {
   lines.push(`${indent}${status} ${ANSI.bold}Rule: ${rule.name}${ANSI.reset}`)
   lines.push("")
 
-  if (rule.backgroundSteps && rule.backgroundSteps.length > 0) {
+  if (rule.backgroundSteps !== undefined && Arr.isReadonlyArrayNonEmpty(rule.backgroundSteps)) {
     lines.push(`${indent}  ${ANSI.dim}Background:${ANSI.reset}`)
     for (const step of rule.backgroundSteps) {
       lines.push(formatStepPretty(step, `${indent}    `))
@@ -107,7 +107,10 @@ function formatFeaturePretty(feature: FeatureResult): string {
   )
   lines.push("")
 
-  if (feature.backgroundSteps && feature.backgroundSteps.length > 0) {
+  if (
+    feature.backgroundSteps !== undefined &&
+    Arr.isReadonlyArrayNonEmpty(feature.backgroundSteps)
+  ) {
     lines.push(`  ${ANSI.dim}Background:${ANSI.reset}`)
     for (const step of feature.backgroundSteps) {
       lines.push(formatStepPretty(step, "    "))

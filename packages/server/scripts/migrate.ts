@@ -23,7 +23,7 @@ const parseSqlStatements = (content: string): Array<string> =>
   content
     .split(";")
     .map((s) => s.trim())
-    .filter((s) => s.length > 0)
+    .filter(EffectString.isNonEmpty)
 
 const generateEffectMigration = (statements: Array<string>, baseName: string): string => {
   const escaped = statements.map(escapeForTemplateLiteral)
@@ -129,7 +129,7 @@ const convertMigrations = Effect.gen(function* () {
     const baseName = file.replace(".sql", "")
     const statements = parseSqlStatements(content)
 
-    if (statements.length === 0) {
+    if (EffectArray.isReadonlyArrayEmpty(statements)) {
       yield* Effect.log(`Skipping ${file} (no statements)`)
       continue
     }
@@ -151,7 +151,7 @@ const convertMigrations = Effect.gen(function* () {
 const program = Effect.gen(function* () {
   const args = yield* Effect.sync(() => process.argv.slice(2))
 
-  if (args.length === 0) {
+  if (EffectArray.isReadonlyArrayEmpty(args)) {
     yield* Console.error("Usage: npx tsx scripts/migrate.ts <migration_name>")
     yield* Console.error("Example: npx tsx scripts/migrate.ts add_users_table")
     return yield* Effect.fail(new Error("Missing migration name"))

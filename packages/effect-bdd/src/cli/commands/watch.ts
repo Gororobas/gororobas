@@ -1,5 +1,14 @@
-import { Console, Duration, Effect, Option, Stream } from "effect"
-import { FileSystem } from "effect"
+import {
+  Console,
+  DateTime,
+  Duration,
+  Effect,
+  Array as EffectArray,
+  FileSystem,
+  Option,
+  Path,
+  Stream,
+} from "effect"
 
 import type { OutputFormat } from "../types.js"
 import { runCheck, splitPatterns } from "./check-impl.js"
@@ -16,7 +25,9 @@ function clearScreen(): Effect.Effect<void> {
   return Console.log("\x1b[2J\x1b[H")
 }
 
-function performCheck(args: WatchArgs): Effect.Effect<void> {
+function performCheck(
+  args: WatchArgs,
+): Effect.Effect<void, never, FileSystem.FileSystem | Path.Path> {
   return runCheck({
     format: args.format,
     ignore: args.ignore,
@@ -32,20 +43,15 @@ function performCheck(args: WatchArgs): Effect.Effect<void> {
 }
 
 function extractWatchDirectories(patterns: Array<string>): Array<string> {
-  const directories = new Set<string>()
-
-  for (const pattern of patterns) {
-    const firstWildcard = pattern.search(/[*?[\]{]/)
-    if (firstWildcard === -1) {
-      directories.add(pattern)
-    } else {
+  return EffectArray.dedupe(
+    patterns.map((pattern) => {
+      const firstWildcard = pattern.search(/[*?[\]{]/)
+      if (firstWildcard === -1) return pattern
       const prefix = pattern.slice(0, firstWildcard)
       const lastSlash = prefix.lastIndexOf("/")
-      directories.add(lastSlash > 0 ? prefix.slice(0, lastSlash) : ".")
-    }
-  }
-
-  return Array.from(directories)
+      return lastSlash > 0 ? prefix.slice(0, lastSlash) : "."
+    }),
+  )
 }
 
 export function runWatchCommand(args: WatchArgs) {
@@ -58,7 +64,9 @@ export function runWatchCommand(args: WatchArgs) {
     const fileSystem = yield* FileSystem.FileSystem
 
     yield* clearScreen()
-    yield* Console.log(`${new Date().toLocaleTimeString()} - Running initial check...\n`)
+    yield* Console.log(
+      `${(yield* DateTime.nowAsDate).toLocaleTimeString()} - Running initial check...\n`,
+    )
     yield* performCheck(args)
 
     yield* Console.log(`\nWatching for changes...`)
@@ -73,7 +81,9 @@ export function runWatchCommand(args: WatchArgs) {
       Stream.runForEach(() =>
         Effect.gen(function* () {
           yield* clearScreen()
-          yield* Console.log(`${new Date().toLocaleTimeString()} - Files changed, rechecking...\n`)
+          yield* Console.log(
+            `${(yield* DateTime.nowAsDate).toLocaleTimeString()} - Files changed, rechecking...\n`,
+          )
           yield* performCheck(args)
         }),
       ),

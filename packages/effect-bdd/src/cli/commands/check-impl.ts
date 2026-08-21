@@ -1,7 +1,14 @@
-import { Console, Effect, Layer, Option } from "effect"
+import {
+  Console,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  String as EffectString,
+  Array as EffectArray,
+} from "effect"
 import { glob } from "glob"
-import { readFileSync } from "node:fs"
-import { resolve } from "node:path"
 
 import { parseFeatureFile } from "../../parser/feature-parser.js"
 import { makeReporter, Reporter } from "../services/reporter.js"
@@ -20,7 +27,7 @@ export function splitPatterns(patterns: string): Array<string> {
   return patterns
     .split(",")
     .map((p) => p.trim())
-    .filter((p) => p.length > 0)
+    .filter(EffectString.isNonEmpty)
 }
 
 const DESCRIBE_FEATURE_REGEX = /describeFeature\s*\(/
@@ -28,44 +35,72 @@ const DESCRIBE_FEATURE_REGEX = /describeFeature\s*\(/
 /**
  * Read .gitignore and convert entries to glob ignore patterns.
  */
-function readGitignorePatterns(cwd: string): Array<string> {
-  try {
-    const content = readFileSync(resolve(cwd, ".gitignore"), "utf8")
+function readGitignorePatterns(
+  cwd: string,
+): Effect.Effect<Array<string>, never, FileSystem.FileSystem | Path.Path> {
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const content = yield* Effect.matchEffect(
+      fileSystem.readFileString(path.resolve(cwd, ".gitignore")),
+      {
+        onFailure: () => Effect.succeed(undefined),
+        onSuccess: Effect.succeed,
+      },
+    )
+
+    if (content === undefined) return []
+
     return content
       .split("\n")
       .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith("#") && !line.startsWith("!"))
+      .filter(
+        (line) => EffectString.isNonEmpty(line) && !line.startsWith("#") && !line.startsWith("!"),
+      )
       .flatMap((pattern) => {
         const cleaned = pattern.replace(/\/$/, "")
         return [`${cleaned}`, `${cleaned}/**`]
       })
-  } catch {
-    return []
-  }
+  })
 }
 
-function globFiles(patterns: Array<string>, ignore: Array<string>): Effect.Effect<Array<string>> {
-  const gitignorePatterns = readGitignorePatterns(process.cwd())
-  const allIgnore = [
-    ...new Set([...ignore, ...gitignorePatterns, "node_modules", "node_modules/**"]),
-  ]
-  return Effect.promise(
-    () => glob(patterns, { ignore: allIgnore, nodir: true }) as Promise<Array<string>>,
-  )
+function globFiles(
+  patterns: Array<string>,
+  ignore: Array<string>,
+): Effect.Effect<Array<string>, never, FileSystem.FileSystem | Path.Path> {
+  return Effect.gen(function* () {
+    const gitignorePatterns = yield* readGitignorePatterns(process.cwd())
+    const allIgnore = EffectArray.dedupe([
+      ...ignore,
+      ...gitignorePatterns,
+      "node_modules",
+      "node_modules/**",
+    ])
+    return yield* Effect.tryPromise(() => glob(patterns, { ignore: allIgnore, nodir: true })).pipe(
+      Effect.orDie,
+    )
+  })
 }
 
 /**
  * Pre-filter test files by checking for `describeFeature(` via regex
  * before expensive TypeScript parsing.
  */
-function filterTestFilesWithFeature(files: Array<string>): Array<string> {
-  return files.filter((file) => {
-    try {
-      const content = readFileSync(file, "utf8")
-      return DESCRIBE_FEATURE_REGEX.test(content)
-    } catch {
-      return false
-    }
+function filterTestFilesWithFeature(
+  files: Array<string>,
+): Effect.Effect<Array<string>, never, FileSystem.FileSystem> {
+  return Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem
+    const matches = yield* Effect.all(
+      files.map((file) =>
+        Effect.matchEffect(fileSystem.readFileString(file), {
+          onFailure: () => Effect.succeed(false),
+          onSuccess: (content) => Effect.succeed(DESCRIBE_FEATURE_REGEX.test(content)),
+        }),
+      ),
+      { concurrency: 150 },
+    )
+    return files.filter((_, index) => matches[index] === true)
   })
 }
 
@@ -73,21 +108,23 @@ function createCheckLayer(format: OutputFormat) {
   return Layer.mergeAll(StepMatcherLive, StepDiscoveryLive, makeReporter(format))
 }
 
-export function runCheck(config: CheckConfig): Effect.Effect<void, Error> {
+export function runCheck(
+  config: CheckConfig,
+): Effect.Effect<void, Error, FileSystem.FileSystem | Path.Path> {
   return Effect.gen(function* () {
     const featurePatterns = splitPatterns(config.patterns)
     const testPatterns = splitPatterns(config.testPattern)
     const ignorePatterns = Option.match(config.ignore, {
-      onNone: () => [] as Array<string>,
+      onNone: (): Array<string> => [],
       onSome: splitPatterns,
     })
 
     const allTestFiles = yield* globFiles(testPatterns, ignorePatterns)
-    const relevantTestFiles = filterTestFilesWithFeature(allTestFiles)
+    const relevantTestFiles = yield* filterTestFilesWithFeature(allTestFiles)
     const stepDiscovery = yield* StepDiscovery
     const discoveredSteps = stepDiscovery.discoverSteps(relevantTestFiles)
 
-    if (discoveredSteps.length === 0) {
+    if (EffectArray.isArrayEmpty(discoveredSteps)) {
       yield* Console.log("No step definitions found in test files")
     }
 
@@ -97,9 +134,7 @@ export function runCheck(config: CheckConfig): Effect.Effect<void, Error> {
     const featureResults = yield* Effect.all(
       allFeatureFiles.map((featurePath) =>
         Effect.gen(function* () {
-          const feature = yield* parseFeatureFile(featurePath).pipe(
-            Effect.mapError((e) => new Error(`Failed to parse ${featurePath}: ${e.message}`)),
-          )
+          const feature = yield* parseFeatureFile(featurePath)
           return yield* stepMatcher.checkFeature(feature, discoveredSteps, featurePath)
         }),
       ),

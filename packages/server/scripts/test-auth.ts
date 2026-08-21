@@ -8,7 +8,7 @@
  */
 
 import { serializeSignedCookie } from "better-call"
-import { Effect } from "effect"
+import { Array as Arr, Effect } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
 import { AppRuntimeTest } from "../src/app-runtime.js"
@@ -59,7 +59,7 @@ const program = Effect.gen(function* () {
     ORDER BY created_at DESC
     LIMIT 1
   `
-  if (verification.length === 0) {
+  if (Arr.isReadonlyArrayEmpty(verification)) {
     yield* Effect.fail(new Error("Verification token not found in database!"))
   }
   const token = verification[0].identifier as string
@@ -85,7 +85,7 @@ const program = Effect.gen(function* () {
   console.log("6. Verifying user persisted in database...")
   const dbUser =
     yield* sql`SELECT id, email, name, is_email_verified FROM accounts WHERE email = ${TEST_EMAIL}`
-  if (dbUser.length === 0) {
+  if (Arr.isReadonlyArrayEmpty(dbUser)) {
     yield* Effect.fail(new Error("User not found in database!"))
   }
   console.log("   Database record:", dbUser[0])
@@ -94,7 +94,7 @@ const program = Effect.gen(function* () {
   console.log("7. Verifying session exists in database...")
   const dbSession =
     yield* sql`SELECT id, token, account_id, expires_at FROM sessions WHERE account_id = ${verifyResult.user.id}`
-  if (dbSession.length === 0) {
+  if (Arr.isReadonlyArrayEmpty(dbSession)) {
     yield* Effect.fail(new Error("Session not found in database!"))
   }
   console.log("   Session count:", dbSession.length)
@@ -259,7 +259,7 @@ const program = Effect.gen(function* () {
 
   const sessionAfterSignOut =
     yield* sql`SELECT id FROM sessions WHERE token = ${verifyResult.token}`
-  if (sessionAfterSignOut.length === 0) {
+  if (Arr.isReadonlyArrayEmpty(sessionAfterSignOut)) {
     console.log("   ✓ Session deleted from database\n")
   } else {
     console.log("   ⚠ Session still exists after signOut\n")

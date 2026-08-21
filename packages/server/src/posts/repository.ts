@@ -22,9 +22,10 @@ import {
   ProfileId,
   type PostSourceData,
   tiptapToText,
+  ResolvedExistingTagExtraction,
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
-import { Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
+import { Array as Arr, Context, DateTime, Effect, Equal, Option, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -38,6 +39,7 @@ import {
   createSystemTranslationCrdtUpdate,
 } from "./post-crdt-orchestration.js"
 import {
+  HumanCrdtUpdate,
   type CreatePostInput as CreatePostInputType,
   type UpdatePostInput as UpdatePostInputType,
 } from "./post-repository-inputs.js"
@@ -290,7 +292,9 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
       return materializeJunctionTable({
         deleteRows: sql`DELETE FROM post_translations WHERE post_id = ${input.postId}`,
-        insertRows: rows.length > 0 ? insertPostTranslationRows(rows) : Effect.void,
+        insertRows: Arr.isReadonlyArrayNonEmpty(rows)
+          ? insertPostTranslationRows(rows)
+          : Effect.void,
       })
     }
 
@@ -299,7 +303,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       postId: PostId
     }) => {
       const rows = (input.classification?.tags ?? []).flatMap((tag) => {
-        if (tag._tag !== "ResolvedExistingTagExtraction") return []
+        if (!Schema.is(ResolvedExistingTagExtraction)(tag)) return []
 
         return PostTagRow.make({
           extractionText: tag.extractionText,
@@ -310,7 +314,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
       return materializeJunctionTable({
         deleteRows: sql`DELETE FROM post_tags WHERE post_id = ${input.postId}`,
-        insertRows: rows.length > 0 ? insertPostTagRows(rows) : Effect.void,
+        insertRows: Arr.isReadonlyArrayNonEmpty(rows) ? insertPostTagRows(rows) : Effect.void,
       })
     }
 
@@ -330,7 +334,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
       return materializeJunctionTable({
         deleteRows: sql`DELETE FROM post_vegetables WHERE post_id = ${input.postId}`,
-        insertRows: rows.length > 0 ? insertPostVegetableRows(rows) : Effect.void,
+        insertRows: Arr.isReadonlyArrayNonEmpty(rows) ? insertPostVegetableRows(rows) : Effect.void,
       })
     }
 
@@ -430,21 +434,19 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
           return yield* new PostConcurrentUpdateError({ id: input.postId })
         }
 
-        const commit =
-          input._tag === "HumanCrdtUpdate"
-            ? HumanCommit.make({ personId: input.authorId })
-            : input.commit
-        const crdtUpdate =
-          input._tag === "HumanCrdtUpdate"
-            ? input.crdtUpdate
-            : yield* createSystemTranslationCrdtUpdate({
-                commit: input.commit,
-                expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
-                snapshot: current.crdtSnapshot,
-                sourceLocale: input.sourceLocale,
-                targetLocale: input.targetLocale,
-                translatedContent: input.translatedContent,
-              })
+        const commit = Schema.is(HumanCrdtUpdate)(input)
+          ? HumanCommit.make({ personId: input.authorId })
+          : input.commit
+        const crdtUpdate = Schema.is(HumanCrdtUpdate)(input)
+          ? input.crdtUpdate
+          : yield* createSystemTranslationCrdtUpdate({
+              commit: input.commit,
+              expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
+              snapshot: current.crdtSnapshot,
+              sourceLocale: input.sourceLocale,
+              targetLocale: input.targetLocale,
+              translatedContent: input.translatedContent,
+            })
 
         const applied = yield* applyPostCrdtUpdateWithCommit({
           commit,
@@ -468,7 +470,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
             updatedAt: now,
             crdtUpdate: applied.crdtUpdate,
             fromCrdtFrontier: applied.fromCrdtFrontier,
-            createdById: commit._tag === "HumanCommit" ? commit.personId : null,
+            createdById: Schema.is(HumanCommit)(commit) ? commit.personId : null,
           }),
           materialize: materializePost({
             currentCrdtFrontier: applied.nextCrdtFrontier,

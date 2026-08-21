@@ -22,7 +22,7 @@ import {
   SuggestedTagExtraction,
   SuggestedVegetableExtraction,
 } from "@gororobas/domain"
-import { Effect, Option, Struct } from "effect"
+import { Array as Arr, Effect, Option, Struct } from "effect"
 import type { Extraction } from "langextract"
 
 import { TagsRepository } from "../tags/repository.js"
@@ -55,7 +55,7 @@ function collectVegetableCandidates(extraction: Extraction): string[] {
       candidates.push(...value)
     }
   }
-  if (candidates.length === 0 && extraction.extractionText) {
+  if (Arr.isReadonlyArrayEmpty(candidates) && extraction.extractionText) {
     candidates.push(extraction.extractionText)
   }
   return candidates

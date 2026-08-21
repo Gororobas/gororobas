@@ -56,7 +56,7 @@ const rowSchemas = [
 describe("Schema Round-Trip Properties", () => {
   describe("Property 1: Schema Round-Trip Preservation", () => {
     // Generate tests for all Row schemas using factory pattern
-    for (const { name, schema } of rowSchemas) {
+    rowSchemas.forEach(({ name, schema }) => {
       it.effect(`${name} round-trip preserves data`, () =>
         // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation
         assertPropertyEffect(Schema.toArbitrary(schema)(FastCheck), (original) =>
@@ -69,7 +69,7 @@ describe("Schema Round-Trip Properties", () => {
           }),
         ),
       )
-    }
+    })
 
     it.effect("Handle validation and transformation round-trip", () =>
       // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation

@@ -1,9 +1,15 @@
 import { BunServices } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale, TagRow, VegetableId, VegetableRow } from "@gororobas/domain"
-import { LoroDocFrontier, TiptapDocument } from "@gororobas/domain"
-import { DateTime, Effect, FileSystem, Layer, Option, Path, Schema } from "effect"
-import { join } from "node:path"
+import {
+  Handle,
+  LoroDocFrontier,
+  TagId,
+  TiptapDocument,
+  VegetableId as VegetableIdSchema,
+} from "@gororobas/domain"
+import { DateTime, Effect, FileSystem, Layer, Option, Path, Record as R, Schema } from "effect"
+import { v7 } from "uuid"
 
 import { TagsRepository } from "../tags/repository.js"
 import { VegetablesRepository } from "../vegetables/repository.js"
@@ -11,13 +17,18 @@ import { ExtractPostTaxonomiesService } from "./extract-post-taxonomies.js"
 import { LangExtractService } from "./langextract-service.js"
 
 const TEST_FRONTIER = Schema.decodeSync(LoroDocFrontier)([])
+const makeTagId = Schema.decodeSync(TagId)
+const makeHandle = Schema.decodeSync(Handle)
+const makeVegetableId = Schema.decodeSync(VegetableIdSchema)
+const TEST_MILHO_ID = makeVegetableId(v7())
+const TEST_MANDIOCA_ID = makeVegetableId(v7())
 
-const now = Effect.runSync(DateTime.now)
+const now = DateTime.nowUnsafe()
 
 const TEST_TAGS: ReadonlyArray<TagRow> = [
   {
-    id: "00000000-0000-0000-0000-000000000001" as TagRow["id"],
-    handle: "plantio" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("plantio"),
     names: { pt: "Plantio", es: "Plantación", en: "Planting" },
     createdAt: now,
     updatedAt: now,
@@ -26,8 +37,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000002" as TagRow["id"],
-    handle: "colheita" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("colheita"),
     names: { pt: "Colheita", es: "Cosecha", en: "Harvest" },
     createdAt: now,
     updatedAt: now,
@@ -36,8 +47,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000003" as TagRow["id"],
-    handle: "compostagem" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("compostagem"),
     names: { pt: "Compostagem", es: "Compostaje", en: "Composting" },
     createdAt: now,
     updatedAt: now,
@@ -46,8 +57,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000004" as TagRow["id"],
-    handle: "comercializacao" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("comercializacao"),
     names: {
       pt: "Comercialização",
       es: "Comercialización",
@@ -60,8 +71,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000005" as TagRow["id"],
-    handle: "permacultura" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("permacultura"),
     names: { pt: "Permacultura", es: "Permacultura", en: "Permaculture" },
     createdAt: now,
     updatedAt: now,
@@ -70,8 +81,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000006" as TagRow["id"],
-    handle: "receita" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("receita"),
     names: { pt: "Receita", es: "Receta", en: "Recipe" },
     createdAt: now,
     updatedAt: now,
@@ -80,8 +91,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000007" as TagRow["id"],
-    handle: "conserva" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("conserva"),
     names: { pt: "Conserva", es: "Conserva", en: "Preserving" },
     createdAt: now,
     updatedAt: now,
@@ -90,8 +101,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000008" as TagRow["id"],
-    handle: "agroecologia" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("agroecologia"),
     names: { pt: "Agroecologia", es: "Agroecología", en: "Agroecology" },
     createdAt: now,
     updatedAt: now,
@@ -100,8 +111,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-000000000009" as TagRow["id"],
-    handle: "reforma-agraria" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("reforma-agraria"),
     names: {
       pt: "Reforma Agrária",
       es: "Reforma Agraria",
@@ -114,8 +125,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-00000000000A" as TagRow["id"],
-    handle: "irrigacao" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("irrigacao"),
     names: { pt: "Irrigação", es: "Irrigación", en: "Irrigation" },
     createdAt: now,
     updatedAt: now,
@@ -124,8 +135,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-00000000000B" as TagRow["id"],
-    handle: "manejo" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("manejo"),
     names: { pt: "Manejo", es: "Manejo", en: "Management" },
     createdAt: now,
     updatedAt: now,
@@ -134,8 +145,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-00000000000C" as TagRow["id"],
-    handle: "soberania-alimentar" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("soberania-alimentar"),
     names: {
       pt: "Soberania Alimentar",
       es: "Soberanía Alimentaria",
@@ -148,8 +159,8 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
     description: null,
   },
   {
-    id: "00000000-0000-0000-0000-00000000000D" as TagRow["id"],
-    handle: "agricultura-urbana" as TagRow["handle"],
+    id: makeTagId(v7()),
+    handle: makeHandle("agricultura-urbana"),
     names: {
       pt: "Agricultura Urbana",
       es: "Agricultura Urbana",
@@ -164,15 +175,15 @@ const TEST_TAGS: ReadonlyArray<TagRow> = [
 ]
 
 const TestTagsRepository = Layer.succeed(TagsRepository)({
-  findAll: () => Effect.succeed(TEST_TAGS as Array<TagRow>),
+  findAll: () => Effect.succeed([...TEST_TAGS]),
   findById: () => Effect.succeed(Option.none()),
   findByHandle: (handle: string) =>
     Effect.succeed(Option.fromNullishOr(TEST_TAGS.find((t) => t.handle === handle))),
-  insertRow: (() => Effect.die(new Error("Not implemented in test"))) as never,
+  insertRow: () => Effect.die("Not implemented in test"),
   findByName: (pattern: string) => {
     const searchTerm = pattern.replace(/%/g, "").toLowerCase()
     const match = TEST_TAGS.find((t) =>
-      Object.values(t.names).some((name) => name && name.toLowerCase().includes(searchTerm)),
+      R.values(t.names).some((name) => name && name.toLowerCase().includes(searchTerm)),
     )
     return Effect.succeed(match ? Option.some(match) : Option.none())
   },
@@ -180,7 +191,7 @@ const TestTagsRepository = Layer.succeed(TagsRepository)({
 
 const TEST_VEGETABLES: ReadonlyArray<VegetableRow> = [
   {
-    id: "10000000-0000-0000-0000-000000000001" as VegetableRow["id"],
+    id: TEST_MILHO_ID,
     handle: "milho",
     developmentCycleMax: 120,
     developmentCycleMin: 90,
@@ -192,7 +203,7 @@ const TEST_VEGETABLES: ReadonlyArray<VegetableRow> = [
     temperatureMin: 15,
   },
   {
-    id: "10000000-0000-0000-0000-000000000002" as VegetableRow["id"],
+    id: TEST_MANDIOCA_ID,
     handle: "mandioca",
     developmentCycleMax: 365,
     developmentCycleMin: 180,
@@ -209,21 +220,27 @@ const TEST_VEGETABLE_SEARCHABLE_NAMES: Record<
   string,
   { vegetableId: VegetableId; handle: string }
 > = {
-  milho: { vegetableId: "10000000-0000-0000-0000-000000000001" as VegetableId, handle: "milho" },
-  corn: { vegetableId: "10000000-0000-0000-0000-000000000001" as VegetableId, handle: "milho" },
-  maiz: { vegetableId: "10000000-0000-0000-0000-000000000001" as VegetableId, handle: "milho" },
+  milho: { vegetableId: TEST_MILHO_ID, handle: "milho" },
+  corn: { vegetableId: TEST_MILHO_ID, handle: "milho" },
+  maiz: { vegetableId: TEST_MILHO_ID, handle: "milho" },
   mandioca: {
-    vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId,
+    vegetableId: TEST_MANDIOCA_ID,
     handle: "mandioca",
   },
   cassava: {
-    vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId,
+    vegetableId: TEST_MANDIOCA_ID,
     handle: "mandioca",
   },
-  yuca: { vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId, handle: "mandioca" },
-  aipim: { vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId, handle: "mandioca" },
+  yuca: {
+    vegetableId: TEST_MANDIOCA_ID,
+    handle: "mandioca",
+  },
+  aipim: {
+    vegetableId: TEST_MANDIOCA_ID,
+    handle: "mandioca",
+  },
   macaxeira: {
-    vegetableId: "10000000-0000-0000-0000-000000000002" as VegetableId,
+    vegetableId: TEST_MANDIOCA_ID,
     handle: "mandioca",
   },
 }
@@ -239,16 +256,16 @@ const TestVegetablesRepository = Layer.succeed(VegetablesRepository)({
     return Effect.succeed(match ? Option.some(match) : Option.none())
   },
   findTranslations: () => Effect.succeed([]),
-  getCrdt: () => Effect.die(new Error("Not implemented in test")),
-  insertCrdt: (() => Effect.die(new Error("Not implemented in test"))) as never,
-  updateCrdt: (() => Effect.die(new Error("Not implemented in test"))) as never,
-  insertRevision: (() => Effect.die(new Error("Not implemented in test"))) as never,
+  getCrdt: () => Effect.die("Not implemented in test"),
+  insertCrdt: () => Effect.die("Not implemented in test"),
+  updateCrdt: () => Effect.die("Not implemented in test"),
+  insertRevision: () => Effect.die("Not implemented in test"),
   fetchRevision: () => Effect.succeed(Option.none()),
-  updateRevision: (() => Effect.die(new Error("Not implemented in test"))) as never,
-  materialize: (() => Effect.die(new Error("Not implemented in test"))) as never,
+  updateRevision: () => Effect.die("Not implemented in test"),
+  materialize: () => Effect.die("Not implemented in test"),
 })
 
-const RESULTS_DIR = join(import.meta.dirname, "extraction-results")
+const RESULTS_DIR_NAME = "extraction-results"
 
 const saveExtractionResult = (
   name: string,
@@ -258,13 +275,15 @@ const saveExtractionResult = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
-    yield* fs.makeDirectory(RESULTS_DIR, { recursive: true })
+    const resultsDirectory = path.join(import.meta.dirname, RESULTS_DIR_NAME)
+    yield* fs.makeDirectory(resultsDirectory, { recursive: true })
 
     const filename = name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()
-    yield* fs.writeFileString(
-      path.join(RESULTS_DIR, `${filename}.json`),
-      JSON.stringify({ input, output: result }, null, 2),
-    )
+    const encodedResult = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+      input,
+      output: result,
+    })
+    yield* fs.writeFileString(path.join(resultsDirectory, `${filename}.json`), encodedResult)
   })
 
 const makeDocument = (text: string): TiptapDocument =>
@@ -371,7 +390,7 @@ describe(
   "note taxonomy extraction (manual QA — requires Ollama running)",
   { timeout: 180_000, sequential: true },
   () => {
-    for (const [name, fixture] of Object.entries(FIXTURES)) {
+    R.toEntries(FIXTURES).forEach(([name, fixture]) => {
       it.effect.skip(name, () =>
         Effect.gen(function* () {
           const service = yield* ExtractPostTaxonomiesService
@@ -390,6 +409,6 @@ describe(
           })
         }).pipe(Effect.provide(TestLayer)),
       )
-    }
+    })
   },
 )

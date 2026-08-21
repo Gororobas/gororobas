@@ -7,7 +7,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { IdGen, PersonId } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
-import { DateTime, Effect, Exit, Option } from "effect"
+import { DateTime, Effect, Exit, Option, Schema } from "effect"
 
 import { PeopleRepository } from "../../src/people/repository.js"
 import { makePersonFixture, makeProfileFixture, personWithProfileArbitrary } from "../fixtures.js"
@@ -18,6 +18,11 @@ import {
   runTransactionScenario,
   TestLayer,
 } from "../test-helpers.js"
+
+class IntentionalFailure extends Schema.TaggedError<IntentionalFailure>()(
+  "PeopleRepositoryTestIntentionalFailure",
+  { message: Schema.String },
+) {}
 
 describe("PeopleRepository", () => {
   describe("findById", () => {
@@ -94,9 +99,13 @@ describe("PeopleRepository", () => {
         // Verify: Check database state
         const updated = yield* repo.findById(person.id)
         expect(Option.isSome(updated)).toBe(true)
-        const retrieved = Option.getOrThrow(updated)
+        if (Option.isNone(updated)) return
+        const retrieved = updated.value
         expect(retrieved.accessLevel).toBe("COMMUNITY")
-        expect(DateTime.Equivalence(retrieved.accessSetAt!, now)).toBe(true)
+        const accessSetAt = Option.fromNullishOr(retrieved.accessSetAt)
+        expect(Option.isSome(accessSetAt)).toBe(true)
+        if (Option.isNone(accessSetAt)) return
+        expect(DateTime.Equivalence(accessSetAt.value, now)).toBe(true)
       }).pipe(Effect.provide(TestLayer)),
     )
   })
@@ -129,7 +138,7 @@ describe("PeopleRepository", () => {
 
               // @effect-diagnostics-next-line globalErrorInEffectFailure:off
               // @effect-diagnostics-next-line missingReturnYieldStar:off
-              yield* Effect.fail(new Error("Intentional failure"))
+              yield* Effect.fail(new IntentionalFailure({ message: "Intentional failure" }))
             }),
         })
 

@@ -2,16 +2,22 @@ import { BunServices } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale } from "@gororobas/domain"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "@gororobas/domain"
-import { FileSystem, Path } from "effect"
-import { Effect } from "effect"
-import { join } from "node:path"
+import {
+  Effect,
+  FileSystem,
+  Path,
+  Predicate as P,
+  Record as R,
+  Schema,
+  String as Str,
+} from "effect"
 
 import { translateTiptapContent } from "./translate-tiptap-content.js"
 import { TranslationServiceOllama } from "./translation-service-ollama.js"
 
 type TiptapAnyNode = TiptapDocument | TiptapNode | TiptapTextNode
 
-const RESULTS_DIR = join(import.meta.dirname, "translation-results")
+const RESULTS_DIR_NAME = "translation-results"
 
 const saveTranslationResult = (
   name: string,
@@ -21,66 +27,42 @@ const saveTranslationResult = (
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
-    yield* fs.makeDirectory(RESULTS_DIR, { recursive: true })
+    const resultsDirectory = path.join(import.meta.dirname, RESULTS_DIR_NAME)
+    yield* fs.makeDirectory(resultsDirectory, { recursive: true })
 
     const filename = name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()
-    yield* fs.writeFileString(
-      path.join(RESULTS_DIR, `${filename}.json`),
-      JSON.stringify({ input, output: result.content, html: result.html }, null, 2),
-    )
+    const encodedResult = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
+      input,
+      output: result.content,
+      html: result.html,
+    })
+    yield* fs.writeFileString(path.join(resultsDirectory, `${filename}.json`), encodedResult)
   })
 
 /** Recursively collect all text content */
 function collectText(node: TiptapAnyNode): string {
-  const parts: string[] = []
-  if ("text" in node && typeof node.text === "string") {
-    parts.push(node.text)
-  }
-  if ("content" in node && node.content) {
-    for (const child of node.content) {
-      parts.push(collectText(child as TiptapAnyNode))
-    }
-  }
-  return parts.join("")
+  const text = "text" in node && P.isString(node.text) ? [node.text] : []
+  const content = "content" in node && node.content ? node.content.flatMap(collectText) : []
+  return [...text, ...content].join("")
 }
 
 /** Recursively collect all node types (structural skeleton) */
 function collectNodeTypes(node: TiptapAnyNode): string[] {
-  const types: string[] = [node.type]
-  if ("content" in node && node.content) {
-    for (const child of node.content) {
-      types.push(...collectNodeTypes(child as TiptapAnyNode))
-    }
-  }
-  return types
+  const content = "content" in node && node.content ? node.content.flatMap(collectNodeTypes) : []
+  return [node.type, ...content]
 }
 
 /** Recursively collect all mark types applied to text nodes */
 function collectMarkTypes(node: TiptapAnyNode): string[] {
-  const marks: string[] = []
-  if ("marks" in node && node.marks) {
-    for (const mark of node.marks) {
-      marks.push(mark.type)
-    }
-  }
-  if ("content" in node && node.content) {
-    for (const child of node.content) {
-      marks.push(...collectMarkTypes(child as TiptapAnyNode))
-    }
-  }
-  return marks
+  const marks = "marks" in node && node.marks ? node.marks.map((mark) => mark.type) : []
+  const content = "content" in node && node.content ? node.content.flatMap(collectMarkTypes) : []
+  return [...marks, ...content]
 }
 
 /** Count content nodes at each level (structural shape) */
 function collectContentShape(node: TiptapAnyNode): number[] {
-  const shape: number[] = []
-  if ("content" in node && node.content) {
-    shape.push(node.content.length)
-    for (const child of node.content) {
-      shape.push(...collectContentShape(child as TiptapAnyNode))
-    }
-  }
-  return shape
+  if (!("content" in node) || !node.content) return []
+  return [node.content.length, ...node.content.flatMap(collectContentShape)]
 }
 
 // ─── Test fixtures ──────────────────────────────────────────────────────────
@@ -460,7 +442,7 @@ describe(
   "ollama translation quality (skipped as it's costly, must be ran manually)",
   { timeout: 180_000, sequential: true },
   () => {
-    for (const [name, fixture] of Object.entries(FIXTURES)) {
+    R.toEntries(FIXTURES).forEach(([name, fixture]) => {
       it.effect.skip(name, () =>
         Effect.gen(function* () {
           const result = yield* translateTiptapContent({
@@ -484,12 +466,12 @@ describe(
           expect(collectMarkTypes(result.content)).toEqual(collectMarkTypes(fixture.document))
 
           // Actually translates text (output differs from input)
-          if (originalText.trim().length > 0) {
-            expect(translatedText).not.toBe(originalText)
-            expect(translatedText.trim().length).toBeGreaterThan(0)
-          }
+          expect(Str.isEmpty(originalText.trim()) || translatedText !== originalText).toBe(true)
+          expect(Str.isEmpty(originalText.trim()) || Str.isNonEmpty(translatedText.trim())).toBe(
+            true,
+          )
         }).pipe(Effect.provide(TranslationServiceOllama), Effect.provide(BunServices.layer)),
       )
-    }
+    })
   },
 )

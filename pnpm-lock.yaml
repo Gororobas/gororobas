@@ -80,9 +80,15 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5)
+      '@foldkit/oxlint-plugin':
+        specifier: ^0.6.0
+        version: 0.6.0(effect@4.0.0-rc.110)
       '@manypkg/cli':
         specifier: ^0.25.1
         version: 0.25.1
+      '@mpsuesser/oxlint-plugin-effect':
+        specifier: ^0.4.3
+        version: 0.4.3
       '@types/node':
         specifier: ^25.6.2
         version: 25.6.2
@@ -121,7 +127,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/domain:
     dependencies:
@@ -159,7 +165,7 @@ importers:
         version: 0.7.9
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)))
+        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)))
       '@types/node':
         specifier: ^25.6.2
         version: 25.6.2
@@ -168,7 +174,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
     publishDirectory: dist
 
   packages/migration:
@@ -184,7 +190,7 @@ importers:
         version: link:../server/dist
       better-auth:
         specifier: 'catalog:'
-        version: 1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)))
+        version: 1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)))
       effect:
         specifier: 'catalog:'
         version: 4.0.0-rc.110
@@ -209,7 +215,7 @@ importers:
         version: 7.0.2
       vitest:
         specifier: 'catalog:'
-        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0))
+        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
 
   packages/server:
     dependencies:
@@ -260,10 +266,10 @@ importers:
         version: 3.23.1
       better-auth:
         specifier: 'catalog:'
-        version: 1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)))
+        version: 1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)))
       better-auth-effect:
         specifier: ^0.4.1
-        version: 0.4.1(@effect/sql@0.51.1(@effect/experimental@0.60.0(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110)(lmdb@3.5.4))(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110))(better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))))(effect@4.0.0-rc.110)
+        version: 0.4.1(@effect/sql@0.51.1(@effect/experimental@0.60.0(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110)(lmdb@3.5.4))(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110))(better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))))(effect@4.0.0-rc.110)
       bun:
         specifier: 'catalog:'
         version: 1.3.12
@@ -291,7 +297,7 @@ importers:
         version: 0.2.3
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)))
+        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)))
       '@gororobas/effect-bdd':
         specifier: workspace:^
         version: link:../effect-bdd/dist
@@ -765,6 +771,10 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@foldkit/oxlint-plugin@0.6.0':
+    resolution: {integrity: sha512-wp4a1ogiTiYpOW+O9zoBFy1r/y/KyWOCoDuUhzKC0UpAkNYc3zWYpCEtUaTC/IyIMEWw+9dCZWYuoer4WorAuA==}
+    engines: {node: '>=20.19.0 || >=22.12.0'}
+
   '@harperfast/extended-iterable@1.0.3':
     resolution: {integrity: sha512-sSAYhQca3rDWtQUHSAPeO7axFIUJOI6hn1gjRC5APVE1a90tuyT8f5WIgRsFhhWA7htNkju2veB9eWL6YHi/Lw==}
 
@@ -846,6 +856,9 @@ packages:
 
   '@microsoft/fetch-event-source@2.0.1':
     resolution: {integrity: sha512-W6CLUJ2eBMw3Rec70qrsEW0jOm/3twwJv21mrmj2yORiaVmVYGS4sSS5yUwvQc1ZlDLYGPnClVWmUUMagKNsfA==}
+
+  '@mpsuesser/oxlint-plugin-effect@0.4.3':
+    resolution: {integrity: sha512-zUuShvX0nIq7UYnjk1mz7YDQMb6A9cJ7vWnDUBwicmiI87rCfqieYAvQC40Mr9ifzXal07VArrOeZw3Ysikzeg==}
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3':
     resolution: {integrity: sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw==}
@@ -1366,6 +1379,10 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@oxlint/plugins@1.78.0':
+    resolution: {integrity: sha512-Ypt8KeRYw+4jUtlPirfcHWMrn5ms12VrrFPD+Mds477/7tJxG1Kcz2Yrg2nVcTQEUx/GdlhS+BUg1kmxNm04Ug==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -2097,6 +2114,14 @@ packages:
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
 
+  effect-oxlint@0.3.3:
+    resolution: {integrity: sha512-J1+0nr0S4mOkPq54Lj2jNpq2iu9UKB+ChhxfT9HANKHKiQaOqjycZqaq8iiZHRGqT36Ir+Lv02LoVLsuA+NfGA==}
+    peerDependencies:
+      effect: ^4.0.0-beta.100
+
+  effect@4.0.0-beta.100:
+    resolution: {integrity: sha512-K4ed+BS3HyE+NoAZ8pJss2DpuK41mb856IO7ZlPfnwBXbq8oTtAAurrsVnwe2hzPamIuaZp/Pq4/xp9qORYv8Q==}
+
   effect@4.0.0-rc.110:
     resolution: {integrity: sha512-ega6FTJ8CS2of7tHZiADvgyJyV999Q6tZ9juE56V81O0jw6flRwydaPNtyfvP2a5LL9PZrse8A1jnNUD5sWVHg==}
 
@@ -2285,6 +2310,10 @@ packages:
   ini@1.3.8:
     resolution: {integrity: sha512-JV/yugV2uzW5iMRSiZAyDtQd+nxtUnjeLt0acNdw98kKLrvuRVyB80tsREOE7yvGVgalhZ6RNXCmEHkUKBKxew==}
 
+  ini@7.0.0:
+    resolution: {integrity: sha512-ifK0CgjALofS5bkrcTy4RaQ9Vx2Knf/eLeIO+NaswQEpH1UblrtTSCIvN71qQDMq0PeQ/SSPojvEJp9vvvfr+w==}
+    engines: {node: ^22.22.2 || ^24.15.0 || >=26.0.0}
+
   is-binary-path@2.1.0:
     resolution: {integrity: sha512-ZMERYes6pDydyuGidse7OsHxtbI7WVeUEozgR/g7rd0xUimYNlvZRE/K2MgZTjWy725IfelLeVcEM97mmtRGXw==}
     engines: {node: '>=8'}
@@ -2355,6 +2384,9 @@ packages:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
     hasBin: true
+
+  kubernetes-types@1.30.0:
+    resolution: {integrity: sha512-Dew1okvhM/SQcIa2rcgujNndZwU8VnSapDgdxlYoB84ZlpAD43U6KLAFqYo17ykSFGHNPrg0qry0bP+GJd9v7Q==}
 
   ky@1.14.3:
     resolution: {integrity: sha512-9zy9lkjac+TR1c2tG+mkNSVlyOpInnWdSMiue4F+kq8TwJSgv6o8jhLRg8Ho6SnZ9wOYUq/yozts9qQCfk7bIw==}
@@ -2592,6 +2624,9 @@ packages:
 
   multipasta@0.2.7:
     resolution: {integrity: sha512-KPA58d68KgGil15oDqXjkUBEBYc00XvbPj5/X+dyzeo/lWm9Nc25pQRlf1D+gv4OpK7NM0J1odrbu9JNNGvynA==}
+
+  multipasta@0.2.8:
+    resolution: {integrity: sha512-ZPWuMKyv0cSO29f7hozp+k6+crZbQijV8ipMvxNxRf2SwtYGTX1ZX89Kd20VV4H9Znonx+EQn+iy1wGQsJ+b+Q==}
 
   nanoid@3.3.12:
     resolution: {integrity: sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==}
@@ -2930,6 +2965,10 @@ packages:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
     engines: {node: '>=8.0'}
 
+  toml@4.3.0:
+    resolution: {integrity: sha512-lVb8X9BsPVuH0M4BKeS91tXAmJvCjQ5UIyAbQFaxkKGyUFK2RPkhwaFSQH8vbpl1d23eu/IBH+dwVMHWaq9A5A==}
+    engines: {node: '>=20'}
+
   tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
 
@@ -2961,6 +3000,10 @@ packages:
 
   uuid@13.0.2:
     resolution: {integrity: sha512-vzi9uRZ926x4XV73S/4qQaTwPXM2JBj6/6lI/byHH1jOpCzb0zDbfytgA9LcN/hzb2l7WQSQnxITOVx5un/wGw==}
+    hasBin: true
+
+  uuid@14.0.1:
+    resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
     hasBin: true
 
   uuid@9.0.1:
@@ -3090,18 +3133,6 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
-  ws@8.20.0:
-    resolution: {integrity: sha512-sAt8BhgNbzCtgGbt2OxmpuryO63ZoDk/sqaB/znQm94T4fCEsy/yV+7CdC1kJhOU9lboAEU7R3kquuycDoibVA==}
-    engines: {node: '>=10.0.0'}
-    peerDependencies:
-      bufferutil: ^4.0.1
-      utf-8-validate: '>=5.0.2'
-    peerDependenciesMeta:
-      bufferutil:
-        optional: true
-      utf-8-validate:
-        optional: true
-
   ws@8.21.3:
     resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
     engines: {node: '>=10.0.0'}
@@ -3116,6 +3147,11 @@ packages:
 
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
+
+  yaml@2.9.0:
+    resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
 
   yocto-queue@1.2.2:
     resolution: {integrity: sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==}
@@ -3407,15 +3443,15 @@ snapshots:
       effect: 4.0.0-rc.110
       uuid: 11.1.1
 
-  '@effect/vitest@4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)))':
+  '@effect/vitest@4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)))':
     dependencies:
       effect: 4.0.0-rc.110
-      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
 
   '@effect/vitest@4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5)':
     dependencies:
       effect: 4.0.0-rc.110
-      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
 
   '@emnapi/core@1.10.0':
     dependencies:
@@ -3511,6 +3547,12 @@ snapshots:
   '@esbuild/win32-x64@0.27.7':
     optional: true
 
+  '@foldkit/oxlint-plugin@0.6.0(effect@4.0.0-rc.110)':
+    dependencies:
+      effect-oxlint: 0.3.3(effect@4.0.0-rc.110)
+    transitivePeerDependencies:
+      - effect
+
   '@harperfast/extended-iterable@1.0.3': {}
 
   '@isaacs/cliui@8.0.2':
@@ -3594,6 +3636,12 @@ snapshots:
       tinyglobby: 0.2.16
 
   '@microsoft/fetch-event-source@2.0.1': {}
+
+  '@mpsuesser/oxlint-plugin-effect@0.4.3':
+    dependencies:
+      '@oxlint/plugins': 1.78.0
+      effect: 4.0.0-beta.100
+      effect-oxlint: 0.3.3(effect@4.0.0-beta.100)
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3':
     optional: true
@@ -3923,6 +3971,8 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.78.0':
     optional: true
+
+  '@oxlint/plugins@1.78.0': {}
 
   '@pkgjs/parseargs@0.11.0':
     optional: true
@@ -4283,7 +4333,7 @@ snapshots:
       std-env: 3.10.0
       test-exclude: 7.0.2
       tinyrainbow: 2.0.0
-      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -4296,21 +4346,21 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.5(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0))':
+  '@vitest/mocker@4.1.5(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.5
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)
+      vite: 8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)
 
-  '@vitest/mocker@4.1.5(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))':
+  '@vitest/mocker@4.1.5(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))':
     dependencies:
       '@vitest/spy': 4.1.5
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)
+      vite: 8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)
 
   '@vitest/pretty-format@4.1.5':
     dependencies:
@@ -4382,13 +4432,13 @@ snapshots:
 
   baseline-browser-mapping@2.10.28: {}
 
-  better-auth-effect@0.4.1(@effect/sql@0.51.1(@effect/experimental@0.60.0(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110)(lmdb@3.5.4))(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110))(better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))))(effect@4.0.0-rc.110):
+  better-auth-effect@0.4.1(@effect/sql@0.51.1(@effect/experimental@0.60.0(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110)(lmdb@3.5.4))(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110))(better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))))(effect@4.0.0-rc.110):
     dependencies:
       '@effect/sql': 0.51.1(@effect/experimental@0.60.0(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110)(lmdb@3.5.4))(@effect/platform@0.96.1(effect@4.0.0-rc.110))(effect@4.0.0-rc.110)
-      better-auth: 1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)))
+      better-auth: 1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)))
       effect: 4.0.0-rc.110
 
-  better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0))):
+  better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))):
     dependencies:
       '@better-auth/core': 1.6.9(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.28.17)(nanostores@1.3.0)
       '@better-auth/drizzle-adapter': 1.6.9(@better-auth/core@1.6.9(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.28.17)(nanostores@1.3.0))(@better-auth/utils@0.4.0)
@@ -4408,12 +4458,12 @@ snapshots:
       nanostores: 1.3.0
       zod: 4.4.3
     optionalDependencies:
-      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0))
+      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
 
-  better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))):
+  better-auth@1.6.9(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))):
     dependencies:
       '@better-auth/core': 1.6.9(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.28.17)(nanostores@1.3.0)
       '@better-auth/drizzle-adapter': 1.6.9(@better-auth/core@1.6.9(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@opentelemetry/api@1.9.1)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.28.17)(nanostores@1.3.0))(@better-auth/utils@0.4.0)
@@ -4433,7 +4483,7 @@ snapshots:
       nanostores: 1.3.0
       zod: 4.4.3
     optionalDependencies:
-      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+      vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -4571,6 +4621,29 @@ snapshots:
       gopd: 1.2.0
 
   eastasianwidth@0.2.0: {}
+
+  effect-oxlint@0.3.3(effect@4.0.0-beta.100):
+    dependencies:
+      '@oxlint/plugins': 1.78.0
+      effect: 4.0.0-beta.100
+
+  effect-oxlint@0.3.3(effect@4.0.0-rc.110):
+    dependencies:
+      '@oxlint/plugins': 1.78.0
+      effect: 4.0.0-rc.110
+
+  effect@4.0.0-beta.100:
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      fast-check: 4.9.0
+      find-my-way-ts: 0.1.6
+      ini: 7.0.0
+      kubernetes-types: 1.30.0
+      msgpackr: 2.0.5
+      multipasta: 0.2.8
+      toml: 4.3.0
+      uuid: 14.0.1
+      yaml: 2.9.0
 
   effect@4.0.0-rc.110:
     dependencies:
@@ -4753,7 +4826,7 @@ snapshots:
       '@types/ws': 8.18.1
       entities: 7.0.1
       whatwg-mimetype: 3.0.0
-      ws: 8.20.0
+      ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -4782,6 +4855,8 @@ snapshots:
   inherits@2.0.4: {}
 
   ini@1.3.8: {}
+
+  ini@7.0.0: {}
 
   is-binary-path@2.1.0:
     dependencies:
@@ -4849,6 +4924,8 @@ snapshots:
       lodash-es: 4.18.1
 
   json5@2.2.3: {}
+
+  kubernetes-types@1.30.0: {}
 
   ky@1.14.3: {}
 
@@ -5072,6 +5149,8 @@ snapshots:
       msgpackr-extract: 3.0.4
 
   multipasta@0.2.7: {}
+
+  multipasta@0.2.8: {}
 
   nanoid@3.3.12: {}
 
@@ -5451,6 +5530,8 @@ snapshots:
       is-number: 7.0.0
     optional: true
 
+  toml@4.3.0: {}
+
   tslib@2.8.1:
     optional: true
 
@@ -5498,11 +5579,13 @@ snapshots:
 
   uuid@13.0.2: {}
 
+  uuid@14.0.1: {}
+
   uuid@9.0.1: {}
 
   validate-npm-package-name@6.0.2: {}
 
-  vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0):
+  vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -5514,8 +5597,9 @@ snapshots:
       esbuild: 0.27.7
       fsevents: 2.3.3
       tsx: 4.21.0
+      yaml: 2.9.0
 
-  vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0):
+  vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4
@@ -5527,11 +5611,12 @@ snapshots:
       esbuild: 0.27.7
       fsevents: 2.3.3
       tsx: 4.21.0
+      yaml: 2.9.0
 
-  vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)):
+  vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.5
-      '@vitest/mocker': 4.1.5(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0))
+      '@vitest/mocker': 4.1.5(vite@8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.5
       '@vitest/runner': 4.1.5
       '@vitest/snapshot': 4.1.5
@@ -5548,7 +5633,7 @@ snapshots:
       tinyexec: 1.1.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)
+      vite: 8.0.11(@types/node@25.3.0)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
@@ -5558,10 +5643,10 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)):
+  vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.5
-      '@vitest/mocker': 4.1.5(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+      '@vitest/mocker': 4.1.5(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.5
       '@vitest/runner': 4.1.5
       '@vitest/snapshot': 4.1.5
@@ -5578,7 +5663,7 @@ snapshots:
       tinyexec: 1.1.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)
+      vite: 8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
@@ -5588,10 +5673,10 @@ snapshots:
     transitivePeerDependencies:
       - msw
 
-  vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)):
+  vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.5
-      '@vitest/mocker': 4.1.5(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0))
+      '@vitest/mocker': 4.1.5(vite@8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0))
       '@vitest/pretty-format': 4.1.5
       '@vitest/runner': 4.1.5
       '@vitest/snapshot': 4.1.5
@@ -5608,7 +5693,7 @@ snapshots:
       tinyexec: 1.1.2
       tinyglobby: 0.2.16
       tinyrainbow: 3.1.0
-      vite: 8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)
+      vite: 8.0.11(@types/node@25.6.2)(esbuild@0.27.7)(tsx@4.21.0)(yaml@2.9.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
@@ -5649,11 +5734,11 @@ snapshots:
 
   wrappy@1.0.2: {}
 
-  ws@8.20.0: {}
-
   ws@8.21.3: {}
 
   yallist@3.1.1: {}
+
+  yaml@2.9.0: {}
 
   yocto-queue@1.2.2: {}
 

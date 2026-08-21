@@ -1,11 +1,11 @@
 import { describe, it } from "@effect/vitest"
-import { Effect, Layer } from "effect"
+import { Array as Arr, Effect, FileSystem, Layer, Path } from "effect"
 import { dirname, isAbsolute } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { BackgroundContext, ScenarioContext } from "../context.js"
-import { ScenarioNotFoundError } from "../errors.js"
-import { parseFeatureFileSync } from "../parser/feature-parser.js"
+import { FeatureParseError, ScenarioNotFoundError } from "../errors.js"
+import { parseFeatureFile } from "../parser/feature-parser.js"
 import type { ParsedFeature, ParsedStep } from "../parser/types.js"
 import {
   findRule,
@@ -203,7 +203,7 @@ function createRunWithBackgrounds({
     const uniqueLayers = [...new Set(allLayers)]
 
     const combinedLayer: Layer.Layer<unknown, unknown, never> | undefined =
-      uniqueLayers.length === 0
+      Arr.isReadonlyArrayEmpty(uniqueLayers)
         ? undefined
         : uniqueLayers.length === 1
           ? uniqueLayers[0]
@@ -324,7 +324,7 @@ function createRuleContext(
         })
       }
 
-      if (parsedOutline.examples.length === 0) {
+      if (Arr.isReadonlyArrayEmpty(parsedOutline.examples)) {
         throw new Error(`ScenarioOutline "${name}" has no examples in ${featurePath}`)
       }
 
@@ -364,44 +364,48 @@ function createRuleContext(
 export function describeFeature(
   featurePath: string,
   callback: (ctx: FeatureContext) => void,
-): void {
+): Effect.Effect<void, FeatureParseError, FileSystem.FileSystem | Path.Path> {
   const absoluteFeaturePath = isAbsolute(featurePath)
     ? featurePath
     : `${getCallerDir()}/${featurePath}`
 
-  const feature = parseFeatureFileSync(absoluteFeaturePath)
+  return Effect.gen(function* () {
+    const feature = yield* parseFeatureFile(absoluteFeaturePath)
 
-  describe(feature.name, () => {
-    const featureBgRef: BackgroundRef = {
-      effect: undefined,
-      layer: undefined,
-      parsedSteps: [],
-    }
-
-    const featureCtx: FeatureContext = {
-      ...createRuleContext(feature, absoluteFeaturePath, featureBgRef),
-
-      Rule: (name, ruleCallback) => {
-        const parsedRule = findRule(feature, name)
-        if (!parsedRule) {
-          throw new Error(
-            `Rule "${name}" not found in ${absoluteFeaturePath}. Available rules: ${listRules(feature).join(", ")}`,
-          )
+    yield* Effect.sync(() => {
+      describe(feature.name, () => {
+        const featureBgRef: BackgroundRef = {
+          effect: undefined,
+          layer: undefined,
+          parsedSteps: [],
         }
 
-        describe(name, () => {
-          const ruleBgRef: BackgroundRef = {
-            effect: undefined,
-            layer: undefined,
-            parsedSteps: [],
-          }
-          ruleCallback(
-            createRuleContext(feature, absoluteFeaturePath, featureBgRef, ruleBgRef, name),
-          )
-        })
-      },
-    }
+        const featureCtx: FeatureContext = {
+          ...createRuleContext(feature, absoluteFeaturePath, featureBgRef),
 
-    callback(featureCtx)
+          Rule: (name, ruleCallback) => {
+            const parsedRule = findRule(feature, name)
+            if (!parsedRule) {
+              throw new Error(
+                `Rule "${name}" not found in ${absoluteFeaturePath}. Available rules: ${listRules(feature).join(", ")}`,
+              )
+            }
+
+            describe(name, () => {
+              const ruleBgRef: BackgroundRef = {
+                effect: undefined,
+                layer: undefined,
+                parsedSteps: [],
+              }
+              ruleCallback(
+                createRuleContext(feature, absoluteFeaturePath, featureBgRef, ruleBgRef, name),
+              )
+            })
+          },
+        }
+
+        callback(featureCtx)
+      })
+    })
   })
 }

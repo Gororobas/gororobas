@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Array as Arr, Effect, Schema } from "effect"
 
 import { StepParamsDecodeError } from "../errors.js"
 
@@ -110,7 +110,7 @@ export function extractParams(
     return null
   }
 
-  if (dataTable && dataTable.length > 0) {
+  if (Arr.isReadonlyArrayNonEmpty(dataTable ?? [])) {
     return { ...patternParams, table: dataTable }
   }
 

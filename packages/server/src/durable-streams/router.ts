@@ -1,7 +1,7 @@
 import { Effect, Stream } from "effect"
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 
-import { DurableStreamsService } from "./service.js"
+import { DurableStreamServerError, DurableStreamsService } from "./service.js"
 
 export const makeDurableStreamRouter = HttpRouter.use((router) =>
   Effect.gen(function* () {
@@ -15,36 +15,37 @@ export const makeDurableStreamRouter = HttpRouter.use((router) =>
       const targetUrl = `${internalUrl}${request.url}`
 
       const hasBody = request.method !== "GET" && request.method !== "HEAD"
-      let body: ReadableStream<Uint8Array> | null = null
+      // A missing body is meaningful to Request, so keep this Web API shape here.
+      // oxlint-disable-next-line effect/prefer-option-over-null
+      let body: ReadableStream<Uint8Array> | undefined
       if (hasBody) {
         body = Stream.toReadableStream(request.stream)
       }
 
       const proxyRequest = new Request(targetUrl, {
         method: request.method,
-        headers: new Headers(request.headers as HeadersInit),
+        headers: new Headers(request.headers),
         body,
         // @ts-expect-error -- duplex not yet in all TS lib typings
         duplex: hasBody ? "half" : undefined,
       })
 
       const upstreamResponse = yield* Effect.tryPromise({
+        // The proxy must forward the request through the Web Fetch API.
+        // oxlint-disable-next-line effect/avoid-native-fetch
         try: () => fetch(proxyRequest),
         catch: (error) => {
-          const errorObj = error instanceof Error ? error : new Error(String(error))
-          const rootCause =
-            "cause" in errorObj && errorObj.cause instanceof Error ? errorObj.cause.message : ""
-          return new Error(
-            `Proxy to durable stream server failed: ${errorObj.message}${rootCause ? ` (${rootCause})` : ""}`,
-          )
+          return new DurableStreamServerError({
+            message: `Proxy to durable stream server failed: ${String(error)}`,
+          })
         },
       })
 
       return HttpServerResponse.fromWeb(upstreamResponse)
     }).pipe(
-      Effect.catch((error) =>
+      Effect.catchTag("DurableStreamServerError", (error) =>
         Effect.succeed(
-          HttpServerResponse.text(error instanceof Error ? error.message : String(error), {
+          HttpServerResponse.text(error.message, {
             status: 502,
           }),
         ),
