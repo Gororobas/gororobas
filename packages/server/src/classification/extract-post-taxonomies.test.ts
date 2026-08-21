@@ -8,7 +8,7 @@ import {
   TiptapDocument,
   VegetableId as VegetableIdSchema,
 } from "@gororobas/domain"
-import { DateTime, Effect, FileSystem, Layer, Option, Path, Record as R, Schema } from "effect"
+import { DateTime, Effect, FileSystem, Layer, Option, Path, Record, Schema } from "effect"
 import { v7 } from "uuid"
 
 import { TagsRepository } from "../tags/repository.js"
@@ -183,7 +183,7 @@ const TestTagsRepository = Layer.succeed(TagsRepository)({
   findByName: (pattern: string) => {
     const searchTerm = pattern.replace(/%/g, "").toLowerCase()
     const match = TEST_TAGS.find((t) =>
-      R.values(t.names).some((name) => name && name.toLowerCase().includes(searchTerm)),
+      Record.values(t.names).some((name) => name && name.toLowerCase().includes(searchTerm)),
     )
     return Effect.succeed(match ? Option.some(match) : Option.none())
   },
@@ -390,7 +390,7 @@ describe(
   "note taxonomy extraction (manual QA — requires Ollama running)",
   { timeout: 180_000, sequential: true },
   () => {
-    R.toEntries(FIXTURES).forEach(([name, fixture]) => {
+    Record.toEntries(FIXTURES).forEach(([name, fixture]) => {
       it.effect.skip(name, () =>
         Effect.gen(function* () {
           const service = yield* ExtractPostTaxonomiesService

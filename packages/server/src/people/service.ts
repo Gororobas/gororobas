@@ -11,7 +11,7 @@ import {
   Policies,
   type PlatformAccessLevel,
 } from "@gororobas/domain"
-import { Array as Arr, DateTime, Effect, Option, Context } from "effect"
+import { Array as EffectArray, DateTime, Effect, Option, Context } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
 import { OrganizationsRepository } from "../organizations/repository.js"
@@ -65,7 +65,7 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
         const orgsWithOtherMembers = orgsWhereSoleManager.filter((org) => org.memberCount > 1)
 
         // 1.1. Prohibit if these orgs have 2+ members
-        if (Arr.isReadonlyArrayNonEmpty(orgsWithOtherMembers)) {
+        if (EffectArray.isReadonlyArrayNonEmpty(orgsWithOtherMembers)) {
           return yield* new AccountDeletionError({
             reason: AccountDeletionErrorReason.make({
               organizations: orgsWithOtherMembers.map((o) => o.organizationId),
@@ -76,7 +76,7 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
         // 1.2. Ask for confirmation if they have a single member (the user to be deleted)
         if (
           confirmation?.shouldDeleteOrgs !== true &&
-          Arr.isReadonlyArrayNonEmpty(orgsWhereSoleManager)
+          EffectArray.isReadonlyArrayNonEmpty(orgsWhereSoleManager)
         ) {
           return AccountDeletionResultConfirmOrgDeletion.make({
             organizations: orgsWhereSoleManager.map((o) => o.organizationId),

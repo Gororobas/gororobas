@@ -22,7 +22,7 @@ import {
   snapshotToLoroDoc,
   SourceResourceData,
 } from "@gororobas/domain"
-import { Context, DateTime, Duration, Effect, Option, Record as R, Schema, Struct } from "effect"
+import { Context, DateTime, Duration, Effect, Option, Record, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import {
@@ -161,7 +161,7 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
         materializeJunctionTable({
           deleteRows: sql`DELETE FROM resource_translations WHERE resource_id = ${input.resourceId}`,
           insertRows: insertResourceTranslationRows(
-            R.toEntries({
+            Record.toEntries({
               en: input.locales.en,
               es: input.locales.es,
               pt: input.locales.pt,

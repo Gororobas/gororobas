@@ -1,7 +1,7 @@
 import * as Gherkin from "@cucumber/gherkin"
 import * as Messages from "@cucumber/messages"
 import { BunServices } from "@effect/platform-bun"
-import { Array as Arr, Effect, FileSystem, Option, Path } from "effect"
+import { Array as EffectArray, Effect, FileSystem, Option, Path } from "effect"
 
 import { FeatureParseError } from "../errors.js"
 import type {
@@ -96,12 +96,12 @@ function parseRule(rule: Messages.Rule): ParsedRule {
     Option.map(parseBackground),
   )
   const scenarios = rule.children.flatMap((child) =>
-    child.scenario && !Arr.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
+    child.scenario && !EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenario(child.scenario)]
       : [],
   )
   const scenarioOutlines = rule.children.flatMap((child) =>
-    child.scenario && Arr.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
+    child.scenario && EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenarioOutline(child.scenario)]
       : [],
   )
@@ -126,12 +126,12 @@ function parseGherkinDocument(document: Messages.GherkinDocument): ParsedFeature
     Option.map(parseBackground),
   )
   const scenarios = feature.children.flatMap((child) =>
-    child.scenario && !Arr.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
+    child.scenario && !EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenario(child.scenario)]
       : [],
   )
   const scenarioOutlines = feature.children.flatMap((child) =>
-    child.scenario && Arr.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
+    child.scenario && EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenarioOutline(child.scenario)]
       : [],
   )

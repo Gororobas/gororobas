@@ -2,7 +2,7 @@
  * JSON diff inverse operations for backward reconstruction.
  * Based on json-diff-ts format.
  */
-import { Array as Arr, Effect, Match, Schema } from "effect"
+import { Array as EffectArray, Effect, Match, Schema } from "effect"
 
 // ============ Types ============
 
@@ -153,7 +153,7 @@ export const applyDiff = (obj: any, diff: JsonDiff): any => {
     Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(obj),
   ) // Deep clone
 
-  Arr.forEach(diff.ops, (op) => {
+  EffectArray.forEach(diff.ops, (op) => {
     Match.value(op.op).pipe(
       Match.when("add", () => setValueAtPath(result, op.path, op.value)),
       Match.when("remove", () => removeValueAtPath(result, op.path)),

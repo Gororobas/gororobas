@@ -1,4 +1,4 @@
-import { Array as Arr, Context, Layer, Option } from "effect"
+import { Array as EffectArray, Context, Layer, Option } from "effect"
 import * as ts from "typescript/unstable/ast"
 import type { CallExpression, Node, SourceFile } from "typescript/unstable/ast"
 import { API } from "typescript/unstable/sync"
@@ -55,13 +55,13 @@ function detectScope(node: Node): Option.Option<StepScope> {
   if (name === "Background") {
     return Option.some({ type: "background" })
   }
-  if (name === "Scenario" && Arr.isReadonlyArrayNonEmpty(node.arguments)) {
+  if (name === "Scenario" && EffectArray.isReadonlyArrayNonEmpty(node.arguments)) {
     const scenarioName = extractStringLiteral(node.arguments[0])
     if (Option.isSome(scenarioName)) {
       return Option.some({ type: "scenario", name: scenarioName.value })
     }
   }
-  if (name === "ScenarioOutline" && Arr.isReadonlyArrayNonEmpty(node.arguments)) {
+  if (name === "ScenarioOutline" && EffectArray.isReadonlyArrayNonEmpty(node.arguments)) {
     const outlineName = extractStringLiteral(node.arguments[0])
     if (Option.isSome(outlineName)) {
       return Option.some({ type: "scenario_outline", name: outlineName.value })
@@ -83,7 +83,7 @@ function visitNode(
 
   if (isStepCallExpression(node)) {
     const keyword = getStepKeyword(node)
-    if (Option.isSome(keyword) && Arr.isReadonlyArrayNonEmpty(node.arguments)) {
+    if (Option.isSome(keyword) && EffectArray.isReadonlyArrayNonEmpty(node.arguments)) {
       const firstArg = node.arguments[0]
       const pattern = extractStringLiteral(firstArg)
       if (Option.isSome(pattern)) {
@@ -122,7 +122,7 @@ export const StepDiscoveryLive = Layer.succeed(
   StepDiscovery,
   StepDiscovery.of({
     discoverSteps: (files) => {
-      if (Arr.isReadonlyArrayEmpty(files)) {
+      if (EffectArray.isReadonlyArrayEmpty(files)) {
         return []
       }
 

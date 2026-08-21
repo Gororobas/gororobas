@@ -20,13 +20,13 @@ import {
   tiptapToText,
 } from "@gororobas/domain"
 import {
-  Array as Arr,
+  Array as EffectArray,
   Context,
   DateTime,
   Effect,
   Equal,
   Option,
-  Record as R,
+  Record,
   Schema,
   Struct,
 } from "effect"
@@ -209,7 +209,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         commentId: CommentId
         locales: SourceCommentData["locales"]
       }) => {
-        const rows = R.toEntries({
+        const rows = Record.toEntries({
           en: input.locales.en,
           es: input.locales.es,
           pt: input.locales.pt,
@@ -229,7 +229,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
 
         return materializeJunctionTable({
           deleteRows: sql`DELETE FROM comment_translations WHERE comment_id = ${input.commentId}`,
-          insertRows: Arr.isReadonlyArrayNonEmpty(rows)
+          insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
             ? insertCommentTranslationRows(rows)
             : Effect.void,
         })

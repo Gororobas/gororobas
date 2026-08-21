@@ -8,7 +8,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { IdGen, OrganizationId, PersonId } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
-import { Array as Arr, DateTime, Effect, Option, Order } from "effect"
+import { Array as EffectArray, DateTime, Effect, Option, Order } from "effect"
 
 import { OrganizationsRepository } from "../../src/organizations/repository.js"
 import {
@@ -194,7 +194,7 @@ describe("OrganizationsRepository", () => {
         const members = yield* repo.listMembers(organization.id)
         expect(members).toHaveLength(2)
 
-        const accessLevels = Arr.sort(
+        const accessLevels = EffectArray.sort(
           members.map((m) => m.accessLevel ?? ""),
           Order.String,
         )
@@ -212,7 +212,7 @@ describe("OrganizationsRepository", () => {
             yield* insertOrganizationWithDependencies({ organization, profile })
 
             const members = yield* repo.listMembers(organization.id)
-            return Arr.isReadonlyArrayEmpty(members)
+            return EffectArray.isReadonlyArrayEmpty(members)
           }).pipe(Effect.provide(TestLayer)),
         DATABASE_PROPERTY_TEST_CONFIG,
       ),

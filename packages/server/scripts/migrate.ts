@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 import { BunServices, BunRuntime } from "@effect/platform-bun"
 import { FileSystem, Path } from "effect"
-import { Array as Arr, Console, Effect, pipe, Schema, String as EffectString } from "effect"
+import { Array as EffectArray, Console, Effect, pipe, Schema, String as EffectString } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 
 const ATLAS_DIR = "src/db/migrations-sql"
@@ -122,11 +122,11 @@ const convertMigrations = Effect.gen(function* () {
   const allFiles = yield* fs.readDirectory(atlasPath)
   const sqlFiles = pipe(
     allFiles,
-    Arr.filter((f) => f.endsWith(".sql")),
-    Arr.sort(EffectString.Order),
+    EffectArray.filter((f) => f.endsWith(".sql")),
+    EffectArray.sort(EffectString.Order),
   )
 
-  if (Arr.isArrayEmpty(sqlFiles) === true) {
+  if (EffectArray.isArrayEmpty(sqlFiles) === true) {
     yield* Effect.log("No SQL migration files found")
     return
   }
@@ -139,7 +139,7 @@ const convertMigrations = Effect.gen(function* () {
         const baseName = file.replace(".sql", "")
         const statements = parseSqlStatements(content)
 
-        if (Arr.isReadonlyArrayEmpty(statements)) {
+        if (EffectArray.isReadonlyArrayEmpty(statements)) {
           yield* Effect.log(`Skipping ${file} (no statements)`)
           return undefined
         }
@@ -161,7 +161,7 @@ const convertMigrations = Effect.gen(function* () {
 const program = Effect.gen(function* () {
   const args = yield* Effect.sync(() => process.argv.slice(2))
 
-  if (Arr.isReadonlyArrayEmpty(args)) {
+  if (EffectArray.isReadonlyArrayEmpty(args)) {
     yield* Console.error("Usage: npx tsx scripts/migrate.ts <migration_name>")
     yield* Console.error("Example: npx tsx scripts/migrate.ts add_users_table")
     return yield* Effect.fail(new MigrationScriptError({ message: "Missing migration name" }))

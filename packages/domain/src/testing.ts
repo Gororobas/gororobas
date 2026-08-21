@@ -4,15 +4,15 @@
  * Import from `@gororobas/domain/testing` in downstream packages.
  */
 import {
-  Array as Arr,
+  Array as EffectArray,
   Cause,
   DateTime,
   Effect,
   Exit,
   Layer,
   Option,
-  Predicate as P,
-  Record as R,
+  Predicate,
+  Record,
   Schema,
 } from "effect"
 import { UnknownError } from "effect/Cause"
@@ -147,7 +147,7 @@ export function deepEquals(a: unknown, b: unknown): boolean {
   // Handle null/undefined/NaN — JSON.stringify converts undefined (in arrays)
   // and NaN to null, and strips undefined-valued object keys.
   const isNullish = (v: unknown) =>
-    v === null || v === undefined || (P.isNumber(v) && !Number.isFinite(v))
+    v === null || v === undefined || (Predicate.isNumber(v) && !Number.isFinite(v))
   if (a === b) return true
   if (isNullish(a) && isNullish(b)) return true
   if (a == null || b == null) return false
@@ -166,21 +166,21 @@ export function deepEquals(a: unknown, b: unknown): boolean {
   // Handle arrays
   if (Array.isArray(a) && Array.isArray(b)) {
     if (a.length !== b.length) return false
-    return Arr.every(a, (value, index) => deepEquals(value, b[index]))
+    return EffectArray.every(a, (value, index) => deepEquals(value, b[index]))
   }
 
   // Handle objects
-  if (P.isObject(a) && P.isObject(b)) {
+  if (Predicate.isObject(a) && Predicate.isObject(b)) {
     // Filter out keys with undefined values since JSON round-trips erase
     // the distinction between {key: undefined} and a missing key.
     const definedKeys = (obj: Record<PropertyKey, unknown>) =>
-      R.keys(obj).filter((k) => obj[k] !== undefined)
+      Record.keys(obj).filter((k) => obj[k] !== undefined)
     const aKeys = definedKeys(a)
     const bKeys = definedKeys(b)
 
     if (aKeys.length !== bKeys.length) return false
 
-    return Arr.every(aKeys, (key) => bKeys.includes(key) && deepEquals(a[key], b[key]))
+    return EffectArray.every(aKeys, (key) => bKeys.includes(key) && deepEquals(a[key], b[key]))
   }
 
   // Fallback to strict equality

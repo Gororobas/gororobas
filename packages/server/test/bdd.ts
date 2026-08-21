@@ -14,7 +14,7 @@ import {
   Then,
   When,
 } from "@gororobas/effect-bdd"
-import { Effect, Record as R, Schema } from "effect"
+import { Effect, Record, Schema } from "effect"
 
 import { AppSqlTest } from "../src/sql.js"
 
@@ -55,7 +55,7 @@ const describeParsedScenarioOutline = (
 ): void => {
   describe(outline.name, () => {
     outline.examples.forEach((example, index) => {
-      const label = R.toEntries(example)
+      const label = Record.toEntries(example)
         .map(([k, v]) => `${k}=${String(v)}`)
         .join(", ")
 

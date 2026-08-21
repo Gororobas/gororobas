@@ -1,4 +1,4 @@
-import { Context, HashSet, Predicate, Record as R, Schema } from "effect"
+import { Context, HashSet, Predicate, Record, Schema } from "effect"
 /**
  * Session types for authentication.
  */
@@ -45,7 +45,7 @@ export const getSessionPlatformPermissions = (
 export const getSessionOrganizationPermissions = (
   session: AccountSession,
 ): Record<OrganizationId, HashSet.HashSet<OrganizationPermission>> =>
-  R.fromEntries(
+  Record.fromEntries(
     session.memberships.map((m) => [m.organizationId, organizationPermissionsFor(m.accessLevel)]),
   )
 

@@ -1,5 +1,5 @@
 /* oxlint-disable effect/casting-awareness -- normalization establishes the Handle invariant. */
-import { String as EffectString, Predicate as P } from "effect"
+import { String as EffectString, Predicate } from "effect"
 
 /**
  * Limits a string to a certain length for UI or SEO purposes.
@@ -21,7 +21,7 @@ export function truncate(str: string, maxLength: number) {
 }
 
 export function capitalize(str: string, allWords = true): string {
-  if (!P.isString(str) || EffectString.isEmpty(str)) {
+  if (!Predicate.isString(str) || EffectString.isEmpty(str)) {
     return str
   }
 

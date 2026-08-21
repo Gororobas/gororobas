@@ -1,4 +1,13 @@
-import { Array as Arr, Console, Context, Effect, Layer, Match, Option, Schema } from "effect"
+import {
+  Array as EffectArray,
+  Console,
+  Context,
+  Effect,
+  Layer,
+  Match,
+  Option,
+  Schema,
+} from "effect"
 
 import type {
   CheckResult,
@@ -56,7 +65,7 @@ function formatRulePretty(rule: RuleResult, indent: string): string {
   )
 
   const status = totalUndefined === 0 ? `${ANSI.green}✓${ANSI.reset}` : `${ANSI.red}✗${ANSI.reset}`
-  const backgroundLines = Arr.isReadonlyArrayNonEmpty(rule.backgroundSteps ?? [])
+  const backgroundLines = EffectArray.isReadonlyArrayNonEmpty(rule.backgroundSteps ?? [])
     ? [
         `${indent}  ${ANSI.dim}Background:${ANSI.reset}`,
         ...(rule.backgroundSteps ?? []).map((step) => formatStepPretty(step, `${indent}    `)),
@@ -90,7 +99,7 @@ function formatFeaturePretty(feature: FeatureResult): string {
   const totalUndefined = topLevelUndefined + rulesUndefined
 
   const status = totalUndefined === 0 ? `${ANSI.green}✓${ANSI.reset}` : `${ANSI.red}✗${ANSI.reset}`
-  const backgroundLines = Arr.isReadonlyArrayNonEmpty(feature.backgroundSteps ?? [])
+  const backgroundLines = EffectArray.isReadonlyArrayNonEmpty(feature.backgroundSteps ?? [])
     ? [
         "  " + ANSI.dim + "Background:" + ANSI.reset,
         ...(feature.backgroundSteps ?? []).map((step) => formatStepPretty(step, "    ")),
@@ -142,7 +151,7 @@ function reportUndefinedStepsGithubActions(
             `::error file=${featureFile},line=${step.step.line}::Undefined step: "${step.step.keyword} ${step.step.text}" in scenario "${scenario.name}"${prefix}`,
         ),
     ),
-    ...Arr.fromOption(backgroundSteps).flatMap((steps) =>
+    ...EffectArray.fromOption(backgroundSteps).flatMap((steps) =>
       steps
         .filter((step) => !step.matched)
         .map(

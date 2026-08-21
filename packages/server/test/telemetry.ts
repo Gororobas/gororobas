@@ -12,7 +12,7 @@ import * as NodeSdk from "@effect/opentelemetry/NodeSdk"
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http"
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base/build/src/export/ConsoleSpanExporter.js"
 import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base/build/src/export/SimpleSpanProcessor.js"
-import { Array as Arr, Effect, Layer, Record as R } from "effect"
+import { Array as EffectArray, Effect, Layer, Record } from "effect"
 
 const logWarningSync = (message: string) => Effect.runSync(Effect.logWarning(message))
 const logErrorSync = (message: string) => Effect.runSync(Effect.logError(message))
@@ -188,7 +188,7 @@ export const withTestSpan = <A, E, R>(
 ): Effect.Effect<A, E, R> => {
   try {
     // If no attributes, just use Effect.withSpan directly
-    if (!attributes || Arr.isReadonlyArrayEmpty(R.keys(attributes))) {
+    if (!attributes || EffectArray.isReadonlyArrayEmpty(Record.keys(attributes))) {
       return Effect.withSpan(effect, name) as Effect.Effect<A, E, R>
     }
 

@@ -22,7 +22,7 @@ import {
   SuggestedTagExtraction,
   SuggestedVegetableExtraction,
 } from "@gororobas/domain"
-import { Array as Arr, Effect, Option, Predicate as P, Struct } from "effect"
+import { Array as EffectArray, Effect, Option, Predicate, Struct } from "effect"
 import type { Extraction } from "langextract"
 
 import { TagsRepository } from "../tags/repository.js"
@@ -48,9 +48,9 @@ function collectVegetableCandidates(extraction: Extraction): string[] {
   const attributes = extraction.attributes ?? {}
   const candidates = ["vegetable_pt", "vegetable_es", "vegetable_en"].flatMap((key) => {
     const value = attributes[key]
-    return P.isString(value) ? [value] : Array.isArray(value) ? value : []
+    return Predicate.isString(value) ? [value] : Array.isArray(value) ? value : []
   })
-  if (Arr.isReadonlyArrayEmpty(candidates) && extraction.extractionText) {
+  if (EffectArray.isReadonlyArrayEmpty(candidates) && extraction.extractionText) {
     return [extraction.extractionText]
   }
   return candidates
@@ -124,13 +124,13 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
     ...common,
     handle: yield* stringToHandle(extraction.extractionText),
     names: {
-      pt: P.isString(common.attributes.vegetable_pt)
+      pt: Predicate.isString(common.attributes.vegetable_pt)
         ? common.attributes.vegetable_pt
         : extraction.extractionText,
-      es: P.isString(common.attributes.vegetable_es)
+      es: Predicate.isString(common.attributes.vegetable_es)
         ? common.attributes.vegetable_es
         : extraction.extractionText,
-      en: P.isString(common.attributes.vegetable_en)
+      en: Predicate.isString(common.attributes.vegetable_en)
         ? common.attributes.vegetable_en
         : extraction.extractionText,
     },
@@ -145,7 +145,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
   const { attributes } = common
   const status = attributes.status
   const tagHandle = yield* stringToHandle(
-    P.isString(attributes.tag) ? attributes.tag : extraction.extractionText,
+    Predicate.isString(attributes.tag) ? attributes.tag : extraction.extractionText,
   )
 
   yield* Effect.logDebug(
@@ -186,9 +186,9 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
     ...common,
     handle: tagHandle,
     names: {
-      pt: P.isString(attributes.name_pt) ? attributes.name_pt : extraction.extractionText,
-      es: P.isString(attributes.name_es) ? attributes.name_es : extraction.extractionText,
-      en: P.isString(attributes.name_en) ? attributes.name_en : extraction.extractionText,
+      pt: Predicate.isString(attributes.name_pt) ? attributes.name_pt : extraction.extractionText,
+      es: Predicate.isString(attributes.name_es) ? attributes.name_es : extraction.extractionText,
+      en: Predicate.isString(attributes.name_en) ? attributes.name_en : extraction.extractionText,
     },
   })
 })

@@ -1,12 +1,12 @@
 import { describe, it } from "@effect/vitest"
 import {
-  Array as Arr,
+  Array as EffectArray,
   Effect,
-  Record as EffectRecord,
+  Record,
   FileSystem,
   Layer,
   Option,
-  Predicate as P,
+  Predicate,
   Path,
 } from "effect"
 
@@ -197,7 +197,7 @@ function provideLayer<T, E, R, LO, LE>(
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return P.isObject(value)
+  return Predicate.isObject(value)
 }
 
 function createRunWithBackgrounds({
@@ -214,14 +214,14 @@ function createRunWithBackgrounds({
     effect: Effect.Effect<unknown, E, ROut | InternalServices>
   }): Effect.Effect<unknown, unknown, unknown> {
     const allLayers = [
-      ...Arr.fromOption(featureBgRef.layer),
-      ...(ruleBgRef ? Arr.fromOption(ruleBgRef.layer) : []),
+      ...EffectArray.fromOption(featureBgRef.layer),
+      ...(ruleBgRef ? EffectArray.fromOption(ruleBgRef.layer) : []),
       ...(scenario.layer ? [scenario.layer] : []),
     ]
 
-    const uniqueLayers = Arr.dedupe(allLayers)
+    const uniqueLayers = EffectArray.dedupe(allLayers)
 
-    const combinedLayer = Arr.match(uniqueLayers, {
+    const combinedLayer = EffectArray.match(uniqueLayers, {
       onEmpty: () => undefined,
       onNonEmpty: (layers) =>
         layers.length === 1
@@ -270,7 +270,7 @@ function createRunWithBackgrounds({
 }
 
 function substituteOutlinePlaceholders(text: string, example: Record<string, string>): string {
-  return EffectRecord.toEntries(example).reduce(
+  return Record.toEntries(example).reduce(
     (result, [key, value]) => result.replace(new RegExp(`<${key}>`, "g"), String(value)),
     text,
   )
@@ -340,13 +340,13 @@ function createRuleContext(
         })
       })
 
-      if (Arr.isReadonlyArrayEmpty(parsedOutline.examples)) {
+      if (EffectArray.isReadonlyArrayEmpty(parsedOutline.examples)) {
         throw new ScenarioOutlineExamplesError({ feature: featurePath, scenario: name })
       }
 
       describe(name, () => {
         parsedOutline.examples.forEach((example, index) => {
-          const label = EffectRecord.toEntries(example)
+          const label = Record.toEntries(example)
             .map(([k, v]) => `${k}=${String(v)}`)
             .join(", ")
 

@@ -6,7 +6,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Handle, IdGen, TagRow } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
-import { Array as Arr, Effect, HashSet, Layer, Option, Order, Schema } from "effect"
+import { Array as EffectArray, Effect, HashSet, Layer, Option, Order, Schema } from "effect"
 import { FastCheck } from "effect/testing"
 import { v7 } from "uuid"
 
@@ -105,7 +105,7 @@ describe("TagsRepository", () => {
             yield* Effect.forEach(tags, (tag) => repo.insertRow(tag), { concurrency: "unbounded" })
 
             const persisted = yield* repo.findAll()
-            const expectedHandles = Arr.sort(
+            const expectedHandles = EffectArray.sort(
               tags.map((tag) => tag.handle),
               Order.String,
             )

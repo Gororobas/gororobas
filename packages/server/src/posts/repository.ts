@@ -26,13 +26,13 @@ import {
 } from "@gororobas/domain"
 import { GetPostPageParams } from "@gororobas/domain/posts/api"
 import {
-  Array as Arr,
+  Array as EffectArray,
   Context,
   DateTime,
   Effect,
   Equal,
   Option,
-  Record as R,
+  Record,
   Schema,
   Struct,
 } from "effect"
@@ -286,7 +286,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
       locales: NoteSourceData["locales"]
       postId: PostId
     }) => {
-      const rows = R.toEntries({
+      const rows = Record.toEntries({
         en: input.locales.en,
         es: input.locales.es,
         pt: input.locales.pt,
@@ -306,7 +306,7 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
       return materializeJunctionTable({
         deleteRows: sql`DELETE FROM post_translations WHERE post_id = ${input.postId}`,
-        insertRows: Arr.isReadonlyArrayNonEmpty(rows)
+        insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
           ? insertPostTranslationRows(rows)
           : Effect.void,
       })
@@ -325,7 +325,9 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
       return materializeJunctionTable({
         deleteRows: sql`DELETE FROM post_tags WHERE post_id = ${input.postId}`,
-        insertRows: Arr.isReadonlyArrayNonEmpty(rows) ? insertPostTagRows(rows) : Effect.void,
+        insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
+          ? insertPostTagRows(rows)
+          : Effect.void,
       })
     }
 
@@ -345,7 +347,9 @@ export class PostsRepository extends Context.Service<PostsRepository>()("PostsRe
 
       return materializeJunctionTable({
         deleteRows: sql`DELETE FROM post_vegetables WHERE post_id = ${input.postId}`,
-        insertRows: Arr.isReadonlyArrayNonEmpty(rows) ? insertPostVegetableRows(rows) : Effect.void,
+        insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
+          ? insertPostVegetableRows(rows)
+          : Effect.void,
       })
     }
 

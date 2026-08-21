@@ -2,15 +2,7 @@ import { BunServices } from "@effect/platform-bun"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale } from "@gororobas/domain"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "@gororobas/domain"
-import {
-  Effect,
-  FileSystem,
-  Path,
-  Predicate as P,
-  Record as R,
-  Schema,
-  String as Str,
-} from "effect"
+import { Effect, FileSystem, Path, Predicate, Record, Schema, String as EffectString } from "effect"
 
 import { translateTiptapContent } from "./translate-tiptap-content.js"
 import { TranslationServiceOllama } from "./translation-service-ollama.js"
@@ -41,7 +33,7 @@ const saveTranslationResult = (
 
 /** Recursively collect all text content */
 function collectText(node: TiptapAnyNode): string {
-  const text = "text" in node && P.isString(node.text) ? [node.text] : []
+  const text = "text" in node && Predicate.isString(node.text) ? [node.text] : []
   const content = "content" in node && node.content ? node.content.flatMap(collectText) : []
   return [...text, ...content].join("")
 }
@@ -442,7 +434,7 @@ describe(
   "ollama translation quality (skipped as it's costly, must be ran manually)",
   { timeout: 180_000, sequential: true },
   () => {
-    R.toEntries(FIXTURES).forEach(([name, fixture]) => {
+    Record.toEntries(FIXTURES).forEach(([name, fixture]) => {
       it.effect.skip(name, () =>
         Effect.gen(function* () {
           const result = yield* translateTiptapContent({
@@ -466,10 +458,13 @@ describe(
           expect(collectMarkTypes(result.content)).toEqual(collectMarkTypes(fixture.document))
 
           // Actually translates text (output differs from input)
-          expect(Str.isEmpty(originalText.trim()) || translatedText !== originalText).toBe(true)
-          expect(Str.isEmpty(originalText.trim()) || Str.isNonEmpty(translatedText.trim())).toBe(
+          expect(EffectString.isEmpty(originalText.trim()) || translatedText !== originalText).toBe(
             true,
           )
+          expect(
+            EffectString.isEmpty(originalText.trim()) ||
+              EffectString.isNonEmpty(translatedText.trim()),
+          ).toBe(true)
         }).pipe(Effect.provide(TranslationServiceOllama), Effect.provide(BunServices.layer)),
       )
     })

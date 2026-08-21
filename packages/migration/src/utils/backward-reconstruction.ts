@@ -3,7 +3,7 @@ import { type SourceVegetableData } from "@gororobas/domain"
 /**
  * Backward reconstruction algorithm for vegetable edit history.
  */
-import { Array as Arr, Effect, Option, Order, Schema } from "effect"
+import { Array as EffectArray, Effect, Option, Order, Schema } from "effect"
 
 import { type EditSuggestion } from "../schemas/gel/entities.js"
 import { applyInverseDiffE, type JsonDiff } from "./json-diff-inverse.js"
@@ -63,7 +63,7 @@ export const transformEditSuggestion = (
 export const sortEventsReverseChronological = (
   events: EditSuggestionEvent[],
 ): EditSuggestionEvent[] => {
-  return Arr.sort(
+  return EffectArray.sort(
     [...events],
     Order.mapInput(Order.flip(Order.String), (event: EditSuggestionEvent) => event.timestamp),
   )

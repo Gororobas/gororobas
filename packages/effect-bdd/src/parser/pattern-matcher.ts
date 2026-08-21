@@ -1,4 +1,4 @@
-import { Array as Arr, Effect, Match, Option, Schema } from "effect"
+import { Array as EffectArray, Effect, Match, Option, Schema } from "effect"
 
 import { StepParamsDecodeError } from "../errors.js"
 
@@ -109,7 +109,7 @@ export function extractParams(
   return Option.match(patternParams, {
     onNone: () => Option.none(),
     onSome: (params) =>
-      Arr.isReadonlyArrayNonEmpty(dataTable ?? [])
+      EffectArray.isReadonlyArrayNonEmpty(dataTable ?? [])
         ? Option.some({ ...params, table: dataTable })
         : Option.some(params),
   })

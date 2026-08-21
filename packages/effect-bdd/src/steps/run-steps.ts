@@ -1,4 +1,4 @@
-import { Array as Arr, Effect, Option, Schema } from "effect"
+import { Array as EffectArray, Effect, Option, Schema } from "effect"
 
 import { BackgroundContext, ScenarioContext } from "../context.js"
 import { StepCountMismatchError, StepMatchError, StepValidationError } from "../errors.js"
@@ -54,7 +54,7 @@ function validateSteps(
 
   return {
     mismatches,
-    valid: Arr.isReadonlyArrayEmpty(mismatches),
+    valid: EffectArray.isReadonlyArrayEmpty(mismatches),
   }
 }
 
@@ -80,7 +80,7 @@ function runStepsImpl(
     // =========================================================================
 
     // 1. Check step count
-    if (Arr.isReadonlyArrayNonEmpty(parsedSteps) && steps.length !== parsedSteps.length) {
+    if (EffectArray.isReadonlyArrayNonEmpty(parsedSteps) && steps.length !== parsedSteps.length) {
       return yield* new StepCountMismatchError({
         actualCount: steps.length,
         expectedCount: parsedSteps.length,
@@ -92,7 +92,7 @@ function runStepsImpl(
     }
 
     // 2. Validate all step patterns match before running any
-    if (Arr.isReadonlyArrayNonEmpty(parsedSteps)) {
+    if (EffectArray.isReadonlyArrayNonEmpty(parsedSteps)) {
       const validation = validateSteps(steps, parsedSteps)
       if (!validation.valid) {
         return yield* new StepValidationError({
