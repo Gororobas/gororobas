@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "effect": "catalog:",
+    "effect-units": "catalog:",
     "loro-mirror": "catalog:",
     "uuid": "catalog:"
   },

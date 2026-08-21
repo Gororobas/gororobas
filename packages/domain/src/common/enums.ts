@@ -79,6 +79,9 @@ export type AgroforestryStratum = typeof AgroforestryStratum.Type
 export const VegetableLifecycle = Schema.Literals(["SEMIANNUAL", "ANNUAL", "BIENNIAL", "PERENNIAL"])
 export type VegetableLifecycle = typeof VegetableLifecycle.Type
 
+export const PlantLifecycle = VegetableLifecycle
+export type PlantLifecycle = typeof PlantLifecycle.Type
+
 export const VegetableUsage = Schema.Literals([
   "HUMAN_FEED",
   "ANIMAL_FEED",
@@ -91,6 +94,9 @@ export const VegetableUsage = Schema.Literals([
   "ECOSYSTEM_SERVICE",
 ])
 export type VegetableUsage = typeof VegetableUsage.Type
+
+export const PlantUsage = VegetableUsage
+export type PlantUsage = typeof PlantUsage.Type
 
 export const EdibleVegetablePart = Schema.Literals([
   "FRUIT",
@@ -107,6 +113,9 @@ export const EdibleVegetablePart = Schema.Literals([
 ])
 export type EdibleVegetablePart = typeof EdibleVegetablePart.Type
 
+export const EdiblePlantPart = EdibleVegetablePart
+export type EdiblePlantPart = typeof EdiblePlantPart.Type
+
 export const PlantingMethod = Schema.Literals([
   "SEED",
   "SEEDLING",
@@ -118,6 +127,33 @@ export const PlantingMethod = Schema.Literals([
   "DIVISION",
 ])
 export type PlantingMethod = typeof PlantingMethod.Type
+
+export const AnimalRole = Schema.Literals([
+  "POLLINATOR",
+  "PEST_CONTROL",
+  "GRAZER",
+  "LIVESTOCK",
+  "DRAFT_ANIMAL",
+  "AQUACULTURE",
+  "COMPOSTING",
+  "SEED_DISPERSER",
+])
+export type AnimalRole = typeof AnimalRole.Type
+
+export const ToolUsage = Schema.Literals([
+  "HAND_TOOL",
+  "IRRIGATION",
+  "SOIL_PREPARATION",
+  "PLANTING",
+  "HARVEST",
+  "PROCESSING",
+  "STORAGE",
+  "MEASUREMENT",
+  "PROTECTION",
+  "MACHINERY",
+  "INFRASTRUCTURE",
+])
+export type ToolUsage = typeof ToolUsage.Type
 
 export const GrammaticalGender = Schema.Literals(["NEUTRAL", "MALE", "FEMALE"])
 export type GrammaticalGender = typeof GrammaticalGender.Type

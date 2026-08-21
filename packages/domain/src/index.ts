@@ -14,6 +14,7 @@ export * from "./profiles/domain.js"
 export * from "./resources/domain.js"
 export * from "./tags/domain.js"
 export * from "./vegetables/domain.js"
+export * from "./wiki/domain.js"
 
 // Errors
 export * from "./comments/errors.js"

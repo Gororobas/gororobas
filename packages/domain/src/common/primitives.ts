@@ -3,6 +3,15 @@
  */
 import { Schema, SchemaTransformation } from "effect"
 
+/**
+ * To be used for all nullish/optional columns in the DB.
+ *
+ * - decoding: missing values, undefineds or nulls become Option.none()
+ * - encoding: Option.some() becomes the Schema; Option.none() becomes `null`
+ **/
+export const OptionalColumn = <S extends Schema.Schema<unknown>>(s: S) =>
+  Schema.OptionFromOptionalNullOr(s, { onNoneEncoding: null })
+
 export const TimestampColumn = Schema.DateTimeUtcFromString
 export type TimestampColumn = typeof TimestampColumn.Type
 
@@ -47,3 +56,14 @@ export const PaginationOptions = Schema.Struct({
   ),
 })
 export type PaginationOptions = typeof PaginationOptions.Type
+
+export const IntNonNegative = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+
+export const NonEmptyTrimmedString = Schema.Trimmed.check(Schema.isNonEmpty())
+
+/** Contains a Loro-provided $cid to identify it in the CRDT list */
+export const NameInCrdtList = Schema.Struct({
+  $cid: Schema.optional(Schema.String),
+  value: NonEmptyTrimmedString,
+}).pipe(Schema.brand("NameInCrdtList"))
+export type NameInCrdtList = typeof NameInCrdtList.Type
