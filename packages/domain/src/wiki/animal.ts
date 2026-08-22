@@ -13,8 +13,8 @@ export type AnimalAttributes = typeof AnimalAttributes.Type
 export const AnimalWikiArticleKind = Schema.Literal("ANIMAL")
 export type AnimalWikiArticleKind = typeof AnimalWikiArticleKind.Type
 
-export const AnimalContributorEditableData = Schema.TaggedStruct(AnimalWikiArticleKind.literal, {
+export const AnimalArticleData = Schema.TaggedStruct(AnimalWikiArticleKind.literal, {
   attributes: AnimalAttributes,
   translations: WikiArticleTranslations,
 })
-export type AnimalContributorEditableData = typeof AnimalContributorEditableData.Type
+export type AnimalArticleData = typeof AnimalArticleData.Type

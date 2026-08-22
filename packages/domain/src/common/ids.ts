@@ -77,8 +77,11 @@ export type VegetableVarietyId = typeof VegetableVarietyId.Type
 export const WikiArticleId = UUID.pipe(Schema.brand("WikiArticleId"))
 export type WikiArticleId = typeof WikiArticleId.Type
 
-export const WikiArticleEditSuggestionId = UUID.pipe(Schema.brand("WikiArticleEditSuggestionId"))
-export type WikiArticleEditSuggestionId = typeof WikiArticleEditSuggestionId.Type
-
 export const WikiArticleRevisionId = UUID.pipe(Schema.brand("WikiArticleRevisionId"))
 export type WikiArticleRevisionId = typeof WikiArticleRevisionId.Type
+
+export const PlantVarietyId = UUID.pipe(Schema.brand("PlantVarietyId"))
+export type PlantVarietyId = typeof PlantVarietyId.Type
+
+export const PlantVarietyRevisionId = UUID.pipe(Schema.brand("PlantVarietyRevisionId"))
+export type PlantVarietyRevisionId = typeof PlantVarietyRevisionId.Type

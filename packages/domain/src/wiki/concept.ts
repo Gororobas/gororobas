@@ -12,8 +12,8 @@ export type ConceptAttributes = typeof ConceptAttributes.Type
 export const ConceptWikiArticleKind = Schema.Literal("CONCEPT")
 export type ConceptWikiArticleKind = typeof ConceptWikiArticleKind.Type
 
-export const ConceptContributorEditableData = Schema.TaggedStruct(ConceptWikiArticleKind.literal, {
+export const ConceptArticleData = Schema.TaggedStruct(ConceptWikiArticleKind.literal, {
   attributes: ConceptAttributes,
   translations: WikiArticleTranslations,
 })
-export type ConceptContributorEditableData = typeof ConceptContributorEditableData.Type
+export type ConceptArticleData = typeof ConceptArticleData.Type

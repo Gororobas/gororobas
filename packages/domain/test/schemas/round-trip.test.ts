@@ -30,27 +30,39 @@ import {
 import { SuggestedTagRow, SuggestedTagSourceRow, TagRow } from "../../src/tags/domain.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import { VegetableRow, VegetableTranslationRow } from "../../src/vegetables/domain.js"
+import {
+  WikiArticleCrdtRow,
+  WikiArticleHandleMaterializedRow,
+  WikiArticleMaterializedRow,
+  WikiArticleRevisionRow,
+  WikiArticleTranslationMaterializedRow,
+} from "../../src/wiki/wiki-article.js"
 
 const rowSchemas = [
   { name: "AccountRow", schema: AccountRow },
+  { name: "ImageRow", schema: ImageRow },
+  { name: "OAuthAccountRow", schema: OAuthAccountRow },
+  { name: "OrganizationRow", schema: OrganizationRow },
   { name: "PersonRow", schema: PersonRow },
   { name: "ProfileRow", schema: ProfileRow },
-  { name: "SessionRow", schema: SessionRow },
-  { name: "OAuthAccountRow", schema: OAuthAccountRow },
-  { name: "VerificationRow", schema: VerificationRow },
-  { name: "ImageRow", schema: ImageRow },
-  { name: "OrganizationRow", schema: OrganizationRow },
-  { name: "PublicationRow", schema: PublicationRow },
-  { name: "PublicationCrdtRow", schema: PublicationCrdtRow },
   { name: "PublicationCommitRow", schema: PublicationCommitRow },
-  { name: "PublicationTranslationRow", schema: PublicationTranslationRow },
+  { name: "PublicationCrdtRow", schema: PublicationCrdtRow },
+  { name: "PublicationRow", schema: PublicationRow },
   { name: "PublicationTagRow", schema: PublicationTagRow },
+  { name: "PublicationTranslationRow", schema: PublicationTranslationRow },
   { name: "PublicationVegetableRow", schema: PublicationVegetableRow },
-  { name: "TagRow", schema: TagRow },
+  { name: "SessionRow", schema: SessionRow },
   { name: "SuggestedTagRow", schema: SuggestedTagRow },
   { name: "SuggestedTagSourceRow", schema: SuggestedTagSourceRow },
+  { name: "TagRow", schema: TagRow },
   { name: "VegetableRow", schema: VegetableRow },
   { name: "VegetableTranslationRow", schema: VegetableTranslationRow },
+  { name: "VerificationRow", schema: VerificationRow },
+  { name: "WikiArticleCrdtRow", schema: WikiArticleCrdtRow },
+  { name: "WikiArticleHandleRow", schema: WikiArticleHandleMaterializedRow },
+  { name: "WikiArticleMaterializedRow", schema: WikiArticleMaterializedRow },
+  { name: "WikiArticleRevisionRow", schema: WikiArticleRevisionRow },
+  { name: "WikiArticleTranslationMaterializedRow", schema: WikiArticleTranslationMaterializedRow },
 ] as const
 
 describe("Schema Round-Trip Properties", () => {

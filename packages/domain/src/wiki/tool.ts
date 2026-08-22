@@ -12,8 +12,8 @@ export type ToolAttributes = typeof ToolAttributes.Type
 export const ToolWikiArticleKind = Schema.Literal("TOOL")
 export type ToolWikiArticleKind = typeof ToolWikiArticleKind.Type
 
-export const ToolContributorEditableData = Schema.TaggedStruct(ToolWikiArticleKind.literal, {
+export const ToolArticleData = Schema.TaggedStruct(ToolWikiArticleKind.literal, {
   attributes: ToolAttributes,
   translations: WikiArticleTranslations,
 })
-export type ToolContributorEditableData = typeof ToolContributorEditableData.Type
+export type ToolArticleData = typeof ToolArticleData.Type
