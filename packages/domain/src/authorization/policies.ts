@@ -6,6 +6,7 @@ import { profilePolicies } from "../profiles/policies.js"
 import { publicationsPolicies } from "../publications/policies.js"
 import { resourcesPolicies } from "../resources/policies.js"
 import { vegetablesPolicies } from "../vegetables/policies.js"
+import { wikiPolicies } from "../wiki/policies.js"
 import {
   assertAuthenticated,
   assertNonBlockedPerson,
@@ -31,6 +32,7 @@ const Policies = {
   publications: publicationsPolicies,
   resources: resourcesPolicies,
   vegetables: vegetablesPolicies,
+  wiki: wikiPolicies,
   profiles: profilePolicies,
 }
 

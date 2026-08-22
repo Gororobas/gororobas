@@ -6,7 +6,7 @@ export class HandleTakenError extends Schema.TaggedError<HandleTakenError>()(
   "HandleTakenError",
   {
     handle: Handle,
-    entity: Schema.Literals(["profile", "vegetable", "publication"]),
+    entity: Schema.Literals(["profile", "vegetable", "publication", "wiki-article"]),
   },
   { httpApiStatus: 409 },
 ) {}

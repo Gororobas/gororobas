@@ -67,16 +67,13 @@ const rowSchemas = [
 
 describe("Schema Round-Trip Properties", () => {
   describe("Property 1: Schema Round-Trip Preservation", () => {
-    // Generate tests for all Row schemas using factory pattern
     rowSchemas.forEach(({ name, schema }) => {
       it.effect(`${name} round-trip preserves data`, () =>
-        // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation
         assertPropertyEffect(Schema.toArbitrary(schema)(FastCheck), (original) =>
           Effect.gen(function* () {
             const encoded = yield* Schema.encodeEffect(schema)(original)
             const decoded = yield* Schema.decodeEffect(schema)(encoded)
 
-            // Use custom deepEquals that handles Uint8Array, DateTime, and other special types
             return deepEquals(original, decoded)
           }),
         ),

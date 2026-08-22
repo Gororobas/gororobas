@@ -1,14 +1,14 @@
-import { Schema } from "effect"
+import { Schema, Struct } from "effect"
 
 import { Locale, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
-import { AnimalArticleData } from "./animal.js"
-import { ConceptArticleData } from "./concept.js"
-import { PlantArticleData } from "./plant.js"
-import { ToolArticleData } from "./tool.js"
-import { UncategorizedArticleData } from "./uncategorized.js"
+import { AnimalArticleData, AnimalAttributes } from "./animal.js"
+import { ConceptArticleData, ConceptAttributes } from "./concept.js"
+import { PlantArticleData, PlantAttributes } from "./plant.js"
+import { ToolArticleData, ToolAttributes } from "./tool.js"
+import { UncategorizedArticleData, UncategorizedAttributes } from "./uncategorized.js"
 import { WikiArticleTranslation } from "./wiki-article-translation.js"
 
 export const WikiArticleEditableData = Schema.Union([
@@ -105,3 +105,32 @@ export const WikiArticleHandleMaterializedRow = Schema.Struct({
   handle: Handle,
 })
 export type WikiArticleHandleMaterializedRow = typeof WikiArticleHandleMaterializedRow.Type
+
+/** A locale-specific article projection returned by the read APIs. */
+export const WikiArticleQueriedData = Schema.Struct({
+  ...coreWikiArticleMaterializedRowFields,
+  kind: WikiArticleKind,
+  attributes: Schema.fromJsonString(
+    Schema.Union([
+      AnimalAttributes,
+      ConceptAttributes,
+      PlantAttributes,
+      ToolAttributes,
+      UncategorizedAttributes,
+    ]),
+  ),
+  handle: Handle,
+  locale: Locale,
+  ...WikiArticleTranslation.fields,
+})
+export type WikiArticleQueriedData = typeof WikiArticleQueriedData.Type
+
+export const WikiArticleQueriedCardData = WikiArticleQueriedData.mapFields(
+  Struct.pick(["id", "handle", "kind", "commonNames", "locale"]),
+)
+export type WikiArticleQueriedCardData = typeof WikiArticleQueriedCardData.Type
+
+export const WikiArticleQueriedPageData = Schema.Struct({
+  wikiArticle: WikiArticleQueriedData,
+})
+export type WikiArticleQueriedPageData = typeof WikiArticleQueriedPageData.Type

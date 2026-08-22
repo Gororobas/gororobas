@@ -26,6 +26,7 @@ export * from "./profiles/errors.js"
 export * from "./resources/errors.js"
 export * from "./tags/errors.js"
 export * from "./vegetables/errors.js"
+export * from "./wiki/errors.js"
 
 // Authentication
 export * from "./authentication/domain.js"
