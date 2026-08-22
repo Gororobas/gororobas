@@ -20,3 +20,9 @@ export class WikiArticleRevisionNotFoundError extends Schema.TaggedError<WikiArt
   { id: Schema.optional(WikiArticleRevisionId) },
   { httpApiStatus: 404 },
 ) {}
+
+export class WikiArticleRevisionAlreadyEvaluatedError extends Schema.TaggedError<WikiArticleRevisionAlreadyEvaluatedError>()(
+  "WikiArticleRevisionAlreadyEvaluatedError",
+  { id: WikiArticleRevisionId },
+  { httpApiStatus: 409 },
+) {}

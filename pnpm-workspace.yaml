@@ -3,6 +3,7 @@ packages:
 
 allowBuilds:
   "@ariga/atlas": true
+  '@parcel/watcher': set this to true or false
   "@prisma/engines": false
   bun: true
   esbuild: true

@@ -190,6 +190,80 @@ CREATE TABLE `image_credits` (
   CONSTRAINT `0` FOREIGN KEY (`person_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`image_id`) REFERENCES `images` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
+-- Create "wiki_article_crdts" table
+CREATE TABLE `wiki_article_crdts` (
+  `id` text NOT NULL,
+  `status` text NOT NULL,
+  `crdt_snapshot` blob NOT NULL,
+  `created_at` text NOT NULL,
+  `updated_at` text NOT NULL,
+  PRIMARY KEY (`id`)
+) WITHOUT ROWID;
+-- Create "wiki_article_revisions" table
+CREATE TABLE `wiki_article_revisions` (
+  `id` text NULL,
+  `wiki_article_id` text NOT NULL,
+  `created_by_id` text NULL,
+  `crdt_update` blob NOT NULL,
+  `from_crdt_frontier` json NOT NULL,
+  `evaluation` text NOT NULL,
+  `evaluation_reason` text NULL,
+  `evaluated_by_id` text NULL,
+  `evaluated_at` text NULL,
+  `created_at` text NOT NULL,
+  `updated_at` text NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `0` FOREIGN KEY (`evaluated_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+  CONSTRAINT `1` FOREIGN KEY (`created_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+  CONSTRAINT `2` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_wiki_article_revisions_article_evaluation" to table: "wiki_article_revisions"
+CREATE INDEX `idx_wiki_article_revisions_article_evaluation` ON `wiki_article_revisions` (`wiki_article_id`, `evaluation`);
+-- Create "wiki_articles" table
+CREATE TABLE `wiki_articles` (
+  `id` text NULL,
+  `kind` text NOT NULL,
+  `status` text NOT NULL,
+  `attributes` json NOT NULL,
+  `current_crdt_frontier` json NOT NULL,
+  `created_at` text NOT NULL,
+  `updated_at` text NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `0` FOREIGN KEY (`id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_wiki_articles_kind_status" to table: "wiki_articles"
+CREATE INDEX `idx_wiki_articles_kind_status` ON `wiki_articles` (`kind`, `status`);
+-- Create "wiki_article_translations" table
+CREATE TABLE `wiki_article_translations` (
+  `wiki_article_id` text NOT NULL,
+  `locale` text NOT NULL,
+  `common_names` json NOT NULL,
+  `searchable_names` text NOT NULL,
+  `content` json NULL,
+  `content_plain_text` text NOT NULL,
+  `grammatical_gender` text NULL,
+  PRIMARY KEY (`wiki_article_id`, `locale`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+) WITHOUT ROWID;
+-- Create "wiki_article_handle_owners" table
+CREATE TABLE `wiki_article_handle_owners` (
+  `wiki_article_id` text NOT NULL,
+  `kind` text NOT NULL,
+  `handle` text NOT NULL,
+  PRIMARY KEY (`kind`, `handle`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+) WITHOUT ROWID;
+-- Create index "wiki_article_handle_owners_wiki_article_id_kind_handle" to table: "wiki_article_handle_owners"
+CREATE UNIQUE INDEX `wiki_article_handle_owners_wiki_article_id_kind_handle` ON `wiki_article_handle_owners` (`wiki_article_id`, `kind`, `handle`);
+-- Create "wiki_article_translation_handles" table
+CREATE TABLE `wiki_article_translation_handles` (
+  `wiki_article_id` text NOT NULL,
+  `locale` text NOT NULL,
+  `kind` text NOT NULL,
+  `handle` text NOT NULL,
+  PRIMARY KEY (`wiki_article_id`, `locale`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `kind`, `handle`) REFERENCES `wiki_article_handle_owners` (`wiki_article_id`, `kind`, `handle`) ON UPDATE NO ACTION ON DELETE CASCADE
+) WITHOUT ROWID;
 -- Create "vegetable_crdts" table
 CREATE TABLE `vegetable_crdts` (
   `id` text NOT NULL,

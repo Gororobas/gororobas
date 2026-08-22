@@ -184,6 +184,86 @@ CREATE TABLE image_credits (
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
+-- =============
+-- WIKI ARTICLES
+-- =============
+--
+-- The source of truth of contributor-editable article data.
+CREATE TABLE wiki_article_crdts (
+  id text PRIMARY KEY,
+  status text NOT NULL, -- WikiArticleStatus
+  crdt_snapshot blob NOT NULL, -- LoroSnapshot
+  created_at text NOT NULL,
+  updated_at text NOT NULL
+) WITHOUT ROWID;
+
+-- Submitted edits. Approved rows are also the article's revision history.
+CREATE TABLE wiki_article_revisions (
+  id text PRIMARY KEY,
+  wiki_article_id text NOT NULL,
+  created_by_id text,
+  crdt_update blob NOT NULL, -- LoroDocUpdate
+  from_crdt_frontier json NOT NULL, -- LoroDocFrontier
+  evaluation text NOT NULL, -- RevisionEvaluation
+  evaluation_reason text,
+  evaluated_by_id text,
+  evaluated_at text,
+  created_at text NOT NULL,
+  updated_at text NOT NULL,
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
+  FOREIGN KEY (evaluated_by_id) REFERENCES people (id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_wiki_article_revisions_article_evaluation ON wiki_article_revisions (wiki_article_id, evaluation);
+
+-- The core queryable data, materialized from the CRDT.
+CREATE TABLE wiki_articles (
+  id text PRIMARY KEY,
+  kind text NOT NULL, -- WikiArticleKind
+  status text NOT NULL, -- WikiArticleStatus
+  attributes json NOT NULL,
+  current_crdt_frontier json NOT NULL,
+  created_at text NOT NULL,
+  updated_at text NOT NULL,
+  FOREIGN KEY (id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_wiki_articles_kind_status ON wiki_articles (kind, status);
+
+-- Per-locale contributor-editable data, materialized from the CRDT.
+CREATE TABLE wiki_article_translations (
+  wiki_article_id text NOT NULL,
+  locale text NOT NULL,
+  common_names json NOT NULL,
+  searchable_names text NOT NULL,
+  content json, -- TiptapDocument
+  content_plain_text text NOT NULL,
+  grammatical_gender text, -- GrammaticalGender
+  PRIMARY KEY (wiki_article_id, locale),
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
+-- Owns a route handle across all locales. The locale mapping below allows the
+-- same article to reuse one handle in more than one locale.
+CREATE TABLE wiki_article_handle_owners (
+  wiki_article_id text NOT NULL,
+  kind text NOT NULL,
+  handle text NOT NULL,
+  PRIMARY KEY (kind, handle),
+  UNIQUE (wiki_article_id, kind, handle),
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
+CREATE TABLE wiki_article_translation_handles (
+  wiki_article_id text NOT NULL,
+  locale text NOT NULL,
+  kind text NOT NULL,
+  handle text NOT NULL,
+  PRIMARY KEY (wiki_article_id, locale),
+  FOREIGN KEY (wiki_article_id, kind, handle) REFERENCES wiki_article_handle_owners (wiki_article_id, kind, handle) ON DELETE CASCADE
+) WITHOUT ROWID;
+
 -- ==========
 -- VEGETABLES
 -- ==========

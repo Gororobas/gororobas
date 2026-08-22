@@ -1,5 +1,5 @@
 #!/usr/bin/env npx tsx
-import { BunServices, BunRuntime } from "@effect/platform-bun"
+import { NodeServices, NodeRuntime } from "@effect/platform-node"
 import { FileSystem, Path } from "effect"
 import { Array as EffectArray, Console, Effect, pipe, Schema, String as EffectString } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
@@ -183,4 +183,4 @@ const program = Effect.gen(function* () {
   yield* Effect.log("\nMigration complete!")
 })
 
-pipe(program, Effect.provide(BunServices.layer), BunRuntime.runMain)
+pipe(program, Effect.provide(NodeServices.layer), NodeRuntime.runMain)

@@ -69,6 +69,9 @@ export const WikiArticleTranslationMaterializedRow = Schema.Struct({
   wikiArticleId: WikiArticleId,
   locale: Locale,
   contentPlainText: Schema.String,
+  searchableNames: Schema.String,
+  // @todo is this needed?
+  commonNames: Schema.fromJsonString(WikiArticleTranslation.fields.commonNames),
   content: Schema.fromJsonString(WikiArticleTranslation.fields.content),
 })
 export type WikiArticleTranslationMaterializedRow =

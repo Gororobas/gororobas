@@ -28,6 +28,7 @@
     "@durable-streams/server": "^0.2.3",
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-bun": "catalog:",
+    "@effect/platform-node": "4.0.0-rc.111",
     "@effect/sql-sqlite-bun": "catalog:",
     "@gororobas/domain": "workspace:^",
     "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
