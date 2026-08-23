@@ -1,7 +1,9 @@
 import { Clock, Effect, Schema } from "effect"
 import { LoroDoc, VersionVector } from "loro-crdt"
 import { InferInputType, SchemaType as LoroMirrorSchema, Mirror } from "loro-mirror"
+import { nanoid } from "nanoid"
 
+import { LoroListItemId } from "../common/ids.js"
 import {
   CrdtCommit,
   CrdtCommitEncoded,
@@ -188,3 +190,5 @@ export const rebuildLoroDocFromUpdates = Effect.fn("rebuildLoroDocFromUpdates")(
 })
 
 export const EMPTY_LORO_DOC_FRONTIER = LoroDocFrontier.make([])
+
+export const createCrdtListItemId = () => LoroListItemId.make(nanoid(10))

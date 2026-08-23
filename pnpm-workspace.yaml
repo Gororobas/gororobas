@@ -3,7 +3,7 @@ packages:
 
 allowBuilds:
   "@ariga/atlas": true
-  '@parcel/watcher': set this to true or false
+  "@parcel/watcher": set this to true or false
   "@prisma/engines": false
   bun: true
   esbuild: true
@@ -27,8 +27,9 @@ catalog:
   effect: 4.0.0-rc.110
   effect-units: 0.3.0
   glob: ^13.0.6
-  loro-crdt: ^1.12.1
+  loro-crdt: ^1.14.1
   loro-mirror: ^1.2.1
+  nanoid: ^6.0.1
   typescript: 7.0.2
   uuid: ^13.0.2
   vitest: ^4.1.5

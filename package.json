@@ -13,7 +13,7 @@
     "type-check": "pnpm --recursive --if-present --parallel run type-check",
     "lint": "oxlint --fix --fix-dangerously --fix-suggestions --config=./oxlint.config.ts",
     "format": "oxfmt",
-    "test": "bun --bun ./node_modules/vitest/vitest.mjs",
+    "test": "vitest",
     "check-bdd": "bun run packages/effect-bdd/bin/effect-bdd-check.ts check",
     "coverage": "bun --bun ./node_modules/vitest/vitest.mjs --coverage",
     "quality-gates": "pnpm run type-check && pnpm run lint && pnpm run test"

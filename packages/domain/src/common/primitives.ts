@@ -3,6 +3,8 @@
  */
 import { Schema, SchemaTransformation } from "effect"
 
+import { LoroListItemId } from "./ids.js"
+
 /**
  * To be used for all nullish/optional columns in the DB.
  *
@@ -61,9 +63,21 @@ export const IntNonNegative = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
 export const NonEmptyTrimmedString = Schema.Trimmed.check(Schema.isNonEmpty())
 
+export const ItemInCrdtList = Schema.Struct({
+  id: LoroListItemId,
+  value: Schema.Any,
+})
+export type ItemInCrdtList = typeof ItemInCrdtList.Type
+
 /** Contains a Loro-provided $cid to identify it in the CRDT list */
 export const NameInCrdtList = Schema.Struct({
-  $cid: Schema.optional(Schema.String),
+  id: LoroListItemId,
   value: NonEmptyTrimmedString,
 }).pipe(Schema.brand("NameInCrdtList"))
 export type NameInCrdtList = typeof NameInCrdtList.Type
+
+export const Centimeters = IntNonNegative.pipe(Schema.brand("Centimeters"))
+
+export const TemperatureInCelsius = Schema.Number.check(Schema.isGreaterThan(0)).pipe(
+  Schema.brand("TemperatureInCelsius"),
+)

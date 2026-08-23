@@ -25,7 +25,9 @@
   "dependencies": {
     "effect": "catalog:",
     "effect-units": "catalog:",
+    "loro-crdt": "catalog:",
     "loro-mirror": "catalog:",
+    "nanoid": "catalog:",
     "uuid": "catalog:"
   },
   "effect": {
