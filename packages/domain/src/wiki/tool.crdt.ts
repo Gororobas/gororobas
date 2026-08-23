@@ -2,10 +2,10 @@ import { Effect, Match, Schema } from "effect"
 import { type LoroDoc } from "loro-crdt"
 
 import { ToolUsage } from "../common/enums.js"
-import { generateStringHashSetOperations } from "../crdts/string-hash-set.js"
+import { makeStringSetEditOperations } from "../crdts/string-set-edit-operations.js"
 import { ToolAttributes } from "./tool.js"
 
-const toolUsageOperations = generateStringHashSetOperations("ToolUsage")({
+const toolUsageOperations = makeStringSetEditOperations("ToolUsage")({
   ValueSchema: ToolUsage,
   getContainer: (document) =>
     Effect.succeed(

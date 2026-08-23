@@ -2,22 +2,18 @@ import { Effect, Match, Schema } from "effect"
 import { type LoroDoc } from "loro-crdt"
 
 import { NonEmptyTrimmedString } from "../common/primitives.js"
-import { generateStringHashSetOperations } from "../crdts/string-hash-set.js"
+import { makeOptionalScalarEditOperations } from "../crdts/optional-scalar-edit-operations.js"
 import { UncategorizedAttributes } from "./uncategorized.js"
 
-const suggestedKindOperations = generateStringHashSetOperations("SuggestedKind")({
+const suggestedKindOperations = makeOptionalScalarEditOperations("SuggestedKind")({
   ValueSchema: NonEmptyTrimmedString,
-  getContainer: (document) =>
-    Effect.succeed(
-      document
-        .getMap("attributes")
-        .ensureMergeableMap("suggestedKind" satisfies keyof UncategorizedAttributes),
-    ),
+  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
+  keyInParentContainer: "suggestedKind" satisfies keyof UncategorizedAttributes,
 })
 
 export const UncategorizedAttributeEdit = Schema.Union([
-  suggestedKindOperations.added.message,
-  suggestedKindOperations.removed.message,
+  suggestedKindOperations.set.message,
+  suggestedKindOperations.unset.message,
 ]).pipe(Schema.toTaggedUnion("_tag"))
 export type UncategorizedAttributeEdit = typeof UncategorizedAttributeEdit.Type
 
@@ -27,7 +23,7 @@ export const applyUncategorizedAttributeEdit = (
 ) =>
   Match.value(change).pipe(
     Match.tagsExhaustive({
-      AddedSuggestedKind: (message) => suggestedKindOperations.added.handler(document, message),
-      RemovedSuggestedKind: (message) => suggestedKindOperations.removed.handler(document, message),
+      SetSuggestedKind: (message) => suggestedKindOperations.set.handler(document, message),
+      UnsetSuggestedKind: (message) => suggestedKindOperations.unset.handler(document, message),
     }),
   )

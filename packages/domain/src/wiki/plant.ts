@@ -7,13 +7,14 @@ import {
   PlantLifecycle,
   PlantUsage,
 } from "../common/enums.js"
-import { IntNonNegative, NameInCrdtList, OptionalColumn } from "../common/primitives.js"
+import {
+  Centimeters,
+  IntNonNegative,
+  NameInCrdtList,
+  OptionalColumn,
+  TemperatureInCelsius,
+} from "../common/primitives.js"
 import { WikiArticleTranslations } from "./wiki-article-translation.js"
-
-const Centimeters = IntNonNegative.pipe(Schema.brand("Centimeters"))
-const TemperatureInCelsius = Schema.Number.check(Schema.isGreaterThan(0)).pipe(
-  Schema.brand("TemperatureInCelsius"),
-)
 
 export const PlantAttributes = Schema.Struct({
   developmentCycleMax: OptionalColumn(IntNonNegative),

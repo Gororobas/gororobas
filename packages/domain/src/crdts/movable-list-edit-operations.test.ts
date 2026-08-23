@@ -4,11 +4,11 @@ import { FastCheck } from "effect/testing"
 import { LoroDoc } from "loro-crdt"
 
 import { assertPropertyEffect } from "../testing.js"
-import { generateMovableListOperations } from "./movable-list.js"
+import { makeMovableListEditOperations } from "./movable-list-edit-operations.js"
 
 const ListValue = Schema.String
 
-const { added, removed, updated, moved } = generateMovableListOperations("Item")({
+const { added, removed, updated, moved } = makeMovableListEditOperations("Item")({
   ValueSchema: ListValue,
   getContainer: (currentDocument) => Effect.succeed(currentDocument.getMovableList("items")),
 })
@@ -19,7 +19,7 @@ const listOperationsArbitrary = FastCheck.array(Schema.toArbitrary(ListOperation
   maxLength: 100,
 })
 
-describe("generateMovableListOperations", () => {
+describe("makeMovableListEditOperations", () => {
   it.effect("ensure it runs", () =>
     assertPropertyEffect(listOperationsArbitrary, (operations) =>
       Effect.gen(function* () {

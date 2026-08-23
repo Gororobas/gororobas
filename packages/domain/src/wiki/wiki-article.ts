@@ -1,4 +1,4 @@
-import { Schema, Tuple } from "effect"
+import { Schema, Struct, Tuple } from "effect"
 
 import { Locale, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
@@ -58,8 +58,29 @@ const coreWikiArticleMaterializedRowFields = {
 
 /** The main queryable article record.*/
 export const WikiArticleMaterializedRow = WikiArticleEditableData.mapMembers(
-  // @todo find a way to automatically encode/decode `kind` as `_tag`
-  Tuple.map(Schema.fieldsAssign(coreWikiArticleMaterializedRowFields)),
+  // @todo find a way to automatically encode/decode `kind` as `_tag` and make this less verbose
+  Tuple.evolve([
+    (member) =>
+      member
+        .mapFields(Struct.omit(["translations"]))
+        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
+    (member) =>
+      member
+        .mapFields(Struct.omit(["translations"]))
+        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
+    (member) =>
+      member
+        .mapFields(Struct.omit(["translations"]))
+        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
+    (member) =>
+      member
+        .mapFields(Struct.omit(["translations"]))
+        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
+    (member) =>
+      member
+        .mapFields(Struct.omit(["translations"]))
+        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
+  ]),
 )
 export type WikiArticleMaterializedRow = typeof WikiArticleMaterializedRow.Type
 
@@ -77,12 +98,12 @@ export const WikiArticleTranslationMaterializedRow = Schema.Struct({
 export type WikiArticleTranslationMaterializedRow =
   typeof WikiArticleTranslationMaterializedRow.Type
 
-/** Stable generated route handles, scoped to an article kind and locale. */
+/** Stable generated route handles, uniquely owned within an article kind. */
 export const WikiArticleHandleMaterializedRow = Schema.Struct({
   wikiArticleId: WikiArticleId,
   kind: WikiArticleKind,
-  locale: Locale,
   handle: Handle,
+  locales: Schema.fromJsonString(Schema.NonEmptyArray(Locale)),
 })
 export type WikiArticleHandleMaterializedRow = typeof WikiArticleHandleMaterializedRow.Type
 

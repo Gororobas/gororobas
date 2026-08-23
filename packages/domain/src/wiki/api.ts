@@ -4,9 +4,9 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 import { HandleTakenError } from "../common/errors.js"
 import { WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
-import { LoroDocUpdate } from "../crdts/domain.js"
 import {
-  WikiArticleEditableData,
+  CreateWikiArticlePayload,
+  CreateWikiArticleRevisionPayload,
   WikiArticleKind,
   WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
@@ -32,7 +32,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
     HttpApiEndpoint.post("createWikiArticle", "/wiki", {
       success: Schema.Struct({ id: WikiArticleId, kind: WikiArticleKind, handle: Handle }),
       error: HandleTakenError,
-      payload: Schema.Struct({ wikiArticle: WikiArticleEditableData }),
+      payload: CreateWikiArticlePayload,
     }),
   )
   .add(
@@ -40,7 +40,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
       success: Schema.Struct({ id: WikiArticleRevisionId }),
       error: WikiArticleNotFoundError,
       params: Schema.Struct({ handle: Handle, kind: WikiArticleKind }),
-      payload: Schema.Struct({ crdtUpdate: LoroDocUpdate }),
+      payload: CreateWikiArticleRevisionPayload,
     }),
   )
   .add(

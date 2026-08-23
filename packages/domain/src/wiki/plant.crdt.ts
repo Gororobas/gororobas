@@ -14,12 +14,12 @@ import {
   NameInCrdtList,
   TemperatureInCelsius,
 } from "../common/primitives.js"
-import { generateMovableListOperations } from "../crdts/movable-list.js"
-import { generatePlainValueOperations } from "../crdts/plain-value.js"
-import { generateStringHashSetOperations } from "../crdts/string-hash-set.js"
+import { makeMovableListEditOperations } from "../crdts/movable-list-edit-operations.js"
+import { makeOptionalScalarEditOperations } from "../crdts/optional-scalar-edit-operations.js"
+import { makeStringSetEditOperations } from "../crdts/string-set-edit-operations.js"
 import { PlantAttributes } from "./plant.js"
 
-const scientificNameOperations = generateMovableListOperations("ScientificName")({
+const scientificNameOperations = makeMovableListEditOperations("ScientificName")({
   ValueSchema: NameInCrdtList.schema.fields.value,
   getContainer: (document) =>
     Effect.succeed(
@@ -29,7 +29,7 @@ const scientificNameOperations = generateMovableListOperations("ScientificName")
     ),
 })
 
-const plantLifecycleOperations = generateStringHashSetOperations("PlantLifecycle")({
+const plantLifecycleOperations = makeStringSetEditOperations("PlantLifecycle")({
   ValueSchema: PlantLifecycle,
   getContainer: (document) =>
     Effect.succeed(
@@ -39,7 +39,7 @@ const plantLifecycleOperations = generateStringHashSetOperations("PlantLifecycle
     ),
 })
 
-const plantingMethodOperations = generateStringHashSetOperations("PlantingMethod")({
+const plantingMethodOperations = makeStringSetEditOperations("PlantingMethod")({
   ValueSchema: PlantingMethod,
   getContainer: (document) =>
     Effect.succeed(
@@ -49,7 +49,7 @@ const plantingMethodOperations = generateStringHashSetOperations("PlantingMethod
     ),
 })
 
-const plantUsageOperations = generateStringHashSetOperations("PlantUsage")({
+const plantUsageOperations = makeStringSetEditOperations("PlantUsage")({
   ValueSchema: PlantUsage,
   getContainer: (document) =>
     Effect.succeed(
@@ -57,7 +57,7 @@ const plantUsageOperations = generateStringHashSetOperations("PlantUsage")({
     ),
 })
 
-const ediblePartsOperations = generateStringHashSetOperations("EdibleParts")({
+const ediblePartsOperations = makeStringSetEditOperations("EdibleParts")({
   ValueSchema: EdiblePlantPart,
   getContainer: (document) =>
     Effect.succeed(
@@ -67,7 +67,7 @@ const ediblePartsOperations = generateStringHashSetOperations("EdibleParts")({
     ),
 })
 
-const strataOperations = generateStringHashSetOperations("Strata")({
+const strataOperations = makeStringSetEditOperations("Strata")({
   ValueSchema: AgroforestryStratum,
   getContainer: (document) =>
     Effect.succeed(
@@ -75,37 +75,37 @@ const strataOperations = generateStringHashSetOperations("Strata")({
     ),
 })
 
-const developmentCycleMaxOperations = generatePlainValueOperations("DevelopmentCycleMax")({
+const developmentCycleMaxOperations = makeOptionalScalarEditOperations("DevelopmentCycleMax")({
   ValueSchema: IntNonNegative,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "developmentCycleMax" satisfies keyof PlantAttributes,
 })
 
-const developmentCycleMinOperations = generatePlainValueOperations("DevelopmentCycleMin")({
+const developmentCycleMinOperations = makeOptionalScalarEditOperations("DevelopmentCycleMin")({
   ValueSchema: IntNonNegative,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "developmentCycleMin" satisfies keyof PlantAttributes,
 })
 
-const heightMaxOperations = generatePlainValueOperations("HeightMax")({
+const heightMaxOperations = makeOptionalScalarEditOperations("HeightMax")({
   ValueSchema: Centimeters,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "heightMax" satisfies keyof PlantAttributes,
 })
 
-const heightMinOperations = generatePlainValueOperations("HeightMin")({
+const heightMinOperations = makeOptionalScalarEditOperations("HeightMin")({
   ValueSchema: Centimeters,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "heightMin" satisfies keyof PlantAttributes,
 })
 
-const temperatureMaxOperations = generatePlainValueOperations("TemperatureMax")({
+const temperatureMaxOperations = makeOptionalScalarEditOperations("TemperatureMax")({
   ValueSchema: TemperatureInCelsius,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "temperatureMax" satisfies keyof PlantAttributes,
 })
 
-const temperatureMinOperations = generatePlainValueOperations("TemperatureMin")({
+const temperatureMinOperations = makeOptionalScalarEditOperations("TemperatureMin")({
   ValueSchema: TemperatureInCelsius,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "temperatureMin" satisfies keyof PlantAttributes,

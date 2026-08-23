@@ -17,7 +17,7 @@ const findItemIndexInCrdtList = (container: LoroMovableList | LoroList, id: Loro
     return itemIndex
   })
 
-export const generateMovableListOperations =
+export const makeMovableListEditOperations =
   <P extends string>(id: P) =>
   <T>({
     ValueSchema,

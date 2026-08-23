@@ -5,11 +5,11 @@ import { LoroDoc } from "loro-crdt"
 
 import { Locale } from "../common/enums.js"
 import { assertPropertyEffect } from "../testing.js"
-import { generateStringHashSetOperations } from "./string-hash-set.js"
+import { makeStringSetEditOperations } from "./string-set-edit-operations.js"
 
 const containerName = "locales"
 
-const { added, removed } = generateStringHashSetOperations("Locale")({
+const { added, removed } = makeStringSetEditOperations("Locale")({
   ValueSchema: Locale,
   getContainer: (document) => Effect.succeed(document.getMap(containerName)),
 })

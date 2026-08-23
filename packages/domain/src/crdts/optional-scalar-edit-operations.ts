@@ -3,7 +3,7 @@ import { LoroDoc, LoroMap } from "loro-crdt"
 
 import { CrdtContainerNotFoundError } from "./errors.js"
 
-export const generatePlainValueOperations =
+export const makeOptionalScalarEditOperations =
   <P extends string>(id: P) =>
   <T>({
     ValueSchema,

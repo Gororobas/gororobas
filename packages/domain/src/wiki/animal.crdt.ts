@@ -3,11 +3,11 @@ import { type LoroDoc } from "loro-crdt"
 
 import { AnimalRole } from "../common/enums.js"
 import { NameInCrdtList } from "../common/primitives.js"
-import { generateMovableListOperations } from "../crdts/movable-list.js"
-import { generateStringHashSetOperations } from "../crdts/string-hash-set.js"
+import { makeMovableListEditOperations } from "../crdts/movable-list-edit-operations.js"
+import { makeStringSetEditOperations } from "../crdts/string-set-edit-operations.js"
 import { AnimalAttributes } from "./animal.js"
 
-const scientificNameOperations = generateMovableListOperations("ScientificName")({
+const scientificNameOperations = makeMovableListEditOperations("ScientificName")({
   ValueSchema: NameInCrdtList.schema.fields.value,
   getContainer: (document) =>
     Effect.succeed(
@@ -17,7 +17,7 @@ const scientificNameOperations = generateMovableListOperations("ScientificName")
     ),
 })
 
-const animalRoleOperations = generateStringHashSetOperations("AnimalRole")({
+const animalRoleOperations = makeStringSetEditOperations("AnimalRole")({
   ValueSchema: AnimalRole,
   getContainer: (document) =>
     Effect.succeed(

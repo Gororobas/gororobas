@@ -3,7 +3,7 @@ import { LoroDoc, LoroMap } from "loro-crdt"
 
 import { CrdtContainerNotFoundError } from "./errors.js"
 
-export const generateStringHashSetOperations =
+export const makeStringSetEditOperations =
   <P extends string>(id: P) =>
   <T extends string, S extends Schema.String | Schema.Literals<ReadonlyArray<T>>>({
     ValueSchema,

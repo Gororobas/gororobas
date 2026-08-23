@@ -2,10 +2,10 @@ import { Effect, Match, Schema } from "effect"
 import { type LoroDoc } from "loro-crdt"
 
 import { TagId } from "../common/ids.js"
-import { generateStringHashSetOperations } from "../crdts/string-hash-set.js"
+import { makeStringSetEditOperations } from "../crdts/string-set-edit-operations.js"
 import { ConceptAttributes } from "./concept.js"
 
-const conceptRoleOperations = generateStringHashSetOperations("ConceptRole")({
+const conceptTagOperations = makeStringSetEditOperations("ConceptTag")({
   ValueSchema: TagId,
   getContainer: (document) =>
     Effect.succeed(
@@ -14,15 +14,15 @@ const conceptRoleOperations = generateStringHashSetOperations("ConceptRole")({
 })
 
 export const ConceptAttributeEdit = Schema.Union([
-  conceptRoleOperations.added.message,
-  conceptRoleOperations.removed.message,
+  conceptTagOperations.added.message,
+  conceptTagOperations.removed.message,
 ]).pipe(Schema.toTaggedUnion("_tag"))
 export type ConceptAttributeEdit = typeof ConceptAttributeEdit.Type
 
 export const applyConceptAttributeEdit = (document: LoroDoc, change: ConceptAttributeEdit) =>
   Match.value(change).pipe(
     Match.tagsExhaustive({
-      AddedConceptRole: (message) => conceptRoleOperations.added.handler(document, message),
-      RemovedConceptRole: (message) => conceptRoleOperations.removed.handler(document, message),
+      AddedConceptTag: (message) => conceptTagOperations.added.handler(document, message),
+      RemovedConceptTag: (message) => conceptTagOperations.removed.handler(document, message),
     }),
   )
