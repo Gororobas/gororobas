@@ -7,17 +7,17 @@ settings:
 catalogs:
   default:
     '@effect/opentelemetry':
-      specifier: 4.0.0-rc.110
-      version: 4.0.0-rc.110
+      specifier: 4.0.0-rc.111
+      version: 4.0.0-rc.111
     '@effect/platform-bun':
-      specifier: 4.0.0-rc.110
-      version: 4.0.0-rc.110
+      specifier: 4.0.0-rc.111
+      version: 4.0.0-rc.111
     '@effect/sql-sqlite-bun':
-      specifier: 4.0.0-rc.110
-      version: 4.0.0-rc.110
+      specifier: 4.0.0-rc.111
+      version: 4.0.0-rc.111
     '@effect/vitest':
-      specifier: 4.0.0-rc.110
-      version: 4.0.0-rc.110
+      specifier: 4.0.0-rc.111
+      version: 4.0.0-rc.111
     '@tiptap/core':
       specifier: ^3.23.1
       version: 3.23.1
@@ -37,8 +37,8 @@ catalogs:
       specifier: 1.3.12
       version: 1.3.12
     effect:
-      specifier: 4.0.0-rc.110
-      version: 4.0.0-rc.110
+      specifier: 4.0.0-rc.111
+      version: 4.0.0-rc.111
     effect-units:
       specifier: 0.3.0
       version: 0.3.0
@@ -85,10 +85,10 @@ importers:
         version: 0.87.2
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5)
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)(vitest@4.1.5)
       '@foldkit/oxlint-plugin':
         specifier: ^0.6.0
-        version: 0.6.0(effect@4.0.0-rc.110)
+        version: 0.6.0(effect@4.0.0-rc.111)
       '@manypkg/cli':
         specifier: ^0.25.1
         version: 0.25.1
@@ -109,7 +109,7 @@ importers:
         version: 1.3.12
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-rc.110
+        version: 4.0.0-rc.111
       glob:
         specifier: 'catalog:'
         version: 13.0.6
@@ -139,10 +139,10 @@ importers:
     dependencies:
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-rc.110
+        version: 4.0.0-rc.111
       effect-units:
         specifier: 'catalog:'
-        version: 0.3.0(effect@4.0.0-rc.110)
+        version: 0.3.0(effect@4.0.0-rc.111)
       loro-crdt:
         specifier: 'catalog:'
         version: 1.14.1
@@ -167,10 +167,10 @@ importers:
         version: 32.3.1
       '@effect/platform-bun':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-rc.110
+        version: 4.0.0-rc.111
       glob:
         specifier: 'catalog:'
         version: 13.0.6
@@ -180,7 +180,7 @@ importers:
         version: 0.7.9
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)))
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)))
       '@types/node':
         specifier: ^25.6.2
         version: 25.6.2
@@ -196,7 +196,7 @@ importers:
     dependencies:
       '@effect/sql-sqlite-bun':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)
       '@gororobas/domain':
         specifier: workspace:^
         version: link:../domain/dist
@@ -208,7 +208,7 @@ importers:
         version: 1.7.1(@opentelemetry/api@1.9.1)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.3.0)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.3.0)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)))
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-rc.110
+        version: 4.0.0-rc.111
       json-diff-ts:
         specifier: ^2.2.1
         version: 2.2.1
@@ -239,16 +239,16 @@ importers:
         version: 0.2.3(@tanstack/db@0.6.5(typescript@7.0.2))
       '@effect/opentelemetry':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(@opentelemetry/api-logs@0.213.0)(@opentelemetry/api@1.9.1)(@opentelemetry/resources@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-web@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.110)
+        version: 4.0.0-rc.111(@opentelemetry/api-logs@0.213.0)(@opentelemetry/api@1.9.1)(@opentelemetry/resources@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-web@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.111)
       '@effect/platform-bun':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)
       '@effect/platform-node':
         specifier: 4.0.0-rc.111
-        version: 4.0.0-rc.111(effect@4.0.0-rc.110)(redis@6.2.1(@opentelemetry/api@1.9.1))
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1(@opentelemetry/api@1.9.1))
       '@effect/sql-sqlite-bun':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)
       '@gororobas/domain':
         specifier: workspace:^
         version: link:../domain/dist
@@ -290,7 +290,7 @@ importers:
         version: 1.3.12
       effect:
         specifier: 'catalog:'
-        version: 4.0.0-rc.110
+        version: 4.0.0-rc.111
       langextract:
         specifier: ^1.2.0
         version: 1.2.0(debug@4.4.3(supports-color@7.2.0))
@@ -312,7 +312,7 @@ importers:
         version: 0.2.3
       '@effect/vitest':
         specifier: 'catalog:'
-        version: 4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)))
+        version: 4.0.0-rc.111(effect@4.0.0-rc.111)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)))
       '@gororobas/effect-bdd':
         specifier: workspace:^
         version: link:../effect-bdd/dist
@@ -545,8 +545,8 @@ packages:
     resolution: {integrity: sha512-CfiSoaVQO8pZgaMZGw5VvMvRGybsJ2LaSDoLYaqiVGvo/YYPYVR2GzUKY0h1NtIweq/+SQ5XLrvtzPIttWQ0GQ==}
     hasBin: true
 
-  '@effect/opentelemetry@4.0.0-rc.110':
-    resolution: {integrity: sha512-8Uum1ikIAK2DjATeLseS71HZKVI/dduFYypvMhiO68RTli1xq9yaoTI1Y0IThPn2sI0i86ZdpFaKQx1hdw2tWw==}
+  '@effect/opentelemetry@4.0.0-rc.111':
+    resolution: {integrity: sha512-bztAYpWoipn/a4tFjECMNvtWLkf2TS+Qn23PBI+f4q5DP9cBKfV00uhX8cwEVcfAtZd+lflSbGURHa4xlSewOA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       '@opentelemetry/api': '>=1.9.0 <2.0.0'
@@ -558,7 +558,7 @@ packages:
       '@opentelemetry/sdk-trace-node': '>=2.0.0 <3.0.0'
       '@opentelemetry/sdk-trace-web': '>=2.0.0 <3.0.0'
       '@opentelemetry/semantic-conventions': '>=1.33.0 <2.0.0'
-      effect: ^4.0.0-rc.110
+      effect: ^4.0.0-rc.111
     peerDependenciesMeta:
       '@opentelemetry/api':
         optional: true
@@ -577,16 +577,10 @@ packages:
       '@opentelemetry/sdk-trace-web':
         optional: true
 
-  '@effect/platform-bun@4.0.0-rc.110':
-    resolution: {integrity: sha512-f4AcFTWVwGby9RvSitqAcG/McN8OCDy7LW8PYRG4NIOO2eYphlW73S5Z7jm3UDP+FmIwwzjfgfIfBYkfPR+YfA==}
+  '@effect/platform-bun@4.0.0-rc.111':
+    resolution: {integrity: sha512-z6MF1ztw8oSvh4nlvI90wraB63ib5K67JPaSYtz5K9IIAgjXgXYC0hjbcqF+PlC9ytlQmu8tWzk2+yGePWWe5A==}
     peerDependencies:
-      effect: ^4.0.0-rc.110
-
-  '@effect/platform-node-shared@4.0.0-rc.110':
-    resolution: {integrity: sha512-P8EZloxS7RtCOSL3VSBPyqSenUm93xLbXf9jkWoy67cibZ2wgZ9nAou9iN8f1i4vzgxUsWtDuy6BEmg67np6Zw==}
-    engines: {node: '>=18.0.0'}
-    peerDependencies:
-      effect: ^4.0.0-rc.110
+      effect: ^4.0.0-rc.111
 
   '@effect/platform-node-shared@4.0.0-rc.111':
     resolution: {integrity: sha512-iES0Q9vmjhaUKqeW9ceonuD45MUg/Ouk08LzRSptZ+B5qB0w9WlRjDmUz5TJmY2betNop5FRI5k4AD4mtQt3Bw==}
@@ -601,15 +595,15 @@ packages:
       effect: ^4.0.0-rc.111
       redis: '>=5.0.0 <7.0.0'
 
-  '@effect/sql-sqlite-bun@4.0.0-rc.110':
-    resolution: {integrity: sha512-Lam3gY1xszjQS/cebdLbWbtR21FtQI4ke7QHqbBQ6AyVJF0CGUtS/ePL9zNq6wHNmJ95FUDGS6W+Qx/l6RPSzA==}
+  '@effect/sql-sqlite-bun@4.0.0-rc.111':
+    resolution: {integrity: sha512-u5HqWLYISTH5ydsCr45nOGmkspmAeNzK4q+plMrJntDoG8sQttwizC4akGfbQDgoSxyYfyBzi3YyVW/NvhvSQQ==}
     peerDependencies:
-      effect: ^4.0.0-rc.110
+      effect: ^4.0.0-rc.111
 
-  '@effect/vitest@4.0.0-rc.110':
-    resolution: {integrity: sha512-ZvceBAWOPDnLgQgoObxPZOBuRTaRhBUR0K8sT4vfwwnf6Sv92GvCFp+WmfFV31j58Inf2p+wU1C3o9TNC1MZrQ==}
+  '@effect/vitest@4.0.0-rc.111':
+    resolution: {integrity: sha512-YDaEVT+grREBVMzykRNFtJwGxy02achzT0WXZYwMJA4ukzuB9krkgQ5roc3N6zhC3NQq/j4IyM32/Pcov7AhHw==}
     peerDependencies:
-      effect: ^4.0.0-rc.110
+      effect: ^4.0.0-rc.111
       vitest: '>=4.1.0 <5.0.0'
 
   '@emnapi/core@1.10.0':
@@ -2296,8 +2290,8 @@ packages:
   effect@4.0.0-beta.100:
     resolution: {integrity: sha512-K4ed+BS3HyE+NoAZ8pJss2DpuK41mb856IO7ZlPfnwBXbq8oTtAAurrsVnwe2hzPamIuaZp/Pq4/xp9qORYv8Q==}
 
-  effect@4.0.0-rc.110:
-    resolution: {integrity: sha512-ega6FTJ8CS2of7tHZiADvgyJyV999Q6tZ9juE56V81O0jw6flRwydaPNtyfvP2a5LL9PZrse8A1jnNUD5sWVHg==}
+  effect@4.0.0-rc.111:
+    resolution: {integrity: sha512-ASd5L58EIR0CUNueZNKKjSsyOCd+2alxOAIaTcHaqkJkPsaYSsw5Cg/cfANk5K4Jr2YsX756xvX11shzqsreWA==}
 
   electron-to-chromium@1.5.353:
     resolution: {integrity: sha512-kOrWphBi8TOZyiJZqsgqIle0lw+tzmnQK83pV9dZUd01Nm2POECSyFQMAuarzZdYqQW7FH9RaYOuaRo3h+bQ3w==}
@@ -3577,10 +3571,10 @@ snapshots:
 
   '@effect/language-service@0.87.2': {}
 
-  '@effect/opentelemetry@4.0.0-rc.110(@opentelemetry/api-logs@0.213.0)(@opentelemetry/api@1.9.1)(@opentelemetry/resources@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-web@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.110)':
+  '@effect/opentelemetry@4.0.0-rc.111(@opentelemetry/api-logs@0.213.0)(@opentelemetry/api@1.9.1)(@opentelemetry/resources@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-logs@0.213.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-metrics@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-node@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-web@2.7.1(@opentelemetry/api@1.9.1))(@opentelemetry/semantic-conventions@1.43.0)(effect@4.0.0-rc.111)':
     dependencies:
       '@opentelemetry/semantic-conventions': 1.43.0
-      effect: 4.0.0-rc.110
+      effect: 4.0.0-rc.111
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       '@opentelemetry/api-logs': 0.213.0
@@ -3591,36 +3585,27 @@ snapshots:
       '@opentelemetry/sdk-trace-node': 2.7.1(@opentelemetry/api@1.9.1)
       '@opentelemetry/sdk-trace-web': 2.7.1(@opentelemetry/api@1.9.1)
 
-  '@effect/platform-bun@4.0.0-rc.110(effect@4.0.0-rc.110)':
+  '@effect/platform-bun@4.0.0-rc.111(effect@4.0.0-rc.111)':
     dependencies:
-      '@effect/platform-node-shared': 4.0.0-rc.110(effect@4.0.0-rc.110)
-      effect: 4.0.0-rc.110
+      '@effect/platform-node-shared': 4.0.0-rc.111(effect@4.0.0-rc.111)
+      effect: 4.0.0-rc.111
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node-shared@4.0.0-rc.110(effect@4.0.0-rc.110)':
+  '@effect/platform-node-shared@4.0.0-rc.111(effect@4.0.0-rc.111)':
     dependencies:
       '@types/ws': 8.18.1
-      effect: 4.0.0-rc.110
+      effect: 4.0.0-rc.111
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  '@effect/platform-node-shared@4.0.0-rc.111(effect@4.0.0-rc.110)':
+  '@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.111)(redis@6.2.1(@opentelemetry/api@1.9.1))':
     dependencies:
-      '@types/ws': 8.18.1
-      effect: 4.0.0-rc.110
-      ws: 8.21.3
-    transitivePeerDependencies:
-      - bufferutil
-      - utf-8-validate
-
-  '@effect/platform-node@4.0.0-rc.111(effect@4.0.0-rc.110)(redis@6.2.1(@opentelemetry/api@1.9.1))':
-    dependencies:
-      '@effect/platform-node-shared': 4.0.0-rc.111(effect@4.0.0-rc.110)
-      effect: 4.0.0-rc.110
+      '@effect/platform-node-shared': 4.0.0-rc.111(effect@4.0.0-rc.111)
+      effect: 4.0.0-rc.111
       mime: 4.1.0
       redis: 6.2.1(@opentelemetry/api@1.9.1)
       undici: 8.10.0
@@ -3628,18 +3613,18 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@effect/sql-sqlite-bun@4.0.0-rc.110(effect@4.0.0-rc.110)':
+  '@effect/sql-sqlite-bun@4.0.0-rc.111(effect@4.0.0-rc.111)':
     dependencies:
-      effect: 4.0.0-rc.110
+      effect: 4.0.0-rc.111
 
-  '@effect/vitest@4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)))':
+  '@effect/vitest@4.0.0-rc.111(effect@4.0.0-rc.111)(vitest@4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)))':
     dependencies:
-      effect: 4.0.0-rc.110
+      effect: 4.0.0-rc.111
       vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4(supports-color@7.2.0)(vitest@4.1.5))(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0))
 
-  '@effect/vitest@4.0.0-rc.110(effect@4.0.0-rc.110)(vitest@4.1.5)':
+  '@effect/vitest@4.0.0-rc.111(effect@4.0.0-rc.111)(vitest@4.1.5)':
     dependencies:
-      effect: 4.0.0-rc.110
+      effect: 4.0.0-rc.111
       vitest: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@25.6.2)(@vitest/coverage-v8@3.2.4)(happy-dom@20.9.0)(vite@8.0.11(@types/node@25.6.2)(esbuild@0.28.2)(tsx@4.21.0)(yaml@2.9.0))
 
   '@emnapi/core@1.10.0':
@@ -3814,9 +3799,9 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
-  '@foldkit/oxlint-plugin@0.6.0(effect@4.0.0-rc.110)':
+  '@foldkit/oxlint-plugin@0.6.0(effect@4.0.0-rc.111)':
     dependencies:
-      effect-oxlint: 0.3.3(effect@4.0.0-rc.110)
+      effect-oxlint: 0.3.3(effect@4.0.0-rc.111)
     transitivePeerDependencies:
       - effect
 
@@ -4906,14 +4891,14 @@ snapshots:
       '@oxlint/plugins': 1.78.0
       effect: 4.0.0-beta.100
 
-  effect-oxlint@0.3.3(effect@4.0.0-rc.110):
+  effect-oxlint@0.3.3(effect@4.0.0-rc.111):
     dependencies:
       '@oxlint/plugins': 1.78.0
-      effect: 4.0.0-rc.110
+      effect: 4.0.0-rc.111
 
-  effect-units@0.3.0(effect@4.0.0-rc.110):
+  effect-units@0.3.0(effect@4.0.0-rc.111):
     dependencies:
-      effect: 4.0.0-rc.110
+      effect: 4.0.0-rc.111
 
   effect@4.0.0-beta.100:
     dependencies:
@@ -4928,7 +4913,7 @@ snapshots:
       uuid: 14.0.1
       yaml: 2.9.0
 
-  effect@4.0.0-rc.110:
+  effect@4.0.0-rc.111:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 4.9.0

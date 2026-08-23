@@ -3,12 +3,12 @@ import { type LoroDoc } from "loro-crdt"
 
 import { NonEmptyTrimmedString } from "../common/primitives.js"
 import { makeOptionalScalarEditOperations } from "../crdts/optional-scalar-edit-operations.js"
-import { UncategorizedAttributes } from "./uncategorized.js"
+import { UncategorizedEditableAttributes } from "./uncategorized.js"
 
 const suggestedKindOperations = makeOptionalScalarEditOperations("SuggestedKind")({
   ValueSchema: NonEmptyTrimmedString,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "suggestedKind" satisfies keyof UncategorizedAttributes,
+  keyInParentContainer: "suggestedKind" satisfies keyof UncategorizedEditableAttributes,
 })
 
 export const UncategorizedAttributeEdit = Schema.Union([

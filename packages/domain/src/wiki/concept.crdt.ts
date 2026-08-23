@@ -3,13 +3,15 @@ import { type LoroDoc } from "loro-crdt"
 
 import { TagId } from "../common/ids.js"
 import { makeStringSetEditOperations } from "../crdts/string-set-edit-operations.js"
-import { ConceptAttributes } from "./concept.js"
+import { ConceptMaterializedAttributes } from "./concept.js"
 
 const conceptTagOperations = makeStringSetEditOperations("ConceptTag")({
   ValueSchema: TagId,
   getContainer: (document) =>
     Effect.succeed(
-      document.getMap("attributes").ensureMergeableMap("tags" satisfies keyof ConceptAttributes),
+      document
+        .getMap("attributes")
+        .ensureMergeableMap("tags" satisfies keyof ConceptMaterializedAttributes),
     ),
 })
 

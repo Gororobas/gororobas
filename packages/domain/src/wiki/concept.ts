@@ -1,19 +1,25 @@
 import { Schema } from "effect"
 
 import { TagId } from "../common/ids.js"
-import { OptionalColumn } from "../common/primitives.js"
+import { CrdtBrandedStringSet, OptionalColumn } from "../common/primitives.js"
 import { WikiArticleTranslations } from "./wiki-article-translation.js"
-
-export const ConceptAttributes = Schema.Struct({
-  tags: OptionalColumn(Schema.Array(TagId)),
-})
-export type ConceptAttributes = typeof ConceptAttributes.Type
 
 export const ConceptWikiArticleKind = Schema.Literal("CONCEPT")
 export type ConceptWikiArticleKind = typeof ConceptWikiArticleKind.Type
 
-export const ConceptArticleData = Schema.TaggedStruct(ConceptWikiArticleKind.literal, {
-  attributes: ConceptAttributes,
+export const ConceptEditableAttributes = Schema.Struct({
+  tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
+})
+export type ConceptEditableAttributes = typeof ConceptEditableAttributes.Type
+
+export const ConceptMaterializedAttributes = Schema.Struct({
+  tags: OptionalColumn(Schema.Array(TagId)),
+})
+export type ConceptMaterializedAttributes = typeof ConceptMaterializedAttributes.Type
+
+export const ConceptEditableArticle = Schema.Struct({
+  kind: ConceptWikiArticleKind,
+  attributes: ConceptEditableAttributes,
   translations: WikiArticleTranslations,
 })
-export type ConceptArticleData = typeof ConceptArticleData.Type
+export type ConceptEditableArticle = typeof ConceptEditableArticle.Type

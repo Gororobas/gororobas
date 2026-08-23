@@ -1,27 +1,39 @@
-import { Schema, Struct, Tuple } from "effect"
+import { Schema, Tuple } from "effect"
 
 import { Locale, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
-import { AnimalArticleData } from "./animal.js"
-import { ConceptArticleData } from "./concept.js"
-import { PlantArticleData } from "./plant.js"
-import { ToolArticleData } from "./tool.js"
-import { UncategorizedArticleData } from "./uncategorized.js"
+import {
+  AnimalEditableArticle,
+  AnimalMaterializedAttributes,
+  AnimalWikiArticleKind,
+} from "./animal.js"
+import {
+  ConceptEditableArticle,
+  ConceptMaterializedAttributes,
+  ConceptWikiArticleKind,
+} from "./concept.js"
+import { PlantEditableArticle, PlantMaterializedAttributes, PlantWikiArticleKind } from "./plant.js"
+import { ToolEditableArticle, ToolMaterializedAttributes, ToolWikiArticleKind } from "./tool.js"
+import {
+  UncategorizedEditableArticle,
+  UncategorizedMaterializedAttributes,
+  UncategorizedWikiArticleKind,
+} from "./uncategorized.js"
 import { WikiArticleTranslation } from "./wiki-article-translation.js"
 
 export const WikiArticleEditableData = Schema.Union([
-  AnimalArticleData,
-  ConceptArticleData,
-  PlantArticleData,
-  ToolArticleData,
-  UncategorizedArticleData,
-])
+  AnimalEditableArticle,
+  ConceptEditableArticle,
+  PlantEditableArticle,
+  ToolEditableArticle,
+  UncategorizedEditableArticle,
+]).pipe(Schema.toTaggedUnion("kind"))
 export type WikiArticleEditableData = typeof WikiArticleEditableData.Type
 
 export const WikiArticleKind = Schema.Literals(
-  WikiArticleEditableData.members.map((m) => m.fields._tag.schema.literal),
+  WikiArticleEditableData.members.map((m) => m.fields.kind.literal),
 )
 export type WikiArticleKind = typeof WikiArticleKind.Type
 
@@ -57,31 +69,33 @@ const coreWikiArticleMaterializedRowFields = {
 } as const
 
 /** The main queryable article record.*/
-export const WikiArticleMaterializedRow = WikiArticleEditableData.mapMembers(
-  // @todo find a way to automatically encode/decode `kind` as `_tag` and make this less verbose
-  Tuple.evolve([
-    (member) =>
-      member
-        .mapFields(Struct.omit(["translations"]))
-        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
-    (member) =>
-      member
-        .mapFields(Struct.omit(["translations"]))
-        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
-    (member) =>
-      member
-        .mapFields(Struct.omit(["translations"]))
-        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
-    (member) =>
-      member
-        .mapFields(Struct.omit(["translations"]))
-        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
-    (member) =>
-      member
-        .mapFields(Struct.omit(["translations"]))
-        .mapFields(Struct.assign(coreWikiArticleMaterializedRowFields)),
-  ]),
-)
+export const WikiArticleMaterializedRow = Schema.Union([
+  Schema.Struct({
+    ...coreWikiArticleMaterializedRowFields,
+    kind: AnimalWikiArticleKind,
+    attributes: AnimalMaterializedAttributes,
+  }),
+  Schema.Struct({
+    ...coreWikiArticleMaterializedRowFields,
+    kind: PlantWikiArticleKind,
+    attributes: PlantMaterializedAttributes,
+  }),
+  Schema.Struct({
+    ...coreWikiArticleMaterializedRowFields,
+    kind: ConceptWikiArticleKind,
+    attributes: ConceptMaterializedAttributes,
+  }),
+  Schema.Struct({
+    ...coreWikiArticleMaterializedRowFields,
+    kind: ToolWikiArticleKind,
+    attributes: ToolMaterializedAttributes,
+  }),
+  Schema.Struct({
+    ...coreWikiArticleMaterializedRowFields,
+    kind: UncategorizedWikiArticleKind,
+    attributes: UncategorizedMaterializedAttributes,
+  }),
+]).pipe(Schema.toTaggedUnion("kind"))
 export type WikiArticleMaterializedRow = typeof WikiArticleMaterializedRow.Type
 
 /** Per-locale materialization of contributor-editable names and content. */
@@ -91,9 +105,6 @@ export const WikiArticleTranslationMaterializedRow = Schema.Struct({
   locale: Locale,
   contentPlainText: Schema.String,
   searchableNames: Schema.String,
-  // @todo is this needed?
-  commonNames: Schema.fromJsonString(WikiArticleTranslation.fields.commonNames),
-  content: Schema.fromJsonString(WikiArticleTranslation.fields.content),
 })
 export type WikiArticleTranslationMaterializedRow =
   typeof WikiArticleTranslationMaterializedRow.Type
@@ -103,7 +114,7 @@ export const WikiArticleHandleMaterializedRow = Schema.Struct({
   wikiArticleId: WikiArticleId,
   kind: WikiArticleKind,
   handle: Handle,
-  locales: Schema.fromJsonString(Schema.NonEmptyArray(Locale)),
+  locale: Locale,
 })
 export type WikiArticleHandleMaterializedRow = typeof WikiArticleHandleMaterializedRow.Type
 

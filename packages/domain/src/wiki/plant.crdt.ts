@@ -17,7 +17,7 @@ import {
 import { makeMovableListEditOperations } from "../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../crdts/string-set-edit-operations.js"
-import { PlantAttributes } from "./plant.js"
+import { PlantEditableAttributes } from "./plant.js"
 
 const scientificNameOperations = makeMovableListEditOperations("ScientificName")({
   ValueSchema: NameInCrdtList.schema.fields.value,
@@ -25,7 +25,7 @@ const scientificNameOperations = makeMovableListEditOperations("ScientificName")
     Effect.succeed(
       document
         .getMap("attributes")
-        .ensureMergeableMovableList("scientificNames" satisfies keyof PlantAttributes),
+        .ensureMergeableMovableList("scientificNames" satisfies keyof PlantEditableAttributes),
     ),
 })
 
@@ -35,7 +35,7 @@ const plantLifecycleOperations = makeStringSetEditOperations("PlantLifecycle")({
     Effect.succeed(
       document
         .getMap("attributes")
-        .ensureMergeableMap("lifecycles" satisfies keyof PlantAttributes),
+        .ensureMergeableMap("lifecycles" satisfies keyof PlantEditableAttributes),
     ),
 })
 
@@ -45,7 +45,7 @@ const plantingMethodOperations = makeStringSetEditOperations("PlantingMethod")({
     Effect.succeed(
       document
         .getMap("attributes")
-        .ensureMergeableMap("plantingMethods" satisfies keyof PlantAttributes),
+        .ensureMergeableMap("plantingMethods" satisfies keyof PlantEditableAttributes),
     ),
 })
 
@@ -53,7 +53,9 @@ const plantUsageOperations = makeStringSetEditOperations("PlantUsage")({
   ValueSchema: PlantUsage,
   getContainer: (document) =>
     Effect.succeed(
-      document.getMap("attributes").ensureMergeableMap("usage" satisfies keyof PlantAttributes),
+      document
+        .getMap("attributes")
+        .ensureMergeableMap("usage" satisfies keyof PlantEditableAttributes),
     ),
 })
 
@@ -63,7 +65,7 @@ const ediblePartsOperations = makeStringSetEditOperations("EdibleParts")({
     Effect.succeed(
       document
         .getMap("attributes")
-        .ensureMergeableMap("edibleParts" satisfies keyof PlantAttributes),
+        .ensureMergeableMap("edibleParts" satisfies keyof PlantEditableAttributes),
     ),
 })
 
@@ -71,44 +73,46 @@ const strataOperations = makeStringSetEditOperations("Strata")({
   ValueSchema: AgroforestryStratum,
   getContainer: (document) =>
     Effect.succeed(
-      document.getMap("attributes").ensureMergeableMap("strata" satisfies keyof PlantAttributes),
+      document
+        .getMap("attributes")
+        .ensureMergeableMap("strata" satisfies keyof PlantEditableAttributes),
     ),
 })
 
 const developmentCycleMaxOperations = makeOptionalScalarEditOperations("DevelopmentCycleMax")({
   ValueSchema: IntNonNegative,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "developmentCycleMax" satisfies keyof PlantAttributes,
+  keyInParentContainer: "developmentCycleMax" satisfies keyof PlantEditableAttributes,
 })
 
 const developmentCycleMinOperations = makeOptionalScalarEditOperations("DevelopmentCycleMin")({
   ValueSchema: IntNonNegative,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "developmentCycleMin" satisfies keyof PlantAttributes,
+  keyInParentContainer: "developmentCycleMin" satisfies keyof PlantEditableAttributes,
 })
 
 const heightMaxOperations = makeOptionalScalarEditOperations("HeightMax")({
   ValueSchema: Centimeters,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "heightMax" satisfies keyof PlantAttributes,
+  keyInParentContainer: "heightMax" satisfies keyof PlantEditableAttributes,
 })
 
 const heightMinOperations = makeOptionalScalarEditOperations("HeightMin")({
   ValueSchema: Centimeters,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "heightMin" satisfies keyof PlantAttributes,
+  keyInParentContainer: "heightMin" satisfies keyof PlantEditableAttributes,
 })
 
 const temperatureMaxOperations = makeOptionalScalarEditOperations("TemperatureMax")({
   ValueSchema: TemperatureInCelsius,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "temperatureMax" satisfies keyof PlantAttributes,
+  keyInParentContainer: "temperatureMax" satisfies keyof PlantEditableAttributes,
 })
 
 const temperatureMinOperations = makeOptionalScalarEditOperations("TemperatureMin")({
   ValueSchema: TemperatureInCelsius,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "temperatureMin" satisfies keyof PlantAttributes,
+  keyInParentContainer: "temperatureMin" satisfies keyof PlantEditableAttributes,
 })
 
 export const PlantAttributeEdit = Schema.Union([

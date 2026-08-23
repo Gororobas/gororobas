@@ -3,13 +3,15 @@ import { type LoroDoc } from "loro-crdt"
 
 import { ToolUsage } from "../common/enums.js"
 import { makeStringSetEditOperations } from "../crdts/string-set-edit-operations.js"
-import { ToolAttributes } from "./tool.js"
+import { ToolEditableAttributes } from "./tool.js"
 
 const toolUsageOperations = makeStringSetEditOperations("ToolUsage")({
   ValueSchema: ToolUsage,
   getContainer: (document) =>
     Effect.succeed(
-      document.getMap("attributes").ensureMergeableMap("usage" satisfies keyof ToolAttributes),
+      document
+        .getMap("attributes")
+        .ensureMergeableMap("usage" satisfies keyof ToolEditableAttributes),
     ),
 })
 

@@ -1,7 +1,7 @@
 /**
  * Common primitive types used across the domain.
  */
-import { Schema, SchemaTransformation } from "effect"
+import { HashSet, Record, Schema, SchemaGetter, SchemaTransformation } from "effect"
 
 import { LoroListItemId } from "./ids.js"
 
@@ -63,6 +63,8 @@ export const IntNonNegative = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
 
 export const NonEmptyTrimmedString = Schema.Trimmed.check(Schema.isNonEmpty())
 
+export const ValidName = NonEmptyTrimmedString.check(Schema.isMinLength(3))
+
 export const ItemInCrdtList = Schema.Struct({
   id: LoroListItemId,
   value: Schema.Any,
@@ -72,9 +74,49 @@ export type ItemInCrdtList = typeof ItemInCrdtList.Type
 /** Contains a Loro-provided $cid to identify it in the CRDT list */
 export const NameInCrdtList = Schema.Struct({
   id: LoroListItemId,
-  value: NonEmptyTrimmedString,
+  value: ValidName,
 }).pipe(Schema.brand("NameInCrdtList"))
 export type NameInCrdtList = typeof NameInCrdtList.Type
+
+/**
+ * In Loro CRDT documents, will be stored as { literal1: true, literal2: true }
+ * During decoding gets transformed into a HashSet.
+ **/
+export const CrdtLiteralSet = <T extends string, S extends Schema.Literals<ReadonlyArray<T>>>(
+  s: S,
+) =>
+  Schema.Record(s, Schema.optional(Schema.Literal(true))).pipe(
+    Schema.decodeTo(Schema.HashSet(s), {
+      decode: SchemaGetter.transform((record) =>
+        HashSet.fromIterable(
+          // @ts-expect-error runtime works, but TS isn't happy. Couldn't find a better way to do this.
+          Record.toEntries(record).flatMap(([entry, value]) => (value === true ? [entry] : [])),
+        ),
+      ),
+      // @ts-expect-error runtime works, but TS isn't happy. Couldn't find a better way to do this.
+      encode: SchemaGetter.transform((hashSet) =>
+        Record.fromIterableWith(hashSet, (entry) => [entry, true] as const),
+      ),
+    }),
+  )
+
+/**
+ * In Loro CRDT documents, will be stored as { literal1: true, literal2: true }
+ * During decoding gets transformed into a HashSet.
+ **/
+export const CrdtBrandedStringSet = <B, S extends Schema.brand<Schema.String, B>>(s: S) =>
+  Schema.Record(Schema.String, Schema.Literal(true)).pipe(
+    Schema.decodeTo(Schema.HashSet(s), {
+      decode: SchemaGetter.transform((record) =>
+        HashSet.fromIterable(
+          Record.toEntries(record).flatMap(([entry, value]) => (value === true ? [entry] : [])),
+        ),
+      ),
+      encode: SchemaGetter.transform((hashSet) =>
+        Record.fromIterableWith(hashSet, (entry) => [entry, true] as const),
+      ),
+    }),
+  )
 
 export const Centimeters = IntNonNegative.pipe(Schema.brand("Centimeters"))
 
