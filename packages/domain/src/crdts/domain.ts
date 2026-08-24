@@ -11,7 +11,6 @@ import {
 import { PersonId, ProfileId } from "../common/ids.js"
 import { Handle, TimestampColumn } from "../common/primitives.js"
 import type { PublicationLocalizedData, PublicationSourceData } from "../publications/domain.js"
-import type { ResourceLocalizedData, SourceResourceData } from "../resources/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const LoroDocUpdate = Schema.Uint8Array.pipe(Schema.brand("LoroCrdtUpdateEncoded"))
@@ -142,37 +141,6 @@ const CommentLocalizedDataStorageLoro = loroSchema.LoroMap(
   { required: false },
 )
 
-const ResourceLocalizedDataStorageLoro = loroSchema.LoroMap(
-  {
-    title: loroSchema.String({ required: false }),
-    description: loroSchema.String({ required: false }),
-    creditLine: loroSchema.String({ required: false }),
-    originalLocale: loroSchema.String<Locale>({ required: false }),
-    translatedAtCrdtFrontier: loroSchema.String({ required: false }),
-    translationSource: loroSchema.String<TranslationSource>({ required: false }),
-  },
-  { required: false },
-)
-
-export const ResourceMetadataStorageLoro = loroSchema.LoroMap({
-  format: loroSchema.String({ required: true }),
-  handle: loroSchema.String<Handle>({ required: true }),
-  thumbnailImageId: loroSchema.String({ required: false }),
-  url: loroSchema.String({ required: true }),
-  urlState: loroSchema.String({ required: true }),
-})
-
-export const ResourceSourceDataStorageLoro = loroSchema({
-  locales: loroSchema.LoroMap(
-    {
-      en: ResourceLocalizedDataStorageLoro,
-      es: ResourceLocalizedDataStorageLoro,
-      pt: ResourceLocalizedDataStorageLoro,
-    },
-    { required: true },
-  ),
-  metadata: ResourceMetadataStorageLoro,
-})
 export const CommentSourceDataStorageLoro = loroSchema({
   locales: loroSchema.LoroMap(
     {
@@ -234,35 +202,5 @@ export const sourceCommentDataToCrdtStorage = (sourceData: SourceCommentData) =>
     en: sourceData.locales.en ? encodeLocalizedData(sourceData.locales.en) : undefined,
     es: sourceData.locales.es ? encodeLocalizedData(sourceData.locales.es) : undefined,
     pt: sourceData.locales.pt ? encodeLocalizedData(sourceData.locales.pt) : undefined,
-  },
-})
-
-// @todo refactor to be an Effect schema
-const encodeResourceLocalizedData = (localeData: ResourceLocalizedData) => ({
-  title: localeData.title,
-  description:
-    localeData.description === null
-      ? undefined
-      : Schema.encodeSync(Schema.fromJsonString(TiptapDocument))(localeData.description),
-  creditLine: localeData.creditLine ?? undefined,
-  originalLocale: localeData.originalLocale,
-  translatedAtCrdtFrontier: Schema.encodeSync(
-    Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
-  )(null),
-  translationSource: localeData.translationSource,
-})
-
-export const sourceResourceDataToCrdtStorage = (sourceData: SourceResourceData) => ({
-  locales: {
-    en: sourceData.locales.en ? encodeResourceLocalizedData(sourceData.locales.en) : {},
-    es: sourceData.locales.es ? encodeResourceLocalizedData(sourceData.locales.es) : {},
-    pt: sourceData.locales.pt ? encodeResourceLocalizedData(sourceData.locales.pt) : {},
-  },
-  metadata: {
-    format: sourceData.metadata.format,
-    handle: sourceData.metadata.handle,
-    thumbnailImageId: sourceData.metadata.thumbnailImageId ?? undefined,
-    url: sourceData.metadata.url,
-    urlState: sourceData.metadata.urlState,
   },
 })

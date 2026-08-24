@@ -34,14 +34,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              When("{string:name} proposes an edit to {word:entity} {string:title}", {
+              When("{string:name} proposes an edit to wiki article {string:title}", {
                 handler: pass,
                 params: Schema.Struct({
-                  entity: Schema.String,
                   name: Schema.String,
                   title: Schema.String,
                 }),
@@ -53,9 +52,9 @@ await Effect.runPromise(
                   params: Schema.Struct({ evaluation: Schema.String, name: Schema.String }),
                 },
               ),
-              And("the {word:entity} {string:title} remains unchanged", {
+              And("the wiki article {string:title} remains unchanged", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
             ),
         })
@@ -64,14 +63,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              When("{string:name} tries to propose an edit to {word:entity} {string:title}", {
+              When("{string:name} tries to propose an edit to wiki article {string:title}", {
                 handler: pass,
                 params: Schema.Struct({
-                  entity: Schema.String,
                   name: Schema.String,
                   title: Schema.String,
                 }),
@@ -86,14 +84,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              When("{string:name} tries to propose an edit to {word:entity} {string:title}", {
+              When("{string:name} tries to propose an edit to wiki article {string:title}", {
                 handler: pass,
                 params: Schema.Struct({
-                  entity: Schema.String,
                   name: Schema.String,
                   title: Schema.String,
                 }),
@@ -108,13 +105,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              When("visitors try to propose an edit to {word:entity} {string:title}", {
+              When("visitors try to propose an edit to wiki article {string:title}", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
               Then("access is denied", {
                 handler: fail,
@@ -148,14 +145,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              And("{string:name} has proposed a revision to {word:entity} {string:title}", {
+              And("{string:name} has proposed a revision to wiki article {string:title}", {
                 handler: pass,
                 params: Schema.Struct({
-                  entity: Schema.String,
                   name: Schema.String,
                   title: Schema.String,
                 }),
@@ -174,14 +170,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              And("{string:name} has proposed a revision to {word:entity} {string:title}", {
+              And("{string:name} has proposed a revision to wiki article {string:title}", {
                 handler: pass,
                 params: Schema.Struct({
-                  entity: Schema.String,
                   name: Schema.String,
                   title: Schema.String,
                 }),
@@ -198,9 +193,9 @@ await Effect.runPromise(
                 handler: pass,
                 params: Schema.Struct({ name: Schema.String }),
               }),
-              And("the {word:entity} {string:title} reflects the approved edit", {
+              And("the wiki article {string:title} reflects the approved edit", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
             ),
         })
@@ -209,14 +204,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              And("{string:name} has proposed a revision to {word:entity} {string:title}", {
+              And("{string:name} has proposed a revision to wiki article {string:title}", {
                 handler: pass,
                 params: Schema.Struct({
-                  entity: Schema.String,
                   name: Schema.String,
                   title: Schema.String,
                 }),
@@ -233,9 +227,9 @@ await Effect.runPromise(
                 handler: pass,
                 params: Schema.Struct({ name: Schema.String }),
               }),
-              And("the {word:entity} {string:title} reflects the approved edit", {
+              And("the wiki article {string:title} reflects the approved edit", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
             ),
         })
@@ -244,14 +238,13 @@ await Effect.runPromise(
           layer: makeTestLayer(),
           steps: () =>
             runSteps(
-              Given("a {word:entity} {string:title} exists", {
+              Given("a wiki article {string:title} exists", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
-              And("{string:name} has proposed a revision to {word:entity} {string:title}", {
+              And("{string:name} has proposed a revision to wiki article {string:title}", {
                 handler: pass,
                 params: Schema.Struct({
-                  entity: Schema.String,
                   name: Schema.String,
                   title: Schema.String,
                 }),
@@ -264,9 +257,9 @@ await Effect.runPromise(
                 handler: fail,
                 params: Schema.Struct({ evaluation: Schema.String }),
               }),
-              And("the {word:entity} {string:title} remains unchanged", {
+              And("the wiki article {string:title} remains unchanged", {
                 handler: pass,
-                params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+                params: Schema.Struct({ title: Schema.String }),
               }),
             ),
         })
@@ -295,14 +288,13 @@ await Effect.runPromise(
         layer: makeTestLayer(),
         steps: () =>
           runSteps(
-            Given("a {word:entity} {string:title} exists", {
+            Given("a wiki article {string:title} exists", {
               handler: pass,
-              params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+              params: Schema.Struct({ title: Schema.String }),
             }),
-            And("{string:name} has proposed a revision to {word:entity} {string:title}", {
+            And("{string:name} has proposed a revision to wiki article {string:title}", {
               handler: pass,
               params: Schema.Struct({
-                entity: Schema.String,
                 name: Schema.String,
                 title: Schema.String,
               }),
@@ -319,9 +311,9 @@ await Effect.runPromise(
               handler: pass,
               params: Schema.Struct({ name: Schema.String }),
             }),
-            And("the {word:entity} {string:title} reflects the approved edit", {
+            And("the wiki article {string:title} reflects the approved edit", {
               handler: pass,
-              params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+              params: Schema.Struct({ title: Schema.String }),
             }),
           ),
       })
@@ -330,14 +322,13 @@ await Effect.runPromise(
         layer: makeTestLayer(),
         steps: () =>
           runSteps(
-            Given("a {word:entity} {string:title} exists", {
+            Given("a wiki article {string:title} exists", {
               handler: pass,
-              params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+              params: Schema.Struct({ title: Schema.String }),
             }),
-            And("{string:name} has proposed a revision to {word:entity} {string:title}", {
+            And("{string:name} has proposed a revision to wiki article {string:title}", {
               handler: pass,
               params: Schema.Struct({
-                entity: Schema.String,
                 name: Schema.String,
                 title: Schema.String,
               }),
@@ -354,9 +345,9 @@ await Effect.runPromise(
               handler: pass,
               params: Schema.Struct({ name: Schema.String }),
             }),
-            And("the {word:entity} {string:title} reflects the approved edit", {
+            And("the wiki article {string:title} reflects the approved edit", {
               handler: pass,
-              params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+              params: Schema.Struct({ title: Schema.String }),
             }),
           ),
       })
@@ -384,14 +375,13 @@ await Effect.runPromise(
         layer: makeTestLayer(),
         steps: () =>
           runSteps(
-            Given("a {word:entity} {string:title} exists", {
+            Given("a wiki article {string:title} exists", {
               handler: pass,
-              params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+              params: Schema.Struct({ title: Schema.String }),
             }),
-            And("{string:name} has proposed a revision to {word:entity} {string:title}", {
+            And("{string:name} has proposed a revision to wiki article {string:title}", {
               handler: pass,
               params: Schema.Struct({
-                entity: Schema.String,
                 name: Schema.String,
                 title: Schema.String,
               }),
@@ -400,9 +390,9 @@ await Effect.runPromise(
               handler: pass,
               params: Schema.Struct({ name: Schema.String }),
             }),
-            When("viewing {word:entity} {string:title} revision history", {
+            When("viewing wiki article {string:title} revision history", {
               handler: pass,
-              params: Schema.Struct({ entity: Schema.String, title: Schema.String }),
+              params: Schema.Struct({ title: Schema.String }),
             }),
             Then("the rejected revision is visible with its rejection status", {
               handler: fail,

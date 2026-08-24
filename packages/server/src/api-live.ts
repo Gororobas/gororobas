@@ -11,7 +11,6 @@ import { PeopleApiLive } from "./people/api-live.js"
 import { ProfilesApiLive } from "./profiles/api-live.js"
 import { PublicationsApiLive } from "./publications/api-live.js"
 import { PublicationsRepository } from "./publications/repository.js"
-import { ResourcesApiLive } from "./resources/api-live.js"
 import { TagsApiLive } from "./tags/api-live.js"
 
 export const ApiLive = Layer.provide(HttpApiBuilder.layer(GororobasApi), [
@@ -22,7 +21,6 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(GororobasApi), [
   PeopleApiLive,
   PublicationsApiLive,
   ProfilesApiLive,
-  ResourcesApiLive,
   TagsApiLive,
 ]).pipe(
   Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),

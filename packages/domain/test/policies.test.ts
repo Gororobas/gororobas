@@ -149,7 +149,6 @@ describe("Policies", () => {
             ),
             Policies.wiki.canCreate,
             Policies.comments.canCreate,
-            Policies.resources.canCreate,
             Policies.organizations.canCreate,
             Policies.media.canCreate,
           ]
@@ -169,7 +168,6 @@ describe("Policies", () => {
         Effect.gen(function* () {
           const policies = [
             Policies.wiki.canCreate,
-            Policies.resources.canCreate,
             Policies.comments.canCreate,
             Policies.media.canCreate,
           ]
@@ -191,8 +189,6 @@ describe("Policies", () => {
   describe("monotonicity", () => {
     assertMonotonic(Policies.wiki.canCreate, "wiki-article:create")
     assertMonotonic(Policies.wiki.canRevise, "wiki-article:revise")
-    assertMonotonic(Policies.resources.canCreate, "resources:canCreate")
-    assertMonotonic(Policies.resources.canRevise, "resources:canRevise")
     assertMonotonic(Policies.organizations.canCreate, "organizations:canCreate")
     assertMonotonic(Policies.comments.canCreate, "comments:canCreate")
     assertMonotonic(Policies.wiki.canBookmark, "bookmarks:create")
@@ -254,16 +250,6 @@ describe("Policies", () => {
         Effect.gen(function* () {
           const canCreate = yield* runPolicySuccess(Policies.wiki.canCreate, session)
           const canRevise = yield* runPolicySuccess(Policies.wiki.canRevise, session)
-          return !canCreate || canRevise
-        }),
-      ),
-    )
-
-    it.effect("canCreate implies canRevise for resources", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const canCreate = yield* runPolicySuccess(Policies.resources.canCreate, session)
-          const canRevise = yield* runPolicySuccess(Policies.resources.canRevise, session)
           return !canCreate || canRevise
         }),
       ),
@@ -842,38 +828,6 @@ describe("Policies", () => {
     it.effect("visitors cannot create wiki articles", () =>
       assertPropertyEffect(visitorSessionArbitrary, (session) =>
         Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
-      ),
-    )
-  })
-
-  describe("resources", () => {
-    it.effect("anyone can access resources", () =>
-      assertPropertyEffect(sessionArbitrary, (session) =>
-        runPolicySuccess(Policies.resources.canAccess, session),
-      ),
-    )
-
-    it.effect("trusted users can create resources", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.resources.canCreate, session),
-      ),
-    )
-
-    it.effect("trusted users can revise resources", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.resources.canRevise, session),
-      ),
-    )
-
-    it.effect("newcomers cannot create resources", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-        Effect.map(runPolicySuccess(Policies.resources.canCreate, session), (allowed) => !allowed),
-      ),
-    )
-
-    it.effect("blocked users cannot create resources", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(runPolicySuccess(Policies.resources.canCreate, session), (allowed) => !allowed),
       ),
     )
   })

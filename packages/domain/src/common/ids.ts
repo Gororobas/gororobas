@@ -53,12 +53,6 @@ export type EventId = typeof EventId.Type
 export const PublicationCommitId = UUID.pipe(Schema.brand("PublicationCommitId"))
 export type PublicationCommitId = typeof PublicationCommitId.Type
 
-export const ResourceId = UUID.pipe(Schema.brand("ResourceId"))
-export type ResourceId = typeof ResourceId.Type
-
-export const ResourceRevisionId = UUID.pipe(Schema.brand("ResourceRevisionId"))
-export type ResourceRevisionId = typeof ResourceRevisionId.Type
-
 export const TagId = UUID.pipe(Schema.brand("TagId"))
 export type TagId = typeof TagId.Type
 

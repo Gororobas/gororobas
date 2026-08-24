@@ -69,7 +69,7 @@ export const runMainWithCustomRuntime = ...
 
 Avoid abbreviations as much as possible. For objects/structs properties, use `snake_case` to comply with SQL tables.
 
-Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/repositores/resources-repository.ts`
+Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/repositories/wiki-articles-repository.ts`
 
 ## Testing
 

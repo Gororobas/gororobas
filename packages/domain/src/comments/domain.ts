@@ -4,14 +4,7 @@
 import { Schema } from "effect"
 
 import { Locale, ModerationStatus, TranslationSource } from "../common/enums.js"
-import {
-  CommentCommitId,
-  CommentId,
-  PersonId,
-  PublicationId,
-  ProfileId,
-  ResourceId,
-} from "../common/ids.js"
+import { CommentCommitId, CommentId, PersonId, PublicationId, ProfileId } from "../common/ids.js"
 import { TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
@@ -60,8 +53,7 @@ export const CommentCrdtRow = Schema.Struct({
   moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  publicationId: Schema.NullOr(PublicationId),
-  resourceId: Schema.NullOr(ResourceId),
+  publicationId: PublicationId,
 })
 export type CommentCrdtRow = typeof CommentCrdtRow.Type
 
@@ -82,8 +74,7 @@ export const CommentRow = Schema.Struct({
   moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  publicationId: Schema.NullOr(PublicationId),
-  resourceId: Schema.NullOr(ResourceId),
+  publicationId: PublicationId,
 })
 export type CommentRow = typeof CommentRow.Type
 
@@ -107,8 +98,7 @@ export const CommentData = Schema.Struct({
   moderationStatus: Schema.NullOr(ModerationStatus),
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  publicationId: Schema.NullOr(PublicationId),
-  resourceId: Schema.NullOr(ResourceId),
+  publicationId: PublicationId,
   updatedAt: TimestampColumn,
 })
 export type CommentData = typeof CommentData.Type
@@ -133,6 +123,5 @@ export type ApiUpdateCommentData = typeof ApiUpdateCommentData.Type
 
 export const CommentSearchParams = Schema.Struct({
   publicationId: Schema.optional(PublicationId),
-  resourceId: Schema.optional(ResourceId),
 })
 export type CommentSearchParams = typeof CommentSearchParams.Type

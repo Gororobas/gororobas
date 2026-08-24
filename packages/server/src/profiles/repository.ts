@@ -123,7 +123,6 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
           (SELECT COUNT(*) FROM publications WHERE owner_profile_id = ${id} AND kind = 'POST') as posts,
           (SELECT COUNT(*) FROM publications WHERE owner_profile_id = ${id} AND kind = 'EVENT') as events,
           (SELECT COUNT(*) FROM bookmarks_wiki_articles WHERE person_id = ${id}) as wiki_article_bookmarks,
-          (SELECT COUNT(*) FROM bookmarks_resources WHERE person_id = ${id}) as resource_bookmarks,
           (SELECT COUNT(*) FROM comments WHERE owner_profile_id = ${id}) as comments,
           (SELECT COUNT(*) FROM images WHERE owner_profile_id = ${id}) as images
       `,

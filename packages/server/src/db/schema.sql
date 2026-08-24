@@ -256,7 +256,6 @@ CREATE TABLE wiki_article_handles (
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
-
 -- ================
 -- WIKI ARTICLE PHOTOS
 -- ================
@@ -278,75 +277,6 @@ CREATE TABLE wiki_article_photo_metadata (
   updated_at text NOT NULL,
   FOREIGN KEY (id) REFERENCES images (id) ON DELETE CASCADE
 );
-
- -- =========
--- RESOURCES
--- =========
---
--- The source of truth of all resource data
-CREATE TABLE resource_crdts (
-  id text PRIMARY KEY,
-  crdt_snapshot blob NOT NULL, -- LoroSnapshot
-  created_at text NOT NULL,
-  updated_at text
-) WITHOUT ROWID;
-
--- People's edit suggestions that compose the library
-CREATE TABLE resource_revisions (
-  id text PRIMARY KEY,
-  resource_id text,
-  created_by_id text,
-  crdt_update blob NOT NULL,
-  from_crdt_frontier json NOT NULL,
-  evaluation text NOT NULL,
-  evaluated_by_id text,
-  evaluated_at text,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
-  FOREIGN KEY (evaluated_by_id) REFERENCES people (id) ON DELETE SET NULL
-);
-
--- The core queryable data, materialized from the CRDT
-CREATE TABLE resources (
-  id text PRIMARY KEY,
-  current_crdt_frontier json NOT NULL,
-  handle text NOT NULL UNIQUE,
-  url text NOT NULL UNIQUE,
-  url_state text NOT NULL,
-  last_checked_at text,
-  format text NOT NULL,
-  thumbnail_image_id text,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  FOREIGN KEY (id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (thumbnail_image_id) REFERENCES images (id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_resources_handle ON resources (handle);
-
--- Per-locale data, materialized from the CRDT
-CREATE TABLE resource_translations (
-  resource_id text NOT NULL,
-  locale text NOT NULL,
-  title text NOT NULL,
-  description json,
-  credit_line text,
-  translated_at_crdt_frontier json NOT NULL,
-  translation_source text NOT NULL,
-  original_locale text NOT NULL,
-  PRIMARY KEY (resource_id, locale),
-  FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE resource_tags (
-  resource_id text NOT NULL,
-  tag_id text NOT NULL,
-  PRIMARY KEY (resource_id, tag_id),
-  FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
-) WITHOUT ROWID;
 
 -- =====
 -- PUBLICATIONS
@@ -436,8 +366,7 @@ CREATE TABLE publication_wiki_articles (
 -- The source of truth of all comment data
 CREATE TABLE comment_crdts (
   id text PRIMARY KEY,
-  publication_id text,
-  resource_id text,
+  publication_id text NOT NULL,
   parent_comment_id text,
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
   owner_profile_id text NOT NULL,
@@ -445,12 +374,8 @@ CREATE TABLE comment_crdts (
   created_at text NOT NULL,
   updated_at text NOT NULL,
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (parent_comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
-  CONSTRAINT check_comment_parent CHECK (
-    (publication_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
-  )
+  FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 );
 
 -- How comments are modified
@@ -468,8 +393,7 @@ CREATE TABLE comment_commits (
 -- The core queryable data, materialized from the CRDT
 CREATE TABLE comments (
   id text PRIMARY KEY,
-  publication_id text,
-  resource_id text,
+  publication_id text NOT NULL,
   parent_comment_id text,
   current_crdt_frontier json NOT NULL,
   moderation_status text,
@@ -478,11 +402,7 @@ CREATE TABLE comments (
   owner_profile_id text NOT NULL,
   FOREIGN KEY (id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
-  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-  CONSTRAINT check_comment_parent CHECK (
-    (publication_id IS NOT NULL) + (resource_id IS NOT NULL) = 1
-  )
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
 );
 
 CREATE TABLE comment_translations (
@@ -507,13 +427,4 @@ CREATE TABLE bookmarks_wiki_articles (
   PRIMARY KEY (person_id, wiki_article_id),
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE bookmarks_resources (
-  person_id text NOT NULL,
-  resource_id text NOT NULL,
-  state text NOT NULL,
-  PRIMARY KEY (person_id, resource_id),
-  FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
-  FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;

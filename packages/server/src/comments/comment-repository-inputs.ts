@@ -5,7 +5,6 @@ import {
   PersonId,
   PublicationId,
   ProfileId,
-  ResourceId,
   SourceCommentData,
   SystemCommit,
   TiptapDocument,
@@ -37,8 +36,7 @@ export const CreateCommentInput = Schema.Struct({
   createdById: PersonId,
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
-  publicationId: Schema.NullOr(PublicationId),
-  resourceId: Schema.NullOr(ResourceId),
+  publicationId: PublicationId,
   sourceData: SourceCommentData,
 })
 export type CreateCommentInput = typeof CreateCommentInput.Type

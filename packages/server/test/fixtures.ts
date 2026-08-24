@@ -11,8 +11,6 @@ import {
   PlatformAccessLevel,
   ProfileRow,
   ProfileVisibility,
-  ResourceLocalizedData,
-  SourceResourceData,
   TimestampColumn,
   type InformationVisibility,
   type OrganizationAccessLevel,
@@ -212,15 +210,6 @@ export const makeMembershipFixture = (
 
     return { ...base, ...overrides }
   })
-
-export const resourceLocalizedDataArbitrary = Schema.toArbitrary(ResourceLocalizedData)(FastCheck)
-
-export const sourceResourceDataArbitrary = Schema.toArbitrary(SourceResourceData)(FastCheck).filter(
-  (sourceData) =>
-    sourceData.locales.pt !== undefined ||
-    sourceData.locales.en !== undefined ||
-    sourceData.locales.es !== undefined,
-)
 
 export const organizationRowArbitrary = Schema.toArbitrary(OrganizationRow)(FastCheck)
 export const organizationProfileRowArbitrary = Schema.toArbitrary(OrganizationProfileRow)(

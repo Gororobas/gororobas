@@ -152,20 +152,6 @@ export type ToolUsage = typeof ToolUsage.Type
 export const GrammaticalGender = Schema.Literals(["NEUTRAL", "MALE", "FEMALE"])
 export type GrammaticalGender = typeof GrammaticalGender.Type
 
-export const ResourceUrlState = Schema.Literals(["UNCHECKED", "OK", "BROKEN", "PENDING"])
-export type ResourceUrlState = typeof ResourceUrlState.Type
-
-export const ResourceFormat = Schema.Literals([
-  "PDF",
-  "VIDEO",
-  "IMAGE",
-  "WEBSITE",
-  "ARTICLE",
-  "BOOK",
-  "OTHER",
-])
-export type ResourceFormat = typeof ResourceFormat.Type
-
 export const TranslationSource = Schema.Literals(["ORIGINAL", "AUTOMATIC", "MANUAL"])
 export type TranslationSource = typeof TranslationSource.Type
 

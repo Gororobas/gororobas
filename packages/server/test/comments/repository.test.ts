@@ -92,7 +92,6 @@ describe("CommentsRepository", () => {
         ownerProfileId: profile.id,
         parentCommentId: null,
         publicationId,
-        resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Primeiro comentario")),
       })
 
@@ -148,7 +147,6 @@ describe("CommentsRepository", () => {
         ownerProfileId: profile.id,
         parentCommentId: null,
         publicationId,
-        resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Antes")),
       })
 
@@ -212,7 +210,6 @@ describe("CommentsRepository", () => {
         ownerProfileId: profile.id,
         parentCommentId: null,
         publicationId,
-        resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Versao 1")),
       })
 
@@ -284,7 +281,6 @@ describe("CommentsRepository", () => {
         ownerProfileId: profile.id,
         parentCommentId: null,
         publicationId,
-        resourceId: null,
         sourceData: makeCommentSourceData(makeDocument("Texto original")),
       })
 
