@@ -1,26 +1,26 @@
 import { ExampleData } from "langextract"
 
-// Vegetable-specific examples for LangExtract
-const vegetableExamples: ExampleData[] = [
+// Wiki-article examples for LangExtract
+const wikiArticleExamples: ExampleData[] = [
   {
     text: "Hoje colhi alface e tomate da horta para vender na feira.",
     extractions: [
       {
-        extractionClass: "vegetable",
+        extractionClass: "wiki_article",
         extractionText: "alface",
         attributes: {
-          vegetable_pt: ["alface"],
-          vegetable_en: ["lettuce"],
-          vegetable_es: ["lechuga"],
+          wiki_article_pt: ["alface"],
+          wiki_article_en: ["lettuce"],
+          wiki_article_es: ["lechuga"],
         },
       },
       {
-        extractionClass: "vegetable",
+        extractionClass: "wiki_article",
         extractionText: "tomate",
         attributes: {
-          vegetable_pt: ["tomate"],
-          vegetable_en: ["tomato"],
-          vegetable_es: ["tomate"],
+          wiki_article_pt: ["tomate"],
+          wiki_article_en: ["tomato"],
+          wiki_article_es: ["tomate"],
         },
       },
     ],
@@ -29,9 +29,13 @@ const vegetableExamples: ExampleData[] = [
     text: "Preparei pamonha fresquinha essa manhã.",
     extractions: [
       {
-        extractionClass: "vegetable",
+        extractionClass: "wiki_article",
         extractionText: "pamonha",
-        attributes: { vegetable_pt: ["milho"], vegetable_en: ["corn"], vegetable_es: ["maiz"] },
+        attributes: {
+          wiki_article_pt: ["milho"],
+          wiki_article_en: ["corn"],
+          wiki_article_es: ["maiz"],
+        },
       },
     ],
   },
@@ -39,21 +43,21 @@ const vegetableExamples: ExampleData[] = [
     text: "Plantamos moranga e aipim usando técnicas de permacultura no sistema agroflorestal.",
     extractions: [
       {
-        extractionClass: "vegetable",
+        extractionClass: "wiki_article",
         extractionText: "moranga",
         attributes: {
-          vegetable_pt: ["abobora", "moranga"],
-          vegetable_en: ["pumpkin", "squash"],
-          vegetable_es: ["calabaza", "ayuama", "zapallo"],
+          wiki_article_pt: ["abobora", "moranga"],
+          wiki_article_en: ["pumpkin", "squash"],
+          wiki_article_es: ["calabaza", "ayuama", "zapallo"],
         },
       },
       {
-        extractionClass: "vegetable",
+        extractionClass: "wiki_article",
         extractionText: "aipim",
         attributes: {
-          vegetable_pt: ["mandioca", "macaxeira", "aipim"],
-          vegetable_en: ["cassava", "yuca"],
-          vegetable_es: ["yuca", "cassava"],
+          wiki_article_pt: ["mandioca", "macaxeira", "aipim"],
+          wiki_article_en: ["cassava", "yuca"],
+          wiki_article_es: ["yuca", "cassava"],
         },
       },
     ],
@@ -127,6 +131,6 @@ const tagExamples: ExampleData[] = [
 ]
 
 export const langExtractExamples = {
-  vegetables: vegetableExamples,
+  wikiArticles: wikiArticleExamples,
   tags: tagExamples,
 }

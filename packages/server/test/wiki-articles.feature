@@ -1,5 +1,5 @@
-Feature: Vegetables
-  The vegetable encyclopedia is a collaborative wiki of hundreds of species.
+Feature: Wiki articles
+  The wiki article encyclopedia is a collaborative wiki of hundreds of species.
   Community members contribute knowledge about agroecological properties.
 
   Rule: Only approved members can contribute to the encyclopedia
@@ -11,17 +11,17 @@ Feature: Vegetables
         | Pedro    | NEWCOMER     |
         | Gusttavo | BLOCKED      |
 
-    Scenario: Person with community access creates a new vegetable
-      When "Maria" creates a vegetable
-      Then the vegetable is created
-      And the vegetable is immediately visible in the encyclopedia
+    Scenario: Person with community access creates a new wiki article
+      When "Maria" creates a wiki article
+      Then the wiki article is created
+      And the wiki article is immediately visible in the encyclopedia
 
-    Scenario: Person awaiting community access cannot create vegetables
-      When "Pedro" tries to create a vegetable
+    Scenario: Person awaiting community access cannot create wiki articles
+      When "Pedro" tries to create a wiki article
       Then access is denied
 
-    Scenario: Blocked person cannot create vegetables
-      When "Gusttavo" tries to create a vegetable
+    Scenario: Blocked person cannot create wiki articles
+      When "Gusttavo" tries to create a wiki article
       Then access is denied
 
   Rule: All edits create revisions that need evaluation
@@ -31,7 +31,7 @@ Feature: Vegetables
         | name  | accessLevel |
         | Maria | COMMUNITY    |
         | Carlos | COMMUNITY   |
-      And the vegetable "Mandioca" exists with content "Raiz tuberosa"
+      And the wiki article "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Member with community access submits an edit for review
       When "Maria" edits "Mandioca" content to "Raiz tuberosa rica em amido"
@@ -39,13 +39,13 @@ Feature: Vegetables
         | field      | value   |
         | evaluation | PENDING |
         | created_by | Maria   |
-      And the vegetable content remains "Raiz tuberosa"
+      And the wiki article content remains "Raiz tuberosa"
 
     Scenario: Multiple pending revisions can coexist
       Given "Maria" has submitted an edit to "Mandioca"
       When "Carlos" has submitted an edit to "Mandioca"
       Then there are 2 PENDING revisions for "Mandioca"
-      And the vegetable content remains "Raiz tuberosa"
+      And the wiki article content remains "Raiz tuberosa"
 
   Rule: Moderators and admins evaluate revisions
 
@@ -55,27 +55,27 @@ Feature: Vegetables
         | Maria  | COMMUNITY    |
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
-      And the vegetable "Mandioca" exists with content "Raiz tuberosa"
+      And the wiki article "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Moderator approves a revision
       Given "Maria" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
       When "Ana" approves the revision
       Then the revision evaluation becomes "APPROVED"
       And the revision shows evaluated by "Ana"
-      And the vegetable content becomes "Raiz rica em amido"
+      And the wiki article content becomes "Raiz rica em amido"
 
     Scenario: Admin approves a revision
       Given "Maria" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
       When "Ailton" approves the revision
       Then the revision evaluation becomes "APPROVED"
       And the revision shows evaluated by "Ailton"
-      And the vegetable content becomes "Raiz rica em amido"
+      And the wiki article content becomes "Raiz rica em amido"
 
     Scenario: Moderator rejects a revision
       Given "Maria" has submitted an edit changing "Mandioca" content to "Informação incorreta"
       When "Ana" rejects the revision
       Then the revision evaluation becomes "REJECTED"
-      And the vegetable content remains "Raiz tuberosa"
+      And the wiki article content remains "Raiz tuberosa"
 
     Scenario: Member with community access cannot evaluate revisions
       Given "Maria" has submitted an edit to "Mandioca"
@@ -95,31 +95,31 @@ Feature: Vegetables
         | name   | accessLevel |
         | Ana    | MODERATOR    |
         | Ailton | ADMIN        |
-      And the vegetable "Mandioca" exists with content "Raiz tuberosa"
+      And the wiki article "Mandioca" exists with content "Raiz tuberosa"
 
     Scenario: Moderator can approve their own revision
       Given "Ana" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
       When "Ana" approves the revision
-      Then the vegetable content becomes "Raiz rica em amido"
+      Then the wiki article content becomes "Raiz rica em amido"
       And the revision shows "Ana" as both editor and evaluator
 
     Scenario: Admin can approve their own revision
       Given "Ailton" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
       When "Ailton" approves the revision
-      Then the vegetable content becomes "Raiz rica em amido"
+      Then the wiki article content becomes "Raiz rica em amido"
 
-  Rule: Vegetables support multiple translations
+  Rule: Wiki articles support multiple translations
 
     Background:
       Given "Maria" has COMMUNITY access
-      And the vegetable "Mandioca" exists with pt content "Raiz tuberosa"
+      And the wiki article "Mandioca" exists with pt content "Raiz tuberosa"
 
     Scenario: Add translation to another locale
       Given "Maria" has submitted a es translation for "Mandioca" with content "Raíz rica en almidón"
       When the revision is APPROVED
       Then "Mandioca" has es content "Raíz rica en almidón"
 
-    Scenario: Viewing vegetable in unsupported locale falls back to original
+    Scenario: Viewing wiki article in unsupported locale falls back to original
       Given "Mandioca" has only pt content "Raiz tuberosa"
       When a user with es locale views "Mandioca"
       Then they see content "Raiz tuberosa"
@@ -131,39 +131,39 @@ Feature: Vegetables
       When the revision is APPROVED
       Then "Mandioca" es content becomes "Raíz tuberosa"
 
-  Rule: Vegetables can have varieties
+  Rule: Wiki articles can be categorized by kind
 
     Background:
       Given "Maria" has COMMUNITY access
-      And the vegetable "Banana" exists
+      And the wiki article "Banana" exists
 
-    Scenario: Create a variety
-      When "Maria" creates a variety for "Banana" with:
+    Scenario: Create a categorized article
+      When "Maria" creates a kind for "Banana" with:
         | field        | value        |
         | handle       | banana-prata |
         | common_names | Banana Prata |
-      Then the variety "Banana Prata" is created under "Banana"
+      Then the kind "Banana Prata" is created under "Banana"
 
-    Scenario: Variety inherits parent properties by default
+    Scenario: A categorized article inherits parent properties by default
       Given "Banana" has lifecycle "PERENNIAL"
-      When "Maria" creates a variety "Banana Prata" without specifying lifecycle
+      When "Maria" creates a kind "Banana Prata" without specifying lifecycle
       Then "Banana Prata" shows lifecycle "PERENNIAL"
 
-    Scenario: Variety can override parent properties
+    Scenario: A categorized article can override parent properties
       Given "Banana" has development cycle 300-400 days
-      When "Maria" creates a variety "Banana Nanica" with development cycle 270-330 days
+      When "Maria" creates a kind "Banana Nanica" with development cycle 270-330 days
       Then "Banana Nanica" shows development cycle 270-330 days
 
-    Scenario: Viewing a vegetable lists its varieties
-      Given "Banana" has varieties "Banana Prata" and "Banana Nanica"
+    Scenario: Viewing a wiki article lists its categorized entries
+      Given "Banana" has kinds "Banana Prata" and "Banana Nanica"
       When viewing "Banana"
-      Then the varieties section lists "Banana Prata" and "Banana Nanica"
+      Then the kinds section lists "Banana Prata" and "Banana Nanica"
 
-  Rule: Vegetables can have categorized photos
+  Rule: Wiki articles can have categorized photos
 
     Background:
       Given "Maria" has COMMUNITY access
-      And the vegetable "Mandioca" exists
+      And the wiki article "Mandioca" exists
 
     Scenario: Add photo with category
       # @TODO modify "raiz" to the actual category we include in the end
@@ -180,38 +180,38 @@ Feature: Vegetables
       When "Ana" censors the photo
       Then the photo becomes hidden in "Mandioca"'s gallery
 
-    Scenario: Moderators can set main photo for vegetable
+    Scenario: Moderators can set main photo for wiki article
       Given "Mandioca" has approved photos
       And "Ana" is a MODERATOR
       When "Ana" sets a photo as the main photo
       Then that photo appears as "Mandioca"'s thumbnail in listings
 
-    Scenario: Member with community access can't set main photo for vegetable
+    Scenario: Member with community access can't set main photo for wiki article
       Given "Mandioca" has approved photos
       When "Maria" sets a photo as the main photo
       Then access is denied
 
-  Rule: People can bookmark vegetables
+  Rule: People can bookmark wiki articles
     Each bookmark has 4 possible states: 'interested', 'active', 'previously-active', 'indifferent'.
-    For vegetables, that's "I want to plant", "Am planting", "Have planted" and "Not interested", respectively.
+    For wiki articles, that's "I want to plant", "Am planting", "Have planted" and "Not interested", respectively.
 
     Background:
       Given "Maria" has COMMUNITY access
-      And the vegetable "Mandioca" exists
+      And the wiki article "Mandioca" exists
 
-    Scenario: Bookmark a vegetable
+    Scenario: Bookmark a wiki article
       When "Maria" bookmarks "Mandioca"
-      Then "Mandioca" appears in "Maria"'s bookmarked vegetables
+      Then "Mandioca" appears in "Maria"'s bookmarked wiki articles
 
     Scenario: Remove bookmark
       Given "Maria" has bookmarked "Mandioca"
       When "Maria" removes the bookmark
-      Then "Mandioca" no longer appears in "Maria"'s bookmarked vegetables
+      Then "Mandioca" no longer appears in "Maria"'s bookmarked wiki articles
 
   Rule: Revision history provides auditability
 
     Background:
-      Given the vegetable "Mandioca" exists with the following revision history:
+      Given the wiki article "Mandioca" exists with the following revision history:
         | editor | action                       | evaluation | evaluated_by |
         | Maria  | created with "Raiz tuberosa" | APPROVED   | Ana          |
         | Carlos | changed to "Raiz rica"       | APPROVED   | Ana          |

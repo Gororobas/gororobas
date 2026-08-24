@@ -135,7 +135,7 @@ Feature: People
       And "Maria"'s comments are deleted
 
     Scenario: Deleted person's wiki contributions remain but are anonymized
-      Given "Maria" has allowed edits on vegetable "Mandioca"
+      Given "Maria" has allowed edits on wiki article "Mandioca"
       When "Maria" deletes their account
       Then "Mandioca" revision history remains the same but no longer shows "Maria"
 

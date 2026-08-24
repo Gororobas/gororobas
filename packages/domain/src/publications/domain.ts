@@ -17,7 +17,7 @@ import {
   PublicationId,
   ProfileId,
   TagId,
-  VegetableId,
+  WikiArticleId,
 } from "../common/ids.js"
 import {
   Handle,
@@ -227,13 +227,13 @@ const MatchedTag = Schema.Struct({
   extraction_text: Schema.NullOr(Schema.String),
 })
 
-const MatchedVegetable = Schema.Struct({
-  vegetable_id: Schema.String,
+const MatchedWikiArticle = Schema.Struct({
+  wiki_article_id: WikiArticleId,
   extraction_text: Schema.NullOr(Schema.String),
 })
 
 const MatchedTagsAsJson = Schema.fromJsonString(Schema.Array(MatchedTag))
-const MatchedVegetablesAsJson = Schema.fromJsonString(Schema.Array(MatchedVegetable))
+const MatchedWikiArticlesAsJson = Schema.fromJsonString(Schema.Array(MatchedWikiArticle))
 
 const PublicationPageDataCommonFields = {
   ...CorePublicationMetadata.fields,
@@ -244,7 +244,7 @@ const PublicationPageDataCommonFields = {
   originalLocale: Schema.NullOr(Locale),
   tags: MatchedTagsAsJson,
   updatedAt: TimestampColumn,
-  vegetables: MatchedVegetablesAsJson,
+  wikiArticles: MatchedWikiArticlesAsJson,
 }
 
 const PublicationPagePostData = Schema.Struct({
@@ -434,9 +434,9 @@ export const PublicationTagRow = Schema.Struct({
 })
 export type PublicationTagRow = typeof PublicationTagRow.Type
 
-export const PublicationVegetableRow = Schema.Struct({
+export const PublicationWikiArticleRow = Schema.Struct({
   extractionText: Schema.NullOr(Schema.String),
   publicationId: PublicationId,
-  vegetableId: VegetableId,
+  wikiArticleId: WikiArticleId,
 })
-export type PublicationVegetableRow = typeof PublicationVegetableRow.Type
+export type PublicationWikiArticleRow = typeof PublicationWikiArticleRow.Type

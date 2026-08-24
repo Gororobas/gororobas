@@ -1,5 +1,5 @@
+import { type WikiArticleEditableData } from "@gororobas/domain"
 /* oxlint-disable effect/casting-awareness -- reconstruction accumulators preserve a recursive domain shape. */
-import { type SourceVegetableData } from "@gororobas/domain"
 /**
  * Backward reconstruction algorithm for vegetable edit history.
  */
@@ -22,11 +22,11 @@ export interface EditSuggestionEvent {
 }
 
 export interface ReconstructedHistory {
-  initialState: SourceVegetableData
+  initialState: WikiArticleEditableData
   edits: Array<{
     event: EditSuggestionEvent
-    previousState: SourceVegetableData
-    newState: SourceVegetableData
+    previousState: WikiArticleEditableData
+    newState: WikiArticleEditableData
     crdtUpdate: Option.Option<Uint8Array>
   }>
 }
@@ -81,7 +81,7 @@ export const filterApprovedEdits = (events: EditSuggestionEvent[]): EditSuggesti
  */
 export const reconstructHistory = (
   vegetableId: string,
-  currentState: SourceVegetableData,
+  currentState: WikiArticleEditableData,
   editSuggestions: EditSuggestion[],
 ): Effect.Effect<ReconstructedHistory, Error> =>
   Effect.gen(function* () {
@@ -133,7 +133,7 @@ export const reconstructHistory = (
  */
 export const validateReconstructedHistory = (
   history: ReconstructedHistory,
-  expectedFinalState: SourceVegetableData,
+  expectedFinalState: WikiArticleEditableData,
 ): Effect.Effect<boolean, Error> =>
   Effect.gen(function* () {
     // Apply all diffs forward to see if we get the expected final state

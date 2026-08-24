@@ -13,7 +13,7 @@ export const resourcesPolicies = {
   canCensorComment: platformPermission("comments:censor"),
   canComment: platformPermission("comments:create"),
   canCreate: platformPermission("resources:create"),
-  canLinkToVegetables: platformPermission("resources:revise"),
+  canLinkToWikiArticles: platformPermission("resources:revise"),
   canRemoveBookmark: (personId: PersonId) =>
     authenticatedPolicy((session) =>
       session.personId === personId

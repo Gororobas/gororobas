@@ -34,9 +34,9 @@ const personIdArbitrary = Arbitrary.make(PersonId)
 _"For all X satisfying P, the action is **denied**."_
 
 ```ts
-it.effect("newcomers cannot create vegetables", () =>
+it.effect("newcomers cannot create wiki articles", () =>
   propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-    Effect.map(runPolicySuccess(Policies.vegetables.canCreate, session), (allowed) => !allowed),
+    Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
   ),
 )
 ```

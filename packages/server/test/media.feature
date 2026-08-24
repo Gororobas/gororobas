@@ -1,6 +1,6 @@
 Feature: Media
   People can upload media (images, audio, video).
-  Media can be uploaded inside publications or attached to vegetables.
+  Media can be uploaded inside publications or attached to wiki articles.
 
   Rule: Media uploaded inside publications inherits the publication visibility
 
@@ -66,7 +66,7 @@ Feature: Media
       When they try to upload media to a publication
       Then access is denied
 
-  Rule: Vegetable media is always public and can be moderated
+  Rule: Wiki article media is always public and can be moderated
 
     Background:
       Given the following people exist:
@@ -75,51 +75,51 @@ Feature: Media
         | Maria    | COMMUNITY    |
         | Pedro    | NEWCOMER     |
         | Gusttavo | BLOCKED      |
-      And the vegetables "Mandioca" and "Banana" exist
+      And the wiki articles "Mandioca" and "Banana" exist
 
-    Scenario: Member with community access attaches media to a vegetable
+    Scenario: Member with community access attaches media to a wiki article
       Given "Maria" is logged in
-      When they upload media attached to vegetable "Mandioca"
-      Then the media is visible on vegetable "Mandioca"
+      When they upload media attached to wiki article "Mandioca"
+      Then the media is visible on wiki article "Mandioca"
       And visitors can access the media
 
-    Scenario: Member with community access can attach the same media to multiple vegetables
+    Scenario: Member with community access can attach the same media to multiple wiki articles
       Given "Maria" is logged in
-      When they upload media attached to vegetables "Mandioca" and "Banana"
-      Then the media is visible on vegetable "Mandioca"
-      And the media is visible on vegetable "Banana"
+      When they upload media attached to wiki articles "Mandioca" and "Banana"
+      Then the media is visible on wiki article "Mandioca"
+      And the media is visible on wiki article "Banana"
 
-    Scenario: Vegetable media is approved by default
+    Scenario: Wiki article media is approved by default
       Given "Maria" is logged in
-      When they upload media attached to vegetable "Mandioca"
+      When they upload media attached to wiki article "Mandioca"
       Then the media is visible to everyone
 
-    Scenario: Moderator can censor vegetable media
+    Scenario: Moderator can censor wiki article media
       Given "Maria" is logged in
-      And they have uploaded media attached to vegetable "Mandioca"
+      And they have uploaded media attached to wiki article "Mandioca"
       When "Ana" censors the media
       Then the media has moderation_status "CENSORED"
       And visitors cannot access the media
-      And the media is hidden on vegetable "Mandioca"
+      And the media is hidden on wiki article "Mandioca"
 
     Scenario: Censoring hides media everywhere it is attached
       Given "Maria" is logged in
-      And they have uploaded media attached to vegetables "Mandioca" and "Banana"
+      And they have uploaded media attached to wiki articles "Mandioca" and "Banana"
       When "Ana" censors the media
-      Then the media is hidden on vegetable "Mandioca"
-      And the media is hidden on vegetable "Banana"
+      Then the media is hidden on wiki article "Mandioca"
+      And the media is hidden on wiki article "Banana"
 
-    Scenario: Person awaiting access cannot attach media to vegetables
+    Scenario: Person awaiting access cannot attach media to wiki articles
       Given "Pedro" is logged in
-      When they try to upload media attached to vegetable "Mandioca"
+      When they try to upload media attached to wiki article "Mandioca"
       Then access is denied
 
-    Scenario: Blocked person cannot attach media to vegetables
+    Scenario: Blocked person cannot attach media to wiki articles
       Given "Gusttavo" is logged in
-      When they try to upload media attached to vegetable "Mandioca"
+      When they try to upload media attached to wiki article "Mandioca"
       Then access is denied
 
-    Scenario: Visitors cannot attach media to vegetables
+    Scenario: Visitors cannot attach media to wiki articles
       Given a visitor is browsing
-      When they try to upload media attached to vegetable "Mandioca"
+      When they try to upload media attached to wiki article "Mandioca"
       Then access is denied

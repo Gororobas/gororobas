@@ -4,7 +4,7 @@
  * Uses a priority-based scoring strategy (inspired by experiment 016) with
  * accent-normalized matching against handles and searchable_names.
  *
- * Resolution for vegetables:
+ * Resolution for wikiArticles:
  *   1. Exact handle match → existing
  *   2. Exact or substring match via searchable_names → existing
  *   3. No match → suggested (with names from extraction attributes)
@@ -14,19 +14,24 @@
  *   2. Name match in tag names JSON → existing
  *   3. No match → suggested (with names from extraction attributes)
  */
-import { stringToHandle, type Handle, type VegetableId, type VegetableRow } from "@gororobas/domain"
+import {
+  stringToHandle,
+  WikiArticleMaterializedRow,
+  type Handle,
+  type WikiArticleId,
+} from "@gororobas/domain"
 import {
   CommonExtractionData,
   ResolvedExistingTagExtraction,
-  ResolvedExistingVegetableExtraction,
+  ResolvedExistingWikiArticleExtraction,
   SuggestedTagExtraction,
-  SuggestedVegetableExtraction,
+  SuggestedWikiArticleExtraction,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Predicate, Struct } from "effect"
 import type { Extraction } from "langextract"
 
 import { TagsRepository } from "../tags/repository.js"
-import { VegetablesRepository } from "../vegetables/repository.js"
+import { WikiArticlesRepository } from "../wiki/repository.js"
 
 function toCommonExtractionFields(extraction: Extraction) {
   return CommonExtractionData.mapFields(Struct.omit(["handle"])).make({
@@ -44,9 +49,9 @@ function toCommonExtractionFields(extraction: Extraction) {
   })
 }
 
-function collectVegetableCandidates(extraction: Extraction): string[] {
+function collectWikiArticleCandidates(extraction: Extraction): string[] {
   const attributes = extraction.attributes ?? {}
-  const candidates = ["vegetable_pt", "vegetable_es", "vegetable_en"].flatMap((key) => {
+  const candidates = ["wikiArticle_pt", "wikiArticle_es", "wikiArticle_en"].flatMap((key) => {
     const value = attributes[key]
     return Predicate.isString(value) ? [value] : Array.isArray(value) ? value : []
   })
@@ -56,44 +61,46 @@ function collectVegetableCandidates(extraction: Extraction): string[] {
   return candidates
 }
 
-export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction")(function* (
+export const resolveWikiArticleExtraction = Effect.fn("resolveWikiArticleExtraction")(function* (
   extraction: Extraction,
 ) {
-  const vegetablesRepository = yield* VegetablesRepository
+  const wikiArticlesRepository = yield* WikiArticlesRepository
 
-  const candidates = collectVegetableCandidates(extraction)
+  const candidates = collectWikiArticleCandidates(extraction)
   yield* Effect.logDebug(
-    `Resolving vegetable extraction: "${extraction.extractionText}". Candidates: [${candidates.join(", ")}]`,
+    `Resolving wikiArticle extraction: "${extraction.extractionText}". Candidates: [${candidates.join(", ")}]`,
   )
 
   const common = toCommonExtractionFields(extraction)
 
   const handleMatch = yield* Effect.reduce(
-    () => Option.none<VegetableRow>(),
-    (found: Option.Option<VegetableRow>, candidate: string) => {
+    () => Option.none<WikiArticleMaterializedRow & { handle: Handle }>(),
+    (found: Option.Option<WikiArticleMaterializedRow & { handle: Handle }>, candidate: string) => {
       if (Option.isSome(found)) return Effect.succeed(found)
 
       return Effect.gen(function* () {
         const handle = yield* stringToHandle(candidate)
         yield* Effect.logDebug(`Trying handle match for "${candidate}" -> "${handle}"`)
-        return yield* vegetablesRepository.findByHandle(handle)
+        return yield* wikiArticlesRepository
+          .findByHandle(handle)
+          .pipe(Effect.map(Option.map((row) => ({ ...row, handle: handle }))))
       })
     },
   )(candidates)
   if (Option.isSome(handleMatch)) {
     yield* Effect.logDebug(
-      `Found existing vegetable by handle: "${handleMatch.value.handle}" -> ${handleMatch.value.id}`,
+      `Found existing wikiArticle by handle: "${handleMatch.value.handle}" -> ${handleMatch.value.id}`,
     )
-    return ResolvedExistingVegetableExtraction.make({
+    return ResolvedExistingWikiArticleExtraction.make({
       ...common,
-      vegetableId: handleMatch.value.id,
+      wikiArticleId: handleMatch.value.id,
       handle: handleMatch.value.handle,
     })
   }
 
   const searchableNameMatch = yield* Effect.reduce(
-    () => Option.none<{ vegetableId: VegetableId; handle: Handle }>(),
-    (found: Option.Option<{ vegetableId: VegetableId; handle: Handle }>, candidate: string) => {
+    () => Option.none<{ wikiArticleId: WikiArticleId; handle: Handle }>(),
+    (found: Option.Option<{ wikiArticleId: WikiArticleId; handle: Handle }>, candidate: string) => {
       if (Option.isSome(found)) return Effect.succeed(found)
 
       return Effect.gen(function* () {
@@ -102,36 +109,36 @@ export const resolveVegetableExtraction = Effect.fn("resolveVegetableExtraction"
         yield* Effect.logDebug(
           `Trying searchable_name match for "${candidate}" -> pattern "${pattern}"`,
         )
-        return yield* vegetablesRepository.findBySearchableName(pattern)
+        return yield* wikiArticlesRepository.findBySearchableName(pattern)
       })
     },
   )(candidates)
   if (Option.isSome(searchableNameMatch)) {
     yield* Effect.logDebug(
-      `Found existing vegetable by searchable_name: "${searchableNameMatch.value.handle}" -> ${searchableNameMatch.value.vegetableId}`,
+      `Found existing wikiArticle by searchable_name: "${searchableNameMatch.value.handle}" -> ${searchableNameMatch.value.wikiArticleId}`,
     )
-    return ResolvedExistingVegetableExtraction.make({
+    return ResolvedExistingWikiArticleExtraction.make({
       ...common,
-      vegetableId: searchableNameMatch.value.vegetableId,
+      wikiArticleId: searchableNameMatch.value.wikiArticleId,
       handle: searchableNameMatch.value.handle,
     })
   }
 
   yield* Effect.logDebug(
-    `No match found for vegetable "${extraction.extractionText}" (candidates: ${candidates.join(", ")}) -> creating suggested`,
+    `No match found for wikiArticle "${extraction.extractionText}" (candidates: ${candidates.join(", ")}) -> creating suggested`,
   )
-  return SuggestedVegetableExtraction.make({
+  return SuggestedWikiArticleExtraction.make({
     ...common,
     handle: yield* stringToHandle(extraction.extractionText),
     names: {
-      pt: Predicate.isString(common.attributes.vegetable_pt)
-        ? common.attributes.vegetable_pt
+      pt: Predicate.isString(common.attributes.wikiArticle_pt)
+        ? common.attributes.wikiArticle_pt
         : extraction.extractionText,
-      es: Predicate.isString(common.attributes.vegetable_es)
-        ? common.attributes.vegetable_es
+      es: Predicate.isString(common.attributes.wikiArticle_es)
+        ? common.attributes.wikiArticle_es
         : extraction.extractionText,
-      en: Predicate.isString(common.attributes.vegetable_en)
-        ? common.attributes.vegetable_en
+      en: Predicate.isString(common.attributes.wikiArticle_en)
+        ? common.attributes.wikiArticle_en
         : extraction.extractionText,
     },
   })

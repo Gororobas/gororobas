@@ -13,13 +13,13 @@ Feature: Sync
       When they open the app
       Then sections that require a connection show an offline warning
 
-  Rule: Vegetables are synced to support offline reading
+  Rule: Wiki articles are synced to support offline reading
 
-    Scenario: Vegetables are available offline
+    Scenario: Wiki articles are available offline
       Given a person was previously online
-      And vegetables have been synced to the device
+      And wiki articles have been synced to the device
       When the person is offline
-      Then they can still access vegetables
+      Then they can still access wiki articles
 
   Rule: Publications are partially synced based on relevance
 

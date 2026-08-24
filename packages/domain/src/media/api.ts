@@ -23,11 +23,11 @@ export const AttachMediaToPublicationData = Schema.Struct({
 })
 export type AttachMediaToPublicationData = typeof AttachMediaToPublicationData.Type
 
-export const AttachMediaToVegetableData = Schema.Struct({
+export const AttachMediaToWikiArticleData = Schema.Struct({
   media_ids: Schema.NonEmptyArray(ImageId),
-  vegetable_handles: Schema.NonEmptyArray(Schema.Trimmed.check(Schema.isNonEmpty())),
+  wiki_article_handles: Schema.NonEmptyArray(Schema.Trimmed.check(Schema.isNonEmpty())),
 })
-export type AttachMediaToVegetableData = typeof AttachMediaToVegetableData.Type
+export type AttachMediaToWikiArticleData = typeof AttachMediaToWikiArticleData.Type
 
 export class MediaApiGroup extends HttpApiGroup.make("media")
   .add(

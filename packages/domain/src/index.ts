@@ -13,7 +13,6 @@ export * from "./publications/domain.js"
 export * from "./profiles/domain.js"
 export * from "./resources/domain.js"
 export * from "./tags/domain.js"
-export * from "./vegetables/domain.js"
 export * from "./wiki/domain.js"
 
 // Errors
@@ -25,7 +24,6 @@ export * from "./publications/errors.js"
 export * from "./profiles/errors.js"
 export * from "./resources/errors.js"
 export * from "./tags/errors.js"
-export * from "./vegetables/errors.js"
 export * from "./wiki/errors.js"
 
 // Authentication

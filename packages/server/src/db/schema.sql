@@ -256,152 +256,20 @@ CREATE TABLE wiki_article_handles (
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- ==========
--- VEGETABLES
--- ==========
---
--- The source of truth of core vegetable data (except photos and varieties)
-CREATE TABLE vegetable_crdts (
-  id text PRIMARY KEY,
-  crdt_snapshot blob NOT NULL, -- LoroSnapshot
-  created_at text NOT NULL,
-  updated_at text
-) WITHOUT ROWID;
 
--- People's edit suggestions that compose the encyclopedia
-CREATE TABLE vegetable_revisions (
-  id text PRIMARY KEY,
-  vegetable_id text,
-  created_by_id text,
-  -- @todo can we add metadata for when it's a system commit? O rather, do system commits even get a revision row?
-  crdt_update blob NOT NULL,
-  from_crdt_frontier json NOT NULL,
-  evaluation text NOT NULL,
-  evaluated_by_id text,
-  evaluated_at text,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
-  FOREIGN KEY (evaluated_by_id) REFERENCES people (id) ON DELETE SET NULL
-);
-
--- The core queryable data, materialized from the CRDT
-CREATE TABLE vegetables (
-  id text PRIMARY KEY,
-  current_crdt_frontier json NOT NULL,
-  handle text NOT NULL UNIQUE,
-  scientific_names json,
-  development_cycle_min integer,
-  development_cycle_max integer,
-  height_min real,
-  height_max real,
-  temperature_min real,
-  temperature_max real,
-  main_photo_id text,
-  FOREIGN KEY (id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (main_photo_id) REFERENCES images (id) ON DELETE SET NULL
-);
-
-CREATE INDEX idx_vegetables_handle ON vegetables (handle);
-
--- Per-locale data, materialized from the CRDT
-CREATE TABLE vegetable_translations (
-  vegetable_id text NOT NULL,
-  locale text NOT NULL,
-  common_names json NOT NULL,
-  searchable_names text,
-  grammatical_gender text,
-  origin text,
-  content json,
-  PRIMARY KEY (vegetable_id, locale),
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE INDEX idx_vegetables_searchable_names ON vegetable_translations (searchable_names);
-
-CREATE TABLE vegetable_strata (
-  vegetable_id text NOT NULL,
-  stratum text NOT NULL,
-  PRIMARY KEY (vegetable_id, stratum),
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE vegetable_planting_methods (
-  vegetable_id text NOT NULL,
-  planting_method text NOT NULL,
-  PRIMARY KEY (vegetable_id, planting_method),
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE vegetable_edible_parts (
-  vegetable_id text NOT NULL,
-  edible_part text NOT NULL,
-  PRIMARY KEY (vegetable_id, edible_part),
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE vegetable_lifecycles (
-  vegetable_id text NOT NULL,
-  lifecycle text NOT NULL,
-  PRIMARY KEY (vegetable_id, lifecycle),
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE vegetable_uses (
-  vegetable_id text NOT NULL,
-  usage text NOT NULL,
-  PRIMARY KEY (vegetable_id, usage),
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
--- ===================
--- VEGETABLE VARIETIES
--- ===================
-CREATE TABLE vegetable_varieties (
-  id text PRIMARY KEY,
-  vegetable_id text NOT NULL,
-  handle text NOT NULL UNIQUE,
-  scientific_names json,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  created_by_id text,
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_vegetable_varieties_handle ON vegetable_varieties (handle);
-
-CREATE TABLE vegetable_variety_translations (
-  variety_id text NOT NULL,
-  locale text NOT NULL,
-  common_names json NOT NULL,
-  content json,
-  PRIMARY KEY (variety_id, locale),
-  FOREIGN KEY (variety_id) REFERENCES vegetable_varieties (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE vegetable_variety_photos (
-  variety_id text NOT NULL,
+-- ================
+-- WIKI ARTICLE PHOTOS
+-- ================
+CREATE TABLE wiki_article_photos (
+  wiki_article_id text NOT NULL,
   image_id text NOT NULL,
   order_index integer,
-  PRIMARY KEY (variety_id, image_id),
-  FOREIGN KEY (variety_id) REFERENCES vegetable_varieties (id) ON DELETE CASCADE,
+  PRIMARY KEY (wiki_article_id, image_id),
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- ================
--- VEGETABLE PHOTOS
--- ================
-CREATE TABLE vegetable_photos (
-  vegetable_id text NOT NULL,
-  image_id text NOT NULL,
-  order_index integer,
-  PRIMARY KEY (vegetable_id, image_id),
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE vegetable_photo_metadata (
+CREATE TABLE wiki_article_photo_metadata (
   id text PRIMARY KEY,
   category text NOT NULL,
   description json,
@@ -411,7 +279,7 @@ CREATE TABLE vegetable_photo_metadata (
   FOREIGN KEY (id) REFERENCES images (id) ON DELETE CASCADE
 );
 
--- =========
+ -- =========
 -- RESOURCES
 -- =========
 --
@@ -478,15 +346,6 @@ CREATE TABLE resource_tags (
   PRIMARY KEY (resource_id, tag_id),
   FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE resource_vegetables (
-  resource_id text NOT NULL,
-  vegetable_id text NOT NULL,
-  order_index integer,
-  PRIMARY KEY (resource_id, vegetable_id),
-  FOREIGN KEY (resource_id) REFERENCES resource_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 -- =====
@@ -561,13 +420,13 @@ CREATE TABLE publication_tags (
   FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
-CREATE TABLE publication_vegetables (
+CREATE TABLE publication_wiki_articles (
   publication_id text NOT NULL,
-  vegetable_id text NOT NULL,
+  wiki_article_id text NOT NULL,
   extraction_text text,
-  PRIMARY KEY (publication_id, vegetable_id),
+  PRIMARY KEY (publication_id, wiki_article_id),
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 -- ========
@@ -641,13 +500,13 @@ CREATE TABLE comment_translations (
 -- =========
 -- BOOKMARKS
 -- =========
-CREATE TABLE bookmarks_vegetables (
+CREATE TABLE bookmarks_wiki_articles (
   person_id text NOT NULL,
-  vegetable_id text NOT NULL,
+  wiki_article_id text NOT NULL,
   state text NOT NULL,
-  PRIMARY KEY (person_id, vegetable_id),
+  PRIMARY KEY (person_id, wiki_article_id),
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
-  FOREIGN KEY (vegetable_id) REFERENCES vegetable_crdts (id) ON DELETE CASCADE
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 CREATE TABLE bookmarks_resources (

@@ -18,7 +18,6 @@ import {
   ResourceRow,
   ResourceTranslationRow,
   ResourceTagRow,
-  ResourceVegetableRow,
   snapshotToLoroDoc,
   SourceResourceData,
 } from "@gororobas/domain"
@@ -120,11 +119,6 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
         execute: (rows) => sql`INSERT INTO resource_tags ${sql.insert(rows)}`,
       })
 
-      const insertResourceVegetableRows = SqlSchema.void({
-        Request: Schema.Array(ResourceVegetableRow),
-        execute: (rows) => sql`INSERT INTO resource_vegetables ${sql.insert(rows)}`,
-      })
-
       const updateResourceCrdtRow = SqlSchema.void({
         Request: ResourceCrdtRow.mapFields(Struct.omit(["createdAt"])),
         execute: ({ id, ...update }) =>
@@ -197,21 +191,6 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
           ),
         })
 
-      const materializeVegetables = (input: {
-        resourceId: ResourceId
-        metadata: SourceResourceData["metadata"]
-      }) =>
-        materializeJunctionTable({
-          deleteRows: sql`DELETE FROM resource_vegetables WHERE resource_id = ${input.resourceId}`,
-          insertRows: insertResourceVegetableRows(
-            (input.metadata.relatedVegetableIds || []).map((vegetableId, index) => ({
-              vegetableId,
-              resourceId: input.resourceId,
-              orderIndex: index,
-            })),
-          ),
-        })
-
       const materializeResource = (input: {
         resourceId: ResourceId
         currentCrdtFrontier: LoroDocFrontier
@@ -241,11 +220,6 @@ export class ResourcesRepository extends Context.Service<ResourcesRepository>()(
           })
 
           yield* materializeTags({
-            resourceId: input.resourceId,
-            metadata: input.sourceData.metadata,
-          })
-
-          yield* materializeVegetables({
             resourceId: input.resourceId,
             metadata: input.sourceData.metadata,
           })

@@ -65,15 +65,6 @@ export type TagId = typeof TagId.Type
 export const SuggestedTagId = UUID.pipe(Schema.brand("SuggestedTagId"))
 export type SuggestedTagId = typeof SuggestedTagId.Type
 
-export const VegetableId = UUID.pipe(Schema.brand("VegetableId"))
-export type VegetableId = typeof VegetableId.Type
-
-export const VegetableRevisionId = UUID.pipe(Schema.brand("VegetableRevisionId"))
-export type VegetableRevisionId = typeof VegetableRevisionId.Type
-
-export const VegetableVarietyId = UUID.pipe(Schema.brand("VegetableVarietyId"))
-export type VegetableVarietyId = typeof VegetableVarietyId.Type
-
 export const WikiArticleId = UUID.pipe(Schema.brand("WikiArticleId"))
 export type WikiArticleId = typeof WikiArticleId.Type
 

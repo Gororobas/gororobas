@@ -18,7 +18,7 @@ import {
   PublicationRow,
   PublicationTagRow,
   PublicationTranslationRow,
-  PublicationVegetableRow,
+  PublicationWikiArticleRow,
   ProfileId,
   type PublicationSourceData,
   tiptapToText,
@@ -138,15 +138,15 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
              FROM publication_tags pt
              INNER JOIN target_publication ON target_publication.id = pt.publication_id
          ),
-         aggregated_vegetables AS (
+         aggregated_wiki_articles AS (
              SELECT
                  JSON_GROUP_ARRAY(
                      JSON_OBJECT(
-                         'vegetable_id', pv.vegetable_id,
+                         'wiki_article_id', pv.wiki_article_id,
                          'extraction_text', pv.extraction_text
                      )
-                 ) AS vegetables
-             FROM publication_vegetables pv
+                 ) AS wiki_articles
+             FROM publication_wiki_articles pv
              INNER JOIN target_publication ON target_publication.id = pv.publication_id
          )
          SELECT
@@ -166,11 +166,11 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
              t.original_locale,
              t.content,
              tags.tags,
-             vegs.vegetables
+             vegs.wiki_articles
          FROM target_publication p
          LEFT JOIN best_translation t ON t.priority_rank = 1
          LEFT JOIN aggregated_tags tags ON TRUE
-         LEFT JOIN aggregated_vegetables vegs ON TRUE
+         LEFT JOIN aggregated_wiki_articles vegs ON TRUE
        `,
         Request: GetPublicationPageParams,
         Result: PublicationPageData,
@@ -225,9 +225,9 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         execute: (rows) => sql`INSERT INTO publication_tags ${sql.insert(rows)}`,
       })
 
-      const insertPublicationVegetableRows = SqlSchema.void({
-        Request: Schema.Array(PublicationVegetableRow),
-        execute: (rows) => sql`INSERT INTO publication_vegetables ${sql.insert(rows)}`,
+      const insertPublicationWikiArticleRows = SqlSchema.void({
+        Request: Schema.Array(PublicationWikiArticleRow),
+        execute: (rows) => sql`INSERT INTO publication_wiki_articles ${sql.insert(rows)}`,
       })
 
       const updatePublicationCrdtRow = SqlSchema.void({
@@ -336,24 +336,24 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
       }
 
-      const materializeVegetables = (input: {
+      const materializeWikiArticles = (input: {
         classification?: PublicationClassification
         publicationId: PublicationId
       }) => {
-        const rows = (input.classification?.vegetables ?? []).flatMap((vegetable) => {
-          if (vegetable._tag !== "ResolvedExistingVegetableExtraction") return []
+        const rows = (input.classification?.wikiArticles ?? []).flatMap((wikiArticle) => {
+          if (wikiArticle._tag !== "ResolvedExistingWikiArticleExtraction") return []
 
-          return PublicationVegetableRow.make({
-            extractionText: vegetable.extractionText,
+          return PublicationWikiArticleRow.make({
+            extractionText: wikiArticle.extractionText,
             publicationId: input.publicationId,
-            vegetableId: vegetable.vegetableId,
+            wikiArticleId: wikiArticle.wikiArticleId,
           })
         })
 
         return materializeJunctionTable({
-          deleteRows: sql`DELETE FROM publication_vegetables WHERE publication_id = ${input.publicationId}`,
+          deleteRows: sql`DELETE FROM publication_wiki_articles WHERE publication_id = ${input.publicationId}`,
           insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
-            ? insertPublicationVegetableRows(rows)
+            ? insertPublicationWikiArticleRows(rows)
             : Effect.void,
         })
       }
@@ -381,7 +381,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             publicationId: input.publicationId,
           })
 
-          yield* materializeVegetables({
+          yield* materializeWikiArticles({
             ...(input.classification ? { classification: input.classification } : {}),
             publicationId: input.publicationId,
           })

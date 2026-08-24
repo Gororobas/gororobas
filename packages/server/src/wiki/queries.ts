@@ -7,6 +7,7 @@ import {
   WikiArticleRevisionId,
   WikiArticleRevisionRow,
 } from "@gororobas/domain"
+import { Handle } from "@gororobas/domain"
 import { Schema } from "effect"
 import { SqlSchema } from "effect/unstable/sql"
 import { SqlClient } from "effect/unstable/sql/SqlClient"
@@ -28,6 +29,38 @@ export const findDatabaseRowByHandleAndKind = SqlSchema.findOneOption({
         INNER JOIN wiki_article_handles AS route
           ON route.wiki_article_id = article.id
         WHERE route.kind = ${kind} AND route.handle = ${handle}
+      `,
+    ),
+})
+
+export const findDatabaseRowByHandle = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: WikiArticleMaterializedRow,
+  execute: (handle) =>
+    SqlClient.use(
+      (sql) => sql`
+        SELECT article.*
+        FROM wiki_articles AS article
+        INNER JOIN wiki_article_handles AS route
+          ON route.wiki_article_id = article.id
+        WHERE route.handle = ${handle}
+        LIMIT 1
+      `,
+    ),
+})
+
+export const findWikiArticleBySearchableName = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: Schema.Struct({ wikiArticleId: WikiArticleId, handle: Handle }),
+  execute: (pattern) =>
+    SqlClient.use(
+      (sql) => sql`
+        SELECT translations.wiki_article_id, route.handle
+        FROM wiki_article_translations AS translations
+        INNER JOIN wiki_article_handles AS route
+          ON route.wiki_article_id = translations.wiki_article_id
+        WHERE translations.searchable_names LIKE ${pattern}
+        LIMIT 1
       `,
     ),
 })

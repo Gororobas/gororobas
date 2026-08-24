@@ -30,11 +30,9 @@ import {
   PublicationRow,
   PublicationTagRow,
   PublicationTranslationRow,
-  PublicationVegetableRow,
 } from "../../src/publications/domain.js"
 import { SuggestedTagRow, SuggestedTagSourceRow, TagRow } from "../../src/tags/domain.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
-import { VegetableRow, VegetableTranslationRow } from "../../src/vegetables/domain.js"
 import {
   WikiArticleCrdtRow,
   WikiArticleHandleMaterializedRow,
@@ -54,13 +52,10 @@ const rowSchemas = [
   { name: "PublicationRow", schema: PublicationRow },
   { name: "PublicationTagRow", schema: PublicationTagRow },
   { name: "PublicationTranslationRow", schema: PublicationTranslationRow },
-  { name: "PublicationVegetableRow", schema: PublicationVegetableRow },
   { name: "SessionRow", schema: SessionRow },
   { name: "SuggestedTagRow", schema: SuggestedTagRow },
   { name: "SuggestedTagSourceRow", schema: SuggestedTagSourceRow },
   { name: "TagRow", schema: TagRow },
-  { name: "VegetableRow", schema: VegetableRow },
-  { name: "VegetableTranslationRow", schema: VegetableTranslationRow },
   { name: "VerificationRow", schema: VerificationRow },
   { name: "WikiArticleCrdtRow", schema: WikiArticleCrdtRow },
   { name: "WikiArticleHandleRow", schema: WikiArticleHandleMaterializedRow },

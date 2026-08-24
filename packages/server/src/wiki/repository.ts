@@ -57,8 +57,10 @@ import {
 import {
   findCrdtRowById,
   findDatabaseRowById,
+  findDatabaseRowByHandle,
   findHandleOwner,
   findRevisionById,
+  findWikiArticleBySearchableName,
 } from "./queries.js"
 
 /**
@@ -401,6 +403,8 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         createRevision,
         createWikiArticle,
         evaluateRevision,
+        findByHandle: (handle: string) => findDatabaseRowByHandle(handle),
+        findBySearchableName: (pattern: string) => findWikiArticleBySearchableName(pattern),
       } as const
     }),
   },

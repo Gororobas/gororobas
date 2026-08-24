@@ -28,7 +28,7 @@ export const PublicationClassificationWorkflowLayer = PublicationClassificationW
       ),
     )
 
-    // @TODO: get the tiptap document from the CRDT, hash it, skip if not equal payload.hash, then extract, then materialize, then create suggested tags and vegetables
+    // @TODO: get the tiptap document from the CRDT, hash it, skip if not equal payload.hash, then extract and materialize suggested tags and wiki articles
     // const currentHash = publication.value.
 
     return null

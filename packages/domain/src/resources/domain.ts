@@ -11,14 +11,7 @@ import {
   RevisionEvaluation,
   TranslationSource,
 } from "../common/enums.js"
-import {
-  ImageId,
-  PersonId,
-  ResourceId,
-  ResourceRevisionId,
-  TagId,
-  VegetableId,
-} from "../common/ids.js"
+import { ImageId, PersonId, ResourceId, ResourceRevisionId, TagId } from "../common/ids.js"
 import { Handle, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
@@ -31,7 +24,6 @@ export const ResourceMetadata = Schema.Struct({
   url: Schema.Trimmed.check(Schema.isNonEmpty()),
   urlState: ResourceUrlState,
   relatedTagIds: Schema.Array(TagId),
-  relatedVegetableIds: Schema.Array(VegetableId),
 })
 export type ResourceMetadata = typeof ResourceMetadata.Type
 
@@ -99,7 +91,6 @@ export const ResourcePageData = Schema.Struct({
   title: Schema.Trimmed.check(Schema.isNonEmpty()),
   url: Schema.Trimmed.check(Schema.isNonEmpty()),
   urlState: Schema.String,
-  vegetableHandles: Schema.Array(Schema.Trimmed.check(Schema.isNonEmpty())),
 })
 export type ResourcePageData = typeof ResourcePageData.Type
 
@@ -197,10 +188,3 @@ export const ResourceTagRow = Schema.Struct({
   tagId: TagId,
 })
 export type ResourceTagRow = typeof ResourceTagRow.Type
-
-export const ResourceVegetableRow = Schema.Struct({
-  resourceId: ResourceId,
-  vegetableId: VegetableId,
-  orderIndex: Schema.Int,
-})
-export type ResourceVegetableRow = typeof ResourceVegetableRow.Type

@@ -63,9 +63,9 @@ export const EventAttendanceMode = Schema.Literals(["IN_PERSON", "VIRTUAL", "MIX
 export type EventAttendanceMode = typeof EventAttendanceMode.Type
 
 export const BookmarkState = Schema.Literals([
-  "INTERESTED", // "Want to plant" for vegetables
-  "ACTIVE", // "Am planting" for vegetables
-  "PREVIOUSLY_ACTIVE", // "Have planted" for vegetables
+  "INTERESTED", // ex for plants in the wiki: "Want to plant"
+  "ACTIVE", // "Am planting" for plant articles
+  "PREVIOUSLY_ACTIVE", // "Have planted" for plant articles
   "INDIFFERENT", // "Not interested"
 ])
 export type BookmarkState = typeof BookmarkState.Type
@@ -79,29 +79,7 @@ export type WikiArticleStatus = typeof WikiArticleStatus.Type
 export const AgroforestryStratum = Schema.Literals(["EMERGENT", "HIGH", "MEDIUM", "LOW", "GROUND"])
 export type AgroforestryStratum = typeof AgroforestryStratum.Type
 
-export const VegetableLifecycle = Schema.Literals(["SEMIANNUAL", "ANNUAL", "BIENNIAL", "PERENNIAL"])
-export type VegetableLifecycle = typeof VegetableLifecycle.Type
-
-export const PlantLifecycle = VegetableLifecycle
-export type PlantLifecycle = typeof PlantLifecycle.Type
-
-export const VegetableUsage = Schema.Literals([
-  "HUMAN_FEED",
-  "ANIMAL_FEED",
-  "CONSTRUCTION",
-  "COSMETIC",
-  "ORGANIC_MATTER",
-  "MEDICINAL",
-  "ORNAMENTAL",
-  "RITUALISTIC",
-  "ECOSYSTEM_SERVICE",
-])
-export type VegetableUsage = typeof VegetableUsage.Type
-
-export const PlantUsage = VegetableUsage
-export type PlantUsage = typeof PlantUsage.Type
-
-export const EdibleVegetablePart = Schema.Literals([
+export const EdiblePlantPart = Schema.Literals([
   "FRUIT",
   "FLOWER",
   "LEAF",
@@ -114,10 +92,23 @@ export const EdibleVegetablePart = Schema.Literals([
   "TUBER",
   "RHIZOME",
 ])
-export type EdibleVegetablePart = typeof EdibleVegetablePart.Type
-
-export const EdiblePlantPart = EdibleVegetablePart
 export type EdiblePlantPart = typeof EdiblePlantPart.Type
+
+export const PlantLifecycle = Schema.Literals(["SEMIANNUAL", "ANNUAL", "BIENNIAL", "PERENNIAL"])
+export type PlantLifecycle = typeof PlantLifecycle.Type
+
+export const PlantUsage = Schema.Literals([
+  "HUMAN_FEED",
+  "ANIMAL_FEED",
+  "CONSTRUCTION",
+  "COSMETIC",
+  "ORGANIC_MATTER",
+  "MEDICINAL",
+  "ORNAMENTAL",
+  "RITUALISTIC",
+  "ECOSYSTEM_SERVICE",
+])
+export type PlantUsage = typeof PlantUsage.Type
 
 export const PlantingMethod = Schema.Literals([
   "SEED",

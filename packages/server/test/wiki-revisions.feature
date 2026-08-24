@@ -1,80 +1,70 @@
-Feature: Revisions
-  Revisions allow community members to propose edits to shared knowledge.
-  Proposed edits must be evaluated by moderators or admins before becoming visible.
-  These workflows apply to vegetables and resources.
-  Publications and comments are edited through commits and follow a different set of rules.
+Feature: Wiki article revisions
+  Wiki articles are collaborative knowledge pages for plants, animals, tools, concepts, and other subjects.
 
   Rule: Only people with community access can propose revisions
-
     Background:
       Given the following people exist:
         | name     | accessLevel |
-        | Maria    | COMMUNITY    |
-        | Ana      | MODERATOR    |
-        | Ailton   | ADMIN        |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
+        | Maria    | COMMUNITY   |
+        | Ana      | MODERATOR   |
+        | Ailton   | ADMIN       |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
 
     Scenario Outline: Person with community access can propose a revision
       Given a <entity> "<title>" exists
       When "Maria" proposes an edit to <entity> "<title>"
       Then a revision is created with "PENDING" evaluation, created by "Maria"
       And the <entity> "<title>" remains unchanged
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
     Scenario Outline: Person awaiting access cannot propose a revision
       Given a <entity> "<title>" exists
       When "Pedro" tries to propose an edit to <entity> "<title>"
       Then access is denied
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
     Scenario Outline: Blocked person cannot propose a revision
       Given a <entity> "<title>" exists
       When "Gusttavo" tries to propose an edit to <entity> "<title>"
       Then access is denied
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
     Scenario Outline: Visitors cannot propose a revision
       Given a <entity> "<title>" exists
       When visitors try to propose an edit to <entity> "<title>"
       Then access is denied
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
   Rule: Revisions must be evaluated by moderators or admins
-
     Background:
       Given the following people exist:
         | name   | accessLevel |
-        | Maria  | COMMUNITY    |
-        | Ana    | MODERATOR    |
-        | Ailton | ADMIN        |
+        | Maria  | COMMUNITY   |
+        | Ana    | MODERATOR   |
+        | Ailton | ADMIN       |
 
     Scenario Outline: Member with community access cannot evaluate a revision
       Given a <entity> "<title>" exists
       And "Maria" has proposed a revision to <entity> "<title>"
       When "Maria" tries to approve the revision
       Then access is denied
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
     Scenario Outline: Moderator approves a revision
       Given a <entity> "<title>" exists
@@ -83,11 +73,10 @@ Feature: Revisions
       Then the revision evaluation becomes "APPROVED"
       And the revision shows evaluated by "Ana"
       And the <entity> "<title>" reflects the approved edit
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
     Scenario Outline: Admin approves a revision
       Given a <entity> "<title>" exists
@@ -96,11 +85,10 @@ Feature: Revisions
       Then the revision evaluation becomes "APPROVED"
       And the revision shows evaluated by "Ailton"
       And the <entity> "<title>" reflects the approved edit
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
     Scenario Outline: Moderator rejects a revision
       Given a <entity> "<title>" exists
@@ -108,19 +96,17 @@ Feature: Revisions
       When "Ana" rejects the revision
       Then the revision evaluation becomes "REJECTED"
       And the <entity> "<title>" remains unchanged
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
   Rule: Evaluators can self-approve their own revisions
-
     Background:
       Given the following people exist:
         | name   | accessLevel |
-        | Ana    | MODERATOR    |
-        | Ailton | ADMIN        |
+        | Ana    | MODERATOR   |
+        | Ailton | ADMIN       |
 
     Scenario Outline: Moderator can approve their own revision
       Given a <entity> "<title>" exists
@@ -129,11 +115,10 @@ Feature: Revisions
       Then the revision evaluation becomes "APPROVED"
       And the revision shows "Ana" as both editor and evaluator
       And the <entity> "<title>" reflects the approved edit
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
     Scenario Outline: Admin can approve their own revision
       Given a <entity> "<title>" exists
@@ -142,19 +127,17 @@ Feature: Revisions
       Then the revision evaluation becomes "APPROVED"
       And the revision shows "Ailton" as both editor and evaluator
       And the <entity> "<title>" reflects the approved edit
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |
 
   Rule: Rejected revisions remain visible in history
-
     Background:
       Given the following people exist:
         | name  | accessLevel |
-        | Maria | COMMUNITY    |
-        | Ana   | MODERATOR    |
+        | Maria | COMMUNITY   |
+        | Ana   | MODERATOR   |
 
     Scenario Outline: Rejected revision remains visible in revision history
       Given a <entity> "<title>" exists
@@ -162,8 +145,7 @@ Feature: Revisions
       And "Ana" has rejected the revision
       When viewing <entity> "<title>" revision history
       Then the rejected revision is visible with its rejection status
-
       Examples:
-        | entity    | title                    |
-        | vegetable | Mandioca                 |
-        | resource  | A Terra Dá, a Terra Quer |
+        | entity       | title        |
+        | wiki_article | Permaculture |
+        | resource     | Agroecology  |

@@ -147,7 +147,7 @@ describe("Policies", () => {
                 visibility: "PUBLIC",
               }),
             ),
-            Policies.vegetables.canCreate,
+            Policies.wiki.canCreate,
             Policies.comments.canCreate,
             Policies.resources.canCreate,
             Policies.organizations.canCreate,
@@ -168,7 +168,7 @@ describe("Policies", () => {
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
           const policies = [
-            Policies.vegetables.canCreate,
+            Policies.wiki.canCreate,
             Policies.resources.canCreate,
             Policies.comments.canCreate,
             Policies.media.canCreate,
@@ -189,13 +189,13 @@ describe("Policies", () => {
   })
 
   describe("monotonicity", () => {
-    assertMonotonic(Policies.vegetables.canCreate, "vegetables:canCreate")
-    assertMonotonic(Policies.vegetables.canRevise, "vegetables:canRevise")
+    assertMonotonic(Policies.wiki.canCreate, "wiki-article:create")
+    assertMonotonic(Policies.wiki.canRevise, "wiki-article:revise")
     assertMonotonic(Policies.resources.canCreate, "resources:canCreate")
     assertMonotonic(Policies.resources.canRevise, "resources:canRevise")
     assertMonotonic(Policies.organizations.canCreate, "organizations:canCreate")
     assertMonotonic(Policies.comments.canCreate, "comments:canCreate")
-    assertMonotonic(Policies.vegetables.canBookmark, "bookmarks:canCreate")
+    assertMonotonic(Policies.wiki.canBookmark, "bookmarks:create")
     assertMonotonic(Policies.media.canCreate, "media:canCreate")
   })
 
@@ -249,11 +249,11 @@ describe("Policies", () => {
       ),
     )
 
-    it.effect("canCreate implies canRevise for vegetables", () =>
+    it.effect("canCreate implies canRevise for wiki articles", () =>
       assertPropertyEffect(accountSessionArbitrary, (session) =>
         Effect.gen(function* () {
-          const canCreate = yield* runPolicySuccess(Policies.vegetables.canCreate, session)
-          const canRevise = yield* runPolicySuccess(Policies.vegetables.canRevise, session)
+          const canCreate = yield* runPolicySuccess(Policies.wiki.canCreate, session)
+          const canRevise = yield* runPolicySuccess(Policies.wiki.canRevise, session)
           return !canCreate || canRevise
         }),
       ),
@@ -808,40 +808,40 @@ describe("Policies", () => {
     )
   })
 
-  describe("vegetables", () => {
-    it.effect("trusted users can create vegetables", () =>
+  describe("wiki articles", () => {
+    it.effect("trusted users can create wiki articles", () =>
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.vegetables.canCreate, session),
+        runPolicySuccess(Policies.wiki.canCreate, session),
       ),
     )
 
-    it.effect("trusted users can revise vegetables", () =>
+    it.effect("trusted users can revise wiki articles", () =>
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.vegetables.canRevise, session),
+        runPolicySuccess(Policies.wiki.canRevise, session),
       ),
     )
 
-    it.effect("newcomers cannot create vegetables", () =>
+    it.effect("newcomers cannot create wiki articles", () =>
       propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-        Effect.map(runPolicySuccess(Policies.vegetables.canCreate, session), (allowed) => !allowed),
+        Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
       ),
     )
 
-    it.effect("blocked users cannot create vegetables", () =>
+    it.effect("blocked users cannot create wiki articles", () =>
       propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(runPolicySuccess(Policies.vegetables.canCreate, session), (allowed) => !allowed),
+        Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
       ),
     )
 
-    it.effect("blocked users cannot revise vegetables", () =>
+    it.effect("blocked users cannot revise wiki articles", () =>
       propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(runPolicySuccess(Policies.vegetables.canRevise, session), (allowed) => !allowed),
+        Effect.map(runPolicySuccess(Policies.wiki.canRevise, session), (allowed) => !allowed),
       ),
     )
 
-    it.effect("visitors cannot create vegetables", () =>
+    it.effect("visitors cannot create wiki articles", () =>
       assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(runPolicySuccess(Policies.vegetables.canCreate, session), (allowed) => !allowed),
+        Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
       ),
     )
   })
@@ -881,34 +881,25 @@ describe("Policies", () => {
   describe("bookmarks", () => {
     it.effect("trusted users can create bookmarks", () =>
       propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.vegetables.canBookmark, session),
+        runPolicySuccess(Policies.wiki.canBookmark, session),
       ),
     )
 
     it.effect("visitors cannot create bookmarks", () =>
       assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(
-          runPolicySuccess(Policies.vegetables.canBookmark, session),
-          (allowed) => !allowed,
-        ),
+        Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
       ),
     )
 
     it.effect("newcomers cannot create bookmarks", () =>
       propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-        Effect.map(
-          runPolicySuccess(Policies.vegetables.canBookmark, session),
-          (allowed) => !allowed,
-        ),
+        Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
       ),
     )
 
     it.effect("blocked users cannot create bookmarks", () =>
       propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(
-          runPolicySuccess(Policies.vegetables.canBookmark, session),
-          (allowed) => !allowed,
-        ),
+        Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
       ),
     )
   })

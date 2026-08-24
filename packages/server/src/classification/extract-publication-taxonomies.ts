@@ -7,7 +7,7 @@ import { Config, DateTime, Effect, Context, Record } from "effect"
 import { TagsRepository } from "../tags/repository.js"
 import { LangExtractService } from "./langextract-service.js"
 import { langExtractExamples } from "./langextract.examples.js"
-import { resolveTagExtraction, resolveVegetableExtraction } from "./resolve-extractions.js"
+import { resolveTagExtraction, resolveWikiArticleExtraction } from "./resolve-extractions.js"
 
 export const hashString = (html: string) =>
   createHash("sha256").update(html).digest("hex").slice(0, 16)
@@ -29,21 +29,21 @@ export function publicationClassificationIdempotencyKey(
   return `publication-classification:${publication_id}:${content_hash}:${CLASSIFICATION_VERSION}`
 }
 
-const VEGETABLE_EXTRACTION_PROMPT =
-  "Extract vegetables (including indirect ingredients like dishes that reference vegetables). Map regional names to most widely used vegetable names (e.g., 'moranga' -> 'abobora', 'aipim' -> 'mandioca'). Return a lowercase, slugified version of the most common canonical vegetable names in PT (vegetable_pt), ES (vegetable_es) and EN (vegetable_en)."
+const WIKI_ARTICLE_EXTRACTION_PROMPT =
+  "Extract wiki articles, including plants, animals, tools, concepts, and other knowledge entities. Map regional names to canonical names and return lowercase, slugified names in PT (wiki_article_pt), ES (wiki_article_es), and EN (wiki_article_en)."
 
-const extractVegetables = Effect.fn("extractVegetables")(function* (html: string) {
+const extractWikiArticles = Effect.fn("extractWikiArticles")(function* (html: string) {
   const langextract = yield* LangExtractService
   const resolutionConcurrency = yield* Config.number("CLASSIFICATION_RESOLUTION_CONCURRENCY").pipe(
     Config.withDefault(5),
   )
 
   const result = yield* langextract.extract(html, {
-    promptDescription: VEGETABLE_EXTRACTION_PROMPT,
-    examples: langExtractExamples.vegetables,
+    promptDescription: WIKI_ARTICLE_EXTRACTION_PROMPT,
+    examples: langExtractExamples.wikiArticles,
   })
 
-  return yield* Effect.forEach(result.extractions ?? [], resolveVegetableExtraction, {
+  return yield* Effect.forEach(result.extractions ?? [], resolveWikiArticleExtraction, {
     concurrency: resolutionConcurrency,
   })
 })
@@ -94,13 +94,13 @@ export class ExtractPublicationTaxonomiesService extends Context.Service<Extract
           const hash = hashString(html)
 
           yield* Effect.logDebug("Extracting with LangExtract", html)
-          const [vegetables, tags] = yield* Effect.all(
-            [extractVegetables(html), extractTags(html)],
+          const [wikiArticles, tags] = yield* Effect.all(
+            [extractWikiArticles(html), extractTags(html)],
             { concurrency: "unbounded" },
           )
 
           yield* Effect.logDebug(
-            `Finished extracting with LangExtract. Found ${vegetables.length} vegetables and ${tags.length} tags`,
+            `Finished extracting with LangExtract. Found ${wikiArticles.length} wikiArticles and ${tags.length} tags`,
           )
 
           const finished_at = yield* DateTime.now
@@ -115,7 +115,7 @@ export class ExtractPublicationTaxonomiesService extends Context.Service<Extract
             crdtFrontier,
             startedAt: started_at,
             finishedAt: finished_at,
-            vegetables,
+            wikiArticles,
             tags,
           } satisfies PublicationClassification
         }),

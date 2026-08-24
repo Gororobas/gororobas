@@ -135,16 +135,16 @@ Feature: Resources
       When "Maria" tries to tag resource "A Terra Dá, a Terra Quer" with "tag-inexistente"
       Then access is denied
 
-  Rule: Resources can be linked to vegetables
+  Rule: Resources can be linked to wiki articles
 
     Background:
       Given "Maria" has COMMUNITY access
-      And the vegetable "Mandioca" exists
+      And the wiki article "Mandioca" exists
       And the resource "A Terra Dá, a Terra Quer" exists
 
-    Scenario: Link a resource to vegetables
-      When "Maria" links resource "A Terra Dá, a Terra Quer" to vegetables "Mandioca"
-      Then resource "A Terra Dá, a Terra Quer" is linked to vegetables "Mandioca"
+    Scenario: Link a resource to wiki articles
+      When "Maria" links resource "A Terra Dá, a Terra Quer" to wiki articles "Mandioca"
+      Then resource "A Terra Dá, a Terra Quer" is linked to wiki articles "Mandioca"
 
   Rule: Resources have comments
 

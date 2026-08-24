@@ -3,11 +3,11 @@
  *
  * Defines the shape of the classification JSON stored on `publication_crdts.classification`.
  * This data is derived (not user-authored) and stored outside the LoroDoc to avoid
- * CRDT merge complications. It gets materialized into `publication_tags` and `publication_vegetables`.
+ * CRDT merge complications. It gets materialized into `publication_tags`.
  */
 import { Schema } from "effect"
 
-import { TagId, VegetableId } from "../common/ids.js"
+import { TagId, WikiArticleId } from "../common/ids.js"
 import { Handle, TimestampColumn } from "../common/primitives.js"
 import { LoroDocFrontier } from "../crdts/domain.js"
 import { TagRow } from "../tags/domain.js"
@@ -45,30 +45,34 @@ export const CommonExtractionData = Schema.Struct({
   ),
 })
 
-export const ResolvedExistingVegetableExtraction = Schema.TaggedStruct(
-  "ResolvedExistingVegetableExtraction",
+export const ResolvedExistingWikiArticleExtraction = Schema.TaggedStruct(
+  "ResolvedExistingWikiArticleExtraction",
   {
     ...CommonExtractionData.fields,
-    vegetableId: VegetableId,
+    wikiArticleId: WikiArticleId,
   },
 )
-export type ResolvedExistingVegetableExtraction = typeof ResolvedExistingVegetableExtraction.Type
+export type ResolvedExistingWikiArticleExtraction =
+  typeof ResolvedExistingWikiArticleExtraction.Type
 
-export const SuggestedVegetableExtraction = Schema.TaggedStruct("SuggestedVegetableExtraction", {
-  ...CommonExtractionData.fields,
-  names: Schema.Struct({
-    pt: Schema.String,
-    es: Schema.String,
-    en: Schema.String,
-  }),
-})
-export type SuggestedVegetableExtraction = typeof SuggestedVegetableExtraction.Type
+export const SuggestedWikiArticleExtraction = Schema.TaggedStruct(
+  "SuggestedWikiArticleExtraction",
+  {
+    ...CommonExtractionData.fields,
+    names: Schema.Struct({
+      pt: Schema.String,
+      es: Schema.String,
+      en: Schema.String,
+    }),
+  },
+)
+export type SuggestedWikiArticleExtraction = typeof SuggestedWikiArticleExtraction.Type
 
-export const ResolvedVegetableExtraction = Schema.Union([
-  ResolvedExistingVegetableExtraction,
-  SuggestedVegetableExtraction,
+export const ResolvedWikiArticleExtraction = Schema.Union([
+  ResolvedExistingWikiArticleExtraction,
+  SuggestedWikiArticleExtraction,
 ])
-export type ResolvedVegetableExtraction = typeof ResolvedVegetableExtraction.Type
+export type ResolvedWikiArticleExtraction = typeof ResolvedWikiArticleExtraction.Type
 
 export const ResolvedExistingTagExtraction = Schema.TaggedStruct("ResolvedExistingTagExtraction", {
   ...CommonExtractionData.fields,
@@ -99,7 +103,7 @@ export const PublicationClassification = Schema.Struct({
   crdtFrontier: LoroDocFrontier,
   startedAt: TimestampColumn,
   finishedAt: TimestampColumn,
-  vegetables: Schema.Array(ResolvedVegetableExtraction),
+  wikiArticles: Schema.Array(ResolvedWikiArticleExtraction),
   tags: Schema.Array(ResolvedTagExtraction),
 })
 export type PublicationClassification = typeof PublicationClassification.Type
