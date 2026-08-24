@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth"
 import { magicLink } from "better-auth/plugins"
-import { Database } from "bun:sqlite"
+// oxlint-disable-next-line effect/avoid-node-imports -- Better Auth's native Node SQLite integration requires DatabaseSync.
+import { DatabaseSync } from "node:sqlite"
 import { v7 } from "uuid"
 
 import type { AppRuntime } from "../app-runtime.js"
@@ -8,7 +9,7 @@ import type { AppRuntime } from "../app-runtime.js"
 export const createAuth = (runtime: AppRuntime, baseUrl?: string, secret?: string) =>
   betterAuth({
     // @TODO can we use the Effect SQL DB here instead? `alex-golubev/better-auth-effect-adapter` is stuck in Effect v3
-    database: new Database("gororobas.db"),
+    database: new DatabaseSync("gororobas.db"),
     // database: effectSqlAdapter({
     //   runtime,
     //   dialect: "sqlite",

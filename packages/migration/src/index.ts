@@ -1,12 +1,12 @@
 /**
  * Gel to SQLite Migration CLI
  */
-import { BunRuntime } from "@effect/platform-bun"
+import { NodeRuntime } from "@effect/platform-node"
 import { Effect } from "effect"
 
 import { runMigration } from "./migration.js"
 
-BunRuntime.runMain(
+NodeRuntime.runMain(
   runMigration.pipe(
     Effect.catchCause((cause) => Effect.logError("Migration failed", cause).pipe(Effect.asVoid)),
   ),

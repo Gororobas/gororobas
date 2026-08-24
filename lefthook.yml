@@ -3,7 +3,7 @@ pre-commit:
   commands:
     oxfmt:
       glob: "*.{ts,tsx,css}"
-      run: pnpm exec oxfmt {staged_files}
+      run: pnpm run format {staged_files}
       stage_fixed: true
     oxlint:
       glob: "*.{ts,tsx,css}"

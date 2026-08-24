@@ -1,4 +1,4 @@
-import { BunServices } from "@effect/platform-bun"
+import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale, TagRow, VegetableId, VegetableRow } from "@gororobas/domain"
 import {
@@ -383,7 +383,7 @@ const TestLayer = Layer.mergeAll(
   Layer.effect(LangExtractService, LangExtractService.make),
   TestTagsRepository,
   TestVegetablesRepository,
-  BunServices.layer,
+  NodeServices.layer,
 )
 
 describe(

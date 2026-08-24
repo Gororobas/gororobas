@@ -12,7 +12,7 @@ const alias = (name: string) => {
 // This is a workaround, see https://github.com/vitest-dev/vitest/issues/4744
 const config: ViteUserConfig = {
   optimizeDeps: {
-    exclude: ["bun:sqlite"],
+    exclude: ["node:sqlite"],
   },
   test: {
     alias: {

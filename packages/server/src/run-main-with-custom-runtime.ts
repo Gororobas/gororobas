@@ -2,7 +2,7 @@ import { Effect, ManagedRuntime, Runtime } from "effect"
 import { constVoid } from "effect/Function"
 
 /**
- * Adaptation of BunRuntime.runMain (which calls @effect/platform/Runtime's `makeRunMain` internally) with a custom ManagedRuntime.
+ * Adaptation of NodeRuntime.runMain (which calls @effect/platform/Runtime's `makeRunMain` internally) with a custom ManagedRuntime.
  *
  * In use because we need a shared runtime with better-auth in order to re-use the same database connection.
  */

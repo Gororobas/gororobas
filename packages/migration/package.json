@@ -10,7 +10,7 @@
     "migrate": "tsx src/index.ts"
   },
   "dependencies": {
-    "@effect/sql-sqlite-bun": "catalog:",
+    "@effect/sql-sqlite-node": "catalog:",
     "@gororobas/domain": "workspace:^",
     "@gororobas/server": "workspace:^",
     "better-auth": "catalog:",

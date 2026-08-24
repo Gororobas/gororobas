@@ -1,4 +1,4 @@
-import { BunServices } from "@effect/platform-bun"
+import { NodeServices } from "@effect/platform-node"
 import { And, describeFeature, Given, runSteps, Then, When } from "@gororobas/effect-bdd"
 import { Effect, Schema } from "effect"
 
@@ -410,5 +410,5 @@ await Effect.runPromise(
           ),
       })
     })
-  }).pipe(Effect.provide(BunServices.layer)),
+  }).pipe(Effect.provide(NodeServices.layer)),
 )

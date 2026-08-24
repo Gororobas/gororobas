@@ -27,9 +27,8 @@
   "dependencies": {
     "@durable-streams/server": "^0.2.3",
     "@effect/opentelemetry": "catalog:",
-    "@effect/platform-bun": "catalog:",
-    "@effect/platform-node": "4.0.0-rc.111",
-    "@effect/sql-sqlite-bun": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@effect/sql-sqlite-node": "catalog:",
     "@gororobas/domain": "workspace:^",
     "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
     "@opentelemetry/sdk-logs": "^0.213.0",
@@ -42,7 +41,6 @@
     "@tiptap/pm": "catalog:",
     "@tiptap/starter-kit": "catalog:",
     "better-auth": "catalog:",
-    "bun": "catalog:",
     "effect": "catalog:",
     "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
@@ -54,7 +52,6 @@
     "@durable-streams/client": "^0.2.3",
     "@effect/vitest": "catalog:",
     "@gororobas/effect-bdd": "workspace:^",
-    "@types/bun": "latest",
     "fast-check": "latest",
     "sql-formatter": "latest"
   },

@@ -1,5 +1,5 @@
-import { BunServices } from "@effect/platform-bun"
-import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-bun"
+import { NodeServices } from "@effect/platform-node"
+import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node"
 import { Config, Effect, Layer } from "effect"
 /**
  * Shared Effect Cluster infrastructure for all durable workflows.
@@ -32,7 +32,7 @@ const makeWorkflowsSqlLive = (filename: string) => {
   const client = SqliteClient.layer({ filename })
   const migrator = SqliteMigrator.layer({
     loader: SqliteMigrator.fromRecord(MIGRATIONS),
-  }).pipe(Layer.provide(BunServices.layer))
+  }).pipe(Layer.provide(NodeServices.layer))
   return migrator.pipe(Layer.provideMerge(client))
 }
 

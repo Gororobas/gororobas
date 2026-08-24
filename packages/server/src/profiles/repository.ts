@@ -49,7 +49,7 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
           sql`
           UPDATE profiles
           SET ${sql.update(update)}
-          WHERE id = ${sql.safe(id)}
+          WHERE id = ${id}
         `,
       })
 

@@ -1,5 +1,5 @@
 import { stream } from "@durable-streams/client"
-import { BunHttpServer } from "@effect/platform-bun"
+import { NodeHttpServer } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Layer, Match, Option, Schema } from "effect"
 import { FastCheck } from "effect/testing"
@@ -41,7 +41,7 @@ const RouterLayer = HttpRouter.serve(makeDurableStreamRouter).pipe(Layer.provide
 
 const TestLayers = Layer.provideMerge(
   RouterLayer,
-  Layer.mergeAll(BunHttpServer.layerTest, FetchHttpClient.layer),
+  Layer.mergeAll(NodeHttpServer.layerTest, FetchHttpClient.layer),
 )
 
 class DurableStreamTestError extends Schema.TaggedError<DurableStreamTestError>()(

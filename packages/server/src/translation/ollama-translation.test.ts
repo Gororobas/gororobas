@@ -1,4 +1,4 @@
-import { BunServices } from "@effect/platform-bun"
+import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import type { Locale } from "@gororobas/domain"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "@gororobas/domain"
@@ -465,7 +465,7 @@ describe(
             EffectString.isEmpty(originalText.trim()) ||
               EffectString.isNonEmpty(translatedText.trim()),
           ).toBe(true)
-        }).pipe(Effect.provide(TranslationServiceOllama), Effect.provide(BunServices.layer)),
+        }).pipe(Effect.provide(TranslationServiceOllama), Effect.provide(NodeServices.layer)),
       )
     })
   },

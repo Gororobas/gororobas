@@ -1,6 +1,6 @@
 import * as Gherkin from "@cucumber/gherkin"
 import * as Messages from "@cucumber/messages"
-import { BunServices } from "@effect/platform-bun"
+import { NodeServices } from "@effect/platform-node"
 import { Array as EffectArray, Effect, FileSystem, Option, Path } from "effect"
 
 import { FeatureParseError } from "../errors.js"
@@ -186,6 +186,6 @@ export function parseFeatureFile(
 
 export function parseFeatureFileSync(featurePath: string, basePath = process.cwd()): ParsedFeature {
   return Effect["runSync"](
-    parseFeatureFile(featurePath, basePath).pipe(Effect.provide(BunServices.layer)),
+    parseFeatureFile(featurePath, basePath).pipe(Effect.provide(NodeServices.layer)),
   )
 }

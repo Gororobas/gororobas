@@ -1,9 +1,7 @@
-/**
- * Bun UUID generation implementation using UUIDv7.
- */
 import { IdGen } from "@gororobas/domain"
 import { Layer } from "effect"
+import { v7 } from "uuid"
 
 export const IdGenLive = Layer.succeed(IdGen, {
-  generate: () => Bun.randomUUIDv7(),
+  generate: () => v7(),
 })

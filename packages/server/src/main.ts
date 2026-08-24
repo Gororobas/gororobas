@@ -1,8 +1,10 @@
-import { BunHttpServer } from "@effect/platform-bun"
+import { NodeHttpServer } from "@effect/platform-node"
 import { GororobasApi } from "@gororobas/domain"
 import { Layer } from "effect"
 import { HttpRouter } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
+// oxlint-disable-next-line effect/use-http-client-service -- NodeHttpServer requires the Node HTTP server factory.
+import * as Http from "node:http"
 
 import { ApiLive } from "./api-live.js"
 import { AppRuntimeLive } from "./app-runtime.js"
@@ -36,7 +38,7 @@ const HttpLive = HttpRouter.serve(
       credentials: true,
     }),
   ),
-  Layer.provide(BunHttpServer.layer({ port: 4000 })),
+  Layer.provide(NodeHttpServer.layer(Http.createServer, { port: 4000 })),
 )
 
 const program = Layer.launch(HttpLive)

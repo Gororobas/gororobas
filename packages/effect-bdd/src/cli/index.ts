@@ -1,4 +1,4 @@
-import { BunServices } from "@effect/platform-bun"
+import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, Option } from "effect"
 import { Command, Flag } from "effect/unstable/cli"
 
@@ -94,7 +94,7 @@ const cli = Command.run(rootCommand, {
 
 export function run(): void {
   const program = cli.pipe(
-    Effect.provide(Layer.mergeAll(BunServices.layer)),
+    Effect.provide(Layer.mergeAll(NodeServices.layer)),
     Effect.matchEffect({
       onFailure: () => Effect.sync(() => process.exit(1)),
       onSuccess: Effect.succeed,
