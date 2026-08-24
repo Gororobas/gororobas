@@ -9,7 +9,7 @@ import { makeStringSetEditOperations } from "./string-set-edit-operations.js"
 
 const containerName = "locales"
 
-const { added, removed } = makeStringSetEditOperations("Locale")({
+const [added, removed] = makeStringSetEditOperations("Locale")({
   ValueSchema: Locale,
   getContainer: (document) => Effect.succeed(document.getMap(containerName)),
 })

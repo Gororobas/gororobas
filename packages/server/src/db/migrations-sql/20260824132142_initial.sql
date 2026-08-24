@@ -245,25 +245,17 @@ CREATE TABLE `wiki_article_translations` (
   PRIMARY KEY (`wiki_article_id`, `locale`),
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create "wiki_article_handle_owners" table
-CREATE TABLE `wiki_article_handle_owners` (
+-- Create "wiki_article_handles" table
+CREATE TABLE `wiki_article_handles` (
   `wiki_article_id` text NOT NULL,
   `kind` text NOT NULL,
   `handle` text NOT NULL,
-  PRIMARY KEY (`kind`, `handle`),
+  `locale` text NOT NULL,
+  PRIMARY KEY (`wiki_article_id`, `kind`, `handle`),
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create index "wiki_article_handle_owners_wiki_article_id_kind_handle" to table: "wiki_article_handle_owners"
-CREATE UNIQUE INDEX `wiki_article_handle_owners_wiki_article_id_kind_handle` ON `wiki_article_handle_owners` (`wiki_article_id`, `kind`, `handle`);
--- Create "wiki_article_translation_handles" table
-CREATE TABLE `wiki_article_translation_handles` (
-  `wiki_article_id` text NOT NULL,
-  `locale` text NOT NULL,
-  `kind` text NOT NULL,
-  `handle` text NOT NULL,
-  PRIMARY KEY (`wiki_article_id`, `locale`),
-  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `kind`, `handle`) REFERENCES `wiki_article_handle_owners` (`wiki_article_id`, `kind`, `handle`) ON UPDATE NO ACTION ON DELETE CASCADE
-) WITHOUT ROWID;
+-- Create index "wiki_article_handles_kind_handle" to table: "wiki_article_handles"
+CREATE UNIQUE INDEX `wiki_article_handles_kind_handle` ON `wiki_article_handles` (`kind`, `handle`);
 -- Create "vegetable_crdts" table
 CREATE TABLE `vegetable_crdts` (
   `id` text NOT NULL,

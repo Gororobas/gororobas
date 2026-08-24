@@ -5,6 +5,11 @@
  * without data loss, ensuring data integrity across the application stack.
  */
 import { describe, it } from "@effect/vitest"
+import {
+  WikiArticleEditableData,
+  WikiArticleEditableTranslation,
+  WikiArticleTranslationMaterializedRow,
+} from "@gororobas/domain"
 import { DateTime, Effect, Schema } from "effect"
 import { FastCheck } from "effect/testing"
 
@@ -35,7 +40,6 @@ import {
   WikiArticleHandleMaterializedRow,
   WikiArticleMaterializedRow,
   WikiArticleRevisionRow,
-  WikiArticleTranslationMaterializedRow,
 } from "../../src/wiki/wiki-article.js"
 
 const rowSchemas = [
@@ -63,6 +67,8 @@ const rowSchemas = [
   { name: "WikiArticleMaterializedRow", schema: WikiArticleMaterializedRow },
   { name: "WikiArticleRevisionRow", schema: WikiArticleRevisionRow },
   { name: "WikiArticleTranslationMaterializedRow", schema: WikiArticleTranslationMaterializedRow },
+  { name: "WikiArticleEditableTranslation", schema: WikiArticleEditableTranslation },
+  { name: "WikiArticleEditableData", schema: WikiArticleEditableData },
 ] as const
 
 describe("Schema Round-Trip Properties", () => {

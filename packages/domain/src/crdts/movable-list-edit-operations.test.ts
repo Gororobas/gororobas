@@ -8,7 +8,7 @@ import { makeMovableListEditOperations } from "./movable-list-edit-operations.js
 
 const ListValue = Schema.String
 
-const { added, removed, updated, moved } = makeMovableListEditOperations("Item")({
+const [added, removed, updated, moved] = makeMovableListEditOperations("Item")({
   ValueSchema: ListValue,
   getContainer: (currentDocument) => Effect.succeed(currentDocument.getMovableList("items")),
 })

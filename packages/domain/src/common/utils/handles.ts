@@ -1,3 +1,5 @@
+import { Schema } from "effect"
+
 import { TiptapDocument } from "../../rich-text/domain.js"
 import { tiptapToText } from "../../rich-text/tiptap-to-text.js"
 import { Handle } from "../primitives.js"
@@ -8,7 +10,7 @@ import { truncate } from "./strings.js"
  * Removes special characters, spaces, upper-cased letters.
  */
 export const stringToHandle = (str: string) =>
-  Handle.makeEffect(
+  Schema.decodeEffect(Handle)(
     str
       .toString()
       .normalize("NFD") // split an accented letter in the base letter and the acent

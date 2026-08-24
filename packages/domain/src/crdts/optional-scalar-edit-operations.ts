@@ -23,8 +23,8 @@ export const makeOptionalScalarEditOperations =
 
     const UnsetPayload = Schema.TaggedStruct(`Unset${id}`, {})
 
-    return {
-      set: {
+    return [
+      {
         message: SetPayload,
         handler: Effect.fn(SetPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -35,7 +35,7 @@ export const makeOptionalScalarEditOperations =
           parent.set(keyInParentContainer, encoded)
         }),
       },
-      unset: {
+      {
         message: UnsetPayload,
         handler: Effect.fn(UnsetPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -45,5 +45,5 @@ export const makeOptionalScalarEditOperations =
           parent.delete(keyInParentContainer)
         }),
       },
-    } as const
+    ] as const
   }

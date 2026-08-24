@@ -20,8 +20,8 @@ export const makeStringSetEditOperations =
       value: ValueSchema,
     })
 
-    return {
-      added: {
+    return [
+      {
         message: AddedPayload,
         handler: Effect.fn(AddedPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -32,7 +32,7 @@ export const makeStringSetEditOperations =
           container.set(payload.value, true)
         }),
       },
-      removed: {
+      {
         message: RemovedPayload,
         handler: Effect.fn(RemovedPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -43,5 +43,5 @@ export const makeStringSetEditOperations =
           container.delete(payload.value)
         }),
       },
-    } as const
+    ] as const
   }

@@ -244,24 +244,16 @@ CREATE TABLE wiki_article_translations (
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- Owns a route handle across all locales. The locale mapping below allows the
--- same article to reuse one handle in more than one locale.
-CREATE TABLE wiki_article_handle_owners (
+-- Owns a route handle across all locales. `locales` records which translations
+-- use it while uniqueness remains scoped only to the article kind.
+CREATE TABLE wiki_article_handles (
   wiki_article_id text NOT NULL,
-  kind text NOT NULL,
+  kind text NOT NULL, -- WikiArticleKind
   handle text NOT NULL,
-  PRIMARY KEY (kind, handle),
-  UNIQUE (wiki_article_id, kind, handle),
+  locale text NOT NULL, -- Locale
+  PRIMARY KEY (wiki_article_id, kind, handle),
+  UNIQUE (kind, handle),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE wiki_article_translation_handles (
-  wiki_article_id text NOT NULL,
-  locale text NOT NULL,
-  kind text NOT NULL,
-  handle text NOT NULL,
-  PRIMARY KEY (wiki_article_id, locale),
-  FOREIGN KEY (wiki_article_id, kind, handle) REFERENCES wiki_article_handle_owners (wiki_article_id, kind, handle) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 -- ==========

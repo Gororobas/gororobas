@@ -53,8 +53,8 @@ export const makeMovableListEditOperations =
       newIndex: Schema.Int,
     })
 
-    return {
-      added: {
+    return [
+      {
         message: AddedPayload,
         handler: Effect.fn(AddedPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -70,7 +70,7 @@ export const makeMovableListEditOperations =
           )
         }),
       },
-      removed: {
+      {
         message: RemovedPayload,
         handler: Effect.fn(RemovedPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -81,7 +81,7 @@ export const makeMovableListEditOperations =
           container.delete(itemIndex, 1)
         }),
       },
-      updated: {
+      {
         message: UpdatedPayload,
         handler: Effect.fn(UpdatedPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -96,7 +96,7 @@ export const makeMovableListEditOperations =
           container.set(itemIndex, ItemInCrdtList.make({ id: payload.id, value: preparedValue }))
         }),
       },
-      moved: {
+      {
         message: MovedPayload,
         handler: Effect.fn(MovedPayload.fields._tag.schema.literal)(function* (
           document: LoroDoc,
@@ -107,5 +107,5 @@ export const makeMovableListEditOperations =
           container.move(itemIndex, payload.newIndex)
         }),
       },
-    } as const
+    ] as const
   }

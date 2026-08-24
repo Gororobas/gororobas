@@ -1,4 +1,3 @@
-/* oxlint-disable effect/casting-awareness -- normalization establishes the Handle invariant. */
 import { String as EffectString, Predicate } from "effect"
 
 /**
@@ -33,4 +32,15 @@ export function capitalize(str: string, allWords = true): string {
   }
 
   return `${str[0].toUpperCase()}${str.slice(1) || ""}`
+}
+
+/** @TODO turn into FTS-friendly string */
+export function strToSearchTokens(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, " ")
+    .trim()
+    .split(" ")
+    .filter(EffectString.isNonEmpty)
+    .join(" ")
 }

@@ -8,6 +8,7 @@ import {
   CreateWikiArticlePayload,
   CreateWikiArticleRevisionPayload,
   WikiArticleKind,
+  WikiArticleLookup,
   WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
   WikiSearchParams,
@@ -25,7 +26,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
     HttpApiEndpoint.get("getWikiArticleByHandleAndKind", "/wiki/:kind/:handle", {
       success: WikiArticleQueriedPageData,
       error: WikiArticleNotFoundError,
-      params: Schema.Struct({ handle: Handle, kind: WikiArticleKind }),
+      params: WikiArticleLookup,
     }),
   )
   .add(
@@ -39,7 +40,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
     HttpApiEndpoint.post("createWikiArticleRevision", "/wiki/:kind/:handle/revisions", {
       success: Schema.Struct({ id: WikiArticleRevisionId }),
       error: WikiArticleNotFoundError,
-      params: Schema.Struct({ handle: Handle, kind: WikiArticleKind }),
+      params: WikiArticleLookup,
       payload: CreateWikiArticleRevisionPayload,
     }),
   )
