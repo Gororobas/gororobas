@@ -5,17 +5,14 @@ import { CrdtContainerNotFoundError } from "./errors.js"
 
 export const makeOptionalScalarEditOperations =
   <P extends string>(id: P) =>
-  <T>({
+  <D>({
     ValueSchema,
     getParentContainer,
     keyInParentContainer,
-    encodeValue,
   }: {
-    ValueSchema: Schema.Schema<T>
+    ValueSchema: Schema.Codec<D, string | number, never, never>
     getParentContainer: (document: LoroDoc) => Effect.Effect<LoroMap, CrdtContainerNotFoundError>
     keyInParentContainer: string
-    /** Use when the value isn't supported by Loro containers */
-    encodeValue?: (value: T) => Effect.Effect<unknown, Schema.SchemaError>
   }) => {
     const SetPayload = Schema.TaggedStruct(`Set${id}`, {
       value: ValueSchema,
@@ -31,7 +28,7 @@ export const makeOptionalScalarEditOperations =
           payload: typeof SetPayload.Type,
         ) {
           const parent = yield* getParentContainer(document)
-          const encoded = yield* (encodeValue ?? Effect.succeed)(payload.value)
+          const encoded = yield* Schema.encodeEffect(ValueSchema)(payload.value)
           parent.set(keyInParentContainer, encoded)
         }),
       },

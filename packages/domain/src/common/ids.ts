@@ -74,7 +74,7 @@ export type PlantVarietyRevisionId = typeof PlantVarietyRevisionId.Type
 export const NanoId = Schema.String.pipe(Schema.brand("NanoId"))
 export type NanoId = typeof NanoId.Type
 
-export const LoroListItemId = NanoId.check(Schema.isLengthBetween(10, 10)).pipe(
+export const LoroListItemId = NanoId.check(Schema.isLengthBetween(12, 12)).pipe(
   Schema.brand("LoroListItemId"),
 )
 export type LoroListItemId = typeof LoroListItemId.Type

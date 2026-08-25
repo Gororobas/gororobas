@@ -22,18 +22,9 @@ export const makeMovableListEditOperations =
   <T>({
     ValueSchema,
     getContainer,
-    encodeValue,
   }: {
-    ValueSchema: Schema.Schema<T> & {
-      readonly "~type.optionality": "required"
-    }
-    getContainer: (
-      document: LoroDoc,
-    ) => Effect.Effect<
-      LoroMovableList,
-      CrdtContainerNotFoundError
-    > /** Use when the value isn't supported by Loro containers */
-    encodeValue?: (value: T) => Effect.Effect<ItemInCrdtList["value"], Schema.SchemaError>
+    ValueSchema: Schema.Codec<T, unknown, never, never>
+    getContainer: (document: LoroDoc) => Effect.Effect<LoroMovableList, CrdtContainerNotFoundError>
   }) => {
     const AddedPayload = Schema.TaggedStruct(`Added${id}`, {
       value: ValueSchema,
@@ -61,11 +52,11 @@ export const makeMovableListEditOperations =
           payload: typeof AddedPayload.Type,
         ) {
           const container = yield* getContainer(document)
-          const preparedValue = encodeValue ? yield* encodeValue(payload.value) : payload.value
+          const encodedValue = yield* Schema.encodeEffect(ValueSchema)(payload.value)
           container.push(
             ItemInCrdtList.make({
               id: createCrdtListItemId(),
-              value: preparedValue,
+              value: encodedValue,
             }),
           )
         }),
@@ -88,12 +79,10 @@ export const makeMovableListEditOperations =
           payload: typeof UpdatedPayload.Type,
         ) {
           const container = yield* getContainer(document)
-          const preparedValue = encodeValue
-            ? yield* encodeValue(payload.updatedValue)
-            : payload.updatedValue
+          const encodedValue = yield* Schema.encodeEffect(ValueSchema)(payload.updatedValue)
           const itemIndex = yield* findItemIndexInCrdtList(container, payload.id)
 
-          container.set(itemIndex, ItemInCrdtList.make({ id: payload.id, value: preparedValue }))
+          container.set(itemIndex, ItemInCrdtList.make({ id: payload.id, value: encodedValue }))
         }),
       },
       {

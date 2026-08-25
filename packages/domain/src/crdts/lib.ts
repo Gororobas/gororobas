@@ -191,4 +191,4 @@ export const rebuildLoroDocFromUpdates = Effect.fn("rebuildLoroDocFromUpdates")(
 
 export const EMPTY_LORO_DOC_FRONTIER = LoroDocFrontier.make([])
 
-export const createCrdtListItemId = () => LoroListItemId.make(nanoid(10))
+export const createCrdtListItemId = () => LoroListItemId.make(nanoid(12))

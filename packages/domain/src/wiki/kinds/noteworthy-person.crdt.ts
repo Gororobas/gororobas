@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 
-import { NameInCrdtList } from "../../common/primitives.js"
+import { NameInCrdtList, ValidName } from "../../common/primitives.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
@@ -40,23 +40,28 @@ const deathDateOperations = makeOptionalScalarEditOperations("DeathDate")({
   keyInParentContainer: "deathDate" satisfies keyof NoteworthyPersonEditableAttributes,
 })
 
-const occupationsOperations = makeOptionalScalarEditOperations("Occupations")({
-  ValueSchema: Schema.Array(Schema.String),
-  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "occupations" satisfies keyof NoteworthyPersonEditableAttributes,
+const occupationsOperations = makeMovableListEditOperations("Occupation")({
+  ValueSchema: NameInCrdtList.schema.fields.value,
+  getContainer: (document) =>
+    Effect.succeed(
+      document
+        .getMap("attributes")
+        .ensureMergeableMovableList(
+          "occupations" satisfies keyof NoteworthyPersonEditableAttributes,
+        ),
+    ),
 })
 
-const countriesOperations = makeOptionalScalarEditOperations("Countries")({
-  ValueSchema: Schema.Array(Schema.String),
+const locationOperations = makeOptionalScalarEditOperations("Location")({
+  ValueSchema: ValidName,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
-  keyInParentContainer: "countries" satisfies keyof NoteworthyPersonEditableAttributes,
+  keyInParentContainer: "location" satisfies keyof NoteworthyPersonEditableAttributes,
 })
 
 const urlOperations = makeOptionalScalarEditOperations("Url")({
   ValueSchema: Schema.URLFromString,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "url" satisfies keyof NoteworthyPersonEditableAttributes,
-  encodeValue: (value) => Effect.succeed(value.toString()),
 })
 
 export const WikiNoteworthyPersonArticleCrdtOperations = defineKindCrdtOperations([
@@ -65,7 +70,7 @@ export const WikiNoteworthyPersonArticleCrdtOperations = defineKindCrdtOperation
   ...birthDateOperations,
   ...deathDateOperations,
   ...occupationsOperations,
-  ...countriesOperations,
+  ...locationOperations,
   ...urlOperations,
 ])
 export type WikiNoteworthyPersonArticleAttributeEdit =

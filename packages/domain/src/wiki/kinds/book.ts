@@ -1,6 +1,11 @@
 import { Option, Schema } from "effect"
 
-import { NameInCrdtList, OptionalColumn, ValidName } from "../../common/primitives.js"
+import {
+  IntNonNegative,
+  NameInCrdtList,
+  OptionalColumn,
+  ValidName,
+} from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
@@ -11,7 +16,7 @@ const MaterializedAttributes = Schema.Struct({
   isbn13: OptionalColumn(Schema.String),
   edition: OptionalColumn(Schema.String),
   language: OptionalColumn(Schema.String),
-  pageCount: OptionalColumn(Schema.Int),
+  pageCount: OptionalColumn(IntNonNegative),
 })
 
 export const WikiBookArticle = defineKind({

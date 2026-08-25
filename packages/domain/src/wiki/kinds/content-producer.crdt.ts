@@ -29,11 +29,6 @@ const channelsOperations = makeMovableListEditOperations("Channel")({
         .getMap("attributes")
         .ensureMergeableMovableList("channels" satisfies keyof ContentProducerEditableAttributes),
     ),
-  encodeValue: (value) =>
-    Effect.succeed({
-      type: value.type,
-      url: value.url.toString(),
-    }),
 })
 
 export const WikiContentProducerArticleCrdtOperations = defineKindCrdtOperations([

@@ -15,7 +15,6 @@ const urlOperations = makeOptionalScalarEditOperations("Url")({
   ValueSchema: Schema.URLFromString,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "url" satisfies keyof ResourceEditableAttributes,
-  encodeValue: (value) => Effect.succeed(value.toString()),
 })
 
 export const WikiResourceArticleCrdtOperations = defineKindCrdtOperations([

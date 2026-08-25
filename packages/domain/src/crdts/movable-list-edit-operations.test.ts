@@ -3,10 +3,11 @@ import { Effect, Match, Schema } from "effect"
 import { FastCheck } from "effect/testing"
 import { LoroDoc } from "loro-crdt"
 
+import { ValidName } from "../common/primitives.js"
 import { assertPropertyEffect } from "../testing.js"
 import { makeMovableListEditOperations } from "./movable-list-edit-operations.js"
 
-const ListValue = Schema.String
+const ListValue = ValidName
 
 const [added, removed, updated, moved] = makeMovableListEditOperations("Item")({
   ValueSchema: ListValue,
@@ -37,6 +38,7 @@ describe("makeMovableListEditOperations", () => {
             ),
           { concurrency: 1 },
         ).pipe(
+          Effect.tapErrorTag("SchemaError", (e) => Effect.logError("AQUI", e.message)),
           // As the arbitrary is not constrained by events that come before, it'll generate a bunch of invalid
           // ids that will throw CrdtListItemNotFoundError. We catch it and return undefined to avoid failing the test.
           // @todo constrain the event arbitraries

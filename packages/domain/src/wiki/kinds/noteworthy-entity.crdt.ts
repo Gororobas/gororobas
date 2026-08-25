@@ -1,16 +1,13 @@
+import { NoteworthyEntityType } from "@gororobas/domain/common/enums"
 import { Effect, Schema } from "effect"
 
-import { NoteworthyEntityType } from "../../common/enums.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
-import {
-  WikiNoteworthyEntityArticle,
-  type NoteworthyEntityEditableAttributes,
-} from "./noteworthy-entity.js"
+import { type NoteworthyEntityEditableAttributes } from "./noteworthy-entity.js"
 
 const namesOperations = makeMovableListEditOperations("Name")({
-  ValueSchema: WikiNoteworthyEntityArticle.EditableAttributes.fields.names,
+  ValueSchema: NameInCrdtList.schema.fields.value,
   getContainer: (document) =>
     Effect.succeed(
       document
@@ -20,7 +17,7 @@ const namesOperations = makeMovableListEditOperations("Name")({
 })
 
 const areasOfWorkOperations = makeMovableListEditOperations("AreaOfWork")({
-  ValueSchema: WikiNoteworthyEntityArticle.EditableAttributes.fields.areasOfWork,
+  ValueSchema: NameInCrdtList.schema.fields.value,
   getContainer: (document) =>
     Effect.succeed(
       document
@@ -53,7 +50,6 @@ const urlOperations = makeOptionalScalarEditOperations("Url")({
   ValueSchema: Schema.URLFromString,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "url" satisfies keyof NoteworthyEntityEditableAttributes,
-  encodeValue: (value) => Effect.succeed(value.toString()),
 })
 
 export const WikiNoteworthyEntityArticleCrdtOperations = defineKindCrdtOperations([
@@ -66,3 +62,5 @@ export const WikiNoteworthyEntityArticleCrdtOperations = defineKindCrdtOperation
 ])
 export type WikiNoteworthyEntityArticleAttributeEdit =
   typeof WikiNoteworthyEntityArticleCrdtOperations.AttributeEdit.Type
+
+import { NameInCrdtList } from "../../common/primitives.js"

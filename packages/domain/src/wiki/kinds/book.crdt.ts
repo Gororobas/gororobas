@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 
-import { NameInCrdtList } from "../../common/primitives.js"
+import { IntNonNegative, NameInCrdtList } from "../../common/primitives.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import type { BookEditableAttributes } from "./book.js"
@@ -53,7 +53,7 @@ const languageOperations = makeOptionalScalarEditOperations("Language")({
 })
 
 const pageCountOperations = makeOptionalScalarEditOperations("PageCount")({
-  ValueSchema: Schema.Int,
+  ValueSchema: IntNonNegative,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "pageCount" satisfies keyof BookEditableAttributes,
 })

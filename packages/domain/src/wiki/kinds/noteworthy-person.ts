@@ -9,7 +9,7 @@ const MaterializedAttributes = Schema.Struct({
   birthDate: OptionalColumn(Schema.String),
   deathDate: OptionalColumn(Schema.String),
   occupations: OptionalColumn(Schema.Array(Schema.String)),
-  countries: OptionalColumn(Schema.Array(Schema.String)),
+  location: OptionalColumn(ValidName),
   url: OptionalColumn(Schema.URLFromString),
 })
 

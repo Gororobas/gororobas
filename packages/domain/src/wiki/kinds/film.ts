@@ -1,16 +1,19 @@
 import { Option, Schema } from "effect"
 
-import { NameInCrdtList, OptionalColumn, ValidName } from "../../common/primitives.js"
+import {
+  ItemInCrdtList,
+  NameInCrdtList,
+  OptionalColumn,
+  TimestampColumn,
+  ValidName,
+} from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
   directors: OptionalColumn(Schema.Array(ValidName)),
-  releaseDate: OptionalColumn(Schema.String),
-  runtimeMinutes: OptionalColumn(Schema.Int),
-  productionCompanies: OptionalColumn(Schema.Array(Schema.String)),
-  countries: OptionalColumn(Schema.Array(Schema.String)),
+  releaseDate: OptionalColumn(TimestampColumn),
   languages: OptionalColumn(Schema.Array(Schema.String)),
-  genres: OptionalColumn(Schema.Array(Schema.String)),
+  genres: OptionalColumn(Schema.Array(ValidName)),
 })
 
 export const WikiFilmArticle = defineKind({
@@ -18,6 +21,15 @@ export const WikiFilmArticle = defineKind({
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,
     directors: OptionalColumn(Schema.Array(NameInCrdtList)),
+    languages: OptionalColumn(
+      Schema.Array(
+        Schema.Struct({
+          ...ItemInCrdtList.fields,
+          value: Schema.Trimmed,
+        }),
+      ),
+    ),
+    genres: OptionalColumn(Schema.Array(NameInCrdtList)),
   }),
   MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
@@ -26,6 +38,10 @@ export const WikiFilmArticle = defineKind({
       directors: Option.map(editableAttributes.directors, (directors) =>
         directors.map((director) => director.value),
       ),
+      languages: Option.map(editableAttributes.languages, (languages) =>
+        languages.map((language) => language.value),
+      ),
+      genres: Option.map(editableAttributes.genres, (genres) => genres.map((genre) => genre.value)),
     }),
 })
 
