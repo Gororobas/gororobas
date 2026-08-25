@@ -1,155 +1,83 @@
-import { type WikiArticleEditableData } from "@gororobas/domain"
-/* oxlint-disable effect/casting-awareness -- reconstruction accumulators preserve a recursive domain shape. */
-/**
- * Backward reconstruction algorithm for vegetable edit history.
- */
-import { Array as EffectArray, Effect, Option, Order, Schema } from "effect"
+import { Array as EffectArray, Effect, Order, Schema, DateTime } from "effect"
+import { type Changeset, revertChangeset } from "json-diff-ts"
 
-import { type EditSuggestion } from "../schemas/gel/entities.js"
-import { applyInverseDiffE, type JsonDiff } from "./json-diff-inverse.js"
+import { type GelEditSuggestion, type GelVegetable } from "../schemas/gel/entities.js"
 
-// ============ Types ============
-
-export interface EditSuggestionEvent {
-  id: string
-  timestamp: string
-  performed_by: string // UserProfile ID
-  target_object: string // Vegetable ID
-  diff: JsonDiff // json-diff-ts format
-  snapshot: any // State after diff was applied
-  status: "PENDING_REVIEW" | "MERGED" | "REJECTED"
-  created_at: string
+export interface GelVegetableEdit {
+  event: GelEditSuggestion
+  previousState: GelVegetable
+  newState: GelVegetable
 }
 
-export interface ReconstructedHistory {
-  initialState: WikiArticleEditableData
-  edits: Array<{
-    event: EditSuggestionEvent
-    previousState: WikiArticleEditableData
-    newState: WikiArticleEditableData
-    crdtUpdate: Option.Option<Uint8Array>
-  }>
+export interface GelVegetableHistory {
+  initialState: GelVegetable
+  versions: Array<GelVegetable>
+  edits: Array<GelVegetableEdit>
 }
 
-class ReconstructionError extends Schema.TaggedError<ReconstructionError>()("ReconstructionError", {
-  message: Schema.String,
-}) {}
+class GelVegetableReconstructionError extends Schema.TaggedError<GelVegetableReconstructionError>()(
+  "GelVegetableReconstructionError",
+  { message: Schema.String },
+) {}
 
-// ============ Data Transformation ============
-
-/**
- * Transform Gel EditSuggestion to EditSuggestionEvent.
- */
-export const transformEditSuggestion = (
-  editSuggestion: EditSuggestion,
-): Effect.Effect<EditSuggestionEvent, Error> =>
-  Effect.try({
-    try: () => ({
-      id: editSuggestion.id,
-      timestamp: editSuggestion.created_at,
-      performed_by: editSuggestion.created_by_id || "",
-      target_object: editSuggestion.target_object,
-      diff: editSuggestion.diff as JsonDiff,
-      snapshot: editSuggestion.snapshot,
-      status: editSuggestion.status as EditSuggestionEvent["status"],
-      created_at: editSuggestion.created_at,
-    }),
-    catch: () => new ReconstructionError({ message: "Failed to transform EditSuggestion" }),
-  })
-
-/**
- * Sort EditSuggestion events by timestamp (newest first).
- */
-export const sortEventsReverseChronological = (
-  events: EditSuggestionEvent[],
-): EditSuggestionEvent[] => {
-  return EffectArray.sort(
-    [...events],
-    Order.mapInput(Order.flip(Order.String), (event: EditSuggestionEvent) => event.timestamp),
-  )
-}
-
-/**
- * Filter for only approved EditSuggestions (MERGED status).
- */
-export const filterApprovedEdits = (events: EditSuggestionEvent[]): EditSuggestionEvent[] => {
-  return events.filter((event) => event.status === "MERGED")
-}
-
-/**
- * Reconstruct the complete edit history by walking backwards from current state.
- */
-export const reconstructHistory = (
-  vegetableId: string,
-  currentState: WikiArticleEditableData,
-  editSuggestions: EditSuggestion[],
-): Effect.Effect<ReconstructedHistory, Error> =>
-  Effect.gen(function* () {
-    // 1. Transform EditSuggestions to events
-    const transformedEvents = yield* Effect.all(editSuggestions.map(transformEditSuggestion), {
-      concurrency: "unbounded",
+const revertGelVegetable = (state: GelVegetable, edit: GelEditSuggestion): GelVegetable => {
+  if (!isChangeset(edit.diff)) {
+    throw new GelVegetableReconstructionError({
+      message: `EditSuggestion ${edit.id} does not contain a json-diff-ts changeset`,
     })
+  }
 
-    // 2. Filter for approved edits only
-    const approvedEdits = filterApprovedEdits(transformedEvents)
+  /* oxlint-disable */
+  try {
+    return revertChangeset(structuredClone(state), edit.diff)
+  } catch (error) {
+    console.log("REVERT ERROR", error, state, edit.diff)
+    throw error
+  }
+  /* oxlint-enable */
+}
 
-    // 3. Sort by timestamp (newest first)
-    const sortedEdits = sortEventsReverseChronological(approvedEdits)
-
-    // 4. Walk backwards applying inverse diffs
-    const reconstruction = yield* Effect.reduce(
-      sortedEdits,
-      () => ({ previousState: currentState, edits: [] as ReconstructedHistory["edits"] }),
-      (accumulator, edit) =>
-        applyInverseDiffE(accumulator.previousState, edit.diff).pipe(
-          Effect.map((stateBeforeEdit) => ({
-            previousState: stateBeforeEdit,
-            edits: [
-              ...accumulator.edits,
-              {
-                event: edit,
-                previousState: stateBeforeEdit,
-                newState: accumulator.previousState,
-                crdtUpdate: Option.none(),
-              },
-            ],
-          })),
-        ),
-    )
-    const previousState = reconstruction.previousState
-    const historicalEdits = reconstruction.edits
-
-    // 5. Reverse to get chronological order
-    historicalEdits.reverse()
-
-    return {
-      initialState: previousState,
-      edits: historicalEdits,
-    }
-  })
+const isChangeset = (value: unknown): value is Changeset => Array.isArray(value)
 
 /**
- * Validate that the reconstructed history produces the current state.
+ * Rebuild GelVegetable states from the current row by reversing merged json-diff-ts changesets.
+ * The Wiki conversion intentionally happens after this step, so the history is not lossy.
  */
-export const validateReconstructedHistory = (
-  history: ReconstructedHistory,
-  expectedFinalState: WikiArticleEditableData,
-): Effect.Effect<boolean, Error> =>
-  Effect.gen(function* () {
-    // Apply all diffs forward to see if we get the expected final state
-    // The forward application is represented by each edit's already-materialized new state.
-    const state = history.edits.reduce((_currentState, edit) => edit.newState, history.initialState)
-
-    // Simple deep equality check
-    const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
-    const finalStateMatches = encodeJson(state) === encodeJson(expectedFinalState)
-
-    if (!finalStateMatches) {
-      yield* Effect.logWarning("Reconstructed history validation failed", {
-        expected: expectedFinalState,
-        actual: state,
-      })
-    }
-
-    return finalStateMatches
+export const reconstructGelVegetableHistory = (
+  currentState: GelVegetable,
+  editSuggestions: ReadonlyArray<GelEditSuggestion>,
+): Effect.Effect<GelVegetableHistory, GelVegetableReconstructionError> =>
+  Effect.try({
+    try: () => {
+      const mergedEdits = EffectArray.sort(
+        editSuggestions.filter((edit) => edit.status === "MERGED"),
+        Order.mapInput(Order.flip(Order.Number), (edit: GelEditSuggestion) =>
+          DateTime.toEpochMillis(edit.created_at),
+        ),
+      )
+      const reconstruction = EffectArray.reduce(
+        mergedEdits,
+        { state: structuredClone(currentState), reverseEdits: new Array<GelVegetableEdit>() },
+        (accumulator, event) => {
+          const previousState = revertGelVegetable(accumulator.state, event)
+          return {
+            state: previousState,
+            reverseEdits: [
+              ...accumulator.reverseEdits,
+              { event, previousState, newState: accumulator.state },
+            ],
+          }
+        },
+      )
+      const edits = [...reconstruction.reverseEdits].reverse()
+      return {
+        initialState: reconstruction.state,
+        versions: [reconstruction.state, ...edits.map((edit) => edit.newState)],
+        edits,
+      }
+    },
+    catch: (error) =>
+      error instanceof GelVegetableReconstructionError
+        ? error
+        : new GelVegetableReconstructionError({ message: String(error) }),
   })

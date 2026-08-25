@@ -5,27 +5,27 @@ import { Schema } from "effect"
 
 // ============ Scalar Types ============
 
-export const Role = Schema.Enum({
+export const GelRole = Schema.Enum({
   ADMIN: "ADMIN",
   USER: "USER",
   MODERATOR: "MODERATOR",
 })
-export type Role = typeof Role.Type
+export type GelRole = typeof GelRole.Type
 
-export const SourceType = Schema.Enum({
+export const GelSourceType = Schema.Enum({
   GOROROBAS: "GOROROBAS",
   EXTERNAL: "EXTERNAL",
 })
-export type SourceType = typeof SourceType.Type
+export type GelSourceType = typeof GelSourceType.Type
 
-export const Gender = Schema.Enum({
+export const GelGender = Schema.Enum({
   FEMININO: "FEMININO",
   MASCULINO: "MASCULINO",
   NEUTRO: "NEUTRO",
 })
-export type Gender = typeof Gender.Type
+export type GelGender = typeof GelGender.Type
 
-export const VegetableUsage = Schema.Enum({
+export const GelVegetableUsage = Schema.Enum({
   ALIMENTO_ANIMAL: "ALIMENTO_ANIMAL",
   ALIMENTO_HUMANO: "ALIMENTO_HUMANO",
   CONSTRUCAO: "CONSTRUCAO",
@@ -36,9 +36,9 @@ export const VegetableUsage = Schema.Enum({
   RITUALISTICO: "RITUALISTICO",
   ECOLOGICO: "ECOLOGICO",
 })
-export type VegetableUsage = typeof VegetableUsage.Type
+export type GelVegetableUsage = typeof GelVegetableUsage.Type
 
-export const EdiblePart = Schema.Enum({
+export const GelEdiblePart = Schema.Enum({
   FRUTO: "FRUTO",
   FLOR: "FLOR",
   FOLHA: "FOLHA",
@@ -51,26 +51,26 @@ export const EdiblePart = Schema.Enum({
   TUBERCULO: "TUBERCULO",
   RIZOMA: "RIZOMA",
 })
-export type EdiblePart = typeof EdiblePart.Type
+export type GelEdiblePart = typeof GelEdiblePart.Type
 
-export const VegetableLifeCycle = Schema.Enum({
+export const GelVegetableLifeCycle = Schema.Enum({
   SEMESTRAL: "SEMESTRAL",
   ANUAL: "ANUAL",
   BIENAL: "BIENAL",
   PERENE: "PERENE",
 })
-export type VegetableLifeCycle = typeof VegetableLifeCycle.Type
+export type GelVegetableLifeCycle = typeof GelVegetableLifeCycle.Type
 
-export const Stratum = Schema.Enum({
+export const GelStratum = Schema.Enum({
   EMERGENTE: "EMERGENTE",
   ALTO: "ALTO",
   MEDIO: "MEDIO",
   BAIXO: "BAIXO",
   RASTEIRO: "RASTEIRO",
 })
-export type Stratum = typeof Stratum.Type
+export type GelStratum = typeof GelStratum.Type
 
-export const PlantingMethod = Schema.Enum({
+export const GelPlantingMethod = Schema.Enum({
   BROTO: "BROTO",
   ENXERTO: "ENXERTO",
   ESTACA: "ESTACA",
@@ -78,38 +78,38 @@ export const PlantingMethod = Schema.Enum({
   SEMENTE: "SEMENTE",
   TUBERCULO: "TUBERCULO",
 })
-export type PlantingMethod = typeof PlantingMethod.Type
+export type GelPlantingMethod = typeof GelPlantingMethod.Type
 
-export const TipSubject = Schema.Enum({
+export const GelTipSubject = Schema.Enum({
   PLANTIO: "PLANTIO",
   CRESCIMENTO: "CRESCIMENTO",
   COLHEITA: "COLHEITA",
 })
-export type TipSubject = typeof TipSubject.Type
+export type GelTipSubject = typeof GelTipSubject.Type
 
-export const VegetableWishlistStatus = Schema.Enum({
+export const GelVegetableWishlistStatus = Schema.Enum({
   QUERO_CULTIVAR: "QUERO_CULTIVAR",
   SEM_INTERESSE: "SEM_INTERESSE",
   JA_CULTIVEI: "JA_CULTIVEI",
   ESTOU_CULTIVANDO: "ESTOU_CULTIVANDO",
 })
-export type VegetableWishlistStatus = typeof VegetableWishlistStatus.Type
+export type GelVegetableWishlistStatus = typeof GelVegetableWishlistStatus.Type
 
-export const EditSuggestionStatus = Schema.Enum({
+export const GelEditSuggestionStatus = Schema.Enum({
   PENDING_REVIEW: "PENDING_REVIEW",
   MERGED: "MERGED",
   REJECTED: "REJECTED",
 })
-export type EditSuggestionStatus = typeof EditSuggestionStatus.Type
+export type GelEditSuggestionStatus = typeof GelEditSuggestionStatus.Type
 
-export const NotePublishStatus = Schema.Enum({
+export const GelNotePublishStatus = Schema.Enum({
   PRIVATE: "PRIVATE",
   COMMUNITY: "COMMUNITY",
   PUBLIC: "PUBLIC",
 })
-export type NotePublishStatus = typeof NotePublishStatus.Type
+export type GelNotePublishStatus = typeof GelNotePublishStatus.Type
 
-export const ResourceFormat = Schema.Enum({
+export const GelResourceFormat = Schema.Enum({
   BOOK: "BOOK",
   FILM: "FILM",
   SOCIAL_MEDIA: "SOCIAL_MEDIA",
@@ -122,20 +122,20 @@ export const ResourceFormat = Schema.Enum({
   ORGANIZATION: "ORGANIZATION",
   OTHER: "OTHER",
 })
-export type ResourceFormat = typeof ResourceFormat.Type
+export type GelResourceFormat = typeof GelResourceFormat.Type
 
-export const NoteType = Schema.Enum({
+export const GelNoteType = Schema.Enum({
   EXPERIMENTO: "EXPERIMENTO",
   ENSINAMENTO: "ENSINAMENTO",
   DESCOBERTA: "DESCOBERTA",
   PERGUNTA: "PERGUNTA",
   INSPIRACAO: "INSPIRACAO",
 })
-export type NoteType = typeof NoteType.Type
+export type GelNoteType = typeof GelNoteType.Type
 
-export const HistoryAction = Schema.Enum({
+export const GelHistoryAction = Schema.Enum({
   INSERT: "INSERT",
   UPDATE: "UPDATE",
   DELETE: "DELETE",
 })
-export type HistoryAction = typeof HistoryAction.Type
+export type GelHistoryAction = typeof GelHistoryAction.Type
