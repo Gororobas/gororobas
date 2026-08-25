@@ -47,8 +47,8 @@ const hashNameToLoroListItemId = (name: string): LoroListItemId =>
 const namesToCrdtList = (names: ReadonlyArray<string>) =>
   names.map((value) =>
     Schema.decodeUnknownSync(NameInCrdtList)({
-      id: hashNameToLoroListItemId(value),
-      value,
+      id: hashNameToLoroListItemId(value.trim()),
+      value: value.trim(),
     }),
   )
 

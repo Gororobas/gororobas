@@ -1,6 +1,6 @@
 import { WikiPlantArticle } from "@gororobas/domain"
-import { DateTime, Effect, Array as EffectArray, Option, Order, Schema } from "effect"
-import { revertChangeset, type Changeset } from "json-diff-ts"
+import { Effect, Array as EffectArray, Option, Order, Predicate, Schema } from "effect"
+import { revertChangeset, type Changeset, type IChange } from "json-diff-ts"
 
 import {
   GelEditSuggestion,
@@ -22,6 +22,7 @@ export type VegetableHistoryEntryForMigration = typeof VegetableHistoryEntryForM
 
 export const VegetableDataForMigration = Schema.Struct({
   latest_source: GelVegetableForReconstruction,
+  edit_suggestions: Schema.Array(GelEditSuggestion),
   history: Schema.Array(VegetableHistoryEntryForMigration),
 })
 export type VegetableDataForMigration = typeof VegetableDataForMigration.Type
@@ -46,7 +47,7 @@ const revertGelVegetable = Effect.fn("revertGelVegetable")(function* (
   }
 
   const reverted = yield* Effect.try({
-    try: () => revertChangeset(structuredClone(state), diff),
+    try: () => revertChangeset(structuredClone(state), normalizeChangeset(diff, state)),
     catch: (error) =>
       new GelVegetableReconstructionError({
         message: `EditSuggestion ${edit.id} failed`,
@@ -57,6 +58,43 @@ const revertGelVegetable = Effect.fn("revertGelVegetable")(function* (
 })
 
 const isChangeset = (value: unknown): value is Changeset => Array.isArray(value)
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Predicate.isObject(value) && !Array.isArray(value)
+
+const normalizeChangeset = (changeset: Changeset, target: unknown): Changeset =>
+  changeset.map((change): IChange => {
+    if (!change.changes) return change
+
+    const child = isRecord(target) ? target[change.key] : undefined
+    const embeddedKey =
+      Array.isArray(child) &&
+      change.embeddedKey === undefined &&
+      child.every((item) => isRecord(item) && Predicate.isString(item.id))
+        ? "id"
+        : change.embeddedKey
+
+    const changes = Array.isArray(child)
+      ? change.changes.map((nestedChange) => {
+          const nestedTarget =
+            embeddedKey === "id"
+              ? child.find((item) => isRecord(item) && item.id === nestedChange.key)
+              : child[Number(nestedChange.key)]
+          return nestedChange.changes
+            ? {
+                ...nestedChange,
+                changes: normalizeChangeset(nestedChange.changes, nestedTarget),
+              }
+            : nestedChange
+        })
+      : normalizeChangeset(change.changes, child)
+
+    return {
+      ...change,
+      ...(embeddedKey === undefined ? {} : { embeddedKey }),
+      changes,
+    }
+  })
 
 /**
  * Rebuild GelVegetable states from the current row by reversing merged json-diff-ts changesets.
@@ -70,7 +108,7 @@ export const reconstructGelVegetableHistory = (
     const mergedEdits = EffectArray.sort(
       editSuggestions.filter((edit) => edit.status === "MERGED"),
       Order.mapInput(Order.flip(Order.Number), (edit: GelEditSuggestion) =>
-        DateTime.toEpochMillis(edit.updated_at ?? edit.created_at),
+        (edit.updated_at ?? edit.created_at).getTime(),
       ),
     )
     const reconstruction = yield* Effect.reduce(
@@ -96,11 +134,11 @@ export const reconstructGelVegetableHistory = (
     )
 
     return [
-      ...reconstruction.history,
       {
         edit_suggestion: Option.none(),
         state: reconstruction.state,
       },
+      ...reconstruction.history.reverse(),
     ]
   }).pipe(
     Effect.mapError((error) =>

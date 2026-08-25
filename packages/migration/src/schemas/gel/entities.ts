@@ -11,12 +11,17 @@ export const GelOptionalColumn = <S extends Schema.Schema<unknown>>(s: S) =>
 
 // ============ Base Types ============
 
-const GelTimestamp = Schema.DateTimeUtcFromDate
+const GelTimestamp = Schema.Date
 
 export const gelAuditableFields = {
   created_at: GelTimestamp,
   updated_at: Schema.NullishOr(GelTimestamp),
   // created_by: Schema.String,
+}
+
+const gelEmbeddedAuditableFields = {
+  created_at: Schema.optional(GelTimestamp),
+  updated_at: Schema.optional(Schema.NullishOr(GelTimestamp)),
 }
 
 // ============ Core Entities ============
@@ -54,7 +59,7 @@ export const GelHistoryLog = Schema.Struct({
 export type GelHistoryLog = typeof GelHistoryLog.Type
 
 export const GelSource = Schema.Struct({
-  ...gelAuditableFields,
+  ...gelEmbeddedAuditableFields,
   id: Schema.String,
   type: Enums.GelSourceType,
   credits: GelOptionalColumn(Schema.String),
@@ -74,7 +79,7 @@ export const GelTag = Schema.Struct({
 export type GelTag = typeof GelTag.Type
 
 export const GelImage = Schema.Struct({
-  ...gelAuditableFields,
+  ...gelEmbeddedAuditableFields,
   id: Schema.String,
   sanity_id: Schema.String,
   label: GelOptionalColumn(Schema.String),
@@ -84,10 +89,11 @@ export const GelImage = Schema.Struct({
 export type GelImage = typeof GelImage.Type
 
 export const GelVegetableVariety = Schema.Struct({
-  ...gelAuditableFields,
+  ...gelEmbeddedAuditableFields,
   id: Schema.String,
   names: Schema.Array(Schema.String),
   handle: Schema.String,
+  photos: Schema.Array(GelImage),
 })
 export type GelVegetableVariety = typeof GelVegetableVariety.Type
 

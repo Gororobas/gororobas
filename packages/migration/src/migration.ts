@@ -38,7 +38,10 @@ const vegetablesQuery = `
       *
     },
     varieties := (select .varieties order by @order_index asc empty last) {
-      *
+      *,
+      photos: {
+        *,
+      }
     },
     friends: {
       id,
@@ -82,7 +85,7 @@ export const migrate = Command.make("migrate", {}, () =>
     const historyResults = yield* Effect.all(
       vegetables.map(({ edit_suggestions, ...source }) =>
         reconstructGelVegetableHistory(source, edit_suggestions).pipe(
-          Effect.map((history) => ({ source, history })),
+          Effect.map((history) => ({ source, history, edit_suggestions })),
         ),
       ),
       { concurrency: "unbounded", mode: "result" },
@@ -101,7 +104,7 @@ export const migrate = Command.make("migrate", {}, () =>
 
     yield* Effect.forEach(
       EffectArray.getSuccesses(historyResults),
-      ({ source, history }) =>
+      ({ source, history, edit_suggestions }) =>
         Effect.gen(function* () {
           const historyEntries = history.map((historyEntry) =>
             VegetableHistoryEntryForMigration.make({
@@ -112,8 +115,10 @@ export const migrate = Command.make("migrate", {}, () =>
                 translations: {
                   pt: {
                     commonNames: gelVegetableNamesToCrdtList(historyEntry.state.names),
-                    content: Schema.decodeUnknownSync(Schema.Option(TiptapDocument))(
-                      historyEntry.state.content,
+                    content: Option.fromNullishOr(
+                      Schema.decodeUnknownSync(Schema.NullishOr(TiptapDocument))(
+                        historyEntry.state.content,
+                      ),
                     ),
                     grammaticalGender: Option.fromNullishOr(
                       gelGenderToGrammaticalGender(historyEntry.state.gender),
@@ -125,6 +130,7 @@ export const migrate = Command.make("migrate", {}, () =>
           )
           const data = VegetableDataForMigration.make({
             latest_source: source,
+            edit_suggestions,
             history: historyEntries,
           })
           const encoded = yield* Schema.encodeEffect(
