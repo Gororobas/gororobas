@@ -9,7 +9,7 @@ import {
 } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const materializedAttributes = Schema.Struct({
+const MaterializedAttributes = Schema.Struct({
   scientificNames: OptionalColumn(Schema.Array(ValidName)),
   roles: OptionalColumn(Schema.Array(AnimalRole)),
 })
@@ -20,9 +20,9 @@ export const WikiAnimalArticle = defineKind({
     scientificNames: OptionalColumn(Schema.Array(NameInCrdtList)),
     roles: OptionalColumn(CrdtLiteralSet(AnimalRole)),
   }),
-  MaterializedAttributes: materializedAttributes,
+  MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
-    materializedAttributes.make({
+    MaterializedAttributes.make({
       scientificNames: Option.map(editableAttributes.scientificNames, (names) =>
         names.map((n) => n.value),
       ),

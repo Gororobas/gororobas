@@ -7,7 +7,10 @@
   "scripts": {
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest",
-    "migrate": "tsx src/index.ts"
+    "migrate": "tsx src/index.ts",
+    "generate:gel": "npx @gel/generate edgeql-js --out src/gel --future-polymorphism-as-discriminated-unions --future-strict-type-names",
+    "generate:interfaces": "npx @gel/generate interfaces --file src/gel.interfaces.ts",
+    "generate:all": "pnpm generate:gel && pnpm generate:interfaces"
   },
   "dependencies": {
     "@effect/sql-sqlite-node": "catalog:",
@@ -15,11 +18,13 @@
     "@gororobas/server": "workspace:^",
     "better-auth": "catalog:",
     "effect": "catalog:",
+    "gel": "^2.2.0",
     "json-diff-ts": "^2.2.1",
     "loro-crdt": "catalog:",
     "loro-mirror": "catalog:"
   },
   "devDependencies": {
+    "@gel/generate": "^0.7.1",
     "@types/node": "25.3.0",
     "tsx": "latest",
     "typescript": "catalog:",

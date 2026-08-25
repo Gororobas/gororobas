@@ -1,20 +1,20 @@
 import { Schema } from "effect"
 
-import { NonEmptyTrimmedString, OptionalColumn } from "../../common/primitives.js"
+import { OptionalColumn, ValidName } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const materializedAttributes = Schema.Struct({
-  suggestedKind: OptionalColumn(NonEmptyTrimmedString),
+const MaterializedAttributes = Schema.Struct({
+  suggestedKind: OptionalColumn(ValidName),
 })
 
 export const WikiUncategorizedArticle = defineKind({
   Kind: Schema.Literal("UNCATEGORIZED"),
   EditableAttributes: Schema.Struct({
-    suggestedKind: OptionalColumn(NonEmptyTrimmedString),
+    suggestedKind: OptionalColumn(ValidName),
   }),
-  MaterializedAttributes: materializedAttributes,
+  MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
-    materializedAttributes.make({
+    MaterializedAttributes.make({
       suggestedKind: editableAttributes.suggestedKind,
     }),
 })

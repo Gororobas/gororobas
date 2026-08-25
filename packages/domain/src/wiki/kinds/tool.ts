@@ -4,7 +4,7 @@ import { ToolUsage } from "../../common/enums.js"
 import { CrdtLiteralSet, OptionalColumn } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const materializedAttributes = Schema.Struct({
+const MaterializedAttributes = Schema.Struct({
   usage: OptionalColumn(Schema.Array(ToolUsage)),
 })
 
@@ -13,9 +13,9 @@ export const WikiToolArticle = defineKind({
   EditableAttributes: Schema.Struct({
     usage: OptionalColumn(CrdtLiteralSet(ToolUsage)),
   }),
-  MaterializedAttributes: materializedAttributes,
+  MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
-    materializedAttributes.make({
+    MaterializedAttributes.make({
       usage: Option.map(editableAttributes.usage, (usage) => Array.from(usage)),
     }),
 })

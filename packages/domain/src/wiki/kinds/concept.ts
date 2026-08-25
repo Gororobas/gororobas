@@ -4,7 +4,7 @@ import { TagId } from "../../common/ids.js"
 import { CrdtBrandedStringSet, OptionalColumn } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const materializedAttributes = Schema.Struct({
+const MaterializedAttributes = Schema.Struct({
   tags: OptionalColumn(Schema.Array(TagId)),
 })
 
@@ -13,9 +13,9 @@ export const WikiConceptArticle = defineKind({
   EditableAttributes: Schema.Struct({
     tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
-  MaterializedAttributes: materializedAttributes,
+  MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
-    materializedAttributes.make({
+    MaterializedAttributes.make({
       tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
 })

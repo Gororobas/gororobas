@@ -157,3 +157,36 @@ export type TranslationSource = typeof TranslationSource.Type
 
 export const SuggestedTagStatus = Schema.Literals(["PENDING", "APPROVED", "REJECTED"])
 export type SuggestedTagStatus = typeof SuggestedTagStatus.Type
+
+export const ContentChannelType = Schema.Literals([
+  "YOUTUBE",
+  "PODCAST",
+  "NEWSLETTER",
+  "MAGAZINE",
+  "RADIO",
+  "OTHER",
+])
+
+export const NoteworthyEntityType = Schema.Literals([
+  "MOVEMENT",
+  "INSTITUTION",
+  "MEDIA_ORGANIZATION",
+  "NONPROFIT",
+  "RESEARCH_ORGANIZATION",
+  "PUBLIC_AGENCY",
+  "COOPERATIVE",
+  "NETWORK",
+  "COMPANY",
+  "OTHER",
+])
+
+export const ResourceFormat = Schema.Literals([
+  "SOCIAL_MEDIA",
+  "VIDEO",
+  "ARTICLE",
+  "PODCAST",
+  "COURSE",
+  "ACADEMIC_WORK",
+  "DATASET",
+  "OTHER",
+])
