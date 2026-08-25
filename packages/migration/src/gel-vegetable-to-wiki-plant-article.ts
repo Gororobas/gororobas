@@ -52,6 +52,9 @@ const namesToCrdtList = (names: ReadonlyArray<string>) =>
     }),
   )
 
+export const gelVegetableNamesToCrdtList = (names: ReadonlyArray<string>) =>
+  Schema.decodeUnknownSync(Schema.NonEmptyArray(NameInCrdtList))(namesToCrdtList(names))
+
 const stratumMap: Record<typeof GelStratum.Type, AgroforestryStratum> = {
   EMERGENTE: "EMERGENT",
   ALTO: "HIGH",
@@ -111,28 +114,36 @@ export const gelVegetableToPlantEditableAttributes = (
   vegetable: GelVegetable,
 ): typeof WikiPlantArticle.EditableAttributes.Type =>
   WikiPlantArticle.EditableAttributes.make({
-    developmentCycleMax: Option.map(vegetable.development_cycle_max, (value) =>
+    developmentCycleMax: Option.map(
+      Option.fromNullishOr(vegetable.development_cycle_max),
+      (value) => Schema.decodeUnknownSync(Centimeters)(value),
+    ),
+    developmentCycleMin: Option.map(
+      Option.fromNullishOr(vegetable.development_cycle_min),
+      (value) => Schema.decodeUnknownSync(Centimeters)(value),
+    ),
+    heightMax: Option.map(Option.fromNullishOr(vegetable.height_max), (value) =>
       Schema.decodeUnknownSync(Centimeters)(value),
     ),
-    developmentCycleMin: Option.map(vegetable.development_cycle_min, (value) =>
+    heightMin: Option.map(Option.fromNullishOr(vegetable.height_min), (value) =>
       Schema.decodeUnknownSync(Centimeters)(value),
     ),
-    heightMax: Option.map(vegetable.height_max, (value) =>
-      Schema.decodeUnknownSync(Centimeters)(value),
-    ),
-    heightMin: Option.map(vegetable.height_min, (value) =>
-      Schema.decodeUnknownSync(Centimeters)(value),
-    ),
-    temperatureMax: Option.map(vegetable.temperature_max, (value) =>
+    temperatureMax: Option.map(Option.fromNullishOr(vegetable.temperature_max), (value) =>
       Schema.decodeUnknownSync(TemperatureInCelsius)(value),
     ),
-    temperatureMin: Option.map(vegetable.temperature_min, (value) =>
+    temperatureMin: Option.map(Option.fromNullishOr(vegetable.temperature_min), (value) =>
       Schema.decodeUnknownSync(TemperatureInCelsius)(value),
     ),
-    scientificNames: Option.map(vegetable.scientific_names, namesToCrdtList),
-    edibleParts: toSet(vegetable.edible_parts, (value) => ediblePartMap[value]),
-    lifecycles: toSet(vegetable.lifecycles, (value) => lifecycleMap[value]),
-    plantingMethods: toSet(vegetable.planting_methods, (value) => plantingMethodMap[value]),
-    strata: toSet(vegetable.strata, (value) => stratumMap[value]),
-    usage: toSet(vegetable.uses, (value) => usageMap[value]),
+    scientificNames: Option.map(Option.fromNullishOr(vegetable.scientific_names), namesToCrdtList),
+    edibleParts: toSet(
+      Option.fromNullishOr(vegetable.edible_parts),
+      (value) => ediblePartMap[value],
+    ),
+    lifecycles: toSet(Option.fromNullishOr(vegetable.lifecycles), (value) => lifecycleMap[value]),
+    plantingMethods: toSet(
+      Option.fromNullishOr(vegetable.planting_methods),
+      (value) => plantingMethodMap[value],
+    ),
+    strata: toSet(Option.fromNullishOr(vegetable.strata), (value) => stratumMap[value]),
+    usage: toSet(Option.fromNullishOr(vegetable.uses), (value) => usageMap[value]),
   })

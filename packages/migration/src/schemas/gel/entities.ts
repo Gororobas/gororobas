@@ -1,4 +1,4 @@
-import { OptionalColumn } from "@gororobas/domain"
+import { TiptapDocument } from "@gororobas/domain"
 /**
  * Gel entity schemas.
  */
@@ -6,17 +6,18 @@ import { Schema } from "effect"
 
 import * as Enums from "./enums.js"
 
+export const GelOptionalColumn = <S extends Schema.Schema<unknown>>(s: S) =>
+  Schema.optional(Schema.NullishOr(s))
+
 // ============ Base Types ============
 
-export const GelAuditableFields = Schema.Struct({
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String,
-})
+const GelTimestamp = Schema.DateTimeUtcFromDate
 
-export const GelWithHandleFields = Schema.Struct({
-  handle: Schema.String,
-})
+export const gelAuditableFields = {
+  created_at: GelTimestamp,
+  updated_at: Schema.NullishOr(GelTimestamp),
+  // created_by: Schema.String,
+}
 
 // ============ Core Entities ============
 
@@ -37,8 +38,6 @@ export const GelUserProfile = Schema.Struct({
   bio: Schema.Unknown, // json
   location: Schema.String.pipe(Schema.optional),
   photo: Schema.String.pipe(Schema.optional), // Image.id
-  created_at: Schema.String,
-  updated_at: Schema.String,
   handle: Schema.String,
 })
 export type GelUserProfile = typeof GelUserProfile.Type
@@ -46,104 +45,94 @@ export type GelUserProfile = typeof GelUserProfile.Type
 export const GelHistoryLog = Schema.Struct({
   id: Schema.String,
   action: Enums.GelHistoryAction,
-  timestamp: Schema.String,
-  performed_by: Schema.String.pipe(Schema.optional), // UserProfile.id
-  old: Schema.Unknown.pipe(Schema.optional), // json
-  new: Schema.Unknown.pipe(Schema.optional), // json
+  timestamp: GelTimestamp,
+  performed_by: GelOptionalColumn(Schema.String), // UserProfile.id
+  old: GelOptionalColumn(Schema.Unknown), // json
+  new: GelOptionalColumn(Schema.Unknown), // json
   target: Schema.String, // Polymorphic - will be handled as string for now
 })
 export type GelHistoryLog = typeof GelHistoryLog.Type
 
 export const GelSource = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   type: Enums.GelSourceType,
-  credits: Schema.String.pipe(Schema.optional),
-  origin: Schema.String.pipe(Schema.optional),
-  comments: Schema.Unknown.pipe(Schema.optional), // json
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
+  credits: GelOptionalColumn(Schema.String),
+  origin: GelOptionalColumn(Schema.String),
+  comments: GelOptionalColumn(Schema.Unknown), // json
 })
 export type GelSource = typeof GelSource.Type
 
 export const GelTag = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   names: Schema.Array(Schema.String),
-  description: Schema.Unknown.pipe(Schema.optional), // json
-  category: Schema.String.pipe(Schema.optional),
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
+  description: GelOptionalColumn(Schema.Unknown), // json
+  category: GelOptionalColumn(Schema.String),
   handle: Schema.String,
 })
 export type GelTag = typeof GelTag.Type
 
 export const GelImage = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   sanity_id: Schema.String,
-  label: Schema.String.pipe(Schema.optional),
-  hotspot: Schema.Unknown.pipe(Schema.optional), // json
-  crop: Schema.Unknown.pipe(Schema.optional), // json
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
+  label: GelOptionalColumn(Schema.String),
+  hotspot: GelOptionalColumn(Schema.Unknown), // json
+  crop: GelOptionalColumn(Schema.Unknown), // json
 })
 export type GelImage = typeof GelImage.Type
 
 export const GelVegetableVariety = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   names: Schema.Array(Schema.String),
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
   handle: Schema.String,
 })
 export type GelVegetableVariety = typeof GelVegetableVariety.Type
 
 export const GelVegetableTip = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   subjects: Schema.Array(Enums.GelTipSubject),
   content: Schema.Unknown, // json
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
   handle: Schema.String,
 })
 export type GelVegetableTip = typeof GelVegetableTip.Type
 
 export const GelVegetable = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   names: Schema.Array(Schema.String),
-  searchable_names: OptionalColumn(Schema.String), // computed field
-  scientific_names: OptionalColumn(Schema.Array(Schema.String)),
-  gender: OptionalColumn(Enums.GelGender),
-  strata: OptionalColumn(Schema.Array(Enums.GelStratum)),
-  planting_methods: OptionalColumn(Schema.Array(Enums.GelPlantingMethod)),
-  edible_parts: OptionalColumn(Schema.Array(Enums.GelEdiblePart)),
-  lifecycles: OptionalColumn(Schema.Array(Enums.GelVegetableLifeCycle)),
-  uses: OptionalColumn(Schema.Array(Enums.GelVegetableUsage)),
-  origin: OptionalColumn(Schema.String),
-  development_cycle_min: OptionalColumn(Schema.Number),
-  development_cycle_max: OptionalColumn(Schema.Number),
-  height_min: OptionalColumn(Schema.Number),
-  height_max: OptionalColumn(Schema.Number),
-  temperature_min: OptionalColumn(Schema.Number),
-  temperature_max: OptionalColumn(Schema.Number),
-  content: OptionalColumn(Schema.Unknown), // json
-  created_at: Schema.DateTimeUtcFromDate,
-  updated_at: Schema.DateTimeUtcFromDate,
-  created_by_id: Schema.String.pipe(Schema.optional),
+  searchable_names: GelOptionalColumn(Schema.String), // computed field
+  scientific_names: GelOptionalColumn(Schema.Array(Schema.String)),
+  gender: GelOptionalColumn(Enums.GelGender),
+  strata: GelOptionalColumn(Schema.Array(Enums.GelStratum)),
+  planting_methods: GelOptionalColumn(Schema.Array(Enums.GelPlantingMethod)),
+  edible_parts: GelOptionalColumn(Schema.Array(Enums.GelEdiblePart)),
+  lifecycles: GelOptionalColumn(Schema.Array(Enums.GelVegetableLifeCycle)),
+  uses: GelOptionalColumn(Schema.Array(Enums.GelVegetableUsage)),
+  origin: GelOptionalColumn(Schema.String),
+  development_cycle_min: GelOptionalColumn(Schema.Number),
+  development_cycle_max: GelOptionalColumn(Schema.Number),
+  height_min: GelOptionalColumn(Schema.Number),
+  height_max: GelOptionalColumn(Schema.Number),
+  temperature_min: GelOptionalColumn(Schema.Number),
+  temperature_max: GelOptionalColumn(Schema.Number),
+  content: GelOptionalColumn(Schema.Unknown), // json
   handle: Schema.String,
 })
 export type GelVegetable = typeof GelVegetable.Type
 
+const GelVegetableFriend = Schema.Struct({
+  id: Schema.String,
+})
+
 export const GelVegetableFriendship = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   vegetables: Schema.Array(Schema.String), // Vegetable.id[]
   unique_key: Schema.String,
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
 })
 export type GelVegetableFriendship = typeof GelVegetableFriendship.Type
 
@@ -156,61 +145,54 @@ export const GelUserWishlist = Schema.Struct({
 export type GelUserWishlist = typeof GelUserWishlist.Type
 
 export const GelNote = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field
   public: Schema.Boolean,
-  publish_status: Enums.GelNotePublishStatus.pipe(Schema.optional),
+  publish_status: GelOptionalColumn(Enums.GelNotePublishStatus),
   published_at: Schema.String,
   types: Schema.Array(Enums.GelNoteType),
-  title: Schema.Unknown, // json
-  body: Schema.Unknown.pipe(Schema.optional), // json
-  content_plain_text: Schema.String.pipe(Schema.optional),
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
+  title: TiptapDocument,
+  body: GelOptionalColumn(TiptapDocument),
+  content_plain_text: GelOptionalColumn(Schema.String),
   handle: Schema.String,
 })
 export type GelNote = typeof GelNote.Type
 
 export const GelEditSuggestion = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   diff: Schema.Unknown, // json - json-diff-ts format
   snapshot: Schema.Unknown, // json
   status: Enums.GelEditSuggestionStatus,
-  reviewed_by_id: Schema.String.pipe(Schema.optional), // UserProfile.id
-  created_at: Schema.DateTimeUtcFromDate,
-  updated_at: Schema.DateTimeUtcFromDate,
-  created_by_id: Schema.String.pipe(Schema.optional),
+  reviewed_by_id: GelOptionalColumn(Schema.String), // UserProfile.id
 })
 export type GelEditSuggestion = typeof GelEditSuggestion.Type
 
 export const GelResource = Schema.Struct({
+  ...gelAuditableFields,
   id: Schema.String,
   url: Schema.String,
   title: Schema.String,
   format: Enums.GelResourceFormat,
-  description: Schema.Unknown.pipe(Schema.optional), // json
-  credit_line: Schema.String.pipe(Schema.optional),
-  thumbnail: Schema.String.pipe(Schema.optional), // Image.id
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
+  description: GelOptionalColumn(Schema.Unknown), // json
+  credit_line: GelOptionalColumn(Schema.String),
+  thumbnail: GelOptionalColumn(Schema.String), // Image.id
   handle: Schema.String,
 })
 export type GelResource = typeof GelResource.Type
 
-export const GelBlueskyPost = Schema.Struct({
-  id: Schema.String,
-  text: Schema.String,
-  content: Schema.String, // PostableToBluesky entity id
-  created_at: Schema.String,
-  updated_at: Schema.String,
-  created_by_id: Schema.String.pipe(Schema.optional),
-})
-export type GelBlueskyPost = typeof GelBlueskyPost.Type
-
-export const GelVegetableForConversion = Schema.Struct({
+export const GelVegetableForReconstruction = Schema.Struct({
   ...GelVegetable.fields,
+  photos: Schema.Array(GelImage),
+  varieties: Schema.Array(GelVegetableVariety),
+  friends: Schema.Array(GelVegetableFriend),
+  sources: Schema.Array(GelSource),
+})
+export type GelVegetableForReconstruction = typeof GelVegetableForReconstruction.Type
+
+export const GelVegetableWithEditSuggestions = Schema.Struct({
+  ...GelVegetableForReconstruction.fields,
   edit_suggestions: Schema.Array(GelEditSuggestion),
 })
-export type GelVegetableForConversion = typeof GelVegetableForConversion.Type
+export type GelVegetableWithEditSuggestions = typeof GelVegetableWithEditSuggestions.Type
