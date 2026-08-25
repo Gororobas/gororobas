@@ -1,13 +1,15 @@
 /**
  * Gel to SQLite Migration CLI
  */
-import { NodeRuntime } from "@effect/platform-node"
+import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { Effect } from "effect"
+import { Layer } from "effect"
+import { Command } from "effect/unstable/cli"
 
-import { runMigration } from "./migration.js"
+import { GelClientLive } from "./gel-client.js"
+import { migrate } from "./migration.js"
 
-NodeRuntime.runMain(
-  runMigration.pipe(
-    Effect.catchCause((cause) => Effect.logError("Migration failed", cause).pipe(Effect.asVoid)),
-  ),
+Command.run(migrate, { version: "0.0.0" }).pipe(
+  Effect.provide(Layer.mergeAll(NodeServices.layer, GelClientLive)),
+  NodeRuntime.runMain,
 )

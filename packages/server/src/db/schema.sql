@@ -1,6 +1,7 @@
 -- ===========
 -- BETTER AUTH
 -- ===========
+--
 CREATE TABLE accounts (
   id text NOT NULL PRIMARY KEY,
   name text NOT NULL,
@@ -56,6 +57,7 @@ CREATE INDEX verification_identifier_idx ON verifications (identifier);
 -- ========
 -- PROFILES
 -- ========
+--
 CREATE TABLE profiles (
   id text NOT NULL PRIMARY KEY,
   type text NOT NULL, -- ProfileType
@@ -92,6 +94,7 @@ CREATE TABLE organizations (
 -- ========================
 -- ORGANIZATION MEMBERSHIPS
 -- ========================
+--
 CREATE TABLE organization_memberships (
   person_id text NOT NULL,
   organization_id text NOT NULL,
@@ -103,9 +106,6 @@ CREATE TABLE organization_memberships (
   FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- ========================
--- ORGANIZATION INVITATIONS
--- ========================
 CREATE TABLE organization_invitations (
   id text NOT NULL PRIMARY KEY,
   organization_id text NOT NULL,
@@ -123,6 +123,7 @@ CREATE TABLE organization_invitations (
 -- ====
 -- TAGS
 -- ====
+--
 CREATE TABLE tags (
   id text PRIMARY KEY,
   handle text NOT NULL UNIQUE,
@@ -160,6 +161,7 @@ CREATE TABLE suggested_tag_sources (
 -- ======
 -- IMAGES
 -- ======
+--
 CREATE TABLE images (
   id text PRIMARY KEY,
   sanity_id text NOT NULL UNIQUE,
@@ -259,6 +261,7 @@ CREATE TABLE wiki_article_handles (
 -- ================
 -- WIKI ARTICLE PHOTOS
 -- ================
+--
 CREATE TABLE wiki_article_photos (
   wiki_article_id text NOT NULL,
   image_id text NOT NULL,
@@ -420,6 +423,7 @@ CREATE TABLE comment_translations (
 -- =========
 -- BOOKMARKS
 -- =========
+--
 CREATE TABLE bookmarks_wiki_articles (
   person_id text NOT NULL,
   wiki_article_id text NOT NULL,

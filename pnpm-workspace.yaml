@@ -3,9 +3,7 @@ packages:
 
 allowBuilds:
   "@ariga/atlas": true
-  "@parcel/watcher": set this to true or false
   "@prisma/engines": false
-  better-sqlite3: set this to true or false
   esbuild: true
   lefthook: true
   lmdb: false

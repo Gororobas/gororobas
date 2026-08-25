@@ -119,5 +119,7 @@ export default defineConfig({
     "oxlint.config.ts",
     "vitest.shared.ts",
     "packages/server/scripts/test-auth.ts",
+    "packages/migration/src/gel",
+    "packages/migration/src/gel.interfaces.ts",
   ],
 })

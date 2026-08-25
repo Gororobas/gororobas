@@ -1,18 +1,37 @@
-/**
- * Main migration orchestrator.
- */
-import { Config, Effect } from "effect"
+import { Array as EffectArray, Effect, Option, Schema } from "effect"
+import { Command } from "effect/unstable/cli"
 
-export const runMigration = Effect.gen(function* () {
-  const config = {
-    gelConnectionString: yield* (
-      Config.redacted("GEL_CONNECTION_STRING") || "gel://localhost:5656/gororobas"
-    ),
-    sqliteConnectionString: yield* (
-      Config.redacted("SQLITE_CONNECTION_STRING") || "file:migration.db"
-    ),
-  }
-  yield* Effect.logInfo("Starting Gel to SQLite migration", config)
+import { GelClient } from "./gel-client.js"
+import { VegetableInGel } from "./schemas/gel/entities.js"
 
-  // TODO: Implement the actual migration steps
-}).pipe(Effect.withLogSpan("migration"))
+export const migrate = Command.make("migrate", {}, () =>
+  Effect.gen(function* () {
+    const gelClient = yield* GelClient
+    const vegetableResults = yield* gelClient
+      .use((client) => client.query("select Vegetable { * }"))
+      .pipe(
+        Effect.tap(Effect.logInfo),
+        Effect.flatMap((vegetables) =>
+          Effect.all(
+            vegetables.map((v) => Schema.decodeUnknownEffect(VegetableInGel)(v)),
+            {
+              concurrency: "unbounded",
+              mode: "result",
+            },
+          ),
+        ),
+      )
+
+    const vegetables = EffectArray.getSuccesses(vegetableResults)
+    yield* Option.match(EffectArray.head(vegetables), {
+      onNone: () => Effect.void,
+      onSome: (vegetable) => Effect.log("Example vegetable", vegetable),
+    })
+
+    const failures = EffectArray.getFailures(vegetableResults)
+    yield* Option.match(EffectArray.head(failures), {
+      onNone: () => Effect.void,
+      onSome: (failure) => Effect.log(failure.message),
+    })
+  }),
+).pipe(Command.withDescription("Fetch vegetables from Gel"))

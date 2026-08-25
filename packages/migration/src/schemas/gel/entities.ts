@@ -1,3 +1,4 @@
+import { OptionalColumn } from "@gororobas/domain"
 /**
  * Gel entity schemas.
  */
@@ -110,31 +111,31 @@ export const VegetableTip = Schema.Struct({
 })
 export type VegetableTip = typeof VegetableTip.Type
 
-export const Vegetable = Schema.Struct({
+export const VegetableInGel = Schema.Struct({
   id: Schema.String,
   names: Schema.Array(Schema.String),
-  searchable_names: Schema.String.pipe(Schema.optional), // computed field
-  scientific_names: Schema.Array(Schema.String).pipe(Schema.optional),
-  gender: Enums.Gender.pipe(Schema.optional),
-  strata: Schema.Array(Enums.Stratum).pipe(Schema.optional),
-  planting_methods: Schema.Array(Enums.PlantingMethod).pipe(Schema.optional),
-  edible_parts: Schema.Array(Enums.EdiblePart).pipe(Schema.optional),
-  lifecycles: Schema.Array(Enums.VegetableLifeCycle).pipe(Schema.optional),
-  uses: Schema.Array(Enums.VegetableUsage).pipe(Schema.optional),
-  origin: Schema.String.pipe(Schema.optional),
-  development_cycle_min: Schema.Number.pipe(Schema.optional),
-  development_cycle_max: Schema.Number.pipe(Schema.optional),
-  height_min: Schema.Number.pipe(Schema.optional),
-  height_max: Schema.Number.pipe(Schema.optional),
-  temperature_min: Schema.Number.pipe(Schema.optional),
-  temperature_max: Schema.Number.pipe(Schema.optional),
-  content: Schema.Unknown.pipe(Schema.optional), // json
-  created_at: Schema.String,
-  updated_at: Schema.String,
+  searchable_names: OptionalColumn(Schema.String), // computed field
+  scientific_names: OptionalColumn(Schema.Array(Schema.String)),
+  gender: OptionalColumn(Enums.Gender),
+  strata: OptionalColumn(Schema.Array(Enums.Stratum)),
+  planting_methods: OptionalColumn(Schema.Array(Enums.PlantingMethod)),
+  edible_parts: OptionalColumn(Schema.Array(Enums.EdiblePart)),
+  lifecycles: OptionalColumn(Schema.Array(Enums.VegetableLifeCycle)),
+  uses: OptionalColumn(Schema.Array(Enums.VegetableUsage)),
+  origin: OptionalColumn(Schema.String),
+  development_cycle_min: OptionalColumn(Schema.Number),
+  development_cycle_max: OptionalColumn(Schema.Number),
+  height_min: OptionalColumn(Schema.Number),
+  height_max: OptionalColumn(Schema.Number),
+  temperature_min: OptionalColumn(Schema.Number),
+  temperature_max: OptionalColumn(Schema.Number),
+  content: OptionalColumn(Schema.Unknown), // json
+  created_at: Schema.DateTimeUtcFromDate,
+  updated_at: Schema.DateTimeUtcFromDate,
   created_by_id: Schema.String.pipe(Schema.optional),
   handle: Schema.String,
 })
-export type Vegetable = typeof Vegetable.Type
+export type VegetableInGel = typeof VegetableInGel.Type
 
 export const VegetableFriendship = Schema.Struct({
   id: Schema.String,
