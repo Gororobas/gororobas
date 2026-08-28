@@ -25,7 +25,7 @@ export const TimestampedStruct = Schema.Struct({
 /** A username handle (e.g., @username) */
 export const Handle = Schema.Trim.pipe(
   Schema.check(Schema.isMinLength(3)),
-  Schema.check(Schema.isMaxLength(60)),
+  Schema.check(Schema.isMaxLength(90)),
   Schema.check(Schema.isPattern(/^[a-z0-9-]+$/)),
   Schema.brand("Handle"),
 )
@@ -34,16 +34,16 @@ export type Handle = typeof Handle.Type
 /** Used by {@link Email} below to ensure proper type checking during decoding. */
 const EmailCore = Schema.TemplateLiteral([
   // Left part: must be a non-empty string
-  Schema.String.check(Schema.isMinLength(1)).pipe(
-    Schema.decodeTo(Schema.String, SchemaTransformation.toLowerCase()),
+  Schema.Trimmed.check(Schema.isMinLength(1)).pipe(
+    Schema.decodeTo(Schema.Trimmed, SchemaTransformation.toLowerCase()),
   ),
 
   // Separator
   "@",
 
   // Right part: must be a string with a maximum length of 128
-  Schema.String.check(Schema.isMaxLength(128)).pipe(
-    Schema.decodeTo(Schema.String, SchemaTransformation.toLowerCase()),
+  Schema.Trimmed.check(Schema.isMinLength(1), Schema.isMaxLength(128)).pipe(
+    Schema.decodeTo(Schema.Trimmed, SchemaTransformation.toLowerCase()),
   ),
 ])
 

@@ -242,12 +242,23 @@ export const GelResource = Schema.Struct({
   url: Schema.String,
   title: Schema.String,
   format: Enums.GelResourceFormat,
-  description: GelOptionalColumn(Schema.Unknown), // json
+  description: GelOptionalColumn(GelTiptapDocument),
   credit_line: GelOptionalColumn(Schema.String),
   thumbnail: GelOptionalColumn(Schema.String), // Image.id
   handle: Handle,
 })
 export type GelResource = typeof GelResource.Type
+
+const GelResourceRelation = Schema.Struct({ id: Schema.String })
+
+export const GelResourceWithRelations = Schema.Struct({
+  ...GelResource.fields,
+  thumbnail: GelOptionalColumn(GelResourceRelation),
+  created_by: GelOptionalColumn(GelResourceRelation),
+  related_vegetables: Schema.Array(GelResourceRelation),
+  tags: Schema.Array(GelResourceRelation),
+})
+export type GelResourceWithRelations = typeof GelResourceWithRelations.Type
 
 export const GelVegetableForReconstruction = Schema.Struct({
   ...GelVegetable.fields,
