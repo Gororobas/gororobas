@@ -12,14 +12,14 @@ import {
 } from "@gororobas/domain"
 import { HashSet, Option, Schema } from "effect"
 
-import { type GelVegetable } from "./schemas/gel/entities.js"
+import { type GelVegetable } from "../schemas/gel/entities.js"
 import {
   GelEdiblePart,
   GelPlantingMethod,
   GelStratum,
   GelVegetableLifeCycle,
   GelVegetableUsage,
-} from "./schemas/gel/enums.js"
+} from "../schemas/gel/enums.js"
 
 const hashNameToLoroListItemId = (name: string): LoroListItemId =>
   LoroListItemId.make(

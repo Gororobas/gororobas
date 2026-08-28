@@ -31,18 +31,35 @@ export const Handle = Schema.Trim.pipe(
 )
 export type Handle = typeof Handle.Type
 
-const emailRegex = /^[\w.-]+@[\w.-]+\.\w{2,}$/i
+/** Used by {@link Email} below to ensure proper type checking during decoding. */
+const EmailCore = Schema.TemplateLiteral([
+  // Left part: must be a non-empty string
+  Schema.String.check(Schema.isMinLength(1)).pipe(
+    Schema.decodeTo(Schema.String, SchemaTransformation.toLowerCase()),
+  ),
 
-export const Email = Schema.String.pipe(
-  Schema.decodeTo(Schema.String, SchemaTransformation.toLowerCase()),
-  Schema.check(
-    Schema.isPattern(emailRegex, {
-      message: "Invalid email format",
+  // Separator
+  "@",
+
+  // Right part: must be a string with a maximum length of 128
+  Schema.String.check(Schema.isMaxLength(128)).pipe(
+    Schema.decodeTo(Schema.String, SchemaTransformation.toLowerCase()),
+  ),
+])
+
+/**
+ * Simple string@string validation.
+ * Transforms the input to lowercase before decoding, ensure we get normalized addresses.
+ */
+export const Email = EmailCore.pipe(
+  Schema.decodeTo(
+    EmailCore,
+    SchemaTransformation.transform({
+      // oxlint-disable-next-line effect/casting-awareness
+      decode: (input) => input.toLowerCase() as typeof EmailCore.Type,
+      encode: (decoded) => decoded,
     }),
   ),
-  Schema.annotate({
-    toArbitrary: () => (fc) => fc.emailAddress().map((s) => s.toLowerCase()),
-  }),
   Schema.brand("Email"),
 )
 export type Email = typeof Email.Type

@@ -12,7 +12,9 @@ interface GelClientService {
 
 export class GelClient extends Context.Service<GelClient, GelClientService>()("GelClient") {}
 
-const makeGelClient = Effect.sync(() => createClient()).pipe(
+const makeGelClient = Effect.sync(() =>
+  createClient().withConfig({ apply_access_policies: false }),
+).pipe(
   Effect.map((client) => ({
     use: <A>(operation: (client: Client) => Promise<A>) =>
       Effect.tryPromise({

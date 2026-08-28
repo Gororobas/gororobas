@@ -1,4 +1,10 @@
-import { TiptapDocument } from "@gororobas/domain"
+import {
+  Email,
+  Handle,
+  NonEmptyTrimmedString,
+  PlatformAccessLevel,
+  TiptapDocument,
+} from "@gororobas/domain"
 /**
  * Gel entity schemas.
  */
@@ -11,7 +17,9 @@ export const GelOptionalColumn = <S extends Schema.Schema<unknown>>(s: S) =>
 
 // ============ Base Types ============
 
-const GelTimestamp = Schema.Date
+export const GelTimestamp = Schema.Date
+
+export const GelTiptapDocument = TiptapDocument
 
 export const gelAuditableFields = {
   created_at: GelTimestamp,
@@ -28,24 +36,77 @@ const gelEmbeddedAuditableFields = {
 
 export const GelUser = Schema.Struct({
   id: Schema.String,
-  identity: Schema.String, // ext::auth::Identity
-  email: Schema.String,
+  identity: Schema.Struct({
+    id: Schema.String,
+    issuer: Schema.String,
+    subject: Schema.String,
+  }),
+  email: Schema.NullOr(Email),
   userRole: Enums.GelRole.pipe(Schema.optional),
-  created: Schema.String,
-  updated: Schema.String,
+  created: GelTimestamp,
+  updated: GelTimestamp,
+  // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field -- Gel uses snake_case in the migration query.
+  is_email_verified: Schema.Boolean,
 })
 export type GelUser = typeof GelUser.Type
 
 export const GelUserProfile = Schema.Struct({
   id: Schema.String,
-  user: Schema.String, // User.id
   name: Schema.String,
-  bio: Schema.Unknown, // json
-  location: Schema.String.pipe(Schema.optional),
-  photo: Schema.String.pipe(Schema.optional), // Image.id
-  handle: Schema.String,
+  bio: GelOptionalColumn(Schema.toCodecJson(GelTiptapDocument)),
+  location: GelOptionalColumn(Schema.String),
+  photo: GelOptionalColumn(Schema.Struct({ id: Schema.String })),
+  handle: Handle,
 })
 export type GelUserProfile = typeof GelUserProfile.Type
+
+export const GelUserWithProfile = Schema.Struct({
+  ...GelUser.fields,
+  profile: Schema.Struct({
+    ...GelUserProfile.fields,
+    bookmarks_count: Schema.Int,
+    edit_suggestions_count: Schema.Int,
+    notes_count: Schema.Int,
+    images_count: Schema.Int,
+  }),
+})
+export type GelUserWithProfile = typeof GelUserWithProfile.Type
+
+export const AccountDataForMigration = Schema.Struct({
+  name: NonEmptyTrimmedString,
+  email: Schema.NullOr(Email),
+  // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field -- Matches the SQLite column.
+  is_email_verified: Schema.Boolean,
+  image: Schema.Null,
+  created_at: GelTimestamp,
+  updated_at: GelTimestamp,
+})
+
+const ProfileDataForMigration = Schema.Struct({
+  type: Schema.Literal("PERSON"),
+  handle: Handle,
+  name: NonEmptyTrimmedString,
+  bio: Schema.NullOr(TiptapDocument),
+  location: Schema.NullOr(NonEmptyTrimmedString),
+  photo_gel_id: Schema.NullOr(Schema.String),
+  visibility: Schema.Literal("PUBLIC"),
+  created_at: GelTimestamp,
+  updated_at: GelTimestamp,
+})
+
+const PersonDataForMigration = Schema.Struct({
+  access_level: PlatformAccessLevel,
+  access_set_by_gel_id: Schema.Null,
+  access_set_at: Schema.Null,
+})
+
+export const UserDataForMigration = Schema.Struct({
+  latest_source: GelUserWithProfile,
+  account: AccountDataForMigration,
+  profile: ProfileDataForMigration,
+  person: PersonDataForMigration,
+})
+export type UserDataForMigration = typeof UserDataForMigration.Type
 
 export const GelHistoryLog = Schema.Struct({
   id: Schema.String,
@@ -92,7 +153,7 @@ export const GelVegetableVariety = Schema.Struct({
   ...gelEmbeddedAuditableFields,
   id: Schema.String,
   names: Schema.Array(Schema.String),
-  handle: Schema.String,
+  handle: Handle,
   photos: Schema.Array(GelImage),
 })
 export type GelVegetableVariety = typeof GelVegetableVariety.Type
@@ -102,7 +163,7 @@ export const GelVegetableTip = Schema.Struct({
   id: Schema.String,
   subjects: Schema.Array(Enums.GelTipSubject),
   content: Schema.Unknown, // json
-  handle: Schema.String,
+  handle: Handle,
 })
 export type GelVegetableTip = typeof GelVegetableTip.Type
 
@@ -126,7 +187,7 @@ export const GelVegetable = Schema.Struct({
   temperature_min: GelOptionalColumn(Schema.Number),
   temperature_max: GelOptionalColumn(Schema.Number),
   content: GelOptionalColumn(Schema.Unknown), // json
-  handle: Schema.String,
+  handle: Handle,
 })
 export type GelVegetable = typeof GelVegetable.Type
 
@@ -161,7 +222,7 @@ export const GelNote = Schema.Struct({
   title: TiptapDocument,
   body: GelOptionalColumn(TiptapDocument),
   content_plain_text: GelOptionalColumn(Schema.String),
-  handle: Schema.String,
+  handle: Handle,
 })
 export type GelNote = typeof GelNote.Type
 
@@ -184,7 +245,7 @@ export const GelResource = Schema.Struct({
   description: GelOptionalColumn(Schema.Unknown), // json
   credit_line: GelOptionalColumn(Schema.String),
   thumbnail: GelOptionalColumn(Schema.String), // Image.id
-  handle: Schema.String,
+  handle: Handle,
 })
 export type GelResource = typeof GelResource.Type
 
