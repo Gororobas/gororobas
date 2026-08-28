@@ -5,8 +5,12 @@ import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { WikiAnimalArticle } from "./kinds/animal.js"
+import { WikiBookArticle } from "./kinds/book.js"
 import { WikiConceptArticle } from "./kinds/concept.js"
+import { WikiFilmArticle } from "./kinds/film.js"
+import { WikiNoteworthyEntityArticle } from "./kinds/noteworthy-entity.js"
 import { WikiPlantArticle } from "./kinds/plant.js"
+import { WikiResourceArticle } from "./kinds/resource.js"
 import { WikiToolArticle } from "./kinds/tool.js"
 import { WikiUncategorizedArticle } from "./kinds/uncategorized.js"
 import {
@@ -16,8 +20,12 @@ import {
 
 export const WikiArticleEditableData = Schema.Union([
   WikiAnimalArticle.EditableArticle,
+  WikiBookArticle.EditableArticle,
   WikiConceptArticle.EditableArticle,
+  WikiFilmArticle.EditableArticle,
+  WikiNoteworthyEntityArticle.EditableArticle,
   WikiPlantArticle.EditableArticle,
+  WikiResourceArticle.EditableArticle,
   WikiToolArticle.EditableArticle,
   WikiUncategorizedArticle.EditableArticle,
 ]).pipe(Schema.toTaggedUnion("kind"))
@@ -55,8 +63,12 @@ export type WikiArticleRevisionRow = typeof WikiArticleRevisionRow.Type
 /** The main queryable article record.*/
 export const WikiArticleMaterializedRow = Schema.Union([
   WikiAnimalArticle.MaterializedRow,
+  WikiBookArticle.MaterializedRow,
   WikiPlantArticle.MaterializedRow,
   WikiConceptArticle.MaterializedRow,
+  WikiFilmArticle.MaterializedRow,
+  WikiNoteworthyEntityArticle.MaterializedRow,
+  WikiResourceArticle.MaterializedRow,
   WikiToolArticle.MaterializedRow,
   WikiUncategorizedArticle.MaterializedRow,
 ]).pipe(Schema.toTaggedUnion("kind"))
@@ -105,16 +117,40 @@ export const editableToMaterializedArticle = (
           attributes: WikiAnimalArticle.materializeAttributes(animal.attributes),
           ...metadata,
         }),
+      BOOK: (book) =>
+        WikiBookArticle.MaterializedRow.make({
+          kind: book.kind,
+          attributes: WikiBookArticle.materializeAttributes(book.attributes),
+          ...metadata,
+        }),
       CONCEPT: (concept) =>
         WikiConceptArticle.MaterializedRow.make({
           kind: concept.kind,
           attributes: WikiConceptArticle.materializeAttributes(concept.attributes),
           ...metadata,
         }),
+      FILM: (film) =>
+        WikiFilmArticle.MaterializedRow.make({
+          kind: film.kind,
+          attributes: WikiFilmArticle.materializeAttributes(film.attributes),
+          ...metadata,
+        }),
+      NOTEWORTHY_ENTITY: (entity) =>
+        WikiNoteworthyEntityArticle.MaterializedRow.make({
+          kind: entity.kind,
+          attributes: WikiNoteworthyEntityArticle.materializeAttributes(entity.attributes),
+          ...metadata,
+        }),
       PLANT: (plant) =>
         WikiPlantArticle.MaterializedRow.make({
           kind: plant.kind,
           attributes: WikiPlantArticle.materializeAttributes(plant.attributes),
+          ...metadata,
+        }),
+      RESOURCE: (resource) =>
+        WikiResourceArticle.MaterializedRow.make({
+          kind: resource.kind,
+          attributes: WikiResourceArticle.materializeAttributes(resource.attributes),
           ...metadata,
         }),
       TOOL: (tool) =>

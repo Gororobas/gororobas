@@ -1,8 +1,10 @@
 import { Effect, Schema } from "effect"
 
+import { TagId } from "../../common/ids.js"
 import { IntNonNegative, NameInCrdtList } from "../../common/primitives.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
+import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import type { BookEditableAttributes } from "./book.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 
@@ -20,6 +22,18 @@ const publisherOperations = makeOptionalScalarEditOperations("Publisher")({
   ValueSchema: Schema.String,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "publisher" satisfies keyof BookEditableAttributes,
+})
+
+const urlOperations = makeOptionalScalarEditOperations("PublisherUrl")({
+  ValueSchema: Schema.URLFromString,
+  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
+  keyInParentContainer: "url" satisfies keyof BookEditableAttributes,
+})
+
+const bookTagOperations = makeStringSetEditOperations("BookTag")({
+  ValueSchema: TagId,
+  getContainer: (document) =>
+    Effect.succeed(document.getMap("attributes").ensureMergeableMap("tags")),
 })
 
 const publicationDateOperations = makeOptionalScalarEditOperations("PublicationDate")({
@@ -61,6 +75,8 @@ const pageCountOperations = makeOptionalScalarEditOperations("PageCount")({
 export const WikiBookArticleCrdtOperations = defineKindCrdtOperations([
   ...authorsOperations,
   ...publisherOperations,
+  ...urlOperations,
+  ...bookTagOperations,
   ...publicationDateOperations,
   ...isbn10Operations,
   ...isbn13Operations,

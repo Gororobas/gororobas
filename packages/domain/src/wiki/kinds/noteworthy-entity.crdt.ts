@@ -1,31 +1,16 @@
 import { NoteworthyEntityType } from "@gororobas/domain/common/enums"
 import { Effect, Schema } from "effect"
 
-import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
+import { TagId } from "../../common/ids.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
+import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import { type NoteworthyEntityEditableAttributes } from "./noteworthy-entity.js"
 
-const namesOperations = makeMovableListEditOperations("Name")({
-  ValueSchema: NameInCrdtList.schema.fields.value,
+const noteworthyEntityTagOperations = makeStringSetEditOperations("NoteworthyEntityTag")({
+  ValueSchema: TagId,
   getContainer: (document) =>
-    Effect.succeed(
-      document
-        .getMap("attributes")
-        .ensureMergeableMovableList("names" satisfies keyof NoteworthyEntityEditableAttributes),
-    ),
-})
-
-const areasOfWorkOperations = makeMovableListEditOperations("AreaOfWork")({
-  ValueSchema: NameInCrdtList.schema.fields.value,
-  getContainer: (document) =>
-    Effect.succeed(
-      document
-        .getMap("attributes")
-        .ensureMergeableMovableList(
-          "areasOfWork" satisfies keyof NoteworthyEntityEditableAttributes,
-        ),
-    ),
+    Effect.succeed(document.getMap("attributes").ensureMergeableMap("tags")),
 })
 
 const entityTypeOperations = makeOptionalScalarEditOperations("EntityType")({
@@ -53,8 +38,7 @@ const urlOperations = makeOptionalScalarEditOperations("Url")({
 })
 
 export const WikiNoteworthyEntityArticleCrdtOperations = defineKindCrdtOperations([
-  ...namesOperations,
-  ...areasOfWorkOperations,
+  ...noteworthyEntityTagOperations,
   ...entityTypeOperations,
   ...foundedDateOperations,
   ...dissolvedDateOperations,
@@ -62,5 +46,3 @@ export const WikiNoteworthyEntityArticleCrdtOperations = defineKindCrdtOperation
 ])
 export type WikiNoteworthyEntityArticleAttributeEdit =
   typeof WikiNoteworthyEntityArticleCrdtOperations.AttributeEdit.Type
-
-import { NameInCrdtList } from "../../common/primitives.js"

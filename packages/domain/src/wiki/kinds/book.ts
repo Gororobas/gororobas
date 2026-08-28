@@ -1,16 +1,20 @@
 import { Option, Schema } from "effect"
 
+import { TagId } from "../../common/ids.js"
 import {
   IntNonNegative,
   NameInCrdtList,
   OptionalColumn,
   ValidName,
 } from "../../common/primitives.js"
+import { CrdtBrandedStringSet } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
   authors: OptionalColumn(Schema.Array(ValidName)),
+  tags: OptionalColumn(Schema.Array(TagId)),
   publisher: OptionalColumn(Schema.String),
+  url: OptionalColumn(Schema.URLFromString),
   publicationDate: OptionalColumn(Schema.String),
   isbn10: OptionalColumn(Schema.String),
   isbn13: OptionalColumn(Schema.String),
@@ -24,6 +28,7 @@ export const WikiBookArticle = defineKind({
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,
     authors: OptionalColumn(Schema.Array(NameInCrdtList)),
+    tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
   MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
@@ -32,6 +37,7 @@ export const WikiBookArticle = defineKind({
       authors: Option.map(editableAttributes.authors, (authors) =>
         authors.map((author) => author.value),
       ),
+      tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
 })
 

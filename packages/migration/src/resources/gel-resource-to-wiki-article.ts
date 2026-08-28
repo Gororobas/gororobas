@@ -5,10 +5,10 @@ import {
   WikiNoteworthyEntityArticle,
   WikiResourceArticle,
 } from "@gororobas/domain"
-import { Effect, Match, Schema } from "effect"
+import { Effect, Match, Record, Schema } from "effect"
 
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
-import { gelVegetableNamesToCrdtList } from "../vegetables/gel-vegetable-to-wiki-plant-article.js"
+import { gelVegetableNamesToCrdtList as stringsToCrdtList } from "../vegetables/gel-vegetable-to-wiki-plant-article.js"
 
 export const ResourceWikiArticle = Schema.Union([
   WikiBookArticle.EditableArticle,
@@ -35,13 +35,51 @@ const genericResourceFormatMap = {
   VIDEO: "VIDEO",
 } as const
 
+const organizationEntityTypesByHandle: Record<
+  string,
+  | "MOVEMENT"
+  | "NETWORK"
+  | "NONPROFIT"
+  | "MEDIA_ORGANIZATION"
+  | "RESEARCH_ORGANIZATION"
+  | "PUBLIC_AGENCY"
+> = {
+  mcp: "MOVEMENT",
+  "instituto-mapinguari-e5efced9": "NONPROFIT",
+  serta: "NONPROFIT",
+  "em-pratos-limpos": "MEDIA_ORGANIZATION",
+  "o-joio-e-o-trigo": "MEDIA_ORGANIZATION",
+  "teia-dos-povos": "NETWORK",
+  fpsan: "NETWORK",
+  "grupo-aue": "RESEARCH_ORGANIZATION",
+  mst: "MOVEMENT",
+  conaq: "NETWORK",
+  "campesena-93aa3ca3": "PUBLIC_AGENCY",
+  "la-via-campesina": "NETWORK",
+  "centro-sabia": "NONPROFIT",
+  "combate-racismo-ambiental-95da2209": "MEDIA_ORGANIZATION",
+  "ctazm-mg": "NONPROFIT",
+  mpa: "MOVEMENT",
+  mmc: "MOVEMENT",
+  rama: "NETWORK",
+  cepeas: "RESEARCH_ORGANIZATION",
+  "de-olho-nos-ruralistas": "MEDIA_ORGANIZATION",
+  aspta: "NONPROFIT",
+  "rede-mg": "NETWORK",
+  "muda-floresta": "NONPROFIT",
+  ana: "NETWORK",
+}
+
 export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(function* (
   source: GelResourceWithRelations,
 ) {
+  // @todo convert to migrated tags via MigrationContext
+  const tags = Record.fromEntries(source.tags.map(({ id }) => [id, true] as const))
+
   // Round-about way of using the encoded version of the translation in the decode calls below
   const translationsEncoded = yield* Schema.decodeEffect(WikiArticleEditableTranslations)({
     pt: {
-      commonNames: gelVegetableNamesToCrdtList([source.title]),
+      commonNames: stringsToCrdtList([source.title]),
       content: source.description,
       grammaticalGender: null,
     },
@@ -53,14 +91,20 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
       Schema.decodeEffect(WikiBookArticle.EditableArticle)({
         kind: "BOOK",
         translations: translationsEncoded,
-        attributes: {}, // @todo add URL to book attributes
+        attributes: {
+          authors: source.credit_line ? stringsToCrdtList([source.credit_line]) : undefined,
+          url: source.url,
+          tags,
+        },
       }),
     ),
     Match.when({ format: "FILM" }, () =>
       Schema.decodeEffect(WikiFilmArticle.EditableArticle)({
         kind: "FILM",
         translations: translationsEncoded,
-        attributes: {}, // @todo add URL to film attributes
+        attributes: {
+          tags,
+        },
       }),
     ),
     Match.when({ format: "ORGANIZATION" }, () =>
@@ -68,9 +112,9 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
         kind: "NOTEWORTHY_ENTITY",
         translations: translationsEncoded,
         attributes: {
-          entityType: "OTHER", // @todo can we parse this?
+          entityType: organizationEntityTypesByHandle[source.handle] ?? "OTHER",
           url: source.url,
-          names: gelVegetableNamesToCrdtList([source.title]), // @todo remove `names` from WikiNoteworthyEntityArticle, already covered in translations
+          tags,
         },
       }),
     ),
@@ -86,7 +130,12 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
       (s) =>
         Schema.decodeEffect(WikiResourceArticle.EditableArticle)({
           kind: "RESOURCE",
-          attributes: { format: genericResourceFormatMap[s.format], url: s.url },
+          attributes: {
+            format: genericResourceFormatMap[s.format],
+            url: s.url,
+            creditLine: s.credit_line ?? undefined,
+            tags,
+          },
           translations: translationsEncoded,
         }),
     ),

@@ -1,33 +1,29 @@
 import { Option, Schema } from "effect"
 
 import { NoteworthyEntityType } from "../../common/enums.js"
-import { NameInCrdtList, OptionalColumn, ValidName } from "../../common/primitives.js"
+import { TagId } from "../../common/ids.js"
+import { CrdtBrandedStringSet, OptionalColumn } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
   entityType: NoteworthyEntityType,
-  names: OptionalColumn(Schema.Array(ValidName)),
-  areasOfWork: OptionalColumn(Schema.Array(ValidName)),
   foundedDate: OptionalColumn(Schema.String),
   dissolvedDate: OptionalColumn(Schema.String),
   url: OptionalColumn(Schema.URLFromString),
+  tags: OptionalColumn(Schema.Array(TagId)),
 })
 
 export const WikiNoteworthyEntityArticle = defineKind({
   Kind: Schema.Literal("NOTEWORTHY_ENTITY"),
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,
-    names: OptionalColumn(Schema.Array(NameInCrdtList)),
-    areasOfWork: OptionalColumn(Schema.Array(NameInCrdtList)),
+    tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
   MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
     MaterializedAttributes.make({
       ...editableAttributes,
-      names: Option.map(editableAttributes.names, (names) => names.map((name) => name.value)),
-      areasOfWork: Option.map(editableAttributes.areasOfWork, (areasOfWork) =>
-        areasOfWork.map((item) => item.value),
-      ),
+      tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
 })
 

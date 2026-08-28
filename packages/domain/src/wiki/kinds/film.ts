@@ -1,5 +1,6 @@
 import { Option, Schema } from "effect"
 
+import { TagId } from "../../common/ids.js"
 import {
   ItemInCrdtList,
   NameInCrdtList,
@@ -7,6 +8,7 @@ import {
   TimestampColumn,
   ValidName,
 } from "../../common/primitives.js"
+import { CrdtBrandedStringSet } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
@@ -14,6 +16,7 @@ const MaterializedAttributes = Schema.Struct({
   releaseDate: OptionalColumn(TimestampColumn),
   languages: OptionalColumn(Schema.Array(Schema.String)),
   genres: OptionalColumn(Schema.Array(ValidName)),
+  tags: OptionalColumn(Schema.Array(TagId)),
 })
 
 export const WikiFilmArticle = defineKind({
@@ -30,6 +33,7 @@ export const WikiFilmArticle = defineKind({
       ),
     ),
     genres: OptionalColumn(Schema.Array(NameInCrdtList)),
+    tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
   MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
@@ -42,6 +46,7 @@ export const WikiFilmArticle = defineKind({
         languages.map((language) => language.value),
       ),
       genres: Option.map(editableAttributes.genres, (genres) => genres.map((genre) => genre.value)),
+      tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
 })
 

@@ -1,8 +1,10 @@
 import { Effect, Schema } from "effect"
 
+import { TagId } from "../../common/ids.js"
 import { NameInCrdtList } from "../../common/primitives.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
+import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import type { FilmEditableAttributes } from "./film.js"
 
@@ -42,10 +44,17 @@ const releaseDateOperations = makeOptionalScalarEditOperations("ReleaseDate")({
   keyInParentContainer: "releaseDate" satisfies keyof FilmEditableAttributes,
 })
 
+const filmTagOperations = makeStringSetEditOperations("FilmTag")({
+  ValueSchema: TagId,
+  getContainer: (document) =>
+    Effect.succeed(document.getMap("attributes").ensureMergeableMap("tags")),
+})
+
 export const WikiFilmArticleCrdtOperations = defineKindCrdtOperations([
   ...directorsOperations,
   ...releaseDateOperations,
   ...languagesOperations,
   ...genresOperations,
+  ...filmTagOperations,
 ])
 export type WikiFilmArticleAttributeEdit = typeof WikiFilmArticleCrdtOperations.AttributeEdit.Type
