@@ -55,6 +55,10 @@ export type ProfileVisibility = typeof ProfileVisibility.Type
 export const InformationVisibility = Schema.Literals(["PRIVATE", "COMMUNITY", "PUBLIC"])
 export type InformationVisibility = typeof InformationVisibility.Type
 
+/** Publications can't be private */
+export const PublicationVisibility = Schema.Literals(["COMMUNITY", "PUBLIC"])
+export type PublicationVisibility = typeof PublicationVisibility.Type
+
 export const RevisionEvaluation = Schema.Literals(["PENDING", "APPROVED", "REJECTED"])
 export type RevisionEvaluation = typeof RevisionEvaluation.Type
 

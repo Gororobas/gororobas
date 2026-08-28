@@ -39,19 +39,6 @@ Feature: Publications
         | Gusttavo | no      |
         | visitors | no      |
 
-    Scenario: Person with community access creates private post publications
-      Given "Irene" is logged in
-      When they create a "PRIVATE" post publication under their profile
-      Then the post publication is created in "Irene"'s profile
-      And the post publication should have the following visibility:
-        | viewer   | visible |
-        | Irene    | yes     |
-        | Ailton   | no      |
-        | Ana      | no      |
-        | Pedro    | no      |
-        | Gusttavo | no      |
-        | visitors | no      |
-
     Scenario: Person awaiting access creates a public post publication
       Given "Pedro" is logged in
       When they create a "PUBLIC" post publication under their profile
@@ -123,19 +110,6 @@ Feature: Publications
         | Carlos   | yes     |
         | Teresa   | yes     |
         | Xavier   | yes     |
-        | Pedro    | no      |
-        | Gusttavo | no      |
-        | visitors | no      |
-
-    Scenario: Editor publishes an internal post (Private)
-      Given "Carlos" is logged in
-      When they create a "PRIVATE" post publication under "Sítio Semente" profile
-      Then the post publication should have the following visibility:
-        | viewer   | visible |
-        | Maria    | yes     |
-        | Carlos   | yes     |
-        | Teresa   | yes     |
-        | Xavier   | no      |
         | Pedro    | no      |
         | Gusttavo | no      |
         | visitors | no      |

@@ -4,8 +4,8 @@ import { schema as loroSchema } from "loro-mirror"
 import type { SourceCommentData } from "../comments/domain.js"
 import {
   EventAttendanceMode,
-  InformationVisibility,
   Locale,
+  PublicationVisibility,
   TranslationSource,
 } from "../common/enums.js"
 import { PersonId, ProfileId } from "../common/ids.js"
@@ -58,7 +58,7 @@ export const PostMetadataLoro = loroSchema.LoroMap({
   kind: loroSchema.String<"POST">(),
   owner_profile_id: loroSchema.String<ProfileId>({ required: true }),
   published_at: loroSchema.String(),
-  visibility: loroSchema.String<InformationVisibility>({ required: true }),
+  visibility: loroSchema.String<PublicationVisibility>({ required: true }),
 })
 
 export const EventMetadataLoro = loroSchema.LoroMap({
@@ -70,7 +70,7 @@ export const EventMetadataLoro = loroSchema.LoroMap({
   owner_profile_id: loroSchema.String<ProfileId>({ required: true }),
   published_at: loroSchema.String(),
   start_date: loroSchema.String({ required: true }),
-  visibility: loroSchema.String<InformationVisibility>({ required: true }),
+  visibility: loroSchema.String<PublicationVisibility>({ required: true }),
 })
 
 export const PostSourceDataLoro = loroSchema({
@@ -116,7 +116,7 @@ export const PublicationMetadataStorageLoro = loroSchema.LoroMap({
   ownerProfileId: loroSchema.String<ProfileId>({ required: true }),
   publishedAt: loroSchema.String({ required: true }),
   startDate: loroSchema.String({ required: false }),
-  visibility: loroSchema.String<InformationVisibility>({ required: true }),
+  visibility: loroSchema.String<PublicationVisibility>({ required: true }),
 })
 
 export const PublicationSourceDataStorageLoro = loroSchema({

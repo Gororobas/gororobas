@@ -1,10 +1,10 @@
 import type {
   Handle,
-  InformationVisibility,
   TranslationSource,
   Locale,
   EventAttendanceMode,
   PublicationKind,
+  PublicationVisibility,
 } from "@gororobas/domain"
 import { schema as loroSchema } from "loro-mirror"
 
@@ -21,7 +21,7 @@ export const CoreMetadataLoro = {
   handle: loroSchema.String<Handle>({ required: true }),
   owner_profile_id: loroSchema.String({ required: true }),
   published_at: loroSchema.String({ required: false }),
-  visibility: loroSchema.String<InformationVisibility>({ required: true }),
+  visibility: loroSchema.String<PublicationVisibility>({ required: true }),
 }
 
 export const PostMetadataLoro = loroSchema.LoroMap({

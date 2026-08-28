@@ -2,7 +2,7 @@
  * Publications service - business operations for publications.
  *
  * Based on BDD features in test/publications.feature:
- * - Create post/event publications with visibility (PUBLIC/COMMUNITY/PRIVATE)
+ * - Create post/event publications with visibility (PUBLIC/COMMUNITY)
  * - Edit publications with history tracking
  * - Delete publications
  * - View publication history

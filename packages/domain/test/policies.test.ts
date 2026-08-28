@@ -19,6 +19,7 @@ import {
   OrganizationType,
   PersonId,
   PlatformAccessLevel,
+  PublicationVisibility,
   Session,
   VisitorSession,
 } from "../src/index.js"
@@ -41,6 +42,7 @@ const trustedAccountSessionArbitrary = accountSessionArbitrary.filter(
 const sessionArbitrary = Schema.toArbitrary(Session)(FastCheck)
 
 const personIdArbitrary = Schema.toArbitrary(PersonId)(FastCheck)
+const publicationVisibilityArbitrary = Schema.toArbitrary(PublicationVisibility)(FastCheck)
 const organizationIdArbitrary = Schema.toArbitrary(OrganizationId)(FastCheck)
 const visibilityArbitrary = Schema.toArbitrary(InformationVisibility)(FastCheck)
 const organizationTypeArbitrary = Schema.toArbitrary(OrganizationType)(FastCheck)
@@ -198,7 +200,7 @@ describe("Policies", () => {
   describe("implications", () => {
     it.effect("canEdit implies canView (for owned publications)", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
+        FastCheck.tuple(accountSessionArbitrary, publicationVisibilityArbitrary),
         ([session, visibility]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
@@ -223,7 +225,7 @@ describe("Policies", () => {
 
     it.effect("canDelete implies canView (for owned publications)", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, visibilityArbitrary),
+        FastCheck.tuple(accountSessionArbitrary, publicationVisibilityArbitrary),
         ([session, visibility]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
@@ -367,27 +369,6 @@ describe("Policies", () => {
               ownerProfileId: ownerId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "COMMUNITY",
-            })
-            const result = yield* runPolicySuccess(
-              Policies.publications.canView(publication),
-              session,
-            )
-            return !result
-          }),
-      ),
-    )
-
-    it.effect("private publications are not viewable by non-owners", () =>
-      assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
-        ([session, otherPersonId]) =>
-          Effect.gen(function* () {
-            if (session.personId === otherPersonId) return true
-            const publication = CorePublicationMetadata.make({
-              handle: TEST_HANDLE,
-              ownerProfileId: otherPersonId,
-              publishedAt: TEST_PUBLISHED_AT,
-              visibility: "PRIVATE",
             })
             const result = yield* runPolicySuccess(
               Policies.publications.canView(publication),
@@ -740,7 +721,7 @@ describe("Policies", () => {
             handle: TEST_HANDLE,
             ownerProfileId: session.personId,
             publishedAt: TEST_PUBLISHED_AT,
-            visibility: "PRIVATE",
+            visibility: "PUBLIC",
           })
           const canEditOwn = yield* runPolicySuccess(
             Policies.publications.canEdit(ownPublication),

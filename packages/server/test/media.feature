@@ -37,19 +37,6 @@ Feature: Media
         | Gusttavo | no      |
         | visitors | no      |
 
-    Scenario: Private publication media is visible to the same audience as the publication
-      Given "Irene" is logged in
-      When they create a "PRIVATE" publication under their profile
-      And they upload media to the publication
-      Then the media should have the following visibility:
-        | viewer   | visible |
-        | Irene    | yes     |
-        | Ailton   | no      |
-        | Ana      | no      |
-        | Pedro    | no      |
-        | Gusttavo | no      |
-        | visitors | no      |
-
     Scenario: Person awaiting access can upload media inside publications
       Given "Pedro" is logged in
       When they create a "PUBLIC" publication under their profile

@@ -6,9 +6,9 @@ import { Schema } from "effect"
 import { PublicationClassification } from "../classification/domain.js"
 import {
   EventAttendanceMode,
-  InformationVisibility,
   Locale,
   PublicationKind,
+  PublicationVisibility,
   TranslationSource,
 } from "../common/enums.js"
 import {
@@ -37,7 +37,7 @@ export const CorePublicationMetadata = Schema.Struct({
   handle: Handle,
   ownerProfileId: ProfileId,
   publishedAt: TimestampColumn,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type CorePublicationMetadata = typeof CorePublicationMetadata.Type
 
@@ -135,7 +135,7 @@ export const PublicationSourceDataStorage = Schema.Struct({
     ownerProfileId: ProfileId,
     publishedAt: Schema.String,
     startDate: Schema.optional(Schema.NullOr(Schema.String)),
-    visibility: InformationVisibility,
+    visibility: PublicationVisibility,
   }),
 })
 export type PublicationSourceDataStorage = typeof PublicationSourceDataStorage.Type
@@ -264,7 +264,7 @@ export type PublicationPageData = typeof PublicationPageData.Type
 export const ApiPublicationSearchParams = Schema.Struct({
   ownerProfileId: Schema.optional(ProfileId),
   type: Schema.optional(PublicationKind),
-  visibility: Schema.optional(InformationVisibility),
+  visibility: Schema.optional(PublicationVisibility),
   ...PaginationOptions.fields,
 })
 
@@ -280,7 +280,7 @@ export const ApiPublicationCardData = Schema.Struct({
   ownerProfileId: ProfileId,
   publishedAt: Schema.NullOr(TimestampColumn),
   kind: PublicationKind,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type ApiPublicationCardData = typeof ApiPublicationCardData.Type
 
@@ -295,7 +295,7 @@ export const ApiPostData = Schema.Struct({
   publishedAt: Schema.NullOr(TimestampColumn),
   kind: PostKind,
   updatedAt: TimestampColumn,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type ApiPostData = typeof ApiPostData.Type
 
@@ -314,7 +314,7 @@ export const ApiEventData = Schema.Struct({
   startDate: TimestampColumn,
   kind: EventKind,
   updatedAt: TimestampColumn,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type ApiEventData = typeof ApiEventData.Type
 
@@ -324,7 +324,7 @@ export type ApiPublicationData = typeof ApiPublicationData.Type
 export const ApiCreatePostData = Schema.Struct({
   content: TiptapDocument,
   handle: Handle,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type ApiCreatePostData = typeof ApiCreatePostData.Type
 
@@ -335,7 +335,7 @@ export const ApiCreateEventData = Schema.Struct({
   handle: Handle,
   locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
   startDate: TimestampColumn,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type ApiCreateEventData = typeof ApiCreateEventData.Type
 
@@ -356,7 +356,7 @@ export type ApiPublicationHistoryEntry = typeof ApiPublicationHistoryEntry.Type
 export const CreatePostData = Schema.Struct({
   locale: Locale,
   content: TiptapDocument,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type CreatePostData = typeof CreatePostData.Type
 
@@ -367,7 +367,7 @@ export const CreateEventData = Schema.Struct({
   endDate: Schema.optional(Schema.NullOr(TimestampColumn)),
   locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
   startDate: TimestampColumn,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 })
 export type CreateEventData = typeof CreateEventData.Type
 
@@ -406,7 +406,7 @@ export const PublicationRow = Schema.Struct({
   ownerProfileId: ProfileId,
   publishedAt: TimestampColumn,
   kind: PublicationKind,
-  visibility: InformationVisibility,
+  visibility: PublicationVisibility,
 
   // Event-specific - always `null` for posts
   startDate: Schema.NullOr(TimestampColumn),
