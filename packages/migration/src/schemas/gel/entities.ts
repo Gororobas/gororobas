@@ -139,6 +139,11 @@ export const GelTag = Schema.Struct({
 })
 export type GelTag = typeof GelTag.Type
 
+export const TagDataForMigration = Schema.Struct({
+  latest_source: GelTag,
+})
+export type TagDataForMigration = typeof TagDataForMigration.Type
+
 export const GelImage = Schema.Struct({
   ...gelEmbeddedAuditableFields,
   id: Schema.String,

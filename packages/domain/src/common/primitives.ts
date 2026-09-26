@@ -45,7 +45,14 @@ const EmailCore = Schema.TemplateLiteral([
   Schema.Trimmed.check(Schema.isMinLength(1), Schema.isMaxLength(128)).pipe(
     Schema.decodeTo(Schema.Trimmed, SchemaTransformation.toLowerCase()),
   ),
-])
+]).annotate({
+  toArbitrary: () => (fc) =>
+    fc
+      .tuple(fc.string({ minLength: 1 }), fc.string({ minLength: 1, maxLength: 128 }))
+      .map(([left, right]) =>
+        Schema.decodeUnknownSync(EmailCore)(`${left.trim()}@${right.trim()}`.toLowerCase()),
+      ),
+})
 
 /**
  * Simple string@string validation.
