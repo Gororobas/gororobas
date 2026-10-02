@@ -41,6 +41,7 @@ const MaterializedAttributes = Schema.Struct({
 
 export const WikiPlantArticle = defineKind({
   Kind: Schema.Literal("PLANT"),
+  EditableTranslationFields: { origin: OptionalColumn(Schema.String) },
   EditableAttributes: Schema.Struct({
     ...plantUniversalAttributes,
     scientificNames: OptionalColumn(Schema.Array(NameInCrdtList)),

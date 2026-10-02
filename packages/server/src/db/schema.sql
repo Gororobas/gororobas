@@ -231,19 +231,27 @@ CREATE TABLE wiki_articles (
   FOREIGN KEY (id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 );
 
+CREATE UNIQUE INDEX idx_wiki_articles_id_kind ON wiki_articles (id, kind);
+
 CREATE INDEX idx_wiki_articles_kind_status ON wiki_articles (kind, status);
 
 -- Per-locale contributor-editable data, materialized from the CRDT.
 CREATE TABLE wiki_article_translations (
   wiki_article_id text NOT NULL,
+  kind text NOT NULL,
   locale text NOT NULL,
   common_names json NOT NULL,
   searchable_names text NOT NULL,
   content json, -- TiptapDocument
   content_plain_text text NOT NULL,
   grammatical_gender text, -- GrammaticalGender
+  origin text,
+  CHECK (
+    kind = 'PLANT'
+    OR origin IS NULL
+  ),
   PRIMARY KEY (wiki_article_id, locale),
-  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
+  FOREIGN KEY (wiki_article_id, kind) REFERENCES wiki_articles (id, kind) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 -- Owns a route handle across all locales. `locales` records which translations

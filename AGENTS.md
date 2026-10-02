@@ -79,6 +79,8 @@ Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/
 
 Where possible, use Property-Based Testing (PBT) with Effect Schema and its arbitraries integration with fast-check. These tests better explore the state space.
 
+Avoid writing tests that are simply a re-statement of the promises already in the code. You can write trivial tests to help guide your implementation, but don't keep them around if all they do is assert obvious behavior that can't go wrong.
+
 ## Ensuring quality
 
 ⚠️ **CRITICAL**: always run the following to ensure your contribution is correct:

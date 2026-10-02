@@ -1,5 +1,10 @@
 import {
-  CreatePostData,
+  PostSourceData,
+  PublicationId,
+  ProfileId,
+  AccountId,
+  ImageId,
+  WikiArticleId,
   Email,
   Handle,
   NonEmptyTrimmedString,
@@ -75,6 +80,7 @@ export const GelUserWithProfile = Schema.Struct({
 export type GelUserWithProfile = typeof GelUserWithProfile.Type
 
 export const AccountDataForMigration = Schema.Struct({
+  id: Schema.optional(AccountId),
   name: NonEmptyTrimmedString,
   email: Schema.NullOr(Email),
   // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field -- Matches the SQLite column.
@@ -85,6 +91,8 @@ export const AccountDataForMigration = Schema.Struct({
 })
 
 const ProfileDataForMigration = Schema.Struct({
+  id: Schema.optional(ProfileId),
+  photoId: Schema.optional(Schema.NullOr(ImageId)),
   type: Schema.Literal("PERSON"),
   handle: Handle,
   name: NonEmptyTrimmedString,
@@ -183,6 +191,7 @@ export const GelVegetableTip = Schema.Struct({
 export type GelVegetableTip = typeof GelVegetableTip.Type
 
 export const GelVegetable = Schema.Struct({
+  created_by_id: GelOptionalColumn(Schema.String),
   ...gelAuditableFields,
   id: Schema.String,
   names: Schema.Array(Schema.String),
@@ -254,8 +263,11 @@ export const GelNoteWithRelations = Schema.Struct({
 export type GelNoteWithRelations = typeof GelNoteWithRelations.Type
 
 export const NoteDataForMigration = Schema.Struct({
+  id: PublicationId,
+  tagIds: Schema.Array(TagId),
+  wikiArticleIds: Schema.Array(WikiArticleId),
   latest_source: GelNoteWithRelations,
-  publication: Schema.NullOr(CreatePostData),
+  publication: Schema.NullOr(PostSourceData),
   conversion_error: Schema.NullOr(Schema.String),
 })
 export type NoteDataForMigration = typeof NoteDataForMigration.Type
@@ -266,6 +278,7 @@ export const GelEditSuggestion = Schema.Struct({
   diff: Schema.Unknown, // json - json-diff-ts format
   snapshot: Schema.Unknown, // json
   status: Enums.GelEditSuggestionStatus,
+  created_by_id: GelOptionalColumn(Schema.String),
   reviewed_by_id: GelOptionalColumn(Schema.String), // UserProfile.id
 })
 export type GelEditSuggestion = typeof GelEditSuggestion.Type

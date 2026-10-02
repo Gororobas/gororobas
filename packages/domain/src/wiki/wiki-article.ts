@@ -1,9 +1,11 @@
-import { Match, Schema, Tuple } from "effect"
+import { Match, Option, Schema } from "effect"
 
 import { Locale, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
+import { strToSearchTokens } from "../common/utils/strings.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
+import { tiptapToText } from "../rich-text/tiptap-to-text.js"
 import { WikiAnimalArticle } from "./kinds/animal.js"
 import { WikiBookArticle } from "./kinds/book.js"
 import { WikiConceptArticle } from "./kinds/concept.js"
@@ -14,10 +16,7 @@ import { WikiPlantArticle } from "./kinds/plant.js"
 import { WikiResourceArticle } from "./kinds/resource.js"
 import { WikiToolArticle } from "./kinds/tool.js"
 import { WikiUncategorizedArticle } from "./kinds/uncategorized.js"
-import {
-  WikiArticleEditableTranslation,
-  WikiArticleTranslationMaterializedRow,
-} from "./wiki-article-translation.js"
+import { WikiArticleEditableTranslation } from "./wiki-article-translation.js"
 
 export const WikiArticleEditableData = Schema.Union([
   WikiAnimalArticle.EditableArticle,
@@ -86,17 +85,34 @@ export const WikiArticleHandleMaterializedRow = Schema.Struct({
 })
 export type WikiArticleHandleMaterializedRow = typeof WikiArticleHandleMaterializedRow.Type
 
+export const WikiArticleTranslationMaterializedRow = Schema.Union([
+  WikiAnimalArticle.TranslationMaterializedRow,
+  WikiBookArticle.TranslationMaterializedRow,
+  WikiConceptArticle.TranslationMaterializedRow,
+  WikiFilmArticle.TranslationMaterializedRow,
+  WikiNoteworthyEntityArticle.TranslationMaterializedRow,
+  WikiPlantArticle.TranslationMaterializedRow,
+  WikiPlantCultivarArticle.TranslationMaterializedRow,
+  WikiResourceArticle.TranslationMaterializedRow,
+  WikiToolArticle.TranslationMaterializedRow,
+  WikiUncategorizedArticle.TranslationMaterializedRow,
+]).pipe(Schema.toTaggedUnion("kind"))
+export type WikiArticleTranslationMaterializedRow =
+  typeof WikiArticleTranslationMaterializedRow.Type
+
 /** A locale-specific article projection returned by the read APIs. */
-export const WikiArticleQueriedPageData = WikiArticleMaterializedRow.mapMembers(
-  Tuple.map(
-    Schema.fieldsAssign({
-      ...WikiArticleTranslationMaterializedRow.fields,
-      id: WikiArticleId,
-      handle: Handle,
-      locale: Locale,
-    }),
-  ),
-)
+export const WikiArticleQueriedPageData = Schema.Union([
+  WikiAnimalArticle.QueriedPageData,
+  WikiBookArticle.QueriedPageData,
+  WikiConceptArticle.QueriedPageData,
+  WikiFilmArticle.QueriedPageData,
+  WikiNoteworthyEntityArticle.QueriedPageData,
+  WikiPlantArticle.QueriedPageData,
+  WikiPlantCultivarArticle.QueriedPageData,
+  WikiResourceArticle.QueriedPageData,
+  WikiToolArticle.QueriedPageData,
+  WikiUncategorizedArticle.QueriedPageData,
+]).pipe(Schema.toTaggedUnion("kind"))
 export type WikiArticleQueriedPageData = typeof WikiArticleQueriedPageData.Type
 
 export const WikiArticleQueriedCardData = Schema.Struct({
@@ -174,6 +190,36 @@ export const editableToMaterializedArticle = (
           attributes: WikiUncategorizedArticle.materializeAttributes(uncategorized.attributes),
           ...metadata,
         }),
+    }),
+  )
+}
+
+export const editableToMaterializedTranslation = (
+  article: WikiArticleEditableData,
+  locale: Locale,
+  wikiArticleId: WikiArticleId,
+): Option.Option<WikiArticleTranslationMaterializedRow> => {
+  const translation = article.translations[locale]
+
+  if (!translation) return Option.none()
+
+  return Option.some(
+    WikiArticleTranslationMaterializedRow.make({
+      ...translation,
+      wikiArticleId,
+      kind: article.kind,
+      locale,
+      commonNames: translation.commonNames.map((name) => name.value),
+      searchableNames: strToSearchTokens(
+        translation.commonNames.map((name) => name.value).join(" "),
+      ),
+      contentPlainText: Option.match(translation.content, {
+        onNone: () => "",
+        onSome: tiptapToText,
+      }),
+      // This is solely to make TS happy
+      // @todo is there a better way to type this construction?
+      origin: "origin" in translation ? translation.origin : Option.none(),
     }),
   )
 }

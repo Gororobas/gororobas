@@ -2,7 +2,10 @@ import { Effect, FileSystem, Path, Result, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
 import { GelNoteWithRelations, NoteDataForMigration } from "../schemas/gel/entities.js"
-import { gelNoteToPublication } from "./gel-note-to-publication.js"
+import {
+  gelNoteToPublicationSource,
+  noteMigrationReferences,
+} from "./gel-note-to-publication-source.js"
 
 const notesQuery = `
   select Note {
@@ -42,17 +45,20 @@ export const sourceGelNotes = Effect.gen(function* () {
     publicationNotes,
     (note) =>
       Effect.gen(function* () {
-        const converted = yield* gelNoteToPublication(note).pipe(Effect.result)
+        const references = yield* noteMigrationReferences(note)
+        const converted = yield* gelNoteToPublicationSource(note).pipe(Effect.result)
         const data = Result.match(converted, {
           onSuccess: (publication) => ({
+            ...references,
             latest_source: note,
             publication,
             conversion_error: null,
           }),
           onFailure: (error) => ({
+            ...references,
             latest_source: note,
             publication: null,
-            conversion_error: error.message,
+            conversion_error: error.message || String(error),
           }),
         })
         const encoded = yield* Schema.encodeEffect(

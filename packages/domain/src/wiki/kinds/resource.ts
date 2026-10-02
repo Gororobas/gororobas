@@ -13,6 +13,7 @@ const MaterializedAttributes = Schema.Struct({
 })
 
 export const WikiResourceArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("RESOURCE"),
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,

@@ -43,6 +43,7 @@ export * from "./common/primitives.js"
 
 // Rich-text
 export * from "./rich-text/domain.js"
+export * from "./rich-text/loro-prosemirror.js"
 export * from "./rich-text/tiptap-to-html.js"
 export * from "./rich-text/tiptap-to-text.js"
 

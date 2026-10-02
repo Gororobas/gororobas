@@ -1,7 +1,13 @@
 import { readFile, readdir } from "node:fs/promises"
 import { createServer } from "node:http"
 
-const directories = { plants: "vegetables", resources: "resources", notes: "notes" }
+const directories = {
+  plants: "vegetables",
+  resources: "resources",
+  notes: "notes",
+  cultivars: "cultivars",
+  tags: "tags",
+}
 
 const server = createServer(async (request, response) => {
   response.setHeader("Cache-Control", "no-store")
@@ -11,7 +17,7 @@ const server = createServer(async (request, response) => {
   }
   try {
     if (request.url === "/exports.json") {
-      const exports = { plants: [], resources: [], notes: [] }
+      const exports = { plants: [], resources: [], notes: [], cultivars: [], tags: [] }
       const rejected = []
       const missing = []
       for (const [category, folder] of Object.entries(directories)) {
@@ -40,7 +46,27 @@ const server = createServer(async (request, response) => {
         }
       }
       response.setHeader("Content-Type", "application/json; charset=utf-8")
-      response.end(JSON.stringify({ ...exports, rejected, missing }))
+      let references = []
+      try {
+        references = JSON.parse(
+          await readFile(new URL("../debug/references/index.json", import.meta.url), "utf8"),
+        )
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error
+      }
+      try {
+        for (const file of (await readdir(new URL("../debug/references/", import.meta.url))).filter(
+          (file) => file.endsWith(".json") && file !== "index.json",
+        ))
+          references.push(
+            JSON.parse(
+              await readFile(new URL(`../debug/references/${file}`, import.meta.url), "utf8"),
+            ),
+          )
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error
+      }
+      response.end(JSON.stringify({ ...exports, references, rejected, missing }))
     } else if (request.url === "/") {
       response.setHeader("Content-Type", "text/html; charset=utf-8")
       response.end(await readFile(new URL("./index.html", import.meta.url)))

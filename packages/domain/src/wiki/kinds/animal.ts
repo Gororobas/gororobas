@@ -15,6 +15,7 @@ const MaterializedAttributes = Schema.Struct({
 })
 
 export const WikiAnimalArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("ANIMAL"),
   EditableAttributes: Schema.Struct({
     scientificNames: OptionalColumn(Schema.Array(NameInCrdtList)),

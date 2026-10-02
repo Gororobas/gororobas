@@ -30,6 +30,10 @@
     "nanoid": "catalog:",
     "uuid": "catalog:"
   },
+  "devDependencies": {
+    "@tiptap/pm": "catalog:",
+    "loro-prosemirror": "catalog:"
+  },
   "effect": {
     "generateExports": {
       "include": [

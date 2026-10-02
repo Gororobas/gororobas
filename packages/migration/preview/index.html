@@ -143,7 +143,7 @@
   </style>
   <header>
     <h1>Preview da migração · Gororobas</h1>
-    <p class="muted">Gel original e última versão convertida, lado a lado. Somente leitura.</p>
+    <p class="muted">Gel original e versão convertida selecionada, lado a lado. Somente leitura.</p>
     <small id="status" role="status">Carregando exports…</small>
     <div id="errors" role="alert"></div>
   </header>
@@ -153,6 +153,7 @@
       <select id="category" disabled>
         <option value="plants">Vegetais → PLANT</option>
         <option value="resources">Biblioteca → Wiki</option>
+        <option value="cultivars">Variedades → PLANT_CULTIVAR</option>
         <option value="notes">Notas → Publicações</option>
       </select>
       <label for="search">Buscar nome, título ou nome científico</label>
@@ -207,17 +208,40 @@
       )
       return image
     }
+    let referenceById = new Map()
+    const referenceLink = (id) => {
+      const reference = referenceById.get(id)
+      const link = element("a", `${reference?.label ?? "Referência não resolvida"} · ${id}`)
+      link.href = `#refs/${encodeURIComponent(id)}`
+      return link
+    }
     const renderContent = (node) => {
       if (!node) return element("p", "Sem conteúdo")
       if (node.type === "image") {
         try {
-          return imageElement(JSON.parse(node.attrs.data).image)
+          const photo = JSON.parse(node.attrs.data).image
+          const wrapper = element("figure")
+          wrapper.append(imageElement(photo))
+          if (photo.id) wrapper.append(element("figcaption"), referenceLink(photo.id))
+          return wrapper
         } catch {
           return element("span", "[imagem inválida]")
         }
       }
       if (node.type === "text" || node.type === "mention") {
         let text = element("span", contentText(node))
+        if (node.type === "mention") {
+          try {
+            const mention = JSON.parse(node.attrs.data)
+            if (referenceById.has(mention.id)) {
+              text = element("a", contentText(node))
+              text.href = `#refs/${encodeURIComponent(mention.id)}`
+              text.title = `${mention.objectType} · ${mention.id}`
+            }
+          } catch {
+            /* Invalid mentions are already labeled by contentText. */
+          }
+        }
         for (const mark of node.marks ?? []) {
           const tag = {
             bold: "strong",
@@ -285,19 +309,29 @@
         (source.names?.[0] ??
           (typeof source.title === "string" ? source.title : contentText(source.title).trim())) ||
         source.handle
-      for (const key of ["plants", "resources", "notes"])
+      for (const reference of dataset.references ?? []) {
+        referenceById.set(reference.id, reference)
+        referenceById.set(reference.gelId, reference)
+      }
+      for (const tag of dataset.tags ?? [])
+        referenceById.set(tag.id, {
+          id: tag.id,
+          gelId: tag.latest_source.id,
+          collection: "tags",
+          label: tag.latest_source.names.join(" / "),
+          handle: tag.latest_source.handle,
+        })
+      for (const key of ["plants", "resources", "notes", "cultivars"])
         dataset[key].sort((a, b) =>
           title(a.latest_source).localeCompare(title(b.latest_source), "pt-BR"),
         )
       dataset.notes.sort((a, b) =>
         String(b.latest_source.published_at).localeCompare(String(a.latest_source.published_at)),
       )
-      const byId = new Map(
-        dataset.plants.map((plant) => [plant.latest_source.id, plant.latest_source]),
-      )
       const category = document.querySelector("#category")
       const route = () => location.hash.slice(1).split("/").map(decodeURIComponent)
-      if (["plants", "resources", "notes"].includes(route()[0])) category.value = route()[0]
+      if (["plants", "resources", "notes", "cultivars"].includes(route()[0]))
+        category.value = route()[0]
       let plants = dataset[category.value]
       const detail = document.querySelector("#detail")
       const search = document.querySelector("#search")
@@ -306,8 +340,41 @@
         .map((item) => `${item.file}: ${item.error}`)
         .join("\n")
 
+      let selectedVersion = null
+      let selectedRecord = null
       const renderDetail = () => {
         const handle = route()[1]
+        if (route()[0] === "refs") {
+          detail.replaceChildren()
+          const reference = referenceById.get(handle)
+          detail.append(
+            element("h1", reference?.label ?? "Referência não resolvida"),
+            element("pre", JSON.stringify(reference ?? { id: handle }, null, 2)),
+          )
+          if (reference?.sanityId)
+            detail.append(imageElement({ sanity_id: reference.sanityId, label: reference.label }))
+          if (
+            reference?.handle &&
+            ["plants", "resources", "cultivars", "notes"].includes(reference.collection)
+          ) {
+            const link = element("a", "Abrir registro migrado")
+            link.href = `#${reference.collection}/${encodeURIComponent(reference.handle)}`
+            detail.append(link)
+          }
+          if (reference?.sourceMissing)
+            detail.append(
+              element(
+                "p",
+                "Referência original ausente do Gel atual. Metadados embutidos foram preservados; não criamos um perfil ativo.",
+              ),
+            )
+          if (reference?.collection === "profiles" && reference.handle) {
+            const link = element("a", `Perfil: ${reference.handle}`)
+            link.href = `https://gororobas.com/pessoas/${encodeURIComponent(reference.handle)}`
+            detail.append(link)
+          }
+          return
+        }
         const plant =
           plants.find((item) => item.latest_source.handle === handle) ??
           (handle ? undefined : plants[0])
@@ -332,15 +399,23 @@
           )
           return
         }
+        if (selectedRecord !== plant.latest_source.id) {
+          selectedRecord = plant.latest_source.id
+          selectedVersion = null
+        }
         const source = plant.latest_source
-        const article = plant.article ?? plant.history?.at(-1)?.article
+        const version = plant.versions?.[selectedVersion ?? plant.versions.length - 1]
+        const article = version?.article ?? plant.article ?? plant.history?.at(-1)?.article
         const translation = article?.translations?.pt
         const publication = plant.publication
+        const publicationContent = publication?.locales?.pt?.content
         detail.append(element("h1", title(source)))
         const live = element("a", "Comparar com o site atual ↗")
         live.href =
           category.value === "resources"
             ? "https://gororobas.com/biblioteca"
+            : category.value === "cultivars"
+              ? `https://gororobas.com/vegetais/${encodeURIComponent(source.parents[0].handle)}`
             : `https://gororobas.com/${category.value === "plants" ? "vegetais" : "notas"}/${encodeURIComponent(source.handle)}`
         live.target = "_blank"
         live.rel = "noopener noreferrer"
@@ -348,7 +423,7 @@
           live,
           element(
             "p",
-            `${plant.file} · ${plant.history?.length ?? 0} versões · atualizado no Gel: ${source.updated_at ?? "—"}`,
+            `${plant.file} · ${plant.versions?.length ?? plant.history?.length ?? 0} versões · atualizado no Gel: ${source.updated_at ?? "—"}`,
           ),
         )
         const raw = element("details")
@@ -356,6 +431,98 @@
           element("summary", "JSON completo (original, histórico e convertido)"),
           element("pre", JSON.stringify(plant, null, 2)),
         )
+        detail.append(element("h2", "Referências migradas"))
+        const ids = new Set()
+        const scan = (value) => {
+          if (typeof value === "string") {
+            if (/^[a-f0-9]{8}-[a-f0-9]{4}-7[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value))
+              ids.add(value)
+            else if (value.startsWith("{")) {
+              try {
+                scan(JSON.parse(value))
+              } catch {
+                /* Regular strings are not reference data. */
+              }
+            }
+          } else if (Array.isArray(value)) value.forEach(scan)
+          else if (value && typeof value === "object")
+            Object.entries(value).forEach(([key, entry]) => {
+              scan(key)
+              scan(entry)
+            })
+        }
+        scan({
+          article,
+          publication,
+          photoIds: plant.photoIds,
+          thumbnailId: plant.thumbnailId,
+          tagIds: plant.tagIds,
+          wikiArticleIds: plant.wikiArticleIds,
+          actorId: version?.actorId,
+          reviewerId: version?.reviewerId,
+        })
+        for (const id of ids) detail.append(referenceLink(id), element("br"))
+        if (!ids.size) detail.append(element("p", "Sem referências nesta versão."))
+        if (plant.versions?.length) {
+          detail.append(
+            element("h2", "Histórico de versões"),
+            element(
+              "p",
+              "Timeline Loro gerada pela migração a partir de estados Gel. Autoria e revisão vêm dos registros originais; autor ausente não é inferido.",
+            ),
+          )
+          const select = element("select")
+          select.setAttribute("aria-label", "Versão migrada")
+          plant.versions.forEach((entry, index) => {
+            const option = element(
+              "option",
+              `${index + 1} · ${entry.timestamp} · ${referenceById.get(entry.actorId)?.label ?? "Autor não registrado"}`,
+            )
+            option.value = String(index)
+            select.append(option)
+          })
+          select.value = String(selectedVersion ?? plant.versions.length - 1)
+          select.addEventListener("change", () => {
+            selectedVersion = Number(select.value)
+            renderDetail()
+          })
+          detail.append(select)
+          if (version.actorId)
+            detail.append(element("p", "Autor: "), referenceLink(version.actorId))
+          if (version.reviewerId)
+            detail.append(element("p", "Revisor: "), referenceLink(version.reviewerId))
+          for (const [label, data] of [
+            ["Mudanças no artigo convertido", version.changes],
+            ["LoroDoc diff", version.loroDiff],
+            [
+              "Frontier e origem da versão",
+              { frontier: version.frontier, sourceEditId: version.sourceEditId },
+            ],
+          ]) {
+            const section = element("details")
+            section.append(element("summary", label), element("pre", JSON.stringify(data, null, 2)))
+            detail.append(section)
+          }
+          if (plant.auditLogs) {
+            const section = element("details")
+            section.append(
+              element("summary", "Audit logs Gel"),
+              element("pre", JSON.stringify(plant.auditLogs, null, 2)),
+            )
+            detail.append(section)
+          }
+        }
+        if (category.value === "cultivars") {
+          detail.append(
+            element("h2", "Planta-mãe"),
+            referenceLink(article.attributes.parentPlantId),
+            element("p", "Características sem dados ficam Unknown; não presumimos herança."),
+            element("pre", JSON.stringify(article.attributes, null, 2)),
+          )
+          for (const photo of source.photos ?? []) detail.append(imageElement(photo))
+          detail.append(raw)
+          return
+        }
         if (category.value !== "plants") {
           detail.append(
             element(
@@ -363,7 +530,7 @@
               category.value === "resources"
                 ? `Wiki: ${article?.kind ?? "sem conversão"}`
                 : publication
-                  ? `Publicação POST · ${publication.locale}`
+                  ? `Publicação ${publication.metadata.kind} · pt`
                   : "Nota sem conversão",
             ),
           )
@@ -382,9 +549,17 @@
                 ]
               : [
                   ["Título", contentText(source.title), "Integrado ao conteúdo"],
-                  ["Tipos", source.types, undefined],
-                  ["Visibilidade", source.publish_status ?? source.public, publication?.visibility],
-                  ["Publicado em", source.published_at, undefined],
+                  [
+                    "Tipos → tags",
+                    source.types,
+                    plant.tagIds?.map((id) => referenceById.get(id)?.label ?? id),
+                  ],
+                  [
+                    "Visibilidade",
+                    source.publish_status ?? source.public,
+                    publication?.metadata?.visibility,
+                  ],
+                  ["Publicado em", source.published_at, publication?.metadata?.publishedAt],
                 ]
           const table = element("table")
           for (const values of [["Campo", "Gel original", "Convertido"], ...comparisons]) {
@@ -412,7 +587,7 @@
                   }
                 : source.description,
             ],
-            ["Conteúdo convertido", publication?.content ?? translation?.content],
+            ["Conteúdo convertido", publicationContent ?? translation?.content],
           ]) {
             const text = renderContent(content)
             detail.append(element("h2", label), text)
@@ -443,7 +618,7 @@
           detail.append(element("p", "Atenção: export sem artigo convertido na última versão."))
         const table = element("table")
         const heading = element("tr")
-        for (const label of ["Campo", "Gel original", "Última versão convertida"])
+        for (const label of ["Campo", "Gel original", "Versão selecionada"])
           heading.append(element("th", label))
         table.append(heading)
         for (const [label, originalKey, convertedKey] of fields) {
@@ -463,7 +638,7 @@
         columns.className = "columns"
         for (const [label, content] of [
           ["Conteúdo Gel", source.content],
-          ["Conteúdo convertido", publication?.content ?? translation?.content],
+          ["Conteúdo convertido", publicationContent ?? translation?.content],
         ]) {
           const column = element("section")
           const text = renderContent(content)
@@ -475,9 +650,12 @@
           element("h2", "Dados adicionais do Gel"),
           element(
             "p",
-            "Os dados abaixo vêm do original; não aparecem no artigo convertido deste export.",
+            "Dados finais do Gel. A origem também aparece na tradução convertida; fotos, variedades e fontes são mostradas aqui para conferência.",
           ),
-          element("p", `Origem: ${display(source.origin)}`),
+          element(
+            "p",
+            `Origem Gel: ${display(source.origin)} · Origem na tradução pt: ${display(translation?.origin)}`,
+          ),
         )
         const photos = element("div")
         photos.className = "photos"
@@ -499,16 +677,11 @@
             "p",
             (source.varieties ?? []).map((item) => display(item.names)).join("; ") || "—",
           ),
-          element("h2", "Amizades e consórcios"),
+          element(
+            "p",
+            "Amizades e consórcios foram arquivados em archives/plant-friendships.json e não serão migrados.",
+          ),
         )
-        for (const friend of source.friends ?? []) {
-          const related = byId.get(friend.id)
-          if (related) {
-            const link = element("a", related.names[0] ?? related.handle)
-            link.href = `#plants/${encodeURIComponent(related.handle)}`
-            detail.append(link, element("span", " · "))
-          } else detail.append(element("p", `Referência não resolvida: ${friend.id}`))
-        }
         detail.append(element("h2", "Fontes"))
         for (const sourceReference of source.sources ?? [])
           detail.append(
@@ -539,7 +712,7 @@
           ).includes(query),
         )
         document.querySelector("#status").textContent =
-          `${filtered.length} de ${plants.length} registros · total: ${dataset.plants.length} vegetais, ${dataset.resources.length} recursos, ${dataset.notes.length} notas · ${dataset.rejected.length} rejeitados · sem validação de schema`
+          `${filtered.length} de ${plants.length} registros · total: ${dataset.plants.length} vegetais, ${dataset.cultivars.length} variedades, ${dataset.resources.length} recursos, ${dataset.notes.length} notas · ${dataset.rejected.length} rejeitados · sem validação de schema`
         list.replaceChildren()
         for (const { latest_source: source } of filtered) {
           const link = element("a", title(source))

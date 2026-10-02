@@ -94,19 +94,29 @@ const applyUpdate = (crdt_update: Uint8Array<ArrayBufferLike>, sourceDocument: L
 const validateSchema = <S extends Schema.Schema<any>>(
   updatedDoc: LoroDoc,
   targetSchema: S,
+  projectDocument: (document: LoroDoc) => unknown,
 ): Effect.Effect<S["Type"], InvalidCrdtUpdateError, never> =>
   Effect.try({
     try: () =>
       // oxlint-disable-next-line effect/casting-awareness -- Effect Schema's decoder constraint is stricter than its generic schema input.
-      Schema.decodeUnknownSync(targetSchema as never)(updatedDoc.toJSON()),
+      Schema.decodeUnknownSync(targetSchema as never)(projectDocument(updatedDoc)),
     catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
   })
 
 export const parseCrdtUpdate = Effect.fn("parseCrdtUpdate")(function* <
   S extends Schema.Schema<any>,
->(props: { crdtUpdate: Uint8Array<ArrayBufferLike>; targetSchema: S; sourceDocument: LoroDoc }) {
+>(props: {
+  crdtUpdate: Uint8Array<ArrayBufferLike>
+  targetSchema: S
+  sourceDocument: LoroDoc
+  projectDocument?: (document: LoroDoc) => unknown
+}) {
   const updatedDoc = yield* applyUpdate(props.crdtUpdate, props.sourceDocument)
-  const data = yield* validateSchema(updatedDoc, props.targetSchema)
+  const data = yield* validateSchema(
+    updatedDoc,
+    props.targetSchema,
+    props.projectDocument ?? ((document) => document.toJSON()),
+  )
 
   return { data, loroDoc: updatedDoc }
 })
@@ -121,17 +131,20 @@ export const applyCrdtUpdateWithCommit = Effect.fn("applyCrdtUpdateWithCommit")(
   crdtUpdate,
   targetSchema,
   snapshot,
+  projectDocument,
 }: {
   commit: CrdtCommit
   crdtUpdate: LoroDocUpdate
   targetSchema: S
   snapshot: LoroDocSnapshot
+  projectDocument?: (document: LoroDoc) => unknown
 }) {
   const currentDoc = snapshotToLoroDoc(snapshot)
   const { data, loroDoc: fullUpdatedDoc } = yield* parseCrdtUpdate<S>({
     crdtUpdate: crdtUpdate,
     sourceDocument: currentDoc,
     targetSchema,
+    ...(projectDocument ? { projectDocument } : {}),
   })
 
   const diff = fullUpdatedDoc.diff(currentDoc.frontiers(), fullUpdatedDoc.frontiers())

@@ -1,4 +1,4 @@
-import { WikiPlantArticle } from "@gororobas/domain"
+import { ImageId, WikiArticleId, WikiPlantArticle } from "@gororobas/domain"
 import { Effect, Array as EffectArray, Option, Order, Predicate, Schema } from "effect"
 import { revertChangeset, type Changeset, type IChange } from "json-diff-ts"
 
@@ -7,6 +7,7 @@ import {
   GelVegetable,
   GelVegetableForReconstruction,
 } from "../schemas/gel/entities.js"
+import { WikiMigrationVersion } from "../wiki-migration-history.js"
 
 export const GelVegetableEdit = Schema.Struct({
   edit_suggestion: Schema.Option(GelEditSuggestion),
@@ -21,6 +22,9 @@ export const VegetableHistoryEntryForMigration = Schema.Struct({
 export type VegetableHistoryEntryForMigration = typeof VegetableHistoryEntryForMigration.Type
 
 export const VegetableDataForMigration = Schema.Struct({
+  id: WikiArticleId,
+  photoIds: Schema.Array(ImageId),
+  versions: Schema.Array(WikiMigrationVersion),
   latest_source: GelVegetableForReconstruction,
   edit_suggestions: Schema.Array(GelEditSuggestion),
   history: Schema.Array(VegetableHistoryEntryForMigration),

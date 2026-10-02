@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect"
 
 import { TagId } from "../../common/ids.js"
-import { NameInCrdtList } from "../../common/primitives.js"
+import { NameInCrdtList, UrlAsString } from "../../common/primitives.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
@@ -50,7 +50,20 @@ const filmTagOperations = makeStringSetEditOperations("FilmTag")({
     Effect.succeed(document.getMap("attributes").ensureMergeableMap("tags")),
 })
 
+const urlOperations = makeOptionalScalarEditOperations("FilmUrl")({
+  ValueSchema: UrlAsString,
+  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
+  keyInParentContainer: "url" satisfies keyof FilmEditableAttributes,
+})
+const countryOperations = makeOptionalScalarEditOperations("FilmCountry")({
+  ValueSchema: Schema.String,
+  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
+  keyInParentContainer: "country" satisfies keyof FilmEditableAttributes,
+})
+
 export const WikiFilmArticleCrdtOperations = defineKindCrdtOperations([
+  ...urlOperations,
+  ...countryOperations,
   ...directorsOperations,
   ...releaseDateOperations,
   ...languagesOperations,

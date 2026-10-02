@@ -26,6 +26,7 @@ catalog:
   glob: ^13.0.6
   loro-crdt: ^1.14.1
   loro-mirror: ^1.2.1
+  loro-prosemirror: 0.4.4
   nanoid: ^6.0.1
   typescript: 7.0.2
   uuid: ^13.0.2

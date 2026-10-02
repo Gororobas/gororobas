@@ -1,4 +1,9 @@
 import {
+  Locale,
+  OptionalColumn,
+  TiptapDocument,
+  WikiArticleQueriedPageData,
+  WikiArticleTranslationMaterializedRow,
   WikiArticleCrdtRow,
   WikiArticleHandleMaterializedRow,
   WikiArticleId,
@@ -106,5 +111,42 @@ export const findHandleOwner = SqlSchema.findOneOption({
         SELECT * FROM wiki_article_handles
         WHERE kind = ${kind} AND handle = ${handle}
       `,
+    ),
+})
+
+export const findTranslationRows = SqlSchema.findAll({
+  Request: WikiArticleId,
+  Result: WikiArticleTranslationMaterializedRow,
+  execute: (id) =>
+    SqlClient.use(
+      (sql) => sql`SELECT * FROM wiki_article_translations WHERE wiki_article_id = ${id}`,
+    ),
+})
+
+export const findPageByHandleAndKind = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...WikiArticleLookup.fields, locale: Locale }),
+  Result: WikiArticleQueriedPageData.mapMembers((members) =>
+    members.map((member) =>
+      Schema.Struct({
+        ...member.fields,
+        attributes: Schema.fromJsonString(member.fields.attributes),
+        commonNames: Schema.fromJsonString(member.fields.commonNames),
+        content: OptionalColumn(Schema.fromJsonString(TiptapDocument)),
+      }),
+    ),
+  ).pipe(Schema.decodeTo(Schema.toType(WikiArticleQueriedPageData))),
+  execute: ({ handle, kind, locale }) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT article.*, translation.*, route.handle
+    FROM wiki_articles AS article
+    INNER JOIN wiki_article_handles AS route ON route.wiki_article_id = article.id
+    INNER JOIN wiki_article_translations AS translation
+      ON translation.wiki_article_id = article.id AND translation.kind = article.kind
+    WHERE route.handle = ${handle} AND article.kind = ${kind}
+    ORDER BY CASE WHEN translation.locale = ${locale} THEN 0
+      WHEN translation.locale = 'en' THEN 1 WHEN translation.locale = 'es' THEN 2 ELSE 3 END
+    LIMIT 1
+  `,
     ),
 })

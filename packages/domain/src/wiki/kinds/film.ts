@@ -5,21 +5,25 @@ import {
   ItemInCrdtList,
   NameInCrdtList,
   OptionalColumn,
-  TimestampColumn,
+  UrlAsString,
   ValidName,
 } from "../../common/primitives.js"
 import { CrdtBrandedStringSet } from "../../common/primitives.js"
+import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
+  url: OptionalColumn(UrlAsString),
+  country: OptionalColumn(Schema.String),
   directors: OptionalColumn(Schema.Array(ValidName)),
-  releaseDate: OptionalColumn(TimestampColumn),
+  releaseDate: OptionalColumn(PartialDate),
   languages: OptionalColumn(Schema.Array(Schema.String)),
   genres: OptionalColumn(Schema.Array(ValidName)),
   tags: OptionalColumn(Schema.Array(TagId)),
 })
 
 export const WikiFilmArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("FILM"),
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,

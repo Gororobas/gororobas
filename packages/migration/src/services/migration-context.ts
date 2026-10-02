@@ -1,4 +1,5 @@
 /** MigrationContext service for persistent ID mapping and progress tracking. */
+import { IdGen } from "@gororobas/domain"
 import { Context, DateTime, Effect, Layer, Option, Schema, SchemaIssue } from "effect"
 import { KeyValueStore } from "effect/unstable/persistence"
 
@@ -119,3 +120,15 @@ export const MigrationContextLive = Layer.effect(
     })
   }),
 )
+
+export const ensureMappedId = Effect.fn("ensureMappedId")(function* (
+  source: { id: string },
+  entityType: string,
+) {
+  const context = yield* MigrationContext
+  const idGen = yield* IdGen
+  const operation = yield* context.planMigrationOp(source, entityType)
+  if (operation.op === "create") yield* operation.execute(() => Effect.sync(() => idGen.generate()))
+  if (operation.op === "update") yield* operation.execute(() => Effect.void)
+  return yield* context.resolveId(source.id, entityType)
+})

@@ -1,4 +1,6 @@
 import {
+  WikiArticleId,
+  ImageId,
   WikiArticleEditableTranslations,
   WikiBookArticle,
   WikiFilmArticle,
@@ -7,9 +9,11 @@ import {
 } from "@gororobas/domain"
 import { Effect, Match, Record, Schema } from "effect"
 
+import { migrateRichText } from "../migrate-rich-text.js"
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
 import { MigrationContext } from "../services/migration-context.js"
 import { gelVegetableNamesToCrdtList as stringsToCrdtList } from "../vegetables/gel-vegetable-to-wiki-plant-article.js"
+import { WikiMigrationVersion } from "../wiki-migration-history.js"
 
 export const ResourceWikiArticle = Schema.Union([
   WikiBookArticle.EditableArticle,
@@ -19,7 +23,19 @@ export const ResourceWikiArticle = Schema.Union([
 ])
 export type ResourceWikiArticle = typeof ResourceWikiArticle.Type
 
+export const ResourceAuditLog = Schema.Struct({
+  id: Schema.String,
+  timestamp: Schema.Date,
+  action: Schema.String,
+  performed_by: Schema.NullOr(Schema.Struct({ id: Schema.String })),
+  old: Schema.Unknown,
+  new: Schema.Unknown,
+})
 export const ResourceDataForMigration = Schema.Struct({
+  id: WikiArticleId,
+  thumbnailId: Schema.NullOr(ImageId),
+  versions: Schema.Array(WikiMigrationVersion),
+  auditLogs: Schema.Array(ResourceAuditLog),
   latest_source: GelResourceWithRelations,
   article: ResourceWikiArticle,
 })
@@ -100,7 +116,7 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
   const translationsEncoded = yield* Schema.decodeEffect(WikiArticleEditableTranslations)({
     pt: {
       commonNames: stringsToCrdtList([source.title]),
-      content: description,
+      content: description ? yield* migrateRichText(description) : description,
       grammaticalGender: null,
     },
   }).pipe(Effect.flatMap(Schema.encodeEffect(WikiArticleEditableTranslations)))

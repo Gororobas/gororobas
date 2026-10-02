@@ -37,7 +37,16 @@ export const sourceGelTags = Effect.gen(function* () {
   yield* fs.makeDirectory(tagsDirectory, { recursive: true })
 
   yield* Effect.forEach(
-    EffectArray.getSuccesses(tagResults),
+    [
+      ...EffectArray.getSuccesses(tagResults),
+      ...["EXPERIMENTO", "ENSINAMENTO", "DESCOBERTA", "PERGUNTA", "INSPIRACAO"].map((type) =>
+        Schema.decodeUnknownSync(GelTag)({
+          id: `note-type:${type}`,
+          handle: `tipo-de-nota-${type.toLowerCase()}`,
+          names: [type],
+        }),
+      ),
+    ],
     (tag) =>
       Effect.gen(function* () {
         const operation = yield* context.planMigrationOp(tag, "Tag")

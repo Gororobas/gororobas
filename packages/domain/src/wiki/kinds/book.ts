@@ -8,6 +8,7 @@ import {
   ValidName,
 } from "../../common/primitives.js"
 import { CrdtBrandedStringSet } from "../../common/primitives.js"
+import { PartialDate } from "../../common/utils/dates.js"
 import { GoogleBooksVolumeId } from "../external-identifiers.js"
 import { defineKind } from "./define-kind.js"
 
@@ -17,7 +18,7 @@ const MaterializedAttributes = Schema.Struct({
   tags: OptionalColumn(Schema.Array(TagId)),
   publisher: OptionalColumn(Schema.String),
   url: OptionalColumn(Schema.URLFromString),
-  publicationDate: OptionalColumn(Schema.String),
+  publicationDate: OptionalColumn(PartialDate),
   isbn10: OptionalColumn(Schema.String),
   isbn13: OptionalColumn(Schema.String),
   edition: OptionalColumn(Schema.String),
@@ -26,6 +27,7 @@ const MaterializedAttributes = Schema.Struct({
 })
 
 export const WikiBookArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("BOOK"),
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,

@@ -73,6 +73,7 @@ const Attributes = Schema.Struct({
 })
 
 export const WikiPlantCultivarArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("PLANT_CULTIVAR"),
   EditableAttributes: Attributes,
   MaterializedAttributes: Attributes,

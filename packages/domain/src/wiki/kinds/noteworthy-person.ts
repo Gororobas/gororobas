@@ -1,19 +1,21 @@
 import { Option, Schema } from "effect"
 
 import { NameInCrdtList, OptionalColumn, ValidName } from "../../common/primitives.js"
+import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
   names: OptionalColumn(Schema.Array(ValidName)),
   areasOfWork: OptionalColumn(Schema.Array(ValidName)),
-  birthDate: OptionalColumn(Schema.String),
-  deathDate: OptionalColumn(Schema.String),
+  birthDate: OptionalColumn(PartialDate),
+  deathDate: OptionalColumn(PartialDate),
   occupations: OptionalColumn(Schema.Array(Schema.String)),
   location: OptionalColumn(ValidName),
   url: OptionalColumn(Schema.URLFromString),
 })
 
 export const WikiNoteworthyPersonArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("NOTEWORTHY_PERSON"),
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,

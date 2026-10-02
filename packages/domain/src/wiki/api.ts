@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
 
+import { Locale } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
@@ -27,6 +28,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
       success: WikiArticleQueriedPageData,
       error: WikiArticleNotFoundError,
       params: WikiArticleLookup,
+      query: Schema.Struct({ locale: Schema.optional(Locale) }),
     }),
   )
   .add(

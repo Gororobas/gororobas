@@ -14,8 +14,6 @@ import {
   NameInCrdtList,
   parseWikiArticleCrdtUpdate,
   stringToHandle,
-  strToSearchTokens,
-  tiptapToText,
   WikiArticleEditableData,
   WikiArticleHandleMaterializedRow,
   WikiArticleId,
@@ -26,18 +24,9 @@ import {
   WikiArticleRevisionNotFoundError,
   WikiArticleRevisionRow,
   WikiArticleStatus,
-  WikiArticleTranslationMaterializedRow,
+  editableToMaterializedTranslation,
 } from "@gororobas/domain"
-import {
-  Context,
-  DateTime,
-  Effect,
-  Array as EffectArray,
-  Option,
-  Record,
-  Result,
-  Schema,
-} from "effect"
+import { Context, DateTime, Effect, Array as EffectArray, Option, Result } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
 import {
@@ -56,6 +45,7 @@ import {
   upsertArticleRow,
 } from "./mutations.js"
 import {
+  findPageByHandleAndKind,
   findCrdtRowById,
   findDatabaseRowByHandle,
   findDatabaseRowById,
@@ -81,7 +71,7 @@ const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(f
     names.map((_, index) =>
       stringToHandle(
         names
-          .slice(0, index)
+          .slice(0, index + 1)
           .map((name) => name.value)
           .join(" ")
           .slice(0, 48),
@@ -148,29 +138,11 @@ const materializeTranslations = Effect.fn("materializeTranslations")(function* (
       DELETE FROM wiki_article_translations WHERE wiki_article_id = ${input.wikiArticleId}
     `,
     insertRows: insertTranslationRows(
-      Record.toEntries({
-        en: input.sourceData.translations.en,
-        es: input.sourceData.translations.es,
-        pt: input.sourceData.translations.pt,
-      }).flatMap(([locale, translation]) => {
-        if (!translation || !Schema.is(Locale)(locale)) return []
-
-        const plainTextNames = translation.commonNames.map((name) => name.value)
-        return [
-          WikiArticleTranslationMaterializedRow.make({
-            locale,
-            wikiArticleId: input.wikiArticleId,
-            grammaticalGender: translation.grammaticalGender,
-            commonNames: plainTextNames,
-            searchableNames: strToSearchTokens(plainTextNames.join(" ")),
-            content: translation.content,
-            contentPlainText: Option.match(translation.content, {
-              onNone: () => "",
-              onSome: tiptapToText,
-            }),
-          }),
-        ]
-      }),
+      Locale.literals.flatMap((locale) =>
+        Option.toArray(
+          editableToMaterializedTranslation(input.sourceData, locale, input.wikiArticleId),
+        ),
+      ),
     ),
   })
 })
@@ -221,7 +193,9 @@ const materializeHandles = Effect.fn("materializeHandles")(function* (input: {
     deleteRows: sql`
       DELETE FROM wiki_article_handles WHERE wiki_article_id = ${input.wikiArticleId}
     `,
-    insertRows: insertHandleRows(handleRows),
+    insertRows: insertHandleRows(
+      EffectArray.dedupeWith(handleRows, (left, right) => left.handle === right.handle),
+    ),
   })
 })
 
@@ -425,9 +399,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
     ),
   )
 
-/**
- * @TODO read-path
- */
+/** @TODO add wiki search and card read paths. */
 export class WikiArticlesRepository extends Context.Service<WikiArticlesRepository>()(
   "WikiArticlesRepository",
   {
@@ -437,6 +409,7 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         createRevision,
         createWikiArticle,
         evaluateRevision,
+        findPageByHandleAndKind,
         findByHandle: (handle: string) => findDatabaseRowByHandle(handle),
         findBySearchableName: (pattern: string) => findWikiArticleBySearchableName(pattern),
       } as const

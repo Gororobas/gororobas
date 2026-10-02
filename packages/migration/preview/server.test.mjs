@@ -25,6 +25,8 @@ void test("preview serves local exports unchanged and does not expose other file
       plants: "vegetables",
       resources: "resources",
       notes: "notes",
+      cultivars: "cultivars",
+      tags: "tags",
     })) {
       const directory = new URL(`../debug/${folder}/`, import.meta.url)
       let files

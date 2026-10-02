@@ -1,0 +1,41 @@
+import { Option, Record, Schema } from "effect"
+
+import { Locale } from "../../src/common/enums.js"
+import { TiptapDocument } from "../../src/rich-text/domain.js"
+import { WikiArticleEditableData } from "../../src/wiki/wiki-article.js"
+
+const wikiRichText = TiptapDocument.make({
+  type: "doc",
+  version: 1,
+  content: [
+    {
+      type: "paragraph",
+      content: [
+        { type: "text", text: "Growing " },
+        { type: "text", text: "together", marks: [{ type: "bold" }] },
+      ],
+    },
+  ],
+})
+
+/** The domain's open-ended node schema also generates shapes no editor supports. */
+export const withEditorRichText = (article: WikiArticleEditableData): WikiArticleEditableData =>
+  Schema.decodeUnknownSync(Schema.toType(WikiArticleEditableData))({
+    ...article,
+    translations: Record.fromEntries(
+      Locale.literals.flatMap((locale) => {
+        const translation = article.translations[locale]
+        return translation
+          ? [
+              [
+                locale,
+                {
+                  ...translation,
+                  content: Option.map(translation.content, () => wikiRichText),
+                },
+              ],
+            ]
+          : []
+      }),
+    ),
+  })

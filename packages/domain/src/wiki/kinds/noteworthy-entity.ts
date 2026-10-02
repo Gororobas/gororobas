@@ -3,17 +3,19 @@ import { Option, Schema } from "effect"
 import { NoteworthyEntityType } from "../../common/enums.js"
 import { TagId } from "../../common/ids.js"
 import { CrdtBrandedStringSet, OptionalColumn } from "../../common/primitives.js"
+import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
   entityType: NoteworthyEntityType,
-  foundedDate: OptionalColumn(Schema.String),
-  dissolvedDate: OptionalColumn(Schema.String),
+  foundedDate: OptionalColumn(PartialDate),
+  dissolvedDate: OptionalColumn(PartialDate),
   url: OptionalColumn(Schema.URLFromString),
   tags: OptionalColumn(Schema.Array(TagId)),
 })
 
 export const WikiNoteworthyEntityArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("NOTEWORTHY_ENTITY"),
   EditableAttributes: Schema.Struct({
     ...MaterializedAttributes.fields,

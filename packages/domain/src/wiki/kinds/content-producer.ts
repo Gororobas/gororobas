@@ -20,6 +20,7 @@ const MaterializedAttributes = Schema.Struct({
 })
 
 export const WikiContentProducerArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("CONTENT_PRODUCER"),
   EditableAttributes: Schema.Struct({
     names: OptionalColumn(Schema.Array(NameInCrdtList)),

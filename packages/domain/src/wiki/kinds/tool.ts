@@ -9,6 +9,7 @@ const MaterializedAttributes = Schema.Struct({
 })
 
 export const WikiToolArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("TOOL"),
   EditableAttributes: Schema.Struct({
     usage: OptionalColumn(CrdtLiteralSet(ToolUsage)),

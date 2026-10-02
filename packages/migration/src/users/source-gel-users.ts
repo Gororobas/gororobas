@@ -1,7 +1,10 @@
+import { AccountId, ProfileId, ImageId } from "@gororobas/domain"
 import { Effect, Array as EffectArray, FileSystem, Option, Path, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
+import { migrateRichText } from "../migrate-rich-text.js"
 import { GelUserWithProfile, UserDataForMigration } from "../schemas/gel/entities.js"
+import { MigrationContext } from "../services/migration-context.js"
 import { gelUserToPersonData } from "./gel-user-to-person.js"
 
 const usersQuery = `
@@ -35,6 +38,7 @@ const usersQuery = `
 export const sourceGelUsers = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
+  const context = yield* MigrationContext
   const gelClient = yield* GelClient
   const userResults = yield* gelClient
     .use((client) => client.query(usersQuery))
@@ -67,9 +71,25 @@ export const sourceGelUsers = Effect.gen(function* () {
     (user) =>
       Effect.gen(function* () {
         const data = yield* gelUserToPersonData(user)
+        const accountId = yield* context
+          .resolveId(user.id, "Account")
+          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(AccountId)))
+        const profileId = yield* context
+          .resolveId(user.profile.id, "Profile")
+          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
+        const photoId = user.profile.photo
+          ? yield* context
+              .resolveId(user.profile.photo.id, "Image")
+              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ImageId)))
+          : null
+        const bio = data.profile.bio ? yield* migrateRichText(data.profile.bio) : null
         const encoded = yield* Schema.encodeEffect(
           Schema.fromJsonString(UserDataForMigration, { space: 2 }),
-        )(data)
+        )({
+          ...data,
+          account: { ...data.account, id: accountId },
+          profile: { ...data.profile, id: profileId, photoId, bio },
+        })
         yield* fs.writeFileString(path.join(usersDirectory, `${user.profile.handle}.json`), encoded)
       }),
     { concurrency: 1 },

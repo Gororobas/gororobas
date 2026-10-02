@@ -8,6 +8,7 @@ const MaterializedAttributes = Schema.Struct({
 })
 
 export const WikiUncategorizedArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("UNCATEGORIZED"),
   EditableAttributes: Schema.Struct({
     suggestedKind: OptionalColumn(ValidName),

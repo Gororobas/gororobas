@@ -1,4 +1,5 @@
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
+import { LoroMap } from "loro-crdt"
 
 import {
   AgroforestryStratum,
@@ -13,12 +14,14 @@ import {
   NameInCrdtList,
   TemperatureInCelsius,
 } from "../../common/primitives.js"
+import { CrdtContainerNotFoundError, InvalidCrdtUpdateError } from "../../crdts/errors.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
+import { makeOptionalTranslatedScalarEditOperations } from "../../crdts/optional-translated-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import { WikidataId } from "../external-identifiers.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
-import type { PlantEditableAttributes } from "./plant.js"
+import type { PlantEditableArticle, PlantEditableAttributes } from "./plant.js"
 
 const scientificNameOperations = makeMovableListEditOperations("ScientificName")({
   ValueSchema: NameInCrdtList.schema.fields.value,
@@ -122,7 +125,27 @@ const wikidataIdOperations = makeOptionalScalarEditOperations("WikidataId")({
   keyInParentContainer: "wikidataId" satisfies keyof PlantEditableAttributes,
 })
 
+const originOperations = makeOptionalTranslatedScalarEditOperations("PlantOrigin")({
+  ValueSchema: Schema.String,
+  // @todo I believe this can go into `makeOptionalTranslatedScalarEditOperations`, I don't see a reason to repeat this on every operation
+  getParentContainer: (document, locale) =>
+    Effect.gen(function* () {
+      if (document.getMap("kind").get("value") !== "PLANT")
+        return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+
+      const translation = document.getMap("translations").get(locale)
+      if (!(translation instanceof LoroMap))
+        return yield* new CrdtContainerNotFoundError({ path: ["translations", locale] })
+
+      return translation
+    }),
+  keyInParentContainer: "origin" satisfies keyof NonNullable<
+    PlantEditableArticle["translations"]["en"]
+  >,
+})
+
 export const WikiPlantArticleCrdtOperations = defineKindCrdtOperations([
+  ...originOperations,
   ...developmentCycleMaxOperations,
   ...developmentCycleMinOperations,
   ...ediblePartsOperations,

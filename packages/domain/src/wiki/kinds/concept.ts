@@ -9,6 +9,7 @@ const MaterializedAttributes = Schema.Struct({
 })
 
 export const WikiConceptArticle = defineKind({
+  EditableTranslationFields: {},
   Kind: Schema.Literal("CONCEPT"),
   EditableAttributes: Schema.Struct({
     tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
