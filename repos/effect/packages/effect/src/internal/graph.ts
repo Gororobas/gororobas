@@ -7,10 +7,15 @@ import { pipeArguments } from "../Pipeable.ts"
 import { hasProperty } from "../Predicate.ts"
 
 /** @internal */
-export const TypeId = "~effect/collections/Graph"
+export const TypeId = "~effect/Graph"
 
 /** @internal */
-export interface GraphImpl<in out N, in out E, T extends Graph.Kind = "directed">
+export const isGraph = <N = unknown, E = unknown, T extends Graph.Kind = Graph.Kind, U = never>(
+  u: U | Graph.Graph<N, E, T> | Graph.MutableGraph<N, E, T>
+): u is Graph.Graph<N, E, T> | Graph.MutableGraph<N, E, T> => hasProperty(u, TypeId)
+
+/** @internal */
+export interface GraphImpl<in out N, in out E, T extends Graph.Kind>
   extends Iterable<readonly [Graph.NodeIndex, N]>, Equal.Equal
 {
   readonly [TypeId]: unknown
@@ -28,7 +33,7 @@ export interface GraphImpl<in out N, in out E, T extends Graph.Kind = "directed"
 }
 
 /** @internal */
-export const toImpl = <N, E, T extends Graph.Kind = "directed">(
+export const toImpl = <N, E, T extends Graph.Kind>(
   graph: Graph.Graph<N, E, T> | Graph.MutableGraph<N, E, T>
 ): GraphImpl<N, E, T> => graph as unknown as GraphImpl<N, E, T>
 
@@ -43,11 +48,12 @@ export const withTransformation = <N, E, T extends Graph.Kind, A>(
   evaluate: () => A
 ): A => {
   const impl = toImpl(graph)
+  const transforming = impl.transforming
   impl.transforming = true
   try {
     return evaluate()
   } finally {
-    impl.transforming = false
+    impl.transforming = transforming
   }
 }
 
@@ -61,22 +67,32 @@ const edgeEquals = (type: Graph.Kind, self: Graph.Edge<any>, that: Graph.Edge<an
 const edgeHash = (type: Graph.Kind, edge: Graph.Edge<any>): number =>
   type === "directed"
     ? Hash.hash(edge)
-    : Hash.optimize(Hash.hash(edge.data) ^ (Hash.hash(edge.source) + Hash.hash(edge.target)))
+    : Hash.optimize(Hash.combine(Hash.hash(edge.data), endpointsHash(edge.source, edge.target)))
+
+/**
+ * Addition is commutative and does not cancel self-loops.
+ *
+ * @internal
+ */
+export const endpointsHash = (source: unknown, target: unknown): number =>
+  Hash.combine(0, Hash.hash(source)) + Hash.combine(0, Hash.hash(target))
+
+const graphSeed = Hash.string("Graph")
 
 const ProtoGraph = {
   [TypeId]: {
     _N: (_: never) => _,
     _E: (_: never) => _
   },
-  [Symbol.iterator](this: GraphImpl<any, any>) {
+  [Symbol.iterator](this: GraphImpl<any, any, any>) {
     return this.nodes[Symbol.iterator]()
   },
-  [NodeInspectSymbol](this: GraphImpl<any, any>) {
+  [NodeInspectSymbol](this: GraphImpl<any, any, any>) {
     return this.toJSON()
   },
-  [Equal.symbol](this: GraphImpl<any, any>, that: Equal.Equal): boolean {
+  [Equal.symbol](this: GraphImpl<any, any, any>, that: Equal.Equal): boolean {
     if (hasProperty(that, TypeId)) {
-      const thatImpl = toImpl(that as Graph.Graph<unknown, unknown, Graph.Kind>)
+      const thatImpl = toImpl(that as Graph.Graph<any, any, any>)
       if (
         this.nodes.size !== thatImpl.nodes.size ||
         this.edges.size !== thatImpl.edges.size ||
@@ -99,20 +115,20 @@ const ProtoGraph = {
     }
     return false
   },
-  [Hash.symbol](this: GraphImpl<any, any>): number {
-    let hash = Hash.string("Graph")
+  [Hash.symbol](this: GraphImpl<any, any, any>): number {
+    let hash = graphSeed
     hash = hash ^ Hash.string(this.type)
     hash = hash ^ Hash.number(this.nodes.size)
     hash = hash ^ Hash.number(this.edges.size)
     for (const [nodeIndex, nodeData] of this.nodes) {
-      hash = hash ^ (Hash.hash(nodeIndex) + Hash.hash(nodeData))
+      hash ^= Hash.combine(Hash.hash(nodeIndex), Hash.hash(nodeData))
     }
     for (const [edgeIndex, edgeData] of this.edges) {
-      hash = hash ^ (Hash.hash(edgeIndex) + edgeHash(this.type, edgeData))
+      hash ^= Hash.combine(Hash.hash(edgeIndex), edgeHash(this.type, edgeData))
     }
-    return hash
+    return Hash.optimize(hash)
   },
-  toJSON(this: GraphImpl<any, any>) {
+  toJSON(this: GraphImpl<any, any, any>) {
     return {
       _id: "Graph",
       nodeCount: this.nodes.size,
@@ -120,7 +136,7 @@ const ProtoGraph = {
       type: this.type
     }
   },
-  toString(this: GraphImpl<any, any>) {
+  toString(this: GraphImpl<any, any, any>) {
     return `Graph(${this.type}, ${this.nodes.size}, ${this.edges.size})`
   },
   pipe() {

@@ -15,8 +15,8 @@ import * as Effect from "effect/Effect"
 import * as Exit from "effect/Exit"
 import * as Layer from "effect/Layer"
 import * as Scope from "effect/Scope"
-import * as Worker from "effect/unstable/workers/Worker"
-import { WorkerError, WorkerReceiveError } from "effect/unstable/workers/WorkerError"
+import * as Worker from "effect/workers/Worker"
+import { WorkerError, WorkerReceiveError } from "effect/workers/WorkerError"
 import type * as ChildProcess from "node:child_process"
 import type * as WorkerThreads from "node:worker_threads"
 
@@ -58,7 +58,7 @@ export const layerPlatform: Layer.Layer<Worker.WorkerPlatform> = Layer.succeed(W
             return Deferred.await(exitDeferred)
           }).pipe(
             Effect.timeout(5000),
-            Effect.catchCause(() => Effect.sync(() => thing.kill()))
+            Effect.catchCause(() => Effect.promise(() => Promise.resolve(thing.kill())))
           )
         ),
         thing

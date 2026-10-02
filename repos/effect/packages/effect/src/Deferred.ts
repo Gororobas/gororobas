@@ -117,6 +117,12 @@ const DeferredProto = {
   }
 }
 
+const DeferredImpl = function(this: any) {
+  this.resumes = undefined
+  this.effect = undefined
+} as unknown as { new<A, E>(): Deferred<A, E>; prototype: any }
+DeferredImpl.prototype = DeferredProto
+
 /**
  * Creates an empty `Deferred` synchronously outside the `Effect` runtime.
  *
@@ -137,12 +143,7 @@ const DeferredProto = {
  * @category unsafe
  * @since 4.0.0
  */
-export const makeUnsafe = <A, E = never>(): Deferred<A, E> => {
-  const self = Object.create(DeferredProto)
-  self.resumes = undefined
-  self.effect = undefined
-  return self
-}
+export const makeUnsafe = <A, E = never>(): Deferred<A, E> => new DeferredImpl<A, E>()
 
 /**
  * Creates a new `Deferred`.
@@ -857,10 +858,14 @@ export const doneUnsafe = <A, E>(self: Deferred<A, E>, effect: Effect<A, E>): bo
   if (self.effect) return false
   self.effect = effect
   if (self.resumes) {
-    for (let i = 0; i < self.resumes.length; i++) {
-      self.resumes[i](effect)
-    }
+    // Clear `resumes` before resuming: a waiter resumed with an interrupt
+    // cause dies synchronously inside `resume`, and its await cleanup would
+    // otherwise splice this array mid-iteration and skip the next waiter.
+    const resumes = self.resumes
     self.resumes = undefined
+    for (let i = 0; i < resumes.length; i++) {
+      resumes[i](effect)
+    }
   }
   return true
 }
