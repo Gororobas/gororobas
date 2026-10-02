@@ -10,11 +10,12 @@
  * @since 3.14.0
  */
 import * as Context from "./Context.ts"
-import type * as Duration from "./Duration.ts"
+import * as Duration from "./Duration.ts"
 import * as Effect from "./Effect.ts"
 import { identity } from "./Function.ts"
 import { getStackTraceLimit, setStackTraceLimit } from "./internal/stackTraceLimit.ts"
 import * as Layer from "./Layer.ts"
+import type * as Option from "./Option.ts"
 import * as RcMap from "./RcMap.ts"
 import * as Scope from "./Scope.ts"
 import type { Mutable, NoExcessProperties } from "./Types.ts"
@@ -93,6 +94,18 @@ export interface LayerMap<in out K, in out I, in out E = never> {
   contextEffect(key: K): Effect.Effect<Context.Context<I>, E, Scope.Scope>
 
   /**
+   * Retains and returns the context for a key only when it is currently cached.
+   *
+   * **Details**
+   *
+   * `Option.none` means no entry is currently cached or the `LayerMap` is closed;
+   * no layer is built for a missing key. An existing in-flight entry is awaited.
+   *
+   * @since 4.0.0
+   */
+  contextEffectOption(key: K): Effect.Effect<Option.Option<Context.Context<I>>, E, Scope.Scope>
+
+  /**
    * Invalidates the resource associated with the key.
    */
   invalidate(key: K): Effect.Effect<void>
@@ -148,6 +161,10 @@ export const make: <
   lookup: (key: K) => L,
   options?: {
     readonly idleTimeToLive?: IdleTimeToLiveInput<K> | undefined
+    /**
+     * Preloaded entries are retained only for their idle TTL. Keys whose idle
+     * TTL is zero are not preloaded (including when no TTL is specified).
+     */
     readonly preloadKeys?: PreloadKeys
   } | undefined
 ) => Effect.Effect<
@@ -174,7 +191,9 @@ export const make: <
 
   if (options?.preloadKeys) {
     for (const key of options.preloadKeys) {
-      yield* Effect.scoped(RcMap.get(rcMap, key))
+      if (!Duration.isZero(rcMap.idleTimeToLive(key))) {
+        yield* Effect.scoped(RcMap.get(rcMap, key))
+      }
     }
   }
 
@@ -183,6 +202,7 @@ export const make: <
     rcMap,
     get: (key) => Layer.effectContext(RcMap.get(rcMap, key)),
     contextEffect: (key) => RcMap.get(rcMap, key),
+    contextEffectOption: (key) => RcMap.getOption(rcMap, key),
     invalidate: (key) => RcMap.invalidate(rcMap, key)
   })
 })
@@ -246,6 +266,10 @@ export const fromRecord = <
   layers: Layers,
   options?: {
     readonly idleTimeToLive?: IdleTimeToLiveInput<keyof Layers> | undefined
+    /**
+     * Preloaded entries are retained only for their idle TTL. Keys whose idle
+     * TTL is zero are not preloaded (including when no TTL is specified).
+     */
     readonly preload?: Preload | undefined
   } | undefined
 ): Effect.Effect<
@@ -317,6 +341,20 @@ export interface TagClass<
   readonly contextEffect: (key: K) => Effect.Effect<Context.Context<I>, E, Scope.Scope | Self>
 
   /**
+   * Retains and returns the context for a key only when it is currently cached.
+   *
+   * **Details**
+   *
+   * `Option.none` means no entry is currently cached or the `LayerMap` is closed;
+   * no layer is built for a missing key. An existing in-flight entry is awaited.
+   *
+   * @since 4.0.0
+   */
+  readonly contextEffectOption: (
+    key: K
+  ) => Effect.Effect<Option.Option<Context.Context<I>>, E, Scope.Scope | Self>
+
+  /**
    * Invalidates the resource associated with the key.
    */
   readonly invalidate: (key: K) => Effect.Effect<void, never, Self>
@@ -375,6 +413,10 @@ export const Service = <Self>() =>
       readonly lookup: (key: any) => Layer.Layer<any, any, any>
       readonly dependencies?: ReadonlyArray<Layer.Layer<any, any, any>> | undefined
       readonly idleTimeToLive?: IdleTimeToLiveInput<any> | undefined
+      /**
+       * Preloaded entries are retained only for their idle TTL. Keys whose idle
+       * TTL is zero are not preloaded (including when no TTL is specified).
+       */
       readonly preloadKeys?:
         | Iterable<Options extends { readonly lookup: (key: infer K) => any } ? K : never>
         | undefined
@@ -383,6 +425,10 @@ export const Service = <Self>() =>
       readonly layers: Record<string, Layer.Layer<any, any, any>>
       readonly dependencies?: ReadonlyArray<Layer.Layer<any, any, any>> | undefined
       readonly idleTimeToLive?: IdleTimeToLiveInput<any> | undefined
+      /**
+       * Preloaded entries are retained only for their idle TTL. Keys whose idle
+       * TTL is zero are not preloaded (including when no TTL is specified).
+       */
       readonly preload?: boolean | undefined
     }, Options>
 >(
@@ -395,7 +441,7 @@ export const Service = <Self>() =>
     : Options extends { readonly layers: infer Layers } ? keyof Layers
     : never,
   Service.Success<Options>,
-  Options extends { readonly preload: true } ? never : Service.Error<Options>,
+  Service.Error<Options>,
   Service.Services<Options>,
   Options extends { readonly preload: true } ? Service.Error<Options>
     : Options extends { readonly preloadKeys: Iterable<any> } ? Service.Error<Options>
@@ -403,11 +449,13 @@ export const Service = <Self>() =>
   Options extends { readonly dependencies: ReadonlyArray<Layer.Layer<any, any, any>> } ? Options["dependencies"][number]
     : never
 > => {
-  const Err = globalThis.Error as any
   const limit = getStackTraceLimit()
-  setStackTraceLimit(2)
-  const creationError = new Err()
-  setStackTraceLimit(limit)
+  let creationError: Error | undefined
+  if (limit !== 0) {
+    setStackTraceLimit(2)
+    creationError = new globalThis.Error()
+    setStackTraceLimit(limit)
+  }
 
   function TagClass() {}
   const TagClass_ = TagClass as any as Mutable<TagClass<Self, Id, string, any, any, any, any, any>>
@@ -415,7 +463,7 @@ export const Service = <Self>() =>
   TagClass.key = id
   Object.defineProperty(TagClass, "stack", {
     get() {
-      return creationError.stack
+      return creationError?.stack
     }
   })
 
@@ -430,6 +478,8 @@ export const Service = <Self>() =>
 
   TagClass_.get = (key: string) => Layer.unwrap(Effect.map(TagClass_, (layerMap) => layerMap.get(key)))
   TagClass_.contextEffect = (key: string) => Effect.flatMap(TagClass_, (layerMap) => layerMap.contextEffect(key))
+  TagClass_.contextEffectOption = (key: string) =>
+    Effect.flatMap(TagClass_, (layerMap) => layerMap.contextEffectOption(key))
   TagClass_.invalidate = (key: string) => Effect.flatMap(TagClass_, (layerMap) => layerMap.invalidate(key))
 
   return TagClass as any
