@@ -2,6 +2,8 @@ import {
   GbifDeprecatedSpeciesId,
   GbifTaxonId,
   Locale,
+  type WikiArticleEditableData,
+  type WikiArticleMaterializedRow,
   ExternalDataFetchError,
   GbifIdentifier,
   GbifPlantResult,
@@ -99,13 +101,12 @@ export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataI
       attributes: { wikidata: null, gbif: null },
     })
 
-  // @todo retry this activity
   const wikidata = yield* Activity.make({
     name: "wikidata",
     success: WikidataResult,
     error: ExternalDataFetchError,
     execute: fetchPlantWikidata(inputs.wikidataId.value),
-  })
+  }).pipe(Activity.retry({ times: 2, while: (error) => error.retryable }))
 
   const gbif =
     wikidata.gbifId === null
@@ -118,4 +119,11 @@ export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataI
         }).pipe(Activity.retry({ times: 2, while: (error) => error.retryable }), Effect.result)
 
   return PlantExternalDataResult.make({ kind: "PLANT", attributes: { wikidata, gbif } })
+})
+
+export const plantToExternalDataInputs = (
+  article: Extract<WikiArticleEditableData | WikiArticleMaterializedRow, { kind: "PLANT" }>,
+): typeof PlantExternalDataInputs.Type => ({
+  kind: "PLANT",
+  wikidataId: article.attributes.wikidataId,
 })

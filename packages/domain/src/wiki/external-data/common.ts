@@ -2,12 +2,7 @@ import { Schema } from "effect"
 
 import { UrlAsString } from "../../common/primitives.js"
 
-export const ExternalDataProvider = Schema.Literals([
-  "WIKIDATA",
-  "GBIF",
-  "OPEN_LIBRARY",
-  "GOOGLE_BOOKS",
-])
+export const ExternalDataProvider = Schema.Literals(["WIKIDATA", "GBIF", "GOOGLE_BOOKS"])
 
 export const ExternalMedia = Schema.Struct({
   creditLine: Schema.String,

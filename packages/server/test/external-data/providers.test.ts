@@ -1,15 +1,13 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ExternalDataFetchRequest, ExternalDataInputs, ExternalDataResult } from "@gororobas/domain"
-import { GbifTaxonId, OpenLibraryWorkId, WikidataId } from "@gororobas/domain"
-import { OpenLibraryEditionsPage } from "@gororobas/server/wiki/external-data/services/open-library.schema"
+import { GbifTaxonId, WikidataId } from "@gororobas/domain"
 import { WikidataEntity } from "@gororobas/server/wiki/external-data/services/wikidata.schema"
 import { Clock, Effect, Fiber, Schema } from "effect"
 import { FastCheck } from "effect/testing"
 import { HttpClient, HttpClientResponse, HttpClientError } from "effect/unstable/http"
 
 import { makeProviderHttp } from "../../src/common/generic-http-service.js"
-import { normalizeOpenLibraryLanguage } from "../../src/wiki/external-data/kinds/book-fetcher.js"
-import { fetchOpenLibraryBook } from "../../src/wiki/external-data/kinds/book-fetcher.js"
+import { normalizeBookLanguage } from "../../src/wiki/external-data/kinds/book-fetcher.js"
 import { fetchGoogleBooksVolume } from "../../src/wiki/external-data/kinds/book-fetcher.js"
 import { fetchPlantWikidata } from "../../src/wiki/external-data/kinds/plant-fetcher.js"
 import { fetchPlantGbif } from "../../src/wiki/external-data/kinds/plant-fetcher.js"
@@ -17,8 +15,6 @@ import { Gbif } from "../../src/wiki/external-data/services/gbif.js"
 import { makeGbif } from "../../src/wiki/external-data/services/gbif.js"
 import { GoogleBooks } from "../../src/wiki/external-data/services/google-books.js"
 import { makeGoogleBooks } from "../../src/wiki/external-data/services/google-books.js"
-import { OpenLibrary } from "../../src/wiki/external-data/services/open-library.js"
-import { makeOpenLibrary } from "../../src/wiki/external-data/services/open-library.js"
 import { Wikidata } from "../../src/wiki/external-data/services/wikidata.js"
 import { makeWikidata } from "../../src/wiki/external-data/services/wikidata.js"
 
@@ -190,37 +186,6 @@ describe("external data providers", () => {
     ),
   )
 
-  it.live("paginates Open Library editions and normalizes language identifiers", () =>
-    Effect.gen(function* () {
-      const provider = yield* makeOpenLibrary
-      const result = yield* fetchOpenLibraryBook("OL27448W").pipe(
-        Effect.provideService(OpenLibrary, provider),
-      )
-      expect(result.editions.map((edition) => edition.languages)).toEqual([["en"], ["pt"]])
-      expect(result.coverage).toBe("COMPLETE")
-      expect(result.observations).toHaveLength(2)
-    }).pipe(
-      Effect.provideService(
-        HttpClient.HttpClient,
-        client((url) => ({
-          body: url.includes("offset=0")
-            ? {
-                entries: [
-                  { key: "/books/OL1M", title: "Test", languages: [{ key: "/languages/eng" }] },
-                ],
-                links: { next: "/next" },
-              }
-            : {
-                entries: [
-                  { key: "/books/OL2M", title: "Teste", languages: [{ key: "/languages/por" }] },
-                ],
-                links: {},
-              },
-        })),
-      ),
-    ),
-  )
-
   it.live("retrieves a Google volume precisely without guessing other editions", () =>
     Effect.gen(function* () {
       const provider = yield* makeGoogleBooks
@@ -325,71 +290,11 @@ describe("external data providers", () => {
       FastCheck.property(
         FastCheck.constantFrom("eng", "por", "spa", "fr", "de", "jpn", "rus", "cze"),
         (code) => {
-          expect(normalizeOpenLibraryLanguage(normalizeOpenLibraryLanguage(code))).toBe(
-            normalizeOpenLibraryLanguage(code),
+          expect(normalizeBookLanguage(normalizeBookLanguage(code))).toBe(
+            normalizeBookLanguage(code),
           )
         },
       ),
-    )
-  })
-
-  it("decodes the Open Library edition shapes that only appear in real responses", () => {
-    // Trimmed from a real /works/OL45804W/editions.json payload: free text arriving as a bare
-    // string instead of a typed object, the -1 "no cover" placeholder, and empty open-ended maps.
-    const page = Schema.decodeUnknownSync(OpenLibraryEditionsPage)({
-      size: 161,
-      links: {
-        self: "/works/OL45804W/editions.json",
-        work: "/works/OL45804W",
-        next: "/x?offset=50",
-      },
-      entries: [
-        {
-          key: "/books/OL47674491M",
-          title: "SUPER-AZERI - ZUBIA",
-          notes: "Source title: SUPER-AZERI - ZUBIA (Basque Edition)",
-          covers: [14301313, -1],
-          identifiers: {},
-          classifications: {},
-          contributors: [{ role: "Illustrator", name: "Quentin Blake" }],
-          works: [{ key: "/works/OL45804W" }],
-          created: { type: "/type/datetime", value: "2023-04-21T15:54:37.822592" },
-        },
-        {
-          key: "/books/OL22937789M",
-          title: "Hu li pa pa wan sui",
-          description: { type: "/type/text", value: "Three farmers out-all each other." },
-          notes: { type: "/type/text", value: "Translation of: Fantastic Mr. Fox." },
-          identifiers: { goodreads: ["4996006"] },
-          isbn_10: ["9575456106"],
-          table_of_contents: [{ title: "Chapter", type: { key: "/type/toc_item" }, level: 0 }],
-        },
-      ],
-    })
-
-    const [stringText, typedText] = page.entries
-    expect(stringText?.notes).toBe("Source title: SUPER-AZERI - ZUBIA (Basque Edition)")
-    expect(stringText?.covers).toEqual([14301313, -1])
-    expect(stringText?.identifiers).toEqual({})
-    expect(stringText?.created?.value).toBe("2023-04-21T15:54:37.822592")
-    expect(typedText?.description).toEqual({
-      type: "/type/text",
-      value: "Three farmers out-all each other.",
-    })
-    expect(typedText?.identifiers).toEqual({ goodreads: ["4996006"] })
-    expect(typedText?.tableOfContents?.[0]?.level).toBe(0)
-    expect(page.links.next).toBe("/x?offset=50")
-  })
-
-  it("round-trips generated Open Library editions through their schema", () => {
-    FastCheck.assert(
-      FastCheck.property(Schema.toArbitrary(OpenLibraryEditionsPage)(FastCheck), (page) => {
-        expect(
-          Schema.decodeUnknownSync(OpenLibraryEditionsPage)(
-            Schema.encodeSync(OpenLibraryEditionsPage)(page),
-          ),
-        ).toEqual(page)
-      }),
     )
   })
 
@@ -603,7 +508,7 @@ describe("external data providers", () => {
   })
 
   it("round-trips generated identity values through their schemas", () => {
-    ;[WikidataId, GbifTaxonId, OpenLibraryWorkId].forEach((schema) => {
+    ;[WikidataId, GbifTaxonId].forEach((schema) => {
       FastCheck.assert(
         FastCheck.property(Schema.toArbitrary(schema)(FastCheck), (value) => {
           expect(Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value))).toBe(value)

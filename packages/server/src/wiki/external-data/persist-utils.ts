@@ -9,26 +9,23 @@ import { Effect, Match, Option, Schema } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 
 import { findDatabaseRowById } from "../queries.js"
+import { bookToExternalDataInputs } from "./kinds/book-fetcher.js"
+import { plantToExternalDataInputs } from "./kinds/plant-fetcher.js"
 
-// @todo move input generation into each individual kind's file
 export const articleToExternalDataInputs = (
   article: WikiArticleEditableData | WikiArticleMaterializedRow,
 ): ExternalDataInputs =>
   Match.value(article).pipe(
-    Match.when({ kind: "PLANT" }, (plant) => ({
-      kind: "PLANT" as const,
-      wikidataId: plant.attributes.wikidataId,
-    })),
-    Match.when({ kind: "BOOK" }, (book) => ({
-      kind: "BOOK" as const,
-      openLibraryWorkId: book.attributes.openLibraryWorkId,
-      googleBooksVolumeId: book.attributes.googleBooksVolumeId,
-    })),
+    Match.when({ kind: "PLANT" }, plantToExternalDataInputs),
+    Match.when({ kind: "BOOK" }, bookToExternalDataInputs),
     Match.orElse(() => ({ kind: "NONE" as const })),
   )
 
+export type ExternalDataArticle = (WikiArticleEditableData | WikiArticleMaterializedRow) &
+  Pick<WikiArticleMaterializedRow, "id" | "currentCrdtFrontier">
+
 export const buildExternalDataRequest = (
-  article: WikiArticleMaterializedRow,
+  article: ExternalDataArticle,
 ): ExternalDataFetchRequest => ({
   wikiArticleId: article.id,
   articleCrdtFrontier: article.currentCrdtFrontier,

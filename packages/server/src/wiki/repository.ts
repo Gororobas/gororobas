@@ -289,14 +289,19 @@ const createWikiArticle = (input: CreateWikiArticleInput) =>
         }),
       })
 
-      return wikiArticleId
+      return {
+        ...input.wikiArticle,
+        id: wikiArticleId,
+        currentCrdtFrontier: created.currentCrdtFrontier,
+      }
     }).pipe(
       sql.withTransaction,
-      Effect.tap((id) =>
-        requestExternalDataFetch(id).pipe(
+      Effect.tap((article) =>
+        requestExternalDataFetch(article).pipe(
           Effect.catchCause((cause) => Effect.logError("External data submission failed", cause)),
         ),
       ),
+      Effect.map((article) => article.id),
     ),
   )
 
@@ -397,12 +402,19 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
           wikiArticleId: article.id,
         }),
       })
-      return { wikiArticleId: article.id, previous: Option.getOrUndefined(previous) }
+      return {
+        article: {
+          ...updated.data,
+          id: article.id,
+          currentCrdtFrontier: LoroDocFrontier.make(updated.loroDoc.frontiers()),
+        },
+        previous: Option.getOrUndefined(previous),
+      }
     }).pipe(
       sql.withTransaction,
       Effect.tap((updated) =>
         updated
-          ? requestExternalDataFetch(updated.wikiArticleId, updated.previous).pipe(
+          ? requestExternalDataFetch(updated.article, updated.previous).pipe(
               Effect.catchCause((cause) =>
                 Effect.logError("External data submission failed", cause),
               ),

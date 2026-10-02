@@ -1,16 +1,19 @@
-import { type ExternalDataFetchRequest, type PlantExternalDataResult } from "@gororobas/domain"
-import { Effect, Result, Schema } from "effect"
+import {
+  ExternalLink,
+  ExternalMedia,
+  GbifPlantResult,
+  GbifClassification,
+  WikiArticleId,
+  type ExternalDataFetchRequest,
+  type PlantExternalDataResult,
+} from "@gororobas/domain"
+import { Effect, Result, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import { persist } from "../persist-utils.js"
 
-// @todo refactor SqlSchema definitions to reuse existing schemas
 const insertExternalLink = SqlSchema.void({
-  Request: Schema.Struct({
-    wikiArticleId: Schema.String,
-    locale: Schema.String,
-    url: Schema.String,
-  }),
+  Request: ExternalLink.mapFields(Struct.assign({ wikiArticleId: WikiArticleId })),
   execute: (link) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
@@ -19,11 +22,9 @@ const insertExternalLink = SqlSchema.void({
 })
 
 const insertTaxonomyGroup = SqlSchema.void({
-  Request: Schema.Struct({
-    wikiArticleId: Schema.String,
-    gbifTaxonId: Schema.String,
-    taxonomyGroup: Schema.NullOr(Schema.String),
-  }),
+  Request: GbifPlantResult.mapFields(Struct.pick(["gbifTaxonId", "taxonomyGroup"])).mapFields(
+    Struct.assign({ wikiArticleId: WikiArticleId }),
+  ),
   execute: (group) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
@@ -32,12 +33,7 @@ const insertTaxonomyGroup = SqlSchema.void({
 })
 
 const insertTaxonomyClassification = SqlSchema.void({
-  Request: Schema.Struct({
-    wikiArticleId: Schema.String,
-    taxonId: Schema.String,
-    scientificName: Schema.String,
-    taxonRank: Schema.String,
-  }),
+  Request: GbifClassification.mapFields(Struct.assign({ wikiArticleId: WikiArticleId })),
   execute: (classification) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
@@ -46,13 +42,7 @@ const insertTaxonomyClassification = SqlSchema.void({
 })
 
 const insertExternalMedia = SqlSchema.void({
-  Request: Schema.Struct({
-    wikiArticleId: Schema.String,
-    mediaUrl: Schema.String,
-    sourceUrl: Schema.String,
-    creditLine: Schema.String,
-    licenseUrl: Schema.NullOr(Schema.String),
-  }),
+  Request: ExternalMedia.mapFields(Struct.assign({ wikiArticleId: WikiArticleId })),
   execute: (media) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient

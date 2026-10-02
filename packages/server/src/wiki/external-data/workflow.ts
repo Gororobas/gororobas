@@ -1,23 +1,21 @@
 import {
   LoroDocFrontier,
-  WikiArticleId,
   type WikiArticleMaterializedRow,
   ExternalDataFetchError,
   ExternalDataFetchRequest,
   type ExternalDataResult,
 } from "@gororobas/domain"
-import { Effect, Layer, Match, Option, Schema } from "effect"
+import { Effect, Layer, Match, Schema } from "effect"
 import { SqlClient } from "effect/unstable/sql"
 import { Activity, Workflow } from "effect/unstable/workflow"
 
-import { findDatabaseRowById } from "../queries.js"
 import { fetchBook } from "./kinds/book-fetcher.js"
 import { persistBook } from "./kinds/book-persister.js"
 import { fetchPlant } from "./kinds/plant-fetcher.js"
 import { persistPlant } from "./kinds/plant-persister.js"
-import { buildExternalDataRequest } from "./persist-utils.js"
+import { type ExternalDataArticle, buildExternalDataRequest } from "./persist-utils.js"
 
-export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v4", {
+export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v1", {
   payload: ExternalDataFetchRequest.fields,
   success: Schema.Void,
   error: ExternalDataFetchError,
@@ -70,19 +68,12 @@ export const FetchArticleExternalDataLive = Layer.unwrap(
   }),
 )
 
-/**
- * Best-effort submission after the article transaction commits.
- * @todo refactor to receive the article directly w/o requerying from the DB. Given how we're calling it from the wiki's repository, this is the way to go.
- */
+/** Best-effort submission after the article transaction commits. */
 export const requestExternalDataFetch = Effect.fn(function* (
-  wikiArticleId: WikiArticleId,
+  article: ExternalDataArticle,
   previous?: WikiArticleMaterializedRow,
 ) {
-  const article = yield* findDatabaseRowById(wikiArticleId)
-
-  if (Option.isNone(article)) return
-
-  const request = buildExternalDataRequest(article.value)
+  const request = buildExternalDataRequest(article)
 
   if (request.inputs.kind === "NONE") return
 

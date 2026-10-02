@@ -8,11 +8,10 @@ import {
   ValidName,
 } from "../../common/primitives.js"
 import { CrdtBrandedStringSet } from "../../common/primitives.js"
-import { OpenLibraryWorkId, GoogleBooksVolumeId } from "../external-identifiers.js"
+import { GoogleBooksVolumeId } from "../external-identifiers.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({
-  openLibraryWorkId: OptionalColumn(OpenLibraryWorkId),
   googleBooksVolumeId: OptionalColumn(GoogleBooksVolumeId),
   authors: OptionalColumn(Schema.Array(ValidName)),
   tags: OptionalColumn(Schema.Array(TagId)),

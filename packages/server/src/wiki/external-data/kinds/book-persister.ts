@@ -1,22 +1,22 @@
-import { type ExternalDataFetchRequest, type BookExternalDataResult } from "@gororobas/domain"
-import { Effect, Result, Schema } from "effect"
+import {
+  BookEdition,
+  WikiArticleId,
+  type ExternalDataFetchRequest,
+  type BookExternalDataResult,
+} from "@gororobas/domain"
+import { Effect, Result, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/unstable/sql"
 
 import { persist } from "../persist-utils.js"
 
-// @todo refactor to improve schema reusability
 const insertEdition = SqlSchema.void({
-  Request: Schema.Struct({
-    wikiArticleId: Schema.String,
-    provider: Schema.Literals(["OPEN_LIBRARY", "GOOGLE_BOOKS"]),
-    externalId: Schema.String,
-    title: Schema.String,
-    publisher: Schema.NullOr(Schema.String),
-    publicationDate: Schema.NullOr(Schema.String),
-    pageCount: Schema.NullOr(Schema.Int),
-    isbn: Schema.String,
-    sourceUrl: Schema.String,
-  }),
+  Request: BookEdition.mapFields(Struct.omit(["languages"])).mapFields(
+    Struct.assign({
+      wikiArticleId: WikiArticleId,
+      provider: Schema.Literal("GOOGLE_BOOKS"),
+      isbn: Schema.fromJsonString(BookEdition.fields.isbn),
+    }),
+  ),
   execute: (edition) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
@@ -31,10 +31,10 @@ const insertEdition = SqlSchema.void({
 
 const insertEditionLanguage = SqlSchema.void({
   Request: Schema.Struct({
-    wikiArticleId: Schema.String,
-    provider: Schema.Literals(["OPEN_LIBRARY", "GOOGLE_BOOKS"]),
-    externalId: Schema.String,
-    language: Schema.String,
+    wikiArticleId: WikiArticleId,
+    provider: Schema.Literal("GOOGLE_BOOKS"),
+    externalId: BookEdition.fields.externalId,
+    language: BookEdition.fields.languages.value,
   }),
   execute: (language) =>
     Effect.gen(function* () {
@@ -43,48 +43,33 @@ const insertEditionLanguage = SqlSchema.void({
     }),
 })
 
-// @todo refactor to reduce identation
-export const persistBook = (request: ExternalDataFetchRequest, data: BookExternalDataResult) =>
-  persist(
-    request,
-    Effect.gen(function* () {
-      const wikiArticleId = request.wikiArticleId
-      const providers = [
-        { provider: "OPEN_LIBRARY", result: data.attributes.openLibrary },
-        { provider: "GOOGLE_BOOKS", result: data.attributes.googleBooks },
-      ] as const
+const persistEditions = Effect.fn(function* (
+  wikiArticleId: WikiArticleId,
+  result: BookExternalDataResult["attributes"]["googleBooks"],
+) {
+  if (result === null || Result.isFailure(result)) return
 
-      yield* Effect.forEach(
-        providers,
-        ({ provider, result }) =>
-          Effect.gen(function* () {
-            if (result === null || Result.isFailure(result)) return
-
-            yield* Effect.forEach(
-              result.success.editions,
-              (edition) =>
-                Effect.gen(function* () {
-                  const { languages, isbn: identifiers, ...attributes } = edition
-                  const isbn = yield* Schema.encodeEffect(
-                    Schema.fromJsonString(Schema.Array(Schema.String)),
-                  )(identifiers)
-                  yield* insertEdition({ wikiArticleId, provider, ...attributes, isbn })
-                  yield* Effect.forEach(
-                    languages,
-                    (language) =>
-                      insertEditionLanguage({
-                        wikiArticleId,
-                        provider,
-                        externalId: edition.externalId,
-                        language,
-                      }),
-                    { discard: true, concurrency: 1 },
-                  )
-                }),
-              { discard: true, concurrency: 1 },
-            )
-          }),
-        { discard: true, concurrency: 1 },
-      )
-    }),
+  yield* Effect.forEach(
+    result.success.editions,
+    (edition) =>
+      Effect.gen(function* () {
+        const { languages, ...attributes } = edition
+        yield* insertEdition({ wikiArticleId, provider: "GOOGLE_BOOKS", ...attributes })
+        yield* Effect.forEach(
+          languages,
+          (language) =>
+            insertEditionLanguage({
+              wikiArticleId,
+              provider: "GOOGLE_BOOKS",
+              externalId: edition.externalId,
+              language,
+            }),
+          { discard: true, concurrency: 1 },
+        )
+      }),
+    { discard: true, concurrency: 1 },
   )
+})
+
+export const persistBook = (request: ExternalDataFetchRequest, data: BookExternalDataResult) =>
+  persist(request, persistEditions(request.wikiArticleId, data.attributes.googleBooks))

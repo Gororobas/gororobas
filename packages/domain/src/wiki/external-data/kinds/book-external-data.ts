@@ -1,6 +1,6 @@
-import { UrlAsString } from "@gororobas/domain"
 import { Schema, Struct } from "effect"
 
+import { UrlAsString } from "../../../common/primitives.js"
 import { WikiBookArticle } from "../../kinds/book.js"
 import { Observation } from "../common.js"
 import { ExternalDataFetchError } from "../error.js"
@@ -25,15 +25,12 @@ export const BookResult = Schema.Struct({
 
 export const BookExternalDataInputs = Schema.Struct({
   kind: Schema.Literal("BOOK"),
-  ...WikiBookArticle.EditableAttributes.mapFields(
-    Struct.pick(["googleBooksVolumeId", "openLibraryWorkId"]),
-  ).fields,
+  ...WikiBookArticle.EditableAttributes.mapFields(Struct.pick(["googleBooksVolumeId"])).fields,
 })
 
 export const BookExternalDataResult = Schema.Struct({
   kind: Schema.Literal("BOOK"),
   attributes: Schema.Struct({
-    openLibrary: Schema.NullOr(Schema.Result(BookResult, ExternalDataFetchError)),
     googleBooks: Schema.NullOr(Schema.Result(BookResult, ExternalDataFetchError)),
   }),
 })

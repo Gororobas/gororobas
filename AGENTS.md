@@ -32,7 +32,7 @@ Per `packages/server/src/sql.ts`, we use Effect SQL's `transformResultNames` and
 
 To be clear: always write symbols' names with Typescript's best practice of `camelCase`. In .sql, always write column and table names in `snake_case`. Effect SQL will do the transformation automatically.
 
-When writing SQL statements, use Effect SQL's SqlSchema if possible. For examples, look at packages/server/src/tags/queries.ts and packages/server/src/tags/mutations.ts
+When writing SQL statements, use Effect SQL's SqlSchema if possible. For examples, look at packages/server/src/publications/queries.ts and packages/server/src/publications/mutations.ts
 
 ## Comments
 
