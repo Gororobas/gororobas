@@ -11,7 +11,7 @@ const resourcesQuery = `
   select Resource {
     *,
     created_by: { id },
-    thumbnail: { id },
+    thumbnail: { *, sources := (select .sources order by @order_index asc empty last) { * } },
     related_vegetables := (select .related_vegetables order by @order_index asc empty last) {
       id,
     },

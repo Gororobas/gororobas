@@ -5,11 +5,12 @@ import {
   NonEmptyTrimmedString,
   PlatformAccessLevel,
   TiptapDocument,
+  TagId,
 } from "@gororobas/domain"
 /**
  * Gel entity schemas.
  */
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 
 import * as Enums from "./enums.js"
 
@@ -132,6 +133,12 @@ export type GelSource = typeof GelSource.Type
 
 export const GelTag = Schema.Struct({
   ...gelAuditableFields,
+  created_at: GelTimestamp.pipe(
+    Schema.withDecodingDefaultKey(
+      Effect.succeed(Schema.decodeUnknownSync(Schema.DateFromString)("2025-04-01T12:00:00Z")),
+    ),
+  ),
+  updated_at: GelOptionalColumn(GelTimestamp),
   id: Schema.String,
   names: Schema.Array(Schema.String),
   description: GelOptionalColumn(Schema.Unknown), // json
@@ -142,6 +149,7 @@ export type GelTag = typeof GelTag.Type
 
 export const TagDataForMigration = Schema.Struct({
   latest_source: GelTag,
+  id: TagId,
 })
 export type TagDataForMigration = typeof TagDataForMigration.Type
 
@@ -149,6 +157,7 @@ export const GelImage = Schema.Struct({
   ...gelEmbeddedAuditableFields,
   id: Schema.String,
   sanity_id: Schema.String,
+  sources: Schema.optional(Schema.Array(GelSource)),
   label: GelOptionalColumn(Schema.String),
   hotspot: GelOptionalColumn(Schema.Unknown), // json
   crop: GelOptionalColumn(Schema.Unknown), // json
@@ -278,7 +287,7 @@ const GelResourceRelation = Schema.Struct({ id: Schema.String })
 
 export const GelResourceWithRelations = Schema.Struct({
   ...GelResource.fields,
-  thumbnail: GelOptionalColumn(GelResourceRelation),
+  thumbnail: GelOptionalColumn(GelImage),
   created_by: GelOptionalColumn(GelResourceRelation),
   related_vegetables: Schema.Array(GelResourceRelation),
   tags: Schema.Array(GelResourceRelation),

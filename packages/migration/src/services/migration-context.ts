@@ -1,231 +1,121 @@
-/**
- * MigrationContext service for ID mapping and progress tracking.
- * Adapted from the reference Supabase migration context.
- */
-/* oxlint-disable effect/casting-awareness -- generic migration IDs are branded by each caller. */
-import { Context, DateTime, Effect, HashMap, Layer, Option, Ref, Schema } from "effect"
-import { SqlClient, SqlError, SqlSchema } from "effect/unstable/sql"
+/** MigrationContext service for persistent ID mapping and progress tracking. */
+import { Context, DateTime, Effect, Layer, Option, Schema, SchemaIssue } from "effect"
+import { KeyValueStore } from "effect/unstable/persistence"
 
-// ============ Types ============
+const MappingEntry = Schema.Struct({
+  gelId: Schema.String,
+  sqliteId: Schema.String,
+  entityType: Schema.String,
+  contentHash: Schema.String,
+  lastSyncedAt: Schema.String,
+})
+export type MappingEntry = typeof MappingEntry.Type
 
-export interface MappingEntry<T extends string = string> {
-  gelId: string
-  sqliteId: T
-  entityType: string
-  contentHash: string
-  lastSyncedAt: string
-}
+type MappingError = Schema.SchemaError | KeyValueStore.KeyValueStoreError
 
 export type MigrationOp =
   | { op: "skip"; reason: "unchanged" }
   | {
       op: "create"
-      execute: <R>(
-        createInSqlite: (data: { contentHash: string }) => Effect.Effect<string, R>,
-      ) => Effect.Effect<void, R | SqlError.SqlError>
+      execute: <E>(
+        create: (data: { contentHash: string }) => Effect.Effect<string, E>,
+      ) => Effect.Effect<void, E | MappingError>
     }
   | {
       op: "update"
       sqliteId: string
-      execute: <R>(
-        updateInSqlite: (data: { contentHash: string; sqliteId: string }) => Effect.Effect<void, R>,
-      ) => Effect.Effect<void, R | SqlError.SqlError>
+      execute: <E>(
+        update: (data: { contentHash: string; sqliteId: string }) => Effect.Effect<void, E>,
+      ) => Effect.Effect<void, E | MappingError>
     }
-
-export type IdMap = HashMap.HashMap<string, MappingEntry>
-
-// ============ Errors ============
 
 export class GelIdNotMappedError extends Schema.TaggedError<GelIdNotMappedError>()(
   "GelIdNotMappedError",
-  {
-    gelId: Schema.String,
-    entityType: Schema.Option(Schema.String),
-  },
+  { gelId: Schema.String, entityType: Schema.Option(Schema.String) },
 ) {}
 
-// ============ Service Interface ============
-
 export interface MigrationContextService {
-  /**
-   * Resolve a Gel ID to its SQLite ID.
-   */
-  readonly resolveId: <T extends string>(
+  readonly resolveId: (
     gelId: string,
     entityType?: string,
-  ) => Effect.Effect<T, GelIdNotMappedError>
-
-  /**
-   * Determine what migration operation is needed and return a
-   * handler that auto-registers the mapping to the context on success.
-   */
+  ) => Effect.Effect<string, GelIdNotMappedError | MappingError>
   readonly planMigrationOp: <GelRecord extends { id: string }>(
     sourceRecord: GelRecord,
     entityType: string,
-  ) => Effect.Effect<MigrationOp, Schema.SchemaError | SqlError.SqlError>
-
-  /**
-   * Register a new ID mapping.
-   */
-  readonly registerMapping: (mapping: MappingEntry) => Effect.Effect<void, SqlError.SqlError>
+  ) => Effect.Effect<MigrationOp, MappingError>
+  readonly registerMapping: (mapping: MappingEntry) => Effect.Effect<void, MappingError>
 }
-
-// ============ Service Tag ============
 
 export class MigrationContext extends Context.Service<MigrationContext, MigrationContextService>()(
   "MigrationContext",
 ) {}
 
-// ============ Implementation ============
-
-const makeMigrationContext = ({ initialMap = HashMap.empty() }: { initialMap?: IdMap }) =>
+export const MigrationContextLive = Layer.effect(
+  MigrationContext,
   Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient
-    const idMapRef = yield* Ref.make(initialMap)
-
-    // Initialize the id_mappings table if it doesn't exist
-    yield* sql`
-      CREATE TABLE IF NOT EXISTS id_mappings (
-        gel_id TEXT PRIMARY KEY,
-        sqlite_id TEXT NOT NULL,
-        entity_type TEXT NOT NULL,
-        content_hash TEXT,
-        last_synced_at TEXT,
-        created_at TEXT DEFAULT (datetime('now')),
-        updated_at TEXT DEFAULT (datetime('now'))
-      )
-    `
-
-    // Load existing mappings from database
-    const loadMappings = SqlSchema.findAll({
-      execute: () => sql`SELECT * FROM id_mappings`,
-      Request: Schema.Void,
-      Result: Schema.Struct({
-        gelId: Schema.String,
-        sqliteId: Schema.String,
-        entityType: Schema.String,
-        contentHash: Schema.String,
-        lastSyncedAt: Schema.String,
-      }),
-    })
-
-    const existingMappings = yield* loadMappings()
-    const loadedMap = HashMap.fromIterable(
-      existingMappings.map((m) => [
-        m.gelId,
-        {
-          gelId: m.gelId,
-          sqliteId: m.sqliteId as string,
-          entityType: m.entityType,
-          contentHash: m.contentHash,
-          lastSyncedAt: m.lastSyncedAt,
-        } as MappingEntry,
-      ]),
-    )
-
-    yield* Ref.set(idMapRef, loadedMap)
-
-    const registerMapping = (mapping: MappingEntry) =>
-      Effect.gen(function* () {
-        // Update in-memory map
-        yield* Ref.update(idMapRef, HashMap.set(mapping.gelId, mapping))
-
-        // Persist to database
-        yield* sql`
-          INSERT OR REPLACE INTO id_mappings
-          (gel_id, sqlite_id, entity_type, content_hash, last_synced_at, updated_at)
-          VALUES (
-            ${mapping.gelId},
-            ${mapping.sqliteId},
-            ${mapping.entityType},
-            ${mapping.contentHash},
-            ${mapping.lastSyncedAt},
-            datetime('now')
-          )
-        `
-      })
-
-    return {
-      resolveId: <T extends string>(gelId: string, entityType?: string) =>
+    const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, MappingEntry)
+    const registerMapping = (mapping: MappingEntry) => store.set(mapping.gelId, mapping)
+    return MigrationContext.of({
+      resolveId: (gelId, entityType) =>
         Effect.gen(function* () {
-          const map = yield* Ref.get(idMapRef)
-          const entry = HashMap.get(map, gelId)
-
-          if (Option.isNone(entry)) {
+          const entry = yield* store.get(gelId)
+          if (
+            Option.isNone(entry) ||
+            (entityType !== undefined && entry.value.entityType !== entityType)
+          ) {
             return yield* Effect.fail(
               new GelIdNotMappedError({ gelId, entityType: Option.fromUndefinedOr(entityType) }),
             )
           }
-
-          return entry.value.sqliteId as T
+          return entry.value.sqliteId
         }),
-
-      planMigrationOp: <GelRecord extends { id: string }>(
-        sourceRecord: GelRecord,
-        entityType: string,
-      ) =>
+      planMigrationOp: (sourceRecord, entityType) =>
         Effect.gen(function* () {
-          const map = yield* Ref.get(idMapRef)
-          const { id: gelId } = sourceRecord
-          const existing = HashMap.get(map, gelId)
-
-          // Simple hash for now - can be improved with proper content hashing
-          const newHash = yield* Effect.succeed(
-            Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(sourceRecord),
+          const existing = yield* store.get(sourceRecord.id)
+          const contentHash = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(
+            sourceRecord,
           )
-          const now = (yield* DateTime.nowAsDate).toISOString()
-
+          const lastSyncedAt = (yield* DateTime.nowAsDate).toISOString()
           if (Option.isSome(existing)) {
-            if (existing.value.contentHash === newHash) {
-              return { op: "skip", reason: "unchanged" } as const
+            if (existing.value.entityType !== entityType) {
+              return yield* Effect.fail(
+                new Schema.SchemaError(
+                  new SchemaIssue.InvalidValue(
+                    { message: "ID mapping entity type mismatch" },
+                    existing.value,
+                  ),
+                ),
+              )
             }
-
-            const mappingEntry = existing.value
+            if (existing.value.contentHash === contentHash)
+              return { op: "skip", reason: "unchanged" } as const
+            const entry = existing.value
             return {
               op: "update",
-              sqliteId: mappingEntry.sqliteId,
-              execute: <R>(
-                updateInSqlite: (data: {
-                  contentHash: string
-                  sqliteId: string
-                }) => Effect.Effect<void, R>,
-              ) =>
+              sqliteId: entry.sqliteId,
+              execute: (update) =>
                 Effect.gen(function* () {
-                  yield* updateInSqlite({
-                    contentHash: newHash,
-                    sqliteId: mappingEntry.sqliteId,
-                  })
-                  yield* registerMapping({
-                    ...mappingEntry,
-                    contentHash: newHash,
-                    lastSyncedAt: now,
-                  })
+                  yield* update({ contentHash, sqliteId: entry.sqliteId })
+                  yield* registerMapping({ ...entry, contentHash, lastSyncedAt })
                 }),
-            } as const
+            } satisfies MigrationOp
           }
-
           return {
             op: "create",
-            execute: <R>(
-              createInSqlite: (data: { contentHash: string }) => Effect.Effect<string, R>,
-            ) =>
+            execute: (create) =>
               Effect.gen(function* () {
-                const sqliteId = yield* createInSqlite({ contentHash: newHash })
+                const sqliteId = yield* create({ contentHash })
                 yield* registerMapping({
-                  gelId,
+                  gelId: sourceRecord.id,
                   sqliteId,
                   entityType,
-                  contentHash: newHash,
-                  lastSyncedAt: now,
+                  contentHash,
+                  lastSyncedAt,
                 })
               }),
-          } as const
+          } satisfies MigrationOp
         }),
-
       registerMapping,
-    }
-  })
-
-// ============ Layer ============
-
-export const MigrationContextLive = Layer.effect(MigrationContext, makeMigrationContext({}))
+    })
+  }),
+)

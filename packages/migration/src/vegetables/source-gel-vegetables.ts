@@ -18,12 +18,14 @@ const vegetablesQuery = `
   select Vegetable {
     *,
     photos := (select .photos order by @order_index asc empty last) {
-      *
+      *,
+      sources := (select .sources order by @order_index asc empty last) { * }
     },
     varieties := (select .varieties order by @order_index asc empty last) {
       *,
       photos: {
         *,
+        sources := (select .sources order by @order_index asc empty last) { * },
       }
     },
     friends: {

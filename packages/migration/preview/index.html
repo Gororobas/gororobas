@@ -395,6 +395,8 @@
             table.append(row)
           }
           detail.append(table)
+          if (source.thumbnail)
+            detail.append(element("h2", "Miniatura Gel"), imageElement(source.thumbnail))
           if (plant.conversion_error) {
             const error = element("p", `Erro de conversão: ${plant.conversion_error}`)
             error.setAttribute("role", "alert")
@@ -483,6 +485,10 @@
           const figure = element("figure")
           figure.append(imageElement(photo))
           figure.append(element("figcaption", photo.label ?? photo.sanity_id ?? photo.id))
+          for (const reference of photo.sources ?? [])
+            figure.append(
+              element("p", [reference.credits, reference.origin].filter(Boolean).join(" · ")),
+            )
           photos.append(figure)
         }
         detail.append(

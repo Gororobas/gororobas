@@ -8,6 +8,7 @@ import {
 import { Effect, Match, Record, Schema } from "effect"
 
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
+import { MigrationContext } from "../services/migration-context.js"
 import { gelVegetableNamesToCrdtList as stringsToCrdtList } from "../vegetables/gel-vegetable-to-wiki-plant-article.js"
 
 export const ResourceWikiArticle = Schema.Union([
@@ -73,14 +74,33 @@ const organizationEntityTypesByHandle: Record<
 export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(function* (
   source: GelResourceWithRelations,
 ) {
-  // @todo convert to migrated tags via MigrationContext
-  const tags = Record.fromEntries(source.tags.map(({ id }) => [id, true] as const))
+  const context = yield* MigrationContext
+  const tagIds = yield* Effect.forEach(source.tags, ({ id }) => context.resolveId(id, "Tag"), {
+    concurrency: 1,
+  })
+  const tags = Record.fromEntries(tagIds.map((id) => [id, true] as const))
+
+  // Organisations have no creditLine attribute; retain attribution in their content.
+  const description =
+    source.format === "ORGANIZATION" && source.credit_line
+      ? {
+          type: "doc" as const,
+          version: 1 as const,
+          content: [
+            ...(source.description?.content ?? []),
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: `Créditos: ${source.credit_line}` }],
+            },
+          ],
+        }
+      : source.description
 
   // Round-about way of using the encoded version of the translation in the decode calls below
   const translationsEncoded = yield* Schema.decodeEffect(WikiArticleEditableTranslations)({
     pt: {
       commonNames: stringsToCrdtList([source.title]),
-      content: source.description,
+      content: description,
       grammaticalGender: null,
     },
   }).pipe(Effect.flatMap(Schema.encodeEffect(WikiArticleEditableTranslations)))
