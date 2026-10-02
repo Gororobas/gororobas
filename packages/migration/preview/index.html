@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="pt-BR">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview da migração · Gororobas</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font:
+        16px/1.5 system-ui,
+        sans-serif;
+      color: #24372c;
+      background: #f8faf7;
+    }
+    header {
+      padding: 20px 28px;
+      border-bottom: 1px solid #d9e1d6;
+    }
+    h1,
+    h2,
+    p {
+      margin: 0 0 12px;
+    }
+    h1 {
+      font-size: 26px;
+    }
+    h2 {
+      font-size: 20px;
+      margin-top: 24px;
+    }
+    a {
+      color: #256540;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+    }
+    aside {
+      padding: 20px;
+      height: calc(100vh - 135px);
+      overflow: auto;
+      position: sticky;
+      top: 0;
+    }
+    input,
+    select {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0 12px;
+      font: inherit;
+    }
+    nav a {
+      display: block;
+      padding: 7px 10px;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+    nav a[aria-current] {
+      background: #dcebdc;
+      font-weight: 600;
+    }
+    article {
+      padding: 24px 32px;
+      border-left: 1px solid #d9e1d6;
+      min-width: 0;
+    }
+    small,
+    .muted {
+      color: #637267;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th,
+    td {
+      text-align: left;
+      vertical-align: top;
+      padding: 10px;
+      border-bottom: 1px solid #d9e1d6;
+      overflow-wrap: anywhere;
+    }
+    th {
+      width: 25%;
+    }
+    .columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+    .photos {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    figure {
+      margin: 0;
+      width: 180px;
+    }
+    img {
+      width: 180px;
+      height: 150px;
+      object-fit: contain;
+      background: #edf1e9;
+    }
+    figcaption {
+      font-size: 13px;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      padding: 12px;
+      background: #edf1e9;
+      font-size: 12px;
+    }
+    details {
+      margin-top: 20px;
+    }
+    #errors {
+      color: #942f20;
+      white-space: pre-wrap;
+    }
+    @media (max-width: 700px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      aside {
+        position: static;
+        height: 240px;
+      }
+      article {
+        padding: 20px;
+        border-left: none;
+      }
+      .columns {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <header>
+    <h1>Preview da migração · Gororobas</h1>
+    <p class="muted">Gel original e última versão convertida, lado a lado. Somente leitura.</p>
+    <small id="status" role="status">Carregando exports…</small>
+    <div id="errors" role="alert"></div>
+  </header>
+  <main>
+    <aside>
+      <label for="category">Coleção</label>
+      <select id="category" disabled>
+        <option value="plants">Vegetais → PLANT</option>
+        <option value="resources">Biblioteca → Wiki</option>
+        <option value="notes">Notas → Publicações</option>
+      </select>
+      <label for="search">Buscar nome, título ou nome científico</label>
+      <input id="search" type="search" disabled />
+      <nav id="plants" aria-label="Vegetais"></nav>
+    </aside>
+    <article id="detail"></article>
+  </main>
+  <script type="module">
+    const element = (tag, text) => {
+      const node = document.createElement(tag)
+      if (text !== undefined) node.textContent = text
+      return node
+    }
+    const display = (value) => {
+      if (value == null) return "—"
+      if (Array.isArray(value))
+        return value.map((item) => item?.value ?? item).join(", ") || "(vazio)"
+      if (typeof value === "object")
+        return (
+          Object.keys(value)
+            .filter((key) => value[key] === true)
+            .join(", ") || "(vazio)"
+        )
+      return String(value) || "(vazio)"
+    }
+    // Plain text for titles/search; unsupported rich-text nodes remain visible in the raw JSON.
+    const contentText = (node) => {
+      if (!node) return ""
+      if (node.text) return node.text
+      if (node.type === "mention") {
+        try {
+          return `@${JSON.parse(node.attrs.data).label}`
+        } catch {
+          return "[menção inválida]"
+        }
+      }
+      if (node.type === "image") return "[imagem]"
+      if (node.type === "hardBreak") return "\n"
+      const text = (node.content ?? []).map(contentText).join("")
+      return ["paragraph", "heading", "listItem"].includes(node.type) ? `${text}\n` : text
+    }
+    const imageElement = (photo) => {
+      const match = /^image-([a-f0-9]+-\d+x\d+)-([a-z]+)$/.exec(photo?.sanity_id ?? "")
+      if (!match) return element("span", "Imagem sem referência Sanity")
+      const image = element("img")
+      image.src = `https://cdn.sanity.io/images/4wdqd7lo/production/${match[1]}.${match[2]}?w=360&fit=max&auto=format`
+      image.alt = photo.label ?? "Imagem do export Gel"
+      image.loading = "lazy"
+      image.addEventListener("error", () =>
+        image.replaceWith(element("span", "Imagem indisponível")),
+      )
+      return image
+    }
+    const renderContent = (node) => {
+      if (!node) return element("p", "Sem conteúdo")
+      if (node.type === "image") {
+        try {
+          return imageElement(JSON.parse(node.attrs.data).image)
+        } catch {
+          return element("span", "[imagem inválida]")
+        }
+      }
+      if (node.type === "text" || node.type === "mention") {
+        let text = element("span", contentText(node))
+        for (const mark of node.marks ?? []) {
+          const tag = {
+            bold: "strong",
+            italic: "em",
+            strike: "s",
+            code: "code",
+            underline: "u",
+            link: "a",
+          }[mark.type]
+          if (!tag || (tag === "a" && !/^https?:\/\//i.test(mark.attrs?.href ?? ""))) continue
+          const wrapper = element(tag)
+          if (tag === "a") {
+            wrapper.href = mark.attrs.href
+            wrapper.target = "_blank"
+            wrapper.rel = "noopener noreferrer"
+          }
+          wrapper.append(text)
+          text = wrapper
+        }
+        return text
+      }
+      const tag = {
+        doc: "div",
+        paragraph: "p",
+        heading: "h3",
+        bulletList: "ul",
+        orderedList: "ol",
+        listItem: "li",
+        hardBreak: "br",
+      }[node.type]
+      if (!tag) return element("span", `[${node.type}: consulte o JSON]`)
+      const result = element(tag)
+      for (const child of node.content ?? []) result.append(renderContent(child))
+      return result
+    }
+    const fields = [
+      ["Nomes", "names", "commonNames"],
+      ["Nomes científicos", "scientific_names", "scientificNames"],
+      ["Gênero gramatical", "gender", "grammaticalGender"],
+      ["Estrato", "strata", "strata"],
+      ["Métodos de plantio", "planting_methods", "plantingMethods"],
+      ["Partes comestíveis", "edible_parts", "edibleParts"],
+      ["Ciclo de vida", "lifecycles", "lifecycles"],
+      ["Usos", "uses", "usage"],
+      ["Altura mínima (cm)", "height_min", "heightMin"],
+      ["Altura máxima (cm)", "height_max", "heightMax"],
+      ["Temperatura mínima (°C)", "temperature_min", "temperatureMin"],
+      ["Temperatura máxima (°C)", "temperature_max", "temperatureMax"],
+      [
+        "Ciclo de desenvolvimento mínimo (valor bruto)",
+        "development_cycle_min",
+        "developmentCycleMin",
+      ],
+      [
+        "Ciclo de desenvolvimento máximo (valor bruto)",
+        "development_cycle_max",
+        "developmentCycleMax",
+      ],
+    ]
+    try {
+      const response = await fetch("/exports.json")
+      if (!response.ok) throw new Error(await response.text())
+      const dataset = await response.json()
+      const title = (source) =>
+        (source.names?.[0] ??
+          (typeof source.title === "string" ? source.title : contentText(source.title).trim())) ||
+        source.handle
+      for (const key of ["plants", "resources", "notes"])
+        dataset[key].sort((a, b) =>
+          title(a.latest_source).localeCompare(title(b.latest_source), "pt-BR"),
+        )
+      dataset.notes.sort((a, b) =>
+        String(b.latest_source.published_at).localeCompare(String(a.latest_source.published_at)),
+      )
+      const byId = new Map(
+        dataset.plants.map((plant) => [plant.latest_source.id, plant.latest_source]),
+      )
+      const category = document.querySelector("#category")
+      const route = () => location.hash.slice(1).split("/").map(decodeURIComponent)
+      if (["plants", "resources", "notes"].includes(route()[0])) category.value = route()[0]
+      let plants = dataset[category.value]
+      const detail = document.querySelector("#detail")
+      const search = document.querySelector("#search")
+      const list = document.querySelector("#plants")
+      document.querySelector("#errors").textContent = dataset.rejected
+        .map((item) => `${item.file}: ${item.error}`)
+        .join("\n")
+
+      const renderDetail = () => {
+        const handle = route()[1]
+        const plant =
+          plants.find((item) => item.latest_source.handle === handle) ??
+          (handle ? undefined : plants[0])
+        detail.replaceChildren()
+        for (const link of list.children) {
+          if (
+            link.hash === location.hash ||
+            (!handle &&
+              link.hash === `#${category.value}/${encodeURIComponent(plant?.latest_source.handle)}`)
+          )
+            link.setAttribute("aria-current", "page")
+          else link.removeAttribute("aria-current")
+        }
+        if (!plant) {
+          detail.append(
+            element(
+              "p",
+              category.value === "notes" && dataset.missing.includes("notes")
+                ? "Não há exports de notas. Adicione os JSON Gel em packages/migration/debug/notes e recarregue. Nenhuma publicação foi convertida ou simulada."
+                : "Registro não encontrado.",
+            ),
+          )
+          return
+        }
+        const source = plant.latest_source
+        const article = plant.article ?? plant.history?.at(-1)?.article
+        const translation = article?.translations?.pt
+        const publication = plant.publication
+        detail.append(element("h1", title(source)))
+        const live = element("a", "Comparar com o site atual ↗")
+        live.href =
+          category.value === "resources"
+            ? "https://gororobas.com/biblioteca"
+            : `https://gororobas.com/${category.value === "plants" ? "vegetais" : "notas"}/${encodeURIComponent(source.handle)}`
+        live.target = "_blank"
+        live.rel = "noopener noreferrer"
+        detail.append(
+          live,
+          element(
+            "p",
+            `${plant.file} · ${plant.history?.length ?? 0} versões · atualizado no Gel: ${source.updated_at ?? "—"}`,
+          ),
+        )
+        const raw = element("details")
+        raw.append(
+          element("summary", "JSON completo (original, histórico e convertido)"),
+          element("pre", JSON.stringify(plant, null, 2)),
+        )
+        if (category.value !== "plants") {
+          detail.append(
+            element(
+              "h2",
+              category.value === "resources"
+                ? `Wiki: ${article?.kind ?? "sem conversão"}`
+                : publication
+                  ? `Publicação POST · ${publication.locale}`
+                  : "Nota sem conversão",
+            ),
+          )
+          const comparisons =
+            category.value === "resources"
+              ? [
+                  ["Título", source.title, translation?.commonNames],
+                  ["Formato", source.format, article?.attributes?.format ?? article?.kind],
+                  ["URL", source.url, article?.attributes?.url],
+                  [
+                    "Créditos / autores",
+                    source.credit_line,
+                    article?.attributes?.creditLine ?? article?.attributes?.authors,
+                  ],
+                  ["Tags (IDs Gel)", source.tags?.map((tag) => tag.id), article?.attributes?.tags],
+                ]
+              : [
+                  ["Título", contentText(source.title), "Integrado ao conteúdo"],
+                  ["Tipos", source.types, undefined],
+                  ["Visibilidade", source.publish_status ?? source.public, publication?.visibility],
+                  ["Publicado em", source.published_at, undefined],
+                ]
+          const table = element("table")
+          for (const values of [["Campo", "Gel original", "Convertido"], ...comparisons]) {
+            const row = element("tr")
+            values.forEach((value, index) =>
+              row.append(element(index === 0 ? "th" : "td", display(value))),
+            )
+            table.append(row)
+          }
+          detail.append(table)
+          if (plant.conversion_error) {
+            const error = element("p", `Erro de conversão: ${plant.conversion_error}`)
+            error.setAttribute("role", "alert")
+            detail.append(error)
+          }
+          for (const [label, content] of [
+            [
+              "Conteúdo Gel",
+              category.value === "notes"
+                ? {
+                    ...source.title,
+                    content: [...source.title.content, ...(source.body?.content ?? [])],
+                  }
+                : source.description,
+            ],
+            ["Conteúdo convertido", publication?.content ?? translation?.content],
+          ]) {
+            const text = renderContent(content)
+            detail.append(element("h2", label), text)
+          }
+          detail.append(
+            element("h2", publication ? "Dados da publicação" : "Atributos convertidos"),
+            element("pre", JSON.stringify(publication ?? article?.attributes ?? null, null, 2)),
+            element("h2", "Referências Gel (sem conversão)"),
+            element(
+              "pre",
+              JSON.stringify(
+                {
+                  thumbnail: source.thumbnail,
+                  createdBy: source.created_by,
+                  relatedVegetables: source.related_vegetables ?? source.related_to_vegetables,
+                  relatedNotes: source.related_to_notes,
+                  photos: source.photos,
+                },
+                null,
+                2,
+              ),
+            ),
+            raw,
+          )
+          return
+        }
+        if (!article)
+          detail.append(element("p", "Atenção: export sem artigo convertido na última versão."))
+        const table = element("table")
+        const heading = element("tr")
+        for (const label of ["Campo", "Gel original", "Última versão convertida"])
+          heading.append(element("th", label))
+        table.append(heading)
+        for (const [label, originalKey, convertedKey] of fields) {
+          const row = element("tr")
+          const converted = ["commonNames", "grammaticalGender"].includes(convertedKey)
+            ? translation?.[convertedKey]
+            : article?.attributes?.[convertedKey]
+          row.append(
+            element("th", label),
+            element("td", display(source[originalKey])),
+            element("td", display(converted)),
+          )
+          table.append(row)
+        }
+        detail.append(element("h2", "Atributos"), table)
+        const columns = element("div")
+        columns.className = "columns"
+        for (const [label, content] of [
+          ["Conteúdo Gel", source.content],
+          ["Conteúdo convertido", publication?.content ?? translation?.content],
+        ]) {
+          const column = element("section")
+          const text = renderContent(content)
+          column.append(element("h2", label), text)
+          columns.append(column)
+        }
+        detail.append(
+          columns,
+          element("h2", "Dados adicionais do Gel"),
+          element(
+            "p",
+            "Os dados abaixo vêm do original; não aparecem no artigo convertido deste export.",
+          ),
+          element("p", `Origem: ${display(source.origin)}`),
+        )
+        const photos = element("div")
+        photos.className = "photos"
+        for (const photo of source.photos ?? []) {
+          const figure = element("figure")
+          figure.append(imageElement(photo))
+          figure.append(element("figcaption", photo.label ?? photo.sanity_id ?? photo.id))
+          photos.append(figure)
+        }
+        detail.append(
+          element("h2", `Fotos (${source.photos?.length ?? 0})`),
+          photos,
+          element("h2", "Variedades"),
+          element(
+            "p",
+            (source.varieties ?? []).map((item) => display(item.names)).join("; ") || "—",
+          ),
+          element("h2", "Amizades e consórcios"),
+        )
+        for (const friend of source.friends ?? []) {
+          const related = byId.get(friend.id)
+          if (related) {
+            const link = element("a", related.names[0] ?? related.handle)
+            link.href = `#plants/${encodeURIComponent(related.handle)}`
+            detail.append(link, element("span", " · "))
+          } else detail.append(element("p", `Referência não resolvida: ${friend.id}`))
+        }
+        detail.append(element("h2", "Fontes"))
+        for (const sourceReference of source.sources ?? [])
+          detail.append(
+            element(
+              "p",
+              [sourceReference.credits, sourceReference.origin].filter(Boolean).join(" · ") ||
+                sourceReference.id,
+            ),
+          )
+        detail.append(raw)
+      }
+      const renderList = () => {
+        const normalize = (text) =>
+          text
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+        const query = normalize(search.value)
+        const filtered = plants.filter(({ latest_source: source }) =>
+          normalize(
+            [
+              ...(source.names ?? []),
+              ...(source.scientific_names ?? []),
+              title(source),
+              contentText(source.body),
+              source.handle,
+            ].join(" "),
+          ).includes(query),
+        )
+        document.querySelector("#status").textContent =
+          `${filtered.length} de ${plants.length} registros · total: ${dataset.plants.length} vegetais, ${dataset.resources.length} recursos, ${dataset.notes.length} notas · ${dataset.rejected.length} rejeitados · sem validação de schema`
+        list.replaceChildren()
+        for (const { latest_source: source } of filtered) {
+          const link = element("a", title(source))
+          link.href = `#${category.value}/${encodeURIComponent(source.handle)}`
+          list.append(link)
+        }
+        if (!filtered.length) list.append(element("p", "Nenhum registro encontrado."))
+        renderDetail()
+      }
+      search.addEventListener("input", renderList)
+      category.addEventListener("change", () => {
+        search.value = ""
+        location.hash = `#${category.value}`
+        plants = dataset[category.value]
+        renderList()
+      })
+      window.addEventListener("hashchange", () => {
+        if (dataset[route()[0]]) category.value = route()[0]
+        plants = dataset[category.value]
+        renderList()
+      })
+      category.disabled = false
+      search.disabled = false
+      renderList()
+    } catch (error) {
+      document.querySelector("#status").textContent = "Falha ao carregar os exports"
+      document.querySelector("#errors").textContent = error.message
+    }
+  </script>
+</html>

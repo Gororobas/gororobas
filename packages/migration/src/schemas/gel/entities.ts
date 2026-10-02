@@ -1,4 +1,5 @@
 import {
+  CreatePostData,
   Email,
   Handle,
   NonEmptyTrimmedString,
@@ -222,7 +223,7 @@ export const GelNote = Schema.Struct({
   // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field
   public: Schema.Boolean,
   publish_status: GelOptionalColumn(Enums.GelNotePublishStatus),
-  published_at: Schema.String,
+  published_at: GelTimestamp,
   types: Schema.Array(Enums.GelNoteType),
   title: TiptapDocument,
   body: GelOptionalColumn(TiptapDocument),
@@ -230,6 +231,25 @@ export const GelNote = Schema.Struct({
   handle: Handle,
 })
 export type GelNote = typeof GelNote.Type
+
+export const GelNoteWithRelations = Schema.Struct({
+  ...GelNote.fields,
+  created_by: Schema.NullOr(
+    Schema.Struct({ id: Schema.String, handle: Handle, name: Schema.String }),
+  ),
+  related_to_vegetables: Schema.Array(
+    Schema.Struct({ id: Schema.String, handle: Handle, names: Schema.Array(Schema.String) }),
+  ),
+  related_to_notes: Schema.Array(Schema.Struct({ id: Schema.String, handle: Handle })),
+})
+export type GelNoteWithRelations = typeof GelNoteWithRelations.Type
+
+export const NoteDataForMigration = Schema.Struct({
+  latest_source: GelNoteWithRelations,
+  publication: Schema.NullOr(CreatePostData),
+  conversion_error: Schema.NullOr(Schema.String),
+})
+export type NoteDataForMigration = typeof NoteDataForMigration.Type
 
 export const GelEditSuggestion = Schema.Struct({
   ...gelAuditableFields,
