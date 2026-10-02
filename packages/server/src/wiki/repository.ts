@@ -45,6 +45,7 @@ import {
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { materializeJunctionTable } from "../common/table-materialization.js"
+import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
   insertCrdtRow,
   insertHandleRows,
@@ -56,8 +57,8 @@ import {
 } from "./mutations.js"
 import {
   findCrdtRowById,
-  findDatabaseRowById,
   findDatabaseRowByHandle,
+  findDatabaseRowById,
   findHandleOwner,
   findRevisionById,
   findWikiArticleBySearchableName,
@@ -289,7 +290,14 @@ const createWikiArticle = (input: CreateWikiArticleInput) =>
       })
 
       return wikiArticleId
-    }).pipe(sql.withTransaction),
+    }).pipe(
+      sql.withTransaction,
+      Effect.tap((id) =>
+        requestExternalDataFetch(id).pipe(
+          Effect.catchCause((cause) => Effect.logError("External data submission failed", cause)),
+        ),
+      ),
+    ),
   )
 
 const createRevision = (input: CreateWikiArticleRevisionInput) =>
@@ -369,6 +377,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
           }),
         ),
       )
+      const previous = yield* findDatabaseRowById(article.id)
       const updated = yield* parseWikiArticleCrdtUpdate({
         crdtUpdate: revision.crdtUpdate,
         snapshot: article.crdtSnapshot,
@@ -388,7 +397,20 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
           wikiArticleId: article.id,
         }),
       })
-    }).pipe(sql.withTransaction),
+      return { wikiArticleId: article.id, previous: Option.getOrUndefined(previous) }
+    }).pipe(
+      sql.withTransaction,
+      Effect.tap((updated) =>
+        updated
+          ? requestExternalDataFetch(updated.wikiArticleId, updated.previous).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logError("External data submission failed", cause),
+              ),
+            )
+          : Effect.void,
+      ),
+      Effect.asVoid,
+    ),
   )
 
 /**

@@ -147,3 +147,11 @@ export const Centimeters = IntNonNegative.pipe(Schema.brand("Centimeters"))
 export const TemperatureInCelsius = Schema.Number.check(Schema.isGreaterThan(0)).pipe(
   Schema.brand("TemperatureInCelsius"),
 )
+
+export const UrlAsString = Schema.Trimmed.check(
+  Schema.makeFilter((s) => URL.canParse(s) || "must be an URL", {
+    identifier: "UrlAsString",
+    title: "Asserts the string can be parsed as an URL",
+    description: "Uses URL.canParse",
+  }),
+)

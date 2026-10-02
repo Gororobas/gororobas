@@ -16,6 +16,7 @@ import {
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
+import { WikidataId } from "../external-identifiers.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import type { PlantEditableAttributes } from "./plant.js"
 
@@ -115,18 +116,25 @@ const temperatureMinOperations = makeOptionalScalarEditOperations("TemperatureMi
   keyInParentContainer: "temperatureMin" satisfies keyof PlantEditableAttributes,
 })
 
+const wikidataIdOperations = makeOptionalScalarEditOperations("WikidataId")({
+  ValueSchema: WikidataId,
+  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
+  keyInParentContainer: "wikidataId" satisfies keyof PlantEditableAttributes,
+})
+
 export const WikiPlantArticleCrdtOperations = defineKindCrdtOperations([
-  ...scientificNameOperations,
-  ...plantLifecycleOperations,
-  ...plantingMethodOperations,
-  ...plantUsageOperations,
-  ...strataOperations,
-  ...ediblePartsOperations,
   ...developmentCycleMaxOperations,
   ...developmentCycleMinOperations,
+  ...ediblePartsOperations,
   ...heightMaxOperations,
   ...heightMinOperations,
+  ...plantLifecycleOperations,
+  ...plantUsageOperations,
+  ...plantingMethodOperations,
+  ...scientificNameOperations,
+  ...strataOperations,
   ...temperatureMaxOperations,
   ...temperatureMinOperations,
+  ...wikidataIdOperations,
 ])
 export type WikiPlantArticleAttributeEdit = typeof WikiPlantArticleCrdtOperations.AttributeEdit.Type

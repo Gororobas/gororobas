@@ -52,6 +52,6 @@ export const defineKind = <
   MaterializedRow: Schema.Struct({
     ...coreWikiArticleMaterializedRowFields,
     kind: Kind,
-    attributes: MaterializedAttributes,
+    attributes: Schema.fromJsonString(MaterializedAttributes),
   }),
 })

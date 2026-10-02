@@ -418,3 +418,67 @@ CREATE TABLE `bookmarks_wiki_articles` (
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`person_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
+-- Create "wiki_article_external_links" table
+CREATE TABLE `wiki_article_external_links` (
+  `wiki_article_id` text NOT NULL,
+  `locale` text NOT NULL,
+  `url` text NOT NULL,
+  PRIMARY KEY (`wiki_article_id`, `locale`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create "wiki_plant_taxonomy_group" table
+CREATE TABLE `wiki_plant_taxonomy_group` (
+  `wiki_article_id` text NOT NULL,
+  `gbif_taxon_id` text NOT NULL,
+  `taxonomy_group` text NULL,
+  PRIMARY KEY (`wiki_article_id`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_plant_taxon" to table: "wiki_plant_taxonomy_group"
+CREATE INDEX `idx_plant_taxon` ON `wiki_plant_taxonomy_group` (`gbif_taxon_id`);
+-- Create "wiki_plant_taxonomy_classification" table
+CREATE TABLE `wiki_plant_taxonomy_classification` (
+  `wiki_article_id` text NOT NULL,
+  `taxon_id` text NOT NULL,
+  `scientific_name` text NOT NULL,
+  `taxon_rank` text NOT NULL,
+  PRIMARY KEY (`wiki_article_id`, `taxon_rank`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_plant_classification" to table: "wiki_plant_taxonomy_classification"
+CREATE INDEX `idx_plant_classification` ON `wiki_plant_taxonomy_classification` (`taxon_rank`, `scientific_name`);
+-- Create "wiki_article_external_media" table
+CREATE TABLE `wiki_article_external_media` (
+  `wiki_article_id` text NOT NULL,
+  `media_url` text NOT NULL,
+  `source_url` text NOT NULL,
+  `credit_line` text NOT NULL,
+  `license_url` text NULL,
+  PRIMARY KEY (`wiki_article_id`, `media_url`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create "wiki_book_editions" table
+CREATE TABLE `wiki_book_editions` (
+  `wiki_article_id` text NOT NULL,
+  `provider` text NOT NULL,
+  `external_id` text NOT NULL,
+  `title` text NOT NULL,
+  `publisher` text NULL,
+  `publication_date` text NULL,
+  `page_count` integer NULL,
+  `isbn` json NOT NULL,
+  `source_url` text NOT NULL,
+  PRIMARY KEY (`wiki_article_id`, `provider`, `external_id`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create "wiki_book_edition_languages" table
+CREATE TABLE `wiki_book_edition_languages` (
+  `wiki_article_id` text NOT NULL,
+  `provider` text NOT NULL,
+  `external_id` text NOT NULL,
+  `language` text NOT NULL,
+  PRIMARY KEY (`wiki_article_id`, `provider`, `external_id`, `language`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `provider`, `external_id`) REFERENCES `wiki_book_editions` (`wiki_article_id`, `provider`, `external_id`) ON UPDATE NO ACTION ON DELETE CASCADE
+);
+-- Create index "idx_book_edition_language" to table: "wiki_book_edition_languages"
+CREATE INDEX `idx_book_edition_language` ON `wiki_book_edition_languages` (`language`, `wiki_article_id`);

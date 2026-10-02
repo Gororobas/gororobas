@@ -16,9 +16,11 @@ import {
   TemperatureInCelsius,
   ValidName,
 } from "../../common/primitives.js"
+import { WikidataId } from "../external-identifiers.js"
 import { defineKind } from "./define-kind.js"
 
 const plantUniversalAttributes = {
+  wikidataId: OptionalColumn(WikidataId),
   developmentCycleMax: OptionalColumn(IntNonNegative),
   developmentCycleMin: OptionalColumn(IntNonNegative),
   heightMax: OptionalColumn(Centimeters),
@@ -51,6 +53,7 @@ export const WikiPlantArticle = defineKind({
   MaterializedAttributes,
   materializeAttributes: (editableAttributes) =>
     MaterializedAttributes.make({
+      wikidataId: editableAttributes.wikidataId,
       developmentCycleMax: editableAttributes.developmentCycleMax,
       developmentCycleMin: editableAttributes.developmentCycleMin,
       heightMax: editableAttributes.heightMax,

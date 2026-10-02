@@ -5,6 +5,7 @@ import { IntNonNegative, NameInCrdtList } from "../../common/primitives.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
+import { OpenLibraryWorkId, GoogleBooksVolumeId } from "../external-identifiers.js"
 import type { BookEditableAttributes } from "./book.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 
@@ -72,16 +73,30 @@ const pageCountOperations = makeOptionalScalarEditOperations("PageCount")({
   keyInParentContainer: "pageCount" satisfies keyof BookEditableAttributes,
 })
 
+const openLibraryWorkIdOperations = makeOptionalScalarEditOperations("OpenLibraryWorkId")({
+  ValueSchema: OpenLibraryWorkId,
+  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
+  keyInParentContainer: "openLibraryWorkId" satisfies keyof BookEditableAttributes,
+})
+
+const googleBooksVolumeIdOperations = makeOptionalScalarEditOperations("GoogleBooksVolumeId")({
+  ValueSchema: GoogleBooksVolumeId,
+  getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
+  keyInParentContainer: "googleBooksVolumeId" satisfies keyof BookEditableAttributes,
+})
+
 export const WikiBookArticleCrdtOperations = defineKindCrdtOperations([
   ...authorsOperations,
-  ...publisherOperations,
-  ...urlOperations,
   ...bookTagOperations,
-  ...publicationDateOperations,
+  ...editionOperations,
+  ...googleBooksVolumeIdOperations,
   ...isbn10Operations,
   ...isbn13Operations,
-  ...editionOperations,
   ...languageOperations,
+  ...openLibraryWorkIdOperations,
   ...pageCountOperations,
+  ...publicationDateOperations,
+  ...publisherOperations,
+  ...urlOperations,
 ])
 export type WikiBookArticleAttributeEdit = typeof WikiBookArticleCrdtOperations.AttributeEdit.Type

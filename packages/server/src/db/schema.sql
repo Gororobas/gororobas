@@ -432,3 +432,65 @@ CREATE TABLE bookmarks_wiki_articles (
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
+
+-- =========
+-- WIKI EXTERNAL DATA
+-- External provider data is separate from contributor-owned CRDT attributes.
+-- =========
+CREATE TABLE wiki_article_external_links (
+  wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
+  locale text NOT NULL,
+  url text NOT NULL,
+  PRIMARY KEY (wiki_article_id, locale)
+);
+
+CREATE TABLE wiki_plant_taxonomy_group (
+  wiki_article_id text NOT NULL PRIMARY KEY REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
+  gbif_taxon_id text NOT NULL,
+  taxonomy_group text
+);
+
+CREATE INDEX idx_plant_taxon ON wiki_plant_taxonomy_group (gbif_taxon_id);
+
+CREATE TABLE wiki_plant_taxonomy_classification (
+  wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
+  taxon_id text NOT NULL,
+  scientific_name text NOT NULL,
+  taxon_rank text NOT NULL,
+  PRIMARY KEY (wiki_article_id, taxon_rank)
+);
+
+CREATE INDEX idx_plant_classification ON wiki_plant_taxonomy_classification (taxon_rank, scientific_name);
+
+CREATE TABLE wiki_article_external_media (
+  wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
+  media_url text NOT NULL,
+  source_url text NOT NULL,
+  credit_line text NOT NULL,
+  license_url text,
+  PRIMARY KEY (wiki_article_id, media_url)
+);
+
+CREATE TABLE wiki_book_editions (
+  wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  external_id text NOT NULL,
+  title text NOT NULL,
+  publisher text,
+  publication_date text,
+  page_count integer,
+  isbn json NOT NULL,
+  source_url text NOT NULL,
+  PRIMARY KEY (wiki_article_id, provider, external_id)
+);
+
+CREATE TABLE wiki_book_edition_languages (
+  wiki_article_id text NOT NULL,
+  provider text NOT NULL,
+  external_id text NOT NULL,
+  language text NOT NULL,
+  PRIMARY KEY (wiki_article_id, provider, external_id, language),
+  FOREIGN KEY (wiki_article_id, provider, external_id) REFERENCES wiki_book_editions (wiki_article_id, provider, external_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_book_edition_language ON wiki_book_edition_languages (language, wiki_article_id);

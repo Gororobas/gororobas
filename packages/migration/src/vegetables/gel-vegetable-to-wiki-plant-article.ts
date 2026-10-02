@@ -114,6 +114,7 @@ export const gelVegetableToPlantEditableAttributes = (
   vegetable: GelVegetable,
 ): typeof WikiPlantArticle.EditableAttributes.Type =>
   WikiPlantArticle.EditableAttributes.make({
+    wikidataId: Option.none(),
     developmentCycleMax: Option.map(
       Option.fromNullishOr(vegetable.development_cycle_max),
       (value) => Schema.decodeUnknownSync(Centimeters)(value),

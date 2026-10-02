@@ -1,40 +1,20 @@
-import { NodeServices } from "@effect/platform-node"
-import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node"
+import { SqliteClient } from "@effect/sql-sqlite-node"
 import { Config, Effect, Layer } from "effect"
 /**
  * Shared Effect Cluster infrastructure for all durable workflows.
  *
  * Uses SingleRunner (single-node, SQL-backed) so that workflow state
- * (activity results, execution status) is persisted in the same SQLite
- * database as the rest of the app. The cluster tables are auto-created
- * by @effect/cluster's SqlMessageStorage.
+ * (activity results, execution status) is persisted in a separate SQLite
+ * database from application data. The cluster tables are auto-created
+ * by Effect cluster's SqlMessageStorage.
  *
  * All workflow layers (translation, notifications, etc.) compose on top
  * of this shared layer — they only need WorkflowEngine in their requirements.
  */
 import { ClusterWorkflowEngine, SingleRunner } from "effect/unstable/cluster"
-import { SqlClient } from "effect/unstable/sql"
 
-// @TODO I need to figure out the proper schema needed by SingleRunner
-const MIGRATIONS = {
-  initial: Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient
-    yield* sql`
-  CREATE TABLE \`activities\` (
-    \`id\` text NOT NULL,
-    \`data\` text NOT NULL
-    PRIMARY KEY (\`id\`)
-  )`
-  }),
-}
-
-const makeWorkflowsSqlLive = (filename: string) => {
-  const client = SqliteClient.layer({ filename })
-  const migrator = SqliteMigrator.layer({
-    loader: SqliteMigrator.fromRecord(MIGRATIONS),
-  }).pipe(Layer.provide(NodeServices.layer))
-  return migrator.pipe(Layer.provideMerge(client))
-}
+// SingleRunner creates its own message and runner tables through SqlMessageStorage.
+const makeWorkflowsSqlLive = (filename: string) => SqliteClient.layer({ filename })
 
 /** SQLite database for production workflows state */
 const WorkflowsSqlLive = Layer.unwrap(

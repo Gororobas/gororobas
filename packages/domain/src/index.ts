@@ -23,6 +23,7 @@ export * from "./publications/errors.js"
 export * from "./profiles/errors.js"
 export * from "./tags/errors.js"
 export * from "./wiki/errors.js"
+export * from "./wiki/external-data/error.js"
 
 // Authentication
 export * from "./authentication/domain.js"

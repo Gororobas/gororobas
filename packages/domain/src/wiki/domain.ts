@@ -10,6 +10,8 @@ export * from "./kinds/index.js"
 export * from "./wiki-article-crdt.js"
 export * from "./wiki-article-translation.js"
 export * from "./wiki-article.js"
+export * from "./external-identifiers.js"
+export * from "./external-data/domain.js"
 
 /** Search filters will be added once wiki-specific filtering is designed. */
 export const WikiSearchParams = Schema.Struct({})

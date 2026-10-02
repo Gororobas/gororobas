@@ -30,6 +30,10 @@ Unified, up-to-date database schema is located in `packages/server/src/db/schema
 
 Per `packages/server/src/sql.ts`, we use Effect SQL's `transformResultNames` and `transformQueryNames` to auto-convert properties from `snake_case` in SQL to `camelCase` in Typescript, back-and-forth.
 
+To be clear: always write symbols' names with Typescript's best practice of `camelCase`. In .sql, always write column and table names in `snake_case`. Effect SQL will do the transformation automatically.
+
+When writing SQL statements, use Effect SQL's SqlSchema if possible. For examples, look at packages/server/src/tags/queries.ts and packages/server/src/tags/mutations.ts
+
 ## Comments
 
 When there are comments in the code, don't delete them if they're still relevant. Only valid case for removing or rewriting comments is for when they become stale (such as in a behavior change or the removal of a @TODO).
