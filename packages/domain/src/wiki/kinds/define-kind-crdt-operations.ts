@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect"
 import { type LoroDoc } from "loro-crdt"
 
-type MessageSchema = Schema.Schema<unknown>
+type MessageSchema = Schema.Codec<unknown, unknown, never, never>
 
 type EditOperation<Message extends MessageSchema> = {
   readonly message: Message
@@ -12,6 +12,12 @@ type AttributeEdit<Operations> = Operations extends {
   readonly message: infer Message extends MessageSchema
 }
   ? Message["Type"]
+  : never
+
+type AttributeEditEncoded<Operations> = Operations extends {
+  readonly message: infer Message extends MessageSchema
+}
+  ? Message["Encoded"]
   : never
 
 const makeOperationRunner = <Message extends MessageSchema>(operation: EditOperation<Message>) => ({
@@ -31,7 +37,12 @@ export const defineKindCrdtOperations = <
   // oxlint-disable-next-line effect/casting-awareness
   const AttributeEdit = Schema.Union(
     operations.map((operation) => operation.message),
-  ) as Schema.Schema<AttributeEdit<Operations[number]>>
+  ) as Schema.Codec<
+    AttributeEdit<Operations[number]>,
+    AttributeEditEncoded<Operations[number]>,
+    never,
+    never
+  >
 
   return {
     AttributeEdit,

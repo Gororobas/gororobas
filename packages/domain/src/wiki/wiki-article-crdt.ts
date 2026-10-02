@@ -14,6 +14,7 @@ import { WikiBookArticleCrdtOperations } from "./kinds/book.crdt.js"
 import { WikiConceptArticleCrdtOperations } from "./kinds/concept.crdt.js"
 import { WikiFilmArticleCrdtOperations } from "./kinds/film.crdt.js"
 import { WikiNoteworthyEntityArticleCrdtOperations } from "./kinds/noteworthy-entity.crdt.js"
+import { WikiPlantCultivarArticleCrdtOperations } from "./kinds/plant-cultivar.crdt.js"
 import { WikiPlantArticleCrdtOperations } from "./kinds/plant.crdt.js"
 import { WikiResourceArticleCrdtOperations } from "./kinds/resource.crdt.js"
 import { WikiToolArticleCrdtOperations } from "./kinds/tool.crdt.js"
@@ -27,6 +28,7 @@ export const WikiArticleEdit = Schema.Union([
   WikiFilmArticleCrdtOperations.AttributeEdit,
   WikiNoteworthyEntityArticleCrdtOperations.AttributeEdit,
   WikiPlantArticleCrdtOperations.AttributeEdit,
+  WikiPlantCultivarArticleCrdtOperations.AttributeEdit,
   WikiResourceArticleCrdtOperations.AttributeEdit,
   WikiToolArticleCrdtOperations.AttributeEdit,
   WikiUncategorizedArticleCrdtOperations.AttributeEdit,
@@ -53,6 +55,9 @@ export const applyWikiArticleEdit = (document: LoroDoc, edit: WikiArticleEdit) =
   }
   if (Schema.is(WikiPlantArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiPlantArticleCrdtOperations.applyAttributeEdit(document, edit)
+  }
+  if (Schema.is(WikiPlantCultivarArticleCrdtOperations.AttributeEdit)(edit)) {
+    return WikiPlantCultivarArticleCrdtOperations.applyAttributeEdit(document, edit)
   }
   if (Schema.is(WikiResourceArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiResourceArticleCrdtOperations.applyAttributeEdit(document, edit)

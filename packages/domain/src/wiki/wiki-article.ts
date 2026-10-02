@@ -9,6 +9,7 @@ import { WikiBookArticle } from "./kinds/book.js"
 import { WikiConceptArticle } from "./kinds/concept.js"
 import { WikiFilmArticle } from "./kinds/film.js"
 import { WikiNoteworthyEntityArticle } from "./kinds/noteworthy-entity.js"
+import { WikiPlantCultivarArticle } from "./kinds/plant-cultivar.js"
 import { WikiPlantArticle } from "./kinds/plant.js"
 import { WikiResourceArticle } from "./kinds/resource.js"
 import { WikiToolArticle } from "./kinds/tool.js"
@@ -25,6 +26,7 @@ export const WikiArticleEditableData = Schema.Union([
   WikiFilmArticle.EditableArticle,
   WikiNoteworthyEntityArticle.EditableArticle,
   WikiPlantArticle.EditableArticle,
+  WikiPlantCultivarArticle.EditableArticle,
   WikiResourceArticle.EditableArticle,
   WikiToolArticle.EditableArticle,
   WikiUncategorizedArticle.EditableArticle,
@@ -65,6 +67,7 @@ export const WikiArticleMaterializedRow = Schema.Union([
   WikiAnimalArticle.MaterializedRow,
   WikiBookArticle.MaterializedRow,
   WikiPlantArticle.MaterializedRow,
+  WikiPlantCultivarArticle.MaterializedRow,
   WikiConceptArticle.MaterializedRow,
   WikiFilmArticle.MaterializedRow,
   WikiNoteworthyEntityArticle.MaterializedRow,
@@ -145,6 +148,12 @@ export const editableToMaterializedArticle = (
         WikiPlantArticle.MaterializedRow.make({
           kind: plant.kind,
           attributes: WikiPlantArticle.materializeAttributes(plant.attributes),
+          ...metadata,
+        }),
+      PLANT_CULTIVAR: (cultivar) =>
+        WikiPlantCultivarArticle.MaterializedRow.make({
+          kind: cultivar.kind,
+          attributes: WikiPlantCultivarArticle.materializeAttributes(cultivar.attributes),
           ...metadata,
         }),
       RESOURCE: (resource) =>
