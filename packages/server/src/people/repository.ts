@@ -1,36 +1,8 @@
-import { PersonId, PersonRow } from "@gororobas/domain"
-import { Effect, Context } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { Context, Effect } from "effect"
+
+import { insertRow, updateRow } from "./mutations.js"
+import { findById } from "./queries.js"
 
 export class PeopleRepository extends Context.Service<PeopleRepository>()("PeopleRepository", {
-  make: Effect.gen(function* () {
-    const sql = yield* SqlClient.SqlClient
-
-    const findById = SqlSchema.findOneOption({
-      Request: PersonId,
-      Result: PersonRow,
-      execute: (id) => sql`SELECT * FROM people WHERE id = ${id}`,
-    })
-
-    const updateRow = SqlSchema.void({
-      Request: PersonRow,
-      execute: ({ id, ...update }) => sql`
-        UPDATE people
-        SET ${sql.update(update)}
-        WHERE id = ${id};`,
-    })
-
-    const insertRow = SqlSchema.void({
-      Request: PersonRow,
-      execute: (person) => sql`
-        INSERT INTO people ${sql.insert(person)}
-      `,
-    })
-
-    return {
-      findById,
-      updateRow,
-      insertRow,
-    } as const
-  }),
+  make: Effect.succeed({ findById, updateRow, insertRow } as const),
 }) {}

@@ -13,9 +13,7 @@ import {
   IdGen,
   Locale,
   LoroDocFrontier,
-  PublicationId,
   SourceCommentData,
-  TiptapDocument,
   tiptapToText,
 } from "@gororobas/domain"
 import {
@@ -27,9 +25,8 @@ import {
   Option,
   Record,
   Schema,
-  Struct,
 } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient } from "effect/unstable/sql"
 
 import {
   persistCrdtDocumentCreation,
@@ -38,82 +35,28 @@ import {
 import { materializeJunctionTable } from "../common/table-materialization.js"
 import { createCommentSnapshot, evolveCommentSnapshot } from "./comment-crdt-orchestration.js"
 import { type CreateCommentInput, type UpdateCommentInput } from "./comment-repository-inputs.js"
+import {
+  deleteComment,
+  insertCommentCommitRow,
+  insertCommentCrdtRow,
+  insertCommentTranslationRows,
+  updateCommentCrdtRow,
+  upsertCommentRow,
+} from "./mutations.js"
+import {
+  findCommentContentByIdAndLocale,
+  findCommentCrdtSnapshotById,
+  findCommentRowById,
+  listCommentCommitRowsByCommentIdAsc,
+  listCommentRowsByPublicationId,
+  listCommentTranslationRowsByCommentId,
+} from "./queries.js"
 
 export class CommentsRepository extends Context.Service<CommentsRepository>()(
   "CommentsRepository",
   {
     make: Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-
-      /**
-       * ======================
-       *         READS
-       * ======================
-       */
-
-      const findCommentRowById = SqlSchema.findOneOption({
-        Request: CommentId,
-        Result: CommentRow,
-        execute: (id) => sql`SELECT * FROM comments WHERE id = ${id}`,
-      })
-
-      const findCommentCrdtSnapshotById = SqlSchema.findOneOption({
-        Request: CommentId,
-        Result: CommentCrdtRow.mapFields(Struct.pick(["crdtSnapshot"])),
-        execute: (id) => sql`SELECT crdt_snapshot FROM comment_crdts WHERE id = ${id}`,
-      })
-
-      const findCommentContentByIdAndLocale = SqlSchema.findOneOption({
-        Request: Schema.Struct({ commentId: CommentId, locale: Locale }),
-        Result: Schema.Struct({ content: Schema.fromJsonString(TiptapDocument) }),
-        execute: (request) => sql`
-          SELECT content
-          FROM comment_translations
-          WHERE comment_id = ${request.commentId} AND locale = ${request.locale}
-        `,
-      })
-
-      const listCommentTranslationRowsByCommentId = SqlSchema.findAll({
-        Request: CommentId,
-        Result: CommentTranslationRow,
-        execute: (commentId) =>
-          sql`SELECT * FROM comment_translations WHERE comment_id = ${commentId}`,
-      })
-
-      const listCommentCommitRowsByCommentIdAsc = SqlSchema.findAll({
-        Request: CommentId,
-        Result: CommentCommitRow,
-        execute: (commentId) =>
-          sql`SELECT * FROM comment_commits WHERE comment_id = ${commentId} ORDER BY created_at ASC`,
-      })
-
-      const listCommentRowsByPublicationId = SqlSchema.findAll({
-        Request: PublicationId,
-        Result: CommentRow,
-        execute: (publicationId) =>
-          sql`SELECT * FROM comments WHERE publication_id = ${publicationId} ORDER BY created_at ASC`,
-      })
-
-      /**
-       * ======================
-       *        WRITES
-       * ======================
-       */
-
-      const deleteComment = SqlSchema.void({
-        Request: CommentId,
-        execute: (commentId) => sql`DELETE FROM comment_crdts WHERE id = ${commentId}`,
-      })
-
-      const insertCommentCrdtRow = SqlSchema.void({
-        Request: CommentCrdtRow,
-        execute: (row) => sql`INSERT INTO comment_crdts ${sql.insert(row)}`,
-      })
-
-      const insertCommentCommitRow = SqlSchema.void({
-        Request: CommentCommitRow,
-        execute: (row) => sql`INSERT INTO comment_commits ${sql.insert(row)}`,
-      })
 
       const insertCommentCommit = (input: {
         commit: CrdtCommit
@@ -137,33 +80,6 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             }),
           )
         })
-
-      const insertCommentTranslationRows = SqlSchema.void({
-        Request: Schema.Array(CommentTranslationRow),
-        execute: (rows) => sql`INSERT INTO comment_translations ${sql.insert(rows)}`,
-      })
-
-      const updateCommentCrdtRow = SqlSchema.void({
-        Request: CommentCrdtRow.mapFields(
-          Struct.omit([
-            "createdAt",
-            "moderationStatus",
-            "ownerProfileId",
-            "parentCommentId",
-            "publicationId",
-          ]),
-        ),
-        execute: ({ id, ...update }) =>
-          sql`UPDATE comment_crdts SET ${sql.update(update)} WHERE id = ${id}`,
-      })
-
-      const upsertCommentRow = SqlSchema.void({
-        Request: CommentRow,
-        execute: (row) => sql`
-            INSERT INTO comments ${sql.insert(row)}
-            ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt", "publicationId", "parentCommentId", "ownerProfileId"])}
-        `,
-      })
 
       /**
        * ======================
