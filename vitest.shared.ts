@@ -19,6 +19,7 @@ const config: ViteUserConfig = {
       ...alias("cli"),
       ...alias("domain"),
       ...alias("effect-bdd"),
+      ...alias("effect-sql-turso-browser"),
       ...alias("server"),
     },
     fakeTimers: {

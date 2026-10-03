@@ -40,7 +40,9 @@
       "@gororobas/effect-bdd/test/*": ["./packages/effect-bdd/test/*.js"],
       "@gororobas/server": ["./packages/server/src/index.js"],
       "@gororobas/server/*": ["./packages/server/src/*.js"],
-      "@gororobas/server/test/*": ["./packages/server/test/*.js"]
+      "@gororobas/server/test/*": ["./packages/server/test/*.js"],
+      "@gororobas/effect-sql-turso-browser": ["./packages/effect-sql-turso-browser/src/index.js"],
+      "@gororobas/effect-sql-turso-browser/*": ["./packages/effect-sql-turso-browser/src/*.js"]
     }
   }
 }

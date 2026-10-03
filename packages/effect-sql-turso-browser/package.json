@@ -1,0 +1,52 @@
+{
+  "name": "@gororobas/effect-sql-turso-browser",
+  "version": "0.0.0",
+  "description": "Effect SQL adapter for the Turso browser WASM database",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://gitlab.com/hdoro/gororobas-experiments.git",
+    "directory": "packages/effect-sql-turso-browser"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./turso-client": "./src/turso-client.ts",
+    "./turso-browser-database": "./src/turso-browser-database.ts",
+    "./turso-migrator": "./src/turso-migrator.ts"
+  },
+  "publishConfig": {
+    "access": "public",
+    "directory": "dist"
+  },
+  "scripts": {
+    "codegen": "build-utils prepare-v2",
+    "build": "pnpm build-annotate && pnpm build-cjs && build-utils pack-v2",
+    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
+    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest --coverage"
+  },
+  "dependencies": {
+    "@tursodatabase/database-wasm": "0.8.1",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/build-utils": "^0.8.9",
+    "@effect/vitest": "catalog:",
+    "@types/node": "^26.6.3",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "effect": {
+    "generateExports": {
+      "include": [
+        "**/*.ts"
+      ]
+    },
+    "generateIndex": {
+      "include": []
+    }
+  }
+}

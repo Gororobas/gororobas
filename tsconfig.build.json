@@ -7,6 +7,9 @@
     },
     {
       "path": "packages/server/tsconfig.build.json"
+    },
+    {
+      "path": "packages/effect-sql-turso-browser/tsconfig.build.json"
     }
   ]
 }
