@@ -184,23 +184,28 @@
     const contentText = (node) => {
       if (!node) return ""
       if (node.text) return node.text
-      if (node.type === "mention") {
-        try {
-          return `@${JSON.parse(node.attrs.data).label}`
-        } catch {
-          return "[menção inválida]"
-        }
-      }
-      if (node.type === "image") return "[imagem]"
+      if (node.type === "entityReference") return node.attrs.labelAtInsertion
+      if (node.type === "mediaGrid") return "[mídia]"
       if (node.type === "hardBreak") return "\n"
       const text = (node.content ?? []).map(contentText).join("")
       return ["paragraph", "heading", "listItem"].includes(node.type) ? `${text}\n` : text
     }
+    const localMediaAssets = new Map()
     const imageElement = (photo) => {
       const match = /^image-([a-f0-9]+-\d+x\d+)-([a-z]+)$/.exec(photo?.sanity_id ?? "")
-      if (!match) return element("span", "Imagem sem referência Sanity")
+      const localId = localMediaAssets.get(photo.id)
+      if (!match && !localId) return element("span", "Imagem sem referência Sanity")
       const image = element("img")
-      image.src = `https://cdn.sanity.io/images/4wdqd7lo/production/${match[1]}.${match[2]}?w=360&fit=max&auto=format`
+      image.src = localId
+        ? `/stored-media-assets/${localId}/1280.webp`
+        : `https://cdn.sanity.io/images/4wdqd7lo/production/${match[1]}.${match[2]}?w=360&fit=max&auto=format`
+      if (match) {
+        const dimensions = /-(\d+)x(\d+)$/.exec(match[1])
+        if (dimensions) {
+          image.width = Number(dimensions[1])
+          image.height = Number(dimensions[2])
+        }
+      }
       image.alt = photo.label ?? "Imagem do export Gel"
       image.loading = "lazy"
       image.addEventListener("error", () =>
@@ -217,30 +222,41 @@
     }
     const renderContent = (node) => {
       if (!node) return element("p", "Sem conteúdo")
-      if (node.type === "image") {
-        try {
-          const photo = JSON.parse(node.attrs.data).image
-          const wrapper = element("figure")
-          wrapper.append(imageElement(photo))
-          if (photo.id) wrapper.append(element("figcaption"), referenceLink(photo.id))
-          return wrapper
-        } catch {
-          return element("span", "[imagem inválida]")
+      if (node.type === "mediaGrid") {
+        const grid = element("div")
+        grid.style.display = "grid"
+        grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))"
+        grid.style.gap = "12px"
+        for (const item of node.attrs.items) {
+          const figure = element("figure")
+          if (item.source === "EXTERNAL_EMBED") {
+            const link = element("a", item.caption ?? item.provider)
+            link.href = item.provider === "YOUTUBE"
+              ? `https://www.youtube.com/watch?v=${encodeURIComponent(item.providerData.videoId)}`
+              : `https://open.spotify.com/${item.providerData.resourceType.toLowerCase()}/${encodeURIComponent(item.providerData.resourceId)}`
+            figure.append(link)
+          } else if (item.format === "IMAGE") {
+            const reference = referenceById.get(item.mediaAssetId)
+            figure.append(
+              imageElement({
+                id: item.mediaAssetId,
+                sanity_id: reference?.sanityId,
+                label: item.alt ?? reference?.label,
+              }),
+            )
+            figure.append(referenceLink(item.mediaAssetId))
+          } else figure.append(referenceLink(item.mediaAssetId))
+          if (item.caption) figure.append(element("figcaption", item.caption))
+          grid.append(figure)
         }
+        return grid
       }
-      if (node.type === "text" || node.type === "mention") {
+      if (node.type === "text" || node.type === "entityReference") {
         let text = element("span", contentText(node))
-        if (node.type === "mention") {
-          try {
-            const mention = JSON.parse(node.attrs.data)
-            if (referenceById.has(mention.id)) {
-              text = element("a", contentText(node))
-              text.href = `#refs/${encodeURIComponent(mention.id)}`
-              text.title = `${mention.objectType} · ${mention.id}`
-            }
-          } catch {
-            /* Invalid mentions are already labeled by contentText. */
-          }
+        if (node.type === "entityReference" && referenceById.has(node.attrs.referenceId)) {
+          text = element("a", contentText(node))
+          text.href = `#refs/${encodeURIComponent(node.attrs.referenceId)}`
+          text.title = `${node.attrs.referenceType} · ${node.attrs.referenceId}`
         }
         for (const mark of node.marks ?? []) {
           const tag = {
@@ -305,6 +321,16 @@
       const response = await fetch("/exports.json")
       if (!response.ok) throw new Error(await response.text())
       const dataset = await response.json()
+      const storedMediaAssetIds = new Set(
+        (dataset.localMediaAssets ?? []).map((mediaAsset) => mediaAsset.id),
+      )
+      for (const id of storedMediaAssetIds) localMediaAssets.set(id, id)
+      for (const plant of dataset.plants ?? []) {
+        for (const [index, photo] of (plant.latest_source.photos ?? []).entries()) {
+          const mediaAssetId = plant.photoIds[index]
+          if (storedMediaAssetIds.has(mediaAssetId)) localMediaAssets.set(photo.id, mediaAssetId)
+        }
+      }
       const title = (source) =>
         (source.names?.[0] ??
           (typeof source.title === "string" ? source.title : contentText(source.title).trim())) ||
@@ -416,7 +442,7 @@
             ? "https://gororobas.com/biblioteca"
             : category.value === "cultivars"
               ? `https://gororobas.com/vegetais/${encodeURIComponent(source.parents[0].handle)}`
-            : `https://gororobas.com/${category.value === "plants" ? "vegetais" : "notas"}/${encodeURIComponent(source.handle)}`
+              : `https://gororobas.com/${category.value === "plants" ? "vegetais" : "notas"}/${encodeURIComponent(source.handle)}`
         live.target = "_blank"
         live.rel = "noopener noreferrer"
         detail.append(
@@ -428,7 +454,7 @@
         )
         const raw = element("details")
         raw.append(
-          element("summary", "JSON completo (original, histórico e convertido)"),
+          element("summary", "JSON completo (Gel original, histórico e dados do SQLite)"),
           element("pre", JSON.stringify(plant, null, 2)),
         )
         detail.append(element("h2", "Referências migradas"))
@@ -712,7 +738,7 @@
           ).includes(query),
         )
         document.querySelector("#status").textContent =
-          `${filtered.length} de ${plants.length} registros · total: ${dataset.plants.length} vegetais, ${dataset.cultivars.length} variedades, ${dataset.resources.length} recursos, ${dataset.notes.length} notas · ${dataset.rejected.length} rejeitados · sem validação de schema`
+          `${filtered.length} de ${plants.length} registros · total: ${dataset.plants.length} vegetais, ${dataset.cultivars.length} variedades, ${dataset.resources.length} recursos, ${dataset.notes.length} notas · SQLite via Effect SQL: ${dataset.database}`
         list.replaceChildren()
         for (const { latest_source: source } of filtered) {
           const link = element("a", title(source))

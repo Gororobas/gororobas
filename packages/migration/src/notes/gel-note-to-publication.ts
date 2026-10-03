@@ -1,4 +1,4 @@
-import { CreatePostData, PublicationVisibility } from "@gororobas/domain"
+import { PublicationVisibility } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 
 import type { GelNote } from "../schemas/gel/entities.js"
@@ -9,12 +9,12 @@ export const gelNoteToPublication = Effect.fn("gelNoteToPublication")(function* 
   )
 
   // Publications have one content document; keep the original title nodes before the body.
-  return CreatePostData.make({
+  return {
     locale: "pt",
     visibility,
     content: {
       ...note.title,
       content: [...note.title.content, ...(note.body?.content ?? [])],
     },
-  })
+  }
 })

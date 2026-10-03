@@ -7,6 +7,7 @@ import {
   PlantLifecycle,
   PlantUsage,
 } from "../../common/enums.js"
+import { WikidataId } from "../../common/external-identifiers.js"
 import {
   Centimeters,
   CrdtLiteralSet,
@@ -16,7 +17,6 @@ import {
   TemperatureInCelsius,
   ValidName,
 } from "../../common/primitives.js"
-import { WikidataId } from "../external-identifiers.js"
 import { defineKind } from "./define-kind.js"
 
 const plantUniversalAttributes = {

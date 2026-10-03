@@ -1,5 +1,6 @@
 import { Option, Schema } from "effect"
 
+import { GoogleBooksVolumeId } from "../../common/external-identifiers.js"
 import { TagId } from "../../common/ids.js"
 import {
   IntNonNegative,
@@ -9,7 +10,6 @@ import {
   CrdtBrandedStringSet,
 } from "../../common/primitives.js"
 import { PartialDate } from "../../common/utils/dates.js"
-import { GoogleBooksVolumeId } from "../external-identifiers.js"
 import { defineKind } from "./define-kind.js"
 
 const MaterializedAttributes = Schema.Struct({

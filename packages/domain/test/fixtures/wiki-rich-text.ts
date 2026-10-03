@@ -18,7 +18,7 @@ const wikiRichText = TiptapDocument.make({
   ],
 })
 
-/** The domain's open-ended node schema also generates shapes no editor supports. */
+/** Use representative editor content for tests that exercise article operations rather than rich-text generation. */
 export const withEditorRichText = (article: WikiArticleEditableData): WikiArticleEditableData =>
   Schema.decodeUnknownSync(Schema.toType(WikiArticleEditableData))({
     ...article,

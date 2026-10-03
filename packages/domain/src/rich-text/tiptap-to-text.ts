@@ -1,15 +1,9 @@
 import { generateText } from "@tiptap/core"
-import StarterKit from "@tiptap/starter-kit"
 
-import type { TiptapDocument } from "./domain.js"
-import { Image } from "./image-extension.js"
+import { TiptapDocument } from "./domain.js"
+import { tiptapExtensions } from "./tiptap-extensions.js"
+import { toTiptapJsonContent } from "./tiptap-json.js"
 
-const extensions = [StarterKit, Image]
-
-export function tiptapToText(json: TiptapDocument): string {
-  return generateText(
-    // @ts-expect-error generateText doesn't accept readonly
-    json,
-    extensions,
-  )
+export function tiptapToText(document: TiptapDocument): string {
+  return generateText(toTiptapJsonContent(document), tiptapExtensions)
 }

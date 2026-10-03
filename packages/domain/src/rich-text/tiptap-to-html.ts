@@ -1,26 +1,18 @@
 import { generateHTML, generateJSON } from "@tiptap/html"
-import StarterKit from "@tiptap/starter-kit"
+import { Schema } from "effect"
 
-/**
- * Tiptap JSON ↔ HTML conversion utilities.
- *
- * Used by the translation workflow to serialize TiptapDocument to HTML
- * (which LLMs handle well) and parse the translated HTML back.
- */
-import type { TiptapDocument } from "./domain.js"
-import { Image } from "./image-extension.js"
+import { TiptapDocument } from "./domain.js"
+import { tiptapExtensions } from "./tiptap-extensions.js"
+/** JSON ↔ HTML conversion for translation; custom node attributes retain their versioned data. */
+import { toTiptapJsonContent } from "./tiptap-json.js"
 
-const extensions = [StarterKit, Image]
-
-export function tiptapToHtml(json: TiptapDocument): string {
-  return generateHTML(
-    // @ts-expect-error generateHTML doesn't accept readonly
-    json,
-    extensions,
-  )
+export function tiptapToHtml(document: TiptapDocument): string {
+  return generateHTML(toTiptapJsonContent(document), tiptapExtensions)
 }
 
 export function tiptapFromHtml(html: string): TiptapDocument {
-  // oxlint-disable-next-line effect/casting-awareness Tiptap's runtime parser lacks the readonly domain type.
-  return generateJSON(html, extensions) as TiptapDocument
+  return Schema.decodeUnknownSync(TiptapDocument)({
+    ...generateJSON(html, tiptapExtensions),
+    version: 1,
+  })
 }

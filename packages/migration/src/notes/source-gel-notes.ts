@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Path, Result, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
+import { archiveGelResult } from "../preview-exports.js"
 import { GelNoteWithRelations, NoteDataForMigration } from "../schemas/gel/entities.js"
 import {
   gelNoteToPublicationSource,
@@ -22,7 +23,10 @@ export const sourceGelNotes = Effect.gen(function* () {
   const gelClient = yield* GelClient
   const notes = yield* gelClient
     .use((client) => client.query(notesQuery))
-    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(GelNoteWithRelations))))
+    .pipe(
+      Effect.tap(archiveGelResult("notes")),
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(GelNoteWithRelations))),
+    )
   const directory = path.join(import.meta.dirname, "..", "..", "debug", "notes")
   yield* fs.makeDirectory(directory, { recursive: true })
   const privateNotes = notes.filter(

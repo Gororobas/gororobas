@@ -1,11 +1,11 @@
 import { Effect, Schema } from "effect"
 
+import { GoogleBooksVolumeId } from "../../common/external-identifiers.js"
 import { TagId } from "../../common/ids.js"
 import { IntNonNegative, NameInCrdtList } from "../../common/primitives.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
-import { GoogleBooksVolumeId } from "../external-identifiers.js"
 import type { BookEditableAttributes } from "./book.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 

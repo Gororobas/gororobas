@@ -1,7 +1,7 @@
 import {
-  WikiArticleId,
-  ImageId,
+  MediaAssetId,
   WikiArticleEditableTranslations,
+  WikiArticleId,
   WikiBookArticle,
   WikiFilmArticle,
   WikiNoteworthyEntityArticle,
@@ -33,7 +33,7 @@ export const ResourceAuditLog = Schema.Struct({
 })
 export const ResourceDataForMigration = Schema.Struct({
   id: WikiArticleId,
-  thumbnailId: Schema.NullOr(ImageId),
+  thumbnailId: Schema.NullOr(MediaAssetId),
   versions: Schema.Array(WikiMigrationVersion),
   auditLogs: Schema.Array(ResourceAuditLog),
   latest_source: GelResourceWithRelations,

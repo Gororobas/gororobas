@@ -23,6 +23,9 @@
     "coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@tiptap/core": "catalog:",
+    "@tiptap/html": "catalog:",
+    "@tiptap/starter-kit": "catalog:",
     "effect": "catalog:",
     "effect-units": "catalog:",
     "loro-crdt": "catalog:",

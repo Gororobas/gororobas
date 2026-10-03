@@ -4,6 +4,7 @@ import {
   CreateWikiArticleInput,
   CreateWikiArticleRevisionInput,
   editableToMaterializedArticle,
+  editableToMaterializedTranslation,
   EMPTY_LORO_DOC_FRONTIER,
   EvaluateWikiArticleRevisionInput,
   HumanCommit,
@@ -24,7 +25,6 @@ import {
   WikiArticleRevisionNotFoundError,
   WikiArticleRevisionRow,
   WikiArticleStatus,
-  editableToMaterializedTranslation,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Array as EffectArray, Option, Result } from "effect"
 import { SqlClient } from "effect/sql"
@@ -45,11 +45,11 @@ import {
   upsertArticleRow,
 } from "./mutations.js"
 import {
-  findPageByHandleAndKind,
   findCrdtRowById,
   findDatabaseRowByHandle,
   findDatabaseRowById,
   findHandleOwner,
+  findPageByHandleAndKind,
   findRevisionById,
   findWikiArticleBySearchableName,
 } from "./queries.js"
@@ -226,10 +226,13 @@ const materializeArticle = (input: {
     yield* materializeTranslations(input)
   })
 
-const createWikiArticle = (input: CreateWikiArticleInput) =>
+const createWikiArticle = (
+  input: CreateWikiArticleInput,
+  options: { id?: WikiArticleId; enrichment?: "submit" | "skip" } = {},
+) =>
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
-      const wikiArticleId = yield* IdGen.make(WikiArticleId)
+      const wikiArticleId = options.id ?? (yield* IdGen.make(WikiArticleId))
       const revisionId = yield* IdGen.make(WikiArticleRevisionId)
       const now = yield* DateTime.now
       const created = yield* createWikiArticleCrdtDocument(input.wikiArticle)
@@ -271,9 +274,13 @@ const createWikiArticle = (input: CreateWikiArticleInput) =>
     }).pipe(
       sql.withTransaction,
       Effect.tap((article) =>
-        requestExternalDataFetch(article).pipe(
-          Effect.catchCause((cause) => Effect.logError("External data submission failed", cause)),
-        ),
+        options.enrichment === "skip"
+          ? Effect.void
+          : requestExternalDataFetch(article).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logError("External data submission failed", cause),
+              ),
+            ),
       ),
       Effect.map((article) => article.id),
     ),

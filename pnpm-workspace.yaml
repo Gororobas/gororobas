@@ -8,6 +8,7 @@ allowBuilds:
   lefthook: true
   lmdb: false
   msgpackr-extract: false
+  node-av: false
   prisma: false
   protobufjs: false
 

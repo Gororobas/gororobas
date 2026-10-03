@@ -171,3 +171,9 @@ export const UrlAsString = Schema.Trimmed.check(
     description: "Uses URL.canParse",
   }),
 )
+
+export const PositiveInteger = Schema.Int.check(Schema.isGreaterThan(0))
+
+export const NonNegativeNumber = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))
+
+export const Fraction = Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 1 }))

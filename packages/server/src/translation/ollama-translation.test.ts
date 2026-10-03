@@ -267,7 +267,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
     }),
   },
 
-  "image node preservation (pt→en)": {
+  "media grid preservation (pt→en)": {
     sourceLocale: "pt",
     targetLocale: "en",
     document: TiptapDocument.make({
@@ -284,9 +284,17 @@ const FIXTURES: Record<string, TranslationFixture> = {
           ],
         },
         {
-          type: "image",
+          type: "mediaGrid",
           attrs: {
-            data: '{"image":{"_type":"image","asset":{"_ref":"image-abc123-800x600-jpg","_type":"reference"},"attribution":"users/user123"},"version":1}',
+            version: 1,
+            items: [
+              {
+                source: "EXTERNAL_EMBED",
+                version: 1,
+                provider: "YOUTUBE",
+                providerData: { videoId: "dQw4w9WgXcQ" },
+              },
+            ],
           },
         },
         {
@@ -364,9 +372,17 @@ const FIXTURES: Record<string, TranslationFixture> = {
           ],
         },
         {
-          type: "image",
+          type: "mediaGrid",
           attrs: {
-            data: '{"image":{"_type":"image","asset":{"_ref":"image-xyz789-1024x768-jpg","_type":"reference"}},"version":1}',
+            version: 1,
+            items: [
+              {
+                source: "EXTERNAL_EMBED",
+                version: 1,
+                provider: "YOUTUBE",
+                providerData: { videoId: "dQw4w9WgXcQ" },
+              },
+            ],
           },
         },
       ],

@@ -1,5 +1,7 @@
 import { PlatformAccessLevel } from "@gororobas/domain"
+import { Effect } from "effect"
 
+import { migrateRichText } from "../migrate-rich-text.js"
 import { GelUserWithProfile, UserDataForMigration } from "../schemas/gel/entities.js"
 import { type GelRole } from "../schemas/gel/enums.js"
 
@@ -9,11 +11,13 @@ const roleMap: Record<GelRole, PlatformAccessLevel> = {
   USER: "COMMUNITY",
 }
 
-export const gelUserToPersonData = (source: GelUserWithProfile) => {
+export const gelUserToPersonData = Effect.fn("gelUserToPersonData")(function* (
+  source: GelUserWithProfile,
+) {
   const name = source.profile.name.trim()
   const location = source.profile.location?.trim() || null
 
-  return UserDataForMigration.makeEffect({
+  return yield* UserDataForMigration.makeEffect({
     latest_source: source,
     account: {
       name,
@@ -27,7 +31,7 @@ export const gelUserToPersonData = (source: GelUserWithProfile) => {
       type: "PERSON",
       handle: source.profile.handle,
       name,
-      bio: source.profile.bio ?? null,
+      bio: source.profile.bio ? yield* migrateRichText(source.profile.bio) : null,
       location,
       photo_gel_id: source.profile.photo?.id ?? null,
       visibility: "PUBLIC",
@@ -40,4 +44,4 @@ export const gelUserToPersonData = (source: GelUserWithProfile) => {
       access_set_at: null,
     },
   })
-}
+})

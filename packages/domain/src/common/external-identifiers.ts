@@ -11,3 +11,13 @@ export type GbifDeprecatedSpeciesId = typeof GbifDeprecatedSpeciesId.Type
 
 export const GoogleBooksVolumeId = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]+$/))
 export type GoogleBooksVolumeId = typeof GoogleBooksVolumeId.Type
+
+export const YoutubeVideoId = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9_-]{11}$/)).pipe(
+  Schema.brand("YoutubeVideoId"),
+)
+export type YoutubeVideoId = typeof YoutubeVideoId.Type
+
+export const SpotifyResourceId = Schema.String.check(Schema.isPattern(/^[a-zA-Z0-9]{22}$/)).pipe(
+  Schema.brand("SpotifyResourceId"),
+)
+export type SpotifyResourceId = typeof SpotifyResourceId.Type

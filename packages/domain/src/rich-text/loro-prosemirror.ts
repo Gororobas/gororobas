@@ -32,7 +32,7 @@ export const initializeLoroRichText = (container: LoroMap, document: TiptapDocum
         )
         text = Option.some(currentText)
         const attributes = Record.fromEntries(
-          (child.marks ?? []).map((mark) => [
+          ("marks" in child ? (child.marks ?? []) : []).map((mark) => [
             toLoroString(mark.type),
             toLoroValue(Schema.decodeUnknownSync(JsonAttributes)(mark.attrs ?? {})),
           ]),

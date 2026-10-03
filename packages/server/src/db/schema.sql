@@ -69,7 +69,7 @@ CREATE TABLE profiles (
   visibility text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
-  FOREIGN KEY (photo_id) REFERENCES images (id) ON DELETE SET NULL
+  FOREIGN KEY (photo_id) REFERENCES media_assets (id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_profiles_handle ON profiles (handle);
@@ -159,30 +159,32 @@ CREATE TABLE suggested_tag_sources (
 ) WITHOUT ROWID;
 
 -- ======
--- IMAGES
+-- MEDIA ASSETS
 -- ======
 --
-CREATE TABLE images (
+CREATE TABLE media_assets (
   id text PRIMARY KEY,
-  sanity_id text NOT NULL UNIQUE,
+  format text NOT NULL,
+  storage_key text UNIQUE,
+  content_type text,
+  byte_size integer,
   label text,
-  hotspot json,
-  crop json,
-  metadata json,
+  metadata json NOT NULL,
+  moderation_status text,
   created_at text NOT NULL,
   updated_at text NOT NULL,
   owner_profile_id text NOT NULL,
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 );
 
-CREATE TABLE image_credits (
-  image_id text NOT NULL,
+CREATE TABLE media_asset_credits (
+  media_asset_id text NOT NULL,
   order_index integer NOT NULL,
   credit_line text,
   credit_url text,
   person_id text,
-  PRIMARY KEY (image_id, order_index),
-  FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE,
+  PRIMARY KEY (media_asset_id, order_index),
+  FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE,
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
@@ -272,11 +274,11 @@ CREATE TABLE wiki_article_handles (
 --
 CREATE TABLE wiki_article_photos (
   wiki_article_id text NOT NULL,
-  image_id text NOT NULL,
+  media_asset_id text NOT NULL,
   order_index integer,
-  PRIMARY KEY (wiki_article_id, image_id),
+  PRIMARY KEY (wiki_article_id, media_asset_id),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (image_id) REFERENCES images (id) ON DELETE CASCADE
+  FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 CREATE TABLE wiki_article_photo_metadata (
@@ -286,7 +288,7 @@ CREATE TABLE wiki_article_photo_metadata (
   moderation_status text,
   created_at text NOT NULL,
   updated_at text NOT NULL,
-  FOREIGN KEY (id) REFERENCES images (id) ON DELETE CASCADE
+  FOREIGN KEY (id) REFERENCES media_assets (id) ON DELETE CASCADE
 );
 
 -- =====

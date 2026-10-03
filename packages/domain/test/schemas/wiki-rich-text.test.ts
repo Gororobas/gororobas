@@ -11,6 +11,7 @@ import {
   type LoroNode,
 } from "loro-prosemirror"
 
+import { MediaAssetId } from "../../src/common/ids.js"
 import { CrdtCommit } from "../../src/crdts/domain.js"
 import { loroDocToUpdate, snapshotToLoroDoc } from "../../src/crdts/lib.js"
 import { toLoroValue } from "../../src/crdts/loro-values.js"
@@ -29,7 +30,11 @@ const editorSchema = new ProseMirrorSchema({
     paragraph: { group: "block", content: "inline*" },
     blockquote: { group: "block", content: "block*" },
     heading: { group: "block", content: "inline*", attrs: { level: { default: 1 } } },
-    image: { group: "block", atom: true, attrs: { data: { default: null } } },
+    mediaGrid: {
+      group: "block",
+      atom: true,
+      attrs: { version: { default: 1 }, items: { default: null } },
+    },
     hardBreak: { group: "inline", inline: true },
     text: { group: "inline" },
   },
@@ -42,7 +47,7 @@ const editorSchema = new ProseMirrorSchema({
 const RichTextInputs = Schema.Struct({
   first: Schema.NonEmptyString,
   second: Schema.NonEmptyString,
-  level: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 6 })),
+  level: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 3 })),
 })
 
 const makeContent = ({ first, second, level }: typeof RichTextInputs.Type) =>
@@ -70,7 +75,19 @@ const makeContent = ({ first, second, level }: typeof RichTextInputs.Type) =>
               },
             ],
           },
-          { type: "image", attrs: { data: '{"id":"asset-1"}' } },
+          {
+            type: "mediaGrid",
+            attrs: {
+              version: 1,
+              items: [
+                {
+                  source: "MEDIA_ASSET",
+                  format: "IMAGE",
+                  mediaAssetId: MediaAssetId.make("019a0dce-1fc0-7abc-8abc-123456789abc"),
+                },
+              ],
+            },
+          },
           { type: "paragraph" },
         ],
       })

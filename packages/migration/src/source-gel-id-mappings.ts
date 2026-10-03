@@ -1,6 +1,7 @@
 import { Effect, FileSystem, Path, Predicate, Schema } from "effect"
 
 import { GelClient } from "./gel-client.js"
+import { archiveGelResult } from "./preview-exports.js"
 import { ensureMappedId, MigrationContext } from "./services/migration-context.js"
 
 const ReferenceSource = Schema.Struct({
@@ -43,7 +44,9 @@ export const sourceGelIdMappings = Effect.gen(function* () {
     ],
     ([query, entityType, collection]) =>
       Effect.gen(function* () {
-        const records = yield* client.use((gel) => gel.query(query))
+        const records = yield* client
+          .use((gel) => gel.query(query))
+          .pipe(Effect.tap(archiveGelResult(`references-${collection}`)))
         yield* Effect.forEach(
           records,
           (record) =>

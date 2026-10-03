@@ -1,7 +1,8 @@
-import { IdGen, TiptapDocument, TiptapNode, TiptapTextNode } from "@gororobas/domain"
+import { IdGen, TiptapDocument, TiptapNode } from "@gororobas/domain"
 import { Effect, FileSystem, Path, PlatformError, Predicate, Schema } from "effect"
 import { KeyValueStore } from "effect/persistence"
 
+import { GelTiptapDocument, GelTiptapNode } from "./schemas/gel/rich-text.js"
 import {
   ensureMappedId,
   GelIdNotMappedError,
@@ -9,7 +10,17 @@ import {
 } from "./services/migration-context.js"
 
 const JsonObject = Schema.Record(Schema.String, Schema.Unknown)
-const Mention = Schema.Struct({ id: Schema.String, objectType: Schema.String })
+const Mention = Schema.Struct({
+  id: Schema.NonEmptyString,
+  objectType: Schema.Literals([
+    "UserProfile",
+    "Note",
+    "Vegetable",
+    "Resource",
+    "VegetableVariety",
+    "Tag",
+  ]),
+})
 const ImageReference = Schema.Struct({
   id: Schema.optional(Schema.String),
   sanity_id: Schema.optional(Schema.String),
@@ -34,10 +45,12 @@ const saveEmbeddedReference = Effect.fn("saveEmbeddedReference")(function* (refe
   )
 })
 
-export const migrateRichText = Effect.fn("migrateRichText")(function* (document: TiptapDocument) {
+export const migrateRichText = Effect.fn("migrateRichText")(function* (
+  document: GelTiptapDocument,
+) {
   const context = yield* MigrationContext
   const rewrite = (
-    node: TiptapNode | TiptapTextNode,
+    node: GelTiptapNode,
   ): Effect.Effect<
     TiptapNode,
     | Schema.SchemaError
@@ -47,7 +60,7 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (document:
     FileSystem.FileSystem | Path.Path | IdGen | MigrationContext
   > =>
     Effect.gen(function* () {
-      let attrs = "attrs" in node ? node.attrs : undefined
+      const attrs = "attrs" in node ? node.attrs : undefined
       if ((node.type === "mention" || node.type === "image") && Predicate.isString(attrs?.data)) {
         const data = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(JsonObject))(
           attrs.data,
@@ -80,60 +93,47 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (document:
               }),
             ),
           )
-          let image = data.image
-          if (image !== undefined && image !== null) {
-            const fields = yield* Schema.decodeUnknownEffect(JsonObject)(image)
-            const reference = yield* Schema.decodeUnknownEffect(ImageReference)(fields)
-            if (reference.sanity_id) {
-              const key = `image-sanity:${reference.sanity_id}`
-              const imageId = yield* context
-                .resolveId(key, "Image")
-                .pipe(
-                  Effect.catchTag("GelIdNotMappedError", () =>
-                    ensureMappedId({ id: key }, "Image"),
-                  ),
-                )
-              yield* saveEmbeddedReference({
-                id: imageId,
-                gelId: key,
-                entityType: "Image",
-                collection: "images",
-                label: reference.sanity_id,
-                sanityId: reference.sanity_id,
-                sourceMissing: false,
-              })
-              image = { ...fields, id: imageId }
-            }
-          }
-          attrs = {
-            ...attrs,
-            data: yield* Schema.encodeEffect(Schema.fromJsonString(JsonObject))({
-              ...data,
-              ...(image === undefined ? {} : { image }),
-              id,
-              objectType: entityType,
-            }),
-          }
+          return yield* Schema.decodeUnknownEffect(TiptapNode)({
+            type: "entityReference",
+            attrs: {
+              version: 1,
+              referenceId: id,
+              referenceType:
+                entityType === "WikiArticle"
+                  ? "WIKI_ARTICLE"
+                  : entityType === "Profile"
+                    ? "PROFILE"
+                    : entityType === "Publication"
+                      ? "PUBLICATION"
+                      : entityType.toUpperCase(),
+              labelAtInsertion: Predicate.isString(data.label) ? data.label : mention.id,
+            },
+          })
         } else {
           const image = yield* Schema.decodeUnknownEffect(JsonObject)(data.image)
           const reference = yield* Schema.decodeUnknownEffect(ImageReference)(image)
-          const key = reference.id ?? `image-sanity:${reference.sanity_id}`
+          const key = yield* Schema.decodeUnknownEffect(Schema.NonEmptyString)(
+            reference.id ??
+              (reference.sanity_id ? `image-sanity:${reference.sanity_id}` : undefined),
+          )
           const id = yield* context.resolveId(key, "Image").pipe(
             Effect.catchTag("GelIdNotMappedError", () =>
               Effect.gen(function* () {
-                const assetKey = `image-sanity:${reference.sanity_id}`
+                const mediaAssetKey = reference.sanity_id
+                  ? `image-sanity:${reference.sanity_id}`
+                  : key
                 const id = yield* context
-                  .resolveId(assetKey, "Image")
+                  .resolveId(mediaAssetKey, "Image")
                   .pipe(
                     Effect.catchTag("GelIdNotMappedError", () =>
-                      ensureMappedId({ id: reference.sanity_id ? assetKey : key }, "Image"),
+                      ensureMappedId({ id: reference.sanity_id ? mediaAssetKey : key }, "Image"),
                     ),
                   )
                 yield* context.registerMapping({
                   gelId: key,
                   sqliteId: id,
                   entityType: "Image",
-                  contentHash: assetKey,
+                  contentHash: mediaAssetKey,
                   lastSyncedAt: "2025-04-01T12:00:00Z",
                 })
                 yield* saveEmbeddedReference({
@@ -151,29 +151,80 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (document:
               }),
             ),
           )
-          attrs = {
-            ...attrs,
-            data: yield* Schema.encodeEffect(Schema.fromJsonString(JsonObject))({
-              ...data,
-              image: { ...image, id },
-            }),
-          }
+          return yield* Schema.decodeUnknownEffect(TiptapNode)({
+            type: "mediaGrid",
+            attrs: {
+              version: 1,
+              items: [
+                {
+                  source: "MEDIA_ASSET",
+                  mediaAssetId: id,
+                  format: "IMAGE",
+                  ...(Predicate.isString(image.label) ? { alt: image.label } : {}),
+                },
+              ],
+            },
+          })
         }
+      }
+      if (node.type === "video") {
+        const data = yield* Schema.decodeUnknownEffect(
+          Schema.fromJsonString(Schema.Struct({ id: Schema.String })),
+        )(attrs?.data)
+        return yield* Schema.decodeUnknownEffect(TiptapNode)({
+          type: "mediaGrid",
+          attrs: {
+            version: 1,
+            items: [
+              {
+                source: "EXTERNAL_EMBED",
+                version: 1,
+                provider: "YOUTUBE",
+                providerData: { videoId: data.id },
+              },
+            ],
+          },
+        })
       }
       const content =
         "content" in node && node.content
-          ? yield* Effect.forEach(node.content, rewrite, { concurrency: 1 })
+          ? yield* Effect.forEach(
+              node.content.filter((child) => child.type !== "text" || child.text !== ""),
+              rewrite,
+              { concurrency: 1 },
+            )
           : undefined
-      return TiptapNode.make({
+      return yield* Schema.decodeUnknownEffect(TiptapNode)({
         type: node.type,
         ...(node.text === undefined ? {} : { text: node.text }),
         ...(node.marks === undefined ? {} : { marks: node.marks }),
         ...(attrs ? { attrs } : {}),
-        ...(content ? { content } : {}),
+        ...(content && content.length > 0 ? { content: mergeMediaGrids(content) } : {}),
       })
     })
-  return TiptapDocument.make({
+  return yield* Schema.decodeUnknownEffect(TiptapDocument)({
     ...document,
-    content: yield* Effect.forEach(document.content, rewrite, { concurrency: 1 }),
+    content: mergeMediaGrids(
+      yield* Effect.forEach(
+        document.content.filter((node) => node.type !== "text" || node.text !== ""),
+        rewrite,
+        { concurrency: 1 },
+      ),
+    ),
   })
 })
+
+/** Merge only adjacent sibling grids; text and nesting preserve their original boundaries. */
+const mergeMediaGrids = (nodes: ReadonlyArray<TiptapNode>): ReadonlyArray<TiptapNode> => {
+  const merged: TiptapNode[] = []
+  for (const node of nodes) {
+    const previous = merged[merged.length - 1]
+    if (previous?.type === "mediaGrid" && node.type === "mediaGrid") {
+      merged[merged.length - 1] = {
+        type: "mediaGrid",
+        attrs: { version: 1, items: [...previous.attrs.items, ...node.attrs.items] },
+      }
+    } else merged.push(node)
+  }
+  return merged
+}

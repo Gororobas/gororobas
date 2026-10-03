@@ -226,9 +226,12 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
        * ======================
        */
 
-      const createPublication = (input: CreatePublicationInputType) =>
+      const createPublication = (
+        input: CreatePublicationInputType,
+        options: { id?: PublicationId } = {},
+      ) =>
         Effect.gen(function* () {
-          const publicationId = yield* IdGen.make(PublicationId)
+          const publicationId = options.id ?? (yield* IdGen.make(PublicationId))
           const commitId = yield* IdGen.make(PublicationCommitId)
           const now = yield* DateTime.now
           const created = createPublicationSnapshot(input.sourceData)

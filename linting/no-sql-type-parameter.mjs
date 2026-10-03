@@ -11,8 +11,8 @@ export const noSqlTypeParameterRule = {
     const hasTypeArguments = (node) =>
       Boolean(
         node.typeArguments ||
-          node.typeParameters ||
-          (node.tag.type === "TSInstantiationExpression" && node.tag.typeArguments),
+        node.typeParameters ||
+        (node.tag.type === "TSInstantiationExpression" && node.tag.typeArguments),
       )
 
     const isSqlTag = (tag) => {

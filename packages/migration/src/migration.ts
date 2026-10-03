@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 import { Command } from "effect/cli"
 
+import { importPreview } from "./import-preview.js"
 import { sourceGelNotes } from "./notes/source-gel-notes.js"
 import { sourceGelResources } from "./resources/source-gel-resources.js"
 import { sourceGelIdMappings } from "./source-gel-id-mappings.js"
@@ -18,5 +19,10 @@ export const migrate = Command.make("migrate", {}, () =>
     yield* sourceGelVegetableVarieties
     yield* sourceGelResources
     yield* sourceGelNotes
+    const report = yield* importPreview(
+      new URL("../debug", import.meta.url).pathname,
+      new URL("../debug/sqlite", import.meta.url).pathname,
+    )
+    yield* Effect.log(`Preview import: ${JSON.stringify(report)}`)
   }),
 ).pipe(Command.withDescription("Migrate data from Gel"))

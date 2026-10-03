@@ -1,16 +1,12 @@
-import {
-  ImageId,
-  ProfileId,
-  WikiArticleId,
-  TiptapDocument,
-  WikiPlantArticle,
-} from "@gororobas/domain"
-import { Effect, Array as EffectArray, FileSystem, Option, Record, Path, Schema } from "effect"
+import { MediaAssetId, ProfileId, WikiArticleId, WikiPlantArticle } from "@gororobas/domain"
+import { Effect, Array as EffectArray, FileSystem, Option, Path, Record, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
 import { migrateRichText } from "../migrate-rich-text.js"
+import { archiveGelResult } from "../preview-exports.js"
 import { GelVegetableWithEditSuggestions } from "../schemas/gel/entities.js"
 import { gelGenderToGrammaticalGender } from "../schemas/gel/enums.js"
+import { GelTiptapDocument } from "../schemas/gel/rich-text.js"
 import { MigrationContext } from "../services/migration-context.js"
 import { buildWikiMigrationHistory } from "../wiki-migration-history.js"
 import {
@@ -61,6 +57,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
   const vegetableResults = yield* gelClient
     .use((client) => client.query(vegetablesQuery))
     .pipe(
+      Effect.tap(archiveGelResult("plants")),
       Effect.flatMap((vegetables) =>
         Effect.all(
           vegetables.map((vegetable) =>
@@ -119,7 +116,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
           history,
           (historyEntry) =>
             Effect.gen(function* () {
-              const originalContent = Schema.decodeUnknownSync(Schema.NullishOr(TiptapDocument))(
+              const originalContent = Schema.decodeUnknownSync(Schema.NullishOr(GelTiptapDocument))(
                 historyEntry.state.content,
               )
               const content = originalContent ? yield* migrateRichText(originalContent) : null
@@ -151,7 +148,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
           (photo) =>
             context
               .resolveId(photo.id, "Image")
-              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ImageId))),
+              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId))),
           { concurrency: 1 },
         )
         const inputs = yield* Effect.forEach(

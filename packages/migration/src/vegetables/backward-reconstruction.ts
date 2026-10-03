@@ -1,4 +1,4 @@
-import { ImageId, WikiArticleId, WikiPlantArticle } from "@gororobas/domain"
+import { MediaAssetId, WikiArticleId, WikiPlantArticle } from "@gororobas/domain"
 import { Effect, Array as EffectArray, Option, Order, Predicate, Schema } from "effect"
 import { revertChangeset, type Changeset, type IChange } from "json-diff-ts"
 
@@ -23,7 +23,7 @@ export type VegetableHistoryEntryForMigration = typeof VegetableHistoryEntryForM
 
 export const VegetableDataForMigration = Schema.Struct({
   id: WikiArticleId,
-  photoIds: Schema.Array(ImageId),
+  photoIds: Schema.Array(MediaAssetId),
   versions: Schema.Array(WikiMigrationVersion),
   latest_source: GelVegetableForReconstruction,
   edit_suggestions: Schema.Array(GelEditSuggestion),

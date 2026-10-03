@@ -73,7 +73,7 @@ CREATE TABLE `profiles` (
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
   PRIMARY KEY (`id`),
-  CONSTRAINT `0` FOREIGN KEY (`photo_id`) REFERENCES `images` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+  CONSTRAINT `0` FOREIGN KEY (`photo_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL
 );
 -- Create index "profiles_handle" to table: "profiles"
 CREATE UNIQUE INDEX `profiles_handle` ON `profiles` (`handle`);
@@ -163,32 +163,34 @@ CREATE TABLE `suggested_tag_sources` (
   CONSTRAINT `0` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`suggested_tag_id`) REFERENCES `suggested_tags` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create "images" table
-CREATE TABLE `images` (
+-- Create "media_assets" table
+CREATE TABLE `media_assets` (
   `id` text NULL,
-  `sanity_id` text NOT NULL,
+  `format` text NOT NULL,
+  `storage_key` text NULL,
+  `content_type` text NULL,
+  `byte_size` integer NULL,
   `label` text NULL,
-  `hotspot` json NULL,
-  `crop` json NULL,
-  `metadata` json NULL,
+  `metadata` json NOT NULL,
+  `moderation_status` text NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
   `owner_profile_id` text NOT NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
--- Create index "images_sanity_id" to table: "images"
-CREATE UNIQUE INDEX `images_sanity_id` ON `images` (`sanity_id`);
--- Create "image_credits" table
-CREATE TABLE `image_credits` (
-  `image_id` text NOT NULL,
+-- Create index "media_assets_storage_key" to table: "media_assets"
+CREATE UNIQUE INDEX `media_assets_storage_key` ON `media_assets` (`storage_key`);
+-- Create "media_asset_credits" table
+CREATE TABLE `media_asset_credits` (
+  `media_asset_id` text NOT NULL,
   `order_index` integer NOT NULL,
   `credit_line` text NULL,
   `credit_url` text NULL,
   `person_id` text NULL,
-  PRIMARY KEY (`image_id`, `order_index`),
+  PRIMARY KEY (`media_asset_id`, `order_index`),
   CONSTRAINT `0` FOREIGN KEY (`person_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`image_id`) REFERENCES `images` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `1` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
 -- Create "wiki_article_crdts" table
 CREATE TABLE `wiki_article_crdts` (
@@ -231,19 +233,27 @@ CREATE TABLE `wiki_articles` (
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create index "idx_wiki_articles_id_kind" to table: "wiki_articles"
+CREATE UNIQUE INDEX `idx_wiki_articles_id_kind` ON `wiki_articles` (`id`, `kind`);
 -- Create index "idx_wiki_articles_kind_status" to table: "wiki_articles"
 CREATE INDEX `idx_wiki_articles_kind_status` ON `wiki_articles` (`kind`, `status`);
 -- Create "wiki_article_translations" table
 CREATE TABLE `wiki_article_translations` (
   `wiki_article_id` text NOT NULL,
+  `kind` text NOT NULL,
   `locale` text NOT NULL,
   `common_names` json NOT NULL,
   `searchable_names` text NOT NULL,
   `content` json NULL,
   `content_plain_text` text NOT NULL,
   `grammatical_gender` text NULL,
+  `origin` text NULL,
   PRIMARY KEY (`wiki_article_id`, `locale`),
-  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `kind`) REFERENCES `wiki_articles` (`id`, `kind`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CHECK (
+    kind = 'PLANT'
+    OR origin IS NULL
+  )
 ) WITHOUT ROWID;
 -- Create "wiki_article_handles" table
 CREATE TABLE `wiki_article_handles` (
@@ -259,10 +269,10 @@ CREATE UNIQUE INDEX `wiki_article_handles_kind_handle` ON `wiki_article_handles`
 -- Create "wiki_article_photos" table
 CREATE TABLE `wiki_article_photos` (
   `wiki_article_id` text NOT NULL,
-  `image_id` text NOT NULL,
+  `media_asset_id` text NOT NULL,
   `order_index` integer NULL,
-  PRIMARY KEY (`wiki_article_id`, `image_id`),
-  CONSTRAINT `0` FOREIGN KEY (`image_id`) REFERENCES `images` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  PRIMARY KEY (`wiki_article_id`, `media_asset_id`),
+  CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
 -- Create "wiki_article_photo_metadata" table
@@ -274,7 +284,7 @@ CREATE TABLE `wiki_article_photo_metadata` (
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
   PRIMARY KEY (`id`),
-  CONSTRAINT `0` FOREIGN KEY (`id`) REFERENCES `images` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `0` FOREIGN KEY (`id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create "publication_crdts" table
 CREATE TABLE `publication_crdts` (

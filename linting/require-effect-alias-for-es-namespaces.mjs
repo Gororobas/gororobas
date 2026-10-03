@@ -14,12 +14,14 @@ export const requireEffectAliasForEsNamespacesRule = {
         if (node.source.type !== "Literal" || node.source.value !== "effect") return
 
         for (const specifier of node.specifiers) {
-          if (specifier.type !== "ImportSpecifier" || specifier.imported.type !== "Identifier") continue
+          if (specifier.type !== "ImportSpecifier" || specifier.imported.type !== "Identifier")
+            continue
 
           const aliasRequiredModule = aliasedEffectModuleNames.find(
             (moduleName) => specifier.imported.name === moduleName,
           )
-          if (!aliasRequiredModule || specifier.local.name === `Effect${aliasRequiredModule}`) continue
+          if (!aliasRequiredModule || specifier.local.name === `Effect${aliasRequiredModule}`)
+            continue
 
           context.report({
             node: specifier.local,

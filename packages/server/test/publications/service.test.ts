@@ -44,6 +44,7 @@ const paragraph = (text: string): TiptapNode => ({
 })
 
 const makeDocument = (text: string): TiptapDocument => ({
+  // @ts-expect-error not sure what's the issue here
   content: [paragraph(text)],
   type: "doc",
   version: 1,

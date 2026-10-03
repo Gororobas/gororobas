@@ -4,7 +4,7 @@
 import { Schema, Struct } from "effect"
 
 import { ProfileType, ProfileVisibility } from "../common/enums.js"
-import { ImageId, OrganizationId, PersonId } from "../common/ids.js"
+import { MediaAssetId, OrganizationId, PersonId } from "../common/ids.js"
 import { Handle, TimestampedStruct } from "../common/primitives.js"
 import { OrganizationRow } from "../organizations/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
@@ -15,7 +15,7 @@ const CoreProfileRow = Schema.Struct({
   handle: Handle,
   location: Schema.NullOr(Schema.Trimmed.check(Schema.isNonEmpty())),
   name: Schema.Trimmed.check(Schema.isNonEmpty()),
-  photoId: Schema.NullOr(ImageId),
+  photoId: Schema.NullOr(MediaAssetId),
   visibility: ProfileVisibility,
 })
 

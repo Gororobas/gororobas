@@ -30,6 +30,7 @@
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@gororobas/domain": "workspace:^",
+    "@mediabunny/server": "^1.61.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
     "@opentelemetry/sdk-logs": "^0.222.0",
     "@opentelemetry/sdk-metrics": "^2.11.0",
@@ -44,7 +45,9 @@
     "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
     "loro-mirror": "catalog:",
-    "ollama": "^0.6.4"
+    "mediabunny": "^1.61.0",
+    "ollama": "^0.6.4",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@ariga/atlas": "latest",

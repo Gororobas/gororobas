@@ -1,14 +1,15 @@
-import { ImageId, ProfileId, WikiArticleEditableData, WikiArticleId } from "@gororobas/domain"
-import { Array as EffectArray, Effect, FileSystem, Option, Path, Predicate, Schema } from "effect"
+import { MediaAssetId, ProfileId, WikiArticleEditableData, WikiArticleId } from "@gororobas/domain"
+import { Effect, Array as EffectArray, FileSystem, Option, Path, Predicate, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
+import { archiveGelResult } from "../preview-exports.js"
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
 import { MigrationContext } from "../services/migration-context.js"
 import { buildWikiMigrationHistory, type WikiMigrationVersion } from "../wiki-migration-history.js"
 import {
   gelResourceToWikiArticle,
-  ResourceDataForMigration,
   ResourceAuditLog,
+  ResourceDataForMigration,
 } from "./gel-resource-to-wiki-article.js"
 
 const resourcesQuery = `
@@ -34,6 +35,7 @@ export const sourceGelResources = Effect.gen(function* () {
   const resourceResults = yield* gelClient
     .use((client) => client.query(resourcesQuery))
     .pipe(
+      Effect.tap(archiveGelResult("resources")),
       Effect.flatMap((resources) =>
         Effect.all(
           resources.map((resource) =>
@@ -80,7 +82,7 @@ export const sourceGelResources = Effect.gen(function* () {
         const thumbnailId = source.thumbnail
           ? yield* context
               .resolveId(source.thumbnail.id, "Image")
-              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ImageId)))
+              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId)))
           : null
         const versionInputs: Array<
           Pick<

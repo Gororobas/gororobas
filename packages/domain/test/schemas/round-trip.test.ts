@@ -20,7 +20,7 @@ import {
   VerificationRow,
 } from "../../src/authentication/domain.js"
 import { Handle, TimestampColumn } from "../../src/common/primitives.js"
-import { ImageRow } from "../../src/media/domain.js"
+import { MediaAssetRow } from "../../src/media/domain.js"
 import { OrganizationRow } from "../../src/organizations/domain.js"
 import { PersonRow } from "../../src/people/domain.js"
 import { ProfileRow } from "../../src/profiles/domain.js"
@@ -42,7 +42,7 @@ import {
 
 const rowSchemas = [
   { name: "AccountRow", schema: AccountRow },
-  { name: "ImageRow", schema: ImageRow },
+  { name: "MediaAssetRow", schema: MediaAssetRow },
   { name: "OAuthAccountRow", schema: OAuthAccountRow },
   { name: "OrganizationRow", schema: OrganizationRow },
   { name: "PersonRow", schema: PersonRow },
@@ -80,6 +80,18 @@ describe("Schema Round-Trip Properties", () => {
         ),
       )
     })
+
+    it.effect("MediaAssetRow rejects a mismatched format and metadata", () =>
+      assertPropertyEffect(Arbitrary.schema(MediaAssetRow), (row) =>
+        Effect.sync(
+          () =>
+            !Schema.is(Schema.toType(MediaAssetRow))({
+              ...row,
+              format: row.format === "IMAGE" ? "AUDIO" : "IMAGE",
+            }),
+        ),
+      ),
+    )
 
     it.effect("Handle validation and transformation round-trip", () =>
       // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation

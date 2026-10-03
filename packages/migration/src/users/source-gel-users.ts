@@ -1,8 +1,8 @@
-import { AccountId, ProfileId, ImageId } from "@gororobas/domain"
+import { AccountId, MediaAssetId, ProfileId } from "@gororobas/domain"
 import { Effect, Array as EffectArray, FileSystem, Option, Path, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
-import { migrateRichText } from "../migrate-rich-text.js"
+import { archiveGelResult } from "../preview-exports.js"
 import { GelUserWithProfile, UserDataForMigration } from "../schemas/gel/entities.js"
 import { MigrationContext } from "../services/migration-context.js"
 import { gelUserToPersonData } from "./gel-user-to-person.js"
@@ -43,6 +43,7 @@ export const sourceGelUsers = Effect.gen(function* () {
   const userResults = yield* gelClient
     .use((client) => client.query(usersQuery))
     .pipe(
+      Effect.tap(archiveGelResult("users")),
       Effect.flatMap((users) =>
         Effect.all(
           users.map((user) => Schema.decodeUnknownEffect(GelUserWithProfile)(user)),
@@ -80,9 +81,9 @@ export const sourceGelUsers = Effect.gen(function* () {
         const photoId = user.profile.photo
           ? yield* context
               .resolveId(user.profile.photo.id, "Image")
-              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ImageId)))
+              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId)))
           : null
-        const bio = data.profile.bio ? yield* migrateRichText(data.profile.bio) : null
+        const bio = data.profile.bio
         const encoded = yield* Schema.encodeEffect(
           Schema.fromJsonString(UserDataForMigration, { space: 2 }),
         )({

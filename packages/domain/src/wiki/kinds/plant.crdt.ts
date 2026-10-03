@@ -8,6 +8,7 @@ import {
   PlantLifecycle,
   PlantUsage,
 } from "../../common/enums.js"
+import { WikidataId } from "../../common/external-identifiers.js"
 import {
   Centimeters,
   IntNonNegative,
@@ -19,7 +20,6 @@ import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-ope
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeOptionalTranslatedScalarEditOperations } from "../../crdts/optional-translated-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
-import { WikidataId } from "../external-identifiers.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import type { PlantEditableArticle, PlantEditableAttributes } from "./plant.js"
 

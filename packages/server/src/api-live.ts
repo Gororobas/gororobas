@@ -5,6 +5,9 @@ import { HttpApiBuilder } from "effect/http-api"
 import { AuthenticationMiddlewareLive } from "./authentication/authentication-middleware-live.js"
 import { CommentsApiLive } from "./comments/api-live.js"
 import { CommentsRepository } from "./comments/repository.js"
+import { MediaAssetsRepository } from "./media-assets/repository.js"
+import { MediaAssetsService } from "./media-assets/service.js"
+import { MediaAssetsStorage } from "./media-assets/storage.js"
 import { MediaApiLive } from "./media/api-live.js"
 import { OrganizationsApiLive } from "./organizations/api-live.js"
 import { PeopleApiLive } from "./people/api-live.js"
@@ -23,6 +26,9 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(GororobasApi), [
   ProfilesApiLive,
   TagsApiLive,
 ]).pipe(
+  Layer.provideMerge(Layer.effect(MediaAssetsService, MediaAssetsService.make)),
+  Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+  Layer.provideMerge(Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make)),
   Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
   Layer.provideMerge(Layer.effect(CommentsRepository, CommentsRepository.make)),
 )

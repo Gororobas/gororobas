@@ -2,6 +2,7 @@ import { WikiArticleId, WikiPlantCultivarArticle } from "@gororobas/domain"
 import { Effect, FileSystem, Option, Path, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
+import { archiveGelResult } from "../preview-exports.js"
 import { GelVegetableVariety } from "../schemas/gel/entities.js"
 import { MigrationContext } from "../services/migration-context.js"
 import { gelVegetableNamesToCrdtList } from "./gel-vegetable-to-wiki-plant-article.js"
@@ -25,7 +26,10 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
         `select VegetableVariety { *, photos: { *, sources: { * } }, parents := .<varieties[is Vegetable] { id, handle } }`,
       ),
     )
-    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(Variety))))
+    .pipe(
+      Effect.tap(archiveGelResult("cultivars")),
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(Variety))),
+    )
   const directory = path.join(import.meta.dirname, "..", "..", "debug", "cultivars")
   yield* fs.makeDirectory(directory, { recursive: true })
   yield* Effect.forEach(

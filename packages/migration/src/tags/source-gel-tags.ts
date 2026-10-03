@@ -2,6 +2,7 @@ import { IdGen, TagId } from "@gororobas/domain"
 import { Array as EffectArray, Effect, FileSystem, Option, Path, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
+import { archiveGelResult } from "../preview-exports.js"
 import { GelTag, TagDataForMigration } from "../schemas/gel/entities.js"
 import { MigrationContext } from "../services/migration-context.js"
 
@@ -20,6 +21,7 @@ export const sourceGelTags = Effect.gen(function* () {
   const tagResults = yield* gelClient
     .use((client) => client.query(tagsQuery))
     .pipe(
+      Effect.tap(archiveGelResult("tags")),
       Effect.flatMap((tags) =>
         Effect.all(
           tags.map((tag) => Schema.decodeUnknownEffect(GelTag)(tag)),

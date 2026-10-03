@@ -82,8 +82,9 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
     Effect.provide(NodeServices.layer),
     Effect.tap(() =>
       Effect.sync(() => {
-        expect(writes.length).toBe(2)
-        const { path, content } = writes[1]
+        expect(writes.length).toBe(3)
+        expect(writes[0].path).toMatch(/debug\/raw-gel\/notes\.json$/)
+        const { path, content } = writes[2]
         expect(path).toMatch(/debug\/notes\/eucalyptus-discovery\.json$/)
         expect(
           Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
@@ -114,7 +115,7 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
   )
 })
 
-it.effect("rejects an invalid note before writing exports", () => {
+it.effect("archives invalid raw notes before rejecting conversion", () => {
   const writeFileString = vi.fn<FileSystem.FileSystem["writeFileString"]>(() => Effect.void)
   return sourceGelNotes.pipe(
     Effect.provideService(
@@ -132,7 +133,11 @@ it.effect("rejects an invalid note before writing exports", () => {
     Effect.tap((error) =>
       Effect.sync(() => {
         expect(error._tag).toBe("SchemaError")
-        expect(writeFileString).not.toHaveBeenCalled()
+        expect(writeFileString).toHaveBeenCalledTimes(1)
+        expect(writeFileString.mock.calls[0][0]).toMatch(/debug\/raw-gel\/notes\.json$/)
+        expect(JSON.parse(writeFileString.mock.calls[0][1])).toMatchObject([
+          { published_at: "not a Gel Date" },
+        ])
       }),
     ),
   )
@@ -162,11 +167,11 @@ it.effect("archives private notes separately and removes earlier publication exp
     Effect.provide(NodeServices.layer),
     Effect.tap(() =>
       Effect.sync(() => {
-        expect(writes).toHaveLength(1)
+        expect(writes).toHaveLength(2)
         expect(
-          Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(writes[0].content),
+          Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(writes[1].content),
         ).toMatchObject([{ publish_status: "PRIVATE", created_by: note.created_by }])
-        expect(writes[0].path).toMatch(/debug\/journal\/notes\.json$/)
+        expect(writes[1].path).toMatch(/debug\/journal\/notes\.json$/)
         expect(remove).toHaveBeenCalledWith(
           expect.stringMatching(/debug\/notes\/eucalyptus-discovery\.json$/),
           { force: true },

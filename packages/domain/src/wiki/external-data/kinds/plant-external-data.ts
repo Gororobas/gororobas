@@ -1,6 +1,6 @@
 import { Schema, Struct } from "effect"
 
-import { GbifDeprecatedSpeciesId, GbifTaxonId } from "../../external-identifiers.js"
+import { GbifDeprecatedSpeciesId, GbifTaxonId } from "../../../common/external-identifiers.js"
 import { WikiPlantArticle } from "../../kinds/plant.js"
 import { ExternalLink, ExternalMedia, Observation } from "../common.js"
 import { ExternalDataFetchError } from "../error.js"

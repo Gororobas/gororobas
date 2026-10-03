@@ -1,16 +1,16 @@
 import {
-  PostSourceData,
-  PublicationId,
-  ProfileId,
   AccountId,
-  ImageId,
-  WikiArticleId,
+  MediaAssetId,
   Email,
   Handle,
   NonEmptyTrimmedString,
   PlatformAccessLevel,
-  TiptapDocument,
+  PostSourceData,
+  ProfileId,
+  PublicationId,
   TagId,
+  TiptapDocument,
+  WikiArticleId,
 } from "@gororobas/domain"
 /**
  * Gel entity schemas.
@@ -18,6 +18,7 @@ import {
 import { Effect, Schema } from "effect"
 
 import * as Enums from "./enums.js"
+import { GelTiptapDocument } from "./rich-text.js"
 
 export const GelOptionalColumn = <S extends Schema.Schema<unknown>>(s: S) =>
   Schema.optional(Schema.NullishOr(s))
@@ -26,7 +27,7 @@ export const GelOptionalColumn = <S extends Schema.Schema<unknown>>(s: S) =>
 
 export const GelTimestamp = Schema.Date
 
-export const GelTiptapDocument = TiptapDocument
+export { GelTiptapDocument } from "./rich-text.js"
 
 export const gelAuditableFields = {
   created_at: GelTimestamp,
@@ -92,7 +93,7 @@ export const AccountDataForMigration = Schema.Struct({
 
 const ProfileDataForMigration = Schema.Struct({
   id: Schema.optional(ProfileId),
-  photoId: Schema.optional(Schema.NullOr(ImageId)),
+  photoId: Schema.optional(Schema.NullOr(MediaAssetId)),
   type: Schema.Literal("PERSON"),
   handle: Handle,
   name: NonEmptyTrimmedString,
@@ -243,8 +244,8 @@ export const GelNote = Schema.Struct({
   publish_status: GelOptionalColumn(Enums.GelNotePublishStatus),
   published_at: GelTimestamp,
   types: Schema.Array(Enums.GelNoteType),
-  title: TiptapDocument,
-  body: GelOptionalColumn(TiptapDocument),
+  title: GelTiptapDocument,
+  body: GelOptionalColumn(GelTiptapDocument),
   content_plain_text: GelOptionalColumn(Schema.String),
   handle: Handle,
 })

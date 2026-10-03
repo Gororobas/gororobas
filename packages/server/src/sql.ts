@@ -11,9 +11,10 @@ import { migrations } from "./db/migrations-effect/index.js"
 const snakeToCamel = (str: string) => str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
 const camelToSnake = (str: string) => str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
-const makeAppSql = (filename: string | ":memory:") => {
-  const client = SqliteClient.layer({
+export const makeAppSqlClient = (filename: string, readonly = false) =>
+  SqliteClient.layer({
     filename,
+    readonly,
     // Transform column names automatically
     transformResultNames: snakeToCamel, // DB → JS (snake_case → camelCase)
     transformQueryNames: camelToSnake, // JS → DB (camelCase → snake_case)
@@ -22,17 +23,23 @@ const makeAppSql = (filename: string | ":memory:") => {
       "db.system": "sqlite",
     },
   })
-  const clientWithPragmas = Layer.effectDiscard(
+
+export const makeAppSql = (filename: string) => {
+  const client = makeAppSqlClient(filename)
+  // SQLite ignores foreign_keys changes inside the migrator's transaction.
+  // Atlas rebuilds tables, so disable enforcement before entering that transaction.
+  const migrate = Layer.effectDiscard(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
+      yield* sql`PRAGMA foreign_keys = OFF`
+      yield* SqliteMigrator.run({ loader: SqliteMigrator.fromRecord(migrations) })
+      const violations = yield* sql`PRAGMA foreign_key_check`
+      if (violations.length > 0)
+        return yield* Effect.die(new Error("Migration left foreign key violations"))
       yield* sql`PRAGMA foreign_keys = ON`
     }),
-  ).pipe(Layer.provideMerge(client))
-
-  const migrator = SqliteMigrator.layer({
-    loader: SqliteMigrator.fromRecord(migrations),
-  }).pipe(Layer.provide(NodeServices.layer))
-  return migrator.pipe(Layer.provideMerge(clientWithPragmas))
+  ).pipe(Layer.provide(NodeServices.layer))
+  return migrate.pipe(Layer.provideMerge(client))
 }
 
 export const AppSqlLive = makeAppSql("gororobas.db")
