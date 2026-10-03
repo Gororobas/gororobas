@@ -2,7 +2,7 @@ import { Schema } from "effect"
 /**
  * Organizations HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { OrganizationAccessLevel } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"

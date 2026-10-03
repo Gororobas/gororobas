@@ -6,7 +6,7 @@ import { GoogleBooksVolume } from "./google-books.schema.js"
 
 export const makeGoogleBooks = Effect.gen(function* () {
   const http = yield* makeProviderHttp("GOOGLE_BOOKS", "https://www.googleapis.com")
-  const apiKey = yield* Config.redacted("GOOGLE_BOOKS_API_KEY").pipe(Config.option)
+  const apiKey = yield* Config.Redacted("GOOGLE_BOOKS_API_KEY").pipe(Config.option)
 
   return {
     volume: Effect.fn(function* (id: GoogleBooksVolumeId) {

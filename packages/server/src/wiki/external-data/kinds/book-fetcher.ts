@@ -7,7 +7,7 @@ import {
   BookExternalDataResult,
 } from "@gororobas/domain"
 import { Effect, Option, Result } from "effect"
-import { Activity } from "effect/unstable/workflow"
+import { Activity } from "effect/workflow"
 
 import { GoogleBooks } from "../services/google-books.js"
 

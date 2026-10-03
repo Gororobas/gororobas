@@ -8,7 +8,7 @@ import {
   type PlantExternalDataResult,
 } from "@gororobas/domain"
 import { Effect, Result, Struct } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient, SqlSchema } from "effect/sql"
 
 import { persist } from "../persist-utils.js"
 

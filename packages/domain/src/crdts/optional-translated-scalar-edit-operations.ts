@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect"
 import { LoroDoc, LoroMap } from "loro-crdt"
 
 import { Locale } from "../common/enums.js"
+import { toLoroValue } from "./loro-values.js"
 
 export const makeOptionalTranslatedScalarEditOperations =
   <P extends string>(id: P) =>
@@ -30,7 +31,7 @@ export const makeOptionalTranslatedScalarEditOperations =
         ) {
           const parent = yield* getParentContainer(document, payload.locale)
           const encoded = yield* Schema.encodeEffect(ValueSchema)(payload.value)
-          parent.set(keyInParentContainer, encoded)
+          parent.set(keyInParentContainer, toLoroValue(encoded))
         }),
       },
       {

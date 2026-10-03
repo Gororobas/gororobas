@@ -20,14 +20,14 @@
     "@gororobas/server": "workspace:^",
     "better-auth": "catalog:",
     "effect": "catalog:",
-    "gel": "^2.2.0",
-    "json-diff-ts": "^2.2.1",
+    "gel": "^2.2.1",
+    "json-diff-ts": "^4.10.4",
     "loro-crdt": "catalog:",
     "loro-mirror": "catalog:"
   },
   "devDependencies": {
     "@gel/generate": "^0.7.1",
-    "@types/node": "25.3.0",
+    "@types/node": "26.6.3",
     "tsx": "latest",
     "typescript": "catalog:",
     "vitest": "catalog:"

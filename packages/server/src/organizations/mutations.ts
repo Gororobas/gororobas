@@ -5,7 +5,7 @@ import {
   PersonId,
 } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient, SqlSchema } from "effect/sql"
 
 export const insertRow = SqlSchema.void({
   Request: OrganizationRow,

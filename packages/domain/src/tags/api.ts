@@ -2,7 +2,7 @@ import { Schema } from "effect"
 /**
  * Tags HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { Locale } from "../common/enums.js"
 import { TagId } from "../common/ids.js"

@@ -1,5 +1,5 @@
 import { Effect } from "effect"
-import { Command } from "effect/unstable/cli"
+import { Command } from "effect/cli"
 
 import { sourceGelNotes } from "./notes/source-gel-notes.js"
 import { sourceGelResources } from "./resources/source-gel-resources.js"

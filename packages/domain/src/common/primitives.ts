@@ -31,41 +31,17 @@ export const Handle = Schema.Trim.pipe(
 )
 export type Handle = typeof Handle.Type
 
-/** Used by {@link Email} below to ensure proper type checking during decoding. */
-const EmailCore = Schema.TemplateLiteral([
-  // Left part: must be a non-empty string
-  Schema.Trimmed.check(Schema.isMinLength(1)).pipe(
-    Schema.decodeTo(Schema.Trimmed, SchemaTransformation.toLowerCase()),
-  ),
-
-  // Separator
-  "@",
-
-  // Right part: must be a string with a maximum length of 128
-  Schema.Trimmed.check(Schema.isMinLength(1), Schema.isMaxLength(128)).pipe(
-    Schema.decodeTo(Schema.Trimmed, SchemaTransformation.toLowerCase()),
-  ),
-]).annotate({
-  toArbitrary: () => (fc) =>
-    fc
-      .tuple(fc.string({ minLength: 1 }), fc.string({ minLength: 1, maxLength: 128 }))
-      .map(([left, right]) =>
-        Schema.decodeUnknownSync(EmailCore)(`${left.trim()}@${right.trim()}`.toLowerCase()),
-      ),
-})
-
 /**
  * Simple string@string validation.
  * Transforms the input to lowercase before decoding, ensure we get normalized addresses.
  */
-export const Email = EmailCore.pipe(
+export const Email = Schema.String.pipe(
   Schema.decodeTo(
-    EmailCore,
-    SchemaTransformation.transform({
-      // oxlint-disable-next-line effect/casting-awareness
-      decode: (input) => input.toLowerCase() as typeof EmailCore.Type,
-      encode: (decoded) => decoded,
-    }),
+    Schema.String.check(
+      Schema.isPattern(/^[^@\s]+@[^@\s]{1,128}$/),
+      Schema.isLowercased({ arbitraryConstraint: {} }),
+    ),
+    SchemaTransformation.toLowerCase(),
   ),
   Schema.brand("Email"),
 )
@@ -128,7 +104,9 @@ export const CrdtLiteralSet = <T extends string, S extends Schema.Literals<Reado
  * In Loro CRDT documents, will be stored as { literal1: true, literal2: true }
  * During decoding gets transformed into a HashSet.
  **/
-export const CrdtBrandedStringSet = <B, S extends Schema.brand<Schema.String, B>>(s: S) =>
+export const CrdtBrandedStringSet = <S extends Schema.Constraint & Schema.Codec<string, string>>(
+  s: S,
+) =>
   Schema.Record(Schema.String, Schema.Literal(true)).pipe(
     Schema.decodeTo(Schema.HashSet(s), {
       decode: SchemaGetter.transform((record) =>

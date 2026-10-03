@@ -34,7 +34,7 @@ const WIKI_ARTICLE_EXTRACTION_PROMPT =
 
 const extractWikiArticles = Effect.fn("extractWikiArticles")(function* (html: string) {
   const langextract = yield* LangExtractService
-  const resolutionConcurrency = yield* Config.number("CLASSIFICATION_RESOLUTION_CONCURRENCY").pipe(
+  const resolutionConcurrency = yield* Config.Number("CLASSIFICATION_RESOLUTION_CONCURRENCY").pipe(
     Config.withDefault(5),
   )
 
@@ -65,7 +65,7 @@ The following tags exist:
 const extractTags = Effect.fn("extractTags")(function* (html: string) {
   const langextract = yield* LangExtractService
   const tags = yield* TagsRepository
-  const resolutionConcurrency = yield* Config.number("CLASSIFICATION_RESOLUTION_CONCURRENCY").pipe(
+  const resolutionConcurrency = yield* Config.Number("CLASSIFICATION_RESOLUTION_CONCURRENCY").pipe(
     Config.withDefault(5),
   )
   const allTags = yield* tags.findAll()

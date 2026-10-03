@@ -1,36 +1,36 @@
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, Option } from "effect"
-import { Command, Flag } from "effect/unstable/cli"
+import { Command, Flag } from "effect/cli"
 
 import { runCheck } from "./commands/check-impl.js"
 import { runWatchCommand } from "./commands/watch.js"
 import type { OutputFormat } from "./types.js"
 
-const patternsOption = Flag.string("patterns").pipe(
+const patternsOption = Flag.String("patterns").pipe(
   Flag.withAlias("p"),
   Flag.withDescription("Glob patterns for feature files (comma-separated)"),
   Flag.withDefault("**/*.feature"),
 )
 
-const testPatternOption = Flag.string("test-pattern").pipe(
+const testPatternOption = Flag.String("test-pattern").pipe(
   Flag.withAlias("t"),
   Flag.withDescription("Glob patterns for test files (comma-separated)"),
   Flag.withDefault("**/*.test.ts,**/*.spec.ts"),
 )
 
-const formatOption = Flag.choice("format", ["pretty", "json", "github-actions"]).pipe(
+const formatOption = Flag.Literals("format", ["pretty", "json", "github-actions"]).pipe(
   Flag.withAlias("f"),
   Flag.withDescription("Output format: pretty, json, github-actions"),
   Flag.withDefault<OutputFormat>("pretty"),
 )
 
-const ignoreOption = Flag.string("ignore").pipe(
+const ignoreOption = Flag.String("ignore").pipe(
   Flag.withAlias("i"),
   Flag.withDescription("Patterns to ignore (comma-separated)"),
   Flag.optional,
 )
 
-const debounceOption = Flag.integer("debounce").pipe(
+const debounceOption = Flag.Int("debounce").pipe(
   Flag.withAlias("d"),
   Flag.withDescription("Debounce time in milliseconds (watch only)"),
   Flag.withDefault(200),

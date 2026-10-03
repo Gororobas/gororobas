@@ -9,8 +9,8 @@ import {
   TiptapDocument,
 } from "@gororobas/domain"
 import { Schema, Struct } from "effect"
-import { SqlSchema } from "effect/unstable/sql"
-import { SqlClient } from "effect/unstable/sql/SqlClient"
+import { SqlSchema } from "effect/sql"
+import { SqlClient } from "effect/sql/SqlClient"
 
 export const findCommentRowById = SqlSchema.findOneOption({
   Request: CommentId,

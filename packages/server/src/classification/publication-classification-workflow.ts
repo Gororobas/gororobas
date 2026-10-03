@@ -1,6 +1,6 @@
 import { PublicationId, PublicationNotFoundError } from "@gororobas/domain"
 import { Effect, Option, Schema } from "effect"
-import { Workflow } from "effect/unstable/workflow"
+import { Workflow } from "effect/workflow"
 
 import { PublicationsRepository } from "../publications/repository.js"
 import { publicationClassificationIdempotencyKey } from "./extract-publication-taxonomies.js"

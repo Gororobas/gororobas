@@ -16,7 +16,7 @@ import {
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { DateTime, Effect, Equal, Layer, Option, Schema, Struct } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { SqlClient } from "effect/sql"
 import { Mirror } from "loro-mirror"
 
 import {

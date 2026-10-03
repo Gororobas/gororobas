@@ -1,10 +1,11 @@
 import { describe, expect, it } from "@effect/vitest"
 import { ExternalDataFetchRequest, ExternalDataInputs, ExternalDataResult } from "@gororobas/domain"
 import { GbifTaxonId, WikidataId } from "@gororobas/domain"
+import { assertProperty } from "@gororobas/domain/testing"
 import { WikidataEntity } from "@gororobas/server/wiki/external-data/services/wikidata.schema"
 import { Clock, Effect, Fiber, Schema } from "effect"
-import { FastCheck } from "effect/testing"
-import { HttpClient, HttpClientResponse, HttpClientError } from "effect/unstable/http"
+import * as Arbitrary from "effect/Arbitrary"
+import { HttpClient, HttpClientResponse, HttpClientError } from "effect/http"
 
 import { makeProviderHttp } from "../../src/common/generic-http-service.js"
 import { normalizeBookLanguage } from "../../src/wiki/external-data/kinds/book-fetcher.js"
@@ -286,15 +287,12 @@ describe("external data providers", () => {
   })
 
   it("normalizes provider language codes idempotently", () => {
-    FastCheck.assert(
-      FastCheck.property(
-        FastCheck.constantFrom("eng", "por", "spa", "fr", "de", "jpn", "rus", "cze"),
-        (code) => {
-          expect(normalizeBookLanguage(normalizeBookLanguage(code))).toBe(
-            normalizeBookLanguage(code),
-          )
-        },
-      ),
+    assertProperty(
+      Arbitrary.schema(Schema.Literals(["eng", "por", "spa", "fr", "de", "jpn", "rus", "cze"])),
+      (code) => {
+        expect(normalizeBookLanguage(normalizeBookLanguage(code))).toBe(normalizeBookLanguage(code))
+        return true
+      },
     )
   })
 
@@ -509,11 +507,10 @@ describe("external data providers", () => {
 
   it("round-trips generated identity values through their schemas", () => {
     ;[WikidataId, GbifTaxonId].forEach((schema) => {
-      FastCheck.assert(
-        FastCheck.property(Schema.toArbitrary(schema)(FastCheck), (value) => {
-          expect(Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value))).toBe(value)
-        }),
-      )
+      assertProperty(Arbitrary.schema(schema), (value) => {
+        expect(Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value))).toBe(value)
+        return true
+      })
     })
   })
 })
@@ -557,12 +554,11 @@ describe("shared external data schemas", () => {
   it("round-trips generated inputs, frontiers, and provider Results through JSON", () => {
     const assertRoundTrip = <A, I>(schema: Schema.Codec<A, I>) => {
       const codec = Schema.toCodecJson(schema)
-      FastCheck.assert(
-        FastCheck.property(Schema.toArbitrary(schema)(FastCheck), (value) => {
-          const decoded = Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(value))
-          expect(Schema.toEquivalence(schema)(value, decoded)).toBe(true)
-        }),
-      )
+      assertProperty(Arbitrary.schema(schema), (value) => {
+        const decoded = Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(value))
+        expect(Schema.toEquivalence(schema)(value, decoded)).toBe(true)
+        return true
+      })
     }
     assertRoundTrip(ExternalDataInputs)
     assertRoundTrip(ExternalDataFetchRequest)

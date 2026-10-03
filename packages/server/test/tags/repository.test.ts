@@ -6,8 +6,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Handle, IdGen, TagRow } from "@gororobas/domain"
 import { assertPropertyEffect, deepEquals } from "@gororobas/domain/testing"
-import { Array as EffectArray, Effect, HashSet, Layer, Option, Order, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import { Array as EffectArray, Effect, HashSet, Layer, Option, Order } from "effect"
+import * as Arbitrary from "effect/Arbitrary"
 import { v7 } from "uuid"
 
 import { AppSqlTest } from "../../src/sql.js"
@@ -22,7 +22,7 @@ const TestLayer = Layer.mergeAll(IdGenTest, Layer.effect(TagsRepository, TagsRep
   Layer.provideMerge(AppSqlTest),
 )
 
-const tagRowArbitrary = Schema.toArbitrary(TagRow)(FastCheck).map((tag) => ({
+const tagRowArbitrary = Arbitrary.map(Arbitrary.schema(TagRow), (tag) => ({
   ...tag,
   cluster: null,
   createdById: null,
@@ -34,10 +34,11 @@ const tagRowArbitrary = Schema.toArbitrary(TagRow)(FastCheck).map((tag) => ({
   },
 }))
 
-const uniqueTagRowsArbitrary = FastCheck.array(tagRowArbitrary, {
-  minLength: 1,
-  maxLength: 10,
-}).filter(
+const uniqueTagRowsArbitrary = Arbitrary.filter(
+  Arbitrary.array(tagRowArbitrary, {
+    minLength: 1,
+    maxLength: 10,
+  }),
   (tags) =>
     HashSet.size(HashSet.fromIterable(tags.map((tag) => tag.id))) === tags.length &&
     HashSet.size(HashSet.fromIterable(tags.map((tag) => tag.handle))) === tags.length,
@@ -83,7 +84,7 @@ describe("TagsRepository", () => {
 
     it.effect("returns None when handle does not exist", () =>
       assertPropertyEffect(
-        Schema.toArbitrary(Handle)(FastCheck),
+        Arbitrary.schema(Handle),
         (handle) =>
           Effect.gen(function* () {
             const repo = yield* TagsRepository

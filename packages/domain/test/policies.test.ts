@@ -3,7 +3,7 @@
  */
 import { describe, it } from "@effect/vitest"
 import { DateTime, Effect, Layer, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 import { v7 } from "uuid"
 
 import Policies from "../src/authorization/policies.js"
@@ -34,30 +34,29 @@ const TEST_HANDLE = Schema.decodeSync(Handle)("test")
 
 // ─── Constructive Arbitraries (no filtering) ───────────────────────────────
 
-const visitorSessionArbitrary = Schema.toArbitrary(VisitorSession)(FastCheck)
-const accountSessionArbitrary = Schema.toArbitrary(AccountSession)(FastCheck)
-const trustedAccountSessionArbitrary = accountSessionArbitrary.filter(
+const visitorSessionArbitrary = Arbitrary.schema(VisitorSession)
+const accountSessionArbitrary = Arbitrary.schema(AccountSession)
+const trustedAccountSessionArbitrary = Arbitrary.filter(
+  accountSessionArbitrary,
   (s) => s.accessLevel !== "BLOCKED" && s.accessLevel !== "NEWCOMER",
 )
-const sessionArbitrary = Schema.toArbitrary(Session)(FastCheck)
+const sessionArbitrary = Arbitrary.schema(Session)
 
-const personIdArbitrary = Schema.toArbitrary(PersonId)(FastCheck)
-const publicationVisibilityArbitrary = Schema.toArbitrary(PublicationVisibility)(FastCheck)
-const organizationIdArbitrary = Schema.toArbitrary(OrganizationId)(FastCheck)
-const visibilityArbitrary = Schema.toArbitrary(InformationVisibility)(FastCheck)
-const organizationTypeArbitrary = Schema.toArbitrary(OrganizationType)(FastCheck)
-const platformAccessLevelArbitrary = Schema.toArbitrary(PlatformAccessLevel)(FastCheck)
+const personIdArbitrary = Arbitrary.schema(PersonId)
+const publicationVisibilityArbitrary = Arbitrary.schema(PublicationVisibility)
+const organizationIdArbitrary = Arbitrary.schema(OrganizationId)
+const visibilityArbitrary = Arbitrary.schema(InformationVisibility)
+const organizationTypeArbitrary = Arbitrary.schema(OrganizationType)
+const platformAccessLevelArbitrary = Arbitrary.schema(PlatformAccessLevel)
 
-const organizationArbitrary = FastCheck.tuple(
-  organizationIdArbitrary,
-  visibilityArbitrary,
-  organizationTypeArbitrary,
-).map(([id, membersVisibility, type]) =>
-  OrganizationRow.make({
-    id,
-    membersVisibility,
-    type,
-  }),
+const organizationArbitrary = Arbitrary.map(
+  Arbitrary.all([organizationIdArbitrary, visibilityArbitrary, organizationTypeArbitrary]),
+  ([id, membersVisibility, type]) =>
+    OrganizationRow.make({
+      id,
+      membersVisibility,
+      type,
+    }),
 )
 
 // ─── Session Helpers ───────────────────────────────
@@ -100,8 +99,6 @@ const isAdmin = (session: AccountSession) => session.accessLevel === "ADMIN"
 const isNewcomer = (session: AccountSession) => session.accessLevel === "NEWCOMER"
 const isBlocked = (session: AccountSession) => session.accessLevel === "BLOCKED"
 const isNewcomerOrBlocked = (session: AccountSession) => isNewcomer(session) || isBlocked(session)
-const hasManagerMembership = (session: AccountSession) =>
-  session.memberships.some((m) => m.accessLevel === "MANAGER")
 
 // ─── Monotonicity Framework ────────────────────────────────────────────
 
@@ -200,7 +197,7 @@ describe("Policies", () => {
   describe("implications", () => {
     it.effect("canEdit implies canView (for owned publications)", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, publicationVisibilityArbitrary),
+        Arbitrary.all([accountSessionArbitrary, publicationVisibilityArbitrary]),
         ([session, visibility]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
@@ -225,7 +222,7 @@ describe("Policies", () => {
 
     it.effect("canDelete implies canView (for owned publications)", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, publicationVisibilityArbitrary),
+        Arbitrary.all([accountSessionArbitrary, publicationVisibilityArbitrary]),
         ([session, visibility]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
@@ -289,7 +286,7 @@ describe("Policies", () => {
 
     it.effect("non-owners cannot edit publications", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
+        Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
@@ -310,7 +307,7 @@ describe("Policies", () => {
 
     it.effect("non-owners cannot delete publications", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
+        Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
         ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
@@ -361,7 +358,7 @@ describe("Policies", () => {
 
     it.effect("visitors cannot view community publications", () =>
       assertPropertyEffect(
-        FastCheck.tuple(visitorSessionArbitrary, personIdArbitrary),
+        Arbitrary.all([visitorSessionArbitrary, personIdArbitrary]),
         ([session, ownerId]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
@@ -381,7 +378,7 @@ describe("Policies", () => {
 
     it.effect("public publication viewing is monotonic", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, personIdArbitrary),
+        Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
         ([baseSession, ownerId]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
@@ -454,7 +451,7 @@ describe("Policies", () => {
 
     it.effect("only admins can manage moderator promotions/demotions", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, platformAccessLevelArbitrary),
+        Arbitrary.all([accountSessionArbitrary, platformAccessLevelArbitrary]),
         ([session, otherLevel]) =>
           Effect.gen(function* () {
             if (otherLevel === "MODERATOR") return true
@@ -482,7 +479,7 @@ describe("Policies", () => {
 
     it.effect("only admins can manage admin promotions/demotions", () =>
       assertPropertyEffect(
-        FastCheck.tuple(accountSessionArbitrary, platformAccessLevelArbitrary),
+        Arbitrary.all([accountSessionArbitrary, platformAccessLevelArbitrary]),
         ([session, otherLevel]) =>
           Effect.gen(function* () {
             if (otherLevel === "ADMIN") return true
@@ -534,22 +531,6 @@ describe("Policies", () => {
       ),
     )
 
-    it.effect("managers can delete their organization", () =>
-      propertyWithPrecondition(
-        accountSessionArbitrary,
-        (s) => isTrustedOrHigher(s) && hasManagerMembership(s),
-        (session) =>
-          Effect.gen(function* () {
-            const managerMembership = session.memberships.find((m) => m.accessLevel === "MANAGER")
-            if (managerMembership === undefined) return false
-            return yield* runPolicySuccess(
-              Policies.organizations.canDelete(managerMembership.organizationId),
-              session,
-            )
-          }),
-      ),
-    )
-
     it.effect("public organization members are viewable by anyone", () =>
       assertPropertyEffect(sessionArbitrary, (session) =>
         Effect.gen(function* () {
@@ -580,7 +561,7 @@ describe("Policies", () => {
 
     it.effect("visitors cannot view private organization members", () =>
       assertPropertyEffect(
-        FastCheck.tuple(visitorSessionArbitrary, organizationArbitrary),
+        Arbitrary.all([visitorSessionArbitrary, organizationArbitrary]),
         ([session, org]) =>
           Effect.map(
             runPolicySuccess(
@@ -597,7 +578,7 @@ describe("Policies", () => {
 
     it.effect("non-member trusted users cannot view private organization members", () =>
       propertyWithPrecondition(
-        FastCheck.tuple(accountSessionArbitrary, organizationArbitrary),
+        Arbitrary.all([accountSessionArbitrary, organizationArbitrary]),
         ([session, org]) =>
           isTrustedOrHigher(session) &&
           !session.memberships.some((m) => m.organizationId === org.id),
@@ -621,10 +602,13 @@ describe("Policies", () => {
       level: OrganizationAccessLevel,
       sessionArbitrary: typeof accountSessionArbitrary = accountSessionArbitrary,
     ) =>
-      FastCheck.tuple(sessionArbitrary, organizationIdArbitrary).map(([session, orgId]) => ({
-        session: sessionWithOrgMembership(session, orgId, level),
-        orgId,
-      }))
+      Arbitrary.map(
+        Arbitrary.all([sessionArbitrary, organizationIdArbitrary]),
+        ([session, orgId]) => ({
+          session: sessionWithOrgMembership(session, orgId, level),
+          orgId,
+        }),
+      )
 
     it.effect("managers can delete their organization", () =>
       assertPropertyEffect(

@@ -1,4 +1,4 @@
-import { HttpApi } from "effect/unstable/httpapi"
+import { HttpApi } from "effect/http-api"
 
 import { AuthenticationMiddleware } from "./authentication/middleware.js"
 import { CommentsApiGroup } from "./comments/api.js"

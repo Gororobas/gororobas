@@ -2,7 +2,7 @@ import { NodeServices } from "@effect/platform-node"
 import { it } from "@effect/vitest"
 import { IdGen, TiptapDocument } from "@gororobas/domain"
 import { Effect, FileSystem, Layer, Schema } from "effect"
-import { KeyValueStore } from "effect/unstable/persistence"
+import { KeyValueStore } from "effect/persistence"
 import { assert, expect } from "vitest"
 
 import { migrateRichText } from "./migrate-rich-text.js"

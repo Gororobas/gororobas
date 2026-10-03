@@ -2,7 +2,7 @@ import { Schema } from "effect"
 /**
  * Publications HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { PublicationId, ProfileId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"

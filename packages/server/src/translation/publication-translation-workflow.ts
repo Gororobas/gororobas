@@ -18,8 +18,8 @@ import {
 } from "@gororobas/domain"
 import { DateTime, Duration, Effect, Option, Schema } from "effect"
 import { SchemaError } from "effect/Schema"
-import { SqlClient, SqlError } from "effect/unstable/sql"
-import { Activity, Workflow } from "effect/unstable/workflow"
+import { SqlClient, SqlError } from "effect/sql"
+import { Activity, Workflow } from "effect/workflow"
 
 import { SystemUpsertTranslation } from "../publications/publication-repository-inputs.js"
 import { PublicationsRepository } from "../publications/repository.js"

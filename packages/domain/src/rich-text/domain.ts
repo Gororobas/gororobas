@@ -9,7 +9,7 @@ const TiptapText = Schema.String
 
 const TiptapMark = Schema.Struct({
   attrs: Schema.optional(UnknownTiptapAttrs),
-  type: Schema.Trimmed.pipe(Schema.check(Schema.isNonEmpty())),
+  type: Schema.Trimmed.check(Schema.isNonEmpty()),
 })
 
 export const TiptapTextNode = Schema.Struct({
@@ -23,7 +23,7 @@ const tiptapNodeFields = {
   attrs: Schema.optional(UnknownTiptapAttrs),
   marks: Schema.optional(Schema.Array(TiptapMark)),
   text: Schema.optional(TiptapText),
-  type: Schema.Trimmed.pipe(Schema.check(Schema.isNonEmpty())),
+  type: Schema.Trimmed.check(Schema.isNonEmpty()),
 }
 
 export class TiptapNode extends Schema.Opaque<TiptapNode>()(
@@ -31,9 +31,8 @@ export class TiptapNode extends Schema.Opaque<TiptapNode>()(
     ...tiptapNodeFields,
     content: Schema.optional(
       Schema.Array(
-        Schema.suspend(
-          (): Schema.Codec<TiptapNode | TiptapTextNode> =>
-            Schema.Union([TiptapNode, TiptapTextNode]),
+        Schema.suspend((): Schema.Codec<TiptapNode | TiptapTextNode> =>
+          Schema.Union([TiptapNode, TiptapTextNode]),
         ),
       ),
     ),

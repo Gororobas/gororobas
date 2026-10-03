@@ -1,8 +1,10 @@
-import { describe, expect, it } from "@effect/vitest"
+import { assert, describe, expect, it } from "@effect/vitest"
 import { Effect, Option, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 
 import { loroDocToUpdate, snapshotToLoroDoc } from "../../src/crdts/lib.js"
+import { toLoroString, toLoroValue } from "../../src/crdts/loro-values.js"
+import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { assertPropertyEffect } from "../../src/testing.js"
 import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
 import {
@@ -13,7 +15,7 @@ import {
 import { WikiArticleEditableData } from "../../src/wiki/wiki-article.js"
 import { withEditorRichText } from "../fixtures/wiki-rich-text.js"
 
-const articleJson = Schema.fromJsonString(WikiArticleEditableData)
+const articleJson = Schema.toCodecJson(WikiArticleEditableData)
 const plant = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)({
   kind: "PLANT",
   attributes: {},
@@ -21,10 +23,94 @@ const plant = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)({
 })
 
 describe("Wiki CRDT review stress tests", () => {
+  it.effect("preserves Unicode and normalizes lone surrogates only at Loro writes", () =>
+    Effect.gen(function* () {
+      const decode = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)
+      const input = {
+        kind: "PLANT",
+        attributes: {},
+        translations: {
+          en: {
+            commonNames: [{ id: "commonname01", value: "Pumpkin" }],
+            origin: "América 🌱",
+            content: {
+              type: "doc",
+              version: 1,
+              content: [{ type: "paragraph", content: [{ type: "text", text: "土 🍅 e\u0301" }] }],
+            },
+          },
+        },
+      }
+      const article = decode(input)
+      const created = yield* createWikiArticleCrdtDocument(article)
+      const parsed = yield* parseWikiArticleCrdtUpdate({
+        snapshot: created.crdtSnapshot,
+        crdtUpdate: created.initialCrdtUpdate,
+      })
+      expect(Schema.encodeSync(WikiArticleEditableData)(parsed.data)).toEqual(
+        Schema.encodeSync(WikiArticleEditableData)(article),
+      )
+      for (const origin of ["\ud800", "\udc00"]) {
+        const raw = decode({
+          ...input,
+          translations: {
+            en: {
+              ...input.translations.en,
+              origin,
+              content: {
+                type: "doc",
+                version: 1,
+                content: [
+                  {
+                    type: "paragraph",
+                    attrs: { [origin]: origin, nested: { ["__proto__"]: origin } },
+                    content: [{ type: "text", text: `${origin} 🍅` }],
+                  },
+                ],
+              },
+            },
+          },
+        })
+        expect(raw.translations.en?.origin).toEqual(Option.some(origin))
+        const stored = yield* createWikiArticleCrdtDocument(raw)
+        const document = snapshotToLoroDoc(stored.crdtSnapshot)
+        const projected = yield* parseWikiArticleCrdtUpdate({
+          snapshot: stored.crdtSnapshot,
+          crdtUpdate: loroDocToUpdate(document),
+        })
+        assert(projected.data.kind === "PLANT")
+        expect(projected.data.translations.en?.origin).toEqual(Option.some("�"))
+        const content = Option.getOrThrow(projected.data.translations.en?.content ?? Option.none())
+        expect(Schema.encodeSync(Schema.toCodecJson(TiptapDocument))(content)).toEqual({
+          type: "doc",
+          version: 1,
+          content: [
+            {
+              type: "paragraph",
+              attrs: { "�": "�", nested: { ["__proto__"]: "�" } },
+              content: [{ type: "text", text: "� 🍅" }],
+            },
+          ],
+        })
+        yield* applyWikiArticleEdit(document, {
+          _tag: "SetPlantOrigin",
+          locale: "en",
+          value: "🌱 fixed",
+        })
+        const edited = yield* parseWikiArticleCrdtUpdate({
+          snapshot: stored.crdtSnapshot,
+          crdtUpdate: loroDocToUpdate(document),
+        })
+        assert(edited.data.kind === "PLANT")
+        expect(edited.data.translations.en?.origin).toEqual(Option.some("🌱 fixed"))
+      }
+    }),
+  )
+
   WikiArticleEditableData.members.forEach((member) => {
     it.effect(`preserves the JSON representation of ${member.fields.kind.literal}`, () =>
       assertPropertyEffect(
-        Schema.toArbitrary(member)(FastCheck),
+        Arbitrary.schema(member),
         (generated) =>
           Effect.gen(function* () {
             const article = withEditorRichText(generated)
@@ -33,19 +119,19 @@ describe("Wiki CRDT review stress tests", () => {
               snapshot: created.crdtSnapshot,
               crdtUpdate: created.initialCrdtUpdate,
             })
-            expect(yield* Schema.encodeEffect(articleJson)(parsed.data)).toBe(
-              yield* Schema.encodeEffect(articleJson)(article),
+            expect(yield* Schema.encodeEffect(articleJson)(parsed.data)).toEqual(
+              toLoroValue(yield* Schema.encodeEffect(articleJson)(article)),
             )
             return true
           }),
-        { numRuns: 100, seed: 20261002 },
+        { runs: 100, seed: 20261002 },
       ),
     )
   })
 
   it.effect("preserves arbitrary JSON rich-text attributes, including reserved keys", () =>
     assertPropertyEffect(
-      Schema.toArbitrary(Schema.Json)(FastCheck),
+      Arbitrary.schema(Schema.Json),
       (value) =>
         Effect.gen(function* () {
           const article = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)({
@@ -67,18 +153,18 @@ describe("Wiki CRDT review stress tests", () => {
             crdtUpdate: created.initialCrdtUpdate,
           })
           const normalized = yield* Schema.decodeEffect(articleJson)(
-            yield* Schema.encodeEffect(articleJson)(article),
+            toLoroValue(yield* Schema.encodeEffect(articleJson)(article)),
           )
           expect(parsed.data.translations.en?.content).toEqual(normalized.translations.en?.content)
           return true
         }),
-      { numRuns: 200, seed: 20261002 },
+      { runs: 200, seed: 20261002 },
     ),
   )
 
   it.effect("merges concurrent additions to the same initially absent plant set", () =>
     assertPropertyEffect(
-      Schema.toArbitrary(Schema.Tuple([Schema.String, Schema.String]))(FastCheck),
+      Arbitrary.schema(Schema.Tuple([Schema.String, Schema.String])),
       ([englishOrigin, portugueseOrigin]) =>
         Effect.gen(function* () {
           const article = WikiPlantArticle.EditableArticle.make({
@@ -112,11 +198,15 @@ describe("Wiki CRDT review stress tests", () => {
           const usage = Array.from(Option.getOrThrow(parsed.data.attributes.usage))
           expect(usage).toHaveLength(2)
           expect(usage).toEqual(expect.arrayContaining(["ANIMAL_FEED", "HUMAN_FEED"]))
-          expect(parsed.data.translations.en?.origin).toEqual(Option.some(englishOrigin))
-          expect(parsed.data.translations.pt?.origin).toEqual(Option.some(portugueseOrigin))
+          expect(parsed.data.translations.en?.origin).toEqual(
+            Option.some(toLoroString(englishOrigin)),
+          )
+          expect(parsed.data.translations.pt?.origin).toEqual(
+            Option.some(toLoroString(portugueseOrigin)),
+          )
           return true
         }),
-      { numRuns: 100, seed: 20261002 },
+      { runs: 100, seed: 20261002 },
     ),
   )
 })

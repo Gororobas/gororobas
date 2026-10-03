@@ -6,8 +6,8 @@ import {
   NameInCrdtList,
   OptionalColumn,
   ValidName,
+  CrdtBrandedStringSet,
 } from "../../common/primitives.js"
-import { CrdtBrandedStringSet } from "../../common/primitives.js"
 import { PartialDate } from "../../common/utils/dates.js"
 import { GoogleBooksVolumeId } from "../external-identifiers.js"
 import { defineKind } from "./define-kind.js"

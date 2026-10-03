@@ -3,7 +3,7 @@ import { it } from "@effect/vitest"
 import { IdGen, PublicationVisibility } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, FileSystem, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 import { createClient } from "gel"
 import { expect, vi } from "vitest"
 
@@ -178,11 +178,11 @@ it.effect("archives private notes separately and removes earlier publication exp
 
 it.effect("preserves ordered title and body nodes for every supported visibility", () =>
   assertPropertyEffect(
-    FastCheck.tuple(
-      Schema.toArbitrary(Schema.String)(FastCheck),
-      Schema.toArbitrary(Schema.NullOr(Schema.String))(FastCheck),
-      Schema.toArbitrary(PublicationVisibility)(FastCheck),
-    ),
+    Arbitrary.all([
+      Arbitrary.schema(Schema.String),
+      Arbitrary.schema(Schema.NullOr(Schema.String)),
+      Arbitrary.schema(PublicationVisibility),
+    ]),
     ([title, body, visibility]) => {
       const original = GelNoteWithRelations.make({
         ...note,

@@ -15,12 +15,12 @@ const partialDateYearFields = {
         identifier: "PartialDateTimezone",
         title: "IANA timezone",
         description: "Requires a timezone identifier recognized by the runtime's timezone database",
+        arbitraryConstraint: {
+          patterns: [{ source: "^(UTC|Europe/London|Asia/Kathmandu|US/Eastern)$", flags: "" }],
+        },
       },
     ),
-  ).annotate({
-    toArbitrary: () => (fc) =>
-      fc.constantFrom("UTC", "Europe/London", "America/Bogota", "Etc/GMT+5", "Asia/Kathmandu"),
-  }),
+  ),
 }
 const partialDateMonthFields = {
   ...partialDateYearFields,
@@ -68,7 +68,7 @@ export type PartialDateEncoded = typeof PartialDateEncoded.Type
 /** Open Evnt partial date: a timezone-qualified string decoded at its stated precision. */
 export const PartialDate = PartialDateEncoded.pipe(
   Schema.decodeTo(PartialDateDecoded, {
-    decode: SchemaGetter.transformOrFail<typeof PartialDateDecoded.Type, string>((input) => {
+    decode: SchemaGetter.transformEffect<typeof PartialDateDecoded.Type, string>((input) => {
       const match = partialDatePattern.exec(input)
       if (!match || match[0] !== input) {
         return Effect.fail(

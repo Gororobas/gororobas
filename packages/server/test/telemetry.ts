@@ -10,8 +10,7 @@
  */
 import * as NodeSdk from "@effect/opentelemetry/NodeSdk"
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http"
-import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base/build/src/export/ConsoleSpanExporter.js"
-import { SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base/build/src/export/SimpleSpanProcessor.js"
+import { ConsoleSpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-base"
 import { Array as EffectArray, Effect, Layer, Record } from "effect"
 
 const logWarningSync = (message: string) => Effect.runSync(Effect.logWarning(message))

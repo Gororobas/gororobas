@@ -1,22 +1,7 @@
-import effect from "@mpsuesser/oxlint-plugin-effect"
 import { defineConfig } from "oxlint"
 
 export default defineConfig({
-  extends: [
-    {
-      ...effect.configs.recommended,
-      rules: {
-        ...effect.configs.recommended.rules,
-        "effect/require-schema-type-alias": "off",
-        "effect/prefer-effect-fn": "off",
-        "effect/no-barrel-imports": "off",
-        "effect/prefer-namespace-imports": "off",
-        "effect/avoid-ts-ignore": "off",
-        "effect/avoid-direct-tag-checks": "off",
-        "effect/prefer-arr-sort": "off",
-      },
-    },
-  ],
+  extends: [],
   plugins: ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
   jsPlugins: [
     "./linting/index.mjs",
@@ -58,7 +43,6 @@ export default defineConfig({
     "custom-lint-rules/require-effect-alias-for-es-namespaces": "error",
     "foldkit/no-noop-message": "error",
     "foldkit/got-submodel-message-name": "error",
-    "foldkit/message-binding-matches-tag": "error",
     "foldkit/got-prefix-requires-submodel-payload": "error",
     "foldkit/no-empty-object-tagged-call": "error",
     "foldkit/prefer-callable-message-constructor": "error",
@@ -83,21 +67,15 @@ export default defineConfig({
     },
     {
       files: ["packages/effect-bdd/**/*", "**/*.test.ts", "packages/server/test/**/*"],
-      rules: {
-        "effect/effect-run-in-body": "off",
-      },
+      rules: {},
     },
     {
       files: ["**/*.test.ts", "**/*.test.tsx", "**/test/**/*.ts", "**/test/**/*.tsx"],
-      rules: {
-        "effect/avoid-option-getorthrow": "off",
-      },
+      rules: {},
     },
     {
       files: ["**/*.mjs"],
-      rules: Object.fromEntries(
-        Object.entries(effect.configs.recommended.rules).map(([key]) => [key, "off"] as const),
-      ),
+      rules: {},
     },
   ],
   env: {

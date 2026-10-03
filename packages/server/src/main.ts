@@ -1,8 +1,8 @@
 import { NodeHttpServer } from "@effect/platform-node"
 import { GororobasApi } from "@gororobas/domain"
 import { Layer } from "effect"
-import { HttpRouter } from "effect/unstable/http"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpRouter } from "effect/http"
+import { HttpApiBuilder } from "effect/http-api"
 // oxlint-disable-next-line effect/use-http-client-service -- NodeHttpServer requires the Node HTTP server factory.
 import * as Http from "node:http"
 

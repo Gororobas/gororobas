@@ -1,5 +1,5 @@
 import { Effect, Stream } from "effect"
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 
 import { DurableStreamServerError, DurableStreamsService } from "./service.js"
 

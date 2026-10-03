@@ -1,7 +1,7 @@
 import { Policies, ProfileId, ProfileNotFoundError, ProfileRowUpdate } from "@gororobas/domain"
 import { HandleTakenError } from "@gororobas/domain/common/errors"
 import { DateTime, Effect, Option, Context } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { SqlClient } from "effect/sql"
 
 import { ProfilesRepository } from "./repository.js"
 

@@ -3,8 +3,8 @@ import { it } from "@effect/vitest"
 import { IdGen, TiptapDocument, ValidName } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, Option, Schema } from "effect"
-import { FastCheck } from "effect/testing"
-import { KeyValueStore } from "effect/unstable/persistence"
+import * as Arbitrary from "effect/Arbitrary"
+import { KeyValueStore } from "effect/persistence"
 import { expect } from "vitest"
 
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
@@ -27,7 +27,7 @@ const source = Schema.decodeUnknownSync(GelResourceWithRelations)({
 const tagId = "019a0dce-1fc0-7abc-8abc-123456789abc"
 
 it.effect("carries credits, book authors, URLs and mapped tag IDs into converted resources", () =>
-  assertPropertyEffect(Schema.toArbitrary(ValidName)(FastCheck), (creditLine) =>
+  assertPropertyEffect(Arbitrary.schema(ValidName), (creditLine) =>
     Effect.gen(function* () {
       const context = yield* MigrationContext
       yield* context.registerMapping({

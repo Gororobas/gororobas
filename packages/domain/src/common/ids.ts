@@ -4,12 +4,9 @@
 import { Schema } from "effect"
 
 const UUID = Schema.String.check(
-  Schema.isUUID(7),
-  // For some reason, isUUID accepts uppercased IDs, which somehow break SQLite updates
-  Schema.isLowercased(),
-).annotate({
-  toArbitrary: () => (fc) => fc.uuid({ version: [7] }),
-})
+  // Lowercase UUID v7 IDs preserve SQLite equality and let native arbitraries generate valid IDs directly.
+  Schema.isPattern(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+)
 
 export const AccountId = UUID.pipe(Schema.brand("AccountId"))
 export type AccountId = typeof AccountId.Type
@@ -74,7 +71,7 @@ export type PlantVarietyRevisionId = typeof PlantVarietyRevisionId.Type
 export const NanoId = Schema.String.pipe(Schema.brand("NanoId"))
 export type NanoId = typeof NanoId.Type
 
-export const LoroListItemId = NanoId.check(Schema.isLengthBetween(12, 12)).pipe(
+export const LoroListItemId = NanoId.check(Schema.isMinLength(12), Schema.isMaxLength(12)).pipe(
   Schema.brand("LoroListItemId"),
 )
 export type LoroListItemId = typeof LoroListItemId.Type

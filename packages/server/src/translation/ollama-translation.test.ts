@@ -432,7 +432,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
 
 describe(
   "ollama translation quality (skipped as it's costly, must be ran manually)",
-  { timeout: 180_000, sequential: true },
+  { timeout: 180_000, concurrent: false },
   () => {
     Record.toEntries(FIXTURES).forEach(([name, fixture]) => {
       it.effect.skip(name, () =>

@@ -1,6 +1,6 @@
 import { ExternalDataFetchError, type ExternalDataProvider } from "@gororobas/domain"
 import { Config, DateTime, Effect, Option, Schema, Semaphore } from "effect"
-import { HttpClient, HttpClientResponse, HttpClientError } from "effect/unstable/http"
+import { HttpClient, HttpClientResponse, HttpClientError } from "effect/http"
 
 /** One shared instance per provider layer; the permit includes a cooldown after every attempt. */
 export const makeProviderHttp = Effect.fn(function* (
@@ -9,7 +9,7 @@ export const makeProviderHttp = Effect.fn(function* (
 ) {
   const client = yield* HttpClient.HttpClient
   const semaphore = yield* Semaphore.make(1)
-  const userAgent = yield* Config.string("EXTERNAL_DATA_USER_AGENT").pipe(
+  const userAgent = yield* Config.String("EXTERNAL_DATA_USER_AGENT").pipe(
     Config.withDefault("Gororobas/1.0 (https://gororobas.com)"),
   )
 

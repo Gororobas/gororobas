@@ -1,6 +1,6 @@
 import { GororobasApi } from "@gororobas/domain"
 import { Layer } from "effect"
-import { HttpApiBuilder } from "effect/unstable/httpapi"
+import { HttpApiBuilder } from "effect/http-api"
 
 import { AuthenticationMiddlewareLive } from "./authentication/authentication-middleware-live.js"
 import { CommentsApiLive } from "./comments/api-live.js"

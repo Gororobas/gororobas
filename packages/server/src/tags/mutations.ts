@@ -1,6 +1,6 @@
 import { TagRow } from "@gororobas/domain"
 import { Effect } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient, SqlSchema } from "effect/sql"
 
 export const insertRow = SqlSchema.void({
   Request: TagRow,

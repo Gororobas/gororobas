@@ -1,4 +1,4 @@
-# Property-Based Testing with Effect + FastCheck
+# Property-Based Testing with Effect
 
 ## Setup
 
@@ -12,13 +12,13 @@ Use `it.effect` from `@effect/vitest` for all effectful tests.
 
 ## Deriving Arbitraries from Schema
 
-Always prefer `Arbitrary.make(SomeSchema)` over hand-built arbitraries — it covers edge cases and stays in sync with schema changes.
+Always prefer `Arbitrary.schema(SomeSchema)` over hand-built arbitraries — it stays in sync with schema changes when the schema can be derived constructively.
 
 ```ts
-const sessionArbitrary = Arbitrary.make(Session)
-const accountSessionArbitrary = Arbitrary.make(AccountSession)
-const visibilityArbitrary = Arbitrary.make(InformationVisibility) // not FastCheck.constantFrom(...)
-const personIdArbitrary = Arbitrary.make(PersonId)
+const sessionArbitrary = Arbitrary.schema(Session)
+const accountSessionArbitrary = Arbitrary.schema(AccountSession)
+const visibilityArbitrary = Arbitrary.schema(InformationVisibility)
+const personIdArbitrary = Arbitrary.schema(PersonId)
 ```
 
 ## Core Helpers
@@ -72,4 +72,4 @@ _"For **all** sessions (including visitors), this holds."_ Use `sessionArbitrary
 - **Don't write example-based tests with PBT machinery.** If your predicate ignores the generated input, you're running a single example 100 times.
 - **Preconditions should be cheap.** `propertyWithPrecondition` uses `.filter()` — expensive predicates cause slow tests or max-skips.
 - **Negate for denial.** Return `!result` inside the predicate. Don't `expect(...).toBe(false)`.
-- **Derive, don't construct.** Prefer `Arbitrary.make(Schema)` over `FastCheck.constantFrom`. It stays in sync with schema changes.
+- **Derive, don't construct.** Prefer `Arbitrary.schema(Schema)` where the current schema compiler can produce valid values. For constraints it cannot generate constructively, compose native arbitraries with `Arbitrary.all`, `Arbitrary.map`, and `Arbitrary.flatMap`.

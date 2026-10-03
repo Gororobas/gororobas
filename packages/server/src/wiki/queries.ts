@@ -14,8 +14,8 @@ import {
 } from "@gororobas/domain"
 import { Handle } from "@gororobas/domain"
 import { Schema } from "effect"
-import { SqlSchema } from "effect/unstable/sql"
-import { SqlClient } from "effect/unstable/sql/SqlClient"
+import { SqlSchema } from "effect/sql"
+import { SqlClient } from "effect/sql/SqlClient"
 
 export const findDatabaseRowById = SqlSchema.findOneOption({
   Request: WikiArticleId,

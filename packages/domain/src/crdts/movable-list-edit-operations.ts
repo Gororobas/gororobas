@@ -5,6 +5,7 @@ import { LoroListItemId } from "../common/ids.js"
 import { ItemInCrdtList } from "../common/primitives.js"
 import { CrdtContainerNotFoundError, CrdtListItemNotFoundError } from "./errors.js"
 import { createCrdtListItemId } from "./lib.js"
+import { toLoroValue } from "./loro-values.js"
 
 const findItemIndexInCrdtList = (container: LoroMovableList | LoroList, id: LoroListItemId) =>
   Effect.gen(function* () {
@@ -52,11 +53,13 @@ export const makeMovableListEditOperations =
           payload: typeof AddedPayload.Type,
         ) {
           const container = yield* getContainer(document)
-          const encodedValue = yield* Schema.encodeEffect(ValueSchema)(payload.value)
+          const encodedValue = yield* Schema.encodeEffect(Schema.toCodecJson(ValueSchema))(
+            payload.value,
+          )
           container.push(
             ItemInCrdtList.make({
               id: createCrdtListItemId(),
-              value: encodedValue,
+              value: toLoroValue(encodedValue),
             }),
           )
         }),
@@ -79,10 +82,15 @@ export const makeMovableListEditOperations =
           payload: typeof UpdatedPayload.Type,
         ) {
           const container = yield* getContainer(document)
-          const encodedValue = yield* Schema.encodeEffect(ValueSchema)(payload.updatedValue)
+          const encodedValue = yield* Schema.encodeEffect(Schema.toCodecJson(ValueSchema))(
+            payload.updatedValue,
+          )
           const itemIndex = yield* findItemIndexInCrdtList(container, payload.id)
 
-          container.set(itemIndex, ItemInCrdtList.make({ id: payload.id, value: encodedValue }))
+          container.set(
+            itemIndex,
+            ItemInCrdtList.make({ id: payload.id, value: toLoroValue(encodedValue) }),
+          )
         }),
       },
       {

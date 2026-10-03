@@ -1,6 +1,6 @@
 import { PersonId, PersonRow } from "@gororobas/domain"
 import { Effect } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient, SqlSchema } from "effect/sql"
 
 export const findById = SqlSchema.findOneOption({
   Request: PersonId,

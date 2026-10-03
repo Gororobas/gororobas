@@ -11,7 +11,7 @@ import { Config, Effect, Layer } from "effect"
  * All workflow layers (translation, notifications, etc.) compose on top
  * of this shared layer — they only need WorkflowEngine in their requirements.
  */
-import { ClusterWorkflowEngine, SingleRunner } from "effect/unstable/cluster"
+import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 
 // SingleRunner creates its own message and runner tables through SqlMessageStorage.
 const makeWorkflowsSqlLive = (filename: string) => SqliteClient.layer({ filename })
@@ -19,7 +19,7 @@ const makeWorkflowsSqlLive = (filename: string) => SqliteClient.layer({ filename
 /** SQLite database for production workflows state */
 const WorkflowsSqlLive = Layer.unwrap(
   Effect.gen(function* () {
-    const filename = yield* Config.string("WORKFLOWS_DB_FILENAME").pipe(
+    const filename = yield* Config.String("WORKFLOWS_DB_FILENAME").pipe(
       Config.withDefault("workflows.db"),
     )
     return makeWorkflowsSqlLive(filename)

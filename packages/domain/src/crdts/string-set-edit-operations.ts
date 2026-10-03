@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect"
 import { LoroDoc, LoroMap } from "loro-crdt"
 
 import { CrdtContainerNotFoundError } from "./errors.js"
+import { toLoroString } from "./loro-values.js"
 
 export const makeStringSetEditOperations =
   <P extends string>(id: P) =>
@@ -29,7 +30,7 @@ export const makeStringSetEditOperations =
         ) {
           const container = yield* getContainer(document)
           // @ts-expect-error @todo find a way to type this
-          container.set(payload.value, true)
+          container.set(toLoroString(payload.value), true)
         }),
       },
       {
@@ -40,7 +41,7 @@ export const makeStringSetEditOperations =
         ) {
           const container = yield* getContainer(document)
           // @ts-expect-error @todo find a way to type this
-          container.delete(payload.value)
+          container.delete(toLoroString(payload.value))
         }),
       },
     ] as const

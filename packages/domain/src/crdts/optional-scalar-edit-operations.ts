@@ -2,6 +2,7 @@ import { Effect, Schema } from "effect"
 import { LoroDoc, LoroMap } from "loro-crdt"
 
 import { CrdtContainerNotFoundError } from "./errors.js"
+import { toLoroValue } from "./loro-values.js"
 
 export const makeOptionalScalarEditOperations =
   <P extends string>(id: P) =>
@@ -29,7 +30,7 @@ export const makeOptionalScalarEditOperations =
         ) {
           const parent = yield* getParentContainer(document)
           const encoded = yield* Schema.encodeEffect(ValueSchema)(payload.value)
-          parent.set(keyInParentContainer, encoded)
+          parent.set(keyInParentContainer, toLoroValue(encoded))
         }),
       },
       {

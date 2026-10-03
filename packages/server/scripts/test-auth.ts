@@ -9,7 +9,7 @@
 
 import { serializeSignedCookie } from "better-call"
 import { Array as EffectArray, Effect } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { SqlClient } from "effect/sql"
 
 import { AppRuntimeTest } from "../src/app-runtime.js"
 import { createAuth } from "../src/authentication/better-auth.js"

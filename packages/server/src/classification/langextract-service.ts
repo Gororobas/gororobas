@@ -12,12 +12,12 @@ export class LangExtractService extends Context.Service<LangExtractService>()(
   "LangExtractService",
   {
     make: Effect.gen(function* () {
-      const ollamaBaseUrl = yield* Config.string("OLLAMA_BASE_URL").pipe(
+      const ollamaBaseUrl = yield* Config.String("OLLAMA_BASE_URL").pipe(
         Config.withDefault("http://localhost:11434"),
       )
-      const ollamaModel = yield* Config.string("OLLAMA_MODEL").pipe(Config.withDefault("gemma3:4b"))
-      const temperature = yield* Config.number("OLLAMA_TEMPERATURE").pipe(Config.withDefault(0.6))
-      const maxConcurrentExtractions = yield* Config.number(
+      const ollamaModel = yield* Config.String("OLLAMA_MODEL").pipe(Config.withDefault("gemma3:4b"))
+      const temperature = yield* Config.Number("OLLAMA_TEMPERATURE").pipe(Config.withDefault(0.6))
+      const maxConcurrentExtractions = yield* Config.Number(
         "OLLAMA_MAX_CONCURRENT_EXTRACTIONS",
       ).pipe(Config.withDefault(2))
 

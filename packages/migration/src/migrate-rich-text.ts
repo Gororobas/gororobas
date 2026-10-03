@@ -1,6 +1,6 @@
 import { IdGen, TiptapDocument, TiptapNode, TiptapTextNode } from "@gororobas/domain"
 import { Effect, FileSystem, Path, PlatformError, Predicate, Schema } from "effect"
-import { KeyValueStore } from "effect/unstable/persistence"
+import { KeyValueStore } from "effect/persistence"
 
 import {
   ensureMappedId,

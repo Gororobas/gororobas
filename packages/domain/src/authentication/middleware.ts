@@ -1,5 +1,5 @@
 import { Context } from "effect"
-import { HttpApiMiddleware, HttpApiSecurity } from "effect/unstable/httpapi"
+import { HttpApiMiddleware, HttpApiSecurity } from "effect/http-api"
 
 import { UnauthorizedError } from "../authorization/session.js"
 import { CurrentAuthenticationData } from "./domain.js"

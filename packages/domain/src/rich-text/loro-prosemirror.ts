@@ -1,20 +1,12 @@
-import { Array as EffectArray, Option, Predicate, Record, Schema } from "effect"
-import { LoroList, LoroMap, LoroText, type Delta, type Value } from "loro-crdt"
+import { Array as EffectArray, Option, Record, Schema } from "effect"
+import { LoroList, LoroMap, LoroText, type Delta } from "loro-crdt"
 
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
+import { toLoroString, toLoroValue } from "../crdts/loro-values.js"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "./domain.js"
 
 const JsonAttributes = Schema.Record(Schema.String, Schema.Json)
 type RichTextNode = TiptapNode | TiptapTextNode | TiptapDocument
-
-const isJsonArray = (value: Schema.Json): value is Schema.JsonArray => Array.isArray(value)
-const isJsonObject = (value: Schema.Json): value is Schema.JsonObject =>
-  Predicate.isObject(value) && !isJsonArray(value)
-const toLoroValue = (value: Schema.Json): Value => {
-  if (isJsonArray(value)) return value.map(toLoroValue)
-  if (isJsonObject(value)) return Record.map(value, toLoroValue)
-  return value
-}
 
 /**
  * Matches loro-prosemirror's nodeName/attributes/children format. Consecutive
@@ -23,11 +15,11 @@ const toLoroValue = (value: Schema.Json): Value => {
  */
 export const initializeLoroRichText = (container: LoroMap, document: TiptapDocument) => {
   const writeNode = (map: LoroMap, node: RichTextNode): void => {
-    map.set("nodeName", node.type)
+    map.set("nodeName", toLoroString(node.type))
     if ("attrs" in node && node.attrs !== undefined) {
       const attributes = map.setContainer("attributes", new LoroMap())
       Record.toEntries(Schema.decodeUnknownSync(JsonAttributes)(node.attrs)).forEach(
-        ([key, value]) => attributes.set(key, value),
+        ([key, value]) => attributes.set(toLoroString(key), toLoroValue(value)),
       )
     }
     if (!("content" in node) || node.content === undefined) return
@@ -41,11 +33,11 @@ export const initializeLoroRichText = (container: LoroMap, document: TiptapDocum
         text = Option.some(currentText)
         const attributes = Record.fromEntries(
           (child.marks ?? []).map((mark) => [
-            mark.type,
-            Record.map(Schema.decodeUnknownSync(JsonAttributes)(mark.attrs ?? {}), toLoroValue),
+            toLoroString(mark.type),
+            toLoroValue(Schema.decodeUnknownSync(JsonAttributes)(mark.attrs ?? {})),
           ]),
         )
-        const delta: Delta<string> = { insert: child.text, attributes }
+        const delta: Delta<string> = { insert: toLoroString(child.text), attributes }
         currentText.applyDelta([{ retain: currentText.length }, delta])
       } else {
         text = Option.none()

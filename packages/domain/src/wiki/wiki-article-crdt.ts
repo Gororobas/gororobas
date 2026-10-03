@@ -10,6 +10,7 @@ import {
   parseCrdtUpdate,
   snapshotToLoroDoc,
 } from "../crdts/lib.js"
+import { toLoroString, toLoroValue } from "../crdts/loro-values.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 import { initializeLoroRichText, loroRichTextToTiptap } from "../rich-text/loro-prosemirror.js"
 import { WikiAnimalArticleCrdtOperations } from "./kinds/animal.crdt.js"
@@ -133,12 +134,12 @@ const initializeMap = (map: LoroMap, values: Schema.JsonObject) => {
   Record.toEntries(values).forEach(([key, value]) => {
     if (value === null) return
     if (isJsonArray(value)) {
-      const list = map.ensureMergeableMovableList(key)
-      value.forEach((item, index) => list.insert(index, item))
+      const list = map.ensureMergeableMovableList(toLoroString(key))
+      value.forEach((item, index) => list.insert(index, toLoroValue(item)))
     } else if (isJsonObject(value) && !("_tag" in value) && !("type" in value)) {
-      initializeMap(map.ensureMergeableMap(key), value)
+      initializeMap(map.ensureMergeableMap(toLoroString(key)), value)
     } else {
-      map.set(key, value)
+      map.set(toLoroString(key), toLoroValue(value))
     }
   })
 }

@@ -27,7 +27,7 @@ import {
   editableToMaterializedTranslation,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Array as EffectArray, Option, Result } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { SqlClient } from "effect/sql"
 
 import {
   persistCrdtDocumentCreation,

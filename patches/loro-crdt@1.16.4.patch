@@ -1,0 +1,90 @@
+diff --git a/base64/index.js b/base64/index.js
+index eb062189837d078d5b0837d8031def00739c5bba..1a40fea18bf4804597811779bb9d666f32525f64 100644
+--- a/base64/index.js
++++ b/base64/index.js
+@@ -8180,7 +8180,12 @@ function __wbg_set_8fc6bf8a5b1071d1(arg0, arg1, arg2) {
+     return addHeapObject(ret);
+ }
+ function __wbg_set_bb8cecf6a62b9f46() { return handleError(function (arg0, arg1, arg2) {
+-    const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
++    // Preserve JSON keys instead of invoking Object.prototype.__proto__.
++    const ret = getObject(arg1) === "__proto__"
++        ? Reflect.defineProperty(getObject(arg0), "__proto__", {
++            value: getObject(arg2), enumerable: true, configurable: true, writable: true,
++        })
++        : Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
+     return ret;
+ }, arguments) }
+ function __wbg_setindex_dcd71eabf405bde1(arg0, arg1, arg2) {
+diff --git a/browser/loro_wasm_bg.js b/browser/loro_wasm_bg.js
+index b2f01baf606cd830f5b9efe92d8e001f0b176fba..c4dfe2b20a6cb8771e0d6d9a34d92f870e4867c8 100644
+--- a/browser/loro_wasm_bg.js
++++ b/browser/loro_wasm_bg.js
+@@ -8163,7 +8163,12 @@ export function __wbg_set_8fc6bf8a5b1071d1(arg0, arg1, arg2) {
+ };
+ 
+ export function __wbg_set_bb8cecf6a62b9f46() { return handleError(function (arg0, arg1, arg2) {
+-    const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
++    // Preserve JSON keys instead of invoking Object.prototype.__proto__.
++    const ret = getObject(arg1) === "__proto__"
++        ? Reflect.defineProperty(getObject(arg0), "__proto__", {
++            value: getObject(arg2), enumerable: true, configurable: true, writable: true,
++        })
++        : Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
+     return ret;
+ }, arguments) };
+ 
+diff --git a/bundler/loro_wasm_bg.js b/bundler/loro_wasm_bg.js
+index b2f01baf606cd830f5b9efe92d8e001f0b176fba..c4dfe2b20a6cb8771e0d6d9a34d92f870e4867c8 100644
+--- a/bundler/loro_wasm_bg.js
++++ b/bundler/loro_wasm_bg.js
+@@ -8163,7 +8163,12 @@ export function __wbg_set_8fc6bf8a5b1071d1(arg0, arg1, arg2) {
+ };
+ 
+ export function __wbg_set_bb8cecf6a62b9f46() { return handleError(function (arg0, arg1, arg2) {
+-    const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
++    // Preserve JSON keys instead of invoking Object.prototype.__proto__.
++    const ret = getObject(arg1) === "__proto__"
++        ? Reflect.defineProperty(getObject(arg0), "__proto__", {
++            value: getObject(arg2), enumerable: true, configurable: true, writable: true,
++        })
++        : Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
+     return ret;
+ }, arguments) };
+ 
+diff --git a/nodejs/loro_wasm.js b/nodejs/loro_wasm.js
+index 79b04abbb71dc3343c63e2f31e970107bca2713c..c0145fc3434fc656cc3bd828d09117b87ce50adb 100644
+--- a/nodejs/loro_wasm.js
++++ b/nodejs/loro_wasm.js
+@@ -8172,7 +8172,12 @@ module.exports.__wbg_set_8fc6bf8a5b1071d1 = function(arg0, arg1, arg2) {
+ };
+ 
+ module.exports.__wbg_set_bb8cecf6a62b9f46 = function() { return handleError(function (arg0, arg1, arg2) {
+-    const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
++    // Preserve JSON keys instead of invoking Object.prototype.__proto__.
++    const ret = getObject(arg1) === "__proto__"
++        ? Reflect.defineProperty(getObject(arg0), "__proto__", {
++            value: getObject(arg2), enumerable: true, configurable: true, writable: true,
++        })
++        : Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
+     return ret;
+ }, arguments) };
+ 
+diff --git a/web/loro_wasm.js b/web/loro_wasm.js
+index afcbcae3139894779665ff872014d3bfcc6f1cd8..098998e2c797c471fcd985f58326231e022f8baf 100644
+--- a/web/loro_wasm.js
++++ b/web/loro_wasm.js
+@@ -8122,7 +8122,12 @@ function __wbg_get_imports() {
+         return addHeapObject(ret);
+     };
+     imports.wbg.__wbg_set_bb8cecf6a62b9f46 = function() { return handleError(function (arg0, arg1, arg2) {
+-        const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
++        // Preserve JSON keys instead of invoking Object.prototype.__proto__.
++        const ret = getObject(arg1) === "__proto__"
++            ? Reflect.defineProperty(getObject(arg0), "__proto__", {
++                value: getObject(arg2), enumerable: true, configurable: true, writable: true,
++            })
++            : Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
+         return ret;
+     }, arguments) };
+     imports.wbg.__wbg_setindex_dcd71eabf405bde1 = function(arg0, arg1, arg2) {

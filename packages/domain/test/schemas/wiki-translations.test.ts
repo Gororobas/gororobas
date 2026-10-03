@@ -1,9 +1,10 @@
 import { assert, describe, expect, it } from "@effect/vitest"
 import { Effect, Exit, Option, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 
 import { WikiArticleId } from "../../src/common/ids.js"
 import { loroDocToUpdate, snapshotToLoroDoc } from "../../src/crdts/lib.js"
+import { toLoroValue } from "../../src/crdts/loro-values.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
 import {
@@ -39,7 +40,7 @@ const plant = decodePlant({
 describe("Kind-specific wiki translations", () => {
   it.effect("article creation preserves every kind and its translations in the snapshot", () =>
     assertPropertyEffect(
-      Schema.toArbitrary(WikiArticleEditableData)(FastCheck),
+      Arbitrary.schema(WikiArticleEditableData),
       (generated) =>
         Effect.gen(function* () {
           const article = withEditorRichText(generated)
@@ -48,13 +49,13 @@ describe("Kind-specific wiki translations", () => {
             snapshot: created.crdtSnapshot,
             crdtUpdate: created.initialCrdtUpdate,
           })
-          const codec = Schema.fromJsonString(WikiArticleEditableData)
+          const codec = Schema.toCodecJson(WikiArticleEditableData)
           const normalized = yield* Schema.decodeEffect(codec)(
-            yield* Schema.encodeEffect(codec)(article),
+            toLoroValue(yield* Schema.encodeEffect(codec)(article)),
           )
           return deepEquals(normalized, parsed.data)
         }),
-      { numRuns: 30 },
+      { runs: 30 },
     ),
   )
 

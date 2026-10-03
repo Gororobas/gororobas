@@ -7,9 +7,10 @@ import {
   WikiPlantArticle,
   TiptapDocument,
 } from "@gororobas/domain"
+import { toLoroValue } from "@gororobas/domain/crdts/loro-values"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, Option, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 import { LoroDoc } from "loro-crdt"
 import { assert, expect } from "vitest"
 
@@ -18,8 +19,11 @@ import { buildWikiMigrationHistory } from "./wiki-migration-history.js"
 
 it.effect("replays migrated origin and marked content, including clearing and restoring them", () =>
   assertPropertyEffect(
-    Schema.toArbitrary(Schema.Struct({ origin: Schema.String, text: Schema.NonEmptyString }))(
-      FastCheck,
+    Arbitrary.schema(
+      Schema.Struct({
+        origin: Schema.String,
+        text: Schema.NonEmptyString,
+      }),
     ),
     ({ origin, text }) =>
       Effect.gen(function* () {
@@ -72,8 +76,14 @@ it.effect("replays migrated origin and marked content, including clearing and re
                 snapshot,
                 crdtUpdate: LoroDocUpdate.make(document.export({ mode: "update" })),
               })
-              expect(Schema.encodeSync(WikiArticleEditableData)(parsed.data)).toEqual(
-                Schema.encodeSync(WikiArticleEditableData)(inputs[index].article),
+              expect(
+                Schema.encodeSync(Schema.toCodecJson(WikiArticleEditableData))(parsed.data),
+              ).toEqual(
+                toLoroValue(
+                  Schema.encodeSync(Schema.toCodecJson(WikiArticleEditableData))(
+                    inputs[index].article,
+                  ),
+                ),
               )
               expect(document.frontiers()).toEqual(version.frontier)
             }),

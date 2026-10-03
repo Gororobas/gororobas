@@ -1,8 +1,9 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 
 import { PartialDate } from "../../src/common/utils/dates.js"
+import { assertProperty } from "../../src/testing.js"
 
 const decode = Schema.decodeUnknownSync(PartialDate)
 const encode = Schema.encodeSync(PartialDate)
@@ -39,11 +40,10 @@ describe("PartialDate", () => {
   })
 
   it("preserves generated objects through string round-trips", () => {
-    FastCheck.assert(
-      FastCheck.property(Schema.toArbitrary(PartialDate)(FastCheck), (date) => {
-        expect(decode(encode(date))).toEqual(date)
-      }),
-    )
+    assertProperty(Arbitrary.schema(PartialDate), (date) => {
+      expect(decode(encode(date))).toEqual(date)
+      return true
+    })
   })
 
   it("supports leap years, four-digit years and IANA timezone aliases", () => {

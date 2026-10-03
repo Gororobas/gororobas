@@ -7,8 +7,8 @@ import {
   OptionalColumn,
   UrlAsString,
   ValidName,
+  CrdtBrandedStringSet,
 } from "../../common/primitives.js"
-import { CrdtBrandedStringSet } from "../../common/primitives.js"
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 

@@ -6,7 +6,7 @@ import {
   ExternalDataInputs,
 } from "@gororobas/domain"
 import { Effect, Match, Option, Schema } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { SqlClient } from "effect/sql"
 
 import { findDatabaseRowById } from "../queries.js"
 import { bookToExternalDataInputs } from "./kinds/book-fetcher.js"

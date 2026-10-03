@@ -7,8 +7,8 @@ import {
   WikiArticleTranslationMaterializedRow,
 } from "@gororobas/domain"
 import { Effect, Array as EffectArray, Schema } from "effect"
-import { SqlSchema } from "effect/unstable/sql"
-import { SqlClient } from "effect/unstable/sql/SqlClient"
+import { SqlSchema } from "effect/sql"
+import { SqlClient } from "effect/sql/SqlClient"
 
 export const insertCrdtRow = SqlSchema.void({
   Request: WikiArticleCrdtRow,

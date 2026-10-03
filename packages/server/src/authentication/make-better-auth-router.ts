@@ -1,6 +1,6 @@
 import { Effect } from "effect"
-import { HttpRouter } from "effect/unstable/http"
-import { fromWebHandler } from "effect/unstable/http/HttpEffect"
+import { HttpRouter } from "effect/http"
+import { fromWebHandler } from "effect/http/HttpEffect"
 
 import type { Auth } from "./better-auth.js"
 

@@ -6,7 +6,7 @@ import {
   ProfileRow,
 } from "@gororobas/domain"
 import { Effect, Schema, SchemaGetter } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient, SqlSchema } from "effect/sql"
 
 export const findByHandle = SqlSchema.findOneOption({
   Request: Handle,

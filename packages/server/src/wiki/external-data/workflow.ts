@@ -6,8 +6,8 @@ import {
   type ExternalDataResult,
 } from "@gororobas/domain"
 import { Effect, Layer, Match, Schema } from "effect"
-import { SqlClient } from "effect/unstable/sql"
-import { Activity, Workflow } from "effect/unstable/workflow"
+import { SqlClient } from "effect/sql"
+import { Activity, Workflow } from "effect/workflow"
 
 import { fetchBook } from "./kinds/book-fetcher.js"
 import { persistBook } from "./kinds/book-persister.js"

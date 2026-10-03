@@ -2,7 +2,7 @@ import { Schema } from "effect"
 /**
  * Comments HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { CommentId, PublicationId } from "../common/ids.js"
 import { PublicationNotFoundError } from "../publications/errors.js"

@@ -2,7 +2,7 @@ import { assert, describe, expect, it } from "@effect/vitest"
 import { Schema as ProseMirrorSchema } from "@tiptap/pm/model"
 import { EditorState } from "@tiptap/pm/state"
 import { Effect, Exit, Option, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 import { LoroList, LoroMap, LoroText, type LoroDoc } from "loro-crdt"
 import {
   createNodeFromLoroObj,
@@ -13,6 +13,7 @@ import {
 
 import { CrdtCommit } from "../../src/crdts/domain.js"
 import { loroDocToUpdate, snapshotToLoroDoc } from "../../src/crdts/lib.js"
+import { toLoroValue } from "../../src/crdts/loro-values.js"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { assertPropertyEffect } from "../../src/testing.js"
 import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
@@ -109,7 +110,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
     "reads constructed documents with the binding and accepts binding-generated edits",
     () =>
       assertPropertyEffect(
-        Schema.toArbitrary(RichTextInputs)(FastCheck),
+        Arbitrary.schema(RichTextInputs),
         (input) =>
           Effect.gen(function* () {
             const content = makeContent(input)
@@ -118,7 +119,13 @@ describe("Wiki rich text and loro-prosemirror", () => {
             const root = getContent(document)
             // oxlint-disable-next-line effect/avoid-native-object-helpers -- The binding requires its mutable native Map cache.
             const node = createNodeFromLoroObj(editorSchema, root, new Map())
-            expect(node.toJSON()).toEqual(editorSchema.nodeFromJSON(content).toJSON())
+            expect(node.toJSON()).toEqual(
+              editorSchema
+                .nodeFromJSON(
+                  toLoroValue(Schema.encodeSync(Schema.toCodecJson(TiptapDocument))(content)),
+                )
+                .toJSON(),
+            )
             const state = EditorState.create({ doc: node })
             const edited = state.apply(state.tr.insertText("Edited ", 1))
             // oxlint-disable-next-line effect/casting-awareness, effect/avoid-native-object-helpers -- The binding requires a native Map; containerId selects our nested editor root instead of its default doc root.
@@ -132,7 +139,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
             expect(editorSchema.nodeFromJSON(projected).toJSON()).toEqual(edited.doc.toJSON())
             return true
           }),
-        { numRuns: 100, seed: 20261002 },
+        { runs: 100, seed: 20261002 },
       ),
   )
 

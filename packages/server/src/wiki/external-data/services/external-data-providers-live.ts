@@ -1,5 +1,5 @@
 import { Layer } from "effect"
-import { FetchHttpClient } from "effect/unstable/http"
+import { FetchHttpClient } from "effect/http"
 
 import { GbifLive } from "./gbif.js"
 import { GoogleBooksLive } from "./google-books.js"

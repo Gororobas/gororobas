@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Record, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 import { LoroDoc } from "loro-crdt"
 
 import { WikiArticleId } from "../../src/common/ids.js"
@@ -19,7 +19,7 @@ const Attributes = WikiPlantCultivarArticle.EditableAttributes
 
 describe("Plant cultivar wiki kind", () => {
   it.effect("new cultivars default every trait to explicit unknown", () =>
-    assertPropertyEffect(Schema.toArbitrary(WikiArticleId)(FastCheck), (parentPlantId) =>
+    assertPropertyEffect(Arbitrary.schema(WikiArticleId), (parentPlantId) =>
       Effect.sync(() => {
         const attributes = Attributes.make({ parentPlantId })
         expect(() => Schema.decodeUnknownSync(Attributes)({ parentPlantId })).toThrow(/Missing/)
@@ -74,7 +74,7 @@ describe("Plant cultivar wiki kind", () => {
   })
 
   it.effect("explicit trait states round-trip through JSON without resolving parent data", () =>
-    assertPropertyEffect(Schema.toArbitrary(Attributes)(FastCheck), (attributes) =>
+    assertPropertyEffect(Arbitrary.schema(Attributes), (attributes) =>
       Effect.gen(function* () {
         const json = yield* Schema.encodeEffect(Schema.fromJsonString(Attributes))(attributes)
         const decoded = yield* Schema.decodeEffect(Schema.fromJsonString(Attributes))(json)
@@ -88,12 +88,12 @@ describe("Plant cultivar wiki kind", () => {
 
   it.effect("participates in wiki decoding and materialization", () =>
     assertPropertyEffect(
-      Schema.toArbitrary(
+      Arbitrary.schema(
         Schema.Struct({
           article: WikiPlantCultivarArticle.EditableArticle,
           metadata: Schema.Struct(coreWikiArticleMaterializedRowFields),
         }),
-      )(FastCheck),
+      ),
       ({ article, metadata }) =>
         Effect.gen(function* () {
           const encoded = yield* Schema.encodeEffect(WikiPlantCultivarArticle.EditableArticle)(
@@ -112,7 +112,7 @@ describe("Plant cultivar wiki kind", () => {
 
   it.effect("registered edits atomically replace the selected property in the CRDT", () =>
     assertPropertyEffect(
-      Schema.toArbitrary(WikiPlantCultivarArticleCrdtOperations.AttributeEdit)(FastCheck),
+      Arbitrary.schema(WikiPlantCultivarArticleCrdtOperations.AttributeEdit),
       (edit) =>
         Effect.gen(function* () {
           const document = new LoroDoc()

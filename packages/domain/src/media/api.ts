@@ -2,7 +2,7 @@ import { Schema } from "effect"
 /**
  * Media HTTP API endpoints.
  */
-import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/unstable/httpapi"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 
 import { ModerationStatus } from "../common/enums.js"
 import { ImageId } from "../common/ids.js"

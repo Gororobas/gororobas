@@ -14,8 +14,8 @@ import {
 } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { DateTime, Effect, Exit, Layer, Schema } from "effect"
-import { FastCheck } from "effect/testing"
-import { SqlClient } from "effect/unstable/sql"
+import * as Arbitrary from "effect/Arbitrary"
+import { SqlClient } from "effect/sql"
 import { v7 } from "uuid"
 
 import { OrganizationsRepository } from "../src/organizations/repository.js"
@@ -27,7 +27,7 @@ import { AppSqlTest } from "../src/sql.js"
 import { makePersonFixture, makeProfileFixture } from "./fixtures.js"
 import { getTelemetryLayer } from "./telemetry.js"
 
-export const DATABASE_PROPERTY_TEST_CONFIG = { numRuns: 50 } as const
+export const DATABASE_PROPERTY_TEST_CONFIG = { runs: 50 } as const
 
 /**
  * Run an effect with a test session context.
@@ -144,8 +144,8 @@ export const assertTransactionProperty = <InputValue, SetupValue, StateValue, Er
   validateRollback,
   validateCommit,
 }: {
-  arbitrary: FastCheck.Arbitrary<InputValue>
-  options?: Parameters<typeof FastCheck.check>[1]
+  arbitrary: Arbitrary.Arbitrary<InputValue>
+  options?: Arbitrary.CheckOptions
   scenario: (inputValue: InputValue) => {
     setup: Effect.Effect<SetupValue, ErrorType, never>
     readState: (setupValue: SetupValue) => Effect.Effect<StateValue, ErrorType, never>

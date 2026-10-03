@@ -12,7 +12,7 @@ import {
   PlantExternalDataInputs,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Predicate, Schema } from "effect"
-import { Activity } from "effect/unstable/workflow"
+import { Activity } from "effect/workflow"
 
 import { Gbif } from "../services/gbif.js"
 import { Wikidata } from "../services/wikidata.js"

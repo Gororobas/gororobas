@@ -16,27 +16,27 @@ import {
   type OrganizationAccessLevel,
   type OrganizationType,
 } from "@gororobas/domain"
+import { DateTime, Effect } from "effect"
 /* oxlint-disable effect/casting-awareness -- fixture IDs use validated domain brands. */
 /**
  * Fixture factories and arbitraries for property-based testing.
  */
-import { DateTime, Effect, Schema } from "effect"
+import * as Arbitrary from "effect/Arbitrary"
 import { SchemaError } from "effect/Schema"
-import { FastCheck } from "effect/testing"
 
 /**
- * Generate arbitraries from schemas using Schema.toArbitrary().
+ * Generate arbitraries from schemas using Arbitrary.schema().
  *
- * These arbitraries can be used with FastCheck for property-based testing.
+ * These arbitraries can be used with Effect's property-based testing API.
  */
-export const personRowArbitrary = Schema.toArbitrary(PersonRow)(FastCheck)
+export const personRowArbitrary = Arbitrary.schema(PersonRow)
 
-export const profileRowArbitrary = Schema.toArbitrary(ProfileRow)(FastCheck).map((profile) => ({
+export const profileRowArbitrary = Arbitrary.map(Arbitrary.schema(ProfileRow), (profile) => ({
   ...profile,
   photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
 }))
-export const handleArbitrary = Schema.toArbitrary(Handle)(FastCheck)
-export const timestampColumnArbitrary = Schema.toArbitrary(TimestampColumn)(FastCheck)
+export const handleArbitrary = Arbitrary.schema(Handle)
+export const timestampColumnArbitrary = Arbitrary.schema(TimestampColumn)
 
 /**
  * Constrained arbitrary for person profiles only (not organizations).
@@ -45,31 +45,33 @@ export const timestampColumnArbitrary = Schema.toArbitrary(TimestampColumn)(Fast
  *
  * Generated directly from PersonProfileRow schema to ensure correct id type (PersonId).
  */
-export const personProfileRowArbitrary = Schema.toArbitrary(PersonProfileRow)(FastCheck).map(
+export const personProfileRowArbitrary = Arbitrary.map(
+  Arbitrary.schema(PersonProfileRow),
   (profile) => ({
     ...profile,
     photoId: null, // to prevent having to create the image in the DB in tests, enforce empty photoId
   }),
 )
 
-export const personWithProfileArbitrary = FastCheck.tuple(
-  personRowArbitrary,
-  personProfileRowArbitrary,
-).map(([person, profile]) => ({
-  person: {
-    ...person,
-    id: profile.id,
-    accessSetById: person.accessSetById === person.id ? profile.id : person.accessSetById,
-  },
-  profile,
-}))
+export const personWithProfileArbitrary = Arbitrary.map(
+  Arbitrary.all([personRowArbitrary, personProfileRowArbitrary]),
+  ([person, profile]) => ({
+    person: {
+      ...person,
+      id: profile.id,
+      accessSetById: person.accessSetById === person.id ? profile.id : person.accessSetById,
+    },
+    profile,
+  }),
+)
 
 /**
  * Constrained arbitrary for trusted persons (COMMUNITY, MODERATOR, or ADMIN access).
  *
  * Useful for testing features that require elevated permissions.
  */
-export const trustedPersonArbitrary = personRowArbitrary.filter(
+export const trustedPersonArbitrary = Arbitrary.filter(
+  personRowArbitrary,
   (person) =>
     person.accessLevel === "COMMUNITY" ||
     person.accessLevel === "MODERATOR" ||
@@ -81,7 +83,8 @@ export const trustedPersonArbitrary = personRowArbitrary.filter(
  *
  * Useful for testing admin-only features.
  */
-export const adminPersonArbitrary = personRowArbitrary.filter(
+export const adminPersonArbitrary = Arbitrary.filter(
+  personRowArbitrary,
   (person) => person.accessLevel === "ADMIN",
 )
 
@@ -211,42 +214,44 @@ export const makeMembershipFixture = (
     return { ...base, ...overrides }
   })
 
-export const organizationRowArbitrary = Schema.toArbitrary(OrganizationRow)(FastCheck)
-export const organizationProfileRowArbitrary = Schema.toArbitrary(OrganizationProfileRow)(
-  FastCheck,
-).map((profile) => ({
-  ...profile,
-  photoId: null,
-}))
+export const organizationRowArbitrary = Arbitrary.schema(OrganizationRow)
+export const organizationProfileRowArbitrary = Arbitrary.map(
+  Arbitrary.schema(OrganizationProfileRow),
+  (profile) => ({
+    ...profile,
+    photoId: null,
+  }),
+)
 
 /**
  * Composite arbitrary for an organization with its profile dependency.
  *
  * Ensures matching IDs between organization and profile, analogous to personWithProfileArbitrary.
  */
-export const organizationWithProfileArbitrary = FastCheck.tuple(
-  organizationRowArbitrary,
-  organizationProfileRowArbitrary,
-).map(([organization, profile]) => ({
-  organization: {
-    ...organization,
-    id: profile.id,
-  },
-  profile,
-}))
+export const organizationWithProfileArbitrary = Arbitrary.map(
+  Arbitrary.all([organizationRowArbitrary, organizationProfileRowArbitrary]),
+  ([organization, profile]) => ({
+    organization: {
+      ...organization,
+      id: profile.id,
+    },
+    profile,
+  }),
+)
 
-const organizationMembershipRowArbitrary = Schema.toArbitrary(OrganizationMembershipRow)(FastCheck)
+const organizationMembershipRowArbitrary = Arbitrary.schema(OrganizationMembershipRow)
 
 /**
  * Composite arbitrary for a membership with all its dependencies (person + profile, organization + profile).
  *
  * Ensures matching IDs across all entities and non-null accessLevel/personId for realistic test scenarios.
  */
-export const membershipWithDependenciesArbitrary = FastCheck.tuple(
-  personWithProfileArbitrary,
-  organizationWithProfileArbitrary,
-  organizationMembershipRowArbitrary,
-).map(
+export const membershipWithDependenciesArbitrary = Arbitrary.map(
+  Arbitrary.all([
+    personWithProfileArbitrary,
+    organizationWithProfileArbitrary,
+    organizationMembershipRowArbitrary,
+  ]),
   ([
     { person, profile: personProfile },
     { organization, profile: organizationProfile },

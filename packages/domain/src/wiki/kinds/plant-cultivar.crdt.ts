@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect"
 import { LoroDoc } from "loro-crdt"
 
+import { toLoroValue } from "../../crdts/loro-values.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import { WikiPlantCultivarArticle, type PlantCultivarEditableAttributes } from "./plant-cultivar.js"
 
@@ -15,7 +16,7 @@ const replaceAttribute = <const Tag extends string, Value, Encoded>(
     handler: Effect.fn(tag)(function* (document: LoroDoc, payload: typeof Message.Type) {
       const encoded = yield* Schema.encodeEffect(Schema.toCodecJson(ValueSchema))(payload.value)
       // Keep the state and value atomic, including entire arrays and paired range endpoints.
-      document.getMap("attributes").set(key, encoded)
+      document.getMap("attributes").set(key, toLoroValue(encoded))
     }),
   }
 }

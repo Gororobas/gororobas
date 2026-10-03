@@ -12,7 +12,7 @@ import {
   type PlatformAccessLevel,
 } from "@gororobas/domain"
 import { Array as EffectArray, DateTime, Effect, Option, Context } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { SqlClient } from "effect/sql"
 
 import { OrganizationsRepository } from "../organizations/repository.js"
 import { ProfilesRepository } from "../profiles/repository.js"

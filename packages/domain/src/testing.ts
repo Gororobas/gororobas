@@ -5,29 +5,18 @@
  */
 import {
   Array as EffectArray,
-  Cause,
   DateTime,
   Effect,
   Exit,
   Layer,
-  Option,
   Predicate,
   Record,
   Schema,
 } from "effect"
-import { UnknownError } from "effect/Cause"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 
 import type { Session } from "./authorization/session.js"
 import { SessionContext } from "./authorization/session.js"
-
-export interface PropertyResult<A> {
-  readonly success: boolean
-  readonly numRuns: number
-  readonly counterexample: Option.Option<A>
-  readonly seed: Option.Option<number>
-  readonly error: unknown
-}
 
 export class PropertyTestFailure extends Error {
   readonly _tag = "PropertyTestFailure"
@@ -43,83 +32,60 @@ export class PropertyTestFailure extends Error {
 }
 
 /**
- * Run property test that returns an Effect<boolean>
- * Uses FastCheck.check internally but wraps everything in Effect
+ * Run an Effect-native property check.
  */
-export const checkPropertyEffect = <A, E>(
-  arbitrary: FastCheck.Arbitrary<A>,
-  predicate: (value: A) => Effect.Effect<boolean, E, never>,
-  options?: Parameters<typeof FastCheck.check>[1],
-): Effect.Effect<PropertyResult<A>, E | UnknownError, never> =>
-  Effect.gen(function* () {
-    let counterexample = Option.none<A>()
-    let lastError: unknown
-
-    const asyncProp = FastCheck.asyncProperty(arbitrary, async (value) => {
-      const result = await Effect.runPromiseExit(predicate(value))
-
-      if (result._tag === "Failure") {
-        lastError = Cause.squash(result.cause)
-        counterexample = Option.some(value)
-        return false
-      }
-
-      if (!result.value) {
-        counterexample = Option.some(value)
-        return false
-      }
-
-      return true
-    })
-
-    const checkResult = yield* Effect.tryPromise({
-      catch: (unknown) => new UnknownError({ cause: unknown }),
-      try: () => FastCheck.check(asyncProp, options),
-    })
-
-    return {
-      counterexample,
-      error: lastError,
-      numRuns: checkResult.numRuns,
-      seed: Option.fromNullishOr(checkResult.seed),
-      success: !checkResult.failed,
-    }
-  })
+export const checkPropertyEffect = <A, E, R>(
+  arbitrary: Arbitrary.Arbitrary<A>,
+  predicate: (value: A) => Effect.Effect<boolean, E, R>,
+  options?: Arbitrary.CheckOptions,
+): Effect.Effect<Arbitrary.CheckResult<A, E>, never, R> =>
+  Arbitrary.checkEffect(arbitrary, predicate, options)
 
 /**
  * Assert property with detailed failure information
  */
-export const assertPropertyEffect = <A, E>(
-  arbitrary: FastCheck.Arbitrary<A>,
-  predicate: (value: A) => Effect.Effect<boolean, E, never>,
-  options?: Parameters<typeof FastCheck.check>[1],
-): Effect.Effect<void, E | PropertyTestFailure | UnknownError, never> =>
+export const assertPropertyEffect = <A, E, R>(
+  arbitrary: Arbitrary.Arbitrary<A>,
+  predicate: (value: A) => Effect.Effect<boolean, E, R>,
+  options?: Arbitrary.CheckOptions,
+): Effect.Effect<void, PropertyTestFailure, R> =>
   Effect.gen(function* () {
     const result = yield* checkPropertyEffect(arbitrary, predicate, {
-      numRuns: 50,
+      runs: 50,
       ...options,
     })
 
-    if (!result.success) {
-      return yield* Effect.fail(
-        new PropertyTestFailure(
-          Option.getOrUndefined(result.counterexample),
-          Option.getOrElse(result.seed, () => 0),
-          result.error?.toString() ?? "",
-        ),
-      )
+    if (result._tag === "Passed") return
+    if (result._tag === "Falsified") {
+      return yield* Effect.fail(new PropertyTestFailure(result.shrunkInput, 0, result.replay))
     }
+    return yield* Effect.fail(new PropertyTestFailure(result, 0, ""))
   })
 
 /**
  * Effectful property with preconditions
  */
-export const propertyWithPrecondition = <A, E>(
-  arbitrary: FastCheck.Arbitrary<A>,
+export const propertyWithPrecondition = <A, E, R>(
+  arbitrary: Arbitrary.Arbitrary<A>,
   precondition: (value: A) => boolean,
-  predicate: (value: A) => Effect.Effect<boolean, E, never>,
-): Effect.Effect<void, E | PropertyTestFailure | UnknownError, never> =>
-  assertPropertyEffect(arbitrary.filter(precondition), predicate)
+  predicate: (value: A) => Effect.Effect<boolean, E, R>,
+): Effect.Effect<void, PropertyTestFailure, R> =>
+  assertPropertyEffect(Arbitrary.filter(arbitrary, precondition), predicate)
+
+export const assertProperty = <A>(
+  arbitrary: Arbitrary.Arbitrary<A>,
+  predicate: (value: A) => boolean,
+  options?: Arbitrary.CheckOptions,
+): void => {
+  const result = Effect.runSync(Arbitrary.checkEffect(arbitrary, predicate, options))
+  if (result._tag !== "Passed") {
+    throw new PropertyTestFailure(
+      result._tag === "Falsified" ? result.shrunkInput : result,
+      0,
+      result._tag === "Falsified" ? result.replay : "",
+    )
+  }
+}
 
 /**
  * Run a policy effect with a session and return the Exit

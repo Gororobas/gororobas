@@ -25,17 +25,16 @@
     "migrate": "npx tsx scripts/migrate.ts"
   },
   "dependencies": {
-    "@durable-streams/server": "^0.2.3",
+    "@durable-streams/server": "^0.3.9",
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@gororobas/domain": "workspace:^",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
-    "@opentelemetry/sdk-logs": "^0.213.0",
-    "@opentelemetry/sdk-metrics": "^2.7.1",
-    "@opentelemetry/sdk-trace-base": "^2.7.1",
-    "@opentelemetry/sdk-trace-node": "^2.7.1",
-    "@opentelemetry/sdk-trace-web": "^2.7.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+    "@opentelemetry/sdk-logs": "^0.222.0",
+    "@opentelemetry/sdk-metrics": "^2.11.0",
+    "@opentelemetry/sdk-trace-base": "^2.11.0",
+    "@opentelemetry/sdk-trace-node": "^2.11.0",
     "@tiptap/core": "catalog:",
     "@tiptap/html": "catalog:",
     "@tiptap/pm": "catalog:",
@@ -45,14 +44,13 @@
     "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
     "loro-mirror": "catalog:",
-    "ollama": "^0.6.3"
+    "ollama": "^0.6.4"
   },
   "devDependencies": {
     "@ariga/atlas": "latest",
-    "@durable-streams/client": "^0.2.3",
+    "@durable-streams/client": "^0.2.7",
     "@effect/vitest": "catalog:",
     "@gororobas/effect-bdd": "workspace:^",
-    "fast-check": "latest",
     "sql-formatter": "latest"
   },
   "effect": {

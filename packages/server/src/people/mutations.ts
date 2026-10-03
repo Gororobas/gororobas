@@ -1,6 +1,6 @@
 import { PersonRow } from "@gororobas/domain"
 import { Effect } from "effect"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { SqlClient, SqlSchema } from "effect/sql"
 
 export const updateRow = SqlSchema.void({
   Request: PersonRow,

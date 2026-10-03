@@ -1,6 +1,6 @@
 import { describe, it } from "@effect/vitest"
 import { Effect, Match, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 import { LoroDoc } from "loro-crdt"
 
 import { ValidName } from "../common/primitives.js"
@@ -16,7 +16,7 @@ const [added, removed, updated, moved] = makeMovableListEditOperations("Item")({
 
 const ListOperation = Schema.Union([added.message, removed.message, updated.message, moved.message])
 
-const listOperationsArbitrary = FastCheck.array(Schema.toArbitrary(ListOperation)(FastCheck), {
+const listOperationsArbitrary = Arbitrary.array(Arbitrary.schema(ListOperation), {
   maxLength: 100,
 })
 

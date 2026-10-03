@@ -4,7 +4,7 @@
 import { NodeServices } from "@effect/platform-node"
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node"
 import { Effect, Layer } from "effect"
-import { SqlClient } from "effect/unstable/sql"
+import { SqlClient } from "effect/sql"
 
 import { migrations } from "./db/migrations-effect/index.js"
 

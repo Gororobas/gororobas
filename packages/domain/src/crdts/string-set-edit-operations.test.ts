@@ -1,6 +1,6 @@
 import { describe, it } from "@effect/vitest"
 import { Array as EffectArray, Effect, HashSet, Record, Schema } from "effect"
-import { FastCheck } from "effect/testing"
+import * as Arbitrary from "effect/Arbitrary"
 import { LoroDoc } from "loro-crdt"
 
 import { Locale } from "../common/enums.js"
@@ -29,15 +29,16 @@ const hasSameEntries = (
   Record.keys(left).length === Record.keys(right).length &&
   Record.toEntries(left).every(([key, value]) => right[key] === value)
 
-const addedMessageArbitrary = Schema.toArbitrary(added.message)(FastCheck)
-const removedMessageArbitrary = Schema.toArbitrary(removed.message)(FastCheck)
+const addedMessageArbitrary = Arbitrary.schema(added.message)
+const removedMessageArbitrary = Arbitrary.schema(removed.message)
 
 // An enum map can have at most one entry per enum value.
-const addedMessagesArbitrary = FastCheck.uniqueArray(addedMessageArbitrary, {
-  selector: (message) => message.value,
-})
+const addedMessagesArbitrary = Arbitrary.filter(
+  Arbitrary.array(addedMessageArbitrary),
+  (messages) => new Set(messages.map((message) => message.value)).size === messages.length,
+)
 
-const removedMessagesArbitrary = FastCheck.array(removedMessageArbitrary, { maxLength: 100 })
+const removedMessagesArbitrary = Arbitrary.array(removedMessageArbitrary, { maxLength: 100 })
 
 const applyAddedMessages = (
   document: LoroDoc,
@@ -82,11 +83,14 @@ class PlainJsStringHashSetModel {
   }
 }
 
-const addThenRemoveArbitrary = addedMessagesArbitrary.chain((addedMessages) =>
-  FastCheck.subarray(addedMessages.map((message) => message.value)).map((removedValues) => ({
-    addedMessages,
-    removedMessages: removedValues.map(removeMessage),
-  })),
+const addThenRemoveArbitrary = Arbitrary.flatMap(addedMessagesArbitrary, (addedMessages) =>
+  Arbitrary.map(
+    Arbitrary.array(Arbitrary.schema(Locale), { maxLength: addedMessages.length }),
+    (removedValues) => ({
+      addedMessages,
+      removedMessages: removedValues.map(removeMessage),
+    }),
+  ),
 )
 
 describe("generateEnumsMapOperations", () => {

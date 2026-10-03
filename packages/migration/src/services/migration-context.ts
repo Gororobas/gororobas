@@ -1,7 +1,7 @@
 /** MigrationContext service for persistent ID mapping and progress tracking. */
 import { IdGen } from "@gororobas/domain"
 import { Context, DateTime, Effect, Layer, Option, Schema, SchemaIssue } from "effect"
-import { KeyValueStore } from "effect/unstable/persistence"
+import { KeyValueStore } from "effect/persistence"
 
 const MappingEntry = Schema.Struct({
   gelId: Schema.String,

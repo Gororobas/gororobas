@@ -15,8 +15,8 @@ import { Effect, Layer, Option, Schema } from "effect"
 /**
  * Session resolution service for authentication.
  */
-import { HttpServerRequest } from "effect/unstable/http"
-import { SqlClient, SqlSchema } from "effect/unstable/sql"
+import { HttpServerRequest } from "effect/http"
+import { SqlClient, SqlSchema } from "effect/sql"
 
 export class AuthenticationFailureError extends Schema.TaggedError<AuthenticationFailureError>()(
   "AuthenticationFailureError",

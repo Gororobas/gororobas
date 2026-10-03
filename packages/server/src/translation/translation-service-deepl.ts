@@ -1,11 +1,6 @@
 import { Locale } from "@gororobas/domain"
 import { Array as EffectArray, Config, Effect, Layer, Redacted, Schema } from "effect"
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-} from "effect/unstable/http"
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 
 import { TranslationError, TranslationService } from "./translation-service.js"
 
@@ -26,7 +21,7 @@ const DeeplResponse = Schema.Struct({
 
 export const TranslationServiceDeepl = Layer.effect(TranslationService)(
   Effect.gen(function* () {
-    const apiKey = yield* Config.redacted("DEEPL_API_KEY")
+    const apiKey = yield* Config.Redacted("DEEPL_API_KEY")
     const client = yield* HttpClient.HttpClient
 
     const translate = Effect.fn("TranslationServiceDeepl.translate")(function* (

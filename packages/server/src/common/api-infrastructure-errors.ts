@@ -1,6 +1,6 @@
 import { Cause, Effect, ErrorReporter, Schema } from "effect"
-import { HttpServerResponse } from "effect/unstable/http"
-import { SqlError } from "effect/unstable/sql"
+import { HttpServerResponse } from "effect/http"
+import { SqlError } from "effect/sql"
 
 type InfrastructureError = Schema.SchemaError | SqlError.SqlError
 
