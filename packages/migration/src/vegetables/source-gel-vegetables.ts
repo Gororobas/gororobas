@@ -90,6 +90,15 @@ export const sourceGelVegetables = Effect.gen(function* () {
     path.join(archiveDirectory, "plant-friendships.json"),
     yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(friendships),
   )
+  const sources = Record.fromEntries(
+    vegetables
+      .filter((plant) => EffectArray.isReadonlyArrayNonEmpty(plant.sources))
+      .map((plant) => [plant.id, plant.sources] as const),
+  )
+  yield* fs.writeFileString(
+    path.join(archiveDirectory, "plant-sources.json"),
+    yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(sources),
+  )
   const historyResults = yield* Effect.all(
     vegetables.map(({ edit_suggestions, ...source }) =>
       reconstructGelVegetableHistory(source, edit_suggestions).pipe(

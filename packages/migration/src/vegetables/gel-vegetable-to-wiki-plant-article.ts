@@ -1,6 +1,7 @@
 import {
   AgroforestryStratum,
   Centimeters,
+  IntNonNegative,
   EdiblePlantPart,
   LoroListItemId,
   NameInCrdtList,
@@ -117,11 +118,11 @@ export const gelVegetableToPlantEditableAttributes = (
     wikidataId: Option.none(),
     developmentCycleMax: Option.map(
       Option.fromNullishOr(vegetable.development_cycle_max),
-      (value) => Schema.decodeUnknownSync(Centimeters)(value),
+      (value) => Schema.decodeUnknownSync(IntNonNegative)(value),
     ),
     developmentCycleMin: Option.map(
       Option.fromNullishOr(vegetable.development_cycle_min),
-      (value) => Schema.decodeUnknownSync(Centimeters)(value),
+      (value) => Schema.decodeUnknownSync(IntNonNegative)(value),
     ),
     heightMax: Option.map(Option.fromNullishOr(vegetable.height_max), (value) =>
       Schema.decodeUnknownSync(Centimeters)(value),

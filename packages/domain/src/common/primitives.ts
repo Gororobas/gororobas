@@ -2,6 +2,9 @@
  * Common primitive types used across the domain.
  */
 import { HashSet, Record, Schema, SchemaGetter, SchemaTransformation } from "effect"
+import * as Length from "effect-units/Length"
+import * as Quantity from "effect-units/Quantity"
+import * as Temperature from "effect-units/Temperature"
 
 import { LoroListItemId } from "./ids.js"
 
@@ -120,10 +123,45 @@ export const CrdtBrandedStringSet = <S extends Schema.Constraint & Schema.Codec<
     }),
   )
 
-export const Centimeters = IntNonNegative.pipe(Schema.brand("Centimeters"))
+const centimetersTransformation = SchemaTransformation.transform({
+  decode: Length.centimeters,
+  // Persist whole centimeters, including after floating-point unit conversions.
+  encode: (length: Length.Length) => Math.round(Length.inCentimeters(length)),
+})
 
-export const TemperatureInCelsius = Schema.Number.check(Schema.isGreaterThan(0)).pipe(
-  Schema.brand("TemperatureInCelsius"),
+export const Centimeters = IntNonNegative.pipe(
+  Schema.decodeTo(
+    Quantity.nonNegative(
+      Length.Length.annotate({
+        // Generate whole-centimeter measurements through the same storage conversion.
+        toCodecArbitrary: () =>
+          Schema.link<Length.Length>()(
+            IntNonNegative.check(Schema.isLessThanOrEqualTo(100000)),
+            centimetersTransformation,
+          ),
+      }),
+    ),
+    centimetersTransformation,
+  ),
+)
+
+const celsiusNumbers = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(-50))
+const celsiusTransformation = SchemaTransformation.transform({
+  decode: Temperature.degreesCelsius,
+  encode: Temperature.inDegreesCelsius,
+})
+
+export const TemperatureInCelsius = celsiusNumbers.pipe(
+  Schema.decodeTo(
+    Temperature.Temperature.annotate({
+      toCodecArbitrary: () =>
+        Schema.link<Temperature.Temperature>()(
+          celsiusNumbers.check(Schema.isLessThanOrEqualTo(100)),
+          celsiusTransformation,
+        ),
+    }),
+    celsiusTransformation,
+  ),
 )
 
 export const UrlAsString = Schema.Trimmed.check(

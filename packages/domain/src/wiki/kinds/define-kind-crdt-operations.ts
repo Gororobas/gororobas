@@ -23,7 +23,7 @@ type AttributeEditEncoded<Operations> = Operations extends {
 const makeOperationRunner = <Message extends MessageSchema>(operation: EditOperation<Message>) => ({
   matches: (change: unknown): change is Message["Type"] => Schema.is(operation.message)(change),
   run: (document: LoroDoc, change: unknown) =>
-    Schema.decodeUnknownEffect(operation.message)(change).pipe(
+    Schema.decodeUnknownEffect(Schema.toType(operation.message))(change).pipe(
       Effect.flatMap((payload) => operation.handler(document, payload)),
     ),
 })

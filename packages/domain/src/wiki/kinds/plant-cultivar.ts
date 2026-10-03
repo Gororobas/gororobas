@@ -1,4 +1,6 @@
 import { Effect, Schema } from "effect"
+import * as Quantity from "effect-units/Quantity"
+import * as Temperature from "effect-units/Temperature"
 
 import {
   AgroforestryStratum,
@@ -27,11 +29,16 @@ export const CultivarProperty = <S extends Schema.Schema<unknown>>(ValueSchema: 
   ] as const).pipe(Schema.withConstructorDefault(Effect.succeed(UnknownCultivarProperty.make({}))))
 
 const HeightRange = Schema.Struct({ min: Centimeters, max: Centimeters }).check(
-  Schema.makeFilter((range) => range.min <= range.max || "Height minimum must not exceed maximum", {
-    identifier: "CultivarHeightRange",
-    title: "Cultivar height range",
-    description: "The minimum height in centimeters must not exceed the maximum.",
-  }),
+  Schema.makeFilter(
+    (range) =>
+      Quantity.isLessThanOrEqualTo(range.min, range.max) ||
+      "Height minimum must not exceed maximum",
+    {
+      identifier: "CultivarHeightRange",
+      title: "Cultivar height range",
+      description: "The minimum height in centimeters must not exceed the maximum.",
+    },
+  ),
 )
 
 const DevelopmentCycleRange = Schema.Struct({ min: IntNonNegative, max: IntNonNegative }).check(
@@ -46,11 +53,13 @@ const DevelopmentCycleRange = Schema.Struct({ min: IntNonNegative, max: IntNonNe
 )
 
 const TemperatureRange = Schema.Struct({
-  min: TemperatureInCelsius.check(Schema.isFinite()),
-  max: TemperatureInCelsius.check(Schema.isFinite()),
+  min: TemperatureInCelsius,
+  max: TemperatureInCelsius,
 }).check(
   Schema.makeFilter(
-    (range) => range.min <= range.max || "Temperature minimum must not exceed maximum",
+    (range) =>
+      Temperature.isLessThanOrEqualTo(range.min, range.max) ||
+      "Temperature minimum must not exceed maximum",
     {
       identifier: "CultivarTemperatureRange",
       title: "Cultivar temperature range",
