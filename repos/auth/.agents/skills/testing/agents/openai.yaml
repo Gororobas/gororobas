@@ -1,0 +1,3 @@
+interface:
+  display_name: "Testing"
+  short_description: "Minimal verification, E2E evidence, and test selection"

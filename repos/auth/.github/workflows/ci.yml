@@ -1,0 +1,276 @@
+# Keep the required workflow on every PR; select expensive work inside it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # Retargeting changes the diff without changing the head commit.
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Complete main baselines; supersede older runs only on the same PR.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  VP_GIT_HOOKS: "0"
+  ASTRO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  changes:
+    name: Select required checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      pull-requests: read
+    outputs:
+      full: ${{ steps.paths.outputs.full }}
+      docs: ${{ steps.paths.outputs.docs }}
+    steps:
+      - name: Classify the complete PR diff
+        id: paths
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea9 # v7
+        with:
+          retries: 2
+          script: |
+            const pr = context.payload.pull_request;
+            // Main warms complete task results. Release metadata still needs
+            // package builds and consumer validation.
+            let full = !pr || (pr.base.ref === 'main' &&
+              pr.head.ref === 'changeset-release/main' &&
+              pr.head.repo?.full_name === context.repo.owner + '/' + context.repo.repo);
+            let docs = false;
+            if (!full) {
+              try {
+                const files = await github.paginate(github.rest.pulls.listFiles, {
+                  ...context.repo, pull_number: pr.number, per_page: 100,
+                });
+                const { data: current } = await github.rest.pulls.get({
+                  ...context.repo, pull_number: pr.number,
+                });
+                // The API caps its file listing. Incomplete or moved diffs must
+                // never authorize skips, including renames out of source paths.
+                if (!files.length || files.length !== current.changed_files ||
+                    current.head.sha !== pr.head.sha || current.base.sha !== pr.base.sha) {
+                  full = true;
+                } else {
+                  const passive = /^(?:[^/]+\.md|LICENSE|docs\/TOOLCHAIN\.md|(?:packages|examples)\/[^/]+\/(?:README|CHANGELOG)\.md|\.changeset\/[^/]+\.md)$/;
+                  for (const file of files) {
+                    for (const path of [file.filename, file.previous_filename].filter(Boolean)) {
+                      // Changes to the commands or setup that run CI exercise
+                      // the full gate. Other workflows get actionlint below.
+                      if (path === '.github/workflows/ci.yml' || path.startsWith('.github/actions/')) {
+                        full = true;
+                      } else if (path === 'README.md') {
+                        // The docs include runnable snippets from the root README.
+                        docs = true;
+                      } else if (passive.test(path) || /^(?:\.agents|\.claude|\.opencode)\//.test(path) ||
+                          /^\.github\/(?:workflows\/[^/]+\.ya?ml|assets\/.*|[^/]+\.md)$/.test(path)) {
+                        continue;
+                      } else if (path.startsWith('docs/')) {
+                        docs = true;
+                      } else {
+                        // Unknown paths are executable inputs until classified.
+                        full = true;
+                      }
+                    }
+                  }
+                }
+              } catch (error) {
+                core.warning(`Cannot prove a limited diff; running full CI: ${error.message}`);
+                full = true;
+              }
+            }
+            core.setOutput('full', String(full));
+            core.setOutput('docs', String(docs && !full));
+            await core.summary.addRaw(full ? 'Full checks, tests, and builds required.' :
+              docs ? 'Formatting, workflow validation, and docs checks/build required.' :
+              'Formatting and workflow validation required.').write();
+
+  checks:
+    name: Static checks
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
+        with:
+          task-cache: checks
+
+      - name: Validate GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color -shellcheck= -pyflakes=
+
+      - name: Check formatting for a limited diff
+        id: format
+        if: needs.changes.outputs.full != 'true'
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 2m
+          command: vp run ci:format
+
+      - name: Format, lint, and type checks
+        id: checks
+        if: needs.changes.outputs.full == 'true'
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          command: vp run -v check
+
+      # Successful tasks remain useful even when another task fails.
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.checks.outcome == 'success' || steps.checks.outcome == 'failure' || steps.format.outcome == 'success') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.setup.outputs.cache-key }}
+
+  test:
+    name: Tests
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
+        with:
+          task-cache: test-v2-workspace
+
+      - name: Run Vitest suites with timeout retries
+        id: tests
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          # Forward runner flags only to Vitest, not the Bun integration script.
+          command: >-
+            vp run -v --parallel --concurrency-limit 4
+            -F './packages/*' -F './examples/*'
+            -F '!@yielded/example-persistence-drizzle-managed' test
+            --retry.count 2 --retry.delay 1000
+            --retry.condition 'timed out|timeout|ETIMEDOUT|ESOCKETTIMEDOUT'
+
+      - name: Run the managed persistence consumer
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 3m
+          command: vp run -v @yielded/example-persistence-drizzle-managed#test
+
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.setup.outputs.cache-key }}
+
+  build:
+    name: Build
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
+        with:
+          task-cache: build
+
+      - name: Build packages, examples, docs, and package consumers
+        id: build
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          command: vp run -v build
+
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.build.outcome == 'success' || steps.build.outcome == 'failure') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.setup.outputs.cache-key }}
+
+  docs:
+    name: Docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up CI
+        id: setup
+        uses: ./.github/actions/setup-ci
+        with:
+          # Mutually exclusive with Build; reuse its docs task results.
+          task-cache: build
+
+      - name: Check and build docs
+        id: docs
+        uses: ./.github/actions/run-ci
+        with:
+          timeout: 5m
+          command: vp run -v ci:docs
+
+      - name: Save Vite Task cache
+        if: ${{ !cancelled() && (steps.docs.outcome == 'success' || steps.docs.outcome == 'failure') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: node_modules/.vite/task-cache
+          key: ${{ steps.setup.outputs.cache-key }}
+
+  ready:
+    name: ready
+    needs: [changes, checks, test, build, docs]
+    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify every selected gate passed
+        env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          FULL: ${{ needs.changes.outputs.full }}
+          DOCS: ${{ needs.changes.outputs.docs }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+        run: |
+          test "$CHANGES_RESULT" = success
+          test "$CHECKS_RESULT" = success
+          if [ "$FULL" = true ]; then
+            test "$DOCS" = false
+            test "$TEST_RESULT" = success
+            test "$BUILD_RESULT" = success
+            test "$DOCS_RESULT" = skipped
+          else
+            test "$FULL" = false
+            test "$TEST_RESULT" = skipped
+            test "$BUILD_RESULT" = skipped
+            if [ "$DOCS" = true ]; then
+              test "$DOCS_RESULT" = success
+            else
+              test "$DOCS" = false
+              test "$DOCS_RESULT" = skipped
+            fi
+          fi

@@ -1,0 +1,47 @@
+{
+  "name": "@yielded/example-auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json",
+    "example:hooks": "bun src/lifecycle-hooks.ts",
+    "example:identity": "bun src/identity-boundary.ts",
+    "example:sessions": "bun src/sessions.ts",
+    "example:proofs": "bun src/proofs.ts",
+    "example:password-hashing": "bun src/password-hashing.ts",
+    "example:password-methods": "bun src/password-methods.ts",
+    "example:email-methods": "bun src/email-methods.ts",
+    "example:phone": "bun src/phone-sqlite-bun.ts",
+    "test": "vp test",
+    "build": "vp build"
+  },
+  "dependencies": {
+    "@effect/atom-react": "catalog:",
+    "@effect/platform-bun": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@effect/sql-libsql": "catalog:",
+    "@effect/sql-sqlite-bun": "catalog:",
+    "@effect/sql-sqlite-node": "catalog:",
+    "@effect/sql-sqlite-wasm": "catalog:",
+    "@yielded/auth": "workspace:*",
+    "@yielded/auth-crypto": "workspace:*",
+    "@yielded/auth-openid-client": "workspace:*",
+    "@yielded/auth-persistence": "workspace:*",
+    "@yielded/auth-persistence-drizzle": "workspace:*",
+    "@yielded/auth-simplewebauthn": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "effect": "catalog:",
+    "openid-client": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "scheduler": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

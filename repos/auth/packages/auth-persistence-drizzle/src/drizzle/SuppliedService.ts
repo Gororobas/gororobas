@@ -1,0 +1,10 @@
+import type { Context } from "effect";
+
+/** The strict function property also checks class-style keys: the adapter's
+ * constructed value must satisfy the selected service, including native relations. */
+export type SuppliedService<Id, Constructed, Selected = Constructed> = Context.Service<
+  Id,
+  Selected
+> & {
+  readonly of: (value: Constructed) => Selected;
+};

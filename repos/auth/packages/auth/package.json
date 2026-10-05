@@ -1,0 +1,86 @@
+{
+  "name": "@yielded/auth",
+  "version": "0.1.0-beta.18",
+  "description": "Composable authentication, sessions, and identity workflows for Effect.",
+  "keywords": [
+    "authentication",
+    "effect",
+    "oauth",
+    "passkeys",
+    "sessions",
+    "typescript"
+  ],
+  "homepage": "https://yielded.dev/auth/",
+  "bugs": {
+    "url": "https://github.com/yielded-dev/auth/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/auth.git",
+    "directory": "packages/auth"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "exports": {
+    ".": "./src/index.ts",
+    "./contracts": "./src/Contracts.ts",
+    "./strategies": "./src/Strategies.ts",
+    "./Auth": "./src/Auth.ts",
+    "./Http": "./src/Http.ts",
+    "./OperationHttp": "./src/OperationHttp.ts",
+    "./OperationHttpClient": "./src/OperationHttpClient.ts",
+    "./OperationHttpServer": "./src/OperationHttpServer.ts",
+    "./Atom": "./src/Atom.ts",
+    "./Hooks": "./src/Hooks.ts",
+    "./Identity": "./src/Identity.ts",
+    "./OAuth": "./src/OAuth.ts",
+    "./OAuthServer": "./src/OAuthServer.ts",
+    "./Strava": "./src/Strava.ts",
+    "./Operations": "./src/Operations.ts",
+    "./Schema": "./src/Schema.ts",
+    "./WebCrypto": "./src/WebCrypto.ts",
+    "./Sessions": "./src/Sessions.ts",
+    "./SessionContract": "./src/SessionContract.ts",
+    "./Proofs": "./src/Proofs.ts",
+    "./Password": "./src/Password.ts",
+    "./Email": "./src/Email.ts",
+    "./Passkey": "./src/Passkey.ts",
+    "./PasskeyPassword": "./src/PasskeyPassword.ts",
+    "./PhoneOtp": "./src/PhoneOtp.ts",
+    "./SmsDelivery": "./src/SmsDelivery.ts",
+    "./adapters/Twilio": "./src/Twilio.ts",
+    "./Totp": "./src/Totp.ts",
+    "./PasskeyContract": "./src/PasskeyContract.ts",
+    "./TotpContract": "./src/TotpContract.ts",
+    "./AuthContract": "./src/AuthContract.ts",
+    "./Client": "./src/Client.ts",
+    "./Persistence": "./src/Persistence.ts",
+    "./EmailDelivery": "./src/EmailDelivery.ts",
+    "./BrowserLogin": "./src/BrowserLogin.ts",
+    "./BrowserLoginContract": "./src/BrowserLoginContract.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vp test --passWithNoTests"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@effect/vitest": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0"
+  }
+}

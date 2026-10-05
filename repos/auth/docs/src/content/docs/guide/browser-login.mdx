@@ -1,0 +1,115 @@
+---
+title: Browser sign-in for desktop and mobile
+description: Reuse hosted sign-in from Electron or iOS, with a separate session for the app.
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+`BrowserLogin` lets desktop and mobile apps use your website's sign-in,
+registration, and account recovery. It opens the system browser and exchanges a
+short-lived return code for a separate native session. Browser cookies stay in
+the browser; the app keeps its credential in a secure vault.
+
+<FlowMap
+  title="Browser to native session"
+  description="The browser handles sign-in. The native app exchanges the return code for its own session."
+  columns={3}
+  nodes={[
+    { id: "host", at: [1, 1], owner: "app", title: "Native app", note: "Secure vault" },
+    { id: "browser", at: [1, 2], owner: "app", title: "System browser", note: "Hosted sign-in" },
+    { id: "server", at: [1, 3], owner: "library", title: "BrowserLogin", note: "Session handoff" },
+  ]}
+  edges={[
+    { from: "host", to: "browser", label: "Open sign-in" },
+    { from: "browser", to: "server", label: "Authorize" },
+    { from: "server", to: "host", label: "Code, then PKCE exchange" },
+  ]}
+/>
+
+## Register your apps
+
+Use your existing session definition to register each app and its exact return URL:
+
+```ts
+import { BrowserLogin } from "@yielded/auth";
+
+const desktop = BrowserLogin.Client.make({
+  clientId: "desktop",
+  displayName: "Example Desktop",
+  returnUrl: "com.example.desktop://auth/callback",
+  browserSession: "confirm",
+});
+
+const ios = BrowserLogin.Client.make({
+  clientId: "ios",
+  displayName: "Example Mobile",
+  returnUrl: "https://app.example.com/account",
+  browserSession: "automatic",
+});
+
+const login = BrowserLogin.make(AppAuth.sessions, {
+  basePath: "/auth/browser-login",
+  clients: [desktop, ios],
+});
+const LoginLive = login.layer;
+```
+
+`make` configures the flow; `layer` acquires its services.
+
+`/account` can remain your normal web account page while the associated native
+app handles login callbacks. Deploy and verify the app/domain association before
+enabling `automatic`; registration alone does not establish it.
+
+| Policy           | Existing browser session                                              |
+| ---------------- | --------------------------------------------------------------------- |
+| `automatic`      | Reuse an eligible session; requires verified HTTPS callback delivery. |
+| `confirm`        | Show the account and ask the user to continue.                        |
+| `reauthenticate` | Require fresh authentication during this attempt.                     |
+
+Every policy enforces authentication freshness and MFA requirements. Custom
+schemes support `confirm` and `reauthenticate`. Fresh sign-in can return without
+a second confirmation; the browser may still require an **Open in app** action.
+
+Provide session services and `BrowserLogin.Persistence`, then mount `login.http`
+with `OperationHttpServer`. The [SQL account example](https://github.com/yielded-dev/auth/tree/main/examples/persistence-sql)
+shows persistence, HTTP configuration, and the hosted page together.
+
+## Connect the browser and app
+
+The hosted page receives an `attempt` query parameter. Its Effect Atom workflow
+reads `routes.describe`, authenticates or confirms the account, then calls
+`routes.authorize` with that exact session ID. Navigate to the returned callback;
+retain the same URL for a manual return link if navigation is blocked.
+See the [hosted-page reference](../reference/browser-login.md#hosted-page) for payloads.
+
+In the native host, create
+`BrowserLogin.makeClient(contract, { clientId, returnUrl, hostedUrl })` and run its
+`signIn` Effect. Platform adapters supply the browser and secure vault:
+
+- **Desktop:** [Electron adapter](https://github.com/yielded-dev/auth/tree/main/packages/auth-electron)
+  and [runnable app](https://github.com/yielded-dev/auth/tree/main/examples/browser-login-electron).
+  Custom schemes work on macOS, Windows, and Linux; HTTPS callbacks require macOS.
+- **Mobile:** [iOS React Native adapter](https://github.com/yielded-dev/auth/tree/main/packages/auth-react-native#browser-login),
+  using Expo WebBrowser and SecureStore. HTTPS callbacks require iOS 17.4+.
+  Android is unsupported.
+
+Browser and native sessions sign out independently. **Never retry an uncertain
+exchange or clear its vault to start again:** a native session may already exist.
+Follow [recovery](../reference/browser-login.md#recovery) before starting another login.
+
+## Optional Apple association helper
+
+Host your app's complete `apple-app-site-association` document yourself or through
+your CDN. This optional helper contributes callback paths for one app:
+
+```ts
+const association = BrowserLogin.appleAssociation({
+  appId: "ABCDE12345.com.example.app",
+  clients: [ios],
+  origin: "https://app.example.com",
+});
+```
+
+The Effect returns `{ appId, callbackPaths }`; it neither hosts nor replaces your
+association document. See [Apple association setup](../reference/browser-login.md#apple-association)
+for integration details and platform entitlements.

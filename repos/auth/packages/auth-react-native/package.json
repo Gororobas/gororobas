@@ -1,0 +1,65 @@
+{
+  "name": "@yielded/auth-react-native",
+  "version": "0.1.0-beta.18",
+  "description": "iOS passkey and browser login adapters for Yielded Auth and React Native.",
+  "homepage": "https://yielded.dev/auth/",
+  "bugs": {
+    "url": "https://github.com/yielded-dev/auth/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/auth.git",
+    "directory": "packages/auth-react-native"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "exports": {
+    ".": "./src/index.ts",
+    "./BrowserLogin": "./src/BrowserLogin.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vp test --passWithNoTests"
+  },
+  "dependencies": {
+    "@yielded/auth": "workspace:*"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "effect": "catalog:",
+    "expo": "catalog:",
+    "expo-secure-store": "catalog:",
+    "expo-web-browser": "catalog:",
+    "react-native": "catalog:",
+    "react-native-passkey": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0",
+    "expo-secure-store": "~15.0.8 || ~57.0.4",
+    "expo-web-browser": "~15.0.11 || ~57.0.3",
+    "react-native": ">=0.81 <1",
+    "react-native-passkey": "~3.6.2"
+  },
+  "peerDependenciesMeta": {
+    "expo-secure-store": {
+      "optional": true
+    },
+    "expo-web-browser": {
+      "optional": true
+    },
+    "react-native-passkey": {
+      "optional": true
+    }
+  }
+}

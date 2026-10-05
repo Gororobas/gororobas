@@ -1,0 +1,17 @@
+{
+  "name": "@yielded/auth-docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "catalog:",
+    "@yielded/starlight-theme": "catalog:",
+    "astro": "catalog:",
+    "satteri": "0.10.5",
+    "starlight-links-validator": "catalog:"
+  }
+}

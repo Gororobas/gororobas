@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.patch -whitespace
+
+examples/*/drizzle/**/snapshot.json linguist-generated=true

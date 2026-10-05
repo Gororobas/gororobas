@@ -1,0 +1,57 @@
+{
+  "name": "@yielded/auth-simplewebauthn",
+  "version": "0.1.0-beta.18",
+  "description": "SimpleWebAuthn browser ceremonies and server verification for Yielded Auth.",
+  "homepage": "https://yielded.dev/auth/",
+  "bugs": {
+    "url": "https://github.com/yielded-dev/auth/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/auth.git",
+    "directory": "packages/auth-simplewebauthn"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "exports": {
+    "./Browser": "./src/Browser.ts",
+    "./Server": "./src/Server.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vp test --passWithNoTests"
+  },
+  "dependencies": {
+    "@yielded/auth": "workspace:*",
+    "tldts": "catalog:"
+  },
+  "devDependencies": {
+    "@simplewebauthn/browser": "catalog:",
+    "@simplewebauthn/server": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "peerDependencies": {
+    "@simplewebauthn/browser": ">=14.0.0 <15",
+    "@simplewebauthn/server": ">=14.0.1 <15",
+    "effect": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@simplewebauthn/browser": {
+      "optional": true
+    },
+    "@simplewebauthn/server": {
+      "optional": true
+    }
+  }
+}

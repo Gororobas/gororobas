@@ -1,0 +1,237 @@
+---
+title: OAuth
+description: Sign in with a provider and optionally retain access to its API.
+---
+
+import { FlowMap, Trace } from "@yielded/starlight-theme/components";
+
+An **app session** identifies your signed-in user. A **provider grant** lets your
+server call a provider's API. Configure both through an OAuth strategy in `Auth.make`.
+Your app owns accounts, claims, and permission policy.
+
+| Your app needs                                             | Strategy                                                       |
+| ---------------------------------------------------------- | -------------------------------------------------------------- |
+| Sign in with an existing account link                      | `OAuth.make()`                                                 |
+| Sign in and retain provider API access in the same consent | `OAuth.make({ access: profile })`                              |
+| Create an account after provider verification              | `OAuth.makeRegistration({ registration, registrationPolicy })` |
+| Link another login method                                  | `OAuth.makeAccounts({ policy })`                               |
+| Connect an API to an already authenticated account         | `OAuth.makeConnected({ policy })`                              |
+
+## Sign in and retain provider access
+
+```ts title="apps/server/auth.ts"
+import { Auth, Sessions } from "@yielded/auth";
+import { OAuth } from "@yielded/auth/strategies";
+import * as GitHub from "@yielded/auth-openid-client/GitHub";
+import { AuthApi } from "@app/domain/auth-contract";
+import { clientId } from "./config";
+
+const profile = GitHub.accessProfile({ clientId, scopes: ["read:user"] });
+
+export const AppAuth = Auth.make(AuthApi, {
+  sessions: Sessions.stateful(),
+  strategies: { social: OAuth.make({ access: profile }) },
+  defaultStrategy: "social",
+});
+```
+
+Omit `access` to discard provider tokens after verifying identity. With `access`,
+the strategy encrypts and saves the grant before completing authentication through
+the same session authority used by passwords, passkeys, and email. Choose stateful,
+stateless, or state-assisted sessions independently.
+
+<Trace
+  lanes={[
+    { id: "browser", label: "Browser" },
+    { id: "provider", label: "Provider" },
+    { id: "library", label: "Yielded Auth" },
+    { id: "app", label: "Your storage" },
+  ]}
+  steps={[
+    {
+      lane: "browser",
+      title: "Start sign-in",
+      detail: "The contract's OAuth `signIn` action starts a single-use flow.",
+    },
+    {
+      lane: "provider",
+      title: "Sign in and consent",
+      detail: "The person signs in at the provider and approves the requested scopes.",
+    },
+    {
+      lane: "library",
+      title: "Receive the callback",
+      code: "/auth/{provider}/callback",
+      detail: "The HTTP adapter routes the provider's callback to the OAuth strategy.",
+    },
+    {
+      lane: "provider",
+      title: "Exchange the code",
+      detail:
+        "The strategy makes a single code exchange. An unknown outcome never permits repeating it.",
+    },
+    {
+      lane: "app",
+      title: "Retain the grant",
+      detail:
+        "Your storage resolves the existing account link and saves the encrypted provider grant.",
+    },
+    {
+      lane: "library",
+      title: "Complete authentication",
+      detail:
+        "Only after the grant is saved does shared authentication deliver the session, as it does for passwords and passkeys.",
+    },
+    {
+      lane: "browser",
+      title: "Read the result",
+      detail:
+        "The browser receives a session or a request for additional authentication. Provider tokens never enter browser results.",
+    },
+  ]}
+/>
+
+Declare the [OAuth actions](../reference/oauth#shared-auth-setup), then configure
+`Http.make` with `GitHub.provider({ clientId, clientSecret, access: [profile] })`.
+The HTTP adapter owns callback routing and private cookie delivery. Supply shared
+sign-in and connected persistence, account claims, and separate transaction/token
+keyrings through Layers. The [runnable composition](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/oauth-application.ts)
+shows the full setup; [GitHub](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/github-app.ts)
+and [Strava](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/strava-app.ts)
+provide concrete configuration and a single-account allowlist.
+
+Retained sign-in currently requires an existing local account link. For new users,
+use registration first, then connect provider access after authentication.
+
+### Use the session and provider access
+
+Under the HTTP middleware, use the regular Auth API:
+
+{/* prettier-ignore */}
+```ts
+const auth = yield* AppAuth;
+const session = yield* auth.requireSession();
+const connections = yield* auth.listAccountConnections({ limit: 20 });
+```
+
+The server-side connected service handles refresh and token use:
+
+{/* prettier-ignore */}
+```ts
+const access = yield* AppAuth.strategies.social.access.ConnectedAccess;
+yield* access.withAccessToken(invocation, { grantId, profileKey: profile.key }, readProfile);
+```
+
+Provide `AppAuth.strategies.social.access.accessLayer` with the same connected
+services. `invocation` must come from a verified session or a trusted job authority;
+the service rechecks the subject, grant, and application permission. `readProfile`
+receives a redacted token and is never retried by the library. Refresh does not
+upgrade session assurance. Provider tokens never enter browser results or sessions.
+
+`auth.disconnectAccount` uses the same connected-grant authority. Provider revocation
+depends on the profile; cohort revocation needs the shared maintenance worker.
+See [retained access](../reference/oauth#retained-access) for dependencies and recovery.
+
+## Authorize MCP clients
+
+`OAuthServer` lets a signed-in user grant a registered MCP client access to your
+application. `Auth` supplies the application session; the OAuth strategy owns retained
+upstream provider credentials. The two grants stay separate:
+
+<FlowMap
+  title="Separate MCP and provider grants"
+  description="The browser signs in through your login page and approves the MCP client on the OAuthServer consent page. The MCP client sends its MCP token to Effect McpServer, where the OAuthServer middleware supplies CurrentAccess to your tool handler. When the handler needs provider data, the OAuth strategy uses its provider grant to call the provider API. The MCP grant and the provider grant stay separate."
+  columns={3}
+  nodes={[
+    { id: "browser", at: [1, 1], owner: "external", title: "Browser" },
+    { id: "login", at: [1, 2], owner: "app", title: "Your login page", code: "loginPath" },
+    { id: "consent", at: [1, 3], owner: "library", title: "Consent", code: "OAuthServer.make(…)" },
+    { id: "client", at: [2, 3], owner: "external", title: "MCP client" },
+    {
+      id: "server",
+      at: [3, 3],
+      owner: "external",
+      title: "Effect McpServer",
+      code: "oauth.middleware(…)",
+    },
+    {
+      id: "handler",
+      at: [4, 3],
+      owner: "app",
+      title: "Your tool handler",
+      code: "OAuthServer.CurrentAccess",
+    },
+    {
+      id: "strategy",
+      at: [4, 2],
+      owner: "library",
+      title: "OAuth strategy",
+      note: "Optional provider access",
+    },
+    { id: "provider", at: [4, 1], owner: "external", title: "Provider API" },
+  ]}
+  edges={[
+    { from: "browser", to: "login" },
+    { from: "login", to: "consent" },
+    { from: "consent", to: "client" },
+    { from: "client", to: "server", label: "MCP token" },
+    { from: "server", to: "handler" },
+    { from: "handler", to: "strategy" },
+    { from: "strategy", to: "provider" },
+  ]}
+  groups={[
+    { label: "MCP grant", from: [1, 3], to: [3, 3] },
+    { label: "Provider grant", from: [4, 1], to: [4, 2] },
+  ]}
+/>
+
+Define supported scopes, supply an identity service that verifies your existing
+session, and mount the authorization routes beside Effect's MCP routes:
+
+```ts
+const oauth = OAuthServer.make("mcp", { scopes: ["athlete:read"] });
+
+const protectedMcp = McpServer.toolkit(toolkit).pipe(
+  Layer.provide(handlers),
+  Layer.provide(
+    McpServer.layerHttp({
+      name: "Athlete tools",
+      version: "1.0.0",
+      path: "/mcp",
+      protocols: [McpProtocol.v2026_07_28],
+    }),
+  ),
+  Layer.provide(oauth.middleware(["athlete:read"]).layer),
+);
+```
+
+The [runnable Strava MCP example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/strava-mcp.ts)
+provides the login, SQL migration, signing keys, client registration, CORS, and
+server. It uses the built-in consent page and a single allowlisted athlete; its
+tool returns the authenticated subject without calling Strava's API.
+
+Inside a tool handler, read `OAuthServer.CurrentAccess`; reject `undefined`.
+The value contains the authenticated `subjectId`, `clientId`, resource, scopes,
+and grant ID. Your application still decides which accounts and operations that
+subject may access. Your application owns the subject-to-provider connection
+mapping. Resolve that connection from trusted storage, then call `withAccessToken`
+on the strategy’s `access.ConnectedAccess` service; MCP clients never receive provider tokens.
+
+This initial server supports explicitly registered public clients. Clients must
+support supplying their registered client ID; there is no dynamic registration
+or Client ID Metadata Document endpoint. See the
+[authorization server reference](../reference/oauth#authorization-server) for
+the setup and token lifecycle.
+
+## Other providers
+
+`OpenIdClient.provider` supports OIDC discovery and plain OAuth endpoints.
+Its optional `access` settings declare permission profiles and the provider's
+refresh/resource/revocation contract. A custom `ProviderDefinition.configure`
+returns the sign-in protocol and optionally a `connected` protocol. Configuration,
+secrets, and required services remain in the provider Layer.
+See [provider configuration](../reference/oauth#providers).
+
+The [combined login example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/login-server.ts)
+shares sessions across email, GitHub, and Google. Provider display metadata never
+authorizes linking accounts by matching email addresses.
