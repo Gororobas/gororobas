@@ -166,7 +166,7 @@ export const readPreviewDataset = (directory: string) =>
     const localMediaAssets = yield* SqlSchema.findAll({
       Request: Schema.Void,
       Result: StoredMediaAsset,
-      execute: () => sql`SELECT id FROM media_assets WHERE storage_key IS NOT NULL`,
+      execute: () => sql`SELECT id FROM media_assets WHERE content_type IS NOT NULL`,
     })(undefined)
     return {
       plants: dataset.plants,

@@ -193,7 +193,6 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
               originalHeight: Number(dimensions[2]),
             },
             label: image.latest_source.label,
-            storageKey: null,
             contentType: null,
             byteSize: null,
             moderationStatus: null,

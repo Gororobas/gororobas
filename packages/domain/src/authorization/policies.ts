@@ -1,5 +1,5 @@
 import { commentsPolicies } from "../comments/policies.js"
-import { mediaPolicies } from "../media/policies.js"
+import { mediaPolicies } from "../media-assets/policies.js"
 import { organizationsPolicies } from "../organizations/policies.js"
 import { peoplePolicies } from "../people/policies.js"
 import { profilePolicies } from "../profiles/policies.js"

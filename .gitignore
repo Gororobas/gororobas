@@ -19,3 +19,5 @@ scratchpad/*
 *-results/
 dolt
 dolt-access.lock
+
+/packages/migration/debug/sanity-images/

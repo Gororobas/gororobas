@@ -13,7 +13,8 @@
     "migrate": "tsx src/index.ts",
     "generate:gel": "npx @gel/generate edgeql-js --out src/gel --future-polymorphism-as-discriminated-unions --future-strict-type-names",
     "generate:interfaces": "npx @gel/generate interfaces --file src/gel.interfaces.ts",
-    "generate:all": "pnpm generate:gel && pnpm generate:interfaces"
+    "generate:all": "pnpm generate:gel && pnpm generate:interfaces",
+    "download:images": "node --import tsx src/download-sanity-images.ts"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",

@@ -1,12 +1,10 @@
 import { Schema } from "effect"
-/**
- * Media HTTP API endpoints.
- */
+import { Multipart } from "effect/http"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 
 import { ModerationStatus } from "../common/enums.js"
 import { MediaAssetId } from "../common/ids.js"
-import { MediaAssetFileName } from "./domain.js"
+import { MediaAssetRequest } from "./domain.js"
 import { MediaAssetStorageError, InvalidMediaAssetError, MediaNotFoundError } from "./errors.js"
 
 export const MediaUploadData = Schema.Struct({
@@ -30,30 +28,26 @@ export const AttachMediaToWikiArticleData = Schema.Struct({
 })
 export type AttachMediaToWikiArticleData = typeof AttachMediaToWikiArticleData.Type
 
-export class MediaApiGroup extends HttpApiGroup.make("media")
+export class MediaAssetsApi extends HttpApiGroup.make("mediaAssets")
   .add(
     HttpApiEndpoint.post("uploadMedia", "/media/upload", {
       success: MediaUploadData,
       error: [InvalidMediaAssetError, MediaAssetStorageError],
-      payload: Schema.Struct({
-        contentType: Schema.Trimmed.check(Schema.isNonEmpty()),
-        file: Schema.Uint8ArrayFromBase64,
-        fileName: Schema.Trimmed.check(Schema.isNonEmpty()),
-      }),
+      payload: Schema.Struct({ file: Multipart.SingleFileSchema }).pipe(
+        HttpApiSchema.asMultipartStream({
+          // One form field; the file body is still consumed as a stream of chunks.
+          maxParts: 1,
+          maxFileSize: "5 GiB",
+          maxTotalSize: "5 GiB",
+        }),
+      ),
     }),
   )
   .add(
-    HttpApiEndpoint.get("getMedia", "/media/:id", {
-      success: MediaUploadData,
-      error: MediaNotFoundError.pipe(HttpApiSchema.status(404)),
-      params: Schema.Struct({ id: MediaAssetId }),
-    }),
-  )
-  .add(
-    HttpApiEndpoint.get("getMediaFile", "/media/:id/files/:name", {
+    HttpApiEndpoint.get("getMedia", "/media/:id/:format/:variant", {
       success: Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array()),
-      error: MediaNotFoundError,
-      params: Schema.Struct({ id: MediaAssetId, name: MediaAssetFileName }),
+      error: [MediaNotFoundError, MediaAssetStorageError],
+      params: MediaAssetRequest,
     }),
   )
   .add(

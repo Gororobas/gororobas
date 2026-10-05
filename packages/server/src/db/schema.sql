@@ -165,7 +165,6 @@ CREATE TABLE suggested_tag_sources (
 CREATE TABLE media_assets (
   id text PRIMARY KEY,
   format text NOT NULL,
-  storage_key text UNIQUE,
   content_type text,
   byte_size integer,
   label text,

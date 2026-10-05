@@ -14,6 +14,8 @@ import {
 } from "@gororobas/domain"
 import { IdGenLive } from "@gororobas/server/id-gen-live"
 import { insertMediaAsset, insertMediaAssetCredit } from "@gororobas/server/media-assets/mutations"
+import { MediaAssetsRepository } from "@gororobas/server/media-assets/repository"
+import { MediaAssetsService } from "@gororobas/server/media-assets/service"
 import { MediaAssetsStorage } from "@gororobas/server/media-assets/storage"
 import { makeAppSql } from "@gororobas/server/sql"
 import {
@@ -83,7 +85,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
       }
     }),
   ).pipe(Layer.provide(WorkflowEngine.layerMemory))
-  const services = Layer.mergeAll(
+  const dependencies = Layer.mergeAll(
     makeAppSql(database),
     IdGenLive,
     Layer.effect(WikiArticlesRepository)(WikiArticlesRepository.make),
@@ -100,6 +102,10 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
     ),
     NodeHttpClient.layerUndici,
   )
+  const services = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
+    Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+    Layer.provideMerge(dependencies),
+  )
   const result = await Effect.runPromise(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
@@ -108,7 +114,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
       const now = yield* DateTime.now
       const timestamp = DateTime.formatIso(now)
       const mediaAssets: Array<MediaAssetRow> = []
-      const storage = yield* MediaAssetsStorage
+      const service = yield* MediaAssetsService
       for (const [photoIndex, photo] of plant.latest_source.photos.entries()) {
         const match = /^image-([a-f0-9]{40})-(\d+)x(\d+)-([a-z0-9]+)$/.exec(photo.sanity_id)
         if (!match)
@@ -131,7 +137,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
             ),
           )
         const original = yield* response.arrayBuffer
-        const stored = yield* storage.store({
+        const stored = yield* service.prepare({
           id: sourceMediaAsset.id,
           file: new Uint8Array(original),
           contentType: `image/${match[4] === "jpg" ? "jpeg" : match[4]}`,

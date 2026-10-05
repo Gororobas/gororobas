@@ -1,5 +1,6 @@
 import {
   AccountSession,
+  CurrentAuthenticationContext,
   OrganizationId,
   OrganizationMembershipSession,
   VisitorSession,
@@ -13,15 +14,10 @@ import {
 } from "@gororobas/domain"
 import { Effect, Layer, Option, Schema } from "effect"
 /**
- * Session resolution service for authentication.
+ * Resolve authorization roles from the account already verified by authentication middleware.
+ * Request headers are credentials, never account IDs.
  */
-import { HttpServerRequest } from "effect/http"
 import { SqlClient, SqlSchema } from "effect/sql"
-
-export class AuthenticationFailureError extends Schema.TaggedError<AuthenticationFailureError>()(
-  "AuthenticationFailureError",
-  {},
-) {}
 
 const PersonQueryResult = Schema.Struct({
   accessLevel: PlatformAccessLevel,
@@ -33,24 +29,14 @@ const MembershipQueryResult = Schema.Struct({
   organizationId: OrganizationId,
 })
 
-const getAccount = (
-  request: HttpServerRequest.HttpServerRequest,
-): Effect.Effect<Option.Option<string>> =>
-  Effect.sync(() => {
-    const authHeader = request.headers.authorization
-    if (!authHeader?.startsWith("Bearer ")) return Option.none()
-    return Option.fromNullishOr(authHeader.slice(7) || undefined)
-  })
-
 export const resolveSession = Effect.gen(function* () {
-  const request = yield* HttpServerRequest.HttpServerRequest
-  const accountId = yield* getAccount(request)
+  const authentication = yield* CurrentAuthenticationContext
 
   const visitorSession: VisitorSession = {
     type: "VISITOR",
   }
 
-  if (Option.isNone(accountId)) {
+  if (authentication === null) {
     return visitorSession
   }
 
@@ -69,7 +55,7 @@ export const resolveSession = Effect.gen(function* () {
     Result: MembershipQueryResult,
   })
 
-  const personOption = yield* fetchPerson(accountId.value)
+  const personOption = yield* fetchPerson(authentication.account.id)
 
   if (Option.isNone(personOption) === true) {
     return yield* new UnauthorizedError({
@@ -79,7 +65,7 @@ export const resolveSession = Effect.gen(function* () {
   }
 
   const person = personOption.value
-  const memberships = yield* fetchMemberships(accountId.value)
+  const memberships = yield* fetchMemberships(authentication.account.id)
 
   const account: AccountSession = {
     accessLevel: person.accessLevel,
@@ -93,11 +79,6 @@ export const resolveSession = Effect.gen(function* () {
     type: "ACCOUNT",
   }
   return account
-}).pipe(
-  Effect.catchTags({
-    SchemaError: () => Effect.fail(new AuthenticationFailureError()),
-    SqlError: () => Effect.fail(new AuthenticationFailureError()),
-  }),
-)
+})
 
 export const SessionServiceLive = Layer.effect(SessionContext, resolveSession)

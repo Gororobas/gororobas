@@ -20,7 +20,7 @@ import {
   VerificationRow,
 } from "../../src/authentication/domain.js"
 import { Handle, TimestampColumn } from "../../src/common/primitives.js"
-import { MediaAssetRow } from "../../src/media/domain.js"
+import { MediaAssetRow } from "../../src/media-assets/domain.js"
 import { OrganizationRow } from "../../src/organizations/domain.js"
 import { PersonRow } from "../../src/people/domain.js"
 import { ProfileRow } from "../../src/profiles/domain.js"

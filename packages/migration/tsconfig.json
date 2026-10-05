@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"],
+  "include": ["src", "../domain/src/crdts/loro-crdt.d.ts"],
   "exclude": ["src/gel"],
   "compilerOptions": {
     "types": ["node"],

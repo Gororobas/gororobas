@@ -6,6 +6,7 @@
 import {
   Array as EffectArray,
   DateTime,
+  Duration,
   Effect,
   Exit,
   Layer,
@@ -122,6 +123,8 @@ export function deepEquals(a: unknown, b: unknown): boolean {
   if (DateTime.isDateTime(a) && DateTime.isDateTime(b)) {
     return DateTime.Equivalence(a, b)
   }
+
+  if (Duration.isDuration(a) && Duration.isDuration(b)) return Duration.equals(a, b)
 
   // Handle Uint8Array
   if (a instanceof Uint8Array && b instanceof Uint8Array) {

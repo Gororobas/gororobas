@@ -2,7 +2,7 @@ import { HttpApi } from "effect/http-api"
 
 import { AuthenticationMiddleware } from "./authentication/middleware.js"
 import { CommentsApiGroup } from "./comments/api.js"
-import { MediaApiGroup } from "./media/api.js"
+import { MediaAssetsApi } from "./media-assets/api.js"
 import { OrganizationsApiGroup } from "./organizations/api.js"
 import { PeopleApiGroup } from "./people/api.js"
 import { ProfilesApiGroup } from "./profiles/api.js"
@@ -12,7 +12,7 @@ import { WikiApiGroup } from "./wiki/api.js"
 
 export const GororobasApi = HttpApi.make("GororobasApi")
   .add(CommentsApiGroup)
-  .add(MediaApiGroup)
+  .add(MediaAssetsApi)
   .add(OrganizationsApiGroup)
   .add(PeopleApiGroup)
   .add(PublicationsApiGroup)

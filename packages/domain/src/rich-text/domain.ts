@@ -2,7 +2,7 @@
 import { Schema } from "effect"
 
 import { MediaAssetId, ProfileId, PublicationId, TagId, WikiArticleId } from "../common/ids.js"
-import { MediaAssetFormat } from "../media/domain.js"
+import { MediaAssetFormat } from "../media-assets/domain.js"
 import { ExternalEmbed } from "./external-embed.js"
 
 export * from "./external-embed.js"
