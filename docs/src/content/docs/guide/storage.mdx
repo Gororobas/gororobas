@@ -1,0 +1,169 @@
+---
+title: Database and backend choices
+description: Keep your account model. Use managed auth tables, map an existing SQL schema, or supply Effect services for another backend.
+---
+
+import StorageLadder from "../../../components/StorageLadder.astro";
+import { TableMap } from "@yielded/starlight-theme/components";
+
+Your account model belongs to your application. A subject can be a row in your
+existing customer table or an identity managed by another service. Yielded Auth
+needs ways to look up that identity and durably store credentials, proofs, and
+sessions; core does not require an ORM or a particular database.
+
+Choose how to provide those services:
+
+| Start with                        | When it fits                                                 |
+| --------------------------------- | ------------------------------------------------------------ |
+| [Managed tables](#managed-tables) | You want auth storage supplied alongside your account table. |
+| [Your schema](#your-schema)       | You already own SQL tables and migrations.                   |
+| [Your services](#your-services)   | Your backend needs a custom store or transaction model.      |
+
+Replacing storage Layers keeps your contract, `AppAuth`, and client unchanged. Moving existing data still
+requires an application-owned migration.
+
+<StorageLadder />
+
+## Managed tables
+
+Map your account table and let Yielded Auth define the rest:
+
+```ts title="apps/server/schema.ts"
+import { Schema as AuthSchema } from "@yielded/auth";
+import { AuthPersistence } from "@yielded/auth-persistence-drizzle/SqliteBun";
+import { Effect } from "effect";
+
+import { AppAuth, requirement } from "./auth";
+import { customers } from "./customers";
+
+export const Persistence = AuthPersistence.make(AppAuth);
+
+export const storage = Persistence.managed({
+  subjects: {
+    table: customers,
+    id: "id",
+    status: "enabled",
+    activeValue: true,
+    securityRevision: "securityRevision",
+    idCodec: AuthSchema.SubjectId,
+    requirements: () => Effect.succeed(requirement),
+  },
+  prefix: "customer_auth",
+});
+
+export const authSchema = storage.schema;
+```
+
+<TableMap
+  table="customers"
+  columns={[
+    { name: "customer_key", role: "subject ID" },
+    { name: "enabled", role: "active flag" },
+    { name: "auth_revision", role: "security revision" },
+    { name: "display_name" },
+  ]}
+  link="subject_id"
+  managed={[
+    "customer_auth_identifiers",
+    "customer_auth_passwords",
+    "customer_auth_sessions",
+    "customer_auth_passkeyCredentials",
+  ]}
+  more="24 more, depending on the methods you install"
+/>
+
+Only the methods you install add tables. Export them from `authSchema` and
+Drizzle Kit generates their migrations; review, commit, and apply them like any
+other migration. In the example, a migration Layer applies committed files at
+startup; it never pushes schema changes. You decide when migrations run.
+
+To give a single table your own layout, pass it in `tables`. The rest stay managed.
+
+## Your schema
+
+Declare every table yourself, with your own names and columns:
+
+```ts title="apps/server/tables.ts"
+export const identifiers = sqliteTable(
+  "app_identifiers",
+  {
+    namespace: text("c_namespace").notNull(),
+    value: text("c_value").notNull(),
+    subjectId: text("c_subject_id").notNull(),
+    revision: text("c_revision").notNull(),
+    verifiedAt: integer("c_verified_at"),
+    active: integer("c_active", { mode: "boolean" }).notNull(),
+  },
+  (table) => [uniqueIndex("app_identifiers_key_0").on(table.namespace, table.value)],
+);
+```
+
+Then map them with `Persistence.map`. TypeScript requires a table for every
+storage role your installed methods use:
+
+```ts title="apps/server/schema.ts"
+export const storage = Persistence.map({
+  subjects: { table: customers, id: "id", status: "enabled" /* … */ },
+  tables: {
+    identifiers: tables.identifiers,
+    credentials: tables.credentials,
+    passwords: tables.passwords,
+    sessions: tables.sessions,
+    // …one entry per role
+  },
+});
+```
+
+The library still runs every query and transaction. Before serving auth, the
+persistence Layer checks each mapped column and unique key against the database.
+
+The same `Persistence.map` works without Drizzle. Import `AuthPersistence` from
+`@yielded/auth-persistence`, describe the tables for Effect SQL, and write the DDL
+yourself. The [Effect SQL app](https://github.com/yielded-dev/auth/tree/main/examples/persistence-sql)
+runs on SQLite and PostgreSQL.
+
+## Your services
+
+Each storage role is a public service, such as `Password.PasswordPersistence`.
+Implement them in your own Layers. The rest of auth calls those services through
+Effect, without knowing whether they use SQL:
+
+```ts title="apps/server/live.ts"
+export const PersistenceLive = Layer.mergeAll(
+  PasswordsLive,
+  ProofsLive,
+  EmailLive,
+  PasskeysLive,
+  SessionsLive,
+);
+```
+
+The Layers above are application implementations, not library exports. The
+[custom services app](https://github.com/yielded-dev/auth/tree/main/examples/persistence-custom)
+implements these boundaries with a single-writer file store and no persistence
+package. It runs the account workflows with the same shared UI; its extra
+username sign-in uses an extended contract.
+
+### What a custom backend must guarantee
+
+Storage services describe workflow commits, not just CRUD. Your implementation
+must recheck the relevant account and credential state, consume proofs, and
+commit changes with their retry receipts atomically where the operation requires
+it. A receipt records the original decision so a retry can recover it safely.
+
+Choose a transaction or batch owner that can uphold those contracts. Splitting
+account and credential writes across independent backends does not make them
+atomic. An uncertain commit requires reconciliation, not another credential
+issuance. The [adapter reference](../reference/adapters) covers the supported
+transaction boundaries, including D1 and Durable Objects.
+
+The file-store example supports one process on a local filesystem. It illustrates
+the service boundary; replication and production storage operations remain yours.
+
+## Run each level
+
+The [four example apps](/auth/guide/examples/#run-an-account-app) implement the
+same account features with managed Drizzle, custom Drizzle, Effect SQL, and
+custom services. Compare their `schema.ts` and `live.ts` files to see what changes.
+The [driver reference](../reference/adapters#choose-a-driver) lists the maintained
+SQL adapters; workflow-specific support is described beside each adapter.

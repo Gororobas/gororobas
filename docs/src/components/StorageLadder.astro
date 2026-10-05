@@ -1,0 +1,70 @@
+---
+/** Who owns each layer of the auth stack at each storage level. */
+import { OwnershipLadder } from "@yielded/starlight-theme/components";
+
+const examples = "https://github.com/yielded-dev/auth/tree/main/examples";
+---
+
+<OwnershipLadder
+  caption="Who owns each layer of the auth stack at each storage level"
+  levels={[
+    {
+      name: "Managed tables",
+      api: "Persistence.managed(…)",
+      links: [{ name: "Managed Drizzle", href: `${examples}/persistence-drizzle-managed` }],
+    },
+    {
+      name: "Your schema",
+      api: "Persistence.map(…)",
+      links: [
+        { name: "Custom Drizzle", href: `${examples}/persistence-drizzle-custom` },
+        { name: "Effect SQL", href: `${examples}/persistence-sql` },
+      ],
+    },
+    {
+      name: "Your services",
+      api: "Layer.mergeAll(…)",
+      links: [{ name: "Custom services", href: `${examples}/persistence-custom` }],
+    },
+  ]}
+  layers={[
+    {
+      name: "Account table",
+      cells: [
+        { owner: "app", note: "Your table and IDs, mapped by column." },
+        { owner: "app", note: "Your table and IDs, mapped by column." },
+        { owner: "app", note: "Your records and IDs, in any store." },
+      ],
+    },
+    {
+      name: "Auth tables and migrations",
+      cells: [
+        { owner: "library", note: "Defined for you. Drizzle Kit generates migrations you review." },
+        { owner: "app", note: "Your table names, columns, and migrations." },
+        { owner: "app", note: "Your durable store; SQL is optional." },
+      ],
+    },
+    {
+      name: "Queries and transactions",
+      cells: [
+        { owner: "library", note: "Run for you." },
+        { owner: "library", note: "Run against your tables, checked at startup." },
+        { owner: "app", note: "Your implementation of each storage service." },
+      ],
+    },
+    {
+      name: "Sign-in workflows",
+      cells: [
+        { owner: "library", note: "Run for you." },
+        { owner: "library", note: "Run for you." },
+        { owner: "library", note: "Run for you, on your storage." },
+      ],
+    },
+  ]}
+  shared={{
+    name: "Contract and client",
+    label: "Unchanged",
+    note: "The same `AuthApi`, `AppAuth`, and client at every level. Only Layers change.",
+  }}
+  linksLabel="Runnable app"
+/>

@@ -1,0 +1,32 @@
+{
+  "name": "@yielded/example-browser-login-electron",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json",
+    "build": "vp pack && vp build",
+    "start": "vp run build && electron .",
+    "package": "vp run build && bun scripts/package.ts"
+  },
+  "dependencies": {
+    "@effect/atom-react": "catalog:",
+    "@effect/platform-node": "catalog:",
+    "@yielded/auth": "workspace:*",
+    "@yielded/auth-electron": "workspace:*",
+    "effect": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/platform-bun": "catalog:",
+    "@electron/packager": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "electron": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

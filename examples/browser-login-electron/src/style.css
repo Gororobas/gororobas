@@ -1,0 +1,67 @@
+:root {
+  font:
+    16px/1.55 system-ui,
+    sans-serif;
+  color: #f3f1e8;
+  background: #171915;
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 42rem;
+  padding: 2.5rem;
+  margin: auto;
+}
+h1 {
+  font-size: 2.4rem;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+h2 {
+  font-size: 1.3rem;
+}
+.eyebrow {
+  color: #ffb45e;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+}
+section {
+  border: 1px solid #484d40;
+  padding: 1.4rem;
+  border-radius: 0.7rem;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+button {
+  border: 1px solid #626959;
+  border-radius: 0.35rem;
+  padding: 0.65rem 0.85rem;
+  background: #2a2e24;
+  font: inherit;
+  cursor: pointer;
+}
+button:first-child {
+  background: #ffb45e;
+  color: #171915;
+  border-color: #ffb45e;
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+button:focus-visible {
+  outline: 3px solid #f3f1e8;
+  outline-offset: 3px;
+}
+.note {
+  color: #b4baa9;
+  font-size: 0.9rem;
+}
+[role="alert"] {
+  color: #ffbda8;
+}

@@ -1,0 +1,162 @@
+---
+title: Auth in an Effect application
+description: Use Schema for the contract, services for application behavior, Layers for infrastructure, and Effect Atom for the client.
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+Yielded Auth is a set of Effect services. You describe the authentication methods
+your application accepts, supply their dependencies with Layers, and call them
+alongside your other Effects. Your application keeps its accounts, database, and
+authorization policy.
+
+## One contract connects server and client
+
+`AuthContract` describes the public actions and session claims with Effect Schema.
+`Auth.make` binds that contract to server strategies. `Client.make` gives the
+browser a service with the same named actions and typed results.
+
+<FlowMap
+  title="Auth inside an Effect application"
+  description="React dispatches to auth atoms, which call the client service. The client sends contract actions over Effect HttpClient to the auth HTTP routes, which call the Auth service. Your handlers call the same Auth service directly. Both sides import the shared AuthApi contract, and your Layers supply accounts, policy, and storage."
+  columns={3}
+  boundary={{ row: 2, above: "Browser", below: "Server" }}
+  nodes={[
+    { id: "react", at: [1, 1], owner: "app", title: "React", note: "Renders and dispatches" },
+    {
+      id: "atoms",
+      at: [1, 2],
+      owner: "library",
+      title: "Auth atoms",
+      code: "AuthAtom.make(AppClient)",
+    },
+    {
+      id: "client",
+      at: [1, 3],
+      owner: "library",
+      title: "Client service",
+      code: "Client.make(AuthApi, …)",
+    },
+    { id: "contract", at: [2, 2], owner: "app", title: "Shared contract", code: "AuthApi" },
+    { id: "handlers", at: [3, 1], owner: "app", title: "Your handlers", code: "yield* AppAuth" },
+    {
+      id: "auth",
+      at: [3, 2],
+      owner: "library",
+      title: "Auth service",
+      code: "Auth.make(AuthApi, …)",
+    },
+    {
+      id: "routes",
+      at: [3, 3],
+      owner: "library",
+      title: "HTTP routes",
+      code: "Http.layer(AppAuth, …)",
+    },
+    {
+      id: "layers",
+      at: [4, 2],
+      owner: "app",
+      title: "Your Layers",
+      note: "Accounts, policy, storage",
+    },
+  ]}
+  edges={[
+    { from: "react", to: "atoms" },
+    { from: "atoms", to: "client" },
+    { from: "client", to: "routes", label: "Effect HttpClient" },
+    { from: "routes", to: "auth" },
+    { from: "handlers", to: "auth" },
+    { from: "auth", to: "layers" },
+  ]}
+/>
+
+The contract is safe to share with the browser: it contains schemas, not server
+keys or database connections. Adding a server strategy does not expose all its
+methods; you select the actions clients may call.
+
+The [getting started tour](./getting-started#define-the-shared-contract) shows the
+three definitions together. [HTTP integration](./http-and-client) shows how to add
+auth to an existing Effect `HttpApi` or router.
+
+## Call auth like any other service
+
+An application handler can require a session with an ordinary Effect:
+
+```ts title="apps/server/current-member.ts"
+import { Effect } from "effect";
+
+import { AppAuth } from "./auth";
+
+export const currentMember = Effect.fn("app.currentMember")(function* () {
+  const auth = yield* AppAuth;
+  const session = yield* auth.requireSession();
+
+  return session.claims.displayName;
+});
+```
+
+`requireSession()` returns the typed session or fails. It uses credentials from
+the current request context, supplied by the [HTTP middleware](./http-and-client#application-routes).
+It makes no HTTP call. Continue the same Effect with your own application
+services to load data or check permission for an action.
+
+Expected failures stay in Effect's error channel. Handle a
+[`PasswordRejected`](./passwords#handle-a-rejected-sign-in) when you want to show
+an invalid-credentials message; storage unavailability remains a different
+failure. Dependencies stay visible in the requirement type, and acquired
+resources belong to the host's Scope.
+
+## Supply infrastructure with Layers
+
+`Auth.make` declares a service; `AppAuth.layer` builds it. Provide your
+application's dependencies at the composition root:
+
+```ts title="apps/server/auth-live.ts"
+import { Layer } from "effect";
+
+import { AppAuth } from "./auth";
+import { AuthDependencies } from "./auth-dependencies";
+
+export const AuthLive = AppAuth.layer.pipe(Layer.provide(AuthDependencies));
+```
+
+`AuthDependencies` is your application's composition of storage, account policy,
+hashing, delivery, and keys, as required by the selected methods. The [Layer composition reference](../reference/adapters#compose-the-application-layer)
+and [complete managed app](https://github.com/yielded-dev/auth/blob/main/examples/persistence-drizzle-managed/src/live.ts)
+show concrete implementations.
+
+Changing a storage Layer does not change `yield* AppAuth`, its contract, or the
+client. Use managed Drizzle tables, map an existing SQL schema, or implement the
+services against another backend. [Database and backend choices](./storage)
+explains where those choices differ and which transaction guarantees remain.
+
+## Your application owns identity
+
+A **subject** is the identity your application authenticates: a customer,
+employee, or another account in your domain. It keeps your identifiers and
+lifecycle. **Claims** are the schema-defined data your application puts in a
+session, such as a display name; they are not a replacement for your account model.
+
+| Yielded Auth owns                               | Your application owns                                     |
+| ----------------------------------------------- | --------------------------------------------------------- |
+| Authentication workflows and proof verification | Which account a verified identity belongs to              |
+| Session issuance and credential delivery rules  | Account creation, status, and required factors            |
+| Typed operations and HTTP credential handling   | Authorization for your application's actions              |
+| Storage service contracts                       | Database connections, schema choices, and durable commits |
+
+The SQL adapters implement the storage contracts for you. They can map an
+existing customer table; a custom backend supplies the same service boundaries.
+Authentication establishes who is calling. Your application still decides what
+that caller may do.
+
+## The client is Effect too
+
+`Client.make` returns methods that produce Effects over Effect `HttpClient`.
+`AuthAtom.make` turns those actions into query and mutation atoms. React reads
+the results and dispatches inputs with ordinary Atom hooks.
+
+Compose multi-step work, such as a passkey prompt followed by authentication,
+in an Effect workflow atom. Declare cross-query invalidation with reactivity
+keys. Use `auth.runtime` for work that should end when the account changes.
+The [Effect Atom client guide](./client) walks through each of these choices.

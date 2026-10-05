@@ -1,0 +1,518 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #222c2a;
+  background: #f4f3ee;
+  font-synthesis: none;
+  line-height: 1.5;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button,
+input {
+  font: inherit;
+}
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #9bbf9f;
+  outline-offset: 4px;
+}
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: 0 48px 36px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 104px;
+  border-bottom: 1px solid #dadcd5;
+}
+.wordmark {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.7px;
+}
+.wordmark > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  background: #254c3b;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 22px;
+  margin-right: 5px;
+}
+.wordmark-divider {
+  color: #a6aaa1;
+  font-weight: 400;
+  margin: 0 2px;
+}
+.local-indicator,
+.eyebrow,
+.badge,
+footer,
+.messages .label-row,
+.reset-note {
+  font-family: ui-monospace, monospace;
+}
+.local-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: #68716a;
+}
+.local-indicator > span,
+.status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #538363;
+  border-radius: 50%;
+}
+.intro {
+  margin: 46px 0 32px;
+}
+.eyebrow {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.3px;
+  color: #728073;
+  margin: 0 0 13px;
+}
+h1 {
+  font-size: clamp(32px, 4.3vw, 49px);
+  line-height: 1.12;
+  letter-spacing: -2px;
+  font-weight: 550;
+  margin: 0 0 18px;
+}
+h1 span {
+  color: #72806c;
+}
+.intro > p:last-child {
+  color: #727970;
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 0;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.panel {
+  border: 1px solid #dce0d7;
+  border-radius: 16px;
+  background: #fffefa;
+}
+.sign-in,
+.welcome {
+  padding: 31px;
+}
+h2 {
+  font-size: 27px;
+  font-weight: 550;
+  line-height: 1.2;
+  letter-spacing: -0.7px;
+  margin: 0 0 8px;
+}
+.description {
+  color: #717a72;
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.7;
+}
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 4px;
+  background: #efeee9;
+  border-radius: 9px;
+  margin: 26px 0;
+  gap: 4px;
+}
+.tabs button {
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  padding: 9px;
+  color: #6d766c;
+  font-size: 12px;
+  font-weight: 550;
+}
+.tabs button[aria-pressed="true"] {
+  color: #2c4536;
+  background: #fffefa;
+  box-shadow: 0 1px 3px #223b2414;
+}
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  margin-bottom: 8px;
+}
+input {
+  display: block;
+  width: 100%;
+  border: 1px solid #d7ddd3;
+  border-radius: 7px;
+  background: #fff;
+  color: #29392e;
+  padding: 11px 12px;
+  font-size: 13px;
+  height: 43px;
+}
+input:focus {
+  outline: 2px solid #9db596;
+  outline-offset: 1px;
+}
+input + .label-row {
+  margin-top: 20px;
+}
+.label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.text-button {
+  background: none;
+  color: #52775b;
+  font-size: 11px;
+  padding: 0;
+  border: 0;
+}
+.hint {
+  font-size: 11px;
+  color: #81877d;
+  line-height: 1.7;
+  margin: 12px 0 22px;
+}
+.primary,
+.secondary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 7px;
+  min-height: 42px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 550;
+}
+.primary {
+  width: 100%;
+  border: 1px solid #294d3b;
+  color: #fff;
+  background: #294d3b;
+}
+.primary:hover {
+  background: #1d3b2c;
+}
+.primary span {
+  font-size: 17px;
+  font-weight: 400;
+}
+.secondary {
+  background: transparent;
+  color: #465f4b;
+  border: 1px solid #d1dacd;
+}
+form > .secondary {
+  width: 100%;
+}
+.secondary:hover {
+  background: #f1f4ed;
+}
+.code-form {
+  border-top: 1px solid #e3e7de;
+  padding-top: 24px;
+  margin-top: 24px;
+}
+.code-input {
+  font-family: ui-monospace, monospace;
+  font-size: 21px;
+  letter-spacing: 9px;
+  margin: 0 0 16px;
+}
+.side {
+  display: grid;
+  gap: 20px;
+}
+.session-panel,
+.inbox-panel {
+  padding: 24px;
+}
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 13px;
+  gap: 10px;
+}
+.section-heading h2 {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.25px;
+  margin: 0;
+}
+.badge {
+  padding: 4px 7px;
+  font-size: 8px;
+  letter-spacing: 0.7px;
+  border-radius: 4px;
+  color: #798272;
+  background: #eef0e8;
+}
+.badge.active {
+  background: #e4f0df;
+  color: #416844;
+}
+.empty {
+  color: #92978c;
+  font-size: 12px;
+  padding: 5px 0 0;
+  margin: 0;
+}
+.inbox-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 23px 12px 7px;
+  color: #9ca493;
+  font-size: 12px;
+}
+.inbox-empty > span {
+  font-size: 23px;
+  color: #b1bca8;
+}
+.messages {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: grid;
+  gap: 10px;
+}
+.messages li {
+  border: 1px solid #dfe5d5;
+  border-radius: 7px;
+  padding: 13px 15px;
+  background: #f4f7ee;
+}
+.messages .label-row {
+  font-size: 9px;
+  color: #748368;
+}
+.messages code {
+  display: block;
+  font-family: ui-monospace, monospace;
+  font-size: 26px;
+  letter-spacing: 7px;
+  color: #49613c;
+  margin-top: 8px;
+}
+.messages li:not(:first-child) {
+  opacity: 0.5;
+}
+.notice {
+  font-size: 12px;
+  padding: 11px 12px;
+  border-radius: 7px;
+  line-height: 1.5;
+}
+.error {
+  background: #f9eee8;
+  color: #9e523b;
+}
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 18px 0;
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 39px;
+  height: 39px;
+  background: #e4eadb;
+  color: #526b43;
+  border-radius: 50%;
+}
+.identity strong {
+  font-size: 14px;
+  font-weight: 550;
+}
+.identity p {
+  margin: 0;
+  font-size: 11px;
+  color: #828b7c;
+}
+.button-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 19px;
+}
+.welcome {
+  min-height: 377px;
+  background: #edf2e6;
+  border-color: #d7e1ce;
+}
+.success-mark {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid #aebe9f;
+  border-radius: 50%;
+  color: #4b6e3d;
+  font-size: 26px;
+  margin: 38px 0 21px;
+}
+.welcome > p:not(.eyebrow) {
+  color: #76816d;
+  font-size: 13px;
+  max-width: 290px;
+}
+.welcome .hint {
+  padding-top: 15px;
+  font-size: 11px;
+}
+footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 26px;
+  font-size: 9px;
+  color: #87917f;
+}
+footer p {
+  margin: 0;
+}
+.status-dot {
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+}
+.reset-note {
+  color: #9ba191;
+  font-size: 9px;
+  margin-top: 15px;
+}
+@media (max-width: 720px) {
+  main {
+    padding: 0 20px 28px;
+  }
+  header {
+    height: 80px;
+  }
+  .intro {
+    margin: 32px 0 25px;
+  }
+  h1 {
+    letter-spacing: -1.2px;
+  }
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  .sign-in,
+  .welcome {
+    padding: 25px;
+  }
+  .welcome {
+    min-height: 300px;
+  }
+  .local-indicator {
+    font-size: 8px;
+  }
+  .wordmark {
+    font-size: 16px;
+    gap: 6px;
+  }
+}
+
+.field-label {
+  margin-top: 20px;
+}
+.submit {
+  margin-top: 22px;
+}
+.forgot {
+  text-align: right;
+  margin: 14px 0;
+}
+.restart {
+  display: block;
+  margin-top: 20px;
+  font-size: 12px;
+}
+.reset-form {
+  margin-top: 26px;
+}
+.success {
+  background: #e4eddf;
+  color: #365b38;
+}
+.verification h2 {
+  font-size: 23px;
+}
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+  color: #7b8377;
+  font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: #e0e4db;
+}
+
+.passkey-button {
+  width: 100%;
+}
+
+.passkey-list {
+  list-style: none;
+  padding: 0;
+  margin: 20px 0;
+}
+
+.passkey-list li {
+  display: grid;
+  gap: 5px;
+  padding: 14px 0;
+  border-bottom: 1px solid #e0e4db;
+  font-size: 13px;
+}
+
+.passkey-list span {
+  color: #7b8377;
+  font-size: 12px;
+}

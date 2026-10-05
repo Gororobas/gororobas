@@ -1,0 +1,147 @@
+---
+title: How sign-in works
+description: Follow one password sign-in from the browser to the session cookie, and see which code runs each step.
+---
+
+import { Trace } from "@yielded/starlight-theme/components";
+
+Follow one password sign-in from the browser to the session cookie. Yielded Auth
+runs the security-sensitive steps; your code supplies the accounts and storage
+they act on.
+
+<Trace
+  steps={[
+    {
+      lane: "browser",
+      title: "Call the contract",
+      code: "yield* client.auth.signIn({ email, password })",
+      detail:
+        "The client sends the contract's input to `/auth/signIn`. The password travels in the request body, never in the URL.",
+    },
+    {
+      lane: "library",
+      title: "Decode the request",
+      code: "Http.layer(AppAuth, { origin })",
+      detail:
+        "The route decodes the input against the same contract, wraps the password in `Redacted`, and reads any session cookie into the request context.",
+    },
+    {
+      lane: "library",
+      title: "Verify the password",
+      code: "Password.make()",
+      detail:
+        "The password method finds the credential through your password storage and checks it with the hashing Layer you supply.",
+    },
+    {
+      lane: "app",
+      title: "Resolve the account",
+      code: "SessionClaims.resolve({ subjectId, credential })",
+      detail:
+        "Your account code returns the session claims, such as `displayName`, or rejects a disabled account.",
+    },
+    {
+      lane: "app",
+      title: "Commit the session",
+      detail:
+        "Your session storage writes the new session in one transaction, whether it uses managed tables, your own schema, or a custom service.",
+    },
+    {
+      lane: "library",
+      title: "Set the cookie",
+      detail:
+        "Only after the commit does the session cookie go on the response. Credentials never appear in the result.",
+    },
+    {
+      lane: "browser",
+      title: "Read the result",
+      code: '{ _tag: "Authenticated", session }',
+      detail:
+        "The client decodes a session with your typed claims. A wrong password arrives as a typed `PasswordRejected` failure instead.",
+    },
+  ]}
+/>
+
+## What your code supplies
+
+`SessionClaims` is the Effect service your application implements to turn a verified
+identity into session data. For password sign-in:
+
+```ts title="apps/server/auth-claims.ts"
+import { Password } from "@yielded/auth";
+import { Effect, Layer } from "effect";
+
+import { AppAuth } from "./auth";
+import { Customers } from "./customers";
+
+export const ClaimsLive = Layer.effect(
+  AppAuth.strategies.password.SessionClaims,
+  Effect.gen(function* () {
+    const customers = yield* Customers;
+
+    return {
+      resolve: Effect.fn("Auth.passwordClaims")(
+        function* ({ subjectId }) {
+          const customer = yield* customers.findById(subjectId);
+          if (customer === null || !customer.enabled)
+            return yield* Password.PasswordUnavailable.make({});
+
+          return { displayName: customer.displayName };
+        },
+        Effect.mapError(() => Password.PasswordUnavailable.make({})),
+      ),
+    };
+  }),
+);
+```
+
+`Customers` is your application's account service. Here it returns a customer
+or `null`; database access stays in that service.
+
+Each sign-in strategy exposes `SessionClaims`. Use `subjectId` for account lookups;
+`credential` contains method-specific details such as the password's email identifier.
+OAuth also supplies the verified provider `identity`.
+
+Provide the claims Layer alongside hashing and storage:
+
+```ts title="apps/server/auth-live.ts"
+import { Layer } from "effect";
+
+import { AppAuth } from "./auth";
+import { ClaimsLive } from "./auth-claims";
+import { AuthDependencies } from "./auth-dependencies";
+import { PasswordPersistenceLive } from "./auth-persistence";
+import { CustomersLive } from "./customers";
+import { HashingLive } from "./hashing";
+
+export const AuthLive = AppAuth.layer.pipe(
+  Layer.provide(ClaimsLive.pipe(Layer.provide(CustomersLive))),
+  Layer.provide(HashingLive),
+  Layer.provide(PasswordPersistenceLive),
+  Layer.provide(AuthDependencies),
+);
+```
+
+Use the [Argon2id Layer](./passwords.md#supply-the-services) for hashing and
+[your chosen adapter](./storage.mdx) for storage. `AuthDependencies` supplies
+[session authority, persistence, and keys](../reference/adapters.md#compose-the-application-layer).
+
+## Other methods, same path
+
+Multi-step methods return a public flow ID between calls; the private binding that ties the steps
+to one browser travels as a cookie, like the session.
+
+| Method                                         | Calls                                                                         |
+| ---------------------------------------------- | ----------------------------------------------------------------------------- |
+| [Password](/auth/guide/passwords/)             | `signIn` → session or additional factor.                                      |
+| [Email code or magic link](/auth/guide/codes/) | `beginSignIn` → `signIn` sends the proof → `verifySignIn` → `completeSignIn`. |
+| [SMS code](/auth/guide/phone/)                 | `signIn` sends the code → `completeSignIn`.                                   |
+| [Passkey](/auth/guide/passkeys/)               | `signIn` → browser ceremony → `completeSignIn`.                               |
+| [OAuth](/auth/guide/oauth/)                    | `signIn` → provider redirect → `completeSignIn`.                              |
+| [TOTP](/auth/guide/totp/)                      | First factor returns a pending proof → `verifyPending`.                       |
+
+## When a response is lost
+
+Commands that change an account, such as registration or a password reset, take
+a request ID. A retry with the same ID returns the stored receipt instead of
+running the command again. If a commit's outcome is unknown, look the receipt up
+through your storage adapter rather than issuing credentials again.

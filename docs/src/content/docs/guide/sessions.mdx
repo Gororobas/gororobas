@@ -1,0 +1,141 @@
+---
+title: Sessions
+description: Configure session lifetimes, read a session, and sign out.
+---
+
+import { Trace } from "@yielded/starlight-theme/components";
+
+Configure sessions on `Auth.make`. Request-aware methods handle credential lookup
+and delivery through the [HTTP boundary](./http-and-client).
+For Electron and iOS, [browser sign-in](./browser-login) establishes a distinct
+native session after hosted authentication and account confirmation.
+
+## Configure sessions
+
+```ts title="apps/server/auth.ts"
+import { Schema } from "effect";
+import { Auth, Sessions } from "@yielded/auth";
+
+export const AppAuth = Auth.make("app/Auth", {
+  claims: Schema.Struct({ displayName: Schema.String }),
+  sessions: Sessions.stateful({
+    idleTimeout: "30 minutes",
+    maxAge: "7 days",
+    renewAfter: "5 minutes",
+  }),
+});
+```
+
+This service only reads and manages sessions. Supply its bound
+`AppAuth.sessions.StatefulSessionPersistence` and `SessionRepository` through your
+storage Layer. It does not require authentication or provisioning authority.
+Adding an authentication strategy also selects the default completion authority;
+your account Layer supplies `AuthenticationAuthority` for issuing sessions.
+
+| Configuration                                  | How it verifies                               | Sign-out                                                      |
+| ---------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------- |
+| `Sessions.stateful(options)`                   | Checks the stored session.                    | Revokes through persistence.                                  |
+| `Sessions.stateless({ keys, ...options })`     | Verifies a signed token.                      | Clears this client only; existing tokens retain their expiry. |
+| `Sessions.stateAssisted({ keys, ...options })` | Verifies a signed token and current validity. | Uses `SignedSessionValidity` for immediate invalidation.      |
+
+Signed modes require an explicit keyring. Stateless sessions default to a
+fifteen-minute maximum age because sign-out cannot revoke an issued token. Their
+idle timeout and renewal interval are bounded by that lifetime. Stateful and
+state-assisted sessions default to a thirty-day maximum age, seven-day idle
+timeout, and renewal after one day. Explicit options select application policy;
+shorter lifetimes bound the idle and renewal intervals.
+
+Issuer and audience default to the stable session namespace, generation to `1`,
+and the token limit to `4096` bytes. The shorter stateless default rejects older
+tokens issued with a longer lifetime. Keep an explicit `maxAge` to retain that
+policy, or set `maximumIssuedAge` to the previous limit until those tokens expire
+while issuing new shorter-lived tokens.
+
+## Read the current session
+
+Inside an existing Effect handler covered by `http.middleware`:
+
+{/* prettier-ignore */}
+```ts
+const auth = yield* AppAuth;
+const session = yield* auth.getSession();
+```
+
+The method reads the incoming session credential from `Auth.AuthRequest`. Missing,
+invalid, or expired credentials return `null`. An unavailable session store,
+defect, or interruption remains a failure. No cookie parsing or catch handler is
+needed in application code.
+
+For a handler that requires authentication:
+
+{/* prettier-ignore */}
+```ts
+const auth = yield* AppAuth;
+const session = yield* auth.requireSession();
+```
+
+An anonymous request fails with `AuthenticationRequired`. The
+[HTTP guide](./http-and-client#protect-an-httpapi-group) shows how to require a
+session for an entire HttpApi group.
+
+Outside a request, verify an explicit credential:
+
+{/* prettier-ignore */}
+```ts
+const auth = yield* AppAuth;
+const session = yield* auth.verifySession(redactedCredential);
+```
+
+## Sign out
+
+In the same request context, call the service directly:
+
+{/* prettier-ignore */}
+```ts
+const auth = yield* AppAuth;
+const result = yield* auth.signOut();
+```
+
+Sign-out reads the incoming credential without first verifying it and clears the
+client cookie through private delivery. Its result reports `revoked`,
+`already-invalid`, `client-only`, or `SessionSignOutUnavailable`. Local clearing
+is not proof of server revocation; do not report global sign-out after a storage
+failure. [Mounting the auth routes](./http-and-client#configure-the-server) supplies
+request context and cookie delivery.
+
+## Renew a session
+
+{/* prettier-ignore */}
+```ts
+const auth = yield* AppAuth;
+const session = yield* auth.renewSession();
+```
+
+Renewal delivers a replacement credential through the request boundary.
+`getSession()` and `requireSession()` do not rotate credentials.
+
+## Session lifecycle
+
+<Trace
+  steps={[
+    { lane: "library", title: "Verify the password, passkey, or provider" },
+    { lane: "app", title: "Approve the current account and credential revision" },
+    { lane: "app", title: "Commit the session" },
+    { lane: "library", title: "Deliver the cookie" },
+    { lane: "browser", title: "Read the public session" },
+  ]}
+/>
+
+## Custom completion and additional factors
+
+Omit `sessions` from `Auth.make` when supplying custom session/completion Layers.
+The lower-level `AppAuth.sessions.statefulLayer`, `statelessLayer`, and
+`stateAssistedLayer` constructors remain available for runtime-selected policy.
+
+Configure `completionLayer({ pendingLifetimeMillis, attemptLimit })` with
+`PendingAuthentication` persistence to support a second factor. A pending proof
+is not an authenticated session. [TOTP](./totp) shows the complete Layer setup.
+
+`SessionStrategy.inspect` returns private provenance for authorization decisions;
+ordinary verification results omit it. Step-up binds its challenge to the source
+session and credential revision and rechecks both before replacing the session.

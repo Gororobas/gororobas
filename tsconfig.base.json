@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/@effect/tsgo/schema.json",
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "anyUnknownInErrorContext": "suggestion",
+          "instanceOfSchema": "suggestion",
+          "nestedEffectGenYield": "suggestion",
+          "newSchemaClass": "suggestion",
+          "preferSchemaTypeProperty": "suggestion",
+          "preferTypedSchemaDecoder": "off",
+          "unsafeEffectTypeAssertion": "suggestion"
+        },
+        "overrides": [
+          {
+            "include": ["**/src/**/*.ts"],
+            "options": {
+              "diagnosticSeverity": {
+                "nodeBuiltinImport": "warning",
+                "preferSchemaOverJson": "suggestion"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

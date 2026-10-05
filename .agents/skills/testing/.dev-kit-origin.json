@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "selector": "testing",
+  "name": "testing",
+  "baseDigest": "sha256:b58c8dbc7b758b96668c3a8db3d74646523603dab56bcfce6287af32e46cc25d",
+  "source": {
+    "type": "bundled",
+    "version": "1.0.2"
+  }
+}

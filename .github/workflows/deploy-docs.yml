@@ -1,0 +1,50 @@
+name: Deploy docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "README.md"
+      - "packages/*/package.json"
+      - "tsconfig.base.json"
+      - "alchemy.run.ts"
+      - ".github/workflows/deploy-docs.yml"
+      - "bun.lock"
+      - "package.json"
+      - "vite.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-docs
+  cancel-in-progress: false
+
+env:
+  CI: "true"
+  VP_GIT_HOOKS: "0"
+
+jobs:
+  deploy:
+    name: Deploy docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install dependencies (frozen, scripts suppressed)
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Deploy with Alchemy
+        run: ./node_modules/.bin/vp run docs:deploy --stage prod --yes
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

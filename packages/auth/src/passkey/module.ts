@@ -1,0 +1,357 @@
+import { Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
+
+import { makeAuthStrategy } from "../auth/AuthStrategy";
+import { cryptoLayer, defaultLayer, hooksLayer } from "../auth/defaults";
+import type { AuthInvocation } from "../operations/context";
+import type { AuthOperationResult } from "../operations/credentials";
+import { operationGroup } from "../operations/operation";
+import { make as makePasskeyContract } from "../PasskeyContract";
+import type { SubjectId } from "../Schema";
+import type { AuthenticationAuthority } from "../sessions/AuthenticationAuthority";
+import type { makeSessionModule } from "../sessions/module";
+import {
+  makePasskeyActions,
+  capturePasskeyPolicy,
+  passkeyUnexpected,
+  makePasskeyCeremony,
+  passkeyNoAmbient,
+  readPasskeyCommit,
+} from "./actions";
+import type { PasskeyFailure } from "./errors";
+import { PasskeyMethodUnsupported, PasskeyRejected, PasskeyUnavailable } from "./errors";
+import { makePasskeyManagement } from "./management";
+import {
+  type PasskeyAuthenticationStarted,
+  type PasskeyCleanupResult,
+  PasskeyBegin,
+  PasskeyComplete,
+  type PasskeyCredential,
+} from "./models";
+import { PasskeyConfig } from "./PasskeyConfig";
+import type { PasskeyCredentials } from "./PasskeyCredentials";
+import { PasskeyPersistence } from "./PasskeyPersistence";
+import { makePasskeyPending } from "./pending";
+import { type PasskeyMethodPolicy, type PasskeyManagementPolicy } from "./policy";
+import { makePasskeyRegistration } from "./registration";
+import { snapshotPasskey } from "./snapshot";
+import { makePasskeyStepUp } from "./stepUp";
+
+export interface PasskeyConfiguration {
+  readonly policy?: Partial<Omit<PasskeyMethodPolicy, "profiles">>;
+}
+
+/** Behavior is captured by the descriptor; host profiles are supplied by the application Layer. */
+export const capturePasskeyConfiguration = (options: PasskeyConfiguration) => {
+  const configured = options.policy;
+
+  const policy = {
+    generation: configured?.generation ?? 1,
+    lifetimeMillis: configured?.lifetimeMillis ?? 300_000,
+    claimLifetimeMillis: configured?.claimLifetimeMillis ?? 30_000,
+    retentionMillis: configured?.retentionMillis ?? 3_600_000,
+    maximumPending: configured?.maximumPending ?? 1000,
+    maximumPendingPerSubject: configured?.maximumPendingPerSubject ?? 5,
+    admission:
+      configured?.admission === undefined
+        ? {
+            global: { limit: 1000, windowMillis: 60_000 },
+            subject: { limit: 10, windowMillis: 60_000 },
+            target: { limit: 10, windowMillis: 60_000 },
+          }
+        : {
+            global: { ...configured.admission.global },
+            subject: { ...configured.admission.subject },
+            target: { ...configured.admission.target },
+          },
+  };
+
+  return Effect.gen(function* () {
+    const config = yield* PasskeyConfig;
+
+    return yield* capturePasskeyPolicy({ ...policy, profiles: config.profiles });
+  });
+};
+
+export const makePasskeyMethod = <
+  const Id extends string,
+  const SessionId extends string,
+  Claims extends Schema.Codec<unknown, unknown, unknown, unknown>,
+>(
+  moduleId: Id,
+  options: {
+    readonly sessions: ReturnType<typeof makeSessionModule<SessionId, Claims>>;
+  } & PasskeyConfiguration,
+  configuredSource?: ReturnType<typeof capturePasskeyConfiguration>,
+) => {
+  const sessions = options.sessions;
+  const source = configuredSource ?? capturePasskeyConfiguration(options);
+  const ceremony = makePasskeyCeremony(moduleId, source, "sign-in");
+
+  /** Supply application session claims for the verified passkey's subject. */
+  const SessionClaims = Context.Service<
+    {
+      readonly moduleId: Id;
+      readonly kind: "passkey-claims";
+      readonly claims: Types.Invariant<Claims["Type"]>;
+    },
+    {
+      readonly resolve: (input: {
+        readonly subjectId: SubjectId;
+        readonly credential: PasskeyCredential;
+      }) => Effect.Effect<Claims["Type"], PasskeyUnavailable>;
+    }
+  >(`effect-auth/ClaimsForPasskey/${moduleId.length}:${moduleId}`);
+
+  const Passkeys = Context.Service<
+    {
+      readonly moduleId: Id;
+      readonly kind: "passkeys";
+      readonly claims: Types.Invariant<Claims["Type"]>;
+    },
+    {
+      readonly begin: (
+        invocation: AuthInvocation,
+        input: PasskeyBegin,
+      ) => Effect.Effect<AuthOperationResult<PasskeyAuthenticationStarted>, PasskeyFailure>;
+      readonly complete: (
+        invocation: AuthInvocation,
+        input: PasskeyComplete,
+      ) => Effect.Effect<
+        AuthOperationResult<typeof sessions.CompletionResult.Type>,
+        PasskeyFailure
+      >;
+      readonly cleanup: (
+        invocation: AuthInvocation,
+        limit: number,
+      ) => Effect.Effect<PasskeyCleanupResult, PasskeyFailure>;
+    }
+  >(`effect-auth/Passkeys/${moduleId.length}:${moduleId}`);
+
+  const layer = Layer.effect(
+    Passkeys,
+    Effect.gen(function* () {
+      const runtime = yield* ceremony.make,
+        claims = yield* SessionClaims,
+        completion = yield* sessions.AuthenticationCompletion,
+        persistence = yield* PasskeyPersistence;
+
+      const services = yield* Effect.context<
+        | PasskeyCredentials
+        | AuthenticationAuthority
+        | Claims["EncodingServices"]
+        | Claims["DecodingServices"]
+      >();
+
+      const claimsCodec = Schema.toCodecJson(Schema.toType(sessions.claims));
+
+      return Passkeys.of({
+        begin: Effect.fn("Passkeys.begin")(function* (invocation, input) {
+          input = yield* snapshotPasskey(Schema.toType(PasskeyBegin), input);
+          yield* passkeyNoAmbient();
+          if (invocation._tag !== "Guest") return yield* PasskeyRejected.make({});
+
+          return yield* runtime.beginAuthentication(input, { _tag: "SignIn" });
+        }, passkeyUnexpected),
+        complete: Effect.fn("Passkeys.complete")(function* (invocation, input) {
+          input = yield* snapshotPasskey(Schema.toType(PasskeyComplete), input);
+          yield* passkeyNoAmbient();
+          if (invocation._tag !== "Guest") return yield* PasskeyRejected.make({});
+
+          const verified = yield* runtime
+            .authentication(input, { _tag: "SignIn" })
+            .pipe(Effect.provide(services));
+
+          const resolved = yield* claims.resolve({
+            subjectId: verified.credential.revision.subjectId,
+            credential: verified.credential,
+          });
+
+          const encoded = yield* Schema.encodeEffect(claimsCodec)(resolved).pipe(
+            Effect.provide(services),
+            Effect.mapError(() => PasskeyUnavailable.make({})),
+          );
+
+          const captured = yield* Schema.decodeEffect(claimsCodec)(encoded).pipe(
+            Effect.provide(services),
+            Effect.mapError(() => PasskeyUnavailable.make({})),
+          );
+
+          const result = yield* readPasskeyCommit(
+            yield* completion
+              .prepare({ evidence: verified.evidence, claims: captured })
+              .pipe(
+                Effect.mapError((error) =>
+                  error._tag === "HookDenied"
+                    ? error
+                    : error._tag === "SessionUnavailable"
+                      ? PasskeyUnavailable.make({})
+                      : error._tag === "SessionCapabilityUnsupported"
+                        ? PasskeyMethodUnsupported.make({})
+                        : PasskeyRejected.make({}),
+                ),
+              ),
+          );
+
+          return {
+            value: result.value,
+            credentialCommands: [...verified.credentialCommands, ...result.credentialCommands],
+          };
+        }, passkeyUnexpected),
+        cleanup: Effect.fn("Passkeys.cleanup")(function* (invocation, limit) {
+          yield* passkeyNoAmbient();
+          if (invocation._tag !== "System") return yield* PasskeyMethodUnsupported.make({});
+          yield* Schema.decodeEffect(
+            Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
+          )(limit).pipe(Effect.mapError(() => PasskeyRejected.make({})));
+
+          return yield* readPasskeyCommit(
+            yield* persistence.cleanup(
+              { moduleId, nowMillis: DateTime.toEpochMillis(yield* DateTime.now), limit },
+              (value, journal) => journal.prepare(value),
+            ),
+          );
+        }, passkeyUnexpected),
+      });
+    }),
+  );
+
+  const { Begin, Complete, Cleanup } = makePasskeyContract(moduleId, sessions).operations;
+
+  const handlersLayer = Layer.mergeAll(
+    Begin.credentialHandlerLayer((input, invocation) =>
+      Effect.flatMap(Passkeys, (service) => service.begin(invocation, input)),
+    ),
+    Complete.credentialHandlerLayer((input, invocation) =>
+      Effect.flatMap(Passkeys, (service) => service.complete(invocation, input)),
+    ),
+    Cleanup.handlerLayer((input, invocation) =>
+      Effect.flatMap(Passkeys, (service) => service.cleanup(invocation, input.limit)),
+    ),
+  );
+
+  const actions = makePasskeyActions(moduleId, source);
+
+  // Protocol verification is an explicit server capability. Keeping it out of
+  // this shared contract avoids bundling the maintained verifier into clients.
+  const strategyLayer = handlersLayer.pipe(
+    Layer.provide(defaultLayer(Passkeys, layer)),
+    Layer.provide(defaultLayer(ceremony.binding.RequestBinding, ceremony.binding.layer)),
+    Layer.provide(hooksLayer),
+    Layer.provide(cryptoLayer),
+  );
+
+  const registration = <Registration extends Schema.Codec<unknown, unknown, unknown, unknown>>(
+    codec: Registration,
+  ) => {
+    const module = makePasskeyRegistration(moduleId, source, codec);
+
+    return Object.freeze({
+      ...module,
+      strategy: makeAuthStrategy(
+        {
+          register: module.operations.Begin.invoke,
+          completeRegistration: module.operations.Complete.invoke,
+        },
+        module.handlersLayer.pipe(
+          Layer.provide(defaultLayer(module.Registrations, module.layer)),
+          Layer.provide(defaultLayer(module.binding.RequestBinding, module.binding.layer)),
+          Layer.provide(hooksLayer),
+          Layer.provide(cryptoLayer),
+        ),
+      ),
+    });
+  };
+
+  const management = (policy: PasskeyManagementPolicy) => {
+    const configured = Object.freeze({ ...policy });
+    const module = makePasskeyManagement(moduleId, source, configured, sessions);
+
+    return Object.freeze({
+      ...module,
+      persistence: {
+        kind: "passkey" as const,
+        moduleId,
+        policy: source,
+        management: true as const,
+        managementPolicy: configured,
+      },
+      strategy: makeAuthStrategy(
+        {
+          enrollPasskey: module.operations.Begin.invoke,
+          completePasskeyEnrollment: module.operations.Complete.invoke,
+          listPasskeys: module.operations.List.invoke,
+          renamePasskey: module.operations.Rename.invoke,
+          removePasskey: module.operations.Remove.invoke,
+        },
+        module.handlersLayer.pipe(
+          Layer.provide(defaultLayer(module.Management, module.layer)),
+          Layer.provide(defaultLayer(module.binding.RequestBinding, module.binding.layer)),
+          Layer.provide(hooksLayer),
+          Layer.provide(cryptoLayer),
+        ),
+      ),
+    });
+  };
+
+  const pendingModule = makePasskeyPending(moduleId, source, sessions);
+
+  const pending = Object.freeze({
+    ...pendingModule,
+    strategy: makeAuthStrategy(
+      {
+        beginPending: pendingModule.operations.Begin.invoke,
+        completePending: pendingModule.operations.Complete.invoke,
+      },
+      pendingModule.handlersLayer.pipe(
+        Layer.provide(defaultLayer(pendingModule.Pending, pendingModule.layer)),
+        Layer.provide(
+          defaultLayer(pendingModule.binding.RequestBinding, pendingModule.binding.layer),
+        ),
+        Layer.provide(hooksLayer),
+        Layer.provide(cryptoLayer),
+      ),
+      { completion: true },
+    ),
+  });
+
+  const stepUpModule = makePasskeyStepUp(moduleId, source, sessions);
+
+  const stepUp = Object.freeze({
+    ...stepUpModule,
+    strategy: makeAuthStrategy(
+      {
+        beginStepUp: stepUpModule.operations.Begin.invoke,
+        completeStepUp: stepUpModule.operations.Complete.invoke,
+      },
+      stepUpModule.handlersLayer.pipe(
+        Layer.provide(defaultLayer(stepUpModule.StepUp, stepUpModule.layer)),
+        Layer.provide(
+          defaultLayer(stepUpModule.binding.RequestBinding, stepUpModule.binding.layer),
+        ),
+        Layer.provide(hooksLayer),
+        Layer.provide(cryptoLayer),
+      ),
+    ),
+  });
+
+  return Object.freeze({
+    persistence: { kind: "passkey" as const, moduleId, policy: source },
+    strategy: makeAuthStrategy(
+      { signIn: Begin.invoke, completeSignIn: Complete.invoke },
+      strategyLayer,
+      { completion: true },
+    ),
+    Passkeys,
+    SessionClaims,
+    binding: ceremony.binding,
+    layer,
+    handlersLayer,
+    operations: Object.freeze({ Begin, Complete, Cleanup }),
+    group: operationGroup(Begin, Complete, Cleanup),
+    registration,
+    management,
+    pending,
+    stepUp,
+    actions,
+  });
+};

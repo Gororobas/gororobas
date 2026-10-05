@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["*.ts", "test/**/*.ts", "../oxlint/*.ts", "../vite.config.ts", "../alchemy.run.ts"]
+}

@@ -1,0 +1,91 @@
+---
+title: Yielded Auth
+description: Authentication that composes with Effect. Your accounts and storage, one typed contract from server to client.
+template: splash
+hero:
+  title: Authentication that fits your Effect application.
+  tagline: Schema for the contract. Layers for your backend. Effect Atom for the client. Passwords, passkeys, codes, and OAuth with your accounts, your database, and your policies.
+  actions:
+    - text: Get started
+      link: /auth/guide/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: See how it fits
+      link: /auth/guide/effect/
+      variant: secondary
+---
+
+import { CallSites, Snippet } from "@yielded/starlight-theme/components";
+
+import StorageLadder from "../../components/StorageLadder.astro";
+
+## One contract, server to client
+
+Describe your session claims and the actions clients may call with Effect Schema.
+The server, HTTP routes, and client share that definition.
+
+<CallSites
+  sites={[
+    { label: "Server handler", code: "yield* auth.signIn({ email, password })" },
+    { label: "HTTP route", code: "POST /auth/signIn" },
+    { label: "Client Effect", code: "yield* client.auth.signIn({ email, password })" },
+    { label: "React", code: "const [result, signIn] = useAtom(auth.signIn)" },
+  ]}
+>
+  <Snippet src="../README.md" region="auth-contract" />
+</CallSites>
+
+Inputs and public results use the same schemas. Expected failures stay typed;
+credentials travel through the private HTTP boundary. Clients reach only the
+actions you declare.
+
+## An ordinary Effect service
+
+Choose your methods and session behavior, then supply their dependencies with
+Layers. Inside a handler, `yield* AppAuth` gives you auth alongside your other
+application services.
+
+<Snippet src="../README.md" region="auth-server" />
+
+Provide storage, account policy, hashing, and keys to `AuthRoutes`; its Layer type
+shows what is still needed. Your app owns account creation and authorization.
+[See how Auth fits into Effect](/auth/guide/effect/), or
+[add it to an existing HttpApi](/auth/guide/http-and-client/#join-an-existing-httpapi).
+
+## Effect on the client too
+
+Derive an Effect HttpClient service and atoms from the shared contract:
+
+<Snippet src="../README.md" region="auth-client" />
+
+Read `auth.session` and dispatch `auth.signIn` or `auth.signOut` with ordinary
+`@effect/atom-react` hooks. Auth mutations refresh auth queries automatically.
+Compose workflows in Effect and connect your application's queries through
+reactivity keys. [Build the client](/auth/guide/client/).
+
+## Your accounts, your storage
+
+Keep your customer or employee model. Use managed auth tables, map your own SQL
+schema, or supply storage services for a different backend. Changing storage
+Layers keeps the contract and client intact.
+
+<StorageLadder />
+
+The [database and backend guide](/auth/guide/storage/) explains the choices and
+the durability each implementation must provide. Four
+[runnable account apps](/auth/guide/examples/#run-an-account-app) show the same
+workflows across Drizzle, Effect SQL, and a non-SQL store.
+
+## Add the methods your application needs
+
+| Method                                          | What you can build                                          |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| [Passwords](/auth/guide/passwords/)             | Registration, sign-in, and recovery.                        |
+| [Passkeys](/auth/guide/passkeys/)               | WebAuthn sign-in and credential management.                 |
+| [Email codes & magic links](/auth/guide/codes/) | Passwordless sign-in and address verification.              |
+| [Phone codes](/auth/guide/phone/)               | SMS sign-in and number verification.                        |
+| [Two-factor authentication](/auth/guide/totp/)  | Authenticator apps after a first factor.                    |
+| [OAuth & OIDC](/auth/guide/oauth/)              | Provider sign-in, account linking, and retained API access. |
+
+Each guide shows the strategy, the services you supply, and the calls you make.
+Start with [GitHub](/auth/guide/github/) or [Google](/auth/guide/google/) for provider setup.
