@@ -57,7 +57,7 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
   const document = new LoroDoc()
   document.configDefaultTextStyle({ expand: "after" })
   const results: Array<WikiMigrationVersion> = []
-  let previous: unknown = {}
+  let previous: Partial<typeof WikiArticleEditableData.Encoded> = {}
 
   yield* Effect.forEach(
     versions,

@@ -133,6 +133,7 @@ export const makeProfileFixture = (
     const id = yield* IdGen.make(PersonId)
     const now = yield* DateTime.now
 
+    // SAFETY: The user- prefix and UUID segment satisfy Handle; the completed fixture is decoded against ProfileRow below.
     const base: Extract<ProfileRow, { type: "PERSON" }> = {
       type: "PERSON",
       id,
@@ -177,6 +178,7 @@ export const makeOrganizationProfileFixture = (
     const id = overrides?.id ?? (yield* IdGen.make(OrganizationId))
     const now = yield* DateTime.now
 
+    // SAFETY: The org- prefix and UUID segment satisfy Handle; the completed fixture is decoded against ProfileRow below.
     const base: Extract<ProfileRow, { type: "ORGANIZATION" }> = {
       type: "ORGANIZATION",
       id,

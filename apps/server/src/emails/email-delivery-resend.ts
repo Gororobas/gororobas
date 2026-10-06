@@ -1,11 +1,11 @@
 import { EmailDelivery } from "@yielded/auth"
-import { Config, Effect, Layer, Redacted } from "effect"
+import { Config, Effect, Layer, Redacted, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http"
 
 export const EmailDeliveryResend = Layer.effect(
   EmailDelivery.EmailDelivery,
   Effect.gen(function* () {
-    const apiKey = yield* Config.NonEmptyString("RESEND_API_KEY").pipe(Config.map(Redacted.make))
+    const apiKey = yield* Config.schema(Schema.Redacted(Schema.NonEmptyString), "RESEND_API_KEY")
     const from = yield* Config.NonEmptyString("AUTH_EMAIL_FROM")
     const http = yield* HttpClient.HttpClient
 

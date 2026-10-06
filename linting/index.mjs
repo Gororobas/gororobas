@@ -16,6 +16,7 @@ import {
 } from "./readability.mjs"
 import { requireCanonicalEffectModuleNamesRule } from "./require-canonical-effect-module-names.mjs"
 import { requireEffectAliasForEsNamespacesRule } from "./require-effect-alias-for-es-namespaces.mjs"
+import { requireEffectVitestRule } from "./require-effect-vitest.mjs"
 import { serviceMapClassSuffixByFileRule } from "./service-map-class-suffix-by-file.mjs"
 import { taggedErrorSuffixRule } from "./tagged-error-suffix.mjs"
 
@@ -40,5 +41,6 @@ export default {
     "require-effect-alias-for-es-namespaces": requireEffectAliasForEsNamespacesRule,
     "service-map-class-suffix-by-file": serviceMapClassSuffixByFileRule,
     "tagged-error-suffix": taggedErrorSuffixRule,
+    "require-effect-vitest": requireEffectVitestRule,
   },
 }

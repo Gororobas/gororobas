@@ -1,7 +1,7 @@
 import * as Gherkin from "@cucumber/gherkin"
 import * as Messages from "@cucumber/messages"
 import { NodeServices } from "@effect/platform-node"
-import { Array as EffectArray, Effect, FileSystem, Option, Path } from "effect"
+import { Array as EffectArray, Effect, Record, FileSystem, Option, Path } from "effect"
 
 import { FeatureParseError } from "../errors.js"
 import type {
@@ -75,7 +75,7 @@ function parseScenarioOutline(scenario: Messages.Scenario): ParsedScenarioOutlin
     const headers = exampleTable.tableHeader.cells.map((cell) => cell.value)
 
     return exampleTable.tableBody.map((row) =>
-      Object.fromEntries(row.cells.map((cell, index) => [headers[index], cell.value])),
+      Record.fromEntries(row.cells.map((cell, index) => [headers[index], cell.value])),
     )
   })
 
@@ -192,7 +192,7 @@ export function parseFeatureFile(
 }
 
 export function parseFeatureFileSync(featurePath: string, basePath = process.cwd()): ParsedFeature {
-  return Effect["runSync"](
+  return Effect.runSync(
     parseFeatureFile(featurePath, basePath).pipe(Effect.provide(NodeServices.layer)),
   )
 }

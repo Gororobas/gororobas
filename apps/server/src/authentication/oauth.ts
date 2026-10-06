@@ -5,25 +5,35 @@ import {
   OAuthCompletePayload,
   OAuthLoginFailure,
   OAuthLoginRejected,
+  OAuthProvider,
   authenticationNamespace,
 } from "@gororobas/domain"
 import { Auth, Operations, Proofs, Schema as AuthSchema, Sessions, WebCrypto } from "@yielded/auth"
-import { ByteSize, Crypto as EffectCrypto, DateTime, Effect, Layer, Schema } from "effect"
+import {
+  ByteSize,
+  Crypto as EffectCrypto,
+  DateTime,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+  Predicate,
+} from "effect"
 import { HttpIncomingMessage, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 
 import { consumeOAuthFlow, insertOAuthFlow } from "./mutations.js"
 import { OAuthProtocol } from "./oauth-protocol.js"
 import { provisionOAuthAccount } from "./oauth-storage.js"
-
 const binding = Operations.makeRequestBinding(authenticationNamespace, "oauth")
-
 const sessions = Sessions.make(AuthenticationClaims, {
   namespace: `${authenticationNamespace}/sessions`,
 })
 
 const BeginOAuth = Operations.makeOperation(`${authenticationNamespace}/oauth/begin`, {
   payload: OAuthBeginPayload,
-  success: Schema.Struct({ authorizationUrl: Schema.String }),
+  success: Schema.Struct({
+    authorizationUrl: Schema.String,
+  }),
   error: OAuthLoginFailure,
   access: "any",
   exposure: "public",
@@ -44,13 +54,16 @@ const CompleteOAuth = Operations.makeOperation(`${authenticationNamespace}/oauth
   credentials: true,
 })
 
-const invalidFlow = () => OAuthLoginRejected.make({ reason: "invalid-flow" })
+const invalidFlow = () =>
+  OAuthLoginRejected.make({
+    reason: "invalid-flow",
+  })
 
 const handlers = Layer.mergeAll(
   BeginOAuth.credentialHandlerLayer(
     Effect.fn(function* (input, caller) {
       const requestContext = yield* Effect.serviceOption(Proofs.ProofRequestContext)
-      if (requestContext._tag === "None") return yield* invalidFlow()
+      if (Option.isNone(requestContext)) return yield* invalidFlow()
       yield* (yield* Proofs.HostIngressLimiter).check({
         action: "oauth",
         networkKey: (yield* requestContext.value).networkKey,
@@ -58,7 +71,7 @@ const handlers = Layer.mergeAll(
       const now = DateTime.toEpochMillis(yield* DateTime.now)
 
       if (
-        caller._tag === "Authenticated" &&
+        Predicate.isTagged(caller, "Authenticated") &&
         now - DateTime.toEpochMillis(caller.assurance.authenticatedAt) > 300_000
       ) {
         return yield* invalidFlow()
@@ -66,7 +79,7 @@ const handlers = Layer.mergeAll(
 
       const issued = yield* (yield* binding.RequestBinding).issue(input.flowId)
       const command = issued.credentialCommands[0]
-      if (command?._tag !== "Issue") return yield* invalidFlow()
+      if (!Predicate.isTagged(command, "Issue")) return yield* invalidFlow()
       const verified = yield* (yield* binding.RequestBinding).verify(
         input.flowId,
         command.credential,
@@ -83,12 +96,11 @@ const handlers = Layer.mergeAll(
         pkceVerifier,
       })
 
-      const linkAuthSubjectId =
-        caller._tag === "Authenticated"
-          ? yield* Schema.decodeEffect(AuthSubjectId)(caller.subjectId).pipe(
-              Effect.mapError(invalidFlow),
-            )
-          : null
+      const linkAuthSubjectId = Predicate.isTagged(caller, "Authenticated")
+        ? yield* Schema.decodeEffect(AuthSubjectId)(caller.subjectId).pipe(
+            Effect.mapError(invalidFlow),
+          )
+        : null
 
       yield* insertOAuthFlow({
         state,
@@ -101,7 +113,12 @@ const handlers = Layer.mergeAll(
         expiresAt: Math.min(now + 600_000, verified.expiresAtMillis),
       }).pipe(Effect.mapError(invalidFlow))
 
-      return { value: { authorizationUrl }, credentialCommands: issued.credentialCommands }
+      return {
+        value: {
+          authorizationUrl,
+        },
+        credentialCommands: issued.credentialCommands,
+      }
     }),
   ),
   CompleteOAuth.credentialHandlerLayer(
@@ -118,12 +135,12 @@ const handlers = Layer.mergeAll(
         bindingVerifier: verified.verifier,
       }).pipe(Effect.mapError(invalidFlow))
 
-      if (flow._tag === "None") return yield* invalidFlow()
+      if (Option.isNone(flow)) return yield* invalidFlow()
       const now = yield* DateTime.now
 
       if (
         flow.value.linkAuthSubjectId !== null &&
-        (caller._tag !== "Authenticated" ||
+        (!Predicate.isTagged(caller, "Authenticated") ||
           String(caller.subjectId) !== flow.value.linkAuthSubjectId ||
           DateTime.toEpochMillis(now) - DateTime.toEpochMillis(caller.assurance.authenticatedAt) >
             300_000)
@@ -132,7 +149,10 @@ const handlers = Layer.mergeAll(
       }
 
       // Claim before exchanging the code. A failed exchange requires a new flow.
-      const identity = yield* (yield* OAuthProtocol).exchange({ ...flow.value, code: input.code })
+      const identity = yield* (yield* OAuthProtocol).exchange({
+        ...flow.value,
+        code: input.code,
+      })
 
       const account = yield* provisionOAuthAccount({
         provider: input.provider,
@@ -147,7 +167,9 @@ const handlers = Layer.mergeAll(
 
       const completed = yield* (yield* sessions.AuthenticationCompletion)
         .prepare({
-          claims: { authSubjectId: account.authSubjectId },
+          claims: {
+            authSubjectId: account.authSubjectId,
+          },
           evidence: {
             flowId: Sessions.AuthenticationFlowId.make(input.flowId),
             bindingDigest: AuthSchema.TokenDigest.make(verified.verifier),
@@ -173,7 +195,10 @@ const handlers = Layer.mergeAll(
         value: completed.value,
         credentialCommands: [
           ...completed.credentialCommands,
-          { _tag: "Clear" as const, slot: "request-binding" as const },
+          {
+            _tag: "Clear" as const,
+            slot: "request-binding" as const,
+          },
         ],
       }
     }),
@@ -185,9 +210,14 @@ const handlers = Layer.mergeAll(
 )
 
 export const oauthStrategy = Auth.makeStrategy(
-  { beginOAuth: BeginOAuth.invoke, completeOAuth: CompleteOAuth.invoke },
+  {
+    beginOAuth: BeginOAuth.invoke,
+    completeOAuth: CompleteOAuth.invoke,
+  },
   handlers,
-  { completion: true },
+  {
+    completion: true,
+  },
 )
 
 // The relay does not consume state or establish a session. The first-party page
@@ -211,17 +241,42 @@ const relay = (provider: "apple" | "google" | "microsoft") =>
       parameters.getAll("state").length !== 1
     ) {
       return HttpServerResponse.redirect("/api/auth/login#oauth-error", {
-        headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
+        headers: {
+          "cache-control": "no-store",
+          "referrer-policy": "no-referrer",
+        },
       })
     }
 
     return HttpServerResponse.redirect(
-      `/api/auth/login#oauth=${encodeURIComponent(JSON.stringify({ provider, code, state }))}`,
-      { status: 303, headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" } },
+      `/api/auth/login#oauth=${encodeURIComponent(
+        Schema.encodeSync(
+          Schema.fromJsonString(
+            Schema.Struct({ provider: OAuthProvider, code: Schema.String, state: Schema.String }),
+          ),
+        )({
+          provider,
+          code,
+          state,
+        }),
+      )}`,
+      {
+        status: 303,
+        headers: {
+          "cache-control": "no-store",
+          "referrer-policy": "no-referrer",
+        },
+      },
     )
   }).pipe(
     Effect.provideService(HttpIncomingMessage.MaxBodySize, ByteSize.kibibytes(16)),
-    Effect.catch(() => Effect.succeed(HttpServerResponse.redirect("/api/auth/login#oauth-error"))),
+    Effect.catchTag("HttpServerError", () =>
+      Effect.succeed(
+        HttpServerResponse.redirect("/api/auth/login#oauth-error", {
+          headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
+        }),
+      ),
+    ),
   )
 
 export const oauthCallbackRoutes = Layer.mergeAll(

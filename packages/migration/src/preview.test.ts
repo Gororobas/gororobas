@@ -1,5 +1,5 @@
 import { NodePath, NodeHttpServer, NodeServices } from "@effect/platform-node"
-import { it } from "@effect/vitest"
+import { expect, it } from "@effect/vitest"
 import {
   MediaAssetId,
   WikiArticleEditableData,
@@ -10,7 +10,6 @@ import { makeAppSqlClient } from "@gororobas/server/sql"
 import { Effect, FileSystem, Layer, Option, Schema, Path } from "effect"
 import { HttpClient, HttpRouter } from "effect/http"
 import { SqlClient } from "effect/sql"
-import { expect } from "vitest"
 
 import { importPreview } from "./import-preview.js"
 import { readPreviewDataset } from "./preview-dataset.js"

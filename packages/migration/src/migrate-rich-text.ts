@@ -1,5 +1,13 @@
 import { IdGen, TiptapDocument, TiptapNode } from "@gororobas/domain"
-import { Effect, FileSystem, Path, PlatformError, Predicate, Schema } from "effect"
+import {
+  Array as EffectArray,
+  Effect,
+  FileSystem,
+  Path,
+  PlatformError,
+  Predicate,
+  Schema,
+} from "effect"
 import { KeyValueStore } from "effect/persistence"
 
 import { GelTiptapDocument, GelTiptapNode } from "./schemas/gel/rich-text.js"
@@ -222,7 +230,9 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
         ...(node.text === undefined ? {} : { text: node.text }),
         ...(node.marks === undefined ? {} : { marks: node.marks }),
         ...(attrs ? { attrs } : {}),
-        ...(content && content.length > 0 ? { content: mergeMediaGrids(content) } : {}),
+        ...(content && EffectArray.isReadonlyArrayNonEmpty(content)
+          ? { content: mergeMediaGrids(content) }
+          : {}),
       })
     })
 
@@ -243,7 +253,7 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
 const mergeMediaGrids = (nodes: ReadonlyArray<TiptapNode>): ReadonlyArray<TiptapNode> => {
   const merged: TiptapNode[] = []
 
-  for (const node of nodes) {
+  nodes.forEach((node) => {
     const previous = merged[merged.length - 1]
 
     if (previous?.type === "mediaGrid" && node.type === "mediaGrid") {
@@ -252,7 +262,7 @@ const mergeMediaGrids = (nodes: ReadonlyArray<TiptapNode>): ReadonlyArray<Tiptap
         attrs: { version: 1, items: [...previous.attrs.items, ...node.attrs.items] },
       }
     } else merged.push(node)
-  }
+  })
 
   return merged
 }

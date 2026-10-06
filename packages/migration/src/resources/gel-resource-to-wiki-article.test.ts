@@ -1,11 +1,10 @@
 import { NodeServices } from "@effect/platform-node"
-import { it } from "@effect/vitest"
+import { expect, it } from "@effect/vitest"
 import { IdGen, TiptapDocument, ValidName } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, Option, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { KeyValueStore } from "effect/persistence"
-import { expect } from "vitest"
 
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
 import { MigrationContext, MigrationContextLive } from "../services/migration-context.js"

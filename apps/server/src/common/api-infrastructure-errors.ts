@@ -14,7 +14,10 @@ const internalServerErrorResponse = HttpServerResponse.empty({ status: 500 })
 const isInfrastructureError = (error: unknown): error is InfrastructureError =>
   Schema.isSchemaError(error) || Schema.is(SqlError.SqlError)(error)
 
-const annotateOperationSpan = (operation: ApiOperation, attributes: Record<string, unknown>) =>
+const annotateOperationSpan = (
+  operation: ApiOperation,
+  attributes: Record<string, string | number | boolean>,
+) =>
   Effect.annotateCurrentSpan({
     "gororobas.http.endpoint": operation.endpoint,
     "gororobas.http.group": operation.group,
@@ -26,8 +29,8 @@ const reportInfrastructureError = (error: InfrastructureError, operation: ApiOpe
     yield* annotateOperationSpan(operation, {
       "gororobas.error.tag": error._tag,
       "gororobas.http.status_code": 500,
-      "gororobas.schema.drift_suspected": error._tag === "SchemaError",
-      "gororobas.sql.retry_exhausted": error._tag === "SqlError",
+      "gororobas.schema.drift_suspected": Schema.isSchemaError(error),
+      "gororobas.sql.retry_exhausted": Schema.is(SqlError.SqlError)(error),
     })
 
     yield* ErrorReporter.report(Cause.fail(error))
@@ -57,6 +60,7 @@ export const withApiInfrastructureErrors =
   <A, E, R>(
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A | HttpServerResponse.HttpServerResponse, Exclude<E, InfrastructureError>, R> =>
+    // SAFETY: protectApiOperation catches the schema/SQL members and leaves other failures untouched, so Exclude describes the remaining error channel. Success and requirements are unchanged.
     /* oxlint-disable effect/casting-awareness -- this adapter narrows a generic Effect at an API boundary. */
     protectApiOperation(
       operation,

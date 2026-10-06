@@ -1,8 +1,7 @@
 import { NodeServices } from "@effect/platform-node"
-import { it } from "@effect/vitest"
+import { assert, expect, it } from "@effect/vitest"
 import { Effect, FileSystem, Layer, Schema } from "effect"
 import { KeyValueStore } from "effect/persistence"
-import { assert, expect } from "vitest"
 
 import { GelTag } from "../schemas/gel/entities.js"
 import { MigrationContext, MigrationContextLive } from "./migration-context.js"

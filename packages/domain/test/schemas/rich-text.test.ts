@@ -1,7 +1,6 @@
-import { it } from "@effect/vitest"
+import { assert, expect, it } from "@effect/vitest"
 import { Effect, Option, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
-import { expect, test } from "vitest"
 
 import {
   EntityReferenceAttributes,
@@ -15,46 +14,164 @@ import { largeTiptapDocument } from "../fixtures/large-tiptap-document.js"
 // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- These tests deliberately decode malformed documents and invalid node placements.
 const decode = Schema.decodeUnknownSync(TiptapDocument)
 // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- These tests deliberately decode malformed documents and invalid node placements.
-const maybeDecode = Schema.decodeUnknownOption(TiptapDocument, { onExcessProperty: "error" })
+const maybeDecode = Schema.decodeUnknownOption(TiptapDocument, {
+  onExcessProperty: "error",
+})
 
 it.effect("enforces block/inline boundaries, text leaves and list-item structure", () =>
   assertPropertyEffect({
     arbitrary: Arbitrary.schema(EntityReferenceAttributes),
     predicate: (attrs) =>
       Effect.sync(() => {
-        const reference = { type: "entityReference", attrs }
-        const text = { type: "text", text: "Hoje com " }
-        const paragraph = { type: "paragraph", content: [text, reference, { type: "hardBreak" }] }
-        const valid = { type: "doc", version: 1, content: [paragraph] }
+        const reference = {
+          type: "entityReference",
+          attrs,
+        }
+        const text = {
+          type: "text",
+          text: "Hoje com ",
+        }
+
+        const paragraph = {
+          type: "paragraph",
+          content: [
+            text,
+            reference,
+            {
+              type: "hardBreak",
+            },
+          ],
+        }
+
+        const valid = {
+          type: "doc",
+          version: 1,
+          content: [paragraph],
+        }
+
         expect(Option.isSome(maybeDecode(valid))).toBe(true)
 
-        for (const content of [
+        const invalidContents = [
           [reference],
           [text],
-          [{ type: "hardBreak" }],
-          [{ type: "paragraph", content: [paragraph] }],
-          [{ type: "paragraph", content: [{ ...text, content: [reference] }] }],
-          [{ type: "paragraph", content: [{ ...reference, content: [text] }] }],
-          [{ type: "paragraph", content: [{ ...reference, marks: [{ type: "bold" }] }] }],
-          [{ type: "listItem", content: [paragraph] }],
-          [{ type: "bulletList", content: [paragraph] }],
+          [
+            {
+              type: "hardBreak",
+            },
+          ],
+          [
+            {
+              type: "paragraph",
+              content: [paragraph],
+            },
+          ],
+          [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  ...text,
+                  content: [reference],
+                },
+              ],
+            },
+          ],
+          [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  ...reference,
+                  content: [text],
+                },
+              ],
+            },
+          ],
+          [
+            {
+              type: "paragraph",
+              content: [
+                {
+                  ...reference,
+                  marks: [
+                    {
+                      type: "bold",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          [
+            {
+              type: "listItem",
+              content: [paragraph],
+            },
+          ],
+          [
+            {
+              type: "bulletList",
+              content: [paragraph],
+            },
+          ],
           [
             {
               type: "bulletList",
               content: [
                 {
                   type: "listItem",
-                  content: [{ type: "heading", attrs: { level: 1 }, content: [text] }],
+                  content: [
+                    {
+                      type: "heading",
+                      attrs: {
+                        level: 1,
+                      },
+                      content: [text],
+                    },
+                  ],
                 },
               ],
             },
           ],
-          [{ type: "codeBlock", content: [reference] }],
-          [{ type: "codeBlock", content: [{ ...text, marks: [{ type: "bold" }] }] }],
-          [{ type: "blockquote", content: [] }],
-        ]) {
-          expect(Option.isNone(maybeDecode({ ...valid, content }))).toBe(true)
-        }
+          [
+            {
+              type: "codeBlock",
+              content: [reference],
+            },
+          ],
+          [
+            {
+              type: "codeBlock",
+              content: [
+                {
+                  ...text,
+                  marks: [
+                    {
+                      type: "bold",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          [
+            {
+              type: "blockquote",
+              content: [],
+            },
+          ],
+        ]
+
+        invalidContents.forEach((content) => {
+          expect(
+            Option.isNone(
+              maybeDecode({
+                ...valid,
+                content,
+              }),
+            ),
+          ).toBe(true)
+        })
 
         expect(
           Option.isSome(
@@ -70,7 +187,12 @@ it.effect("enforces block/inline boundaries, text leaves and list-item structure
                         paragraph,
                         {
                           type: "bulletList",
-                          content: [{ type: "listItem", content: [paragraph] }],
+                          content: [
+                            {
+                              type: "listItem",
+                              content: [paragraph],
+                            },
+                          ],
                         },
                       ],
                     },
@@ -94,7 +216,15 @@ it.effect("preserves provider data and captions without accepting mismatched pro
         const document = {
           type: "doc",
           version: 1,
-          content: [{ type: "mediaGrid", attrs: { version: 1, items: [embed] } }],
+          content: [
+            {
+              type: "mediaGrid",
+              attrs: {
+                version: 1,
+                items: [embed],
+              },
+            },
+          ],
         }
 
         expect(decode(document)).toEqual(document)
@@ -109,20 +239,40 @@ it.effect("preserves provider data and captions without accepting mismatched pro
           ),
         ).toBe(true)
 
-        for (const extra of [{ content: [] }, { text: "invalid" }, { marks: [] }]) {
+        const invalidAttributes = [
+          {
+            content: [],
+          },
+          {
+            text: "invalid",
+          },
+          {
+            marks: [],
+          },
+        ]
+
+        invalidAttributes.forEach((extra) => {
           expect(
             Option.isNone(
-              maybeDecode({ ...document, content: [{ ...document.content[0], ...extra }] }),
+              maybeDecode({
+                ...document,
+                content: [
+                  {
+                    ...document.content[0],
+                    ...extra,
+                  },
+                ],
+              }),
             ),
           ).toBe(true)
-        }
+        })
 
         return true
       }),
   }),
 )
 
-test("decodes a huge document and still validates its final inline node", () => {
+it("decodes a huge document and still validates its final inline node", () => {
   // 250,000 inline/text-block nodes plus nested lists and blockquotes; no machine-dependent timing assertion.
   const source = largeTiptapDocument(50_000)
   const decoded = decode(source)
@@ -130,7 +280,7 @@ test("decodes a huge document and still validates its final inline node", () => 
   expect(decoded.content[0]).toEqual(source.content[0])
   expect(decoded.content[49_999]).toEqual(source.content[49_999])
   const finalParagraph = source.content[49_999]
-  if (finalParagraph.type !== "paragraph") throw new Error("Expected the final paragraph")
+  assert(finalParagraph.type === "paragraph")
 
   const invalid = {
     ...source,
@@ -138,7 +288,13 @@ test("decodes a huge document and still validates its final inline node", () => 
       ...source.content.slice(0, -1),
       {
         ...finalParagraph,
-        content: [...finalParagraph.content, { type: "text", text: "" }],
+        content: [
+          ...finalParagraph.content,
+          {
+            type: "text",
+            text: "",
+          },
+        ],
       },
     ],
   }

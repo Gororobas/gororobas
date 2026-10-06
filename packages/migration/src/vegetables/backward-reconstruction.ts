@@ -66,9 +66,11 @@ const revertGelVegetable = Effect.fn("revertGelVegetable")(function* (
 
 const isChangeset = (value: unknown): value is Changeset => Array.isArray(value)
 
+// oxlint-disable-next-line effect/no-unsafe-dictionary-type -- This structural guard only establishes dictionary access during legacy traversal; reconstruction is validated by the vegetable schema.
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Predicate.isObject(value) && !Array.isArray(value)
 
+// oxlint-disable-next-line effect/no-unknown-parameters -- Legacy changesets traverse heterogeneous nested state; the reconstructed vegetable is decoded before it is returned.
 const normalizeChangeset = (changeset: Changeset, target: unknown): Changeset =>
   changeset.map((change): IChange => {
     if (!change.changes) return change

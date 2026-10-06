@@ -1,4 +1,5 @@
-import "loro-crdt"
+import type { ContainerID, Diff, JsonDiff, VersionVector } from "loro-crdt"
+
 import type { LoroDocFrontier, LoroDocUpdate, LoroDocSnapshot } from "./domain.js"
 
 declare module "loro-crdt" {

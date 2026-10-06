@@ -6,7 +6,7 @@ import {
   MagicLinkIdentity,
 } from "@gororobas/domain"
 import { Sessions } from "@yielded/auth"
-import { DateTime, Effect, Schema } from "effect"
+import { DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
 import {
@@ -31,7 +31,7 @@ export const provisionMagicLinkAccount = Effect.fn("Authentication.provisionAcco
       Effect.gen(function* () {
         const existing = yield* findAccountSecurityByEmail(email)
 
-        if (existing._tag === "Some") {
+        if (Option.isSome(existing)) {
           if (!existing.value.active) return yield* Sessions.StaleAuthentication.make({})
 
           yield* verifyAccountEmail(existing.value.id)
@@ -66,7 +66,9 @@ export const provisionMagicLinkAccount = Effect.fn("Authentication.provisionAcco
     )
     .pipe(
       Effect.mapError((error) =>
-        error._tag === "StaleAuthentication" ? error : Sessions.SessionUnavailable.make({}),
+        Schema.is(Sessions.StaleAuthentication)(error)
+          ? error
+          : Sessions.SessionUnavailable.make({}),
       ),
     )
 })

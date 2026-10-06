@@ -1,6 +1,5 @@
 import { OtelLogger } from "@effect/opentelemetry"
-import { Context, Effect, ErrorReporter, Tracer } from "effect"
-
+import { Context, Effect, ErrorReporter, Tracer, Predicate } from "effect"
 const RuntimeErrorReporter = ErrorReporter.make(
   ({ attributes, error, fiber, severity, timestamp }) => {
     const span = Context.getOrUndefined(fiber.context, Tracer.ParentSpan)
@@ -12,9 +11,9 @@ const RuntimeErrorReporter = ErrorReporter.make(
       errorMessage: error.message,
       errorName: error.name,
       fiberId: fiber.id,
-      spanId: span?._tag === "Span" ? span.spanId : undefined,
+      spanId: Predicate.isTagged(span, "Span") ? span.spanId : undefined,
       timestamp: timestamp.toString(),
-      traceId: span?._tag === "Span" ? span.traceId : undefined,
+      traceId: Predicate.isTagged(span, "Span") ? span.traceId : undefined,
     }
 
     if (loggerProvider !== undefined) {

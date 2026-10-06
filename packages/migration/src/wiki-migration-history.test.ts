@@ -1,4 +1,4 @@
-import { it } from "@effect/vitest"
+import { assert, expect, it } from "@effect/vitest"
 import {
   LoroDocSnapshot,
   LoroDocUpdate,
@@ -12,7 +12,6 @@ import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, Option, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { LoroDoc } from "loro-crdt"
-import { assert, expect } from "vitest"
 
 import { gelVegetableNamesToCrdtList } from "./vegetables/gel-vegetable-to-wiki-plant-article.js"
 import { buildWikiMigrationHistory } from "./wiki-migration-history.js"

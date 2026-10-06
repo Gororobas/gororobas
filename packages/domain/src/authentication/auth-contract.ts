@@ -6,14 +6,10 @@ import {
   Proofs,
   Sessions,
 } from "@yielded/auth"
-import { Schema } from "effect"
-
+import { Schema, Predicate } from "effect"
 export const authenticationNamespace = "gororobas/auth"
-
 export const sessionCookieName = "__Host-gororobas-session"
-
 export const AuthenticationClaims = Schema.Struct({})
-
 export const AuthenticationSession = Schema.Struct({
   ...Sessions.SessionMetadata.fields,
   claims: AuthenticationClaims,
@@ -69,7 +65,9 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
     beginOAuth: AuthContract.action({
       strategy: "oauth",
       payload: OAuthBeginPayload,
-      success: Schema.Struct({ authorizationUrl: Schema.String }),
+      success: Schema.Struct({
+        authorizationUrl: Schema.String,
+      }),
       error: OAuthLoginFailure,
       mode: "mutation",
       credentials: true,
@@ -82,14 +80,18 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
       mode: "mutation",
       credentials: true,
       replay: "single-use",
-      requestFields: { requestBinding: "request-binding" },
+      requestFields: {
+        requestBinding: "request-binding",
+      },
       subject: {
         fromSuccess: (value) =>
-          value._tag === "Authenticated" ? value.session.subjectId : undefined,
+          Predicate.isTagged(value, "Authenticated") ? value.session.subjectId : undefined,
       },
     }),
     beginMagicLink: AuthContract.action({
-      payload: Schema.Struct({ flowId: Operations.RequestBindingFlowId }),
+      payload: Schema.Struct({
+        flowId: Operations.RequestBindingFlowId,
+      }),
       success: Operations.RequestBindingPublic,
       error: MagicLinkFailure,
       mode: "mutation",
@@ -105,7 +107,9 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
       error: MagicLinkFailure,
       mode: "mutation",
       credentials: true,
-      requestFields: { requestBinding: "request-binding" },
+      requestFields: {
+        requestBinding: "request-binding",
+      },
     }),
     verifyMagicLink: AuthContract.action({
       payload: Schema.Struct({
@@ -113,12 +117,16 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
         reference: Proofs.ProofReference,
         secret: Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(4096))),
       }),
-      success: Schema.Struct({ continuation: Proofs.ProofContinuation }),
+      success: Schema.Struct({
+        continuation: Proofs.ProofContinuation,
+      }),
       error: MagicLinkFailure,
       mode: "mutation",
       credentials: true,
       replay: "single-use",
-      requestFields: { requestBinding: "request-binding" },
+      requestFields: {
+        requestBinding: "request-binding",
+      },
     }),
     completeMagicLink: AuthContract.action({
       payload: Schema.Struct({
@@ -130,10 +138,13 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
       mode: "mutation",
       credentials: true,
       replay: "single-use",
-      requestFields: { requestBinding: "request-binding", credential: "proof-continuation" },
+      requestFields: {
+        requestBinding: "request-binding",
+        credential: "proof-continuation",
+      },
       subject: {
         fromSuccess: (value) =>
-          value._tag === "Authenticated" ? value.session.subjectId : undefined,
+          Predicate.isTagged(value, "Authenticated") ? value.session.subjectId : undefined,
       },
     }),
   }),

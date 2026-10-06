@@ -28,6 +28,7 @@ import {
   Option,
   Record,
   Schema,
+  Predicate,
 } from "effect"
 import { SqlClient } from "effect/sql"
 
@@ -174,7 +175,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         publicationId: PublicationId
       }) => {
         const rows = (input.classification?.wikiArticles ?? []).flatMap((wikiArticle) => {
-          if (wikiArticle._tag !== "ResolvedExistingWikiArticleExtraction") return []
+          if (!Predicate.isTagged(wikiArticle, "ResolvedExistingWikiArticleExtraction")) return []
 
           return PublicationWikiArticleRow.make({
             extractionText: wikiArticle.extractionText,
@@ -210,12 +211,20 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
 
           yield* materializeTags({
-            ...(input.classification ? { classification: input.classification } : {}),
+            ...(input.classification
+              ? {
+                  classification: input.classification,
+                }
+              : {}),
             publicationId: input.publicationId,
           })
 
           yield* materializeWikiArticles({
-            ...(input.classification ? { classification: input.classification } : {}),
+            ...(input.classification
+              ? {
+                  classification: input.classification,
+                }
+              : {}),
             publicationId: input.publicationId,
           })
         })
@@ -229,7 +238,9 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
 
       const createPublication = (
         input: CreatePublicationInputType,
-        options: { id?: PublicationId } = {},
+        options: {
+          id?: PublicationId
+        } = {},
       ) =>
         Effect.gen(function* () {
           const publicationId = options.id ?? (yield* IdGen.make(PublicationId))
@@ -273,7 +284,11 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             Effect.flatMap(
               Option.match({
                 onNone: () =>
-                  Effect.fail(new PublicationNotFoundError({ id: input.publicationId })),
+                  Effect.fail(
+                    new PublicationNotFoundError({
+                      id: input.publicationId,
+                    }),
+                  ),
                 onSome: Effect.succeed,
               }),
             ),
@@ -283,7 +298,11 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             Effect.flatMap(
               Option.match({
                 onNone: () =>
-                  Effect.fail(new PublicationNotFoundError({ id: input.publicationId })),
+                  Effect.fail(
+                    new PublicationNotFoundError({
+                      id: input.publicationId,
+                    }),
+                  ),
                 onSome: Effect.succeed,
               }),
             ),
@@ -292,11 +311,15 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           if (
             !Equal.equals(publicationRow.currentCrdtFrontier, input.expectedCurrentCrdtFrontier)
           ) {
-            return yield* new PublicationConcurrentUpdateError({ id: input.publicationId })
+            return yield* new PublicationConcurrentUpdateError({
+              id: input.publicationId,
+            })
           }
 
           const commit = Schema.is(HumanCrdtUpdate)(input)
-            ? HumanCommit.make({ personId: input.authorId })
+            ? HumanCommit.make({
+                personId: input.authorId,
+              })
             : input.commit
 
           const crdtUpdate = Schema.is(HumanCrdtUpdate)(input)

@@ -2,7 +2,7 @@ import { it } from "@effect/vitest"
 import { AuthSubjectId, MagicLinkIdentity, OAuthProvider } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Schema as AuthSchema } from "@yielded/auth"
-import { DateTime, Effect, Schema } from "effect"
+import { DateTime, Array as EffectArray, Effect, Schema, Predicate } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient } from "effect/sql"
 
@@ -10,14 +10,13 @@ import { provisionMagicLinkAccount } from "../src/authentication/auth-subjects.j
 import { consumeOAuthFlow, insertOAuthFlow } from "../src/authentication/mutations.js"
 import { provisionOAuthAccount } from "../src/authentication/oauth-storage.js"
 import { DATABASE_PROPERTY_TEST_CONFIG, TestLayer } from "./test-helpers.js"
-
 const signupArbitrary = Arbitrary.schema(
   Schema.Struct({
     identifier: AuthSubjectId,
     name: MagicLinkIdentity.fields.name,
     otherName: MagicLinkIdentity.fields.name,
     provider: OAuthProvider,
-    oauthFirst: Schema.Boolean,
+    isOAuthFirst: Schema.Boolean,
   }),
 )
 
@@ -35,20 +34,28 @@ it.effect("both signup orders converge on one subject only through explicit OAut
           issuer: "https://provider.example",
           subject: input.identifier,
           email,
-          emailVerified: true,
+          isEmailVerified: true,
           name: input.name,
         }
 
-        const signup = { provider: input.provider, identity, linkAuthSubjectId: null }
-        const authSubjectId = input.oauthFirst
-          ? (yield* provisionOAuthAccount(signup)).authSubjectId
-          : yield* provisionMagicLinkAccount({ email, name: input.name })
+        const signup = {
+          provider: input.provider,
+          identity,
+          linkAuthSubjectId: null,
+        }
 
-        if (!input.oauthFirst) {
+        const authSubjectId = input.isOAuthFirst
+          ? (yield* provisionOAuthAccount(signup)).authSubjectId
+          : yield* provisionMagicLinkAccount({
+              email,
+              name: input.name,
+            })
+
+        if (!input.isOAuthFirst) {
           const implicitLink = yield* provisionOAuthAccount(signup).pipe(Effect.result)
 
           if (
-            implicitLink._tag !== "Failure" ||
+            !Predicate.isTagged(implicitLink, "Failure") ||
             implicitLink.failure.reason !== "account-conflict"
           ) {
             return false
@@ -61,11 +68,20 @@ it.effect("both signup orders converge on one subject only through explicit OAut
           if (linked.authSubjectId !== authSubjectId) return false
         }
 
-        const magicLinkSubject = yield* provisionMagicLinkAccount({ email, name: input.otherName })
+        const magicLinkSubject = yield* provisionMagicLinkAccount({
+          email,
+          name: input.otherName,
+        })
+
         const returning = yield* provisionOAuthAccount({
           ...signup,
-          identity: { ...identity, email: "changed@example.com", emailVerified: false },
+          identity: {
+            ...identity,
+            email: "changed@example.com",
+            isEmailVerified: false,
+          },
         })
+
         const subjects = yield* sql`SELECT id, name FROM auth_subjects`
         const people = yield* sql`SELECT id, access_level FROM people`
         const profiles = yield* sql`SELECT id, name FROM profiles`
@@ -144,10 +160,10 @@ it.effect("only the exact unexpired OAuth binding can consume a flow, and only o
         const replay = yield* consumeOAuthFlow(request)
 
         return (
-          rejected._tag === "None" &&
+          Predicate.isTagged(rejected, "None") &&
           retained.length === 1 &&
           consumed._tag === (input.mismatch === "expiry" ? "None" : "Some") &&
-          replay._tag === "None"
+          Predicate.isTagged(replay, "None")
         )
       }).pipe(Effect.provide(TestLayer)),
     options: DATABASE_PROPERTY_TEST_CONFIG,
@@ -165,28 +181,34 @@ it.effect("a failed profile write rolls back signup through either authenticatio
         )
         yield* sql`CREATE TRIGGER reject_profile BEFORE INSERT ON profiles BEGIN SELECT RAISE(ABORT, 'profile failure'); END`
 
-        const result = input.oauthFirst
+        const result = input.isOAuthFirst
           ? yield* provisionOAuthAccount({
               provider: input.provider,
               identity: {
                 issuer: "https://provider.example",
                 subject: input.identifier,
                 email,
-                emailVerified: true,
+                isEmailVerified: true,
                 name: input.name,
               },
               linkAuthSubjectId: null,
             }).pipe(Effect.result)
-          : yield* provisionMagicLinkAccount({ email, name: input.name }).pipe(Effect.result)
+          : yield* provisionMagicLinkAccount({
+              email,
+              name: input.name,
+            }).pipe(Effect.result)
 
         const subjects = yield* sql`SELECT id FROM auth_subjects`
         const profiles = yield* sql`SELECT id FROM profiles`
         const people = yield* sql`SELECT id FROM people`
         const credentials = yield* sql`SELECT credential_id FROM auth_credentials`
         const identities = yield* sql`SELECT subject FROM auth_oauth_identities`
+
         return (
-          result._tag === "Failure" &&
-          [subjects, profiles, people, credentials, identities].every((rows) => rows.length === 0)
+          Predicate.isTagged(result, "Failure") &&
+          [subjects, profiles, people, credentials, identities].every((rows) =>
+            EffectArray.isReadonlyArrayEmpty(rows),
+          )
         )
       }).pipe(Effect.provide(TestLayer)),
     options: DATABASE_PROPERTY_TEST_CONFIG,

@@ -36,7 +36,8 @@ const removedMessageArbitrary = Arbitrary.schema(removed.message)
 // An enum map can have at most one entry per enum value.
 const addedMessagesArbitrary = Arbitrary.filter(
   Arbitrary.array(addedMessageArbitrary),
-  (messages) => new Set(messages.map((message) => message.value)).size === messages.length,
+  (messages) =>
+    EffectArray.dedupe(messages.map((message) => message.value)).length === messages.length,
 )
 
 const removedMessagesArbitrary = Arbitrary.array(removedMessageArbitrary, { maxLength: 100 })

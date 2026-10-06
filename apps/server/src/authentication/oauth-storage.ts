@@ -6,7 +6,7 @@ import {
   OAuthLoginRejected,
   OAuthProvider,
 } from "@gororobas/domain"
-import { DateTime, Effect, Schema } from "effect"
+import { DateTime, Effect, Option, Schema, Predicate } from "effect"
 import { SqlClient } from "effect/sql"
 
 import {
@@ -18,7 +18,6 @@ import {
 } from "./mutations.js"
 import { OAuthIdentity } from "./oauth-protocol.js"
 import { findAccountSecurityByEmail, findOAuthIdentity } from "./queries.js"
-
 export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAccount")(
   function* (input: {
     readonly provider: typeof OAuthProvider.Type
@@ -38,14 +37,16 @@ export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAcc
 
           const existing = yield* findOAuthIdentity(key)
 
-          if (existing._tag === "Some") {
+          if (Option.isSome(existing)) {
             if (
               !existing.value.active ||
               !existing.value.credentialActive ||
               (input.linkAuthSubjectId !== null &&
                 input.linkAuthSubjectId !== existing.value.authSubjectId)
             ) {
-              return yield* OAuthLoginRejected.make({ reason: "account-conflict" })
+              return yield* OAuthLoginRejected.make({
+                reason: "account-conflict",
+              })
             }
 
             return existing.value
@@ -54,20 +55,27 @@ export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAcc
           let authSubjectId = input.linkAuthSubjectId
 
           if (authSubjectId === null) {
-            if (!input.identity.emailVerified || input.identity.email === undefined) {
-              return yield* OAuthLoginRejected.make({ reason: "email-verification-required" })
+            if (!input.identity.isEmailVerified || input.identity.email === undefined) {
+              return yield* OAuthLoginRejected.make({
+                reason: "email-verification-required",
+              })
             }
 
             const email = yield* Schema.decodeEffect(Email)(input.identity.email).pipe(
               Effect.mapError(() =>
-                OAuthLoginRejected.make({ reason: "email-verification-required" }),
+                OAuthLoginRejected.make({
+                  reason: "email-verification-required",
+                }),
               ),
             )
 
             // Matching email is not consent to connect an external identity to an account.
-            if ((yield* findAccountSecurityByEmail(email))._tag === "Some") {
-              return yield* OAuthLoginRejected.make({ reason: "account-conflict" })
+            if (Predicate.isTagged(yield* findAccountSecurityByEmail(email), "Some")) {
+              return yield* OAuthLoginRejected.make({
+                reason: "account-conflict",
+              })
             }
+
             authSubjectId = yield* IdGen.make(AuthSubjectId)
             const now = yield* DateTime.now
 
@@ -95,16 +103,32 @@ export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAcc
 
           const credentialId = `oauth:${(yield* IdGen).generate()}`
           const revision = yield* IdGen.make(AuthSecurityRevision)
-          yield* insertOAuthCredential({ credentialId, authSubjectId, revision })
-          yield* insertOAuthIdentity({ ...key, authSubjectId, credentialId })
-          return { authSubjectId, credentialId }
+
+          yield* insertOAuthCredential({
+            credentialId,
+            authSubjectId,
+            revision,
+          })
+
+          yield* insertOAuthIdentity({
+            ...key,
+            authSubjectId,
+            credentialId,
+          })
+
+          return {
+            authSubjectId,
+            credentialId,
+          }
         }),
       )
       .pipe(
         Effect.mapError((error) =>
-          error._tag === "OAuthLoginRejected"
+          Schema.is(OAuthLoginRejected)(error)
             ? error
-            : OAuthLoginRejected.make({ reason: "invalid-flow" }),
+            : OAuthLoginRejected.make({
+                reason: "invalid-flow",
+              }),
         ),
       )
   },

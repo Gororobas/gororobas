@@ -40,7 +40,7 @@ function extractPlaceholders(pattern: string): Array<PlaceholderInfo> {
   }))
 }
 
-function patternToRegex(pattern: string): { regex: RegExp; names: Array<string> } {
+function patternToRegex(pattern: string) {
   const placeholders = extractPlaceholders(pattern)
   const names: Array<string> = []
 
@@ -56,7 +56,7 @@ function patternToRegex(pattern: string): { regex: RegExp; names: Array<string> 
   return { names, regex: new RegExp(`^${regexStr}$`) }
 }
 
-function convertValue(value: string, type: PlaceholderType): unknown {
+function convertValue(value: string, type: PlaceholderType): string | number {
   return Match.value(type).pipe(
     Match.when("int", () => parseInt(value, 10)),
     Match.when("float", () => parseFloat(value)),
@@ -69,7 +69,7 @@ function convertValue(value: string, type: PlaceholderType): unknown {
 export function matchPattern(
   pattern: string,
   text: string,
-): Option.Option<Record<string, unknown>> {
+): Option.Option<Record<string, string | number>> {
   const placeholders = extractPlaceholders(pattern)
   const { names, regex } = patternToRegex(pattern)
 
@@ -78,7 +78,7 @@ export function matchPattern(
     return Option.none()
   }
 
-  const result: Record<string, unknown> = {}
+  const result: Record<string, string | number> = {}
 
   names.forEach((name, index) => {
     const value = match[index + 1]
@@ -118,13 +118,13 @@ export function extractParams({
   pattern: string
   text: string
   dataTable?: Array<Record<string, string>> | undefined
-}): Option.Option<Record<string, unknown>> {
+}): Option.Option<Record<string, string | number | Array<Record<string, string>>>> {
   const patternParams = matchPattern(pattern, text)
 
   return Option.match(patternParams, {
     onNone: () => Option.none(),
     onSome: (params) =>
-      EffectArray.isReadonlyArrayNonEmpty(dataTable ?? [])
+      dataTable !== undefined && EffectArray.isReadonlyArrayNonEmpty(dataTable)
         ? Option.some({ ...params, table: dataTable })
         : Option.some(params),
   })

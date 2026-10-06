@@ -10,6 +10,7 @@ export interface StepConfig<Params extends Record<string, unknown>, CtxIn, CtxOu
 export interface Step<CtxIn, CtxOut, E, R> {
   readonly _tag: StepTag
   readonly pattern: string
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The interpreter erases each heterogeneous parameter type here; its stored params schema validates the extracted values before the handler runs.
   readonly config: StepConfig<Record<string, unknown>, CtxIn, CtxOut, E, R>
 }
 

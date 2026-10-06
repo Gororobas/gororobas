@@ -121,7 +121,7 @@ function runStepsImpl(
         const parsedStep = parsedSteps[index]
 
         return Effect.gen(function* () {
-          let extractedParams: Record<string, unknown> = {}
+          let extractedParams: Record<string, string | number | Array<Record<string, string>>> = {}
 
           if (parsedStep) {
             const matched = extractParams({
@@ -160,21 +160,25 @@ function runStepsImpl(
 // ... all the overloads remain the same ...
 
 export function runSteps<A, E1, R1>(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
 ): Effect.Effect<A, E1, R1 | BackgroundContext | ScenarioContext>
 
 export function runSteps<A, B, E1, E2, R1, R2>(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
 ): Effect.Effect<B, E1 | E2, R1 | R2 | BackgroundContext | ScenarioContext>
 
 export function runSteps<A, B, C, E1, E2, E3, R1, R2, R3>(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
 ): Effect.Effect<C, E1 | E2 | E3, R1 | R2 | R3 | BackgroundContext | ScenarioContext>
 
 export function runSteps<A, B, C, D, E1, E2, E3, E4, R1, R2, R3, R4>(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -182,6 +186,7 @@ export function runSteps<A, B, C, D, E1, E2, E3, E4, R1, R2, R3, R4>(
 ): Effect.Effect<D, E1 | E2 | E3 | E4, R1 | R2 | R3 | R4 | BackgroundContext | ScenarioContext>
 
 export function runSteps<A, B, C, D, E, E1, E2, E3, E4, E5, R1, R2, R3, R4, R5>(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -194,6 +199,7 @@ export function runSteps<A, B, C, D, E, E1, E2, E3, E4, E5, R1, R2, R3, R4, R5>(
 >
 
 export function runSteps<A, B, C, D, E, F, E1, E2, E3, E4, E5, E6, R1, R2, R3, R4, R5, R6>(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -229,6 +235,7 @@ export function runSteps<
   R6,
   R7,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -268,6 +275,7 @@ export function runSteps<
   R7,
   R8,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -311,6 +319,7 @@ export function runSteps<
   R8,
   R9,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -358,6 +367,7 @@ export function runSteps<
   R9,
   R10,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -409,6 +419,7 @@ export function runSteps<
   R10,
   R11,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -464,6 +475,7 @@ export function runSteps<
   R11,
   R12,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -523,6 +535,7 @@ export function runSteps<
   R12,
   R13,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -600,6 +613,7 @@ export function runSteps<
   R13,
   R14,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,
@@ -682,6 +696,7 @@ export function runSteps<
   R14,
   R15,
 >(
+  // oxlint-disable-next-line effect/no-unsafe-dictionary-type -- The first step accepts the heterogeneous background dictionary; subsequent context types are checked by these sequential overloads.
   s1: Step<Record<string, unknown>, A, E1, R1>,
   s2: Step<A, B, E2, R2>,
   s3: Step<B, C, E3, R3>,

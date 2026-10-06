@@ -10,7 +10,7 @@ import {
   ProfileId,
   assertAuthenticated,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Option, Schema } from "effect"
+import { Record, Context, DateTime, Effect, Option, Schema } from "effect"
 
 import { processMediaAsset, readMediaAssetMetadata } from "./processing.js"
 import { MediaAssetsRepository } from "./repository.js"
@@ -87,7 +87,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
           // Conversion is interruptible; publication must finish before the staging scope is released.
           Effect.uninterruptible(
             Effect.gen(function* () {
-              const media = Object.entries(contentTypes).find(
+              const media = Record.toEntries(contentTypes).find(
                 ([type]) => type === input.contentType,
               )?.[1]
               if (!media) {

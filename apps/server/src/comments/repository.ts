@@ -25,6 +25,7 @@ import {
   Option,
   Record,
   Schema,
+  Predicate,
 } from "effect"
 import { SqlClient } from "effect/sql"
 
@@ -51,7 +52,6 @@ import {
   listCommentRowsByPublicationId,
   listCommentTranslationRowsByCommentId,
 } from "./queries.js"
-
 export class CommentsRepository extends Context.Service<CommentsRepository>()(
   "CommentsRepository",
   {
@@ -67,7 +67,9 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         Effect.gen(function* () {
           const id = yield* IdGen.make(CommentCommitId)
           const now = yield* DateTime.now
-          const createdById = input.commit._tag === "HumanCommit" ? input.commit.personId : null
+          const createdById = Predicate.isTagged(input.commit, "HumanCommit")
+            ? input.commit.personId
+            : null
 
           yield* insertCommentCommitRow(
             CommentCommitRow.make({
@@ -224,7 +226,9 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             ),
             insertCommitOrRevision: insertCommentCommit({
               commentId,
-              commit: HumanCommit.make({ personId: input.createdById }),
+              commit: HumanCommit.make({
+                personId: input.createdById,
+              }),
               crdtUpdate: created.initialCrdtUpdate,
               fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
             }),
@@ -247,7 +251,12 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           const current = yield* findCommentCrdtSnapshotById(input.commentId).pipe(
             Effect.flatMap(
               Option.match({
-                onNone: () => Effect.fail(new CommentNotFoundError({ id: input.commentId })),
+                onNone: () =>
+                  Effect.fail(
+                    new CommentNotFoundError({
+                      id: input.commentId,
+                    }),
+                  ),
                 onSome: Effect.succeed,
               }),
             ),
@@ -256,52 +265,65 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           const commentRow = yield* findCommentRowById(input.commentId).pipe(
             Effect.flatMap(
               Option.match({
-                onNone: () => Effect.fail(new CommentNotFoundError({ id: input.commentId })),
+                onNone: () =>
+                  Effect.fail(
+                    new CommentNotFoundError({
+                      id: input.commentId,
+                    }),
+                  ),
                 onSome: Effect.succeed,
               }),
             ),
           )
 
           if (!Equal.equals(commentRow.currentCrdtFrontier, input.expectedCurrentCrdtFrontier)) {
-            return yield* new CommentConcurrentUpdateError({ id: input.commentId })
+            return yield* new CommentConcurrentUpdateError({
+              id: input.commentId,
+            })
           }
 
           const translationRows = yield* listCommentTranslationRowsByCommentId(input.commentId)
           const currentSourceData = buildSourceDataFromMaterializedRows(translationRows)
 
-          const nextSourceData: SourceCommentData =
-            input._tag === "HumanUpdatePtContent"
-              ? {
-                  ...currentSourceData,
-                  locales: {
-                    ...currentSourceData.locales,
-                    pt: currentSourceData.locales.pt
-                      ? { ...currentSourceData.locales.pt, content: input.content }
-                      : {
-                          content: input.content,
-                          originalLocale: "pt",
-                          translatedAtCrdtFrontier: null,
-                          translationSource: "ORIGINAL",
-                        },
+          const nextSourceData: SourceCommentData = Predicate.isTagged(
+            input,
+            "HumanUpdatePtContent",
+          )
+            ? {
+                ...currentSourceData,
+                locales: {
+                  ...currentSourceData.locales,
+                  pt: currentSourceData.locales.pt
+                    ? {
+                        ...currentSourceData.locales.pt,
+                        content: input.content,
+                      }
+                    : {
+                        content: input.content,
+                        originalLocale: "pt",
+                        translatedAtCrdtFrontier: null,
+                        translationSource: "ORIGINAL",
+                      },
+                },
+              }
+            : {
+                ...currentSourceData,
+                locales: {
+                  ...currentSourceData.locales,
+                  [input.targetLocale]: {
+                    content: input.translatedContent,
+                    originalLocale: input.sourceLocale,
+                    translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
+                    translationSource: "AUTOMATIC",
                   },
-                }
-              : {
-                  ...currentSourceData,
-                  locales: {
-                    ...currentSourceData.locales,
-                    [input.targetLocale]: {
-                      content: input.translatedContent,
-                      originalLocale: input.sourceLocale,
-                      translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
-                      translationSource: "AUTOMATIC",
-                    },
-                  },
-                }
+                },
+              }
 
-          const commit: CrdtCommit =
-            input._tag === "HumanUpdatePtContent"
-              ? HumanCommit.make({ personId: input.authorId })
-              : input.commit
+          const commit: CrdtCommit = Predicate.isTagged(input, "HumanUpdatePtContent")
+            ? HumanCommit.make({
+                personId: input.authorId,
+              })
+            : input.commit
 
           const evolved = yield* evolveCommentSnapshot({
             commit,

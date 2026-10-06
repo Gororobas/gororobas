@@ -57,7 +57,7 @@ export const initializeLoroRichText = (container: LoroMap, document: TiptapDocum
 
 /** Read containers directly: doc.toJSON() discards LoroText marks. */
 export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
-  const readNode = (map: LoroMap): unknown => {
+  const readNode = (map: LoroMap): Schema.JsonObject => {
     const attributes = map.get("attributes")
     const children = map.get("children")
     if (attributes !== undefined && !(attributes instanceof LoroMap)) {
@@ -74,29 +74,30 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
         : {}
 
     return {
-      type: map.get("nodeName"),
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro container names must be validated before projecting a JSON node.
+      type: Schema.decodeUnknownSync(Schema.String)(map.get("nodeName")),
       ...(Record.size(decodedAttributes) > 0 ? { attrs: decodedAttributes } : {}),
       ...(children instanceof LoroList &&
       (Boolean(children.length) || map.get("nodeName") === "doc")
         ? {
-            content: children.toArray().flatMap((child): unknown[] => {
+            content: children.toArray().flatMap((child): Schema.JsonArray => {
               if (child instanceof LoroMap) return [readNode(child)]
               if (!(child instanceof LoroText)) {
                 throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
               }
 
               return child.toDelta().map((delta) => {
-                const marks = Record.toEntries(delta.attributes ?? {}).map(([type, attrs]) => ({
-                  type,
+                const marks = Record.toEntries(delta.attributes ?? {}).map(([type, attributes]) => {
                   // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro mark attributes can contain non-JSON values.
-                  ...(Record.size(Schema.decodeUnknownSync(JsonAttributes)(attrs)) > 0
-                    ? { attrs }
-                    : {}),
-                }))
+                  const attrs = Schema.decodeUnknownSync(JsonAttributes)(attributes)
+                  return { type, ...(Record.size(attrs) > 0 ? { attrs } : {}) }
+                })
 
                 return {
                   type: "text",
-                  text: delta.insert,
+                  // A missing insert is not a text node; the decoder rejects malformed Loro deltas.
+                  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro deltas may contain retain/delete operations without a string insert.
+                  text: Schema.decodeUnknownSync(Schema.String)(delta.insert),
                   ...(EffectArray.isReadonlyArrayNonEmpty(marks) ? { marks } : {}),
                 }
               })

@@ -1,8 +1,7 @@
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node"
 import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
-// oxlint-disable-next-line effect/use-http-client-service -- NodeHttpServer requires the Node HTTP server factory.
-// oxlint-disable-next-line custom-lint-rules/no-node-apis -- NodeHttpServer.layer requires the Node HTTP server factory.
+// oxlint-disable-next-line effect/use-http-client-service, custom-lint-rules/no-node-apis -- NodeHttpServer.layer requires the Node HTTP server factory.
 import * as Http from "node:http"
 
 import { AuthenticationLive } from "./authentication/authentication-live.js"

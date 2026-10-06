@@ -1,12 +1,12 @@
 import { OAuthLoginRejected, OAuthProvider } from "@gororobas/domain"
-import { Config, Context, Effect, Layer, Option, Redacted, Schema } from "effect"
+import { Config, Context, Effect, Layer, Option, Predicate, Redacted, Schema } from "effect"
 import * as OpenIdClient from "openid-client"
 
 export const OAuthIdentity = Schema.Struct({
   issuer: Schema.NonEmptyString,
   subject: Schema.NonEmptyString,
   email: Schema.optionalKey(Schema.String),
-  emailVerified: Schema.Boolean,
+  isEmailVerified: Schema.Boolean,
   name: Schema.String,
 })
 
@@ -46,7 +46,7 @@ export const oauthProtocolLayer = (origin: string) =>
     OAuthProtocol,
     Effect.gen(function* () {
       const settings = yield* configuration
-      const clients = new Map<typeof OAuthProvider.Type, OpenIdClient.Configuration>()
+      const clients: Partial<Record<typeof OAuthProvider.Type, OpenIdClient.Configuration>> = {}
 
       const registrations = [
         {
@@ -69,36 +69,40 @@ export const oauthProtocolLayer = (origin: string) =>
         },
       ] as const
 
-      for (const registration of registrations) {
-        if (Option.isNone(registration.id) && Option.isNone(registration.secret)) continue
-        if (Option.isNone(registration.id) || Option.isNone(registration.secret)) {
-          return yield* OAuthLoginRejected.make({ reason: "provider-disabled" })
-        }
-        const clientId = registration.id.value
-        const secret = Redacted.value(registration.secret.value)
-        if (secret.length === 0) {
-          return yield* OAuthLoginRejected.make({ reason: "provider-disabled" })
-        }
+      yield* Effect.forEach(
+        registrations,
+        Effect.fn(function* (registration) {
+          if (Option.isNone(registration.id) && Option.isNone(registration.secret)) return
+          if (Option.isNone(registration.id) || Option.isNone(registration.secret)) {
+            return yield* OAuthLoginRejected.make({ reason: "provider-disabled" })
+          }
+          const clientId = registration.id.value
+          const secret = Redacted.value(registration.secret.value)
+          if (secret === "") {
+            return yield* OAuthLoginRejected.make({ reason: "provider-disabled" })
+          }
 
-        const client = yield* Effect.tryPromise({
-          try: () =>
-            OpenIdClient.discovery(
-              new URL(registration.issuer),
-              clientId,
-              {
-                id_token_signed_response_alg: "RS256",
-              },
-              OpenIdClient.ClientSecretPost(secret),
-              {
-                timeout: 10,
-                execute: [OpenIdClient.enableNonRepudiationChecks],
-              },
-            ),
-          catch: rejected,
-        })
+          const client = yield* Effect.tryPromise({
+            try: () =>
+              OpenIdClient.discovery(
+                new URL(registration.issuer),
+                clientId,
+                {
+                  id_token_signed_response_alg: "RS256",
+                },
+                OpenIdClient.ClientSecretPost(secret),
+                {
+                  timeout: 10,
+                  execute: [OpenIdClient.enableNonRepudiationChecks],
+                },
+              ),
+            catch: rejected,
+          })
 
-        clients.set(registration.provider, client)
-      }
+          clients[registration.provider] = client
+        }),
+        { concurrency: 1, discard: true },
+      )
 
       return makeOAuthProtocol(origin, clients)
     }),
@@ -106,10 +110,10 @@ export const oauthProtocolLayer = (origin: string) =>
 
 export const makeOAuthProtocol = (
   origin: string,
-  clients: ReadonlyMap<typeof OAuthProvider.Type, OpenIdClient.Configuration>,
+  clients: Readonly<Partial<Record<typeof OAuthProvider.Type, OpenIdClient.Configuration>>>,
 ) => {
   const getClient = (provider: typeof OAuthProvider.Type) => {
-    const client = clients.get(provider)
+    const client = clients[provider]
     return client === undefined
       ? Effect.fail(OAuthLoginRejected.make({ reason: "provider-disabled" }))
       : Effect.succeed(client)
@@ -173,9 +177,9 @@ export const makeOAuthProtocol = (
       return yield* Schema.decodeEffect(OAuthIdentity)({
         issuer: claims.iss,
         subject: claims.sub,
-        ...(typeof claims.email === "string" ? { email: claims.email } : {}),
-        emailVerified: claims.email_verified === true || claims.email_verified === "true",
-        name: typeof claims.name === "string" ? claims.name : "Gororobas member",
+        ...(Predicate.isString(claims.email) ? { email: claims.email } : {}),
+        isEmailVerified: claims.email_verified === true || claims.email_verified === "true",
+        name: Predicate.isString(claims.name) ? claims.name : "Gororobas member",
       }).pipe(Effect.mapError(rejected))
     }),
   })

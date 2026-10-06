@@ -1,8 +1,7 @@
 import { NodeHttpServer } from "@effect/platform-node"
 import { Effect, Layer } from "effect"
 import { HttpRouter } from "effect/http"
-// oxlint-disable-next-line effect/use-http-client-service -- NodeHttpServer requires the Node HTTP server factory.
-// oxlint-disable-next-line custom-lint-rules/no-node-apis -- NodeHttpServer.layer requires the Node HTTP server factory.
+// oxlint-disable-next-line effect/use-http-client-service, custom-lint-rules/no-node-apis -- NodeHttpServer.layer requires the Node HTTP server factory.
 import * as Http from "node:http"
 
 import { ApiLive } from "./api-live.js"
@@ -26,10 +25,6 @@ const Services = Layer.mergeAll(WorkflowsLive).pipe(
   Layer.provideMerge(TranslationServiceDeepl),
   Layer.provideMerge(AuthenticationLive),
   Layer.provideMerge(Layer.effect(ProfilesRepository, ProfilesRepository.make)),
-)
-
-const HttpLive = HttpRouter.serve(Services).pipe(
-  Layer.provide(ServerServicesLive),
   Layer.provide(
     Layer.unwrap(
       Effect.map(authenticationOrigin, (origin) =>
@@ -40,6 +35,11 @@ const HttpLive = HttpRouter.serve(Services).pipe(
       ),
     ),
   ),
+)
+
+const HttpLive = HttpRouter.serve(Services).pipe(
+  Layer.provide(ServerServicesLive),
+
   Layer.provide(NodeHttpServer.layer(Http.createServer, { port: 4000 })),
 )
 

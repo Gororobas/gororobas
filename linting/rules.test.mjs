@@ -1,15 +1,17 @@
+import { describe, it } from "@effect/vitest"
 import effectPlugin from "@mpsuesser/oxlint-plugin-effect"
 import { RuleTester } from "oxlint/plugins-dev"
-import { describe, it } from "vitest"
 
 import { noNodeApisRule } from "./no-node-apis.mjs"
 import { noSchemaDecodeUnknownRule } from "./no-schema-decode-unknown.mjs"
+import { preferArrSortRule } from "./prefer-arr-sort.mjs"
 import {
   noFunctionAliasesRule,
   noInlineImportsRule,
   noManyFunctionParametersRule,
   paddingAroundLargeStatementsRule,
 } from "./readability.mjs"
+import { requireEffectVitestRule } from "./require-effect-vitest.mjs"
 
 RuleTester.describe = describe
 RuleTester.it = it
@@ -164,4 +166,35 @@ tester.run("padding-around-large-statements", paddingAroundLargeStatementsRule, 
       errors: [{ messageId: "padding" }],
     },
   ],
+})
+
+tester.run("prefer-arr-sort", preferArrSortRule, {
+  valid: [
+    'import { Array as EffectArray, Order } from "effect"; EffectArray.sort(items, Order.String)',
+    'import * as EffectArray from "effect/Array"; EffectArray.sort(items, order)',
+    'import * as Arr from "effect/Array"; Arr.sort(items, order)',
+    "items.map(transform)",
+  ],
+  invalid: ["items.sort()", "items.sort(compare)", "[...items].sort(compare)"].map((code) => ({
+    code,
+    errors: [{ message: /Avoid native/ }],
+  })),
+})
+
+tester.run("require-effect-vitest", requireEffectVitestRule, {
+  valid: [
+    'import { it, expect, assert } from "@effect/vitest"',
+    'import * as Test from "@effect/vitest"',
+    'import { defineConfig } from "vitest/config"',
+    'export { it } from "@effect/vitest"',
+    'import("@effect/vitest")',
+  ],
+  invalid: [
+    'import { it, test, expect, assert } from "vitest"',
+    'import * as Test from "vitest"',
+    'export { test } from "vitest"',
+    'export * from "vitest"',
+    'import("vitest")',
+    'require("vitest")',
+  ].map((code) => ({ code, errors: [{ messageId: "effectVitest" }] })),
 })

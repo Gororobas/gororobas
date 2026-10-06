@@ -1,11 +1,10 @@
 import { NodeServices } from "@effect/platform-node"
-import { it } from "@effect/vitest"
+import { expect, it, vi } from "@effect/vitest"
 import { IdGen, PublicationVisibility } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, FileSystem, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { createClient } from "gel"
-import { expect, vi } from "vitest"
 
 import { GelClient, GelClientError } from "../gel-client.js"
 import { GelNoteWithRelations } from "../schemas/gel/entities.js"

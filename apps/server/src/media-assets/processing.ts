@@ -5,7 +5,7 @@ import {
   TransformedVideoHeightBreakpoints,
 } from "@gororobas/domain"
 import { registerMediabunnyServer } from "@mediabunny/server"
-import { Effect, FileSystem, Schema, Path } from "effect"
+import { Array as EffectArray, Effect, FileSystem, Schema, Path } from "effect"
 import {
   ALL_FORMATS,
   Conversion,
@@ -104,7 +104,7 @@ const convert = Effect.fn("MediaAssets.convert")((options: Parameters<typeof Con
     }
     // A failed or interrupted conversion must release codecs and partial output handles.
     yield* Effect.acquireRelease(Effect.succeed(conversion), (conversion) =>
-      Effect.promise(() => conversion.cancel()),
+      Effect.tryPromise(() => conversion.cancel()).pipe(Effect.orDie),
     )
     yield* processingPromise(() => conversion.execute())
   }),
@@ -148,7 +148,7 @@ export const processMediaAsset = Effect.fn("MediaAssets.process")(
             TransformedImageWidthBreakpoints.literals,
             (size) =>
               transformImage({ filename: input.filename, directory: input.directory, width: size }),
-            { discard: true },
+            { concurrency: 1, discard: true },
           )
 
           return
@@ -181,19 +181,17 @@ export const processMediaAsset = Effect.fn("MediaAssets.process")(
                   numberOfChannels: Math.min(2, metadata.numberOfChannels),
                 },
               }),
-            { discard: true },
+            { concurrency: 1, discard: true },
           )
 
           return
         }
 
-        const heights = [
-          ...new Set(
-            TransformedVideoHeightBreakpoints.literals.map((height) =>
-              Math.min(height, metadata.originalHeight),
-            ),
+        const heights = EffectArray.dedupe(
+          TransformedVideoHeightBreakpoints.literals.map((height) =>
+            Math.min(height, metadata.originalHeight),
           ),
-        ]
+        )
 
         const video = heights.map((height) => ({
           height: Math.max(2, Math.floor(height / 2) * 2),

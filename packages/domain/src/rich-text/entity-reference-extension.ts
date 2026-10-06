@@ -1,5 +1,5 @@
 import { Node } from "@tiptap/core"
-import { Schema } from "effect"
+import { MutableHashSet, Option, Schema } from "effect"
 
 import {
   EntityReferenceAttributes,
@@ -30,7 +30,7 @@ export const EntityReference = Node.create({
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- DOM attributes may be absent or contain malformed JSON.
         Schema.decodeUnknownOption(AttributesJson)(
           element.getAttribute("data-entity-reference"),
-        ).pipe((attributes) => (attributes._tag === "Some" ? attributes.value : false)),
+        ).pipe((attributes) => (Option.isSome(attributes) ? attributes.value : false)),
     },
   ],
   renderText: ({ node }) =>
@@ -52,15 +52,15 @@ export const linkedEntitiesFromTiptapDocument = (
   document: TiptapDocument,
 ): ReadonlyArray<EntityReferenceTarget> => {
   const entities: EntityReferenceTarget[] = []
-  const seen = new Set<string>()
+  const seen = MutableHashSet.empty<string>()
 
   const visit = (node: TiptapNode): void => {
     if (node.type === "entityReference") {
       const { referenceId, referenceType } = node.attrs
       const key = `${referenceType}:${referenceId}`
 
-      if (!seen.has(key)) {
-        seen.add(key)
+      if (!MutableHashSet.has(seen, key)) {
+        MutableHashSet.add(seen, key)
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
         entities.push(Schema.decodeUnknownSync(EntityReferenceTarget)(node.attrs))
       }

@@ -80,6 +80,7 @@ const applyUpdateToSnapshot = (input: { crdtUpdate: LoroDocUpdate; snapshot: Lor
   return doc
 }
 
+// oxlint-disable-next-line effect/no-unknown-parameters -- This test helper validates persisted JSON against the storage schema immediately below.
 const getPtContentFromStorageJson = (json: unknown) => {
   // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This helper validates unknown persisted JSON.
   const storage = Schema.decodeUnknownSync(

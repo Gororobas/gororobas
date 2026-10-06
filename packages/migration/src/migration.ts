@@ -1,4 +1,4 @@
-import { Effect } from "effect"
+import { Effect, Schema } from "effect"
 import { Command } from "effect/cli"
 
 import { importPreview } from "./import-preview.js"
@@ -23,6 +23,8 @@ export const migrate = Command.make("migrate", {}, () =>
       new URL("../debug", import.meta.url).pathname,
       new URL("../debug/sqlite", import.meta.url).pathname,
     )
-    yield* Effect.log(`Preview import: ${JSON.stringify(report)}`)
+    yield* Effect.log(
+      `Preview import: ${Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(report)}`,
+    )
   }),
 ).pipe(Command.withDescription("Migrate data from Gel"))

@@ -1,5 +1,5 @@
 import { MediaAssetId, MediaAssetStorageError } from "@gororobas/domain"
-import { Config, Context, Effect, FileSystem, Path } from "effect"
+import { Config, Context, Effect, FileSystem, Path, Predicate } from "effect"
 
 export class MediaAssetsStorage extends Context.Service<MediaAssetsStorage>()(
   "MediaAssetsStorage",
@@ -27,13 +27,14 @@ export class MediaAssetsStorage extends Context.Service<MediaAssetsStorage>()(
       const stage = (input: { file: Uint8Array | string }) =>
         Effect.gen(function* () {
           const directory = yield* Effect.acquireRelease(
+            // oxlint-disable-next-line effect/use-temp-file-scoped -- Publishing renames this directory; the finalizer must tolerate its absence with force: true.
             filesystem.makeTempDirectory({ directory: root, prefix: ".upload-" }),
             (directory) =>
               filesystem.remove(directory, { recursive: true, force: true }).pipe(Effect.orDie),
           )
 
           const filename = path.join(directory, "original")
-          yield* typeof input.file === "string"
+          yield* Predicate.isString(input.file)
             ? filesystem.copyFile(input.file, filename)
             : filesystem.writeFile(filename, input.file)
           const info = yield* filesystem.stat(filename)

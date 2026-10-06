@@ -58,8 +58,8 @@ export const authStorage = Persistence.map({
   tables: Record.map(generated.schema, (table) =>
     AuthPersistence.table({
       name: EffectString.camelToSnake(table.name),
-      columns: Object.fromEntries(
-        Object.entries(table.columns).map(([key, column]) => [
+      columns: Record.fromEntries(
+        Record.toEntries(table.columns).map(([key, column]) => [
           key,
           {
             ...column.options,

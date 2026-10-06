@@ -98,10 +98,11 @@ const TestLayer = CalculatorServiceLive.pipe(Layer.provideMerge(CalculatorStateL
 // Context Type
 // ============================================================================
 
-interface CalculatorContext {
-  value: number
-  history: Array<number>
-}
+const CalculatorContext = Schema.Struct({
+  value: Schema.Number,
+  history: Schema.Array(Schema.Number),
+})
+type CalculatorContext = typeof CalculatorContext.Type
 
 const initialContext: CalculatorContext = {
   history: [],
@@ -136,7 +137,7 @@ await Effect.runPromise(
           Given("I have entered {int:first} into the calculator", {
             handler: (_, { first }) =>
               Effect.gen(function* () {
-                const bgCtx = yield* getBackgroundContext<CalculatorContext>()
+                const bgCtx = yield* getBackgroundContext(CalculatorContext)
                 const calc = yield* CalculatorService
                 const newValue = yield* calc.add(first)
                 return { ...bgCtx, value: newValue }
@@ -182,7 +183,7 @@ await Effect.runPromise(
             // `first` now comes from params (extracted from substituted step text)
             handler: (_, { first }) =>
               Effect.gen(function* () {
-                const bgCtx = yield* getBackgroundContext<CalculatorContext>()
+                const bgCtx = yield* getBackgroundContext(CalculatorContext)
                 const calc = yield* CalculatorService
                 yield* calc.setValue(first)
                 return { ...bgCtx, value: first }

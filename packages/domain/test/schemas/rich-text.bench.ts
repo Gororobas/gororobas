@@ -1,12 +1,12 @@
-import { Schema } from "effect"
-import { expect, test } from "vitest"
+import { expect, it as test } from "@effect/vitest"
+import { Array as EffectArray, Schema } from "effect"
 
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { largeTiptapDocument } from "../fixtures/large-tiptap-document.js"
 
 const decode = Schema.decodeSync(TiptapDocument)
 
-for (const count of [1_000, 10_000]) {
+EffectArray.forEach([1_000, 10_000], (count) => {
   const document = largeTiptapDocument(count)
 
   test(`decode ${count.toLocaleString("en-US")} paragraphs`, async ({ bench }) => {
@@ -15,4 +15,4 @@ for (const count of [1_000, 10_000]) {
       decode(document)
     }).run({ time: 1_000, iterations: 16, warmupIterations: 4 })
   })
-}
+})

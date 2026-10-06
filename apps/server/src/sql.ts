@@ -3,7 +3,7 @@
  */
 import { NodeServices } from "@effect/platform-node"
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node"
-import { Effect, Layer, String as EffectString } from "effect"
+import { Array as EffectArray, Effect, Layer, String as EffectString } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { migrations } from "./db/migrations-effect/index.js"
@@ -32,8 +32,8 @@ export const makeAppSql = (filename: string) => {
       yield* sql`PRAGMA foreign_keys = OFF`
       yield* SqliteMigrator.run({ loader: SqliteMigrator.fromRecord(migrations) })
       const violations = yield* sql`PRAGMA foreign_key_check`
-      if (violations.length > 0) {
-        return yield* Effect.die(new Error("Migration left foreign key violations"))
+      if (EffectArray.isReadonlyArrayNonEmpty(violations)) {
+        return yield* Effect.die("Migration left foreign key violations")
       }
       yield* sql`PRAGMA foreign_keys = ON`
     }),

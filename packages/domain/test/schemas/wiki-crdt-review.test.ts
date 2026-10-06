@@ -54,64 +54,70 @@ describe("Wiki CRDT review stress tests", () => {
         Schema.encodeSync(WikiArticleEditableData)(article),
       )
 
-      for (const origin of ["\ud800", "\udc00"]) {
-        const raw = decode({
-          ...input,
-          translations: {
-            en: {
-              ...input.translations.en,
-              origin,
-              content: {
-                type: "doc",
-                version: 1,
-                content: [
-                  {
-                    type: "paragraph",
-                    attrs: { [origin]: origin, nested: { ["__proto__"]: origin } },
-                    content: [{ type: "text", text: `${origin} 🍅` }],
-                  },
-                ],
+      yield* Effect.forEach(
+        ["\ud800", "\udc00"],
+        Effect.fn(function* (origin) {
+          const raw = decode({
+            ...input,
+            translations: {
+              en: {
+                ...input.translations.en,
+                origin,
+                content: {
+                  type: "doc",
+                  version: 1,
+                  content: [
+                    {
+                      type: "paragraph",
+                      attrs: { [origin]: origin, nested: { ["__proto__"]: origin } },
+                      content: [{ type: "text", text: `${origin} 🍅` }],
+                    },
+                  ],
+                },
               },
             },
-          },
-        })
+          })
 
-        expect(raw.translations.en?.origin).toEqual(Option.some(origin))
-        const stored = yield* createWikiArticleCrdtDocument(raw)
-        const document = snapshotToLoroDoc(stored.crdtSnapshot)
-        const projected = yield* parseWikiArticleCrdtUpdate({
-          snapshot: stored.crdtSnapshot,
-          crdtUpdate: loroDocToUpdate(document),
-        })
-        assert(projected.data.kind === "PLANT")
-        expect(projected.data.translations.en?.origin).toEqual(Option.some("�"))
-        const content = Option.getOrThrow(projected.data.translations.en?.content ?? Option.none())
+          expect(raw.translations.en?.origin).toEqual(Option.some(origin))
+          const stored = yield* createWikiArticleCrdtDocument(raw)
+          const document = snapshotToLoroDoc(stored.crdtSnapshot)
+          const projected = yield* parseWikiArticleCrdtUpdate({
+            snapshot: stored.crdtSnapshot,
+            crdtUpdate: loroDocToUpdate(document),
+          })
+          assert(projected.data.kind === "PLANT")
+          expect(projected.data.translations.en?.origin).toEqual(Option.some("�"))
+          const content = Option.getOrThrow(
+            projected.data.translations.en?.content ?? Option.none(),
+          )
 
-        expect(Schema.encodeSync(Schema.toCodecJson(TiptapDocument))(content)).toEqual({
-          type: "doc",
-          version: 1,
-          content: [
-            {
-              type: "paragraph",
-              attrs: { "�": "�", nested: { ["__proto__"]: "�" } },
-              content: [{ type: "text", text: "� 🍅" }],
-            },
-          ],
-        })
+          expect(Schema.encodeSync(Schema.toCodecJson(TiptapDocument))(content)).toEqual({
+            type: "doc",
+            version: 1,
+            content: [
+              {
+                type: "paragraph",
+                attrs: { "�": "�", nested: { ["__proto__"]: "�" } },
+                content: [{ type: "text", text: "� 🍅" }],
+              },
+            ],
+          })
 
-        yield* applyWikiArticleEdit(document, {
-          _tag: "SetPlantOrigin",
-          locale: "en",
-          value: "🌱 fixed",
-        })
+          yield* applyWikiArticleEdit(document, {
+            _tag: "SetPlantOrigin",
+            locale: "en",
+            value: "🌱 fixed",
+          })
 
-        const edited = yield* parseWikiArticleCrdtUpdate({
-          snapshot: stored.crdtSnapshot,
-          crdtUpdate: loroDocToUpdate(document),
-        })
-        assert(edited.data.kind === "PLANT")
-        expect(edited.data.translations.en?.origin).toEqual(Option.some("🌱 fixed"))
-      }
+          const edited = yield* parseWikiArticleCrdtUpdate({
+            snapshot: stored.crdtSnapshot,
+            crdtUpdate: loroDocToUpdate(document),
+          })
+          assert(edited.data.kind === "PLANT")
+          expect(edited.data.translations.en?.origin).toEqual(Option.some("🌱 fixed"))
+        }),
+        { concurrency: 1, discard: true },
+      )
     }),
   )
 

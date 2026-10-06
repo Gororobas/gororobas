@@ -18,7 +18,6 @@ import * as Arbitrary from "effect/Arbitrary"
 
 import type { Session } from "./authorization/session.js"
 import { SessionContext } from "./authorization/session.js"
-
 export class PropertyTestFailure extends Error {
   readonly _tag = "PropertyTestFailure"
   readonly counterexample: unknown
@@ -78,9 +77,9 @@ export const assertPropertyEffect = <A, E, R>({
       },
     })
 
-    if (result._tag === "Passed") return
+    if (Predicate.isTagged(result, "Passed")) return
 
-    if (result._tag === "Falsified") {
+    if (Predicate.isTagged(result, "Falsified")) {
       return yield* Effect.fail(
         new PropertyTestFailure({
           counterexample: result.shrunkInput,
@@ -91,7 +90,11 @@ export const assertPropertyEffect = <A, E, R>({
     }
 
     return yield* Effect.fail(
-      new PropertyTestFailure({ counterexample: result, seed: 0, path: "" }),
+      new PropertyTestFailure({
+        counterexample: result,
+        seed: 0,
+        path: "",
+      }),
     )
   })
 
@@ -123,11 +126,11 @@ export const assertProperty = <A>({
 }): void => {
   const result = Effect.runSync(Arbitrary.checkEffect(arbitrary, predicate, options))
 
-  if (result._tag !== "Passed") {
+  if (!Predicate.isTagged(result, "Passed")) {
     throw new PropertyTestFailure({
-      counterexample: result._tag === "Falsified" ? result.shrunkInput : result,
+      counterexample: Predicate.isTagged(result, "Falsified") ? result.shrunkInput : result,
       seed: 0,
-      path: result._tag === "Falsified" ? result.replay : "",
+      path: Predicate.isTagged(result, "Falsified") ? result.replay : "",
     })
   }
 }
@@ -154,9 +157,11 @@ export const runPolicySuccess = <A, E, R>(
  * Deep equality check that handles special types like Uint8Array and DateTime.
  * This is needed because Equal.equals() doesn't handle all schema types correctly.
  */
+// oxlint-disable-next-line effect/no-unknown-parameters -- Equality compares arbitrary decoded schema values, including nullish and non-finite values, without claiming a domain type.
 export function deepEquals(a: unknown, b: unknown): boolean {
   // Handle null/undefined/NaN — JSON.stringify converts undefined (in arrays)
   // and NaN to null, and strips undefined-valued object keys.
+  // oxlint-disable-next-line effect/no-unknown-parameters -- Equality compares arbitrary decoded schema values, including nullish and non-finite values, without claiming a domain type.
   const isNullish = (v: unknown) =>
     v === null || v === undefined || (Predicate.isNumber(v) && !Number.isFinite(v))
   if (a === b) return true
@@ -167,7 +172,6 @@ export function deepEquals(a: unknown, b: unknown): boolean {
   if (DateTime.isDateTime(a) && DateTime.isDateTime(b)) {
     return DateTime.Equivalence(a, b)
   }
-
   if (Duration.isDuration(a) && Duration.isDuration(b)) return Duration.equals(a, b)
 
   // Handle Uint8Array
@@ -190,9 +194,7 @@ export function deepEquals(a: unknown, b: unknown): boolean {
       Record.keys(obj).filter((k) => obj[k] !== undefined)
     const aKeys = definedKeys(a)
     const bKeys = definedKeys(b)
-
     if (aKeys.length !== bKeys.length) return false
-
     return EffectArray.every(aKeys, (key) => bKeys.includes(key) && deepEquals(a[key], b[key]))
   }
 

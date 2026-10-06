@@ -9,7 +9,7 @@ const isJsonObject = (value: Schema.Json): value is Schema.JsonObject =>
   Predicate.isObject(value) && !isJsonArray(value)
 
 export const toLoroValue = (value: Schema.Json): Schema.Json & Value => {
-  if (typeof value === "string") return toLoroString(value)
+  if (Predicate.isString(value)) return toLoroString(value)
   if (isJsonArray(value)) return value.map(toLoroValue)
 
   if (isJsonObject(value)) {

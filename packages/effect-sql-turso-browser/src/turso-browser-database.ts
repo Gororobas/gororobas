@@ -1,6 +1,18 @@
 import type { Database, connect } from "@tursodatabase/database-wasm/vite"
 import * as Effect from "effect/Effect"
+import * as Predicate from "effect/Predicate"
+import * as Schema from "effect/Schema"
 import * as Scope from "effect/Scope"
+
+class TursoBrowserDatabaseError extends Schema.TaggedError<TursoBrowserDatabaseError>()(
+  "TursoBrowserDatabaseError",
+  {
+    message: Schema.String,
+  },
+) {}
+
+// Keep native driver errors intact: SqlError classification reads their SQLite code.
+const isDriverError = Schema.is(Schema.instanceOf(Error))
 
 export type DatabaseOptions = NonNullable<Parameters<typeof connect>[1]>
 
@@ -36,6 +48,7 @@ type Message =
 type Pending = {
   request: Omit<Request, "target">
   target?: string
+  // oxlint-disable-next-line effect/no-unknown-parameters -- The WASM protocol returns either rows or write metadata; the SQL adapter interprets the driver result after resolution.
   resolve: (rows: unknown) => void
   reject: (error: Error) => void
 }
@@ -53,7 +66,9 @@ export type BrowserDatabase = {
 
 const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<BrowserDatabase> => {
   if (!navigator.locks || !globalThis.BroadcastChannel) {
-    throw new Error("Turso requires Web Locks and BroadcastChannel")
+    throw new TursoBrowserDatabaseError({
+      message: "Turso requires Web Locks and BroadcastChannel",
+    })
   }
 
   const keyDigest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(path))
@@ -62,6 +77,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
   ).join("")}`
   const id = crypto.randomUUID()
   const channel = new BroadcastChannel(path === ":memory:" ? `${name}:${id}` : name)
+  // oxlint-disable-next-line effect/avoid-native-object-helpers -- Pending native Promise callbacks require insertion-ordered dispatch; preserve request order while callbacks remove entries.
   const pending = new Map<string, Pending>()
   const queue: Array<Request> = []
   let database: Database | undefined
@@ -84,7 +100,9 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
     }
     processing = true
 
+    // oxlint-disable-next-line effect/avoid-try-catch -- The native async driver callback must release statement/lock resources in finally and serialize query failures for other tabs.
     try {
+      // oxlint-disable-next-line effect/imperative-loops, effect/no-length-comparison, effect/prefer-arr-match -- Queries can arrive while a statement awaits and transaction ownership selects the next request; a fixed array traversal would miss or reorder work.
       while (queue.length > 0) {
         const index = transactionOwner
           ? queue.findIndex((request) => request.sender === transactionOwner)
@@ -92,11 +110,14 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
         if (index < 0) {
           break
         }
-        const request = queue.splice(index, 1)[0]!
+        const [request] = queue.splice(index, 1)
+        if (request === undefined) break
 
+        // oxlint-disable-next-line effect/avoid-try-catch -- The native async driver callback must release statement/lock resources in finally and serialize query failures for other tabs.
         try {
           const statement = await database.prepare(request.sql)
 
+          // oxlint-disable-next-line effect/avoid-try-catch -- The native async driver callback must release statement/lock resources in finally and serialize query failures for other tabs.
           try {
             if (request.safeIntegers) {
               statement.safeIntegers(true)
@@ -131,19 +152,23 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
             statement.close()
           }
         } catch (cause) {
+          const error: NonNullable<Response["error"]> = {
+            message: isDriverError(cause) ? cause.message : String(cause),
+          }
+
+          if (
+            Predicate.isObjectOrArray(cause) &&
+            "code" in cause &&
+            (Predicate.isString(cause.code) || Predicate.isNumber(cause.code))
+          ) {
+            error.code = cause.code
+          }
+
           const response: Response = {
             kind: "response",
             id: request.id,
             target: request.sender,
-            error: {
-              message: cause instanceof Error ? cause.message : String(cause),
-              ...(typeof cause === "object" &&
-              cause !== null &&
-              "code" in cause &&
-              (typeof cause.code === "string" || typeof cause.code === "number")
-                ? { code: cause.code }
-                : {}),
-            },
+            error,
           }
 
           if (request.sender === id) {
@@ -159,12 +184,14 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
   }
 
   const rejectPending = (target: string) => {
-    for (const [requestId, entry] of pending) {
+    pending.forEach((entry, requestId) => {
       if (entry.target === target) {
-        entry.reject(new Error("Turso leader changed during a query"))
+        entry.reject(
+          new TursoBrowserDatabaseError({ message: "Turso leader changed during a query" }),
+        )
         pending.delete(requestId)
       }
-    }
+    })
   }
 
   const receive = (message: Message) => {
@@ -199,7 +226,12 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
         pending.delete(message.id)
 
         if (message.error) {
-          entry.reject(Object.assign(new Error(message.error.message), message.error))
+          entry.reject(
+            Object.assign(
+              new TursoBrowserDatabaseError({ message: message.error.message }),
+              message.error,
+            ),
+          )
         } else {
           entry.resolve(message.result ?? [])
         }
@@ -217,6 +249,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
         return
       }
 
+      // oxlint-disable-next-line effect/avoid-try-catch -- The native async driver callback must release statement/lock resources in finally and serialize query failures for other tabs.
       try {
         const { connect } = await import("@tursodatabase/database-wasm/vite")
         database = await connect(path, options)
@@ -236,15 +269,18 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
     if (closed) {
       return
     }
-    failure = cause instanceof Error ? cause : new Error(String(cause))
-    for (const entry of pending.values()) {
-      entry.reject(failure)
-    }
+    const error = isDriverError(cause)
+      ? cause
+      : new TursoBrowserDatabaseError({ message: String(cause) })
+    failure = error
+    pending.forEach((entry) => {
+      entry.reject(error)
+    })
     pending.clear()
   })
 
   const dispatchPending = () => {
-    for (const entry of pending.values()) {
+    pending.forEach((entry) => {
       if (!entry.target && leader) {
         entry.target = leader
         const request = { ...entry.request, target: leader }
@@ -255,7 +291,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
           channel.postMessage(request)
         }
       }
-    }
+    })
   }
 
   channel.postMessage({ kind: "hello" })
@@ -267,7 +303,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
           try: () =>
             new Promise<unknown>((resolve, reject) => {
               if (closed) {
-                reject(new Error("Turso database is closed"))
+                reject(new TursoBrowserDatabaseError({ message: "Turso database is closed" }))
                 return
               }
               if (failure) {
@@ -289,11 +325,14 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
               pending.set(request.id, { request, resolve, reject })
               dispatchPending()
             }),
-          catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+          catch: (cause) =>
+            isDriverError(cause)
+              ? cause
+              : new TursoBrowserDatabaseError({ message: String(cause) }),
         }),
       ),
     close: () =>
-      Effect.promise(async () => {
+      Effect.tryPromise(async () => {
         if (closed) {
           return
         }
@@ -301,15 +340,15 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
           channel.postMessage({ kind: "released", id })
         }
         closed = true
-        for (const entry of pending.values()) {
-          entry.reject(new Error("Turso database is closed"))
-        }
+        pending.forEach((entry) => {
+          entry.reject(new TursoBrowserDatabaseError({ message: "Turso database is closed" }))
+        })
         pending.clear()
         releaseLock()
         electionAbort.abort()
         await election.catch(() => {})
         channel.close()
-      }),
+      }).pipe(Effect.orDie),
   }
 }
 
@@ -320,7 +359,8 @@ export const open = (
   Effect.acquireRelease(
     Effect.tryPromise({
       try: () => openRaw(path, options),
-      catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+      catch: (cause) =>
+        isDriverError(cause) ? cause : new TursoBrowserDatabaseError({ message: String(cause) }),
     }),
     (database) => database.close(),
   )

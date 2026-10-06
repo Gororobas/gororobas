@@ -7,15 +7,22 @@ import { IntNonNegative, PositiveInteger, TimestampedStruct } from "../common/pr
 
 // JSON stores milliseconds; reject durations that cannot round-trip through that representation.
 const MediaDuration = Schema.DurationFromMillis.check(
-  Schema.makeFilter((duration) => {
-    const milliseconds = Duration.toMillis(duration)
+  Schema.makeFilter(
+    (duration) => {
+      const milliseconds = Duration.toMillis(duration)
 
-    return (
-      Number.isFinite(milliseconds * 1_000_000) &&
-      milliseconds >= 0 &&
-      Duration.equals(duration, Duration.millis(milliseconds))
-    )
-  }),
+      return (
+        Number.isFinite(milliseconds * 1_000_000) &&
+        milliseconds >= 0 &&
+        Duration.equals(duration, Duration.millis(milliseconds))
+      )
+    },
+    {
+      identifier: "MediaDuration",
+      title: "Media duration",
+      description: "A non-negative duration that round-trips through finite milliseconds.",
+    },
+  ),
 )
 
 const Dimensions = { originalWidth: PositiveInteger, originalHeight: PositiveInteger }

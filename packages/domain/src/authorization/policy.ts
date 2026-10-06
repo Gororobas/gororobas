@@ -89,6 +89,7 @@ type TupleOfA<Policies> = {
 export const or = <Policies extends ReadonlyArray<Policy<any, any>>>(
   ...policies: Policies
 ): Policy<UnionOfA<Policies>, UnionOfR<Policies>> => {
+  // SAFETY: Recovery returns only values from the supplied policies and accumulates their service requirements; no new success value is introduced.
   return policies.reduce((acc, p) =>
     acc.pipe(Effect.catchTag("UnauthorizedError", () => p)),
   ) as Policy<UnionOfA<Policies>, UnionOfR<Policies>>
@@ -107,6 +108,7 @@ export const unionPolicy = <A, R = never>(
 export const and = <Policies extends ReadonlyArray<Policy<any, any>>>(
   ...policies: Policies
 ): Policy<TupleOfA<Policies>, UnionOfR<Policies>> => {
+  // SAFETY: Effect.all preserves input order and each policy's success type, producing the mapped tuple with the union of service requirements.
   return Effect.all(policies, { concurrency: 1 }) as Policy<TupleOfA<Policies>, UnionOfR<Policies>>
 }
 

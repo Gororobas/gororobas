@@ -1,5 +1,6 @@
 import {
   Console,
+  Schema,
   Effect,
   FileSystem,
   Layer,
@@ -15,6 +16,8 @@ import { makeReporter, Reporter } from "../services/reporter.js"
 import { StepDiscovery, StepDiscoveryLive } from "../services/step-discovery.js"
 import { StepMatcher, StepMatcherLive, aggregateResults } from "../services/step-matcher.js"
 import type { OutputFormat } from "../types.js"
+
+class CheckFailedError extends Schema.TaggedError<CheckFailedError>()("CheckFailedError", {}) {}
 
 export interface CheckConfig {
   patterns: string
@@ -156,7 +159,7 @@ export function runCheck(
     yield* reporter.report(result)
 
     if (!result.passed) {
-      return yield* Effect.fail("CHECK_FAILED" as never)
+      return yield* Effect.fail(new CheckFailedError({}))
     }
   }).pipe(Effect.provide(createCheckLayer(config.format)))
 }

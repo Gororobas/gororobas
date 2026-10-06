@@ -1,5 +1,5 @@
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "@gororobas/domain"
-import "loro-crdt"
+import type { ContainerID, Diff, JsonDiff, VersionVector } from "loro-crdt"
 
 declare module "loro-crdt" {
   interface LoroDoc {

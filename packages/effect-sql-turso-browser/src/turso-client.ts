@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect"
 import { identity } from "effect/Function"
 import * as Layer from "effect/Layer"
 import * as Reactivity from "effect/reactivity/Reactivity"
+import * as Record from "effect/Record"
 import * as Schema from "effect/Schema"
 import type * as Scope from "effect/Scope"
 import * as Semaphore from "effect/Semaphore"
@@ -153,7 +154,7 @@ export const make = (
       : undefined
 
     const spanAttributes: Array<[string, unknown]> = [
-      ...(options.spanAttributes ? Object.entries(options.spanAttributes) : []),
+      ...(options.spanAttributes ? Record.toEntries(options.spanAttributes) : []),
       [ATTR_DB_SYSTEM_NAME, "sqlite"],
     ]
 

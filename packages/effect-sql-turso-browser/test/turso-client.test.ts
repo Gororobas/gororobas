@@ -1,18 +1,18 @@
-import { Effect } from "effect"
+import { expect, it as test } from "@effect/vitest"
+import { Array as EffectArray, Effect, Record, Predicate } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
-// oxlint-disable-next-line custom-lint-rules/no-node-apis -- Use an independent SQLite reference driver to test the Effect SQL adapter.
+// oxlint-disable-next-line effect/avoid-node-imports, custom-lint-rules/no-node-apis -- Use an independent SQLite reference driver to test the Effect SQL adapter.
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
-import { expect, test } from "vitest"
 
 import type { BrowserDatabase } from "../src/turso-browser-database.js"
 import * as TursoClient from "../src/turso-client.js"
-
+// oxlint-disable-next-line effect/no-unknown-parameters -- This adapter validates raw SQL bindings against the independent SQLite driver input types below.
 const parameter = (value: unknown): SQLInputValue => {
   if (
     value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "bigint" ||
+    Predicate.isString(value) ||
+    Predicate.isNumber(value) ||
+    Predicate.isBigInt(value) ||
     value instanceof Uint8Array
   ) {
     return value
@@ -37,9 +37,9 @@ const withDatabase = (body: Effect.Effect<void, unknown, SqlClient.SqlClient>) =
               const statement = database.prepare(sql)
               statement.setReadBigInts(safeIntegers)
               const bindings = parameters.map(parameter)
-              if (statement.columns().length > 0) {
+              if (EffectArray.isReadonlyArrayNonEmpty(statement.columns())) {
                 const rows = statement.all(...bindings)
-                return values ? rows.map(Object.values) : rows
+                return values ? rows.map(Record.values) : rows
               }
               const result = statement.run(...bindings)
               return raw ? result : []
@@ -63,30 +63,44 @@ const withDatabase = (body: Effect.Effect<void, unknown, SqlClient.SqlClient>) =
     }),
   )
 
-test("transforms names, preserves raw results, values and safe integers", async () => {
-  await Effect.runPromise(
-    withDatabase(
+test.live(
+  "transforms names, preserves raw results, values and safe integers",
+  Effect.fn(function* () {
+    yield* withDatabase(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         yield* sql`CREATE TABLE items (item_name TEXT, big_value INTEGER)`
         const result =
           yield* sql`INSERT INTO items (item_name, big_value) VALUES (${"🍅"}, ${9007199254740993n})`
             .raw
-        expect(result).toMatchObject({ changes: 1 })
-        yield* sql`INSERT INTO items ${sql.insert({ itemName: "🌱", bigValue: 1 })}`
+        expect(result).toMatchObject({
+          changes: 1,
+        })
+        yield* sql`INSERT INTO items ${sql.insert({
+          itemName: "🌱",
+          bigValue: 1,
+        })}`
         const rows = yield* sql`SELECT item_name, big_value FROM items WHERE big_value > 1`.pipe(
           Effect.provideService(SqlClient.SafeIntegers, true),
         )
-        expect(rows).toEqual([{ itemName: "🍅", bigValue: 9007199254740993n }])
+
+        expect(rows).toEqual([
+          {
+            itemName: "🍅",
+            bigValue: 9007199254740993n,
+          },
+        ])
+
         expect(yield* sql`SELECT item_name FROM items`.values).toEqual([["🍅"], ["🌱"]])
       }),
-    ),
-  )
-})
+    )
+  }),
+)
 
-test("nested rollback preserves the outer transaction and failed commits are cleaned up", async () => {
-  await Effect.runPromise(
-    withDatabase(
+test.live(
+  "nested rollback preserves the outer transaction and failed commits are cleaned up",
+  Effect.fn(function* () {
+    yield* withDatabase(
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         yield* sql`PRAGMA foreign_keys = ON`
@@ -110,7 +124,15 @@ test("nested rollback preserves the outer transaction and failed commits are cle
           }),
         )
 
-        expect(yield* sql`SELECT id FROM parents ORDER BY id`).toEqual([{ id: 1 }, { id: 3 }])
+        expect(yield* sql`SELECT id FROM parents ORDER BY id`).toEqual([
+          {
+            id: 1,
+          },
+          {
+            id: 3,
+          },
+        ])
+
         const failed = yield* sql
           .withTransaction(sql`INSERT INTO children VALUES (999)`)
           .pipe(Effect.exit)
@@ -118,6 +140,6 @@ test("nested rollback preserves the outer transaction and failed commits are cle
         expect(yield* sql`SELECT id FROM children`).toEqual([])
         yield* sql.withTransaction(sql`INSERT INTO children VALUES (1)`)
       }),
-    ),
-  )
-})
+    )
+  }),
+)

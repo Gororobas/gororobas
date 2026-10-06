@@ -28,6 +28,7 @@ import {
 } from "./helpers.js"
 
 function getCallerDir(): string {
+  // oxlint-disable-next-line typescript/unbound-method -- The callback is restored on Error below, never invoked unbound.
   const previousPrepareStackTrace = Error.prepareStackTrace
   let callerFile = Option.none<string>()
 
@@ -37,9 +38,13 @@ function getCallerDir(): string {
     return ""
   }
 
-  const callerError = new FeatureParseError({ path: "caller", message: "Call site lookup" })
-  void callerError.stack
-  Error.prepareStackTrace = previousPrepareStackTrace
+  // oxlint-disable-next-line effect/avoid-try-catch -- Restore the global Node stack hook even if stack materialization throws.
+  try {
+    const callerError = new FeatureParseError({ path: "caller", message: "Call site lookup" })
+    void callerError.stack
+  } finally {
+    Error.prepareStackTrace = previousPrepareStackTrace
+  }
 
   if (Option.isNone(callerFile)) {
     throw new FeatureParseError({ path: "caller", message: "Could not determine caller file path" })
@@ -417,6 +422,7 @@ export function describeFeature(
   // inside Effect.gen would return an Effect runtime frame instead of the test file.
   const callerFile = getCallerDir()
 
+  // SAFETY: Path is provided below; callback-created test effects are registered with Vitest and run under their own test layers, not in this registration effect.
   // oxlint-disable-next-line effect/casting-awareness the BDD callback intentionally hides its internal requirements.
   return Effect.gen(function* () {
     const path = yield* Path.Path

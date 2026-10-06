@@ -1,23 +1,31 @@
-import { Effect, Redacted } from "effect"
-// oxlint-disable-next-line custom-lint-rules/no-node-apis -- Generate and sign OAuth provider JWT fixtures; Effect Crypto does not expose asymmetric signing.
+import { assert, expect, it as test } from "@effect/vitest"
+import { Clock, Effect, Predicate, Redacted } from "effect"
+// oxlint-disable-next-line effect/avoid-node-imports, custom-lint-rules/no-node-apis -- Generate and sign OAuth provider JWT fixtures; Effect Crypto does not expose asymmetric signing.
 import { generateKeyPairSync, sign } from "node:crypto"
 import * as OpenIdClient from "openid-client"
-import { expect, test } from "vitest"
 
 import { makeOAuthProtocol } from "./oauth-protocol.js"
-
-const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
-const { privateKey: wrongPrivateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
+const { privateKey, publicKey } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+})
+const { privateKey: wrongPrivateKey } = generateKeyPairSync("rsa", {
+  modulusLength: 2048,
+})
 const issuer = "https://provider.example"
+const providers = ["apple", "google", "microsoft"] as const
 
-for (const provider of ["apple", "google", "microsoft"] as const) {
-  test.each(["valid", "wrong-nonce", "wrong-issuer", "wrong-signature"])(
+providers.forEach((provider) => {
+  test.live.each(["valid", "wrong-nonce", "wrong-issuer", "wrong-signature"])(
     `${provider} OIDC validates %s using signed ID tokens`,
-    async (scenario) => {
-      const now = Math.floor(Date.now() / 1000)
-      const header = Buffer.from(JSON.stringify({ alg: "RS256", kid: "test-key" })).toString(
-        "base64url",
-      )
+    Effect.fn(function* (scenario) {
+      const now = Math.floor((yield* Clock.currentTimeMillis) / 1000)
+
+      const header = Buffer.from(
+        JSON.stringify({
+          alg: "RS256",
+          kid: "test-key",
+        }),
+      ).toString("base64url")
 
       const payload = Buffer.from(
         JSON.stringify({
@@ -50,7 +58,9 @@ for (const provider of ["apple", "google", "microsoft"] as const) {
           id_token_signing_alg_values_supported: ["RS256"],
         },
         "test-client",
-        { id_token_signed_response_alg: "RS256" },
+        {
+          id_token_signed_response_alg: "RS256",
+        },
         OpenIdClient.ClientSecretPost("test-secret"),
       )
 
@@ -58,15 +68,20 @@ for (const provider of ["apple", "google", "microsoft"] as const) {
         if (String(input) === `${issuer}/jwks`) {
           return Response.json({
             keys: [
-              { ...publicKey.export({ format: "jwk" }), kid: "test-key", alg: "RS256", use: "sig" },
+              {
+                ...publicKey.export({
+                  format: "jwk",
+                }),
+                kid: "test-key",
+                alg: "RS256",
+                use: "sig",
+              },
             ],
           })
         }
 
         expect(String(input)).toBe(`${issuer}/token`)
-        if (typeof init.body !== "string" && !(init.body instanceof URLSearchParams)) {
-          throw new Error("unexpected token request body")
-        }
+        assert(Predicate.isString(init.body) || init.body instanceof URLSearchParams)
         tokenBodies.push(init.body.toString())
 
         return Response.json({
@@ -77,7 +92,7 @@ for (const provider of ["apple", "google", "microsoft"] as const) {
       }
 
       OpenIdClient.enableNonRepudiationChecks(client)
-      const protocol = makeOAuthProtocol("https://app.example", new Map([[provider, client]]))
+      const protocol = makeOAuthProtocol("https://app.example", { [provider]: client })
 
       const input = {
         provider,
@@ -86,7 +101,7 @@ for (const provider of ["apple", "google", "microsoft"] as const) {
         pkceVerifier: "a".repeat(64),
       }
 
-      const url = new URL(await Effect.runPromise(protocol.authorize(input)))
+      const url = new URL(yield* protocol.authorize(input))
       expect(url.searchParams.get("nonce")).toBe(input.nonce)
       expect(url.searchParams.get("redirect_uri")).toBe(
         `https://app.example/api/auth/${provider}/callback`,
@@ -96,14 +111,19 @@ for (const provider of ["apple", "google", "microsoft"] as const) {
       )
       expect(url.searchParams.get("response_mode")).toBe(provider === "apple" ? "form_post" : null)
 
-      const result = await Effect.runPromise(
-        protocol.exchange({ ...input, code: Redacted.make("authorization-code") }).pipe(
+      const result = yield* protocol
+        .exchange({
+          ...input,
+          code: Redacted.make("authorization-code"),
+        })
+        .pipe(
           Effect.match({
             onSuccess: (identity) => identity,
-            onFailure: (error) => ({ reason: error.reason }),
+            onFailure: (error) => ({
+              reason: error.reason,
+            }),
           }),
-        ),
-      )
+        )
 
       expect(result).toEqual(
         scenario === "valid"
@@ -111,15 +131,17 @@ for (const provider of ["apple", "google", "microsoft"] as const) {
               issuer,
               subject: "external-subject",
               email: "person@example.com",
-              emailVerified: true,
+              isEmailVerified: true,
               name: "Provider Person",
             }
-          : { reason: "invalid-flow" },
+          : {
+              reason: "invalid-flow",
+            },
       )
 
       expect(new URLSearchParams(tokenBodies[0]).get("code_verifier")).toBe(
         provider === "apple" ? null : input.pkceVerifier,
       )
-    },
+    }),
   )
-}
+})

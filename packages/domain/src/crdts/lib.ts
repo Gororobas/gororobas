@@ -30,6 +30,7 @@ export function snapshotToLoroDoc(crdtBlob: LoroDocSnapshot): LoroDoc {
   return doc
 }
 
+// oxlint-disable-next-line effect/no-unknown-parameters -- Mirror initialization accepts sparse nested state; InferInputType incorrectly requires omitted optional fields. Callers supply domain-encoded state.
 export function createLoroDocFromData(data: unknown, schema: LoroMirrorSchema): LoroDoc {
   const initialDoc = new LoroDoc()
   const initialDocStore = new Mirror({
@@ -91,28 +92,29 @@ const applyUpdate = (crdt_update: Uint8Array<ArrayBufferLike>, sourceDocument: L
     catch: () => new InvalidCrdtUpdateError({ reason: "InvalidFormat" }),
   })
 
-const validateSchema = <S extends Schema.Schema<any>>({
+const validateSchema = <S extends Schema.ConstraintDecoder<unknown, never>>({
   updatedDoc,
   targetSchema,
   projectDocument,
 }: {
   updatedDoc: LoroDoc
   targetSchema: S
+  // oxlint-disable-next-line effect/no-unknown-returns -- CRDT projections remain untrusted until targetSchema decodes them; declaring a domain result here would bypass that validation.
   projectDocument: (document: LoroDoc) => unknown
 }): Effect.Effect<S["Type"], InvalidCrdtUpdateError, never> =>
-  Effect.try({
-    try: () =>
-      // oxlint-disable-next-line effect/casting-awareness, custom-lint-rules/no-schema-decode-unknown -- Effect Schema's decoder constraint is stricter than its generic schema input, and CRDT document projections have an unknown shape until validated.
-      Schema.decodeUnknownSync(targetSchema as never)(projectDocument(updatedDoc)),
-    catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
-  })
+  Effect.try(() => projectDocument(updatedDoc)).pipe(
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro projections remain untrusted until the caller's schema validates them.
+    Effect.flatMap(Schema.decodeUnknownEffect(targetSchema)),
+    Effect.mapError(() => new InvalidCrdtUpdateError({ reason: "SchemaValidation" })),
+  )
 
 export const parseCrdtUpdate = Effect.fn("parseCrdtUpdate")(function* <
-  S extends Schema.Schema<any>,
+  S extends Schema.ConstraintDecoder<unknown, never>,
 >(props: {
   crdtUpdate: Uint8Array<ArrayBufferLike>
   targetSchema: S
   sourceDocument: LoroDoc
+  // oxlint-disable-next-line effect/no-unknown-returns -- CRDT projections remain untrusted until targetSchema decodes them; declaring a domain result here would bypass that validation.
   projectDocument?: (document: LoroDoc) => unknown
 }) {
   const updatedDoc = yield* applyUpdate(props.crdtUpdate, props.sourceDocument)
@@ -130,7 +132,7 @@ export const parseCrdtUpdate = Effect.fn("parseCrdtUpdate")(function* <
  * Applies the update ignoring intermediary values stored in the CRDT edit history (for storage size and user privacy)
  */
 export const applyCrdtUpdateWithCommit = Effect.fn("applyCrdtUpdateWithCommit")(function* <
-  S extends Schema.Schema<any>,
+  S extends Schema.ConstraintDecoder<unknown, never>,
 >({
   commit,
   crdtUpdate,
@@ -142,6 +144,7 @@ export const applyCrdtUpdateWithCommit = Effect.fn("applyCrdtUpdateWithCommit")(
   crdtUpdate: LoroDocUpdate
   targetSchema: S
   snapshot: LoroDocSnapshot
+  // oxlint-disable-next-line effect/no-unknown-returns -- CRDT projections remain untrusted until targetSchema decodes them; declaring a domain result here would bypass that validation.
   projectDocument?: (document: LoroDoc) => unknown
 }) {
   const currentDoc = snapshotToLoroDoc(snapshot)

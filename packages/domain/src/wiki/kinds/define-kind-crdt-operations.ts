@@ -22,6 +22,7 @@ type AttributeEditEncoded<Operations> = Operations extends {
 
 const makeOperationRunner = <Message extends MessageSchema>(operation: EditOperation<Message>) => ({
   matches: (change: unknown): change is Message["Type"] => Schema.is(operation.message)(change),
+  // oxlint-disable-next-line effect/no-unknown-parameters -- The heterogeneous operation registry decodes this input with the selected message schema before its handler runs.
   run: (document: LoroDoc, change: unknown) =>
     Schema.decodeEffect(Schema.toType(operation.message))(change).pipe(
       Effect.flatMap((payload) => operation.handler(document, payload)),
@@ -35,6 +36,7 @@ export const defineKindCrdtOperations = <
 ) => {
   const runners = operations.map(makeOperationRunner)
 
+  // SAFETY: Every union member is an operation.message; the conditional types extract Type and Encoded from those same members.
   // oxlint-disable-next-line effect/casting-awareness
   const AttributeEdit = Schema.Union(
     operations.map((operation) => operation.message),

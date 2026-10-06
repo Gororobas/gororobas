@@ -1,5 +1,5 @@
 import { Node } from "@tiptap/core"
-import { Schema } from "effect"
+import { Option, Schema } from "effect"
 
 import {
   MediaGridAttributes,
@@ -27,7 +27,7 @@ export const MediaGrid = Node.create({
       getAttrs: (element) =>
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- DOM attributes may be absent or contain malformed JSON.
         Schema.decodeUnknownOption(AttributesJson)(element.getAttribute("data-media-grid")).pipe(
-          (attributes) => (attributes._tag === "Some" ? attributes.value : false),
+          (attributes) => (Option.isSome(attributes) ? attributes.value : false),
         ),
     },
   ],

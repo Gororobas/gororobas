@@ -213,10 +213,7 @@ export const StepMatcherLive = Layer.succeed(
   }),
 )
 
-function countSteps(
-  scenarios: Array<ScenarioResult>,
-  backgroundSteps?: Array<MatchedStep>,
-): { total: number; undefined: number } {
+function countSteps(scenarios: Array<ScenarioResult>, backgroundSteps?: Array<MatchedStep>) {
   const steps = [...(backgroundSteps ?? []), ...scenarios.flatMap((scenario) => scenario.steps)]
   return {
     total: steps.length,

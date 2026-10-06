@@ -1,19 +1,26 @@
-// import effect from "@mpsuesser/oxlint-plugin-effect"
+import effect from "@mpsuesser/oxlint-plugin-effect"
 import { defineConfig } from "oxlint"
 
 export default defineConfig({
   extends: [
-    // {
-    //   ...effect.configs.recommended,
-    //   rules: {
-    //     ...effect.configs.recommended.rules,
-    //     "effect/require-schema-type-alias": "off",
-    //     // "effect/prefer-effect-fn": "off",
-    //     "effect/no-barrel-imports": "off",
-    //     "effect/prefer-namespace-imports": "off",
-    //     "effect/avoid-ts-ignore": "off",
-    //   },
-    // },
+    {
+      ...effect.configs.recommended,
+      ignorePatterns: ["./linting/**/*.mjs"],
+      rules: {
+        ...effect.configs.recommended.rules,
+        "effect/prefer-effect-fn": "off",
+        "effect/require-schema-type-alias": "off",
+        "effect/effect-run-in-body": "off",
+        "effect/prefer-arr-sort": "off",
+        "effect/no-barrel-imports": "off",
+        "effect/prefer-namespace-imports": "off",
+        "effect/avoid-ts-ignore": "off",
+        "effect/no-service-constructor-imports": "off",
+        "effect/prefer-option-over-null": "off",
+        "effect/no-conditional-empty-object-spread": "off",
+        "effect/no-shape-in-symbol-names": "off",
+      },
+    },
   ],
   plugins: ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
   jsPlugins: [
@@ -53,6 +60,7 @@ export default defineConfig({
     "custom-lint-rules/no-sql-type-parameter": "error",
     "custom-lint-rules/prefer-option-from-nullable": "error",
     "custom-lint-rules/prefer-arr-sort": "error",
+    "custom-lint-rules/require-effect-vitest": "error",
     "custom-lint-rules/no-direct-fetch": "error",
     "custom-lint-rules/pipe-max-arguments": "error",
     "custom-lint-rules/no-nested-layer-provide": "error",
@@ -71,6 +79,12 @@ export default defineConfig({
   },
   overrides: [
     {
+      files: ["packages/migration/src/**/*preview*", "packages/migration/preview/**"],
+      rules: Object.fromEntries(
+        Object.keys(effect.configs.recommended.rules).map((rule) => [rule, "off" as const]),
+      ),
+    },
+    {
       files: ["apps/server/src/db/migrations-effect/**"],
       rules: {
         "unicorn/filename-case": "off",
@@ -87,8 +101,19 @@ export default defineConfig({
       rules: {},
     },
     {
-      files: ["**/*.test.ts", "**/*.test.tsx", "**/test/**/*.ts", "**/test/**/*.tsx"],
-      rules: {},
+      files: [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/test/**/*.ts",
+        "**/test/**/*.tsx",
+      ],
+      rules: {
+        "effect/avoid-option-getorthrow": "off",
+        "effect/avoid-untagged-errors": "off",
+        "effect/avoid-direct-json": "off",
+      },
     },
     {
       files: ["**/*.mjs"],
@@ -111,6 +136,7 @@ export default defineConfig({
     "**/.git",
     "repos/**",
     "**/repos/**",
+    "linting/**",
     "oxlint.config.ts",
     "vitest.shared.ts",
     "apps/server/scripts/test-auth.ts",

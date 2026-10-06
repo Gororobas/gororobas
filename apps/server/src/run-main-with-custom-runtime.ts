@@ -6,24 +6,16 @@ import { constVoid } from "effect/Function"
  *
  * The HTTP server and background workflows share the application's SQL and cluster services.
  */
-export const runMainWithCustomRuntime = <
-  RuntimeServices,
-  RuntimeError,
-  ProgramServices,
-  ProgramError,
->({
+export const runMainWithCustomRuntime = <RuntimeServices, RuntimeError, ProgramError>({
   runtime,
   program,
   teardown = Runtime.defaultTeardown,
 }: {
   runtime: ManagedRuntime.ManagedRuntime<RuntimeServices, RuntimeError>
-  program: Effect.Effect<unknown, ProgramError, ProgramServices>
+  program: Effect.Effect<unknown, ProgramError, RuntimeServices>
   teardown?: Runtime.Teardown | undefined
 }) => {
-  const fiber = runtime.runFork(
-    // oxlint-disable-next-line effect/casting-awareness, effect/avoid-any -- the custom runtime is the application boundary.
-    program as unknown as Effect.Effect<unknown, RuntimeError, RuntimeServices>,
-  )
+  const fiber = runtime.runFork(program)
 
   const keepAlive = setInterval(constVoid, 2 ** 31 - 1)
   let receivedSignal = false

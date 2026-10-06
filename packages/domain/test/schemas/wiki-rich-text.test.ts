@@ -109,6 +109,7 @@ const getContent = (document: LoroDoc): LoroNode => {
   assert(translation instanceof LoroMap)
   const content = translation.get("content")
   assert(content instanceof LoroMap)
+  // SAFETY: Both container levels are checked as LoroMap above; the created article schema supplies the node fields exercised by the binding.
   // oxlint-disable-next-line effect/casting-awareness -- The binding's generic node type describes our tested wire format.
   return content as LoroNode
 }
@@ -147,6 +148,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
 
             const state = EditorState.create({ doc: node })
             const edited = state.apply(state.tr.insertText("Edited ", 1))
+            // SAFETY: This document is the real loro-crdt LoroDoc used to construct the editor root; the binding's separate type declaration describes the same runtime API.
             // oxlint-disable-next-line effect/casting-awareness, effect/avoid-native-object-helpers -- The binding requires a native Map; containerId selects our nested editor root instead of its default doc root.
             updateLoroToPmState(document as LoroDocType, new Map(), edited, root.id)
             const parsed = yield* parse(created, document)

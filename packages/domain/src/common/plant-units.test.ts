@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Option, Schema } from "effect"
+import { Array as EffectArray, Effect, Option, Schema } from "effect"
 import * as Length from "effect-units/Length"
 import * as Temperature from "effect-units/Temperature"
 import * as Arbitrary from "effect/Arbitrary"
@@ -24,15 +24,19 @@ describe("Plant unit storage", () => {
         Effect.gen(function* () {
           const document = new LoroDoc()
 
-          for (const edit of [
-            { _tag: "SetHeightMax", value: height },
-            { _tag: "SetTemperatureMin", value: temperature },
-          ] as const) {
-            yield* WikiPlantArticleCrdtOperations.applyAttributeEdit(
-              document,
-              Schema.decodeSync(WikiPlantArticleCrdtOperations.AttributeEdit)(edit),
-            )
-          }
+          yield* Effect.forEach(
+            [
+              { _tag: "SetHeightMax", value: height },
+              { _tag: "SetTemperatureMin", value: temperature },
+            ] as const,
+            Effect.fn(function* (edit) {
+              yield* WikiPlantArticleCrdtOperations.applyAttributeEdit(
+                document,
+                Schema.decodeSync(WikiPlantArticleCrdtOperations.AttributeEdit)(edit),
+              )
+            }),
+            { concurrency: 1, discard: true },
+          )
 
           const editable = Schema.decodeSync(WikiPlantArticle.EditableAttributes)(
             document.getMap("attributes").toJSON(),
@@ -55,32 +59,32 @@ describe("Plant unit storage", () => {
   )
 
   it("rounds computed lengths to whole centimeters without rejecting conversion noise", () => {
-    for (const height of [0, 7, 29, 57]) {
+    EffectArray.forEach([0, 7, 29, 57], (height) => {
       expect(Schema.encodeSync(Centimeters)(Schema.decodeSync(Centimeters)(height))).toBe(height)
-    }
+    })
 
     expect(Schema.encodeSync(Centimeters)(Length.centimeters(7.4))).toBe(7)
     expect(Schema.encodeSync(Centimeters)(Length.centimeters(7.5))).toBe(8)
-    for (const invalid of [-1, 0.5, NaN, Infinity]) {
+    EffectArray.forEach([-1, 0.5, NaN, Infinity], (invalid) => {
       expect(() => Schema.decodeSync(Centimeters)(invalid)).toThrow(/Expected/)
-    }
-    for (const invalid of [-0.1, NaN, Infinity]) {
+    })
+    EffectArray.forEach([-0.1, NaN, Infinity], (invalid) => {
       expect(() => Schema.encodeSync(Centimeters)(Length.centimeters(invalid))).toThrow(/Expected/)
-    }
+    })
   })
 
   it("accepts freezing temperatures while enforcing the Celsius lower bound in both directions", () => {
-    for (const celsius of [-50, -20, 0, 20]) {
+    EffectArray.forEach([-50, -20, 0, 20], (celsius) => {
       const temperature = Schema.decodeSync(TemperatureInCelsius)(celsius)
       expect(Schema.encodeSync(TemperatureInCelsius)(temperature)).toBe(celsius)
-    }
+    })
 
-    for (const invalid of [-51, NaN, Infinity, -Infinity]) {
+    EffectArray.forEach([-51, NaN, Infinity, -Infinity], (invalid) => {
       expect(() => Schema.decodeSync(TemperatureInCelsius)(invalid)).toThrow(/Expected/)
       expect(() =>
         Schema.encodeSync(TemperatureInCelsius)(Temperature.degreesCelsius(invalid)),
       ).toThrow(/Expected/)
-    }
+    })
   })
 
   it("compares cultivar range endpoints as quantities and retains numeric JSON", () => {
@@ -96,10 +100,10 @@ describe("Plant unit storage", () => {
       Schema.encodeSync(Schema.toCodecJson(Fields))(Schema.decodeSync(Fields)(stored)),
     ).toEqual(stored)
 
-    for (const field of [Fields.fields.height, Fields.fields.temperature]) {
+    EffectArray.forEach([Fields.fields.height, Fields.fields.temperature], (field) => {
       expect(() => Schema.decodeSync(field)({ _tag: "Value", value: { min: 20, max: 7 } })).toThrow(
         /minimum must not exceed maximum/,
       )
-    }
+    })
   })
 })

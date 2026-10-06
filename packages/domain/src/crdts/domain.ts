@@ -154,7 +154,7 @@ export const CommentSourceDataStorageLoro = loroSchema({
   ),
 })
 
-const encodeDateOrUndefined = (value: unknown) => {
+const encodeDateOrUndefined = (value: TimestampColumn | string | null | undefined) => {
   if (value == null) return undefined
   if (Predicate.isString(value)) return value
   if (Schema.is(TimestampColumn)(value)) return DateTime.formatIso(value)
