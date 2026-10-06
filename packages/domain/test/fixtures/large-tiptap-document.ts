@@ -1,4 +1,6 @@
 /** Mix flat text with nested blockquotes/lists without including fixture construction in benchmark timings. */
+import type { TiptapDocument } from "../../src/rich-text/domain.js"
+
 export const largeTiptapDocument = (paragraphCount: number) => {
   const paragraphs = Array.from({ length: paragraphCount }, (_, index) => ({
     type: "paragraph" as const,
@@ -38,5 +40,5 @@ export const largeTiptapDocument = (paragraphCount: number) => {
           }
         : paragraph,
     ),
-  }
+  } satisfies typeof TiptapDocument.Encoded
 }

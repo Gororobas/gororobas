@@ -9,7 +9,7 @@ import { MigrationContext, MigrationContextLive } from "./migration-context.js"
 
 it.effect("defaults missing tag dates to the agreed UTC timestamp", () =>
   Effect.sync(() => {
-    const tag = Schema.decodeUnknownSync(GelTag)({ id: "old-tag", names: ["Test"], handle: "test" })
+    const tag = Schema.decodeSync(GelTag)({ id: "old-tag", names: ["Test"], handle: "test" })
     expect(tag.created_at.toISOString()).toBe("2025-04-01T12:00:00.000Z")
   }),
 )

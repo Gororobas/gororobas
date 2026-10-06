@@ -44,5 +44,9 @@ minimumReleaseAgeExclude:
 
 nodeLinker: hoisted
 
+overrides:
+  # Hoisted effect-oxlint and its plugins must share the same Schema runtime.
+  "@mpsuesser/oxlint-plugin-effect>effect": "catalog:"
+
 patchedDependencies:
   loro-crdt@1.16.4: patches/loro-crdt@1.16.4.patch

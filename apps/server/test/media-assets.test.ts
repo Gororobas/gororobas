@@ -1,10 +1,9 @@
 import { NodePath, NodeServices } from "@effect/platform-node"
-import { AudioMetadata } from "@gororobas/domain"
 import { registerMediabunnyServer } from "@mediabunny/server"
-import { FileSystem, Duration, Effect, Schema, Path } from "effect"
+import { FileSystem, Duration, Effect, Path } from "effect"
 import { FilePathTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny"
 import sharp from "sharp"
-import { expect, it } from "vitest"
+import { assert, expect, it } from "vitest"
 
 import { processMediaAsset, readMediaAssetMetadata } from "../src/media-assets/processing.js"
 
@@ -86,13 +85,8 @@ it("processes audio and adaptive video through Mediabunny without CLI tools", as
       const metadata = await Effect.runPromise(
         readMediaAssetMetadata(join(directory, name), "AUDIO"),
       )
-      expect(metadata.format).toBe("AUDIO")
-
-      expect(
-        Duration.toSeconds(
-          Schema.decodeUnknownSync(Schema.toType(AudioMetadata))(metadata).duration,
-        ),
-      ).toBeCloseTo(0.1, 1)
+      assert(metadata.format === "AUDIO")
+      expect(Duration.toSeconds(metadata.duration)).toBeCloseTo(0.1, 1)
     }
 
     const filename = join(directory, "original.mp4")

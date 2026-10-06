@@ -18,7 +18,8 @@ const MapJson = Schema.Record(Schema.String, Schema.Boolean)
 const RootJson = Schema.Record(Schema.String, Schema.Unknown)
 
 const getEnumMapJson = (document: LoroDoc) => {
-  const container = Schema.decodeUnknownSync(RootJson)(document.toJSON())[containerName]
+  const container = Schema.decodeSync(RootJson)(document.toJSON())[containerName]
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro JSON containers may be null or have a different shape.
   return container === undefined ? {} : Schema.decodeUnknownSync(MapJson)(container)
 }
 
@@ -57,7 +58,7 @@ const applyRemovedMessages = (
   })
 
 const removeMessage = (value: Locale) =>
-  Schema.decodeUnknownSync(removed.message)({ _tag: "RemovedLocale", value })
+  Schema.decodeSync(removed.message)({ _tag: "RemovedLocale", value })
 
 class PlainJsStringHashSetModel {
   values = HashSet.empty<Locale>()

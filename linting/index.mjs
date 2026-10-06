@@ -3,6 +3,7 @@ import { noDirectIdConstructionRule } from "./no-direct-id-construction.mjs"
 import { noDisableValidationRule } from "./no-disable-validation.mjs"
 import { noNestedLayerProvideRule } from "./no-nested-layer-provide.mjs"
 import { noNodeApisRule } from "./no-node-apis.mjs"
+import { noSchemaDecodeUnknownRule } from "./no-schema-decode-unknown.mjs"
 import { noSqlTypeParameterRule } from "./no-sql-type-parameter.mjs"
 import { pipeMaxArgumentsRule } from "./pipe-max-arguments.mjs"
 import { preferArrSortRule } from "./prefer-arr-sort.mjs"
@@ -21,6 +22,7 @@ import { taggedErrorSuffixRule } from "./tagged-error-suffix.mjs"
 export default {
   meta: { name: "custom-lint-rules" },
   rules: {
+    "no-schema-decode-unknown": noSchemaDecodeUnknownRule,
     "no-node-apis": noNodeApisRule,
     "no-function-aliases": noFunctionAliasesRule,
     "no-many-function-parameters": noManyFunctionParametersRule,

@@ -150,7 +150,7 @@ export const GelTag = Schema.Struct({
   ...gelAuditableFields,
   created_at: GelTimestamp.pipe(
     Schema.withDecodingDefaultKey(
-      Effect.succeed(Schema.decodeUnknownSync(Schema.DateFromString)("2025-04-01T12:00:00Z")),
+      Effect.succeed(Schema.decodeSync(Schema.DateFromString)("2025-04-01T12:00:00Z")),
     ),
   ),
   updated_at: GelOptionalColumn(GelTimestamp),

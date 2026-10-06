@@ -11,9 +11,9 @@ import { GelResourceWithRelations } from "../schemas/gel/entities.js"
 import { MigrationContext, MigrationContextLive } from "../services/migration-context.js"
 import { gelResourceToWikiArticle } from "./gel-resource-to-wiki-article.js"
 
-const timestamp = Schema.decodeUnknownSync(Schema.DateFromString)("2025-04-01T12:00:00Z")
+const timestamp = Schema.decodeSync(Schema.DateFromString)("2025-04-01T12:00:00Z")
 
-const source = Schema.decodeUnknownSync(GelResourceWithRelations)({
+const source = Schema.decodeSync(GelResourceWithRelations)({
   id: "gel-resource",
   handle: "test-resource",
   title: "Test resource",

@@ -30,6 +30,7 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
     )
     .pipe(
       Effect.tap(archiveGelResult("cultivars")),
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(Variety))),
     )
 
@@ -51,7 +52,7 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
         const id = yield* context.resolveId(source.id, "WikiArticle")
         const parentPlantId = yield* context
           .resolveId(source.parents[0].id, "WikiArticle")
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(WikiArticleId)))
+          .pipe(Effect.flatMap(Schema.decodeEffect(WikiArticleId)))
 
         const photoIds = yield* Effect.forEach(
           source.photos,

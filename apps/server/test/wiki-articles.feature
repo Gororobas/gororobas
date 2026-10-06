@@ -193,7 +193,7 @@ Feature: Wiki articles
 
   Rule: People can bookmark wiki articles
     Each bookmark has 4 possible states: 'interested', 'active', 'previously-active', 'indifferent'.
-    For wiki articles, that's "I want to plant", "Am planting", "Have planted" and "Not interested", respectively.
+    For wiki articles of kind plant, that's "I want to plant", "Am planting", "Have planted" and "Not interested", respectively.
 
     Background:
       Given "Maria" has COMMUNITY access

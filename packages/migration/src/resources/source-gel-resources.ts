@@ -40,6 +40,7 @@ export const sourceGelResources = Effect.gen(function* () {
       Effect.flatMap((resources) =>
         Effect.all(
           resources.map((resource) =>
+            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
             Schema.decodeUnknownEffect(
               Schema.Struct({
                 ...GelResourceWithRelations.fields,
@@ -80,12 +81,12 @@ export const sourceGelResources = Effect.gen(function* () {
       Effect.gen(function* () {
         const id = yield* context
           .resolveId(source.id, "WikiArticle")
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(WikiArticleId)))
+          .pipe(Effect.flatMap(Schema.decodeEffect(WikiArticleId)))
 
         const thumbnailId = source.thumbnail
           ? yield* context
               .resolveId(source.thumbnail.id, "Image")
-              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId)))
+              .pipe(Effect.flatMap(Schema.decodeEffect(MediaAssetId)))
           : null
 
         const versionInputs: Array<
@@ -99,18 +100,19 @@ export const sourceGelResources = Effect.gen(function* () {
           source.audit_logs.filter((log) => log.new && log.action !== "DELETE"),
           (log) =>
             Effect.gen(function* () {
+              // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy audit payloads are unknown until validated.
               const fields = yield* Schema.decodeUnknownEffect(
                 Schema.Record(Schema.String, Schema.Unknown),
               )(log.new)
 
-              const state = yield* Schema.decodeUnknownEffect(GelResourceWithRelations)({
+              const state = yield* Schema.decodeEffect(GelResourceWithRelations)({
                 ...source,
                 ...fields,
                 created_at: Predicate.isString(fields.created_at)
-                  ? Schema.decodeUnknownSync(Schema.DateFromString)(fields.created_at)
+                  ? Schema.decodeSync(Schema.DateFromString)(fields.created_at)
                   : source.created_at,
                 updated_at: Predicate.isString(fields.updated_at)
-                  ? Schema.decodeUnknownSync(Schema.DateFromString)(fields.updated_at)
+                  ? Schema.decodeSync(Schema.DateFromString)(fields.updated_at)
                   : source.updated_at,
               })
 
@@ -119,7 +121,7 @@ export const sourceGelResources = Effect.gen(function* () {
               const actorId = log.performed_by
                 ? yield* context
                     .resolveId(log.performed_by.id, "Profile")
-                    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
+                    .pipe(Effect.flatMap(Schema.decodeEffect(ProfileId)))
                 : null
 
               versionInputs.push({
@@ -140,7 +142,7 @@ export const sourceGelResources = Effect.gen(function* () {
             actorId: source.created_by
               ? yield* context
                   .resolveId(source.created_by.id, "Profile")
-                  .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
+                  .pipe(Effect.flatMap(Schema.decodeEffect(ProfileId)))
               : null,
             reviewerId: null,
             timestamp: (source.updated_at ?? source.created_at).toISOString(),

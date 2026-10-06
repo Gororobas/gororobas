@@ -72,6 +72,7 @@ export const makeProviderHttp = Effect.fn(function* (
         ),
       )
 
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- External HTTP JSON has not yet been validated against the provider schema.
       const value = yield* Schema.decodeUnknownEffect(schema)(payload).pipe(
         Effect.tapError((error) => Effect.logError(`[${provider}] ${error.message}`, error)),
         Effect.mapError(

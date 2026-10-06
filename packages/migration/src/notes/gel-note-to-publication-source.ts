@@ -21,7 +21,7 @@ export const gelNoteToPublicationSource = Effect.fn("gelNoteToPublicationSource"
   const ownerProfileId = yield* context.resolveId(note.created_by.id, "Profile")
   const content = yield* migrateRichText(post.content)
 
-  const publication = yield* Schema.decodeUnknownEffect(PostSourceData)({
+  const publication = yield* Schema.decodeEffect(PostSourceData)({
     metadata: {
       kind: "POST",
       handle: note.handle,
@@ -48,13 +48,13 @@ export const noteMigrationReferences = Effect.fn("noteMigrationReferences")(func
   const context = yield* MigrationContext
   const id = yield* context
     .resolveId(note.id, "Publication")
-    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(PublicationId)))
+    .pipe(Effect.flatMap(Schema.decodeEffect(PublicationId)))
 
   const tagIds = yield* Effect.forEach(
     note.types,
     (type) =>
       ensureMappedId({ id: `note-type:${type}` }, "Tag").pipe(
-        Effect.flatMap(Schema.decodeUnknownEffect(TagId)),
+        Effect.flatMap(Schema.decodeEffect(TagId)),
       ),
     { concurrency: 1 },
   )
@@ -64,7 +64,7 @@ export const noteMigrationReferences = Effect.fn("noteMigrationReferences")(func
     (plant) =>
       context
         .resolveId(plant.id, "WikiArticle")
-        .pipe(Effect.flatMap(Schema.decodeUnknownEffect(WikiArticleId))),
+        .pipe(Effect.flatMap(Schema.decodeEffect(WikiArticleId))),
     { concurrency: 1 },
   )
 

@@ -145,10 +145,8 @@ export const PublicationSourceDataStorage = Schema.Struct({
 export type PublicationSourceDataStorage = typeof PublicationSourceDataStorage.Type
 
 /** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
-const decodeTiptapDocumentStorage = Schema.decodeUnknownSync(Schema.fromJsonString(TiptapDocument))
-const decodeLoroDocFrontierStorage = Schema.decodeUnknownSync(
-  Schema.fromJsonString(LoroDocFrontier),
-)
+const decodeTiptapDocumentStorage = Schema.decodeSync(Schema.fromJsonString(TiptapDocument))
+const decodeLoroDocFrontierStorage = Schema.decodeSync(Schema.fromJsonString(LoroDocFrontier))
 
 /** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
 const publicationLocalizedDataStorageToSourceData = (
@@ -224,6 +222,7 @@ export const publicationSourceDataStorageToSourcePublicationData = (
           },
         }
 
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Stored event metadata may omit required dates; decoding must reject incomplete persisted events.
   return Schema.decodeUnknownSync(PublicationSourceData)(sourceData)
 }
 

@@ -61,7 +61,7 @@ const revertGelVegetable = Effect.fn("revertGelVegetable")(function* (
       }),
   })
 
-  return yield* Schema.decodeUnknownEffect(GelVegetableForReconstruction)({ ...state, ...reverted })
+  return yield* Schema.decodeEffect(GelVegetableForReconstruction)({ ...state, ...reverted })
 })
 
 const isChangeset = (value: unknown): value is Changeset => Array.isArray(value)

@@ -21,9 +21,9 @@ const context = MigrationContext.of({
   planMigrationOp: () => Effect.succeed({ op: "skip", reason: "unchanged" }),
 })
 
-const timestamp = Schema.decodeUnknownSync(Schema.DateFromString)("2025-08-06T05:00:00Z")
+const timestamp = Schema.decodeSync(Schema.DateFromString)("2025-08-06T05:00:00Z")
 
-const note = Schema.decodeUnknownSync(GelNoteWithRelations)({
+const note = Schema.decodeSync(GelNoteWithRelations)({
   id: "note-id",
   handle: "eucalyptus-discovery",
   created_at: timestamp,
@@ -92,9 +92,7 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
         const { path, content } = writes[2]
         expect(path).toMatch(/debug\/notes\/eucalyptus-discovery\.json$/)
 
-        expect(
-          Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
-        ).toMatchObject({
+        expect(Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(content)).toMatchObject({
           id: mappedId,
           tagIds: [mappedId],
           wikiArticleIds: [mappedId],
@@ -177,7 +175,7 @@ it.effect("archives private notes separately and removes earlier publication exp
       Effect.sync(() => {
         expect(writes).toHaveLength(2)
         expect(
-          Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(writes[1].content),
+          Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(writes[1].content),
         ).toMatchObject([{ publish_status: "PRIVATE", created_by: note.created_by }])
         expect(writes[1].path).toMatch(/debug\/journal\/notes\.json$/)
         expect(remove).toHaveBeenCalledWith(

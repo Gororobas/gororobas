@@ -26,7 +26,7 @@ const articleId = WikiArticleId.make("01900000-0000-7000-8000-000000000001")
 const article = (origin: string) =>
   WikiPlantArticle.EditableArticle.make({
     kind: "PLANT",
-    attributes: Schema.decodeUnknownSync(WikiPlantArticle.EditableAttributes)({}),
+    attributes: Schema.decodeSync(WikiPlantArticle.EditableAttributes)({}),
     translations: {
       pt: {
         commonNames: gelVegetableNamesToCrdtList(["Test plant"]),
@@ -100,6 +100,7 @@ it.effect(
         expect(yield* sql`PRAGMA foreign_key_check`).toEqual([])
         const dataset = yield* readPreviewDataset(report.directory)
 
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         const plants = Schema.decodeUnknownSync(
           Schema.Array(
             Schema.Struct({

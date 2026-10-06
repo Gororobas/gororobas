@@ -99,7 +99,7 @@ export const PartialDate = PartialDateEncoded.pipe(
       if ("month" in date) encoded += `-${pad(date.month)}`
       if ("day" in date) encoded += `-${pad(date.day)}`
       if (date.precision === "time") encoded += `T${pad(date.hour)}:${pad(date.minute)}`
-      return Schema.decodeUnknownSync(PartialDateEncoded)(`${encoded}[${date.timezone}]`)
+      return Schema.decodeSync(PartialDateEncoded)(`${encoded}[${date.timezone}]`)
     }),
   }),
 )

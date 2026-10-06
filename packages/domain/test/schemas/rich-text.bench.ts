@@ -4,7 +4,7 @@ import { expect, test } from "vitest"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { largeTiptapDocument } from "../fixtures/large-tiptap-document.js"
 
-const decode = Schema.decodeUnknownSync(TiptapDocument)
+const decode = Schema.decodeSync(TiptapDocument)
 
 for (const count of [1_000, 10_000]) {
   const document = largeTiptapDocument(count)

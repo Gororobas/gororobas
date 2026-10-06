@@ -49,7 +49,7 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = Schema.decodeUnknownSync(Handle)
+const makeHandle = Schema.decodeSync(Handle)
 
 const makePublicationCrdtUpdate = (input: {
   nextSourceData: PublicationSourceData
@@ -65,7 +65,7 @@ const makePublicationCrdtUpdate = (input: {
   store.setState(() => sourcePublicationDataToCrdtStorage(input.nextSourceData))
   store.dispose()
 
-  return Schema.decodeUnknownSync(LoroDocUpdate)(
+  return Schema.decodeSync(LoroDocUpdate)(
     nextDoc.export({
       from: currentDoc.version(),
       mode: "update",
@@ -81,6 +81,7 @@ const applyUpdateToSnapshot = (input: { crdtUpdate: LoroDocUpdate; snapshot: Lor
 }
 
 const getPtContentFromStorageJson = (json: unknown) => {
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This helper validates unknown persisted JSON.
   const storage = Schema.decodeUnknownSync(
     Schema.Struct({
       locales: Schema.optional(
@@ -93,7 +94,7 @@ const getPtContentFromStorageJson = (json: unknown) => {
 
   return Option.match(Option.fromNullishOr(storage.locales?.pt?.content), {
     onNone: () => undefined,
-    onSome: (content) => Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
+    onSome: (content) => Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(content),
   })
 }
 
@@ -227,6 +228,7 @@ describe("PublicationsRepository", () => {
 
         const beforeUpdate = yield* repository.findPublicationRowById(publicationId)
         expect(Option.isSome(beforeUpdate)).toBe(true)
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         const beforeSnapshotRows = Schema.decodeUnknownSync(
           Schema.Array(PublicationCrdtSnapshotRow),
         )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
@@ -316,6 +318,7 @@ describe("PublicationsRepository", () => {
 
         const beforeTranslation = yield* repository.findPublicationRowById(publicationId)
         expect(Option.isSome(beforeTranslation)).toBe(true)
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         const beforeSnapshotRows = Schema.decodeUnknownSync(
           Schema.Array(PublicationCrdtSnapshotRow),
         )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
@@ -345,7 +348,7 @@ describe("PublicationsRepository", () => {
           snapshot: beforeSnapshot.crdtSnapshot,
         })
 
-        const replayedStorage = Schema.decodeUnknownSync(
+        const replayedStorage = Schema.decodeSync(
           Schema.Struct({
             locales: Schema.optional(
               Schema.Struct({
@@ -363,8 +366,7 @@ describe("PublicationsRepository", () => {
         expect(
           Option.match(Option.fromNullishOr(replayedStorage.locales?.en?.content), {
             onNone: () => undefined,
-            onSome: (content) =>
-              Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
+            onSome: (content) => Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(content),
           }),
         ).toEqual(makeDocument("Translated text"))
 
@@ -432,6 +434,7 @@ describe("PublicationsRepository", () => {
         ),
       })
 
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       const translationRows = Schema.decodeUnknownSync(Schema.Array(TranslatedFrontierRow))(
         yield* sql`
           SELECT translated_at_crdt_frontier
@@ -508,6 +511,7 @@ describe("PublicationsRepository", () => {
       const initialRow = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(initialRow)).toBe(true)
       const expectedCurrentCrdtFrontier = Option.getOrThrow(initialRow).currentCrdtFrontier
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       const initialSnapshotRows = Schema.decodeUnknownSync(
         Schema.Array(PublicationCrdtSnapshotRow),
       )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
@@ -588,7 +592,7 @@ describe("PublicationsRepository", () => {
       const invalidUpdate = repository.updatePublication(
         HumanCrdtUpdate.make({
           authorId: person.id,
-          crdtUpdate: Schema.decodeUnknownSync(LoroDocUpdate)(new Uint8Array([1, 2, 3])),
+          crdtUpdate: Schema.decodeSync(LoroDocUpdate)(new Uint8Array([1, 2, 3])),
           expectedCurrentCrdtFrontier: Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
           publicationId,
         }),

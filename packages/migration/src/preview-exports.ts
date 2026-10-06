@@ -32,7 +32,7 @@ export const readPreviewExports = (directory: string) =>
         ),
         (file) =>
           fs.readFileString(path.join(directory, folder, file)).pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(PreviewRecord))),
+            Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(PreviewRecord))),
             Effect.map((data) => ({ file, data })),
           ),
         { concurrency: 1 },

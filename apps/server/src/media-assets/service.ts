@@ -53,13 +53,11 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
           ),
         )
 
-      const getFile = ({ id, format, variant }: MediaAssetRequest) =>
+      const getFile = (input: MediaAssetRequest) =>
         Effect.gen(function* () {
-          const request = yield* Schema.decodeUnknownEffect(MediaAssetRequest)({
-            id,
-            format,
-            variant,
-          })
+          // @todo do we really need to re-decode this?
+          const request = yield* Schema.decodeEffect(MediaAssetRequest)(input)
+          const { id, format, variant } = request
 
           const delivery = yield* repository.findMediaAssetDeliveryById(request.id)
           if (Option.isNone(delivery)) return yield* new MediaNotFoundError({ id })
@@ -142,10 +140,14 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
               const stored = yield* prepare({ ...input, id })
 
               return yield* Effect.gen(function* () {
-                const mediaAsset = yield* Schema.decodeUnknownEffect(Schema.toType(MediaAssetRow))({
+                const mediaAsset = yield* Schema.decodeEffect(Schema.toType(MediaAssetRow))({
                   ...stored,
                   id,
-                  format: stored.metadata.format,
+                  ...(stored.metadata.format === "IMAGE"
+                    ? { format: stored.metadata.format, metadata: stored.metadata }
+                    : stored.metadata.format === "AUDIO"
+                      ? { format: stored.metadata.format, metadata: stored.metadata }
+                      : { format: stored.metadata.format, metadata: stored.metadata }),
                   ownerProfileId: ProfileId.make(session.personId),
                   label: null,
                   moderationStatus: null,

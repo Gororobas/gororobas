@@ -288,6 +288,7 @@ describe("external data providers", () => {
       yield* http.get("/second", Schema.Struct({}))
       yield* Fiber.join(first)
       expect(starts).toHaveLength(3)
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Collected request timings must be validated for the expected tuple length.
       const [firstStart, secondStart, thirdStart] = yield* Schema.decodeUnknownEffect(
         Schema.Tuple([Schema.Number, Schema.Number, Schema.Number]),
       )(starts)
@@ -311,7 +312,7 @@ describe("external data providers", () => {
   it("decodes every Wikidata datavalue shape from a real entity", () => {
     // Trimmed from the real Q23501 (tomato) Special:EntityData payload. Every datavalue shape the
     // EntitySchema documents appears at least once, including the `somevalue` snak that has none.
-    const entity = {
+    const entity: typeof WikidataEntity.Encoded = {
       pageid: 26885,
       ns: 0,
       title: "Q23501",
@@ -482,7 +483,7 @@ describe("external data providers", () => {
       },
     }
 
-    const decoded = Schema.decodeUnknownSync(WikidataEntity)(entity)
+    const decoded = Schema.decodeSync(WikidataEntity)(entity)
     expect(decoded.id).toBe("Q23501")
     expect(decoded.type).toBe("item")
     expect(decoded.lastrevid).toBe(2547649593)
@@ -524,7 +525,7 @@ describe("external data providers", () => {
       assertProperty({
         arbitrary: Arbitrary.schema(schema),
         predicate: (value) => {
-          expect(Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value))).toBe(value)
+          expect(Schema.decodeSync(schema)(Schema.encodeSync(schema)(value))).toBe(value)
           return true
         },
       })
@@ -575,7 +576,7 @@ describe("shared external data schemas", () => {
       assertProperty({
         arbitrary: Arbitrary.schema(schema),
         predicate: (value) => {
-          const decoded = Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(value))
+          const decoded = Schema.decodeSync(codec)(Schema.encodeSync(codec)(value))
           expect(Schema.toEquivalence(schema)(value, decoded)).toBe(true)
           return true
         },

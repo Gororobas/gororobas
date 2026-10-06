@@ -5,7 +5,7 @@ import * as Arbitrary from "effect/Arbitrary"
 import { PartialDate } from "../../src/common/utils/dates.js"
 import { assertProperty } from "../../src/testing.js"
 
-const decode = Schema.decodeUnknownSync(PartialDate)
+const decode = Schema.decodeSync(PartialDate)
 const encode = Schema.encodeSync(PartialDate)
 
 describe("PartialDate", () => {

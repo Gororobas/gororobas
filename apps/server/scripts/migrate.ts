@@ -170,7 +170,7 @@ const program = Effect.gen(function* () {
     return yield* Effect.fail(new MigrationScriptError({ message: "Missing migration name" }))
   }
 
-  const migrationName = yield* Schema.decodeUnknownEffect(MigrationNameArg)(args[0]).pipe(
+  const migrationName = yield* Schema.decodeEffect(MigrationNameArg)(args[0]).pipe(
     Effect.mapError(
       () =>
         new MigrationScriptError({

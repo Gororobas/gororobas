@@ -24,6 +24,7 @@ describe("Plant cultivar wiki kind", () => {
       predicate: (parentPlantId) =>
         Effect.sync(() => {
           const attributes = Attributes.make({ parentPlantId })
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test deliberately supplies missing required fields.
           expect(() => Schema.decodeUnknownSync(Attributes)({ parentPlantId })).toThrow(/Missing/)
           return Record.toEntries(attributes).every(
             ([key, value]) => key === "parentPlantId" || deepEquals(value, { _tag: "Unknown" }),
@@ -34,6 +35,7 @@ describe("Plant cultivar wiki kind", () => {
 
   it("keeps unknown, inheritance, empty selections and literal values unambiguous", () => {
     const Property = CultivarProperty(Schema.Array(Schema.Literals(["HIGH", "LOW"])))
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This decoder also tests deliberately malformed trait values.
     const decode = Schema.decodeUnknownSync(Property)
     expect(decode({ _tag: "Unknown" })).toEqual({ _tag: "Unknown" })
     expect(decode({ _tag: "Inherit" })).toEqual({ _tag: "Inherit" })
@@ -63,6 +65,7 @@ describe("Plant cultivar wiki kind", () => {
     ]
 
     ranges.forEach((field) => {
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This decoder also tests incomplete range endpoints.
       const decode = Schema.decodeUnknownSync(field)
       expect(() => decode({ _tag: "Value", value: { min: 5, max: 2 } })).toThrow(
         /minimum must not exceed maximum/,
@@ -72,7 +75,7 @@ describe("Plant cultivar wiki kind", () => {
     })
 
     expect(() =>
-      Schema.decodeUnknownSync(Attributes.fields.temperature)({
+      Schema.decodeSync(Attributes.fields.temperature)({
         _tag: "Value",
         value: { min: 2, max: Infinity },
       }),
@@ -143,9 +146,7 @@ describe("Plant cultivar wiki kind", () => {
     () =>
       Effect.gen(function* () {
         const document = new LoroDoc()
-        const decode = Schema.decodeUnknownSync(
-          WikiPlantCultivarArticleCrdtOperations.AttributeEdit,
-        )
+        const decode = Schema.decodeSync(WikiPlantCultivarArticleCrdtOperations.AttributeEdit)
 
         yield* applyWikiArticleEdit(
           document,
@@ -164,7 +165,7 @@ describe("Plant cultivar wiki kind", () => {
         )
 
         yield* Effect.forEach(
-          [{ _tag: "Inherit" }, { _tag: "Unknown" }, { _tag: "Value", value: [] }],
+          [{ _tag: "Inherit" }, { _tag: "Unknown" }, { _tag: "Value", value: [] }] as const,
           (state) =>
             Effect.gen(function* () {
               yield* applyWikiArticleEdit(

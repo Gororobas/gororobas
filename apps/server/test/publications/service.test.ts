@@ -51,7 +51,7 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = Schema.decodeUnknownSync(Handle)
+const makeHandle = Schema.decodeSync(Handle)
 
 const makePublicationCrdtUpdate = (input: {
   nextSourceData: PublicationSourceData
@@ -67,7 +67,7 @@ const makePublicationCrdtUpdate = (input: {
   store.setState(() => sourcePublicationDataToCrdtStorage(input.nextSourceData))
   store.dispose()
 
-  return Schema.decodeUnknownSync(LoroDocUpdate)(
+  return Schema.decodeSync(LoroDocUpdate)(
     nextDoc.export({
       from: currentDoc.version(),
       mode: "update",
@@ -129,6 +129,7 @@ describe("PublicationsService", () => {
 
       const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
         yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
       )
@@ -191,6 +192,7 @@ describe("PublicationsService", () => {
 
       const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
         yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
       )

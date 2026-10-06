@@ -156,7 +156,7 @@ export const createWikiArticleCrdtDocument = Effect.fn("createWikiArticleCrdtDoc
   sourceDocument.configDefaultTextStyle({ expand: "after" })
   const json = yield* Schema.encodeEffect(Schema.fromJsonString(WikiArticleCrdtData))(sourceData)
 
-  const encoded = yield* Schema.decodeUnknownEffect(
+  const encoded = yield* Schema.decodeEffect(
     Schema.fromJsonString(
       Schema.Struct({
         attributes: Schema.Record(Schema.String, Schema.Json),
@@ -178,6 +178,7 @@ export const createWikiArticleCrdtDocument = Effect.fn("createWikiArticleCrdtDoc
     if (values.content !== undefined && values.content !== null) {
       initializeLoroRichText(
         translation.ensureMergeableMap("content"),
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Stored CRDT content is arbitrary JSON until decoded as a rich-text document.
         Schema.decodeUnknownSync(TiptapDocument)(values.content),
       )
     }

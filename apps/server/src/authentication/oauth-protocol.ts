@@ -170,7 +170,7 @@ export const makeOAuthProtocol = (
       const claims = tokens.claims()
       if (claims === undefined) return yield* rejected()
 
-      return yield* Schema.decodeUnknownEffect(OAuthIdentity)({
+      return yield* Schema.decodeEffect(OAuthIdentity)({
         issuer: claims.iss,
         subject: claims.sub,
         ...(typeof claims.email === "string" ? { email: claims.email } : {}),

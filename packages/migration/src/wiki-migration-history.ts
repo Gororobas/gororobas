@@ -25,10 +25,10 @@ export type WikiMigrationVersion = typeof WikiMigrationVersion.Type
 const json = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
 
 const synchronizeMap = (map: LoroMap, target: Schema.JsonObject) => {
-  Schema.decodeUnknownSync(Schema.Array(Schema.String))(map.keys()).forEach((key) => {
+  Schema.decodeSync(Schema.Array(Schema.String))(map.keys()).forEach((key) => {
     if (!(key in target)) map.delete(key)
   })
-  const current = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json))(map.toJSON())
+  const current = Schema.decodeSync(Schema.Record(Schema.String, Schema.Json))(map.toJSON())
 
   Record.toEntries(target).forEach(([key, value]) => {
     if (current[key] !== undefined && json(current[key]) === json(value)) return
@@ -40,6 +40,7 @@ const synchronizeMap = (map: LoroMap, target: Schema.JsonObject) => {
     } else if (Predicate.isObject(value) && !("type" in value) && !("_tag" in value)) {
       synchronizeMap(
         map.ensureMergeableMap(key),
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Nested legacy JSON may be an array rather than an object.
         Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json))(value),
       )
     } else if (value === null) map.delete(key)
@@ -63,9 +64,11 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
     (version) =>
       Effect.gen(function* () {
         const encoded = yield* Schema.encodeEffect(WikiArticleEditableData)(version.article)
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy attributes may contain undefined values and must be checked for JSON compatibility.
         const attributes = yield* Schema.decodeUnknownEffect(
           Schema.Record(Schema.String, Schema.Json),
         )(encoded.attributes)
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translations may contain undefined values and must be checked for JSON compatibility.
         const translations = yield* Schema.decodeUnknownEffect(
           Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Json)),
         )(encoded.translations)
@@ -96,7 +99,7 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
             Effect.gen(function* () {
               synchronizeMap(
                 document.getMap(key),
-                yield* Schema.decodeUnknownEffect(Schema.Record(Schema.String, Schema.Json))(value),
+                yield* Schema.decodeEffect(Schema.Record(Schema.String, Schema.Json))(value),
               )
             }),
           { concurrency: 1 },
@@ -111,6 +114,7 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
                 .getMap("translations")
                 .ensureMergeableMap(locale)
                 .ensureMergeableMap("content"),
+              // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translation content is arbitrary JSON until decoded as a rich-text document.
               Schema.decodeUnknownSync(TiptapDocument)(translation.content),
             )
           }

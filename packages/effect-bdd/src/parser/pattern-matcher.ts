@@ -98,7 +98,7 @@ export function decodeParams<A>({
   params: unknown
   stepText: string
 }) {
-  return Schema.decodeUnknownEffect(schema)(params).pipe(
+  return Schema.decodeEffect(schema)(params).pipe(
     Effect.mapError(
       (error) =>
         new StepParamsDecodeError({

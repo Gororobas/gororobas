@@ -76,7 +76,7 @@ export const createSystemTranslationCrdtUpdate = (params: {
   Effect.gen(function* () {
     const currentDoc = snapshotToLoroDoc(params.snapshot)
     const currentStorageData = yield* Effect.try({
-      try: () => Schema.decodeUnknownSync(PublicationSourceDataStorage)(currentDoc.toJSON()),
+      try: () => Schema.decodeSync(PublicationSourceDataStorage)(currentDoc.toJSON()),
       catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
     })
     const currentSourceData = yield* decodePublicationStorageDataEffect(currentStorageData)

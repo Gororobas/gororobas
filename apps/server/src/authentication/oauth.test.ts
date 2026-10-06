@@ -90,6 +90,7 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
     const flowId = crypto.randomUUID()
     const response = await request({ path: "/api/auth/beginOAuth", payload: { provider, flowId } })
     expect(response.status).toBe(200)
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP response JSON has not yet been validated against its response schema.
     const result = Schema.decodeUnknownSync(authorization)(await response.json())
     const state = new URL(result.value.authorizationUrl).searchParams.get("state")
     if (state === null) throw new Error("missing state")
@@ -99,6 +100,7 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
   const finish = async (input: Awaited<ReturnType<typeof begin>>) => {
     const response = await request({ path: "/api/auth/completeOAuth", payload: input })
     expect(response.status).toBe(200)
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP response JSON has not yet been validated against its response schema.
     const value = Schema.decodeUnknownSync(completion)(await response.json()).value
     if (value._tag !== "Authenticated") throw new Error("missing session")
     return value.session.subjectId
@@ -135,6 +137,7 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
     expect(exchanges).toBe(1)
     const rows = await query((sql) => sql`SELECT id, security_revision FROM auth_subjects`)
     expect(rows).toHaveLength(1)
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
     Schema.decodeUnknownSync(
       Schema.Array(Schema.Struct({ id: AuthSubjectId, securityRevision: AuthSecurityRevision })),
     )(rows)

@@ -26,6 +26,7 @@ export const MediaAssetsApiLive = HttpApiBuilder.group(GororobasApi, "mediaAsset
         yield* Policies.media.canCreate
         const parts = yield* Multipart.toPersisted(payload)
 
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Multipart fields have arbitrary names and must be validated for the required file field.
         const { file } = yield* Schema.decodeUnknownEffect(
           Schema.Struct({ file: Multipart.SingleFileSchema }),
         )(parts).pipe(

@@ -51,15 +51,11 @@ export const readPreviewDataset = (directory: string) =>
     yield* fs.readFileString(join(directory, "verification.json"))
     const exports = yield* fs
       .readFileString(join(directory, "converted.json"))
-      .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(PreviewExports))))
+      .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(PreviewExports))))
 
     const references = yield* fs
       .readFileString(join(directory, "references.json"))
-      .pipe(
-        Effect.flatMap(
-          Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.Json))),
-        ),
-      )
+      .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Array(Schema.Json)))))
 
     const dataset: Record<string, Array<Record<string, unknown>>> = {}
 
@@ -68,6 +64,7 @@ export const readPreviewDataset = (directory: string) =>
         exports[category],
         ({ file, data }) =>
           Effect.gen(function* () {
+            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Preview identifiers are arbitrary JSON values.
             const id = yield* Schema.decodeUnknownEffect(WikiArticleId)(data.id)
             const crdt = yield* findCrdtRowById(id).pipe(Effect.map(Option.getOrThrow))
             const row = yield* findDatabaseRowById(id).pipe(Effect.map(Option.getOrThrow))
@@ -140,12 +137,13 @@ export const readPreviewDataset = (directory: string) =>
       exports.notes,
       ({ file, data }) =>
         Effect.gen(function* () {
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Preview identifiers are arbitrary JSON values.
           const id = yield* Schema.decodeUnknownEffect(PublicationId)(data.id)
           const crdt = yield* findPublicationCrdtSnapshotById(id).pipe(
             Effect.map(Option.getOrThrow),
           )
           const row = yield* findPublicationRowById(id).pipe(Effect.map(Option.getOrThrow))
-          const storage = yield* Schema.decodeUnknownEffect(PublicationSourceDataStorage)(
+          const storage = yield* Schema.decodeEffect(PublicationSourceDataStorage)(
             snapshotToLoroDoc(crdt.crdtSnapshot).toJSON(),
           )
           const publication = publicationSourceDataStorageToSourcePublicationData(storage)

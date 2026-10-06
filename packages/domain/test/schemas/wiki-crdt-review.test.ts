@@ -17,7 +17,7 @@ import { withEditorRichText } from "../fixtures/wiki-rich-text.js"
 
 const articleJson = Schema.toCodecJson(WikiArticleEditableData)
 
-const plant = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)({
+const plant = Schema.decodeSync(WikiPlantArticle.EditableArticle)({
   kind: "PLANT",
   attributes: {},
   translations: { en: { commonNames: [{ id: "commonname01", value: "Pumpkin" }] } },
@@ -26,7 +26,7 @@ const plant = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)({
 describe("Wiki CRDT review stress tests", () => {
   it.effect("preserves Unicode and normalizes lone surrogates only at Loro writes", () =>
     Effect.gen(function* () {
-      const decode = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)
+      const decode = Schema.decodeSync(WikiPlantArticle.EditableArticle)
 
       const input = {
         kind: "PLANT",
@@ -42,7 +42,7 @@ describe("Wiki CRDT review stress tests", () => {
             },
           },
         },
-      }
+      } as const
 
       const article = decode(input)
       const created = yield* createWikiArticleCrdtDocument(article)
@@ -142,7 +142,7 @@ describe("Wiki CRDT review stress tests", () => {
       arbitrary: Arbitrary.schema(Schema.Json),
       predicate: (value) =>
         Effect.gen(function* () {
-          const article = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)({
+          const article = Schema.decodeSync(WikiPlantArticle.EditableArticle)({
             ...Schema.encodeSync(WikiPlantArticle.EditableArticle)(plant),
             translations: {
               en: {

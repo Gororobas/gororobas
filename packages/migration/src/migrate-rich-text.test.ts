@@ -26,7 +26,7 @@ it.effect("rewrites mentions and resolves stale image IDs through the Sanity ali
       { concurrency: 1 },
     )
 
-    const source = Schema.decodeUnknownSync(GelTiptapDocument)({
+    const source = Schema.decodeSync(GelTiptapDocument)({
       type: "doc",
       version: 1,
       content: [

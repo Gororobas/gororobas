@@ -25,6 +25,7 @@ export const sourceGelTags = Effect.gen(function* () {
       Effect.tap(archiveGelResult("tags")),
       Effect.flatMap((tags) =>
         Effect.all(
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
           tags.map((tag) => Schema.decodeUnknownEffect(GelTag)(tag)),
           { concurrency: "unbounded", mode: "result" },
         ),
@@ -43,7 +44,7 @@ export const sourceGelTags = Effect.gen(function* () {
     [
       ...EffectArray.getSuccesses(tagResults),
       ...["EXPERIMENTO", "ENSINAMENTO", "DESCOBERTA", "PERGUNTA", "INSPIRACAO"].map((type) =>
-        Schema.decodeUnknownSync(GelTag)({
+        Schema.decodeSync(GelTag)({
           id: `note-type:${type}`,
           handle: `tipo-de-nota-${type.toLowerCase()}`,
           names: [type],
@@ -59,7 +60,7 @@ export const sourceGelTags = Effect.gen(function* () {
         if (operation.op === "update") yield* operation.execute(() => Effect.void)
         const id = yield* context
           .resolveId(tag.id, "Tag")
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(TagId)))
+          .pipe(Effect.flatMap(Schema.decodeEffect(TagId)))
 
         yield* Schema.encodeEffect(Schema.fromJsonString(TagDataForMigration, { space: 2 }))({
           latest_source: tag,

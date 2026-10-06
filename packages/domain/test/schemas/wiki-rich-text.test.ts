@@ -51,7 +51,7 @@ const RichTextInputs = Schema.Struct({
 })
 
 const makeContent = ({ first, second, level }: typeof RichTextInputs.Type) =>
-  Schema.decodeUnknownSync(TiptapDocument)({
+  Schema.decodeSync(TiptapDocument)({
     ...editorSchema
       .nodeFromJSON({
         type: "doc",
@@ -96,7 +96,7 @@ const makeContent = ({ first, second, level }: typeof RichTextInputs.Type) =>
   })
 
 const makeArticle = (content: TiptapDocument) =>
-  Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)({
+  Schema.decodeSync(WikiPlantArticle.EditableArticle)({
     kind: "PLANT",
     attributes: {},
     translations: {

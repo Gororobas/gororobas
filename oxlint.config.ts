@@ -1,7 +1,20 @@
+// import effect from "@mpsuesser/oxlint-plugin-effect"
 import { defineConfig } from "oxlint"
 
 export default defineConfig({
-  extends: [],
+  extends: [
+    // {
+    //   ...effect.configs.recommended,
+    //   rules: {
+    //     ...effect.configs.recommended.rules,
+    //     "effect/require-schema-type-alias": "off",
+    //     // "effect/prefer-effect-fn": "off",
+    //     "effect/no-barrel-imports": "off",
+    //     "effect/prefer-namespace-imports": "off",
+    //     "effect/avoid-ts-ignore": "off",
+    //   },
+    // },
+  ],
   plugins: ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
   jsPlugins: [
     "./linting/index.mjs",
@@ -14,6 +27,7 @@ export default defineConfig({
     typeAware: true,
   },
   rules: {
+    "custom-lint-rules/no-schema-decode-unknown": "error",
     curly: ["error", "multi-line"],
     "custom-lint-rules/no-node-apis": "error",
     "custom-lint-rules/no-function-aliases": "error",

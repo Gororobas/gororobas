@@ -13,7 +13,7 @@ import { EmailDeliveryResend } from "./email-delivery-resend.js"
 const configuration = (values: Record<string, string>) =>
   Layer.succeed(ConfigProvider.ConfigProvider, ConfigProvider.fromUnknown(values))
 
-const message = Schema.decodeUnknownSync(EmailDelivery.EmailMessage)({
+const message = Schema.decodeSync(EmailDelivery.EmailMessage)({
   to: "recipient@example.com",
   subject: "Sign in",
   text: Redacted.make("private link"),

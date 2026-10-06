@@ -26,6 +26,7 @@ export const sourceGelNotes = Effect.gen(function* () {
     .use((client) => client.query(notesQuery))
     .pipe(
       Effect.tap(archiveGelResult("notes")),
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(GelNoteWithRelations))),
     )
 

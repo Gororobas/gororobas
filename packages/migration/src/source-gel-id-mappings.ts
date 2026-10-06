@@ -54,6 +54,7 @@ export const sourceGelIdMappings = Effect.gen(function* () {
           records,
           (record) =>
             Effect.gen(function* () {
+              // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy database references are unknown until validated.
               const source = yield* Schema.decodeUnknownEffect(ReferenceSource)(record)
               const id = yield* ensureMappedId({ id: source.id }, entityType)
 

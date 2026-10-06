@@ -215,7 +215,7 @@ export const insertPersonWithDependencies = ({
     const now = DateTime.formatIso(nowUtc)
     const emailIdPart = person.id.replaceAll("-", "")
     const handleIdPart = person.id.replaceAll("-", "").slice(0, 25)
-    const generatedHandle = Schema.decodeUnknownSync(Handle)(`user-${handleIdPart}`)
+    const generatedHandle = Schema.decodeSync(Handle)(`user-${handleIdPart}`)
 
     yield* sql`
       INSERT INTO auth_subjects (id, name, email, is_email_verified, security_revision, image, created_at, updated_at)

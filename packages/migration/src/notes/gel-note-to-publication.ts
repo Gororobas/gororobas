@@ -4,6 +4,7 @@ import { Effect, Schema } from "effect"
 import type { GelNote } from "../schemas/gel/entities.js"
 
 export const gelNoteToPublication = Effect.fn("gelNoteToPublication")(function* (note: GelNote) {
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy PRIVATE visibility must fail target-schema validation.
   const visibility = yield* Schema.decodeUnknownEffect(PublicationVisibility)(
     note.publish_status ?? (note.public ? "PUBLIC" : "PRIVATE"),
   )

@@ -40,7 +40,7 @@ it.effect(
 
           const restored = tiptapFromHtml(tiptapToHtml(document))
           expect(linkedEntitiesFromTiptapDocument(restored)).toEqual([
-            Schema.decodeUnknownSync(EntityReferenceTarget)(reference),
+            Schema.decodeSync(EntityReferenceTarget)(reference),
           ])
           expect(mediaItemsFromTiptapDocument(restored)).toEqual(grid.items)
           const paragraph = restored.content[0]

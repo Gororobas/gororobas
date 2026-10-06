@@ -47,13 +47,14 @@ const hashNameToLoroListItemId = (name: string): LoroListItemId =>
 
 const namesToCrdtList = (names: ReadonlyArray<string>) =>
   names.map((value) =>
-    Schema.decodeUnknownSync(NameInCrdtList)({
+    Schema.decodeSync(NameInCrdtList)({
       id: hashNameToLoroListItemId(value.trim()),
       value: value.trim(),
     }),
   )
 
 export const gelVegetableNamesToCrdtList = (names: ReadonlyArray<string>) =>
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy names may be empty and must fail the non-empty array constraint.
   Schema.decodeUnknownSync(Schema.NonEmptyArray(NameInCrdtList))(namesToCrdtList(names))
 
 const stratumMap: Record<typeof GelStratum.Type, AgroforestryStratum> = {
@@ -118,23 +119,23 @@ export const gelVegetableToPlantEditableAttributes = (
     wikidataId: Option.none(),
     developmentCycleMax: Option.map(
       Option.fromNullishOr(vegetable.development_cycle_max),
-      (value) => Schema.decodeUnknownSync(IntNonNegative)(value),
+      (value) => Schema.decodeSync(IntNonNegative)(value),
     ),
     developmentCycleMin: Option.map(
       Option.fromNullishOr(vegetable.development_cycle_min),
-      (value) => Schema.decodeUnknownSync(IntNonNegative)(value),
+      (value) => Schema.decodeSync(IntNonNegative)(value),
     ),
     heightMax: Option.map(Option.fromNullishOr(vegetable.height_max), (value) =>
-      Schema.decodeUnknownSync(Centimeters)(value),
+      Schema.decodeSync(Centimeters)(value),
     ),
     heightMin: Option.map(Option.fromNullishOr(vegetable.height_min), (value) =>
-      Schema.decodeUnknownSync(Centimeters)(value),
+      Schema.decodeSync(Centimeters)(value),
     ),
     temperatureMax: Option.map(Option.fromNullishOr(vegetable.temperature_max), (value) =>
-      Schema.decodeUnknownSync(TemperatureInCelsius)(value),
+      Schema.decodeSync(TemperatureInCelsius)(value),
     ),
     temperatureMin: Option.map(Option.fromNullishOr(vegetable.temperature_min), (value) =>
-      Schema.decodeUnknownSync(TemperatureInCelsius)(value),
+      Schema.decodeSync(TemperatureInCelsius)(value),
     ),
     scientificNames: Option.map(Option.fromNullishOr(vegetable.scientific_names), namesToCrdtList),
     edibleParts: toSet(

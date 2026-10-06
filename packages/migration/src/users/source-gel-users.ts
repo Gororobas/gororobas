@@ -47,6 +47,7 @@ export const sourceGelUsers = Effect.gen(function* () {
       Effect.tap(archiveGelResult("users")),
       Effect.flatMap((users) =>
         Effect.all(
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
           users.map((user) => Schema.decodeUnknownEffect(GelUserWithProfile)(user)),
           { concurrency: "unbounded", mode: "result" },
         ),
@@ -76,15 +77,15 @@ export const sourceGelUsers = Effect.gen(function* () {
         const data = yield* gelUserToPersonData(user)
         const authSubjectId = yield* context
           .resolveId(user.id, "Account")
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(AuthSubjectId)))
+          .pipe(Effect.flatMap(Schema.decodeEffect(AuthSubjectId)))
         const profileId = yield* context
           .resolveId(user.profile.id, "Profile")
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
+          .pipe(Effect.flatMap(Schema.decodeEffect(ProfileId)))
 
         const photoId = user.profile.photo
           ? yield* context
               .resolveId(user.profile.photo.id, "Image")
-              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId)))
+              .pipe(Effect.flatMap(Schema.decodeEffect(MediaAssetId)))
           : null
 
         const bio = data.profile.bio

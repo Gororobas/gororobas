@@ -11,6 +11,7 @@ export function tiptapToHtml(document: TiptapDocument): string {
 }
 
 export function tiptapFromHtml(html: string): TiptapDocument {
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Tiptap HTML parsing returns an open dictionary without a document schema.
   return Schema.decodeUnknownSync(TiptapDocument)({
     ...generateJSON(html, tiptapExtensions),
     version: 1,

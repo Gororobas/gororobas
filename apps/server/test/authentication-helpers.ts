@@ -93,10 +93,11 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
       body: action.route.method === "GET" ? undefined : payload === undefined ? {} : { payload },
     })
 
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP response JSON has not yet been validated against its response schema.
     const result = Schema.decodeUnknownSync(envelope)(await response.json())
     expect(response.status).toBe(200)
     if (result._tag !== "Success") throw new Error(`${action.route.path} failed`)
-    return Schema.decodeUnknownSync(action.route.operation.rpc.successSchema)(result.value)
+    return Schema.decodeSync(action.route.operation.rpc.successSchema)(result.value)
   }
 
   return { fetchRoute, call, cookieHeader }

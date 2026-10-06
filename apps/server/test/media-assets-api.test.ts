@@ -39,7 +39,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
   const personId = "00000000-0000-7000-8000-000000000001"
   const timestamp = "2026-10-03T00:00:00Z"
 
-  let authentication = Schema.decodeUnknownSync(CurrentAuthenticationData)({
+  let authentication = Schema.decodeSync(CurrentAuthenticationData)({
     account: {
       id: personId,
       name: "Reviewer",
@@ -137,6 +137,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
     body.append("file", new Blob([file], { type: "image/png" }), "plant.png")
     const uploaded = await request("/media/upload", { method: "POST", body })
     expect(uploaded.status).toBe(200)
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP response JSON has not yet been validated against its response schema.
     const media = Schema.decodeUnknownSync(
       Schema.Struct({ id: Schema.String, url: Schema.String, byteSize: Schema.Number }),
     )(await uploaded.json())

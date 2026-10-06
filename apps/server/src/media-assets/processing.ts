@@ -52,7 +52,7 @@ export const readMediaAssetMetadata = Effect.fn("MediaAssets.readMetadata")(
         if (format === "IMAGE") {
           const metadata = yield* processingPromise(() => sharp(filename).metadata())
 
-          return yield* Schema.decodeUnknownEffect(MediaAssetMetadata)({
+          return yield* Schema.decodeEffect(MediaAssetMetadata)({
             format,
             originalWidth: metadata.width,
             originalHeight: metadata.height,

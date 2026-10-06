@@ -29,14 +29,14 @@ it.effect("replays migrated origin and marked content, including clearing and re
       Effect.gen(function* () {
         const article = WikiPlantArticle.EditableArticle.make({
           kind: "PLANT",
-          attributes: Schema.decodeUnknownSync(WikiPlantArticle.EditableAttributes)({}),
+          attributes: Schema.decodeSync(WikiPlantArticle.EditableAttributes)({}),
           translations: {
             pt: {
               commonNames: gelVegetableNamesToCrdtList(["Test plant"]),
               origin: Option.some(origin),
               grammaticalGender: Option.none(),
               content: Option.some(
-                Schema.decodeUnknownSync(TiptapDocument)({
+                Schema.decodeSync(TiptapDocument)({
                   type: "doc",
                   version: 1,
                   content: [

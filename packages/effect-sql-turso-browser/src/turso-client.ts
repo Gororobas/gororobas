@@ -216,9 +216,11 @@ export const make = (
           ),
       )
 
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The database worker returns unknown statement results across the message boundary.
     const decodeRows = Schema.decodeUnknownEffect(
       Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
     )
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The database worker returns unknown statement results across the message boundary.
     const decodeValues = Schema.decodeUnknownEffect(Schema.Array(Schema.Array(Schema.Unknown)))
 
     const invalidResult = (cause: unknown) =>

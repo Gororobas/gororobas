@@ -25,6 +25,7 @@ export const MediaGrid = Node.create({
     {
       tag: "div[data-media-grid]",
       getAttrs: (element) =>
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- DOM attributes may be absent or contain malformed JSON.
         Schema.decodeUnknownOption(AttributesJson)(element.getAttribute("data-media-grid")).pipe(
           (attributes) => (attributes._tag === "Some" ? attributes.value : false),
         ),
@@ -36,6 +37,7 @@ export const MediaGrid = Node.create({
     "div",
     {
       "data-media-grid": Schema.encodeSync(AttributesJson)(
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
         Schema.decodeUnknownSync(MediaGridAttributes)(node.attrs),
       ),
     },

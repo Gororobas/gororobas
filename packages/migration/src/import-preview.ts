@@ -93,9 +93,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
 
     // A person is both an account and a profile with the same primary key in the server schema.
     for (const entry of exports.users) {
-      const user = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(UserDataForMigration))(
-        entry.data,
-      )
+      const user = yield* Schema.decodeEffect(Schema.toCodecJson(UserDataForMigration))(entry.data)
       if (!user.profile.id) {
         return yield* Effect.fail(new Error(`Missing profile ID: ${entry.file}`))
       }
@@ -104,6 +102,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
       entry.data = {
         ...entry.data,
         account: {
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Preview account records contain arbitrary JSON.
           ...Schema.decodeUnknownSync(PreviewRecord)(entry.data.account),
           id: user.profile.id,
           email: user.account.email ?? `migration-${user.profile.id}@example.invalid`,
@@ -146,7 +145,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
     )) {
       const data = yield* fs
         .readFileString(join(referencesDirectory, filename))
-        .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Json))))
+        .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Json))))
       if (Array.isArray(data)) references.push(...data)
       else references.push(data)
     }
@@ -183,9 +182,8 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
 
         for (const { data } of exports.users) {
-          const user = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(UserDataForMigration))(
-            data,
-          )
+          const user = yield* Schema.decodeEffect(Schema.toCodecJson(UserDataForMigration))(data)
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy user profiles may have a missing identifier that must be rejected.
           const id = yield* Schema.decodeUnknownEffect(PersonId)(user.profile.id)
           if (!user.account.email) {
             return yield* Effect.fail(new Error(`Account ${id} has no email`))
@@ -197,6 +195,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         }
 
         for (const { data } of exports.images) {
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy image records are unvalidated JSON dictionaries.
           const image = yield* Schema.decodeUnknownEffect(ImageExport)(data)
           const dimensions = /^image-[a-f0-9]{40}-(\d+)x(\d+)-[a-z0-9]+$/.exec(
             image.latest_source.sanity_id,
@@ -237,24 +236,18 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         }
 
         for (const { data } of exports.users) {
-          const user = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(UserDataForMigration))(
-            data,
-          )
+          const user = yield* Schema.decodeEffect(Schema.toCodecJson(UserDataForMigration))(data)
           if (user.profile.photoId) {
             yield* sql`UPDATE profiles SET photo_id = ${user.profile.photoId} WHERE id = ${user.profile.id}`
           }
         }
 
         for (const { data } of exports.tags) {
-          const tag = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(TagDataForMigration))(
-            data,
-          )
+          const tag = yield* Schema.decodeEffect(Schema.toCodecJson(TagDataForMigration))(data)
 
           const row = TagRow.make({
             id: tag.id,
-            handle: yield* Schema.decodeUnknownEffect(TagRow.fields.handle)(
-              tag.latest_source.handle,
-            ),
+            handle: yield* Schema.decodeEffect(TagRow.fields.handle)(tag.latest_source.handle),
             names: {
               pt: tag.latest_source.names.join(" / "),
               en: tag.latest_source.names.join(" / "),
@@ -262,7 +255,8 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
             },
             cluster: tag.latest_source.category ?? null,
             description: tag.latest_source.description
-              ? yield* Schema.decodeUnknownEffect(TagRow.fields.description)(
+              ? // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy descriptions may omit required rich-text document fields.
+                yield* Schema.decodeUnknownEffect(TagRow.fields.description)(
                   tag.latest_source.description,
                 )
               : null,
@@ -281,6 +275,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
 
         for (const category of ["plants", "cultivars", "resources"] as const) {
           for (const { file, data } of exports[category]) {
+            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy article records are unvalidated JSON dictionaries.
             const article = yield* Schema.decodeUnknownEffect(ArticleExport)(data)
             const latest = article.versions?.at(-1)
             const editable = latest?.article ?? article.article
@@ -314,7 +309,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                 if (!Schema.toEquivalence(WikiArticleEditableData)(parsed.data, version.article)) {
                   return yield* Effect.fail(new Error(`CRDT differs from conversion: ${file}`))
                 }
-                const createdAt = yield* Schema.decodeUnknownEffect(Schema.DateTimeUtcFromString)(
+                const createdAt = yield* Schema.decodeEffect(Schema.DateTimeUtcFromString)(
                   version.timestamp,
                 )
 
@@ -360,10 +355,10 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                 new Uint8Array(Buffer.from(latest.loroSnapshot, "base64")),
               )
               const frontier = LoroDocFrontier.make(snapshotToLoroDoc(snapshot).frontiers())
-              const createdAt = yield* Schema.decodeUnknownEffect(Schema.DateTimeUtcFromString)(
+              const createdAt = yield* Schema.decodeEffect(Schema.DateTimeUtcFromString)(
                 article.versions[0].timestamp,
               )
-              const updatedAt = yield* Schema.decodeUnknownEffect(Schema.DateTimeUtcFromString)(
+              const updatedAt = yield* Schema.decodeEffect(Schema.DateTimeUtcFromString)(
                 latest.timestamp,
               )
 
@@ -387,9 +382,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         }
 
         for (const { file, data } of exports.notes) {
-          const note = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(NoteDataForMigration))(
-            data,
-          )
+          const note = yield* Schema.decodeEffect(Schema.toCodecJson(NoteDataForMigration))(data)
 
           if (!note.publication) {
             return yield* Effect.fail(
@@ -414,6 +407,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
           }
         }
 
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         yield* Schema.decodeUnknownEffect(Schema.Array(MediaAssetRow))(
           yield* sql`SELECT * FROM media_assets`,
         )

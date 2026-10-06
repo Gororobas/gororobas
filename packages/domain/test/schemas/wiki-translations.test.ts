@@ -19,7 +19,7 @@ import {
 } from "../../src/wiki/wiki-article.js"
 import { withEditorRichText } from "../fixtures/wiki-rich-text.js"
 
-const decodePlant = Schema.decodeUnknownSync(WikiPlantArticle.EditableArticle)
+const decodePlant = Schema.decodeSync(WikiPlantArticle.EditableArticle)
 
 const plant = decodePlant({
   kind: "PLANT",
@@ -61,7 +61,7 @@ describe("Kind-specific wiki translations", () => {
   )
 
   it("materializes origin only for plants and accepts older translations without origin", () => {
-    const id = Schema.decodeUnknownSync(WikiArticleId)("0199a000-0000-7000-8000-000000000001")
+    const id = Schema.decodeSync(WikiArticleId)("0199a000-0000-7000-8000-000000000001")
     const row = Option.getOrThrow(
       editableToMaterializedTranslation({ article: plant, locale: "en", wikiArticleId: id }),
     )
@@ -79,6 +79,7 @@ describe("Kind-specific wiki translations", () => {
     const encoded = Schema.encodeSync(WikiArticleTranslationMaterializedRow)(row)
     expect(encoded.commonNames).toBe('["Pumpkin"]')
 
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test supplies excess fields to verify that fields from other wiki kinds are stripped.
     const animal = Schema.decodeUnknownSync(WikiArticleTranslationMaterializedRow)({
       ...encoded,
       kind: "ANIMAL",

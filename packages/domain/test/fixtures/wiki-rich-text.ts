@@ -20,7 +20,7 @@ const wikiRichText = TiptapDocument.make({
 
 /** Use representative editor content for tests that exercise article operations rather than rich-text generation. */
 export const withEditorRichText = (article: WikiArticleEditableData): WikiArticleEditableData =>
-  Schema.decodeUnknownSync(Schema.toType(WikiArticleEditableData))({
+  Schema.decodeSync(Schema.toType(WikiArticleEditableData))({
     ...article,
     translations: Record.fromEntries(
       Locale.literals.flatMap((locale) => {

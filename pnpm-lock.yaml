@@ -231,6 +231,9 @@ catalogs:
       specifier: ^5.0.3
       version: 5.0.3
 
+overrides:
+  '@mpsuesser/oxlint-plugin-effect>effect': 4.0.1
+
 patchedDependencies:
   loro-crdt@1.16.4: 14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd
 
@@ -265,6 +268,9 @@ importers:
       '@manypkg/cli':
         specifier: ^0.25.1
         version: 0.25.1
+      '@mpsuesser/oxlint-plugin-effect':
+        specifier: ^0.6.0
+        version: 0.6.0
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.3
@@ -1193,6 +1199,9 @@ packages:
 
   '@minhducsun2002/leb128@1.0.0':
     resolution: {integrity: sha512-eFrYUPDVHeuwWHluTG1kwNQUEUcFjVKYwPkU8z9DR1JH3AW7JtJsG9cRVGmwz809kKtGfwGJj58juCZxEvnI/g==}
+
+  '@mpsuesser/oxlint-plugin-effect@0.6.0':
+    resolution: {integrity: sha512-q0QNOQxvOU/FLBsJI5qpAmnX7g8xzhfgKDzesDliqD1YIj18DBxal2x3IZIcjMupZf5uVhv8hu9p1p4PKF1teA==}
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
     resolution: {integrity: sha512-LCkGo6JDfaBhgST7UpPWgNgLINpcpabaHfyz5OBx75nUYxBsaEPxjnyNjWpeb/xBup/682QnBfRBy2/LvPutZQ==}
@@ -3917,6 +3926,12 @@ snapshots:
 
   '@minhducsun2002/leb128@1.0.0':
     optional: true
+
+  '@mpsuesser/oxlint-plugin-effect@0.6.0':
+    dependencies:
+      '@oxlint/plugins': 1.87.0
+      effect: 4.0.1
+      effect-oxlint: 0.4.0(effect@4.0.1)
 
   '@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.4':
     optional: true

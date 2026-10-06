@@ -102,7 +102,7 @@ const validateSchema = <S extends Schema.Schema<any>>({
 }): Effect.Effect<S["Type"], InvalidCrdtUpdateError, never> =>
   Effect.try({
     try: () =>
-      // oxlint-disable-next-line effect/casting-awareness -- Effect Schema's decoder constraint is stricter than its generic schema input.
+      // oxlint-disable-next-line effect/casting-awareness, custom-lint-rules/no-schema-decode-unknown -- Effect Schema's decoder constraint is stricter than its generic schema input, and CRDT document projections have an unknown shape until validated.
       Schema.decodeUnknownSync(targetSchema as never)(projectDocument(updatedDoc)),
     catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
   })

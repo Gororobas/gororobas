@@ -44,7 +44,7 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = Schema.decodeUnknownSync(Handle)
+const makeHandle = Schema.decodeSync(Handle)
 
 const makeCommentSourceData = (content: TiptapDocument): SourceCommentData => ({
   locales: {

@@ -66,7 +66,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
   const filesystem = await Effect.runPromise(
     Effect.provide(FileSystem.FileSystem, NodeServices.layer),
   )
-  const plant = Schema.decodeUnknownSync(Schema.fromJsonString(PlantPreviewSource))(
+  const plant = Schema.decodeSync(Schema.fromJsonString(PlantPreviewSource))(
     await Effect.runPromise(filesystem.readFileString(sourceFilename)),
   )
   const latest = plant.versions.at(-1)
@@ -135,7 +135,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
         }
         const sourceMediaAsset = yield* filesystem
           .readFileString(resolve(import.meta.dirname, "../debug/images", `${photo.id}.json`))
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(SourceMediaAsset))))
+          .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(SourceMediaAsset))))
         if (sourceMediaAsset.id !== plant.photoIds[photoIndex]) {
           return yield* Effect.die(new Error("Photo ID mapping does not match the plant export"))
         }
@@ -226,6 +226,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
       })(plant.id)
 
       const storedMediaAssets = yield* sql`SELECT * FROM media_assets`
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       yield* Schema.decodeUnknownEffect(Schema.Array(MediaAssetRow))(storedMediaAssets)
       const violations = yield* sql`PRAGMA foreign_key_check`
 
@@ -241,7 +242,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
 
       for (const route of routes) {
         const page = yield* findPageByHandleAndKind({
-          handle: Schema.decodeUnknownSync(Handle)(route.handle),
+          handle: Schema.decodeSync(Handle)(route.handle),
           kind: "PLANT",
           locale: "pt",
         })

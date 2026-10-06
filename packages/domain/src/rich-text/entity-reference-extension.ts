@@ -27,14 +27,17 @@ export const EntityReference = Node.create({
     {
       tag: "span[data-entity-reference]",
       getAttrs: (element) =>
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- DOM attributes may be absent or contain malformed JSON.
         Schema.decodeUnknownOption(AttributesJson)(
           element.getAttribute("data-entity-reference"),
         ).pipe((attributes) => (attributes._tag === "Some" ? attributes.value : false)),
     },
   ],
   renderText: ({ node }) =>
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
     Schema.decodeUnknownSync(EntityReferenceAttributes)(node.attrs).labelAtInsertion,
   renderHTML: ({ node }) => {
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
     const attributes = Schema.decodeUnknownSync(EntityReferenceAttributes)(node.attrs)
 
     return [
@@ -55,8 +58,10 @@ export const linkedEntitiesFromTiptapDocument = (
     if (node.type === "entityReference") {
       const { referenceId, referenceType } = node.attrs
       const key = `${referenceType}:${referenceId}`
+
       if (!seen.has(key)) {
         seen.add(key)
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
         entities.push(Schema.decodeUnknownSync(EntityReferenceTarget)(node.attrs))
       }
     }

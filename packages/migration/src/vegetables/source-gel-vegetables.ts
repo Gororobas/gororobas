@@ -62,6 +62,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
       Effect.flatMap((vegetables) =>
         Effect.all(
           vegetables.map((vegetable) =>
+            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
             Schema.decodeUnknownEffect(GelVegetableWithEditSuggestions)(vegetable),
           ),
           { concurrency: "unbounded", mode: "result" },
@@ -121,6 +122,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
           history,
           (historyEntry) =>
             Effect.gen(function* () {
+              // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy audit content is unknown until validated.
               const originalContent = Schema.decodeUnknownSync(Schema.NullishOr(GelTiptapDocument))(
                 historyEntry.state.content,
               )
@@ -149,14 +151,14 @@ export const sourceGelVegetables = Effect.gen(function* () {
 
         const id = yield* context
           .resolveId(source.id, "WikiArticle")
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(WikiArticleId)))
+          .pipe(Effect.flatMap(Schema.decodeEffect(WikiArticleId)))
 
         const photoIds = yield* Effect.forEach(
           source.photos,
           (photo) =>
             context
               .resolveId(photo.id, "Image")
-              .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId))),
+              .pipe(Effect.flatMap(Schema.decodeEffect(MediaAssetId))),
           { concurrency: 1 },
         )
 
@@ -170,13 +172,13 @@ export const sourceGelVegetables = Effect.gen(function* () {
               const actorId = sourceActorId
                 ? yield* context
                     .resolveId(sourceActorId, "Profile")
-                    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
+                    .pipe(Effect.flatMap(Schema.decodeEffect(ProfileId)))
                 : null
 
               const reviewerId = edit?.reviewed_by_id
                 ? yield* context
                     .resolveId(edit.reviewed_by_id, "Profile")
-                    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
+                    .pipe(Effect.flatMap(Schema.decodeEffect(ProfileId)))
                 : null
 
               return {

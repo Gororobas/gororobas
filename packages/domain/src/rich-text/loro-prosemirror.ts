@@ -19,6 +19,7 @@ export const initializeLoroRichText = (container: LoroMap, document: TiptapDocum
 
     if ("attrs" in node && node.attrs !== undefined) {
       const attributes = map.setContainer("attributes", new LoroMap())
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Rich-text attributes may contain undefined values and must be checked for JSON compatibility.
       Record.toEntries(Schema.decodeUnknownSync(JsonAttributes)(node.attrs)).forEach(
         ([key, value]) => attributes.set(toLoroString(key), toLoroValue(value)),
       )
@@ -38,7 +39,7 @@ export const initializeLoroRichText = (container: LoroMap, document: TiptapDocum
         const attributes = Record.fromEntries(
           ("marks" in child ? (child.marks ?? []) : []).map((mark) => [
             toLoroString(mark.type),
-            toLoroValue(Schema.decodeUnknownSync(JsonAttributes)(mark.attrs ?? {})),
+            toLoroValue(Schema.decodeSync(JsonAttributes)(mark.attrs ?? {})),
           ]),
         )
 
@@ -65,9 +66,11 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
     if (children !== undefined && !(children instanceof LoroList)) {
       throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
     }
+
     const decodedAttributes =
       attributes instanceof LoroMap
-        ? Schema.decodeUnknownSync(JsonAttributes)(Record.fromEntries(attributes.entries()))
+        ? // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro attribute containers can contain non-JSON values.
+          Schema.decodeUnknownSync(JsonAttributes)(Record.fromEntries(attributes.entries()))
         : {}
 
     return {
@@ -85,6 +88,7 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
               return child.toDelta().map((delta) => {
                 const marks = Record.toEntries(delta.attributes ?? {}).map(([type, attrs]) => ({
                   type,
+                  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro mark attributes can contain non-JSON values.
                   ...(Record.size(Schema.decodeUnknownSync(JsonAttributes)(attrs)) > 0
                     ? { attrs }
                     : {}),
@@ -102,7 +106,9 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
     }
   }
 
+  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro nodes have dynamic names and children that require structural validation.
   return Schema.decodeUnknownSync(TiptapDocument)({
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The recursive Loro projection returns unknown data.
     ...Schema.decodeUnknownSync(JsonAttributes)(readNode(container)),
     version: 1,
   })

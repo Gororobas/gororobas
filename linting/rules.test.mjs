@@ -1,7 +1,9 @@
+import effectPlugin from "@mpsuesser/oxlint-plugin-effect"
 import { RuleTester } from "oxlint/plugins-dev"
 import { describe, it } from "vitest"
 
 import { noNodeApisRule } from "./no-node-apis.mjs"
+import { noSchemaDecodeUnknownRule } from "./no-schema-decode-unknown.mjs"
 import {
   noFunctionAliasesRule,
   noInlineImportsRule,
@@ -14,6 +16,42 @@ RuleTester.it = it
 RuleTester.itOnly = it.only
 
 const tester = new RuleTester()
+
+tester.run("effect/no-runtime-typeof", effectPlugin.rules["no-runtime-typeof"], {
+  valid: ["const value = 1"],
+  invalid: [{ code: "typeof value", errors: [{ messageId: "runtimeTypeof" }] }],
+})
+
+tester.run(
+  "effect/require-safety-comment-for-type-assertion",
+  effectPlugin.rules["require-safety-comment-for-type-assertion"],
+  {
+    valid: [{ code: 'const value = "a" as const', filename: "test.ts" }],
+    invalid: [
+      {
+        code: "const value = source as string",
+        filename: "test.ts",
+        errors: [{ messageId: "missingSafetyComment" }],
+      },
+    ],
+  },
+)
+
+tester.run("no-schema-decode-unknown", noSchemaDecodeUnknownRule, {
+  valid: [
+    'import { Schema } from "effect"; Schema.decodeSync(schema)(value)',
+    'import { Schema } from "other"; Schema.decodeUnknownSync(schema)(value)',
+    'import { Schema } from "effect"; function f(Schema) { return Schema.decodeUnknownSync(value) }',
+  ],
+  invalid: [
+    'import { Schema } from "effect"; const decode = Schema.decodeUnknownEffect(schema)',
+    'import { Schema as S } from "effect"; S.decodeUnknownSync(schema)(value)',
+    'import * as Schema from "effect/Schema"; Schema.decodeUnknownOption(schema)(value)',
+    'import * as Effect from "effect"; Effect.Schema.decodeUnknownExit(schema)(value)',
+    'import { Schema } from "effect"; Schema["decodeUnknownPromise"](schema)(value)',
+    'import { decodeUnknownResult as decode } from "effect/Schema"; decode(schema)(value)',
+  ].map((code) => ({ code, errors: [{ messageId: "decodeUnknown" }] })),
+})
 
 tester.run("no-node-apis", noNodeApisRule, {
   valid: [
