@@ -18,11 +18,11 @@ Fight entropy. Leave the codebase better than you found it.
 
 Do not set `as any`, `@ts-ignore` or `@ts-expect-error` when you're stuck. Think hard about types and find ways to make them work.
 
-## Effect v4 RC and vendors
+## Vendors references
 
-We're using the Effect v4 RC, which includes some breaking changes from Effect v3. Make sure to read the repos/effect folder  (which is a git submodule) to go through the new version's source code when proposing changes.
+We're using Effect v4, which includes some breaking changes from Effect v3. Make sure to read the repos/effect folder  (which is a git subtree) to go through the new version's source code when proposing changes.
 
-Foldkit, Loro and Turso also have their monorepos available for reference under the `./repos` folder.
+Foldkit, @yielded/auth, Loro and Turso also have their monorepos available for reference under the `./repos` folder.
 
 ## Database
 
@@ -71,7 +71,7 @@ export const runMainWithCustomRuntime = ...
 
 ## Naming
 
-Avoid abbreviations as much as possible. For objects/structs properties, use `snake_case` to comply with SQL tables.
+Avoid abbreviations as much as possible.
 
 Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/repositories/wiki-articles-repository.ts`
 

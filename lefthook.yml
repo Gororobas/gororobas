@@ -14,4 +14,4 @@ pre-commit:
       run: pnpm run type-check
     test:
       glob: "*.{ts,tsx,feature}"
-      run: pnpm run test -- --run
+      run: pnpm run test
