@@ -1,25 +1,13 @@
-import { Context } from "effect"
-import { HttpApiMiddleware, HttpApiSecurity } from "effect/http-api"
+import { makeSessionHttpContract } from "@yielded/auth/SessionContract"
 
-import { UnauthorizedError } from "../authorization/session.js"
-import { CurrentAuthenticationData } from "./domain.js"
+import {
+  AuthenticationSession,
+  authenticationNamespace,
+  sessionCookieName,
+} from "./auth-contract.js"
 
-export class CurrentAuthenticationContext extends Context.Service<
-  CurrentAuthenticationContext,
-  CurrentAuthenticationData
->()("CurrentAuthenticationContext") {}
-
-export class AuthenticationMiddleware extends HttpApiMiddleware.Service<
-  AuthenticationMiddleware,
-  {
-    provides: CurrentAuthenticationContext
-  }
->()("AuthMiddleware", {
-  error: UnauthorizedError,
-  security: {
-    cookie: HttpApiSecurity.apiKey({
-      in: "cookie",
-      key: "better-auth.session_token",
-    }),
-  },
-}) {}
+export const AuthenticationHttp = makeSessionHttpContract(
+  authenticationNamespace,
+  AuthenticationSession,
+  { cookieName: sessionCookieName },
+)

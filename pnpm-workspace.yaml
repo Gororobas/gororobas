@@ -21,7 +21,6 @@ catalog:
   "@tiptap/html": ^3.31.4
   "@tiptap/pm": ^3.31.4
   "@tiptap/starter-kit": ^3.31.4
-  better-auth: 1.7.7
   effect: 4.0.0
   effect-units: 0.4.2
   glob: ^13.0.6
@@ -32,6 +31,11 @@ catalog:
   typescript: 7.0.2
   uuid: ^14.0.2
   vitest: ^5.0.3
+
+minimumReleaseAgeExclude:
+  - "@yielded/auth-crypto@0.1.0-beta.18"
+  - "@yielded/auth-persistence@0.1.0-beta.18"
+  - "@yielded/auth@0.1.0-beta.18"
 
 nodeLinker: hoisted
 

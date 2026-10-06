@@ -22,7 +22,8 @@
     "type-check:watch": "tsc --noEmit -p tsconfig.json -w",
     "test": "vitest",
     "coverage": "vitest --coverage",
-    "migrate": "npx tsx scripts/migrate.ts"
+    "migrate": "npx tsx scripts/migrate.ts",
+    "dev:auth-experiments": "npx tsx --env-file=.env.auth-dev-experiments ./src/auth-dev-experiments-server.ts"
   },
   "dependencies": {
     "@durable-streams/server": "^0.3.9",
@@ -40,13 +41,15 @@
     "@tiptap/html": "catalog:",
     "@tiptap/pm": "catalog:",
     "@tiptap/starter-kit": "catalog:",
-    "better-auth": "catalog:",
+    "@yielded/auth": "0.1.0-beta.18",
+    "@yielded/auth-persistence": "0.1.0-beta.18",
     "effect": "catalog:",
     "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
     "loro-mirror": "catalog:",
     "mediabunny": "^1.61.0",
     "ollama": "^0.6.4",
+    "openid-client": "^6.8.8",
     "sharp": "^0.35.5"
   },
   "devDependencies": {

@@ -3,21 +3,18 @@
  */
 import { NodeServices } from "@effect/platform-node"
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, String as EffectString } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { migrations } from "./db/migrations-effect/index.js"
-
-const snakeToCamel = (str: string) => str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-const camelToSnake = (str: string) => str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 
 export const makeAppSqlClient = (filename: string, readonly = false) =>
   SqliteClient.layer({
     filename,
     readonly,
     // Transform column names automatically
-    transformResultNames: snakeToCamel, // DB → JS (snake_case → camelCase)
-    transformQueryNames: camelToSnake, // JS → DB (camelCase → snake_case)
+    transformResultNames: EffectString.snakeToCamel, // DB → JS (snake_case → camelCase)
+    transformQueryNames: EffectString.camelToSnake, // JS → DB (camelCase → snake_case)
     // Add span attributes for telemetry
     spanAttributes: {
       "db.system": "sqlite",

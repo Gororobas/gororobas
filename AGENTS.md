@@ -64,7 +64,7 @@ export const CLASSIFICATION_VERSION = "2026-02-19.1" as const
 /**
  * Adaptation of NodeRuntime.runMain (which calls @effect/platform/Runtime's `makeRunMain` internally) with a custom ManagedRuntime.
  *
- * In use because we need a shared runtime with better-auth in order to re-use the same database connection.
+ * The HTTP server and background workflows share the application's SQL and cluster services.
  */
 export const runMainWithCustomRuntime = ...
 ```

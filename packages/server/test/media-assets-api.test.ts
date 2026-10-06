@@ -1,11 +1,7 @@
 import { NodeServices } from "@effect/platform-node"
-import {
-  AuthenticationMiddleware,
-  CurrentAuthenticationContext,
-  CurrentAuthenticationData,
-  GororobasApi,
-} from "@gororobas/domain"
-import { ConfigProvider, Effect, Layer, Schema } from "effect"
+import { AuthenticationHttp, CurrentAuthenticationData, GororobasApi } from "@gororobas/domain"
+import { Auth, Sessions } from "@yielded/auth"
+import { ConfigProvider, Context, Effect, Layer, ManagedRuntime, Schema } from "effect"
 import { Etag, HttpPlatform, HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
 import { SqlClient } from "effect/sql"
@@ -25,7 +21,8 @@ import { makeAppSql } from "../src/sql.js"
 it("streams multipart uploads and serves validated variants, ranges and censorship through HTTP", async () => {
   const directory = await mkdtemp(join(tmpdir(), "mediaAssets-api-"))
   const root = join(directory, "assets")
-  const database = makeAppSql(join(directory, "preview.sqlite"))
+  const databaseRuntime = ManagedRuntime.make(makeAppSql(join(directory, "preview.sqlite")))
+  const database = Layer.succeedContext(await databaseRuntime.context())
   const personId = "00000000-0000-7000-8000-000000000001"
   const timestamp = "2026-10-03T00:00:00Z"
   let authentication = Schema.decodeUnknownSync(CurrentAuthenticationData)({
@@ -39,14 +36,18 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
       updatedAt: timestamp,
     },
     session: {
-      id: "00000000-0000-7000-8000-000000000002",
-      accountId: personId,
-      token: "test",
-      expiresAt: "2027-01-01T00:00:00Z",
-      ipAddress: null,
-      userAgent: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
+      sessionId: "media-assets-test-session",
+      subjectId: personId,
+      securityRevision: "media-assets-test-revision",
+      assurance: {
+        method: "magic-link",
+        factors: ["possession"],
+        authenticatedAt: Date.parse(timestamp),
+      },
+      issuedAt: Date.parse(timestamp),
+      expiresAt: Date.parse("2027-01-01T00:00:00Z"),
+      absoluteExpiresAt: Date.parse("2027-01-01T00:00:00Z"),
+      claims: { authSubjectId: personId },
     },
   })
   const services = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
@@ -71,10 +72,16 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
       Layer.provide(MediaAssetsApiLive),
       Layer.provide(
         Layer.succeed(
-          AuthenticationMiddleware,
-          AuthenticationMiddleware.of({
-            cookie: (httpEffect) =>
-              Effect.provideService(httpEffect, CurrentAuthenticationContext, authentication),
+          AuthenticationHttp.RequireSession,
+          AuthenticationHttp.RequireSession.of({
+            session: (httpEffect) =>
+              authentication === null
+                ? Effect.fail(Sessions.SessionInvalid.make({}))
+                : Effect.provideService(
+                    httpEffect,
+                    AuthenticationHttp.CurrentSession,
+                    authentication.session,
+                  ),
           }),
         ),
       ),
@@ -83,12 +90,19 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
     { disableLogger: true },
   )
   const request = (path: string, init?: RequestInit) =>
-    app.handler(new Request(`http://localhost${path}`, init))
+    app.handler(
+      new Request(`http://localhost${path}`, init),
+      Context.make(Auth.AuthRequest, {
+        invocation: { _tag: "Guest" },
+        credentials: {},
+        credentialCommandSink: () => Effect.void,
+      }),
+    )
   try {
     await Effect.runPromise(
       SqlClient.SqlClient.use((sql) =>
         Effect.gen(function* () {
-          yield* sql`INSERT INTO accounts (id, name, email, is_email_verified, created_at, updated_at) VALUES (${personId}, 'Reviewer', 'reviewer@example.invalid', 1, ${timestamp}, ${timestamp})`
+          yield* sql`INSERT INTO auth_subjects (id, name, email, is_email_verified, security_revision, created_at, updated_at) VALUES (${personId}, 'Reviewer', 'reviewer@example.invalid', 1, ${personId}, ${timestamp}, ${timestamp})`
           yield* sql`INSERT INTO profiles (id, type, handle, name, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'reviewer', 'Reviewer', 'PUBLIC', ${timestamp}, ${timestamp})`
           yield* sql`INSERT INTO people (id, access_level) VALUES (${personId}, 'ADMIN')`
         }),
@@ -187,9 +201,10 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
           headers: { authorization: `Bearer ${personId}` },
         })
       ).status,
-    ).toBe(403)
+    ).toBe(401)
   } finally {
     await app.dispose()
+    await databaseRuntime.dispose()
     await rm(directory, { recursive: true, force: true })
   }
 })

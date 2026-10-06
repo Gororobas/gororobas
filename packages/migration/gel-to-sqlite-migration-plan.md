@@ -14,7 +14,7 @@ This plan outlines the comprehensive migration from Gel/EdgeDB to SQLite with Ef
 - **Audit Trail**: `HistoryLog` with automatic triggers for INSERT/UPDATE/DELETE
 
 ### Target SQLite Schema Structure
-- **Authentication**: Better Auth with accounts, sessions, oauth_accounts
+- **Authentication**: Yielded with application accounts and durable proof/session storage
 - **Profiles**: Unified `profiles` table with people/organizations
 - **CRDT-based**: vegetable_crdts, resource_crdts, publication_crdts with Loro documents
 - **Revisions**: vegetable_revisions, resource_revisions for contribution workflow
@@ -25,7 +25,7 @@ This plan outlines the comprehensive migration from Gel/EdgeDB to SQLite with Ef
 
 | Gel Type | SQLite Target | Notes |
 |----------|--------------|-------|
-| `User` | `accounts` + `people` | Split into Better Auth accounts + people-specific data |
+| `User` | `auth_subjects` + `people` | Split into application accounts + people-specific data |
 | `UserProfile` | `profiles` | Direct mapping to unified profiles table |
 | `Source` | `image_credits` + `resource_credits` | Split into separate credit tables |
 | `Tag` | `tags` | Direct mapping, `category` → `cluster` |
@@ -124,8 +124,8 @@ interface MigrationContextService {
 ### 4. Data Transformation Pipeline
 #### Phase 1: Identity & Authentication Migration
 1. **Extract Gel Users**: Query User table with identities
-2. **Create Better Auth Accounts**: Map to accounts table structure
-3. **Preserve Roles**: Map Gel roles to Better Auth access levels
+2. **Create Application Accounts**: Map to auth_subjects table structure
+3. **Preserve Roles**: Map Gel roles to application access levels
 4. **Profile Migration**: Convert UserProfile to unified profiles table
 5. **Organization/Person Split**: Create people and organizations tables
 
@@ -250,27 +250,7 @@ const generateCrdtUpdate = ({
 
 ### 6. Authentication Migration
 
-#### Better Auth Configuration
-```typescript
-export const auth = betterAuth({
-  database: new Database("main.sqlite"),
-  user: {
-    modelName: "accounts",
-    fields: {
-      createdAt: "created_at",
-      emailVerified: "is_email_verified",
-      updatedAt: "updated_at",
-    },
-  },
-  // ... other mappings
-})
-```
-
-#### Migration Steps
-1. **Create Accounts**: Migrate from Gel User to accounts table
-2. **Session Migration**: Convert existing sessions if needed
-3. **OAuth Accounts**: Preserve third-party authentications
-4. **Profile Linking**: Connect accounts to profiles
+The server owns signup and sign-in through Yielded magic-link proofs. Import account/profile/person data; do not import legacy authentication sessions, OAuth grants, or verification tokens. The first completed mailbox proof establishes the account's Yielded credential. See [the authentication decision log](../server/auth-migration-decisions.md) and [local setup](../server/README.md).
 
 ## Implementation Plan
 
@@ -278,7 +258,6 @@ export const auth = betterAuth({
 1. Create `packages/migration/package.json` with dependencies:
    - `effect`, `@effect/sql-sqlite-node`
    - `loro-crdt`, `loro-mirror`
-   - `better-auth`
    - `json-diff-ts` for reading existing diffs
 
 2. Implement `MigrationContext` service based on reference implementation
@@ -331,7 +310,7 @@ export const auth = betterAuth({
 **Solution**: Create migration-specific wrappers that handle bulk operations and transactions
 
 ### 4. Authentication System Migration
-**Challenge**: Migrating from Gel's built-in auth to Better Auth
+**Challenge**: Migrating from Gel's built-in auth to application accounts with Yielded
 **Solution**: Extract user identities, preserve emails and roles, create new accounts
 
 ### 5. Large Dataset Performance

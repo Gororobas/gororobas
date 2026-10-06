@@ -45,7 +45,7 @@ it("publishes processed files before rows, cleans up failures, and hides censore
         const filesystem = yield* FileSystem.FileSystem
         const service = yield* MediaAssetsService
         const personId = yield* IdGen.make(PersonId)
-        yield* sql`INSERT INTO accounts (id, name, email, is_email_verified, created_at, updated_at) VALUES (${personId}, 'Importer', 'mediaAssets@example.invalid', 0, '2026-10-03T00:00:00Z', '2026-10-03T00:00:00Z')`
+        yield* sql`INSERT INTO auth_subjects (id, name, email, is_email_verified, security_revision, created_at, updated_at) VALUES (${personId}, 'Importer', 'mediaAssets@example.invalid', 0, ${personId}, '2026-10-03T00:00:00Z', '2026-10-03T00:00:00Z')`
         yield* sql`INSERT INTO profiles (id, type, handle, name, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'importer', 'Importer', 'PUBLIC', '2026-10-03T00:00:00Z', '2026-10-03T00:00:00Z')`
         yield* sql`INSERT INTO people (id, access_level) VALUES (${personId}, 'ADMIN')`
         const session = AccountSession.make({

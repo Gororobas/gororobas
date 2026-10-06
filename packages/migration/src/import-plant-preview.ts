@@ -4,6 +4,7 @@ import {
   MediaAssetRow,
   Handle,
   IdGen,
+  AuthSecurityRevision,
   loroDocToUpdate,
   parseWikiArticleCrdtUpdate,
   PersonId,
@@ -156,7 +157,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
         })
       }
       yield* Effect.gen(function* () {
-        yield* sql`INSERT INTO accounts ${sql.insert({ id: importerId, name: "Migration import", email: "migration-preview@example.invalid", isEmailVerified: 0, createdAt: timestamp, updatedAt: timestamp })}`
+        yield* sql`INSERT INTO auth_subjects ${sql.insert({ id: importerId, name: "Migration import", email: "migration-preview@example.invalid", isEmailVerified: 0, securityRevision: yield* IdGen.make(AuthSecurityRevision), createdAt: timestamp, updatedAt: timestamp })}`
         yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
         yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
         yield* repository.createWikiArticle(

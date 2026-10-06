@@ -2,9 +2,9 @@ import { Effect, ManagedRuntime, Runtime } from "effect"
 import { constVoid } from "effect/Function"
 
 /**
- * Adaptation of NodeRuntime.runMain (which calls @effect/platform/Runtime's `makeRunMain` internally) with a custom ManagedRuntime.
+ * Runs the application's ManagedRuntime with Node-style process lifetime and signal handling.
  *
- * In use because we need a shared runtime with better-auth in order to re-use the same database connection.
+ * The HTTP server and background workflows share the application's SQL and cluster services.
  */
 export const runMainWithCustomRuntime = <
   RuntimeServices,

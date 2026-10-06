@@ -8,17 +8,11 @@ const UUID = Schema.String.check(
   Schema.isPattern(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
 )
 
-export const AccountId = UUID.pipe(Schema.brand("AccountId"))
-export type AccountId = typeof AccountId.Type
+export const AuthSubjectId = UUID.pipe(Schema.brand("AuthSubjectId"))
+export type AuthSubjectId = typeof AuthSubjectId.Type
 
-export const SessionId = UUID.pipe(Schema.brand("SessionId"))
-export type SessionId = typeof SessionId.Type
-
-export const OAuthAccountId = UUID.pipe(Schema.brand("OAuthAccountId"))
-export type OAuthAccountId = typeof OAuthAccountId.Type
-
-export const VerificationId = UUID.pipe(Schema.brand("VerificationId"))
-export type VerificationId = typeof VerificationId.Type
+export const AuthSecurityRevision = UUID.pipe(Schema.brand("AuthSecurityRevision"))
+export type AuthSecurityRevision = typeof AuthSecurityRevision.Type
 
 export const CommentId = UUID.pipe(Schema.brand("CommentId"))
 export type CommentId = typeof CommentId.Type

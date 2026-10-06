@@ -26,6 +26,7 @@
     "@tiptap/core": "catalog:",
     "@tiptap/html": "catalog:",
     "@tiptap/starter-kit": "catalog:",
+    "@yielded/auth": "0.1.0-beta.18",
     "effect": "catalog:",
     "effect-units": "catalog:",
     "loro-crdt": "catalog:",

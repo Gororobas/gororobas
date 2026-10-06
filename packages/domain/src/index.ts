@@ -26,6 +26,7 @@ export * from "./wiki/errors.js"
 export * from "./wiki/external-data/error.js"
 
 // Authentication
+export * from "./authentication/auth-contract.js"
 export * from "./authentication/domain.js"
 export * from "./authentication/middleware.js"
 

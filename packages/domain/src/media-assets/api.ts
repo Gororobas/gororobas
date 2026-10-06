@@ -2,6 +2,7 @@ import { Schema } from "effect"
 import { Multipart } from "effect/http"
 import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 
+import { UnauthorizedError } from "../authorization/session.js"
 import { ModerationStatus } from "../common/enums.js"
 import { MediaAssetId } from "../common/ids.js"
 import { MediaAssetRequest } from "./domain.js"
@@ -32,7 +33,7 @@ export class MediaAssetsApi extends HttpApiGroup.make("mediaAssets")
   .add(
     HttpApiEndpoint.post("uploadMedia", "/media/upload", {
       success: MediaUploadData,
-      error: [InvalidMediaAssetError, MediaAssetStorageError],
+      error: [InvalidMediaAssetError, MediaAssetStorageError, UnauthorizedError],
       payload: Schema.Struct({ file: Multipart.SingleFileSchema }).pipe(
         HttpApiSchema.asMultipartStream({
           // One form field; the file body is still consumed as a stream of chunks.
@@ -53,7 +54,7 @@ export class MediaAssetsApi extends HttpApiGroup.make("mediaAssets")
   .add(
     HttpApiEndpoint.post("censorMedia", "/media/:id/censor", {
       success: Schema.Struct({ moderationStatus: ModerationStatus }),
-      error: MediaNotFoundError.pipe(HttpApiSchema.status(404)),
+      error: [MediaNotFoundError.pipe(HttpApiSchema.status(404)), UnauthorizedError],
       params: Schema.Struct({ id: MediaAssetId }),
       payload: Schema.Struct({
         reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),

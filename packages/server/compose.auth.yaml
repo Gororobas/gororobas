@@ -1,0 +1,14 @@
+services:
+  mailpit:
+    image: axllent/mailpit:v1.30.3
+    ports:
+      - "127.0.0.1:8025:8025"
+  auth-proxy:
+    image: caddy:2.10.2
+    ports:
+      - "127.0.0.1:4443:4443"
+    volumes:
+      - ./Caddyfile.auth:/etc/caddy/Caddyfile:ro
+      - auth-caddy-data:/data
+volumes:
+  auth-caddy-data:

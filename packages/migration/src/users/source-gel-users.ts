@@ -1,4 +1,4 @@
-import { AccountId, MediaAssetId, ProfileId } from "@gororobas/domain"
+import { AuthSubjectId, MediaAssetId, ProfileId } from "@gororobas/domain"
 import { Effect, Array as EffectArray, FileSystem, Option, Path, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
@@ -72,9 +72,9 @@ export const sourceGelUsers = Effect.gen(function* () {
     (user) =>
       Effect.gen(function* () {
         const data = yield* gelUserToPersonData(user)
-        const accountId = yield* context
+        const authSubjectId = yield* context
           .resolveId(user.id, "Account")
-          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(AccountId)))
+          .pipe(Effect.flatMap(Schema.decodeUnknownEffect(AuthSubjectId)))
         const profileId = yield* context
           .resolveId(user.profile.id, "Profile")
           .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
@@ -88,7 +88,7 @@ export const sourceGelUsers = Effect.gen(function* () {
           Schema.fromJsonString(UserDataForMigration, { space: 2 }),
         )({
           ...data,
-          account: { ...data.account, id: accountId },
+          account: { ...data.account, id: authSubjectId },
           profile: { ...data.profile, id: profileId, photoId, bio },
         })
         yield* fs.writeFileString(path.join(usersDirectory, `${user.profile.handle}.json`), encoded)

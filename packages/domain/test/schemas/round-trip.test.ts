@@ -13,12 +13,8 @@ import {
 import { DateTime, Effect, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 
-import {
-  AccountRow,
-  OAuthAccountRow,
-  SessionRow,
-  VerificationRow,
-} from "../../src/authentication/domain.js"
+import { AuthenticationSession } from "../../src/authentication/auth-contract.js"
+import { AccountRow } from "../../src/authentication/domain.js"
 import { Handle, TimestampColumn } from "../../src/common/primitives.js"
 import { MediaAssetRow } from "../../src/media-assets/domain.js"
 import { OrganizationRow } from "../../src/organizations/domain.js"
@@ -43,7 +39,6 @@ import {
 const rowSchemas = [
   { name: "AccountRow", schema: AccountRow },
   { name: "MediaAssetRow", schema: MediaAssetRow },
-  { name: "OAuthAccountRow", schema: OAuthAccountRow },
   { name: "OrganizationRow", schema: OrganizationRow },
   { name: "PersonRow", schema: PersonRow },
   { name: "ProfileRow", schema: ProfileRow },
@@ -52,11 +47,10 @@ const rowSchemas = [
   { name: "PublicationRow", schema: PublicationRow },
   { name: "PublicationTagRow", schema: PublicationTagRow },
   { name: "PublicationTranslationRow", schema: PublicationTranslationRow },
-  { name: "SessionRow", schema: SessionRow },
+  { name: "AuthenticationSession", schema: AuthenticationSession },
   { name: "SuggestedTagRow", schema: SuggestedTagRow },
   { name: "SuggestedTagSourceRow", schema: SuggestedTagSourceRow },
   { name: "TagRow", schema: TagRow },
-  { name: "VerificationRow", schema: VerificationRow },
   { name: "WikiArticleCrdtRow", schema: WikiArticleCrdtRow },
   { name: "WikiArticleHandleRow", schema: WikiArticleHandleMaterializedRow },
   { name: "WikiArticleMaterializedRow", schema: WikiArticleMaterializedRow },

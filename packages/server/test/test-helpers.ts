@@ -4,6 +4,7 @@
 import {
   Handle,
   IdGen,
+  AuthSecurityRevision,
   SessionContext,
   type OrganizationMembershipRow,
   type OrganizationRow,
@@ -16,8 +17,8 @@ import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { DateTime, Effect, Exit, Layer, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient } from "effect/sql"
-import { v7 } from "uuid"
 
+import { IdGenLive } from "../src/id-gen-live.js"
 import { OrganizationsRepository } from "../src/organizations/repository.js"
 import { PeopleRepository } from "../src/people/repository.js"
 import { PeopleService } from "../src/people/service.js"
@@ -45,9 +46,7 @@ export const withSession = <A, E, R>(
  *
  * Uses the same UUID generation strategy as production.
  */
-export const IdGenTest = Layer.succeed(IdGen, {
-  generate: () => v7(),
-})
+export const IdGenTest = IdGenLive
 
 /**
  * Compose test layers for common test scenarios.
@@ -218,8 +217,8 @@ export const insertPersonWithDependencies = ({
     const generatedHandle = Schema.decodeUnknownSync(Handle)(`user-${handleIdPart}`)
 
     yield* sql`
-      INSERT INTO accounts (id, name, email, is_email_verified, image, created_at, updated_at)
-      VALUES (${person.id}, ${profile.name}, ${`${emailIdPart}@example.com`}, ${1}, ${null}, ${now}, ${now})
+      INSERT INTO auth_subjects (id, name, email, is_email_verified, security_revision, image, created_at, updated_at)
+      VALUES (${person.id}, ${profile.name}, ${`${emailIdPart}@example.com`}, ${1}, ${yield* IdGen.make(AuthSecurityRevision)}, ${null}, ${now}, ${now})
       ON CONFLICT (id) DO NOTHING
     `
 

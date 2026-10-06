@@ -31,7 +31,7 @@ export const sourceGelIdMappings = Effect.gen(function* () {
   yield* Effect.forEach(
     [
       ["select UserProfile { id, handle, name }", "Profile", "profiles"],
-      ["select User { id }", "Account", "accounts"],
+      ["select User { id }", "Account", "auth_subjects"],
       ["select Vegetable { id, handle, names }", "WikiArticle", "plants"],
       ["select VegetableVariety { id, handle, names }", "WikiArticle", "cultivars"],
       ["select Resource { id, handle, title }", "WikiArticle", "resources"],

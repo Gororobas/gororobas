@@ -1,58 +1,217 @@
--- ===========
--- BETTER AUTH
--- ===========
---
-CREATE TABLE accounts (
+-- ========
+-- AUTENTICATION
+-- application accounts and Yielded durable storage.
+-- ========
+CREATE TABLE auth_subjects (
   id text NOT NULL PRIMARY KEY,
   name text NOT NULL,
   email text NOT NULL UNIQUE,
   is_email_verified integer NOT NULL,
   image text,
+  active integer NOT NULL DEFAULT 1,
+  security_revision text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL
 );
 
-CREATE TABLE sessions (
-  id text NOT NULL PRIMARY KEY,
-  expires_at date NOT NULL,
-  token text NOT NULL UNIQUE,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  ip_address text,
-  user_agent text,
-  account_id text NOT NULL REFERENCES accounts (id) ON DELETE CASCADE
+CREATE TABLE auth_oauth_flows (
+  state text NOT NULL PRIMARY KEY,
+  flow_id text NOT NULL UNIQUE,
+  provider text NOT NULL,
+  binding_verifier text NOT NULL,
+  nonce text NOT NULL,
+  pkce_verifier text NOT NULL,
+  link_auth_subject_id text REFERENCES auth_subjects (id) ON DELETE CASCADE,
+  expires_at integer NOT NULL
 );
 
-CREATE TABLE oauth_accounts (
-  id text NOT NULL PRIMARY KEY,
-  oauth_account_id text NOT NULL,
-  provider_id text NOT NULL,
-  account_id text NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
-  access_token text,
-  refresh_token text,
-  id_token text,
-  access_token_expires_at text,
-  refresh_token_expires_at text,
-  scope text,
-  password text,
-  created_at text NOT NULL,
-  updated_at text NOT NULL
+CREATE TABLE auth_oauth_identities (
+  provider text NOT NULL,
+  issuer text NOT NULL,
+  subject text NOT NULL,
+  auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
+  credential_id text NOT NULL UNIQUE,
+  UNIQUE (provider, issuer, subject)
 );
 
-CREATE TABLE verifications (
-  id text NOT NULL PRIMARY KEY,
-  identifier text NOT NULL,
+CREATE INDEX auth_oauth_identities_auth_subject_id_idx ON auth_oauth_identities (auth_subject_id);
+
+CREATE TABLE auth_identifiers (
+  namespace text NOT NULL,
   value text NOT NULL,
-  expires_at text NOT NULL,
-  created_at text NOT NULL,
-  updated_at text NOT NULL
+  auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
+  revision text NOT NULL,
+  verified_at integer,
+  active integer NOT NULL,
+  UNIQUE (namespace, value)
 );
 
-CREATE INDEX session_account_id_idx ON sessions (account_id);
+CREATE TABLE auth_credentials (
+  credential_id text NOT NULL,
+  auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
+  revision text NOT NULL,
+  active integer NOT NULL,
+  UNIQUE (credential_id)
+);
 
-CREATE INDEX account_account_id_idx ON oauth_accounts (account_id);
+CREATE INDEX auth_credentials_auth_subject_id_idx ON auth_credentials (auth_subject_id);
 
-CREATE INDEX verification_identifier_idx ON verifications (identifier);
+CREATE TABLE auth_sessions (
+  session_id text NOT NULL,
+  auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
+  digest text NOT NULL,
+  version text NOT NULL,
+  security_revision text NOT NULL,
+  issued_at integer NOT NULL,
+  expires_at integer NOT NULL,
+  absolute_expires_at integer NOT NULL,
+  record text NOT NULL,
+  UNIQUE (session_id),
+  UNIQUE (digest)
+);
+
+CREATE INDEX auth_sessions_auth_subject_id_idx ON auth_sessions (auth_subject_id);
+
+CREATE TABLE auth_session_flows (
+  flow_id text NOT NULL,
+  auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
+  state text NOT NULL,
+  pending_digest text,
+  dedup_until integer NOT NULL,
+  UNIQUE (flow_id)
+);
+
+CREATE TABLE auth_email_credentials (
+  module_id text NOT NULL,
+  auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
+  credential_id text NOT NULL,
+  identifier_namespace text NOT NULL,
+  identifier_value text NOT NULL,
+  credential_revision text NOT NULL,
+  active integer NOT NULL,
+  UNIQUE (module_id, credential_id),
+  UNIQUE (module_id, identifier_namespace, identifier_value)
+);
+
+CREATE TABLE auth_email_commands (
+  module_id text NOT NULL,
+  command_id text NOT NULL,
+  action text NOT NULL,
+  binding_digest text NOT NULL,
+  retention_until integer NOT NULL,
+  UNIQUE (module_id, command_id)
+);
+
+CREATE TABLE auth_proof_requests (
+  module_id text NOT NULL,
+  request_id text NOT NULL,
+  fingerprint text NOT NULL,
+  proof_id text NOT NULL,
+  purpose text NOT NULL,
+  key_id text NOT NULL,
+  created_at integer NOT NULL,
+  retention_until integer NOT NULL,
+  receipt text NOT NULL,
+  UNIQUE (module_id, request_id)
+);
+
+CREATE TABLE auth_proof_series (
+  module_id text NOT NULL,
+  purpose text NOT NULL,
+  scope_key text NOT NULL,
+  active_proof_id text,
+  last_issue_at integer,
+  version text NOT NULL,
+  UNIQUE (module_id, purpose, scope_key)
+);
+
+CREATE TABLE auth_proof_generations (
+  module_id text NOT NULL,
+  purpose text NOT NULL,
+  proof_id text NOT NULL,
+  request_id text NOT NULL,
+  series_key text NOT NULL,
+  delivery_id text NOT NULL,
+  binding text NOT NULL,
+  verifier_key_id text NOT NULL,
+  verifier_digest text NOT NULL,
+  issued_at integer NOT NULL,
+  expires_at integer NOT NULL,
+  version text NOT NULL,
+  state text NOT NULL,
+  send_count integer NOT NULL,
+  delivery_state text NOT NULL,
+  claim_version text,
+  claim_deadline integer,
+  retry_at integer,
+  delivery_retry_millis integer NOT NULL,
+  retention_until integer NOT NULL,
+  fingerprint text NOT NULL,
+  UNIQUE (module_id, proof_id),
+  UNIQUE (module_id, delivery_id)
+);
+
+CREATE TABLE auth_proof_continuations (
+  module_id text NOT NULL,
+  purpose text NOT NULL,
+  continuation_id text NOT NULL,
+  digest text NOT NULL,
+  proof_id text NOT NULL,
+  series_key text NOT NULL,
+  binding text NOT NULL,
+  expires_at integer NOT NULL,
+  consumed integer NOT NULL,
+  version text NOT NULL,
+  retention_until integer NOT NULL,
+  UNIQUE (module_id, continuation_id),
+  UNIQUE (module_id, digest)
+);
+
+CREATE TABLE auth_proof_scopes (
+  module_id text NOT NULL,
+  purpose text NOT NULL,
+  action text NOT NULL,
+  scope_kind text NOT NULL,
+  scope_key text NOT NULL,
+  UNIQUE (module_id, purpose, action, scope_kind, scope_key)
+);
+
+CREATE TABLE auth_proof_abuse (
+  module_id text NOT NULL,
+  purpose text NOT NULL,
+  action text NOT NULL,
+  scope_kind text NOT NULL,
+  scope_key text NOT NULL,
+  command_id text NOT NULL,
+  occurred_at integer NOT NULL,
+  retention_until integer NOT NULL,
+  UNIQUE (
+    module_id,
+    action,
+    scope_kind,
+    scope_key,
+    command_id
+  )
+);
+
+CREATE TABLE auth_proof_failures (
+  module_id text NOT NULL,
+  purpose text NOT NULL,
+  series_key text NOT NULL,
+  command_id text NOT NULL,
+  occurred_at integer NOT NULL,
+  retention_until integer NOT NULL,
+  UNIQUE (module_id, series_key, command_id)
+);
+
+CREATE TABLE auth_proof_commands (
+  module_id text NOT NULL,
+  command_id text NOT NULL,
+  kind text NOT NULL,
+  decision text NOT NULL,
+  retention_until integer NOT NULL,
+  UNIQUE (module_id, command_id)
+);
 
 -- ========
 -- PROFILES
@@ -80,7 +239,7 @@ CREATE TABLE people (
   access_set_by_id text,
   access_set_at text,
   FOREIGN KEY (id) REFERENCES profiles (id) ON DELETE CASCADE,
-  FOREIGN KEY (id) REFERENCES accounts (id) ON DELETE CASCADE,
+  FOREIGN KEY (id) REFERENCES auth_subjects (id) ON DELETE CASCADE,
   FOREIGN KEY (access_set_by_id) REFERENCES profiles (id) ON DELETE SET NULL
 );
 

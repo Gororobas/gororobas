@@ -1,5 +1,5 @@
 import {
-  AccountId,
+  AuthSubjectId,
   MediaAssetId,
   Email,
   Handle,
@@ -81,7 +81,7 @@ export const GelUserWithProfile = Schema.Struct({
 export type GelUserWithProfile = typeof GelUserWithProfile.Type
 
 export const AccountDataForMigration = Schema.Struct({
-  id: Schema.optional(AccountId),
+  id: Schema.optional(AuthSubjectId),
   name: NonEmptyTrimmedString,
   email: Schema.NullOr(Email),
   // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field -- Matches the SQLite column.

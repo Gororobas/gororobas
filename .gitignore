@@ -11,9 +11,8 @@ scratchpad/*
 .direnv/
 .idea/
 .env
-.env.local
-.env.development.local
-.env.test.local
+.env.*
+!.env.*.example
 .pnpm-store
 .devcontainer
 *-results/
@@ -21,3 +20,7 @@ dolt
 dolt-access.lock
 
 /packages/migration/debug/sanity-images/
+
+gororobas.db
+gororobas.db-shm
+gororobas.db-wal
