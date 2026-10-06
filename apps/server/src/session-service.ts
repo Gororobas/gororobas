@@ -72,6 +72,7 @@ export const resolveSession = Effect.gen(function* () {
     personId: person.id,
     type: "ACCOUNT",
   }
+
   return account
 })
 

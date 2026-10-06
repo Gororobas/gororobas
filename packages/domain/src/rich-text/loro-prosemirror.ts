@@ -16,27 +16,32 @@ type RichTextNode = TiptapNode | TiptapTextNode | TiptapDocument
 export const initializeLoroRichText = (container: LoroMap, document: TiptapDocument) => {
   const writeNode = (map: LoroMap, node: RichTextNode): void => {
     map.set("nodeName", toLoroString(node.type))
+
     if ("attrs" in node && node.attrs !== undefined) {
       const attributes = map.setContainer("attributes", new LoroMap())
       Record.toEntries(Schema.decodeUnknownSync(JsonAttributes)(node.attrs)).forEach(
         ([key, value]) => attributes.set(toLoroString(key), toLoroValue(value)),
       )
     }
+
     if (!("content" in node) || node.content === undefined) return
     const children = map.setContainer("children", new LoroList())
     let text = Option.none<LoroText>()
+
     node.content.forEach((child) => {
       if (child.type === "text" && child.text !== undefined) {
         const currentText = Option.getOrElse(text, () =>
           children.insertContainer(children.length, new LoroText()),
         )
         text = Option.some(currentText)
+
         const attributes = Record.fromEntries(
           ("marks" in child ? (child.marks ?? []) : []).map((mark) => [
             toLoroString(mark.type),
             toLoroValue(Schema.decodeUnknownSync(JsonAttributes)(mark.attrs ?? {})),
           ]),
         )
+
         const delta: Delta<string> = { insert: toLoroString(child.text), attributes }
         currentText.applyDelta([{ retain: currentText.length }, delta])
       } else {
@@ -45,6 +50,7 @@ export const initializeLoroRichText = (container: LoroMap, document: TiptapDocum
       }
     })
   }
+
   writeNode(container, document)
 }
 
@@ -53,10 +59,12 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
   const readNode = (map: LoroMap): unknown => {
     const attributes = map.get("attributes")
     const children = map.get("children")
-    if (attributes !== undefined && !(attributes instanceof LoroMap))
+    if (attributes !== undefined && !(attributes instanceof LoroMap)) {
       throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
-    if (children !== undefined && !(children instanceof LoroList))
+    }
+    if (children !== undefined && !(children instanceof LoroList)) {
       throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+    }
     const decodedAttributes =
       attributes instanceof LoroMap
         ? Schema.decodeUnknownSync(JsonAttributes)(Record.fromEntries(attributes.entries()))
@@ -70,8 +78,10 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
         ? {
             content: children.toArray().flatMap((child): unknown[] => {
               if (child instanceof LoroMap) return [readNode(child)]
-              if (!(child instanceof LoroText))
+              if (!(child instanceof LoroText)) {
                 throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+              }
+
               return child.toDelta().map((delta) => {
                 const marks = Record.toEntries(delta.attributes ?? {}).map(([type, attrs]) => ({
                   type,
@@ -79,6 +89,7 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
                     ? { attrs }
                     : {}),
                 }))
+
                 return {
                   type: "text",
                   text: delta.insert,
@@ -90,6 +101,7 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
         : {}),
     }
   }
+
   return Schema.decodeUnknownSync(TiptapDocument)({
     ...Schema.decodeUnknownSync(JsonAttributes)(readNode(container)),
     version: 1,

@@ -36,6 +36,7 @@ const TestLayerWithPublicationsService = Layer.mergeAll(
   PublicationsRepositoryLayer,
   PublicationsServiceLayer,
 )
+
 const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
 const paragraph = (text: string): TiptapNode => ({
@@ -50,7 +51,7 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
+const makeHandle = Schema.decodeUnknownSync(Handle)
 
 const makePublicationCrdtUpdate = (input: {
   nextSourceData: PublicationSourceData
@@ -113,12 +114,14 @@ describe("PublicationsService", () => {
       yield* insertPersonWithDependencies({ person: other, profile: otherProfile })
 
       const now = yield* DateTime.now
+
       const sourceData = makePostSourceData({
         content: makeDocument("Nota do dono"),
         handle: `svc-publication-${owner.id.slice(0, 8)}`,
         ownerProfileId: ownerProfile.id,
         publishedAt: now,
       })
+
       const publicationId = yield* repository.createPublication({
         createdById: owner.id,
         sourceData,
@@ -155,7 +158,7 @@ describe("PublicationsService", () => {
           expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
           publicationId,
         }),
-        makeAccountSession(other.id),
+        makeAccountSession({ personId: other.id }),
       ).pipe(Effect.flip)
 
       expect(result).toBeInstanceOf(UnauthorizedError)
@@ -173,12 +176,14 @@ describe("PublicationsService", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const sourceData = makePostSourceData({
         content: makeDocument("Antes"),
         handle: `service-publication-${person.id.slice(0, 8)}`,
         ownerProfileId: profile.id,
         publishedAt: now,
       })
+
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
         sourceData,
@@ -215,7 +220,7 @@ describe("PublicationsService", () => {
           expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
           publicationId,
         }),
-        makeAccountSession(person.id),
+        makeAccountSession({ personId: person.id }),
       )
 
       const handle = Option.getOrThrow(

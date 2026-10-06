@@ -15,21 +15,25 @@ export const WikiArticlesCreate = Schema.Struct({
   loro_snapshot: Schema.Uint8ArrayFromBase64,
   materialized_view: Schema.Struct({ kind: Schema.String, handle: Schema.String }),
 })
+
 export const WikiArticlesUpdate = Schema.Struct({
   event: Schema.Literal("wiki_articles.update"),
   wiki_article_id: WikiArticleId,
   crdt_update: Schema.Uint8ArrayFromBase64,
   from_frontier: LoroDocFrontier,
 })
+
 export const WikiArticlesDelete = Schema.Struct({
   event: Schema.Literal("wiki_articles.delete"),
   wiki_article_id: WikiArticleId,
 })
+
 export const WikiArticleStreamEvent = Schema.Union([
   WikiArticlesCreate,
   WikiArticlesUpdate,
   WikiArticlesDelete,
 ])
+
 export type WikiArticleStreamEvent = typeof WikiArticleStreamEvent.Type
 export const WikiArticleStreamEventBinary = createEventBinary(WikiArticleStreamEvent)
 
@@ -47,6 +51,7 @@ export const PublicationsCreate = Schema.Struct({
     owner_profile_id: Schema.String,
   }),
 })
+
 export const PublicationsUpdate = Schema.Struct({
   event: Schema.Literal("publications.update"),
   publication_id: Schema.String.pipe(
@@ -85,5 +90,6 @@ export const ProfileStreamEvent = Schema.Union([
   BookmarksWikiArticlesCreate,
   BookmarksWikiArticlesDelete,
 ])
+
 export type ProfileStreamEvent = typeof ProfileStreamEvent.Type
 export const ProfileStreamEventBinary = createEventBinary(ProfileStreamEvent)

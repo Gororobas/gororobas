@@ -88,6 +88,7 @@ const bindIdentity = Effect.fn("MagicLink.bindIdentity")(function* (
 ) {
   const verified = yield* (yield* binding.RequestBinding).verify(input.flowId, input.requestBinding)
   const crypto = yield* EffectCrypto.Crypto
+
   const bytes = yield* crypto
     .digest(
       "SHA-256",
@@ -102,6 +103,7 @@ const bindIdentity = Effect.fn("MagicLink.bindIdentity")(function* (
       ),
     )
     .pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({})))
+
   return Proofs.IdentifierProofBinding.make({
     _tag: "Identifier",
     flowId: input.flowId,
@@ -124,6 +126,7 @@ const magicLinkHandlers = (origin: string) => {
     secret: { _tag: "Token" },
     policy: Proofs.defaultProofPolicy,
   })
+
   const handlers = Layer.mergeAll(
     Begin.credentialHandlerLayer(
       Effect.fn(function* (input) {
@@ -140,6 +143,7 @@ const magicLinkHandlers = (origin: string) => {
           networkKey: caller.networkKey,
         })
         const proofBinding = yield* bindIdentity(input)
+
         const dispatch = yield* (yield* proofs.Proofs)
           .prepareIssue({
             requestId: input.requestId,
@@ -148,6 +152,7 @@ const magicLinkHandlers = (origin: string) => {
             eligible: true,
           })
           .pipe(Effect.flatMap(Proofs.readProofCommit))
+
         yield* dispatch.schedule
         return dispatch.receipt
       }),
@@ -155,6 +160,7 @@ const magicLinkHandlers = (origin: string) => {
     Verify.credentialHandlerLayer(
       Effect.fn(function* (input) {
         const proofBinding = yield* bindIdentity(input)
+
         const result = yield* (yield* proofs.Proofs)
           .prepareAttempt({
             binding: proofBinding,
@@ -162,6 +168,7 @@ const magicLinkHandlers = (origin: string) => {
             credential: input.secret,
           })
           .pipe(Effect.flatMap(Proofs.readProofCommit))
+
         if (result.value._tag === "Rejected") return yield* Proofs.ProofInvalid.make({})
         return {
           value: { continuation: result.value.continuation },
@@ -173,6 +180,7 @@ const magicLinkHandlers = (origin: string) => {
       Effect.fn(function* (input) {
         const proofBinding = yield* bindIdentity(input)
         const verifiedAt = yield* DateTime.now
+
         const consumed = yield* (yield* proofs.Proofs)
           .prepareComplete({
             binding: proofBinding,
@@ -180,6 +188,7 @@ const magicLinkHandlers = (origin: string) => {
             credential: input.credential,
           })
           .pipe(Effect.flatMap(Proofs.readProofCommit))
+
         if (consumed !== "completed") return yield* Proofs.ProofInvalid.make({})
         // Standalone proof completion burns on downstream failure, matching Yielded's
         // email strategy. Provisioning is transactional; a retry needs a fresh link.
@@ -188,6 +197,7 @@ const magicLinkHandlers = (origin: string) => {
         const revision = yield* (yield* Sessions.AuthenticationAuthority).capture(subjectId, [
           authSubjectId,
         ])
+
         const established = yield* (yield* sessions.AuthenticationCompletion)
           .prepare({
             claims: { authSubjectId: authSubjectId },
@@ -211,6 +221,7 @@ const magicLinkHandlers = (origin: string) => {
             Effect.flatMap((commit) => commit.read),
             Effect.mapError(() => Sessions.SessionUnavailable.make({})),
           )
+
         return {
           value: established.value,
           credentialCommands: [
@@ -242,6 +253,7 @@ const magicLinkHandlers = (origin: string) => {
     ),
     Layer.provide(WebCrypto.layerWebCrypto),
   )
+
   return handlers
 }
 

@@ -4,6 +4,7 @@ import { SqlClient } from "effect/sql"
 
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient
+
   yield* sql`-- Create "auth_subjects" table
 CREATE TABLE \`auth_subjects\` (
   \`id\` text NOT NULL,

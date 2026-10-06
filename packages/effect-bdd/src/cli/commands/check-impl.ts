@@ -41,6 +41,7 @@ function readGitignorePatterns(
   return Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem
     const path = yield* Path.Path
+
     const content = yield* Effect.matchEffect(
       fileSystem.readFileString(path.resolve(cwd, ".gitignore")),
       {
@@ -70,12 +71,14 @@ function globFiles(
 ): Effect.Effect<Array<string>, never, FileSystem.FileSystem | Path.Path> {
   return Effect.gen(function* () {
     const gitignorePatterns = yield* readGitignorePatterns(process.cwd())
+
     const allIgnore = EffectArray.dedupe([
       ...ignore,
       ...gitignorePatterns,
       "node_modules",
       "node_modules/**",
     ])
+
     return yield* Effect.tryPromise(() => glob(patterns, { ignore: allIgnore, nodir: true })).pipe(
       Effect.orDie,
     )
@@ -91,6 +94,7 @@ function filterTestFilesWithFeature(
 ): Effect.Effect<Array<string>, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem
+
     const matches = yield* Effect.all(
       files.map((file) =>
         Effect.matchEffect(fileSystem.readFileString(file), {
@@ -100,6 +104,7 @@ function filterTestFilesWithFeature(
       ),
       { concurrency: 150 },
     )
+
     return files.filter((_, index) => matches[index] === true)
   })
 }
@@ -135,7 +140,12 @@ export function runCheck(
       allFeatureFiles.map((featurePath) =>
         Effect.gen(function* () {
           const feature = yield* parseFeatureFile(featurePath)
-          return yield* stepMatcher.checkFeature(feature, discoveredSteps, featurePath)
+
+          return yield* stepMatcher.checkFeature({
+            feature: feature,
+            discoveredSteps: discoveredSteps,
+            featurePath: featurePath,
+          })
         }),
       ),
       { concurrency: "unbounded" },

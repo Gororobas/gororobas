@@ -1,4 +1,5 @@
-import { String as EffectString, Predicate } from "effect"
+import { Effect, Crypto as EffectCrypto, String as EffectString, Predicate } from "effect"
+import { Hex } from "effect/encoding"
 
 /**
  * Limits a string to a certain length for UI or SEO purposes.
@@ -44,3 +45,8 @@ export function strToSearchTokens(str: string): string {
     .filter(EffectString.isNonEmpty)
     .join(" ")
 }
+
+export const hashString = (str: string) =>
+  EffectCrypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(str))).pipe(
+    Effect.map((digest) => Hex.encode(digest).slice(0, 16)),
+  )

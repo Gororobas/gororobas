@@ -1,12 +1,15 @@
-import * as path from "node:path"
+import { NodePath } from "@effect/platform-node"
+import { Effect, Path } from "effect"
 import type { ViteUserConfig } from "vitest/config"
+
+const path = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
 const alias = (name: string) => {
   const target = process.env.TEST_DIST !== undefined ? "dist/dist/esm" : "src"
   const packageRoot = name === "server" ? "apps/server" : path.join("packages", name)
   return {
-    [`${name}/test`]: path.join(__dirname, packageRoot, "test"),
-    [`@gororobas/${name}`]: path.join(__dirname, packageRoot, target),
+    [`${name}/test`]: path.join(import.meta.dirname, packageRoot, "test"),
+    [`@gororobas/${name}`]: path.join(import.meta.dirname, packageRoot, target),
   }
 }
 
@@ -31,7 +34,7 @@ const config: ViteUserConfig = {
     sequence: {
       concurrent: true,
     },
-    setupFiles: [path.join(__dirname, "setup-tests.ts")],
+    setupFiles: [path.join(import.meta.dirname, "setup-tests.ts")],
   },
 }
 

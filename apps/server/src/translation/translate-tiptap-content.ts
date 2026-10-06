@@ -22,7 +22,12 @@ export const translateTiptapContent = Effect.fn("translateTiptapContent")(functi
   const html = tiptapToHtml(content)
 
   const service = yield* TranslationService
-  const translatedHtml = yield* service.translate(html, source, target)
+
+  const translatedHtml = yield* service.translate({
+    text: html,
+    sourceLocale: source,
+    targetLocale: target,
+  })
 
   return {
     content: tiptapFromHtml(translatedHtml),

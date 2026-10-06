@@ -41,9 +41,9 @@ describe("OrganizationsRepository", () => {
     )
 
     it.effect("preserves data through SQL round-trip", () =>
-      assertPropertyEffect(
-        organizationWithProfileArbitrary,
-        ({ organization, profile }) =>
+      assertPropertyEffect({
+        arbitrary: organizationWithProfileArbitrary,
+        predicate: ({ organization, profile }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -54,16 +54,16 @@ describe("OrganizationsRepository", () => {
 
             return deepEquals(Option.getOrThrow(result), organization)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
   describe("updateRow", () => {
     it.effect("applying same update twice produces same result", () =>
-      assertPropertyEffect(
-        organizationWithProfileArbitrary,
-        ({ organization, profile }) =>
+      assertPropertyEffect({
+        arbitrary: organizationWithProfileArbitrary,
+        predicate: ({ organization, profile }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -92,16 +92,16 @@ describe("OrganizationsRepository", () => {
                 }),
             })
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
   describe("deleteRow", () => {
     it.effect("removes organization from database", () =>
-      assertPropertyEffect(
-        organizationWithProfileArbitrary,
-        ({ organization, profile }) =>
+      assertPropertyEffect({
+        arbitrary: organizationWithProfileArbitrary,
+        predicate: ({ organization, profile }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -111,16 +111,16 @@ describe("OrganizationsRepository", () => {
             const result = yield* repo.findById(organization.id)
             return Option.isNone(result)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
   describe("memberships", () => {
     it.effect("insertMembership and findMembership round-trip", () =>
-      assertPropertyEffect(
-        membershipWithDependenciesArbitrary,
-        ({ person, personProfile, organization, organizationProfile, membership }) =>
+      assertPropertyEffect({
+        arbitrary: membershipWithDependenciesArbitrary,
+        predicate: ({ person, personProfile, organization, organizationProfile, membership }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -142,8 +142,8 @@ describe("OrganizationsRepository", () => {
 
             return deepEquals(retrieved, membership)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("findMembership returns None when membership does not exist", () =>
@@ -183,6 +183,7 @@ describe("OrganizationsRepository", () => {
             accessLevel: "MANAGER",
           }),
         )
+
         yield* repo.insertMembership(
           yield* makeMembershipFixture({
             organizationId: organization.id,
@@ -203,9 +204,9 @@ describe("OrganizationsRepository", () => {
     )
 
     it.effect("listMembers returns empty array when no members", () =>
-      assertPropertyEffect(
-        organizationWithProfileArbitrary,
-        ({ organization, profile }) =>
+      assertPropertyEffect({
+        arbitrary: organizationWithProfileArbitrary,
+        predicate: ({ organization, profile }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -214,14 +215,14 @@ describe("OrganizationsRepository", () => {
             const members = yield* repo.listMembers(organization.id)
             return EffectArray.isReadonlyArrayEmpty(members)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("updateMembership modifies access level", () =>
-      assertPropertyEffect(
-        membershipWithDependenciesArbitrary,
-        ({ person, personProfile, organization, organizationProfile, membership }) =>
+      assertPropertyEffect({
+        arbitrary: membershipWithDependenciesArbitrary,
+        predicate: ({ person, personProfile, organization, organizationProfile, membership }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -234,6 +235,7 @@ describe("OrganizationsRepository", () => {
             })
 
             const now = yield* DateTime.now
+
             yield* repo.updateMembership({
               organizationId: organization.id,
               personId: person.id,
@@ -249,14 +251,14 @@ describe("OrganizationsRepository", () => {
             if (Option.isNone(result)) return false
             return Option.getOrThrow(result).accessLevel === "EDITOR"
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("deleteMembership removes the membership", () =>
-      assertPropertyEffect(
-        membershipWithDependenciesArbitrary,
-        ({ person, personProfile, organization, organizationProfile, membership }) =>
+      assertPropertyEffect({
+        arbitrary: membershipWithDependenciesArbitrary,
+        predicate: ({ person, personProfile, organization, organizationProfile, membership }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -279,16 +281,16 @@ describe("OrganizationsRepository", () => {
             })
             return Option.isNone(result)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
   describe("findOrganizationsWhereSoleManager", () => {
     it.effect("returns organizations where person is the only manager", () =>
-      assertPropertyEffect(
-        membershipWithDependenciesArbitrary,
-        ({ person, personProfile, organization, organizationProfile, membership }) =>
+      assertPropertyEffect({
+        arbitrary: membershipWithDependenciesArbitrary,
+        predicate: ({ person, personProfile, organization, organizationProfile, membership }) =>
           Effect.gen(function* () {
             const repo = yield* OrganizationsRepository
 
@@ -302,6 +304,7 @@ describe("OrganizationsRepository", () => {
 
             const result = yield* repo.findOrganizationsWhereSoleManager(person.id)
             const firstResult = result[0]
+
             return (
               result.length === 1 &&
               firstResult !== undefined &&
@@ -309,8 +312,8 @@ describe("OrganizationsRepository", () => {
               firstResult.memberCount === 1
             )
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("returns empty when another manager exists", () =>
@@ -336,6 +339,7 @@ describe("OrganizationsRepository", () => {
             accessLevel: "MANAGER",
           }),
         )
+
         yield* repo.insertMembership(
           yield* makeMembershipFixture({
             organizationId: organization.id,
@@ -391,6 +395,7 @@ describe("OrganizationsRepository", () => {
               withTestLayer(
                 Effect.gen(function* () {
                   const repo = yield* OrganizationsRepository
+
                   yield* repo.updateRow({
                     id: persistedOrganization.id,
                     type: persistedOrganization.type,
@@ -430,6 +435,7 @@ describe("OrganizationsRepository", () => {
                   organization,
                   organizationProfile,
                 })
+
                 return { organizationId: organization.id, personId: person.id }
               }),
             ),
@@ -451,6 +457,7 @@ describe("OrganizationsRepository", () => {
                 Effect.gen(function* () {
                   const repo = yield* OrganizationsRepository
                   const now = yield* DateTime.now
+
                   yield* repo.updateMembership({
                     organizationId: key.organizationId,
                     personId: key.personId,

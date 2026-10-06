@@ -231,9 +231,10 @@
           const figure = element("figure")
           if (item.source === "EXTERNAL_EMBED") {
             const link = element("a", item.caption ?? item.provider)
-            link.href = item.provider === "YOUTUBE"
-              ? `https://www.youtube.com/watch?v=${encodeURIComponent(item.providerData.videoId)}`
-              : `https://open.spotify.com/${item.providerData.resourceType.toLowerCase()}/${encodeURIComponent(item.providerData.resourceId)}`
+            link.href =
+              item.provider === "YOUTUBE"
+                ? `https://www.youtube.com/watch?v=${encodeURIComponent(item.providerData.videoId)}`
+                : `https://open.spotify.com/${item.providerData.resourceType.toLowerCase()}/${encodeURIComponent(item.providerData.resourceId)}`
             figure.append(link)
           } else if (item.format === "IMAGE") {
             const reference = referenceById.get(item.mediaAssetId)

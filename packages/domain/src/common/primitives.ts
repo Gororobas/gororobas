@@ -32,6 +32,7 @@ export const Handle = Schema.Trim.pipe(
   Schema.check(Schema.isPattern(/^[a-z0-9-]+$/)),
   Schema.brand("Handle"),
 )
+
 export type Handle = typeof Handle.Type
 
 /**
@@ -48,6 +49,7 @@ export const Email = Schema.String.pipe(
   ),
   Schema.brand("Email"),
 )
+
 export type Email = typeof Email.Type
 
 export const PaginationOptions = Schema.Struct({
@@ -60,6 +62,7 @@ export const PaginationOptions = Schema.Struct({
     Schema.check(Schema.isGreaterThanOrEqualTo(0)),
   ),
 })
+
 export type PaginationOptions = typeof PaginationOptions.Type
 
 export const IntNonNegative = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))

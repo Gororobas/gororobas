@@ -10,6 +10,7 @@ export const preferArrSortRule = {
     return {
       CallExpression(node) {
         const { callee } = node
+
         if (
           callee.type !== "MemberExpression" ||
           callee.property.type !== "Identifier" ||

@@ -19,16 +19,20 @@ export const WikiMigrationVersion = Schema.Struct({
   changes: Schema.Unknown,
   loroSnapshot: Schema.String,
 })
+
 export type WikiMigrationVersion = typeof WikiMigrationVersion.Type
 
 const json = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
+
 const synchronizeMap = (map: LoroMap, target: Schema.JsonObject) => {
   Schema.decodeUnknownSync(Schema.Array(Schema.String))(map.keys()).forEach((key) => {
     if (!(key in target)) map.delete(key)
   })
   const current = Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json))(map.toJSON())
+
   Record.toEntries(target).forEach(([key, value]) => {
     if (current[key] !== undefined && json(current[key]) === json(value)) return
+
     if (Array.isArray(value)) {
       const list = map.ensureMergeableMovableList(key)
       if (list.length) list.delete(0, list.length)
@@ -53,6 +57,7 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
   document.configDefaultTextStyle({ expand: "after" })
   const results: Array<WikiMigrationVersion> = []
   let previous: unknown = {}
+
   yield* Effect.forEach(
     versions,
     (version) =>
@@ -64,6 +69,7 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
         const translations = yield* Schema.decodeUnknownEffect(
           Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Json)),
         )(encoded.translations)
+
         const values = {
           kind: { value: version.article.kind },
           attributes,
@@ -71,15 +77,19 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
             Record.filter(translation, (_, key) => key !== "content"),
           ),
         }
+
         const from = document.frontiers()
-        if (version.actorId)
+        if (version.actorId) {
           document.setPeerId(BigInt(`0x${version.actorId.replaceAll("-", "").slice(-16)}`))
+        }
+
         document
           .getMap("translations")
           .entries()
           .forEach(([, translation]) => {
             if (translation instanceof LoroMap) translation.delete("content")
           })
+
         yield* Effect.forEach(
           Record.toEntries(values),
           ([key, value]) =>
@@ -91,10 +101,11 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
             }),
           { concurrency: 1 },
         )
+
         // Synthetic migration history replaces rich-text subtrees; live editor
         // updates must retain their container identities through loro-prosemirror.
         Record.toEntries(translations).forEach(([locale, translation]) => {
-          if (translation.content !== null && translation.content !== undefined)
+          if (translation.content !== null && translation.content !== undefined) {
             initializeLoroRichText(
               document
                 .getMap("translations")
@@ -102,7 +113,9 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
                 .ensureMergeableMap("content"),
               Schema.decodeUnknownSync(TiptapDocument)(translation.content),
             )
+          }
         })
+
         document.commit({
           message: version.actorId
             ? json({ _tag: "HumanCommit", personId: version.actorId })
@@ -113,7 +126,9 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
                 model: "none",
               }),
         })
+
         const frontier = document.frontiers()
+
         results.push(
           WikiMigrationVersion.make({
             ...version,
@@ -123,9 +138,11 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
             loroSnapshot: Buffer.from(document.export({ mode: "snapshot" })).toString("base64"),
           }),
         )
+
         previous = encoded
       }),
     { concurrency: 1 },
   )
+
   return results
 })

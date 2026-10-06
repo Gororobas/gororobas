@@ -54,6 +54,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
   const path = yield* Path.Path
   const context = yield* MigrationContext
   const gelClient = yield* GelClient
+
   const vegetableResults = yield* gelClient
     .use((client) => client.query(vegetablesQuery))
     .pipe(
@@ -81,21 +82,25 @@ export const sourceGelVegetables = Effect.gen(function* () {
       .filter((plant) => EffectArray.isReadonlyArrayNonEmpty(plant.friends))
       .map((plant) => [plant.id, plant.friends.map((friend) => friend.id)] as const),
   )
+
   const archiveDirectory = path.join(import.meta.dirname, "..", "..", "archives")
   yield* fs.makeDirectory(archiveDirectory, { recursive: true })
   yield* fs.writeFileString(
     path.join(archiveDirectory, "plant-friendships.json"),
     yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(friendships),
   )
+
   const sources = Record.fromEntries(
     vegetables
       .filter((plant) => EffectArray.isReadonlyArrayNonEmpty(plant.sources))
       .map((plant) => [plant.id, plant.sources] as const),
   )
+
   yield* fs.writeFileString(
     path.join(archiveDirectory, "plant-sources.json"),
     yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(sources),
   )
+
   const historyResults = yield* Effect.all(
     vegetables.map(({ edit_suggestions, ...source }) =>
       reconstructGelVegetableHistory(source, edit_suggestions).pipe(
@@ -120,6 +125,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
                 historyEntry.state.content,
               )
               const content = originalContent ? yield* migrateRichText(originalContent) : null
+
               return VegetableHistoryEntryForMigration.make({
                 ...historyEntry,
                 article: WikiPlantArticle.EditableArticle.make({
@@ -140,9 +146,11 @@ export const sourceGelVegetables = Effect.gen(function* () {
             }),
           { concurrency: 1 },
         )
+
         const id = yield* context
           .resolveId(source.id, "WikiArticle")
           .pipe(Effect.flatMap(Schema.decodeUnknownEffect(WikiArticleId)))
+
         const photoIds = yield* Effect.forEach(
           source.photos,
           (photo) =>
@@ -151,22 +159,26 @@ export const sourceGelVegetables = Effect.gen(function* () {
               .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId))),
           { concurrency: 1 },
         )
+
         const inputs = yield* Effect.forEach(
           historyEntries,
           (entry) =>
             Effect.gen(function* () {
               const edit = Option.getOrNull(entry.edit_suggestion)
               const sourceActorId = edit ? edit.created_by_id : source.created_by_id
+
               const actorId = sourceActorId
                 ? yield* context
                     .resolveId(sourceActorId, "Profile")
                     .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
                 : null
+
               const reviewerId = edit?.reviewed_by_id
                 ? yield* context
                     .resolveId(edit.reviewed_by_id, "Profile")
                     .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
                 : null
+
               return {
                 article: entry.article,
                 sourceEditId: edit?.id ?? null,
@@ -181,7 +193,9 @@ export const sourceGelVegetables = Effect.gen(function* () {
             }),
           { concurrency: 1 },
         )
+
         const versions = yield* buildWikiMigrationHistory(inputs)
+
         const data = VegetableDataForMigration.make({
           id,
           photoIds,
@@ -190,6 +204,7 @@ export const sourceGelVegetables = Effect.gen(function* () {
           edit_suggestions,
           history: historyEntries,
         })
+
         const encoded = yield* Schema.encodeEffect(
           Schema.fromJsonString(VegetableDataForMigration, { space: 2 }),
         )(data)

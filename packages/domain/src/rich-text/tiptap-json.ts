@@ -18,5 +18,6 @@ export const toTiptapJsonContent = (document: TiptapDocument): JSONContent => {
         }),
     ...("content" in node && node.content !== undefined ? { content: node.content.map(copy) } : {}),
   })
+
   return { type: "doc", content: document.content.map(copy) }
 }

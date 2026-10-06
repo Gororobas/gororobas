@@ -73,5 +73,6 @@ export const WikiNoteworthyPersonArticleCrdtOperations = defineKindCrdtOperation
   ...locationOperations,
   ...urlOperations,
 ])
+
 export type WikiNoteworthyPersonArticleAttributeEdit =
   typeof WikiNoteworthyPersonArticleCrdtOperations.AttributeEdit.Type

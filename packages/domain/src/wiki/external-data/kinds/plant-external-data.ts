@@ -42,4 +42,5 @@ export const PlantExternalDataResult = Schema.Struct({
     gbif: Schema.NullOr(Schema.Result(GbifPlantResult, ExternalDataFetchError)),
   }),
 })
+
 export type PlantExternalDataResult = typeof PlantExternalDataResult.Type

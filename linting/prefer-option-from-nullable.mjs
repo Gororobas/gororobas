@@ -13,6 +13,7 @@ export const preferOptionFromNullableRule = {
         if (test.operator !== "!==" && test.operator !== "!=") return
 
         let testedName = null
+
         if (
           test.left.type === "Identifier" &&
           test.right.type === "Literal" &&
@@ -38,22 +39,26 @@ export const preferOptionFromNullableRule = {
         ) {
           testedName = context.getSourceCode().getText(test.right)
         }
+
         if (!testedName) return
 
         // Check if consequent is Option.some(x)
         if (consequent.type !== "CallExpression") return
         const conseqCallee = consequent.callee
+
         const isOptionSome =
           conseqCallee.type === "MemberExpression" &&
           conseqCallee.object.type === "Identifier" &&
           conseqCallee.object.name === "Option" &&
           conseqCallee.property.type === "Identifier" &&
           conseqCallee.property.name === "some"
+
         if (!isOptionSome) return
 
         // Check if alternate is Option.none()
         if (alternate.type !== "CallExpression") return
         const altCallee = alternate.callee
+
         // Handle both Option.none() and Option.none<Type>()
         const isOptionNone =
           (altCallee.type === "MemberExpression" &&
@@ -67,6 +72,7 @@ export const preferOptionFromNullableRule = {
             altCallee.expression.object.name === "Option" &&
             altCallee.expression.property.type === "Identifier" &&
             altCallee.expression.property.name === "none")
+
         if (!isOptionNone) return
 
         context.report({

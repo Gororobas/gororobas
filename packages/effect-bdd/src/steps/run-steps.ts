@@ -24,10 +24,12 @@ function validateSteps(
 
   // Check each step pair
   const minLength = Math.min(steps.length, parsedSteps.length)
+
   steps.slice(0, minLength).forEach((step, index) => {
     const parsedStep = parsedSteps[index]
 
     const matched = matchPattern(step.pattern, parsedStep.text)
+
     if (Option.isNone(matched)) {
       // Try to provide a helpful reason
       let reason = "Pattern does not match step text"
@@ -94,6 +96,7 @@ function runStepsImpl(
     // 2. Validate all step patterns match before running any
     if (EffectArray.isReadonlyArrayNonEmpty(parsedSteps)) {
       const validation = validateSteps(steps, parsedSteps)
+
       if (!validation.valid) {
         return yield* new StepValidationError({
           featureSteps: parsedSteps.map((s) => `[${s.keyword}] ${s.text}`),
@@ -109,9 +112,11 @@ function runStepsImpl(
     // =========================================================================
 
     const initialContext: unknown = bgCtx
+
     return yield* Effect.reduce(
       steps,
       () => initialContext,
+      // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Effect.reduce supplies accumulator, element, and index positionally.
       (ctx, step, index) => {
         const parsedStep = parsedSteps[index]
 
@@ -119,7 +124,11 @@ function runStepsImpl(
           let extractedParams: Record<string, unknown> = {}
 
           if (parsedStep) {
-            const matched = extractParams(step.pattern, parsedStep.text, parsedStep.dataTable)
+            const matched = extractParams({
+              pattern: step.pattern,
+              text: parsedStep.text,
+              dataTable: parsedStep.dataTable,
+            })
 
             // This shouldn't happen after validation, but keep as safety net
             if (Option.isNone(matched)) {
@@ -134,7 +143,13 @@ function runStepsImpl(
           }
 
           const schema = step.config.params ?? Schema.Struct({})
-          const params = yield* decodeParams(schema, extractedParams, step.pattern)
+
+          const params = yield* decodeParams({
+            schema: schema,
+            params: extractedParams,
+            stepText: step.pattern,
+          })
+
           return yield* step.config.handler(ctx, params)
         })
       },

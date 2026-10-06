@@ -30,6 +30,7 @@ export const taggedErrorSuffixRule = {
         if (!isTaggedErrorClass) return
 
         const className = node.id.name
+
         if (className.endsWith("Error") === false) {
           context.report({
             data: { name: className },

@@ -20,6 +20,7 @@ const insertEdition = SqlSchema.void({
   execute: (edition) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
+
       return yield* sql`
         INSERT INTO wiki_book_editions ${sql.insert(edition)}
         ON CONFLICT (wiki_article_id, provider, external_id) DO UPDATE SET title = excluded.title,
@@ -55,6 +56,7 @@ const persistEditions = Effect.fn(function* (
       Effect.gen(function* () {
         const { languages, ...attributes } = edition
         yield* insertEdition({ wikiArticleId, provider: "GOOGLE_BOOKS", ...attributes })
+
         yield* Effect.forEach(
           languages,
           (language) =>

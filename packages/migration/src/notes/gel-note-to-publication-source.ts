@@ -15,10 +15,12 @@ export const gelNoteToPublicationSource = Effect.fn("gelNoteToPublicationSource"
 ) {
   const context = yield* MigrationContext
   const post = yield* gelNoteToPublication(note)
-  if (!note.created_by)
+  if (!note.created_by) {
     return yield* Effect.fail(new MissingNoteOwner({ message: `Note ${note.handle} has no owner` }))
+  }
   const ownerProfileId = yield* context.resolveId(note.created_by.id, "Profile")
   const content = yield* migrateRichText(post.content)
+
   const publication = yield* Schema.decodeUnknownEffect(PostSourceData)({
     metadata: {
       kind: "POST",
@@ -36,6 +38,7 @@ export const gelNoteToPublicationSource = Effect.fn("gelNoteToPublicationSource"
       },
     },
   })
+
   return publication
 })
 
@@ -46,6 +49,7 @@ export const noteMigrationReferences = Effect.fn("noteMigrationReferences")(func
   const id = yield* context
     .resolveId(note.id, "Publication")
     .pipe(Effect.flatMap(Schema.decodeUnknownEffect(PublicationId)))
+
   const tagIds = yield* Effect.forEach(
     note.types,
     (type) =>
@@ -54,6 +58,7 @@ export const noteMigrationReferences = Effect.fn("noteMigrationReferences")(func
       ),
     { concurrency: 1 },
   )
+
   const wikiArticleIds = yield* Effect.forEach(
     note.related_to_vegetables,
     (plant) =>
@@ -62,5 +67,6 @@ export const noteMigrationReferences = Effect.fn("noteMigrationReferences")(func
         .pipe(Effect.flatMap(Schema.decodeUnknownEffect(WikiArticleId))),
     { concurrency: 1 },
   )
+
   return { id, tagIds, wikiArticleIds }
 })

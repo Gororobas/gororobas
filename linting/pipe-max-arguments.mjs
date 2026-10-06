@@ -7,6 +7,7 @@ export const pipeMaxArgumentsRule = {
     return {
       CallExpression(node) {
         const callee = node.callee
+
         // Check for .pipe() method call
         if (
           callee.type === "MemberExpression" &&

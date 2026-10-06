@@ -126,9 +126,9 @@ describe("Wiki rich text and loro-prosemirror", () => {
   it.effect(
     "reads constructed documents with the binding and accepts binding-generated edits",
     () =>
-      assertPropertyEffect(
-        Arbitrary.schema(RichTextInputs),
-        (input) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(RichTextInputs),
+        predicate: (input) =>
           Effect.gen(function* () {
             const content = makeContent(input)
             const created = yield* createWikiArticleCrdtDocument(makeArticle(content))
@@ -136,6 +136,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
             const root = getContent(document)
             // oxlint-disable-next-line effect/avoid-native-object-helpers -- The binding requires its mutable native Map cache.
             const node = createNodeFromLoroObj(editorSchema, root, new Map())
+
             expect(node.toJSON()).toEqual(
               editorSchema
                 .nodeFromJSON(
@@ -143,6 +144,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
                 )
                 .toJSON(),
             )
+
             const state = EditorState.create({ doc: node })
             const edited = state.apply(state.tr.insertText("Edited ", 1))
             // oxlint-disable-next-line effect/casting-awareness, effect/avoid-native-object-helpers -- The binding requires a native Map; containerId selects our nested editor root instead of its default doc root.
@@ -156,8 +158,8 @@ describe("Wiki rich text and loro-prosemirror", () => {
             expect(editorSchema.nodeFromJSON(projected).toJSON()).toEqual(edited.doc.toJSON())
             return true
           }),
-        { runs: 100, seed: 20261002 },
-      ),
+        options: { runs: 100, seed: 20261002 },
+      }),
   )
 
   it.effect("preserves concurrent text insertions and marks through approval", () =>
@@ -166,6 +168,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
       const created = yield* createWikiArticleCrdtDocument(makeArticle(content))
       const first = snapshotToLoroDoc(created.crdtSnapshot)
       const second = first.fork()
+
       const findText = (document: LoroDoc) => {
         const children = getContent(document).get("children")
         const heading = children.get(0)
@@ -176,12 +179,14 @@ describe("Wiki rich text and loro-prosemirror", () => {
         assert(text instanceof LoroText)
         return text
       }
+
       const firstText = findText(first)
       const secondText = findText(second)
       first.configTextStyle({ bold: { expand: "after" } })
       firstText.mark({ start: 0, end: 5 }, "bold", {})
       secondText.insert(5, "!")
       first.import(loroDocToUpdate(second))
+
       const committed = yield* applyWikiArticleCrdtUpdateWithCommit({
         snapshot: created.crdtSnapshot,
         crdtUpdate: loroDocToUpdate(first),
@@ -192,6 +197,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
           model: "none",
         }),
       })
+
       const accepted = snapshotToLoroDoc(committed.nextSnapshot)
       expect(findText(accepted).toString()).toBe("Hello!")
       expect(findText(accepted).toDelta()).toEqual(findText(first).toDelta())

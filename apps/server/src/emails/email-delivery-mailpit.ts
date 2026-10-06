@@ -12,6 +12,7 @@ export const EmailDeliveryMailpit = Layer.effect(
       Config.withDefault("auth@gororobas.local"),
     )
     const http = yield* HttpClient.HttpClient
+
     return EmailDelivery.EmailDelivery.of({
       send: Effect.fn(
         function* (message) {
@@ -33,8 +34,9 @@ export const EmailDeliveryMailpit = Layer.effect(
 
           if (response.status >= 200 && response.status < 300) return
 
-          if ([400, 401, 403, 404, 413, 422].includes(response.status))
+          if ([400, 401, 403, 404, 413, 422].includes(response.status)) {
             return yield* EmailDelivery.EmailNotAccepted.make({})
+          }
 
           return yield* EmailDelivery.EmailAcceptanceUnknown.make({})
         },

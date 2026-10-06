@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config"
 
 export default defineConfig({
   test: {
-    projects: ["packages/*", "linting", "!repos/**"],
+    name: "linting",
+    include: ["**/*.test.mjs"],
   },
 })

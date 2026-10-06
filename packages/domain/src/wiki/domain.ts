@@ -32,6 +32,7 @@ export const CreateWikiArticleInput = Schema.Struct({
   createdById: PersonId,
   status: WikiArticleStatus,
 })
+
 export type CreateWikiArticleInput = typeof CreateWikiArticleInput.Type
 
 export const CreateWikiArticleRevisionPayload = Schema.Struct({ crdtUpdate: LoroDocUpdate })
@@ -42,6 +43,7 @@ export const CreateWikiArticleRevisionInput = Schema.Struct({
   createdById: PersonId,
   wikiArticleId: WikiArticleId,
 })
+
 export type CreateWikiArticleRevisionInput = typeof CreateWikiArticleRevisionInput.Type
 
 export const EvaluateWikiArticleRevisionInput = Schema.Struct({
@@ -50,6 +52,7 @@ export const EvaluateWikiArticleRevisionInput = Schema.Struct({
   evaluationReason: Schema.optional(Schema.String),
   revisionId: WikiArticleRevisionId,
 })
+
 export type EvaluateWikiArticleRevisionInput = typeof EvaluateWikiArticleRevisionInput.Type
 
 export const WikiArticleRevisionUpdateRow = WikiArticleRevisionRow.mapFields(

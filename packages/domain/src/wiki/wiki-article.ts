@@ -30,6 +30,7 @@ export const WikiArticleEditableData = Schema.Union([
   WikiToolArticle.EditableArticle,
   WikiUncategorizedArticle.EditableArticle,
 ]).pipe(Schema.toTaggedUnion("kind"))
+
 export type WikiArticleEditableData = typeof WikiArticleEditableData.Type
 
 export const WikiArticleKind = Schema.Literals(
@@ -44,6 +45,7 @@ export const WikiArticleCrdtRow = Schema.Struct({
   status: WikiArticleStatus,
   crdtSnapshot: LoroDocSnapshot,
 })
+
 export type WikiArticleCrdtRow = typeof WikiArticleCrdtRow.Type
 
 /** A submitted change that has not necessarily changed the canonical article. */
@@ -59,6 +61,7 @@ export const WikiArticleRevisionRow = Schema.Struct({
   evaluatedById: OptionalColumn(PersonId),
   evaluatedAt: OptionalColumn(TimestampColumn),
 })
+
 export type WikiArticleRevisionRow = typeof WikiArticleRevisionRow.Type
 
 /** The main queryable article record.*/
@@ -74,6 +77,7 @@ export const WikiArticleMaterializedRow = Schema.Union([
   WikiToolArticle.MaterializedRow,
   WikiUncategorizedArticle.MaterializedRow,
 ]).pipe(Schema.toTaggedUnion("kind"))
+
 export type WikiArticleMaterializedRow = typeof WikiArticleMaterializedRow.Type
 
 /** Stable generated route handles, uniquely owned within an article kind. */
@@ -83,6 +87,7 @@ export const WikiArticleHandleMaterializedRow = Schema.Struct({
   handle: Handle,
   locale: Locale,
 })
+
 export type WikiArticleHandleMaterializedRow = typeof WikiArticleHandleMaterializedRow.Type
 
 export const WikiArticleTranslationMaterializedRow = Schema.Union([
@@ -97,6 +102,7 @@ export const WikiArticleTranslationMaterializedRow = Schema.Union([
   WikiToolArticle.TranslationMaterializedRow,
   WikiUncategorizedArticle.TranslationMaterializedRow,
 ]).pipe(Schema.toTaggedUnion("kind"))
+
 export type WikiArticleTranslationMaterializedRow =
   typeof WikiArticleTranslationMaterializedRow.Type
 
@@ -113,6 +119,7 @@ export const WikiArticleQueriedPageData = Schema.Union([
   WikiToolArticle.QueriedPageData,
   WikiUncategorizedArticle.QueriedPageData,
 ]).pipe(Schema.toTaggedUnion("kind"))
+
 export type WikiArticleQueriedPageData = typeof WikiArticleQueriedPageData.Type
 
 export const WikiArticleQueriedCardData = Schema.Struct({
@@ -122,6 +129,7 @@ export const WikiArticleQueriedCardData = Schema.Struct({
   commonNames: WikiArticleEditableTranslation.fields.commonNames,
   locale: Locale,
 })
+
 export type WikiArticleQueriedCardData = typeof WikiArticleQueriedCardData.Type
 
 export const editableToMaterializedArticle = (
@@ -194,11 +202,15 @@ export const editableToMaterializedArticle = (
   )
 }
 
-export const editableToMaterializedTranslation = (
-  article: WikiArticleEditableData,
-  locale: Locale,
-  wikiArticleId: WikiArticleId,
-): Option.Option<WikiArticleTranslationMaterializedRow> => {
+export const editableToMaterializedTranslation = ({
+  article,
+  locale,
+  wikiArticleId,
+}: {
+  article: WikiArticleEditableData
+  locale: Locale
+  wikiArticleId: WikiArticleId
+}): Option.Option<WikiArticleTranslationMaterializedRow> => {
   const translation = article.translations[locale]
 
   if (!translation) return Option.none()

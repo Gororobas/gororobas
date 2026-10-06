@@ -19,6 +19,7 @@ export const authenticationLayer = (options: {
   readonly requestBindingKey: Redacted.Redacted<string>
 }) => {
   const { http } = makeAuthentication(options.origin)
+
   const dependencies = Layer.mergeAll(
     AuthStorageLive,
     options.oauthProtocol ?? oauthProtocolLayer(options.origin),
@@ -32,6 +33,7 @@ export const authenticationLayer = (options: {
       },
     }),
   )
+
   return Layer.mergeAll(
     http.routes(),
     magicLinkPageRoutes,

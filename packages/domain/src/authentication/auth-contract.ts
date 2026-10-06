@@ -38,6 +38,7 @@ export const OAuthBeginPayload = Schema.Struct({
   flowId: Operations.RequestBindingFlowId,
   provider: OAuthProvider,
 })
+
 export const OAuthCompletePayload = Schema.Struct({
   flowId: Operations.RequestBindingFlowId,
   provider: OAuthProvider,
@@ -46,6 +47,7 @@ export const OAuthCompletePayload = Schema.Struct({
     Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096)),
   ),
 })
+
 export class OAuthLoginRejected extends Schema.TaggedError<OAuthLoginRejected>()(
   "OAuthLoginRejected",
   {
@@ -57,6 +59,7 @@ export class OAuthLoginRejected extends Schema.TaggedError<OAuthLoginRejected>()
     ]),
   },
 ) {}
+
 export const OAuthLoginFailure = Schema.Union([OAuthLoginRejected, MagicLinkFailure])
 
 export const AuthenticationApi = AuthContract.make(authenticationNamespace, {

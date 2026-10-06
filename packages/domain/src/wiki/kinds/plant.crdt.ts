@@ -130,12 +130,14 @@ const originOperations = makeOptionalTranslatedScalarEditOperations("PlantOrigin
   // @todo I believe this can go into `makeOptionalTranslatedScalarEditOperations`, I don't see a reason to repeat this on every operation
   getParentContainer: (document, locale) =>
     Effect.gen(function* () {
-      if (document.getMap("kind").get("value") !== "PLANT")
+      if (document.getMap("kind").get("value") !== "PLANT") {
         return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+      }
 
       const translation = document.getMap("translations").get(locale)
-      if (!(translation instanceof LoroMap))
+      if (!(translation instanceof LoroMap)) {
         return yield* new CrdtContainerNotFoundError({ path: ["translations", locale] })
+      }
 
       return translation
     }),
@@ -160,4 +162,5 @@ export const WikiPlantArticleCrdtOperations = defineKindCrdtOperations([
   ...temperatureMinOperations,
   ...wikidataIdOperations,
 ])
+
 export type WikiPlantArticleAttributeEdit = typeof WikiPlantArticleCrdtOperations.AttributeEdit.Type

@@ -36,6 +36,7 @@ export const EntityReference = Node.create({
     Schema.decodeUnknownSync(EntityReferenceAttributes)(node.attrs).labelAtInsertion,
   renderHTML: ({ node }) => {
     const attributes = Schema.decodeUnknownSync(EntityReferenceAttributes)(node.attrs)
+
     return [
       "span",
       { "data-entity-reference": Schema.encodeSync(AttributesJson)(attributes) },
@@ -49,6 +50,7 @@ export const linkedEntitiesFromTiptapDocument = (
 ): ReadonlyArray<EntityReferenceTarget> => {
   const entities: EntityReferenceTarget[] = []
   const seen = new Set<string>()
+
   const visit = (node: TiptapNode): void => {
     if (node.type === "entityReference") {
       const { referenceId, referenceType } = node.attrs
@@ -58,8 +60,10 @@ export const linkedEntitiesFromTiptapDocument = (
         entities.push(Schema.decodeUnknownSync(EntityReferenceTarget)(node.attrs))
       }
     }
+
     if ("content" in node) node.content?.forEach(visit)
   }
+
   document.content.forEach(visit)
   return entities
 }

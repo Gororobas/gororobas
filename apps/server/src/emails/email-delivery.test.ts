@@ -33,6 +33,7 @@ test.each([
     requests.push(new Request(input, init))
     return new Response(null, { status })
   }
+
   const result = await Effect.runPromise(
     Effect.gen(function* () {
       const delivery = yield* EmailDelivery.EmailDelivery
@@ -51,6 +52,7 @@ test.each([
       Effect.provideService(FetchHttpClient.Fetch, transport),
     ),
   )
+
   const request = requests[0]
   expect(requests).toHaveLength(1)
   if (request === undefined) throw new Error("missing email request")
@@ -59,6 +61,7 @@ test.each([
   expect(request.headers.get("authorization")).toBe("Bearer test-api-key")
   expect(request.redirect).toBe("error")
   expect(request.credentials).toBe("omit")
+
   expect(await request.json()).toEqual({
     from: "Gororobas <auth@example.com>",
     to: ["recipient@example.com"],
@@ -66,6 +69,7 @@ test.each([
     text: Redacted.value(message.text),
     html: "<p>private link</p>",
   })
+
   expect(result._tag).toBe(errorTag === undefined ? "Success" : "Failure")
   expect(result._tag === "Failure" ? result.failure._tag : undefined).toBe(errorTag)
 })
@@ -81,6 +85,7 @@ test.each([
 ])("auth delivery selection validates configuration: %j", async (values) => {
   const shouldStart =
     values.NODE_ENV !== "production" || Boolean(values.RESEND_API_KEY && values.AUTH_EMAIL_FROM)
+
   const exit = await Effect.runPromiseExit(
     Layer.build(
       AuthenticationLive.pipe(
@@ -97,5 +102,6 @@ test.each([
       ),
     ).pipe(Effect.scoped),
   )
+
   expect(Exit.isSuccess(exit)).toBe(shouldStart)
 })

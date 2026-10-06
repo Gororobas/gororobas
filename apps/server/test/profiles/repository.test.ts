@@ -27,9 +27,9 @@ class IntentionalFailure extends Schema.TaggedError<IntentionalFailure>()(
 describe("ProfilesRepository", () => {
   describe("findByHandle", () => {
     it.effect("returns profile when exists and preserves schema", () =>
-      assertPropertyEffect(
-        profileRowArbitrary,
-        (profile) =>
+      assertPropertyEffect({
+        arbitrary: profileRowArbitrary,
+        predicate: (profile) =>
           Effect.gen(function* () {
             const repo = yield* ProfilesRepository
 
@@ -44,8 +44,8 @@ describe("ProfilesRepository", () => {
 
             return deepEquals(retrieved, decoded)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("returns None when profile does not exist", () =>
@@ -60,9 +60,9 @@ describe("ProfilesRepository", () => {
 
   describe("Property 9: Handle Uniqueness Invariant", () => {
     it.effect("isHandleInUse returns true for existing handle", () =>
-      assertPropertyEffect(
-        profileRowArbitrary,
-        (profile) =>
+      assertPropertyEffect({
+        arbitrary: profileRowArbitrary,
+        predicate: (profile) =>
           Effect.gen(function* () {
             const repo = yield* ProfilesRepository
 
@@ -73,14 +73,14 @@ describe("ProfilesRepository", () => {
             const inUse = yield* repo.isHandleInUse(profile.handle)
             return inUse === true
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("isHandleInUse returns false for non-existent handle", () =>
-      assertPropertyEffect(
-        Arbitrary.schema(Handle),
-        (handle: Handle) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(Handle),
+        predicate: (handle: Handle) =>
           Effect.gen(function* () {
             const repo = yield* ProfilesRepository
 
@@ -88,8 +88,8 @@ describe("ProfilesRepository", () => {
             const inUse = yield* repo.isHandleInUse(handle)
             return inUse === false
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
@@ -104,6 +104,7 @@ describe("ProfilesRepository", () => {
         // Action: Update profile
         const newName = "Updated Name"
         const now = yield* DateTime.now
+
         yield* repo.updateProfileRow({
           id: profile.id,
           name: newName,
@@ -120,14 +121,15 @@ describe("ProfilesRepository", () => {
 
   describe("Property 5: Repository Update Idempotence", () => {
     it.effect("applying same update twice produces same result", () =>
-      assertPropertyEffect(
-        personProfileRowArbitrary,
-        (profile) =>
+      assertPropertyEffect({
+        arbitrary: personProfileRowArbitrary,
+        predicate: (profile) =>
           Effect.gen(function* () {
             const repo = yield* ProfilesRepository
             yield* repo.insertProfile(profile)
 
             const now = yield* DateTime.now
+
             const updateData = {
               id: profile.id,
               name: "Idempotent Name",
@@ -152,8 +154,8 @@ describe("ProfilesRepository", () => {
                 }),
             })
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
@@ -161,6 +163,7 @@ describe("ProfilesRepository", () => {
     it.effect("transaction rolls back all changes on failure", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
+
         const scenario = yield* runTransactionScenario({
           setup: Effect.gen(function* () {
             const profile = yield* makeProfileFixture({ name: "Original Name" })
@@ -171,6 +174,7 @@ describe("ProfilesRepository", () => {
           transaction: (profile) =>
             Effect.gen(function* () {
               const now = yield* DateTime.now
+
               yield* repo.updateProfileRow({
                 id: profile.id,
                 name: "Updated Name",
@@ -198,6 +202,7 @@ describe("ProfilesRepository", () => {
     it.effect("transaction commits all changes on success", () =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
+
         const scenario = yield* runTransactionScenario({
           setup: Effect.gen(function* () {
             const profile = yield* makeProfileFixture({ name: "Original Name" })
@@ -208,6 +213,7 @@ describe("ProfilesRepository", () => {
           transaction: (profile) =>
             Effect.gen(function* () {
               const now = yield* DateTime.now
+
               yield* repo.updateProfileRow({
                 id: profile.id,
                 name: "First Update",

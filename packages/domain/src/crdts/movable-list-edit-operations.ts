@@ -56,6 +56,7 @@ export const makeMovableListEditOperations =
           const encodedValue = yield* Schema.encodeEffect(Schema.toCodecJson(ValueSchema))(
             payload.value,
           )
+
           container.push(
             ItemInCrdtList.make({
               id: createCrdtListItemId(),

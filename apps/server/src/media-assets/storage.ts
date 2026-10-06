@@ -7,11 +7,13 @@ export class MediaAssetsStorage extends Context.Service<MediaAssetsStorage>()(
     make: Effect.gen(function* () {
       const filesystem = yield* FileSystem.FileSystem
       const path = yield* Path.Path
+
       const root = path.resolve(
         yield* Config.String("MEDIA_ASSETS_DIRECTORY").pipe(
           Config.withDefault("data/media-assets"),
         ),
       )
+
       yield* filesystem.makeDirectory(root, { recursive: true })
 
       const storageError = (cause: unknown) => new MediaAssetStorageError({ cause })
@@ -29,6 +31,7 @@ export class MediaAssetsStorage extends Context.Service<MediaAssetsStorage>()(
             (directory) =>
               filesystem.remove(directory, { recursive: true, force: true }).pipe(Effect.orDie),
           )
+
           const filename = path.join(directory, "original")
           yield* typeof input.file === "string"
             ? filesystem.copyFile(input.file, filename)

@@ -27,12 +27,14 @@ it.effect(
           )
         const source = { id: "gel-tag", name: "original" }
         const mappedId = "019a0dce-1fc0-7abc-8abc-123456789abc"
+
         yield* Effect.gen(function* () {
           const context = yield* MigrationContext
           const operation = yield* context.planMigrationOp(source, "Tag")
           assert(operation.op === "create")
           yield* operation.execute(() => Effect.succeed(mappedId))
         }).pipe(Effect.provide(layer()))
+
         yield* Effect.gen(function* () {
           const context = yield* MigrationContext
           expect(yield* context.resolveId(source.id, "Tag")).toBe(mappedId)

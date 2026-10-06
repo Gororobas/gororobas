@@ -21,6 +21,7 @@ export const largeTiptapDocument = (paragraphCount: number) => {
       { type: "text" as const, text: "Growing together." },
     ],
   }))
+
   return {
     type: "doc" as const,
     version: 1 as const,

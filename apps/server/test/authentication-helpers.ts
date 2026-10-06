@@ -16,12 +16,14 @@ export const AuthenticationTestInfrastructure = TestLayer.pipe(
 
 export const captureEmailDelivery = () => {
   const deliveries: EmailDelivery.EmailMessage[] = []
+
   const layer = Layer.succeed(EmailDelivery.EmailDelivery, {
     send: (message) =>
       Effect.sync(() => {
         deliveries.push(message)
       }),
   })
+
   return { deliveries, layer }
 }
 
@@ -34,12 +36,18 @@ const envelope = Schema.Union([
 export const makeAuthenticationTestBrowser = (handler: (request: Request) => Promise<Response>) => {
   const cookies = new Map<string, string>()
   const cookieHeader = () => [...cookies].map(([key, value]) => `${key}=${value}`).join("; ")
-  const fetchRoute = async (
-    path: string,
+
+  const fetchRoute = async ({
+    path,
     method = "GET",
-    body?: unknown,
-    customHeaders?: Record<string, string>,
-  ) => {
+    body,
+    customHeaders,
+  }: {
+    path: string
+    method?: string | undefined
+    body?: unknown
+    customHeaders?: Record<string, string> | undefined
+  }) => {
     const response = await handler(
       new Request(`${authenticationTestOrigin}${path}`, {
         method,
@@ -53,6 +61,7 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
     )
+
     for (const header of response.headers.getSetCookie()) {
       const pair = header.split(";")[0]
       if (pair === undefined) continue
@@ -64,8 +73,10 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
       expect(header).toMatch(/HttpOnly/i)
       expect(header).toMatch(/Secure/i)
     }
+
     return response
   }
+
   const call = async <S extends Schema.ConstraintDecoder<unknown, never>>(
     action: {
       readonly route: {
@@ -76,16 +87,18 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
     },
     payload?: unknown,
   ) => {
-    const response = await fetchRoute(
-      action.route.path,
-      action.route.method,
-      action.route.method === "GET" ? undefined : payload === undefined ? {} : { payload },
-    )
+    const response = await fetchRoute({
+      path: action.route.path,
+      method: action.route.method,
+      body: action.route.method === "GET" ? undefined : payload === undefined ? {} : { payload },
+    })
+
     const result = Schema.decodeUnknownSync(envelope)(await response.json())
     expect(response.status).toBe(200)
     if (result._tag !== "Success") throw new Error(`${action.route.path} failed`)
     return Schema.decodeUnknownSync(action.route.operation.rpc.successSchema)(result.value)
   }
+
   return { fetchRoute, call, cookieHeader }
 }
 

@@ -1,4 +1,4 @@
-import { NodeHttpServer, NodeServices } from "@effect/platform-node"
+import { NodePath, NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { it } from "@effect/vitest"
 import {
   MediaAssetId,
@@ -7,10 +7,9 @@ import {
   WikiPlantArticle,
 } from "@gororobas/domain"
 import { makeAppSqlClient } from "@gororobas/server/sql"
-import { Effect, FileSystem, Layer, Option, Schema } from "effect"
+import { Effect, FileSystem, Layer, Option, Schema, Path } from "effect"
 import { HttpClient, HttpRouter } from "effect/http"
 import { SqlClient } from "effect/sql"
-import { join } from "node:path"
 import { expect } from "vitest"
 
 import { importPreview } from "./import-preview.js"
@@ -20,7 +19,10 @@ import { makePreviewRoutes } from "./preview-server.js"
 import { gelVegetableNamesToCrdtList } from "./vegetables/gel-vegetable-to-wiki-plant-article.js"
 import { WikiMigrationVersion, buildWikiMigrationHistory } from "./wiki-migration-history.js"
 
+const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
+
 const articleId = WikiArticleId.make("01900000-0000-7000-8000-000000000001")
+
 const article = (origin: string) =>
   WikiPlantArticle.EditableArticle.make({
     kind: "PLANT",
@@ -34,12 +36,15 @@ const article = (origin: string) =>
       },
     },
   })
+
 const fixture = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const directory = yield* fs.makeTempDirectoryScoped()
-  for (const folder of [...Object.values(previewCollections), "references"])
+  for (const folder of [...Object.values(previewCollections), "references"]) {
     yield* fs.makeDirectory(join(directory, folder))
+  }
   yield* fs.writeFileString(join(directory, "references/index.json"), "[]")
+
   const versions = yield* buildWikiMigrationHistory(
     ["First origin", "Second origin", "First origin"].map((origin) => ({
       article: article(origin),
@@ -49,6 +54,7 @@ const fixture = Effect.gen(function* () {
       sourceEditId: null,
     })),
   )
+
   yield* fs.writeFileString(
     join(directory, "vegetables/test.json"),
     yield* Schema.encodeEffect(
@@ -67,6 +73,7 @@ const fixture = Effect.gen(function* () {
       photoIds: [],
     }),
   )
+
   return directory
 })
 
@@ -87,10 +94,12 @@ it.effect(
         version.article = null
       })
       yield* fs.writeFileString(join(report.directory, "converted.json"), JSON.stringify(converted))
+
       yield* Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         expect(yield* sql`PRAGMA foreign_key_check`).toEqual([])
         const dataset = yield* readPreviewDataset(report.directory)
+
         const plants = Schema.decodeUnknownSync(
           Schema.Array(
             Schema.Struct({
@@ -99,6 +108,7 @@ it.effect(
             }),
           ),
         )(dataset.plants)
+
         expect(
           plants[0].versions.map((version) =>
             version.article.kind === "PLANT" ? version.article.translations.pt?.origin : null,
@@ -108,6 +118,7 @@ it.effect(
           Option.some("Second origin"),
           Option.some("First origin"),
         ])
+
         expect(plants[0].article).toEqual(plants[0].versions.at(-1)?.article)
         yield* makePreviewRoutes(report.directory).pipe(HttpRouter.serve, Layer.build)
         expect((yield* HttpClient.get("/exports.json")).status).toBe(200)

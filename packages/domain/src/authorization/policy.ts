@@ -38,8 +38,9 @@ export const policy = <A, R = never>(
     const effectOrResult = predicate(session)
     const result = Result.isResult(effectOrResult) ? effectOrResult : yield* effectOrResult
 
-    if (Result.isFailure(result))
+    if (Result.isFailure(result)) {
       return yield* new UnauthorizedError({ message: result.failure, session })
+    }
 
     return result.success
   }).pipe(
@@ -50,7 +51,7 @@ export const policy = <A, R = never>(
   )
 
 /** Helper to make policies' positive results explicit */
-export const allow = <A = void>(value: A) => Result.succeed(value)
+export const allow = Result.succeed
 
 /** Helper to make policies' negative results explicit */
 export const deny = (message: string = "Denied") => Result.fail(message)

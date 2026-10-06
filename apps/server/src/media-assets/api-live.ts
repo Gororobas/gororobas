@@ -25,6 +25,7 @@ export const MediaAssetsApiLive = HttpApiBuilder.group(GororobasApi, "mediaAsset
       Effect.gen(function* () {
         yield* Policies.media.canCreate
         const parts = yield* Multipart.toPersisted(payload)
+
         const { file } = yield* Schema.decodeUnknownEffect(
           Schema.Struct({ file: Multipart.SingleFileSchema }),
         )(parts).pipe(
@@ -32,7 +33,9 @@ export const MediaAssetsApiLive = HttpApiBuilder.group(GororobasApi, "mediaAsset
             () => new InvalidMediaAssetError({ message: "Expected exactly one file field" }),
           ),
         )
+
         const service = yield* MediaAssetsService
+
         return yield* service.upload({
           file: file.path,
           contentType: file.contentType,

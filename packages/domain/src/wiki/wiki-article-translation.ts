@@ -10,6 +10,7 @@ export const WikiArticleEditableTranslation = Schema.Struct({
   content: OptionalColumn(TiptapDocument),
   grammaticalGender: OptionalColumn(GrammaticalGender),
 })
+
 export type WikiArticleEditableTranslation = typeof WikiArticleEditableTranslation.Type
 
 export const WikiArticleEditableTranslations = Schema.Struct({
@@ -17,6 +18,7 @@ export const WikiArticleEditableTranslations = Schema.Struct({
   es: Schema.optional(WikiArticleEditableTranslation),
   pt: Schema.optional(WikiArticleEditableTranslation),
 })
+
 export type WikiArticleEditableTranslations = typeof WikiArticleEditableTranslations.Type
 
 /** Per-locale materialization of contributor-editable names and content. */

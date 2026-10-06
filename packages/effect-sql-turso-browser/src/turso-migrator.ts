@@ -5,7 +5,7 @@ import type { SqlError } from "effect/sql/SqlError"
 
 export * from "effect/sql/Migrator"
 
-export const run = <R>(options: Migrator.MigratorOptions<R>) => Migrator.make({})(options)
+export const run = Migrator.make({})
 
 export const layer = <R>(
   options: Migrator.MigratorOptions<R>,

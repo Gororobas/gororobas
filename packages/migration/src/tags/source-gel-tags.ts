@@ -18,6 +18,7 @@ export const sourceGelTags = Effect.gen(function* () {
   const context = yield* MigrationContext
   const idGen = yield* IdGen
   const gelClient = yield* GelClient
+
   const tagResults = yield* gelClient
     .use((client) => client.query(tagsQuery))
     .pipe(
@@ -52,12 +53,14 @@ export const sourceGelTags = Effect.gen(function* () {
     (tag) =>
       Effect.gen(function* () {
         const operation = yield* context.planMigrationOp(tag, "Tag")
-        if (operation.op === "create")
+        if (operation.op === "create") {
           yield* operation.execute(() => Effect.sync(() => idGen.generate()))
+        }
         if (operation.op === "update") yield* operation.execute(() => Effect.void)
         const id = yield* context
           .resolveId(tag.id, "Tag")
           .pipe(Effect.flatMap(Schema.decodeUnknownEffect(TagId)))
+
         yield* Schema.encodeEffect(Schema.fromJsonString(TagDataForMigration, { space: 2 }))({
           latest_source: tag,
           id,

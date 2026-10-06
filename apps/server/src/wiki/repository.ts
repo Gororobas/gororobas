@@ -62,11 +62,15 @@ import {
  * ...
  * - `first-name-adbe4fa1ad35`
  **/
-const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(function* (
-  names: ReadonlyArray<NameInCrdtList>,
-  kind: WikiArticleKind,
-  id: WikiArticleId,
-) {
+const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(function* ({
+  names,
+  kind,
+  id,
+}: {
+  names: ReadonlyArray<NameInCrdtList>
+  kind: WikiArticleKind
+  id: WikiArticleId
+}) {
   const results = yield* Effect.all(
     names.map((_, index) =>
       stringToHandle(
@@ -82,6 +86,7 @@ const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(f
       mode: "result",
     },
   )
+
   const plainTextCandidates = EffectArray.dedupe(EffectArray.getSuccesses(results))
 
   const idSuffix = EffectArray.last(id.split("-"))
@@ -95,6 +100,7 @@ const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(f
     plainTextCandidates.map((candidate) => stringToHandle(`${candidate}-${idSuffix.value}`)),
     { concurrency: "unbounded", mode: "result" },
   )
+
   return [
     ...plainTextCandidates,
     ...EffectArray.getSuccesses(fallbackWithKind),
@@ -108,11 +114,12 @@ const chooseAvailableHandle = (input: {
   wikiArticleId: WikiArticleId
 }) =>
   Effect.gen(function* () {
-    const preferredCandidates = yield* getPreferredHandleCandidates(
-      input.names,
-      input.kind,
-      input.wikiArticleId,
-    )
+    const preferredCandidates = yield* getPreferredHandleCandidates({
+      names: input.names,
+      kind: input.kind,
+      id: input.wikiArticleId,
+    })
+
     const available = yield* Effect.findFirst(preferredCandidates, (handle) =>
       findHandleOwner({ handle, kind: input.kind }).pipe(
         Effect.map(
@@ -123,6 +130,7 @@ const chooseAvailableHandle = (input: {
         ),
       ),
     )
+
     const fallback = yield* stringToHandle(input.wikiArticleId)
 
     return Option.getOrElse(available, () => fallback)
@@ -133,6 +141,7 @@ const materializeTranslations = Effect.fn("materializeTranslations")(function* (
   wikiArticleId: WikiArticleId
 }) {
   const sql = yield* SqlClient.SqlClient
+
   return yield* materializeJunctionTable({
     deleteRows: sql`
       DELETE FROM wiki_article_translations WHERE wiki_article_id = ${input.wikiArticleId}
@@ -140,7 +149,11 @@ const materializeTranslations = Effect.fn("materializeTranslations")(function* (
     insertRows: insertTranslationRows(
       Locale.literals.flatMap((locale) =>
         Option.toArray(
-          editableToMaterializedTranslation(input.sourceData, locale, input.wikiArticleId),
+          editableToMaterializedTranslation({
+            article: input.sourceData,
+            locale: locale,
+            wikiArticleId: input.wikiArticleId,
+          }),
         ),
       ),
     ),
@@ -176,6 +189,7 @@ const materializeHandles = Effect.fn("materializeHandles")(function* (input: {
           names: translation.commonNames,
           wikiArticleId: input.wikiArticleId,
         })
+
         return Result.succeed(
           WikiArticleHandleMaterializedRow.make({
             locale,
@@ -222,6 +236,7 @@ const materializeArticle = (input: {
         updatedAt: now,
       }),
     )
+
     yield* materializeHandles(input)
     yield* materializeTranslations(input)
   })
@@ -297,11 +312,13 @@ const createRevision = (input: CreateWikiArticleRevisionInput) =>
           }),
         ),
       )
+
       const applied = yield* applyWikiArticleCrdtUpdateWithCommit({
         commit: HumanCommit.make({ personId: input.createdById }),
         crdtUpdate: input.crdtUpdate,
         snapshot: article.crdtSnapshot,
       })
+
       const revisionId = yield* IdGen.make(WikiArticleRevisionId)
       const now = yield* DateTime.now
 
@@ -341,6 +358,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
       }
 
       const now = yield* DateTime.now
+
       const evaluatedRevision = WikiArticleRevisionRow.make({
         ...revision,
         evaluatedAt: Option.some(now),
@@ -363,6 +381,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
           }),
         ),
       )
+
       const previous = yield* findDatabaseRowById(article.id)
       const updated = yield* parseWikiArticleCrdtUpdate({
         crdtUpdate: revision.crdtUpdate,
@@ -383,6 +402,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
           wikiArticleId: article.id,
         }),
       })
+
       return {
         article: {
           ...updated.data,

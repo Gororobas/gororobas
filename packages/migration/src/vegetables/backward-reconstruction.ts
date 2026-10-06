@@ -29,6 +29,7 @@ export const VegetableDataForMigration = Schema.Struct({
   edit_suggestions: Schema.Array(GelEditSuggestion),
   history: Schema.Array(VegetableHistoryEntryForMigration),
 })
+
 export type VegetableDataForMigration = typeof VegetableDataForMigration.Type
 
 export const GelVegetableHistory = Schema.Array(GelVegetableEdit)
@@ -44,6 +45,7 @@ const revertGelVegetable = Effect.fn("revertGelVegetable")(function* (
   edit: GelEditSuggestion,
 ) {
   const diff = edit.diff
+
   if (!isChangeset(diff)) {
     return yield* new GelVegetableReconstructionError({
       message: `EditSuggestion ${edit.id} does not contain a json-diff-ts changeset`,
@@ -58,6 +60,7 @@ const revertGelVegetable = Effect.fn("revertGelVegetable")(function* (
         error,
       }),
   })
+
   return yield* Schema.decodeUnknownEffect(GelVegetableForReconstruction)({ ...state, ...reverted })
 })
 
@@ -71,6 +74,7 @@ const normalizeChangeset = (changeset: Changeset, target: unknown): Changeset =>
     if (!change.changes) return change
 
     const child = isRecord(target) ? target[change.key] : undefined
+
     const embeddedKey =
       Array.isArray(child) &&
       change.embeddedKey === undefined &&
@@ -84,6 +88,7 @@ const normalizeChangeset = (changeset: Changeset, target: unknown): Changeset =>
             embeddedKey === "id"
               ? child.find((item) => isRecord(item) && item.id === nestedChange.key)
               : child[Number(nestedChange.key)]
+
           return nestedChange.changes
             ? {
                 ...nestedChange,
@@ -115,6 +120,7 @@ export const reconstructGelVegetableHistory = (
         (edit.updated_at ?? edit.created_at).getTime(),
       ),
     )
+
     const reconstruction = yield* Effect.reduce(
       mergedEdits,
       () => ({
@@ -124,6 +130,7 @@ export const reconstructGelVegetableHistory = (
       (accumulator, edit_suggestion) =>
         Effect.gen(function* () {
           const previousState = yield* revertGelVegetable(accumulator.state, edit_suggestion)
+
           return {
             state: previousState,
             history: [

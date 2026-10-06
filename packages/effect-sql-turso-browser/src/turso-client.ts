@@ -30,8 +30,15 @@ import { open } from "./turso-browser-database.js"
 
 const ATTR_DB_SYSTEM_NAME = "db.system.name"
 
-const classifyError = (cause: unknown, message: string, operation: string) =>
-  classifySqliteError(cause, { message, operation })
+const classifyError = ({
+  cause,
+  message,
+  operation,
+}: {
+  cause: unknown
+  message: string
+  operation: string
+}) => classifySqliteError(cause, { message, operation })
 
 /**
  * Runtime type identifier used to mark `TursoClient` values.
@@ -160,51 +167,85 @@ export const make = (
               "transformQueryNames",
               "transformResultNames",
             ])
+
             return yield* open(options.url.toString(), databaseOptions).pipe(
               Effect.mapError(
                 (cause) =>
                   new SqlError({
-                    reason: classifyError(cause, "Failed to open database", "openDatabase"),
+                    reason: classifyError({
+                      cause: cause,
+                      message: "Failed to open database",
+                      operation: "openDatabase",
+                    }),
                   }),
               ),
             )
           })
 
-    const runRaw = (sql: string, params: ReadonlyArray<unknown>, raw = false, values = false) =>
+    const runRaw = ({
+      sql,
+      params,
+      raw = false,
+      values = false,
+    }: {
+      sql: string
+      params: ReadonlyArray<unknown>
+      raw?: boolean | undefined
+      values?: boolean | undefined
+    }) =>
       Effect.withFiber((fiber) =>
-        db.execute(sql, params, raw, Context.get(fiber.context, Client.SafeIntegers), values).pipe(
-          Effect.mapError(
-            (cause) =>
-              new SqlError({
-                reason: classifyError(cause, "Failed to execute statement", "execute"),
-              }),
+        db
+          .execute({
+            sql: sql,
+            params: params,
+            raw: raw,
+            safeIntegers: Context.get(fiber.context, Client.SafeIntegers),
+            values: values,
+          })
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new SqlError({
+                  reason: classifyError({
+                    cause: cause,
+                    message: "Failed to execute statement",
+                    operation: "execute",
+                  }),
+                }),
+            ),
           ),
-        ),
       )
 
     const decodeRows = Schema.decodeUnknownEffect(
       Schema.Array(Schema.Record(Schema.String, Schema.Unknown)),
     )
     const decodeValues = Schema.decodeUnknownEffect(Schema.Array(Schema.Array(Schema.Unknown)))
+
     const invalidResult = (cause: unknown) =>
       new SqlError({
-        reason: classifyError(cause, "Invalid statement result", "execute"),
+        reason: classifyError({
+          cause: cause,
+          message: "Invalid statement result",
+          operation: "execute",
+        }),
       })
+
     const run = (sql: string, params: ReadonlyArray<unknown>) =>
-      runRaw(sql, params).pipe(
+      runRaw({ sql: sql, params: params }).pipe(
         Effect.flatMap((result) => decodeRows(result).pipe(Effect.mapError(invalidResult))),
       )
     const runValues = (sql: string, params: ReadonlyArray<unknown>) =>
-      runRaw(sql, params, false, true).pipe(
+      runRaw({ sql: sql, params: params, raw: false, values: true }).pipe(
         Effect.flatMap((result) => decodeValues(result).pipe(Effect.mapError(invalidResult))),
       )
 
     const connection = identity<Connection>({
+      // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Effect SQL's Connection interface defines this positional signature.
       execute(sql, params, transformRows) {
         return transformRows ? Effect.map(run(sql, params), transformRows) : run(sql, params)
       },
       executeRaw(sql, params) {
-        return runRaw(sql, params, true)
+        return runRaw({ sql: sql, params: params, raw: true })
       },
       executeValues(sql, params) {
         return runValues(sql, params)
@@ -212,6 +253,7 @@ export const make = (
       executeValuesUnprepared(sql, params) {
         return runValues(sql, params)
       },
+      // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Effect SQL's Connection interface defines this positional signature.
       executeUnprepared(sql, params, transformRows) {
         return transformRows ? Effect.map(run(sql, params), transformRows) : run(sql, params)
       },

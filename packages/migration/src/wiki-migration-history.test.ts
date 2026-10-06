@@ -18,14 +18,14 @@ import { gelVegetableNamesToCrdtList } from "./vegetables/gel-vegetable-to-wiki-
 import { buildWikiMigrationHistory } from "./wiki-migration-history.js"
 
 it.effect("replays migrated origin and marked content, including clearing and restoring them", () =>
-  assertPropertyEffect(
-    Arbitrary.schema(
+  assertPropertyEffect({
+    arbitrary: Arbitrary.schema(
       Schema.Struct({
         origin: Schema.String,
         text: Schema.NonEmptyString,
       }),
     ),
-    ({ origin, text }) =>
+    predicate: ({ origin, text }) =>
       Effect.gen(function* () {
         const article = WikiPlantArticle.EditableArticle.make({
           kind: "PLANT",
@@ -51,12 +51,14 @@ it.effect("replays migrated origin and marked content, including clearing and re
             },
           },
         })
+
         const translation = article.translations.pt
         assert(translation)
         const cleared = WikiPlantArticle.EditableArticle.make({
           ...article,
           translations: { pt: { ...translation, origin: Option.none(), content: Option.none() } },
         })
+
         const inputs = [article, cleared, article].map((article, index) => ({
           article,
           sourceEditId: `edit-${index}`,
@@ -64,7 +66,9 @@ it.effect("replays migrated origin and marked content, including clearing and re
           reviewerId: null,
           timestamp: "2025-04-01T12:00:00Z",
         }))
+
         const versions = yield* buildWikiMigrationHistory(inputs)
+
         yield* Effect.forEach(
           versions,
           (version, index) =>
@@ -76,6 +80,7 @@ it.effect("replays migrated origin and marked content, including clearing and re
                 snapshot,
                 crdtUpdate: LoroDocUpdate.make(document.export({ mode: "update" })),
               })
+
               expect(
                 Schema.encodeSync(Schema.toCodecJson(WikiArticleEditableData))(parsed.data),
               ).toEqual(
@@ -85,13 +90,15 @@ it.effect("replays migrated origin and marked content, including clearing and re
                   ),
                 ),
               )
+
               expect(document.frontiers()).toEqual(version.frontier)
             }),
           { concurrency: 1 },
         )
+
         expect(versions[1].changes).not.toEqual([])
         expect(versions[1].loroDiff).not.toEqual([])
         return true
       }),
-  ),
+  }),
 )

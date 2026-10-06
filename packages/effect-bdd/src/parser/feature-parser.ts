@@ -16,11 +16,13 @@ import type {
 
 function normalizeKeyword(keyword: string): StepKeyword {
   const normalized = keyword.trim()
+
   const keywordValue = Option.fromNullishOr(
     ["Given", "When", "Then", "And", "But"].find(
       (value): value is StepKeyword => value === normalized,
     ),
   )
+
   return Option.getOrElse(keywordValue, () => (normalized === "*" ? "And" : "Given"))
 }
 
@@ -47,6 +49,7 @@ function parseDataTable(
 
 function parseStep(step: Messages.Step): ParsedStep {
   const dataTable = parseDataTable(Option.fromNullishOr(step.dataTable))
+
   return {
     keyword: normalizeKeyword(step.keyword),
     line: step.location.line,
@@ -70,11 +73,9 @@ function parseScenarioOutline(scenario: Messages.Scenario): ParsedScenarioOutlin
   const examples = scenario.examples.flatMap((exampleTable) => {
     if (!exampleTable.tableHeader || !exampleTable.tableBody) return []
     const headers = exampleTable.tableHeader.cells.map((cell) => cell.value)
+
     return exampleTable.tableBody.map((row) =>
-      row.cells.reduce<Record<string, string>>(
-        (example, cell, index) => ({ ...example, [headers[index]]: cell.value }),
-        {},
-      ),
+      Object.fromEntries(row.cells.map((cell, index) => [headers[index], cell.value])),
     )
   })
 
@@ -95,11 +96,13 @@ function parseRule(rule: Messages.Rule): ParsedRule {
     Option.flatMap((child) => Option.fromNullishOr(child.background)),
     Option.map(parseBackground),
   )
+
   const scenarios = rule.children.flatMap((child) =>
     child.scenario && !EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenario(child.scenario)]
       : [],
   )
+
   const scenarioOutlines = rule.children.flatMap((child) =>
     child.scenario && EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenarioOutline(child.scenario)]
@@ -125,16 +128,19 @@ function parseGherkinDocument(document: Messages.GherkinDocument): ParsedFeature
     Option.flatMap((child) => Option.fromNullishOr(child.background)),
     Option.map(parseBackground),
   )
+
   const scenarios = feature.children.flatMap((child) =>
     child.scenario && !EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenario(child.scenario)]
       : [],
   )
+
   const scenarioOutlines = feature.children.flatMap((child) =>
     child.scenario && EffectArray.isReadonlyArrayNonEmpty(child.scenario.examples ?? [])
       ? [parseScenarioOutline(child.scenario)]
       : [],
   )
+
   const rules = feature.children.flatMap((child) => (child.rule ? [parseRule(child.rule)] : []))
 
   return {
@@ -155,6 +161,7 @@ export function parseFeatureFile(
     const fileSystem = yield* FileSystem.FileSystem
     const path = yield* Path.Path
     const resolvedPath = path.resolve(basePath, featurePath)
+
     const content = yield* fileSystem.readFileString(resolvedPath).pipe(
       Effect.mapError(
         (error) =>

@@ -55,6 +55,7 @@ export const CommentCrdtRow = Schema.Struct({
   parentCommentId: Schema.NullOr(CommentId),
   publicationId: PublicationId,
 })
+
 export type CommentCrdtRow = typeof CommentCrdtRow.Type
 
 export const CommentCommitRow = Schema.Struct({
@@ -65,6 +66,7 @@ export const CommentCommitRow = Schema.Struct({
   commentId: CommentId,
   crdtUpdate: LoroDocUpdate,
 })
+
 export type CommentCommitRow = typeof CommentCommitRow.Type
 
 export const CommentRow = Schema.Struct({
@@ -76,6 +78,7 @@ export const CommentRow = Schema.Struct({
   parentCommentId: Schema.NullOr(CommentId),
   publicationId: PublicationId,
 })
+
 export type CommentRow = typeof CommentRow.Type
 
 export const CommentTranslationRow = Schema.Struct({
@@ -87,6 +90,7 @@ export const CommentTranslationRow = Schema.Struct({
   translatedAtCrdtFrontier: Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
   translationSource: TranslationSource,
 })
+
 export type CommentTranslationRow = typeof CommentTranslationRow.Type
 
 /** API response schemas */
@@ -101,6 +105,7 @@ export const CommentData = Schema.Struct({
   publicationId: PublicationId,
   updatedAt: TimestampColumn,
 })
+
 export type CommentData = typeof CommentData.Type
 
 export const CreateCommentData = Schema.Struct({

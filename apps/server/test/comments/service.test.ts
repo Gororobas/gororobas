@@ -47,7 +47,7 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
+const makeHandle = Schema.decodeUnknownSync(Handle)
 
 const makePostSourceData = (input: {
   content: TiptapDocument
@@ -95,6 +95,7 @@ describe("CommentsService", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* publicationsRepository.createPublication({
         createdById: person.id,
         sourceData: makePostSourceData({
@@ -110,7 +111,7 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Primeiro comentario")),
           publicationId,
         }),
-        makeAccountSession(person.id),
+        makeAccountSession({ personId: person.id }),
       )
 
       const row = yield* commentsRepository.findCommentRowById(commentId)
@@ -134,6 +135,7 @@ describe("CommentsService", () => {
       yield* insertPersonWithDependencies({ person: other, profile: otherProfile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* publicationsRepository.createPublication({
         createdById: owner.id,
         sourceData: makePostSourceData({
@@ -149,7 +151,7 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Comentario original")),
           publicationId,
         }),
-        makeAccountSession(owner.id),
+        makeAccountSession({ personId: owner.id }),
       )
 
       const comment = yield* service.getCommentById(commentId)
@@ -160,7 +162,7 @@ describe("CommentsService", () => {
           content: makeDocument("Tentativa de invasao"),
           expectedCurrentCrdtFrontier: comment.currentCrdtFrontier,
         }),
-        makeAccountSession(other.id),
+        makeAccountSession({ personId: other.id }),
       ).pipe(Effect.flip)
 
       expect(result).toBeInstanceOf(UnauthorizedError)
@@ -177,6 +179,7 @@ describe("CommentsService", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* publicationsRepository.createPublication({
         createdById: person.id,
         sourceData: makePostSourceData({
@@ -192,10 +195,13 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Comentario para deletar")),
           publicationId,
         }),
-        makeAccountSession(person.id),
+        makeAccountSession({ personId: person.id }),
       )
 
-      yield* withSession(service.deleteComment(commentId), makeAccountSession(person.id))
+      yield* withSession(
+        service.deleteComment(commentId),
+        makeAccountSession({ personId: person.id }),
+      )
 
       const deleted = yield* service.getCommentById(commentId).pipe(Effect.flip)
       expect(deleted).toBeInstanceOf(CommentNotFoundError)

@@ -23,6 +23,7 @@ export const makeAppSqlClient = (filename: string, readonly = false) =>
 
 export const makeAppSql = (filename: string) => {
   const client = makeAppSqlClient(filename)
+
   // SQLite ignores foreign_keys changes inside the migrator's transaction.
   // Atlas rebuilds tables, so disable enforcement before entering that transaction.
   const migrate = Layer.effectDiscard(
@@ -31,11 +32,13 @@ export const makeAppSql = (filename: string) => {
       yield* sql`PRAGMA foreign_keys = OFF`
       yield* SqliteMigrator.run({ loader: SqliteMigrator.fromRecord(migrations) })
       const violations = yield* sql`PRAGMA foreign_key_check`
-      if (violations.length > 0)
+      if (violations.length > 0) {
         return yield* Effect.die(new Error("Migration left foreign key violations"))
+      }
       yield* sql`PRAGMA foreign_keys = ON`
     }),
   ).pipe(Layer.provide(NodeServices.layer))
+
   return migrate.pipe(Layer.provideMerge(client))
 }
 

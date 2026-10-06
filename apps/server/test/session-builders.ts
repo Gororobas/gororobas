@@ -40,11 +40,15 @@ export const makeVisitorSession = (): VisitorSession => ({
  * const result = yield* someEffect.pipe(withSession(session))
  * ```
  */
-export const makeAccountSession = (
-  personId: PersonId,
-  accessLevel: PlatformAccessLevel = "COMMUNITY",
-  memberships: OrganizationMembershipSession[] = [],
-): AccountSession => ({
+export const makeAccountSession = ({
+  personId,
+  accessLevel = "COMMUNITY",
+  memberships = [],
+}: {
+  personId: PersonId
+  accessLevel?: PlatformAccessLevel | undefined
+  memberships?: OrganizationMembershipSession[] | undefined
+}): AccountSession => ({
   type: "ACCOUNT",
   personId,
   accessLevel,
@@ -69,7 +73,8 @@ export const makeAccountSession = (
 export const makeAdminSession = (
   personId: PersonId,
   memberships: OrganizationMembershipSession[] = [],
-): AccountSession => makeAccountSession(personId, "ADMIN", memberships)
+): AccountSession =>
+  makeAccountSession({ personId: personId, accessLevel: "ADMIN", memberships: memberships })
 
 /**
  * Create a moderator session.
@@ -89,4 +94,5 @@ export const makeAdminSession = (
 export const makeModeratorSession = (
   personId: PersonId,
   memberships: OrganizationMembershipSession[] = [],
-): AccountSession => makeAccountSession(personId, "MODERATOR", memberships)
+): AccountSession =>
+  makeAccountSession({ personId: personId, accessLevel: "MODERATOR", memberships: memberships })

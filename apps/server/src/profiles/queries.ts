@@ -49,6 +49,7 @@ export const fetchProfileMetadata = SqlSchema.findOneOption({
   execute: (handle) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
+
       return yield* sql`
       SELECT
         p.id,
@@ -78,6 +79,7 @@ export const fetchProfileContentCounts = SqlSchema.findOne({
   execute: (id) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
+
       return yield* sql`
       SELECT
         (SELECT COUNT(*) FROM publications WHERE owner_profile_id = ${id} AND kind = 'POST') as posts,

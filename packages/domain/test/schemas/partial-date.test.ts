@@ -33,6 +33,7 @@ describe("PartialDate", () => {
         },
       ],
     ]
+
     examples.forEach(([encoded, parsed]) => {
       expect(decode(encoded)).toEqual(parsed)
       expect(encode(parsed)).toBe(encoded)
@@ -40,9 +41,12 @@ describe("PartialDate", () => {
   })
 
   it("preserves generated objects through string round-trips", () => {
-    assertProperty(Arbitrary.schema(PartialDate), (date) => {
-      expect(decode(encode(date))).toEqual(date)
-      return true
+    assertProperty({
+      arbitrary: Arbitrary.schema(PartialDate),
+      predicate: (date) => {
+        expect(decode(encode(date))).toEqual(date)
+        return true
+      },
     })
   })
 
@@ -57,6 +61,7 @@ describe("PartialDate", () => {
       "9999-12-31T23:59[Asia/Kathmandu]",
       "2025[US/Eastern]",
     ]
+
     valid.forEach((value) => expect(encode(decode(value))).toBe(value))
   })
 
@@ -88,6 +93,7 @@ describe("PartialDate", () => {
       " 2025[UTC]",
       "10000[UTC]",
     ]
+
     invalid.forEach((value) => expect(() => decode(value)).toThrow(/must|Expected/))
   })
 
@@ -102,6 +108,7 @@ describe("PartialDate", () => {
       { precision: "time", year: 2025, month: 1, day: 1, hour: 24, minute: 0, timezone: "UTC" },
       { precision: "time", year: 2025, month: 1, day: 1, hour: 0, timezone: "UTC" },
     ]
+
     invalid.forEach((value) =>
       expect(() => Schema.encodeUnknownSync(PartialDate)(value)).toThrow(/must|Expected|Missing/),
     )

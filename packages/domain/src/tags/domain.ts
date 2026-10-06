@@ -17,6 +17,7 @@ export const TagRow = Schema.Struct({
   handle: Handle,
   names: Schema.fromJsonString(Schema.Record(Locale, Schema.Trimmed.check(Schema.isNonEmpty()))),
 })
+
 export type TagRow = typeof TagRow.Type
 
 export const SuggestedTagRow = Schema.Struct({
@@ -26,6 +27,7 @@ export const SuggestedTagRow = Schema.Struct({
   status: SuggestedTagStatus,
   approvedTagId: Schema.NullOr(TagId),
 })
+
 export type SuggestedTagRow = typeof SuggestedTagRow.Type
 
 export const SuggestedTagSourceRow = Schema.Struct({

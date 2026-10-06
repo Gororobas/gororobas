@@ -30,11 +30,13 @@ import {
 function getCallerDir(): string {
   const previousPrepareStackTrace = Error.prepareStackTrace
   let callerFile = Option.none<string>()
+
   Error.prepareStackTrace = (_error, stack) => {
     const fileName = stack[2]?.getFileName()
     callerFile = Option.fromNullishOr(fileName)
     return ""
   }
+
   const callerError = new FeatureParseError({ path: "caller", message: "Call site lookup" })
   void callerError.stack
   Error.prepareStackTrace = previousPrepareStackTrace
@@ -242,6 +244,7 @@ function createRunWithBackgrounds({
             steps: featureBgRef.parsedSteps,
           }),
         )
+
         ctx = isRecord(featureResult) ? featureResult : {}
       }
 
@@ -253,6 +256,7 @@ function createRunWithBackgrounds({
             steps: ruleBgRef.parsedSteps,
           }),
         )
+
         ctx = { ...ctx, ...(isRecord(ruleResult) ? ruleResult : {}) }
       }
 
@@ -276,13 +280,19 @@ function substituteOutlinePlaceholders(text: string, example: Record<string, str
   )
 }
 
-function createRuleContext(
-  feature: ParsedFeature,
-  featurePath: string,
-  featureBgRef: BackgroundRef,
-  ruleBgRef?: BackgroundRef,
-  ruleName?: string,
-): RuleContext {
+function createRuleContext({
+  feature,
+  featurePath,
+  featureBgRef,
+  ruleBgRef,
+  ruleName,
+}: {
+  feature: ParsedFeature
+  featurePath: string
+  featureBgRef: BackgroundRef
+  ruleBgRef?: BackgroundRef | undefined
+  ruleName?: string | undefined
+}): RuleContext {
   const runWithBackgrounds = createRunWithBackgrounds({
     featureBgRef,
     ...(ruleBgRef ? { ruleBgRef } : {}),
@@ -309,13 +319,16 @@ function createRuleContext(
     },
 
     Scenario: (name, config) => {
-      const parsedScenario = Option.getOrElse(findScenario(feature, name, ruleName), () => {
-        throw new ScenarioNotFoundError({
-          availableScenarios: listScenarios(feature),
-          feature: featurePath,
-          scenario: name,
-        })
-      })
+      const parsedScenario = Option.getOrElse(
+        findScenario({ feature: feature, name: name, ruleName: ruleName }),
+        () => {
+          throw new ScenarioNotFoundError({
+            availableScenarios: listScenarios(feature),
+            feature: featurePath,
+            scenario: name,
+          })
+        },
+      )
 
       it.effect(
         name,
@@ -332,13 +345,16 @@ function createRuleContext(
     },
 
     ScenarioOutline: (name, config) => {
-      const parsedOutline = Option.getOrElse(findScenarioOutline(feature, name, ruleName), () => {
-        throw new ScenarioNotFoundError({
-          availableScenarios: listScenarioOutlines(feature),
-          feature: featurePath,
-          scenario: name,
-        })
-      })
+      const parsedOutline = Option.getOrElse(
+        findScenarioOutline({ feature: feature, name: name, ruleName: ruleName }),
+        () => {
+          throw new ScenarioNotFoundError({
+            availableScenarios: listScenarioOutlines(feature),
+            feature: featurePath,
+            scenario: name,
+          })
+        },
+      )
 
       if (EffectArray.isReadonlyArrayEmpty(parsedOutline.examples)) {
         throw new ScenarioOutlineExamplesError({ feature: featurePath, scenario: name })
@@ -373,7 +389,15 @@ function createRuleContext(
   }
 }
 
-function missingRule(name: string, feature: string, availableRules: Array<string>): never {
+function missingRule({
+  name,
+  feature,
+  availableRules,
+}: {
+  name: string
+  feature: string
+  availableRules: Array<string>
+}): never {
   throw new ScenarioNotFoundError({
     availableScenarios: availableRules,
     feature,
@@ -410,11 +434,20 @@ export function describeFeature(
         }
 
         const featureCtx: FeatureContext = {
-          ...createRuleContext(feature, absoluteFeaturePath, featureBgRef),
+          ...createRuleContext({
+            feature: feature,
+            featurePath: absoluteFeaturePath,
+            featureBgRef: featureBgRef,
+          }),
 
           Rule: (name, ruleCallback) => {
             Option.match(findRule(feature, name), {
-              onNone: () => missingRule(name, absoluteFeaturePath, listRules(feature)),
+              onNone: () =>
+                missingRule({
+                  name: name,
+                  feature: absoluteFeaturePath,
+                  availableRules: listRules(feature),
+                }),
               onSome: () => undefined,
             })
 
@@ -424,8 +457,15 @@ export function describeFeature(
                 layer: Option.none(),
                 parsedSteps: [],
               }
+
               ruleCallback(
-                createRuleContext(feature, absoluteFeaturePath, featureBgRef, ruleBgRef, name),
+                createRuleContext({
+                  feature: feature,
+                  featurePath: absoluteFeaturePath,
+                  featureBgRef: featureBgRef,
+                  ruleBgRef: ruleBgRef,
+                  ruleName: name,
+                }),
               )
             })
           },

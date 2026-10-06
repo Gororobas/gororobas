@@ -14,6 +14,12 @@ export default defineConfig({
     typeAware: true,
   },
   rules: {
+    curly: ["error", "multi-line"],
+    "custom-lint-rules/no-node-apis": "error",
+    "custom-lint-rules/no-function-aliases": "error",
+    "custom-lint-rules/no-many-function-parameters": "error",
+    "custom-lint-rules/no-inline-imports": "error",
+    "custom-lint-rules/padding-around-large-statements": "error",
     "unicorn/filename-case": ["error", { case: "kebabCase" }],
     yoda: ["error", "never", { exceptRange: true }],
     "no-unused-vars": [

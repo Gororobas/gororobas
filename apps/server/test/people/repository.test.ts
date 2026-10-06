@@ -48,9 +48,9 @@ describe("PeopleRepository", () => {
     )
 
     it.effect("preserves data through SQL round-trip", () =>
-      assertPropertyEffect(
-        personWithProfileArbitrary,
-        ({ person, profile }) =>
+      assertPropertyEffect({
+        arbitrary: personWithProfileArbitrary,
+        predicate: ({ person, profile }) =>
           Effect.gen(function* () {
             const repo = yield* PeopleRepository
 
@@ -63,8 +63,8 @@ describe("PeopleRepository", () => {
 
             return deepEquals(retrieved, person)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("returns None when person does not exist", () =>
@@ -89,6 +89,7 @@ describe("PeopleRepository", () => {
 
         // Action: Update access level
         const now = yield* DateTime.now
+
         yield* repo.updateRow({
           id: person.id,
           accessLevel: "COMMUNITY",
@@ -114,6 +115,7 @@ describe("PeopleRepository", () => {
     it.effect("transaction rolls back person updates on failure", () =>
       Effect.gen(function* () {
         const repo = yield* PeopleRepository
+
         const scenario = yield* runTransactionScenario({
           setup: Effect.gen(function* () {
             const person = yield* makePersonFixture({ accessLevel: "NEWCOMER" })
@@ -125,6 +127,7 @@ describe("PeopleRepository", () => {
           transaction: (person) =>
             Effect.gen(function* () {
               const now = yield* DateTime.now
+
               yield* repo.updateRow({
                 id: person.id,
                 accessLevel: "COMMUNITY",
@@ -153,6 +156,7 @@ describe("PeopleRepository", () => {
     it.effect("transaction commits person updates on success", () =>
       Effect.gen(function* () {
         const repo = yield* PeopleRepository
+
         const scenario = yield* runTransactionScenario({
           setup: Effect.gen(function* () {
             const person = yield* makePersonFixture({ accessLevel: "NEWCOMER" })
@@ -217,6 +221,7 @@ describe("PeopleRepository", () => {
                 Effect.gen(function* () {
                   const repo = yield* PeopleRepository
                   const now = yield* DateTime.now
+
                   yield* repo.updateRow({
                     id: persistedPerson.id,
                     accessLevel: "ADMIN",

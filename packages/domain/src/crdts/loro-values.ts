@@ -11,9 +11,12 @@ const isJsonObject = (value: Schema.Json): value is Schema.JsonObject =>
 export const toLoroValue = (value: Schema.Json): Schema.Json & Value => {
   if (typeof value === "string") return toLoroString(value)
   if (isJsonArray(value)) return value.map(toLoroValue)
-  if (isJsonObject(value))
+
+  if (isJsonObject(value)) {
     return Record.fromEntries(
       Record.toEntries(value).map(([key, entry]) => [toLoroString(key), toLoroValue(entry)]),
     )
+  }
+
   return value
 }

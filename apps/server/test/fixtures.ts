@@ -215,6 +215,7 @@ export const makeMembershipFixture = (
   })
 
 export const organizationRowArbitrary = Arbitrary.schema(OrganizationRow)
+
 export const organizationProfileRowArbitrary = Arbitrary.map(
   Arbitrary.schema(OrganizationProfileRow),
   (profile) => ({

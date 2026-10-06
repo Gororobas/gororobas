@@ -29,6 +29,7 @@ export const AccountSession = Schema.Struct({
   personId: PersonId,
   type: Schema.Literal("ACCOUNT"),
 })
+
 export type AccountSession = typeof AccountSession.Type
 
 export const isAccountSession = (session: Session): session is AccountSession =>

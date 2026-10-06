@@ -14,12 +14,15 @@ import { gelNoteToPublication } from "./gel-note-to-publication.js"
 import { sourceGelNotes } from "./source-gel-notes.js"
 
 const mappedId = "019a0dce-1fc0-7abc-8abc-123456789abc"
+
 const context = MigrationContext.of({
   resolveId: () => Effect.succeed(mappedId),
   registerMapping: () => Effect.void,
   planMigrationOp: () => Effect.succeed({ op: "skip", reason: "unchanged" }),
 })
+
 const timestamp = Schema.decodeUnknownSync(Schema.DateFromString)("2025-08-06T05:00:00Z")
+
 const note = Schema.decodeUnknownSync(GelNoteWithRelations)({
   id: "note-id",
   handle: "eucalyptus-discovery",
@@ -54,6 +57,7 @@ const note = Schema.decodeUnknownSync(GelNoteWithRelations)({
 const makeTestGelClient = (records: Array<unknown>) => {
   const client = createClient({ dsn: "gel://localhost/test" })
   vi.spyOn(client, "query").mockResolvedValue(records)
+
   return GelClient.of({
     use: (operation) =>
       Effect.tryPromise({
@@ -65,6 +69,7 @@ const makeTestGelClient = (records: Array<unknown>) => {
 
 it.effect("converts notes and preserves Gel Date values, mentions and relations", () => {
   const writes: Array<{ path: string; content: string }> = []
+
   return sourceGelNotes.pipe(
     Effect.provideService(GelClient, makeTestGelClient([note])),
     Effect.provideService(
@@ -86,6 +91,7 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
         expect(writes[0].path).toMatch(/debug\/raw-gel\/notes\.json$/)
         const { path, content } = writes[2]
         expect(path).toMatch(/debug\/notes\/eucalyptus-discovery\.json$/)
+
         expect(
           Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
         ).toMatchObject({
@@ -117,6 +123,7 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
 
 it.effect("archives invalid raw notes before rejecting conversion", () => {
   const writeFileString = vi.fn<FileSystem.FileSystem["writeFileString"]>(() => Effect.void)
+
   return sourceGelNotes.pipe(
     Effect.provideService(
       GelClient,
@@ -146,6 +153,7 @@ it.effect("archives invalid raw notes before rejecting conversion", () => {
 it.effect("archives private notes separately and removes earlier publication exports", () => {
   const writes: Array<{ path: string; content: string }> = []
   const remove = vi.fn<FileSystem.FileSystem["remove"]>(() => Effect.void)
+
   return sourceGelNotes.pipe(
     Effect.provideService(
       GelClient,
@@ -182,13 +190,13 @@ it.effect("archives private notes separately and removes earlier publication exp
 })
 
 it.effect("preserves ordered title and body nodes for every supported visibility", () =>
-  assertPropertyEffect(
-    Arbitrary.all([
+  assertPropertyEffect({
+    arbitrary: Arbitrary.all([
       Arbitrary.schema(Schema.String),
       Arbitrary.schema(Schema.NullOr(Schema.String)),
       Arbitrary.schema(PublicationVisibility),
     ]),
-    ([title, body, visibility]) => {
+    predicate: ([title, body, visibility]) => {
       const original = GelNoteWithRelations.make({
         ...note,
         publish_status: visibility,
@@ -206,6 +214,7 @@ it.effect("preserves ordered title and body nodes for every supported visibility
                 content: [{ type: "paragraph", content: [{ type: "text", text: body }] }],
               },
       })
+
       return gelNoteToPublication(original).pipe(
         Effect.map((publication) => {
           expect(publication.visibility).toBe(visibility)
@@ -217,5 +226,5 @@ it.effect("preserves ordered title and body nodes for every supported visibility
         }),
       )
     },
-  ),
+  }),
 )

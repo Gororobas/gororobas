@@ -95,62 +95,70 @@ const addThenRemoveArbitrary = Arbitrary.flatMap(addedMessagesArbitrary, (addedM
 
 describe("generateEnumsMapOperations", () => {
   it.effect("adds every distinct enum value as a map key", () =>
-    assertPropertyEffect(addedMessagesArbitrary, (messages) =>
-      Effect.sync(() => {
-        const document = new LoroDoc()
-        Effect.runSync(applyAddedMessages(document, messages))
+    assertPropertyEffect({
+      arbitrary: addedMessagesArbitrary,
+      predicate: (messages) =>
+        Effect.sync(() => {
+          const document = new LoroDoc()
+          Effect.runSync(applyAddedMessages(document, messages))
 
-        const values = getEnumMapJson(document)
-        return (
-          Record.keys(values).length === messages.length &&
-          messages.every((message) => Object.hasOwn(values, message.value))
-        )
-      }),
-    ),
+          const values = getEnumMapJson(document)
+          return (
+            Record.keys(values).length === messages.length &&
+            messages.every((message) => Object.hasOwn(values, message.value))
+          )
+        }),
+    }),
   )
 
   it.effect("is idempotent when add operations are replayed", () =>
-    assertPropertyEffect(addedMessagesArbitrary, (messages) =>
-      Effect.sync(() => {
-        const document = new LoroDoc()
-        Effect.runSync(applyAddedMessages(document, messages))
-        const once = getEnumMapJson(document)
+    assertPropertyEffect({
+      arbitrary: addedMessagesArbitrary,
+      predicate: (messages) =>
+        Effect.sync(() => {
+          const document = new LoroDoc()
+          Effect.runSync(applyAddedMessages(document, messages))
+          const once = getEnumMapJson(document)
 
-        Effect.runSync(applyAddedMessages(document, messages))
-        const twice = getEnumMapJson(document)
+          Effect.runSync(applyAddedMessages(document, messages))
+          const twice = getEnumMapJson(document)
 
-        Effect.runSync(applyAddedMessages(document, messages))
-        const threeTimes = getEnumMapJson(document)
+          Effect.runSync(applyAddedMessages(document, messages))
+          const threeTimes = getEnumMapJson(document)
 
-        return hasSameEntries(once, twice) && hasSameEntries(twice, threeTimes)
-      }),
-    ),
+          return hasSameEntries(once, twice) && hasSameEntries(twice, threeTimes)
+        }),
+    }),
   )
 
   it.effect("leaves an empty map when only remove operations are applied", () =>
-    assertPropertyEffect(removedMessagesArbitrary, (messages) =>
-      Effect.sync(() => {
-        const document = new LoroDoc()
-        Effect.runSync(applyRemovedMessages(document, messages))
+    assertPropertyEffect({
+      arbitrary: removedMessagesArbitrary,
+      predicate: (messages) =>
+        Effect.sync(() => {
+          const document = new LoroDoc()
+          Effect.runSync(applyRemovedMessages(document, messages))
 
-        return EffectArray.isArrayEmpty(Record.keys(getEnumMapJson(document)))
-      }),
-    ),
+          return EffectArray.isArrayEmpty(Record.keys(getEnumMapJson(document)))
+        }),
+    }),
   )
 
   it.effect("matches an imperative model when added values are later removed", () =>
-    assertPropertyEffect(addThenRemoveArbitrary, ({ addedMessages, removedMessages }) =>
-      Effect.sync(() => {
-        const document = new LoroDoc()
-        const model = new PlainJsStringHashSetModel()
+    assertPropertyEffect({
+      arbitrary: addThenRemoveArbitrary,
+      predicate: ({ addedMessages, removedMessages }) =>
+        Effect.sync(() => {
+          const document = new LoroDoc()
+          const model = new PlainJsStringHashSetModel()
 
-        Effect.runSync(applyAddedMessages(document, addedMessages))
-        model.add(addedMessages)
-        Effect.runSync(applyRemovedMessages(document, removedMessages))
-        model.remove(removedMessages)
+          Effect.runSync(applyAddedMessages(document, addedMessages))
+          model.add(addedMessages)
+          Effect.runSync(applyRemovedMessages(document, removedMessages))
+          model.remove(removedMessages)
 
-        return hasSameEntries(getEnumMapJson(document), model.toJSON())
-      }),
-    ),
+          return hasSameEntries(getEnumMapJson(document), model.toJSON())
+        }),
+    }),
   )
 })

@@ -68,6 +68,7 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
       if (gbif === null || Result.isFailure(gbif)) return
 
       const taxon = gbif.success
+
       yield* insertTaxonomyGroup({
         wikiArticleId,
         gbifTaxonId: taxon.gbifTaxonId,

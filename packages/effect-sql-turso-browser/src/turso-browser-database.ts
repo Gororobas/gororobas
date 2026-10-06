@@ -15,6 +15,7 @@ type Request = {
   values: boolean
   safeIntegers: boolean
 }
+
 type Response = {
   kind: "response"
   id: string
@@ -22,13 +23,16 @@ type Response = {
   result?: unknown
   error?: { message: string; code?: string | number }
 }
+
 type Announcement = { kind: "leader"; id: string }
+
 type Message =
   | Request
   | Response
   | Announcement
   | { kind: "hello" }
   | { kind: "released"; id: string }
+
 type Pending = {
   request: Omit<Request, "target">
   target?: string
@@ -37,13 +41,13 @@ type Pending = {
 }
 
 export type BrowserDatabase = {
-  execute: (
-    sql: string,
-    params: ReadonlyArray<unknown>,
-    raw: boolean,
-    safeIntegers: boolean,
-    values?: boolean,
-  ) => Effect.Effect<unknown, Error>
+  execute: (input: {
+    sql: string
+    params: ReadonlyArray<unknown>
+    raw: boolean
+    safeIntegers: boolean
+    values?: boolean | undefined
+  }) => Effect.Effect<unknown, Error>
   close: () => Effect.Effect<void>
 }
 
@@ -72,14 +76,14 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
   })
   const electionAbort = new AbortController()
 
-  const send = (message: Message) => channel.postMessage(message)
-  const announce = () => send({ kind: "leader", id })
+  const announce = () => channel.postMessage({ kind: "leader", id })
 
   const processQueue = async () => {
     if (processing || !database) {
       return
     }
     processing = true
+
     try {
       while (queue.length > 0) {
         const index = transactionOwner
@@ -89,8 +93,10 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
           break
         }
         const request = queue.splice(index, 1)[0]!
+
         try {
           const statement = await database.prepare(request.sql)
+
           try {
             if (request.safeIntegers) {
               statement.safeIntegers(true)
@@ -108,16 +114,18 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
             if (/^\s*(?:COMMIT|END|ROLLBACK(?!\s+(?:TRANSACTION\s+)?TO\b))\b/i.test(request.sql)) {
               transactionOwner = undefined
             }
+
             const response: Response = {
               kind: "response",
               id: request.id,
               target: request.sender,
               result: rows,
             }
+
             if (request.sender === id) {
               receive(response)
             } else {
-              send(response)
+              channel.postMessage(response)
             }
           } finally {
             statement.close()
@@ -137,10 +145,11 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
                 : {}),
             },
           }
+
           if (request.sender === id) {
             receive(response)
           } else {
-            send(response)
+            channel.postMessage(response)
           }
         }
       }
@@ -162,6 +171,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
     if (closed) {
       return
     }
+
     if (message.kind === "hello") {
       if (database) {
         announce()
@@ -184,8 +194,10 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
       }
     } else if (message.target === id) {
       const entry = pending.get(message.id)
+
       if (entry) {
         pending.delete(message.id)
+
         if (message.error) {
           entry.reject(Object.assign(new Error(message.error.message), message.error))
         } else {
@@ -194,6 +206,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
       }
     }
   }
+
   channel.onmessage = (event: MessageEvent<Message>) => receive(event.data)
 
   const election = navigator.locks.request(
@@ -203,6 +216,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
       if (closed) {
         return
       }
+
       try {
         const { connect } = await import("@tursodatabase/database-wasm/vite")
         database = await connect(path, options)
@@ -217,6 +231,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
       }
     },
   )
+
   void election.catch((cause) => {
     if (closed) {
       return
@@ -233,18 +248,20 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
       if (!entry.target && leader) {
         entry.target = leader
         const request = { ...entry.request, target: leader }
+
         if (leader === id) {
           receive(request)
         } else {
-          send(request)
+          channel.postMessage(request)
         }
       }
     }
   }
-  send({ kind: "hello" })
+
+  channel.postMessage({ kind: "hello" })
 
   return {
-    execute: (sql, params, raw, safeIntegers, values = false) =>
+    execute: ({ sql, params, raw, safeIntegers, values = false }) =>
       Effect.uninterruptible(
         Effect.tryPromise({
           try: () =>
@@ -257,6 +274,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
                 reject(failure)
                 return
               }
+
               const request: Omit<Request, "target"> = {
                 kind: "request",
                 id: crypto.randomUUID(),
@@ -267,6 +285,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
                 values,
                 safeIntegers,
               }
+
               pending.set(request.id, { request, resolve, reject })
               dispatchPending()
             }),
@@ -279,7 +298,7 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
           return
         }
         if (leader === id) {
-          send({ kind: "released", id })
+          channel.postMessage({ kind: "released", id })
         }
         closed = true
         for (const entry of pending.values()) {

@@ -21,12 +21,14 @@ export const sourceGelNotes = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
   const gelClient = yield* GelClient
+
   const notes = yield* gelClient
     .use((client) => client.query(notesQuery))
     .pipe(
       Effect.tap(archiveGelResult("notes")),
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(GelNoteWithRelations))),
     )
+
   const directory = path.join(import.meta.dirname, "..", "..", "debug", "notes")
   yield* fs.makeDirectory(directory, { recursive: true })
   const privateNotes = notes.filter(
@@ -38,19 +40,23 @@ export const sourceGelNotes = Effect.gen(function* () {
     Schema.fromJsonString(Schema.Array(GelNoteWithRelations), { space: 2 }),
   )(privateNotes)
   yield* fs.writeFileString(path.join(journalDirectory, "notes.json"), journalJson)
+
   // Remove earlier publication exports only after the journal archive is safely written.
   yield* Effect.forEach(
     privateNotes,
     (note) => fs.remove(path.join(directory, `${note.handle}.json`), { force: true }),
     { concurrency: 1 },
   )
+
   const publicationNotes = notes.filter((note) => !privateNotes.includes(note))
+
   const conversions = yield* Effect.forEach(
     publicationNotes,
     (note) =>
       Effect.gen(function* () {
         const references = yield* noteMigrationReferences(note)
         const converted = yield* gelNoteToPublicationSource(note).pipe(Effect.result)
+
         const data = Result.match(converted, {
           onSuccess: (publication) => ({
             ...references,
@@ -65,6 +71,7 @@ export const sourceGelNotes = Effect.gen(function* () {
             conversion_error: error.message || String(error),
           }),
         })
+
         const encoded = yield* Schema.encodeEffect(
           Schema.fromJsonString(NoteDataForMigration, { space: 2 }),
         )(data)
@@ -73,6 +80,7 @@ export const sourceGelNotes = Effect.gen(function* () {
       }),
     { concurrency: 1 },
   )
+
   const successful = conversions.filter(Boolean).length
   yield* Effect.log(
     `Exported ${notes.length} Gel notes: ${successful} publications converted, ${publicationNotes.length - successful} conversion failures retained, ${privateNotes.length} journal notes archived`,

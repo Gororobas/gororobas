@@ -87,10 +87,12 @@ export const resolveWikiArticleExtraction = Effect.fn("resolveWikiArticleExtract
       })
     },
   )(candidates)
+
   if (Option.isSome(handleMatch)) {
     yield* Effect.logDebug(
       `Found existing wikiArticle by handle: "${handleMatch.value.handle}" -> ${handleMatch.value.id}`,
     )
+
     return ResolvedExistingWikiArticleExtraction.make({
       ...common,
       wikiArticleId: handleMatch.value.id,
@@ -113,10 +115,12 @@ export const resolveWikiArticleExtraction = Effect.fn("resolveWikiArticleExtract
       })
     },
   )(candidates)
+
   if (Option.isSome(searchableNameMatch)) {
     yield* Effect.logDebug(
       `Found existing wikiArticle by searchable_name: "${searchableNameMatch.value.handle}" -> ${searchableNameMatch.value.wikiArticleId}`,
     )
+
     return ResolvedExistingWikiArticleExtraction.make({
       ...common,
       wikiArticleId: searchableNameMatch.value.wikiArticleId,
@@ -127,6 +131,7 @@ export const resolveWikiArticleExtraction = Effect.fn("resolveWikiArticleExtract
   yield* Effect.logDebug(
     `No match found for wikiArticle "${extraction.extractionText}" (candidates: ${candidates.join(", ")}) -> creating suggested`,
   )
+
   return SuggestedWikiArticleExtraction.make({
     ...common,
     handle: yield* stringToHandle(extraction.extractionText),
@@ -162,10 +167,12 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
   if (status === "existing" || !status) {
     yield* Effect.logDebug(`Trying handle match for tag "${tagHandle}"`)
     const handleMatch = yield* tagsRepository.findByHandle(tagHandle)
+
     if (Option.isSome(handleMatch)) {
       yield* Effect.logDebug(
         `Found existing tag by handle: "${tagHandle}" -> ${handleMatch.value.id}`,
       )
+
       return ResolvedExistingTagExtraction.make({
         ...common,
         tagId: handleMatch.value.id,
@@ -176,8 +183,10 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
     const namePattern = `%${tagHandle}%`
     yield* Effect.logDebug(`Trying name match for tag with pattern "${namePattern}"`)
     const nameMatch = yield* tagsRepository.findByName(namePattern)
+
     if (Option.isSome(nameMatch)) {
       yield* Effect.logDebug(`Found existing tag by name: "${tagHandle}" -> ${nameMatch.value.id}`)
+
       return ResolvedExistingTagExtraction.make({
         ...common,
         tagId: nameMatch.value.id,
@@ -189,6 +198,7 @@ export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* 
   yield* Effect.logDebug(
     `No match found for tag "${extraction.extractionText}" -> creating suggested`,
   )
+
   return SuggestedTagExtraction.make({
     ...common,
     handle: tagHandle,

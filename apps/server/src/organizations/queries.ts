@@ -46,6 +46,7 @@ export const findOrganizationsWhereSoleManager = SqlSchema.findAll({
   execute: (personId) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
+
       return yield* sql`
       SELECT
         om.organization_id AS organizationId,

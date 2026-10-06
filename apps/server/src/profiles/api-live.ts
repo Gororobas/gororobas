@@ -10,6 +10,7 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
     .handle("getProfileByHandle", ({ params }) =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository
+
         const profile = yield* repo.findByHandle(params.handle).pipe(
           Effect.flatMap(
             Option.match({

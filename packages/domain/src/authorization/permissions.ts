@@ -23,6 +23,7 @@ export const PlatformPermission = Schema.Literals([
   "comments:censor",
   "bookmarks:create",
 ])
+
 export type PlatformPermission = typeof PlatformPermission.Type
 
 const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
@@ -72,6 +73,7 @@ export const OrganizationPermission = Schema.Literals([
   "publications:delete",
   "publications:view",
 ])
+
 export type OrganizationPermission = typeof OrganizationPermission.Type
 
 const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<

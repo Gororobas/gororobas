@@ -1,11 +1,14 @@
+import { NodeFileSystem, NodeRuntime } from "@effect/platform-node"
+import { Effect, FileSystem } from "effect"
 import * as Glob from "glob"
-import * as Fs from "node:fs"
 
-const dirs = [".", ...Glob.sync("packages/*/")]
-dirs.forEach((pkg) => {
-  const files = [".tsbuildinfo", "build", "dist", "coverage"]
+Effect.gen(function* () {
+  const filesystem = yield* FileSystem.FileSystem
+  const directories = [".", ...Glob.sync("packages/*/")]
 
-  files.forEach((file) => {
-    Fs.rmSync(`${pkg}/${file}`, { force: true, recursive: true }, () => {})
-  })
-})
+  yield* Effect.forEach(directories, (directory) =>
+    Effect.forEach([".tsbuildinfo", "build", "dist", "coverage"], (file) =>
+      filesystem.remove(`${directory}/${file}`, { force: true, recursive: true }),
+    ),
+  )
+}).pipe(Effect.provide(NodeFileSystem.layer), NodeRuntime.runMain)

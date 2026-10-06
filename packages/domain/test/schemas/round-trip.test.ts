@@ -64,125 +64,141 @@ describe("Schema Round-Trip Properties", () => {
   describe("Property 1: Schema Round-Trip Preservation", () => {
     rowSchemas.forEach(({ name, schema }) => {
       it.effect(`${name} round-trip preserves data`, () =>
-        assertPropertyEffect(Arbitrary.schema(schema), (original) =>
-          Effect.gen(function* () {
-            const encoded = yield* Schema.encodeEffect(schema)(original)
-            const decoded = yield* Schema.decodeEffect(schema)(encoded)
+        assertPropertyEffect({
+          arbitrary: Arbitrary.schema(schema),
+          predicate: (original) =>
+            Effect.gen(function* () {
+              const encoded = yield* Schema.encodeEffect(schema)(original)
+              const decoded = yield* Schema.decodeEffect(schema)(encoded)
 
-            return deepEquals(original, decoded)
-          }),
-        ),
+              return deepEquals(original, decoded)
+            }),
+        }),
       )
     })
 
     it.effect("MediaAssetRow rejects a mismatched format and metadata", () =>
-      assertPropertyEffect(Arbitrary.schema(MediaAssetRow), (row) =>
-        Effect.sync(
-          () =>
-            !Schema.is(Schema.toType(MediaAssetRow))({
-              ...row,
-              format: row.format === "IMAGE" ? "AUDIO" : "IMAGE",
-            }),
-        ),
-      ),
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(MediaAssetRow),
+        predicate: (row) =>
+          Effect.sync(
+            () =>
+              !Schema.is(Schema.toType(MediaAssetRow))({
+                ...row,
+                format: row.format === "IMAGE" ? "AUDIO" : "IMAGE",
+              }),
+          ),
+      }),
     )
 
     it.effect("Handle validation and transformation round-trip", () =>
       // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation
-      assertPropertyEffect(Arbitrary.schema(Handle), (original) =>
-        Effect.gen(function* () {
-          const encoded = yield* Schema.encodeEffect(Handle)(original)
-          const decoded = yield* Schema.decodeEffect(Handle)(encoded)
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(Handle),
+        predicate: (original) =>
+          Effect.gen(function* () {
+            const encoded = yield* Schema.encodeEffect(Handle)(original)
+            const decoded = yield* Schema.decodeEffect(Handle)(encoded)
 
-          // Strings can use direct equality
-          return original === decoded
-        }),
-      ),
+            // Strings can use direct equality
+            return original === decoded
+          }),
+      }),
     )
 
     it.effect("TimestampColumn encoding/decoding round-trip", () =>
       // Feature: people-profiles-testing-strategy, Property 1: Schema Round-Trip Preservation
-      assertPropertyEffect(Arbitrary.schema(TimestampColumn), (original) =>
-        Effect.gen(function* () {
-          const encoded = yield* Schema.encodeEffect(TimestampColumn)(original)
-          const decoded = yield* Schema.decodeEffect(TimestampColumn)(encoded)
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(TimestampColumn),
+        predicate: (original) =>
+          Effect.gen(function* () {
+            const encoded = yield* Schema.encodeEffect(TimestampColumn)(original)
+            const decoded = yield* Schema.decodeEffect(TimestampColumn)(encoded)
 
-          // Use DateTime.Equivalence for DateTime comparison
-          return DateTime.Equivalence(original, decoded)
-        }),
-      ),
+            // Use DateTime.Equivalence for DateTime comparison
+            return DateTime.Equivalence(original, decoded)
+          }),
+      }),
     )
   })
 
   describe("Property 2: Nullable Fields Preserve Null", () => {
     it.effect("PersonRow nullable fields preserve null values", () =>
       // Feature: people-profiles-testing-strategy, Property 2: Nullable Fields Preserve Null
-      assertPropertyEffect(Arbitrary.schema(PersonRow), (original) =>
-        Effect.gen(function* () {
-          // Create version with null nullable fields
-          const withNulls = PersonRow.make({
-            ...original,
-            accessSetAt: null,
-            accessSetById: null,
-          })
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(PersonRow),
+        predicate: (original) =>
+          Effect.gen(function* () {
+            // Create version with null nullable fields
+            const withNulls = PersonRow.make({
+              ...original,
+              accessSetAt: null,
+              accessSetById: null,
+            })
 
-          const encoded = yield* Schema.encodeEffect(PersonRow)(withNulls)
-          const decoded = yield* Schema.decodeEffect(PersonRow)(encoded)
+            const encoded = yield* Schema.encodeEffect(PersonRow)(withNulls)
+            const decoded = yield* Schema.decodeEffect(PersonRow)(encoded)
 
-          return decoded.accessSetAt === null && decoded.accessSetById === null
-        }),
-      ),
+            return decoded.accessSetAt === null && decoded.accessSetById === null
+          }),
+      }),
     )
 
     it.effect("ProfileRow nullable fields preserve null values", () =>
       // Feature: people-profiles-testing-strategy, Property 2: Nullable Fields Preserve Null
-      assertPropertyEffect(Arbitrary.schema(ProfileRow), (original) =>
-        Effect.gen(function* () {
-          // Create version with null nullable fields
-          const withNulls = {
-            ...original,
-            bio: null,
-            location: null,
-            photoId: null,
-          }
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(ProfileRow),
+        predicate: (original) =>
+          Effect.gen(function* () {
+            // Create version with null nullable fields
+            const withNulls = {
+              ...original,
+              bio: null,
+              location: null,
+              photoId: null,
+            }
 
-          const encoded = yield* Schema.encodeEffect(ProfileRow)(withNulls)
-          const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
+            const encoded = yield* Schema.encodeEffect(ProfileRow)(withNulls)
+            const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
 
-          return decoded.bio === null && decoded.location === null && decoded.photoId === null
-        }),
-      ),
+            return decoded.bio === null && decoded.location === null && decoded.photoId === null
+          }),
+      }),
     )
   })
 
   describe("Property 4: Nested Schema Composition", () => {
     it.effect("ProfileRow preserves nested TimestampedStruct fields", () =>
       // Feature: people-profiles-testing-strategy, Property 4: Nested Schema Composition
-      assertPropertyEffect(Arbitrary.schema(ProfileRow), (original) =>
-        Effect.gen(function* () {
-          const encoded = yield* Schema.encodeEffect(ProfileRow)(original)
-          const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(ProfileRow),
+        predicate: (original) =>
+          Effect.gen(function* () {
+            const encoded = yield* Schema.encodeEffect(ProfileRow)(original)
+            const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
 
-          // Verify nested timestamp fields are preserved
-          const createdAtMatch = DateTime.Equivalence(original.createdAt, decoded.createdAt)
-          const updatedAtMatch = DateTime.Equivalence(original.updatedAt, decoded.updatedAt)
+            // Verify nested timestamp fields are preserved
+            const createdAtMatch = DateTime.Equivalence(original.createdAt, decoded.createdAt)
+            const updatedAtMatch = DateTime.Equivalence(original.updatedAt, decoded.updatedAt)
 
-          return createdAtMatch && updatedAtMatch
-        }),
-      ),
+            return createdAtMatch && updatedAtMatch
+          }),
+      }),
     )
 
     it.effect("ProfileRow preserves all nested schema fields together", () =>
       // Feature: people-profiles-testing-strategy, Property 4: Nested Schema Composition
-      assertPropertyEffect(Arbitrary.schema(ProfileRow), (original) =>
-        Effect.gen(function* () {
-          const encoded = yield* Schema.encodeEffect(ProfileRow)(original)
-          const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(ProfileRow),
+        predicate: (original) =>
+          Effect.gen(function* () {
+            const encoded = yield* Schema.encodeEffect(ProfileRow)(original)
+            const decoded = yield* Schema.decodeEffect(ProfileRow)(encoded)
 
-          // Use custom deepEquals for structural equality
-          return deepEquals(original, decoded)
-        }),
-      ),
+            // Use custom deepEquals for structural equality
+            return deepEquals(original, decoded)
+          }),
+      }),
     )
   })
 })

@@ -47,9 +47,9 @@ const uniqueTagRowsArbitrary = Arbitrary.filter(
 describe("TagsRepository", () => {
   describe("findById", () => {
     it.effect("preserves data through SQL round-trip", () =>
-      assertPropertyEffect(
-        tagRowArbitrary,
-        (tag) =>
+      assertPropertyEffect({
+        arbitrary: tagRowArbitrary,
+        predicate: (tag) =>
           Effect.gen(function* () {
             const repo = yield* TagsRepository
             yield* repo.insertRow(tag)
@@ -59,16 +59,16 @@ describe("TagsRepository", () => {
 
             return deepEquals(Option.getOrThrow(result), tag)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
   describe("findByHandle", () => {
     it.effect("returns persisted tag for arbitrary valid handles", () =>
-      assertPropertyEffect(
-        tagRowArbitrary,
-        (tag) =>
+      assertPropertyEffect({
+        arbitrary: tagRowArbitrary,
+        predicate: (tag) =>
           Effect.gen(function* () {
             const repo = yield* TagsRepository
             yield* repo.insertRow(tag)
@@ -78,29 +78,29 @@ describe("TagsRepository", () => {
 
             return deepEquals(Option.getOrThrow(result), tag)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("returns None when handle does not exist", () =>
-      assertPropertyEffect(
-        Arbitrary.schema(Handle),
-        (handle) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(Handle),
+        predicate: (handle) =>
           Effect.gen(function* () {
             const repo = yield* TagsRepository
             const result = yield* repo.findByHandle(handle)
             return Option.isNone(result)
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
   describe("findAll", () => {
     it.effect("returns tags ordered by handle", () =>
-      assertPropertyEffect(
-        uniqueTagRowsArbitrary,
-        (tags) =>
+      assertPropertyEffect({
+        arbitrary: uniqueTagRowsArbitrary,
+        predicate: (tags) =>
           Effect.gen(function* () {
             const repo = yield* TagsRepository
             yield* Effect.forEach(tags, (tag) => repo.insertRow(tag), { concurrency: "unbounded" })
@@ -119,16 +119,16 @@ describe("TagsRepository", () => {
               )
             )
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
   })
 
   describe("findByName", () => {
     it.effect("returns matching tag id and handle for arbitrary names", () =>
-      assertPropertyEffect(
-        tagRowArbitrary,
-        (tag) =>
+      assertPropertyEffect({
+        arbitrary: tagRowArbitrary,
+        predicate: (tag) =>
           Effect.gen(function* () {
             const repo = yield* TagsRepository
             yield* repo.insertRow(tag)
@@ -140,8 +140,8 @@ describe("TagsRepository", () => {
             const found = Option.getOrThrow(result)
             return found.id === tag.id && found.handle === tag.handle
           }).pipe(Effect.provide(TestLayer)),
-        DATABASE_PROPERTY_TEST_CONFIG,
-      ),
+        options: DATABASE_PROPERTY_TEST_CONFIG,
+      }),
     )
 
     it.effect("returns None when no tag name matches the pattern", () =>

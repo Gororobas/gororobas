@@ -1,3 +1,4 @@
+import { NodePath } from "@effect/platform-node"
 import {
   PersonId,
   LoroDocSnapshot,
@@ -22,13 +23,14 @@ import {
   findDatabaseRowById,
   findTranslationRows,
 } from "@gororobas/server/wiki/queries"
-import { Effect, FileSystem, Option, Schema } from "effect"
+import { Effect, FileSystem, Option, Schema, Path } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { diff } from "json-diff-ts"
 import { LoroDoc } from "loro-crdt"
-import { join } from "node:path"
 
 import { PreviewExports } from "./preview-exports.js"
+
+const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
 const Revision = Schema.Struct({
   crdtUpdate: LoroDocUpdate,
@@ -36,6 +38,7 @@ const Revision = Schema.Struct({
   createdById: Schema.NullOr(PersonId),
   evaluatedById: Schema.NullOr(PersonId),
 })
+
 const Photo = Schema.Struct({ mediaAssetId: Schema.String })
 const StoredMediaAsset = Schema.Struct({ id: Schema.String })
 
@@ -49,6 +52,7 @@ export const readPreviewDataset = (directory: string) =>
     const exports = yield* fs
       .readFileString(join(directory, "converted.json"))
       .pipe(Effect.flatMap(Schema.decodeUnknownEffect(Schema.fromJsonString(PreviewExports))))
+
     const references = yield* fs
       .readFileString(join(directory, "references.json"))
       .pipe(
@@ -56,7 +60,9 @@ export const readPreviewDataset = (directory: string) =>
           Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Array(Schema.Json))),
         ),
       )
+
     const dataset: Record<string, Array<Record<string, unknown>>> = {}
+
     for (const category of ["plants", "resources", "cultivars"] as const) {
       dataset[category] = yield* Effect.forEach(
         exports[category],
@@ -70,22 +76,26 @@ export const readPreviewDataset = (directory: string) =>
               snapshot: crdt.crdtSnapshot,
               crdtUpdate: LoroDocUpdate.make(loroDocToUpdate(snapshotToLoroDoc(crdt.crdtSnapshot))),
             })
+
             const revisions = yield* SqlSchema.findAll({
               Request: WikiArticleId,
               Result: Revision,
               execute: (id) =>
                 sql`SELECT crdt_update, created_at, created_by_id, evaluated_by_id FROM wiki_article_revisions WHERE wiki_article_id = ${id} AND evaluation = 'APPROVED' ORDER BY created_at, rowid`,
             })(id)
+
             const photos = yield* SqlSchema.findAll({
               Request: WikiArticleId,
               Result: Photo,
               execute: (id) =>
                 sql`SELECT media_asset_id FROM wiki_article_photos WHERE wiki_article_id = ${id} ORDER BY order_index`,
             })(id)
+
             const document = new LoroDoc()
             const versions = []
             const provenance = Array.isArray(data.versions) ? data.versions : []
             let previous: unknown = {}
+
             for (const [index, revision] of revisions.entries()) {
               const from = document.frontiers()
               document.import(revision.crdtUpdate)
@@ -96,6 +106,7 @@ export const readPreviewDataset = (directory: string) =>
               })
               const original = provenance[index]
               const encoded = yield* Schema.encodeEffect(WikiArticleEditableData)(parsed.data)
+
               versions.push({
                 ...(original && typeof original === "object" ? original : {}),
                 article: encoded,
@@ -107,8 +118,10 @@ export const readPreviewDataset = (directory: string) =>
                 frontier: document.frontiers(),
                 loroSnapshot: Buffer.from(snapshot).toString("base64"),
               })
+
               previous = encoded
             }
+
             return {
               ...data,
               file,
@@ -122,6 +135,7 @@ export const readPreviewDataset = (directory: string) =>
         { concurrency: 1 },
       )
     }
+
     dataset.notes = yield* Effect.forEach(
       exports.notes,
       ({ file, data }) =>
@@ -135,17 +149,20 @@ export const readPreviewDataset = (directory: string) =>
             snapshotToLoroDoc(crdt.crdtSnapshot).toJSON(),
           )
           const publication = publicationSourceDataStorageToSourcePublicationData(storage)
+
           const tags = yield* SqlSchema.findAll({
             Request: PublicationId,
             Result: Schema.Struct({ tagId: Schema.String }),
             execute: (id) => sql`SELECT tag_id FROM publication_tags WHERE publication_id = ${id}`,
           })(id)
+
           const articles = yield* SqlSchema.findAll({
             Request: PublicationId,
             Result: Schema.Struct({ wikiArticleId: Schema.String }),
             execute: (id) =>
               sql`SELECT wiki_article_id FROM publication_wiki_articles WHERE publication_id = ${id}`,
           })(id)
+
           return {
             ...data,
             file,
@@ -157,17 +174,21 @@ export const readPreviewDataset = (directory: string) =>
         }),
       { concurrency: 1 },
     )
+
     const tags = yield* sql`SELECT * FROM tags`
+
     dataset.tags = exports.tags.map(({ file, data }) => ({
       ...data,
       file,
       persisted: tags.find((tag) => tag.id === data.id),
     }))
+
     const localMediaAssets = yield* SqlSchema.findAll({
       Request: Schema.Void,
       Result: StoredMediaAsset,
       execute: () => sql`SELECT id FROM media_assets WHERE content_type IS NOT NULL`,
     })(undefined)
+
     return {
       plants: dataset.plants,
       resources: dataset.resources,

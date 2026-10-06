@@ -1,11 +1,7 @@
 import "loro-crdt"
+import type { LoroDocFrontier, LoroDocUpdate, LoroDocSnapshot } from "./domain.js"
 
 declare module "loro-crdt" {
-  // Local type alias to avoid repetition
-  type LoroDocFrontier = import("./domain.js").LoroDocFrontier
-  type LoroDocUpdate = import("./domain.js").LoroDocUpdate
-  type LoroDocSnapshot = import("./domain.js").LoroDocSnapshot
-
   interface LoroDoc {
     export(config: { mode: "snapshot" }): LoroDocSnapshot
     export(config: { from: VersionVector; mode: "update" }): LoroDocUpdate

@@ -21,19 +21,23 @@ import type {
 export class StepMatcher extends Context.Service<
   StepMatcher,
   {
-    checkFeature: (
-      feature: ParsedFeature,
-      discoveredSteps: Array<DiscoveredStep>,
-      featurePath: string,
-    ) => Effect.Effect<FeatureResult>
+    checkFeature: (input: {
+      feature: ParsedFeature
+      discoveredSteps: Array<DiscoveredStep>
+      featurePath: string
+    }) => Effect.Effect<FeatureResult>
   }
 >()("StepMatcher") {}
 
-function filterStepsByScope(
-  discoveredSteps: Array<DiscoveredStep>,
-  scopeType: "background" | "scenario" | "scenario_outline",
-  scopeName?: string,
-): Array<DiscoveredStep> {
+function filterStepsByScope({
+  discoveredSteps,
+  scopeType,
+  scopeName,
+}: {
+  discoveredSteps: Array<DiscoveredStep>
+  scopeType: "background" | "scenario" | "scenario_outline"
+  scopeName?: string | undefined
+}): Array<DiscoveredStep> {
   return discoveredSteps.filter((step) => {
     if (!step.scope) return true
     if (step.scope.type === scopeType) {
@@ -84,11 +88,13 @@ function matchSteps(
 ): Array<MatchedStep> {
   return steps.map((step) => {
     const implementation = matchStep(step.text, discoveredSteps)
+
     const featureStep: FeatureStep = {
       keyword: step.keyword,
       line: step.line,
       text: step.text,
     }
+
     return {
       matched: Option.isSome(implementation),
       step: featureStep,
@@ -101,7 +107,12 @@ function checkScenario(
   scenario: ParsedScenario,
   discoveredSteps: Array<DiscoveredStep>,
 ): ScenarioResult {
-  const scopedSteps = filterStepsByScope(discoveredSteps, "scenario", scenario.name)
+  const scopedSteps = filterStepsByScope({
+    discoveredSteps: discoveredSteps,
+    scopeType: "scenario",
+    scopeName: scenario.name,
+  })
+
   return {
     name: scenario.name,
     steps: matchSteps(scenario.steps, scopedSteps),
@@ -115,11 +126,13 @@ function matchOutlineSteps(
 ): Array<MatchedStep> {
   return steps.map((step) => {
     const implementation = matchOutlineStep(step.text, discoveredSteps)
+
     const featureStep: FeatureStep = {
       keyword: step.keyword,
       line: step.line,
       text: step.text,
     }
+
     return {
       matched: Option.isSome(implementation),
       step: featureStep,
@@ -132,7 +145,12 @@ function checkScenarioOutline(
   outline: ParsedScenarioOutline,
   discoveredSteps: Array<DiscoveredStep>,
 ): ScenarioResult {
-  const scopedSteps = filterStepsByScope(discoveredSteps, "scenario_outline", outline.name)
+  const scopedSteps = filterStepsByScope({
+    discoveredSteps: discoveredSteps,
+    scopeType: "scenario_outline",
+    scopeName: outline.name,
+  })
+
   return {
     examplesCount: outline.examples.length,
     name: outline.name,
@@ -147,7 +165,10 @@ function checkRule(rule: ParsedRule, discoveredSteps: Array<DiscoveredStep>): Ru
     ...rule.scenarioOutlines.map((outline) => checkScenarioOutline(outline, discoveredSteps)),
   ]
 
-  const backgroundScopedSteps = filterStepsByScope(discoveredSteps, "background")
+  const backgroundScopedSteps = filterStepsByScope({
+    discoveredSteps: discoveredSteps,
+    scopeType: "background",
+  })
   const backgroundSteps = rule.background
     ? matchSteps(rule.background.steps, backgroundScopedSteps)
     : undefined
@@ -162,7 +183,7 @@ function checkRule(rule: ParsedRule, discoveredSteps: Array<DiscoveredStep>): Ru
 export const StepMatcherLive = Layer.succeed(
   StepMatcher,
   StepMatcher.of({
-    checkFeature: (feature, discoveredSteps, featurePath) =>
+    checkFeature: ({ feature, discoveredSteps, featurePath }) =>
       Effect.sync(() => {
         const scenarios = [
           ...feature.scenarios.map((scenario) => checkScenario(scenario, discoveredSteps)),
@@ -170,9 +191,13 @@ export const StepMatcherLive = Layer.succeed(
             checkScenarioOutline(outline, discoveredSteps),
           ),
         ]
+
         const rules = feature.rules.map((rule) => checkRule(rule, discoveredSteps))
 
-        const backgroundScopedSteps = filterStepsByScope(discoveredSteps, "background")
+        const backgroundScopedSteps = filterStepsByScope({
+          discoveredSteps: discoveredSteps,
+          scopeType: "background",
+        })
         const backgroundSteps = feature.background
           ? matchSteps(feature.background.steps, backgroundScopedSteps)
           : undefined

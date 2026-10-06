@@ -18,6 +18,7 @@ export const Observation = Schema.Struct({
   fetchedAt: Schema.String,
   payload: Schema.Json,
 })
+
 export type Observation = typeof Observation.Type
 
 export const ExternalLink = Schema.Struct({ locale: Schema.String, url: UrlAsString })

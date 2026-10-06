@@ -2,6 +2,7 @@ import { NodeHttpServer } from "@effect/platform-node"
 import { Effect, Layer } from "effect"
 import { HttpRouter } from "effect/http"
 // oxlint-disable-next-line effect/use-http-client-service -- NodeHttpServer requires the Node HTTP server factory.
+// oxlint-disable-next-line custom-lint-rules/no-node-apis -- NodeHttpServer.layer requires the Node HTTP server factory.
 import * as Http from "node:http"
 
 import { ApiLive } from "./api-live.js"
@@ -44,4 +45,4 @@ const HttpLive = HttpRouter.serve(Services).pipe(
 
 const program = Layer.launch(HttpLive)
 
-runMainWithCustomRuntime(AppRuntimeLive, program)
+runMainWithCustomRuntime({ runtime: AppRuntimeLive, program: program })

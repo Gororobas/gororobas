@@ -26,6 +26,7 @@ export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAcc
     readonly linkAuthSubjectId: AuthSubjectId | null
   }) {
     const sql = yield* SqlClient.SqlClient
+
     return yield* sql
       .withTransaction(
         Effect.gen(function* () {
@@ -34,7 +35,9 @@ export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAcc
             issuer: input.identity.issuer,
             subject: input.identity.subject,
           }
+
           const existing = yield* findOAuthIdentity(key)
+
           if (existing._tag === "Some") {
             if (
               !existing.value.active ||
@@ -44,22 +47,30 @@ export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAcc
             ) {
               return yield* OAuthLoginRejected.make({ reason: "account-conflict" })
             }
+
             return existing.value
           }
+
           let authSubjectId = input.linkAuthSubjectId
+
           if (authSubjectId === null) {
-            if (!input.identity.emailVerified || input.identity.email === undefined)
+            if (!input.identity.emailVerified || input.identity.email === undefined) {
               return yield* OAuthLoginRejected.make({ reason: "email-verification-required" })
+            }
+
             const email = yield* Schema.decodeEffect(Email)(input.identity.email).pipe(
               Effect.mapError(() =>
                 OAuthLoginRejected.make({ reason: "email-verification-required" }),
               ),
             )
+
             // Matching email is not consent to connect an external identity to an account.
-            if ((yield* findAccountSecurityByEmail(email))._tag === "Some")
+            if ((yield* findAccountSecurityByEmail(email))._tag === "Some") {
               return yield* OAuthLoginRejected.make({ reason: "account-conflict" })
+            }
             authSubjectId = yield* IdGen.make(AuthSubjectId)
             const now = yield* DateTime.now
+
             yield* insertAuthSubject({
               id: authSubjectId,
               email,
@@ -71,14 +82,17 @@ export const provisionOAuthAccount = Effect.fn("Authentication.provisionOAuthAcc
               createdAt: now,
               updatedAt: now,
             })
+
             yield* insertPersonProfile({
               id: authSubjectId,
               name: input.identity.name,
               createdAt: now,
               updatedAt: now,
             })
+
             yield* insertPerson(authSubjectId)
           }
+
           const credentialId = `oauth:${(yield* IdGen).generate()}`
           const revision = yield* IdGen.make(AuthSecurityRevision)
           yield* insertOAuthCredential({ credentialId, authSubjectId, revision })

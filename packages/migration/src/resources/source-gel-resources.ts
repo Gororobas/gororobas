@@ -32,6 +32,7 @@ export const sourceGelResources = Effect.gen(function* () {
   const path = yield* Path.Path
   const context = yield* MigrationContext
   const gelClient = yield* GelClient
+
   const resourceResults = yield* gelClient
     .use((client) => client.query(resourcesQuery))
     .pipe(
@@ -57,6 +58,7 @@ export const sourceGelResources = Effect.gen(function* () {
   })
 
   const resources = EffectArray.getSuccesses(resourceResults)
+
   const articleResults = yield* Effect.all(
     resources.map((source) =>
       gelResourceToWikiArticle(source).pipe(Effect.map((article) => ({ article, source }))),
@@ -79,17 +81,20 @@ export const sourceGelResources = Effect.gen(function* () {
         const id = yield* context
           .resolveId(source.id, "WikiArticle")
           .pipe(Effect.flatMap(Schema.decodeUnknownEffect(WikiArticleId)))
+
         const thumbnailId = source.thumbnail
           ? yield* context
               .resolveId(source.thumbnail.id, "Image")
               .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId)))
           : null
+
         const versionInputs: Array<
           Pick<
             WikiMigrationVersion,
             "article" | "sourceEditId" | "actorId" | "reviewerId" | "timestamp"
           >
         > = []
+
         yield* Effect.forEach(
           source.audit_logs.filter((log) => log.new && log.action !== "DELETE"),
           (log) =>
@@ -97,6 +102,7 @@ export const sourceGelResources = Effect.gen(function* () {
               const fields = yield* Schema.decodeUnknownEffect(
                 Schema.Record(Schema.String, Schema.Unknown),
               )(log.new)
+
               const state = yield* Schema.decodeUnknownEffect(GelResourceWithRelations)({
                 ...source,
                 ...fields,
@@ -107,12 +113,15 @@ export const sourceGelResources = Effect.gen(function* () {
                   ? Schema.decodeUnknownSync(Schema.DateFromString)(fields.updated_at)
                   : source.updated_at,
               })
+
               const historicalArticle = yield* gelResourceToWikiArticle(state)
+
               const actorId = log.performed_by
                 ? yield* context
                     .resolveId(log.performed_by.id, "Profile")
                     .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
                 : null
+
               versionInputs.push({
                 article: historicalArticle,
                 sourceEditId: log.id,
@@ -123,7 +132,8 @@ export const sourceGelResources = Effect.gen(function* () {
             }),
           { concurrency: 1 },
         )
-        if (EffectArray.isReadonlyArrayEmpty(versionInputs))
+
+        if (EffectArray.isReadonlyArrayEmpty(versionInputs)) {
           versionInputs.push({
             article,
             sourceEditId: null,
@@ -135,12 +145,15 @@ export const sourceGelResources = Effect.gen(function* () {
             reviewerId: null,
             timestamp: (source.updated_at ?? source.created_at).toISOString(),
           })
+        }
+
         const last = versionInputs.at(-1)
+
         if (
           last &&
           Schema.encodeSync(Schema.fromJsonString(WikiArticleEditableData))(last.article) !==
             Schema.encodeSync(Schema.fromJsonString(WikiArticleEditableData))(article)
-        )
+        ) {
           versionInputs.push({
             article,
             sourceEditId: null,
@@ -148,7 +161,10 @@ export const sourceGelResources = Effect.gen(function* () {
             reviewerId: null,
             timestamp: (source.updated_at ?? source.created_at).toISOString(),
           })
+        }
+
         const versions = yield* buildWikiMigrationHistory(versionInputs)
+
         const encoded = yield* Schema.encodeEffect(
           Schema.fromJsonString(ResourceDataForMigration, { space: 2 }),
         )({
@@ -159,6 +175,7 @@ export const sourceGelResources = Effect.gen(function* () {
           article,
           latest_source: source,
         })
+
         yield* fs.writeFileString(path.join(resourcesDirectory, `${source.handle}.json`), encoded)
       }),
     { concurrency: 1 },

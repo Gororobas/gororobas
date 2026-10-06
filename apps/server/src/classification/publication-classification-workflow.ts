@@ -19,6 +19,7 @@ export const PublicationClassificationWorkflow = Workflow.make("PublicationClass
 export const PublicationClassificationWorkflowLayer = PublicationClassificationWorkflow.toLayer(
   Effect.fn("PublicationClassificationWorkflow")(function* (payload, _executionId) {
     const publications = yield* PublicationsRepository
+
     yield* publications.findPublicationRowById(payload.publication_id).pipe(
       Effect.flatMap(
         Option.match({

@@ -17,6 +17,7 @@ export {
 export { describeFeature } from "./feature/describe-feature.js"
 export { parseFeatureFile, parseFeatureFileSync } from "./parser/feature-parser.js"
 export { decodeParams, extractParams, matchPattern } from "./parser/pattern-matcher.js"
+
 export type {
   ParsedBackground,
   ParsedFeature,

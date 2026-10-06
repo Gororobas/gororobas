@@ -19,6 +19,7 @@ export const sourceGelIdMappings = Effect.gen(function* () {
   const path = yield* Path.Path
   const context = yield* MigrationContext
   const directory = path.join(import.meta.dirname, "..", "debug")
+
   const references: Array<{
     id: string
     gelId: string
@@ -28,6 +29,7 @@ export const sourceGelIdMappings = Effect.gen(function* () {
     label: string
     sanityId?: string
   }> = []
+
   yield* Effect.forEach(
     [
       ["select UserProfile { id, handle, name }", "Profile", "profiles"],
@@ -47,12 +49,14 @@ export const sourceGelIdMappings = Effect.gen(function* () {
         const records = yield* client
           .use((gel) => gel.query(query))
           .pipe(Effect.tap(archiveGelResult(`references-${collection}`)))
+
         yield* Effect.forEach(
           records,
           (record) =>
             Effect.gen(function* () {
               const source = yield* Schema.decodeUnknownEffect(ReferenceSource)(record)
               const id = yield* ensureMappedId({ id: source.id }, entityType)
+
               references.push({
                 id,
                 gelId: source.id,
@@ -67,6 +71,7 @@ export const sourceGelIdMappings = Effect.gen(function* () {
                   source.id,
                 ...(source.sanity_id ? { sanityId: source.sanity_id } : {}),
               })
+
               if (source.sanity_id) {
                 yield* context.registerMapping({
                   gelId: `image-sanity:${source.sanity_id}`,
@@ -75,6 +80,7 @@ export const sourceGelIdMappings = Effect.gen(function* () {
                   contentHash: source.sanity_id,
                   lastSyncedAt: "2025-04-01T12:00:00Z",
                 })
+
                 yield* fs.makeDirectory(path.join(directory, "images"), { recursive: true })
                 const encoded = yield* Schema.encodeEffect(
                   Schema.fromJsonString(Schema.Unknown, { space: 2 }),
@@ -90,6 +96,7 @@ export const sourceGelIdMappings = Effect.gen(function* () {
       }),
     { concurrency: 1 },
   )
+
   yield* fs.makeDirectory(path.join(directory, "references"), { recursive: true })
   yield* fs.writeFileString(
     path.join(directory, "references", "index.json"),

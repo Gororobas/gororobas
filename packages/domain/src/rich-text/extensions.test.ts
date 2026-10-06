@@ -17,11 +17,11 @@ import { tiptapFromHtml, tiptapToHtml } from "./tiptap-to-html.js"
 it.effect(
   "preserves versioned references and ordered media through HTML and deduplicates nested targets",
   () =>
-    assertPropertyEffect(
-      Arbitrary.schema(
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(
         Schema.Struct({ reference: EntityReferenceAttributes, grid: MediaGridAttributes }),
       ),
-      ({ reference, grid }) =>
+      predicate: ({ reference, grid }) =>
         Effect.sync(() => {
           const document = TiptapDocument.make({
             type: "doc",
@@ -37,6 +37,7 @@ it.effect(
               { type: "mediaGrid", attrs: grid },
             ],
           })
+
           const restored = tiptapFromHtml(tiptapToHtml(document))
           expect(linkedEntitiesFromTiptapDocument(restored)).toEqual([
             Schema.decodeUnknownSync(EntityReferenceTarget)(reference),
@@ -47,6 +48,7 @@ it.effect(
           if (paragraph.type !== "paragraph") throw new Error("Expected a paragraph")
           expect(paragraph.content?.[0]).toEqual({ type: "entityReference", attrs: reference })
           expect(restored.content[2]).toEqual({ type: "mediaGrid", attrs: grid })
+
           expect(
             Schema.is(TiptapDocument)({
               ...document,
@@ -58,13 +60,15 @@ it.effect(
               ],
             }),
           ).toBe(false)
+
           expect(
             Schema.is(TiptapDocument)({
               ...document,
               content: [{ type: "mediaGrid", attrs: { ...grid, items: [] } }],
             }),
           ).toBe(false)
+
           return true
         }),
-    ),
+    }),
 )

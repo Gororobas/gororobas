@@ -26,6 +26,7 @@
     "@babel/plugin-transform-export-namespace-from": "^8.0.1",
     "@babel/plugin-transform-modules-commonjs": "^8.0.1",
     "@effect/language-service": "^0.87.3",
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
     "@foldkit/oxlint-plugin": "^0.15.2",
     "@manypkg/cli": "^0.25.1",

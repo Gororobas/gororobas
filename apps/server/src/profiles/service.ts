@@ -27,6 +27,7 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
             }),
           ),
         )
+
         yield* Policies.profiles.canEdit(profile)
 
         return yield* repo.updateProfileRow({

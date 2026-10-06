@@ -47,6 +47,7 @@ export const oauthProtocolLayer = (origin: string) =>
     Effect.gen(function* () {
       const settings = yield* configuration
       const clients = new Map<typeof OAuthProvider.Type, OpenIdClient.Configuration>()
+
       const registrations = [
         {
           provider: "google",
@@ -67,14 +68,18 @@ export const oauthProtocolLayer = (origin: string) =>
           secret: settings.microsoftSecret,
         },
       ] as const
+
       for (const registration of registrations) {
         if (Option.isNone(registration.id) && Option.isNone(registration.secret)) continue
-        if (Option.isNone(registration.id) || Option.isNone(registration.secret))
+        if (Option.isNone(registration.id) || Option.isNone(registration.secret)) {
           return yield* OAuthLoginRejected.make({ reason: "provider-disabled" })
+        }
         const clientId = registration.id.value
         const secret = Redacted.value(registration.secret.value)
-        if (secret.length === 0)
+        if (secret.length === 0) {
           return yield* OAuthLoginRejected.make({ reason: "provider-disabled" })
+        }
+
         const client = yield* Effect.tryPromise({
           try: () =>
             OpenIdClient.discovery(
@@ -91,8 +96,10 @@ export const oauthProtocolLayer = (origin: string) =>
             ),
           catch: rejected,
         })
+
         clients.set(registration.provider, client)
       }
+
       return makeOAuthProtocol(origin, clients)
     }),
   )
@@ -107,8 +114,10 @@ export const makeOAuthProtocol = (
       ? Effect.fail(OAuthLoginRejected.make({ reason: "provider-disabled" }))
       : Effect.succeed(client)
   }
+
   const callback = (provider: typeof OAuthProvider.Type) =>
     `${origin}/api/auth/${provider}/callback`
+
   return OAuthProtocol.of({
     authorize: Effect.fn(function* (input) {
       const client = yield* getClient(input.provider)
@@ -116,6 +125,7 @@ export const makeOAuthProtocol = (
         try: () => OpenIdClient.calculatePKCECodeChallenge(input.pkceVerifier),
         catch: rejected,
       })
+
       return OpenIdClient.buildAuthorizationUrl(client, {
         redirect_uri: callback(input.provider),
         response_type: "code",
@@ -135,6 +145,7 @@ export const makeOAuthProtocol = (
         code: Redacted.value(input.code),
       })
       url.search = parameters.toString()
+
       // Apple posts its authorization response and does not advertise PKCE.
       const response =
         input.provider === "apple"
@@ -144,6 +155,7 @@ export const makeOAuthProtocol = (
               body: parameters,
             })
           : url
+
       const tokens = yield* Effect.tryPromise({
         try: () =>
           OpenIdClient.authorizationCodeGrant(client, response, {
@@ -154,8 +166,10 @@ export const makeOAuthProtocol = (
           }),
         catch: rejected,
       })
+
       const claims = tokens.claims()
       if (claims === undefined) return yield* rejected()
+
       return yield* Schema.decodeUnknownEffect(OAuthIdentity)({
         issuer: claims.iss,
         subject: claims.sub,

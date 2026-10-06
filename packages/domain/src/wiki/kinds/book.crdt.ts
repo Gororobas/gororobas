@@ -92,4 +92,5 @@ export const WikiBookArticleCrdtOperations = defineKindCrdtOperations([
   ...publisherOperations,
   ...urlOperations,
 ])
+
 export type WikiBookArticleAttributeEdit = typeof WikiBookArticleCrdtOperations.AttributeEdit.Type

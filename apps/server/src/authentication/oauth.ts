@@ -56,11 +56,14 @@ const handlers = Layer.mergeAll(
         networkKey: (yield* requestContext.value).networkKey,
       })
       const now = DateTime.toEpochMillis(yield* DateTime.now)
+
       if (
         caller._tag === "Authenticated" &&
         now - DateTime.toEpochMillis(caller.assurance.authenticatedAt) > 300_000
-      )
+      ) {
         return yield* invalidFlow()
+      }
+
       const issued = yield* (yield* binding.RequestBinding).issue(input.flowId)
       const command = issued.credentialCommands[0]
       if (command?._tag !== "Issue") return yield* invalidFlow()
@@ -72,18 +75,21 @@ const handlers = Layer.mergeAll(
       const state = yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))
       const nonce = yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))
       const pkceVerifier = `${yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))}${yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))}`
+
       const authorizationUrl = yield* (yield* OAuthProtocol).authorize({
         provider: input.provider,
         state,
         nonce,
         pkceVerifier,
       })
+
       const linkAuthSubjectId =
         caller._tag === "Authenticated"
           ? yield* Schema.decodeEffect(AuthSubjectId)(caller.subjectId).pipe(
               Effect.mapError(invalidFlow),
             )
           : null
+
       yield* insertOAuthFlow({
         state,
         flowId: input.flowId,
@@ -94,6 +100,7 @@ const handlers = Layer.mergeAll(
         linkAuthSubjectId,
         expiresAt: Math.min(now + 600_000, verified.expiresAtMillis),
       }).pipe(Effect.mapError(invalidFlow))
+
       return { value: { authorizationUrl }, credentialCommands: issued.credentialCommands }
     }),
   ),
@@ -103,33 +110,41 @@ const handlers = Layer.mergeAll(
         input.flowId,
         input.requestBinding,
       )
+
       const flow = yield* consumeOAuthFlow({
         state: input.state,
         provider: input.provider,
         flowId: input.flowId,
         bindingVerifier: verified.verifier,
       }).pipe(Effect.mapError(invalidFlow))
+
       if (flow._tag === "None") return yield* invalidFlow()
       const now = yield* DateTime.now
+
       if (
         flow.value.linkAuthSubjectId !== null &&
         (caller._tag !== "Authenticated" ||
           String(caller.subjectId) !== flow.value.linkAuthSubjectId ||
           DateTime.toEpochMillis(now) - DateTime.toEpochMillis(caller.assurance.authenticatedAt) >
             300_000)
-      )
+      ) {
         return yield* invalidFlow()
+      }
+
       // Claim before exchanging the code. A failed exchange requires a new flow.
       const identity = yield* (yield* OAuthProtocol).exchange({ ...flow.value, code: input.code })
+
       const account = yield* provisionOAuthAccount({
         provider: input.provider,
         identity,
         linkAuthSubjectId: flow.value.linkAuthSubjectId,
       })
+
       const subjectId = AuthSchema.SubjectId.make(account.authSubjectId)
       const revision = yield* (yield* Sessions.AuthenticationAuthority).capture(subjectId, [
         account.credentialId,
       ])
+
       const completed = yield* (yield* sessions.AuthenticationCompletion)
         .prepare({
           claims: { authSubjectId: account.authSubjectId },
@@ -153,6 +168,7 @@ const handlers = Layer.mergeAll(
           Effect.flatMap((commit) => commit.read),
           Effect.mapError(() => Sessions.SessionUnavailable.make({})),
         )
+
       return {
         value: completed.value,
         credentialCommands: [
@@ -185,6 +201,7 @@ const relay = (provider: "apple" | "google" | "microsoft") =>
         : new URL(request.url, "https://localhost").searchParams
     const code = parameters.get("code")
     const state = parameters.get("state")
+
     if (
       code === null ||
       state === null ||
@@ -192,10 +209,12 @@ const relay = (provider: "apple" | "google" | "microsoft") =>
       state.length > 128 ||
       parameters.getAll("code").length !== 1 ||
       parameters.getAll("state").length !== 1
-    )
+    ) {
       return HttpServerResponse.redirect("/api/auth/login#oauth-error", {
         headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
       })
+    }
+
     return HttpServerResponse.redirect(
       `/api/auth/login#oauth=${encodeURIComponent(JSON.stringify({ provider, code, state }))}`,
       { status: 303, headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" } },

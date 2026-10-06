@@ -59,16 +59,19 @@ export const defineKind = <
     ...EditableTranslationFields,
     ...WikiArticleEditableTranslation.fields,
   })
+
   const TranslationMaterializedRow = Schema.Struct({
     ...EditableTranslationFields,
     ...commonWikiArticleTranslationMaterializedFields,
     kind: Kind,
   })
+
   const MaterializedRow = Schema.Struct({
     ...coreWikiArticleMaterializedRowFields,
     kind: Kind,
     attributes: Schema.fromJsonString(MaterializedAttributes),
   })
+
   return {
     Kind,
     EditableAttributes,

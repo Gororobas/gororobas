@@ -12,6 +12,7 @@ export const AccountRow = Schema.Struct({
   isEmailVerified: Schema.Boolean,
   image: Schema.NullOr(Schema.String),
 })
+
 export type AccountRow = typeof AccountRow.Type
 
 export const CurrentAuthenticationData = Schema.NullOr(

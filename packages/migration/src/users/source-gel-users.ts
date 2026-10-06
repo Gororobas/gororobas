@@ -40,6 +40,7 @@ export const sourceGelUsers = Effect.gen(function* () {
   const path = yield* Path.Path
   const context = yield* MigrationContext
   const gelClient = yield* GelClient
+
   const userResults = yield* gelClient
     .use((client) => client.query(usersQuery))
     .pipe(
@@ -67,6 +68,7 @@ export const sourceGelUsers = Effect.gen(function* () {
       user.profile.notes_count > 0 ||
       user.profile.images_count > 0,
   )
+
   yield* Effect.forEach(
     usersWithContent,
     (user) =>
@@ -78,12 +80,15 @@ export const sourceGelUsers = Effect.gen(function* () {
         const profileId = yield* context
           .resolveId(user.profile.id, "Profile")
           .pipe(Effect.flatMap(Schema.decodeUnknownEffect(ProfileId)))
+
         const photoId = user.profile.photo
           ? yield* context
               .resolveId(user.profile.photo.id, "Image")
               .pipe(Effect.flatMap(Schema.decodeUnknownEffect(MediaAssetId)))
           : null
+
         const bio = data.profile.bio
+
         const encoded = yield* Schema.encodeEffect(
           Schema.fromJsonString(UserDataForMigration, { space: 2 }),
         )({
@@ -91,6 +96,7 @@ export const sourceGelUsers = Effect.gen(function* () {
           account: { ...data.account, id: authSubjectId },
           profile: { ...data.profile, id: profileId, photoId, bio },
         })
+
         yield* fs.writeFileString(path.join(usersDirectory, `${user.profile.handle}.json`), encoded)
       }),
     { concurrency: 1 },

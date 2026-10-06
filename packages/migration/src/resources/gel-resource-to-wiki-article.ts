@@ -21,6 +21,7 @@ export const ResourceWikiArticle = Schema.Union([
   WikiNoteworthyEntityArticle.EditableArticle,
   WikiResourceArticle.EditableArticle,
 ])
+
 export type ResourceWikiArticle = typeof ResourceWikiArticle.Type
 
 export const ResourceAuditLog = Schema.Struct({
@@ -31,6 +32,7 @@ export const ResourceAuditLog = Schema.Struct({
   old: Schema.Unknown,
   new: Schema.Unknown,
 })
+
 export const ResourceDataForMigration = Schema.Struct({
   id: WikiArticleId,
   thumbnailId: Schema.NullOr(MediaAssetId),
@@ -39,6 +41,7 @@ export const ResourceDataForMigration = Schema.Struct({
   latest_source: GelResourceWithRelations,
   article: ResourceWikiArticle,
 })
+
 export type ResourceDataForMigration = typeof ResourceDataForMigration.Type
 
 const genericResourceFormatMap = {

@@ -28,6 +28,7 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
   let exchanges = 0
   let subjectSuffix = ""
   let email = "provider@example.com"
+
   const protocol = Layer.succeed(OAuthProtocol, {
     authorize: (input) =>
       Effect.succeed(
@@ -36,6 +37,7 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
     exchange: (input) =>
       Effect.sync(() => {
         exchanges++
+
         return {
           issuer: `https://${input.provider}.example`,
           subject: `${input.provider}-subject${subjectSuffix}`,
@@ -45,8 +47,10 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
         }
       }),
   })
+
   const runtime = ManagedRuntime.make(AuthenticationTestInfrastructure)
   const { layer: deliveryLayer } = captureEmailDelivery()
+
   const routes = authenticationLayer({
     origin,
     requestBindingKey: authenticationTestBindingKey,
@@ -55,6 +59,7 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
     Layer.provide(deliveryLayer),
     Layer.provide(Layer.succeedContext(await runtime.context())),
   )
+
   const app = HttpRouter.toWebHandler(routes, { disableLogger: true })
   const context = Context.make(
     Proofs.ProofRequestContext,
@@ -63,45 +68,70 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
   const { fetchRoute, cookieHeader } = makeAuthenticationTestBrowser((request) =>
     app.handler(request, context),
   )
-  const request = async (path: string, payload?: unknown, cookie = cookieHeader()) => {
-    return fetchRoute(
-      path,
-      payload === undefined ? "GET" : "POST",
-      payload === undefined ? undefined : { payload },
-      { cookie },
-    )
+
+  const request = async ({
+    path,
+    payload,
+    cookie = cookieHeader(),
+  }: {
+    path: string
+    payload?: unknown
+    cookie?: string | undefined
+  }) => {
+    return fetchRoute({
+      path: path,
+      method: payload === undefined ? "GET" : "POST",
+      body: payload === undefined ? undefined : { payload },
+      customHeaders: { cookie },
+    })
   }
+
   const begin = async (provider: "apple" | "google" | "microsoft") => {
     const flowId = crypto.randomUUID()
-    const response = await request("/api/auth/beginOAuth", { provider, flowId })
+    const response = await request({ path: "/api/auth/beginOAuth", payload: { provider, flowId } })
     expect(response.status).toBe(200)
     const result = Schema.decodeUnknownSync(authorization)(await response.json())
     const state = new URL(result.value.authorizationUrl).searchParams.get("state")
     if (state === null) throw new Error("missing state")
     return { provider, flowId, state, code: "approved-code" }
   }
+
   const finish = async (input: Awaited<ReturnType<typeof begin>>) => {
-    const response = await request("/api/auth/completeOAuth", input)
+    const response = await request({ path: "/api/auth/completeOAuth", payload: input })
     expect(response.status).toBe(200)
     const value = Schema.decodeUnknownSync(completion)(await response.json()).value
     if (value._tag !== "Authenticated") throw new Error("missing session")
     return value.session.subjectId
   }
+
   const query = <A extends object>(
     execute: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, unknown>,
   ) => runtime.runPromise(Effect.flatMap(SqlClient.SqlClient, execute))
+
   try {
     const google = await begin("google")
-    expect((await request("/api/auth/completeOAuth", google, "")).status).not.toBe(200)
     expect(
-      (await request("/api/auth/completeOAuth", { ...google, state: "wrong" })).status,
+      (await request({ path: "/api/auth/completeOAuth", payload: google, cookie: "" })).status,
     ).not.toBe(200)
     expect(
-      (await request("/api/auth/completeOAuth", { ...google, provider: "apple" })).status,
+      (await request({ path: "/api/auth/completeOAuth", payload: { ...google, state: "wrong" } }))
+        .status,
     ).not.toBe(200)
+
+    expect(
+      (
+        await request({
+          path: "/api/auth/completeOAuth",
+          payload: { ...google, provider: "apple" },
+        })
+      ).status,
+    ).not.toBe(200)
+
     expect(exchanges).toBe(0)
     const authSubjectId = await finish(google)
-    expect((await request("/api/auth/completeOAuth", google)).status).not.toBe(200)
+    expect((await request({ path: "/api/auth/completeOAuth", payload: google })).status).not.toBe(
+      200,
+    )
     expect(exchanges).toBe(1)
     const rows = await query((sql) => sql`SELECT id, security_revision FROM auth_subjects`)
     expect(rows).toHaveLength(1)
@@ -109,21 +139,27 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
       Schema.Array(Schema.Struct({ id: AuthSubjectId, securityRevision: AuthSecurityRevision })),
     )(rows)
     const lostSession = await begin("microsoft")
-    await request("/api/auth/signOut", {})
-    expect((await request("/api/auth/completeOAuth", lostSession)).status).not.toBe(200)
+    await request({ path: "/api/auth/signOut", payload: {} })
+    expect(
+      (await request({ path: "/api/auth/completeOAuth", payload: lostSession })).status,
+    ).not.toBe(200)
     expect(exchanges).toBe(1)
     subjectSuffix = "-unverified"
-    const unverified = await request("/api/auth/completeOAuth", await begin("microsoft"))
+    const unverified = await request({
+      path: "/api/auth/completeOAuth",
+      payload: await begin("microsoft"),
+    })
     expect(unverified.status).not.toBe(200)
     expect(await unverified.text()).toContain("email-verification-required")
     subjectSuffix = ""
     expect(await finish(await begin("google"))).toBe(authSubjectId)
     const microsoft = await begin("microsoft")
     expect(await finish(microsoft)).toBe(authSubjectId)
-    await request("/api/auth/signOut", {})
+    await request({ path: "/api/auth/signOut", payload: {} })
     expect(await finish(await begin("microsoft"))).toBe(authSubjectId)
-    await request("/api/auth/signOut", {})
+    await request({ path: "/api/auth/signOut", payload: {} })
     const apple = await begin("apple")
+
     const relay = await app.handler(
       new Request(`${origin}/api/auth/apple/callback`, {
         method: "POST",
@@ -132,30 +168,36 @@ test("OAuth binds and consumes flows, relays Apple POSTs, and connects identitie
       }),
       context,
     )
+
     expect(relay.status).toBe(303)
     expect(relay.headers.get("location")).toContain("#oauth=")
     expect(exchanges).toBe(5)
     // An existing email cannot silently acquire a new external login.
-    const conflict = await request("/api/auth/completeOAuth", apple)
+    const conflict = await request({ path: "/api/auth/completeOAuth", payload: apple })
     expect(conflict.status).not.toBe(200)
     expect(await conflict.text()).toContain("account-conflict")
     expect(await query((sql) => sql`SELECT id FROM auth_subjects`)).toHaveLength(1)
     email = "apple@example.com"
     const appleAuthSubjectId = await finish(await begin("apple"))
     expect(appleAuthSubjectId).not.toBe(authSubjectId)
-    await request("/api/auth/signOut", {})
+    await request({ path: "/api/auth/signOut", payload: {} })
     // Expired flows never exchange a code or establish a session.
     const expired = await begin("google")
     await query(
       (sql) => sql`UPDATE auth_oauth_flows SET expires_at = 0 WHERE state = ${expired.state}`,
     )
     const beforeExpiry = exchanges
-    expect((await request("/api/auth/completeOAuth", expired)).status).not.toBe(200)
+    expect((await request({ path: "/api/auth/completeOAuth", payload: expired })).status).not.toBe(
+      200,
+    )
     expect(exchanges).toBe(beforeExpiry)
     await query(
       (sql) => sql`UPDATE auth_credentials SET active = 0 WHERE auth_subject_id = ${authSubjectId}`,
     )
-    const revoked = await request("/api/auth/completeOAuth", await begin("microsoft"))
+    const revoked = await request({
+      path: "/api/auth/completeOAuth",
+      payload: await begin("microsoft"),
+    })
     expect(revoked.status).not.toBe(200)
     expect(await revoked.text()).toContain("account-conflict")
     expect(await query((sql) => sql`SELECT id FROM auth_subjects`)).toHaveLength(2)

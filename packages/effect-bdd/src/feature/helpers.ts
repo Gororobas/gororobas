@@ -7,11 +7,15 @@ import type {
   ParsedScenarioOutline,
 } from "../parser/types.js"
 
-export function findScenario(
-  feature: ParsedFeature,
-  name: string,
-  ruleName?: string,
-): Option.Option<ParsedScenario> {
+export function findScenario({
+  feature,
+  name,
+  ruleName,
+}: {
+  feature: ParsedFeature
+  name: string
+  ruleName?: string | undefined
+}): Option.Option<ParsedScenario> {
   if (ruleName) {
     const rule = feature.rules.find((r) => r.name === ruleName)
     return Option.fromNullishOr(rule?.scenarios.find((s) => s.name === name))
@@ -25,11 +29,15 @@ export function findScenario(
   )
 }
 
-export function findScenarioOutline(
-  feature: ParsedFeature,
-  name: string,
-  ruleName?: string,
-): Option.Option<ParsedScenarioOutline> {
+export function findScenarioOutline({
+  feature,
+  name,
+  ruleName,
+}: {
+  feature: ParsedFeature
+  name: string
+  ruleName?: string | undefined
+}): Option.Option<ParsedScenarioOutline> {
   if (ruleName) {
     const rule = feature.rules.find((r) => r.name === ruleName)
     return Option.fromNullishOr(rule?.scenarioOutlines.find((s) => s.name === name))

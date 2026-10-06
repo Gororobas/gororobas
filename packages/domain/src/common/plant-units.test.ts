@@ -18,36 +18,40 @@ const StoredMeasurements = Schema.Struct({
 
 describe("Plant unit storage", () => {
   it.effect("round-trips numeric CRDT edits and materialized attributes", () =>
-    assertPropertyEffect(Arbitrary.schema(StoredMeasurements), ({ height, temperature }) =>
-      Effect.gen(function* () {
-        const document = new LoroDoc()
-        for (const edit of [
-          { _tag: "SetHeightMax", value: height },
-          { _tag: "SetTemperatureMin", value: temperature },
-        ]) {
-          yield* WikiPlantArticleCrdtOperations.applyAttributeEdit(
-            document,
-            Schema.decodeUnknownSync(WikiPlantArticleCrdtOperations.AttributeEdit)(edit),
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(StoredMeasurements),
+      predicate: ({ height, temperature }) =>
+        Effect.gen(function* () {
+          const document = new LoroDoc()
+
+          for (const edit of [
+            { _tag: "SetHeightMax", value: height },
+            { _tag: "SetTemperatureMin", value: temperature },
+          ]) {
+            yield* WikiPlantArticleCrdtOperations.applyAttributeEdit(
+              document,
+              Schema.decodeUnknownSync(WikiPlantArticleCrdtOperations.AttributeEdit)(edit),
+            )
+          }
+
+          const editable = Schema.decodeUnknownSync(WikiPlantArticle.EditableAttributes)(
+            document.getMap("attributes").toJSON(),
           )
-        }
-        const editable = Schema.decodeUnknownSync(WikiPlantArticle.EditableAttributes)(
-          document.getMap("attributes").toJSON(),
-        )
-        const materialized = WikiPlantArticle.materializeAttributes(editable)
-        const codec = Schema.fromJsonString(WikiPlantArticle.MaterializedAttributes)
-        const decoded = Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(materialized))
-        const decodedHeight = Option.getOrThrow(decoded.heightMax)
-        const decodedTemperature = Option.getOrThrow(decoded.temperatureMin)
-        expect(document.getMap("attributes").get("heightMax")).toBe(height)
-        expect(document.getMap("attributes").get("temperatureMin")).toBeCloseTo(temperature, 10)
-        expect(Length.inMeters(decodedHeight)).toBeCloseTo(height / 100, 10)
-        expect(Temperature.inDegreesFahrenheit(decodedTemperature)).toBeCloseTo(
-          temperature * 1.8 + 32,
-          10,
-        )
-        return Schema.encodeSync(Centimeters)(decodedHeight) === height
-      }),
-    ),
+          const materialized = WikiPlantArticle.materializeAttributes(editable)
+          const codec = Schema.fromJsonString(WikiPlantArticle.MaterializedAttributes)
+          const decoded = Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(materialized))
+          const decodedHeight = Option.getOrThrow(decoded.heightMax)
+          const decodedTemperature = Option.getOrThrow(decoded.temperatureMin)
+          expect(document.getMap("attributes").get("heightMax")).toBe(height)
+          expect(document.getMap("attributes").get("temperatureMin")).toBeCloseTo(temperature, 10)
+          expect(Length.inMeters(decodedHeight)).toBeCloseTo(height / 100, 10)
+          expect(Temperature.inDegreesFahrenheit(decodedTemperature)).toBeCloseTo(
+            temperature * 1.8 + 32,
+            10,
+          )
+          return Schema.encodeSync(Centimeters)(decodedHeight) === height
+        }),
+    }),
   )
 
   it("rounds computed lengths to whole centimeters without rejecting conversion noise", () => {
@@ -56,6 +60,7 @@ describe("Plant unit storage", () => {
         height,
       )
     }
+
     expect(Schema.encodeSync(Centimeters)(Length.centimeters(7.4))).toBe(7)
     expect(Schema.encodeSync(Centimeters)(Length.centimeters(7.5))).toBe(8)
     for (const invalid of [-1, 0.5, NaN, Infinity]) {
@@ -71,6 +76,7 @@ describe("Plant unit storage", () => {
       const temperature = Schema.decodeUnknownSync(TemperatureInCelsius)(celsius)
       expect(Schema.encodeSync(TemperatureInCelsius)(temperature)).toBe(celsius)
     }
+
     for (const invalid of [-51, NaN, Infinity, -Infinity]) {
       expect(() => Schema.decodeUnknownSync(TemperatureInCelsius)(invalid)).toThrow(/Expected/)
       expect(() =>
@@ -91,6 +97,7 @@ describe("Plant unit storage", () => {
     expect(
       Schema.encodeSync(Schema.toCodecJson(Fields))(Schema.decodeUnknownSync(Fields)(stored)),
     ).toEqual(stored)
+
     for (const field of [Fields.fields.height, Fields.fields.temperature]) {
       expect(() =>
         Schema.decodeUnknownSync(field)({ _tag: "Value", value: { min: 20, max: 7 } }),

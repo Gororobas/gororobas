@@ -9,6 +9,7 @@ import { IntNonNegative, PositiveInteger, TimestampedStruct } from "../common/pr
 const MediaDuration = Schema.DurationFromMillis.check(
   Schema.makeFilter((duration) => {
     const milliseconds = Duration.toMillis(duration)
+
     return (
       Number.isFinite(milliseconds * 1_000_000) &&
       milliseconds >= 0 &&
@@ -73,6 +74,7 @@ export const MediaAssetRow = Schema.Union([
     metadata: Schema.fromJsonString(AudioMetadata),
   }),
 ]).pipe(Schema.toTaggedUnion("format"))
+
 export type MediaAssetRow = typeof MediaAssetRow.Type
 
 export const MediaAssetCredit = Schema.Struct({
@@ -82,6 +84,7 @@ export const MediaAssetCredit = Schema.Struct({
   orderIndex: IntNonNegative,
   personId: Schema.NullOr(PersonId),
 })
+
 export type MediaAssetCredit = typeof MediaAssetCredit.Type
 
 export const TransformedImageWidthBreakpoints = Schema.Literals([50, 300, 1280, 2400])
@@ -110,4 +113,5 @@ export const MediaAssetRequest = Schema.Union([
     variant: Schema.Literal("original"),
   }),
 ])
+
 export type MediaAssetRequest = typeof MediaAssetRequest.Type

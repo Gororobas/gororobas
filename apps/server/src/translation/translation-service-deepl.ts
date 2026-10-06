@@ -24,11 +24,15 @@ export const TranslationServiceDeepl = Layer.effect(TranslationService)(
     const apiKey = yield* Config.Redacted("DEEPL_API_KEY")
     const client = yield* HttpClient.HttpClient
 
-    const translate = Effect.fn("TranslationServiceDeepl.translate")(function* (
-      text: string,
-      sourceLocale: Locale,
-      targetLocale: Locale,
-    ) {
+    const translate = Effect.fn("TranslationServiceDeepl.translate")(function* ({
+      text,
+      sourceLocale,
+      targetLocale,
+    }: {
+      text: string
+      sourceLocale: Locale
+      targetLocale: Locale
+    }) {
       const response = yield* HttpClientRequest.post(
         "https://api-free.deepl.com/v2/translate",
       ).pipe(

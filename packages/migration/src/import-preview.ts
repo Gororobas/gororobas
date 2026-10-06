@@ -1,4 +1,4 @@
-import { NodeRuntime, NodeServices } from "@effect/platform-node"
+import { NodePath, NodeRuntime, NodeServices } from "@effect/platform-node"
 import {
   MediaAssetId,
   MediaAssetRow,
@@ -32,6 +32,7 @@ import {
   DateTime,
   Effect,
   FileSystem,
+  Path,
   Layer,
   Option,
   Order,
@@ -39,7 +40,6 @@ import {
 } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
-import { join, resolve } from "node:path"
 
 import { PreviewRecord, readPreviewExports } from "./preview-exports.js"
 import {
@@ -49,6 +49,8 @@ import {
 } from "./schemas/gel/entities.js"
 import { WikiMigrationVersion } from "./wiki-migration-history.js"
 
+const { join, resolve } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
+
 const ArticleExport = Schema.Struct({
   id: WikiArticleId,
   article: Schema.optional(WikiArticleEditableData),
@@ -56,6 +58,7 @@ const ArticleExport = Schema.Struct({
   photoIds: Schema.optional(Schema.Array(MediaAssetId)),
   thumbnailId: Schema.optional(Schema.NullOr(MediaAssetId)),
 })
+
 const ImageExport = Schema.Struct({
   id: MediaAssetId,
   latest_source: Schema.Struct({
@@ -75,6 +78,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const originals = yield* readPreviewExports(exportDirectory)
+
     const exports: Record<
       string,
       Array<{ file: string; data: typeof PreviewRecord.Type }>
@@ -84,15 +88,19 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         records.map((entry) => ({ ...entry })),
       ]),
     )
+
     const missingEmailAccounts: Array<string> = []
+
     // A person is both an account and a profile with the same primary key in the server schema.
     for (const entry of exports.users) {
       const user = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(UserDataForMigration))(
         entry.data,
       )
-      if (!user.profile.id)
+      if (!user.profile.id) {
         return yield* Effect.fail(new Error(`Missing profile ID: ${entry.file}`))
+      }
       if (!user.account.email) missingEmailAccounts.push(user.profile.id)
+
       entry.data = {
         ...entry.data,
         account: {
@@ -102,12 +110,14 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         },
       }
     }
+
     yield* fs.makeDirectory(outputRoot, { recursive: true })
     const directory = yield* fs.makeTempDirectory({ directory: outputRoot, prefix: "migration-" })
     const schema = yield* fs.readFileString(
       new URL("../../../apps/server/src/db/schema.sql", import.meta.url).pathname,
     )
     yield* fs.writeFileString(join(directory, "schema.sql"), schema)
+
     yield* fs.writeFileString(
       join(directory, "raw.json"),
       JSON.stringify(
@@ -121,6 +131,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         2,
       ),
     )
+
     yield* fs.writeFileString(join(directory, "converted.json"), JSON.stringify(exports, null, 2))
     const rawDirectory = join(exportDirectory, "raw-gel")
     if (yield* fs.exists(rawDirectory)) yield* fs.copy(rawDirectory, join(directory, "raw-gel"))
@@ -128,6 +139,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
     if (yield* fs.exists(journal)) yield* fs.copyFile(journal, join(directory, "journal.json"))
     const referencesDirectory = join(exportDirectory, "references")
     const references: Array<Schema.Json> = []
+
     for (const filename of EffectArray.sort(
       (yield* fs.readDirectory(referencesDirectory)).filter((file) => file.endsWith(".json")),
       Order.String,
@@ -138,11 +150,13 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
       if (Array.isArray(data)) references.push(...data)
       else references.push(data)
     }
+
     yield* fs.writeFileString(
       join(directory, "references.json"),
       JSON.stringify(references, null, 2),
     )
     const database = join(directory, "preview.sqlite")
+
     const result = yield* Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
       yield* sql`PRAGMA foreign_keys = ON`
@@ -154,37 +168,46 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
       const people = new Set<string>([importerId])
       const unresolvedActors = new Set<string>()
       let revisionCount = 0
+
       yield* Effect.gen(function* () {
         // schema.sql contains plain DDL, with no triggers or semicolons in literals.
         for (const statement of schema
           .replace(/--[^\n]*/g, "")
           .split(";")
-          .filter((part) => part.trim()))
+          .filter((part) => part.trim())) {
           yield* sql.unsafe(statement)
+        }
+
         yield* sql`INSERT INTO auth_subjects ${sql.insert({ id: importerId, name: "Migration import", email: "migration-preview@example.invalid", isEmailVerified: 0, securityRevision: yield* IdGen.make(AuthSecurityRevision), createdAt: timestamp, updatedAt: timestamp })}`
         yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
         yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
+
         for (const { data } of exports.users) {
           const user = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(UserDataForMigration))(
             data,
           )
           const id = yield* Schema.decodeUnknownEffect(PersonId)(user.profile.id)
-          if (!user.account.email)
+          if (!user.account.email) {
             return yield* Effect.fail(new Error(`Account ${id} has no email`))
+          }
           yield* sql`INSERT INTO auth_subjects ${sql.insert({ id, name: user.account.name, email: user.account.email, isEmailVerified: Number(user.account.is_email_verified), securityRevision: yield* IdGen.make(AuthSecurityRevision), image: user.account.image, createdAt: user.account.created_at.toISOString(), updatedAt: user.account.updated_at.toISOString() })}`
           yield* sql`INSERT INTO profiles ${sql.insert({ id, type: user.profile.type, handle: user.profile.handle, name: user.profile.name, bio: user.profile.bio ? JSON.stringify(user.profile.bio) : null, location: user.profile.location, visibility: user.profile.visibility, createdAt: user.profile.created_at.toISOString(), updatedAt: user.profile.updated_at.toISOString() })}`
           yield* sql`INSERT INTO people ${sql.insert({ id, accessLevel: user.person.access_level })}`
           people.add(id)
         }
+
         for (const { data } of exports.images) {
           const image = yield* Schema.decodeUnknownEffect(ImageExport)(data)
           const dimensions = /^image-[a-f0-9]{40}-(\d+)x(\d+)-[a-z0-9]+$/.exec(
             image.latest_source.sanity_id,
           )
-          if (!dimensions)
+
+          if (!dimensions) {
             return yield* Effect.fail(
               new Error(`Invalid Sanity ID: ${image.latest_source.sanity_id}`),
             )
+          }
+
           yield* insertMediaAsset({
             id: image.id,
             format: "IMAGE",
@@ -201,7 +224,8 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
             createdAt: now,
             updatedAt: now,
           })
-          for (const [orderIndex, credit] of image.latest_source.sources.entries())
+
+          for (const [orderIndex, credit] of image.latest_source.sources.entries()) {
             yield* insertMediaAssetCredit({
               mediaAssetId: image.id,
               orderIndex,
@@ -209,18 +233,23 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
               creditUrl: credit.origin,
               personId: null,
             })
+          }
         }
+
         for (const { data } of exports.users) {
           const user = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(UserDataForMigration))(
             data,
           )
-          if (user.profile.photoId)
+          if (user.profile.photoId) {
             yield* sql`UPDATE profiles SET photo_id = ${user.profile.photoId} WHERE id = ${user.profile.id}`
+          }
         }
+
         for (const { data } of exports.tags) {
           const tag = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(TagDataForMigration))(
             data,
           )
+
           const row = TagRow.make({
             id: tag.id,
             handle: yield* Schema.decodeUnknownEffect(TagRow.fields.handle)(
@@ -243,30 +272,36 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
               tag.latest_source.updated_at ?? tag.latest_source.created_at,
             ),
           })
+
           yield* SqlSchema.void({
             Request: TagRow,
             execute: (row) => sql`INSERT INTO tags ${sql.insert(row)}`,
           })(row)
         }
+
         for (const category of ["plants", "cultivars", "resources"] as const) {
           for (const { file, data } of exports[category]) {
             const article = yield* Schema.decodeUnknownEffect(ArticleExport)(data)
             const latest = article.versions?.at(-1)
             const editable = latest?.article ?? article.article
-            if (!editable)
+            if (!editable) {
               return yield* Effect.fail(new Error(`No converted article: ${category}/${file}`))
+            }
             yield* wiki.createWikiArticle(
               { wikiArticle: editable, createdById: importerId, status: "PUBLISHED" },
               { id: article.id, enrichment: "skip" },
             )
+
             if (latest && article.versions) {
               yield* sql`DELETE FROM wiki_article_revisions WHERE wiki_article_id = ${article.id}`
               let previousDocument: ReturnType<typeof snapshotToLoroDoc> | undefined
+
               for (const version of article.versions) {
                 const snapshot = LoroDocSnapshot.make(
                   new Uint8Array(Buffer.from(version.loroSnapshot, "base64")),
                 )
                 const document = snapshotToLoroDoc(snapshot)
+
                 const parsed = yield* parseWikiArticleCrdtUpdate({
                   snapshot,
                   crdtUpdate: LoroDocUpdate.make(loroDocToUpdate(document)),
@@ -275,17 +310,21 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                     Effect.logError(`Invalid historical snapshot: ${category}/${file}`, error),
                   ),
                 )
-                if (!Schema.toEquivalence(WikiArticleEditableData)(parsed.data, version.article))
+
+                if (!Schema.toEquivalence(WikiArticleEditableData)(parsed.data, version.article)) {
                   return yield* Effect.fail(new Error(`CRDT differs from conversion: ${file}`))
+                }
                 const createdAt = yield* Schema.decodeUnknownEffect(Schema.DateTimeUtcFromString)(
                   version.timestamp,
                 )
+
                 const knownPerson = (id: ProfileId | null) => {
                   if (!id) return null
                   if (people.has(id)) return PersonId.make(id)
                   unresolvedActors.add(id)
                   return null
                 }
+
                 yield* SqlSchema.void({
                   Request: WikiArticleRevisionRow.mapFields((fields) => ({
                     ...fields,
@@ -312,9 +351,11 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                     }),
                   ),
                 })
+
                 previousDocument = document
                 revisionCount++
               }
+
               const snapshot = LoroDocSnapshot.make(
                 new Uint8Array(Buffer.from(latest.loroSnapshot, "base64")),
               )
@@ -325,6 +366,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
               const updatedAt = yield* Schema.decodeUnknownEffect(Schema.DateTimeUtcFromString)(
                 latest.timestamp,
               )
+
               yield* updateCrdtRow({
                 id: article.id,
                 crdtSnapshot: snapshot,
@@ -332,43 +374,57 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                 createdAt,
                 updatedAt,
               })
+
               yield* sql`UPDATE wiki_article_crdts SET created_at = ${DateTime.formatIso(createdAt)} WHERE id = ${article.id}`
               yield* sql`UPDATE wiki_articles SET current_crdt_frontier = ${JSON.stringify(frontier)}, created_at = ${DateTime.formatIso(createdAt)}, updated_at = ${DateTime.formatIso(updatedAt)} WHERE id = ${article.id}`
             } else revisionCount++
+
             const photoIds = article.photoIds ?? (article.thumbnailId ? [article.thumbnailId] : [])
-            for (const [orderIndex, mediaAssetId] of photoIds.entries())
+            for (const [orderIndex, mediaAssetId] of photoIds.entries()) {
               yield* sql`INSERT INTO wiki_article_photos ${sql.insert({ wikiArticleId: article.id, mediaAssetId, orderIndex })}`
+            }
           }
         }
+
         for (const { file, data } of exports.notes) {
           const note = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(NoteDataForMigration))(
             data,
           )
-          if (!note.publication)
+
+          if (!note.publication) {
             return yield* Effect.fail(
               new Error(`Unconverted note ${file}: ${note.conversion_error}`),
             )
+          }
+
           const sourceData = PostSourceData.make(note.publication)
           const owner = sourceData.metadata.ownerProfileId
-          if (!people.has(owner))
+          if (!people.has(owner)) {
             return yield* Effect.fail(new Error(`Missing publication owner ${owner}: ${file}`))
+          }
           yield* publications.createPublication(
             { sourceData, createdById: PersonId.make(owner) },
             { id: PublicationId.make(note.id) },
           )
-          for (const tagId of note.tagIds)
+          for (const tagId of note.tagIds) {
             yield* sql`INSERT INTO publication_tags ${sql.insert({ publicationId: note.id, tagId, extractionText: null })}`
-          for (const wikiArticleId of note.wikiArticleIds)
+          }
+          for (const wikiArticleId of note.wikiArticleIds) {
             yield* sql`INSERT INTO publication_wiki_articles ${sql.insert({ publicationId: note.id, wikiArticleId, extractionText: null })}`
+          }
         }
+
         yield* Schema.decodeUnknownEffect(Schema.Array(MediaAssetRow))(
           yield* sql`SELECT * FROM media_assets`,
         )
         const violations = yield* sql`PRAGMA foreign_key_check`
-        if (violations.length)
+
+        if (violations.length) {
           return yield* Effect.fail(
             new Error(`Foreign key violations: ${JSON.stringify(violations)}`),
           )
+        }
+
         yield* sql`PRAGMA integrity_check`.pipe(
           Effect.flatMap((rows) =>
             rows[0]?.integrityCheck === "ok"
@@ -377,6 +433,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
           ),
         )
       }).pipe(sql.withTransaction)
+
       return {
         counts: Object.fromEntries(
           Object.entries(exports).map(([name, records]) => [name, records.length]),
@@ -396,6 +453,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         ),
       ),
     )
+
     const report = { directory, database, missingEmailAccounts, ...result }
     yield* fs.writeFileString(join(directory, "verification.json"), JSON.stringify(report, null, 2))
     return report

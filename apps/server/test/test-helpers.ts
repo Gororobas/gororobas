@@ -125,6 +125,7 @@ const runScenarioInIsolation = <ResultValue, ErrorType>(
 ) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
+
     return yield* scenario.pipe(
       Effect.flatMap((value) => Effect.fail(new ScenarioIsolationResult(value))),
       sql.withTransaction,
@@ -157,9 +158,9 @@ export const assertTransactionProperty = <InputValue, SetupValue, StateValue, Er
   ) => boolean
   validateCommit: (stateAfter: StateValue, inputValue: InputValue) => boolean
 }) =>
-  assertPropertyEffect(
-    arbitrary,
-    (inputValue) =>
+  assertPropertyEffect({
+    arbitrary: arbitrary,
+    predicate: (inputValue) =>
       Effect.gen(function* () {
         const sharedScenario = scenario(inputValue)
 
@@ -189,8 +190,8 @@ export const assertTransactionProperty = <InputValue, SetupValue, StateValue, Er
           validateCommit(commitResult.stateAfter, inputValue)
         )
       }).pipe(Effect.provide(TestLayer)),
-    options,
-  )
+    options: options,
+  })
 
 export const insertPersonWithDependencies = ({
   person,

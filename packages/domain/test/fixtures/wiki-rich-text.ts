@@ -25,6 +25,7 @@ export const withEditorRichText = (article: WikiArticleEditableData): WikiArticl
     translations: Record.fromEntries(
       Locale.literals.flatMap((locale) => {
         const translation = article.translations[locale]
+
         return translation
           ? [
               [

@@ -1,16 +1,12 @@
-import { TiptapDocument, tiptapToHtml } from "@gororobas/domain"
+import { hashString, TiptapDocument, tiptapToHtml } from "@gororobas/domain"
 import type { TagRow } from "@gororobas/domain"
 import { type PublicationClassification } from "@gororobas/domain"
-import { createHash } from "crypto"
 import { Config, DateTime, Effect, Context, Record } from "effect"
 
 import { TagsRepository } from "../tags/repository.js"
 import { LangExtractService } from "./langextract-service.js"
 import { langExtractExamples } from "./langextract.examples.js"
 import { resolveTagExtraction, resolveWikiArticleExtraction } from "./resolve-extractions.js"
-
-export const hashString = (html: string) =>
-  createHash("sha256").update(html).digest("hex").slice(0, 16)
 
 /**
  * Bump this when prompts, examples, or extraction logic changes.
@@ -91,7 +87,7 @@ export class ExtractPublicationTaxonomiesService extends Context.Service<Extract
           const started_at = yield* DateTime.now
 
           const html = tiptapToHtml(input)
-          const hash = hashString(html)
+          const hash = yield* hashString(html)
 
           yield* Effect.logDebug("Extracting with LangExtract", html)
           const [wikiArticles, tags] = yield* Effect.all(

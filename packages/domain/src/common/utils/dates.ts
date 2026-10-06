@@ -22,6 +22,7 @@ const partialDateYearFields = {
     ),
   ),
 }
+
 const partialDateMonthFields = {
   ...partialDateYearFields,
   month: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 12 })),
@@ -70,11 +71,13 @@ export const PartialDate = PartialDateEncoded.pipe(
   Schema.decodeTo(PartialDateDecoded, {
     decode: SchemaGetter.transformEffect<typeof PartialDateDecoded.Type, string>((input) => {
       const match = partialDatePattern.exec(input)
+
       if (!match || match[0] !== input) {
         return Effect.fail(
           new SchemaIssue.InvalidValue({ message: "must be an Open Evnt partial date" }, input),
         )
       }
+
       const [, year, month, day, hour, minute, timezone] = match
       const fields = { year: Number(year), timezone: timezone ?? "" }
       if (month === undefined) return Effect.succeed({ ...fields, precision: "year" as const })
@@ -82,6 +85,7 @@ export const PartialDate = PartialDateEncoded.pipe(
       if (day === undefined) return Effect.succeed({ ...monthFields, precision: "month" as const })
       const dayFields = { ...monthFields, day: Number(day) }
       if (hour === undefined) return Effect.succeed({ ...dayFields, precision: "day" as const })
+
       return Effect.succeed({
         ...dayFields,
         precision: "time" as const,
@@ -99,4 +103,5 @@ export const PartialDate = PartialDateEncoded.pipe(
     }),
   }),
 )
+
 export type PartialDate = typeof PartialDate.Type

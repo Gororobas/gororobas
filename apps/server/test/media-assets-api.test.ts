@@ -1,13 +1,19 @@
-import { NodeServices } from "@effect/platform-node"
+import { NodePath, NodeServices } from "@effect/platform-node"
 import { AuthenticationHttp, CurrentAuthenticationData, GororobasApi } from "@gororobas/domain"
 import { Auth, Sessions } from "@yielded/auth"
-import { ConfigProvider, Context, Effect, Layer, ManagedRuntime, Schema } from "effect"
+import {
+  FileSystem,
+  ConfigProvider,
+  Context,
+  Effect,
+  Layer,
+  ManagedRuntime,
+  Schema,
+  Path,
+} from "effect"
 import { Etag, HttpPlatform, HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
 import { SqlClient } from "effect/sql"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 import sharp from "sharp"
 import { expect, it } from "vitest"
 
@@ -18,13 +24,21 @@ import { MediaAssetsService } from "../src/media-assets/service.js"
 import { MediaAssetsStorage } from "../src/media-assets/storage.js"
 import { makeAppSql } from "../src/sql.js"
 
+const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
+
 it("streams multipart uploads and serves validated variants, ranges and censorship through HTTP", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "mediaAssets-api-"))
+  const filesystem = await Effect.runPromise(
+    Effect.provide(FileSystem.FileSystem, NodeServices.layer),
+  )
+  const directory = await Effect.runPromise(
+    filesystem.makeTempDirectory({ prefix: "mediaAssets-api-" }),
+  )
   const root = join(directory, "assets")
   const databaseRuntime = ManagedRuntime.make(makeAppSql(join(directory, "preview.sqlite")))
   const database = Layer.succeedContext(await databaseRuntime.context())
   const personId = "00000000-0000-7000-8000-000000000001"
   const timestamp = "2026-10-03T00:00:00Z"
+
   let authentication = Schema.decodeUnknownSync(CurrentAuthenticationData)({
     account: {
       id: personId,
@@ -50,6 +64,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
       claims: { authSubjectId: personId },
     },
   })
+
   const services = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
     Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
     Layer.provideMerge(
@@ -66,7 +81,9 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
     Layer.provideMerge(HttpPlatform.layer),
     Layer.provideMerge(Layer.mergeAll(database, IdGenLive, NodeServices.layer, Etag.layer)),
   )
+
   const api = HttpApi.make("GororobasApi").add(GororobasApi.groups.mediaAssets)
+
   const app = HttpRouter.toWebHandler(
     HttpApiBuilder.layer(api).pipe(
       Layer.provide(MediaAssetsApiLive),
@@ -89,6 +106,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
     ),
     { disableLogger: true },
   )
+
   const request = (path: string, init?: RequestInit) =>
     app.handler(
       new Request(`http://localhost${path}`, init),
@@ -98,6 +116,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
         credentialCommandSink: () => Effect.void,
       }),
     )
+
   try {
     await Effect.runPromise(
       SqlClient.SqlClient.use((sql) =>
@@ -108,6 +127,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
         }),
       ).pipe(Effect.provide(database)),
     )
+
     const png = await sharp({ create: { width: 80, height: 40, channels: 3, background: "green" } })
       .png()
       .toBuffer()
@@ -121,13 +141,20 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
       Schema.Struct({ id: Schema.String, url: Schema.String, byteSize: Schema.Number }),
     )(await uploaded.json())
     expect(media.byteSize).toBe(file.length)
-    expect((await readFile(join(root, media.id, "original"))).equals(file)).toBe(true)
+
+    expect(
+      new Uint8Array(
+        await Effect.runPromise(filesystem.readFile(join(root, media.id, "original"))),
+      ),
+    ).toEqual(new Uint8Array(file))
+
     const image = await request(media.url)
     expect(image.headers.get("content-type")).toBe("image/avif")
     expect(await sharp(Buffer.from(await image.arrayBuffer())).metadata()).toMatchObject({
       format: "heif",
       width: 80,
     })
+
     for (const [range, start, end] of [
       ["bytes=2-6", 2, 6],
       ["bytes=-4", file.length - 4, file.length - 1],
@@ -140,6 +167,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
       expect(response.headers.get("content-length")).toBe(String(end - start + 1))
       expect(new Uint8Array(await response.arrayBuffer())).toEqual(file.slice(start, end + 1))
     }
+
     const head = await request(`/media/${media.id}/original/original`, { method: "HEAD" })
     expect(head.headers.get("content-length")).toBe(String(file.length))
     expect((await head.arrayBuffer()).byteLength).toBe(0)
@@ -154,6 +182,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
     ).toBe(416)
     expect((await request(`/media/${media.id}/images/51`)).status).toBe(400)
     expect((await request(`/media/${media.id}/audio/audio.m4a`)).status).toBe(404)
+
     // A playlist's relative segment URL must resolve through the same endpoint.
     await Effect.runPromise(
       SqlClient.SqlClient.use(
@@ -161,12 +190,18 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
           sql`UPDATE media_assets SET format = 'VIDEO', metadata = ${JSON.stringify({ format: "VIDEO", originalWidth: 80, originalHeight: 40, duration: 1000 })} WHERE id = ${media.id}`,
       ).pipe(Effect.provide(database)),
     )
-    await writeFile(join(root, media.id, "master.m3u8"), "#EXTM3U\nsegment-0.ts\n")
-    await writeFile(join(root, media.id, "segment-0.ts"), new Uint8Array([1, 2, 3]))
+
+    await Effect.runPromise(
+      filesystem.writeFileString(join(root, media.id, "master.m3u8"), "#EXTM3U\nsegment-0.ts\n"),
+    )
+    await Effect.runPromise(
+      filesystem.writeFile(join(root, media.id, "segment-0.ts"), new Uint8Array([1, 2, 3])),
+    )
     const playlistUrl = `/media/${media.id}/video/master.m3u8`
     const playlist = await request(playlistUrl)
     expect(playlist.headers.get("content-type")).toBe("application/vnd.apple.mpegurl")
     expect(await playlist.text()).toContain("segment-0.ts")
+
     expect(
       new Uint8Array(
         await (
@@ -174,6 +209,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
         ).arrayBuffer(),
       ),
     ).toEqual(new Uint8Array([1, 2, 3]))
+
     const duplicate = new FormData()
     duplicate.append("file", new Blob([png], { type: "image/png" }), "one.png")
     duplicate.append("file", new Blob([png], { type: "image/png" }), "two.png")
@@ -181,6 +217,7 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
     const missing = new FormData()
     missing.append("other", "value")
     expect((await request("/media/upload", { method: "POST", body: missing })).status).toBe(400)
+
     expect(
       (
         await request(`/media/${media.id}/censor`, {
@@ -190,9 +227,11 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
         })
       ).status,
     ).toBe(200)
+
     expect((await request(playlistUrl)).status).toBe(404)
     expect((await request(`/media/${media.id}/original/original`)).status).toBe(404)
     authentication = null
+
     expect(
       (
         await request("/media/upload", {
@@ -205,6 +244,6 @@ it("streams multipart uploads and serves validated variants, ranges and censorsh
   } finally {
     await app.dispose()
     await databaseRuntime.dispose()
-    await rm(directory, { recursive: true, force: true })
+    await Effect.runPromise(filesystem.remove(directory, { recursive: true, force: true }))
   }
 })

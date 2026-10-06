@@ -37,5 +37,6 @@ export const WikiResourceArticleCrdtOperations = defineKindCrdtOperations([
   ...creditLineOperations,
   ...resourceTagOperations,
 ])
+
 export type WikiResourceArticleAttributeEdit =
   typeof WikiResourceArticleCrdtOperations.AttributeEdit.Type

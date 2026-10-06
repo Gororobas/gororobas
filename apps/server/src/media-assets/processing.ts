@@ -1,10 +1,11 @@
+import { NodePath } from "@effect/platform-node"
 import {
   MediaAssetMetadata,
   TransformedImageWidthBreakpoints,
   TransformedVideoHeightBreakpoints,
 } from "@gororobas/domain"
 import { registerMediabunnyServer } from "@mediabunny/server"
-import { Effect, FileSystem, Schema } from "effect"
+import { Effect, FileSystem, Schema, Path } from "effect"
 import {
   ALL_FORMATS,
   Conversion,
@@ -19,8 +20,9 @@ import {
   Quality,
   WebMOutputFormat,
 } from "mediabunny"
-import { join } from "node:path"
 import sharp from "sharp"
+
+const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
 export class MediaAssetProcessingError extends Schema.TaggedError<MediaAssetProcessingError>()(
   "MediaAssetProcessingError",
@@ -46,8 +48,10 @@ export const readMediaAssetMetadata = Effect.fn("MediaAssets.readMetadata")(
     Effect.scoped(
       Effect.gen(function* () {
         yield* Effect.annotateCurrentSpan({ "media.format": format })
+
         if (format === "IMAGE") {
           const metadata = yield* processingPromise(() => sharp(filename).metadata())
+
           return yield* Schema.decodeUnknownEffect(MediaAssetMetadata)({
             format,
             originalWidth: metadata.width,
@@ -64,6 +68,7 @@ export const readMediaAssetMetadata = Effect.fn("MediaAssets.readMetadata")(
         if (format === "VIDEO") {
           const video = yield* processingPromise(() => input.getPrimaryVideoTrack())
           if (!video) return yield* new MediaAssetProcessingError({ cause: "No video track" })
+
           return yield* Schema.decodeEffect(MediaAssetMetadata)({
             format,
             duration,
@@ -94,8 +99,9 @@ const convert = Effect.fn("MediaAssets.convert")((options: Parameters<typeof Con
       "media.output.format": options.output.format.constructor.name,
     })
     const conversion = yield* processingPromise(() => Conversion.init(options))
-    if (!conversion.isValid)
+    if (!conversion.isValid) {
       return yield* new MediaAssetProcessingError({ cause: "Media cannot be converted" })
+    }
     // A failed or interrupted conversion must release codecs and partial output handles.
     yield* Effect.acquireRelease(Effect.succeed(conversion), (conversion) =>
       Effect.promise(() => conversion.cancel()),
@@ -105,7 +111,15 @@ const convert = Effect.fn("MediaAssets.convert")((options: Parameters<typeof Con
 )
 
 const transformImage = Effect.fn("MediaAssets.transformImage")(
-  (filename: string, directory: string, width: typeof TransformedImageWidthBreakpoints.Type) =>
+  ({
+    filename,
+    directory,
+    width,
+  }: {
+    filename: string
+    directory: string
+    width: typeof TransformedImageWidthBreakpoints.Type
+  }) =>
     Effect.annotateCurrentSpan({ "media.image.width": width }).pipe(
       Effect.andThen(
         processingPromise(() =>
@@ -132,9 +146,11 @@ export const processMediaAsset = Effect.fn("MediaAssets.process")(
         if (metadata.format === "IMAGE") {
           yield* Effect.forEach(
             TransformedImageWidthBreakpoints.literals,
-            (size) => transformImage(input.filename, input.directory, size),
+            (size) =>
+              transformImage({ filename: input.filename, directory: input.directory, width: size }),
             { discard: true },
           )
+
           return
         }
 
@@ -167,6 +183,7 @@ export const processMediaAsset = Effect.fn("MediaAssets.process")(
               }),
             { discard: true },
           )
+
           return
         }
 
@@ -177,12 +194,14 @@ export const processMediaAsset = Effect.fn("MediaAssets.process")(
             ),
           ),
         ]
+
         const video = heights.map((height) => ({
           height: Math.max(2, Math.floor(height / 2) * 2),
           codec: "avc" as const,
           quality: new Quality("medium"),
           keyFrameInterval: 4,
         }))
+
         yield* convert({
           input: media,
           output: new Output({
@@ -200,6 +219,7 @@ export const processMediaAsset = Effect.fn("MediaAssets.process")(
           video,
           audio: { codec: "aac", quality: new Quality({ bitrate: 128_000 }) },
         })
+
         yield* convert({
           input: media,
           output: new Output({

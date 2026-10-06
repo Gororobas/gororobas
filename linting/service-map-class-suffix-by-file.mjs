@@ -1,5 +1,3 @@
-import path from "node:path"
-
 const getMemberAccess = (expression) => {
   if (expression.type === "TSInstantiationExpression") {
     return getMemberAccess(expression.expression)
@@ -28,7 +26,7 @@ const getMemberAccess = (expression) => {
  */
 export const serviceMapClassSuffixByFileRule = {
   create(context) {
-    const fileName = path.basename(context.filename ?? context.getFilename())
+    const fileName = (context.filename ?? context.getFilename()).split(/[\\/]/u).at(-1)
 
     return {
       ClassDeclaration(node) {

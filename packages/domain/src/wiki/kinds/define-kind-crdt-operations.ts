@@ -34,6 +34,7 @@ export const defineKindCrdtOperations = <
   operations: Operations,
 ) => {
   const runners = operations.map(makeOperationRunner)
+
   // oxlint-disable-next-line effect/casting-awareness
   const AttributeEdit = Schema.Union(
     operations.map((operation) => operation.message),

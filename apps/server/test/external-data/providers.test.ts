@@ -23,6 +23,7 @@ const client = (respond: (url: string) => { body: unknown; status?: number }) =>
   HttpClient.make((request) =>
     Effect.sync(() => {
       const response = respond(request.url)
+
       return HttpClientResponse.fromWeb(
         request,
         new Response(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(response.body), {
@@ -98,11 +99,13 @@ describe("external data providers", () => {
       const provider = yield* makeWikidata
       const fetched = yield* provider.entity("Q23501")
       expect(fetched.value.claims.P846).toHaveLength(2)
+
       expect(fetched.value.claims.P31?.[0]?.mainsnak.datavalue?.value).toEqual({
         entityType: "item",
         numericId: 16521,
         id: "Q16521",
       })
+
       expect(fetched.value.labels).toEqual({ en: { language: "en", value: "tomato" } })
       const result = yield* fetchPlantWikidata("Q23501").pipe(
         Effect.provideService(Wikidata, provider),
@@ -139,7 +142,8 @@ describe("external data providers", () => {
           if (url.includes("/v2/species/match")) {
             return { body: { usage: { key: "4Y369" } } }
           }
-          if (url.includes("/info"))
+
+          if (url.includes("/info")) {
             return {
               body: {
                 taxonID: "4Y369",
@@ -155,8 +159,11 @@ describe("external data providers", () => {
                 ],
               },
             }
+          }
+
           expect(url).toContain("taxonKey=4Y369")
           expect(url).toContain("checklistKey=7ddf754f-d193-4cc9-b351-99906754a03b")
+
           return {
             body: {
               offset: 0,
@@ -241,6 +248,7 @@ describe("external data providers", () => {
 
   it.live("does not retry malformed responses", () => {
     let attempts = 0
+
     return Effect.gen(function* () {
       const http = yield* makeProviderHttp("GBIF", "https://example.org")
       const result = yield* http
@@ -262,6 +270,7 @@ describe("external data providers", () => {
   it.live("paces concurrent requests and retries 429 responses through the same semaphore", () => {
     const starts: number[] = []
     let attempts = 0
+
     const httpClient = HttpClient.make((request) =>
       Effect.gen(function* () {
         starts.push(yield* Clock.currentTimeMillis)
@@ -272,6 +281,7 @@ describe("external data providers", () => {
         )
       }),
     )
+
     return Effect.gen(function* () {
       const http = yield* makeProviderHttp("GBIF", "https://example.org")
       const first = yield* http.get("/first", Schema.Struct({})).pipe(Effect.forkChild)
@@ -287,13 +297,15 @@ describe("external data providers", () => {
   })
 
   it("normalizes provider language codes idempotently", () => {
-    assertProperty(
-      Arbitrary.schema(Schema.Literals(["eng", "por", "spa", "fr", "de", "jpn", "rus", "cze"])),
-      (code) => {
+    assertProperty({
+      arbitrary: Arbitrary.schema(
+        Schema.Literals(["eng", "por", "spa", "fr", "de", "jpn", "rus", "cze"]),
+      ),
+      predicate: (code) => {
         expect(normalizeBookLanguage(normalizeBookLanguage(code))).toBe(normalizeBookLanguage(code))
         return true
       },
-    )
+    })
   })
 
   it("decodes every Wikidata datavalue shape from a real entity", () => {
@@ -477,11 +489,13 @@ describe("external data providers", () => {
     expect(decoded.labels?.en?.value).toBe("tomato")
     expect(decoded.aliases?.en?.[0]?.value).toBe("tomato plant")
     expect(decoded.sitelinks.enwiki?.badges).toEqual(["Q17437798"])
+
     expect(decoded.claims.P31?.[0]?.mainsnak.datavalue?.value).toEqual({
       entityType: "item",
       numericId: 16521,
       id: "Q16521",
     })
+
     expect(decoded.claims.P31?.[0]?.references?.[0]?.snaks.P854?.[0]?.datavalue?.value).toBe(
       "https://example.org/a",
     )
@@ -507,9 +521,12 @@ describe("external data providers", () => {
 
   it("round-trips generated identity values through their schemas", () => {
     ;[WikidataId, GbifTaxonId].forEach((schema) => {
-      assertProperty(Arbitrary.schema(schema), (value) => {
-        expect(Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value))).toBe(value)
-        return true
+      assertProperty({
+        arbitrary: Arbitrary.schema(schema),
+        predicate: (value) => {
+          expect(Schema.decodeUnknownSync(schema)(Schema.encodeSync(schema)(value))).toBe(value)
+          return true
+        },
       })
     })
   })
@@ -554,12 +571,17 @@ describe("shared external data schemas", () => {
   it("round-trips generated inputs, frontiers, and provider Results through JSON", () => {
     const assertRoundTrip = <A, I>(schema: Schema.Codec<A, I>) => {
       const codec = Schema.toCodecJson(schema)
-      assertProperty(Arbitrary.schema(schema), (value) => {
-        const decoded = Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(value))
-        expect(Schema.toEquivalence(schema)(value, decoded)).toBe(true)
-        return true
+
+      assertProperty({
+        arbitrary: Arbitrary.schema(schema),
+        predicate: (value) => {
+          const decoded = Schema.decodeUnknownSync(codec)(Schema.encodeSync(codec)(value))
+          expect(Schema.toEquivalence(schema)(value, decoded)).toBe(true)
+          return true
+        },
       })
     }
+
     assertRoundTrip(ExternalDataInputs)
     assertRoundTrip(ExternalDataFetchRequest)
     assertRoundTrip(ExternalDataResult)

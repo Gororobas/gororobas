@@ -11,11 +11,15 @@ type TiptapAnyNode = TiptapDocument | TiptapNode | TiptapTextNode
 
 const RESULTS_DIR_NAME = "translation-results"
 
-const saveTranslationResult = (
-  name: string,
-  input: TiptapDocument,
-  result: { content: TiptapDocument; html: string },
-) =>
+const saveTranslationResult = ({
+  name,
+  input,
+  result,
+}: {
+  name: string
+  input: TiptapDocument
+  result: { content: TiptapDocument; html: string }
+}) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
@@ -23,11 +27,13 @@ const saveTranslationResult = (
     yield* fs.makeDirectory(resultsDirectory, { recursive: true })
 
     const filename = name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()
+
     const encodedResult = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))({
       input,
       output: result.content,
       html: result.html,
     })
+
     yield* fs.writeFileString(path.join(resultsDirectory, `${filename}.json`), encodedResult)
   })
 
@@ -459,7 +465,7 @@ describe(
             target: fixture.targetLocale,
           })
 
-          yield* saveTranslationResult(name, fixture.document, result)
+          yield* saveTranslationResult({ name: name, input: fixture.document, result: result })
 
           const originalText = collectText(fixture.document)
           const translatedText = collectText(result.content)

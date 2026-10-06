@@ -25,6 +25,7 @@ export const LoroDocFrontier = Schema.Array(
     counter: Schema.Finite,
   }),
 ).pipe(Schema.brand("LoroDocFrontier"))
+
 export type LoroDocFrontier = typeof LoroDocFrontier.Type
 
 export const HumanCommit = Schema.TaggedStruct("HumanCommit", {
@@ -37,6 +38,7 @@ export const SystemCommit = Schema.TaggedStruct("SystemCommit", {
   workflowVersion: Schema.String,
   model: Schema.String,
 })
+
 export type SystemCommit = typeof SystemCommit.Type
 
 export const CrdtCommit = Schema.Union([HumanCommit, SystemCommit])

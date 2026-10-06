@@ -16,6 +16,7 @@ export const OrganizationRow = Schema.Struct({
   membersVisibility: InformationVisibility,
   type: OrganizationType,
 })
+
 export type OrganizationRow = typeof OrganizationRow.Type
 
 export const OrganizationMembershipRow = Schema.Struct({
@@ -24,6 +25,7 @@ export const OrganizationMembershipRow = Schema.Struct({
   organizationId: OrganizationId,
   personId: Schema.NullOr(PersonId),
 })
+
 export type OrganizationMembershipRow = typeof OrganizationMembershipRow.Type
 
 export const OrganizationMembershipData = Schema.Struct({
@@ -31,6 +33,7 @@ export const OrganizationMembershipData = Schema.Struct({
   organizationId: OrganizationId,
   personId: PersonId,
 })
+
 export type OrganizationMembershipData = typeof OrganizationMembershipData.Type
 
 export const CreateOrganizationData = Schema.Struct({
@@ -38,6 +41,7 @@ export const CreateOrganizationData = Schema.Struct({
   name: Schema.Trimmed.check(Schema.isNonEmpty()),
   type: OrganizationType,
 })
+
 export type CreateOrganizationData = typeof CreateOrganizationData.Type
 
 export const UpdateOrganizationData = Schema.Struct({

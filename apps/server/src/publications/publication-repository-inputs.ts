@@ -16,6 +16,7 @@ export const HumanCrdtUpdate = Schema.TaggedStruct("HumanCrdtUpdate", {
   expectedCurrentCrdtFrontier: LoroDocFrontier,
   publicationId: PublicationId,
 })
+
 export type HumanCrdtUpdate = typeof HumanCrdtUpdate.Type
 
 export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslation", {
@@ -26,6 +27,7 @@ export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslat
   translatedContent: TiptapDocument,
   commit: SystemCommit,
 })
+
 export type SystemUpsertTranslation = typeof SystemUpsertTranslation.Type
 
 export const UpdatePublicationInput = Schema.Union([HumanCrdtUpdate, SystemUpsertTranslation])

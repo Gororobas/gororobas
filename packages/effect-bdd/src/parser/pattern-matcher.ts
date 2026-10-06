@@ -25,6 +25,7 @@ function escapeRegex(str: string): string {
 
 function extractPlaceholders(pattern: string): Array<PlaceholderInfo> {
   const regex = new RegExp(PLACEHOLDER_REGEX.source, "g")
+
   return Array.from(pattern.matchAll(regex)).map((match) => ({
     fullMatch: match[0],
     name: match[2],
@@ -78,6 +79,7 @@ export function matchPattern(
   }
 
   const result: Record<string, unknown> = {}
+
   names.forEach((name, index) => {
     const value = match[index + 1]
     const placeholder = placeholders[index]
@@ -87,7 +89,15 @@ export function matchPattern(
   return Option.some(result)
 }
 
-export function decodeParams<A>(schema: Schema.Schema<A>, params: unknown, stepText: string) {
+export function decodeParams<A>({
+  schema,
+  params,
+  stepText,
+}: {
+  schema: Schema.Schema<A>
+  params: unknown
+  stepText: string
+}) {
   return Schema.decodeUnknownEffect(schema)(params).pipe(
     Effect.mapError(
       (error) =>
@@ -100,12 +110,17 @@ export function decodeParams<A>(schema: Schema.Schema<A>, params: unknown, stepT
   )
 }
 
-export function extractParams(
-  pattern: string,
-  text: string,
-  dataTable?: Array<Record<string, string>>,
-): Option.Option<Record<string, unknown>> {
+export function extractParams({
+  pattern,
+  text,
+  dataTable,
+}: {
+  pattern: string
+  text: string
+  dataTable?: Array<Record<string, string>> | undefined
+}): Option.Option<Record<string, unknown>> {
   const patternParams = matchPattern(pattern, text)
+
   return Option.match(patternParams, {
     onNone: () => Option.none(),
     onSome: (params) =>

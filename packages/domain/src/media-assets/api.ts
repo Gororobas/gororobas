@@ -16,6 +16,7 @@ export const MediaUploadData = Schema.Struct({
   byteSize: Schema.Int,
   url: Schema.String,
 })
+
 export type MediaUploadData = typeof MediaUploadData.Type
 
 export const AttachMediaToPublicationData = Schema.Struct({

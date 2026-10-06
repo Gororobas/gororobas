@@ -1,5 +1,6 @@
 import { Effect } from "effect"
 import * as SqlClient from "effect/sql/SqlClient"
+// oxlint-disable-next-line custom-lint-rules/no-node-apis -- Use an independent SQLite reference driver to test the Effect SQL adapter.
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
 import { expect, test } from "vitest"
 
@@ -16,6 +17,7 @@ const parameter = (value: unknown): SQLInputValue => {
   ) {
     return value
   }
+
   throw new Error("Invalid SQL parameter")
 }
 
@@ -27,8 +29,9 @@ const withDatabase = (body: Effect.Effect<void, unknown, SqlClient.SqlClient>) =
         Effect.sync(() => new DatabaseSync(":memory:")),
         (database) => Effect.sync(() => database.close()),
       )
+
       const browserDatabase: BrowserDatabase = {
-        execute: (sql, parameters, raw, safeIntegers, values) =>
+        execute: ({ sql, params: parameters, raw, safeIntegers, values }) =>
           Effect.try({
             try: () => {
               const statement = database.prepare(sql)
@@ -45,6 +48,7 @@ const withDatabase = (body: Effect.Effect<void, unknown, SqlClient.SqlClient>) =
           }),
         close: () => Effect.die("Caller-owned connection must not be closed"),
       }
+
       yield* body.pipe(
         Effect.provide(
           TursoClient.layer({
@@ -88,9 +92,11 @@ test("nested rollback preserves the outer transaction and failed commits are cle
         yield* sql`PRAGMA foreign_keys = ON`
         yield* sql`CREATE TABLE parents (id INTEGER PRIMARY KEY)`
         yield* sql`CREATE TABLE children (id INTEGER REFERENCES parents(id) DEFERRABLE INITIALLY DEFERRED)`
+
         yield* sql.withTransaction(
           Effect.gen(function* () {
             yield* sql`INSERT INTO parents VALUES (1)`
+
             yield* sql
               .withTransaction(
                 Effect.gen(function* () {
@@ -99,9 +105,11 @@ test("nested rollback preserves the outer transaction and failed commits are cle
                 }),
               )
               .pipe(Effect.catch(() => Effect.void))
+
             yield* sql`INSERT INTO parents VALUES (3)`
           }),
         )
+
         expect(yield* sql`SELECT id FROM parents ORDER BY id`).toEqual([{ id: 1 }, { id: 3 }])
         const failed = yield* sql
           .withTransaction(sql`INSERT INTO children VALUES (999)`)

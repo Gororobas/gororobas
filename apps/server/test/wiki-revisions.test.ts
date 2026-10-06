@@ -4,7 +4,7 @@ import { Effect, Schema } from "effect"
 
 import { makeTestLayer } from "./bdd.js"
 
-const pass = <Ctx>(ctx: Ctx) => Effect.succeed(ctx)
+const pass = Effect.succeed
 // const fail = <Ctx>(_ctx: Ctx) => Effect.fail(NotImplementedError)
 const fail = pass
 

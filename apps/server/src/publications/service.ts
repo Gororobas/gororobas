@@ -35,6 +35,7 @@ export const CreatePostInput = Schema.Struct({
   kind: Schema.Literal("POST"),
   ownerProfileId: ProfileId,
 })
+
 export type CreatePostInput = typeof CreatePostInput.Type
 
 export const CreateEventInput = Schema.Struct({
@@ -42,6 +43,7 @@ export const CreateEventInput = Schema.Struct({
   kind: Schema.Literal("EVENT"),
   ownerProfileId: ProfileId,
 })
+
 export type CreateEventInput = typeof CreateEventInput.Type
 
 export const CreatePublicationInput = Schema.Union([CreatePostInput, CreateEventInput])
@@ -90,6 +92,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           yield* Policies.publications.canCreate(input)
 
           const { locale } = input
+
           const localeData = PublicationLocalizedData.make({
             content: input.content,
             originalLocale: locale,
@@ -100,6 +103,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           const handle = yield* richTextToHandle(input.content)
 
           const now = yield* DateTime.now
+
           const coreMetadata = CorePublicationMetadata.make({
             handle,
             ownerProfileId: input.ownerProfileId,

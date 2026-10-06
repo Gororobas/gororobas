@@ -56,6 +56,7 @@ export const GelUser = Schema.Struct({
   // oxlint-disable-next-line effect/require-is-prefix-for-boolean-schema-field -- Gel uses snake_case in the migration query.
   is_email_verified: Schema.Boolean,
 })
+
 export type GelUser = typeof GelUser.Type
 
 export const GelUserProfile = Schema.Struct({
@@ -66,6 +67,7 @@ export const GelUserProfile = Schema.Struct({
   photo: GelOptionalColumn(Schema.Struct({ id: Schema.String })),
   handle: Handle,
 })
+
 export type GelUserProfile = typeof GelUserProfile.Type
 
 export const GelUserWithProfile = Schema.Struct({
@@ -78,6 +80,7 @@ export const GelUserWithProfile = Schema.Struct({
     images_count: Schema.Int,
   }),
 })
+
 export type GelUserWithProfile = typeof GelUserWithProfile.Type
 
 export const AccountDataForMigration = Schema.Struct({
@@ -117,6 +120,7 @@ export const UserDataForMigration = Schema.Struct({
   profile: ProfileDataForMigration,
   person: PersonDataForMigration,
 })
+
 export type UserDataForMigration = typeof UserDataForMigration.Type
 
 export const GelHistoryLog = Schema.Struct({
@@ -128,6 +132,7 @@ export const GelHistoryLog = Schema.Struct({
   new: GelOptionalColumn(Schema.Unknown), // json
   target: Schema.String, // Polymorphic - will be handled as string for now
 })
+
 export type GelHistoryLog = typeof GelHistoryLog.Type
 
 export const GelSource = Schema.Struct({
@@ -138,6 +143,7 @@ export const GelSource = Schema.Struct({
   origin: GelOptionalColumn(Schema.String),
   comments: GelOptionalColumn(Schema.Unknown), // json
 })
+
 export type GelSource = typeof GelSource.Type
 
 export const GelTag = Schema.Struct({
@@ -154,6 +160,7 @@ export const GelTag = Schema.Struct({
   category: GelOptionalColumn(Schema.String),
   handle: Schema.String,
 })
+
 export type GelTag = typeof GelTag.Type
 
 export const TagDataForMigration = Schema.Struct({
@@ -171,6 +178,7 @@ export const GelImage = Schema.Struct({
   hotspot: GelOptionalColumn(Schema.Unknown), // json
   crop: GelOptionalColumn(Schema.Unknown), // json
 })
+
 export type GelImage = typeof GelImage.Type
 
 export const GelVegetableVariety = Schema.Struct({
@@ -180,6 +188,7 @@ export const GelVegetableVariety = Schema.Struct({
   handle: Handle,
   photos: Schema.Array(GelImage),
 })
+
 export type GelVegetableVariety = typeof GelVegetableVariety.Type
 
 export const GelVegetableTip = Schema.Struct({
@@ -189,6 +198,7 @@ export const GelVegetableTip = Schema.Struct({
   content: Schema.Unknown, // json
   handle: Handle,
 })
+
 export type GelVegetableTip = typeof GelVegetableTip.Type
 
 export const GelVegetable = Schema.Struct({
@@ -214,6 +224,7 @@ export const GelVegetable = Schema.Struct({
   content: GelOptionalColumn(Schema.Unknown), // json
   handle: Handle,
 })
+
 export type GelVegetable = typeof GelVegetable.Type
 
 const GelVegetableFriend = Schema.Struct({
@@ -226,6 +237,7 @@ export const GelVegetableFriendship = Schema.Struct({
   vegetables: Schema.Array(Schema.String), // Vegetable.id[]
   unique_key: Schema.String,
 })
+
 export type GelVegetableFriendship = typeof GelVegetableFriendship.Type
 
 export const GelUserWishlist = Schema.Struct({
@@ -234,6 +246,7 @@ export const GelUserWishlist = Schema.Struct({
   vegetable: Schema.String, // Vegetable.id
   status: Enums.GelVegetableWishlistStatus,
 })
+
 export type GelUserWishlist = typeof GelUserWishlist.Type
 
 export const GelNote = Schema.Struct({
@@ -249,6 +262,7 @@ export const GelNote = Schema.Struct({
   content_plain_text: GelOptionalColumn(Schema.String),
   handle: Handle,
 })
+
 export type GelNote = typeof GelNote.Type
 
 export const GelNoteWithRelations = Schema.Struct({
@@ -261,6 +275,7 @@ export const GelNoteWithRelations = Schema.Struct({
   ),
   related_to_notes: Schema.Array(Schema.Struct({ id: Schema.String, handle: Handle })),
 })
+
 export type GelNoteWithRelations = typeof GelNoteWithRelations.Type
 
 export const NoteDataForMigration = Schema.Struct({
@@ -271,6 +286,7 @@ export const NoteDataForMigration = Schema.Struct({
   publication: Schema.NullOr(PostSourceData),
   conversion_error: Schema.NullOr(Schema.String),
 })
+
 export type NoteDataForMigration = typeof NoteDataForMigration.Type
 
 export const GelEditSuggestion = Schema.Struct({
@@ -282,6 +298,7 @@ export const GelEditSuggestion = Schema.Struct({
   created_by_id: GelOptionalColumn(Schema.String),
   reviewed_by_id: GelOptionalColumn(Schema.String), // UserProfile.id
 })
+
 export type GelEditSuggestion = typeof GelEditSuggestion.Type
 
 export const GelResource = Schema.Struct({
@@ -295,6 +312,7 @@ export const GelResource = Schema.Struct({
   thumbnail: GelOptionalColumn(Schema.String), // Image.id
   handle: Handle,
 })
+
 export type GelResource = typeof GelResource.Type
 
 const GelResourceRelation = Schema.Struct({ id: Schema.String })
@@ -306,6 +324,7 @@ export const GelResourceWithRelations = Schema.Struct({
   related_vegetables: Schema.Array(GelResourceRelation),
   tags: Schema.Array(GelResourceRelation),
 })
+
 export type GelResourceWithRelations = typeof GelResourceWithRelations.Type
 
 export const GelVegetableForReconstruction = Schema.Struct({
@@ -315,6 +334,7 @@ export const GelVegetableForReconstruction = Schema.Struct({
   friends: Schema.Array(GelVegetableFriend),
   sources: Schema.Array(GelSource),
 })
+
 export type GelVegetableForReconstruction = typeof GelVegetableForReconstruction.Type
 
 export const GelVegetableWithEditSuggestions = Schema.Struct({

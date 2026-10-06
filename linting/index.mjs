@@ -2,10 +2,17 @@ import { noDirectFetchRule } from "./no-direct-fetch.mjs"
 import { noDirectIdConstructionRule } from "./no-direct-id-construction.mjs"
 import { noDisableValidationRule } from "./no-disable-validation.mjs"
 import { noNestedLayerProvideRule } from "./no-nested-layer-provide.mjs"
+import { noNodeApisRule } from "./no-node-apis.mjs"
 import { noSqlTypeParameterRule } from "./no-sql-type-parameter.mjs"
 import { pipeMaxArgumentsRule } from "./pipe-max-arguments.mjs"
 import { preferArrSortRule } from "./prefer-arr-sort.mjs"
 import { preferOptionFromNullableRule } from "./prefer-option-from-nullable.mjs"
+import {
+  noFunctionAliasesRule,
+  noManyFunctionParametersRule,
+  noInlineImportsRule,
+  paddingAroundLargeStatementsRule,
+} from "./readability.mjs"
 import { requireCanonicalEffectModuleNamesRule } from "./require-canonical-effect-module-names.mjs"
 import { requireEffectAliasForEsNamespacesRule } from "./require-effect-alias-for-es-namespaces.mjs"
 import { serviceMapClassSuffixByFileRule } from "./service-map-class-suffix-by-file.mjs"
@@ -14,6 +21,11 @@ import { taggedErrorSuffixRule } from "./tagged-error-suffix.mjs"
 export default {
   meta: { name: "custom-lint-rules" },
   rules: {
+    "no-node-apis": noNodeApisRule,
+    "no-function-aliases": noFunctionAliasesRule,
+    "no-many-function-parameters": noManyFunctionParametersRule,
+    "no-inline-imports": noInlineImportsRule,
+    "padding-around-large-statements": paddingAroundLargeStatementsRule,
     "no-direct-fetch": noDirectFetchRule,
     "no-direct-id-construction": noDirectIdConstructionRule,
     "no-disable-validation": noDisableValidationRule,

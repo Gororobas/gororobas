@@ -49,7 +49,7 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
+const makeHandle = Schema.decodeUnknownSync(Handle)
 
 const makePublicationCrdtUpdate = (input: {
   nextSourceData: PublicationSourceData
@@ -160,6 +160,7 @@ describe("PublicationsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const sourceData = makePostSourceData({
         content: makeDocument("Primeira versao"),
         handle: `pub-${person.id.slice(0, 8)}`,
@@ -211,12 +212,14 @@ describe("PublicationsRepository", () => {
         yield* insertPersonWithDependencies({ person, profile })
 
         const now = yield* DateTime.now
+
         const initialSourceData = makePostSourceData({
           content: makeDocument("Antes"),
           handle: `pub-${person.id.slice(0, 8)}-update`,
           ownerProfileId: profile.id,
           publishedAt: now,
         })
+
         const publicationId = yield* repository.createPublication({
           createdById: person.id,
           sourceData: initialSourceData,
@@ -229,6 +232,7 @@ describe("PublicationsRepository", () => {
         )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
         expect(beforeSnapshotRows).toHaveLength(1)
         const beforeSnapshot = Option.getOrThrow(Option.fromNullishOr(beforeSnapshotRows[0]))
+
         const nextSourceData: PublicationSourceData = {
           ...initialSourceData,
           locales: {
@@ -239,6 +243,7 @@ describe("PublicationsRepository", () => {
             },
           },
         }
+
         const crdtUpdate = makePublicationCrdtUpdate({
           nextSourceData,
           snapshot: beforeSnapshot.crdtSnapshot,
@@ -268,6 +273,7 @@ describe("PublicationsRepository", () => {
 
         const row = yield* repository.findPublicationRowById(publicationId)
         expect(Option.isSome(row)).toBe(true)
+
         expect(
           Equal.equals(
             Option.getOrThrow(row).currentCrdtFrontier,
@@ -297,6 +303,7 @@ describe("PublicationsRepository", () => {
         yield* insertPersonWithDependencies({ person, profile })
 
         const now = yield* DateTime.now
+
         const publicationId = yield* repository.createPublication({
           createdById: person.id,
           sourceData: makePostSourceData({
@@ -337,6 +344,7 @@ describe("PublicationsRepository", () => {
           crdtUpdate: Option.getOrThrow(Option.fromNullishOr(commits[1])).crdtUpdate,
           snapshot: beforeSnapshot.crdtSnapshot,
         })
+
         const replayedStorage = Schema.decodeUnknownSync(
           Schema.Struct({
             locales: Schema.optional(
@@ -351,6 +359,7 @@ describe("PublicationsRepository", () => {
             ),
           }),
         )(replayedDoc.toJSON())
+
         expect(
           Option.match(Option.fromNullishOr(replayedStorage.locales?.en?.content), {
             onNone: () => undefined,
@@ -358,6 +367,7 @@ describe("PublicationsRepository", () => {
               Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Unknown))(content),
           }),
         ).toEqual(makeDocument("Translated text"))
+
         expect(replayedStorage.locales?.en?.translatedAtCrdtFrontier).toBe(
           Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(
             Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
@@ -387,6 +397,7 @@ describe("PublicationsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
         sourceData: makePostSourceData({
@@ -420,6 +431,7 @@ describe("PublicationsRepository", () => {
           Schema.NullOr(Schema.Array(Schema.Unknown)),
         ),
       })
+
       const translationRows = Schema.decodeUnknownSync(Schema.Array(TranslatedFrontierRow))(
         yield* sql`
           SELECT translated_at_crdt_frontier
@@ -480,12 +492,14 @@ describe("PublicationsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const initialSourceData = makePostSourceData({
         content: makeDocument("Versao 1"),
         handle: `pub-${person.id.slice(0, 8)}-stale-frontier`,
         ownerProfileId: profile.id,
         publishedAt: now,
       })
+
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
         sourceData: initialSourceData,
@@ -499,6 +513,7 @@ describe("PublicationsRepository", () => {
       )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
       expect(initialSnapshotRows).toHaveLength(1)
       const initialSnapshot = Option.getOrThrow(Option.fromNullishOr(initialSnapshotRows[0]))
+
       const makeUpdateWithContent = (content: TiptapDocument) =>
         makePublicationCrdtUpdate({
           nextSourceData: {
@@ -554,12 +569,14 @@ describe("PublicationsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const sourceData = makePostSourceData({
         content: makeDocument("Permanece"),
         handle: `pub-${person.id.slice(0, 8)}-invalid-update`,
         ownerProfileId: profile.id,
         publishedAt: now,
       })
+
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
         sourceData,
@@ -606,6 +623,7 @@ describe("PublicationsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
         sourceData: makePostSourceData({

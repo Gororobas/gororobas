@@ -35,6 +35,7 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
             }),
           ),
         )
+
         yield* Policies.people.canModifyAccessLevel({
           from: currentRow.accessLevel,
           to: newAccessLevel,
@@ -108,6 +109,7 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
           ],
           { concurrency: "unbounded" },
         )
+
         if (confirmation?.shouldDeleteContent !== true) {
           return AccountDeletionResultConfirmContentDeletion.make({
             personalContentCount,

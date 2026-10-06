@@ -5,12 +5,17 @@ import { toLoroValue } from "../../crdts/loro-values.js"
 import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import { WikiPlantCultivarArticle, type PlantCultivarEditableAttributes } from "./plant-cultivar.js"
 
-const replaceAttribute = <const Tag extends string, Value, Encoded>(
-  tag: Tag,
-  key: keyof PlantCultivarEditableAttributes,
-  ValueSchema: Schema.Codec<Value, Encoded, never, never>,
-) => {
+const replaceAttribute = <const Tag extends string, Value, Encoded>({
+  tag,
+  key,
+  ValueSchema,
+}: {
+  tag: Tag
+  key: keyof PlantCultivarEditableAttributes
+  ValueSchema: Schema.Codec<Value, Encoded, never, never>
+}) => {
   const Message = Schema.TaggedStruct(tag, { value: ValueSchema })
+
   return {
     message: Message,
     handler: Effect.fn(tag)(function* (document: LoroDoc, payload: typeof Message.Type) {
@@ -24,16 +29,44 @@ const replaceAttribute = <const Tag extends string, Value, Encoded>(
 const fields = WikiPlantCultivarArticle.EditableAttributes.fields
 
 export const WikiPlantCultivarArticleCrdtOperations = defineKindCrdtOperations([
-  replaceAttribute("SetPlantCultivarParentPlantId", "parentPlantId", fields.parentPlantId),
-  replaceAttribute("SetPlantCultivarScientificNames", "scientificNames", fields.scientificNames),
-  replaceAttribute("SetPlantCultivarDevelopmentCycle", "developmentCycle", fields.developmentCycle),
-  replaceAttribute("SetPlantCultivarHeight", "height", fields.height),
-  replaceAttribute("SetPlantCultivarTemperature", "temperature", fields.temperature),
-  replaceAttribute("SetPlantCultivarEdibleParts", "edibleParts", fields.edibleParts),
-  replaceAttribute("SetPlantCultivarLifecycles", "lifecycles", fields.lifecycles),
-  replaceAttribute("SetPlantCultivarPlantingMethods", "plantingMethods", fields.plantingMethods),
-  replaceAttribute("SetPlantCultivarStrata", "strata", fields.strata),
-  replaceAttribute("SetPlantCultivarUsage", "usage", fields.usage),
+  replaceAttribute({
+    tag: "SetPlantCultivarParentPlantId",
+    key: "parentPlantId",
+    ValueSchema: fields.parentPlantId,
+  }),
+  replaceAttribute({
+    tag: "SetPlantCultivarScientificNames",
+    key: "scientificNames",
+    ValueSchema: fields.scientificNames,
+  }),
+  replaceAttribute({
+    tag: "SetPlantCultivarDevelopmentCycle",
+    key: "developmentCycle",
+    ValueSchema: fields.developmentCycle,
+  }),
+  replaceAttribute({ tag: "SetPlantCultivarHeight", key: "height", ValueSchema: fields.height }),
+  replaceAttribute({
+    tag: "SetPlantCultivarTemperature",
+    key: "temperature",
+    ValueSchema: fields.temperature,
+  }),
+  replaceAttribute({
+    tag: "SetPlantCultivarEdibleParts",
+    key: "edibleParts",
+    ValueSchema: fields.edibleParts,
+  }),
+  replaceAttribute({
+    tag: "SetPlantCultivarLifecycles",
+    key: "lifecycles",
+    ValueSchema: fields.lifecycles,
+  }),
+  replaceAttribute({
+    tag: "SetPlantCultivarPlantingMethods",
+    key: "plantingMethods",
+    ValueSchema: fields.plantingMethods,
+  }),
+  replaceAttribute({ tag: "SetPlantCultivarStrata", key: "strata", ValueSchema: fields.strata }),
+  replaceAttribute({ tag: "SetPlantCultivarUsage", key: "usage", ValueSchema: fields.usage }),
 ])
 
 export type WikiPlantCultivarArticleAttributeEdit =

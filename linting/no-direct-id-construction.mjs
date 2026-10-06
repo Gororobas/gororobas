@@ -15,11 +15,13 @@ export const noDirectIdConstructionRule = {
 
         const callee = node.callee
         if (callee.type !== "MemberExpression") return
+
         if (
           callee.property.type !== "Identifier" ||
           (callee.property.name !== "makeUnsafe" && callee.property.name !== "makeOption")
-        )
+        ) {
           return
+        }
 
         const obj = callee.object
         if (obj.type !== "Identifier") return

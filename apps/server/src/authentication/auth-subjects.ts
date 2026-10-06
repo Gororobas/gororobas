@@ -45,6 +45,7 @@ export const provisionMagicLinkAccount = Effect.fn("Authentication.provisionAcco
         const id = yield* IdGen.make(AuthSubjectId)
         const now = yield* DateTime.now
         const revision = yield* IdGen.make(AuthSecurityRevision)
+
         yield* insertAuthSubject({
           id,
           name: input.name,
@@ -56,6 +57,7 @@ export const provisionMagicLinkAccount = Effect.fn("Authentication.provisionAcco
           createdAt: now,
           updatedAt: now,
         })
+
         yield* insertPersonProfile({ id, name: input.name, createdAt: now, updatedAt: now })
         yield* insertPerson(id)
         yield* upsertMagicLinkCredential({ authSubjectId: id, revision })

@@ -39,6 +39,7 @@ export const CorePublicationMetadata = Schema.Struct({
   publishedAt: TimestampColumn,
   visibility: PublicationVisibility,
 })
+
 export type CorePublicationMetadata = typeof CorePublicationMetadata.Type
 
 const PublicationLocalizedDataCommonFields = {
@@ -78,6 +79,7 @@ export const EventMetadata = Schema.Struct({
   locationOrUrl: Schema.NullOr(Schema.String),
   attendanceMode: Schema.NullOr(EventAttendanceMode),
 })
+
 export type EventMetadata = typeof EventMetadata.Type
 
 export const PostMetadata = Schema.Struct({
@@ -117,6 +119,7 @@ export const PublicationLocalizedDataStorage = Schema.Struct({
   translatedAtCrdtFrontier: Schema.optional(Schema.String),
   translationSource: Schema.optional(TranslationSource),
 })
+
 export type PublicationLocalizedDataStorage = typeof PublicationLocalizedDataStorage.Type
 
 /** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PublicationSourceData` */
@@ -138,6 +141,7 @@ export const PublicationSourceDataStorage = Schema.Struct({
     visibility: PublicationVisibility,
   }),
 })
+
 export type PublicationSourceDataStorage = typeof PublicationSourceDataStorage.Type
 
 /** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
@@ -151,6 +155,7 @@ const publicationLocalizedDataStorageToSourceData = (
   localeData: PublicationSourceDataStorage["locales"][Locale],
 ) => {
   if (!localeData.content) return undefined
+
   if (!localeData.originalLocale || !localeData.translationSource) {
     throw new InvalidPublicationStorageError({
       message: "Invalid localized publication storage data",
@@ -282,6 +287,7 @@ export const ApiPublicationCardData = Schema.Struct({
   kind: PublicationKind,
   visibility: PublicationVisibility,
 })
+
 export type ApiPublicationCardData = typeof ApiPublicationCardData.Type
 
 export const ApiPostData = Schema.Struct({
@@ -297,6 +303,7 @@ export const ApiPostData = Schema.Struct({
   updatedAt: TimestampColumn,
   visibility: PublicationVisibility,
 })
+
 export type ApiPostData = typeof ApiPostData.Type
 
 export const ApiEventData = Schema.Struct({
@@ -316,6 +323,7 @@ export const ApiEventData = Schema.Struct({
   updatedAt: TimestampColumn,
   visibility: PublicationVisibility,
 })
+
 export type ApiEventData = typeof ApiEventData.Type
 
 export const ApiPublicationData = Schema.Union([ApiPostData, ApiEventData])
@@ -326,6 +334,7 @@ export const ApiCreatePostData = Schema.Struct({
   handle: Handle,
   visibility: PublicationVisibility,
 })
+
 export type ApiCreatePostData = typeof ApiCreatePostData.Type
 
 export const ApiCreateEventData = Schema.Struct({
@@ -337,6 +346,7 @@ export const ApiCreateEventData = Schema.Struct({
   startDate: TimestampColumn,
   visibility: PublicationVisibility,
 })
+
 export type ApiCreateEventData = typeof ApiCreateEventData.Type
 
 export const ApiUpdatePostData = Schema.Struct({
@@ -351,6 +361,7 @@ export const ApiPublicationHistoryEntry = Schema.Struct({
   createdAt: TimestampColumn,
   version: Schema.Int,
 })
+
 export type ApiPublicationHistoryEntry = typeof ApiPublicationHistoryEntry.Type
 
 export const CreatePostData = Schema.Struct({
@@ -358,6 +369,7 @@ export const CreatePostData = Schema.Struct({
   content: TiptapDocument,
   visibility: PublicationVisibility,
 })
+
 export type CreatePostData = typeof CreatePostData.Type
 
 export const CreateEventData = Schema.Struct({
@@ -369,6 +381,7 @@ export const CreateEventData = Schema.Struct({
   startDate: TimestampColumn,
   visibility: PublicationVisibility,
 })
+
 export type CreateEventData = typeof CreateEventData.Type
 
 export const PublicationHistoryEntry = Schema.Struct({
@@ -377,6 +390,7 @@ export const PublicationHistoryEntry = Schema.Struct({
   createdAt: TimestampColumn,
   version: Schema.Int,
 })
+
 export type PublicationHistoryEntry = typeof PublicationHistoryEntry.Type
 
 export const PublicationCrdtRow = Schema.Struct({
@@ -386,6 +400,7 @@ export const PublicationCrdtRow = Schema.Struct({
   crdtSnapshot: LoroDocSnapshot,
   ownerProfileId: ProfileId,
 })
+
 export type PublicationCrdtRow = typeof PublicationCrdtRow.Type
 
 export const PublicationCommitRow = Schema.Struct({
@@ -396,6 +411,7 @@ export const PublicationCommitRow = Schema.Struct({
   crdtUpdate: LoroDocUpdate,
   fromCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
 })
+
 export type PublicationCommitRow = typeof PublicationCommitRow.Type
 
 export const PublicationRow = Schema.Struct({
@@ -414,6 +430,7 @@ export const PublicationRow = Schema.Struct({
   locationOrUrl: Schema.NullOr(Schema.String),
   attendanceMode: Schema.NullOr(EventAttendanceMode),
 })
+
 export type PublicationRow = typeof PublicationRow.Type
 
 export const PublicationTranslationRow = Schema.Struct({
@@ -425,6 +442,7 @@ export const PublicationTranslationRow = Schema.Struct({
   translatedAtCrdtFrontier: Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
   translationSource: TranslationSource,
 })
+
 export type PublicationTranslationRow = typeof PublicationTranslationRow.Type
 
 export const PublicationTagRow = Schema.Struct({
@@ -432,6 +450,7 @@ export const PublicationTagRow = Schema.Struct({
   publicationId: PublicationId,
   tagId: TagId,
 })
+
 export type PublicationTagRow = typeof PublicationTagRow.Type
 
 export const PublicationWikiArticleRow = Schema.Struct({
@@ -439,4 +458,5 @@ export const PublicationWikiArticleRow = Schema.Struct({
   publicationId: PublicationId,
   wikiArticleId: WikiArticleId,
 })
+
 export type PublicationWikiArticleRow = typeof PublicationWikiArticleRow.Type

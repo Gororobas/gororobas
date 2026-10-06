@@ -22,31 +22,34 @@ const listOperationsArbitrary = Arbitrary.array(Arbitrary.schema(ListOperation),
 
 describe("makeMovableListEditOperations", () => {
   it.effect("ensure it runs", () =>
-    assertPropertyEffect(listOperationsArbitrary, (operations) =>
-      Effect.gen(function* () {
-        const document = new LoroDoc()
-        yield* Effect.forEach(
-          operations,
-          (operation) =>
-            Match.value(operation).pipe(
-              Match.tagsExhaustive({
-                AddedItem: (op) => added.handler(document, op),
-                RemovedItem: (op) => removed.handler(document, op),
-                UpdatedItem: (op) => updated.handler(document, op),
-                MovedItem: (op) => moved.handler(document, op),
-              }),
-            ),
-          { concurrency: 1 },
-        ).pipe(
-          Effect.tapErrorTag("SchemaError", (e) => Effect.logError("AQUI", e.message)),
-          // As the arbitrary is not constrained by events that come before, it'll generate a bunch of invalid
-          // ids that will throw CrdtListItemNotFoundError. We catch it and return undefined to avoid failing the test.
-          // @todo constrain the event arbitraries
-          Effect.catchTag("CrdtListItemNotFoundError", () => Effect.succeed(undefined)),
-        )
+    assertPropertyEffect({
+      arbitrary: listOperationsArbitrary,
+      predicate: (operations) =>
+        Effect.gen(function* () {
+          const document = new LoroDoc()
 
-        return true
-      }),
-    ),
+          yield* Effect.forEach(
+            operations,
+            (operation) =>
+              Match.value(operation).pipe(
+                Match.tagsExhaustive({
+                  AddedItem: (op) => added.handler(document, op),
+                  RemovedItem: (op) => removed.handler(document, op),
+                  UpdatedItem: (op) => updated.handler(document, op),
+                  MovedItem: (op) => moved.handler(document, op),
+                }),
+              ),
+            { concurrency: 1 },
+          ).pipe(
+            Effect.tapErrorTag("SchemaError", (e) => Effect.logError("AQUI", e.message)),
+            // As the arbitrary is not constrained by events that come before, it'll generate a bunch of invalid
+            // ids that will throw CrdtListItemNotFoundError. We catch it and return undefined to avoid failing the test.
+            // @todo constrain the event arbitraries
+            Effect.catchTag("CrdtListItemNotFoundError", () => Effect.succeed(undefined)),
+          )
+
+          return true
+        }),
+    }),
   )
 })

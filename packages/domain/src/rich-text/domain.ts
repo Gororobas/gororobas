@@ -15,6 +15,7 @@ export const EntityReferenceTarget = Schema.Union([
   Schema.Struct({ referenceType: Schema.Literal("TAG"), referenceId: TagId }),
   Schema.Struct({ referenceType: Schema.Literal("PUBLICATION"), referenceId: PublicationId }),
 ])
+
 export type EntityReferenceTarget = typeof EntityReferenceTarget.Type
 
 export const EntityReferenceAttributes = Schema.Union(
@@ -26,6 +27,7 @@ export const EntityReferenceAttributes = Schema.Union(
     }),
   ),
 )
+
 export type EntityReferenceAttributes = typeof EntityReferenceAttributes.Type
 
 /** Labels and alternative text describe this use of the media, rather than the shared file. */
@@ -39,6 +41,7 @@ export const MediaGridItem = Schema.Union([
   }),
   ExternalEmbed,
 ])
+
 export type MediaGridItem = typeof MediaGridItem.Type
 
 export const MediaGridAttributes = Schema.Struct({
@@ -58,6 +61,7 @@ export const TiptapTextNode = Schema.Struct({
   text: Schema.NonEmptyString,
   marks: Schema.optional(Schema.Array(TiptapMark)),
 })
+
 export type TiptapTextNode = typeof TiptapTextNode.Type
 
 export const EntityReferenceNode = Schema.Struct({
@@ -87,6 +91,7 @@ export const TiptapInlineNode = Schema.Union([
   EntityReferenceNode,
   TiptapHardBreakNode,
 ])
+
 export type TiptapInlineNode = typeof TiptapInlineNode.Type
 
 export const TiptapParagraphNode = Schema.Struct({
@@ -94,6 +99,7 @@ export const TiptapParagraphNode = Schema.Struct({
   attrs: Schema.optional(JsonAttributes),
   content: Schema.optional(Schema.Array(TiptapInlineNode)),
 })
+
 export type TiptapParagraphNode = typeof TiptapParagraphNode.Type
 
 export const TiptapHeadingNode = Schema.Struct({
@@ -112,11 +118,13 @@ export interface TiptapBlockquoteNode {
   readonly attrs?: typeof JsonAttributes.Type | undefined
   readonly content: readonly [TiptapBlockNode, ...TiptapBlockNode[]]
 }
+
 interface TiptapBlockquoteNodeEncoded {
   readonly type: "blockquote"
   readonly attrs?: typeof JsonAttributes.Type | undefined
   readonly content: readonly [TiptapBlockNodeEncoded, ...TiptapBlockNodeEncoded[]]
 }
+
 export const TiptapBlockquoteNode: Schema.Codec<TiptapBlockquoteNode, TiptapBlockquoteNodeEncoded> =
   Schema.Struct({
     type: Schema.Literal("blockquote"),
@@ -196,6 +204,7 @@ export const TiptapDocument = Schema.Struct({
   type: Schema.Literal("doc"),
   version: Schema.Literal(1),
 })
+
 export type TiptapDocument = typeof TiptapDocument.Type
 
 export const EMPTY_TIPTAP_DOCUMENT: TiptapDocument = TiptapDocument.make({

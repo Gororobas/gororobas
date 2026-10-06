@@ -1,18 +1,23 @@
-import { NodeServices } from "@effect/platform-node"
+import { NodePath, NodeServices } from "@effect/platform-node"
 import { AudioMetadata } from "@gororobas/domain"
 import { registerMediabunnyServer } from "@mediabunny/server"
-import { Duration, Effect, Schema } from "effect"
+import { FileSystem, Duration, Effect, Schema, Path } from "effect"
 import { FilePathTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny"
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 import sharp from "sharp"
 import { expect, it } from "vitest"
 
 import { processMediaAsset, readMediaAssetMetadata } from "../src/media-assets/processing.js"
 
+const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
+
 it("retains original dimensions and creates proportional AVIF derivatives without upscaling", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "mediaAssets-image-"))
+  const filesystem = await Effect.runPromise(
+    Effect.provide(FileSystem.FileSystem, NodeServices.layer),
+  )
+  const directory = await Effect.runPromise(
+    filesystem.makeTempDirectory({ prefix: "mediaAssets-image-" }),
+  )
+
   try {
     const filename = join(directory, "original.png")
     await sharp({ create: { width: 100, height: 40, channels: 3, background: "red" } })
@@ -23,23 +28,31 @@ it("retains original dimensions and creates proportional AVIF derivatives withou
       processMediaAsset({ filename, directory, metadata }).pipe(Effect.provide(NodeServices.layer)),
     )
     expect(metadata).toMatchObject({ originalWidth: 100, originalHeight: 40 })
+
     expect(await sharp(join(directory, "50.avif")).metadata()).toMatchObject({
       format: "heif",
       width: 50,
       height: 20,
     })
+
     expect(await sharp(join(directory, "2400.avif")).metadata()).toMatchObject({
       width: 100,
       height: 40,
     })
     expect(await sharp(filename).metadata()).toMatchObject({ width: 100, height: 40 })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await Effect.runPromise(filesystem.remove(directory, { recursive: true, force: true }))
   }
 })
 
 it("processes audio and adaptive video through Mediabunny without CLI tools", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "mediaAssets-media-"))
+  const filesystem = await Effect.runPromise(
+    Effect.provide(FileSystem.FileSystem, NodeServices.layer),
+  )
+  const directory = await Effect.runPromise(
+    filesystem.makeTempDirectory({ prefix: "mediaAssets-media-" }),
+  )
+
   try {
     registerMediabunnyServer({ hardwareContext: null })
     const audioFile = join(directory, "original.wav")
@@ -57,27 +70,31 @@ it("processes audio and adaptive video through Mediabunny without CLI tools", as
     wav.writeUInt16LE(16, 34)
     wav.write("data", 36)
     wav.writeUInt32LE(samples * 2, 40)
-    await writeFile(audioFile, wav)
+    await Effect.runPromise(filesystem.writeFile(audioFile, wav))
     const audio = await Effect.runPromise(readMediaAssetMetadata(audioFile, "AUDIO"))
     expect(audio).toMatchObject({ sampleRate: 48000, numberOfChannels: 1 })
     if (audio.format !== "AUDIO") throw new Error("Expected audio")
     expect(Duration.toMillis(audio.duration)).toBeCloseTo(100)
+
     await Effect.runPromise(
       processMediaAsset({ filename: audioFile, directory, metadata: audio }).pipe(
         Effect.provide(NodeServices.layer),
       ),
     )
+
     for (const name of ["audio.webm", "audio.m4a"]) {
       const metadata = await Effect.runPromise(
         readMediaAssetMetadata(join(directory, name), "AUDIO"),
       )
       expect(metadata.format).toBe("AUDIO")
+
       expect(
         Duration.toSeconds(
           Schema.decodeUnknownSync(Schema.toType(AudioMetadata))(metadata).duration,
         ),
       ).toBeCloseTo(0.1, 1)
     }
+
     const filename = join(directory, "original.mp4")
     const output = new Output({
       format: new Mp4OutputFormat(),
@@ -86,6 +103,7 @@ it("processes audio and adaptive video through Mediabunny without CLI tools", as
     const source = new VideoSampleSource({ codec: "avc", bitrate: 100_000 })
     output.addVideoTrack(source)
     await output.start()
+
     for (let index = 0; index < 4; index++) {
       using frame = new VideoSample(new Uint8Array(640 * 480 * 4).fill(128), {
         format: "RGBA",
@@ -94,26 +112,32 @@ it("processes audio and adaptive video through Mediabunny without CLI tools", as
         timestamp: index / 2,
         duration: 0.5,
       })
+
       await source.add(frame)
     }
+
     source.close()
     await output.finalize()
     const video = await Effect.runPromise(readMediaAssetMetadata(filename, "VIDEO"))
     expect(video).toMatchObject({ originalWidth: 640, originalHeight: 480 })
+
     await Effect.runPromise(
       processMediaAsset({ filename, directory, metadata: video }).pipe(
         Effect.provide(NodeServices.layer),
       ),
     )
+
     if (video.format !== "VIDEO") throw new Error("Expected video")
     expect(Duration.toMillis(video.duration)).toBeCloseTo(2000)
-    const playlist = await readFile(join(directory, "master.m3u8"), "utf8")
+    const playlist = await Effect.runPromise(
+      filesystem.readFileString(join(directory, "master.m3u8")),
+    )
     expect(playlist).toContain("#EXTM3U")
     expect(playlist.match(/#EXT-X-STREAM-INF/g)).toHaveLength(2)
     expect(
       await Effect.runPromise(readMediaAssetMetadata(join(directory, "video.mp4"), "VIDEO")),
     ).toMatchObject({ originalWidth: 640, originalHeight: 480 })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await Effect.runPromise(filesystem.remove(directory, { recursive: true, force: true }))
   }
 }, 30_000)

@@ -11,6 +11,7 @@ export function getBackgroundContext<T extends Record<any, any>>(): Effect.Effec
   never,
   BackgroundContext
 >
+
 export function getBackgroundContext() {
   return BackgroundContext
 }

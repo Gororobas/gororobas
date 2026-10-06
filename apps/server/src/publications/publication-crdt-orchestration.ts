@@ -80,6 +80,7 @@ export const createSystemTranslationCrdtUpdate = (params: {
       catch: () => new InvalidCrdtUpdateError({ reason: "SchemaValidation" }),
     })
     const currentSourceData = yield* decodePublicationStorageDataEffect(currentStorageData)
+
     const nextSourceData = PublicationSourceData.make({
       ...currentSourceData,
       locales: {

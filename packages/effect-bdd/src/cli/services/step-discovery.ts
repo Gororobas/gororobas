@@ -55,27 +55,35 @@ function detectScope(node: Node): Option.Option<StepScope> {
   if (name === "Background") {
     return Option.some({ type: "background" })
   }
+
   if (name === "Scenario" && EffectArray.isReadonlyArrayNonEmpty(node.arguments)) {
     const scenarioName = extractStringLiteral(node.arguments[0])
     if (Option.isSome(scenarioName)) {
       return Option.some({ type: "scenario", name: scenarioName.value })
     }
   }
+
   if (name === "ScenarioOutline" && EffectArray.isReadonlyArrayNonEmpty(node.arguments)) {
     const outlineName = extractStringLiteral(node.arguments[0])
     if (Option.isSome(outlineName)) {
       return Option.some({ type: "scenario_outline", name: outlineName.value })
     }
   }
+
   return Option.none()
 }
 
-function visitNode(
-  node: Node,
-  sourceFile: SourceFile,
-  filePath: string,
-  currentScope: Option.Option<StepScope>,
-): Array<DiscoveredStep> {
+function visitNode({
+  node,
+  sourceFile,
+  filePath,
+  currentScope,
+}: {
+  node: Node
+  sourceFile: SourceFile
+  filePath: string
+  currentScope: Option.Option<StepScope>
+}): Array<DiscoveredStep> {
   const steps: Array<DiscoveredStep> = []
 
   const detectedScope = detectScope(node)
@@ -83,12 +91,15 @@ function visitNode(
 
   if (isStepCallExpression(node)) {
     const keyword = getStepKeyword(node)
+
     if (Option.isSome(keyword) && EffectArray.isReadonlyArrayNonEmpty(node.arguments)) {
       const firstArg = node.arguments[0]
       const pattern = extractStringLiteral(firstArg)
+
       if (Option.isSome(pattern)) {
         const position = node.getStart(sourceFile)
         const { line } = sourceFile.getLineAndCharacterOfPosition(position)
+
         steps.push({
           file: filePath,
           keyword: keyword.value,
@@ -101,7 +112,14 @@ function visitNode(
   }
 
   node.forEachChild((child) => {
-    steps.push(...visitNode(child, sourceFile, filePath, scope))
+    steps.push(
+      ...visitNode({
+        node: child,
+        sourceFile: sourceFile,
+        filePath: filePath,
+        currentScope: scope,
+      }),
+    )
   })
 
   return steps
@@ -115,7 +133,12 @@ function discoverStepsInFile(
     return []
   }
 
-  return visitNode(sourceFile.value, sourceFile.value, filePath, Option.none())
+  return visitNode({
+    node: sourceFile.value,
+    sourceFile: sourceFile.value,
+    filePath: filePath,
+    currentScope: Option.none(),
+  })
 }
 
 export const StepDiscoveryLive = Layer.succeed(
@@ -133,12 +156,14 @@ export const StepDiscoveryLive = Layer.succeed(
       const api = new API({ cwd: process.cwd() })
 
       const snapshot = api.updateSnapshot({ openFiles: absoluteFiles })
+
       files.forEach((file, index) => {
         const absoluteFile = absoluteFiles[index]
         const project = snapshot.getDefaultProjectForFile(absoluteFile)
         const sourceFile = project?.program.getSourceFile(absoluteFile)
         allSteps.push(...discoverStepsInFile(file, Option.fromNullishOr(sourceFile)))
       })
+
       snapshot.dispose()
       api.close()
 

@@ -16,6 +16,7 @@ it.effect("rewrites mentions and resolves stale image IDs through the Sanity ali
     const context = yield* MigrationContext
     const plantId = "019a0dce-1fc0-7abc-8abc-123456789abc"
     const imageId = "019a0dce-1fc0-7abc-8abc-123456789abd"
+
     yield* Effect.forEach(
       [
         { gelId: "plant", sqliteId: plantId, entityType: "WikiArticle" },
@@ -24,6 +25,7 @@ it.effect("rewrites mentions and resolves stale image IDs through the Sanity ali
       (mapping) => context.registerMapping({ ...mapping, contentHash: "", lastSyncedAt: "" }),
       { concurrency: 1 },
     )
+
     const source = Schema.decodeUnknownSync(GelTiptapDocument)({
       type: "doc",
       version: 1,
@@ -49,12 +51,14 @@ it.effect("rewrites mentions and resolves stale image IDs through the Sanity ali
         },
       ],
     })
+
     const converted = yield* migrateRichText(source)
     const paragraph = converted.content[0]
     assert(paragraph.type === "paragraph")
     const mention = paragraph.content?.[0]
     const image = converted.content[1]
     assert(mention && "attrs" in mention)
+
     expect(mention).toEqual({
       type: "entityReference",
       attrs: {
@@ -64,6 +68,7 @@ it.effect("rewrites mentions and resolves stale image IDs through the Sanity ali
         labelAtInsertion: "Açaí",
       },
     })
+
     expect(image).toEqual({
       type: "mediaGrid",
       attrs: {
@@ -71,6 +76,7 @@ it.effect("rewrites mentions and resolves stale image IDs through the Sanity ali
         items: [{ source: "MEDIA_ASSET", format: "IMAGE", mediaAssetId: imageId, alt: "Photo" }],
       },
     })
+
     expect(Schema.is(TiptapDocument)(converted)).toBe(true)
     expect(yield* migrateRichText(converted)).toEqual(converted)
     expect(paragraph.content?.[1]).toEqual(source.content[0].content?.[1])
@@ -95,6 +101,7 @@ it.effect("groups adjacent media across formats, preserves nesting and keeps tex
   Effect.gen(function* () {
     const imageId = "019a0dce-1fc0-7abc-8abc-123456789abc"
     const context = yield* MigrationContext
+
     yield* context.registerMapping({
       gelId: "photo",
       sqliteId: imageId,
@@ -102,11 +109,13 @@ it.effect("groups adjacent media across formats, preserves nesting and keeps tex
       contentHash: "",
       lastSyncedAt: "",
     })
+
     const image = {
       type: "image",
       attrs: { data: encodeJson({ image: { id: "photo", label: "Photo" } }) },
     }
     const video = { type: "video", attrs: { data: encodeJson({ version: 1, id: "dQw4w9WgXcQ" }) } }
+
     const source = GelTiptapDocument.make({
       type: "doc",
       version: 1,
@@ -117,8 +126,10 @@ it.effect("groups adjacent media across formats, preserves nesting and keeps tex
         { type: "blockquote", content: [video, image] },
       ],
     })
+
     const migrated = yield* migrateRichText(source)
     expect(migrated.content).toHaveLength(3)
+
     expect(migrated.content[0]).toMatchObject({
       type: "mediaGrid",
       attrs: {
@@ -133,22 +144,27 @@ it.effect("groups adjacent media across formats, preserves nesting and keeps tex
         ],
       },
     })
+
     expect(migrated.content[1]).toEqual(source.content[2])
     const blockquote = migrated.content[2]
     assert(blockquote.type === "blockquote")
     expect(blockquote.content).toHaveLength(1)
+
     expect(blockquote.content?.[0]).toMatchObject({
       type: "mediaGrid",
       attrs: {
         items: [{ source: "EXTERNAL_EMBED", provider: "YOUTUBE" }, { source: "MEDIA_ASSET" }],
       },
     })
+
     expect(yield* migrateRichText(migrated)).toEqual(migrated)
+
     const malformed = GelTiptapDocument.make({
       type: "doc",
       version: 1,
       content: [{ type: "video", attrs: { data: encodeJson({ id: "invalid" }) } }],
     })
+
     expect(yield* migrateRichText(malformed).pipe(Effect.flip)).toMatchObject({
       _tag: "SchemaError",
     })

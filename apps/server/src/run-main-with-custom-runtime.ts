@@ -11,11 +11,15 @@ export const runMainWithCustomRuntime = <
   RuntimeError,
   ProgramServices,
   ProgramError,
->(
-  runtime: ManagedRuntime.ManagedRuntime<RuntimeServices, RuntimeError>,
-  program: Effect.Effect<unknown, ProgramError, ProgramServices>,
-  teardown: Runtime.Teardown = Runtime.defaultTeardown,
-) => {
+>({
+  runtime,
+  program,
+  teardown = Runtime.defaultTeardown,
+}: {
+  runtime: ManagedRuntime.ManagedRuntime<RuntimeServices, RuntimeError>
+  program: Effect.Effect<unknown, ProgramError, ProgramServices>
+  teardown?: Runtime.Teardown | undefined
+}) => {
   const fiber = runtime.runFork(
     // oxlint-disable-next-line effect/casting-awareness, effect/avoid-any -- the custom runtime is the application boundary.
     program as unknown as Effect.Effect<unknown, RuntimeError, RuntimeServices>,
@@ -30,6 +34,7 @@ export const runMainWithCustomRuntime = <
       process.removeListener("SIGTERM", onSigint)
     }
     clearInterval(keepAlive)
+
     teardown(exit, (code) => {
       if (receivedSignal || code !== 0) {
         process.exit(code)

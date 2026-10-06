@@ -38,6 +38,7 @@ export const WikiArticleEdit = Schema.Union([
   WikiUncategorizedArticleCrdtOperations.AttributeEdit,
   // @todo wiki-article-translation
 ])
+
 export type WikiArticleEdit = typeof WikiArticleEdit.Type
 
 /** @todo rewrite with Match */
@@ -109,11 +110,14 @@ const projectWikiArticleDocument = (document: LoroDoc) => ({
       .getMap("translations")
       .entries()
       .map(([locale, translation]) => {
-        if (!(translation instanceof LoroMap))
+        if (!(translation instanceof LoroMap)) {
           throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+        }
         const content = translation.get("content")
-        if (content !== undefined && !(content instanceof LoroMap))
+        if (content !== undefined && !(content instanceof LoroMap)) {
           throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+        }
+
         return [
           locale,
           {
@@ -133,6 +137,7 @@ const isJsonObject = (value: Schema.Json): value is Schema.JsonObject =>
 const initializeMap = (map: LoroMap, values: Schema.JsonObject) => {
   Record.toEntries(values).forEach(([key, value]) => {
     if (value === null) return
+
     if (isJsonArray(value)) {
       const list = map.ensureMergeableMovableList(toLoroString(key))
       value.forEach((item, index) => list.insert(index, toLoroValue(item)))
@@ -150,6 +155,7 @@ export const createWikiArticleCrdtDocument = Effect.fn("createWikiArticleCrdtDoc
   const sourceDocument = new LoroDoc()
   sourceDocument.configDefaultTextStyle({ expand: "after" })
   const json = yield* Schema.encodeEffect(Schema.fromJsonString(WikiArticleCrdtData))(sourceData)
+
   const encoded = yield* Schema.decodeUnknownEffect(
     Schema.fromJsonString(
       Schema.Struct({
@@ -158,19 +164,23 @@ export const createWikiArticleCrdtDocument = Effect.fn("createWikiArticleCrdtDoc
       }),
     ),
   )(json)
+
   sourceDocument.getMap("kind").set("value", sourceData.kind)
   initializeMap(sourceDocument.getMap("attributes"), encoded.attributes)
+
   Record.toEntries(encoded.translations).forEach(([locale, values]) => {
     const translation = sourceDocument.getMap("translations").ensureMergeableMap(locale)
     initializeMap(
       translation,
       Record.filter(values, (_, key) => key !== "content"),
     )
-    if (values.content !== undefined && values.content !== null)
+
+    if (values.content !== undefined && values.content !== null) {
       initializeLoroRichText(
         translation.ensureMergeableMap("content"),
         Schema.decodeUnknownSync(TiptapDocument)(values.content),
       )
+    }
   })
 
   return {

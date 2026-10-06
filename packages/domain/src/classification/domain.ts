@@ -30,6 +30,7 @@ export const LangExtractAlignmentStatus = Schema.Literals([
   "match_lesser",
   "match_fuzzy",
 ])
+
 export type LangExtractAlignmentStatus = typeof LangExtractAlignmentStatus.Type
 
 export const CommonExtractionData = Schema.Struct({
@@ -52,6 +53,7 @@ export const ResolvedExistingWikiArticleExtraction = Schema.TaggedStruct(
     wikiArticleId: WikiArticleId,
   },
 )
+
 export type ResolvedExistingWikiArticleExtraction =
   typeof ResolvedExistingWikiArticleExtraction.Type
 
@@ -66,6 +68,7 @@ export const SuggestedWikiArticleExtraction = Schema.TaggedStruct(
     }),
   },
 )
+
 export type SuggestedWikiArticleExtraction = typeof SuggestedWikiArticleExtraction.Type
 
 export const ResolvedWikiArticleExtraction = Schema.Union([
@@ -106,4 +109,5 @@ export const PublicationClassification = Schema.Struct({
   wikiArticles: Schema.Array(ResolvedWikiArticleExtraction),
   tags: Schema.Array(ResolvedTagExtraction),
 })
+
 export type PublicationClassification = typeof PublicationClassification.Type

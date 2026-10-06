@@ -25,6 +25,7 @@ const PublicationsRepositoryTestLayer = Layer.effect(
   PublicationsRepository,
   PublicationsRepository.make,
 ).pipe(Layer.provide(TestLayer))
+
 const TestLayerWithRepositories = Layer.mergeAll(
   TestLayer,
   CommentsRepositoryTestLayer,
@@ -43,7 +44,7 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = (value: string) => Schema.decodeUnknownSync(Handle)(value)
+const makeHandle = Schema.decodeUnknownSync(Handle)
 
 const makeCommentSourceData = (content: TiptapDocument): SourceCommentData => ({
   locales: {
@@ -67,6 +68,7 @@ describe("CommentsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
@@ -122,6 +124,7 @@ describe("CommentsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
@@ -185,6 +188,7 @@ describe("CommentsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
@@ -256,6 +260,7 @@ describe("CommentsRepository", () => {
       yield* insertPersonWithDependencies({ person, profile })
 
       const now = yield* DateTime.now
+
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {

@@ -25,4 +25,5 @@ export const GelTiptapDocument = Schema.Struct({
   version: Schema.Literal(1),
   content: Schema.Array(GelTiptapNode),
 })
+
 export type GelTiptapDocument = typeof GelTiptapDocument.Type

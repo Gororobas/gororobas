@@ -14,6 +14,7 @@ export const PersonRow = Schema.Struct({
   accessSetById: Schema.NullOr(PersonId),
   id: PersonId,
 })
+
 export type PersonRow = typeof PersonRow.Type
 
 export const AccountDeletionConfirmation = Schema.Struct({

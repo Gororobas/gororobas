@@ -10,6 +10,7 @@ const MappingEntry = Schema.Struct({
   contentHash: Schema.String,
   lastSyncedAt: Schema.String,
 })
+
 export type MappingEntry = typeof MappingEntry.Type
 
 type MappingError = Schema.SchemaError | KeyValueStore.KeyValueStoreError
@@ -56,10 +57,12 @@ export const MigrationContextLive = Layer.effect(
   Effect.gen(function* () {
     const store = KeyValueStore.toSchemaStore(yield* KeyValueStore.KeyValueStore, MappingEntry)
     const registerMapping = (mapping: MappingEntry) => store.set(mapping.gelId, mapping)
+
     return MigrationContext.of({
       resolveId: (gelId, entityType) =>
         Effect.gen(function* () {
           const entry = yield* store.get(gelId)
+
           if (
             Option.isNone(entry) ||
             (entityType !== undefined && entry.value.entityType !== entityType)
@@ -68,6 +71,7 @@ export const MigrationContextLive = Layer.effect(
               new GelIdNotMappedError({ gelId, entityType: Option.fromUndefinedOr(entityType) }),
             )
           }
+
           return entry.value.sqliteId
         }),
       planMigrationOp: (sourceRecord, entityType) =>
@@ -77,6 +81,7 @@ export const MigrationContextLive = Layer.effect(
             sourceRecord,
           )
           const lastSyncedAt = (yield* DateTime.nowAsDate).toISOString()
+
           if (Option.isSome(existing)) {
             if (existing.value.entityType !== entityType) {
               return yield* Effect.fail(
@@ -88,9 +93,12 @@ export const MigrationContextLive = Layer.effect(
                 ),
               )
             }
-            if (existing.value.contentHash === contentHash)
+
+            if (existing.value.contentHash === contentHash) {
               return { op: "skip", reason: "unchanged" } as const
+            }
             const entry = existing.value
+
             return {
               op: "update",
               sqliteId: entry.sqliteId,
@@ -101,11 +109,13 @@ export const MigrationContextLive = Layer.effect(
                 }),
             } satisfies MigrationOp
           }
+
           return {
             op: "create",
             execute: (create) =>
               Effect.gen(function* () {
                 const sqliteId = yield* create({ contentHash })
+
                 yield* registerMapping({
                   gelId: sourceRecord.id,
                   sqliteId,

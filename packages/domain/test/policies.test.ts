@@ -7,6 +7,7 @@ import * as Arbitrary from "effect/Arbitrary"
 import { v7 } from "uuid"
 
 import Policies from "../src/authorization/policies.js"
+import type { SessionContext } from "../src/authorization/session.js"
 import { Handle } from "../src/common/primitives.js"
 import {
   AccountSession,
@@ -66,11 +67,15 @@ const sessionWithAccessLevel = (
   accessLevel: AccountSession["accessLevel"],
 ): AccountSession => ({ ...baseSession, accessLevel })
 
-const sessionWithOrgMembership = (
-  baseSession: AccountSession,
-  organizationId: OrganizationId,
-  accessLevel: OrganizationAccessLevel,
-): AccountSession => ({
+const sessionWithOrgMembership = ({
+  baseSession,
+  organizationId,
+  accessLevel,
+}: {
+  baseSession: AccountSession
+  organizationId: OrganizationId
+  accessLevel: OrganizationAccessLevel
+}): AccountSession => ({
   ...baseSession,
   memberships: [...baseSession.memberships, { accessLevel, organizationId }],
 })
@@ -103,29 +108,27 @@ const isNewcomerOrBlocked = (session: AccountSession) => isNewcomer(session) || 
 // ─── Monotonicity Framework ────────────────────────────────────────────
 
 const assertMonotonic = (
-  policyEffect: Effect.Effect<
-    unknown,
-    unknown,
-    import("../src/authorization/session.js").SessionContext
-  >,
+  policyEffect: Effect.Effect<unknown, unknown, SessionContext>,
   description: string,
 ) =>
   it.effect(`${description} is monotonic`, () =>
-    assertPropertyEffect(accountSessionArbitrary, (baseSession) =>
-      Effect.gen(function* () {
-        const results = yield* Effect.all(
-          ACCESS_LEVEL_ORDER.map((level) =>
-            runPolicySuccess(policyEffect, sessionWithAccessLevel(baseSession, level)),
-          ),
-          { concurrency: "unbounded" },
-        )
+    assertPropertyEffect({
+      arbitrary: accountSessionArbitrary,
+      predicate: (baseSession) =>
+        Effect.gen(function* () {
+          const results = yield* Effect.all(
+            ACCESS_LEVEL_ORDER.map((level) =>
+              runPolicySuccess(policyEffect, sessionWithAccessLevel(baseSession, level)),
+            ),
+            { concurrency: "unbounded" },
+          )
 
-        return results.every(
-          (result, index) =>
-            result || results.slice(0, index).every((previousResult) => previousResult === false),
-        )
-      }),
-    ),
+          return results.every(
+            (result, index) =>
+              result || results.slice(0, index).every((previousResult) => previousResult === false),
+          )
+        }),
+    }),
   )
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
@@ -133,55 +136,61 @@ const assertMonotonic = (
 describe("Policies", () => {
   describe("security invariants", () => {
     it.effect("blocked users can never perform write operations", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const blockedSession = sessionWithAccessLevel(session, "BLOCKED")
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const blockedSession = sessionWithAccessLevel(session, "BLOCKED")
 
-          const writePolicies = [
-            Policies.publications.canCreate(
-              CorePublicationMetadata.make({
-                handle: TEST_HANDLE,
-                ownerProfileId: session.personId,
-                publishedAt: TEST_PUBLISHED_AT,
-                visibility: "PUBLIC",
-              }),
-            ),
-            Policies.wiki.canCreate,
-            Policies.comments.canCreate,
-            Policies.organizations.canCreate,
-            Policies.media.canCreate,
-          ]
+            const writePolicies = [
+              Policies.publications.canCreate(
+                CorePublicationMetadata.make({
+                  handle: TEST_HANDLE,
+                  ownerProfileId: session.personId,
+                  publishedAt: TEST_PUBLISHED_AT,
+                  visibility: "PUBLIC",
+                }),
+              ),
+              Policies.wiki.canCreate,
+              Policies.comments.canCreate,
+              Policies.organizations.canCreate,
+              Policies.media.canCreate,
+            ]
 
-          const canWriteResults = yield* Effect.forEach(
-            writePolicies,
-            (policy) => runPolicySuccess(policy, blockedSession),
-            { concurrency: 50 },
-          )
-          return canWriteResults.every((canWrite) => canWrite === false)
-        }).pipe(Effect.provide(IdGenTest)),
-      ),
+            const canWriteResults = yield* Effect.forEach(
+              writePolicies,
+              (policy) => runPolicySuccess(policy, blockedSession),
+              { concurrency: 50 },
+            )
+
+            return canWriteResults.every((canWrite) => canWrite === false)
+          }).pipe(Effect.provide(IdGenTest)),
+      }),
     )
 
     it.effect("permission checks are idempotent", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const policies = [
-            Policies.wiki.canCreate,
-            Policies.comments.canCreate,
-            Policies.media.canCreate,
-          ]
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const policies = [
+              Policies.wiki.canCreate,
+              Policies.comments.canCreate,
+              Policies.media.canCreate,
+            ]
 
-          const results = yield* Effect.forEach(
-            policies,
-            (policy) =>
-              Effect.all([runPolicySuccess(policy, session), runPolicySuccess(policy, session)], {
-                concurrency: 50,
-              }),
-            { concurrency: 1 },
-          )
-          return results.every(([result1, result2]) => result1 === result2)
-        }),
-      ),
+            const results = yield* Effect.forEach(
+              policies,
+              (policy) =>
+                Effect.all([runPolicySuccess(policy, session), runPolicySuccess(policy, session)], {
+                  concurrency: 50,
+                }),
+              { concurrency: 1 },
+            )
+
+            return results.every(([result1, result2]) => result1 === result2)
+          }),
+      }),
     )
   })
 
@@ -196,9 +205,9 @@ describe("Policies", () => {
 
   describe("implications", () => {
     it.effect("canEdit implies canView (for owned publications)", () =>
-      assertPropertyEffect(
-        Arbitrary.all([accountSessionArbitrary, publicationVisibilityArbitrary]),
-        ([session, visibility]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, publicationVisibilityArbitrary]),
+        predicate: ([session, visibility]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
@@ -206,6 +215,7 @@ describe("Policies", () => {
               publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
+
             const canEdit = yield* runPolicySuccess(
               Policies.publications.canEdit(publication),
               session,
@@ -217,13 +227,13 @@ describe("Policies", () => {
             if (canEdit === true) return canView
             return true
           }),
-      ),
+      }),
     )
 
     it.effect("canDelete implies canView (for owned publications)", () =>
-      assertPropertyEffect(
-        Arbitrary.all([accountSessionArbitrary, publicationVisibilityArbitrary]),
-        ([session, visibility]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, publicationVisibilityArbitrary]),
+        predicate: ([session, visibility]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
@@ -231,6 +241,7 @@ describe("Policies", () => {
               publishedAt: TEST_PUBLISHED_AT,
               visibility,
             })
+
             const canDelete = yield* runPolicySuccess(
               Policies.publications.canDelete(publication),
               session,
@@ -241,125 +252,146 @@ describe("Policies", () => {
             )
             return !canDelete || canView
           }),
-      ),
+      }),
     )
 
     it.effect("canCreate implies canRevise for wiki articles", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const canCreate = yield* runPolicySuccess(Policies.wiki.canCreate, session)
-          const canRevise = yield* runPolicySuccess(Policies.wiki.canRevise, session)
-          return !canCreate || canRevise
-        }),
-      ),
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const canCreate = yield* runPolicySuccess(Policies.wiki.canCreate, session)
+            const canRevise = yield* runPolicySuccess(Policies.wiki.canRevise, session)
+            return !canCreate || canRevise
+          }),
+      }),
     )
   })
 
   describe("publications", () => {
     it.effect("owner can always edit their own publication", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const publication = CorePublicationMetadata.make({
-            handle: TEST_HANDLE,
-            ownerProfileId: session.personId,
-            publishedAt: TEST_PUBLISHED_AT,
-            visibility: "PUBLIC",
-          })
-          return yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
-        }),
-      ),
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const publication = CorePublicationMetadata.make({
+              handle: TEST_HANDLE,
+              ownerProfileId: session.personId,
+              publishedAt: TEST_PUBLISHED_AT,
+              visibility: "PUBLIC",
+            })
+
+            return yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
+          }),
+      }),
     )
 
     it.effect("owner can always delete their own publication", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const publication = CorePublicationMetadata.make({
-            handle: TEST_HANDLE,
-            ownerProfileId: session.personId,
-            publishedAt: TEST_PUBLISHED_AT,
-            visibility: "PUBLIC",
-          })
-          return yield* runPolicySuccess(Policies.publications.canDelete(publication), session)
-        }),
-      ),
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const publication = CorePublicationMetadata.make({
+              handle: TEST_HANDLE,
+              ownerProfileId: session.personId,
+              publishedAt: TEST_PUBLISHED_AT,
+              visibility: "PUBLIC",
+            })
+
+            return yield* runPolicySuccess(Policies.publications.canDelete(publication), session)
+          }),
+      }),
     )
 
     it.effect("non-owners cannot edit publications", () =>
-      assertPropertyEffect(
-        Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
-        ([session, otherPersonId]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
+        predicate: ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
+
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
+
             const result = yield* runPolicySuccess(
               Policies.publications.canEdit(publication),
               session,
             )
             return !result
           }),
-      ),
+      }),
     )
 
     it.effect("non-owners cannot delete publications", () =>
-      assertPropertyEffect(
-        Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
-        ([session, otherPersonId]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
+        predicate: ([session, otherPersonId]) =>
           Effect.gen(function* () {
             if (session.personId === otherPersonId) return true
+
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
               ownerProfileId: otherPersonId,
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
+
             const result = yield* runPolicySuccess(
               Policies.publications.canDelete(publication),
               session,
             )
             return !result
           }),
-      ),
+      }),
     )
 
     it.effect("public publications are viewable by anyone", () =>
-      assertPropertyEffect(sessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const personId = yield* IdGen.make(PersonId)
-          const publication = CorePublicationMetadata.make({
-            handle: TEST_HANDLE,
-            ownerProfileId: personId,
-            publishedAt: TEST_PUBLISHED_AT,
-            visibility: "PUBLIC",
-          })
-          return yield* runPolicySuccess(Policies.publications.canView(publication), session)
-        }).pipe(Effect.provide(IdGenTest)),
-      ),
+      assertPropertyEffect({
+        arbitrary: sessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const personId = yield* IdGen.make(PersonId)
+
+            const publication = CorePublicationMetadata.make({
+              handle: TEST_HANDLE,
+              ownerProfileId: personId,
+              publishedAt: TEST_PUBLISHED_AT,
+              visibility: "PUBLIC",
+            })
+
+            return yield* runPolicySuccess(Policies.publications.canView(publication), session)
+          }).pipe(Effect.provide(IdGenTest)),
+      }),
     )
 
     it.effect("community publications are viewable by trusted users", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        Effect.gen(function* () {
-          const personId = yield* IdGen.make(PersonId)
-          const publication = CorePublicationMetadata.make({
-            handle: TEST_HANDLE,
-            ownerProfileId: personId,
-            publishedAt: TEST_PUBLISHED_AT,
-            visibility: "COMMUNITY",
-          })
-          return yield* runPolicySuccess(Policies.publications.canView(publication), session)
-        }).pipe(Effect.provide(IdGenTest)),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isTrustedOrHigher,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const personId = yield* IdGen.make(PersonId)
+
+            const publication = CorePublicationMetadata.make({
+              handle: TEST_HANDLE,
+              ownerProfileId: personId,
+              publishedAt: TEST_PUBLISHED_AT,
+              visibility: "COMMUNITY",
+            })
+
+            return yield* runPolicySuccess(Policies.publications.canView(publication), session)
+          }).pipe(Effect.provide(IdGenTest)),
+      }),
     )
 
     it.effect("visitors cannot view community publications", () =>
-      assertPropertyEffect(
-        Arbitrary.all([visitorSessionArbitrary, personIdArbitrary]),
-        ([session, ownerId]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([visitorSessionArbitrary, personIdArbitrary]),
+        predicate: ([session, ownerId]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
@@ -367,19 +399,20 @@ describe("Policies", () => {
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "COMMUNITY",
             })
+
             const result = yield* runPolicySuccess(
               Policies.publications.canView(publication),
               session,
             )
             return !result
           }),
-      ),
+      }),
     )
 
     it.effect("public publication viewing is monotonic", () =>
-      assertPropertyEffect(
-        Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
-        ([baseSession, ownerId]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, personIdArbitrary]),
+        predicate: ([baseSession, ownerId]) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
@@ -387,6 +420,7 @@ describe("Policies", () => {
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
+
             const results = yield* Effect.all(
               ACCESS_LEVEL_ORDER.map((level) =>
                 runPolicySuccess(
@@ -396,63 +430,73 @@ describe("Policies", () => {
               ),
               { concurrency: "unbounded" },
             )
+
             return results.every(
               (result, index) =>
                 result ||
                 results.slice(0, index).every((previousResult) => previousResult === false),
             )
           }),
-      ),
+      }),
     )
   })
 
   describe("people", () => {
     it.effect("moderators can manage trusted users", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isModeratorOrAdmin, (session) =>
-        runPolicySuccess(
-          Policies.people.canModifyAccessLevel({
-            from: "NEWCOMER",
-            to: "COMMUNITY",
-          }),
-          session,
-        ),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isModeratorOrAdmin,
+        predicate: (session) =>
+          runPolicySuccess(
+            Policies.people.canModifyAccessLevel({
+              from: "NEWCOMER",
+              to: "COMMUNITY",
+            }),
+            session,
+          ),
+      }),
     )
 
     it.effect("newcomers cannot manage access levels", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-        Effect.map(
-          runPolicySuccess(
-            Policies.people.canModifyAccessLevel({
-              from: "NEWCOMER",
-              to: "COMMUNITY",
-            }),
-            session,
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isNewcomer,
+        predicate: (session) =>
+          Effect.map(
+            runPolicySuccess(
+              Policies.people.canModifyAccessLevel({
+                from: "NEWCOMER",
+                to: "COMMUNITY",
+              }),
+              session,
+            ),
+            (allowed) => !allowed,
           ),
-          (allowed) => !allowed,
-        ),
-      ),
+      }),
     )
 
     it.effect("blocked users cannot manage access levels", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(
-          runPolicySuccess(
-            Policies.people.canModifyAccessLevel({
-              from: "NEWCOMER",
-              to: "COMMUNITY",
-            }),
-            session,
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isBlocked,
+        predicate: (session) =>
+          Effect.map(
+            runPolicySuccess(
+              Policies.people.canModifyAccessLevel({
+                from: "NEWCOMER",
+                to: "COMMUNITY",
+              }),
+              session,
+            ),
+            (allowed) => !allowed,
           ),
-          (allowed) => !allowed,
-        ),
-      ),
+      }),
     )
 
     it.effect("only admins can manage moderator promotions/demotions", () =>
-      assertPropertyEffect(
-        Arbitrary.all([accountSessionArbitrary, platformAccessLevelArbitrary]),
-        ([session, otherLevel]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, platformAccessLevelArbitrary]),
+        predicate: ([session, otherLevel]) =>
           Effect.gen(function* () {
             if (otherLevel === "MODERATOR") return true
 
@@ -463,6 +507,7 @@ describe("Policies", () => {
               }),
               session,
             )
+
             const fromModerator = yield* runPolicySuccess(
               Policies.people.canModifyAccessLevel({
                 from: "MODERATOR",
@@ -474,13 +519,13 @@ describe("Policies", () => {
             if (isAdmin(session) === true) return true
             return !toModerator && !fromModerator
           }),
-      ),
+      }),
     )
 
     it.effect("only admins can manage admin promotions/demotions", () =>
-      assertPropertyEffect(
-        Arbitrary.all([accountSessionArbitrary, platformAccessLevelArbitrary]),
-        ([session, otherLevel]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, platformAccessLevelArbitrary]),
+        predicate: ([session, otherLevel]) =>
           Effect.gen(function* () {
             if (otherLevel === "ADMIN") return true
 
@@ -491,6 +536,7 @@ describe("Policies", () => {
               }),
               session,
             )
+
             const fromAdmin = yield* runPolicySuccess(
               Policies.people.canModifyAccessLevel({
                 from: "ADMIN",
@@ -502,67 +548,83 @@ describe("Policies", () => {
             if (isAdmin(session) === true) return true
             return !toAdmin && !fromAdmin
           }),
-      ),
+      }),
     )
   })
 
   describe("organizations", () => {
     it.effect("trusted users can create organizations", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.organizations.canCreate, session),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isTrustedOrHigher,
+        predicate: (session) => runPolicySuccess(Policies.organizations.canCreate, session),
+      }),
     )
 
     it.effect("newcomers and blocked users cannot create organizations", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isNewcomerOrBlocked, (session) =>
-        Effect.map(
-          runPolicySuccess(Policies.organizations.canCreate, session),
-          (allowed) => !allowed,
-        ),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isNewcomerOrBlocked,
+        predicate: (session) =>
+          Effect.map(
+            runPolicySuccess(Policies.organizations.canCreate, session),
+            (allowed) => !allowed,
+          ),
+      }),
     )
 
     it.effect("visitors cannot create organizations", () =>
-      assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(
-          runPolicySuccess(Policies.organizations.canCreate, session),
-          (allowed) => !allowed,
-        ),
-      ),
+      assertPropertyEffect({
+        arbitrary: visitorSessionArbitrary,
+        predicate: (session) =>
+          Effect.map(
+            runPolicySuccess(Policies.organizations.canCreate, session),
+            (allowed) => !allowed,
+          ),
+      }),
     )
 
     it.effect("public organization members are viewable by anyone", () =>
-      assertPropertyEffect(sessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const orgId = yield* IdGen.make(OrganizationId)
-          const org = OrganizationRow.make({
-            id: orgId,
-            membersVisibility: "PUBLIC",
-            type: "COMMERCIAL",
-          })
-          return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
-        }).pipe(Effect.provide(IdGenTest)),
-      ),
+      assertPropertyEffect({
+        arbitrary: sessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const orgId = yield* IdGen.make(OrganizationId)
+
+            const org = OrganizationRow.make({
+              id: orgId,
+              membersVisibility: "PUBLIC",
+              type: "COMMERCIAL",
+            })
+
+            return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
+          }).pipe(Effect.provide(IdGenTest)),
+      }),
     )
 
     it.effect("community organization members are viewable by trusted users", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        Effect.gen(function* () {
-          const orgId = yield* IdGen.make(OrganizationId)
-          const org = OrganizationRow.make({
-            id: orgId,
-            membersVisibility: "COMMUNITY",
-            type: "COMMERCIAL",
-          })
-          return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
-        }).pipe(Effect.provide(IdGenTest)),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isTrustedOrHigher,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const orgId = yield* IdGen.make(OrganizationId)
+
+            const org = OrganizationRow.make({
+              id: orgId,
+              membersVisibility: "COMMUNITY",
+              type: "COMMERCIAL",
+            })
+
+            return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
+          }).pipe(Effect.provide(IdGenTest)),
+      }),
     )
 
     it.effect("visitors cannot view private organization members", () =>
-      assertPropertyEffect(
-        Arbitrary.all([visitorSessionArbitrary, organizationArbitrary]),
-        ([session, org]) =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([visitorSessionArbitrary, organizationArbitrary]),
+        predicate: ([session, org]) =>
           Effect.map(
             runPolicySuccess(
               Policies.organizations.canViewMembers({
@@ -573,16 +635,16 @@ describe("Policies", () => {
             ),
             (allowed) => !allowed,
           ),
-      ),
+      }),
     )
 
     it.effect("non-member trusted users cannot view private organization members", () =>
-      propertyWithPrecondition(
-        Arbitrary.all([accountSessionArbitrary, organizationArbitrary]),
-        ([session, org]) =>
+      propertyWithPrecondition({
+        arbitrary: Arbitrary.all([accountSessionArbitrary, organizationArbitrary]),
+        precondition: ([session, org]) =>
           isTrustedOrHigher(session) &&
           !session.memberships.some((m) => m.organizationId === org.id),
-        ([session, org]) =>
+        predicate: ([session, org]) =>
           Effect.map(
             runPolicySuccess(
               Policies.organizations.canViewMembers({
@@ -593,7 +655,7 @@ describe("Policies", () => {
             ),
             (allowed) => !allowed,
           ),
-      ),
+      }),
     )
   })
 
@@ -605,22 +667,27 @@ describe("Policies", () => {
       Arbitrary.map(
         Arbitrary.all([sessionArbitrary, organizationIdArbitrary]),
         ([session, orgId]) => ({
-          session: sessionWithOrgMembership(session, orgId, level),
+          session: sessionWithOrgMembership({
+            baseSession: session,
+            organizationId: orgId,
+            accessLevel: level,
+          }),
           orgId,
         }),
       )
 
     it.effect("managers can delete their organization", () =>
-      assertPropertyEffect(
-        memberWithLevel("MANAGER", trustedAccountSessionArbitrary),
-        ({ session, orgId }) => runPolicySuccess(Policies.organizations.canDelete(orgId), session),
-      ),
+      assertPropertyEffect({
+        arbitrary: memberWithLevel("MANAGER", trustedAccountSessionArbitrary),
+        predicate: ({ session, orgId }) =>
+          runPolicySuccess(Policies.organizations.canDelete(orgId), session),
+      }),
     )
 
     it.effect("editors can create organization publications", () =>
-      assertPropertyEffect(
-        memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
-        ({ session, orgId }) =>
+      assertPropertyEffect({
+        arbitrary: memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
+        predicate: ({ session, orgId }) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
@@ -628,15 +695,16 @@ describe("Policies", () => {
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
+
             return yield* runPolicySuccess(Policies.publications.canCreate(publication), session)
           }),
-      ),
+      }),
     )
 
     it.effect("editors can edit organization publications", () =>
-      assertPropertyEffect(
-        memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
-        ({ session, orgId }) =>
+      assertPropertyEffect({
+        arbitrary: memberWithLevel("EDITOR", trustedAccountSessionArbitrary),
+        predicate: ({ session, orgId }) =>
           Effect.gen(function* () {
             const publication = CorePublicationMetadata.make({
               handle: TEST_HANDLE,
@@ -644,265 +712,330 @@ describe("Policies", () => {
               publishedAt: TEST_PUBLISHED_AT,
               visibility: "PUBLIC",
             })
+
             return yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
           }),
-      ),
+      }),
     )
 
     it.effect("viewers cannot delete organization", () =>
-      assertPropertyEffect(memberWithLevel("VIEWER"), ({ session, orgId }) =>
-        Effect.map(
-          runPolicySuccess(Policies.organizations.canDelete(orgId), session),
-          (allowed) => !allowed,
-        ),
-      ),
+      assertPropertyEffect({
+        arbitrary: memberWithLevel("VIEWER"),
+        predicate: ({ session, orgId }) =>
+          Effect.map(
+            runPolicySuccess(Policies.organizations.canDelete(orgId), session),
+            (allowed) => !allowed,
+          ),
+      }),
     )
 
     it.effect("viewers cannot create organization publications", () =>
-      assertPropertyEffect(memberWithLevel("VIEWER"), ({ session, orgId }) =>
-        Effect.gen(function* () {
-          const publication = CorePublicationMetadata.make({
-            handle: TEST_HANDLE,
-            ownerProfileId: orgId,
-            publishedAt: TEST_PUBLISHED_AT,
-            visibility: "PUBLIC",
-          })
-          const canCreate = yield* runPolicySuccess(
-            Policies.publications.canCreate(publication),
-            session,
-          )
-          return !canCreate
-        }),
-      ),
+      assertPropertyEffect({
+        arbitrary: memberWithLevel("VIEWER"),
+        predicate: ({ session, orgId }) =>
+          Effect.gen(function* () {
+            const publication = CorePublicationMetadata.make({
+              handle: TEST_HANDLE,
+              ownerProfileId: orgId,
+              publishedAt: TEST_PUBLISHED_AT,
+              visibility: "PUBLIC",
+            })
+
+            const canCreate = yield* runPolicySuccess(
+              Policies.publications.canCreate(publication),
+              session,
+            )
+            return !canCreate
+          }),
+      }),
     )
 
     it.effect("organization membership does not grant platform admin rights", () =>
-      assertPropertyEffect(memberWithLevel("MANAGER"), ({ session }) =>
-        Effect.gen(function* () {
-          if (session.accessLevel === "ADMIN") return true
+      assertPropertyEffect({
+        arbitrary: memberWithLevel("MANAGER"),
+        predicate: ({ session }) =>
+          Effect.gen(function* () {
+            if (session.accessLevel === "ADMIN") return true
 
-          const canManageAdmins = yield* runPolicySuccess(
-            Policies.people.canModifyAccessLevel({
-              from: "MODERATOR",
-              to: "ADMIN",
-            }),
-            session,
-          )
-          return !canManageAdmins
-        }),
-      ),
+            const canManageAdmins = yield* runPolicySuccess(
+              Policies.people.canModifyAccessLevel({
+                from: "MODERATOR",
+                to: "ADMIN",
+              }),
+              session,
+            )
+
+            return !canManageAdmins
+          }),
+      }),
     )
   })
 
   describe("permission composition", () => {
     it.effect("publication owner + org member has both permissions", () =>
-      assertPropertyEffect(trustedAccountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const orgId = yield* IdGen.make(OrganizationId)
-          const sessionWithMembership = sessionWithOrgMembership(session, orgId, "EDITOR")
+      assertPropertyEffect({
+        arbitrary: trustedAccountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const orgId = yield* IdGen.make(OrganizationId)
 
-          const ownPublication = CorePublicationMetadata.make({
-            handle: TEST_HANDLE,
-            ownerProfileId: session.personId,
-            publishedAt: TEST_PUBLISHED_AT,
-            visibility: "PUBLIC",
-          })
-          const canEditOwn = yield* runPolicySuccess(
-            Policies.publications.canEdit(ownPublication),
-            sessionWithMembership,
-          )
-          if (canEditOwn === false) return false
+            const sessionWithMembership = sessionWithOrgMembership({
+              baseSession: session,
+              organizationId: orgId,
+              accessLevel: "EDITOR",
+            })
 
-          const orgPublication = CorePublicationMetadata.make({
-            handle: TEST_HANDLE,
-            ownerProfileId: orgId,
-            publishedAt: TEST_PUBLISHED_AT,
-            visibility: "PUBLIC",
-          })
-          const canEditOrg = yield* runPolicySuccess(
-            Policies.publications.canEdit(orgPublication),
-            sessionWithMembership,
-          )
+            const ownPublication = CorePublicationMetadata.make({
+              handle: TEST_HANDLE,
+              ownerProfileId: session.personId,
+              publishedAt: TEST_PUBLISHED_AT,
+              visibility: "PUBLIC",
+            })
 
-          return canEditOrg
-        }).pipe(Effect.provide(IdGenTest)),
-      ),
+            const canEditOwn = yield* runPolicySuccess(
+              Policies.publications.canEdit(ownPublication),
+              sessionWithMembership,
+            )
+            if (canEditOwn === false) return false
+
+            const orgPublication = CorePublicationMetadata.make({
+              handle: TEST_HANDLE,
+              ownerProfileId: orgId,
+              publishedAt: TEST_PUBLISHED_AT,
+              visibility: "PUBLIC",
+            })
+
+            const canEditOrg = yield* runPolicySuccess(
+              Policies.publications.canEdit(orgPublication),
+              sessionWithMembership,
+            )
+
+            return canEditOrg
+          }).pipe(Effect.provide(IdGenTest)),
+      }),
     )
 
     it.effect("multiple organization memberships work independently", () =>
-      assertPropertyEffect(trustedAccountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const org1 = yield* IdGen.make(OrganizationId)
-          const org2 = yield* IdGen.make(OrganizationId)
+      assertPropertyEffect({
+        arbitrary: trustedAccountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const org1 = yield* IdGen.make(OrganizationId)
+            const org2 = yield* IdGen.make(OrganizationId)
 
-          const sessionWithMemberships = AccountSession.make({
-            ...session,
-            memberships: [
-              { accessLevel: "MANAGER", organizationId: org1 },
-              { accessLevel: "VIEWER", organizationId: org2 },
-            ],
-          })
+            const sessionWithMemberships = AccountSession.make({
+              ...session,
+              memberships: [
+                { accessLevel: "MANAGER", organizationId: org1 },
+                { accessLevel: "VIEWER", organizationId: org2 },
+              ],
+            })
 
-          const canDeleteOrg1 = yield* runPolicySuccess(
-            Policies.organizations.canDelete(org1),
-            sessionWithMemberships,
-          )
+            const canDeleteOrg1 = yield* runPolicySuccess(
+              Policies.organizations.canDelete(org1),
+              sessionWithMemberships,
+            )
 
-          const canDeleteOrg2 = yield* runPolicySuccess(
-            Policies.organizations.canDelete(org2),
-            sessionWithMemberships,
-          )
+            const canDeleteOrg2 = yield* runPolicySuccess(
+              Policies.organizations.canDelete(org2),
+              sessionWithMemberships,
+            )
 
-          return canDeleteOrg1 && !canDeleteOrg2
-        }).pipe(Effect.provide(IdGenTest)),
-      ),
+            return canDeleteOrg1 && !canDeleteOrg2
+          }).pipe(Effect.provide(IdGenTest)),
+      }),
     )
   })
 
   describe("wiki articles", () => {
     it.effect("trusted users can create wiki articles", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.wiki.canCreate, session),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isTrustedOrHigher,
+        predicate: (session) => runPolicySuccess(Policies.wiki.canCreate, session),
+      }),
     )
 
     it.effect("trusted users can revise wiki articles", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.wiki.canRevise, session),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isTrustedOrHigher,
+        predicate: (session) => runPolicySuccess(Policies.wiki.canRevise, session),
+      }),
     )
 
     it.effect("newcomers cannot create wiki articles", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-        Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isNewcomer,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("blocked users cannot create wiki articles", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isBlocked,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("blocked users cannot revise wiki articles", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(runPolicySuccess(Policies.wiki.canRevise, session), (allowed) => !allowed),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isBlocked,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.wiki.canRevise, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("visitors cannot create wiki articles", () =>
-      assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
-      ),
+      assertPropertyEffect({
+        arbitrary: visitorSessionArbitrary,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.wiki.canCreate, session), (allowed) => !allowed),
+      }),
     )
   })
 
   describe("bookmarks", () => {
     it.effect("trusted users can create bookmarks", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.wiki.canBookmark, session),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isTrustedOrHigher,
+        predicate: (session) => runPolicySuccess(Policies.wiki.canBookmark, session),
+      }),
     )
 
     it.effect("visitors cannot create bookmarks", () =>
-      assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
-      ),
+      assertPropertyEffect({
+        arbitrary: visitorSessionArbitrary,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("newcomers cannot create bookmarks", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-        Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isNewcomer,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("blocked users cannot create bookmarks", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isBlocked,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.wiki.canBookmark, session), (allowed) => !allowed),
+      }),
     )
   })
 
   describe("comments", () => {
     it.effect("trusted users can create comments", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isTrustedOrHigher, (session) =>
-        runPolicySuccess(Policies.comments.canCreate, session),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isTrustedOrHigher,
+        predicate: (session) => runPolicySuccess(Policies.comments.canCreate, session),
+      }),
     )
 
     it.effect("newcomers cannot create comments", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isNewcomer, (session) =>
-        Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isNewcomer,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("visitors cannot create comments", () =>
-      assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
-      ),
+      assertPropertyEffect({
+        arbitrary: visitorSessionArbitrary,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("only moderators and admins can censor comments", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const canCensor = yield* runPolicySuccess(Policies.comments.canCensor, session)
-          if (isAdmin(session) === true) return true
-          return !canCensor
-        }),
-      ),
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const canCensor = yield* runPolicySuccess(Policies.comments.canCensor, session)
+            if (isAdmin(session) === true) return true
+            return !canCensor
+          }),
+      }),
     )
   })
 
   describe("media", () => {
     it.effect("authenticated users with media:create can create media", () =>
-      propertyWithPrecondition(
-        accountSessionArbitrary,
-        (s) => s.accessLevel !== "BLOCKED",
-        (session) => runPolicySuccess(Policies.media.canCreate, session),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: (s) => s.accessLevel !== "BLOCKED",
+        predicate: (session) => runPolicySuccess(Policies.media.canCreate, session),
+      }),
     )
 
     it.effect("blocked users cannot create media", () =>
-      propertyWithPrecondition(accountSessionArbitrary, isBlocked, (session) =>
-        Effect.map(runPolicySuccess(Policies.media.canCreate, session), (allowed) => !allowed),
-      ),
+      propertyWithPrecondition({
+        arbitrary: accountSessionArbitrary,
+        precondition: isBlocked,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.media.canCreate, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("visitors cannot create media", () =>
-      assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(runPolicySuccess(Policies.media.canCreate, session), (allowed) => !allowed),
-      ),
+      assertPropertyEffect({
+        arbitrary: visitorSessionArbitrary,
+        predicate: (session) =>
+          Effect.map(runPolicySuccess(Policies.media.canCreate, session), (allowed) => !allowed),
+      }),
     )
 
     it.effect("only admins can censor media", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const canCensor = yield* runPolicySuccess(Policies.media.canCensor, session)
-          if (isAdmin(session) === true) return true
-          return !canCensor
-        }),
-      ),
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const canCensor = yield* runPolicySuccess(Policies.media.canCensor, session)
+            if (isAdmin(session) === true) return true
+            return !canCensor
+          }),
+      }),
     )
   })
 
   describe("revisions", () => {
     it.effect("only moderators and admins can evaluate revisions", () =>
-      assertPropertyEffect(accountSessionArbitrary, (session) =>
-        Effect.gen(function* () {
-          const canEvaluate = yield* runPolicySuccess(Policies.revisions.canEvaluate, session)
-          if (isModeratorOrAdmin(session) === true) return canEvaluate
-          return !canEvaluate
-        }),
-      ),
+      assertPropertyEffect({
+        arbitrary: accountSessionArbitrary,
+        predicate: (session) =>
+          Effect.gen(function* () {
+            const canEvaluate = yield* runPolicySuccess(Policies.revisions.canEvaluate, session)
+            if (isModeratorOrAdmin(session) === true) return canEvaluate
+            return !canEvaluate
+          }),
+      }),
     )
 
     it.effect("visitors cannot evaluate revisions", () =>
-      assertPropertyEffect(visitorSessionArbitrary, (session) =>
-        Effect.map(
-          runPolicySuccess(Policies.revisions.canEvaluate, session),
-          (allowed) => !allowed,
-        ),
-      ),
+      assertPropertyEffect({
+        arbitrary: visitorSessionArbitrary,
+        predicate: (session) =>
+          Effect.map(
+            runPolicySuccess(Policies.revisions.canEvaluate, session),
+            (allowed) => !allowed,
+          ),
+      }),
     )
   })
 })

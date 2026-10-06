@@ -17,6 +17,7 @@ export const HumanUpdatePtContent = Schema.TaggedStruct("HumanUpdatePtContent", 
   content: TiptapDocument,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
+
 export type HumanUpdatePtContent = typeof HumanUpdatePtContent.Type
 
 export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslation", {
@@ -27,6 +28,7 @@ export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslat
   targetLocale: Locale,
   translatedContent: TiptapDocument,
 })
+
 export type SystemUpsertTranslation = typeof SystemUpsertTranslation.Type
 
 export const UpdateCommentInput = Schema.Union([HumanUpdatePtContent, SystemUpsertTranslation])
@@ -39,4 +41,5 @@ export const CreateCommentInput = Schema.Struct({
   publicationId: PublicationId,
   sourceData: SourceCommentData,
 })
+
 export type CreateCommentInput = typeof CreateCommentInput.Type

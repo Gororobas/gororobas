@@ -100,6 +100,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
               id: input.publicationId,
               updatedAt: now,
             })
+
             return
           }
 
@@ -277,6 +278,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
               }),
             ),
           )
+
           const publicationRow = yield* findPublicationRowById(input.publicationId).pipe(
             Effect.flatMap(
               Option.match({
@@ -296,6 +298,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           const commit = Schema.is(HumanCrdtUpdate)(input)
             ? HumanCommit.make({ personId: input.authorId })
             : input.commit
+
           const crdtUpdate = Schema.is(HumanCrdtUpdate)(input)
             ? input.crdtUpdate
             : yield* createSystemTranslationCrdtUpdate({

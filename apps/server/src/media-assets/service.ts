@@ -60,14 +60,17 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
             format,
             variant,
           })
+
           const delivery = yield* repository.findMediaAssetDeliveryById(request.id)
           if (Option.isNone(delivery)) return yield* new MediaNotFoundError({ id })
           const mediaAsset = delivery.value
+
           if (format !== "original") {
             const expectedFormat =
               format === "images" ? "IMAGE" : format === "audio" ? "AUDIO" : "VIDEO"
             if (mediaAsset.format !== expectedFormat) return yield* new MediaNotFoundError({ id })
           }
+
           return {
             filename: storage.filePath(id, format === "images" ? `${variant}.avif` : variant),
             contentType:
@@ -89,11 +92,14 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
               const media = Object.entries(contentTypes).find(
                 ([type]) => type === input.contentType,
               )?.[1]
-              if (!media)
+              if (!media) {
                 return yield* new InvalidMediaAssetError({ message: "Unsupported media type" })
+              }
               const staged = yield* Effect.interruptible(storage.stage({ file: input.file }))
-              if (staged.byteSize === 0)
+              if (staged.byteSize === 0) {
                 return yield* new InvalidMediaAssetError({ message: "Empty media file" })
+              }
+
               const metadata = yield* Effect.interruptible(
                 readMediaAssetMetadata(staged.filename, media),
               ).pipe(
@@ -104,10 +110,12 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
                     }),
                 ),
               )
+
               yield* Effect.interruptible(processMediaAsset({ ...staged, metadata })).pipe(
                 Effect.mapError((cause) => new MediaAssetStorageError({ cause })),
               )
               yield* storage.publish(input.id, staged.directory)
+
               return {
                 metadata,
                 contentType: input.contentType,
@@ -127,10 +135,12 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
           yield* Policies.media.canCreate
           const id = yield* IdGen.make(MediaAssetId)
           const now = yield* DateTime.now
+
           // Keep publication and insertion together across interruption; failures remove published files.
           return yield* Effect.uninterruptibleMask(() =>
             Effect.gen(function* () {
               const stored = yield* prepare({ ...input, id })
+
               return yield* Effect.gen(function* () {
                 const mediaAsset = yield* Schema.decodeUnknownEffect(Schema.toType(MediaAssetRow))({
                   ...stored,
@@ -142,6 +152,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
                   createdAt: now,
                   updatedAt: now,
                 })
+
                 yield* repository.insertMediaAsset(mediaAsset)
                 return mediaAsset
               }).pipe(Effect.onError(() => storage.remove(id).pipe(Effect.orDie)))
@@ -152,6 +163,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
       const censor = (id: MediaAssetId) =>
         Effect.gen(function* () {
           yield* Policies.media.canCensor
+
           const mediaAsset = yield* repository.findMediaAssetById(id).pipe(
             Effect.flatMap(
               Option.match({
@@ -160,6 +172,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
               }),
             ),
           )
+
           yield* repository.censorMediaAsset({ ...mediaAsset, updatedAt: yield* DateTime.now })
           return { moderationStatus: "CENSORED" as const }
         })

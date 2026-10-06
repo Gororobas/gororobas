@@ -170,21 +170,25 @@ export const getTelemetryLayer = () => {
  *
  * Usage:
  * ```typescript
- * yield* withTestSpan("setup-user-data",
- *   Effect.gen(function*() {
+ * yield* withTestSpan({ name: "setup-user-data",
+ *   effect: Effect.gen(function*() {
  *     // ... setup code
  *   })
- * )
+ * })
  * ```
  *
  * If span creation fails, the effect executes without instrumentation.
  * Telemetry errors never cause the wrapped effect to fail.
  */
-export const withTestSpan = <A, E, R>(
-  name: string,
-  effect: Effect.Effect<A, E, R>,
-  attributes?: Record<string, unknown>,
-): Effect.Effect<A, E, R> => {
+export const withTestSpan = <A, E, R>({
+  name,
+  effect,
+  attributes,
+}: {
+  name: string
+  effect: Effect.Effect<A, E, R>
+  attributes?: Record<string, unknown> | undefined
+}): Effect.Effect<A, E, R> => {
   try {
     // If no attributes, just use Effect.withSpan directly
     if (!attributes || EffectArray.isReadonlyArrayEmpty(Record.keys(attributes))) {

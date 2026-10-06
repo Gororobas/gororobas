@@ -9,6 +9,7 @@ export const previewCollections = {
   users: "users",
   images: "images",
 } as const
+
 export type PreviewCollection = keyof typeof previewCollections
 export const PreviewRecord = Schema.Record(Schema.String, Schema.Json)
 export const PreviewExport = Schema.Struct({ file: Schema.String, data: PreviewRecord })
@@ -20,8 +21,10 @@ export const readPreviewExports = (directory: string) =>
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
     const collections: Record<string, Array<typeof PreviewExport.Type>> = {}
+
     for (const [collection, folder] of Object.entries(previewCollections)) {
       const filenames = yield* fs.readDirectory(path.join(directory, folder))
+
       collections[collection] = yield* Effect.forEach(
         EffectArray.sort(
           filenames.filter((filename) => filename.endsWith(".json")),
@@ -35,6 +38,7 @@ export const readPreviewExports = (directory: string) =>
         { concurrency: 1 },
       )
     }
+
     return collections
   })
 

@@ -13,7 +13,11 @@ export class TranslationError extends Schema.TaggedError<TranslationError>()("Tr
 }) {}
 
 export interface TranslationServiceApi {
-  translate(text: string, source: Locale, target: Locale): Effect.Effect<string, TranslationError>
+  translate(input: {
+    text: string
+    sourceLocale: Locale
+    targetLocale: Locale
+  }): Effect.Effect<string, TranslationError>
   getServiceId(): string
 }
 

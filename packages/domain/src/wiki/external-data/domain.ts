@@ -20,6 +20,7 @@ export const ExternalDataInputs = Schema.Union([
   BookExternalDataInputs,
   Schema.Struct({ kind: Schema.Literal("NONE") }),
 ]).pipe(Schema.toTaggedUnion("kind"))
+
 export type ExternalDataInputs = typeof ExternalDataInputs.Type
 
 export const ExternalDataFetchRequest = Schema.Struct({
@@ -27,4 +28,5 @@ export const ExternalDataFetchRequest = Schema.Struct({
   articleCrdtFrontier: LoroDocFrontier,
   inputs: ExternalDataInputs,
 })
+
 export type ExternalDataFetchRequest = typeof ExternalDataFetchRequest.Type

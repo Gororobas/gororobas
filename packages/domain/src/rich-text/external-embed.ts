@@ -15,6 +15,7 @@ export const YoutubeEmbed = Schema.Struct({
     videoId: YoutubeVideoId,
   }),
 })
+
 export type YoutubeEmbed = typeof YoutubeEmbed.Type
 
 export const SpotifyEmbed = Schema.Struct({
@@ -25,6 +26,7 @@ export const SpotifyEmbed = Schema.Struct({
     resourceId: SpotifyResourceId,
   }),
 })
+
 export type SpotifyEmbed = typeof SpotifyEmbed.Type
 
 /** Store provider identity, not arbitrary iframe HTML or duplicated remote preview metadata. */

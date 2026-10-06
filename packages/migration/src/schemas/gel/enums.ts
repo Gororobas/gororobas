@@ -26,6 +26,7 @@ export const GelVegetableUsage = Schema.Literals([
   "RITUALISTICO",
   "ECOLOGICO",
 ])
+
 export type GelVegetableUsage = typeof GelVegetableUsage.Type
 
 export const GelEdiblePart = Schema.Literals([
@@ -41,6 +42,7 @@ export const GelEdiblePart = Schema.Literals([
   "TUBERCULO",
   "RIZOMA",
 ])
+
 export type GelEdiblePart = typeof GelEdiblePart.Type
 
 export const GelVegetableLifeCycle = Schema.Literals(["SEMESTRAL", "ANUAL", "BIENAL", "PERENE"])
@@ -57,6 +59,7 @@ export const GelPlantingMethod = Schema.Literals([
   "SEMENTE",
   "TUBERCULO",
 ])
+
 export type GelPlantingMethod = typeof GelPlantingMethod.Type
 
 export const GelTipSubject = Schema.Literals(["PLANTIO", "CRESCIMENTO", "COLHEITA"])
@@ -68,6 +71,7 @@ export const GelVegetableWishlistStatus = Schema.Literals([
   "JA_CULTIVEI",
   "ESTOU_CULTIVANDO",
 ])
+
 export type GelVegetableWishlistStatus = typeof GelVegetableWishlistStatus.Type
 
 export const GelEditSuggestionStatus = Schema.Literals(["PENDING_REVIEW", "MERGED", "REJECTED"])
@@ -89,6 +93,7 @@ export const GelResourceFormat = Schema.Literals([
   "ORGANIZATION",
   "OTHER",
 ])
+
 export type GelResourceFormat = typeof GelResourceFormat.Type
 
 export const GelNoteType = Schema.Literals([
@@ -98,6 +103,7 @@ export const GelNoteType = Schema.Literals([
   "PERGUNTA",
   "INSPIRACAO",
 ])
+
 export type GelNoteType = typeof GelNoteType.Type
 
 export const GelHistoryAction = Schema.Literals(["INSERT", "UPDATE", "DELETE"])

@@ -44,5 +44,6 @@ export const WikiNoteworthyEntityArticleCrdtOperations = defineKindCrdtOperation
   ...dissolvedDateOperations,
   ...urlOperations,
 ])
+
 export type WikiNoteworthyEntityArticleAttributeEdit =
   typeof WikiNoteworthyEntityArticleCrdtOperations.AttributeEdit.Type

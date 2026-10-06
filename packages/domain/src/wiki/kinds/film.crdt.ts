@@ -55,6 +55,7 @@ const urlOperations = makeOptionalScalarEditOperations("FilmUrl")({
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "url" satisfies keyof FilmEditableAttributes,
 })
+
 const countryOperations = makeOptionalScalarEditOperations("FilmCountry")({
   ValueSchema: Schema.String,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
@@ -70,4 +71,5 @@ export const WikiFilmArticleCrdtOperations = defineKindCrdtOperations([
   ...genresOperations,
   ...filmTagOperations,
 ])
+
 export type WikiFilmArticleAttributeEdit = typeof WikiFilmArticleCrdtOperations.AttributeEdit.Type

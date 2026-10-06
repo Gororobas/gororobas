@@ -12,6 +12,7 @@ import { MigrationContext, MigrationContextLive } from "../services/migration-co
 import { gelResourceToWikiArticle } from "./gel-resource-to-wiki-article.js"
 
 const timestamp = Schema.decodeUnknownSync(Schema.DateFromString)("2025-04-01T12:00:00Z")
+
 const source = Schema.decodeUnknownSync(GelResourceWithRelations)({
   id: "gel-resource",
   handle: "test-resource",
@@ -24,54 +25,66 @@ const source = Schema.decodeUnknownSync(GelResourceWithRelations)({
   tags: [{ id: "gel-tag" }],
   related_vegetables: [],
 })
+
 const tagId = "019a0dce-1fc0-7abc-8abc-123456789abc"
 
 it.effect("carries credits, book authors, URLs and mapped tag IDs into converted resources", () =>
-  assertPropertyEffect(Arbitrary.schema(ValidName), (creditLine) =>
-    Effect.gen(function* () {
-      const context = yield* MigrationContext
-      yield* context.registerMapping({
-        gelId: "gel-tag",
-        sqliteId: tagId,
-        entityType: "Tag",
-        contentHash: "tag",
-        lastSyncedAt: timestamp.toISOString(),
-      })
-      const book = yield* gelResourceToWikiArticle({ ...source, credit_line: creditLine })
-      const resource = yield* gelResourceToWikiArticle({
-        ...source,
-        format: "PODCAST",
-        credit_line: creditLine,
-      })
-      const organization = yield* gelResourceToWikiArticle({
-        ...source,
-        format: "ORGANIZATION",
-        credit_line: creditLine,
-      })
-      if (
-        book.kind !== "BOOK" ||
-        resource.kind !== "RESOURCE" ||
-        organization.kind !== "NOTEWORTHY_ENTITY"
-      )
-        return false
-      expect(Option.getOrThrow(book.attributes.authors).map((author) => author.value)).toEqual([
-        creditLine,
-      ])
-      expect(Option.getOrThrow(book.attributes.url).href).toBe(source.url)
-      expect(Option.getOrThrow(resource.attributes.creditLine)).toBe(creditLine)
-      expect(resource.attributes.url.href).toBe(source.url)
-      expect(Array.from(Option.getOrThrow(resource.attributes.tags))).toEqual([tagId])
-      expect(
-        Option.getOrThrow(organization.translations.pt?.content ?? Option.none()).content,
-      ).toEqual([
-        { type: "paragraph", content: [{ type: "text", text: `Créditos: ${creditLine}` }] },
-      ])
-      return true
-    }).pipe(
-      Effect.provide(MigrationContextLive),
-      Effect.provide(KeyValueStore.layerMemory),
-      Effect.provide(NodeServices.layer),
-      Effect.provideService(IdGen, { generate: () => tagId }),
-    ),
-  ),
+  assertPropertyEffect({
+    arbitrary: Arbitrary.schema(ValidName),
+    predicate: (creditLine) =>
+      Effect.gen(function* () {
+        const context = yield* MigrationContext
+
+        yield* context.registerMapping({
+          gelId: "gel-tag",
+          sqliteId: tagId,
+          entityType: "Tag",
+          contentHash: "tag",
+          lastSyncedAt: timestamp.toISOString(),
+        })
+
+        const book = yield* gelResourceToWikiArticle({ ...source, credit_line: creditLine })
+
+        const resource = yield* gelResourceToWikiArticle({
+          ...source,
+          format: "PODCAST",
+          credit_line: creditLine,
+        })
+
+        const organization = yield* gelResourceToWikiArticle({
+          ...source,
+          format: "ORGANIZATION",
+          credit_line: creditLine,
+        })
+
+        if (
+          book.kind !== "BOOK" ||
+          resource.kind !== "RESOURCE" ||
+          organization.kind !== "NOTEWORTHY_ENTITY"
+        ) {
+          return false
+        }
+
+        expect(Option.getOrThrow(book.attributes.authors).map((author) => author.value)).toEqual([
+          creditLine,
+        ])
+        expect(Option.getOrThrow(book.attributes.url).href).toBe(source.url)
+        expect(Option.getOrThrow(resource.attributes.creditLine)).toBe(creditLine)
+        expect(resource.attributes.url.href).toBe(source.url)
+        expect(Array.from(Option.getOrThrow(resource.attributes.tags))).toEqual([tagId])
+
+        expect(
+          Option.getOrThrow(organization.translations.pt?.content ?? Option.none()).content,
+        ).toEqual([
+          { type: "paragraph", content: [{ type: "text", text: `Créditos: ${creditLine}` }] },
+        ])
+
+        return true
+      }).pipe(
+        Effect.provide(MigrationContextLive),
+        Effect.provide(KeyValueStore.layerMemory),
+        Effect.provide(NodeServices.layer),
+        Effect.provideService(IdGen, { generate: () => tagId }),
+      ),
+  }),
 )

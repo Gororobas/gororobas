@@ -65,6 +65,7 @@ function formatRulePretty(rule: RuleResult, indent: string): string {
   )
 
   const status = totalUndefined === 0 ? `${ANSI.green}✓${ANSI.reset}` : `${ANSI.red}✗${ANSI.reset}`
+
   const backgroundLines = EffectArray.isReadonlyArrayNonEmpty(rule.backgroundSteps ?? [])
     ? [
         `${indent}  ${ANSI.dim}Background:${ANSI.reset}`,
@@ -72,6 +73,7 @@ function formatRulePretty(rule: RuleResult, indent: string): string {
         "",
       ]
     : []
+
   return [
     `${indent}${status} ${ANSI.bold}Rule: ${rule.name}${ANSI.reset}`,
     "",
@@ -99,6 +101,7 @@ function formatFeaturePretty(feature: FeatureResult): string {
   const totalUndefined = topLevelUndefined + rulesUndefined
 
   const status = totalUndefined === 0 ? `${ANSI.green}✓${ANSI.reset}` : `${ANSI.red}✗${ANSI.reset}`
+
   const backgroundLines = EffectArray.isReadonlyArrayNonEmpty(feature.backgroundSteps ?? [])
     ? [
         "  " + ANSI.dim + "Background:" + ANSI.reset,
@@ -106,6 +109,7 @@ function formatFeaturePretty(feature: FeatureResult): string {
         "",
       ]
     : []
+
   return [
     `${status} ${ANSI.bold}${feature.name}${ANSI.reset} ${ANSI.dim}(${feature.file})${ANSI.reset}`,
     "",
@@ -135,13 +139,19 @@ function reportJson(result: CheckResult): Effect.Effect<void> {
   return Console.log(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(result))
 }
 
-function reportUndefinedStepsGithubActions(
-  scenarios: Array<ScenarioResult>,
-  backgroundSteps: Option.Option<Array<MatchedStep>>,
-  featureFile: string,
-  context?: string,
-): Array<string> {
+function reportUndefinedStepsGithubActions({
+  scenarios,
+  backgroundSteps,
+  featureFile,
+  context,
+}: {
+  scenarios: Array<ScenarioResult>
+  backgroundSteps: Option.Option<Array<MatchedStep>>
+  featureFile: string
+  context?: string | undefined
+}): Array<string> {
   const prefix = context ? ` in rule "${context}"` : ""
+
   return [
     ...scenarios.flatMap((scenario) =>
       scenario.steps
@@ -164,20 +174,21 @@ function reportUndefinedStepsGithubActions(
 
 function reportGithubActions(result: CheckResult): Effect.Effect<void> {
   const messages = result.features.flatMap((feature) => [
-    ...reportUndefinedStepsGithubActions(
-      feature.scenarios,
-      Option.fromNullishOr(feature.backgroundSteps),
-      feature.file,
-    ),
+    ...reportUndefinedStepsGithubActions({
+      scenarios: feature.scenarios,
+      backgroundSteps: Option.fromNullishOr(feature.backgroundSteps),
+      featureFile: feature.file,
+    }),
     ...feature.rules.flatMap((rule) =>
-      reportUndefinedStepsGithubActions(
-        rule.scenarios,
-        Option.fromNullishOr(rule.backgroundSteps),
-        feature.file,
-        rule.name,
-      ),
+      reportUndefinedStepsGithubActions({
+        scenarios: rule.scenarios,
+        backgroundSteps: Option.fromNullishOr(rule.backgroundSteps),
+        featureFile: feature.file,
+        context: rule.name,
+      }),
     ),
   ])
+
   return Effect.forEach(
     result.undefinedSteps > 0
       ? [

@@ -22,14 +22,15 @@ const signupArbitrary = Arbitrary.schema(
 )
 
 it.effect("both signup orders converge on one subject only through explicit OAuth linking", () =>
-  assertPropertyEffect(
-    signupArbitrary,
-    (input) =>
+  assertPropertyEffect({
+    arbitrary: signupArbitrary,
+    predicate: (input) =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         const email = yield* Schema.decodeEffect(AuthSchema.Email)(
           `${input.identifier}@example.com`,
         )
+
         const identity = {
           issuer: "https://provider.example",
           subject: input.identifier,
@@ -37,6 +38,7 @@ it.effect("both signup orders converge on one subject only through explicit OAut
           emailVerified: true,
           name: input.name,
         }
+
         const signup = { provider: input.provider, identity, linkAuthSubjectId: null }
         const authSubjectId = input.oauthFirst
           ? (yield* provisionOAuthAccount(signup)).authSubjectId
@@ -44,8 +46,14 @@ it.effect("both signup orders converge on one subject only through explicit OAut
 
         if (!input.oauthFirst) {
           const implicitLink = yield* provisionOAuthAccount(signup).pipe(Effect.result)
-          if (implicitLink._tag !== "Failure" || implicitLink.failure.reason !== "account-conflict")
+
+          if (
+            implicitLink._tag !== "Failure" ||
+            implicitLink.failure.reason !== "account-conflict"
+          ) {
             return false
+          }
+
           const linked = yield* provisionOAuthAccount({
             ...signup,
             linkAuthSubjectId: authSubjectId,
@@ -63,6 +71,7 @@ it.effect("both signup orders converge on one subject only through explicit OAut
         const profiles = yield* sql`SELECT id, name FROM profiles`
         const credentials = yield* sql`SELECT auth_subject_id FROM auth_credentials`
         const identities = yield* sql`SELECT auth_subject_id FROM auth_oauth_identities`
+
         return (
           magicLinkSubject === authSubjectId &&
           returning.authSubjectId === authSubjectId &&
@@ -81,13 +90,13 @@ it.effect("both signup orders converge on one subject only through explicit OAut
           identities[0]?.authSubjectId === authSubjectId
         )
       }).pipe(Effect.provide(TestLayer)),
-    DATABASE_PROPERTY_TEST_CONFIG,
-  ),
+    options: DATABASE_PROPERTY_TEST_CONFIG,
+  }),
 )
 
 it.effect("only the exact unexpired OAuth binding can consume a flow, and only once", () =>
-  assertPropertyEffect(
-    Arbitrary.schema(
+  assertPropertyEffect({
+    arbitrary: Arbitrary.schema(
       Schema.Struct({
         state: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
         flowId: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
@@ -96,15 +105,17 @@ it.effect("only the exact unexpired OAuth binding can consume a flow, and only o
         mismatch: Schema.Literals(["state", "flowId", "bindingVerifier", "provider", "expiry"]),
       }),
     ),
-    (input) =>
+    predicate: (input) =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
+
         const request = {
           state: input.state,
           flowId: input.flowId,
           bindingVerifier: input.bindingVerifier,
           provider: input.provider,
         }
+
         yield* insertOAuthFlow({
           ...request,
           nonce: "nonce",
@@ -113,6 +124,7 @@ it.effect("only the exact unexpired OAuth binding can consume a flow, and only o
           expiresAt:
             input.mismatch === "expiry" ? 0 : DateTime.toEpochMillis(yield* DateTime.now) + 600_000,
         })
+
         const mismatch = {
           ...request,
           ...(input.mismatch === "provider"
@@ -125,10 +137,12 @@ it.effect("only the exact unexpired OAuth binding can consume a flow, and only o
                   [input.mismatch]: request[input.mismatch] + ":other",
                 }),
         }
+
         const rejected = yield* consumeOAuthFlow(mismatch)
         const retained = yield* sql`SELECT state FROM auth_oauth_flows`
         const consumed = yield* consumeOAuthFlow(request)
         const replay = yield* consumeOAuthFlow(request)
+
         return (
           rejected._tag === "None" &&
           retained.length === 1 &&
@@ -136,20 +150,21 @@ it.effect("only the exact unexpired OAuth binding can consume a flow, and only o
           replay._tag === "None"
         )
       }).pipe(Effect.provide(TestLayer)),
-    DATABASE_PROPERTY_TEST_CONFIG,
-  ),
+    options: DATABASE_PROPERTY_TEST_CONFIG,
+  }),
 )
 
 it.effect("a failed profile write rolls back signup through either authentication method", () =>
-  assertPropertyEffect(
-    signupArbitrary,
-    (input) =>
+  assertPropertyEffect({
+    arbitrary: signupArbitrary,
+    predicate: (input) =>
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         const email = yield* Schema.decodeEffect(AuthSchema.Email)(
           `${input.identifier}@example.com`,
         )
         yield* sql`CREATE TRIGGER reject_profile BEFORE INSERT ON profiles BEGIN SELECT RAISE(ABORT, 'profile failure'); END`
+
         const result = input.oauthFirst
           ? yield* provisionOAuthAccount({
               provider: input.provider,
@@ -163,6 +178,7 @@ it.effect("a failed profile write rolls back signup through either authenticatio
               linkAuthSubjectId: null,
             }).pipe(Effect.result)
           : yield* provisionMagicLinkAccount({ email, name: input.name }).pipe(Effect.result)
+
         const subjects = yield* sql`SELECT id FROM auth_subjects`
         const profiles = yield* sql`SELECT id FROM profiles`
         const people = yield* sql`SELECT id FROM people`
@@ -173,6 +189,6 @@ it.effect("a failed profile write rolls back signup through either authenticatio
           [subjects, profiles, people, credentials, identities].every((rows) => rows.length === 0)
         )
       }).pipe(Effect.provide(TestLayer)),
-    DATABASE_PROPERTY_TEST_CONFIG,
-  ),
+    options: DATABASE_PROPERTY_TEST_CONFIG,
+  }),
 )

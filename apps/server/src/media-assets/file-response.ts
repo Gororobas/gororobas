@@ -15,6 +15,7 @@ export const mediaFileResponse = ({
     const request = yield* HttpServerRequest.HttpServerRequest
     const info = yield* filesystem.stat(filename)
     const size = Number(info.size)
+
     const response = yield* HttpServerResponse.file(filename, {
       ...(contentType ? { contentType } : {}),
       ...(filename.endsWith(".m3u8") ? { contentType: "application/vnd.apple.mpegurl" } : {}),
@@ -27,6 +28,7 @@ export const mediaFileResponse = ({
 
     const range = request.headers.range
     const ifRange = request.headers["if-range"]
+
     if (
       !range ||
       (ifRange &&
@@ -43,6 +45,7 @@ export const mediaFileResponse = ({
 
     const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]))
     const end = match[1] && match[2] ? Math.min(size - 1, Number(match[2])) : size - 1
+
     if (
       (!match[1] && !match[2]) ||
       !Number.isSafeInteger(start) ||

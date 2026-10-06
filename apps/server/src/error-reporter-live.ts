@@ -24,6 +24,7 @@ const RuntimeErrorReporter = ErrorReporter.make(
         severityNumber: OtelLogger.logLevelToSeverityNumber(severity),
         severityText: severity,
       })
+
       return
     }
 

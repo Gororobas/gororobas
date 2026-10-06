@@ -7,6 +7,7 @@ export const noNestedLayerProvideRule = {
     function isLayerProvide(node) {
       if (node.type !== "CallExpression") return false
       const callee = node.callee
+
       return (
         callee.type === "MemberExpression" &&
         callee.object.type === "Identifier" &&

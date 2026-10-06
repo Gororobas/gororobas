@@ -12,6 +12,7 @@ export const TrustedAccessLevel = Schema.Literals([
   "MODERATOR", // Can trust or block newcomers, flag media and publications, and approve revisions
   "ADMIN", // Moderator access + manage other moderators and admins
 ])
+
 export type TrustedAccessLevel = typeof TrustedAccessLevel.Type
 
 export const PlatformAccessLevel = Schema.Literals([
@@ -19,6 +20,7 @@ export const PlatformAccessLevel = Schema.Literals([
   "NEWCOMER", // Just signed up, limited access
   "BLOCKED", // Has been blocked by a moderator or admin, same access as visitors
 ])
+
 export type PlatformAccessLevel = typeof PlatformAccessLevel.Type
 
 export const PlatformAccessLevelOrVisitor = Schema.Literals([
@@ -46,6 +48,7 @@ export const OrganizationType = Schema.Literals([
   "COMMERCIAL",
   "NGO",
 ])
+
 export type OrganizationType = typeof OrganizationType.Type
 
 /** Profiles can't be private */
@@ -72,6 +75,7 @@ export const BookmarkState = Schema.Literals([
   "PREVIOUSLY_ACTIVE", // "Have planted" for plant articles
   "INDIFFERENT", // "Not interested"
 ])
+
 export type BookmarkState = typeof BookmarkState.Type
 
 export const PublicationKind = Schema.Literals(["POST", "EVENT"])
@@ -96,6 +100,7 @@ export const EdiblePlantPart = Schema.Literals([
   "TUBER",
   "RHIZOME",
 ])
+
 export type EdiblePlantPart = typeof EdiblePlantPart.Type
 
 export const PlantLifecycle = Schema.Literals(["SEMIANNUAL", "ANNUAL", "BIENNIAL", "PERENNIAL"])
@@ -112,6 +117,7 @@ export const PlantUsage = Schema.Literals([
   "RITUALISTIC",
   "ECOSYSTEM_SERVICE",
 ])
+
 export type PlantUsage = typeof PlantUsage.Type
 
 export const PlantingMethod = Schema.Literals([
@@ -124,6 +130,7 @@ export const PlantingMethod = Schema.Literals([
   "BULB",
   "DIVISION",
 ])
+
 export type PlantingMethod = typeof PlantingMethod.Type
 
 export const AnimalRole = Schema.Literals([
@@ -136,6 +143,7 @@ export const AnimalRole = Schema.Literals([
   "COMPOSTING",
   "SEED_DISPERSER",
 ])
+
 export type AnimalRole = typeof AnimalRole.Type
 
 export const ToolUsage = Schema.Literals([
@@ -151,6 +159,7 @@ export const ToolUsage = Schema.Literals([
   "MACHINERY",
   "INFRASTRUCTURE",
 ])
+
 export type ToolUsage = typeof ToolUsage.Type
 
 export const GrammaticalGender = Schema.Literals(["NEUTRAL", "MALE", "FEMALE"])

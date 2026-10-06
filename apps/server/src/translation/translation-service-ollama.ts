@@ -21,11 +21,15 @@ function generatePrompt({
 
 export const TranslationServiceOllama = Context.make(TranslationService, {
   getServiceId: () => "ollama",
-  translate: Effect.fn("TranslationServiceOllama.translate")(function* (
-    text: string,
-    sourceLocale: Locale,
-    targetLocale: Locale,
-  ) {
+  translate: Effect.fn("TranslationServiceOllama.translate")(function* ({
+    text,
+    sourceLocale,
+    targetLocale,
+  }: {
+    text: string
+    sourceLocale: Locale
+    targetLocale: Locale
+  }) {
     const response = yield* Effect.tryPromise({
       try: () =>
         ollama.chat({

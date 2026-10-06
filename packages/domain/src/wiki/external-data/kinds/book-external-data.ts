@@ -15,6 +15,7 @@ export const BookEdition = Schema.Struct({
   isbn: Schema.Array(Schema.String),
   sourceUrl: UrlAsString,
 })
+
 export type BookEdition = typeof BookEdition.Type
 
 export const BookResult = Schema.Struct({
@@ -34,4 +35,5 @@ export const BookExternalDataResult = Schema.Struct({
     googleBooks: Schema.NullOr(Schema.Result(BookResult, ExternalDataFetchError)),
   }),
 })
+
 export type BookExternalDataResult = typeof BookExternalDataResult.Type

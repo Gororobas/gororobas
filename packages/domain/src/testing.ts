@@ -21,70 +21,114 @@ import { SessionContext } from "./authorization/session.js"
 
 export class PropertyTestFailure extends Error {
   readonly _tag = "PropertyTestFailure"
-  constructor(
-    readonly counterexample: unknown,
-    readonly seed: number,
-    readonly path: string,
-  ) {
+  readonly counterexample: unknown
+  readonly seed: number
+  readonly path: string
+  constructor({
+    counterexample,
+    seed,
+    path,
+  }: {
+    counterexample: unknown
+    seed: number
+    path: string
+  }) {
     super(
       `Property failed with counterexample: ${Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(counterexample)}`,
     )
+    this.counterexample = counterexample
+    this.seed = seed
+    this.path = path
   }
 }
 
 /**
  * Run an Effect-native property check.
  */
-export const checkPropertyEffect = <A, E, R>(
-  arbitrary: Arbitrary.Arbitrary<A>,
-  predicate: (value: A) => Effect.Effect<boolean, E, R>,
-  options?: Arbitrary.CheckOptions,
-): Effect.Effect<Arbitrary.CheckResult<A, E>, never, R> =>
+export const checkPropertyEffect = <A, E, R>({
+  arbitrary,
+  predicate,
+  options,
+}: {
+  arbitrary: Arbitrary.Arbitrary<A>
+  predicate: (value: A) => Effect.Effect<boolean, E, R>
+  options?: Arbitrary.CheckOptions | undefined
+}): Effect.Effect<Arbitrary.CheckResult<A, E>, never, R> =>
   Arbitrary.checkEffect(arbitrary, predicate, options)
 
 /**
  * Assert property with detailed failure information
  */
-export const assertPropertyEffect = <A, E, R>(
-  arbitrary: Arbitrary.Arbitrary<A>,
-  predicate: (value: A) => Effect.Effect<boolean, E, R>,
-  options?: Arbitrary.CheckOptions,
-): Effect.Effect<void, PropertyTestFailure, R> =>
+export const assertPropertyEffect = <A, E, R>({
+  arbitrary,
+  predicate,
+  options,
+}: {
+  arbitrary: Arbitrary.Arbitrary<A>
+  predicate: (value: A) => Effect.Effect<boolean, E, R>
+  options?: Arbitrary.CheckOptions | undefined
+}): Effect.Effect<void, PropertyTestFailure, R> =>
   Effect.gen(function* () {
-    const result = yield* checkPropertyEffect(arbitrary, predicate, {
-      runs: 50,
-      ...options,
+    const result = yield* checkPropertyEffect({
+      arbitrary: arbitrary,
+      predicate: predicate,
+      options: {
+        runs: 50,
+        ...options,
+      },
     })
 
     if (result._tag === "Passed") return
+
     if (result._tag === "Falsified") {
-      return yield* Effect.fail(new PropertyTestFailure(result.shrunkInput, 0, result.replay))
+      return yield* Effect.fail(
+        new PropertyTestFailure({
+          counterexample: result.shrunkInput,
+          seed: 0,
+          path: result.replay,
+        }),
+      )
     }
-    return yield* Effect.fail(new PropertyTestFailure(result, 0, ""))
+
+    return yield* Effect.fail(
+      new PropertyTestFailure({ counterexample: result, seed: 0, path: "" }),
+    )
   })
 
 /**
  * Effectful property with preconditions
  */
-export const propertyWithPrecondition = <A, E, R>(
-  arbitrary: Arbitrary.Arbitrary<A>,
-  precondition: (value: A) => boolean,
-  predicate: (value: A) => Effect.Effect<boolean, E, R>,
-): Effect.Effect<void, PropertyTestFailure, R> =>
-  assertPropertyEffect(Arbitrary.filter(arbitrary, precondition), predicate)
+export const propertyWithPrecondition = <A, E, R>({
+  arbitrary,
+  precondition,
+  predicate,
+}: {
+  arbitrary: Arbitrary.Arbitrary<A>
+  precondition: (value: A) => boolean
+  predicate: (value: A) => Effect.Effect<boolean, E, R>
+}): Effect.Effect<void, PropertyTestFailure, R> =>
+  assertPropertyEffect({
+    arbitrary: Arbitrary.filter(arbitrary, precondition),
+    predicate: predicate,
+  })
 
-export const assertProperty = <A>(
-  arbitrary: Arbitrary.Arbitrary<A>,
-  predicate: (value: A) => boolean,
-  options?: Arbitrary.CheckOptions,
-): void => {
+export const assertProperty = <A>({
+  arbitrary,
+  predicate,
+  options,
+}: {
+  arbitrary: Arbitrary.Arbitrary<A>
+  predicate: (value: A) => boolean
+  options?: Arbitrary.CheckOptions | undefined
+}): void => {
   const result = Effect.runSync(Arbitrary.checkEffect(arbitrary, predicate, options))
+
   if (result._tag !== "Passed") {
-    throw new PropertyTestFailure(
-      result._tag === "Falsified" ? result.shrunkInput : result,
-      0,
-      result._tag === "Falsified" ? result.replay : "",
-    )
+    throw new PropertyTestFailure({
+      counterexample: result._tag === "Falsified" ? result.shrunkInput : result,
+      seed: 0,
+      path: result._tag === "Falsified" ? result.replay : "",
+    })
   }
 }
 

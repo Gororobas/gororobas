@@ -62,6 +62,7 @@ export const fetchPlantWikidata = Effect.fn(function* (wikidataId: string) {
   const claims = hasCurrentClaims ? currentClaims : legacyClaims
   const identifierSchema = hasCurrentClaims ? GbifTaxonId : GbifDeprecatedSpeciesId
   const preferred = claims.filter((claim) => claim.rank === "preferred")
+
   const identifiers = EffectArray.dedupe(
     (EffectArray.isReadonlyArrayNonEmpty(preferred) ? preferred : claims).flatMap((claim) =>
       Predicate.isString(claim.mainsnak.datavalue?.value) &&
@@ -95,11 +96,12 @@ export const fetchPlantWikidata = Effect.fn(function* (wikidataId: string) {
 })
 
 export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataInputs.Type) {
-  if (Option.isNone(inputs.wikidataId))
+  if (Option.isNone(inputs.wikidataId)) {
     return PlantExternalDataResult.make({
       kind: "PLANT",
       attributes: { wikidata: null, gbif: null },
     })
+  }
 
   const wikidata = yield* Activity.make({
     name: "wikidata",

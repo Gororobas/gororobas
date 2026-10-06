@@ -23,6 +23,7 @@ export const EmailDeliveryResend = Layer.effect(
             }),
             Effect.mapError(() => EmailDelivery.EmailNotAccepted.make({})),
           )
+
           const response = yield* http.execute(request).pipe(
             Effect.timeout("10 seconds"),
             Effect.mapError(() => EmailDelivery.EmailAcceptanceUnknown.make({})),
@@ -30,8 +31,9 @@ export const EmailDeliveryResend = Layer.effect(
 
           if (response.status >= 200 && response.status < 300) return
 
-          if ([400, 401, 403, 404, 409, 413, 422, 429].includes(response.status))
+          if ([400, 401, 403, 404, 409, 413, 422, 429].includes(response.status)) {
             return yield* EmailDelivery.EmailNotAccepted.make({})
+          }
 
           return yield* EmailDelivery.EmailAcceptanceUnknown.make({})
         },

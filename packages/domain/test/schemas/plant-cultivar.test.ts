@@ -19,15 +19,17 @@ const Attributes = WikiPlantCultivarArticle.EditableAttributes
 
 describe("Plant cultivar wiki kind", () => {
   it.effect("new cultivars default every trait to explicit unknown", () =>
-    assertPropertyEffect(Arbitrary.schema(WikiArticleId), (parentPlantId) =>
-      Effect.sync(() => {
-        const attributes = Attributes.make({ parentPlantId })
-        expect(() => Schema.decodeUnknownSync(Attributes)({ parentPlantId })).toThrow(/Missing/)
-        return Record.toEntries(attributes).every(
-          ([key, value]) => key === "parentPlantId" || deepEquals(value, { _tag: "Unknown" }),
-        )
-      }),
-    ),
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(WikiArticleId),
+      predicate: (parentPlantId) =>
+        Effect.sync(() => {
+          const attributes = Attributes.make({ parentPlantId })
+          expect(() => Schema.decodeUnknownSync(Attributes)({ parentPlantId })).toThrow(/Missing/)
+          return Record.toEntries(attributes).every(
+            ([key, value]) => key === "parentPlantId" || deepEquals(value, { _tag: "Unknown" }),
+          )
+        }),
+    }),
   )
 
   it("keeps unknown, inheritance, empty selections and literal values unambiguous", () => {
@@ -37,6 +39,7 @@ describe("Plant cultivar wiki kind", () => {
     expect(decode({ _tag: "Inherit" })).toEqual({ _tag: "Inherit" })
     expect(decode({ _tag: "Value", value: [] })).toEqual({ _tag: "Value", value: [] })
     expect(decode({ _tag: "Value", value: ["LOW"] })).toEqual({ _tag: "Value", value: ["LOW"] })
+
     const invalidValues = [
       undefined,
       null,
@@ -46,6 +49,7 @@ describe("Plant cultivar wiki kind", () => {
       { _tag: "Value" },
       { _tag: "Value", value: ["OTHER"] },
     ]
+
     invalidValues.forEach((invalid) => {
       expect(() => decode(invalid)).toThrow(/Expected|Missing/)
     })
@@ -57,6 +61,7 @@ describe("Plant cultivar wiki kind", () => {
       Attributes.fields.developmentCycle,
       Attributes.fields.temperature,
     ]
+
     ranges.forEach((field) => {
       const decode = Schema.decodeUnknownSync(field)
       expect(() => decode({ _tag: "Value", value: { min: 5, max: 2 } })).toThrow(
@@ -65,6 +70,7 @@ describe("Plant cultivar wiki kind", () => {
       expect(() => decode({ _tag: "Value", value: { max: 5 } })).toThrow(/Missing/)
       expect(() => decode({ _tag: "Value", value: { min: 2, max: 5 } })).not.toThrow()
     })
+
     expect(() =>
       Schema.decodeUnknownSync(Attributes.fields.temperature)({
         _tag: "Value",
@@ -74,46 +80,49 @@ describe("Plant cultivar wiki kind", () => {
   })
 
   it.effect("explicit trait states round-trip through JSON without resolving parent data", () =>
-    assertPropertyEffect(Arbitrary.schema(Attributes), (attributes) =>
-      Effect.gen(function* () {
-        const json = yield* Schema.encodeEffect(Schema.fromJsonString(Attributes))(attributes)
-        const decoded = yield* Schema.decodeEffect(Schema.fromJsonString(Attributes))(json)
-        return (
-          deepEquals(attributes, decoded) &&
-          deepEquals(attributes, WikiPlantCultivarArticle.materializeAttributes(attributes))
-        )
-      }),
-    ),
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(Attributes),
+      predicate: (attributes) =>
+        Effect.gen(function* () {
+          const json = yield* Schema.encodeEffect(Schema.fromJsonString(Attributes))(attributes)
+          const decoded = yield* Schema.decodeEffect(Schema.fromJsonString(Attributes))(json)
+          return (
+            deepEquals(attributes, decoded) &&
+            deepEquals(attributes, WikiPlantCultivarArticle.materializeAttributes(attributes))
+          )
+        }),
+    }),
   )
 
   it.effect("participates in wiki decoding and materialization", () =>
-    assertPropertyEffect(
-      Arbitrary.schema(
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(
         Schema.Struct({
           article: WikiPlantCultivarArticle.EditableArticle,
           metadata: Schema.Struct(coreWikiArticleMaterializedRowFields),
         }),
       ),
-      ({ article, metadata }) =>
+      predicate: ({ article, metadata }) =>
         Effect.gen(function* () {
           const encoded = yield* Schema.encodeEffect(WikiPlantCultivarArticle.EditableArticle)(
             article,
           )
           const decoded = yield* Schema.decodeEffect(WikiArticleEditableData)(encoded)
           const materialized = editableToMaterializedArticle(decoded, metadata)
+
           return (
             Schema.is(WikiArticleKind)("PLANT_CULTIVAR") &&
             materialized.kind === "PLANT_CULTIVAR" &&
             deepEquals(materialized.attributes, article.attributes)
           )
         }),
-    ),
+    }),
   )
 
   it.effect("registered edits atomically replace the selected property in the CRDT", () =>
-    assertPropertyEffect(
-      Arbitrary.schema(WikiPlantCultivarArticleCrdtOperations.AttributeEdit),
-      (edit) =>
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(WikiPlantCultivarArticleCrdtOperations.AttributeEdit),
+      predicate: (edit) =>
         Effect.gen(function* () {
           const document = new LoroDoc()
           yield* applyWikiArticleEdit(document, edit)
@@ -126,7 +135,7 @@ describe("Plant cultivar wiki kind", () => {
             deepEquals(Record.values(attributes)[0], encoded.value)
           )
         }),
-    ),
+    }),
   )
 
   it.effect(
@@ -137,6 +146,7 @@ describe("Plant cultivar wiki kind", () => {
         const decode = Schema.decodeUnknownSync(
           WikiPlantCultivarArticleCrdtOperations.AttributeEdit,
         )
+
         yield* applyWikiArticleEdit(
           document,
           decode({
@@ -144,6 +154,7 @@ describe("Plant cultivar wiki kind", () => {
             value: { _tag: "Value", value: ["HUMAN_FEED"] },
           }),
         )
+
         yield* applyWikiArticleEdit(
           document,
           decode({
@@ -151,6 +162,7 @@ describe("Plant cultivar wiki kind", () => {
             value: { _tag: "Value", value: { min: 100, max: 250 } },
           }),
         )
+
         yield* Effect.forEach(
           [{ _tag: "Inherit" }, { _tag: "Unknown" }, { _tag: "Value", value: [] }],
           (state) =>

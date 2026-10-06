@@ -19,6 +19,7 @@ export const makeProviderHttp = Effect.fn(function* (
       const endpoint = new URL(`${baseUrl}${path}`)
       endpoint.search = ""
       const safeEndpoint = endpoint.toString()
+
       const response = yield* client
         .get(`${baseUrl}${path}`, {
           headers: { "User-Agent": userAgent },
@@ -40,6 +41,7 @@ export const makeProviderHttp = Effect.fn(function* (
         const header = response.headers["retry-after"]
         const now = DateTime.toEpochMillis(yield* DateTime.now)
         const seconds = Number(header)
+
         const retryAfterMs = Number.isFinite(seconds)
           ? seconds * 1000
           : Option.match(DateTime.make(header ?? ""), {
@@ -69,6 +71,7 @@ export const makeProviderHttp = Effect.fn(function* (
             }),
         ),
       )
+
       const value = yield* Schema.decodeUnknownEffect(schema)(payload).pipe(
         Effect.tapError((error) => Effect.logError(`[${provider}] ${error.message}`, error)),
         Effect.mapError(
@@ -80,7 +83,9 @@ export const makeProviderHttp = Effect.fn(function* (
             }),
         ),
       )
+
       const fetchedAt = DateTime.formatIso(yield* DateTime.now)
+
       return {
         value,
         observation: {
