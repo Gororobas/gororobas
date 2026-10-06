@@ -14,7 +14,7 @@ const ContentChannel = Schema.Struct({
   url: Schema.URLFromString,
 })
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   names: OptionalColumn(Schema.Array(ValidName)),
   channels: OptionalColumn(Schema.Array(ContentChannel)),
 })
@@ -33,9 +33,9 @@ export const WikiContentProducerArticle = defineKind({
       ),
     ),
   }),
-  MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       names: Option.map(editableAttributes.names, (names) => names.map((name) => name.value)),
       channels: Option.map(editableAttributes.channels, (channels) =>
         channels.map((channel) => channel.value),
@@ -46,7 +46,7 @@ export const WikiContentProducerArticle = defineKind({
 export type ContentProducerArticleKind = typeof WikiContentProducerArticle.Kind.Type
 export type ContentProducerEditableAttributes =
   typeof WikiContentProducerArticle.EditableAttributes.Type
-export type ContentProducerMaterializedAttributes =
-  typeof WikiContentProducerArticle.MaterializedAttributes.Type
+export type ContentProducerProjectedAttributes =
+  typeof WikiContentProducerArticle.ProjectedAttributes.Type
 export type ContentProducerEditableArticle = typeof WikiContentProducerArticle.EditableArticle.Type
-export type ContentProducerMaterializedRow = typeof WikiContentProducerArticle.MaterializedRow.Type
+export type ContentProducerProjectionRow = typeof WikiContentProducerArticle.ProjectionRow.Type

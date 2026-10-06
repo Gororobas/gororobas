@@ -1,6 +1,6 @@
 import {
   LoroDocFrontier,
-  type WikiArticleMaterializedRow,
+  type WikiArticleProjectionRow,
   ExternalDataFetchError,
   ExternalDataFetchRequest,
   type ExternalDataResult,
@@ -71,7 +71,7 @@ export const FetchArticleExternalDataLive = Layer.unwrap(
 /** Best-effort submission after the article transaction commits. */
 export const requestExternalDataFetch = Effect.fn(function* (
   article: ExternalDataArticle,
-  previous?: WikiArticleMaterializedRow,
+  previous?: WikiArticleProjectionRow,
 ) {
   const request = buildExternalDataRequest(article)
 

@@ -64,47 +64,46 @@ export const WikiArticleRevisionRow = Schema.Struct({
 
 export type WikiArticleRevisionRow = typeof WikiArticleRevisionRow.Type
 
-/** The main queryable article record.*/
-export const WikiArticleMaterializedRow = Schema.Union([
-  WikiAnimalArticle.MaterializedRow,
-  WikiBookArticle.MaterializedRow,
-  WikiPlantArticle.MaterializedRow,
-  WikiPlantCultivarArticle.MaterializedRow,
-  WikiConceptArticle.MaterializedRow,
-  WikiFilmArticle.MaterializedRow,
-  WikiNoteworthyEntityArticle.MaterializedRow,
-  WikiResourceArticle.MaterializedRow,
-  WikiToolArticle.MaterializedRow,
-  WikiUncategorizedArticle.MaterializedRow,
+/** Persisted read model derived from the canonical CRDT state. */
+export const WikiArticleProjectionRow = Schema.Union([
+  WikiAnimalArticle.ProjectionRow,
+  WikiBookArticle.ProjectionRow,
+  WikiPlantArticle.ProjectionRow,
+  WikiPlantCultivarArticle.ProjectionRow,
+  WikiConceptArticle.ProjectionRow,
+  WikiFilmArticle.ProjectionRow,
+  WikiNoteworthyEntityArticle.ProjectionRow,
+  WikiResourceArticle.ProjectionRow,
+  WikiToolArticle.ProjectionRow,
+  WikiUncategorizedArticle.ProjectionRow,
 ]).pipe(Schema.toTaggedUnion("kind"))
 
-export type WikiArticleMaterializedRow = typeof WikiArticleMaterializedRow.Type
+export type WikiArticleProjectionRow = typeof WikiArticleProjectionRow.Type
 
 /** Stable generated route handles, uniquely owned within an article kind. */
-export const WikiArticleHandleMaterializedRow = Schema.Struct({
+export const WikiArticleHandleProjectionRow = Schema.Struct({
   wikiArticleId: WikiArticleId,
   kind: WikiArticleKind,
   handle: Handle,
   locale: Locale,
 })
 
-export type WikiArticleHandleMaterializedRow = typeof WikiArticleHandleMaterializedRow.Type
+export type WikiArticleHandleProjectionRow = typeof WikiArticleHandleProjectionRow.Type
 
-export const WikiArticleTranslationMaterializedRow = Schema.Union([
-  WikiAnimalArticle.TranslationMaterializedRow,
-  WikiBookArticle.TranslationMaterializedRow,
-  WikiConceptArticle.TranslationMaterializedRow,
-  WikiFilmArticle.TranslationMaterializedRow,
-  WikiNoteworthyEntityArticle.TranslationMaterializedRow,
-  WikiPlantArticle.TranslationMaterializedRow,
-  WikiPlantCultivarArticle.TranslationMaterializedRow,
-  WikiResourceArticle.TranslationMaterializedRow,
-  WikiToolArticle.TranslationMaterializedRow,
-  WikiUncategorizedArticle.TranslationMaterializedRow,
+export const WikiArticleTranslationProjectionRow = Schema.Union([
+  WikiAnimalArticle.TranslationProjectionRow,
+  WikiBookArticle.TranslationProjectionRow,
+  WikiConceptArticle.TranslationProjectionRow,
+  WikiFilmArticle.TranslationProjectionRow,
+  WikiNoteworthyEntityArticle.TranslationProjectionRow,
+  WikiPlantArticle.TranslationProjectionRow,
+  WikiPlantCultivarArticle.TranslationProjectionRow,
+  WikiResourceArticle.TranslationProjectionRow,
+  WikiToolArticle.TranslationProjectionRow,
+  WikiUncategorizedArticle.TranslationProjectionRow,
 ]).pipe(Schema.toTaggedUnion("kind"))
 
-export type WikiArticleTranslationMaterializedRow =
-  typeof WikiArticleTranslationMaterializedRow.Type
+export type WikiArticleTranslationProjectionRow = typeof WikiArticleTranslationProjectionRow.Type
 
 /** A locale-specific article projection returned by the read APIs. */
 export const WikiArticleQueriedPageData = Schema.Union([
@@ -132,77 +131,77 @@ export const WikiArticleQueriedCardData = Schema.Struct({
 
 export type WikiArticleQueriedCardData = typeof WikiArticleQueriedCardData.Type
 
-export const editableToMaterializedArticle = (
+export const projectArticle = (
   editableData: WikiArticleEditableData,
-  metadata: Omit<WikiArticleMaterializedRow, "kind" | "attributes">,
-): WikiArticleMaterializedRow => {
+  metadata: Omit<WikiArticleProjectionRow, "kind" | "attributes">,
+): WikiArticleProjectionRow => {
   return Match.value(editableData).pipe(
     Match.discriminatorsExhaustive("kind")({
       ANIMAL: (animal) =>
-        WikiAnimalArticle.MaterializedRow.make({
+        WikiAnimalArticle.ProjectionRow.make({
           kind: animal.kind,
-          attributes: WikiAnimalArticle.materializeAttributes(animal.attributes),
+          attributes: WikiAnimalArticle.projectAttributes(animal.attributes),
           ...metadata,
         }),
       BOOK: (book) =>
-        WikiBookArticle.MaterializedRow.make({
+        WikiBookArticle.ProjectionRow.make({
           kind: book.kind,
-          attributes: WikiBookArticle.materializeAttributes(book.attributes),
+          attributes: WikiBookArticle.projectAttributes(book.attributes),
           ...metadata,
         }),
       CONCEPT: (concept) =>
-        WikiConceptArticle.MaterializedRow.make({
+        WikiConceptArticle.ProjectionRow.make({
           kind: concept.kind,
-          attributes: WikiConceptArticle.materializeAttributes(concept.attributes),
+          attributes: WikiConceptArticle.projectAttributes(concept.attributes),
           ...metadata,
         }),
       FILM: (film) =>
-        WikiFilmArticle.MaterializedRow.make({
+        WikiFilmArticle.ProjectionRow.make({
           kind: film.kind,
-          attributes: WikiFilmArticle.materializeAttributes(film.attributes),
+          attributes: WikiFilmArticle.projectAttributes(film.attributes),
           ...metadata,
         }),
       NOTEWORTHY_ENTITY: (entity) =>
-        WikiNoteworthyEntityArticle.MaterializedRow.make({
+        WikiNoteworthyEntityArticle.ProjectionRow.make({
           kind: entity.kind,
-          attributes: WikiNoteworthyEntityArticle.materializeAttributes(entity.attributes),
+          attributes: WikiNoteworthyEntityArticle.projectAttributes(entity.attributes),
           ...metadata,
         }),
       PLANT: (plant) =>
-        WikiPlantArticle.MaterializedRow.make({
+        WikiPlantArticle.ProjectionRow.make({
           kind: plant.kind,
-          attributes: WikiPlantArticle.materializeAttributes(plant.attributes),
+          attributes: WikiPlantArticle.projectAttributes(plant.attributes),
           ...metadata,
         }),
       PLANT_CULTIVAR: (cultivar) =>
-        WikiPlantCultivarArticle.MaterializedRow.make({
+        WikiPlantCultivarArticle.ProjectionRow.make({
           kind: cultivar.kind,
-          attributes: WikiPlantCultivarArticle.materializeAttributes(cultivar.attributes),
+          attributes: WikiPlantCultivarArticle.projectAttributes(cultivar.attributes),
           ...metadata,
         }),
       RESOURCE: (resource) =>
-        WikiResourceArticle.MaterializedRow.make({
+        WikiResourceArticle.ProjectionRow.make({
           kind: resource.kind,
-          attributes: WikiResourceArticle.materializeAttributes(resource.attributes),
+          attributes: WikiResourceArticle.projectAttributes(resource.attributes),
           ...metadata,
         }),
       TOOL: (tool) =>
-        WikiToolArticle.MaterializedRow.make({
+        WikiToolArticle.ProjectionRow.make({
           kind: tool.kind,
-          attributes: WikiToolArticle.materializeAttributes(tool.attributes),
+          attributes: WikiToolArticle.projectAttributes(tool.attributes),
           ...metadata,
         }),
       UNCATEGORIZED: (uncategorized) =>
-        WikiUncategorizedArticle.MaterializedRow.make({
+        WikiUncategorizedArticle.ProjectionRow.make({
           kind: uncategorized.kind,
-          attributes: WikiUncategorizedArticle.materializeAttributes(uncategorized.attributes),
+          attributes: WikiUncategorizedArticle.projectAttributes(uncategorized.attributes),
           ...metadata,
         }),
     }),
   )
 }
 
-export const editableToMaterializedTranslation = ({
+export const projectTranslation = ({
   article,
   locale,
   wikiArticleId,
@@ -210,13 +209,13 @@ export const editableToMaterializedTranslation = ({
   article: WikiArticleEditableData
   locale: Locale
   wikiArticleId: WikiArticleId
-}): Option.Option<WikiArticleTranslationMaterializedRow> => {
+}): Option.Option<WikiArticleTranslationProjectionRow> => {
   const translation = article.translations[locale]
 
   if (!translation) return Option.none()
 
   return Option.some(
-    WikiArticleTranslationMaterializedRow.make({
+    WikiArticleTranslationProjectionRow.make({
       ...translation,
       wikiArticleId,
       kind: article.kind,

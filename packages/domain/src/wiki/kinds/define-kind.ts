@@ -7,10 +7,10 @@ import { LoroDocFrontier } from "../../crdts/domain.js"
 import { TiptapDocument } from "../../rich-text/domain.js"
 import {
   WikiArticleEditableTranslation,
-  commonWikiArticleTranslationMaterializedFields,
+  commonWikiArticleTranslationProjectionFields,
 } from "../wiki-article-translation.js"
 
-export const coreWikiArticleMaterializedRowFields = {
+export const coreWikiArticleProjectionRowFields = {
   ...TimestampedStruct.fields,
   id: WikiArticleId,
   status: WikiArticleStatus,
@@ -20,16 +20,16 @@ export const coreWikiArticleMaterializedRowFields = {
 export interface DefineKindInput<
   Kind extends Schema.Literal<SchemaAST.LiteralValue>,
   EditableAttributes extends Schema.Struct<Schema.Struct.Fields>,
-  MaterializedAttributes extends Schema.Struct<Schema.Struct.Fields>,
+  ProjectedAttributes extends Schema.Struct<Schema.Struct.Fields>,
   TranslationFields extends Schema.Struct.Fields,
-  MaterializeAttributes extends (
+  ProjectAttributes extends (
     editableAttributes: EditableAttributes["Type"],
-  ) => MaterializedAttributes["Type"],
+  ) => ProjectedAttributes["Type"],
 > {
   readonly Kind: Kind
   readonly EditableAttributes: EditableAttributes
-  readonly MaterializedAttributes: MaterializedAttributes
-  readonly materializeAttributes: MaterializeAttributes
+  readonly ProjectedAttributes: ProjectedAttributes
+  readonly projectAttributes: ProjectAttributes
   // @todo rename to TranslatableAttributes and better document that it's for fields beyond commonNames et. al
   readonly EditableTranslationFields: TranslationFields
 }
@@ -37,48 +37,48 @@ export interface DefineKindInput<
 export const defineKind = <
   Kind extends Schema.Literal<SchemaAST.LiteralValue>,
   EditableAttributes extends Schema.Struct<Schema.Struct.Fields>,
-  MaterializedAttributes extends Schema.Struct<Schema.Struct.Fields>,
+  ProjectedAttributes extends Schema.Struct<Schema.Struct.Fields>,
   const TranslationFields extends Schema.Struct.Fields,
-  MaterializeAttributes extends (
+  ProjectAttributes extends (
     editableAttributes: EditableAttributes["Type"],
-  ) => MaterializedAttributes["Type"],
+  ) => ProjectedAttributes["Type"],
 >({
   Kind,
   EditableAttributes,
-  MaterializedAttributes,
-  materializeAttributes,
+  ProjectedAttributes,
+  projectAttributes,
   EditableTranslationFields,
 }: DefineKindInput<
   Kind,
   EditableAttributes,
-  MaterializedAttributes,
+  ProjectedAttributes,
   TranslationFields,
-  MaterializeAttributes
+  ProjectAttributes
 >) => {
   const EditableTranslation = Schema.Struct({
     ...EditableTranslationFields,
     ...WikiArticleEditableTranslation.fields,
   })
 
-  const TranslationMaterializedRow = Schema.Struct({
+  const TranslationProjectionRow = Schema.Struct({
     ...EditableTranslationFields,
-    ...commonWikiArticleTranslationMaterializedFields,
+    ...commonWikiArticleTranslationProjectionFields,
     kind: Kind,
   })
 
-  const MaterializedRow = Schema.Struct({
-    ...coreWikiArticleMaterializedRowFields,
+  const ProjectionRow = Schema.Struct({
+    ...coreWikiArticleProjectionRowFields,
     kind: Kind,
-    attributes: Schema.fromJsonString(MaterializedAttributes),
+    attributes: Schema.fromJsonString(ProjectedAttributes),
   })
 
   return {
     Kind,
     EditableAttributes,
-    MaterializedAttributes,
-    materializeAttributes,
+    ProjectedAttributes,
+    projectAttributes,
     EditableTranslation,
-    TranslationMaterializedRow,
+    TranslationProjectionRow,
     EditableArticle: Schema.Struct({
       kind: Kind,
       attributes: EditableAttributes,
@@ -88,11 +88,11 @@ export const defineKind = <
         pt: Schema.optional(EditableTranslation),
       }),
     }),
-    MaterializedRow,
+    ProjectionRow,
     QueriedPageData: Schema.Struct({
-      ...MaterializedRow.fields,
-      ...TranslationMaterializedRow.fields,
-      attributes: MaterializedAttributes,
+      ...ProjectionRow.fields,
+      ...TranslationProjectionRow.fields,
+      attributes: ProjectedAttributes,
       commonNames: Schema.Array(ValidName),
       content: OptionalColumn(TiptapDocument),
       handle: Handle,

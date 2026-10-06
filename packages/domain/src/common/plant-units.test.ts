@@ -17,7 +17,7 @@ const StoredMeasurements = Schema.Struct({
 })
 
 describe("Plant unit storage", () => {
-  it.effect("round-trips numeric CRDT edits and materialized attributes", () =>
+  it.effect("round-trips numeric CRDT edits and projected attributes", () =>
     assertPropertyEffect({
       arbitrary: Arbitrary.schema(StoredMeasurements),
       predicate: ({ height, temperature }) =>
@@ -41,9 +41,9 @@ describe("Plant unit storage", () => {
           const editable = Schema.decodeSync(WikiPlantArticle.EditableAttributes)(
             document.getMap("attributes").toJSON(),
           )
-          const materialized = WikiPlantArticle.materializeAttributes(editable)
-          const codec = Schema.fromJsonString(WikiPlantArticle.MaterializedAttributes)
-          const decoded = Schema.decodeSync(codec)(Schema.encodeSync(codec)(materialized))
+          const projected = WikiPlantArticle.projectAttributes(editable)
+          const codec = Schema.fromJsonString(WikiPlantArticle.ProjectedAttributes)
+          const decoded = Schema.decodeSync(codec)(Schema.encodeSync(codec)(projected))
           const decodedHeight = Option.getOrThrow(decoded.heightMax)
           const decodedTemperature = Option.getOrThrow(decoded.temperatureMin)
           expect(document.getMap("attributes").get("heightMax")).toBe(height)

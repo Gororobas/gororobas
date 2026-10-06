@@ -6,7 +6,7 @@ import { CrdtBrandedStringSet, OptionalColumn } from "../../common/primitives.js
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   entityType: NoteworthyEntityType,
   foundedDate: OptionalColumn(PartialDate),
   dissolvedDate: OptionalColumn(PartialDate),
@@ -18,12 +18,12 @@ export const WikiNoteworthyEntityArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("NOTEWORTHY_ENTITY"),
   EditableAttributes: Schema.Struct({
-    ...MaterializedAttributes.fields,
+    ...ProjectedAttributes.fields,
     tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
-  MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       ...editableAttributes,
       tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
@@ -32,9 +32,8 @@ export const WikiNoteworthyEntityArticle = defineKind({
 export type NoteworthyEntityArticleKind = typeof WikiNoteworthyEntityArticle.Kind.Type
 export type NoteworthyEntityEditableAttributes =
   typeof WikiNoteworthyEntityArticle.EditableAttributes.Type
-export type NoteworthyEntityMaterializedAttributes =
-  typeof WikiNoteworthyEntityArticle.MaterializedAttributes.Type
+export type NoteworthyEntityProjectedAttributes =
+  typeof WikiNoteworthyEntityArticle.ProjectedAttributes.Type
 export type NoteworthyEntityEditableArticle =
   typeof WikiNoteworthyEntityArticle.EditableArticle.Type
-export type NoteworthyEntityMaterializedRow =
-  typeof WikiNoteworthyEntityArticle.MaterializedRow.Type
+export type NoteworthyEntityProjectionRow = typeof WikiNoteworthyEntityArticle.ProjectionRow.Type

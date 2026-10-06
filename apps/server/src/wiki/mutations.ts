@@ -1,10 +1,10 @@
 import {
   WikiArticleCrdtRow,
-  WikiArticleHandleMaterializedRow,
-  WikiArticleMaterializedRow,
+  WikiArticleHandleProjectionRow,
+  WikiArticleProjectionRow,
   WikiArticleRevisionRow,
   WikiArticleRevisionUpdateRow,
-  WikiArticleTranslationMaterializedRow,
+  WikiArticleTranslationProjectionRow,
 } from "@gororobas/domain"
 import { Effect, Array as EffectArray, Schema } from "effect"
 import { SqlSchema } from "effect/sql"
@@ -38,7 +38,7 @@ export const updateRevisionRow = SqlSchema.void({
 })
 
 export const upsertArticleRow = SqlSchema.void({
-  Request: WikiArticleMaterializedRow,
+  Request: WikiArticleProjectionRow,
   execute: (row) =>
     SqlClient.use(
       (sql) => sql`
@@ -49,7 +49,7 @@ export const upsertArticleRow = SqlSchema.void({
 })
 
 export const insertTranslationRows = SqlSchema.void({
-  Request: Schema.Array(WikiArticleTranslationMaterializedRow),
+  Request: Schema.Array(WikiArticleTranslationProjectionRow),
   execute: EffectArray.match({
     onEmpty: () => Effect.void,
     onNonEmpty: (rows) =>
@@ -58,7 +58,7 @@ export const insertTranslationRows = SqlSchema.void({
 })
 
 export const insertHandleRows = SqlSchema.void({
-  Request: Schema.Array(WikiArticleHandleMaterializedRow),
+  Request: Schema.Array(WikiArticleHandleProjectionRow),
   execute: EffectArray.match({
     onEmpty: () => Effect.void,
     onNonEmpty: (rows) =>

@@ -85,15 +85,15 @@ export const WikiPlantCultivarArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("PLANT_CULTIVAR"),
   EditableAttributes: Attributes,
-  MaterializedAttributes: Attributes,
+  ProjectedAttributes: Attributes,
   // Preserve authored states; parent traits belong to a separate read-time presentation.
-  materializeAttributes: (editableAttributes) => Attributes.make(editableAttributes),
+  projectAttributes: (editableAttributes) => Attributes.make(editableAttributes),
 })
 
 export type PlantCultivarArticleKind = typeof WikiPlantCultivarArticle.Kind.Type
 export type PlantCultivarEditableAttributes =
   typeof WikiPlantCultivarArticle.EditableAttributes.Type
-export type PlantCultivarMaterializedAttributes =
-  typeof WikiPlantCultivarArticle.MaterializedAttributes.Type
+export type PlantCultivarProjectedAttributes =
+  typeof WikiPlantCultivarArticle.ProjectedAttributes.Type
 export type PlantCultivarEditableArticle = typeof WikiPlantCultivarArticle.EditableArticle.Type
-export type PlantCultivarMaterializedRow = typeof WikiPlantCultivarArticle.MaterializedRow.Type
+export type PlantCultivarProjectionRow = typeof WikiPlantCultivarArticle.ProjectionRow.Type

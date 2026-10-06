@@ -4,7 +4,7 @@ import { NameInCrdtList, OptionalColumn, ValidName } from "../../common/primitiv
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   names: OptionalColumn(Schema.Array(ValidName)),
   areasOfWork: OptionalColumn(Schema.Array(ValidName)),
   birthDate: OptionalColumn(PartialDate),
@@ -18,13 +18,13 @@ export const WikiNoteworthyPersonArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("NOTEWORTHY_PERSON"),
   EditableAttributes: Schema.Struct({
-    ...MaterializedAttributes.fields,
+    ...ProjectedAttributes.fields,
     names: OptionalColumn(Schema.Array(NameInCrdtList)),
     areasOfWork: OptionalColumn(Schema.Array(NameInCrdtList)),
   }),
-  MaterializedAttributes: MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes: ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       ...editableAttributes,
       names: Option.map(editableAttributes.names, (names) => names.map((item) => item.value)),
       areasOfWork: Option.map(editableAttributes.areasOfWork, (areasOfWork) =>
@@ -36,9 +36,8 @@ export const WikiNoteworthyPersonArticle = defineKind({
 export type NoteworthyPersonArticleKind = typeof WikiNoteworthyPersonArticle.Kind.Type
 export type NoteworthyPersonEditableAttributes =
   typeof WikiNoteworthyPersonArticle.EditableAttributes.Type
-export type NoteworthyPersonMaterializedAttributes =
-  typeof WikiNoteworthyPersonArticle.MaterializedAttributes.Type
+export type NoteworthyPersonProjectedAttributes =
+  typeof WikiNoteworthyPersonArticle.ProjectedAttributes.Type
 export type NoteworthyPersonEditableArticle =
   typeof WikiNoteworthyPersonArticle.EditableArticle.Type
-export type NoteworthyPersonMaterializedRow =
-  typeof WikiNoteworthyPersonArticle.MaterializedRow.Type
+export type NoteworthyPersonProjectionRow = typeof WikiNoteworthyPersonArticle.ProjectionRow.Type

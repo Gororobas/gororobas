@@ -146,7 +146,7 @@ const makeEventSourceData = (input: {
 })
 
 describe("PublicationsRepository", () => {
-  it.effect("createPublication persists materialized row and first commit", () =>
+  it.effect("createPublication persists projection row and first commit", () =>
     Effect.gen(function* () {
       const repository = yield* PublicationsRepository
 
@@ -196,7 +196,7 @@ describe("PublicationsRepository", () => {
   )
 
   it.effect(
-    "updatePublication with HumanCrdtUpdate appends replayable commit and rematerializes post content",
+    "updatePublication with HumanCrdtUpdate appends replayable commit and rebuilds projected post content",
     () =>
       Effect.gen(function* () {
         const repository = yield* PublicationsRepository
@@ -425,7 +425,7 @@ describe("PublicationsRepository", () => {
     }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
   )
 
-  it.effect("createPublication materializes event metadata", () =>
+  it.effect("createPublication projects event metadata", () =>
     Effect.gen(function* () {
       const repository = yield* PublicationsRepository
 

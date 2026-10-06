@@ -37,7 +37,7 @@ import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
-import { materializeJunctionTable } from "../common/table-materialization.js"
+import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import {
   deletePublication,
   insertPublicationCommitRow,
@@ -77,11 +77,11 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
 
       /**
        * ======================
-       *    MATERIALIZATION
+       *    PROJECTION PERSISTENCE
        * ======================
        */
 
-      const materializePublicationRow = (input: {
+      const persistPublicationProjectionRow = (input: {
         currentCrdtFrontier: LoroDocFrontier
         metadata: PostSourceData["metadata"] | EventSourceData["metadata"]
         publicationId: PublicationId
@@ -114,7 +114,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
         })
 
-      const materializeTranslations = (input: {
+      const persistTranslationProjections = (input: {
         locales: PostSourceData["locales"]
         publicationId: PublicationId
       }) => {
@@ -136,7 +136,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
         })
 
-        return materializeJunctionTable({
+        return persistProjectionJunctionTables({
           deleteRows: sql`DELETE FROM publication_translations WHERE publication_id = ${input.publicationId}`,
           insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
             ? insertPublicationTranslationRows(rows)
@@ -144,7 +144,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
       }
 
-      const materializeTags = (input: {
+      const persistTagProjections = (input: {
         classification?: PublicationClassification
         publicationId: PublicationId
       }) => {
@@ -158,7 +158,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
         })
 
-        return materializeJunctionTable({
+        return persistProjectionJunctionTables({
           deleteRows: sql`DELETE FROM publication_tags WHERE publication_id = ${input.publicationId}`,
           insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
             ? insertPublicationTagRows(rows)
@@ -166,7 +166,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
       }
 
-      const materializeWikiArticles = (input: {
+      const persistWikiArticleProjections = (input: {
         classification?: PublicationClassification
         publicationId: PublicationId
       }) => {
@@ -180,7 +180,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
         })
 
-        return materializeJunctionTable({
+        return persistProjectionJunctionTables({
           deleteRows: sql`DELETE FROM publication_wiki_articles WHERE publication_id = ${input.publicationId}`,
           insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
             ? insertPublicationWikiArticleRows(rows)
@@ -188,25 +188,25 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
       }
 
-      const materializePublication = (input: {
+      const persistPublicationProjection = (input: {
         classification?: PublicationClassification
         currentCrdtFrontier: LoroDocFrontier
         publicationId: PublicationId
         sourceData: PublicationSourceData
       }) =>
         Effect.gen(function* () {
-          yield* materializePublicationRow({
+          yield* persistPublicationProjectionRow({
             currentCrdtFrontier: input.currentCrdtFrontier,
             metadata: input.sourceData.metadata,
             publicationId: input.publicationId,
           })
 
-          yield* materializeTranslations({
+          yield* persistTranslationProjections({
             locales: input.sourceData.locales,
             publicationId: input.publicationId,
           })
 
-          yield* materializeTags({
+          yield* persistTagProjections({
             ...(input.classification
               ? {
                   classification: input.classification,
@@ -215,7 +215,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             publicationId: input.publicationId,
           })
 
-          yield* materializeWikiArticles({
+          yield* persistWikiArticleProjections({
             ...(input.classification
               ? {
                   classification: input.classification,
@@ -264,7 +264,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
               crdtUpdate: created.initialCrdtUpdate,
               fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
             }),
-            materialize: materializePublication({
+            persistProjection: persistPublicationProjection({
               currentCrdtFrontier: created.currentCrdtFrontier,
               publicationId,
               sourceData: created.data,
@@ -359,7 +359,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
               fromCrdtFrontier: applied.fromCrdtFrontier,
               createdById: Schema.is(HumanCommit)(commit) ? commit.personId : null,
             }),
-            materialize: materializePublication({
+            persistProjection: persistPublicationProjection({
               currentCrdtFrontier: applied.nextCrdtFrontier,
               publicationId: input.publicationId,
               sourceData: applied.data,

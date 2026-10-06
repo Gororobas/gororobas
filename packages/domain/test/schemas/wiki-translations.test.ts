@@ -10,8 +10,8 @@ import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
 import { WikiArticleCrdt } from "../../src/wiki/wiki-article-crdt.js"
 import {
   WikiArticleEditableData,
-  WikiArticleTranslationMaterializedRow,
-  editableToMaterializedTranslation,
+  WikiArticleTranslationProjectionRow,
+  projectTranslation,
 } from "../../src/wiki/wiki-article.js"
 import { withEditorRichText } from "../fixtures/wiki-rich-text.js"
 
@@ -56,27 +56,27 @@ describe("Kind-specific wiki translations", () => {
     }),
   )
 
-  it("materializes origin only for plants and accepts older translations without origin", () => {
+  it("projects origin only for plants and accepts older translations without origin", () => {
     const id = Schema.decodeSync(WikiArticleId)("0199a000-0000-7000-8000-000000000001")
     const row = Option.getOrThrow(
-      editableToMaterializedTranslation({ article: plant, locale: "en", wikiArticleId: id }),
+      projectTranslation({ article: plant, locale: "en", wikiArticleId: id }),
     )
     expect(row.kind).toBe("PLANT")
     assert(row.kind === "PLANT")
     expect(row.origin).toEqual(Option.some("Central America"))
     const portuguese = Option.getOrThrow(
-      editableToMaterializedTranslation({ article: plant, locale: "pt", wikiArticleId: id }),
+      projectTranslation({ article: plant, locale: "pt", wikiArticleId: id }),
     )
     assert(portuguese.kind === "PLANT")
     expect(portuguese.origin).toEqual(Option.none())
-    expect(
-      editableToMaterializedTranslation({ article: plant, locale: "es", wikiArticleId: id }),
-    ).toEqual(Option.none())
-    const encoded = Schema.encodeSync(WikiArticleTranslationMaterializedRow)(row)
+    expect(projectTranslation({ article: plant, locale: "es", wikiArticleId: id })).toEqual(
+      Option.none(),
+    )
+    const encoded = Schema.encodeSync(WikiArticleTranslationProjectionRow)(row)
     expect(encoded.commonNames).toBe('["Pumpkin"]')
 
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test supplies excess fields to verify that fields from other wiki kinds are stripped.
-    const animal = Schema.decodeUnknownSync(WikiArticleTranslationMaterializedRow)({
+    const animal = Schema.decodeUnknownSync(WikiArticleTranslationProjectionRow)({
       ...encoded,
       kind: "ANIMAL",
       origin: null,

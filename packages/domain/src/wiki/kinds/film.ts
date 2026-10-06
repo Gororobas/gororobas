@@ -12,7 +12,7 @@ import {
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   url: OptionalColumn(UrlAsString),
   country: OptionalColumn(Schema.String),
   directors: OptionalColumn(Schema.Array(ValidName)),
@@ -26,7 +26,7 @@ export const WikiFilmArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("FILM"),
   EditableAttributes: Schema.Struct({
-    ...MaterializedAttributes.fields,
+    ...ProjectedAttributes.fields,
     directors: OptionalColumn(Schema.Array(NameInCrdtList)),
     languages: OptionalColumn(
       Schema.Array(
@@ -39,9 +39,9 @@ export const WikiFilmArticle = defineKind({
     genres: OptionalColumn(Schema.Array(NameInCrdtList)),
     tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
-  MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       ...editableAttributes,
       directors: Option.map(editableAttributes.directors, (directors) =>
         directors.map((director) => director.value),
@@ -56,6 +56,6 @@ export const WikiFilmArticle = defineKind({
 
 export type FilmArticleKind = typeof WikiFilmArticle.Kind.Type
 export type FilmEditableAttributes = typeof WikiFilmArticle.EditableAttributes.Type
-export type FilmMaterializedAttributes = typeof WikiFilmArticle.MaterializedAttributes.Type
+export type FilmProjectedAttributes = typeof WikiFilmArticle.ProjectedAttributes.Type
 export type FilmEditableArticle = typeof WikiFilmArticle.EditableArticle.Type
-export type FilmMaterializedRow = typeof WikiFilmArticle.MaterializedRow.Type
+export type FilmProjectionRow = typeof WikiFilmArticle.ProjectionRow.Type

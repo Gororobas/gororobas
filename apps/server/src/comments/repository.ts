@@ -34,7 +34,7 @@ import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
-import { materializeJunctionTable } from "../common/table-materialization.js"
+import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import { type CreateCommentInput, type UpdateCommentInput } from "./comment-repository-inputs.js"
 import {
   deleteComment,
@@ -84,11 +84,11 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
 
       /**
        * ======================
-       *    MATERIALIZATION
+       *    PROJECTION PERSISTENCE
        * ======================
        */
 
-      const materializeCommentRow = (input: {
+      const persistCommentProjectionRow = (input: {
         commentId: CommentId
         currentCrdtFrontier: LoroDocFrontier
         moderationStatus: CommentRow["moderationStatus"]
@@ -111,7 +111,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           })
         })
 
-      const materializeTranslations = (input: {
+      const persistTranslationProjections = (input: {
         commentId: CommentId
         locales: SourceCommentData["locales"]
       }) => {
@@ -133,7 +133,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           })
         })
 
-        return materializeJunctionTable({
+        return persistProjectionJunctionTables({
           deleteRows: sql`DELETE FROM comment_translations WHERE comment_id = ${input.commentId}`,
           insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
             ? insertCommentTranslationRows(rows)
@@ -141,7 +141,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         })
       }
 
-      const materializeComment = (input: {
+      const persistCommentProjection = (input: {
         commentId: CommentId
         currentCrdtFrontier: LoroDocFrontier
         moderationStatus: CommentRow["moderationStatus"]
@@ -151,7 +151,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         sourceData: SourceCommentData
       }) =>
         Effect.gen(function* () {
-          yield* materializeCommentRow({
+          yield* persistCommentProjectionRow({
             commentId: input.commentId,
             currentCrdtFrontier: input.currentCrdtFrontier,
             moderationStatus: input.moderationStatus,
@@ -160,7 +160,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             publicationId: input.publicationId,
           })
 
-          yield* materializeTranslations({
+          yield* persistTranslationProjections({
             commentId: input.commentId,
             locales: input.sourceData.locales,
           })
@@ -200,7 +200,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               crdtUpdate: created.initialCrdtUpdate,
               fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
             }),
-            materialize: materializeComment({
+            persistProjection: persistCommentProjection({
               commentId,
               currentCrdtFrontier: created.currentCrdtFrontier,
               moderationStatus: "APPROVED_BY_DEFAULT",
@@ -293,7 +293,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               crdtUpdate: evolved.crdtUpdate,
               fromCrdtFrontier: evolved.fromCrdtFrontier,
             }),
-            materialize: materializeComment({
+            persistProjection: persistCommentProjection({
               commentId: input.commentId,
               currentCrdtFrontier: evolved.nextCrdtFrontier,
               moderationStatus: commentRow.moderationStatus,

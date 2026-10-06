@@ -12,7 +12,7 @@ const conceptTagOperations = makeStringSetEditOperations("ConceptTag")({
       document
         .getMap("attributes")
         .ensureMergeableMap(
-          "tags" satisfies keyof typeof WikiConceptArticle.MaterializedAttributes.Type,
+          "tags" satisfies keyof typeof WikiConceptArticle.ProjectedAttributes.Type,
         ),
     ),
 })

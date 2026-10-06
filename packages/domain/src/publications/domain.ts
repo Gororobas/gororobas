@@ -89,21 +89,21 @@ const PublicationSourceLocales = Schema.Struct({
   pt: Schema.optional(PublicationLocalizedData),
 })
 
-/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+/** Data stored in Loro CRDT documents, the source of the persisted database projections */
 export const PostSourceData = Schema.Struct({
   locales: PublicationSourceLocales,
   metadata: PostMetadata,
 })
 export type PostSourceData = typeof PostSourceData.Type
 
-/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+/** Data stored in Loro CRDT documents, the source of the persisted database projections */
 export const EventSourceData = Schema.Struct({
   locales: PublicationSourceLocales,
   metadata: EventMetadata,
 })
 export type EventSourceData = typeof EventSourceData.Type
 
-/** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
+/** Data stored in Loro CRDT documents, the source of the persisted database projections */
 export const PublicationSourceData = Schema.Union([PostSourceData, EventSourceData])
 export type PublicationSourceData = typeof PublicationSourceData.Type
 

@@ -4,7 +4,7 @@ import { ToolUsage } from "../../common/enums.js"
 import { CrdtLiteralSet, OptionalColumn } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   usage: OptionalColumn(Schema.Array(ToolUsage)),
 })
 
@@ -14,15 +14,15 @@ export const WikiToolArticle = defineKind({
   EditableAttributes: Schema.Struct({
     usage: OptionalColumn(CrdtLiteralSet(ToolUsage)),
   }),
-  MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       usage: Option.map(editableAttributes.usage, (usage) => Array.from(usage)),
     }),
 })
 
 export type ToolArticleKind = typeof WikiToolArticle.Kind.Type
 export type ToolEditableAttributes = typeof WikiToolArticle.EditableAttributes.Type
-export type ToolMaterializedAttributes = typeof WikiToolArticle.MaterializedAttributes.Type
+export type ToolProjectedAttributes = typeof WikiToolArticle.ProjectedAttributes.Type
 export type ToolEditableArticle = typeof WikiToolArticle.EditableArticle.Type
-export type ToolMaterializedRow = typeof WikiToolArticle.MaterializedRow.Type
+export type ToolProjectionRow = typeof WikiToolArticle.ProjectionRow.Type

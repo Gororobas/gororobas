@@ -16,7 +16,7 @@
  */
 import {
   stringToHandle,
-  WikiArticleMaterializedRow,
+  WikiArticleProjectionRow,
   type Handle,
   type WikiArticleId,
 } from "@gororobas/domain"
@@ -74,8 +74,8 @@ export const resolveWikiArticleExtraction = Effect.fn("resolveWikiArticleExtract
   const common = toCommonExtractionFields(extraction)
 
   const handleMatch = yield* Effect.reduce(
-    () => Option.none<WikiArticleMaterializedRow & { handle: Handle }>(),
-    (found: Option.Option<WikiArticleMaterializedRow & { handle: Handle }>, candidate: string) => {
+    () => Option.none<WikiArticleProjectionRow & { handle: Handle }>(),
+    (found: Option.Option<WikiArticleProjectionRow & { handle: Handle }>, candidate: string) => {
       if (Option.isSome(found)) return Effect.succeed(found)
 
       return Effect.gen(function* () {

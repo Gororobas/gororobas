@@ -379,7 +379,7 @@ CREATE TABLE wiki_article_revisions (
 
 CREATE INDEX idx_wiki_article_revisions_article_evaluation ON wiki_article_revisions (wiki_article_id, evaluation);
 
--- The core queryable data, materialized from the CRDT.
+-- Queryable projection of the canonical CRDT state.
 CREATE TABLE wiki_articles (
   id text PRIMARY KEY,
   kind text NOT NULL, -- WikiArticleKind
@@ -395,7 +395,7 @@ CREATE UNIQUE INDEX idx_wiki_articles_id_kind ON wiki_articles (id, kind);
 
 CREATE INDEX idx_wiki_articles_kind_status ON wiki_articles (kind, status);
 
--- Per-locale contributor-editable data, materialized from the CRDT.
+-- Per-locale queryable projection of contributor-editable CRDT data.
 CREATE TABLE wiki_article_translations (
   wiki_article_id text NOT NULL,
   kind text NOT NULL,
@@ -477,7 +477,7 @@ CREATE TABLE publication_commits (
   FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
--- The core queryable data, materialized from the CRDT
+-- Queryable projection of the canonical CRDT state.
 CREATE TABLE publications (
   id text PRIMARY KEY,
   current_crdt_frontier json NOT NULL,
@@ -561,7 +561,7 @@ CREATE TABLE comment_commits (
   FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
--- The core queryable data, materialized from the CRDT
+-- Queryable projection of the canonical CRDT state.
 CREATE TABLE comments (
   id text PRIMARY KEY,
   publication_id text NOT NULL,

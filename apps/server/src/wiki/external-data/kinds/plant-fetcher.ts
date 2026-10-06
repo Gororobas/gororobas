@@ -3,7 +3,7 @@ import {
   GbifTaxonId,
   Locale,
   type WikiArticleEditableData,
-  type WikiArticleMaterializedRow,
+  type WikiArticleProjectionRow,
   ExternalDataFetchError,
   GbifIdentifier,
   GbifPlantResult,
@@ -124,7 +124,7 @@ export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataI
 })
 
 export const plantToExternalDataInputs = (
-  article: Extract<WikiArticleEditableData | WikiArticleMaterializedRow, { kind: "PLANT" }>,
+  article: Extract<WikiArticleEditableData | WikiArticleProjectionRow, { kind: "PLANT" }>,
 ): typeof PlantExternalDataInputs.Type => ({
   kind: "PLANT",
   wikidataId: article.attributes.wikidataId,

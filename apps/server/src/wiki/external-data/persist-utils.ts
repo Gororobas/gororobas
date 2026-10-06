@@ -1,6 +1,6 @@
 import {
   type WikiArticleEditableData,
-  type WikiArticleMaterializedRow,
+  type WikiArticleProjectionRow,
   LoroDocFrontier,
   type ExternalDataFetchRequest,
   ExternalDataInputs,
@@ -13,7 +13,7 @@ import { bookToExternalDataInputs } from "./kinds/book-fetcher.js"
 import { plantToExternalDataInputs } from "./kinds/plant-fetcher.js"
 
 export const articleToExternalDataInputs = (
-  article: WikiArticleEditableData | WikiArticleMaterializedRow,
+  article: WikiArticleEditableData | WikiArticleProjectionRow,
 ): ExternalDataInputs =>
   Match.value(article).pipe(
     Match.when({ kind: "PLANT" }, plantToExternalDataInputs),
@@ -21,8 +21,8 @@ export const articleToExternalDataInputs = (
     Match.orElse(() => ({ kind: "NONE" as const })),
   )
 
-export type ExternalDataArticle = (WikiArticleEditableData | WikiArticleMaterializedRow) &
-  Pick<WikiArticleMaterializedRow, "id" | "currentCrdtFrontier">
+export type ExternalDataArticle = (WikiArticleEditableData | WikiArticleProjectionRow) &
+  Pick<WikiArticleProjectionRow, "id" | "currentCrdtFrontier">
 
 export const buildExternalDataRequest = (
   article: ExternalDataArticle,

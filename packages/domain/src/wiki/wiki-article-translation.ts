@@ -21,8 +21,8 @@ export const WikiArticleEditableTranslations = Schema.Struct({
 
 export type WikiArticleEditableTranslations = typeof WikiArticleEditableTranslations.Type
 
-/** Per-locale materialization of contributor-editable names and content. */
-export const commonWikiArticleTranslationMaterializedFields = {
+/** Per-locale projection of contributor-editable names and content. */
+export const commonWikiArticleTranslationProjectionFields = {
   ...WikiArticleEditableTranslation.fields,
   commonNames: Schema.fromJsonString(Schema.Array(ValidName)),
   content: OptionalColumn(Schema.fromJsonString(TiptapDocument)),

@@ -1,6 +1,6 @@
 import {
   type WikiArticleEditableData,
-  type WikiArticleMaterializedRow,
+  type WikiArticleProjectionRow,
   ExternalDataFetchError,
   BookResult,
   BookExternalDataInputs,
@@ -58,7 +58,7 @@ export const fetchBook = Effect.fn(function* (inputs: typeof BookExternalDataInp
 })
 
 export const bookToExternalDataInputs = (
-  article: Extract<WikiArticleEditableData | WikiArticleMaterializedRow, { kind: "BOOK" }>,
+  article: Extract<WikiArticleEditableData | WikiArticleProjectionRow, { kind: "BOOK" }>,
 ): typeof BookExternalDataInputs.Type => ({
   kind: "BOOK",
   googleBooksVolumeId: article.attributes.googleBooksVolumeId,

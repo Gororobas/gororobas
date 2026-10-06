@@ -3,7 +3,7 @@
  *
  * Defines the shape of the classification JSON stored on `publication_crdts.classification`.
  * This data is derived (not user-authored) and stored outside the LoroDoc to avoid
- * CRDT merge complications. It gets materialized into `publication_tags`.
+ * CRDT merge complications. It is projected into `publication_tags`.
  */
 import { Schema } from "effect"
 

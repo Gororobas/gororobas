@@ -3,12 +3,12 @@ import {
   OptionalColumn,
   TiptapDocument,
   WikiArticleQueriedPageData,
-  WikiArticleTranslationMaterializedRow,
+  WikiArticleTranslationProjectionRow,
   WikiArticleCrdtRow,
-  WikiArticleHandleMaterializedRow,
+  WikiArticleHandleProjectionRow,
   WikiArticleId,
   WikiArticleLookup,
-  WikiArticleMaterializedRow,
+  WikiArticleProjectionRow,
   WikiArticleRevisionId,
   WikiArticleRevisionRow,
 } from "@gororobas/domain"
@@ -19,13 +19,13 @@ import { SqlClient } from "effect/sql/SqlClient"
 
 export const findDatabaseRowById = SqlSchema.findOneOption({
   Request: WikiArticleId,
-  Result: WikiArticleMaterializedRow,
+  Result: WikiArticleProjectionRow,
   execute: (id) => SqlClient.use((sql) => sql`SELECT * FROM wiki_articles WHERE id = ${id}`),
 })
 
 export const findDatabaseRowByHandleAndKind = SqlSchema.findOneOption({
   Request: WikiArticleLookup,
-  Result: WikiArticleMaterializedRow,
+  Result: WikiArticleProjectionRow,
   execute: ({ handle, kind }) =>
     SqlClient.use(
       (sql) => sql`
@@ -40,7 +40,7 @@ export const findDatabaseRowByHandleAndKind = SqlSchema.findOneOption({
 
 export const findDatabaseRowByHandle = SqlSchema.findOneOption({
   Request: Schema.String,
-  Result: WikiArticleMaterializedRow,
+  Result: WikiArticleProjectionRow,
   execute: (handle) =>
     SqlClient.use(
       (sql) => sql`
@@ -72,7 +72,7 @@ export const findWikiArticleBySearchableName = SqlSchema.findOneOption({
 
 export const listDatabaseRows = SqlSchema.findAll({
   Request: Schema.Void,
-  Result: WikiArticleMaterializedRow,
+  Result: WikiArticleProjectionRow,
   execute: () => SqlClient.use((sql) => sql`SELECT * FROM wiki_articles ORDER BY created_at ASC`),
 })
 
@@ -104,7 +104,7 @@ export const listPendingRevisionsByWikiArticleId = SqlSchema.findAll({
 
 export const findHandleOwner = SqlSchema.findOneOption({
   Request: WikiArticleLookup,
-  Result: WikiArticleHandleMaterializedRow,
+  Result: WikiArticleHandleProjectionRow,
   execute: ({ handle, kind }) =>
     SqlClient.use(
       (sql) => sql`
@@ -116,7 +116,7 @@ export const findHandleOwner = SqlSchema.findOneOption({
 
 export const findTranslationRows = SqlSchema.findAll({
   Request: WikiArticleId,
-  Result: WikiArticleTranslationMaterializedRow,
+  Result: WikiArticleTranslationProjectionRow,
   execute: (id) =>
     SqlClient.use(
       (sql) => sql`SELECT * FROM wiki_article_translations WHERE wiki_article_id = ${id}`,

@@ -5,14 +5,14 @@ import { LoroDoc } from "loro-crdt"
 
 import { WikiArticleId } from "../../src/common/ids.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
-import { coreWikiArticleMaterializedRowFields } from "../../src/wiki/kinds/define-kind.js"
+import { coreWikiArticleProjectionRowFields } from "../../src/wiki/kinds/define-kind.js"
 import { WikiPlantCultivarArticleCrdtOperations } from "../../src/wiki/kinds/plant-cultivar.crdt.js"
 import { CultivarProperty, WikiPlantCultivarArticle } from "../../src/wiki/kinds/plant-cultivar.js"
 import { WikiArticleCrdt } from "../../src/wiki/wiki-article-crdt.js"
 import {
   WikiArticleEditableData,
   WikiArticleKind,
-  editableToMaterializedArticle,
+  projectArticle,
 } from "../../src/wiki/wiki-article.js"
 
 const Attributes = WikiPlantCultivarArticle.EditableAttributes
@@ -91,18 +91,18 @@ describe("Plant cultivar wiki kind", () => {
           const decoded = yield* Schema.decodeEffect(Schema.fromJsonString(Attributes))(json)
           return (
             deepEquals(attributes, decoded) &&
-            deepEquals(attributes, WikiPlantCultivarArticle.materializeAttributes(attributes))
+            deepEquals(attributes, WikiPlantCultivarArticle.projectAttributes(attributes))
           )
         }),
     }),
   )
 
-  it.effect("participates in wiki decoding and materialization", () =>
+  it.effect("participates in wiki decoding and projection", () =>
     assertPropertyEffect({
       arbitrary: Arbitrary.schema(
         Schema.Struct({
           article: WikiPlantCultivarArticle.EditableArticle,
-          metadata: Schema.Struct(coreWikiArticleMaterializedRowFields),
+          metadata: Schema.Struct(coreWikiArticleProjectionRowFields),
         }),
       ),
       predicate: ({ article, metadata }) =>
@@ -111,12 +111,12 @@ describe("Plant cultivar wiki kind", () => {
             article,
           )
           const decoded = yield* Schema.decodeEffect(WikiArticleEditableData)(encoded)
-          const materialized = editableToMaterializedArticle(decoded, metadata)
+          const projected = projectArticle(decoded, metadata)
 
           return (
             Schema.is(WikiArticleKind)("PLANT_CULTIVAR") &&
-            materialized.kind === "PLANT_CULTIVAR" &&
-            deepEquals(materialized.attributes, article.attributes)
+            projected.kind === "PLANT_CULTIVAR" &&
+            deepEquals(projected.attributes, article.attributes)
           )
         }),
     }),

@@ -6,7 +6,7 @@ import { SqlClient } from "effect/sql"
  *
  * 1. Persisting the CRDT row
  * 2. Adding an initial commit or revision
- * 3. Materializing the indexed tables to query the source data through SQL
+ * 3. Persisting the indexed projections to query the source data through SQL
  *
  * This method is mostly for documentation and doesn't do anything fancy,
  * it just wraps them in a SQL transaction to ensure operation consistency.
@@ -14,13 +14,13 @@ import { SqlClient } from "effect/sql"
 export const persistCrdtDocumentCreation = <R1, E1, R2, E2, R3, E3>(input: {
   insertCrdt: Effect.Effect<void, E1, R1>
   insertCommitOrRevision: Effect.Effect<void, E2, R2>
-  materialize: Effect.Effect<void, E3, R3>
+  persistProjection: Effect.Effect<void, E3, R3>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
     yield* sql.withTransaction(
-      Effect.all([input.insertCrdt, input.insertCommitOrRevision, input.materialize], {
+      Effect.all([input.insertCrdt, input.insertCommitOrRevision, input.persistProjection], {
         concurrency: 1,
       }),
     )
@@ -31,7 +31,7 @@ export const persistCrdtDocumentCreation = <R1, E1, R2, E2, R3, E3>(input: {
  *
  * 1. Persisting the CRDT row
  * 2. Adding a commit or revision
- * 3. Materializing the indexed tables to query the source data through SQL
+ * 3. Persisting the indexed projections to query the source data through SQL
  *
  * This method is mostly for documentation and doesn't do anything fancy,
  * it just wraps them in a SQL transaction to ensure operation consistency.
@@ -44,14 +44,17 @@ export const persistCrdtDocumentUpdate = <R1, E1, R2, E2, R3, E3>(input: {
    */
   updateCrdtRow: Effect.Effect<void, E1, R1>
   insertCommitOrUpdateRevision: Effect.Effect<void, E2, R2>
-  materialize: Effect.Effect<void, E3, R3>
+  persistProjection: Effect.Effect<void, E3, R3>
 }) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient
 
     yield* sql.withTransaction(
-      Effect.all([input.updateCrdtRow, input.insertCommitOrUpdateRevision, input.materialize], {
-        concurrency: 1,
-      }),
+      Effect.all(
+        [input.updateCrdtRow, input.insertCommitOrUpdateRevision, input.persistProjection],
+        {
+          concurrency: 1,
+        },
+      ),
     )
   })

@@ -72,7 +72,7 @@ const makeCommentSourceData = (content: TiptapDocument): SourceCommentData => ({
 })
 
 describe("CommentsRepository", () => {
-  it.effect("createComment persists materialized row and first commit", () =>
+  it.effect("createComment persists projection row and first commit", () =>
     Effect.gen(function* () {
       const comments = yield* CommentsRepository
       const publications = yield* PublicationsRepository

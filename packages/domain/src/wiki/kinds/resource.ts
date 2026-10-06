@@ -5,7 +5,7 @@ import { TagId } from "../../common/ids.js"
 import { CrdtBrandedStringSet, OptionalColumn } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   format: ResourceFormat,
   url: Schema.URLFromString,
   creditLine: OptionalColumn(Schema.String),
@@ -16,12 +16,12 @@ export const WikiResourceArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("RESOURCE"),
   EditableAttributes: Schema.Struct({
-    ...MaterializedAttributes.fields,
+    ...ProjectedAttributes.fields,
     tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
-  MaterializedAttributes: MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes: ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       ...editableAttributes,
       tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
@@ -29,6 +29,6 @@ export const WikiResourceArticle = defineKind({
 
 export type ResourceArticleKind = typeof WikiResourceArticle.Kind.Type
 export type ResourceEditableAttributes = typeof WikiResourceArticle.EditableAttributes.Type
-export type ResourceMaterializedAttributes = typeof WikiResourceArticle.MaterializedAttributes.Type
+export type ResourceProjectedAttributes = typeof WikiResourceArticle.ProjectedAttributes.Type
 export type ResourceEditableArticle = typeof WikiResourceArticle.EditableArticle.Type
-export type ResourceMaterializedRow = typeof WikiResourceArticle.MaterializedRow.Type
+export type ResourceProjectionRow = typeof WikiResourceArticle.ProjectionRow.Type

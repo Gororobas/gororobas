@@ -12,7 +12,7 @@ import {
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   googleBooksVolumeId: OptionalColumn(GoogleBooksVolumeId),
   authors: OptionalColumn(Schema.Array(ValidName)),
   tags: OptionalColumn(Schema.Array(TagId)),
@@ -30,13 +30,13 @@ export const WikiBookArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("BOOK"),
   EditableAttributes: Schema.Struct({
-    ...MaterializedAttributes.fields,
+    ...ProjectedAttributes.fields,
     authors: OptionalColumn(Schema.Array(NameInCrdtList)),
     tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
-  MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       ...editableAttributes,
       authors: Option.map(editableAttributes.authors, (authors) =>
         authors.map((author) => author.value),
@@ -47,6 +47,6 @@ export const WikiBookArticle = defineKind({
 
 export type BookArticleKind = typeof WikiBookArticle.Kind.Type
 export type BookEditableAttributes = typeof WikiBookArticle.EditableAttributes.Type
-export type BookMaterializedAttributes = typeof WikiBookArticle.MaterializedAttributes.Type
+export type BookProjectedAttributes = typeof WikiBookArticle.ProjectedAttributes.Type
 export type BookEditableArticle = typeof WikiBookArticle.EditableArticle.Type
-export type BookMaterializedRow = typeof WikiBookArticle.MaterializedRow.Type
+export type BookProjectionRow = typeof WikiBookArticle.ProjectionRow.Type

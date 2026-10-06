@@ -8,7 +8,7 @@ import { describe, it } from "@effect/vitest"
 import {
   WikiArticleEditableData,
   WikiArticleEditableTranslation,
-  WikiArticleTranslationMaterializedRow,
+  WikiArticleTranslationProjectionRow,
 } from "@gororobas/domain"
 import { DateTime, Effect, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
@@ -31,8 +31,8 @@ import { SuggestedTagRow, SuggestedTagSourceRow, TagRow } from "../../src/tags/d
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import {
   WikiArticleCrdtRow,
-  WikiArticleHandleMaterializedRow,
-  WikiArticleMaterializedRow,
+  WikiArticleHandleProjectionRow,
+  WikiArticleProjectionRow,
   WikiArticleRevisionRow,
 } from "../../src/wiki/wiki-article.js"
 
@@ -52,10 +52,10 @@ const rowSchemas = [
   { name: "SuggestedTagSourceRow", schema: SuggestedTagSourceRow },
   { name: "TagRow", schema: TagRow },
   { name: "WikiArticleCrdtRow", schema: WikiArticleCrdtRow },
-  { name: "WikiArticleHandleRow", schema: WikiArticleHandleMaterializedRow },
-  { name: "WikiArticleMaterializedRow", schema: WikiArticleMaterializedRow },
+  { name: "WikiArticleHandleRow", schema: WikiArticleHandleProjectionRow },
+  { name: "WikiArticleProjectionRow", schema: WikiArticleProjectionRow },
   { name: "WikiArticleRevisionRow", schema: WikiArticleRevisionRow },
-  { name: "WikiArticleTranslationMaterializedRow", schema: WikiArticleTranslationMaterializedRow },
+  { name: "WikiArticleTranslationProjectionRow", schema: WikiArticleTranslationProjectionRow },
   { name: "WikiArticleEditableTranslation", schema: WikiArticleEditableTranslation },
   { name: "WikiArticleEditableData", schema: WikiArticleEditableData },
 ] as const

@@ -13,7 +13,7 @@ export const WikiArticlesCreate = Schema.Struct({
   event: Schema.Literal("wiki_articles.create"),
   wiki_article_id: WikiArticleId,
   loro_snapshot: Schema.Uint8ArrayFromBase64,
-  materialized_view: Schema.Struct({ kind: Schema.String, handle: Schema.String }),
+  projection: Schema.Struct({ kind: Schema.String, handle: Schema.String }),
 })
 
 export const WikiArticlesUpdate = Schema.Struct({
@@ -44,7 +44,7 @@ export const PublicationsCreate = Schema.Struct({
     Schema.brand("PublicationId"),
   ),
   loro_snapshot: Schema.Uint8ArrayFromBase64,
-  materialized_view: Schema.Struct({
+  projection: Schema.Struct({
     handle: Schema.String,
     type: Schema.String,
     visibility: Schema.String,

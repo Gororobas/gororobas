@@ -2,8 +2,8 @@ import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   CreateWikiArticleInput,
   CreateWikiArticleRevisionInput,
-  editableToMaterializedArticle,
-  editableToMaterializedTranslation,
+  projectArticle,
+  projectTranslation,
   EMPTY_LORO_DOC_FRONTIER,
   EvaluateWikiArticleRevisionInput,
   HumanCommit,
@@ -14,7 +14,7 @@ import {
   NameInCrdtList,
   stringToHandle,
   WikiArticleEditableData,
-  WikiArticleHandleMaterializedRow,
+  WikiArticleHandleProjectionRow,
   WikiArticleId,
   WikiArticleKind,
   WikiArticleNotFoundError,
@@ -31,7 +31,7 @@ import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
-import { materializeJunctionTable } from "../common/table-materialization.js"
+import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
   insertCrdtRow,
@@ -134,20 +134,20 @@ const chooseAvailableHandle = (input: {
     return Option.getOrElse(available, () => fallback)
   })
 
-const materializeTranslations = Effect.fn("materializeTranslations")(function* (input: {
+const persistTranslationProjections = Effect.fn("persistTranslationProjections")(function* (input: {
   sourceData: WikiArticleEditableData
   wikiArticleId: WikiArticleId
 }) {
   const sql = yield* SqlClient.SqlClient
 
-  return yield* materializeJunctionTable({
+  return yield* persistProjectionJunctionTables({
     deleteRows: sql`
       DELETE FROM wiki_article_translations WHERE wiki_article_id = ${input.wikiArticleId}
     `,
     insertRows: insertTranslationRows(
       Locale.literals.flatMap((locale) =>
         Option.toArray(
-          editableToMaterializedTranslation({
+          projectTranslation({
             article: input.sourceData,
             locale: locale,
             wikiArticleId: input.wikiArticleId,
@@ -170,7 +170,7 @@ const getTranslation = (sourceData: WikiArticleEditableData, locale: Locale) => 
   return existingLocale ? sourceData.translations[existingLocale] : undefined
 }
 
-const materializeHandles = Effect.fn("materializeHandles")(function* (input: {
+const persistHandleProjections = Effect.fn("persistHandleProjections")(function* (input: {
   sourceData: WikiArticleEditableData
   wikiArticleId: WikiArticleId
 }) {
@@ -189,7 +189,7 @@ const materializeHandles = Effect.fn("materializeHandles")(function* (input: {
         })
 
         return Result.succeed(
-          WikiArticleHandleMaterializedRow.make({
+          WikiArticleHandleProjectionRow.make({
             locale,
             handle,
             kind: input.sourceData.kind,
@@ -201,7 +201,7 @@ const materializeHandles = Effect.fn("materializeHandles")(function* (input: {
     { concurrency: 1 },
   ).pipe(Effect.map(EffectArray.getSuccesses))
 
-  return yield* materializeJunctionTable({
+  return yield* persistProjectionJunctionTables({
     deleteRows: sql`
       DELETE FROM wiki_article_handles WHERE wiki_article_id = ${input.wikiArticleId}
     `,
@@ -211,7 +211,7 @@ const materializeHandles = Effect.fn("materializeHandles")(function* (input: {
   })
 })
 
-const materializeArticle = (input: {
+const persistArticleProjection = (input: {
   currentCrdtFrontier: LoroDocFrontier
   sourceData: WikiArticleEditableData
   status: WikiArticleStatus
@@ -226,7 +226,7 @@ const materializeArticle = (input: {
     })
 
     yield* upsertArticleRow(
-      editableToMaterializedArticle(input.sourceData, {
+      projectArticle(input.sourceData, {
         createdAt,
         currentCrdtFrontier: input.currentCrdtFrontier,
         id: input.wikiArticleId,
@@ -235,8 +235,8 @@ const materializeArticle = (input: {
       }),
     )
 
-    yield* materializeHandles(input)
-    yield* materializeTranslations(input)
+    yield* persistHandleProjections(input)
+    yield* persistTranslationProjections(input)
   })
 
 const createWikiArticle = (
@@ -271,7 +271,7 @@ const createWikiArticle = (
           evaluation: "APPROVED",
           evaluationReason: Option.none(),
         }),
-        materialize: materializeArticle({
+        persistProjection: persistArticleProjection({
           currentCrdtFrontier: created.currentCrdtFrontier,
           sourceData: created.data,
           status: input.status,
@@ -393,7 +393,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
           updatedAt: now,
         }),
         insertCommitOrUpdateRevision: updateRevisionRow(evaluatedRevision),
-        materialize: materializeArticle({
+        persistProjection: persistArticleProjection({
           currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
           sourceData: updated.data,
           status: article.status,

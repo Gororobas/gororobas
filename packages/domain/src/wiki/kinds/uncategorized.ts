@@ -3,7 +3,7 @@ import { Schema } from "effect"
 import { OptionalColumn, ValidName } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   suggestedKind: OptionalColumn(ValidName),
 })
 
@@ -13,9 +13,9 @@ export const WikiUncategorizedArticle = defineKind({
   EditableAttributes: Schema.Struct({
     suggestedKind: OptionalColumn(ValidName),
   }),
-  MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       suggestedKind: editableAttributes.suggestedKind,
     }),
 })
@@ -23,7 +23,7 @@ export const WikiUncategorizedArticle = defineKind({
 export type UncategorizedArticleKind = typeof WikiUncategorizedArticle.Kind.Type
 export type UncategorizedEditableAttributes =
   typeof WikiUncategorizedArticle.EditableAttributes.Type
-export type UncategorizedMaterializedAttributes =
-  typeof WikiUncategorizedArticle.MaterializedAttributes.Type
+export type UncategorizedProjectedAttributes =
+  typeof WikiUncategorizedArticle.ProjectedAttributes.Type
 export type UncategorizedEditableArticle = typeof WikiUncategorizedArticle.EditableArticle.Type
-export type UncategorizedMaterializedRow = typeof WikiUncategorizedArticle.MaterializedRow.Type
+export type UncategorizedProjectionRow = typeof WikiUncategorizedArticle.ProjectionRow.Type

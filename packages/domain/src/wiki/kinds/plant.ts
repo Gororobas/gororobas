@@ -29,7 +29,7 @@ const plantUniversalAttributes = {
   temperatureMin: OptionalColumn(TemperatureInCelsius),
 }
 
-const MaterializedAttributes = Schema.Struct({
+const ProjectedAttributes = Schema.Struct({
   ...plantUniversalAttributes,
   scientificNames: OptionalColumn(Schema.Array(ValidName)),
   edibleParts: OptionalColumn(Schema.Array(EdiblePlantPart)),
@@ -51,9 +51,9 @@ export const WikiPlantArticle = defineKind({
     strata: OptionalColumn(CrdtLiteralSet(AgroforestryStratum)),
     usage: OptionalColumn(CrdtLiteralSet(PlantUsage)),
   }),
-  MaterializedAttributes,
-  materializeAttributes: (editableAttributes) =>
-    MaterializedAttributes.make({
+  ProjectedAttributes,
+  projectAttributes: (editableAttributes) =>
+    ProjectedAttributes.make({
       wikidataId: editableAttributes.wikidataId,
       developmentCycleMax: editableAttributes.developmentCycleMax,
       developmentCycleMin: editableAttributes.developmentCycleMin,
@@ -76,6 +76,6 @@ export const WikiPlantArticle = defineKind({
 
 export type PlantArticleKind = typeof WikiPlantArticle.Kind.Type
 export type PlantEditableAttributes = typeof WikiPlantArticle.EditableAttributes.Type
-export type PlantMaterializedAttributes = typeof WikiPlantArticle.MaterializedAttributes.Type
+export type PlantProjectedAttributes = typeof WikiPlantArticle.ProjectedAttributes.Type
 export type PlantEditableArticle = typeof WikiPlantArticle.EditableArticle.Type
-export type PlantMaterializedRow = typeof WikiPlantArticle.MaterializedRow.Type
+export type PlantProjectionRow = typeof WikiPlantArticle.ProjectionRow.Type

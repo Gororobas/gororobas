@@ -18,7 +18,7 @@ This plan outlines the comprehensive migration from Gel/EdgeDB to SQLite with Ef
 - **Profiles**: Unified `profiles` table with people/organizations
 - **CRDT-based**: vegetable_crdts, resource_crdts, publication_crdts with Loro documents
 - **Revisions**: vegetable_revisions, resource_revisions for contribution workflow
-- **Materialized**: Queryable tables derived from CRDTs
+- **Projections**: Queryable tables derived from CRDTs
 - **Junction Tables**: Normalized many-to-many relationships
 
 ## Schema Mapping Overview
@@ -30,7 +30,7 @@ This plan outlines the comprehensive migration from Gel/EdgeDB to SQLite with Ef
 | `Source` | `image_credits` + `resource_credits` | Split into separate credit tables |
 | `Tag` | `tags` | Direct mapping, `category` → `cluster` |
 | `Image` | `images` + `image_credits` | Main image data + separate credits table |
-| `Vegetable` | `vegetable_crdts` + `vegetables` + `vegetable_translations` + junction tables | CRDT-based with materialized views |
+| `Vegetable` | `vegetable_crdts` + `vegetables` + `vegetable_translations` + junction tables | CRDT-based with persisted projections |
 | `VegetableVariety` | `vegetable_varieties` + `vegetable_variety_translations` + `vegetable_variety_photos` | Standalone with translations and photos |
 | `VegetableTip` | `publication_crdts` + `publications` + `publication_translations` + `publication_tags` | Tips become post publications with tip subject becoming tag |
 | `VegetableFriendship` | **Dropped** | Feature removed in new schema |
@@ -86,7 +86,7 @@ interface VegetablesRepository {
     crdt_update: Uint8Array
   }): Effect.Effect<VegetableRevisionId>
   
-  materialize(data: {
+  persistProjection(data: {
     vegetable_id: VegetableId
     loro_crdt: Uint8Array
     source_data: SourceVegetableData
@@ -98,7 +98,7 @@ interface VegetablesRepository {
 **Migration Process:**
 1. **Initial Creation**: Use `createFirstVersion` for the vegetable's initial state
 2. **Sequential Edits**: Use `createRevision` for each historical change
-3. **Materialization**: Automatic materialization through repository methods
+3. **Projection**: Automatic projection through repository methods
 4. **Resource Migration**: Simple creation-only process for resources
 
 ### 3. MigrationContext Service
@@ -280,7 +280,7 @@ The server owns signup and sign-in through Yielded magic-link proofs. Import acc
 ### Step 4: Repository Integration
 1. Implement `createFirstVersion` wrapper for migration
 2. Implement `createRevision` wrapper for migration
-3. Create materialization integration
+3. Create projection integration
 4. Add transaction handling and rollback capability
 
 ### Step 5: Migration Execution
