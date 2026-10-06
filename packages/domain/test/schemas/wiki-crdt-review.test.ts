@@ -7,11 +7,7 @@ import { toLoroString, toLoroValue } from "../../src/crdts/loro-values.js"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { assertPropertyEffect } from "../../src/testing.js"
 import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
-import {
-  applyWikiArticleEdit,
-  createWikiArticleCrdtDocument,
-  parseWikiArticleCrdtUpdate,
-} from "../../src/wiki/wiki-article-crdt.js"
+import { WikiArticleCrdt } from "../../src/wiki/wiki-article-crdt.js"
 import { WikiArticleEditableData } from "../../src/wiki/wiki-article.js"
 import { withEditorRichText } from "../fixtures/wiki-rich-text.js"
 
@@ -45,8 +41,8 @@ describe("Wiki CRDT review stress tests", () => {
       } as const
 
       const article = decode(input)
-      const created = yield* createWikiArticleCrdtDocument(article)
-      const parsed = yield* parseWikiArticleCrdtUpdate({
+      const created = yield* WikiArticleCrdt.create(article)
+      const parsed = yield* WikiArticleCrdt.parseUpdate({
         snapshot: created.crdtSnapshot,
         crdtUpdate: created.initialCrdtUpdate,
       })
@@ -79,9 +75,9 @@ describe("Wiki CRDT review stress tests", () => {
           })
 
           expect(raw.translations.en?.origin).toEqual(Option.some(origin))
-          const stored = yield* createWikiArticleCrdtDocument(raw)
+          const stored = yield* WikiArticleCrdt.create(raw)
           const document = snapshotToLoroDoc(stored.crdtSnapshot)
-          const projected = yield* parseWikiArticleCrdtUpdate({
+          const projected = yield* WikiArticleCrdt.parseUpdate({
             snapshot: stored.crdtSnapshot,
             crdtUpdate: loroDocToUpdate(document),
           })
@@ -103,13 +99,13 @@ describe("Wiki CRDT review stress tests", () => {
             ],
           })
 
-          yield* applyWikiArticleEdit(document, {
+          yield* WikiArticleCrdt.applyEdit(document, {
             _tag: "SetPlantOrigin",
             locale: "en",
             value: "🌱 fixed",
           })
 
-          const edited = yield* parseWikiArticleCrdtUpdate({
+          const edited = yield* WikiArticleCrdt.parseUpdate({
             snapshot: stored.crdtSnapshot,
             crdtUpdate: loroDocToUpdate(document),
           })
@@ -128,8 +124,8 @@ describe("Wiki CRDT review stress tests", () => {
         predicate: (generated) =>
           Effect.gen(function* () {
             const article = withEditorRichText(generated)
-            const created = yield* createWikiArticleCrdtDocument(article)
-            const parsed = yield* parseWikiArticleCrdtUpdate({
+            const created = yield* WikiArticleCrdt.create(article)
+            const parsed = yield* WikiArticleCrdt.parseUpdate({
               snapshot: created.crdtSnapshot,
               crdtUpdate: created.initialCrdtUpdate,
             })
@@ -162,8 +158,8 @@ describe("Wiki CRDT review stress tests", () => {
             },
           })
 
-          const created = yield* createWikiArticleCrdtDocument(article)
-          const parsed = yield* parseWikiArticleCrdtUpdate({
+          const created = yield* WikiArticleCrdt.create(article)
+          const parsed = yield* WikiArticleCrdt.parseUpdate({
             snapshot: created.crdtSnapshot,
             crdtUpdate: created.initialCrdtUpdate,
           })
@@ -186,19 +182,22 @@ describe("Wiki CRDT review stress tests", () => {
             ...plant,
             translations: { en: plant.translations.en, pt: plant.translations.en },
           })
-          const created = yield* createWikiArticleCrdtDocument(article)
+          const created = yield* WikiArticleCrdt.create(article)
           const first = snapshotToLoroDoc(created.crdtSnapshot)
           const second = first.fork()
-          yield* applyWikiArticleEdit(first, { _tag: "AddedPlantUsage", value: "HUMAN_FEED" })
-          yield* applyWikiArticleEdit(second, { _tag: "AddedPlantUsage", value: "ANIMAL_FEED" })
+          yield* WikiArticleCrdt.applyEdit(first, { _tag: "AddedPlantUsage", value: "HUMAN_FEED" })
+          yield* WikiArticleCrdt.applyEdit(second, {
+            _tag: "AddedPlantUsage",
+            value: "ANIMAL_FEED",
+          })
 
-          yield* applyWikiArticleEdit(first, {
+          yield* WikiArticleCrdt.applyEdit(first, {
             _tag: "SetPlantOrigin",
             locale: "en",
             value: englishOrigin,
           })
 
-          yield* applyWikiArticleEdit(second, {
+          yield* WikiArticleCrdt.applyEdit(second, {
             _tag: "SetPlantOrigin",
             locale: "pt",
             value: portugueseOrigin,
@@ -207,7 +206,7 @@ describe("Wiki CRDT review stress tests", () => {
           first.import(loroDocToUpdate(second))
           second.import(loroDocToUpdate(first))
           expect(first.toJSON()).toEqual(second.toJSON())
-          const parsed = yield* parseWikiArticleCrdtUpdate({
+          const parsed = yield* WikiArticleCrdt.parseUpdate({
             snapshot: created.crdtSnapshot,
             crdtUpdate: loroDocToUpdate(first),
           })

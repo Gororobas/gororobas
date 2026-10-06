@@ -1,20 +1,18 @@
 import { describe, expect, it } from "@effect/vitest"
+import { PublicationCrdt } from "@gororobas/domain"
 import {
   Handle,
   LoroDocSnapshot,
   LoroDocUpdate,
   PublicationCrdtRow,
-  PublicationSourceDataStorageLoro,
   UnauthorizedError,
   type PublicationSourceData,
   type TiptapDocument,
   type TiptapNode,
-  sourcePublicationDataToCrdtStorage,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
 import { SqlClient } from "effect/sql"
-import { Mirror } from "loro-mirror"
 
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { PublicationsService } from "../../src/publications/service.js"
@@ -59,13 +57,26 @@ const makePublicationCrdtUpdate = (input: {
 }) => {
   const currentDoc = snapshotToLoroDoc(input.snapshot)
   const nextDoc = currentDoc.fork()
-  const store = new Mirror({
-    doc: nextDoc,
-    schema: PublicationSourceDataStorageLoro,
-  })
 
-  store.setState(() => sourcePublicationDataToCrdtStorage(input.nextSourceData))
-  store.dispose()
+  Effect.runSync(
+    PublicationCrdt.applyEdit(nextDoc, {
+      _tag: "SetPublicationMetadata",
+      value: input.nextSourceData.metadata,
+    }),
+  )
+  ;
+(["en", "es", "pt"] as const).forEach((locale) => {
+    const value = input.nextSourceData.locales[locale]
+
+    Effect.runSync(
+      PublicationCrdt.applyEdit(
+        nextDoc,
+        value
+          ? { _tag: "SetPublicationLocale", locale, value }
+          : { _tag: "RemovedPublicationLocale", locale },
+      ),
+    )
+  })
 
   return Schema.decodeSync(LoroDocUpdate)(
     nextDoc.export({

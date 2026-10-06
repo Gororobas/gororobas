@@ -1,9 +1,9 @@
 import { Effect } from "effect"
 
 import { TagId } from "../../common/ids.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import { WikiConceptArticle } from "./concept.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 
 const conceptTagOperations = makeStringSetEditOperations("ConceptTag")({
   ValueSchema: TagId,
@@ -17,6 +17,6 @@ const conceptTagOperations = makeStringSetEditOperations("ConceptTag")({
     ),
 })
 
-export const WikiConceptArticleCrdtOperations = defineKindCrdtOperations(conceptTagOperations)
+export const WikiConceptArticleCrdtOperations = defineCrdtOperations(conceptTagOperations)
 export type WikiConceptArticleAttributeEdit =
   typeof WikiConceptArticleCrdtOperations.AttributeEdit.Type

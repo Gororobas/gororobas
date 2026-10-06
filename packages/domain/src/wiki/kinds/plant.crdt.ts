@@ -15,12 +15,12 @@ import {
   NameInCrdtList,
   TemperatureInCelsius,
 } from "../../common/primitives.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { CrdtContainerNotFoundError, InvalidCrdtUpdateError } from "../../crdts/errors.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeOptionalTranslatedScalarEditOperations } from "../../crdts/optional-translated-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import type { PlantEditableArticle, PlantEditableAttributes } from "./plant.js"
 
 const scientificNameOperations = makeMovableListEditOperations("ScientificName")({
@@ -146,7 +146,7 @@ const originOperations = makeOptionalTranslatedScalarEditOperations("PlantOrigin
   >,
 })
 
-export const WikiPlantArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiPlantArticleCrdtOperations = defineCrdtOperations([
   ...originOperations,
   ...developmentCycleMaxOperations,
   ...developmentCycleMinOperations,

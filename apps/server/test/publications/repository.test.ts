@@ -1,23 +1,21 @@
 import { describe, expect, it } from "@effect/vitest"
+import { PublicationCrdt } from "@gororobas/domain"
 import {
   Handle,
   InvalidCrdtUpdateError,
   LoroDocFrontier,
   LoroDocSnapshot,
   LoroDocUpdate,
-  PublicationSourceDataStorageLoro,
   PublicationConcurrentUpdateError,
   PublicationCrdtRow,
   SystemCommit,
-  type PublicationSourceData,
+  PublicationSourceData,
   type TiptapDocument,
   type TiptapNode,
-  sourcePublicationDataToCrdtStorage,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { DateTime, Effect, Equal, Layer, Option, Schema, Struct } from "effect"
 import { SqlClient } from "effect/sql"
-import { Mirror } from "loro-mirror"
 
 import {
   HumanCrdtUpdate,
@@ -57,13 +55,26 @@ const makePublicationCrdtUpdate = (input: {
 }) => {
   const currentDoc = snapshotToLoroDoc(input.snapshot)
   const nextDoc = currentDoc.fork()
-  const store = new Mirror({
-    doc: nextDoc,
-    schema: PublicationSourceDataStorageLoro,
-  })
 
-  store.setState(() => sourcePublicationDataToCrdtStorage(input.nextSourceData))
-  store.dispose()
+  Effect.runSync(
+    PublicationCrdt.applyEdit(nextDoc, {
+      _tag: "SetPublicationMetadata",
+      value: input.nextSourceData.metadata,
+    }),
+  )
+  ;
+(["en", "es", "pt"] as const).forEach((locale) => {
+    const value = input.nextSourceData.locales[locale]
+
+    Effect.runSync(
+      PublicationCrdt.applyEdit(
+        nextDoc,
+        value
+          ? { _tag: "SetPublicationLocale", locale, value }
+          : { _tag: "RemovedPublicationLocale", locale },
+      ),
+    )
+  })
 
   return Schema.decodeSync(LoroDocUpdate)(
     nextDoc.export({
@@ -81,24 +92,6 @@ const applyUpdateToSnapshot = (input: { crdtUpdate: LoroDocUpdate; snapshot: Lor
 }
 
 // oxlint-disable-next-line effect/no-unknown-parameters -- This test helper validates persisted JSON against the storage schema immediately below.
-const getPtContentFromStorageJson = (json: unknown) => {
-  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This helper validates unknown persisted JSON.
-  const storage = Schema.decodeUnknownSync(
-    Schema.Struct({
-      locales: Schema.optional(
-        Schema.Struct({
-          pt: Schema.optional(Schema.Struct({ content: Schema.optional(Schema.String) })),
-        }),
-      ),
-    }),
-  )(json)
-
-  return Option.match(Option.fromNullishOr(storage.locales?.pt?.content), {
-    onNone: () => undefined,
-    onSome: (content) => Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(content),
-  })
-}
-
 const makePostSourceData = (input: {
   content: TiptapDocument
   handle: string
@@ -272,7 +265,9 @@ describe("PublicationsRepository", () => {
           crdtUpdate: Option.getOrThrow(Option.fromNullishOr(commits[1])).crdtUpdate,
           snapshot: beforeSnapshot.crdtSnapshot,
         })
-        expect(getPtContentFromStorageJson(replayedDoc.toJSON())).toEqual(makeDocument("Depois"))
+        expect((yield* PublicationCrdt.read(replayedDoc)).locales.pt?.content).toEqual(
+          makeDocument("Depois"),
+        )
 
         const row = yield* repository.findPublicationRowById(publicationId)
         expect(Option.isSome(row)).toBe(true)
@@ -349,32 +344,10 @@ describe("PublicationsRepository", () => {
           snapshot: beforeSnapshot.crdtSnapshot,
         })
 
-        const replayedStorage = Schema.decodeSync(
-          Schema.Struct({
-            locales: Schema.optional(
-              Schema.Struct({
-                en: Schema.optional(
-                  Schema.Struct({
-                    content: Schema.optional(Schema.String),
-                    translatedAtCrdtFrontier: Schema.optional(Schema.String),
-                  }),
-                ),
-              }),
-            ),
-          }),
-        )(replayedDoc.toJSON())
-
-        expect(
-          Option.match(Option.fromNullishOr(replayedStorage.locales?.en?.content), {
-            onNone: () => undefined,
-            onSome: (content) => Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(content),
-          }),
-        ).toEqual(makeDocument("Translated text"))
-
-        expect(replayedStorage.locales?.en?.translatedAtCrdtFrontier).toBe(
-          Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(
-            Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
-          ),
+        const replayed = yield* PublicationCrdt.read(replayedDoc)
+        expect(replayed.locales.en?.content).toEqual(makeDocument("Translated text"))
+        expect(replayed.locales.en?.translatedAtCrdtFrontier).toEqual(
+          Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
         )
 
         const row = yield* repository.findPublicationRowById(publicationId)

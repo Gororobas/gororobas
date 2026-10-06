@@ -23,8 +23,7 @@
     "effect": "catalog:",
     "gel": "^2.2.1",
     "json-diff-ts": "^4.10.4",
-    "loro-crdt": "catalog:",
-    "loro-mirror": "catalog:"
+    "loro-crdt": "catalog:"
   },
   "devDependencies": {
     "@gel/generate": "^0.7.1",

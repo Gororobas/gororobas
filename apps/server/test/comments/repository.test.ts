@@ -1,18 +1,23 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
   CommentConcurrentUpdateError,
+  InvalidCrdtUpdateError,
+  CommentCrdt,
+  CommentId,
+  LoroDocUpdate,
+  snapshotToLoroDoc,
   Handle,
   SourceCommentData,
   SystemCommit,
   TiptapDocument,
-  TiptapNode,
 } from "@gororobas/domain"
 import { DateTime, Effect, Layer, Option, Schema } from "effect"
 
 import {
-  HumanUpdatePtContent,
+  HumanCrdtUpdate,
   SystemUpsertTranslation,
 } from "../../src/comments/comment-repository-inputs.js"
+import { findCommentCrdtSnapshotById } from "../../src/comments/queries.js"
 import { CommentsRepository } from "../../src/comments/repository.js"
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
@@ -32,16 +37,25 @@ const TestLayerWithRepositories = Layer.mergeAll(
   PublicationsRepositoryTestLayer,
 )
 
-const paragraph = (text: string): TiptapNode => ({
-  content: [{ text, type: "text" }],
-  type: "paragraph",
-})
+const makeDocument = (text: string): TiptapDocument =>
+  TiptapDocument.make({
+    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    type: "doc",
+    version: 1,
+  })
 
-const makeDocument = (text: string): TiptapDocument => ({
-  // @ts-expect-error not sure what's the issue here
-  content: [paragraph(text)],
-  type: "doc",
-  version: 1,
+const makeClientUpdate = Effect.fn(function* (commentId: CommentId, text: string) {
+  const snapshot = Option.getOrThrow(yield* findCommentCrdtSnapshotById(commentId)).crdtSnapshot
+  const document = snapshotToLoroDoc(snapshot)
+  const version = document.version()
+
+  yield* CommentCrdt.applyEdit(document, {
+    _tag: "SetCommentContent",
+    locale: "pt",
+    content: makeDocument(text),
+  })
+
+  return LoroDocUpdate.make(document.export({ from: version, mode: "update" }))
 })
 
 const makeHandle = Schema.decodeSync(Handle)
@@ -157,11 +171,36 @@ describe("CommentsRepository", () => {
       const beforeUpdate = yield* comments.findCommentRowById(commentId)
       expect(Option.isSome(beforeUpdate)).toBe(true)
 
+      const snapshot = Option.getOrThrow(yield* findCommentCrdtSnapshotById(commentId)).crdtSnapshot
+      const invalidDocument = snapshotToLoroDoc(snapshot)
+      const version = invalidDocument.version()
+      invalidDocument.getMap("unexpected").set("value", "untrusted")
+
+      const invalidUpdate = yield* Effect.flip(
+        comments.updateComment(
+          HumanCrdtUpdate.make({
+            authorId: person.id,
+            commentId,
+            crdtUpdate: LoroDocUpdate.make(
+              invalidDocument.export({ from: version, mode: "update" }),
+            ),
+            expectedCurrentCrdtFrontier: Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
+          }),
+        ),
+      )
+
+      expect(invalidUpdate).toBeInstanceOf(InvalidCrdtUpdateError)
+      expect(yield* comments.findCommentRowById(commentId)).toEqual(beforeUpdate)
+      expect(Option.getOrThrow(yield* findCommentCrdtSnapshotById(commentId)).crdtSnapshot).toEqual(
+        snapshot,
+      )
+      expect(yield* comments.listCommentCommitRowsByCommentIdAsc(commentId)).toHaveLength(1)
+
       yield* comments.updateComment(
-        HumanUpdatePtContent.make({
+        HumanCrdtUpdate.make({
           authorId: person.id,
           commentId,
-          content: makeDocument("Depois"),
+          crdtUpdate: yield* makeClientUpdate(commentId, "Depois"),
           expectedCurrentCrdtFrontier: Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
         }),
       )
@@ -223,19 +262,19 @@ describe("CommentsRepository", () => {
       const expectedCurrentCrdtFrontier = Option.getOrThrow(row).currentCrdtFrontier
 
       yield* comments.updateComment(
-        HumanUpdatePtContent.make({
+        HumanCrdtUpdate.make({
           authorId: person.id,
           commentId,
-          content: makeDocument("Versao 2"),
+          crdtUpdate: yield* makeClientUpdate(commentId, "Versao 2"),
           expectedCurrentCrdtFrontier,
         }),
       )
 
       const staleUpdate = comments.updateComment(
-        HumanUpdatePtContent.make({
+        HumanCrdtUpdate.make({
           authorId: person.id,
           commentId,
-          content: makeDocument("Versao 3"),
+          crdtUpdate: yield* makeClientUpdate(commentId, "Versao 3"),
           expectedCurrentCrdtFrontier,
         }),
       )

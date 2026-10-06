@@ -1,18 +1,10 @@
-import { Effect, Predicate, Record, Schema, SchemaTransformation } from "effect"
-import { LoroDoc, LoroMap } from "loro-crdt"
+import { Effect, Record, Schema, SchemaTransformation } from "effect"
+import { type LoroDoc, LoroMap } from "loro-crdt"
 
-import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
+import { defineCrdtDocument } from "../crdts/define-crdt-document.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
-import {
-  applyCrdtUpdateWithCommit,
-  loroDocToSnapshot,
-  loroDocToUpdate,
-  parseCrdtUpdate,
-  snapshotToLoroDoc,
-} from "../crdts/lib.js"
-import { toLoroString, toLoroValue } from "../crdts/loro-values.js"
-import { TiptapDocument } from "../rich-text/domain.js"
-import { initializeLoroRichText, loroRichTextToTiptap } from "../rich-text/loro-prosemirror.js"
+import { createLoroDocFromData } from "../crdts/lib.js"
+import { loroRichTextToTiptap } from "../rich-text/loro-prosemirror.js"
 import { WikiAnimalArticleCrdtOperations } from "./kinds/animal.crdt.js"
 import { WikiBookArticleCrdtOperations } from "./kinds/book.crdt.js"
 import { WikiConceptArticleCrdtOperations } from "./kinds/concept.crdt.js"
@@ -42,7 +34,7 @@ export const WikiArticleEdit = Schema.Union([
 export type WikiArticleEdit = typeof WikiArticleEdit.Type
 
 /** @todo rewrite with Match */
-export const applyWikiArticleEdit = (document: LoroDoc, edit: WikiArticleEdit) => {
+const applyWikiArticleEdit = (document: LoroDoc, edit: WikiArticleEdit) => {
   if (Schema.is(WikiAnimalArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiAnimalArticleCrdtOperations.applyAttributeEdit(document, edit)
   }
@@ -103,6 +95,7 @@ const WikiArticleCrdtData = WikiArticleEditableData.mapMembers((members) =>
 ).pipe(Schema.decodeTo(Schema.toType(WikiArticleEditableData)))
 
 const projectWikiArticleDocument = (document: LoroDoc) => ({
+  ...document.toJSON(),
   kind: document.getMap("kind").toJSON(),
   attributes: document.getMap("attributes").toJSON(),
   translations: Record.fromEntries(
@@ -129,31 +122,9 @@ const projectWikiArticleDocument = (document: LoroDoc) => ({
   ),
 })
 
-const isJsonArray = (value: Schema.Json): value is Schema.JsonArray => Array.isArray(value)
-
-const isJsonObject = (value: Schema.Json): value is Schema.JsonObject =>
-  Predicate.isObject(value) && !isJsonArray(value)
-
-const initializeMap = (map: LoroMap, values: Schema.JsonObject) => {
-  Record.toEntries(values).forEach(([key, value]) => {
-    if (value === null) return
-
-    if (isJsonArray(value)) {
-      const list = map.ensureMergeableMovableList(toLoroString(key))
-      value.forEach((item, index) => list.insert(index, toLoroValue(item)))
-    } else if (isJsonObject(value) && !("_tag" in value) && !("type" in value)) {
-      initializeMap(map.ensureMergeableMap(toLoroString(key)), value)
-    } else {
-      map.set(toLoroString(key), toLoroValue(value))
-    }
-  })
-}
-
-export const createWikiArticleCrdtDocument = Effect.fn("createWikiArticleCrdtDocument")(function* (
+const createWikiArticleDocument = Effect.fn("createWikiArticleDocument")(function* (
   sourceData: WikiArticleEditableData,
 ) {
-  const sourceDocument = new LoroDoc()
-  sourceDocument.configDefaultTextStyle({ expand: "after" })
   const json = yield* Schema.encodeEffect(Schema.fromJsonString(WikiArticleCrdtData))(sourceData)
 
   const encoded = yield* Schema.decodeEffect(
@@ -165,53 +136,21 @@ export const createWikiArticleCrdtDocument = Effect.fn("createWikiArticleCrdtDoc
     ),
   )(json)
 
-  sourceDocument.getMap("kind").set("value", sourceData.kind)
-  initializeMap(sourceDocument.getMap("attributes"), encoded.attributes)
+  const sourceDocument = createLoroDocFromData(
+    {
+      kind: { value: sourceData.kind },
+      attributes: encoded.attributes,
+      translations: encoded.translations,
+    },
+    { omitNull: true },
+  )
 
-  Record.toEntries(encoded.translations).forEach(([locale, values]) => {
-    const translation = sourceDocument.getMap("translations").ensureMergeableMap(locale)
-    initializeMap(
-      translation,
-      Record.filter(values, (_, key) => key !== "content"),
-    )
-
-    if (values.content !== undefined && values.content !== null) {
-      initializeLoroRichText(
-        translation.ensureMergeableMap("content"),
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Stored CRDT content is arbitrary JSON until decoded as a rich-text document.
-        Schema.decodeUnknownSync(TiptapDocument)(values.content),
-      )
-    }
-  })
-
-  return {
-    currentCrdtFrontier: LoroDocFrontier.make(sourceDocument.frontiers()),
-    crdtSnapshot: loroDocToSnapshot(sourceDocument),
-    initialCrdtUpdate: loroDocToUpdate(sourceDocument),
-    sourceData,
-  } as const
+  return sourceDocument
 })
 
-export const parseWikiArticleCrdtUpdate = (input: {
-  crdtUpdate: LoroDocUpdate
-  snapshot: LoroDocSnapshot
-}) =>
-  parseCrdtUpdate({
-    crdtUpdate: input.crdtUpdate,
-    sourceDocument: snapshotToLoroDoc(input.snapshot),
-    targetSchema: WikiArticleCrdtData,
-    projectDocument: projectWikiArticleDocument,
-  })
-
-export const applyWikiArticleCrdtUpdateWithCommit = (input: {
-  commit: CrdtCommit
-  crdtUpdate: LoroDocUpdate
-  snapshot: LoroDocSnapshot
-}) =>
-  applyCrdtUpdateWithCommit({
-    commit: input.commit,
-    crdtUpdate: input.crdtUpdate,
-    snapshot: input.snapshot,
-    targetSchema: WikiArticleCrdtData,
-    projectDocument: projectWikiArticleDocument,
-  })
+export const WikiArticleCrdt = defineCrdtDocument({
+  schema: WikiArticleCrdtData,
+  createDocument: createWikiArticleDocument,
+  projectDocument: projectWikiArticleDocument,
+  applyEdit: applyWikiArticleEdit,
+})

@@ -57,3 +57,6 @@ export * from "./crdts/lib.js"
 
 export * from "./rich-text/entity-reference-extension.js"
 export * from "./rich-text/media-grid-extension.js"
+export * from "./publications/publication-crdt.js"
+export * from "./comments/comment-crdt.js"
+export * from "./crdts/define-crdt-document.js"

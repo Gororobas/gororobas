@@ -5,6 +5,7 @@ import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { CommentId, PublicationId } from "../common/ids.js"
+import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import { PublicationNotFoundError } from "../publications/errors.js"
 import {
   ApiUpdateCommentData,
@@ -47,7 +48,11 @@ export class CommentsApiGroup extends HttpApiGroup.make("comments")
   .add(
     HttpApiEndpoint.patch("updateComment", "/comments/:id", {
       success: CommentData,
-      error: Schema.Union([CommentNotFoundError, CommentConcurrentUpdateError]),
+      error: Schema.Union([
+        CommentNotFoundError,
+        CommentConcurrentUpdateError,
+        InvalidCrdtUpdateError,
+      ]),
       params: Schema.Struct({ id: CommentId }),
       payload: ApiUpdateCommentData,
     }),

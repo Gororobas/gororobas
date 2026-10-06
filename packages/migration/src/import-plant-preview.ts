@@ -1,4 +1,5 @@
 import { NodePath, NodeHttpClient, NodeServices } from "@effect/platform-node"
+import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   MediaAssetId,
   MediaAssetRow,
@@ -6,7 +7,6 @@ import {
   IdGen,
   AuthSecurityRevision,
   loroDocToUpdate,
-  parseWikiArticleCrdtUpdate,
   PersonId,
   ProfileId,
   snapshotToLoroDoc,
@@ -205,7 +205,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
 
       const article = yield* findDatabaseRowById(plant.id).pipe(Effect.map(Option.getOrThrow))
       const crdt = yield* findCrdtRowById(plant.id).pipe(Effect.map(Option.getOrThrow))
-      const parsed = yield* parseWikiArticleCrdtUpdate({
+      const parsed = yield* WikiArticleCrdt.parseUpdate({
         snapshot: crdt.crdtSnapshot,
         crdtUpdate: loroDocToUpdate(snapshotToLoroDoc(crdt.crdtSnapshot)),
       })

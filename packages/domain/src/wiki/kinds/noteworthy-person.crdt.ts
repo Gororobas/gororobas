@@ -1,9 +1,9 @@
 import { Effect, Schema } from "effect"
 
 import { NameInCrdtList, ValidName } from "../../common/primitives.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import type { NoteworthyPersonEditableAttributes } from "./noteworthy-person.js"
 
 const namesOperations = makeMovableListEditOperations("Name")({
@@ -64,7 +64,7 @@ const urlOperations = makeOptionalScalarEditOperations("Url")({
   keyInParentContainer: "url" satisfies keyof NoteworthyPersonEditableAttributes,
 })
 
-export const WikiNoteworthyPersonArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiNoteworthyPersonArticleCrdtOperations = defineCrdtOperations([
   ...namesOperations,
   ...areasOfWorkOperations,
   ...birthDateOperations,

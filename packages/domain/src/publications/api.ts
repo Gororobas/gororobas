@@ -6,6 +6,7 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { PublicationId, ProfileId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
+import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import {
   ApiCreateEventData,
   ApiCreatePostData,
@@ -62,7 +63,11 @@ export class PublicationsApiGroup extends HttpApiGroup.make("publications")
   .add(
     HttpApiEndpoint.patch("updatePost", "/publications/:id", {
       success: ApiPostData,
-      error: Schema.Union([PublicationNotFoundError, PublicationConcurrentUpdateError]),
+      error: Schema.Union([
+        PublicationNotFoundError,
+        PublicationConcurrentUpdateError,
+        InvalidCrdtUpdateError,
+      ]),
       params: Schema.Struct({ id: PublicationId }),
       payload: ApiUpdatePostData,
     }),

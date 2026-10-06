@@ -1,6 +1,5 @@
 import { Clock, Effect, Schema } from "effect"
 import { LoroDoc, VersionVector } from "loro-crdt"
-import { InferInputType, SchemaType as LoroMirrorSchema, Mirror } from "loro-mirror"
 import { nanoid } from "nanoid"
 
 import { LoroListItemId } from "../common/ids.js"
@@ -12,6 +11,7 @@ import {
   LoroDocUpdate,
 } from "../crdts/domain.js"
 import { InvalidCrdtUpdateError } from "./errors.js"
+export { createLoroDocFromData } from "./initialize-loro-document.js"
 
 export function loroDocToSnapshot(doc: LoroDoc) {
   return doc.export({ mode: "snapshot" })
@@ -30,41 +30,17 @@ export function snapshotToLoroDoc(crdtBlob: LoroDocSnapshot): LoroDoc {
   return doc
 }
 
-// oxlint-disable-next-line effect/no-unknown-parameters -- Mirror initialization accepts sparse nested state; InferInputType incorrectly requires omitted optional fields. Callers supply domain-encoded state.
-export function createLoroDocFromData(data: unknown, schema: LoroMirrorSchema): LoroDoc {
-  const initialDoc = new LoroDoc()
-  const initialDocStore = new Mirror({
-    doc: initialDoc,
-    schema,
-  })
-  initialDocStore.setState(() => data)
-
-  const doc = initialDoc.fork()
-  initialDocStore.dispose()
-  return doc
-}
-
-/** Operates based on the JS object for the new data. For applying a `crdtUpdate`, use `applyCrdtUpdateWithCommit` */
-export const modifyLoroDocWithCommit = Effect.fn("modifyLoroDocWithCommit")(function* <
-  S extends LoroMirrorSchema,
->({
+/** Applies edits to an isolated fork, publishing only their final diff. */
+export const modifyLoroDocWithCommit = Effect.fn("modifyLoroDocWithCommit")(function* <E, R>({
   initialDoc,
-  loroMirrorSchema: schema,
-  newData,
+  modifyDoc,
   commit,
 }: {
   initialDoc: LoroDoc
-  loroMirrorSchema: S
-  newData: InferInputType<S>
+  modifyDoc: (startDoc: LoroDoc) => Effect.Effect<LoroDoc, E, R>
   commit: CrdtCommit
 }) {
-  const editedDoc = initialDoc.fork()
-  const editedDocStore = new Mirror({
-    doc: editedDoc,
-    schema,
-  })
-  editedDocStore.setState(() => newData)
-  editedDocStore.dispose()
+  const editedDoc = yield* modifyDoc(initialDoc.fork())
 
   const diff = editedDoc.diff(initialDoc.frontiers(), editedDoc.frontiers())
 
@@ -79,20 +55,30 @@ export const modifyLoroDocWithCommit = Effect.fn("modifyLoroDocWithCommit")(func
   return cleanFinalDocument
 })
 
-const applyUpdate = (crdt_update: Uint8Array<ArrayBufferLike>, sourceDocument: LoroDoc) =>
+const applyUpdate = (crdtUpdate: Uint8Array<ArrayBufferLike>, sourceDocument: LoroDoc) =>
   Effect.try({
     try: () => {
       const forkedDoc = sourceDocument.fork()
 
-      const importStatus = forkedDoc.import(crdt_update)
-      if (!importStatus.success) throw new InvalidCrdtUpdateError({ reason: "InvalidFormat" })
+      const importStatus = forkedDoc.import(crdtUpdate)
+
+      if (
+        !importStatus.success ||
+        (importStatus.pending !== null && importStatus.pending.size > 0)
+      ) {
+        throw new InvalidCrdtUpdateError({ reason: "InvalidFormat" })
+      }
 
       return forkedDoc
     },
     catch: () => new InvalidCrdtUpdateError({ reason: "InvalidFormat" }),
   })
 
-const validateSchema = <S extends Schema.ConstraintDecoder<unknown, never>>({
+/**
+ * We use `onExcessProperty: error` when decoding the document to prevent incorporating malicious
+ * data into our CRDT documents.
+ */
+export const validateCrdtDocument = <S extends Schema.ConstraintDecoder<unknown, never>>({
   updatedDoc,
   targetSchema,
   projectDocument,
@@ -104,7 +90,7 @@ const validateSchema = <S extends Schema.ConstraintDecoder<unknown, never>>({
 }): Effect.Effect<S["Type"], InvalidCrdtUpdateError, never> =>
   Effect.try(() => projectDocument(updatedDoc)).pipe(
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro projections remain untrusted until the caller's schema validates them.
-    Effect.flatMap(Schema.decodeUnknownEffect(targetSchema)),
+    Effect.flatMap(Schema.decodeUnknownEffect(targetSchema, { onExcessProperty: "error" })),
     Effect.mapError(() => new InvalidCrdtUpdateError({ reason: "SchemaValidation" })),
   )
 
@@ -119,7 +105,7 @@ export const parseCrdtUpdate = Effect.fn("parseCrdtUpdate")(function* <
 }) {
   const updatedDoc = yield* applyUpdate(props.crdtUpdate, props.sourceDocument)
 
-  const data = yield* validateSchema({
+  const data = yield* validateCrdtDocument({
     updatedDoc: updatedDoc,
     targetSchema: props.targetSchema,
     projectDocument: props.projectDocument ?? ((document) => document.toJSON()),
@@ -149,28 +135,28 @@ export const applyCrdtUpdateWithCommit = Effect.fn("applyCrdtUpdateWithCommit")(
 }) {
   const currentDoc = snapshotToLoroDoc(snapshot)
 
-  const { data, loroDoc: fullUpdatedDoc } = yield* parseCrdtUpdate<S>({
+  const { loroDoc: fullUpdatedDoc } = yield* parseCrdtUpdate<S>({
     crdtUpdate: crdtUpdate,
     sourceDocument: currentDoc,
     targetSchema,
     ...(projectDocument ? { projectDocument } : {}),
   })
 
-  const diff = fullUpdatedDoc.diff(currentDoc.frontiers(), fullUpdatedDoc.frontiers())
-
   // We could export the `update` snapshot from `editedDoc`, but then every intermediary update would be captured.
   // This mean bloat and potentially leaking private data (say a user accidentally pasted sensitive data in the form).
   // Instead, we generate a diff, which captures only the final updates, and then a apply it to a new, 3rd document.
   // Now, this 3rd document can export the CRDT update without any of the intermediary data in it.
   // Private in-betweens (only what the user explicitly chose to publish is included) and lean result.
-  const cleanFinalDocument = currentDoc.fork()
+  const cleanFinalDocument = yield* modifyLoroDocWithCommit({
+    initialDoc: currentDoc,
+    commit,
+    modifyDoc: () => Effect.succeed(fullUpdatedDoc),
+  })
 
-  cleanFinalDocument.applyDiff(diff)
-
-  // Include the commit message, encoded (stringified JSON)
-  cleanFinalDocument.commit({
-    message: yield* Schema.encodeEffect(CrdtCommitEncoded)(commit),
-    timestamp: yield* Clock.currentTimeMillis,
+  const data = yield* validateCrdtDocument({
+    updatedDoc: cleanFinalDocument,
+    targetSchema,
+    projectDocument: projectDocument ?? ((document) => document.toJSON()),
   })
 
   return {
@@ -183,31 +169,6 @@ export const applyCrdtUpdateWithCommit = Effect.fn("applyCrdtUpdateWithCommit")(
     fromCrdtFrontier: LoroDocFrontier.make(currentDoc.frontiers()),
     nextCrdtFrontier: LoroDocFrontier.make(cleanFinalDocument.frontiers()),
     nextSnapshot: loroDocToSnapshot(cleanFinalDocument),
-  } as const
-})
-
-/** @todo is this needed? */
-export const rebuildLoroDocFromUpdates = Effect.fn("rebuildLoroDocFromUpdates")(function* (params: {
-  updates: ReadonlyArray<LoroDocUpdate>
-}) {
-  const rebuiltDoc = new LoroDoc()
-
-  yield* Effect.forEach(
-    params.updates,
-    (update) =>
-      Effect.gen(function* () {
-        const importStatus = rebuiltDoc.import(update)
-        if (!importStatus.success) {
-          return yield* new InvalidCrdtUpdateError({ reason: "InvalidFormat" })
-        }
-      }),
-    { concurrency: 1 },
-  )
-
-  return {
-    currentCrdtFrontier: LoroDocFrontier.make(rebuiltDoc.frontiers()),
-    doc: rebuiltDoc,
-    snapshot: loroDocToSnapshot(rebuiltDoc),
   } as const
 })
 

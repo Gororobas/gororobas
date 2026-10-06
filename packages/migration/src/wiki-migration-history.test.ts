@@ -1,8 +1,8 @@
 import { assert, expect, it } from "@effect/vitest"
+import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   LoroDocSnapshot,
   LoroDocUpdate,
-  parseWikiArticleCrdtUpdate,
   WikiArticleEditableData,
   WikiPlantArticle,
   TiptapDocument,
@@ -75,7 +75,7 @@ it.effect("replays migrated origin and marked content, including clearing and re
               const snapshot = LoroDocSnapshot.make(Buffer.from(version.loroSnapshot, "base64"))
               const document = new LoroDoc()
               document.import(snapshot)
-              const parsed = yield* parseWikiArticleCrdtUpdate({
+              const parsed = yield* WikiArticleCrdt.parseUpdate({
                 snapshot,
                 crdtUpdate: LoroDocUpdate.make(document.export({ mode: "update" })),
               })

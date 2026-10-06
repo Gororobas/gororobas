@@ -2,9 +2,9 @@ import { NoteworthyEntityType } from "@gororobas/domain/common/enums"
 import { Effect, Schema } from "effect"
 
 import { TagId } from "../../common/ids.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import { type NoteworthyEntityEditableAttributes } from "./noteworthy-entity.js"
 
 const noteworthyEntityTagOperations = makeStringSetEditOperations("NoteworthyEntityTag")({
@@ -37,7 +37,7 @@ const urlOperations = makeOptionalScalarEditOperations("Url")({
   keyInParentContainer: "url" satisfies keyof NoteworthyEntityEditableAttributes,
 })
 
-export const WikiNoteworthyEntityArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiNoteworthyEntityArticleCrdtOperations = defineCrdtOperations([
   ...noteworthyEntityTagOperations,
   ...entityTypeOperations,
   ...foundedDateOperations,

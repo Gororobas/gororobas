@@ -29,7 +29,7 @@ const makeOperationRunner = <Message extends MessageSchema>(operation: EditOpera
     ),
 })
 
-export const defineKindCrdtOperations = <
+export const defineCrdtOperations = <
   const Operations extends readonly EditOperation<MessageSchema>[],
 >(
   operations: Operations,

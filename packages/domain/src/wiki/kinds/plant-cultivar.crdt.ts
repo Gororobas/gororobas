@@ -1,8 +1,8 @@
 import { Effect, Schema } from "effect"
 import { LoroDoc } from "loro-crdt"
 
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { toLoroValue } from "../../crdts/loro-values.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import { WikiPlantCultivarArticle, type PlantCultivarEditableAttributes } from "./plant-cultivar.js"
 
 const replaceAttribute = <const Tag extends string, Value, Encoded>({
@@ -28,7 +28,7 @@ const replaceAttribute = <const Tag extends string, Value, Encoded>({
 
 const fields = WikiPlantCultivarArticle.EditableAttributes.fields
 
-export const WikiPlantCultivarArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiPlantCultivarArticleCrdtOperations = defineCrdtOperations([
   replaceAttribute({
     tag: "SetPlantCultivarParentPlantId",
     key: "parentPlantId",

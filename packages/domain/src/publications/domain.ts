@@ -28,11 +28,6 @@ import {
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
-class InvalidPublicationStorageError extends Schema.TaggedError<InvalidPublicationStorageError>()(
-  "InvalidPublicationStorageError",
-  { message: Schema.String },
-) {}
-
 export const CorePublicationMetadata = Schema.Struct({
   handle: Handle,
   ownerProfileId: ProfileId,
@@ -111,120 +106,6 @@ export type EventSourceData = typeof EventSourceData.Type
 /** Data stored in Loro CRDT documents, the source of what gets materialized in the database */
 export const PublicationSourceData = Schema.Union([PostSourceData, EventSourceData])
 export type PublicationSourceData = typeof PublicationSourceData.Type
-
-/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PublicationLocalizedData` */
-export const PublicationLocalizedDataStorage = Schema.Struct({
-  content: Schema.optional(Schema.String),
-  originalLocale: Schema.optional(Locale),
-  translatedAtCrdtFrontier: Schema.optional(Schema.String),
-  translationSource: Schema.optional(TranslationSource),
-})
-
-export type PublicationLocalizedDataStorage = typeof PublicationLocalizedDataStorage.Type
-
-/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace with correct `PublicationSourceData` */
-export const PublicationSourceDataStorage = Schema.Struct({
-  locales: Schema.Struct({
-    en: PublicationLocalizedDataStorage,
-    es: PublicationLocalizedDataStorage,
-    pt: PublicationLocalizedDataStorage,
-  }),
-  metadata: Schema.Struct({
-    attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
-    endDate: Schema.optional(Schema.NullOr(Schema.String)),
-    handle: Handle,
-    kind: Schema.Literals(["POST", "EVENT"]),
-    locationOrUrl: Schema.optional(Schema.NullOr(Schema.String)),
-    ownerProfileId: ProfileId,
-    publishedAt: Schema.String,
-    startDate: Schema.optional(Schema.NullOr(Schema.String)),
-    visibility: PublicationVisibility,
-  }),
-})
-
-export type PublicationSourceDataStorage = typeof PublicationSourceDataStorage.Type
-
-/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
-const decodeTiptapDocumentStorage = Schema.decodeSync(Schema.fromJsonString(TiptapDocument))
-const decodeLoroDocFrontierStorage = Schema.decodeSync(Schema.fromJsonString(LoroDocFrontier))
-
-/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
-const publicationLocalizedDataStorageToSourceData = (
-  localeData: PublicationSourceDataStorage["locales"][Locale],
-) => {
-  if (!localeData.content) return undefined
-
-  if (!localeData.originalLocale || !localeData.translationSource) {
-    throw new InvalidPublicationStorageError({
-      message: "Invalid localized publication storage data",
-    })
-  }
-
-  const content = decodeTiptapDocumentStorage(localeData.content)
-
-  if (localeData.translationSource === "ORIGINAL") {
-    return PublicationLocalizedData.make({
-      content,
-      originalLocale: localeData.originalLocale,
-      translatedAtCrdtFrontier: null,
-      translationSource: "ORIGINAL",
-    })
-  }
-
-  if (!localeData.translatedAtCrdtFrontier) {
-    throw new InvalidPublicationStorageError({
-      message: "Invalid translated publication storage data",
-    })
-  }
-
-  return PublicationLocalizedData.make({
-    content,
-    originalLocale: localeData.originalLocale,
-    translatedAtCrdtFrontier: decodeLoroDocFrontierStorage(localeData.translatedAtCrdtFrontier),
-    translationSource: localeData.translationSource,
-  })
-}
-
-/** @todo this shouldn't exist. Vibe-coded slop. Find a way to replace */
-export const publicationSourceDataStorageToSourcePublicationData = (
-  storageData: PublicationSourceDataStorage,
-): PublicationSourceData => {
-  const locales = {
-    en: publicationLocalizedDataStorageToSourceData(storageData.locales.en),
-    es: publicationLocalizedDataStorageToSourceData(storageData.locales.es),
-    pt: publicationLocalizedDataStorageToSourceData(storageData.locales.pt),
-  }
-
-  const sourceData =
-    storageData.metadata.kind === "EVENT"
-      ? {
-          locales,
-          metadata: {
-            attendanceMode: storageData.metadata.attendanceMode ?? null,
-            endDate: storageData.metadata.endDate ?? null,
-            handle: storageData.metadata.handle,
-            kind: "EVENT" as const,
-            locationOrUrl: storageData.metadata.locationOrUrl ?? null,
-            ownerProfileId: storageData.metadata.ownerProfileId,
-            publishedAt: storageData.metadata.publishedAt,
-            startDate: storageData.metadata.startDate,
-            visibility: storageData.metadata.visibility,
-          },
-        }
-      : {
-          locales,
-          metadata: {
-            handle: storageData.metadata.handle,
-            kind: "POST" as const,
-            ownerProfileId: storageData.metadata.ownerProfileId,
-            publishedAt: storageData.metadata.publishedAt,
-            visibility: storageData.metadata.visibility,
-          },
-        }
-
-  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Stored event metadata may omit required dates; decoding must reject incomplete persisted events.
-  return Schema.decodeUnknownSync(PublicationSourceData)(sourceData)
-}
 
 const MatchedTag = Schema.Struct({
   tag_id: Schema.String,

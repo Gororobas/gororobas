@@ -7,11 +7,7 @@ import { loroDocToUpdate, snapshotToLoroDoc } from "../../src/crdts/lib.js"
 import { toLoroValue } from "../../src/crdts/loro-values.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
-import {
-  applyWikiArticleEdit,
-  createWikiArticleCrdtDocument,
-  parseWikiArticleCrdtUpdate,
-} from "../../src/wiki/wiki-article-crdt.js"
+import { WikiArticleCrdt } from "../../src/wiki/wiki-article-crdt.js"
 import {
   WikiArticleEditableData,
   WikiArticleTranslationMaterializedRow,
@@ -45,8 +41,8 @@ describe("Kind-specific wiki translations", () => {
       predicate: (generated) =>
         Effect.gen(function* () {
           const article = withEditorRichText(generated)
-          const created = yield* createWikiArticleCrdtDocument(article)
-          const parsed = yield* parseWikiArticleCrdtUpdate({
+          const created = yield* WikiArticleCrdt.create(article)
+          const parsed = yield* WikiArticleCrdt.parseUpdate({
             snapshot: created.crdtSnapshot,
             crdtUpdate: created.initialCrdtUpdate,
           })
@@ -93,16 +89,16 @@ describe("Kind-specific wiki translations", () => {
     "origin edits affect only the requested locale and reject missing locales and other kinds",
     () =>
       Effect.gen(function* () {
-        const created = yield* createWikiArticleCrdtDocument(plant)
+        const created = yield* WikiArticleCrdt.create(plant)
         const document = snapshotToLoroDoc(created.crdtSnapshot)
 
-        yield* applyWikiArticleEdit(document, {
+        yield* WikiArticleCrdt.applyEdit(document, {
           _tag: "SetPlantOrigin",
           locale: "pt",
           value: "América Central",
         })
 
-        let parsed = yield* parseWikiArticleCrdtUpdate({
+        let parsed = yield* WikiArticleCrdt.parseUpdate({
           snapshot: created.crdtSnapshot,
           crdtUpdate: loroDocToUpdate(document),
         })
@@ -110,8 +106,8 @@ describe("Kind-specific wiki translations", () => {
         expect(parsed.data.translations.pt?.origin).toEqual(Option.some("América Central"))
         expect(parsed.data.translations.en?.origin).toEqual(Option.some("Central America"))
         expect(parsed.data.translations.en?.content).toEqual(plant.translations.en?.content)
-        yield* applyWikiArticleEdit(document, { _tag: "UnsetPlantOrigin", locale: "pt" })
-        parsed = yield* parseWikiArticleCrdtUpdate({
+        yield* WikiArticleCrdt.applyEdit(document, { _tag: "UnsetPlantOrigin", locale: "pt" })
+        parsed = yield* WikiArticleCrdt.parseUpdate({
           snapshot: created.crdtSnapshot,
           crdtUpdate: loroDocToUpdate(document),
         })
@@ -121,7 +117,7 @@ describe("Kind-specific wiki translations", () => {
         expect(
           Exit.isFailure(
             yield* Effect.exit(
-              applyWikiArticleEdit(document, {
+              WikiArticleCrdt.applyEdit(document, {
                 _tag: "SetPlantOrigin",
                 locale: "es",
                 value: "América Central",
@@ -133,7 +129,7 @@ describe("Kind-specific wiki translations", () => {
         expect(
           Exit.isFailure(
             yield* Effect.exit(
-              applyWikiArticleEdit(document, {
+              WikiArticleCrdt.applyEdit(document, {
                 _tag: "UnsetPlantOrigin",
                 locale: "es",
               }),
@@ -147,7 +143,7 @@ describe("Kind-specific wiki translations", () => {
         expect(
           Exit.isFailure(
             yield* Effect.exit(
-              applyWikiArticleEdit(document, {
+              WikiArticleCrdt.applyEdit(document, {
                 _tag: "SetPlantOrigin",
                 locale: "en",
                 value: "Africa",

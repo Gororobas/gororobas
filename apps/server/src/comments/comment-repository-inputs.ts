@@ -1,6 +1,7 @@
 import {
   CommentId,
   LoroDocFrontier,
+  LoroDocUpdate,
   Locale,
   PersonId,
   PublicationId,
@@ -11,14 +12,14 @@ import {
 } from "@gororobas/domain"
 import { Schema } from "effect"
 
-export const HumanUpdatePtContent = Schema.TaggedStruct("HumanUpdatePtContent", {
+export const HumanCrdtUpdate = Schema.TaggedStruct("HumanCrdtUpdate", {
   authorId: PersonId,
   commentId: CommentId,
-  content: TiptapDocument,
+  crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 
-export type HumanUpdatePtContent = typeof HumanUpdatePtContent.Type
+export type HumanCrdtUpdate = typeof HumanCrdtUpdate.Type
 
 export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslation", {
   commentId: CommentId,
@@ -31,7 +32,7 @@ export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslat
 
 export type SystemUpsertTranslation = typeof SystemUpsertTranslation.Type
 
-export const UpdateCommentInput = Schema.Union([HumanUpdatePtContent, SystemUpsertTranslation])
+export const UpdateCommentInput = Schema.Union([HumanCrdtUpdate, SystemUpsertTranslation])
 export type UpdateCommentInput = typeof UpdateCommentInput.Type
 
 export const CreateCommentInput = Schema.Struct({

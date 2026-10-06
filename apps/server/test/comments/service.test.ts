@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
   CommentNotFoundError,
+  LoroDocUpdate,
   Handle,
   UnauthorizedError,
   type SourceCommentData,
@@ -159,7 +160,7 @@ describe("CommentsService", () => {
       const result = yield* withSession(
         service.updateComment({
           commentId,
-          content: makeDocument("Tentativa de invasao"),
+          crdtUpdate: LoroDocUpdate.make(new Uint8Array()),
           expectedCurrentCrdtFrontier: comment.currentCrdtFrontier,
         }),
         makeAccountSession({ personId: other.id }),

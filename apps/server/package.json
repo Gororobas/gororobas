@@ -46,7 +46,6 @@
     "effect": "catalog:",
     "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
-    "loro-mirror": "catalog:",
     "mediabunny": "^1.61.0",
     "ollama": "^0.6.4",
     "openid-client": "^6.8.8",

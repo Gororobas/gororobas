@@ -1,4 +1,5 @@
 import { NodePath, NodeRuntime, NodeServices } from "@effect/platform-node"
+import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   MediaAssetId,
   MediaAssetRow,
@@ -18,7 +19,6 @@ import {
   WikiArticleRevisionId,
   WikiArticleRevisionRow,
   loroDocToUpdate,
-  parseWikiArticleCrdtUpdate,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { IdGenLive } from "@gororobas/server/id-gen-live"
@@ -297,7 +297,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                 )
                 const document = snapshotToLoroDoc(snapshot)
 
-                const parsed = yield* parseWikiArticleCrdtUpdate({
+                const parsed = yield* WikiArticleCrdt.parseUpdate({
                   snapshot,
                   crdtUpdate: LoroDocUpdate.make(loroDocToUpdate(document)),
                 }).pipe(

@@ -5,6 +5,7 @@ import { Locale } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
+import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import {
   CreateWikiArticlePayload,
   CreateWikiArticleRevisionPayload,
@@ -41,7 +42,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
   .add(
     HttpApiEndpoint.post("createWikiArticleRevision", "/wiki/:kind/:handle/revisions", {
       success: Schema.Struct({ id: WikiArticleRevisionId }),
-      error: WikiArticleNotFoundError,
+      error: Schema.Union([WikiArticleNotFoundError, InvalidCrdtUpdateError]),
       params: WikiArticleLookup,
       payload: CreateWikiArticleRevisionPayload,
     }),

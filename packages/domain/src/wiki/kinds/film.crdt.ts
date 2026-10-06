@@ -2,10 +2,10 @@ import { Effect, Schema } from "effect"
 
 import { TagId } from "../../common/ids.js"
 import { NameInCrdtList, UrlAsString } from "../../common/primitives.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import type { FilmEditableAttributes } from "./film.js"
 
 const directorsOperations = makeMovableListEditOperations("Director")({
@@ -62,7 +62,7 @@ const countryOperations = makeOptionalScalarEditOperations("FilmCountry")({
   keyInParentContainer: "country" satisfies keyof FilmEditableAttributes,
 })
 
-export const WikiFilmArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiFilmArticleCrdtOperations = defineCrdtOperations([
   ...urlOperations,
   ...countryOperations,
   ...directorsOperations,

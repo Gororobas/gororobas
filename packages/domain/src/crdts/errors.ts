@@ -7,6 +7,7 @@ export class InvalidCrdtUpdateError extends Schema.TaggedError<InvalidCrdtUpdate
   {
     reason: Schema.Union([Schema.Literal("InvalidFormat"), Schema.Literal("SchemaValidation")]),
   },
+  { httpApiStatus: 400 },
 ) {}
 
 export class CrdtListItemNotFoundError extends Schema.TaggedError<CrdtListItemNotFoundError>()(

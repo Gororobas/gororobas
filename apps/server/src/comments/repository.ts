@@ -7,6 +7,7 @@ import {
   CommentNotFoundError,
   CommentRow,
   CommentTranslationRow,
+  CommentCrdt,
   EMPTY_LORO_DOC_FRONTIER,
   type CrdtCommit,
   HumanCommit,
@@ -34,7 +35,6 @@ import {
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { materializeJunctionTable } from "../common/table-materialization.js"
-import { createCommentSnapshot, evolveCommentSnapshot } from "./comment-crdt-orchestration.js"
 import { type CreateCommentInput, type UpdateCommentInput } from "./comment-repository-inputs.js"
 import {
   deleteComment,
@@ -50,7 +50,6 @@ import {
   findCommentRowById,
   listCommentCommitRowsByCommentIdAsc,
   listCommentRowsByPublicationId,
-  listCommentTranslationRowsByCommentId,
 } from "./queries.js"
 export class CommentsRepository extends Context.Service<CommentsRepository>()(
   "CommentsRepository",
@@ -167,37 +166,6 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
           })
         })
 
-      const buildSourceDataFromMaterializedRows = (
-        translationRows: Array<CommentTranslationRow>,
-      ) => {
-        const toLocalizedData = (row: CommentTranslationRow) =>
-          row.translationSource === "ORIGINAL"
-            ? {
-                content: row.content,
-                originalLocale: row.originalLocale,
-                translatedAtCrdtFrontier: null,
-                translationSource: "ORIGINAL" as const,
-              }
-            : {
-                content: row.content,
-                originalLocale: row.originalLocale,
-                translatedAtCrdtFrontier: row.translatedAtCrdtFrontier ?? LoroDocFrontier.make([]),
-                translationSource: row.translationSource,
-              }
-
-        const enRow = translationRows.find((row) => row.locale === "en")
-        const esRow = translationRows.find((row) => row.locale === "es")
-        const ptRow = translationRows.find((row) => row.locale === "pt")
-
-        return {
-          locales: {
-            en: enRow ? toLocalizedData(enRow) : undefined,
-            es: esRow ? toLocalizedData(esRow) : undefined,
-            pt: ptRow ? toLocalizedData(ptRow) : undefined,
-          },
-        } as const
-      }
-
       /**
        * ======================
        *    BUSINESS LOGIC
@@ -209,7 +177,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         Effect.gen(function* () {
           const commentId = yield* IdGen.make(CommentId)
           const now = yield* DateTime.now
-          const created = createCommentSnapshot(input.sourceData)
+          const created = yield* CommentCrdt.create(input.sourceData)
 
           yield* persistCrdtDocumentCreation({
             insertCrdt: insertCommentCrdtRow(
@@ -239,7 +207,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
               ownerProfileId: input.ownerProfileId,
               parentCommentId: input.parentCommentId,
               publicationId: input.publicationId,
-              sourceData: created.sourceData,
+              sourceData: created.data,
             }),
           })
 
@@ -282,54 +250,34 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             })
           }
 
-          const translationRows = yield* listCommentTranslationRowsByCommentId(input.commentId)
-          const currentSourceData = buildSourceDataFromMaterializedRows(translationRows)
-
-          const nextSourceData: SourceCommentData = Predicate.isTagged(
-            input,
-            "HumanUpdatePtContent",
-          )
-            ? {
-                ...currentSourceData,
-                locales: {
-                  ...currentSourceData.locales,
-                  pt: currentSourceData.locales.pt
-                    ? {
-                        ...currentSourceData.locales.pt,
-                        content: input.content,
-                      }
-                    : {
-                        content: input.content,
-                        originalLocale: "pt",
-                        translatedAtCrdtFrontier: null,
-                        translationSource: "ORIGINAL",
-                      },
-                },
-              }
-            : {
-                ...currentSourceData,
-                locales: {
-                  ...currentSourceData.locales,
-                  [input.targetLocale]: {
-                    content: input.translatedContent,
-                    originalLocale: input.sourceLocale,
-                    translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
-                    translationSource: "AUTOMATIC",
-                  },
-                },
-              }
-
-          const commit: CrdtCommit = Predicate.isTagged(input, "HumanUpdatePtContent")
+          const commit: CrdtCommit = Predicate.isTagged(input, "HumanCrdtUpdate")
             ? HumanCommit.make({
                 personId: input.authorId,
               })
             : input.commit
 
-          const evolved = yield* evolveCommentSnapshot({
-            commit,
-            nextSourceData,
-            snapshot: current.crdtSnapshot,
-          })
+          const evolved = yield* Predicate.isTagged(input, "HumanCrdtUpdate")
+            ? CommentCrdt.applyUpdate({
+                commit,
+                crdtUpdate: input.crdtUpdate,
+                snapshot: current.crdtSnapshot,
+              })
+            : CommentCrdt.evolve({
+                commit,
+                snapshot: current.crdtSnapshot,
+                edits: [
+                  {
+                    _tag: "SetCommentLocale",
+                    locale: input.targetLocale,
+                    value: {
+                      content: input.translatedContent,
+                      originalLocale: input.sourceLocale,
+                      translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
+                      translationSource: "AUTOMATIC",
+                    },
+                  },
+                ],
+              })
 
           const now = yield* DateTime.now
 
@@ -341,18 +289,18 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             }),
             insertCommitOrUpdateRevision: insertCommentCommit({
               commentId: input.commentId,
-              commit: evolved.commit,
+              commit,
               crdtUpdate: evolved.crdtUpdate,
               fromCrdtFrontier: evolved.fromCrdtFrontier,
             }),
             materialize: materializeComment({
               commentId: input.commentId,
-              currentCrdtFrontier: evolved.nextFrontier,
+              currentCrdtFrontier: evolved.nextCrdtFrontier,
               moderationStatus: commentRow.moderationStatus,
               ownerProfileId: commentRow.ownerProfileId,
               parentCommentId: commentRow.parentCommentId,
               publicationId: commentRow.publicationId,
-              sourceData: evolved.sourceData,
+              sourceData: evolved.data,
             }),
           })
         })

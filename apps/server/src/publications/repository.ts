@@ -9,6 +9,7 @@ import {
   type PublicationClassification,
   PublicationCommitId,
   PublicationCrdtRow,
+  PublicationCrdt,
   PublicationConcurrentUpdateError,
   PublicationId,
   PublicationNotFoundError,
@@ -47,11 +48,6 @@ import {
   updatePublicationCrdtRow,
   upsertPublicationRow,
 } from "./mutations.js"
-import {
-  applyPublicationCrdtUpdateWithCommit,
-  createPublicationSnapshot,
-  createSystemTranslationCrdtUpdate,
-} from "./publication-crdt-orchestration.js"
 import {
   HumanCrdtUpdate,
   type CreatePublicationInput as CreatePublicationInputType,
@@ -246,7 +242,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           const publicationId = options.id ?? (yield* IdGen.make(PublicationId))
           const commitId = yield* IdGen.make(PublicationCommitId)
           const now = yield* DateTime.now
-          const created = createPublicationSnapshot(input.sourceData)
+          const created = yield* PublicationCrdt.create(input.sourceData)
 
           yield* persistCrdtDocumentCreation({
             insertCrdt: insertPublicationCrdtRow(
@@ -271,7 +267,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             materialize: materializePublication({
               currentCrdtFrontier: created.currentCrdtFrontier,
               publicationId,
-              sourceData: created.sourceData,
+              sourceData: created.data,
             }),
           })
 
@@ -322,22 +318,28 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
               })
             : input.commit
 
-          const crdtUpdate = Schema.is(HumanCrdtUpdate)(input)
-            ? input.crdtUpdate
-            : yield* createSystemTranslationCrdtUpdate({
-                commit: input.commit,
-                expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
+          const applied = yield* Schema.is(HumanCrdtUpdate)(input)
+            ? PublicationCrdt.applyUpdate({
+                commit,
+                crdtUpdate: input.crdtUpdate,
                 snapshot: current.crdtSnapshot,
-                sourceLocale: input.sourceLocale,
-                targetLocale: input.targetLocale,
-                translatedContent: input.translatedContent,
               })
-
-          const applied = yield* applyPublicationCrdtUpdateWithCommit({
-            commit,
-            crdtUpdate,
-            snapshot: current.crdtSnapshot,
-          })
+            : PublicationCrdt.evolve({
+                commit,
+                snapshot: current.crdtSnapshot,
+                edits: [
+                  {
+                    _tag: "SetPublicationLocale",
+                    locale: input.targetLocale,
+                    value: {
+                      content: input.translatedContent,
+                      originalLocale: input.sourceLocale,
+                      translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
+                      translationSource: "AUTOMATIC",
+                    },
+                  },
+                ],
+              })
 
           const commitId = yield* IdGen.make(PublicationCommitId)
           const now = yield* DateTime.now
@@ -360,7 +362,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             materialize: materializePublication({
               currentCrdtFrontier: applied.nextCrdtFrontier,
               publicationId: input.publicationId,
-              sourceData: applied.sourceData,
+              sourceData: applied.data,
             }),
           })
         })

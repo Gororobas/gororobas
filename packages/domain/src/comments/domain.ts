@@ -114,14 +114,8 @@ export const CreateCommentData = Schema.Struct({
 })
 export type CreateCommentData = typeof CreateCommentData.Type
 
-export const UpdateCommentData = Schema.Struct({
-  content: TiptapDocument,
-  expectedCurrentCrdtFrontier: LoroDocFrontier,
-})
-export type UpdateCommentData = typeof UpdateCommentData.Type
-
 export const ApiUpdateCommentData = Schema.Struct({
-  content: TiptapDocument,
+  crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 export type ApiUpdateCommentData = typeof ApiUpdateCommentData.Type

@@ -2,9 +2,9 @@ import { Effect, Schema } from "effect"
 
 import { ContentChannelType } from "../../common/enums.js"
 import { NameInCrdtList } from "../../common/primitives.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import type { ContentProducerEditableAttributes } from "./content-producer.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 
 const contentChannel = Schema.Struct({
   type: ContentChannelType,
@@ -31,7 +31,7 @@ const channelsOperations = makeMovableListEditOperations("Channel")({
     ),
 })
 
-export const WikiContentProducerArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiContentProducerArticleCrdtOperations = defineCrdtOperations([
   ...namesOperations,
   ...channelsOperations,
 ])

@@ -3,11 +3,11 @@ import { Effect, Schema } from "effect"
 import { GoogleBooksVolumeId } from "../../common/external-identifiers.js"
 import { TagId } from "../../common/ids.js"
 import { IntNonNegative, NameInCrdtList } from "../../common/primitives.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import type { BookEditableAttributes } from "./book.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 
 const authorsOperations = makeMovableListEditOperations("Author")({
   ValueSchema: NameInCrdtList.schema.fields.value,
@@ -79,7 +79,7 @@ const googleBooksVolumeIdOperations = makeOptionalScalarEditOperations("GoogleBo
   keyInParentContainer: "googleBooksVolumeId" satisfies keyof BookEditableAttributes,
 })
 
-export const WikiBookArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiBookArticleCrdtOperations = defineCrdtOperations([
   ...authorsOperations,
   ...bookTagOperations,
   ...editionOperations,

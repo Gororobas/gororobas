@@ -212,9 +212,6 @@ catalogs:
     loro-crdt:
       specifier: ^1.16.4
       version: 1.16.4
-    loro-mirror:
-      specifier: ^2.3.3
-      version: 2.3.3
     loro-prosemirror:
       specifier: 0.4.4
       version: 0.4.4
@@ -370,9 +367,6 @@ importers:
       loro-crdt:
         specifier: 'catalog:'
         version: 1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd)
-      loro-mirror:
-        specifier: 'catalog:'
-        version: 2.3.3(loro-crdt@1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd))
       mediabunny:
         specifier: ^1.61.0
         version: 1.61.3
@@ -429,9 +423,6 @@ importers:
       loro-crdt:
         specifier: 'catalog:'
         version: 1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd)
-      loro-mirror:
-        specifier: 'catalog:'
-        version: 2.3.3(loro-crdt@1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd))
       nanoid:
         specifier: 'catalog:'
         version: 6.0.1
@@ -531,9 +522,6 @@ importers:
       loro-crdt:
         specifier: 'catalog:'
         version: 1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd)
-      loro-mirror:
-        specifier: 'catalog:'
-        version: 2.3.3(loro-crdt@1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd))
     devDependencies:
       '@gel/generate':
         specifier: ^0.7.1
@@ -2570,9 +2558,6 @@ packages:
     resolution: {integrity: sha512-/8UvqAPU9DGTI9k4mxtf49U37Isfwr8Uts96+SBHIkFxPJnHS0Ew4f00sM4Scd8V8EjM0jUNtVDdv1kPdt35lg==}
     engines: {node: '>= 4'}
 
-  immer@10.2.0:
-    resolution: {integrity: sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw==}
-
   import-meta-resolve@4.2.0:
     resolution: {integrity: sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg==}
 
@@ -2799,11 +2784,6 @@ packages:
 
   loro-crdt@1.16.4:
     resolution: {integrity: sha512-UPufMpHSEMLRVjWfCjhVbOD8nkCDwxdfVk4Uer6xTEFAcNn+X+oGYWGgIIYuAgofc8UiI0ERZUIMnP7ib/kh6w==}
-
-  loro-mirror@2.3.3:
-    resolution: {integrity: sha512-hu09GaKQHtUnqEjBA0nFUsr213txmFITX9Km1htz+8MN04iccKI96n0zSdMDFCEzxSgaI9jiTLHU427GkZW6IA==}
-    peerDependencies:
-      loro-crdt: ^1.16.0
 
   loro-prosemirror@0.4.4:
     resolution: {integrity: sha512-9Ttd3yHcb6Y+qxsqiS+fNMy9c9bNeimlLd7FShbVwRUBer8iosI9txWZlegzKnNjUUqIRyV15ybM6w3c2zS+Jg==}
@@ -5087,8 +5067,6 @@ snapshots:
 
   ignore@7.0.12: {}
 
-  immer@10.2.0: {}
-
   import-meta-resolve@4.2.0: {}
 
   inherits@2.0.4: {}
@@ -5275,11 +5253,6 @@ snapshots:
       '@lmdb/lmdb-win32-x64': 3.5.7
 
   loro-crdt@1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd): {}
-
-  loro-mirror@2.3.3(loro-crdt@1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd)):
-    dependencies:
-      immer: 10.2.0
-      loro-crdt: 1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd)
 
   loro-prosemirror@0.4.4(loro-crdt@1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd)):
     dependencies:

@@ -2,9 +2,9 @@ import { Effect, Schema } from "effect"
 
 import { ResourceFormat } from "../../common/enums.js"
 import { TagId } from "../../common/ids.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import type { ResourceEditableAttributes } from "./resource.js"
 
 const formatOperations = makeOptionalScalarEditOperations("Format")({
@@ -31,7 +31,7 @@ const resourceTagOperations = makeStringSetEditOperations("ResourceTag")({
     Effect.succeed(document.getMap("attributes").ensureMergeableMap("tags")),
 })
 
-export const WikiResourceArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiResourceArticleCrdtOperations = defineCrdtOperations([
   ...formatOperations,
   ...urlOperations,
   ...creditLineOperations,

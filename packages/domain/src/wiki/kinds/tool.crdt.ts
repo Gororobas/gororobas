@@ -1,8 +1,8 @@
 import { Effect } from "effect"
 
 import { ToolUsage } from "../../common/enums.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 import { WikiToolArticle } from "./tool.js"
 
 const toolUsageOperations = makeStringSetEditOperations("ToolUsage")({
@@ -15,5 +15,5 @@ const toolUsageOperations = makeStringSetEditOperations("ToolUsage")({
     ),
 })
 
-export const WikiToolArticleCrdtOperations = defineKindCrdtOperations(toolUsageOperations)
+export const WikiToolArticleCrdtOperations = defineCrdtOperations(toolUsageOperations)
 export type WikiToolArticleAttributeEdit = typeof WikiToolArticleCrdtOperations.AttributeEdit.Type

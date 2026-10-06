@@ -1,4 +1,6 @@
 import { NodePath } from "@effect/platform-node"
+import { WikiArticleCrdt } from "@gororobas/domain"
+import { PublicationCrdt } from "@gororobas/domain"
 import {
   PersonId,
   LoroDocSnapshot,
@@ -7,9 +9,6 @@ import {
   WikiArticleId,
   PublicationId,
   PublicationSourceData,
-  PublicationSourceDataStorage,
-  publicationSourceDataStorageToSourcePublicationData,
-  parseWikiArticleCrdtUpdate,
   loroDocToSnapshot,
   loroDocToUpdate,
   snapshotToLoroDoc,
@@ -69,7 +68,7 @@ export const readPreviewDataset = (directory: string) =>
             const crdt = yield* findCrdtRowById(id).pipe(Effect.map(Option.getOrThrow))
             const row = yield* findDatabaseRowById(id).pipe(Effect.map(Option.getOrThrow))
             const translations = yield* findTranslationRows(id)
-            const article = yield* parseWikiArticleCrdtUpdate({
+            const article = yield* WikiArticleCrdt.parseUpdate({
               snapshot: crdt.crdtSnapshot,
               crdtUpdate: LoroDocUpdate.make(loroDocToUpdate(snapshotToLoroDoc(crdt.crdtSnapshot))),
             })
@@ -97,7 +96,7 @@ export const readPreviewDataset = (directory: string) =>
               const from = document.frontiers()
               document.import(revision.crdtUpdate)
               const snapshot = LoroDocSnapshot.make(loroDocToSnapshot(document))
-              const parsed = yield* parseWikiArticleCrdtUpdate({
+              const parsed = yield* WikiArticleCrdt.parseUpdate({
                 snapshot,
                 crdtUpdate: LoroDocUpdate.make(loroDocToUpdate(document)),
               })
@@ -143,10 +142,7 @@ export const readPreviewDataset = (directory: string) =>
             Effect.map(Option.getOrThrow),
           )
           const row = yield* findPublicationRowById(id).pipe(Effect.map(Option.getOrThrow))
-          const storage = yield* Schema.decodeEffect(PublicationSourceDataStorage)(
-            snapshotToLoroDoc(crdt.crdtSnapshot).toJSON(),
-          )
-          const publication = publicationSourceDataStorageToSourcePublicationData(storage)
+          const publication = yield* PublicationCrdt.read(snapshotToLoroDoc(crdt.crdtSnapshot))
 
           const tags = yield* SqlSchema.findAll({
             Request: PublicationId,

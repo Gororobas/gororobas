@@ -257,7 +257,7 @@ The server owns signup and sign-in through Yielded magic-link proofs. Import acc
 ### Step 1: Setup Migration Infrastructure
 1. Create `packages/migration/package.json` with dependencies:
    - `effect`, `@effect/sql-sqlite-node`
-   - `loro-crdt`, `loro-mirror`
+   - `loro-crdt`
    - `json-diff-ts` for reading existing diffs
 
 2. Implement `MigrationContext` service based on reference implementation

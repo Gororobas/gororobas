@@ -1,6 +1,5 @@
+import { WikiArticleCrdt } from "@gororobas/domain"
 import {
-  applyWikiArticleCrdtUpdateWithCommit,
-  createWikiArticleCrdtDocument,
   CreateWikiArticleInput,
   CreateWikiArticleRevisionInput,
   editableToMaterializedArticle,
@@ -13,7 +12,6 @@ import {
   LoroDocFrontier,
   loroDocToSnapshot,
   NameInCrdtList,
-  parseWikiArticleCrdtUpdate,
   stringToHandle,
   WikiArticleEditableData,
   WikiArticleHandleMaterializedRow,
@@ -250,7 +248,7 @@ const createWikiArticle = (
       const wikiArticleId = options.id ?? (yield* IdGen.make(WikiArticleId))
       const revisionId = yield* IdGen.make(WikiArticleRevisionId)
       const now = yield* DateTime.now
-      const created = yield* createWikiArticleCrdtDocument(input.wikiArticle)
+      const created = yield* WikiArticleCrdt.create(input.wikiArticle)
 
       yield* persistCrdtDocumentCreation({
         insertCrdt: insertCrdtRow({
@@ -275,14 +273,14 @@ const createWikiArticle = (
         }),
         materialize: materializeArticle({
           currentCrdtFrontier: created.currentCrdtFrontier,
-          sourceData: input.wikiArticle,
+          sourceData: created.data,
           status: input.status,
           wikiArticleId,
         }),
       })
 
       return {
-        ...input.wikiArticle,
+        ...created.data,
         id: wikiArticleId,
         currentCrdtFrontier: created.currentCrdtFrontier,
       }
@@ -313,7 +311,7 @@ const createRevision = (input: CreateWikiArticleRevisionInput) =>
         ),
       )
 
-      const applied = yield* applyWikiArticleCrdtUpdateWithCommit({
+      const applied = yield* WikiArticleCrdt.applyUpdate({
         commit: HumanCommit.make({ personId: input.createdById }),
         crdtUpdate: input.crdtUpdate,
         snapshot: article.crdtSnapshot,
@@ -383,7 +381,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
       )
 
       const previous = yield* findDatabaseRowById(article.id)
-      const updated = yield* parseWikiArticleCrdtUpdate({
+      const updated = yield* WikiArticleCrdt.parseUpdate({
         crdtUpdate: revision.crdtUpdate,
         snapshot: article.crdtSnapshot,
       })
@@ -391,12 +389,12 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
       yield* persistCrdtDocumentUpdate({
         updateCrdtRow: updateCrdtRow({
           ...article,
-          crdtSnapshot: loroDocToSnapshot(updated.loroDoc),
+          crdtSnapshot: loroDocToSnapshot(updated.document),
           updatedAt: now,
         }),
         insertCommitOrUpdateRevision: updateRevisionRow(evaluatedRevision),
         materialize: materializeArticle({
-          currentCrdtFrontier: LoroDocFrontier.make(updated.loroDoc.frontiers()),
+          currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
           sourceData: updated.data,
           status: article.status,
           wikiArticleId: article.id,
@@ -407,7 +405,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
         article: {
           ...updated.data,
           id: article.id,
-          currentCrdtFrontier: LoroDocFrontier.make(updated.loroDoc.frontiers()),
+          currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
         },
         previous: Option.getOrUndefined(previous),
       }

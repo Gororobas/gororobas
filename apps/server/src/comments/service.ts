@@ -10,7 +10,7 @@ import {
 import { Effect, Option, Context } from "effect"
 
 import { PublicationsRepository } from "../publications/repository.js"
-import { HumanUpdatePtContent } from "./comment-repository-inputs.js"
+import { HumanCrdtUpdate } from "./comment-repository-inputs.js"
 import { CommentsRepository } from "./repository.js"
 
 export class CommentsService extends Context.Service<CommentsService>()("CommentsService", {
@@ -81,18 +81,18 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
 
     const updateComment = (input: {
       commentId: CommentId
-      content: HumanUpdatePtContent["content"]
-      expectedCurrentCrdtFrontier: HumanUpdatePtContent["expectedCurrentCrdtFrontier"]
+      crdtUpdate: HumanCrdtUpdate["crdtUpdate"]
+      expectedCurrentCrdtFrontier: HumanCrdtUpdate["expectedCurrentCrdtFrontier"]
     }) =>
       Effect.gen(function* () {
         const row = yield* getCommentById(input.commentId)
         const session = yield* Policies.comments.canEdit(row.ownerProfileId)
 
         yield* commentsRepository.updateComment(
-          HumanUpdatePtContent.make({
+          HumanCrdtUpdate.make({
             authorId: session.personId,
             commentId: input.commentId,
-            content: input.content,
+            crdtUpdate: input.crdtUpdate,
             expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
           }),
         )

@@ -2,10 +2,10 @@ import { Effect } from "effect"
 
 import { AnimalRole } from "../../common/enums.js"
 import { NameInCrdtList } from "../../common/primitives.js"
+import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import type { AnimalEditableAttributes } from "./animal.js"
-import { defineKindCrdtOperations } from "./define-kind-crdt-operations.js"
 
 const scientificNameOperations = makeMovableListEditOperations("ScientificName")({
   ValueSchema: NameInCrdtList.schema.fields.value,
@@ -27,7 +27,7 @@ const animalRoleOperations = makeStringSetEditOperations("AnimalRole")({
     ),
 })
 
-export const WikiAnimalArticleCrdtOperations = defineKindCrdtOperations([
+export const WikiAnimalArticleCrdtOperations = defineCrdtOperations([
   ...scientificNameOperations,
   ...animalRoleOperations,
 ])

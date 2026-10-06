@@ -8,7 +8,7 @@ import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import { coreWikiArticleMaterializedRowFields } from "../../src/wiki/kinds/define-kind.js"
 import { WikiPlantCultivarArticleCrdtOperations } from "../../src/wiki/kinds/plant-cultivar.crdt.js"
 import { CultivarProperty, WikiPlantCultivarArticle } from "../../src/wiki/kinds/plant-cultivar.js"
-import { applyWikiArticleEdit } from "../../src/wiki/wiki-article-crdt.js"
+import { WikiArticleCrdt } from "../../src/wiki/wiki-article-crdt.js"
 import {
   WikiArticleEditableData,
   WikiArticleKind,
@@ -128,7 +128,7 @@ describe("Plant cultivar wiki kind", () => {
       predicate: (edit) =>
         Effect.gen(function* () {
           const document = new LoroDoc()
-          yield* applyWikiArticleEdit(document, edit)
+          yield* WikiArticleCrdt.applyEdit(document, edit)
           const attributes = document.getMap("attributes").toJSON()
           const encoded = yield* Schema.encodeEffect(
             WikiPlantCultivarArticleCrdtOperations.AttributeEdit,
@@ -148,7 +148,7 @@ describe("Plant cultivar wiki kind", () => {
         const document = new LoroDoc()
         const decode = Schema.decodeSync(WikiPlantCultivarArticleCrdtOperations.AttributeEdit)
 
-        yield* applyWikiArticleEdit(
+        yield* WikiArticleCrdt.applyEdit(
           document,
           decode({
             _tag: "SetPlantCultivarUsage",
@@ -156,7 +156,7 @@ describe("Plant cultivar wiki kind", () => {
           }),
         )
 
-        yield* applyWikiArticleEdit(
+        yield* WikiArticleCrdt.applyEdit(
           document,
           decode({
             _tag: "SetPlantCultivarHeight",
@@ -168,7 +168,7 @@ describe("Plant cultivar wiki kind", () => {
           [{ _tag: "Inherit" }, { _tag: "Unknown" }, { _tag: "Value", value: [] }] as const,
           (state) =>
             Effect.gen(function* () {
-              yield* applyWikiArticleEdit(
+              yield* WikiArticleCrdt.applyEdit(
                 document,
                 decode({ _tag: "SetPlantCultivarUsage", value: state }),
               )

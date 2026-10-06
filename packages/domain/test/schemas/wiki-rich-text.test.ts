@@ -18,11 +18,7 @@ import { toLoroValue } from "../../src/crdts/loro-values.js"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { assertPropertyEffect } from "../../src/testing.js"
 import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
-import {
-  applyWikiArticleCrdtUpdateWithCommit,
-  createWikiArticleCrdtDocument,
-  parseWikiArticleCrdtUpdate,
-} from "../../src/wiki/wiki-article-crdt.js"
+import { WikiArticleCrdt } from "../../src/wiki/wiki-article-crdt.js"
 
 const editorSchema = new ProseMirrorSchema({
   nodes: {
@@ -115,10 +111,10 @@ const getContent = (document: LoroDoc): LoroNode => {
 }
 
 const parse = (
-  created: Effect.Success<ReturnType<typeof createWikiArticleCrdtDocument>>,
+  created: Effect.Success<ReturnType<typeof WikiArticleCrdt.create>>,
   document: LoroDoc,
 ) =>
-  parseWikiArticleCrdtUpdate({
+  WikiArticleCrdt.parseUpdate({
     snapshot: created.crdtSnapshot,
     crdtUpdate: loroDocToUpdate(document),
   })
@@ -132,7 +128,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
         predicate: (input) =>
           Effect.gen(function* () {
             const content = makeContent(input)
-            const created = yield* createWikiArticleCrdtDocument(makeArticle(content))
+            const created = yield* WikiArticleCrdt.create(makeArticle(content))
             const document = snapshotToLoroDoc(created.crdtSnapshot)
             const root = getContent(document)
             // oxlint-disable-next-line effect/avoid-native-object-helpers -- The binding requires its mutable native Map cache.
@@ -167,7 +163,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
   it.effect("preserves concurrent text insertions and marks through approval", () =>
     Effect.gen(function* () {
       const content = makeContent({ first: "Hello", second: " world", level: 2 })
-      const created = yield* createWikiArticleCrdtDocument(makeArticle(content))
+      const created = yield* WikiArticleCrdt.create(makeArticle(content))
       const first = snapshotToLoroDoc(created.crdtSnapshot)
       const second = first.fork()
 
@@ -189,7 +185,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
       secondText.insert(5, "!")
       first.import(loroDocToUpdate(second))
 
-      const committed = yield* applyWikiArticleCrdtUpdateWithCommit({
+      const committed = yield* WikiArticleCrdt.applyUpdate({
         snapshot: created.crdtSnapshot,
         crdtUpdate: loroDocToUpdate(first),
         commit: CrdtCommit.make({
@@ -210,7 +206,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
 
   it.effect("rejects malformed rich-text subtrees instead of dropping them", () =>
     Effect.gen(function* () {
-      const created = yield* createWikiArticleCrdtDocument(
+      const created = yield* WikiArticleCrdt.create(
         makeArticle(makeContent({ first: "Hello", second: "world", level: 1 })),
       )
       const document = snapshotToLoroDoc(created.crdtSnapshot)
