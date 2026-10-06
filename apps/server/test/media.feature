@@ -7,11 +7,11 @@ Feature: Media
     Background:
       Given the following people exist:
         | name     | accessLevel |
-        | Ailton   | ADMIN        |
-        | Ana      | MODERATOR    |
-        | Irene    | COMMUNITY    |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
+        | Ailton   | ADMIN       |
+        | Ana      | MODERATOR   |
+        | Irene    | COMMUNITY   |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
 
     Scenario: Public publication media is visible to the same audience as the publication
       Given "Irene" is logged in
@@ -42,6 +42,24 @@ Feature: Media
       When they create a "PUBLIC" publication under their profile
       And they upload media to the publication
       Then the publication is created in "Pedro"'s profile
+      And the media is attached to the publication
+      And the media should have the following visibility:
+        | viewer   | visible |
+        | Pedro    | yes     |
+        | Ailton   | yes     |
+        | Ana      | yes     |
+        | Irene    | no      |
+        | Gusttavo | no      |
+        | visitors | no      |
+      When "Ana" promotes "Pedro" to COMMUNITY
+      Then the same media should have the following visibility:
+        | viewer   | visible |
+        | Pedro    | yes     |
+        | Ailton   | yes     |
+        | Ana      | yes     |
+        | Irene    | yes     |
+        | Gusttavo | yes     |
+        | visitors | yes     |
 
     Scenario: Blocked person cannot upload media inside publications
       Given "Gusttavo" is logged in
@@ -53,15 +71,16 @@ Feature: Media
       When they try to upload media to a publication
       Then access is denied
 
-  Rule: Wiki article media is always public and can be moderated
+  Rule: Uncensored wiki article media is public and can be moderated
+    Moderators and admins can censor wiki article media; ordinary community members cannot.
 
     Background:
       Given the following people exist:
         | name     | accessLevel |
-        | Ana      | MODERATOR    |
-        | Maria    | COMMUNITY    |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
+        | Ana      | MODERATOR   |
+        | Maria    | COMMUNITY   |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
       And the wiki articles "Mandioca" and "Banana" exist
 
     Scenario: Member with community access attaches media to a wiki article
@@ -88,6 +107,13 @@ Feature: Media
       Then the media has moderation_status "CENSORED"
       And visitors cannot access the media
       And the media is hidden on wiki article "Mandioca"
+
+    Scenario: Community member cannot censor wiki article media
+      Given "Maria" has uploaded media attached to wiki article "Mandioca"
+      When "Maria" tries to censor the media
+      Then access is denied
+      And visitors can access the media
+      And the media is visible on wiki article "Mandioca"
 
     Scenario: Censoring hides media everywhere it is attached
       Given "Maria" is logged in

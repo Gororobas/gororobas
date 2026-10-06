@@ -4,15 +4,18 @@ Feature: Publications
   Publications are either posts or events, for when they have a date and location.
 
   Rule: Post publications visibility
+    While their author is a NEWCOMER, personal publications are visible only to
+    their author, moderators, and admins, even when their visibility is PUBLIC.
+    Approval of the person makes their existing PUBLIC publications visible to everyone.
 
     Background:
       Given the following people exist:
         | name     | accessLevel |
-        | Ailton   | ADMIN        |
-        | Ana      | MODERATOR    |
-        | Irene    | COMMUNITY    |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
+        | Ailton   | ADMIN       |
+        | Ana      | MODERATOR   |
+        | Irene    | COMMUNITY   |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
 
     Scenario: Person with community access creates truly public post publications
       Given "Ailton" is logged in
@@ -51,6 +54,15 @@ Feature: Publications
         | Irene    | no      |
         | Gusttavo | no      |
         | visitors | no      |
+      When "Ana" promotes "Pedro" to COMMUNITY
+      Then the same post publication should have the following visibility:
+        | viewer   | visible |
+        | Pedro    | yes     |
+        | Ailton   | yes     |
+        | Ana      | yes     |
+        | Irene    | yes     |
+        | Gusttavo | yes     |
+        | visitors | yes     |
 
     Scenario: Blocked person cannot create post publications
       Given "Gusttavo" is logged in
@@ -67,8 +79,8 @@ Feature: Publications
     Background:
       Given the following people exist:
         | name  | accessLevel |
-        | Maria | COMMUNITY    |
-        | Irene | COMMUNITY    |
+        | Maria | COMMUNITY   |
+        | Irene | COMMUNITY   |
 
     Scenario: Person with community access creates a public event publication with date and location
       Given "Maria" is logged in
@@ -89,19 +101,19 @@ Feature: Publications
       Given the organization "Sítio Semente" exists
       And the following people exist:
         | name     | accessLevel |
-        | Maria    | COMMUNITY    |
-        | Carlos   | COMMUNITY    |
-        | Teresa   | COMMUNITY    |
-        | Xavier   | COMMUNITY    |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
+        | Maria    | COMMUNITY   |
+        | Carlos   | COMMUNITY   |
+        | Teresa   | COMMUNITY   |
+        | Xavier   | COMMUNITY   |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
       And the following members exist for "Sítio Semente":
         | name   | organizationAccessLevel |
         | Maria  | MANAGER                 |
         | Carlos | EDITOR                  |
         | Teresa | VIEWER                  |
 
-      Scenario: Editor publishes a community-only post
+    Scenario: Editor publishes a community-only post
       Given "Carlos" is logged in
       When they create a "COMMUNITY" post publication under "Sítio Semente" profile
       Then the post publication should have the following visibility:
@@ -125,10 +137,10 @@ Feature: Publications
       Given the organization "Sítio Semente" exists
       And the following people exist:
         | name   | accessLevel |
-        | Maria  | COMMUNITY    |
-        | Carlos | COMMUNITY    |
-        | Teresa | COMMUNITY    |
-        | Xavier | COMMUNITY    |
+        | Maria  | COMMUNITY   |
+        | Carlos | COMMUNITY   |
+        | Teresa | COMMUNITY   |
+        | Xavier | COMMUNITY   |
       And the following members exist for "Sítio Semente":
         | name   | organizationAccessLevel |
         | Maria  | MANAGER                 |
@@ -173,14 +185,15 @@ Feature: Publications
     Background:
       Given the organization "Sítio Semente" exists
       And the following people exist:
-        | name  | accessLevel |
-        | Maria | COMMUNITY    |
-        | Carlos | COMMUNITY    |
+        | name   | accessLevel |
+        | Maria  | COMMUNITY   |
+        | Carlos | COMMUNITY   |
       And the following members exist for "Sítio Semente":
         | name   | organizationAccessLevel |
         | Maria  | MANAGER                 |
         | Carlos | EDITOR                  |
       And "Maria" has created a post under "Sítio Semente" with content "Reunião cancelada"
+      And "Sítio Semente" displays members in "PRIVATE"
 
     Scenario: Post history shows all edits with authors
       Given "Carlos" is logged in
@@ -188,17 +201,18 @@ Feature: Publications
       Then the post publication history should contain 2 versions
       And the post publication history should match:
         | version | author | content                    |
-        |       1 | Maria  | Reunião cancelada          |
-        |       2 | Carlos | Reunião adiada para amanhã |
+        | 1       | Maria  | Reunião cancelada          |
+        | 2       | Carlos | Reunião adiada para amanhã |
 
   Rule: Posts have comments
+    Moderators and admins can censor comments; ordinary community members cannot.
 
     Background:
       Given the following people exist:
         | name  | accessLevel |
-        | Maria | COMMUNITY    |
-        | Pedro | NEWCOMER     |
-        | Ana   | MODERATOR    |
+        | Maria | COMMUNITY   |
+        | Pedro | NEWCOMER    |
+        | Ana   | MODERATOR   |
       And "Maria" has created a "PUBLIC" post with content "Canteiro novo"
       And "Pedro" is logged in
 
@@ -219,43 +233,56 @@ Feature: Publications
       Then the comment becomes hidden on the post publication
       And the comment has moderation_status "CENSORED"
 
+    Scenario: Community member cannot censor a comment
+      Given "Maria" has commented on the post publication with "Que massa!"
+      When "Maria" tries to censor the comment
+      Then access is denied
+      And the comment remains visible on the post publication
+      And the comment has moderation_status "APPROVED_BY_DEFAULT"
+
   Rule: Member visibility affects public attribution
+    Organization members visibility controls both the contributors list and author identities
+    in publication history. Hidden attribution does not hide the PUBLIC publication itself.
 
     Background:
       Given the organization "Gororobas" exists
       And the following people exist:
-        | name   | accessLevel |
-        | Maria  | COMMUNITY    |
-        | Carlos | COMMUNITY    |
-        | Xavier | COMMUNITY    |
-        | Pedro  | NEWCOMER     |
+        | name     | accessLevel |
+        | Maria    | COMMUNITY   |
+        | Carlos   | COMMUNITY   |
+        | Xavier   | COMMUNITY   |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
       And the following members exist for "Gororobas":
         | name   | organizationAccessLevel |
         | Maria  | MANAGER                 |
         | Carlos | EDITOR                  |
       And a "PUBLIC" post exists on "Gororobas" with contributors "Maria" and "Carlos"
+      And the post history contains versions authored by "Maria" and "Carlos"
 
-    Scenario: Members see contributors when visibility is private
-      Given "Gororobas" displays members in "PRIVATE"
-      Then post contributors are visible to:
-        | viewer   |
-        | Maria    |
-        | Carlos   |
-
-    Scenario: Community sees contributors when visibility is community
-      Given "Gororobas" displays members in "COMMUNITY"
-      Then post contributors are visible to:
-        | viewer |
-        | Xavier |
-        | Maria  |
-        | Carlos |
-
-    Scenario: Everyone sees contributors when visibility is public
-      Given "Gororobas" displays members in "PUBLIC"
-      Then post contributors are visible to:
-        | viewer   |
-        | visitors |
-        | Pedro    |
-        | Xavier   |
-        | Maria    |
-        | Carlos   |
+    Scenario Outline: Member visibility controls contributor and history author attribution
+      Given "Gororobas" displays members in "<membersVisibility>"
+      When "<viewer>" views the post publication
+      Then the post publication is visible
+      And contributor identities have accessibility "<can_access>"
+      And author identities in the post publication history have accessibility "<can_access>"
+      Examples:
+        | membersVisibility | viewer   | can_access |
+        | PRIVATE           | Maria    | yes        |
+        | PRIVATE           | Carlos   | yes        |
+        | PRIVATE           | Xavier   | no         |
+        | PRIVATE           | Pedro    | no         |
+        | PRIVATE           | Gusttavo | no         |
+        | PRIVATE           | visitors | no         |
+        | COMMUNITY         | Maria    | yes        |
+        | COMMUNITY         | Carlos   | yes        |
+        | COMMUNITY         | Xavier   | yes        |
+        | COMMUNITY         | Pedro    | no         |
+        | COMMUNITY         | Gusttavo | no         |
+        | COMMUNITY         | visitors | no         |
+        | PUBLIC            | Maria    | yes        |
+        | PUBLIC            | Carlos   | yes        |
+        | PUBLIC            | Xavier   | yes        |
+        | PUBLIC            | Pedro    | yes        |
+        | PUBLIC            | Gusttavo | yes        |
+        | PUBLIC            | visitors | yes        |

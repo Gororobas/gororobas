@@ -1,123 +1,12 @@
 Feature: Wiki articles
   The wiki article encyclopedia is a collaborative wiki of hundreds of species.
   Community members contribute knowledge about agroecological properties.
-
-  Rule: Only approved members can contribute to the encyclopedia
-
-    Background:
-      Given the following people exist:
-        | name     | accessLevel |
-        | Maria    | COMMUNITY    |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
-
-    Scenario: Person with community access creates a new wiki article
-      When "Maria" creates a wiki article
-      Then the wiki article is created
-      And the wiki article is immediately visible in the encyclopedia
-
-    Scenario: Person awaiting community access cannot create wiki articles
-      When "Pedro" tries to create a wiki article
-      Then access is denied
-
-    Scenario: Blocked person cannot create wiki articles
-      When "Gusttavo" tries to create a wiki article
-      Then access is denied
-
-  Rule: All edits create revisions that need evaluation
-
-    Background:
-      Given the following people exist:
-        | name  | accessLevel |
-        | Maria | COMMUNITY    |
-        | Carlos | COMMUNITY   |
-      And the wiki article "Mandioca" exists with content "Raiz tuberosa"
-
-    Scenario: Member with community access submits an edit for review
-      When "Maria" edits "Mandioca" content to "Raiz tuberosa rica em amido"
-      Then a revision is created with:
-        | field      | value   |
-        | evaluation | PENDING |
-        | created_by | Maria   |
-      And the wiki article content remains "Raiz tuberosa"
-
-    Scenario: Multiple pending revisions can coexist
-      Given "Maria" has submitted an edit to "Mandioca"
-      When "Carlos" has submitted an edit to "Mandioca"
-      Then there are 2 PENDING revisions for "Mandioca"
-      And the wiki article content remains "Raiz tuberosa"
-
-  Rule: Moderators and admins evaluate revisions
-
-    Background:
-      Given the following people exist:
-        | name   | accessLevel |
-        | Maria  | COMMUNITY    |
-        | Ana    | MODERATOR    |
-        | Ailton | ADMIN        |
-      And the wiki article "Mandioca" exists with content "Raiz tuberosa"
-
-    Scenario: Moderator approves a revision
-      Given "Maria" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
-      When "Ana" approves the revision
-      Then the revision evaluation becomes "APPROVED"
-      And the revision shows evaluated by "Ana"
-      And the wiki article content becomes "Raiz rica em amido"
-
-    Scenario: Admin approves a revision
-      Given "Maria" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
-      When "Ailton" approves the revision
-      Then the revision evaluation becomes "APPROVED"
-      And the revision shows evaluated by "Ailton"
-      And the wiki article content becomes "Raiz rica em amido"
-
-    Scenario: Moderator rejects a revision
-      Given "Maria" has submitted an edit changing "Mandioca" content to "Informação incorreta"
-      When "Ana" rejects the revision
-      Then the revision evaluation becomes "REJECTED"
-      And the wiki article content remains "Raiz tuberosa"
-
-    Scenario: Member with community access cannot evaluate revisions
-      Given "Maria" has submitted an edit to "Mandioca"
-      When "Maria" tries to approve the revision
-      Then access is denied
-
-    Scenario: Rejected revisions remain in history
-      Given "Maria" has submitted an edit to "Mandioca"
-      And "Ana" has rejected the revision
-      When viewing "Mandioca" revision history
-      Then the rejected revision is visible with its rejection status
-
-  Rule: Moderators and admins can self-approve their edits
-
-    Background:
-      Given the following people exist:
-        | name   | accessLevel |
-        | Ana    | MODERATOR    |
-        | Ailton | ADMIN        |
-      And the wiki article "Mandioca" exists with content "Raiz tuberosa"
-
-    Scenario: Moderator can approve their own revision
-      Given "Ana" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
-      When "Ana" approves the revision
-      Then the wiki article content becomes "Raiz rica em amido"
-      And the revision shows "Ana" as both editor and evaluator
-
-    Scenario: Admin can approve their own revision
-      Given "Ailton" has submitted an edit changing "Mandioca" content to "Raiz rica em amido"
-      When "Ailton" approves the revision
-      Then the wiki article content becomes "Raiz rica em amido"
+  Creation, revision evaluation, and audit history are specified in wiki-revisions.feature.
 
   Rule: Wiki articles support multiple translations
 
     Background:
-      Given "Maria" has COMMUNITY access
-      And the wiki article "Mandioca" exists with pt content "Raiz tuberosa"
-
-    Scenario: Add translation to another locale
-      Given "Maria" has submitted a es translation for "Mandioca" with content "Raíz rica en almidón"
-      When the revision is APPROVED
-      Then "Mandioca" has es content "Raíz rica en almidón"
+      Given the wiki article "Mandioca" exists with pt content "Raiz tuberosa"
 
     Scenario: Viewing wiki article in unsupported locale falls back to original
       Given "Mandioca" has only pt content "Raiz tuberosa"
@@ -125,39 +14,62 @@ Feature: Wiki articles
       Then they see content "Raiz tuberosa"
       And they see an indicator that Spanish translation is unavailable
 
-    Scenario: Edit existing translation
-      Given "Mandioca" has es content "Raíz"
-      And "Maria" has submitted an edit to "Mandioca" es content "Raíz tuberosa"
-      When the revision is APPROVED
-      Then "Mandioca" es content becomes "Raíz tuberosa"
-
-  Rule: Wiki articles can be categorized by kind
+  Rule: Plant cultivars reference parent plants and preserve authored property states
+    Cultivar properties have three states: Unknown, Inherit, and Value.
+    Omitted properties default to Unknown. Only Inherit resolves the parent's current value.
+    Parent information can be displayed alongside Unknown without changing the authored state.
 
     Background:
       Given "Maria" has COMMUNITY access
-      And the wiki article "Banana" exists
+      And "Ana" is a MODERATOR
+      And the published plant article "Banana" exists
 
-    Scenario: Create a categorized article
-      When "Maria" creates a kind for "Banana" with:
-        | field        | value        |
-        | handle       | banana-prata |
-        | common_names | Banana Prata |
-      Then the kind "Banana Prata" is created under "Banana"
+    Scenario: Create a plant cultivar linked to its parent
+      When "Maria" proposes a plant cultivar article for "Banana" with:
+        | field       | value        |
+        | commonNames | Banana Prata |
+      Then a creation revision is created with "PENDING" evaluation, created by "Maria"
+      And "Banana Prata" is not visible in "Banana"'s cultivars list
+      When "Ana" approves the creation revision
+      Then "Banana Prata" is published with kind "PLANT_CULTIVAR"
+      And "Banana Prata"'s parentPlantId references "Banana"
 
-    Scenario: A categorized article inherits parent properties by default
-      Given "Banana" has lifecycle "PERENNIAL"
-      When "Maria" creates a kind "Banana Prata" without specifying lifecycle
-      Then "Banana Prata" shows lifecycle "PERENNIAL"
+    Scenario: Omitted cultivar properties remain Unknown
+      Given "Banana" has lifecycles "PERENNIAL"
+      When "Maria" proposes "Banana Prata" without specifying lifecycles
+      And "Ana" approves the creation revision
+      Then "Banana Prata"'s lifecycles property has state "Unknown"
+      And parent lifecycles "PERENNIAL" do not become "Banana Prata"'s authored lifecycles
 
-    Scenario: A categorized article can override parent properties
+    Scenario: Explicit inheritance resolves the parent property
+      Given "Banana" has lifecycles "PERENNIAL"
+      When "Maria" proposes "Banana Prata" with lifecycles state "Inherit"
+      And "Ana" approves the creation revision
+      Then "Banana Prata"'s lifecycles property has state "Inherit"
+      And "Banana Prata"'s resolved lifecycles are "PERENNIAL"
+
+    Scenario: Explicit cultivar values override parent values
       Given "Banana" has development cycle 300-400 days
-      When "Maria" creates a kind "Banana Nanica" with development cycle 270-330 days
-      Then "Banana Nanica" shows development cycle 270-330 days
+      When "Maria" proposes "Banana Nanica" with developmentCycle state "Value" and range 270-330 days
+      And "Ana" approves the creation revision
+      Then "Banana Nanica"'s developmentCycle property has state "Value" and range 270-330 days
+      And "Banana Nanica"'s resolved development cycle is 270-330 days
 
-    Scenario: Viewing a wiki article lists its categorized entries
-      Given "Banana" has kinds "Banana Prata" and "Banana Nanica"
+    Scenario: Parent edits change inherited values without changing authored cultivar states
+      Given "Banana" has development cycle 300-400 days
+      And published cultivar "Banana Prata" has developmentCycle state "Inherit"
+      And published cultivar "Banana Nanica" has developmentCycle state "Value" and range 270-330 days
+      And published cultivar "Banana Maçã" has developmentCycle state "Unknown"
+      When an approved revision changes "Banana" development cycle to 310-410 days
+      Then "Banana Prata"'s resolved development cycle is 310-410 days
+      And "Banana Prata"'s developmentCycle property remains in state "Inherit"
+      And "Banana Nanica"'s developmentCycle property remains in state "Value" with range 270-330 days
+      And "Banana Maçã"'s developmentCycle property remains in state "Unknown"
+
+    Scenario: Viewing a plant article lists its published cultivars
+      Given "Banana" has published cultivars "Banana Prata" and "Banana Nanica"
       When viewing "Banana"
-      Then the kinds section lists "Banana Prata" and "Banana Nanica"
+      Then the cultivars section lists "Banana Prata" and "Banana Nanica"
 
   Rule: Wiki articles can have categorized photos
 
@@ -166,7 +78,7 @@ Feature: Wiki articles
       And the wiki article "Mandioca" exists
 
     Scenario: Add photo with category
-      # @TODO modify "raiz" to the actual category we include in the end
+      # @TODO finalize photo data structures and category identifiers before implementing this scenario; "raiz" is a placeholder.
       When "Maria" adds a photo to "Mandioca" with category "raiz"
       Then the photo appears in "Mandioca"'s gallery under "raiz"
 
@@ -192,36 +104,36 @@ Feature: Wiki articles
       Then access is denied
 
   Rule: People can bookmark wiki articles
-    Each bookmark has 4 possible states: 'interested', 'active', 'previously-active', 'indifferent'.
-    For wiki articles of kind plant, that's "I want to plant", "Am planting", "Have planted" and "Not interested", respectively.
+    Each bookmark has one of four states: INTERESTED, ACTIVE, PREVIOUSLY_ACTIVE, or INDIFFERENT.
+    For plant articles, these mean "I want to plant", "Am planting", "Have planted", and "Not interested".
+    Bookmarking without selecting a state defaults to INTERESTED.
+    INDIFFERENT remains a bookmark; only removing a bookmark removes it from the list.
 
     Background:
       Given "Maria" has COMMUNITY access
       And the wiki article "Mandioca" exists
 
-    Scenario: Bookmark a wiki article
-      When "Maria" bookmarks "Mandioca"
-      Then "Mandioca" appears in "Maria"'s bookmarked wiki articles
+    Scenario: Bookmark a wiki article with the default state
+      When "Maria" bookmarks "Mandioca" without selecting a state
+      Then "Mandioca" appears in "Maria"'s bookmarked wiki articles with state "INTERESTED"
+
+    Scenario Outline: Bookmark a wiki article with an explicit state
+      When "Maria" bookmarks "Mandioca" with state "<state>"
+      Then "Mandioca" appears in "Maria"'s bookmarked wiki articles with state "<state>"
+      Examples:
+        | state             |
+        | INTERESTED        |
+        | ACTIVE            |
+        | PREVIOUSLY_ACTIVE |
+        | INDIFFERENT       |
+
+    Scenario: Changing to INDIFFERENT retains the bookmark
+      Given "Maria" has bookmarked "Mandioca" with state "ACTIVE"
+      When "Maria" changes the bookmark state to "INDIFFERENT"
+      Then "Mandioca" appears in "Maria"'s bookmarked wiki articles with state "INDIFFERENT"
+      And "Maria" has exactly one bookmark for "Mandioca"
 
     Scenario: Remove bookmark
-      Given "Maria" has bookmarked "Mandioca"
+      Given "Maria" has bookmarked "Mandioca" with state "INDIFFERENT"
       When "Maria" removes the bookmark
       Then "Mandioca" no longer appears in "Maria"'s bookmarked wiki articles
-
-  Rule: Revision history provides auditability
-
-    Background:
-      Given the wiki article "Mandioca" exists with the following revision history:
-        | editor | action                       | evaluation | evaluated_by |
-        | Maria  | created with "Raiz tuberosa" | APPROVED   | Ana          |
-        | Carlos | changed to "Raiz rica"       | APPROVED   | Ana          |
-        | Maria  | changed to "Info incorreta"  | REJECTED   | Ailton       |
-
-    Scenario: View complete revision history
-      When viewing "Mandioca" revision history
-      Then 3 revisions are shown in chronological order
-      And each revision shows the editor, change, and evaluation status
-
-    Scenario: Filter revision history by evaluation status
-      When viewing "Mandioca" revision history filtered to "APPROVED"
-      Then 2 revisions are shown

@@ -7,9 +7,9 @@ Feature: Organizations
     Background:
       Given the following people exist:
         | name     | accessLevel |
-        | Maria    | COMMUNITY    |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
+        | Maria    | COMMUNITY   |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
 
     Scenario: Member with community access creates an organization
       When "Maria" creates an organization named "Sítio Semente" of type "TERRITORY"
@@ -29,12 +29,13 @@ Feature: Organizations
       Then access is denied
 
   Rule: Organization profile can only be edited by organization managers
+    EDITOR grants permission to manage publications, not the organization's profile.
 
     Background:
       Given the following people exist:
         | name  | accessLevel |
-        | Maria | COMMUNITY    |
-        | Irene | COMMUNITY    |
+        | Maria | COMMUNITY   |
+        | Irene | COMMUNITY   |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | organizationAccessLevel |
@@ -46,19 +47,20 @@ Feature: Organizations
       Then "Sítio Semente" profile name becomes "Sítio Semente (DF)"
 
     Scenario: Editor cannot edit organization profile
-      When "Irene" tries to update "Sítio Semente" profile name
+      When "Irene" tries to update "Sítio Semente" profile name to "Outro nome"
       Then access is denied
+      And "Sítio Semente" profile name remains "Sítio Semente"
 
   Rule: Organization invitations create memberships
 
     Background:
       Given the following people exist:
         | name     | accessLevel |
-        | Maria    | COMMUNITY    |
-        | Teresa   | COMMUNITY    |
-        | Irene    | COMMUNITY    |
-        | Pedro    | NEWCOMER     |
-        | Gusttavo | BLOCKED      |
+        | Maria    | COMMUNITY   |
+        | Teresa   | COMMUNITY   |
+        | Irene    | COMMUNITY   |
+        | Pedro    | NEWCOMER    |
+        | Gusttavo | BLOCKED     |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | organizationAccessLevel |
@@ -83,17 +85,18 @@ Feature: Organizations
 
     Scenario: Can't invite invalid people
       When "Maria" tries to invite "Fulana" to join "Sítio Semente"
-      Then access is denied
+      Then the invitation fails because the person does not exist
+      And no invitation is created
 
   Rule: Managers handle organization memberships
 
     Background:
       Given the following people exist:
         | name   | accessLevel |
-        | Maria  | COMMUNITY    |
-        | Irene  | COMMUNITY    |
-        | Teresa | COMMUNITY    |
-        | Ana    | MODERATOR    |
+        | Maria  | COMMUNITY   |
+        | Irene  | COMMUNITY   |
+        | Teresa | COMMUNITY   |
+        | Ana    | MODERATOR   |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name   | organizationAccessLevel |
@@ -129,8 +132,8 @@ Feature: Organizations
     Background:
       Given the following people exist:
         | name  | accessLevel |
-        | Maria | COMMUNITY    |
-        | Irene | COMMUNITY    |
+        | Maria | COMMUNITY   |
+        | Irene | COMMUNITY   |
       And the organization "Sítio Semente" exists
       And the following memberships exist for "Sítio Semente":
         | name  | organizationAccessLevel |
@@ -150,10 +153,10 @@ Feature: Organizations
     Background:
       Given the following people exist:
         | name   | accessLevel |
-        | Maria  | COMMUNITY    |
-        | Irene  | COMMUNITY    |
-        | Teresa | COMMUNITY    |
-        | Pedro  | NEWCOMER     |
+        | Maria  | COMMUNITY   |
+        | Irene  | COMMUNITY   |
+        | Teresa | COMMUNITY   |
+        | Pedro  | NEWCOMER    |
       And the organization "Sítio Semente" exists
       And the following members exist for "Sítio Semente":
         | name   | organizationAccessLevel |
