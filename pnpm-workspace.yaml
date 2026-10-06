@@ -1,4 +1,5 @@
 packages:
+  - apps/*
   - packages/*
 
 allowBuilds:
@@ -13,15 +14,19 @@ allowBuilds:
   protobufjs: false
 
 catalog:
-  "@effect/opentelemetry": "4.0.0"
-  "@effect/platform-node": 4.0.0
-  "@effect/sql-sqlite-node": "4.0.0"
-  "@effect/vitest": 4.0.0
+  "@durable-streams/client": "^0.2.7"
+  "@effect/opentelemetry": "4.0.1"
+  "@effect/platform-node": 4.0.1
+  "@effect/sql-sqlite-node": "4.0.1"
+  "@effect/vitest": 4.0.1
   "@tiptap/core": ^3.31.4
   "@tiptap/html": ^3.31.4
   "@tiptap/pm": ^3.31.4
   "@tiptap/starter-kit": ^3.31.4
-  effect: 4.0.0
+  "@types/node": "^26.6.3"
+  "@yielded/auth": "0.1.0-beta.18"
+  "@yielded/auth-persistence": "0.1.0-beta.18"
+  effect: 4.0.1
   effect-units: 0.4.2
   glob: ^13.0.6
   loro-crdt: ^1.16.4

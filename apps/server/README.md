@@ -4,7 +4,7 @@ Authentication uses @yielded/auth with magic links and Apple, Google, and Micros
 
 ## Local authentication
 
-From `packages/server`:
+From `apps/server`:
 
 ```sh
 cp .env.auth.example .env.auth
@@ -79,7 +79,7 @@ Email links contain their secret only in the fragment. A landing GET does not au
 From the workspace root:
 
 ```sh
-pnpm exec vitest run packages/server/src/authentication/authentication.test.ts
+pnpm exec vitest run apps/server/src/authentication/authentication.test.ts
 pnpm run quality-gates
 ```
 

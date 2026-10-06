@@ -39,7 +39,7 @@ Checking the custom main runtime with a fully typed program revealed pre-existin
 
 `src/authentication/authentication.test.ts` exercises real HTTP contracts, Secure/HttpOnly cookie delivery, the real SQL persistence adapter, and a fresh database built from the regenerated initial migration. It verifies email delivery, retry suppression, no account creation on landing GET, request/identity binding, signup persistence, protected middleware and database role resolution, sign-out/revocation, existing-account sign-in without duplicates/name changes, proof/completion replay rejection, proof/continuation expiry, inactive-account rejection, and provisioning rollback.
 
-Run `pnpm exec vitest run packages/server/src/authentication/authentication.test.ts` from the workspace root, then `pnpm run quality-gates`.
+Run `pnpm exec vitest run apps/server/src/authentication/authentication.test.ts` from the workspace root, then `pnpm run quality-gates`.
 
 The full quality gates passed: type checking, lint, and 234 passing tests (11 skipped). A separate live smoke check launched `main-auth.ts` with a temporary database, exercised real HTTP signup through session establishment, and verified the Mailpit transport's outgoing payload against a local HTTP capture server. Docker was unavailable, so the actual Mailpit/Caddy containers were not run.
 

@@ -105,7 +105,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
     yield* fs.makeDirectory(outputRoot, { recursive: true })
     const directory = yield* fs.makeTempDirectory({ directory: outputRoot, prefix: "migration-" })
     const schema = yield* fs.readFileString(
-      new URL("../../server/src/db/schema.sql", import.meta.url).pathname,
+      new URL("../../../apps/server/src/db/schema.sql", import.meta.url).pathname,
     )
     yield* fs.writeFileString(join(directory, "schema.sql"), schema)
     yield* fs.writeFileString(

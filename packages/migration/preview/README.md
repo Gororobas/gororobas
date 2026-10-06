@@ -41,7 +41,7 @@ Each completed directory contains:
 - `raw-gel/`: unfiltered Gel query results, including records that conversion excludes or cannot decode.
 - `raw.json`: original source records associated with each converted export.
 - `converted.json`: frozen converted exports, including reconstructed wiki timelines.
-- `preview.sqlite`: application tables created directly from `packages/server/src/db/schema.sql`.
+- `preview.sqlite`: application tables created directly from `apps/server/src/db/schema.sql`.
 - `schema.sql`, `references.json`, `journal.json`, and `verification.json`: the exact DDL, reference catalogue, private-note archive and import report.
 
 To import existing frozen exports without querying Gel:

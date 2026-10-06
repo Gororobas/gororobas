@@ -3,9 +3,10 @@ import type { ViteUserConfig } from "vitest/config"
 
 const alias = (name: string) => {
   const target = process.env.TEST_DIST !== undefined ? "dist/dist/esm" : "src"
+  const packageRoot = name === "server" ? "apps/server" : path.join("packages", name)
   return {
-    [`${name}/test`]: path.join(__dirname, "packages", name, "test"),
-    [`@gororobas/${name}`]: path.join(__dirname, "packages", name, target),
+    [`${name}/test`]: path.join(__dirname, packageRoot, "test"),
+    [`@gororobas/${name}`]: path.join(__dirname, packageRoot, target),
   }
 }
 

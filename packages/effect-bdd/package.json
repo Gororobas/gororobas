@@ -36,7 +36,7 @@
   "devDependencies": {
     "@effect/build-utils": "^0.8.9",
     "@effect/vitest": "catalog:",
-    "@types/node": "^26.6.3",
+    "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

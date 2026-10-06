@@ -51,22 +51,19 @@ export default defineConfig({
   },
   overrides: [
     {
-      files: ["packages/server/src/db/migrations-effect/**"],
+      files: ["apps/server/src/db/migrations-effect/**"],
       rules: {
         "unicorn/filename-case": "off",
       },
     },
     {
-      files: [
-        "packages/server/src/durable-streams/router.ts",
-        "packages/server/test/durable-streams/**",
-      ],
+      files: ["apps/server/src/durable-streams/router.ts", "apps/server/test/durable-streams/**"],
       rules: {
         "custom-lint-rules/no-direct-fetch": "off",
       },
     },
     {
-      files: ["packages/effect-bdd/**/*", "**/*.test.ts", "packages/server/test/**/*"],
+      files: ["packages/effect-bdd/**/*", "**/*.test.ts", "apps/server/test/**/*"],
       rules: {},
     },
     {
@@ -96,7 +93,7 @@ export default defineConfig({
     "**/repos/**",
     "oxlint.config.ts",
     "vitest.shared.ts",
-    "packages/server/scripts/test-auth.ts",
+    "apps/server/scripts/test-auth.ts",
     "packages/migration/src/gel",
     "packages/migration/src/gel.interfaces.ts",
   ],

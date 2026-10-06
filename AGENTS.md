@@ -26,13 +26,13 @@ Foldkit, @yielded/auth, Loro and Turso also have their monorepos available for r
 
 ## Database
 
-Unified, up-to-date database schema is located in `packages/server/src/db/schema.sql`. We use `@ariga/atlas` to generate migration files based on diffs in the schema.
+Unified, up-to-date database schema is located in `apps/server/src/db/schema.sql`. We use `@ariga/atlas` to generate migration files based on diffs in the schema.
 
-Per `packages/server/src/sql.ts`, we use Effect SQL's `transformResultNames` and `transformQueryNames` to auto-convert properties from `snake_case` in SQL to `camelCase` in Typescript, back-and-forth.
+Per `apps/server/src/sql.ts`, we use Effect SQL's `transformResultNames` and `transformQueryNames` to auto-convert properties from `snake_case` in SQL to `camelCase` in Typescript, back-and-forth.
 
 To be clear: always write symbols' names with Typescript's best practice of `camelCase`. In .sql, always write column and table names in `snake_case`. Effect SQL will do the transformation automatically.
 
-When writing SQL statements, use Effect SQL's SqlSchema if possible. For examples, look at packages/server/src/publications/queries.ts and packages/server/src/publications/mutations.ts
+When writing SQL statements, use Effect SQL's SqlSchema if possible. For examples, look at apps/server/src/publications/queries.ts and apps/server/src/publications/mutations.ts
 
 ## Comments
 
@@ -73,7 +73,7 @@ export const runMainWithCustomRuntime = ...
 
 Avoid abbreviations as much as possible.
 
-Folders and Typescript file names should be `kebab-case`. Ex: `/packages/server/repositories/wiki-articles-repository.ts`
+Folders and Typescript file names should be `kebab-case`. Ex: `/apps/server/repositories/wiki-articles-repository.ts`
 
 ## Testing
 
