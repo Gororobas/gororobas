@@ -53,7 +53,7 @@ export const WikiArticleRevisionRow = Schema.Struct({
   ...TimestampedStruct.fields,
   id: WikiArticleRevisionId,
   wikiArticleId: WikiArticleId,
-  createdById: PersonId,
+  createdById: Schema.NullOr(PersonId),
   crdtUpdate: LoroDocUpdate,
   fromCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   evaluation: RevisionEvaluation,

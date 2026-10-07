@@ -8,6 +8,7 @@ import {
   OrganizationContentCount,
   PersonId,
   PersonNotFoundError,
+  UnauthorizedError,
   Policies,
   type PlatformAccessLevel,
 } from "@gororobas/domain"
@@ -42,6 +43,18 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
         })
 
         const currentSession = yield* Policies.common.assertAuthenticated
+
+        if (currentRow.accessLevel === "ADMIN" && newAccessLevel !== "ADMIN") {
+          const { count } = yield* repo.countOtherAdministrators(personId)
+
+          if (count === 0) {
+            return yield* new UnauthorizedError({
+              message: "Cannot demote the last administrator",
+              session: currentSession,
+            })
+          }
+        }
+
         const now = yield* DateTime.now
 
         yield* repo.updateRow({
