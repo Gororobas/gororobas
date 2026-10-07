@@ -3,7 +3,7 @@
  */
 import { Schema } from "effect"
 
-import { OrganizationId } from "../common/ids.js"
+import { OrganizationId, PersonId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 
 export class OrganizationNotFoundError extends Schema.TaggedError<OrganizationNotFoundError>()(
@@ -18,7 +18,25 @@ export class OrganizationNotFoundError extends Schema.TaggedError<OrganizationNo
 export class LastManagerCannotLeaveError extends Schema.TaggedError<LastManagerCannotLeaveError>()(
   "LastManagerCannotLeaveError",
   {
-    organization_id: OrganizationId,
+    organizationId: OrganizationId,
   },
   { httpApiStatus: 403 },
+) {}
+
+export class OrganizationInvitationNotFoundError extends Schema.TaggedError<OrganizationInvitationNotFoundError>()(
+  "OrganizationInvitationNotFoundError",
+  { organizationId: OrganizationId },
+  { httpApiStatus: 404 },
+) {}
+
+export class OrganizationMembershipNotFoundError extends Schema.TaggedError<OrganizationMembershipNotFoundError>()(
+  "OrganizationMembershipNotFoundError",
+  { organizationId: OrganizationId, personId: PersonId },
+  { httpApiStatus: 404 },
+) {}
+
+export class OrganizationInvitationExpiredError extends Schema.TaggedError<OrganizationInvitationExpiredError>()(
+  "OrganizationInvitationExpiredError",
+  { organizationId: OrganizationId },
+  { httpApiStatus: 410 },
 ) {}

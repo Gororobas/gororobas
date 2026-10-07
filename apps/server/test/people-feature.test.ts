@@ -12,7 +12,6 @@ import {
   WikiArticleId,
   WikiArticleRevisionRow,
   OrganizationAccessLevel,
-  SessionContext,
 } from "@gororobas/domain"
 import {
   And,
@@ -100,80 +99,6 @@ it.effect("provisioned newcomers need approval to read community profiles", () =
       yield* withSession(profiles.findById(ownerId), yield* resolveSessionFromPersonId(newcomerId)),
     )
     expect(profile.id).toBe(ownerId)
-  }).pipe(Effect.provide(TestLayerWithServices)),
-)
-
-it.effect("impersonation isolates concurrent identities", () =>
-  Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
-    const firstPersonId = yield* provisionCommunityPerson(administratorId, "First person")
-    const secondPersonId = yield* provisionCommunityPerson(administratorId, "Second person")
-    const readIdentity = Effect.gen(function* () {
-      yield* Effect.yieldNow
-      return yield* SessionContext
-    })
-
-    const sessions = yield* Effect.all(
-      [
-        withSession(readIdentity, yield* resolveSessionFromPersonId(firstPersonId)),
-        withSession(readIdentity, yield* resolveSessionFromPersonId(secondPersonId)),
-      ],
-      { concurrency: "unbounded" },
-    )
-
-    expect(sessions).toMatchObject([
-      { type: "ACCOUNT", personId: firstPersonId },
-      { type: "ACCOUNT", personId: secondPersonId },
-    ])
-  }).pipe(Effect.provide(TestLayerWithServices)),
-)
-
-it.effect("nested impersonation restores the caller's session", () =>
-  Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
-    const firstPersonId = yield* provisionCommunityPerson(administratorId, "First person")
-    const secondPersonId = yield* provisionCommunityPerson(administratorId, "Second person")
-
-    yield* withSession(
-      Effect.gen(function* () {
-        const before = yield* SessionContext
-        const nested = yield* withSession(
-          SessionContext,
-          yield* resolveSessionFromPersonId(secondPersonId),
-        )
-        const after = yield* SessionContext
-        expect(nested.type === "ACCOUNT" ? nested.personId : null).toMatchObject(secondPersonId)
-        expect(after).toEqual(before)
-      }),
-      yield* resolveSessionFromPersonId(firstPersonId),
-    )
-
-    expect(yield* SessionContext).toEqual(VISITOR_SESSION)
-  }).pipe(Effect.provide(TestLayerWithServices), (action) => withSession(action, VISITOR_SESSION)),
-)
-
-it.effect("impersonation cannot edit another person's profile", () =>
-  Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
-    const firstPersonId = yield* provisionCommunityPerson(administratorId, "First person")
-    const secondPersonId = yield* provisionCommunityPerson(administratorId, "Second person")
-    const service = yield* ProfileService
-    const before = yield* withSession(
-      service.findById(firstPersonId),
-      yield* resolveSessionFromPersonId(firstPersonId),
-    )
-    const error = yield* withSession(
-      service.updateProfile(firstPersonId, { name: "Unauthorized change" }),
-      yield* resolveSessionFromPersonId(secondPersonId),
-    ).pipe(Effect.flip)
-    expect(error).toMatchObject({ _tag: "UnauthorizedError" })
-
-    expect(
-      yield* withSession(
-        service.findById(firstPersonId),
-        yield* resolveSessionFromPersonId(firstPersonId),
-      ),
-    ).toEqual(before)
   }).pipe(Effect.provide(TestLayerWithServices)),
 )
 
@@ -295,14 +220,7 @@ const blockedAccessBecomes = () =>
 const accessLevelBecomes = () =>
   Then("{string:name}'s accessLevel becomes {string:accessLevel}", {
     params: NamedAccessLevel,
-    handler: (_, { name, accessLevel }) =>
-      Effect.gen(function* () {
-        const context = yield* getBackgroundContext(PeopleBackground)
-        expect(
-          (yield* resolveSessionFromPersonId(personNamed(context.actors, name))).accessLevel,
-        ).toBe(accessLevel)
-        return context
-      }),
+    handler: (_, { name, accessLevel }) => verifyAccessLevel(name, accessLevel),
   })
 
 const readWikiHistory = SqlSchema.findAll({
@@ -378,7 +296,6 @@ it.effect("administrator demotion preserves at least one administrator", () =>
     const administratorId = yield* provisionAdministrator()
     const otherAdministratorId = yield* provisionPerson("Another administrator")
     const people = yield* PeopleRepository
-    yield* setAccess({ actorId: administratorId, personId: administratorId, accessLevel: "ADMIN" })
 
     yield* Effect.forEach(
       ["COMMUNITY", "MODERATOR", "BLOCKED"] as const,

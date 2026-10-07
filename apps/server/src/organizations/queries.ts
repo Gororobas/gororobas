@@ -1,5 +1,7 @@
 import {
   OrganizationId,
+  OrganizationInvitationRow,
+  Email,
   OrganizationMembershipRow,
   OrganizationRow,
   PersonId,
@@ -66,4 +68,34 @@ export const findOrganizationsWhereSoleManager = SqlSchema.findAll({
       GROUP BY om.organization_id
     `
     }),
+})
+
+export const findInvitation = SqlSchema.findOneOption({
+  Request: Schema.Struct({ organizationId: OrganizationId, email: Email }),
+  Result: OrganizationInvitationRow,
+  execute: ({ organizationId, email }) =>
+    SqlClient.SqlClient.use(
+      (sql) =>
+        sql`SELECT * FROM organization_invitations WHERE organization_id = ${organizationId} AND email = ${email}`,
+    ),
+})
+
+export const findPersonEmail = SqlSchema.findOneOption({
+  Request: PersonId,
+  Result: Schema.Struct({ email: Email }),
+  execute: (personId) =>
+    SqlClient.SqlClient.use(
+      (sql) =>
+        sql`SELECT auth_subjects.email FROM auth_subjects INNER JOIN people ON people.id = auth_subjects.id WHERE people.id = ${personId}`,
+    ),
+})
+
+export const listInvitations = SqlSchema.findAll({
+  Request: OrganizationId,
+  Result: OrganizationInvitationRow,
+  execute: (organizationId) =>
+    SqlClient.SqlClient.use(
+      (sql) =>
+        sql`SELECT * FROM organization_invitations WHERE organization_id = ${organizationId} ORDER BY id`,
+    ),
 })

@@ -29,6 +29,9 @@ export type ProfileId = typeof ProfileId.Type
 export const OrganizationId = ProfileId.pipe(Schema.brand("OrganizationId"))
 export type OrganizationId = typeof OrganizationId.Type
 
+export const OrganizationInvitationId = UUID.pipe(Schema.brand("OrganizationInvitationId"))
+export type OrganizationInvitationId = typeof OrganizationInvitationId.Type
+
 export const PersonId = ProfileId.pipe(Schema.brand("PersonId"))
 export type PersonId = typeof PersonId.Type
 

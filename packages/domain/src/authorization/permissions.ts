@@ -81,7 +81,6 @@ const ORGANIZATION_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   HashSet.HashSet<OrganizationPermission>
 > = {
   EDITOR: HashSet.fromIterable([
-    "organization:edit-profile",
     "publications:create:organization",
     "publications:edit",
     "publications:delete",

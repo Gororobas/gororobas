@@ -1,6 +1,8 @@
 import { Context, Effect } from "effect"
 
 import {
+  insertInvitation,
+  updateInvitation,
   deleteMembership,
   deleteRow,
   insertMembership,
@@ -9,6 +11,9 @@ import {
   updateRow,
 } from "./mutations.js"
 import {
+  listInvitations,
+  findInvitation,
+  findPersonEmail,
   findById,
   findMembership,
   findOrganizationsWhereSoleManager,
@@ -19,6 +24,11 @@ export class OrganizationsRepository extends Context.Service<OrganizationsReposi
   "OrganizationsRepository",
   {
     make: Effect.succeed({
+      listInvitations,
+      findInvitation,
+      findPersonEmail,
+      insertInvitation,
+      updateInvitation,
       deleteRow,
       deleteMembership,
       findById,

@@ -7,9 +7,10 @@ import {
   InformationVisibility,
   OrganizationAccessLevel,
   OrganizationType,
+  OrganizationInvitationStatus,
 } from "../common/enums.js"
-import { OrganizationId, PersonId } from "../common/ids.js"
-import { Handle, TimestampedStruct } from "../common/primitives.js"
+import { OrganizationId, OrganizationInvitationId, PersonId } from "../common/ids.js"
+import { Email, Handle, TimestampedStruct } from "../common/primitives.js"
 
 export const OrganizationRow = Schema.Struct({
   id: OrganizationId,
@@ -49,3 +50,15 @@ export const UpdateOrganizationData = Schema.Struct({
   name: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
 })
 export type UpdateOrganizationData = typeof UpdateOrganizationData.Type
+
+export const OrganizationInvitationRow = Schema.Struct({
+  ...TimestampedStruct.fields,
+  id: OrganizationInvitationId,
+  organizationId: OrganizationId,
+  email: Email,
+  accessLevel: OrganizationAccessLevel,
+  status: OrganizationInvitationStatus,
+  createdById: PersonId,
+})
+
+export type OrganizationInvitationRow = typeof OrganizationInvitationRow.Type

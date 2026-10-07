@@ -52,6 +52,7 @@ Feature: Organizations
       And "Sítio Semente" profile name remains "Sítio Semente"
 
   Rule: Organization invitations create memberships
+    Invitations expire two weeks after creation.
 
     Background:
       Given the following people exist:
@@ -70,6 +71,17 @@ Feature: Organizations
       Given "Maria" has invited "Teresa" to join "Sítio Semente" as a "VIEWER"
       When "Teresa" accepts the invitation to join "Sítio Semente"
       Then "Teresa" is a "VIEWER" of "Sítio Semente"
+
+    Scenario Outline: Invitations expire two weeks after creation
+      Given "Maria" has invited "Teresa" to join "Sítio Semente" as a "VIEWER"
+      When "Teresa" tries to accept the invitation to join "Sítio Semente" after <elapsedMilliseconds> milliseconds
+      Then the invitation is <outcome>
+
+      Examples:
+        | elapsedMilliseconds | outcome  |
+        | 1209599999          | accepted |
+        | 1209600000          | expired  |
+        | 1209600001          | expired  |
 
     Scenario: Non-members can't invite people to an organization
       When "Irene" tries to invite "Teresa" to join "Sítio Semente"

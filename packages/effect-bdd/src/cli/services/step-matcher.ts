@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option } from "effect"
+import { Array as EffectArray, Context, Effect, Layer, Option } from "effect"
 
 import { matchPattern } from "../../parser/pattern-matcher.js"
 import type {
@@ -57,31 +57,6 @@ function matchStep(
   )
 }
 
-/**
- * Normalizes a discovered pattern like `I have entered {int:first} into the calculator`
- * to `I have entered <first> into the calculator` so it can be structurally compared
- * with outline step text that uses `<placeholder>` syntax.
- */
-function normalizePatternToOutlineText(pattern: string): string {
-  return pattern.replace(/\{(?:string|int|float|word):(\w+)\}/g, "<$1>")
-}
-
-function matchOutlineStep(
-  stepText: string,
-  discoveredSteps: Array<DiscoveredStep>,
-): Option.Option<DiscoveredStep> {
-  // First try exact/regex match (works for steps without angle-bracket placeholders)
-  const exactMatch = matchStep(stepText, discoveredSteps)
-  if (Option.isSome(exactMatch)) return exactMatch
-
-  // For outline steps with <placeholder>, normalize patterns and compare structurally
-  return Option.fromNullishOr(
-    discoveredSteps.find(
-      (discovered) => normalizePatternToOutlineText(discovered.pattern) === stepText,
-    ),
-  )
-}
-
 function matchSteps(
   steps: Array<ParsedStep>,
   discoveredSteps: Array<DiscoveredStep>,
@@ -121,11 +96,27 @@ function checkScenario(
 }
 
 function matchOutlineSteps(
-  steps: Array<ParsedStep>,
+  outline: ParsedScenarioOutline,
   discoveredSteps: Array<DiscoveredStep>,
 ): Array<MatchedStep> {
-  return steps.map((step) => {
-    const implementation = matchOutlineStep(step.text, discoveredSteps)
+  return outline.steps.map((step) => {
+    const implementation = Option.fromNullishOr(
+      discoveredSteps.find(
+        (discovered) =>
+          EffectArray.isReadonlyArrayNonEmpty(outline.examples) &&
+          outline.examples.every((example) =>
+            Option.isSome(
+              matchPattern(
+                discovered.pattern,
+                step.text.replace(
+                  /<([^>]+)>/g,
+                  (placeholder, name: string) => example[name] ?? placeholder,
+                ),
+              ),
+            ),
+          ),
+      ),
+    )
 
     const featureStep: FeatureStep = {
       keyword: step.keyword,
@@ -154,7 +145,7 @@ function checkScenarioOutline(
   return {
     examplesCount: outline.examples.length,
     name: outline.name,
-    steps: matchOutlineSteps(outline.steps, scopedSteps),
+    steps: matchOutlineSteps(outline, scopedSteps),
     type: "ScenarioOutline",
   }
 }

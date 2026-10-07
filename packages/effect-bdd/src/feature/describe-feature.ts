@@ -120,8 +120,8 @@ type ScenarioConfig<ROut = never, LayerError = never, E = never> =
 /**
  * ScenarioOutline config WITH a layer
  */
-interface ScenarioOutlineConfigWithLayer<ROut, E> {
-  layer: SelfContainedLayer<ROut, E>
+interface ScenarioOutlineConfigWithLayer<ROut, LayerError, E> {
+  layer: SelfContainedLayer<ROut, LayerError>
   steps: () => Effect.Effect<unknown, E, ROut | InternalServices>
 }
 
@@ -136,8 +136,8 @@ interface ScenarioOutlineConfigWithoutLayer<E> {
 /**
  * Union type that enforces: if no layer, steps must have no external requirements
  */
-type ScenarioOutlineConfig<ROut = never, E = never> =
-  | ScenarioOutlineConfigWithLayer<ROut, E>
+type ScenarioOutlineConfig<ROut = never, LayerError = never, E = never> =
+  | ScenarioOutlineConfigWithLayer<ROut, LayerError, E>
   | ScenarioOutlineConfigWithoutLayer<E>
 
 // ============================================================================
@@ -179,7 +179,10 @@ interface RuleContext {
   /**
    * Define a scenario outline with examples from the feature file.
    */
-  ScenarioOutline: <ROut, E>(name: string, config: ScenarioOutlineConfig<ROut, E>) => void
+  ScenarioOutline: <ROut, LayerError, E>(
+    name: string,
+    config: ScenarioOutlineConfig<ROut, LayerError, E>,
+  ) => void
 }
 
 interface FeatureContext extends RuleContext {

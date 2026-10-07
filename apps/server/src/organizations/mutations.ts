@@ -1,5 +1,6 @@
 import {
   OrganizationId,
+  OrganizationInvitationRow,
   OrganizationMembershipRow,
   OrganizationRow,
   PersonId,
@@ -59,4 +60,20 @@ export const deleteMembership = SqlSchema.void({
       const sql = yield* SqlClient.SqlClient
       return yield* sql`DELETE FROM organization_memberships WHERE organization_id = ${organizationId} AND person_id = ${personId}`
     }),
+})
+
+export const insertInvitation = SqlSchema.void({
+  Request: OrganizationInvitationRow,
+  execute: (invitation) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`INSERT INTO organization_invitations ${sql.insert(invitation)}`,
+    ),
+})
+
+export const updateInvitation = SqlSchema.void({
+  Request: OrganizationInvitationRow,
+  execute: ({ id, ...update }) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`UPDATE organization_invitations SET ${sql.update(update)} WHERE id = ${id}`,
+    ),
 })
