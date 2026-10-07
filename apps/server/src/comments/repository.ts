@@ -38,6 +38,7 @@ import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import { type CreateCommentInput, type UpdateCommentInput } from "./comment-repository-inputs.js"
 import {
   deleteComment,
+  censorComment,
   insertCommentCommitRow,
   insertCommentCrdtRow,
   insertCommentTranslationRows,
@@ -306,6 +307,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         })
 
       return {
+        censorComment,
         createComment,
         deleteComment,
         findCommentContentByIdAndLocale,

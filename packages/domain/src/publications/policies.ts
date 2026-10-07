@@ -10,7 +10,10 @@ import {
   organizationPermission,
   policy,
 } from "../authorization/policy.js"
+import type { PlatformAccessLevel } from "../common/enums.js"
 import { OrganizationId } from "../common/ids.js"
+import type { OrganizationRow } from "../organizations/domain.js"
+import { organizationsPolicies } from "../organizations/policies.js"
 import type { CorePublicationMetadata } from "./domain.js"
 
 const isPublicationOwner = (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
@@ -25,6 +28,9 @@ const isPersonalPublicationPublic = (publication: Pick<CorePublicationMetadata, 
       publication.visibility === "COMMUNITY" ? Effect.map(assertTrustedPerson, allow) : deny(),
     ),
   )
+
+const canViewAttribution = (organization: OrganizationRow | undefined) =>
+  organization ? organizationsPolicies.canViewMembers(organization) : policy(allow)
 
 export const publicationsPolicies = {
   canCreate: (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
@@ -58,28 +64,28 @@ export const publicationsPolicies = {
       ),
     ),
 
-  canView: (publication: Pick<CorePublicationMetadata, "ownerProfileId" | "visibility">) =>
-    or(
-      isPublicationOwner(publication),
-      isPersonalPublicationPublic(publication),
-      organizationPermission(
-        "publications:view",
-        Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
-      ),
-    ),
+  canView: (
+    publication: Pick<CorePublicationMetadata, "ownerProfileId" | "visibility">,
+    ownerAccessLevel?: PlatformAccessLevel,
+  ) =>
+    ownerAccessLevel === "NEWCOMER"
+      ? or(
+          isPublicationOwner(publication),
+          authenticatedPolicy((session) =>
+            session.accessLevel === "ADMIN" || session.accessLevel === "MODERATOR"
+              ? allow(session)
+              : deny(),
+          ),
+        )
+      : or(
+          isPublicationOwner(publication),
+          isPersonalPublicationPublic(publication),
+          organizationPermission(
+            "publications:view",
+            Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
+          ),
+        ),
 
-  canViewHistory: (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
-    or(
-      isPublicationOwner(publication),
-      organizationPermission(
-        "members:view",
-        Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
-      ),
-    ),
-
-  canViewContributors: (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
-    organizationPermission(
-      "members:view",
-      Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
-    ),
+  canViewHistory: canViewAttribution,
+  canViewContributors: canViewAttribution,
 }

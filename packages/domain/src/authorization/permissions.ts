@@ -33,6 +33,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   ADMIN: HashSet.fromIterable(PlatformPermission.literals),
   BLOCKED: HashSet.empty(),
   MODERATOR: HashSet.fromIterable([
+    "comments:censor",
     "people:manage-community-access",
     "revisions:evaluate",
     "publications:create:personal",

@@ -7,9 +7,10 @@ import {
   PublicationNotFoundError,
   SourceCommentData,
 } from "@gororobas/domain"
-import { Effect, Option, Context } from "effect"
+import { DateTime, Effect, Option, Context } from "effect"
 
 import { PublicationsRepository } from "../publications/repository.js"
+import { assertCanViewPublication } from "../publications/service.js"
 import { HumanCrdtUpdate } from "./comment-repository-inputs.js"
 import { CommentsRepository } from "./repository.js"
 
@@ -47,7 +48,7 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
         const publication = yield* getPublicationById(input.publicationId)
 
         yield* Policies.comments.canCreate
-        yield* Policies.publications.canView(publication)
+        yield* assertCanViewPublication(publication)
 
         return yield* commentsRepository.createComment({
           createdById: session.personId,
@@ -68,7 +69,7 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
 
         yield* Policies.comments.canCreate
 
-        yield* Policies.publications.canView(yield* getPublicationById(parent.publicationId))
+        yield* assertCanViewPublication(yield* getPublicationById(parent.publicationId))
 
         return yield* commentsRepository.createComment({
           createdById: session.personId,
@@ -111,6 +112,15 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
       Effect.gen(function* () {
         yield* getCommentById(commentId)
         yield* Policies.comments.canCensor
+        yield* commentsRepository.censorComment({ id: commentId, updatedAt: yield* DateTime.now })
+      })
+
+    const listByPublicationId = (publicationId: PublicationId) =>
+      Effect.gen(function* () {
+        yield* assertCanViewPublication(yield* getPublicationById(publicationId))
+        return (yield* commentsRepository.listCommentRowsByPublicationId(publicationId)).filter(
+          (comment) => comment.moderationStatus !== "CENSORED",
+        )
       })
 
     return {
@@ -119,7 +129,7 @@ export class CommentsService extends Context.Service<CommentsService>()("Comment
       createReplyComment,
       deleteComment,
       getCommentById,
-      listByPublicationId: commentsRepository.listCommentRowsByPublicationId,
+      listByPublicationId,
       updateComment,
     } as const
   }),

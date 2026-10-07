@@ -5,7 +5,7 @@ import {
   CommentRow,
   CommentTranslationRow,
 } from "@gororobas/domain"
-import { Schema, Struct } from "effect"
+import { Effect, Schema, Struct } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
 
@@ -13,6 +13,20 @@ export const deleteComment = SqlSchema.void({
   Request: CommentId,
   execute: (commentId) =>
     SqlClient.use((sql) => sql`DELETE FROM comment_crdts WHERE id = ${commentId}`),
+})
+
+export const censorComment = SqlSchema.void({
+  Request: CommentRow.mapFields(Struct.pick(["id", "updatedAt"])),
+  execute: ({ id, updatedAt }) =>
+    SqlClient.use((sql) =>
+      sql.withTransaction(
+        sql`UPDATE comment_crdts SET moderation_status = 'CENSORED', updated_at = ${updatedAt} WHERE id = ${id}`.pipe(
+          Effect.andThen(
+            sql`UPDATE comments SET moderation_status = 'CENSORED', updated_at = ${updatedAt} WHERE id = ${id}`,
+          ),
+        ),
+      ),
+    ),
 })
 
 export const insertCommentCrdtRow = SqlSchema.void({

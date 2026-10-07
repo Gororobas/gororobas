@@ -968,8 +968,7 @@ describe("Policies", () => {
         predicate: (session) =>
           Effect.gen(function* () {
             const canCensor = yield* runPolicySuccess(Policies.comments.canCensor, session)
-            if (isAdmin(session) === true) return true
-            return !canCensor
+            return canCensor === isModeratorOrAdmin(session)
           }),
       }),
     )

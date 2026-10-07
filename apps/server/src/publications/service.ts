@@ -24,9 +24,13 @@ import {
   PublicationLocalizedData,
   PublicationNotFoundError,
   ProfileId,
+  PersonId,
+  OrganizationId,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Option, Schema } from "effect"
 
+import { findById as findOrganizationById } from "../organizations/queries.js"
+import { findById as findPersonById } from "../people/queries.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
 import { PublicationsRepository } from "./repository.js"
 
@@ -60,6 +64,19 @@ export const UpdatePublicationInput = Schema.Struct({
 })
 export type UpdatePublicationInput = typeof UpdatePublicationInput.Type
 
+/**
+ * Fetches the owner of the publication.
+ * If it's a person and they're a NEWCOMMER, Policies.publications.canView will ensure
+ * publications aren't truly public.
+ **/
+export const assertCanViewPublication = (
+  publication: Pick<CorePublicationMetadata, "ownerProfileId" | "visibility">,
+) =>
+  Effect.gen(function* () {
+    const owner = yield* findPersonById(Schema.decodeSync(PersonId)(publication.ownerProfileId))
+    yield* Policies.publications.canView(publication, Option.getOrUndefined(owner)?.accessLevel)
+  })
+
 export class PublicationsService extends Context.Service<PublicationsService>()(
   "PublicationsService",
   {
@@ -85,6 +102,16 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
             }),
           ),
         )
+
+      const getAttributionOrganization = (publicationId: PublicationId) =>
+        Effect.gen(function* () {
+          const publication = yield* getPublicationById(publicationId)
+          yield* assertCanViewPublication(publication)
+          const organization = yield* findOrganizationById(
+            Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
+          )
+          return Option.getOrUndefined(organization)
+        })
 
       const createPublication = (input: CreatePublicationInput) =>
         Effect.gen(function* () {
@@ -168,7 +195,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
 
       const getPublicationPageData = (handle: Handle, locale: Locale = "pt") =>
         Effect.gen(function* () {
-          yield* Policies.publications.canView(yield* getPublicationByHandle(handle))
+          yield* assertCanViewPublication(yield* getPublicationByHandle(handle))
 
           const page = yield* repo.findPublicationPageData({ handle, locale }).pipe(
             Effect.flatMap(
@@ -184,14 +211,18 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
 
       const getContributors = (publicationId: PublicationId) =>
         Effect.gen(function* () {
-          yield* Policies.publications.canViewContributors(yield* getPublicationById(publicationId))
+          yield* Policies.publications.canViewContributors(
+            yield* getAttributionOrganization(publicationId),
+          )
 
           return yield* repo.listPublicationContributorIdsByPublicationId(publicationId)
         })
 
       const getHistory = (publicationId: PublicationId) =>
         Effect.gen(function* () {
-          yield* Policies.publications.canViewHistory(yield* getPublicationById(publicationId))
+          yield* Policies.publications.canViewHistory(
+            yield* getAttributionOrganization(publicationId),
+          )
 
           return yield* repo.listPublicationCommitRowsByPublicationIdAsc(publicationId)
         })
