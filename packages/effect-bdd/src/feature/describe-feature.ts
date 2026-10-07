@@ -97,8 +97,8 @@ type BackgroundConfig<ROut = never, E = never> =
 /**
  * Scenario config WITH a layer - steps can use services from the layer
  */
-interface ScenarioConfigWithLayer<ROut, E> {
-  layer: SelfContainedLayer<ROut, E>
+interface ScenarioConfigWithLayer<ROut, LayerError, E> {
+  layer: SelfContainedLayer<ROut, LayerError>
   steps: () => Effect.Effect<unknown, E, ROut | InternalServices>
 }
 
@@ -113,8 +113,8 @@ interface ScenarioConfigWithoutLayer<E> {
 /**
  * Union type that enforces: if no layer, steps must have no external requirements
  */
-type ScenarioConfig<ROut = never, E = never> =
-  | ScenarioConfigWithLayer<ROut, E>
+type ScenarioConfig<ROut = never, LayerError = never, E = never> =
+  | ScenarioConfigWithLayer<ROut, LayerError, E>
   | ScenarioConfigWithoutLayer<E>
 
 /**
@@ -174,7 +174,7 @@ interface RuleContext {
   /**
    * Define a scenario test.
    */
-  Scenario: <ROut, E>(name: string, config: ScenarioConfig<ROut, E>) => void
+  Scenario: <ROut, LayerError, E>(name: string, config: ScenarioConfig<ROut, LayerError, E>) => void
 
   /**
    * Define a scenario outline with examples from the feature file.
@@ -214,10 +214,10 @@ function createRunWithBackgrounds({
   featureBgRef: BackgroundRef
   ruleBgRef?: BackgroundRef
 }) {
-  return function runWithBackgrounds<ROut, E>(scenario: {
+  return function runWithBackgrounds<ROut, LayerError, E>(scenario: {
     name: string
     steps: Array<ParsedStep>
-    layer?: SelfContainedLayer<ROut, E>
+    layer?: SelfContainedLayer<ROut, LayerError>
     effect: Effect.Effect<unknown, E, ROut | InternalServices>
   }): Effect.Effect<unknown, unknown, unknown> {
     const allLayers = [

@@ -1,21 +1,21 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
   CommentNotFoundError,
-  LoroDocUpdate,
   Handle,
+  LoroDocUpdate,
   UnauthorizedError,
-  type SourceCommentData,
   type PublicationSourceData,
+  type SourceCommentData,
   type TiptapDocument,
   type TiptapNode,
 } from "@gororobas/domain"
+import { resolveSessionFromPersonId } from "@gororobas/server/session-service"
 import { DateTime, Effect, Layer, Option, Schema } from "effect"
 
 import { CommentsRepository } from "../../src/comments/repository.js"
 import { CommentsService } from "../../src/comments/service.js"
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
-import { makeAccountSession } from "../session-builders.js"
 import { insertPersonWithDependencies, TestLayer, withSession } from "../test-helpers.js"
 
 const PublicationsRepositoryLayer = Layer.effect(
@@ -112,7 +112,7 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Primeiro comentario")),
           publicationId,
         }),
-        makeAccountSession({ personId: person.id }),
+        yield* resolveSessionFromPersonId(person.id),
       )
 
       const row = yield* commentsRepository.findCommentRowById(commentId)
@@ -152,7 +152,7 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Comentario original")),
           publicationId,
         }),
-        makeAccountSession({ personId: owner.id }),
+        yield* resolveSessionFromPersonId(owner.id),
       )
 
       const comment = yield* service.getCommentById(commentId)
@@ -163,7 +163,7 @@ describe("CommentsService", () => {
           crdtUpdate: LoroDocUpdate.make(new Uint8Array()),
           expectedCurrentCrdtFrontier: comment.currentCrdtFrontier,
         }),
-        makeAccountSession({ personId: other.id }),
+        yield* resolveSessionFromPersonId(other.id),
       ).pipe(Effect.flip)
 
       expect(result).toBeInstanceOf(UnauthorizedError)
@@ -196,12 +196,12 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Comentario para deletar")),
           publicationId,
         }),
-        makeAccountSession({ personId: person.id }),
+        yield* resolveSessionFromPersonId(person.id),
       )
 
       yield* withSession(
         service.deleteComment(commentId),
-        makeAccountSession({ personId: person.id }),
+        yield* resolveSessionFromPersonId(person.id),
       )
 
       const deleted = yield* service.getCommentById(commentId).pipe(Effect.flip)

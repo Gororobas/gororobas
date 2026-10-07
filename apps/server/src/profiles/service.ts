@@ -1,4 +1,11 @@
-import { Policies, ProfileId, ProfileNotFoundError, ProfileRowUpdate } from "@gororobas/domain"
+import {
+  Handle,
+  Policies,
+  ProfileId,
+  ProfileNotFoundError,
+  ProfileRowUpdate,
+  type ProfileRow,
+} from "@gororobas/domain"
 import { HandleTakenError } from "@gororobas/domain/common/errors"
 import { DateTime, Effect, Option, Context } from "effect"
 import { SqlClient } from "effect/sql"
@@ -9,6 +16,18 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
   make: Effect.gen(function* () {
     const repo = yield* ProfilesRepository
     const sql = yield* SqlClient.SqlClient
+
+    const authorizeRead = (profile: Option.Option<ProfileRow>) =>
+      Option.match(profile, {
+        onNone: () => Effect.void,
+        onSome: Policies.profiles.canRead,
+      })
+
+    const findByHandle = (handle: Handle) =>
+      repo.findByHandle(handle).pipe(Effect.tap(authorizeRead))
+
+    const findById = (profileId: ProfileId) =>
+      repo.findById(profileId).pipe(Effect.tap(authorizeRead))
 
     const updateProfile = (profileId: ProfileId, data: ProfileRowUpdate) =>
       Effect.gen(function* () {
@@ -38,6 +57,8 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
       }).pipe(sql.withTransaction)
 
     return {
+      findByHandle,
+      findById,
       updateProfile,
     } as const
   }),

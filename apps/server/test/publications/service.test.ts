@@ -11,13 +11,13 @@ import {
   type TiptapNode,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
+import { resolveSessionFromPersonId } from "@gororobas/server/session-service"
 import { DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { PublicationsService } from "../../src/publications/service.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
-import { makeAccountSession } from "../session-builders.js"
 import { insertPersonWithDependencies, TestLayer, withSession } from "../test-helpers.js"
 
 const PublicationsRepositoryLayer = Layer.effect(
@@ -170,7 +170,7 @@ describe("PublicationsService", () => {
           expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
           publicationId,
         }),
-        makeAccountSession({ personId: other.id }),
+        yield* resolveSessionFromPersonId(other.id),
       ).pipe(Effect.flip)
 
       expect(result).toBeInstanceOf(UnauthorizedError)
@@ -233,7 +233,7 @@ describe("PublicationsService", () => {
           expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
           publicationId,
         }),
-        makeAccountSession({ personId: person.id }),
+        yield* resolveSessionFromPersonId(person.id),
       )
 
       const handle = Option.getOrThrow(

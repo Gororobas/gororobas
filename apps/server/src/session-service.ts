@@ -27,53 +27,58 @@ const MembershipQueryResult = Schema.Struct({
   organizationId: OrganizationId,
 })
 
-const VISITOR_SESSION: VisitorSession = {
+const fetchPerson = SqlSchema.findOneOption({
+  execute: (id) =>
+    SqlClient.SqlClient.use((sql) => sql`SELECT id, access_level FROM people WHERE id = ${id}`),
+  Request: Schema.String,
+  Result: PersonQueryResult,
+})
+
+const fetchMemberships = SqlSchema.findAll({
+  execute: (personId) =>
+    SqlClient.SqlClient.use(
+      (sql) =>
+        sql`SELECT organization_id, access_level FROM organization_memberships WHERE person_id = ${personId}`,
+    ),
+  Request: Schema.String,
+  Result: MembershipQueryResult,
+})
+
+export const VISITOR_SESSION: VisitorSession = {
   type: "VISITOR",
 }
 
-export const resolveSession = Effect.gen(function* () {
-  const authentication = yield* AuthenticationHttp.CurrentSession
+export const resolveSessionFromPersonId = (personId: string) =>
+  Effect.gen(function* () {
+    const personOption = yield* fetchPerson(personId)
 
-  const sql = yield* SqlClient.SqlClient
+    if (Option.isNone(personOption) === true) {
+      return yield* new UnauthorizedError({
+        message: "Account not found",
+        session: VISITOR_SESSION,
+      })
+    }
 
-  const fetchPerson = SqlSchema.findOneOption({
-    execute: (id) => sql`SELECT id, access_level FROM people WHERE id = ${id}`,
-    Request: Schema.String,
-    Result: PersonQueryResult,
+    const person = personOption.value
+    const memberships = yield* fetchMemberships(personId)
+
+    const account: AccountSession = {
+      accessLevel: person.accessLevel,
+      memberships: memberships.map((m) =>
+        OrganizationMembershipSession.make({
+          accessLevel: m.accessLevel,
+          organizationId: m.organizationId,
+        }),
+      ),
+      personId: person.id,
+      type: "ACCOUNT",
+    }
+
+    return account
   })
 
-  const fetchMemberships = SqlSchema.findAll({
-    execute: (personId) =>
-      sql`SELECT organization_id, access_level FROM organization_memberships WHERE person_id = ${personId}`,
-    Request: Schema.String,
-    Result: MembershipQueryResult,
-  })
-
-  const personOption = yield* fetchPerson(authentication.subjectId)
-
-  if (Option.isNone(personOption) === true) {
-    return yield* new UnauthorizedError({
-      message: "Account not found",
-      session: VISITOR_SESSION,
-    })
-  }
-
-  const person = personOption.value
-  const memberships = yield* fetchMemberships(authentication.subjectId)
-
-  const account: AccountSession = {
-    accessLevel: person.accessLevel,
-    memberships: memberships.map((m) =>
-      OrganizationMembershipSession.make({
-        accessLevel: m.accessLevel,
-        organizationId: m.organizationId,
-      }),
-    ),
-    personId: person.id,
-    type: "ACCOUNT",
-  }
-
-  return account
-})
+export const resolveSession = Effect.flatMap(AuthenticationHttp.CurrentSession, (authentication) =>
+  resolveSessionFromPersonId(authentication.subjectId),
+)
 
 export const SessionServiceLive = Layer.effect(SessionContext, resolveSession)
