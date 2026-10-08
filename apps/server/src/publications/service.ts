@@ -28,7 +28,7 @@ import {
   OrganizationId,
   MediaAssetId,
 } from "@gororobas/domain"
-import { Array as EffectArray, Context, DateTime, Effect, Option, Schema } from "effect"
+import { Context, DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { MediaAssetsService } from "../media-assets/service.js"
@@ -123,8 +123,6 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
         mediaIds: readonly MediaAssetId[]
       }) =>
         Effect.gen(function* () {
-          if (EffectArray.isReadonlyArrayEmpty(input.mediaIds)) return
-
           yield* Policies.publications.canEdit(yield* getPublicationById(input.publicationId))
           const existingMediaAttachments = yield* repo.listPublicationMediaAttachments(
             input.publicationId,

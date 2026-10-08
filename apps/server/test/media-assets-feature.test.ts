@@ -65,7 +65,7 @@ const storage = Layer.effect(
   MediaAssetsStorage,
   Effect.gen(function* () {
     const directory = yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
-      prefix: "media-feature-",
+      prefix: "media-assets-feature-",
     })
 
     return yield* MediaAssetsStorage.make.pipe(
@@ -365,7 +365,7 @@ const createWikiArticles = (context: MediaContext, names: readonly string[]) =>
   })
 
 await Effect.runPromise(
-  describeFeature("./media.feature", ({ Rule }) => {
+  describeFeature("./media-assets.feature", ({ Rule }) => {
     Rule(
       "Media uploaded inside publications inherits the publication visibility",
       ({ Background, Scenario }) => {
