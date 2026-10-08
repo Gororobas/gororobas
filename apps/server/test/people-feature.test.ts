@@ -8,7 +8,7 @@ import {
   PlatformAccessLevel,
   ProfileVisibility,
   PublicationId,
-  CommentId,
+  PublicationCommentId,
   NameInCrdtList,
   WikiArticleId,
   WikiArticleRevisionRow,
@@ -28,12 +28,12 @@ import { Effect, Option, Result, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
-import { CommentsRepository } from "../src/comments/repository.js"
-import { CommentsService } from "../src/comments/service.js"
 import { OrganizationsRepository } from "../src/organizations/repository.js"
 import { PeopleRepository } from "../src/people/repository.js"
 import { PeopleService } from "../src/people/service.js"
 import { ProfileService } from "../src/profiles/service.js"
+import { PublicationCommentsRepository } from "../src/publication-comments/repository.js"
+import { PublicationCommentsService } from "../src/publication-comments/service.js"
 import { PublicationsRepository } from "../src/publications/repository.js"
 import { PublicationsService } from "../src/publications/service.js"
 import { findDatabaseRowById } from "../src/wiki/queries.js"
@@ -249,7 +249,7 @@ const DeletionBackground = Schema.Struct({
   personId: PersonId,
   publicationId: PublicationId,
   retainedPublicationId: PublicationId,
-  commentId: CommentId,
+  publicationCommentId: PublicationCommentId,
 })
 
 const confirmPersonalDeletion = (personId: PersonId, shouldDeleteOrgs = false) =>
@@ -862,15 +862,14 @@ await Effect.runPromise(
                     content: "Conteúdo de outra pessoa",
                   })
 
-                  const comments = yield* CommentsService
+                  const publicationComments = yield* PublicationCommentsService
 
-                  const commentId = yield* withPerson(
-                    comments.createPublicationComment({
+                  const publicationCommentId = yield* withPerson(
+                    publicationComments.createPublicationComment({
                       publicationId: retainedPublication.id,
                       content: {
                         sourceContent: textToRichTextDocument("Comentário pessoal"),
                         sourceLanguage: ContentLanguage.make("pt"),
-                        translations: { pt: "original" },
                       },
                     }),
                     personId,
@@ -881,7 +880,7 @@ await Effect.runPromise(
                     personId,
                     publicationId: publication.id,
                     retainedPublicationId: retainedPublication.id,
-                    commentId,
+                    publicationCommentId,
                   }
                 }),
             }),
@@ -902,7 +901,7 @@ await Effect.runPromise(
                   const confirmation = yield* withPerson(people.deleteCurrentPerson(), personId)
                   expect(confirmation).toMatchObject({
                     _tag: "ConfirmContentDeletion",
-                    personalContentCount: { posts: 1, comments: 1 },
+                    personalContentCount: { posts: 1, publicationComments: 1 },
                   })
                   const profiles = yield* ProfileService
                   expect(
@@ -938,14 +937,20 @@ await Effect.runPromise(
                   return context
                 }),
             }),
-            And("{string:name}'s comments are deleted", {
+            And("{string:name}'s publication comments are deleted", {
               params: NamedPerson,
               handler: (context) =>
                 Effect.gen(function* () {
-                  const comments = yield* CommentsRepository
-                  expect(Option.isNone(yield* comments.findCommentRowById(context.commentId))).toBe(
-                    true,
-                  )
+                  const publicationComments = yield* PublicationCommentsRepository
+
+                  expect(
+                    Option.isNone(
+                      yield* publicationComments.findPublicationCommentRowById(
+                        context.publicationCommentId,
+                      ),
+                    ),
+                  ).toBe(true)
+
                   return context
                 }),
             }),
@@ -1094,7 +1099,7 @@ await Effect.runPromise(
                   const profiles = yield* ProfileService
                   const organizations = yield* OrganizationsRepository
                   const publications = yield* PublicationsRepository
-                  const comments = yield* CommentsRepository
+                  const publicationComments = yield* PublicationCommentsRepository
                   expect(
                     yield* withPerson(profiles.findById(context.personId), context.personId),
                   ).toEqual(context.profileBefore)
@@ -1108,9 +1113,14 @@ await Effect.runPromise(
                     ),
                   ).toBe(true)
 
-                  expect(Option.isSome(yield* comments.findCommentRowById(context.commentId))).toBe(
-                    true,
-                  )
+                  expect(
+                    Option.isSome(
+                      yield* publicationComments.findPublicationCommentRowById(
+                        context.publicationCommentId,
+                      ),
+                    ),
+                  ).toBe(true)
+
                   return context
                 }),
             }),

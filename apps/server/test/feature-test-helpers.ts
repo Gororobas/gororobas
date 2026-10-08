@@ -16,10 +16,10 @@ import { resolveSessionFromAuthSubjectId } from "@gororobas/server/session-servi
 import { Effect, Layer, Match, Option, Record, Schema } from "effect"
 
 import { provisionMagicLinkAccount } from "../src/authentication/auth-subjects.js"
-import { CommentsRepository } from "../src/comments/repository.js"
-import { CommentsService } from "../src/comments/service.js"
 import { OrganizationsRepository } from "../src/organizations/repository.js"
 import { PeopleService } from "../src/people/service.js"
+import { PublicationCommentsRepository } from "../src/publication-comments/repository.js"
+import { PublicationCommentsService } from "../src/publication-comments/service.js"
 import { PublicationsRepository } from "../src/publications/repository.js"
 import { PublicationsService } from "../src/publications/service.js"
 import { WikiArticlesRepository } from "../src/wiki/repository.js"
@@ -160,13 +160,13 @@ export const textToRichTextDocument = (text: string): TiptapDocument => ({
 
 const ContentRepositoriesLayer = Layer.mergeAll(
   Layer.effect(PublicationsRepository, PublicationsRepository.make),
-  Layer.effect(CommentsRepository, CommentsRepository.make),
+  Layer.effect(PublicationCommentsRepository, PublicationCommentsRepository.make),
   Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make),
 ).pipe(Layer.provideMerge(TestLayerWithServices))
 
 export const PeopleFeatureTestLayer = Layer.mergeAll(
   Layer.effect(PublicationsService, PublicationsService.make),
-  Layer.effect(CommentsService, CommentsService.make),
+  Layer.effect(PublicationCommentsService, PublicationCommentsService.make),
 ).pipe(Layer.provideMerge(ContentRepositoriesLayer))
 
 export const createPost = ({

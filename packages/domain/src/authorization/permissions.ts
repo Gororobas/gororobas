@@ -19,8 +19,8 @@ export const PlatformPermission = Schema.Literals([
   "wiki-article:create",
   "wiki-article:revise",
   "organizations:create",
-  "comments:create",
-  "comments:censor",
+  "publication-comments:create",
+  "publication-comments:censor",
   "bookmarks:create",
 ])
 
@@ -33,7 +33,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   ADMIN: HashSet.fromIterable(PlatformPermission.literals),
   BLOCKED: HashSet.empty(),
   MODERATOR: HashSet.fromIterable([
-    "comments:censor",
+    "publication-comments:censor",
     "media:moderate",
     "people:manage-community-access",
     "revisions:evaluate",
@@ -44,7 +44,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
     "wiki-article:create",
     "wiki-article:revise",
     "organizations:create",
-    "comments:create",
+    "publication-comments:create",
     "bookmarks:create",
   ]),
   NEWCOMER: HashSet.fromIterable(["publications:create:personal", "media:create"]),
@@ -56,7 +56,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
     "profiles:read:community",
     "wiki-article:create",
     "wiki-article:revise",
-    "comments:create",
+    "publication-comments:create",
     "bookmarks:create",
   ]),
   VISITOR: HashSet.empty(),

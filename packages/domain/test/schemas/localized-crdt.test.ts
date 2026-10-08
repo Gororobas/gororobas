@@ -4,8 +4,6 @@ import * as Arbitrary from "effect/Arbitrary"
 import { TestClock } from "effect/testing"
 import { LoroList, LoroMap, LoroText, type LoroDoc } from "loro-crdt"
 
-import { CommentCrdt } from "../../src/comments/comment-crdt.js"
-import { SourceCommentData } from "../../src/comments/domain.js"
 import { ContentLanguage } from "../../src/common/content-language.js"
 import { ProfileId } from "../../src/common/ids.js"
 import { PersonId } from "../../src/common/ids.js"
@@ -16,7 +14,7 @@ import {
   snapshotToLoroDoc,
 } from "../../src/crdts/lib.js"
 import { toLoroString } from "../../src/crdts/loro-values.js"
-import { PublicationSourceData } from "../../src/publications/domain.js"
+import { PublicationSourceData, PostSourceData } from "../../src/publications/domain.js"
 import { PublicationCrdt } from "../../src/publications/publication-crdt.js"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { assertPropertyEffect } from "../../src/testing.js"
@@ -35,8 +33,8 @@ const original = (text: string) => ({
   translatedAtCrdtFrontier: null,
 })
 
-const publication = (text: string): PublicationSourceData =>
-  Schema.decodeSync(PublicationSourceData)({
+const publication = (text: string): PostSourceData =>
+  Schema.decodeSync(PostSourceData)({
     metadata: {
       kind: "POST",
       handle: "growing-together",
@@ -62,13 +60,14 @@ const textContainer = (document: LoroDoc) => {
   return text
 }
 
-describe("Publication and comment CRDTs", () => {
+describe("Publication CRDT", () => {
   it.effect(
     "keeps the source text container stable when an undetermined language is corrected",
     () =>
       Effect.gen(function* () {
-        const document = (yield* CommentCrdt.create(
-          SourceCommentData.make({
+        const document = (yield* PublicationCrdt.create(
+          Schema.toType(PublicationSourceData).make({
+            metadata: publication("Original").metadata,
             sourceContent: content("你好"),
             sourceLanguage: ContentLanguage.make("und"),
             translations: {},
@@ -78,26 +77,31 @@ describe("Publication and comment CRDTs", () => {
         const identity = textContainer(document).id
         const sourceLanguage = Schema.decodeSync(ContentLanguage)("ZH-hans")
         expect(sourceLanguage).toBe("zh-Hans")
-        yield* CommentCrdt.applyEdit(document, { _tag: "SetCommentSourceLanguage", sourceLanguage })
-        const corrected = yield* CommentCrdt.read(snapshotToLoroDoc(loroDocToSnapshot(document)))
+        yield* PublicationCrdt.applyEdit(document, {
+          _tag: "SetPublicationSourceLanguage",
+          sourceLanguage,
+        })
+        const corrected = yield* PublicationCrdt.read(
+          snapshotToLoroDoc(loroDocToSnapshot(document)),
+        )
         expect(corrected.sourceLanguage).toBe("zh-Hans")
         expect(corrected.translations).toEqual({})
         expect(corrected.sourceContent).toEqual(content("你好"))
         expect(textContainer(document).id).toBe(identity)
-        yield* CommentCrdt.applyEdit(document, {
-          _tag: "SetCommentSourceLanguage",
+        yield* PublicationCrdt.applyEdit(document, {
+          _tag: "SetPublicationSourceLanguage",
           sourceLanguage: ContentLanguage.make("en-US"),
         })
-        expect((yield* CommentCrdt.read(document)).translations.en).toBe("original")
-        yield* CommentCrdt.applyEdit(document, {
-          _tag: "SetCommentSourceLanguage",
+        expect((yield* PublicationCrdt.read(document)).translations.en).toBe("original")
+        yield* PublicationCrdt.applyEdit(document, {
+          _tag: "SetPublicationSourceLanguage",
           sourceLanguage: ContentLanguage.make("fr"),
         })
-        expect((yield* CommentCrdt.read(document)).translations.en).toBeUndefined()
+        expect((yield* PublicationCrdt.read(document)).translations.en).toBeUndefined()
         expect(textContainer(document).id).toBe(identity)
         const frontier = document.frontiers()
-        yield* CommentCrdt.applyEdit(document, {
-          _tag: "SetCommentSourceLanguage",
+        yield* PublicationCrdt.applyEdit(document, {
+          _tag: "SetPublicationSourceLanguage",
           sourceLanguage: ContentLanguage.make("fr"),
         })
         expect(document.frontiers()).toEqual(frontier)
@@ -117,23 +121,11 @@ describe("Publication and comment CRDTs", () => {
             snapshotToLoroDoc(loroDocToSnapshot(publicationDocument)),
           )
 
-          const comment = SourceCommentData.make({
-            sourceContent: content(text),
-            sourceLanguage: ContentLanguage.make("pt"),
-            translations: { pt: "original" },
-          })
-
-          const commentDocument = yield* CommentCrdt.create(comment).pipe(
-            Effect.map((created) => created.document),
-          )
-          const decodedComment = yield* CommentCrdt.read(
-            snapshotToLoroDoc(loroDocToSnapshot(commentDocument)),
-          )
-          expect(decodedComment.sourceContent).toEqual(content(toLoroString(text)))
+          expect(decodedPublication.sourceContent).toEqual(content(toLoroString(text)))
           expect(DateTime.formatIso(decodedPublication.metadata.publishedAt)).toBe(
             "2026-10-06T00:00:00.000Z",
           )
-          return Equal.equals(decodedPublication.sourceContent, decodedComment.sourceContent)
+          return true
         }),
     }),
   )
@@ -177,8 +169,9 @@ describe("Publication and comment CRDTs", () => {
 
   it.effect("preserves arbitrary attributes and changes only differing text/marks", () =>
     Effect.gen(function* () {
-      const document = yield* CommentCrdt.create(
-        SourceCommentData.make({
+      const document = yield* PublicationCrdt.create(
+        Schema.toType(PublicationSourceData).make({
+          metadata: publication("Original").metadata,
           sourceContent: content("Growing"),
           sourceLanguage: ContentLanguage.make("pt"),
           translations: { pt: "original" },
@@ -208,17 +201,17 @@ describe("Publication and comment CRDTs", () => {
         ],
       })
 
-      yield* CommentCrdt.applyEdit(document, {
-        _tag: "SetCommentSourceContent",
+      yield* PublicationCrdt.applyEdit(document, {
+        _tag: "SetPublicationSourceContent",
 
         content: next,
       })
 
-      expect((yield* CommentCrdt.read(document)).sourceContent).toEqual(next)
+      expect((yield* PublicationCrdt.read(document)).sourceContent).toEqual(next)
       const frontier = document.frontiers()
 
-      yield* CommentCrdt.applyEdit(document, {
-        _tag: "SetCommentSourceContent",
+      yield* PublicationCrdt.applyEdit(document, {
+        _tag: "SetPublicationSourceContent",
         content: next,
       })
 
@@ -228,8 +221,8 @@ describe("Publication and comment CRDTs", () => {
       const firstText = textContainer(first)
       firstText.mark({ start: 0, end: 3 }, "italic", {})
 
-      yield* CommentCrdt.applyEdit(second, {
-        _tag: "SetCommentSourceContent",
+      yield* PublicationCrdt.applyEdit(second, {
+        _tag: "SetPublicationSourceContent",
 
         content: {
           ...next,
@@ -261,8 +254,9 @@ describe("Publication and comment CRDTs", () => {
 
   it.effect("creates the same language concurrently with mergeable rich-text roots", () =>
     Effect.gen(function* () {
-      const initial = yield* CommentCrdt.create(
-        SourceCommentData.make({
+      const initial = yield* PublicationCrdt.create(
+        Schema.toType(PublicationSourceData).make({
+          metadata: publication("Original").metadata,
           sourceContent: content("Original"),
           sourceLanguage: ContentLanguage.make("pt"),
           translations: { pt: "original" },
@@ -272,8 +266,8 @@ describe("Publication and comment CRDTs", () => {
       const first = initial.fork()
       const second = initial.fork()
 
-      yield* CommentCrdt.applyEdit(first, {
-        _tag: "SetCommentTranslation",
+      yield* PublicationCrdt.applyEdit(first, {
+        _tag: "SetPublicationTranslation",
         language: "en",
         value: {
           ...original("First"),
@@ -282,8 +276,8 @@ describe("Publication and comment CRDTs", () => {
         },
       })
 
-      yield* CommentCrdt.applyEdit(second, {
-        _tag: "SetCommentTranslation",
+      yield* PublicationCrdt.applyEdit(second, {
+        _tag: "SetPublicationTranslation",
         language: "en",
         value: {
           ...original("Second"),
@@ -293,13 +287,16 @@ describe("Publication and comment CRDTs", () => {
       })
 
       first.import(second.export({ from: initial.version(), mode: "update" }))
-      const merged = yield* CommentCrdt.read(first)
+      const merged = yield* PublicationCrdt.read(first)
       expect(
         merged.translations.en !== "original" ? merged.translations.en?.content.content : undefined,
       ).toHaveLength(2)
       expect(merged.sourceContent).toEqual(content("Original"))
-      yield* CommentCrdt.applyEdit(first, { _tag: "RemovedCommentTranslation", language: "en" })
-      expect((yield* CommentCrdt.read(first)).translations.en).toBeUndefined()
+      yield* PublicationCrdt.applyEdit(first, {
+        _tag: "RemovedPublicationTranslation",
+        language: "en",
+      })
+      expect((yield* PublicationCrdt.read(first)).translations.en).toBeUndefined()
     }),
   )
 
@@ -307,8 +304,9 @@ describe("Publication and comment CRDTs", () => {
     Effect.gen(function* () {
       yield* TestClock.adjust("1 second")
 
-      const initialDoc = yield* CommentCrdt.create(
-        SourceCommentData.make({
+      const initialDoc = yield* PublicationCrdt.create(
+        Schema.toType(PublicationSourceData).make({
+          metadata: publication("Original").metadata,
           sourceContent: content("Original"),
           sourceLanguage: ContentLanguage.make("pt"),
           translations: { pt: "original" },
@@ -342,7 +340,7 @@ describe("Publication and comment CRDTs", () => {
       const change = result.getChangeAt(frontier)
       expect(change.message).toBe(Schema.encodeSync(CrdtCommitEncoded)(commit))
       expect(change.timestamp).toBeGreaterThan(0)
-      expect((yield* CommentCrdt.read(result)).sourceContent).toEqual(content("Published"))
+      expect((yield* PublicationCrdt.read(result)).sourceContent).toEqual(content("Published"))
     }),
   )
 })

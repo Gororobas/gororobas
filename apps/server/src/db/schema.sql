@@ -545,59 +545,42 @@ CREATE TABLE publication_wiki_articles (
 -- ========
 -- COMMENTS
 -- ========
---
--- The source of truth of all comment data
-CREATE TABLE comment_crdts (
+CREATE TABLE publication_comments (
   id text PRIMARY KEY,
   publication_id text NOT NULL,
-  parent_comment_id text,
-  crdt_snapshot blob NOT NULL, -- LoroSnapshot
-  owner_profile_id text NOT NULL,
-  moderation_status text NOT NULL,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (parent_comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
-);
-
--- How comments are modified
-CREATE TABLE comment_commits (
-  id text PRIMARY KEY,
-  comment_id text,
-  created_by_id text,
-  from_crdt_frontier json NOT NULL,
-  crdt_update blob NOT NULL,
-  created_at text NOT NULL,
-  FOREIGN KEY (comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
-);
-
--- Queryable projection of the canonical CRDT state.
-CREATE TABLE comments (
-  id text PRIMARY KEY,
-  publication_id text NOT NULL,
-  parent_comment_id text,
-  current_crdt_frontier json NOT NULL,
+  parent_publication_comment_id text,
   moderation_status text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
   owner_profile_id text NOT NULL,
-  FOREIGN KEY (id) REFERENCES comment_crdts (id) ON DELETE CASCADE,
+  source_language text NOT NULL,
+  source_content json NOT NULL,
+  FOREIGN KEY (parent_publication_comment_id) REFERENCES publication_comments (id) ON DELETE CASCADE,
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
 );
 
-CREATE TABLE comment_translations (
-  comment_id text NOT NULL,
+CREATE TABLE publication_comment_content_revisions (
+  id text PRIMARY KEY,
+  publication_comment_id text NOT NULL,
+  created_by_id text,
+  created_at text NOT NULL,
+  FOREIGN KEY (publication_comment_id) REFERENCES publication_comments (id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL,
+  UNIQUE (publication_comment_id, id)
+);
+
+CREATE INDEX idx_publication_comment_content_revisions_comment ON publication_comment_content_revisions (publication_comment_id, created_at, id);
+
+CREATE TABLE publication_comment_translations (
+  publication_comment_id text NOT NULL,
   language text NOT NULL,
   content json NOT NULL,
   content_plain_text text NOT NULL,
-  translated_at_crdt_frontier json NOT NULL,
-  translation_source text NOT NULL,
-  original_language text NOT NULL,
-  PRIMARY KEY (comment_id, language),
-  FOREIGN KEY (comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE
+  translated_at_revision_id text NOT NULL,
+  PRIMARY KEY (publication_comment_id, language),
+  FOREIGN KEY (publication_comment_id) REFERENCES publication_comments (id) ON DELETE CASCADE,
+  FOREIGN KEY (publication_comment_id, translated_at_revision_id) REFERENCES publication_comment_content_revisions (publication_comment_id, id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 -- =========

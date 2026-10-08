@@ -153,7 +153,7 @@ describe("Policies", () => {
                 }),
               ),
               Policies.wiki.canCreate,
-              Policies.comments.canCreate,
+              Policies.publicationComments.canCreate,
               Policies.organizations.canCreate,
               Policies.media.canCreate,
             ]
@@ -176,7 +176,7 @@ describe("Policies", () => {
           Effect.gen(function* () {
             const policies = [
               Policies.wiki.canCreate,
-              Policies.comments.canCreate,
+              Policies.publicationComments.canCreate,
               Policies.media.canCreate,
             ]
 
@@ -199,7 +199,7 @@ describe("Policies", () => {
     assertMonotonic(Policies.wiki.canCreate, "wiki-article:create")
     assertMonotonic(Policies.wiki.canRevise, "wiki-article:revise")
     assertMonotonic(Policies.organizations.canCreate, "organizations:canCreate")
-    assertMonotonic(Policies.comments.canCreate, "comments:canCreate")
+    assertMonotonic(Policies.publicationComments.canCreate, "publicationComments:canCreate")
     assertMonotonic(Policies.wiki.canBookmark, "bookmarks:create")
     assertMonotonic(Policies.media.canCreate, "media:canCreate")
   })
@@ -937,38 +937,47 @@ describe("Policies", () => {
     )
   })
 
-  describe("comments", () => {
-    it.effect("trusted users can create comments", () =>
+  describe("publicationComments", () => {
+    it.effect("trusted users can create publication comments", () =>
       propertyWithPrecondition({
         arbitrary: accountSessionArbitrary,
         precondition: isTrustedOrHigher,
-        predicate: (session) => runPolicySuccess(Policies.comments.canCreate, session),
+        predicate: (session) => runPolicySuccess(Policies.publicationComments.canCreate, session),
       }),
     )
 
-    it.effect("newcomers cannot create comments", () =>
+    it.effect("newcomers cannot create publication comments", () =>
       propertyWithPrecondition({
         arbitrary: accountSessionArbitrary,
         precondition: isNewcomer,
         predicate: (session) =>
-          Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
+          Effect.map(
+            runPolicySuccess(Policies.publicationComments.canCreate, session),
+            (allowed) => !allowed,
+          ),
       }),
     )
 
-    it.effect("visitors cannot create comments", () =>
+    it.effect("visitors cannot create publication comments", () =>
       assertPropertyEffect({
         arbitrary: visitorSessionArbitrary,
         predicate: (session) =>
-          Effect.map(runPolicySuccess(Policies.comments.canCreate, session), (allowed) => !allowed),
+          Effect.map(
+            runPolicySuccess(Policies.publicationComments.canCreate, session),
+            (allowed) => !allowed,
+          ),
       }),
     )
 
-    it.effect("only moderators and admins can censor comments", () =>
+    it.effect("only moderators and admins can censor publication comments", () =>
       assertPropertyEffect({
         arbitrary: accountSessionArbitrary,
         predicate: (session) =>
           Effect.gen(function* () {
-            const canModerate = yield* runPolicySuccess(Policies.comments.canCensor, session)
+            const canModerate = yield* runPolicySuccess(
+              Policies.publicationComments.canCensor,
+              session,
+            )
             return canModerate === isModeratorOrAdmin(session)
           }),
       }),

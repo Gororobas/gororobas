@@ -2,8 +2,7 @@ import { NodeServices } from "@effect/platform-node"
 import { assert, expect, it } from "@effect/vitest"
 import { ContentLanguage } from "@gororobas/domain"
 import {
-  CommentCrdt,
-  CommentId,
+  PublicationCommentId,
   Handle,
   LoroDocUpdate,
   ModerationStatus,
@@ -37,11 +36,10 @@ import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { TestClock } from "effect/testing"
 
-import { findCommentCrdtSnapshotById } from "../src/comments/queries.js"
-import { CommentsRepository } from "../src/comments/repository.js"
-import { CommentsService } from "../src/comments/service.js"
 import { OrganizationsService } from "../src/organizations/service.js"
 import { PeopleService } from "../src/people/service.js"
+import { PublicationCommentsRepository } from "../src/publication-comments/repository.js"
+import { PublicationCommentsService } from "../src/publication-comments/service.js"
 import { findPublicationCrdtSnapshotById } from "../src/publications/queries.js"
 import { PublicationsRepository } from "../src/publications/repository.js"
 import { PublicationsService } from "../src/publications/service.js"
@@ -72,7 +70,7 @@ const PublicationsBackground = Schema.Struct({
 
 type PublicationContext = typeof PublicationsBackground.Type & {
   actorId?: PersonId | undefined
-  commentId?: CommentId
+  publicationCommentId?: PublicationCommentId
   error?: unknown
 }
 
@@ -82,7 +80,7 @@ const publicationIn = (context: PublicationContext) =>
 const organizationIn = (context: PublicationContext) =>
   Option.getOrThrow(Option.fromNullishOr(context.organizationId))
 const commentIn = (context: PublicationContext) =>
-  Option.getOrThrow(Option.fromNullishOr(context.commentId))
+  Option.getOrThrow(Option.fromNullishOr(context.publicationCommentId))
 const asViewer = <A, E, R>(
   context: PublicationContext,
   action: Effect.Effect<A, E, R | SessionContext>,
@@ -691,8 +689,8 @@ const personalPostSetup = () =>
       }),
   })
 
-const comment = (context: PublicationContext, content: string) =>
-  CommentsService.use((service) =>
+const publicationComment = (context: PublicationContext, content: string) =>
+  PublicationCommentsService.use((service) =>
     asViewer(
       context,
       service.createPublicationComment({
@@ -700,116 +698,128 @@ const comment = (context: PublicationContext, content: string) =>
         content: {
           sourceContent: textToRichTextDocument(content),
           sourceLanguage: ContentLanguage.make("pt"),
-          translations: { pt: "original" },
         },
       }),
     ),
-  ).pipe(Effect.map((commentId) => ({ ...context, commentId })))
+  ).pipe(Effect.map((publicationCommentId) => ({ ...context, publicationCommentId })))
 
 const commentOnPost = () =>
   When("they comment on the post publication with {string:content}", {
     params: Content,
-    handler: (context: PublicationContext, { content }) => comment(context, content),
+    handler: (context: PublicationContext, { content }) => publicationComment(context, content),
   })
 
 const commented = () =>
   And("they have commented on the post publication with {string:content}", {
     params: Content,
-    handler: (context: PublicationContext, { content }) => comment(context, content),
+    handler: (context: PublicationContext, { content }) => publicationComment(context, content),
   })
 
-const namedCommented = () =>
+const namedPublicationCommented = () =>
   Given("{string:name} has commented on the post publication with {string:content}", {
     params: Schema.Struct({ ...NamedPerson.fields, ...Content.fields }),
     handler: (_, { name, content }) =>
-      background().pipe(Effect.flatMap((context) => comment(viewerNamed(context, name), content))),
+      background().pipe(
+        Effect.flatMap((context) => publicationComment(viewerNamed(context, name), content)),
+      ),
   })
 
-const deniedComment = () =>
+const deniedPublicationComment = () =>
   When("{string:name} tries to comment on the post publication", {
     params: NamedPerson,
     handler: (_, { name }) =>
       Effect.gen(function* () {
         const context = viewerNamed(yield* background(), name)
-        const repo = yield* CommentsRepository
-        const before = yield* repo.listCommentRowsByPublicationId(publicationIn(context).id)
-        const result = yield* denied(context, comment(context, "Tentativa"))
-        expect(yield* repo.listCommentRowsByPublicationId(publicationIn(context).id)).toEqual(
-          before,
+        const repo = yield* PublicationCommentsRepository
+        const before = yield* repo.listPublicationCommentRowsByPublicationId(
+          publicationIn(context).id,
         )
+        const result = yield* denied(context, publicationComment(context, "Tentativa"))
+        expect(
+          yield* repo.listPublicationCommentRowsByPublicationId(publicationIn(context).id),
+        ).toEqual(before)
         return result
       }),
   })
 
 const censor = () =>
-  When("{string:name} censors the comment", {
+  When("{string:name} censors the publication comment", {
     params: NamedPerson,
     handler: (context: PublicationContext, { name }) =>
       withPerson(
-        CommentsService.use((service) => service.censorComment(commentIn(context))),
+        PublicationCommentsService.use((service) =>
+          service.censorPublicationComment(commentIn(context)),
+        ),
         personNamed(context.actors, name),
       ).pipe(Effect.as(context)),
   })
 
 const deniedCensor = () =>
-  When("{string:name} tries to censor the comment", {
+  When("{string:name} tries to censor the publication comment", {
     params: NamedPerson,
     handler: (context: PublicationContext, { name }) =>
       Effect.gen(function* () {
-        const repo = yield* CommentsRepository
-        const before = yield* repo.findCommentRowById(commentIn(context))
+        const repo = yield* PublicationCommentsRepository
+        const before = yield* repo.findPublicationCommentRowById(commentIn(context))
 
         const result = yield* denied(
           context,
           withPerson(
-            (yield* CommentsService).censorComment(commentIn(context)),
+            (yield* PublicationCommentsService).censorPublicationComment(commentIn(context)),
             personNamed(context.actors, name),
           ),
         )
 
-        expect(yield* repo.findCommentRowById(commentIn(context))).toEqual(before)
+        expect(yield* repo.findPublicationCommentRowById(commentIn(context))).toEqual(before)
         return result
       }),
   })
 
-const visibleCommentStep = {
+const visiblePublicationCommentStep = {
   handler: (context: PublicationContext) =>
     Effect.gen(function* () {
-      const comments = yield* asViewer(
+      const publicationComments = yield* asViewer(
         context,
-        (yield* CommentsService).listByPublicationId(publicationIn(context).id),
+        (yield* PublicationCommentsService).listByPublicationId(publicationIn(context).id),
       )
-      expect(comments.map((row) => row.id)).toContain(commentIn(context))
+      expect(publicationComments.map((row) => row.id)).toContain(commentIn(context))
       return context
     }),
 }
 
 const commentVisible = () =>
-  Then("the comment is visible on the post publication", visibleCommentStep)
+  Then("the publication comment is visible on the post publication", visiblePublicationCommentStep)
+
 const commentRemains = () =>
-  And("the comment remains visible on the post publication", visibleCommentStep)
+  And(
+    "the publication comment remains visible on the post publication",
+    visiblePublicationCommentStep,
+  )
 
 const commentHidden = () =>
-  Then("the comment becomes hidden on the post publication", {
+  Then("the publication comment becomes hidden on the post publication", {
     handler: (context: PublicationContext) =>
       Effect.gen(function* () {
-        const comments = yield* asViewer(
+        const publicationComments = yield* asViewer(
           context,
-          (yield* CommentsService).listByPublicationId(publicationIn(context).id),
+          (yield* PublicationCommentsService).listByPublicationId(publicationIn(context).id),
         )
-        expect(comments.map((row) => row.id)).not.toContain(commentIn(context))
+        expect(publicationComments.map((row) => row.id)).not.toContain(commentIn(context))
         return context
       }),
   })
 
 const commentStatus = () =>
-  And("the comment has moderation_status {string:status}", {
+  And("the publication comment has moderation_status {string:status}", {
     params: Schema.Struct({ status: ModerationStatus }),
     handler: (context: PublicationContext, { status }) =>
       Effect.gen(function* () {
         const row = Option.getOrThrow(
-          yield* (yield* CommentsRepository).findCommentRowById(commentIn(context)),
+          yield* (yield* PublicationCommentsRepository).findPublicationCommentRowById(
+            commentIn(context),
+          ),
         )
+
         expect(row.moderationStatus).toBe(status)
         expect(row.ownerProfileId).toBe(context.actorId)
         return context
@@ -1074,7 +1084,7 @@ await Effect.runPromise(
       })
     })
 
-    Rule("Posts have comments", ({ Background, Scenario }) => {
+    Rule("Posts have publication comments", ({ Background, Scenario }) => {
       Background({
         layer: PublicationsFeatureTestLayer,
         steps: () => runSteps(givenPeople(), personalPostSetup(), loggedIn()),
@@ -1085,18 +1095,18 @@ await Effect.runPromise(
       })
       Scenario("Newcomer cannot comment on a post", {
         layer: PublicationsFeatureTestLayer,
-        steps: () => runSteps(deniedComment(), accessDenied()),
+        steps: () => runSteps(deniedPublicationComment(), accessDenied()),
       })
-      Scenario("Moderator can censor a comment", {
+      Scenario("Moderator can censor a publication comment", {
         layer: PublicationsFeatureTestLayer,
         steps: () => runSteps(loggedIn(), commented(), censor(), commentHidden(), commentStatus()),
       })
 
-      Scenario("Community member cannot censor a comment", {
+      Scenario("Community member cannot censor a publication comment", {
         layer: PublicationsFeatureTestLayer,
         steps: () =>
           runSteps(
-            namedCommented(),
+            namedPublicationCommented(),
             deniedCensor(),
             accessDenied(),
             commentRemains(),
@@ -1133,185 +1143,184 @@ await Effect.runPromise(
   }).pipe(Effect.provide(NodeServices.layer)),
 )
 
-it.effect("posts and events apply current author access to pages, attribution, and comments", () =>
-  assertPropertyEffect({
-    arbitrary: Arbitrary.schema(
-      Schema.Struct({
-        kind: Schema.Literals(["POST", "EVENT"]),
-        visibility: ProfileVisibility,
-        viewerAccess: PlatformAccessLevelOrVisitor,
-      }),
-    ),
-    options: { runs: 40 },
-    predicate: ({ kind, visibility, viewerAccess }) =>
-      Effect.gen(function* () {
-        const context = yield* provisionPeople([
-          { name: "Owner", accessLevel: "NEWCOMER" },
-          ...(viewerAccess === "VISITOR" ? [] : [{ name: "Reader", accessLevel: viewerAccess }]),
-        ])
-        const ownerId = personNamed(context.actors, "Owner")
-        const reader = viewerAccess === "VISITOR" ? context : viewerNamed(context, "Reader")
-        const service = yield* PublicationsService
-        const comments = yield* CommentsService
-        const repo = yield* CommentsRepository
+it.effect(
+  "posts and events apply current author access to pages, attribution, and publication comments",
+  () =>
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(
+        Schema.Struct({
+          kind: Schema.Literals(["POST", "EVENT"]),
+          visibility: ProfileVisibility,
+          viewerAccess: PlatformAccessLevelOrVisitor,
+        }),
+      ),
+      options: { runs: 40 },
+      predicate: ({ kind, visibility, viewerAccess }) =>
+        Effect.gen(function* () {
+          const context = yield* provisionPeople([
+            { name: "Owner", accessLevel: "NEWCOMER" },
+            ...(viewerAccess === "VISITOR" ? [] : [{ name: "Reader", accessLevel: viewerAccess }]),
+          ])
+          const ownerId = personNamed(context.actors, "Owner")
+          const reader = viewerAccess === "VISITOR" ? context : viewerNamed(context, "Reader")
+          const service = yield* PublicationsService
+          const publicationComments = yield* PublicationCommentsService
+          const repo = yield* PublicationCommentsRepository
 
-        const publication = yield* withPerson(
-          service.createPublication({
-            kind,
-            visibility,
-            ownerProfileId: ownerId,
-            sourceLanguage: ContentLanguage.make("pt"),
-            content: textToRichTextDocument("Encontro agroecológico"),
-            startDate: DateTime.makeUnsafe("2026-02-01"),
-          }),
-          ownerId,
-        )
-
-        const readerContext = { ...reader, publication }
-        const trusted =
-          viewerAccess === "COMMUNITY" || viewerAccess === "MODERATOR" || viewerAccess === "ADMIN"
-
-        const checkRead = <A, E, R>(action: Effect.Effect<A, E, R>, allowed: boolean) =>
-          Effect.gen(function* () {
-            const result = yield* action.pipe(Effect.result)
-            expect(Result.isSuccess(result)).toBe(allowed)
-            Result.match(result, {
-              onSuccess: () => undefined,
-              onFailure: (error) => expect(error).toMatchObject({ _tag: "UnauthorizedError" }),
-            })
-          })
-
-        yield* Effect.forEach(
-          [false, true],
-          (approved) =>
-            Effect.gen(function* () {
-              if (approved) {
-                yield* withPerson(
-                  (yield* PeopleService).setAccessLevel(ownerId, "COMMUNITY"),
-                  context.administratorId,
-                )
-              }
-
-              const allowed = approved
-                ? visibility === "PUBLIC" || trusted
-                : viewerAccess === "ADMIN" || viewerAccess === "MODERATOR"
-              yield* checkRead(
-                asViewer(readerContext, service.getPublicationPageData(publication.handle)),
-                allowed,
-              )
-              yield* checkRead(asViewer(readerContext, service.getHistory(publication.id)), allowed)
-              yield* checkRead(
-                asViewer(readerContext, service.getContributors(publication.id)),
-                allowed,
-              )
-              yield* checkRead(
-                asViewer(readerContext, comments.listByPublicationId(publication.id)),
-                allowed,
-              )
-              expect(
-                (yield* withPerson(service.getPublicationPageData(publication.handle), ownerId)).id,
-              ).toBe(publication.id)
-              const before = yield* repo.listCommentRowsByPublicationId(publication.id)
-              const result = yield* comment(readerContext, "Comentário").pipe(Effect.result)
-              expect(Result.isSuccess(result)).toBe(allowed && trusted)
-
-              yield* Result.match(result, {
-                onSuccess: () => Effect.void,
-                onFailure: (error) =>
-                  Effect.gen(function* () {
-                    expect(error).toMatchObject({ _tag: "UnauthorizedError" })
-                    expect(yield* repo.listCommentRowsByPublicationId(publication.id)).toEqual(
-                      before,
-                    )
-                  }),
-              })
+          const publication = yield* withPerson(
+            service.createPublication({
+              kind,
+              visibility,
+              ownerProfileId: ownerId,
+              sourceLanguage: ContentLanguage.make("pt"),
+              content: textToRichTextDocument("Encontro agroecológico"),
+              startDate: DateTime.makeUnsafe("2026-02-01"),
             }),
-          { concurrency: 1 },
-        )
+            ownerId,
+          )
 
-        return true
-      }).pipe(Effect.provide(PublicationsFeatureTestLayer)),
-  }),
+          const readerContext = { ...reader, publication }
+          const trusted =
+            viewerAccess === "COMMUNITY" || viewerAccess === "MODERATOR" || viewerAccess === "ADMIN"
+
+          const checkRead = <A, E, R>(action: Effect.Effect<A, E, R>, allowed: boolean) =>
+            Effect.gen(function* () {
+              const result = yield* action.pipe(Effect.result)
+              expect(Result.isSuccess(result)).toBe(allowed)
+              Result.match(result, {
+                onSuccess: () => undefined,
+                onFailure: (error) => expect(error).toMatchObject({ _tag: "UnauthorizedError" }),
+              })
+            })
+
+          yield* Effect.forEach(
+            [false, true],
+            (approved) =>
+              Effect.gen(function* () {
+                if (approved) {
+                  yield* withPerson(
+                    (yield* PeopleService).setAccessLevel(ownerId, "COMMUNITY"),
+                    context.administratorId,
+                  )
+                }
+
+                const allowed = approved
+                  ? visibility === "PUBLIC" || trusted
+                  : viewerAccess === "ADMIN" || viewerAccess === "MODERATOR"
+                yield* checkRead(
+                  asViewer(readerContext, service.getPublicationPageData(publication.handle)),
+                  allowed,
+                )
+                yield* checkRead(
+                  asViewer(readerContext, service.getHistory(publication.id)),
+                  allowed,
+                )
+                yield* checkRead(
+                  asViewer(readerContext, service.getContributors(publication.id)),
+                  allowed,
+                )
+                yield* checkRead(
+                  asViewer(readerContext, publicationComments.listByPublicationId(publication.id)),
+                  allowed,
+                )
+                expect(
+                  (yield* withPerson(service.getPublicationPageData(publication.handle), ownerId))
+                    .id,
+                ).toBe(publication.id)
+                const before = yield* repo.listPublicationCommentRowsByPublicationId(publication.id)
+                const result = yield* publicationComment(readerContext, "Comentário").pipe(
+                  Effect.result,
+                )
+                expect(Result.isSuccess(result)).toBe(allowed && trusted)
+
+                yield* Result.match(result, {
+                  onSuccess: () => Effect.void,
+                  onFailure: (error) =>
+                    Effect.gen(function* () {
+                      expect(error).toMatchObject({ _tag: "UnauthorizedError" })
+                      expect(
+                        yield* repo.listPublicationCommentRowsByPublicationId(publication.id),
+                      ).toEqual(before)
+                    }),
+                })
+              }),
+            { concurrency: 1 },
+          )
+
+          return true
+        }).pipe(Effect.provide(PublicationsFeatureTestLayer)),
+    }),
 )
 
-it.effect(
-  "censorship persists in the aggregate and projection and survives subsequent author edits",
-  () =>
-    Effect.gen(function* () {
-      const context = yield* provisionPeople([
-        { name: "Maria", accessLevel: "COMMUNITY" },
-        { name: "Ana", accessLevel: "MODERATOR" },
-        { name: "Ailton", accessLevel: "ADMIN" },
-      ])
+it.effect("censorship survives subsequent author edits", () =>
+  Effect.gen(function* () {
+    const context = yield* provisionPeople([
+      { name: "Maria", accessLevel: "COMMUNITY" },
+      { name: "Ana", accessLevel: "MODERATOR" },
+      { name: "Ailton", accessLevel: "ADMIN" },
+    ])
 
-      const author = viewerNamed(context, "Maria")
+    const author = viewerNamed(context, "Maria")
 
-      const created = yield* createPublication({
-        context: author,
-        visibility: "PUBLIC",
-        ownerProfileId: personNamed(context.actors, "Maria"),
-        content: "Canteiro novo",
-      })
+    const created = yield* createPublication({
+      context: author,
+      visibility: "PUBLIC",
+      ownerProfileId: personNamed(context.actors, "Maria"),
+      content: "Canteiro novo",
+    })
 
-      const commented = yield* comment(created, "Comentário original")
-      const commentId = commentIn(commented)
-      const service = yield* CommentsService
-      const repo = yield* CommentsRepository
-      yield* withPerson(service.censorComment(commentId), personNamed(context.actors, "Ana"))
+    const commented = yield* publicationComment(created, "Comentário original")
+    const publicationCommentId = commentIn(commented)
+    const service = yield* PublicationCommentsService
+    const repo = yield* PublicationCommentsRepository
+    yield* withPerson(
+      service.censorPublicationComment(publicationCommentId),
+      personNamed(context.actors, "Ana"),
+    )
 
-      const readAggregateStatus = SqlSchema.findOne({
-        Request: CommentId,
-        Result: Schema.Struct({ moderationStatus: Schema.NullOr(ModerationStatus) }),
-        execute: (id) =>
-          SqlClient.SqlClient.use(
-            (sql) => sql`SELECT moderation_status FROM comment_crdts WHERE id = ${id}`,
-          ),
-      })
-
-      expect((yield* readAggregateStatus(commentId)).moderationStatus).toBe("CENSORED")
-      const current = snapshotToLoroDoc(
-        Option.getOrThrow(yield* findCommentCrdtSnapshotById(commentId)).crdtSnapshot,
-      )
-      const edited = current.fork()
-
-      yield* CommentCrdt.applyEdit(edited, {
-        _tag: "SetCommentSourceContent",
-        content: textToRichTextDocument("Comentário editado"),
-      })
-
-      const before = Option.getOrThrow(yield* repo.findCommentRowById(commentId))
-      yield* TestClock.adjust(1)
-
-      yield* asViewer(
-        commented,
-        service.updateComment({
-          commentId,
-          expectedCurrentCrdtFrontier: before.currentCrdtFrontier,
-          crdtUpdate: LoroDocUpdate.make(
-            edited.export({ from: current.version(), mode: "update" }),
-          ),
-        }),
-      )
-
-      expect(
-        Option.getOrThrow(
-          yield* repo.findCommentContentByIdAndLanguage({ commentId, language: "pt" }),
-        ).content,
-      ).toEqual(textToRichTextDocument("Comentário editado"))
-
-      expect(Option.getOrThrow(yield* repo.findCommentRowById(commentId)).moderationStatus).toBe(
-        "CENSORED",
-      )
-      expect((yield* readAggregateStatus(commentId)).moderationStatus).toBe("CENSORED")
-      yield* withPerson(service.censorComment(commentId), personNamed(context.actors, "Ailton"))
-
-      expect(
-        yield* withSession(
-          service.listByPublicationId(publicationIn(commented).id),
-          VISITOR_SESSION,
+    const readAggregateStatus = SqlSchema.findOne({
+      Request: PublicationCommentId,
+      Result: Schema.Struct({ moderationStatus: Schema.NullOr(ModerationStatus) }),
+      execute: (id) =>
+        SqlClient.SqlClient.use(
+          (sql) => sql`SELECT moderation_status FROM publication_comments WHERE id = ${id}`,
         ),
-      ).toEqual([])
-    }).pipe(Effect.provide(PublicationsFeatureTestLayer)),
+    })
+
+    expect((yield* readAggregateStatus(publicationCommentId)).moderationStatus).toBe("CENSORED")
+    const before = Option.getOrThrow(
+      yield* repo.findPublicationCommentRowById(publicationCommentId),
+    )
+    yield* TestClock.adjust(1)
+
+    yield* asViewer(
+      commented,
+      service.updatePublicationComment({
+        publicationCommentId,
+        expectedCurrentRevisionId: before.currentRevisionId,
+        sourceContent: textToRichTextDocument("Comentário editado"),
+      }),
+    )
+
+    expect(
+      Option.getOrThrow(yield* repo.findPublicationCommentRowById(publicationCommentId))
+        .sourceContent,
+    ).toEqual(textToRichTextDocument("Comentário editado"))
+
+    expect(
+      Option.getOrThrow(yield* repo.findPublicationCommentRowById(publicationCommentId))
+        .moderationStatus,
+    ).toBe("CENSORED")
+    expect((yield* readAggregateStatus(publicationCommentId)).moderationStatus).toBe("CENSORED")
+    yield* withPerson(
+      service.censorPublicationComment(publicationCommentId),
+      personNamed(context.actors, "Ailton"),
+    )
+
+    expect(
+      yield* withSession(service.listByPublicationId(publicationIn(commented).id), VISITOR_SESSION),
+    ).toEqual([])
+  }).pipe(Effect.provide(PublicationsFeatureTestLayer)),
 )
 
 it.effect("publication updates preserve kind and reject kind changes without persisting them", () =>

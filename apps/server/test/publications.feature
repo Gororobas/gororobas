@@ -204,8 +204,8 @@ Feature: Publications
         | 1       | Maria  | Reunião cancelada          |
         | 2       | Carlos | Reunião adiada para amanhã |
 
-  Rule: Posts have comments
-    Moderators and admins can censor comments; ordinary community members cannot.
+  Rule: Posts have publication comments
+    Moderators and admins can censor publication comments; ordinary community members cannot.
 
     Background:
       Given the following people exist:
@@ -219,26 +219,26 @@ Feature: Publications
     Scenario: Person with community access can comment on a post
       Given "Maria" is logged in
       When they comment on the post publication with "Que massa!"
-      Then the comment is visible on the post publication
-      And the comment has moderation_status "APPROVED_BY_DEFAULT"
+      Then the publication comment is visible on the post publication
+      And the publication comment has moderation_status "APPROVED_BY_DEFAULT"
 
     Scenario: Newcomer cannot comment on a post
       When "Pedro" tries to comment on the post publication
       Then access is denied
 
-    Scenario: Moderator can censor a comment
+    Scenario: Moderator can censor a publication comment
       Given "Maria" is logged in
       And they have commented on the post publication with "Comentário polêmico"
-      When "Ana" censors the comment
-      Then the comment becomes hidden on the post publication
-      And the comment has moderation_status "CENSORED"
+      When "Ana" censors the publication comment
+      Then the publication comment becomes hidden on the post publication
+      And the publication comment has moderation_status "CENSORED"
 
-    Scenario: Community member cannot censor a comment
+    Scenario: Community member cannot censor a publication comment
       Given "Maria" has commented on the post publication with "Que massa!"
-      When "Maria" tries to censor the comment
+      When "Maria" tries to censor the publication comment
       Then access is denied
-      And the comment remains visible on the post publication
-      And the comment has moderation_status "APPROVED_BY_DEFAULT"
+      And the publication comment remains visible on the post publication
+      And the publication comment has moderation_status "APPROVED_BY_DEFAULT"
 
   Rule: Member visibility affects public attribution
     Organization members visibility controls both the contributors list and author identities

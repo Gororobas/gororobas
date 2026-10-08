@@ -3,8 +3,6 @@ import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
 
-import { CommentsApiLive } from "./comments/api-live.js"
-import { CommentsRepository } from "./comments/repository.js"
 import { MediaAssetsApiLive } from "./media-assets/api-live.js"
 import { MediaAssetsRepository } from "./media-assets/repository.js"
 import { MediaAssetsService } from "./media-assets/service.js"
@@ -13,6 +11,9 @@ import { OrganizationsApiLive } from "./organizations/api-live.js"
 import { PeopleApiLive } from "./people/api-live.js"
 import { ProfilesApiLive } from "./profiles/api-live.js"
 import { ProfilesRepository } from "./profiles/repository.js"
+import { PublicationCommentsApiLive } from "./publication-comments/api-live.js"
+import { PublicationCommentsRepository } from "./publication-comments/repository.js"
+import { PublicationCommentsService } from "./publication-comments/service.js"
 import { PublicationsApiLive } from "./publications/api-live.js"
 import { PublicationsRepository } from "./publications/repository.js"
 import { PublicationsService } from "./publications/service.js"
@@ -20,7 +21,7 @@ import { TagsApiLive } from "./tags/api-live.js"
 
 // Register the implemented API groups.
 const ImplementedApi = HttpApi.make(GororobasApi.identifier).add(
-  GororobasApi.groups.comments,
+  GororobasApi.groups.publicationComments,
   GororobasApi.groups.mediaAssets,
   GororobasApi.groups.organizations,
   GororobasApi.groups.people,
@@ -35,7 +36,7 @@ const MediaServicesLive = Layer.effect(MediaAssetsService, MediaAssetsService.ma
 )
 
 export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
-  CommentsApiLive,
+  PublicationCommentsApiLive,
   MediaAssetsApiLive,
   OrganizationsApiLive,
   PeopleApiLive,
@@ -46,12 +47,15 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
   HttpRouter.provideRequest(
     Layer.mergeAll(
       MediaServicesLive,
+      Layer.effect(PublicationCommentsService, PublicationCommentsService.make),
       Layer.effect(PublicationsService, PublicationsService.make),
       Layer.effect(ProfilesRepository, ProfilesRepository.make),
     ),
   ),
   Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
-  Layer.provideMerge(Layer.effect(CommentsRepository, CommentsRepository.make)),
+  Layer.provideMerge(
+    Layer.effect(PublicationCommentsRepository, PublicationCommentsRepository.make),
+  ),
 )
 
 export const ApiTest = ApiLive

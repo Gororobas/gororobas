@@ -1,8 +1,8 @@
-import { commentsPolicies } from "../comments/policies.js"
 import { mediaPolicies } from "../media-assets/policies.js"
 import { organizationsPolicies } from "../organizations/policies.js"
 import { peoplePolicies } from "../people/policies.js"
 import { profilePolicies } from "../profiles/policies.js"
+import { publicationCommentsPolicies } from "../publication-comments/policies.js"
 import { publicationsPolicies } from "../publications/policies.js"
 import { wikiPolicies } from "../wiki/policies.js"
 import {
@@ -23,7 +23,7 @@ const Policies = {
   },
 
   // Domain-specific
-  comments: commentsPolicies,
+  publicationComments: publicationCommentsPolicies,
   media: mediaPolicies,
   organizations: organizationsPolicies,
   people: peoplePolicies,

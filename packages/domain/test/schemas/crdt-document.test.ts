@@ -3,8 +3,6 @@ import { Effect, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { LoroMap, type LoroDoc } from "loro-crdt"
 
-import { CommentCrdt } from "../../src/comments/comment-crdt.js"
-import { SourceCommentData } from "../../src/comments/domain.js"
 import { ContentLanguage } from "../../src/common/content-language.js"
 import { PersonId, ProfileId } from "../../src/common/ids.js"
 import { HumanCommit, LoroDocSnapshot, LoroDocUpdate } from "../../src/crdts/domain.js"
@@ -31,12 +29,6 @@ const original = {
   translationSource: "ORIGINAL",
   translatedAtCrdtFrontier: null,
 } as const
-
-const comment: SourceCommentData = {
-  sourceContent: original.content,
-  sourceLanguage: ContentLanguage.make("pt"),
-  translations: { pt: "original" },
-}
 
 const publication = Schema.decodeSync(PublicationSourceData)({
   metadata: {
@@ -125,24 +117,6 @@ const rejectUnknownKeys = (parameters: {
   })
 
 describe("Shared CRDT document boundary", () => {
-  it.effect("rejects unknown comment keys before committing", () =>
-    Effect.gen(function* () {
-      const created = yield* CommentCrdt.create(comment)
-
-      yield* rejectUnknownKeys({
-        snapshot: created.crdtSnapshot,
-        languageRoot: "sourceContent",
-        metadataRoot: undefined,
-        apply: (crdtUpdate) =>
-          CommentCrdt.applyUpdate({ commit, crdtUpdate, snapshot: created.crdtSnapshot }).pipe(
-            Effect.asVoid,
-          ),
-      })
-
-      expect(yield* CommentCrdt.read(created.document)).toEqual(comment)
-    }),
-  )
-
   it.effect("rejects unknown publication keys before committing", () =>
     Effect.gen(function* () {
       const created = yield* PublicationCrdt.create(publication)
@@ -177,19 +151,19 @@ describe("Shared CRDT document boundary", () => {
 
   it.effect("rejects updates whose dependencies are missing", () =>
     Effect.gen(function* () {
-      const created = yield* CommentCrdt.create(comment)
-      const unrelated = yield* CommentCrdt.create(comment)
+      const created = yield* PublicationCrdt.create(publication)
+      const unrelated = yield* PublicationCrdt.create(publication)
       const version = created.document.version()
 
-      yield* CommentCrdt.applyEdit(created.document, {
-        _tag: "SetCommentSourceContent",
+      yield* PublicationCrdt.applyEdit(created.document, {
+        _tag: "SetPublicationSourceContent",
 
         content: content("Changed"),
       })
 
       const update = LoroDocUpdate.make(created.document.export({ from: version, mode: "update" }))
       const error = yield* Effect.flip(
-        CommentCrdt.parseUpdate({ snapshot: unrelated.crdtSnapshot, crdtUpdate: update }),
+        PublicationCrdt.parseUpdate({ snapshot: unrelated.crdtSnapshot, crdtUpdate: update }),
       )
       expect(error.reason).toBe("InvalidFormat")
     }),
@@ -197,16 +171,16 @@ describe("Shared CRDT document boundary", () => {
 
   it.effect("applies multiple edits in order and publishes only their final state", () =>
     Effect.gen(function* () {
-      const created = yield* CommentCrdt.create(comment)
+      const created = yield* PublicationCrdt.create(publication)
 
-      const evolved = yield* CommentCrdt.evolve({
+      const evolved = yield* PublicationCrdt.evolve({
         commit,
         snapshot: created.crdtSnapshot,
         edits: [
-          { _tag: "SetCommentSourceContent", content: content("PRIVATE INTERMEDIATE") },
-          { _tag: "SetCommentSourceContent", content: content("Published") },
+          { _tag: "SetPublicationSourceContent", content: content("PRIVATE INTERMEDIATE") },
+          { _tag: "SetPublicationSourceContent", content: content("Published") },
           {
-            _tag: "SetCommentTranslation",
+            _tag: "SetPublicationTranslation",
             language: "en",
             value: {
               content: content("Translation"),
@@ -226,27 +200,27 @@ describe("Shared CRDT document boundary", () => {
           : undefined,
       ).toEqual(content("Translation"))
 
-      expect(yield* CommentCrdt.read(created.document)).toEqual(comment)
+      expect(yield* PublicationCrdt.read(created.document)).toEqual(publication)
       const history = evolved.document.exportJsonUpdates(created.document.version())
       expect(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(history)).not.toContain(
         "PRIVATE INTERMEDIATE",
       )
 
       expect(
-        (yield* CommentCrdt.parseUpdate({
+        (yield* PublicationCrdt.parseUpdate({
           snapshot: created.crdtSnapshot,
           crdtUpdate: LoroDocUpdate.make(evolved.crdtUpdate),
         })).data,
       ).toEqual(evolved.data)
 
       const failed = yield* Effect.flip(
-        CommentCrdt.evolve({
+        PublicationCrdt.evolve({
           commit,
           snapshot: created.crdtSnapshot,
           edits: [
-            { _tag: "SetCommentSourceContent", content: content("Should not persist") },
+            { _tag: "SetPublicationSourceContent", content: content("Should not persist") },
             {
-              _tag: "SetCommentTranslationContent",
+              _tag: "SetPublicationTranslationContent",
               language: "en",
               content: content("Missing language"),
             },
@@ -256,7 +230,7 @@ describe("Shared CRDT document boundary", () => {
 
       assert(failed instanceof InvalidCrdtUpdateError)
       expect(failed.reason).toBe("SchemaValidation")
-      expect(yield* CommentCrdt.read(created.document)).toEqual(comment)
+      expect(yield* PublicationCrdt.read(created.document)).toEqual(publication)
     }),
   )
 })

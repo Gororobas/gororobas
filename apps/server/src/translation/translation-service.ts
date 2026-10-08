@@ -9,7 +9,7 @@ export const CODE_TO_LANG: Record<SupportedLanguage, string> = {
 
 export class TranslationError extends Schema.TaggedError<TranslationError>()("TranslationError", {
   message: Schema.String,
-  cause: Schema.optional(Schema.Unknown),
+  cause: Schema.optional(Schema.Defect()),
 }) {}
 
 export interface TranslationServiceApi {

@@ -142,7 +142,7 @@ Feature: People
       When "Maria" confirms deletion of their account and personal content
       Then "Maria"'s profile no longer exists
       And "Maria"'s personal publications are deleted
-      And "Maria"'s comments are deleted
+      And "Maria"'s publication comments are deleted
 
     Scenario: Deleted person's wiki contributions remain but are anonymized
       Given "Maria" has approved revisions on wiki article "Mandioca"

@@ -11,6 +11,7 @@ import { AuthenticationLive, authenticationOrigin } from "./authentication/authe
 import { ProfilesRepository } from "./profiles/repository.js"
 import { runMainWithCustomRuntime } from "./run-main-with-custom-runtime.js"
 import { ServerServicesLive } from "./server-services.js"
+import { LanguageDetectionServiceStub } from "./translation/language-detection-service.js"
 import { TranslationServiceDeepl } from "./translation/translation-service-deepl.js"
 import { WorkflowsLive } from "./workflows-live.js"
 
@@ -23,6 +24,7 @@ const Services = Layer.mergeAll(WorkflowsLive).pipe(
     ),
   ),
   Layer.provideMerge(TranslationServiceDeepl),
+  Layer.provideMerge(LanguageDetectionServiceStub),
   Layer.provideMerge(AuthenticationLive),
   Layer.provideMerge(Layer.effect(ProfilesRepository, ProfilesRepository.make)),
   Layer.provide(

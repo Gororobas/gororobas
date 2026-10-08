@@ -14,11 +14,13 @@ export type AuthSubjectId = typeof AuthSubjectId.Type
 export const AuthSecurityRevision = UUID.pipe(Schema.brand("AuthSecurityRevision"))
 export type AuthSecurityRevision = typeof AuthSecurityRevision.Type
 
-export const CommentId = UUID.pipe(Schema.brand("CommentId"))
-export type CommentId = typeof CommentId.Type
+export const PublicationCommentId = UUID.pipe(Schema.brand("PublicationCommentId"))
+export type PublicationCommentId = typeof PublicationCommentId.Type
 
-export const CommentCommitId = UUID.pipe(Schema.brand("CommentCommitId"))
-export type CommentCommitId = typeof CommentCommitId.Type
+export const PublicationCommentContentRevisionId = UUID.pipe(
+  Schema.brand("PublicationCommentContentRevisionId"),
+)
+export type PublicationCommentContentRevisionId = typeof PublicationCommentContentRevisionId.Type
 
 export const MediaAssetId = UUID.pipe(Schema.brand("MediaAssetId"))
 export type MediaAssetId = typeof MediaAssetId.Type
