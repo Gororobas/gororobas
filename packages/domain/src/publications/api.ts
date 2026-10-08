@@ -4,20 +4,19 @@ import { Schema } from "effect"
  */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
+import { UnauthorizedError } from "../authorization/session.js"
 import { PublicationId, ProfileId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
+import { InvalidMediaAssetError, MediaNotFoundError } from "../media-assets/errors.js"
 import {
-  ApiCreateEventData,
-  ApiCreatePostData,
-  ApiEventData,
+  ApiCreatePublicationData,
   ApiGetPublicationPageParams,
-  ApiPostData,
   ApiPublicationCardData,
   ApiPublicationData,
   ApiPublicationHistoryEntry,
   ApiPublicationSearchParams,
-  ApiUpdatePostData,
+  ApiUpdatePublicationData,
 } from "./domain.js"
 
 export const GetPublicationPageParams = ApiGetPublicationPageParams
@@ -33,56 +32,58 @@ export class PublicationsApiGroup extends HttpApiGroup.make("publications")
   .add(
     HttpApiEndpoint.get("getPublication", "/publications/:id", {
       success: ApiPublicationData,
-      error: PublicationNotFoundError,
+      error: [PublicationNotFoundError, UnauthorizedError],
       params: Schema.Struct({ id: PublicationId }),
     }),
   )
   .add(
     HttpApiEndpoint.get("getPublicationByHandle", "/publications/handle/:handle", {
       success: ApiPublicationData,
-      error: PublicationNotFoundError,
+      error: [PublicationNotFoundError, UnauthorizedError],
       params: Schema.Struct({ handle: Handle }),
     }),
   )
   .add(
-    HttpApiEndpoint.post("createPost", "/profiles/:profileId/posts", {
-      success: ApiPostData,
-      error: ProfileNotFoundError,
+    HttpApiEndpoint.post("createPublication", "/profiles/:profileId/publications", {
+      success: ApiPublicationData,
+      error: [
+        ProfileNotFoundError,
+        PublicationNotFoundError,
+        InvalidCrdtUpdateError,
+        UnauthorizedError,
+        InvalidMediaAssetError,
+        MediaNotFoundError,
+      ],
       params: Schema.Struct({ profileId: ProfileId }),
-      payload: ApiCreatePostData,
+      payload: ApiCreatePublicationData,
     }),
   )
   .add(
-    HttpApiEndpoint.post("createEvent", "/profiles/:profileId/events", {
-      success: ApiEventData,
-      error: ProfileNotFoundError,
-      params: Schema.Struct({ profileId: ProfileId }),
-      payload: ApiCreateEventData,
-    }),
-  )
-  .add(
-    HttpApiEndpoint.patch("updatePost", "/publications/:id", {
-      success: ApiPostData,
+    HttpApiEndpoint.patch("updatePublication", "/publications/:id", {
+      success: ApiPublicationData,
       error: Schema.Union([
         PublicationNotFoundError,
+        UnauthorizedError,
+        InvalidMediaAssetError,
+        MediaNotFoundError,
         PublicationConcurrentUpdateError,
         InvalidCrdtUpdateError,
       ]),
       params: Schema.Struct({ id: PublicationId }),
-      payload: ApiUpdatePostData,
+      payload: ApiUpdatePublicationData,
     }),
   )
   .add(
     HttpApiEndpoint.delete("deletePublication", "/publications/:id", {
       success: Schema.Void,
-      error: PublicationNotFoundError,
+      error: [PublicationNotFoundError, UnauthorizedError],
       params: Schema.Struct({ id: PublicationId }),
     }),
   )
   .add(
     HttpApiEndpoint.get("getPublicationHistory", "/publications/:id/history", {
       success: Schema.Array(ApiPublicationHistoryEntry),
-      error: PublicationNotFoundError,
+      error: [PublicationNotFoundError, UnauthorizedError],
       params: Schema.Struct({ id: PublicationId }),
     }),
   ) {}

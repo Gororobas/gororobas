@@ -11,7 +11,7 @@ import {
   type TiptapDocument,
   type ProfileRowUpdate,
 } from "@gororobas/domain"
-import { resolveSessionFromPersonId } from "@gororobas/server/session-service"
+import { resolveSessionFromAuthSubjectId } from "@gororobas/server/session-service"
 import { Effect, Layer, Match, Option, Record, Schema } from "effect"
 
 import { provisionMagicLinkAccount } from "../src/authentication/auth-subjects.js"
@@ -89,7 +89,7 @@ export const provisionCommunityPerson = (administratorId: PersonId, name: string
     const people = yield* PeopleService
     yield* withSession(
       people.setAccessLevel(personId, "COMMUNITY"),
-      yield* resolveSessionFromPersonId(administratorId),
+      yield* resolveSessionFromAuthSubjectId(administratorId),
     )
     return personId
   })
@@ -147,7 +147,7 @@ export const withPerson = <A, E, R>(
   action: Effect.Effect<A, E, R | SessionContext>,
   personId: PersonId,
 ) =>
-  resolveSessionFromPersonId(personId).pipe(
+  resolveSessionFromAuthSubjectId(personId).pipe(
     Effect.flatMap((session) => withSession(action, session)),
   )
 

@@ -9,7 +9,7 @@ import {
   type TiptapDocument,
   type TiptapNode,
 } from "@gororobas/domain"
-import { resolveSessionFromPersonId } from "@gororobas/server/session-service"
+import { resolveSessionFromAuthSubjectId } from "@gororobas/server/session-service"
 import { DateTime, Effect, Layer, Option, Schema } from "effect"
 
 import { CommentsRepository } from "../../src/comments/repository.js"
@@ -112,7 +112,7 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Primeiro comentario")),
           publicationId,
         }),
-        yield* resolveSessionFromPersonId(person.id),
+        yield* resolveSessionFromAuthSubjectId(person.id),
       )
 
       const row = yield* commentsRepository.findCommentRowById(commentId)
@@ -152,7 +152,7 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Comentario original")),
           publicationId,
         }),
-        yield* resolveSessionFromPersonId(owner.id),
+        yield* resolveSessionFromAuthSubjectId(owner.id),
       )
 
       const comment = yield* service.getCommentById(commentId)
@@ -163,7 +163,7 @@ describe("CommentsService", () => {
           crdtUpdate: LoroDocUpdate.make(new Uint8Array()),
           expectedCurrentCrdtFrontier: comment.currentCrdtFrontier,
         }),
-        yield* resolveSessionFromPersonId(other.id),
+        yield* resolveSessionFromAuthSubjectId(other.id),
       ).pipe(Effect.flip)
 
       expect(result).toBeInstanceOf(UnauthorizedError)
@@ -196,12 +196,12 @@ describe("CommentsService", () => {
           content: makeCommentSourceData(makeDocument("Comentario para deletar")),
           publicationId,
         }),
-        yield* resolveSessionFromPersonId(person.id),
+        yield* resolveSessionFromAuthSubjectId(person.id),
       )
 
       yield* withSession(
         service.deleteComment(commentId),
-        yield* resolveSessionFromPersonId(person.id),
+        yield* resolveSessionFromAuthSubjectId(person.id),
       )
 
       const deleted = yield* service.getCommentById(commentId).pipe(Effect.flip)

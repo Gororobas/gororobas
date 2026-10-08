@@ -29,7 +29,12 @@ export const PlatformAccessLevelOrVisitor = Schema.Literals([
 ])
 export type PlatformAccessLevelOrVisitor = typeof PlatformAccessLevelOrVisitor.Type
 
-export const ModerationStatus = Schema.Literals(["APPROVED_BY_DEFAULT", "CENSORED"])
+export const ModerationStatus = Schema.Literals([
+  "APPROVED_BY_DEFAULT",
+  "CENSORED",
+  "REAPPROVED_AFTER_CENSORING",
+])
+
 export type ModerationStatus = typeof ModerationStatus.Type
 
 export const ProfileType = Schema.Literals(["PERSON", "ORGANIZATION"])
@@ -203,3 +208,5 @@ export const ResourceFormat = Schema.Literals([
   "DATASET",
   "OTHER",
 ])
+
+export const MediaAssetFormat = Schema.Literals(["VIDEO", "AUDIO", "IMAGE"])

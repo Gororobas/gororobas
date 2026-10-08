@@ -20,7 +20,7 @@ import {
   Then,
   When,
 } from "@gororobas/effect-bdd"
-import { resolveSessionFromPersonId, VISITOR_SESSION } from "@gororobas/server/session-service"
+import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
 import { DateTime, Effect, Layer, Option, Result, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { TestClock } from "effect/testing"
@@ -1064,7 +1064,10 @@ await Effect.runPromise(
                         const session =
                           viewer === "visitors"
                             ? VISITOR_SESSION
-                            : yield* resolveSessionFromPersonId(personNamed(context.actors, viewer))
+                            : yield* resolveSessionFromAuthSubjectId(
+                                personNamed(context.actors, viewer),
+                              )
+
                         const result = yield* withSession(
                           service.listMembers(organizationNamed(context, organization)),
                           session,

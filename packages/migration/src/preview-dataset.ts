@@ -84,7 +84,7 @@ export const readPreviewDataset = (directory: string) =>
               Request: WikiArticleId,
               Result: Photo,
               execute: (id) =>
-                sql`SELECT media_asset_id FROM wiki_article_photos WHERE wiki_article_id = ${id} ORDER BY order_index`,
+                sql`SELECT media_asset_id FROM wiki_article_media_assets WHERE wiki_article_id = ${id} ORDER BY media_asset_id`,
             })(id)
 
             const document = new LoroDoc()

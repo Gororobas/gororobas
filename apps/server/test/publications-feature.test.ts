@@ -7,6 +7,7 @@ import {
   LoroDocUpdate,
   ModerationStatus,
   InformationVisibility,
+  InvalidCrdtUpdateError,
   OrganizationAccessLevel,
   OrganizationId,
   PlatformAccessLevelOrVisitor,
@@ -1327,4 +1328,117 @@ it.effect(
         ),
       ).toEqual([])
     }).pipe(Effect.provide(PublicationsFeatureTestLayer)),
+)
+
+it.effect("publication updates preserve kind and reject kind changes without persisting them", () =>
+  Effect.gen(function* () {
+    const context = yield* provisionPeople([{ name: "Maria", accessLevel: "COMMUNITY" }])
+    const personId = personNamed(context.actors, "Maria")
+    const service = yield* PublicationsService
+    const repository = yield* PublicationsRepository
+    const now = yield* DateTime.now
+
+    yield* Effect.forEach(
+      ["POST", "EVENT"] as const,
+      Effect.fn(function* (kind) {
+        const publication = yield* withPerson(
+          service.createPublication({
+            kind,
+            ownerProfileId: personId,
+            locale: "pt",
+            content: textToRichTextDocument("Original content"),
+            handle: Schema.decodeSync(Handle)(`kind-preservation-${kind.toLowerCase()}`),
+            visibility: "PUBLIC",
+            startDate: now,
+          }),
+          personId,
+        )
+
+        const snapshot = Option.getOrThrow(
+          yield* findPublicationCrdtSnapshotById(publication.id),
+        ).crdtSnapshot
+        const current = snapshotToLoroDoc(snapshot)
+        const edited = current.fork()
+
+        yield* PublicationCrdt.applyEdit(edited, {
+          _tag: "SetPublicationLocale",
+          locale: "pt",
+          value: {
+            content: textToRichTextDocument("Updated content"),
+            originalLocale: "pt",
+            translationSource: "ORIGINAL",
+            translatedAtCrdtFrontier: null,
+          },
+        })
+
+        const before = yield* service.getPublicationById(publication.id)
+
+        yield* withPerson(
+          service.updatePublication({
+            publicationId: publication.id,
+            expectedCurrentCrdtFrontier: before.currentCrdtFrontier,
+            crdtUpdate: LoroDocUpdate.make(
+              edited.export({ from: current.version(), mode: "update" }),
+            ),
+          }),
+          personId,
+        )
+
+        const after = yield* service.getPublicationById(publication.id)
+        expect(after.kind).toBe(kind)
+        expect(
+          (yield* withPerson(service.getPublicationPageData(after.handle), personId)).content,
+        ).toEqual(textToRichTextDocument("Updated content"))
+
+        const updatedSnapshot = Option.getOrThrow(
+          yield* findPublicationCrdtSnapshotById(publication.id),
+        ).crdtSnapshot
+        const updated = snapshotToLoroDoc(updatedSnapshot)
+        const changedKind = updated.fork()
+        const sourceData = yield* PublicationCrdt.read(updated)
+
+        yield* PublicationCrdt.applyEdit(changedKind, {
+          _tag: "SetPublicationMetadata",
+          value:
+            kind === "POST"
+              ? {
+                  ...sourceData.metadata,
+                  kind: "EVENT",
+                  startDate: now,
+                  endDate: null,
+                  attendanceMode: null,
+                  locationOrUrl: null,
+                }
+              : { ...sourceData.metadata, kind: "POST" },
+        })
+
+        const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(
+          publication.id,
+        )
+
+        const error = yield* Effect.flip(
+          withPerson(
+            service.updatePublication({
+              publicationId: publication.id,
+              expectedCurrentCrdtFrontier: after.currentCrdtFrontier,
+              crdtUpdate: LoroDocUpdate.make(
+                changedKind.export({ from: updated.version(), mode: "update" }),
+              ),
+            }),
+            personId,
+          ),
+        )
+
+        expect(error).toBeInstanceOf(InvalidCrdtUpdateError)
+        expect(yield* service.getPublicationById(publication.id)).toEqual(after)
+        expect(
+          Option.getOrThrow(yield* findPublicationCrdtSnapshotById(publication.id)).crdtSnapshot,
+        ).toEqual(updatedSnapshot)
+        expect(
+          yield* repository.listPublicationCommitRowsByPublicationIdAsc(publication.id),
+        ).toEqual(commits)
+      }),
+      { concurrency: 1, discard: true },
+    )
+  }).pipe(Effect.provide(PublicationsFeatureTestLayer)),
 )

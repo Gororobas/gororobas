@@ -1,3 +1,4 @@
+import { NodeServices } from "@effect/platform-node"
 /**
  * Test infrastructure helpers for Effect-based testing.
  */
@@ -14,11 +15,15 @@ import {
   type Session,
 } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
+import { ConfigProvider, FileSystem } from "effect"
 import { DateTime, Effect, Exit, Layer, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient } from "effect/sql"
 
 import { IdGenLive } from "../src/id-gen-live.js"
+import { MediaAssetsRepository } from "../src/media-assets/repository.js"
+import { MediaAssetsService } from "../src/media-assets/service.js"
+import { MediaAssetsStorage } from "../src/media-assets/storage.js"
 import { OrganizationsRepository } from "../src/organizations/repository.js"
 import { PeopleRepository } from "../src/people/repository.js"
 import { PeopleService } from "../src/people/service.js"
@@ -58,7 +63,30 @@ export const IdGenTest = IdGenLive
  * - PeopleRepository: People data access layer
  * - ProfilesRepository: Profiles data access layer
  */
+const MediaTestLayer = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
+  Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+  Layer.provideMerge(
+    Layer.effect(
+      MediaAssetsStorage,
+      Effect.gen(function* () {
+        const root = yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
+          prefix: "test-media-",
+        })
+
+        return yield* MediaAssetsStorage.make.pipe(
+          Effect.provideService(
+            ConfigProvider.ConfigProvider,
+            ConfigProvider.fromUnknown({ MEDIA_ASSETS_DIRECTORY: root }),
+          ),
+        )
+      }),
+    ),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+)
+
 export const TestLayer = Layer.mergeAll(
+  MediaTestLayer,
   getTelemetryLayer(),
   IdGenTest,
   Layer.effect(OrganizationsRepository, OrganizationsRepository.make),

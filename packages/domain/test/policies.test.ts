@@ -13,6 +13,7 @@ import {
   AccountSession,
   CorePublicationMetadata,
   IdGen,
+  ModerationStatus,
   InformationVisibility,
   OrganizationAccessLevel,
   OrganizationId,
@@ -967,14 +968,79 @@ describe("Policies", () => {
         arbitrary: accountSessionArbitrary,
         predicate: (session) =>
           Effect.gen(function* () {
-            const canCensor = yield* runPolicySuccess(Policies.comments.canCensor, session)
-            return canCensor === isModeratorOrAdmin(session)
+            const canModerate = yield* runPolicySuccess(Policies.comments.canCensor, session)
+            return canModerate === isModeratorOrAdmin(session)
           }),
       }),
     )
   })
 
   describe("media", () => {
+    it.effect("media audiences and censorship control access across all session roles", () =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.all([
+          sessionArbitrary,
+          personIdArbitrary,
+          Arbitrary.schema(
+            Schema.Struct({
+              moderationStatus: ModerationStatus,
+              isOwner: Schema.Boolean,
+              hasWikiAttachment: Schema.Boolean,
+              canViewPublication: Schema.Boolean,
+              isAttached: Schema.Boolean,
+            }),
+          ),
+        ]),
+        predicate: ([session, ownerId, input]) =>
+          Effect.gen(function* () {
+            const ownerProfileId =
+              input.isOwner && session.type === "ACCOUNT" ? session.personId : ownerId
+
+            const allowed = yield* runPolicySuccess(
+              Policies.media.canView(
+                { ownerProfileId, moderationStatus: input.moderationStatus },
+                input,
+              ),
+              session,
+            )
+
+            const expected =
+              input.moderationStatus !== "CENSORED" &&
+              (input.hasWikiAttachment ||
+                input.canViewPublication ||
+                (!input.isAttached &&
+                  session.type === "ACCOUNT" &&
+                  (session.personId === ownerProfileId || isModeratorOrAdmin(session))))
+
+            return allowed === expected
+          }),
+      }),
+    )
+
+    it.effect(
+      "only uploaders can attach new media, while authorized editors can retain attachments",
+      () =>
+        assertPropertyEffect({
+          arbitrary: Arbitrary.all([
+            sessionArbitrary,
+            personIdArbitrary,
+            Arbitrary.schema(Schema.Boolean),
+          ]),
+          predicate: ([session, ownerProfileId, isAlreadyAttached]) =>
+            Effect.map(
+              runPolicySuccess(
+                Policies.media.canAttach({ ownerProfileId }, { isAlreadyAttached }),
+                session,
+              ),
+              (allowed) =>
+                allowed ===
+                (session.type === "ACCOUNT" &&
+                  session.accessLevel !== "BLOCKED" &&
+                  (isAlreadyAttached || session.personId === ownerProfileId)),
+            ),
+        }),
+    )
+
     it.effect("authenticated users with media:create can create media", () =>
       propertyWithPrecondition({
         arbitrary: accountSessionArbitrary,
@@ -1000,14 +1066,13 @@ describe("Policies", () => {
       }),
     )
 
-    it.effect("only admins can censor media", () =>
+    it.effect("only moderators and admins can moderate media", () =>
       assertPropertyEffect({
         arbitrary: accountSessionArbitrary,
         predicate: (session) =>
           Effect.gen(function* () {
-            const canCensor = yield* runPolicySuccess(Policies.media.canCensor, session)
-            if (isAdmin(session) === true) return true
-            return !canCensor
+            const canModerate = yield* runPolicySuccess(Policies.media.canModerate, session)
+            return canModerate === isModeratorOrAdmin(session)
           }),
       }),
     )

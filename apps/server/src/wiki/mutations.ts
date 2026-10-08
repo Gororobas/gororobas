@@ -1,8 +1,10 @@
 import {
+  WikiArticleMediaAssetRow,
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
   WikiArticleProjectionRow,
   WikiArticleRevisionRow,
+  WikiArticleRevisionMediaAssetRow,
   WikiArticleRevisionUpdateRow,
   WikiArticleTranslationProjectionRow,
 } from "@gororobas/domain"
@@ -19,6 +21,17 @@ export const insertRevisionRow = SqlSchema.void({
   Request: WikiArticleRevisionRow,
   execute: (row) =>
     SqlClient.use((sql) => sql`INSERT INTO wiki_article_revisions ${sql.insert(row)}`),
+})
+
+export const insertRevisionMediaAssetRows = SqlSchema.void({
+  Request: Schema.Array(WikiArticleRevisionMediaAssetRow),
+  execute: EffectArray.match({
+    onEmpty: () => Effect.void,
+    onNonEmpty: (rows) =>
+      SqlClient.use(
+        (sql) => sql`INSERT INTO wiki_article_revision_media_assets ${sql.insert(rows)}`,
+      ),
+  }),
 })
 
 export const updateCrdtRow = SqlSchema.void({
@@ -64,4 +77,12 @@ export const insertHandleRows = SqlSchema.void({
     onNonEmpty: (rows) =>
       SqlClient.use((sql) => sql`INSERT INTO wiki_article_handles ${sql.insert(rows)}`),
   }),
+})
+
+export const attachMediaToWikiArticle = SqlSchema.void({
+  Request: WikiArticleMediaAssetRow,
+  execute: (row) =>
+    SqlClient.use(
+      (sql) => sql`INSERT INTO wiki_article_media_assets ${sql.insert(row)} ON CONFLICT DO NOTHING`,
+    ),
 })

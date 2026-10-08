@@ -12,23 +12,12 @@ export const MediaUploadData = Schema.Struct({
   contentType: Schema.Trimmed.check(Schema.isNonEmpty()),
   fileName: Schema.Trimmed.check(Schema.isNonEmpty()),
   id: MediaAssetId,
-  moderationStatus: Schema.NullOr(ModerationStatus),
+  moderationStatus: ModerationStatus,
   byteSize: Schema.Int,
   url: Schema.String,
 })
 
 export type MediaUploadData = typeof MediaUploadData.Type
-
-export const AttachMediaToPublicationData = Schema.Struct({
-  media_ids: Schema.NonEmptyArray(MediaAssetId),
-})
-export type AttachMediaToPublicationData = typeof AttachMediaToPublicationData.Type
-
-export const AttachMediaToWikiArticleData = Schema.Struct({
-  media_ids: Schema.NonEmptyArray(MediaAssetId),
-  wiki_article_handles: Schema.NonEmptyArray(Schema.Trimmed.check(Schema.isNonEmpty())),
-})
-export type AttachMediaToWikiArticleData = typeof AttachMediaToWikiArticleData.Type
 
 export class MediaAssetsApi extends HttpApiGroup.make("mediaAssets")
   .add(
@@ -53,12 +42,12 @@ export class MediaAssetsApi extends HttpApiGroup.make("mediaAssets")
     }),
   )
   .add(
-    HttpApiEndpoint.post("censorMedia", "/media/:id/censor", {
+    HttpApiEndpoint.post("moderateMedia", "/media/:id/moderate", {
       success: Schema.Struct({ moderationStatus: ModerationStatus }),
       error: [MediaNotFoundError.pipe(HttpApiSchema.status(404)), UnauthorizedError],
       params: Schema.Struct({ id: MediaAssetId }),
       payload: Schema.Struct({
-        reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
+        moderationStatus: Schema.Literals(["CENSORED", "REAPPROVED_AFTER_CENSORING"]),
       }),
     }),
   ) {}

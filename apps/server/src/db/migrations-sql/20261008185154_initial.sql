@@ -346,9 +346,10 @@ CREATE TABLE `media_assets` (
   `format` text NOT NULL,
   `content_type` text NULL,
   `byte_size` integer NULL,
-  `label` text NULL,
+  `category` text NULL,
+  `descriptions` json NULL,
   `metadata` json NOT NULL,
-  `moderation_status` text NULL,
+  `moderation_status` text NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
   `owner_profile_id` text NOT NULL,
@@ -384,6 +385,7 @@ CREATE TABLE `wiki_article_revisions` (
   `from_crdt_frontier` json NOT NULL,
   `evaluation` text NOT NULL,
   `evaluation_reason` text NULL,
+  `has_media_selection` integer NOT NULL DEFAULT 0,
   `evaluated_by_id` text NULL,
   `evaluated_at` text NULL,
   `created_at` text NOT NULL,
@@ -391,10 +393,25 @@ CREATE TABLE `wiki_article_revisions` (
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`evaluated_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
   CONSTRAINT `1` FOREIGN KEY (`created_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
-  CONSTRAINT `2` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `2` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CHECK (has_media_selection IN (0, 1))
 );
 -- Create index "idx_wiki_article_revisions_article_evaluation" to table: "wiki_article_revisions"
 CREATE INDEX `idx_wiki_article_revisions_article_evaluation` ON `wiki_article_revisions` (`wiki_article_id`, `evaluation`);
+-- Create "wiki_article_revision_media_assets" table
+CREATE TABLE `wiki_article_revision_media_assets` (
+  `wiki_article_revision_id` text NOT NULL,
+  `media_asset_id` text NOT NULL,
+  `category` text NULL,
+  `has_category_override` integer NOT NULL DEFAULT 0,
+  `descriptions` json NULL,
+  PRIMARY KEY (`wiki_article_revision_id`, `media_asset_id`),
+  CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `1` FOREIGN KEY (`wiki_article_revision_id`) REFERENCES `wiki_article_revisions` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CHECK (has_category_override IN (0, 1))
+) WITHOUT ROWID;
+-- Create index "idx_wiki_article_revision_media_assets_media_asset" to table: "wiki_article_revision_media_assets"
+CREATE INDEX `idx_wiki_article_revision_media_assets_media_asset` ON `wiki_article_revision_media_assets` (`media_asset_id`);
 -- Create "wiki_articles" table
 CREATE TABLE `wiki_articles` (
   `id` text NULL,
@@ -440,26 +457,14 @@ CREATE TABLE `wiki_article_handles` (
 ) WITHOUT ROWID;
 -- Create index "wiki_article_handles_kind_handle" to table: "wiki_article_handles"
 CREATE UNIQUE INDEX `wiki_article_handles_kind_handle` ON `wiki_article_handles` (`kind`, `handle`);
--- Create "wiki_article_photos" table
-CREATE TABLE `wiki_article_photos` (
+-- Create "wiki_article_media_assets" table
+CREATE TABLE `wiki_article_media_assets` (
   `wiki_article_id` text NOT NULL,
   `media_asset_id` text NOT NULL,
-  `order_index` integer NULL,
   PRIMARY KEY (`wiki_article_id`, `media_asset_id`),
   CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
--- Create "wiki_article_photo_metadata" table
-CREATE TABLE `wiki_article_photo_metadata` (
-  `id` text NULL,
-  `category` text NOT NULL,
-  `description` json NULL,
-  `moderation_status` text NULL,
-  `created_at` text NOT NULL,
-  `updated_at` text NOT NULL,
-  PRIMARY KEY (`id`),
-  CONSTRAINT `0` FOREIGN KEY (`id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
-);
 -- Create "publication_crdts" table
 CREATE TABLE `publication_crdts` (
   `id` text NOT NULL,
@@ -530,6 +535,14 @@ CREATE TABLE `publication_tags` (
   CONSTRAINT `0` FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
+-- Create "publication_media_assets" table
+CREATE TABLE `publication_media_assets` (
+  `publication_id` text NOT NULL,
+  `media_asset_id` text NOT NULL,
+  PRIMARY KEY (`publication_id`, `media_asset_id`),
+  CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+) WITHOUT ROWID;
 -- Create "publication_wiki_articles" table
 CREATE TABLE `publication_wiki_articles` (
   `publication_id` text NOT NULL,
@@ -546,7 +559,7 @@ CREATE TABLE `comment_crdts` (
   `parent_comment_id` text NULL,
   `crdt_snapshot` blob NOT NULL,
   `owner_profile_id` text NOT NULL,
-  `moderation_status` text NULL,
+  `moderation_status` text NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
   PRIMARY KEY (`id`),
@@ -572,7 +585,7 @@ CREATE TABLE `comments` (
   `publication_id` text NOT NULL,
   `parent_comment_id` text NULL,
   `current_crdt_frontier` json NOT NULL,
-  `moderation_status` text NULL,
+  `moderation_status` text NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
   `owner_profile_id` text NOT NULL,

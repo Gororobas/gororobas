@@ -4,6 +4,7 @@ import { WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { LoroDocUpdate } from "../crdts/domain.js"
+import { WikiMediaSelection } from "../media-assets/attachments.js"
 import { WikiArticleEditableData, WikiArticleKind, WikiArticleRevisionRow } from "./wiki-article.js"
 
 export * from "./kinds/index.js"
@@ -24,6 +25,7 @@ export type WikiArticleLookup = typeof WikiArticleLookup.Type
 
 export const CreateWikiArticlePayload = Schema.Struct({
   wikiArticle: WikiArticleEditableData,
+  mediaAssets: Schema.optional(WikiMediaSelection),
 })
 export type CreateWikiArticlePayload = typeof CreateWikiArticlePayload.Type
 
@@ -35,7 +37,10 @@ export const CreateWikiArticleInput = Schema.Struct({
 
 export type CreateWikiArticleInput = typeof CreateWikiArticleInput.Type
 
-export const CreateWikiArticleRevisionPayload = Schema.Struct({ crdtUpdate: LoroDocUpdate })
+export const CreateWikiArticleRevisionPayload = Schema.Struct({
+  crdtUpdate: LoroDocUpdate,
+  mediaAssets: Schema.optional(WikiMediaSelection),
+})
 export type CreateWikiArticleRevisionPayload = typeof CreateWikiArticleRevisionPayload.Type
 
 export const CreateWikiArticleRevisionInput = Schema.Struct({
@@ -47,6 +52,7 @@ export const CreateWikiArticleRevisionInput = Schema.Struct({
 export type CreateWikiArticleRevisionInput = typeof CreateWikiArticleRevisionInput.Type
 
 export const EvaluateWikiArticleRevisionInput = Schema.Struct({
+  wikiArticleId: Schema.optional(WikiArticleId),
   evaluatedById: PersonId,
   evaluation: Schema.Literals(["APPROVED", "REJECTED"]),
   evaluationReason: Schema.optional(Schema.String),

@@ -1,8 +1,8 @@
 /** Version 1 of the supported Tiptap document format; custom nodes version their attributes separately. */
 import { Schema } from "effect"
 
+import { MediaAssetFormat } from "../common/enums.js"
 import { MediaAssetId, ProfileId, PublicationId, TagId, WikiArticleId } from "../common/ids.js"
-import { MediaAssetFormat } from "../media-assets/domain.js"
 import { ExternalEmbed } from "./external-embed.js"
 
 export * from "./external-embed.js"

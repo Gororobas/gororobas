@@ -93,7 +93,11 @@ describe("Publication and comment CRDTs", () => {
 
   it.effect("merges concurrent tagged content edits without replacing LoroText", () =>
     assertPropertyEffect({
-      arbitrary: Arbitrary.schema(Schema.NonEmptyString),
+      // Distinct edit markers avoid ambiguous diff positions when the original contains A or Z.
+      arbitrary: Arbitrary.filter<string>(
+        Arbitrary.schema(Schema.NonEmptyString),
+        (text) => !text.includes("A") && !text.includes("Z"),
+      ),
       predicate: (text) =>
         Effect.gen(function* () {
           const initial = yield* PublicationCrdt.create(publication(text)).pipe(

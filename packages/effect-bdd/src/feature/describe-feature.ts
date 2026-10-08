@@ -74,8 +74,8 @@ type InternalServices = BackgroundContext | ScenarioContext
 /**
  * Background config WITH a layer - steps can use services from the layer
  */
-interface BackgroundConfigWithLayer<ROut, E> {
-  layer: SelfContainedLayer<ROut, E>
+interface BackgroundConfigWithLayer<ROut, LayerError, E> {
+  layer: SelfContainedLayer<ROut, LayerError>
   steps: () => Effect.Effect<unknown, E, ROut | InternalServices>
 }
 
@@ -90,8 +90,8 @@ interface BackgroundConfigWithoutLayer<E> {
 /**
  * Union type that enforces: if no layer, steps must have no external requirements
  */
-type BackgroundConfig<ROut = never, E = never> =
-  | BackgroundConfigWithLayer<ROut, E>
+type BackgroundConfig<ROut = never, LayerError = never, E = never> =
+  | BackgroundConfigWithLayer<ROut, LayerError, E>
   | BackgroundConfigWithoutLayer<E>
 
 /**
@@ -169,7 +169,7 @@ interface RuleContext {
    *   steps: () => runSteps(Given('setup', { handler: () => Effect.succeed({ ready: true }) }))
    * })
    */
-  Background: <ROut, E>(config: BackgroundConfig<ROut, E>) => void
+  Background: <ROut, LayerError, E>(config: BackgroundConfig<ROut, LayerError, E>) => void
 
   /**
    * Define a scenario test.

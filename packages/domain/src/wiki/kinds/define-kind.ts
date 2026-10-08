@@ -4,6 +4,7 @@ import { WikiArticleStatus } from "../../common/enums.js"
 import { WikiArticleId } from "../../common/ids.js"
 import { Handle, OptionalColumn, TimestampedStruct, ValidName } from "../../common/primitives.js"
 import { LoroDocFrontier } from "../../crdts/domain.js"
+import { MediaAssetRow } from "../../media-assets/domain.js"
 import { TiptapDocument } from "../../rich-text/domain.js"
 import {
   WikiArticleEditableTranslation,
@@ -96,6 +97,7 @@ export const defineKind = <
       commonNames: Schema.Array(ValidName),
       content: OptionalColumn(TiptapDocument),
       handle: Handle,
+      mediaAssets: Schema.Array(MediaAssetRow),
     }),
   }
 }

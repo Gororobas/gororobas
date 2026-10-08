@@ -22,7 +22,7 @@ import {
   Then,
   When,
 } from "@gororobas/effect-bdd"
-import { resolveSessionFromPersonId, VISITOR_SESSION } from "@gororobas/server/session-service"
+import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
 import { Effect, Option, Result, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
@@ -57,6 +57,11 @@ import {
 import { makeMembershipFixture } from "./fixtures.js"
 import { TestLayerWithServices, withSession } from "./test-helpers.js"
 
+const accessLevelForPerson = (personId: PersonId) =>
+  resolveSessionFromAuthSubjectId(personId).pipe(
+    Effect.map((session) => (session.type === "ACCOUNT" ? session.accessLevel : "VISITOR")),
+  )
+
 const givenHandle = () =>
   Given("{string:name} has handle {string:handle}", {
     params: NamedHandle,
@@ -68,7 +73,7 @@ const givenHandle = () =>
         const service = yield* ProfileService
         yield* withSession(
           service.updateProfile(personId, { handle }),
-          yield* resolveSessionFromPersonId(personId),
+          yield* resolveSessionFromAuthSubjectId(personId),
         )
         return { ...context, personId }
       }),
@@ -81,23 +86,30 @@ it.effect("provisioned newcomers need approval to read community profiles", () =
     const profiles = yield* ProfileService
     yield* withSession(
       profiles.updateProfile(ownerId, { visibility: "COMMUNITY" }),
-      yield* resolveSessionFromPersonId(ownerId),
+      yield* resolveSessionFromAuthSubjectId(ownerId),
     )
 
     const newcomerId = yield* provisionPerson("Newcomer")
-    const newcomerSession = yield* resolveSessionFromPersonId(newcomerId)
-    expect(newcomerSession.accessLevel).toBe("NEWCOMER")
+    const newcomerSession = yield* resolveSessionFromAuthSubjectId(newcomerId)
+    expect(newcomerSession.type === "ACCOUNT" ? newcomerSession.accessLevel : "VISITOR").toBe(
+      "NEWCOMER",
+    )
     const denied = yield* withSession(profiles.findById(ownerId), newcomerSession).pipe(Effect.flip)
     expect(denied).toMatchObject({ _tag: "UnauthorizedError" })
 
     const people = yield* PeopleService
     yield* withSession(
       people.setAccessLevel(newcomerId, "COMMUNITY"),
-      yield* resolveSessionFromPersonId(administratorId),
+      yield* resolveSessionFromAuthSubjectId(administratorId),
     )
+
     const profile = Option.getOrThrow(
-      yield* withSession(profiles.findById(ownerId), yield* resolveSessionFromPersonId(newcomerId)),
+      yield* withSession(
+        profiles.findById(ownerId),
+        yield* resolveSessionFromAuthSubjectId(newcomerId),
+      ),
     )
+
     expect(profile.id).toBe(ownerId)
   }).pipe(Effect.provide(TestLayerWithServices)),
 )
@@ -199,9 +211,7 @@ const blockAccess = () =>
 const verifyAccessLevel = (name: string, accessLevel: PlatformAccessLevel) =>
   Effect.gen(function* () {
     const context = yield* getBackgroundContext(PeopleBackground)
-    expect((yield* resolveSessionFromPersonId(personNamed(context.actors, name))).accessLevel).toBe(
-      accessLevel,
-    )
+    expect(yield* accessLevelForPerson(personNamed(context.actors, name))).toBe(accessLevel)
     return context
   })
 
@@ -257,9 +267,7 @@ const expectPersonDeleted = (personId: PersonId) =>
       true,
     )
     expect(Option.isNone(yield* people.findById(personId))).toBe(true)
-    expect(yield* resolveSessionFromPersonId(personId).pipe(Effect.flip)).toMatchObject({
-      _tag: "UnauthorizedError",
-    })
+    expect(yield* resolveSessionFromAuthSubjectId(personId)).toEqual(VISITOR_SESSION)
   })
 
 const NamedOrganization = Schema.Struct({ name: Schema.String, organization: Schema.String })
@@ -406,10 +414,9 @@ await Effect.runPromise(
             params: NamedAccessLevel,
             handler: (context, { name, accessLevel }) =>
               Effect.gen(function* () {
-                expect(
-                  (yield* resolveSessionFromPersonId(personNamed(context.actors, name)))
-                    .accessLevel,
-                ).toBe(accessLevel)
+                expect(yield* accessLevelForPerson(personNamed(context.actors, name))).toBe(
+                  accessLevel,
+                )
                 return context
               }),
           }),
@@ -483,7 +490,9 @@ await Effect.runPromise(
                       const session =
                         viewer === "visitors"
                           ? VISITOR_SESSION
-                          : yield* resolveSessionFromPersonId(personNamed(context.actors, viewer))
+                          : yield* resolveSessionFromAuthSubjectId(
+                              personNamed(context.actors, viewer),
+                            )
 
                       yield* Effect.forEach(
                         [profiles.findById(personId), profiles.findByHandle(ownerProfile.handle)],
@@ -659,7 +668,7 @@ await Effect.runPromise(
                   const service = yield* ProfileService
                   yield* withSession(
                     service.updateProfile(personId, { handle }),
-                    yield* resolveSessionFromPersonId(personId),
+                    yield* resolveSessionFromAuthSubjectId(personId),
                   )
                   return { ...context, personId }
                 }),
@@ -673,7 +682,7 @@ await Effect.runPromise(
                   const profile = Option.getOrThrow(
                     yield* withSession(
                       service.findByHandle(handle),
-                      yield* resolveSessionFromPersonId(context.personId),
+                      yield* resolveSessionFromAuthSubjectId(context.personId),
                     ),
                   )
 
@@ -692,7 +701,7 @@ await Effect.runPromise(
                     Option.isNone(
                       yield* withSession(
                         service.findByHandle(handle),
-                        yield* resolveSessionFromPersonId(context.personId),
+                        yield* resolveSessionFromAuthSubjectId(context.personId),
                       ),
                     ),
                   ).toBe(true)
@@ -719,13 +728,13 @@ await Effect.runPromise(
                   const service = yield* ProfileService
                   yield* withSession(
                     service.updateProfile(otherPersonId, { handle }),
-                    yield* resolveSessionFromPersonId(otherPersonId),
+                    yield* resolveSessionFromAuthSubjectId(otherPersonId),
                   )
 
                   const originalProfile = Option.getOrThrow(
                     yield* withSession(
                       service.findById(context.personId),
-                      yield* resolveSessionFromPersonId(context.personId),
+                      yield* resolveSessionFromAuthSubjectId(context.personId),
                     ),
                   )
 
@@ -740,7 +749,7 @@ await Effect.runPromise(
                   const service = yield* ProfileService
                   const error = yield* withSession(
                     service.updateProfile(personId, { handle }),
-                    yield* resolveSessionFromPersonId(personId),
+                    yield* resolveSessionFromAuthSubjectId(personId),
                   ).pipe(Effect.flip)
                   return { ...context, error, requestedHandle: handle }
                 }),
@@ -759,7 +768,7 @@ await Effect.runPromise(
                   const owner = Option.getOrThrow(
                     yield* withSession(
                       service.findByHandle(context.requestedHandle),
-                      yield* resolveSessionFromPersonId(context.personId),
+                      yield* resolveSessionFromAuthSubjectId(context.personId),
                     ),
                   )
 
@@ -777,7 +786,7 @@ await Effect.runPromise(
                   const profile = Option.getOrThrow(
                     yield* withSession(
                       service.findById(personId),
-                      yield* resolveSessionFromPersonId(personId),
+                      yield* resolveSessionFromAuthSubjectId(personId),
                     ),
                   )
 
@@ -803,7 +812,7 @@ await Effect.runPromise(
                   const service = yield* ProfileService
                   yield* withSession(
                     service.updateProfile(personId, information),
-                    yield* resolveSessionFromPersonId(personId),
+                    yield* resolveSessionFromAuthSubjectId(personId),
                   )
                   return { personId, information }
                 }),
@@ -816,7 +825,7 @@ await Effect.runPromise(
                   const profile = Option.getOrThrow(
                     yield* withSession(
                       service.findById(context.personId),
-                      yield* resolveSessionFromPersonId(context.personId),
+                      yield* resolveSessionFromAuthSubjectId(context.personId),
                     ),
                   )
 

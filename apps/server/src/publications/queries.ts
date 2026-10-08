@@ -1,4 +1,7 @@
 import {
+  ApiPublicationData,
+  MediaAssetRow,
+  PublicationMediaAssetRow,
   Handle,
   ProfileId,
   PublicationCommitRow,
@@ -149,4 +152,38 @@ export const findPublicationCrdtSnapshotById = SqlSchema.findOneOption({
   Result: PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"])),
   execute: (id) =>
     SqlClient.use((sql) => sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${id}`),
+})
+
+export const findPublicationApiData = SqlSchema.findOneOption({
+  Request: PublicationId,
+  Result: ApiPublicationData,
+  execute: (id) =>
+    SqlClient.use(
+      (sql) => sql` 
+    SELECT p.*, t.content, t.locale FROM publications p
+    JOIN publication_translations t ON t.publication_id = p.id
+    WHERE p.id = ${id}
+    ORDER BY CASE t.locale WHEN 'pt' THEN 0 WHEN 'en' THEN 1 ELSE 2 END LIMIT 1
+  `,
+    ),
+})
+
+export const listPublicationMediaAssets = SqlSchema.findAll({
+  Request: PublicationMediaAssetRow.fields.publicationId,
+  Result: MediaAssetRow,
+  execute: (id) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT m.* FROM media_assets m JOIN publication_media_assets a ON a.media_asset_id = m.id
+    WHERE a.publication_id = ${id} AND m.moderation_status <> 'CENSORED' ORDER BY m.id`,
+    ),
+})
+
+export const listPublicationMediaAttachments = SqlSchema.findAll({
+  Request: PublicationId,
+  Result: PublicationMediaAssetRow,
+  execute: (id) =>
+    SqlClient.use(
+      (sql) => sql`SELECT * FROM publication_media_assets WHERE publication_id = ${id}`,
+    ),
 })

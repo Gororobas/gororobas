@@ -1,6 +1,6 @@
 import { HttpApi } from "effect/http-api"
 
-import { AuthenticationHttp } from "./authentication/middleware.js"
+import { ApiAuthentication } from "./authentication/middleware.js"
 import { CommentsApiGroup } from "./comments/api.js"
 import { MediaAssetsApi } from "./media-assets/api.js"
 import { OrganizationsApiGroup } from "./organizations/api.js"
@@ -12,11 +12,11 @@ import { WikiApiGroup } from "./wiki/api.js"
 
 export const GororobasApi = HttpApi.make("GororobasApi")
   .add(CommentsApiGroup)
-  .add(MediaAssetsApi)
   .add(OrganizationsApiGroup)
   .add(PeopleApiGroup)
   .add(PublicationsApiGroup)
   .add(WikiApiGroup)
   .add(ProfilesApiGroup)
   .add(TagsApiGroup)
-  .middleware(AuthenticationHttp.RequireSession)
+  .add(MediaAssetsApi)
+  .middleware(ApiAuthentication)

@@ -26,12 +26,16 @@ import {
   ProfileId,
   PersonId,
   OrganizationId,
+  MediaAssetId,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Option, Schema } from "effect"
+import { Array as EffectArray, Context, DateTime, Effect, Option, Schema } from "effect"
+import { SqlClient } from "effect/sql"
 
+import { MediaAssetsService } from "../media-assets/service.js"
 import { findById as findOrganizationById } from "../organizations/queries.js"
 import { findById as findPersonById } from "../people/queries.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
+import { listPublicationMediaAssets, findPublicationApiData } from "./queries.js"
 import { PublicationsRepository } from "./repository.js"
 
 export const CreatePostInput = Schema.Struct({
@@ -53,13 +57,14 @@ export type CreateEventInput = typeof CreateEventInput.Type
 export const CreatePublicationInput = Schema.Union([CreatePostInput, CreateEventInput])
 export type CreatePublicationInput = typeof CreatePublicationInput.Type
 
-const UpdatePostData = Schema.Struct({
+const UpdatePublicationData = Schema.Struct({
+  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
 
 export const UpdatePublicationInput = Schema.Struct({
-  ...UpdatePostData.fields,
+  ...UpdatePublicationData.fields,
   publicationId: PublicationId,
 })
 export type UpdatePublicationInput = typeof UpdatePublicationInput.Type
@@ -113,6 +118,40 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           return Option.getOrUndefined(organization)
         })
 
+      const attachMediaToPublication = (input: {
+        publicationId: PublicationId
+        mediaIds: readonly MediaAssetId[]
+      }) =>
+        Effect.gen(function* () {
+          if (EffectArray.isReadonlyArrayEmpty(input.mediaIds)) return
+
+          yield* Policies.publications.canEdit(yield* getPublicationById(input.publicationId))
+          const existingMediaAttachments = yield* repo.listPublicationMediaAttachments(
+            input.publicationId,
+          )
+          const media = yield* MediaAssetsService
+
+          yield* repo.deletePublicationMediaAttachments(input.publicationId)
+
+          yield* Effect.forEach(
+            input.mediaIds,
+            (mediaAssetId) =>
+              Effect.gen(function* () {
+                yield* media.getMediaForAttachment(mediaAssetId, {
+                  isAlreadyAttached: existingMediaAttachments.some(
+                    (row) => row.mediaAssetId === mediaAssetId,
+                  ),
+                })
+
+                yield* repo.attachMediaToPublication({
+                  publicationId: input.publicationId,
+                  mediaAssetId,
+                })
+              }),
+            { concurrency: 1 },
+          )
+        }).pipe((effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)))
+
       const createPublication = (input: CreatePublicationInput) =>
         Effect.gen(function* () {
           const session = yield* assertAuthenticated
@@ -127,7 +166,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
             translationSource: "ORIGINAL",
           })
 
-          const handle = yield* richTextToHandle(input.content)
+          const handle = input.handle ?? (yield* richTextToHandle(input.content))
 
           const now = yield* DateTime.now
 
@@ -168,8 +207,12 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
             sourceData,
           })
 
+          if (input.mediaIds !== undefined) {
+            yield* attachMediaToPublication({ publicationId, mediaIds: input.mediaIds })
+          }
+
           return { id: publicationId, handle }
-        })
+        }).pipe((effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)))
 
       const updatePublication = (input: UpdatePublicationInput) =>
         Effect.gen(function* () {
@@ -184,7 +227,14 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
               publicationId: input.publicationId,
             }),
           )
-        })
+
+          if (input.mediaIds !== undefined) {
+            yield* attachMediaToPublication({
+              publicationId: input.publicationId,
+              mediaIds: input.mediaIds,
+            })
+          }
+        }).pipe((effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)))
 
       const deletePublication = (publicationId: PublicationId) =>
         Effect.gen(function* () {
@@ -227,7 +277,26 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           return yield* repo.listPublicationCommitRowsByPublicationIdAsc(publicationId)
         })
 
+      const listPublicationMedia = (publicationId: PublicationId) =>
+        Effect.gen(function* () {
+          yield* assertCanViewPublication(yield* getPublicationById(publicationId))
+          return yield* listPublicationMediaAssets(publicationId)
+        })
+
+      const getPublicationData = (id: PublicationId) =>
+        Effect.gen(function* () {
+          yield* assertCanViewPublication(yield* getPublicationById(id))
+          const data = yield* findPublicationApiData(id)
+          if (Option.isNone(data)) return yield* new PublicationNotFoundError({ id })
+          return data.value
+        })
+
       return {
+        attachMediaToPublication,
+        getPublicationData,
+        listPublicationMedia,
+        getPublicationById,
+        getPublicationByHandle,
         createPublication,
         delete: deletePublication,
         updatePublication,

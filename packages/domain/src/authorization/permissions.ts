@@ -15,7 +15,7 @@ export const PlatformPermission = Schema.Literals([
   "profiles:read:community",
   "profiles:read:all",
   "media:create",
-  "media:censor",
+  "media:moderate",
   "wiki-article:create",
   "wiki-article:revise",
   "organizations:create",
@@ -34,6 +34,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   BLOCKED: HashSet.empty(),
   MODERATOR: HashSet.fromIterable([
     "comments:censor",
+    "media:moderate",
     "people:manage-community-access",
     "revisions:evaluate",
     "publications:create:personal",

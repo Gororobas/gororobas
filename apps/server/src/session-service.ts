@@ -1,21 +1,22 @@
 import {
   AccountSession,
-  AuthenticationHttp,
+  AuthSubjectId,
   OrganizationAccessLevel,
   OrganizationId,
   OrganizationMembershipSession,
   PersonId,
   PlatformAccessLevel,
   SessionContext,
-  UnauthorizedError,
   VisitorSession,
 } from "@gororobas/domain"
 import { Effect, Layer, Option, Schema } from "effect"
+import { SqlClient, SqlSchema } from "effect/sql"
+
 /**
  * Resolve authorization roles from the account already verified by authentication middleware.
  * Request headers are credentials, never account IDs.
  */
-import { SqlClient, SqlSchema } from "effect/sql"
+import { AppAuth } from "./authentication/app-auth.js"
 
 const PersonQueryResult = Schema.Struct({
   accessLevel: PlatformAccessLevel,
@@ -48,19 +49,16 @@ export const VISITOR_SESSION: VisitorSession = {
   type: "VISITOR",
 }
 
-export const resolveSessionFromPersonId = (personId: string) =>
+export const resolveSessionFromAuthSubjectId = (authSubjectId: AuthSubjectId) =>
   Effect.gen(function* () {
-    const personOption = yield* fetchPerson(personId)
+    const personOption = yield* fetchPerson(authSubjectId)
 
     if (Option.isNone(personOption) === true) {
-      return yield* new UnauthorizedError({
-        message: "Account not found",
-        session: VISITOR_SESSION,
-      })
+      return VISITOR_SESSION
     }
 
     const person = personOption.value
-    const memberships = yield* fetchMemberships(personId)
+    const memberships = yield* fetchMemberships(authSubjectId)
 
     const account: AccountSession = {
       accessLevel: person.accessLevel,
@@ -77,8 +75,11 @@ export const resolveSessionFromPersonId = (personId: string) =>
     return account
   })
 
-export const resolveSession = Effect.flatMap(AuthenticationHttp.CurrentSession, (authentication) =>
-  resolveSessionFromPersonId(authentication.subjectId),
-)
+export const resolveSession = Effect.gen(function* () {
+  const authentication = yield* (yield* AppAuth).getSession()
+  return authentication === null
+    ? VISITOR_SESSION
+    : yield* resolveSessionFromAuthSubjectId(authentication.subjectId)
+})
 
 export const SessionServiceLive = Layer.effect(SessionContext, resolveSession)

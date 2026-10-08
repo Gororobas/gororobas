@@ -34,9 +34,11 @@ import {
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
+  attachMediaToWikiArticle,
   insertCrdtRow,
   insertHandleRows,
   insertRevisionRow,
+  insertRevisionMediaAssetRows,
   insertTranslationRows,
   updateCrdtRow,
   updateRevisionRow,
@@ -270,6 +272,7 @@ const createWikiArticle = (
           evaluatedById: Option.some(input.createdById),
           evaluation: "APPROVED",
           evaluationReason: Option.none(),
+          hasMediaSelection: input.mediaAssets !== undefined,
         }),
         persistProjection: persistArticleProjection({
           currentCrdtFrontier: created.currentCrdtFrontier,
@@ -278,6 +281,16 @@ const createWikiArticle = (
           wikiArticleId,
         }),
       })
+
+      yield* insertRevisionMediaAssetRows(
+        (input.mediaAssets ?? []).map((selected) => ({
+          wikiArticleRevisionId: revisionId,
+          mediaAssetId: selected.mediaAssetId,
+          category: selected.category ?? null,
+          hasCategoryOverride: selected.category !== undefined,
+          descriptions: Option.fromUndefinedOr(selected.descriptions),
+        })),
+      )
 
       return {
         ...created.data,
@@ -328,17 +341,31 @@ const createRevision = (input: CreateWikiArticleRevisionInput) =>
         evaluatedById: Option.none(),
         evaluation: "PENDING",
         evaluationReason: Option.none(),
+        hasMediaSelection: input.mediaAssets !== undefined,
         fromCrdtFrontier: applied.fromCrdtFrontier,
         id: revisionId,
         updatedAt: now,
         wikiArticleId: input.wikiArticleId,
       })
 
+      yield* insertRevisionMediaAssetRows(
+        (input.mediaAssets ?? []).map((selected) => ({
+          wikiArticleRevisionId: revisionId,
+          mediaAssetId: selected.mediaAssetId,
+          category: selected.category ?? null,
+          hasCategoryOverride: selected.category !== undefined,
+          descriptions: Option.fromUndefinedOr(selected.descriptions),
+        })),
+      )
+
       return revisionId
     }).pipe(sql.withTransaction),
   )
 
-const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
+const evaluateRevision = (
+  input: EvaluateWikiArticleRevisionInput,
+  options: { enrichment?: "submit" | "skip" } = {},
+) =>
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
       const revision = yield* findRevisionById(input.revisionId).pipe(
@@ -412,7 +439,7 @@ const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
     }).pipe(
       sql.withTransaction,
       Effect.tap((updated) =>
-        updated
+        updated && options.enrichment !== "skip"
           ? requestExternalDataFetch(updated.article, updated.previous).pipe(
               Effect.catchCause((cause) =>
                 Effect.logError("External data submission failed", cause),
@@ -431,6 +458,7 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
     // oxlint-disable-next-line require-yield not sure if we can avoid having make as an Effect
     make: Effect.gen(function* () {
       return {
+        attachMediaToWikiArticle,
         createRevision,
         createWikiArticle,
         evaluateRevision,

@@ -31,6 +31,7 @@ import { HttpClient } from "effect/http"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
+import { migrateMediaDescriptions } from "./migrate-media-descriptions.js"
 import { WikiMigrationVersion } from "./wiki-migration-history.js"
 
 const { join, resolve } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
@@ -168,8 +169,9 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
           format: "IMAGE",
           ...stored,
           metadata: stored.metadata,
-          label: photo.label ?? null,
-          moderationStatus: null,
+          moderationStatus: "APPROVED_BY_DEFAULT",
+          category: null,
+          descriptions: migrateMediaDescriptions(photo.label),
           ownerProfileId: ProfileId.make(importerId),
           createdAt: now,
           updatedAt: now,
@@ -199,7 +201,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
             })
           }
 
-          yield* sql`INSERT INTO wiki_article_photos ${sql.insert({ wikiArticleId: plant.id, mediaAssetId: mediaAsset.id, orderIndex: index })}`
+          yield* sql`INSERT INTO wiki_article_media_assets ${sql.insert({ wikiArticleId: plant.id, mediaAssetId: mediaAsset.id })}`
         }
       }).pipe(sql.withTransaction)
 

@@ -15,9 +15,10 @@ import { ProfilesApiLive } from "./profiles/api-live.js"
 import { ProfilesRepository } from "./profiles/repository.js"
 import { PublicationsApiLive } from "./publications/api-live.js"
 import { PublicationsRepository } from "./publications/repository.js"
+import { PublicationsService } from "./publications/service.js"
 import { TagsApiLive } from "./tags/api-live.js"
 
-// The wiki group has no server implementation yet; register only implemented groups.
+// Register the implemented API groups.
 const ImplementedApi = HttpApi.make(GororobasApi.identifier).add(
   GororobasApi.groups.comments,
   GororobasApi.groups.mediaAssets,
@@ -43,7 +44,11 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
   TagsApiLive,
 ]).pipe(
   HttpRouter.provideRequest(
-    Layer.mergeAll(MediaServicesLive, Layer.effect(ProfilesRepository, ProfilesRepository.make)),
+    Layer.mergeAll(
+      MediaServicesLive,
+      Layer.effect(PublicationsService, PublicationsService.make),
+      Layer.effect(ProfilesRepository, ProfilesRepository.make),
+    ),
   ),
   Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
   Layer.provideMerge(Layer.effect(CommentsRepository, CommentsRepository.make)),

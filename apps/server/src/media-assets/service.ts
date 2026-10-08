@@ -10,8 +10,10 @@ import {
   ProfileId,
   assertAuthenticated,
 } from "@gororobas/domain"
-import { Record, Context, DateTime, Effect, Option, Schema } from "effect"
+import { Record, Context, DateTime, Effect, Option, Schema, Array as EffectArray } from "effect"
+import { SqlClient } from "effect/sql"
 
+import { assertCanViewPublication } from "../publications/service.js"
 import { processMediaAsset, readMediaAssetMetadata } from "./processing.js"
 import { MediaAssetsRepository } from "./repository.js"
 import { MediaAssetsStorage } from "./storage.js"
@@ -41,17 +43,38 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
       const storage = yield* MediaAssetsStorage
 
       const getRow = (id: MediaAssetId) =>
-        repository.findMediaAssetById(id).pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: () => Effect.fail(new MediaNotFoundError({ id })),
-              onSome: (mediaAsset) =>
-                mediaAsset.moderationStatus === "CENSORED"
-                  ? Effect.fail(new MediaNotFoundError({ id }))
-                  : Effect.succeed(mediaAsset),
-            }),
-          ),
-        )
+        Effect.gen(function* () {
+          const mediaAsset = yield* repository.findMediaAssetById(id)
+          if (Option.isNone(mediaAsset)) {
+            return yield* new MediaNotFoundError({ id })
+          }
+          const row = mediaAsset.value
+
+          const wiki = yield* repository.listMediaAssetWikiArticles(id)
+          const publications = yield* repository.listMediaAssetPublications(id)
+
+          const access = yield* Effect.forEach(
+            publications,
+            (publication) =>
+              assertCanViewPublication(publication).pipe(
+                Effect.as(true),
+                Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
+              ),
+            { concurrency: 1 },
+          )
+
+          yield* Policies.media
+            .canView(row, {
+              hasWikiAttachment: EffectArray.isReadonlyArrayNonEmpty(wiki),
+              canViewPublication: access.some((allowed) => allowed),
+              isAttached:
+                EffectArray.isReadonlyArrayNonEmpty(publications) ||
+                EffectArray.isReadonlyArrayNonEmpty(wiki),
+            })
+            .pipe(Effect.mapError(() => new MediaNotFoundError({ id })))
+
+          return row
+        })
 
       const getFile = (input: MediaAssetRequest) =>
         Effect.gen(function* () {
@@ -59,9 +82,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
           const request = yield* Schema.decodeEffect(MediaAssetRequest)(input)
           const { id, format, variant } = request
 
-          const delivery = yield* repository.findMediaAssetDeliveryById(request.id)
-          if (Option.isNone(delivery)) return yield* new MediaNotFoundError({ id })
-          const mediaAsset = delivery.value
+          const mediaAsset = yield* getRow(id)
 
           if (format !== "original") {
             const expectedFormat =
@@ -149,37 +170,71 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
                       ? { format: stored.metadata.format, metadata: stored.metadata }
                       : { format: stored.metadata.format, metadata: stored.metadata }),
                   ownerProfileId: ProfileId.make(session.personId),
-                  label: null,
-                  moderationStatus: null,
+                  category: null,
+                  descriptions: {},
+                  moderationStatus: "APPROVED_BY_DEFAULT",
                   createdAt: now,
                   updatedAt: now,
                 })
 
                 yield* repository.insertMediaAsset(mediaAsset)
+
                 return mediaAsset
-              }).pipe(Effect.onError(() => storage.remove(id).pipe(Effect.orDie)))
+              }).pipe(
+                (effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)),
+                Effect.onError(() => storage.remove(id).pipe(Effect.orDie)),
+              )
             }),
           )
         })
 
-      const censor = (id: MediaAssetId) =>
+      const getMediaForAttachment = (id: MediaAssetId, options: { isAlreadyAttached: boolean }) =>
         Effect.gen(function* () {
-          yield* Policies.media.canCensor
+          const media = yield* repository.findMediaAssetById(id)
+          if (Option.isNone(media)) return yield* new MediaNotFoundError({ id })
+          yield* Policies.media.canAttach(media.value, options)
 
-          const mediaAsset = yield* repository.findMediaAssetById(id).pipe(
-            Effect.flatMap(
-              Option.match({
-                onNone: () => Effect.fail(new MediaNotFoundError({ id })),
-                onSome: Effect.succeed,
-              }),
-            ),
-          )
-
-          yield* repository.censorMediaAsset({ ...mediaAsset, updatedAt: yield* DateTime.now })
-          return { moderationStatus: "CENSORED" as const }
+          if (media.value.moderationStatus === "CENSORED") {
+            return yield* new MediaNotFoundError({ id })
+          }
+          return media.value
         })
 
-      return { upload, prepare, getRow, censor, getFile }
+      const moderate = (input: {
+        id: MediaAssetId
+        moderationStatus: "CENSORED" | "REAPPROVED_AFTER_CENSORING"
+      }) =>
+        SqlClient.SqlClient.use((sql) =>
+          Effect.gen(function* () {
+            yield* Policies.media.canModerate
+            const media = yield* repository.findMediaAssetById(input.id)
+            if (Option.isNone(media)) return yield* new MediaNotFoundError({ id: input.id })
+
+            if (
+              input.moderationStatus === "CENSORED" ||
+              media.value.moderationStatus === "CENSORED"
+            ) {
+              yield* repository.moderateMediaAsset({
+                id: input.id,
+                moderationStatus: input.moderationStatus,
+                updatedAt: yield* DateTime.now,
+              })
+            }
+
+            const updated = yield* repository.findMediaAssetById(input.id)
+            if (Option.isNone(updated)) return yield* new MediaNotFoundError({ id: input.id })
+            return { moderationStatus: updated.value.moderationStatus }
+          }).pipe(sql.withTransaction),
+        )
+
+      return {
+        upload,
+        getMediaForAttachment,
+        moderate,
+        prepare,
+        getRow,
+        getFile,
+      }
     }),
   },
 ) {}

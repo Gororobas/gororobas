@@ -5,7 +5,6 @@ import { HttpServerRespondable, Multipart } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
-import { SessionServiceLive } from "../session-service.js"
 import { mediaFileResponse } from "./file-response.js"
 import { MediaAssetsService } from "./service.js"
 
@@ -45,7 +44,6 @@ export const MediaAssetsApiLive = HttpApiBuilder.group(GororobasApi, "mediaAsset
       }).pipe(
         Effect.map(formUploadResult),
         Effect.catchTag("MultipartError", HttpServerRespondable.toResponse),
-        Effect.provide(SessionServiceLive),
         withApiInfrastructureErrors({ endpoint: "uploadMedia", group: "mediaAssets" }),
       ),
     )
@@ -55,10 +53,9 @@ export const MediaAssetsApiLive = HttpApiBuilder.group(GororobasApi, "mediaAsset
         withApiInfrastructureErrors({ endpoint: "getMedia", group: "mediaAssets" }),
       ),
     )
-    .handle("censorMedia", ({ params }) =>
-      MediaAssetsService.use((service) => service.censor(params.id)).pipe(
-        Effect.provide(SessionServiceLive),
-        withApiInfrastructureErrors({ endpoint: "censorMedia", group: "mediaAssets" }),
+    .handle("moderateMedia", ({ params, payload }) =>
+      MediaAssetsService.use((service) => service.moderate({ ...params, ...payload })).pipe(
+        withApiInfrastructureErrors({ endpoint: "moderateMedia", group: "mediaAssets" }),
       ),
     ),
 )

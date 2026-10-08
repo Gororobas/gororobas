@@ -1,6 +1,6 @@
 import { expect, it } from "@effect/vitest"
 import { SessionContext } from "@gororobas/domain"
-import { resolveSessionFromPersonId, VISITOR_SESSION } from "@gororobas/server/session-service"
+import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
 import { Effect } from "effect"
 
 import { ProfileService } from "../src/profiles/service.js"
@@ -19,8 +19,8 @@ it.effect("impersonation isolates concurrent identities", () =>
 
     const sessions = yield* Effect.all(
       [
-        withSession(readIdentity, yield* resolveSessionFromPersonId(firstPersonId)),
-        withSession(readIdentity, yield* resolveSessionFromPersonId(secondPersonId)),
+        withSession(readIdentity, yield* resolveSessionFromAuthSubjectId(firstPersonId)),
+        withSession(readIdentity, yield* resolveSessionFromAuthSubjectId(secondPersonId)),
       ],
       { concurrency: "unbounded" },
     )
@@ -43,13 +43,13 @@ it.effect("nested impersonation restores the caller's session", () =>
         const before = yield* SessionContext
         const nested = yield* withSession(
           SessionContext,
-          yield* resolveSessionFromPersonId(secondPersonId),
+          yield* resolveSessionFromAuthSubjectId(secondPersonId),
         )
         const after = yield* SessionContext
         expect(nested).toMatchObject({ type: "ACCOUNT", personId: secondPersonId })
         expect(after).toEqual(before)
       }),
-      yield* resolveSessionFromPersonId(firstPersonId),
+      yield* resolveSessionFromAuthSubjectId(firstPersonId),
     )
 
     expect(yield* SessionContext).toEqual(VISITOR_SESSION)
@@ -64,18 +64,18 @@ it.effect("impersonation cannot edit another person's profile", () =>
     const service = yield* ProfileService
     const before = yield* withSession(
       service.findById(firstPersonId),
-      yield* resolveSessionFromPersonId(firstPersonId),
+      yield* resolveSessionFromAuthSubjectId(firstPersonId),
     )
     const error = yield* withSession(
       service.updateProfile(firstPersonId, { name: "Unauthorized change" }),
-      yield* resolveSessionFromPersonId(secondPersonId),
+      yield* resolveSessionFromAuthSubjectId(secondPersonId),
     ).pipe(Effect.flip)
     expect(error).toMatchObject({ _tag: "UnauthorizedError" })
 
     expect(
       yield* withSession(
         service.findById(firstPersonId),
-        yield* resolveSessionFromPersonId(firstPersonId),
+        yield* resolveSessionFromAuthSubjectId(firstPersonId),
       ),
     ).toEqual(before)
   }).pipe(Effect.provide(TestLayerWithServices)),

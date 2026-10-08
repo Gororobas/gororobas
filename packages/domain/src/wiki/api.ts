@@ -1,11 +1,13 @@
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
+import { UnauthorizedError } from "../authorization/session.js"
 import { Locale } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
+import { InvalidMediaAssetError, MediaNotFoundError } from "../media-assets/errors.js"
 import {
   CreateWikiArticlePayload,
   CreateWikiArticleRevisionPayload,
@@ -15,7 +17,11 @@ import {
   WikiArticleQueriedPageData,
   WikiSearchParams,
 } from "./domain.js"
-import { WikiArticleNotFoundError } from "./errors.js"
+import {
+  WikiArticleRevisionAlreadyEvaluatedError,
+  WikiArticleRevisionNotFoundError,
+  WikiArticleNotFoundError,
+} from "./errors.js"
 
 export class WikiApiGroup extends HttpApiGroup.make("wiki")
   .add(
@@ -35,14 +41,26 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
   .add(
     HttpApiEndpoint.post("createWikiArticle", "/wiki", {
       success: Schema.Struct({ id: WikiArticleId, kind: WikiArticleKind, handle: Handle }),
-      error: HandleTakenError,
+      error: [
+        HandleTakenError,
+        InvalidCrdtUpdateError,
+        UnauthorizedError,
+        InvalidMediaAssetError,
+        MediaNotFoundError,
+      ],
       payload: CreateWikiArticlePayload,
     }),
   )
   .add(
     HttpApiEndpoint.post("createWikiArticleRevision", "/wiki/:kind/:handle/revisions", {
       success: Schema.Struct({ id: WikiArticleRevisionId }),
-      error: Schema.Union([WikiArticleNotFoundError, InvalidCrdtUpdateError]),
+      error: Schema.Union([
+        WikiArticleNotFoundError,
+        InvalidCrdtUpdateError,
+        UnauthorizedError,
+        InvalidMediaAssetError,
+        MediaNotFoundError,
+      ]),
       params: WikiArticleLookup,
       payload: CreateWikiArticleRevisionPayload,
     }),
@@ -53,7 +71,15 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
       "/wiki/:kind/:handle/revision/:revision_id",
       {
         success: Schema.Struct({ id: WikiArticleRevisionId }),
-        error: WikiArticleNotFoundError,
+        error: [
+          WikiArticleNotFoundError,
+          WikiArticleRevisionNotFoundError,
+          WikiArticleRevisionAlreadyEvaluatedError,
+          InvalidCrdtUpdateError,
+          UnauthorizedError,
+          InvalidMediaAssetError,
+          MediaNotFoundError,
+        ],
         params: Schema.Struct({
           handle: Handle,
           kind: WikiArticleKind,

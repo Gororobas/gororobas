@@ -1,5 +1,8 @@
+import { Sessions, Operations, Hooks } from "@yielded/auth"
 import { makeSessionHttpContract } from "@yielded/auth/SessionContract"
+import { HttpApiMiddleware } from "effect/http-api"
 
+import { SessionContext } from "../authorization/session.js"
 import {
   AuthenticationSession,
   authenticationNamespace,
@@ -11,3 +14,10 @@ export const AuthenticationHttp = makeSessionHttpContract(
   AuthenticationSession,
   { cookieName: sessionCookieName },
 )
+
+export class ApiAuthentication extends HttpApiMiddleware.Service<
+  ApiAuthentication,
+  { provides: SessionContext }
+>()("ApiAuthentication", {
+  error: [Sessions.SessionError, Operations.OperationBoundaryError, Hooks.HookDenied],
+}) {}

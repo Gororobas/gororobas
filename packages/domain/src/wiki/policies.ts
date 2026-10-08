@@ -2,6 +2,7 @@ import { allow, authenticatedPolicy, deny, platformPermission } from "../authori
 import { PersonId } from "../common/ids.js"
 
 export const wikiPolicies = {
+  canEvaluateRevision: platformPermission("revisions:evaluate"),
   canBookmark: platformPermission("bookmarks:create"),
   canCreate: platformPermission("wiki-article:create"),
   canRemoveBookmark: (personId: PersonId) =>

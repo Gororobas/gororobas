@@ -8,7 +8,7 @@ const UUID = Schema.String.check(
   Schema.isPattern(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
 )
 
-export const AuthSubjectId = UUID.pipe(Schema.brand("AuthSubjectId"))
+export const AuthSubjectId = UUID.pipe(Schema.brand("effect-auth/SubjectId"))
 export type AuthSubjectId = typeof AuthSubjectId.Type
 
 export const AuthSecurityRevision = UUID.pipe(Schema.brand("AuthSecurityRevision"))
@@ -32,7 +32,17 @@ export type OrganizationId = typeof OrganizationId.Type
 export const OrganizationInvitationId = UUID.pipe(Schema.brand("OrganizationInvitationId"))
 export type OrganizationInvitationId = typeof OrganizationInvitationId.Type
 
-export const PersonId = ProfileId.pipe(Schema.brand("PersonId"))
+/** People's IDs are at the same time:
+ * - the auth subject ID - in SQL: `auth_subjects.id`
+ * - the profile ID - in SQL: `profiles.id`
+ * - the person ID - in SQL: `people.id`
+ *
+ * This is enforced through foreign key references, {@see apps/server/src/db/schema.sql}
+ **/
+export const PersonId = ProfileId.pipe(
+  Schema.brand("PersonId"),
+  Schema.brand("effect-auth/SubjectId"),
+)
 export type PersonId = typeof PersonId.Type
 
 export const PublicationId = UUID.pipe(Schema.brand("PublicationId"))

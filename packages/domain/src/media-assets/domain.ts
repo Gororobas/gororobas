@@ -4,6 +4,7 @@ import { Duration, Schema } from "effect"
 import { ModerationStatus } from "../common/enums.js"
 import { MediaAssetId, PersonId, ProfileId } from "../common/ids.js"
 import { IntNonNegative, PositiveInteger, TimestampedStruct } from "../common/primitives.js"
+import { MediaAssetDescriptions } from "./attachments.js"
 
 // JSON stores milliseconds; reject durations that cannot round-trip through that representation.
 const MediaDuration = Schema.DurationFromMillis.check(
@@ -52,15 +53,14 @@ export const AudioMetadata = Schema.Struct({
 export const MediaAssetMetadata = Schema.Union([ImageMetadata, VideoMetadata, AudioMetadata])
 export type MediaAssetMetadata = typeof MediaAssetMetadata.Type
 
-export const MediaAssetFormat = Schema.Literals(["VIDEO", "AUDIO", "IMAGE"])
-
 const coreMediaAssetRowFields = {
   ...TimestampedStruct.fields,
   id: MediaAssetId,
   contentType: Schema.NullOr(Schema.String),
   byteSize: Schema.NullOr(IntNonNegative),
-  label: Schema.NullOr(Schema.String),
-  moderationStatus: Schema.NullOr(ModerationStatus),
+  category: Schema.NullOr(Schema.String),
+  descriptions: Schema.fromJsonString(MediaAssetDescriptions),
+  moderationStatus: ModerationStatus,
   ownerProfileId: ProfileId,
 }
 

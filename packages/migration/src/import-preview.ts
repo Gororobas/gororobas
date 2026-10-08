@@ -41,6 +41,7 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
+import { migrateMediaDescriptions } from "./migrate-media-descriptions.js"
 import { PreviewRecord, readPreviewExports } from "./preview-exports.js"
 import {
   NoteDataForMigration,
@@ -215,10 +216,11 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
               originalWidth: Number(dimensions[1]),
               originalHeight: Number(dimensions[2]),
             },
-            label: image.latest_source.label,
             contentType: null,
             byteSize: null,
-            moderationStatus: null,
+            moderationStatus: "APPROVED_BY_DEFAULT",
+            category: null,
+            descriptions: migrateMediaDescriptions(image.latest_source.label),
             ownerProfileId: ProfileId.make(importerId),
             createdAt: now,
             updatedAt: now,
@@ -333,6 +335,7 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                   evaluatedById: Option.fromNullishOr(knownPerson(version.reviewerId)),
                   evaluation: "APPROVED",
                   evaluationReason: Option.none(),
+                  hasMediaSelection: false,
                   evaluatedAt: Option.some(createdAt),
                   createdAt,
                   updatedAt: createdAt,
@@ -375,8 +378,8 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
             } else revisionCount++
 
             const photoIds = article.photoIds ?? (article.thumbnailId ? [article.thumbnailId] : [])
-            for (const [orderIndex, mediaAssetId] of photoIds.entries()) {
-              yield* sql`INSERT INTO wiki_article_photos ${sql.insert({ wikiArticleId: article.id, mediaAssetId, orderIndex })}`
+            for (const mediaAssetId of photoIds) {
+              yield* sql`INSERT INTO wiki_article_media_assets ${sql.insert({ wikiArticleId: article.id, mediaAssetId })}`
             }
           }
         }

@@ -1,7 +1,17 @@
 import { NodePath, NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { AuthenticationHttp, CurrentAuthenticationData, GororobasApi } from "@gororobas/domain"
-import { Auth, Sessions } from "@yielded/auth"
+import {
+  ApiPublicationData,
+  ApiUpdatePublicationData,
+  PublicationCrdt,
+  LoroDocUpdate,
+  snapshotToLoroDoc,
+  CurrentAuthenticationData,
+  AuthenticationSession,
+  GororobasApi,
+  MediaAssetId,
+} from "@gororobas/domain"
+import { Auth } from "@yielded/auth"
 import {
   FileSystem,
   ConfigProvider,
@@ -10,6 +20,7 @@ import {
   DateTime,
   Layer,
   ManagedRuntime,
+  Option,
   Schema,
   Path,
 } from "effect"
@@ -18,12 +29,27 @@ import { HttpApi, HttpApiBuilder } from "effect/http-api"
 import { SqlClient } from "effect/sql"
 import sharp from "sharp"
 
+import { AppAuth } from "../src/authentication/app-auth.js"
+import {
+  authenticationLayer,
+  ApiAuthenticationLive,
+} from "../src/authentication/authentication-live.js"
 import { IdGenLive } from "../src/id-gen-live.js"
 import { MediaAssetsApiLive } from "../src/media-assets/api-live.js"
 import { MediaAssetsRepository } from "../src/media-assets/repository.js"
 import { MediaAssetsService } from "../src/media-assets/service.js"
 import { MediaAssetsStorage } from "../src/media-assets/storage.js"
+import { PublicationsApiLive } from "../src/publications/api-live.js"
+import { findPublicationCrdtSnapshotById } from "../src/publications/queries.js"
+import { PublicationsRepository } from "../src/publications/repository.js"
+import { PublicationsService } from "../src/publications/service.js"
 import { makeAppSql } from "../src/sql.js"
+import {
+  authenticationTestOrigin,
+  authenticationTestBindingKey,
+  captureEmailDelivery,
+} from "./authentication-helpers.js"
+import { textToRichTextDocument } from "./feature-test-helpers.js"
 const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
 it.live(
@@ -86,31 +112,47 @@ it.live(
           ),
         ),
       ),
+      Layer.provideMerge(
+        Layer.effect(PublicationsService, PublicationsService.make).pipe(
+          Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
+        ),
+      ),
       Layer.provideMerge(HttpPlatform.layer),
       Layer.provideMerge(Layer.mergeAll(database, IdGenLive, NodeServices.layer, Etag.layer)),
     )
 
-    const api = HttpApi.make("GororobasApi").add(GororobasApi.groups.mediaAssets)
+    const api = HttpApi.make("GororobasApi").add(
+      GororobasApi.groups.mediaAssets,
+      GororobasApi.groups.publications,
+    )
+
+    const authenticationServices = Layer.effect(
+      AppAuth,
+      Effect.gen(function* () {
+        const api = yield* AppAuth
+
+        return {
+          ...api,
+          getSession: () =>
+            Effect.sync(() => (authentication === null ? null : authentication.session)),
+        }
+      }),
+    ).pipe(
+      Layer.provide(
+        authenticationLayer({
+          origin: authenticationTestOrigin,
+          requestBindingKey: authenticationTestBindingKey,
+        }).pipe(Layer.provide(captureEmailDelivery().layer), Layer.provide(services)),
+      ),
+    )
 
     const app = yield* Effect.acquireRelease(
       Effect.sync(() =>
         HttpRouter.toWebHandler(
           HttpApiBuilder.layer(api).pipe(
-            Layer.provide(MediaAssetsApiLive),
+            Layer.provide([MediaAssetsApiLive, PublicationsApiLive]),
             Layer.provide(
-              Layer.succeed(
-                AuthenticationHttp.RequireSession,
-                AuthenticationHttp.RequireSession.of({
-                  session: (httpEffect) =>
-                    authentication === null
-                      ? Effect.fail(Sessions.SessionInvalid.make({}))
-                      : Effect.provideService(
-                          httpEffect,
-                          AuthenticationHttp.CurrentSession,
-                          authentication.session,
-                        ),
-                }),
-              ),
+              Layer.fresh(ApiAuthenticationLive).pipe(Layer.provide(authenticationServices)),
             ),
             Layer.provideMerge(services),
           ),
@@ -321,19 +363,163 @@ it.live(
       })).status,
     ).toBe(400)
 
+    const privateBody = new FormData()
+    privateBody.append("file", new Blob([png], { type: "image/png" }), "community.png")
+    const privateUpload = yield* request("/media/upload", { method: "POST", body: privateBody })
+    expect(privateUpload.status).toBe(200)
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
+    const privateMedia = Schema.decodeUnknownSync(
+      Schema.Struct({ id: MediaAssetId, url: Schema.String }),
+    )(yield* Effect.tryPromise(() => privateUpload.json()))
+
+    const privatePublicationResponse = yield* request(`/profiles/${personId}/publications`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "POST",
+        content: textToRichTextDocument("Community media"),
+        handle: "community-media",
+        visibility: "COMMUNITY",
+        mediaIds: [privateMedia.id],
+      }),
+    })
+
+    expect(privatePublicationResponse.status).toBe(200)
+    expect((yield* request(privateMedia.url)).status).toBe(200)
+
+    const publicPublicationResponse = yield* request(`/profiles/${personId}/publications`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "POST",
+        content: textToRichTextDocument("Public media"),
+        handle: "public-media",
+        visibility: "PUBLIC",
+        mediaIds: [media.id],
+      }),
+    })
+
+    expect(publicPublicationResponse.status).toBe(200)
+
+    const eventResponse = yield* request(`/profiles/${personId}/publications`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "EVENT",
+        content: textToRichTextDocument("Community gathering"),
+        handle: "community-gathering",
+        visibility: "PUBLIC",
+        startDate: "2026-10-09T12:00:00Z",
+      }),
+    })
+
+    expect(eventResponse.status).toBe(200)
+
+    yield* Effect.forEach(
+      [publicPublicationResponse, eventResponse],
+      Effect.fn(function* (response) {
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
+        const publication = Schema.decodeUnknownSync(ApiPublicationData)(
+          yield* Effect.tryPromise(() => response.json()),
+        )
+        const snapshot = Option.getOrThrow(
+          yield* findPublicationCrdtSnapshotById(publication.id).pipe(Effect.provide(database)),
+        ).crdtSnapshot
+        const current = snapshotToLoroDoc(snapshot)
+        const edited = current.fork()
+
+        yield* PublicationCrdt.applyEdit(edited, {
+          _tag: "SetPublicationLocale",
+          locale: "pt",
+          value: {
+            content: textToRichTextDocument("Updated publication"),
+            originalLocale: "pt",
+            translationSource: "ORIGINAL",
+            translatedAtCrdtFrontier: null,
+          },
+        })
+
+        const updatedResponse = yield* request(`/publications/${publication.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(
+            Schema.encodeSync(Schema.toCodecJson(ApiUpdatePublicationData))({
+              expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
+              crdtUpdate: LoroDocUpdate.make(
+                edited.export({ from: current.version(), mode: "update" }),
+              ),
+            }),
+          ),
+        })
+
+        expect(updatedResponse.status).toBe(200)
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
+        const updated = Schema.decodeUnknownSync(ApiPublicationData)(
+          yield* Effect.tryPromise(() => updatedResponse.json()),
+        )
+        expect(updated.kind).toBe(publication.kind)
+        expect(updated.content).toEqual(textToRichTextDocument("Updated publication"))
+      }),
+      { concurrency: 1, discard: true },
+    )
+
+    const ownerAuthentication = Option.getOrThrow(Option.fromNullishOr(authentication))
+    authentication = null
+    expect((yield* request(media.url)).status).toBe(404) // This asset was changed to VIDEO above.
+    expect((yield* request(playlistUrl)).status).toBe(200)
+    expect((yield* request(privateMedia.url)).status).toBe(404)
+    expect((yield* request(privateMedia.url, { method: "HEAD" })).status).toBe(404)
+    expect((yield* request(privateMedia.url, { headers: { range: "bytes=0-1" } })).status).toBe(404)
+
+    authentication = {
+      ...ownerAuthentication,
+      session: {
+        ...ownerAuthentication.session,
+        subjectId: Schema.decodeSync(AuthenticationSession.fields.subjectId)(
+          "00000000-0000-7000-8000-000000000098",
+        ),
+      },
+    }
+
+    expect((yield* request(playlistUrl)).status).toBe(200)
+    expect((yield* request(privateMedia.url)).status).toBe(404)
+
+    authentication = ownerAuthentication
+    expect((yield* request(privateMedia.url)).status).toBe(200)
+
     expect(
-      (yield* request(`/media/${media.id}/censor`, {
+      (yield* request(`/media/${media.id}/moderate`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
-        body: "{}",
+        body: JSON.stringify({ moderationStatus: "CENSORED" }),
       })).status,
     ).toBe(200)
 
     expect((yield* request(playlistUrl)).status).toBe(404)
     expect((yield* request(`/media/${media.id}/original/original`)).status).toBe(404)
+
+    const reapproved = yield* request(`/media/${media.id}/moderate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ moderationStatus: "REAPPROVED_AFTER_CENSORING" }),
+    })
+
+    expect(reapproved.status).toBe(200)
+    expect(yield* Effect.tryPromise(() => reapproved.json())).toEqual({
+      moderationStatus: "REAPPROVED_AFTER_CENSORING",
+    })
+    expect((yield* request(playlistUrl)).status).toBe(200)
+
+    expect(
+      (yield* request(`/media/publications/00000000-0000-7000-8000-000000000001`, {
+        method: "POST",
+      })).status,
+    ).toBe(404)
+
     authentication = null
+    expect((yield* request(privateMedia.url)).status).toBe(404)
 
     expect(
       (yield* request("/media/upload", {
@@ -343,6 +529,6 @@ it.live(
           authorization: `Bearer ${personId}`,
         },
       })).status,
-    ).toBe(401)
+    ).toBe(403)
   }),
 )

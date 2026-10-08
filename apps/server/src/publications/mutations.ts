@@ -1,4 +1,5 @@
 import {
+  PublicationMediaAssetRow,
   PublicationCommitRow,
   PublicationCrdtRow,
   PublicationId,
@@ -62,5 +63,21 @@ export const upsertPublicationRow = SqlSchema.void({
       INSERT INTO publications ${sql.insert(row)}
       ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt"])}
     `,
+    ),
+})
+
+export const attachMediaToPublication = SqlSchema.void({
+  Request: PublicationMediaAssetRow,
+  execute: (row) =>
+    SqlClient.use(
+      (sql) => sql`INSERT INTO publication_media_assets ${sql.insert(row)} ON CONFLICT DO NOTHING`,
+    ),
+})
+
+export const deletePublicationMediaAttachments = SqlSchema.void({
+  Request: PublicationId,
+  execute: (publicationId) =>
+    SqlClient.use(
+      (sql) => sql`DELETE FROM publication_media_assets WHERE publication_id = ${publicationId}`,
     ),
 })

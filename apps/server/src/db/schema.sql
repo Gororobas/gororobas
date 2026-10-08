@@ -326,9 +326,10 @@ CREATE TABLE media_assets (
   format text NOT NULL,
   content_type text,
   byte_size integer,
-  label text,
+  category text,
+  descriptions json, -- { [locale]: TiptapDocument }
   metadata json NOT NULL,
-  moderation_status text,
+  moderation_status text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
   owner_profile_id text NOT NULL,
@@ -368,6 +369,7 @@ CREATE TABLE wiki_article_revisions (
   from_crdt_frontier json NOT NULL, -- LoroDocFrontier
   evaluation text NOT NULL, -- RevisionEvaluation
   evaluation_reason text,
+  has_media_selection integer NOT NULL DEFAULT 0 CHECK (has_media_selection IN (0, 1)), -- distinguishes an empty selection from unchanged media
   evaluated_by_id text,
   evaluated_at text,
   created_at text NOT NULL,
@@ -378,6 +380,19 @@ CREATE TABLE wiki_article_revisions (
 );
 
 CREATE INDEX idx_wiki_article_revisions_article_evaluation ON wiki_article_revisions (wiki_article_id, evaluation);
+
+CREATE TABLE wiki_article_revision_media_assets (
+  wiki_article_revision_id text NOT NULL,
+  media_asset_id text NOT NULL,
+  category text,
+  has_category_override integer NOT NULL DEFAULT 0 CHECK (has_category_override IN (0, 1)), -- distinguishes clearing a category from leaving it unchanged
+  descriptions json,
+  PRIMARY KEY (wiki_article_revision_id, media_asset_id),
+  FOREIGN KEY (wiki_article_revision_id) REFERENCES wiki_article_revisions (id) ON DELETE CASCADE,
+  FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
+CREATE INDEX idx_wiki_article_revision_media_assets_media_asset ON wiki_article_revision_media_assets (media_asset_id);
 
 -- Queryable projection of the canonical CRDT state.
 CREATE TABLE wiki_articles (
@@ -427,27 +442,16 @@ CREATE TABLE wiki_article_handles (
 ) WITHOUT ROWID;
 
 -- ================
--- WIKI ARTICLE PHOTOS
+-- WIKI ARTICLE MEDIA UPLOADED IN THE APP
 -- ================
---
-CREATE TABLE wiki_article_photos (
+-- External source media lives in wiki_article_external_media.
+CREATE TABLE wiki_article_media_assets (
   wiki_article_id text NOT NULL,
   media_asset_id text NOT NULL,
-  order_index integer,
   PRIMARY KEY (wiki_article_id, media_asset_id),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
-
-CREATE TABLE wiki_article_photo_metadata (
-  id text PRIMARY KEY,
-  category text NOT NULL,
-  description json,
-  moderation_status text,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  FOREIGN KEY (id) REFERENCES media_assets (id) ON DELETE CASCADE
-);
 
 -- =====
 -- PUBLICATIONS
@@ -521,6 +525,14 @@ CREATE TABLE publication_tags (
   FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
+CREATE TABLE publication_media_assets (
+  publication_id text NOT NULL,
+  media_asset_id text NOT NULL,
+  PRIMARY KEY (publication_id, media_asset_id),
+  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
+  FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
 CREATE TABLE publication_wiki_articles (
   publication_id text NOT NULL,
   wiki_article_id text NOT NULL,
@@ -541,7 +553,7 @@ CREATE TABLE comment_crdts (
   parent_comment_id text,
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
   owner_profile_id text NOT NULL,
-  moderation_status text,
+  moderation_status text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
@@ -567,7 +579,7 @@ CREATE TABLE comments (
   publication_id text NOT NULL,
   parent_comment_id text,
   current_crdt_frontier json NOT NULL,
-  moderation_status text,
+  moderation_status text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
   owner_profile_id text NOT NULL,

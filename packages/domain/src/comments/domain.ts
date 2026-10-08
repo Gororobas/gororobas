@@ -1,7 +1,7 @@
 /**
  * Comment domain entity and related types.
  */
-import { Schema } from "effect"
+import { Schema, Struct } from "effect"
 
 import { Locale, ModerationStatus, TranslationSource } from "../common/enums.js"
 import { CommentCommitId, CommentId, PersonId, PublicationId, ProfileId } from "../common/ids.js"
@@ -50,7 +50,7 @@ export const CommentCrdtRow = Schema.Struct({
   ...TimestampedStruct.fields,
   id: CommentId,
   crdtSnapshot: LoroDocSnapshot,
-  moderationStatus: Schema.NullOr(ModerationStatus),
+  moderationStatus: ModerationStatus,
   ownerProfileId: ProfileId,
   parentCommentId: Schema.NullOr(CommentId),
   publicationId: PublicationId,
@@ -70,13 +70,8 @@ export const CommentCommitRow = Schema.Struct({
 export type CommentCommitRow = typeof CommentCommitRow.Type
 
 export const CommentRow = Schema.Struct({
-  ...TimestampedStruct.fields,
+  ...Struct.omit(CommentCrdtRow.fields, ["crdtSnapshot"]),
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
-  id: CommentId,
-  moderationStatus: Schema.NullOr(ModerationStatus),
-  ownerProfileId: ProfileId,
-  parentCommentId: Schema.NullOr(CommentId),
-  publicationId: PublicationId,
 })
 
 export type CommentRow = typeof CommentRow.Type
@@ -95,15 +90,8 @@ export type CommentTranslationRow = typeof CommentTranslationRow.Type
 
 /** API response schemas */
 export const CommentData = Schema.Struct({
+  ...CommentRow.fields,
   content: Schema.fromJsonString(TiptapDocument),
-  createdAt: TimestampColumn,
-  currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
-  id: CommentId,
-  moderationStatus: Schema.NullOr(ModerationStatus),
-  ownerProfileId: ProfileId,
-  parentCommentId: Schema.NullOr(CommentId),
-  publicationId: PublicationId,
-  updatedAt: TimestampColumn,
 })
 
 export type CommentData = typeof CommentData.Type

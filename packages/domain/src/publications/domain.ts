@@ -12,6 +12,7 @@ import {
   TranslationSource,
 } from "../common/enums.js"
 import {
+  MediaAssetId,
   PersonId,
   PublicationCommitId,
   PublicationId,
@@ -26,6 +27,7 @@ import {
   TimestampedStruct,
 } from "../common/primitives.js"
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
+import { MediaAssetRow } from "../media-assets/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
 export const CorePublicationMetadata = Schema.Struct({
@@ -170,7 +172,8 @@ export const ApiPublicationCardData = Schema.Struct({
 
 export type ApiPublicationCardData = typeof ApiPublicationCardData.Type
 
-export const ApiPostData = Schema.Struct({
+export const ApiPostResponse = Schema.Struct({
+  mediaAssets: Schema.optional(Schema.Array(MediaAssetRow)),
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
@@ -184,9 +187,10 @@ export const ApiPostData = Schema.Struct({
   visibility: PublicationVisibility,
 })
 
-export type ApiPostData = typeof ApiPostData.Type
+export type ApiPostResponse = typeof ApiPostResponse.Type
 
-export const ApiEventData = Schema.Struct({
+export const ApiEventResponse = Schema.Struct({
+  mediaAssets: Schema.optional(Schema.Array(MediaAssetRow)),
   attendanceMode: Schema.NullOr(EventAttendanceMode),
   content: Schema.fromJsonString(TiptapDocument),
   createdAt: TimestampColumn,
@@ -204,20 +208,24 @@ export const ApiEventData = Schema.Struct({
   visibility: PublicationVisibility,
 })
 
-export type ApiEventData = typeof ApiEventData.Type
+export type ApiEventResponse = typeof ApiEventResponse.Type
 
-export const ApiPublicationData = Schema.Union([ApiPostData, ApiEventData])
+export const ApiPublicationData = Schema.Union([ApiPostResponse, ApiEventResponse])
 export type ApiPublicationData = typeof ApiPublicationData.Type
 
-export const ApiCreatePostData = Schema.Struct({
+const ApiCreatePostData = Schema.Struct({
+  kind: PostKind,
+  locale: Schema.optional(Locale),
+  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   content: TiptapDocument,
   handle: Handle,
   visibility: PublicationVisibility,
 })
 
-export type ApiCreatePostData = typeof ApiCreatePostData.Type
-
-export const ApiCreateEventData = Schema.Struct({
+const ApiCreateEventData = Schema.Struct({
+  kind: EventKind,
+  locale: Schema.optional(Locale),
+  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,
   endDate: Schema.optional(Schema.NullOr(TimestampColumn)),
@@ -227,13 +235,16 @@ export const ApiCreateEventData = Schema.Struct({
   visibility: PublicationVisibility,
 })
 
-export type ApiCreateEventData = typeof ApiCreateEventData.Type
+export const ApiCreatePublicationData = Schema.Union([ApiCreatePostData, ApiCreateEventData])
+export type ApiCreatePublicationData = typeof ApiCreatePublicationData.Type
 
-export const ApiUpdatePostData = Schema.Struct({
+export const ApiUpdatePublicationData = Schema.Struct({
+  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
 })
-export type ApiUpdatePostData = typeof ApiUpdatePostData.Type
+
+export type ApiUpdatePublicationData = typeof ApiUpdatePublicationData.Type
 
 export const ApiPublicationHistoryEntry = Schema.Struct({
   authorId: ProfileId,
@@ -245,6 +256,8 @@ export const ApiPublicationHistoryEntry = Schema.Struct({
 export type ApiPublicationHistoryEntry = typeof ApiPublicationHistoryEntry.Type
 
 export const CreatePostData = Schema.Struct({
+  handle: Schema.optional(Handle),
+  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   locale: Locale,
   content: TiptapDocument,
   visibility: PublicationVisibility,
@@ -253,6 +266,8 @@ export const CreatePostData = Schema.Struct({
 export type CreatePostData = typeof CreatePostData.Type
 
 export const CreateEventData = Schema.Struct({
+  handle: Schema.optional(Handle),
+  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   locale: Locale,
   attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,

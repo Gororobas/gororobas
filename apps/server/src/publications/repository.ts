@@ -3,6 +3,7 @@ import {
   type EventSourceData,
   HumanCommit,
   IdGen,
+  InvalidCrdtUpdateError,
   Locale,
   LoroDocFrontier,
   type PostSourceData,
@@ -39,6 +40,8 @@ import {
 } from "../common/crdt-aggregate-persistence.js"
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import {
+  attachMediaToPublication,
+  deletePublicationMediaAttachments,
   deletePublication,
   insertPublicationCommitRow,
   insertPublicationCrdtRow,
@@ -54,6 +57,7 @@ import {
   type UpdatePublicationInput as UpdatePublicationInputType,
 } from "./publication-repository-inputs.js"
 import {
+  listPublicationMediaAttachments,
   countPublicationRowsByOwnerProfileId,
   findPublicationCrdtSnapshotById,
   findPublicationPageData,
@@ -341,6 +345,10 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
                 ],
               })
 
+          if (applied.data.metadata.kind !== publicationRow.kind) {
+            return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+          }
+
           const commitId = yield* IdGen.make(PublicationCommitId)
           const now = yield* DateTime.now
 
@@ -368,6 +376,9 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
 
       return {
+        listPublicationMediaAttachments,
+        attachMediaToPublication,
+        deletePublicationMediaAttachments,
         countPublicationRowsByOwnerProfileId,
         createPublication,
         deletePublication,

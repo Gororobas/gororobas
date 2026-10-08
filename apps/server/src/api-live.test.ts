@@ -1,16 +1,23 @@
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { AuthenticationHttp } from "@gororobas/domain"
-import { Auth, Sessions } from "@yielded/auth"
+import { Auth } from "@yielded/auth"
 import { Context, ConfigProvider, Effect, FileSystem, Layer, Path } from "effect"
 import { HttpRouter } from "effect/http"
+import { WorkflowEngine } from "effect/workflow"
 
+import {
+  authenticationTestOrigin,
+  authenticationTestBindingKey,
+  captureEmailDelivery,
+} from "../test/authentication-helpers.js"
 import { ApiLive } from "./api-live.js"
+import { makeAuthentication } from "./authentication/app-auth.js"
+import { authenticationLayer } from "./authentication/authentication-live.js"
 import { IdGenLive } from "./id-gen-live.js"
 import { makeAppSql } from "./sql.js"
 
 it.live(
-  "builds implemented API groups and preserves their authentication middleware",
+  "authenticates visitors without blocking public endpoints and lets policies deny uploads",
   Effect.fn(function* () {
     const filesystem = yield* FileSystem.FileSystem.pipe(Effect.provide(NodeServices.layer))
     const path = yield* Path.Path.pipe(Effect.provide(NodeServices.layer))
@@ -21,6 +28,7 @@ it.live(
       IdGenLive,
       NodeHttpServer.layerHttpServices,
       NodeServices.layer,
+      WorkflowEngine.layerMemory,
       Layer.succeed(
         ConfigProvider.ConfigProvider,
         ConfigProvider.fromUnknown({
@@ -33,13 +41,12 @@ it.live(
       Effect.sync(() =>
         HttpRouter.toWebHandler(
           ApiLive.pipe(
+            makeAuthentication(authenticationTestOrigin).http.middleware,
             Layer.provide(
-              Layer.succeed(
-                AuthenticationHttp.RequireSession,
-                AuthenticationHttp.RequireSession.of({
-                  session: () => Effect.fail(Sessions.SessionInvalid.make({})),
-                }),
-              ),
+              authenticationLayer({
+                origin: authenticationTestOrigin,
+                requestBindingKey: authenticationTestBindingKey,
+              }).pipe(Layer.provide(captureEmailDelivery().layer)),
             ),
             HttpRouter.provideRequest(dependencies),
             Layer.provideMerge(dependencies),
@@ -63,7 +70,20 @@ it.live(
       ),
     )
 
-    expect(profiles.status).toBe(401)
+    expect(profiles.status).toBe(200)
+
+    const deniedUpload = yield* Effect.tryPromise(() =>
+      app.handler(
+        new Request("http://localhost/media/upload", {
+          method: "POST",
+          headers: { "content-type": "multipart/form-data; boundary=empty" },
+          body: "--empty--",
+        }),
+        guest,
+      ),
+    )
+
+    expect(deniedUpload.status).toBe(403)
     const wiki = yield* Effect.tryPromise(() =>
       app.handler(new Request("http://localhost/wiki"), guest),
     )

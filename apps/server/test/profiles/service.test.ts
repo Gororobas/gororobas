@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Handle, IdGen, PersonId, PlatformAccessLevel } from "@gororobas/domain"
-import { resolveSessionFromPersonId, VISITOR_SESSION } from "@gororobas/server/session-service"
+import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
 import { Effect, Option, Result, Schema } from "effect"
 
 import { ProfileService } from "../../src/profiles/service.js"
@@ -14,7 +14,7 @@ describe("ProfileService reads", () => {
       Effect.gen(function* () {
         const { person } = yield* seedPerson("COMMUNITY")
         const service = yield* ProfileService
-        const owner = yield* resolveSessionFromPersonId(person.id)
+        const owner = yield* resolveSessionFromAuthSubjectId(person.id)
         const profile = Option.getOrThrow(yield* withSession(service.findById(person.id), owner))
         const read =
           lookup === "handle" ? service.findByHandle(profile.handle) : service.findById(person.id)
@@ -32,7 +32,7 @@ describe("ProfileService reads", () => {
                     const session =
                       accessLevel === "VISITOR"
                         ? VISITOR_SESSION
-                        : yield* resolveSessionFromPersonId(
+                        : yield* resolveSessionFromAuthSubjectId(
                             (yield* seedPerson(accessLevel)).person.id,
                           )
 

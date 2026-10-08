@@ -80,7 +80,7 @@ it.live(
         })
 
         expect(yield* service.getRow(mediaAsset.id)).toEqual(mediaAsset)
-        expect(mediaAsset.label).toBeNull()
+        expect(mediaAsset.descriptions).toEqual({})
         expect(yield* filesystem.readDirectory(join(root, mediaAsset.id))).toEqual(
           expect.arrayContaining(["original", "50.avif", "300.avif", "1280.avif", "2400.avif"]),
         )
@@ -146,7 +146,7 @@ it.live(
         )
 
         expect(visitorUpload).toSatisfy(Exit.isFailure)
-        yield* service.censor(mediaAsset.id)
+        yield* service.moderate({ id: mediaAsset.id, moderationStatus: "CENSORED" })
         expect(yield* Effect.exit(service.getRow(mediaAsset.id))).toSatisfy(Exit.isFailure)
 
         expect(

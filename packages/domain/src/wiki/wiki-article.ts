@@ -58,6 +58,7 @@ export const WikiArticleRevisionRow = Schema.Struct({
   fromCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   evaluation: RevisionEvaluation,
   evaluationReason: OptionalColumn(Schema.String),
+  hasMediaSelection: Schema.BooleanFromBit,
   evaluatedById: OptionalColumn(PersonId),
   evaluatedAt: OptionalColumn(TimestampColumn),
 })

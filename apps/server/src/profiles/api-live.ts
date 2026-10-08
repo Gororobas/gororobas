@@ -3,7 +3,6 @@ import { Effect, Option } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
-import { SessionServiceLive } from "../session-service.js"
 import { ProfilesRepository } from "./repository.js"
 
 export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (handlers) =>
@@ -25,7 +24,6 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
 
         return profile
       }).pipe(
-        Effect.provide(SessionServiceLive),
         withApiInfrastructureErrors({
           endpoint: "getProfileByHandle",
           group: "profiles",
