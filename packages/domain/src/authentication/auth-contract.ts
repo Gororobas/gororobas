@@ -101,7 +101,7 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
       payload: Schema.Struct({
         ...MagicLinkIdentity.fields,
         requestId: Proofs.ProofRequestId,
-        locale: AuthSchema.Locale,
+        language: AuthSchema.Locale,
       }),
       success: Proofs.ProofRequestReceipt,
       error: MagicLinkFailure,

@@ -1,8 +1,9 @@
 import {
+  ContentLanguage,
   CommentId,
   LoroDocFrontier,
   LoroDocUpdate,
-  Locale,
+  SupportedLanguage,
   PersonId,
   PublicationId,
   ProfileId,
@@ -25,8 +26,9 @@ export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslat
   commentId: CommentId,
   commit: SystemCommit,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
-  sourceLocale: Locale,
-  targetLocale: Locale,
+  sourceLanguage: ContentLanguage,
+  sourceCrdtFrontier: LoroDocFrontier,
+  targetLanguage: SupportedLanguage,
   translatedContent: TiptapDocument,
 })
 

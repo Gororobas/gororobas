@@ -1,4 +1,7 @@
 import {
+  projectContentTranslations,
+  SourceContent,
+  snapshotToLoroDoc,
   CommentCommitId,
   CommentCommitRow,
   CommentConcurrentUpdateError,
@@ -12,22 +15,12 @@ import {
   type CrdtCommit,
   HumanCommit,
   IdGen,
-  Locale,
+  InvalidCrdtUpdateError,
   LoroDocFrontier,
   SourceCommentData,
   tiptapToText,
 } from "@gororobas/domain"
-import {
-  Array as EffectArray,
-  Context,
-  DateTime,
-  Effect,
-  Equal,
-  Option,
-  Record,
-  Schema,
-  Predicate,
-} from "effect"
+import { Array as EffectArray, Context, DateTime, Effect, Equal, Option, Predicate } from "effect"
 import { SqlClient } from "effect/sql"
 
 import {
@@ -46,7 +39,7 @@ import {
   upsertCommentRow,
 } from "./mutations.js"
 import {
-  findCommentContentByIdAndLocale,
+  findCommentContentByIdAndLanguage,
   findCommentCrdtSnapshotById,
   findCommentRowById,
   listCommentCommitRowsByCommentIdAsc,
@@ -114,25 +107,15 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
 
       const persistTranslationProjections = (input: {
         commentId: CommentId
-        locales: SourceCommentData["locales"]
+        sourceData: SourceContent
       }) => {
-        const rows = Record.toEntries({
-          en: input.locales.en,
-          es: input.locales.es,
-          pt: input.locales.pt,
-        }).flatMap(([locale, localeData]) => {
-          if (!localeData || !Schema.is(Locale)(locale)) return []
-
-          return CommentTranslationRow.make({
+        const rows = projectContentTranslations(input.sourceData).map((translation) =>
+          CommentTranslationRow.make({
+            ...translation,
+            contentPlainText: tiptapToText(translation.content),
             commentId: input.commentId,
-            content: localeData.content,
-            contentPlainText: tiptapToText(localeData.content),
-            locale,
-            originalLocale: localeData.originalLocale,
-            translatedAtCrdtFrontier: localeData.translatedAtCrdtFrontier,
-            translationSource: localeData.translationSource,
-          })
-        })
+          }),
+        )
 
         return persistProjectionJunctionTables({
           deleteRows: sql`DELETE FROM comment_translations WHERE comment_id = ${input.commentId}`,
@@ -163,7 +146,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
 
           yield* persistTranslationProjections({
             commentId: input.commentId,
-            locales: input.sourceData.locales,
+            sourceData: input.sourceData,
           })
         })
 
@@ -251,6 +234,25 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
             })
           }
 
+          if (Predicate.isTagged(input, "SystemUpsertTranslation")) {
+            const currentDocument = snapshotToLoroDoc(current.crdtSnapshot)
+            const sourceDocument = currentDocument.fork()
+            yield* Effect.try({
+              try: () => sourceDocument.checkout([...input.sourceCrdtFrontier]),
+              catch: () => new InvalidCrdtUpdateError({ reason: "InvalidFormat" }),
+            })
+            const source = yield* CommentCrdt.read(sourceDocument)
+            const latest = yield* CommentCrdt.read(currentDocument)
+
+            if (
+              source.sourceLanguage !== input.sourceLanguage ||
+              latest.sourceLanguage !== source.sourceLanguage ||
+              !Equal.equals(latest.sourceContent, source.sourceContent)
+            ) {
+              return yield* new CommentConcurrentUpdateError({ id: input.commentId })
+            }
+          }
+
           const commit: CrdtCommit = Predicate.isTagged(input, "HumanCrdtUpdate")
             ? HumanCommit.make({
                 personId: input.authorId,
@@ -268,12 +270,12 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
                 snapshot: current.crdtSnapshot,
                 edits: [
                   {
-                    _tag: "SetCommentLocale",
-                    locale: input.targetLocale,
+                    _tag: "SetCommentTranslation",
+                    language: input.targetLanguage,
                     value: {
                       content: input.translatedContent,
-                      originalLocale: input.sourceLocale,
-                      translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
+                      originalLanguage: input.sourceLanguage,
+                      translatedAtCrdtFrontier: input.sourceCrdtFrontier,
                       translationSource: "AUTOMATIC",
                     },
                   },
@@ -310,7 +312,7 @@ export class CommentsRepository extends Context.Service<CommentsRepository>()(
         censorComment,
         createComment,
         deleteComment,
-        findCommentContentByIdAndLocale,
+        findCommentContentByIdAndLanguage,
         findCommentRowById,
         listCommentCommitRowsByCommentIdAsc,
         listCommentRowsByPublicationId,

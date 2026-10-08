@@ -66,7 +66,7 @@ Provider configuration and consent screens require credentials from your own pro
 The shared `AuthenticationApi` in the domain package drives the routes and Yielded client. Auth POSTs carry `{ "payload": ... }` and require `Origin: <AUTH_ORIGIN>` plus `x-effect-auth-csrf: 1`; browser cookies carry private credentials automatically. Auth responses use Yielded's `Success`/`Failure` envelopes.
 
 1. `POST /api/auth/beginMagicLink`: `{ flowId }`.
-2. `POST /api/auth/requestMagicLink`: `{ flowId, email, name, requestId, locale }`.
+2. `POST /api/auth/requestMagicLink`: `{ flowId, email, name, requestId, language }`.
 3. `POST /api/auth/verifyMagicLink`: `{ flowId, email, name, reference, secret }`, after explicit confirmation of the email link. The originating request-binding cookie is required.
 4. `POST /api/auth/completeMagicLink`: `{ flowId, email, name, continuationId }`. The continuation and request-binding credentials remain in HttpOnly cookies.
 5. `POST /api/auth/beginOAuth`: `{ provider, flowId }`; returns an authorization URL. `POST /api/auth/completeOAuth`: `{ provider, flowId, state, code }`; the request-binding cookie is required.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import { PublicationCrdt } from "@gororobas/domain"
 import {
   Handle,
@@ -11,7 +12,6 @@ import {
   SystemCommit,
   PublicationSourceData,
   type TiptapDocument,
-  type TiptapNode,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { DateTime, Effect, Equal, Layer, Option, Schema, Struct } from "effect"
@@ -35,13 +35,12 @@ const TestLayerWithPublicationsRepository = Layer.mergeAll(
 )
 const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
-const paragraph = (text: string): TiptapNode => ({
-  content: [{ text, type: "text" }],
-  type: "paragraph",
+const paragraph = (text: string) => ({
+  content: [{ text, type: "text" as const }],
+  type: "paragraph" as const,
 })
 
 const makeDocument = (text: string): TiptapDocument => ({
-  // @ts-expect-error not sure what's the issue here
   content: [paragraph(text)],
   type: "doc",
   version: 1,
@@ -62,16 +61,32 @@ const makePublicationCrdtUpdate = (input: {
       value: input.nextSourceData.metadata,
     }),
   )
-  ;
-(["en", "es", "pt"] as const).forEach((locale) => {
-    const value = input.nextSourceData.locales[locale]
+
+  Effect.runSync(
+    PublicationCrdt.applyEdit(nextDoc, {
+      _tag: "SetPublicationSourceContent",
+      content: input.nextSourceData.sourceContent,
+    }),
+  )
+
+  Effect.runSync(
+    PublicationCrdt.applyEdit(nextDoc, {
+      _tag: "SetPublicationSourceLanguage",
+      sourceLanguage: input.nextSourceData.sourceLanguage,
+    }),
+  )
+
+  const translationLanguages = ["en", "es", "pt"] as const
+
+  translationLanguages.forEach((language) => {
+    const value = input.nextSourceData.translations[language]
 
     Effect.runSync(
       PublicationCrdt.applyEdit(
         nextDoc,
         value
-          ? { _tag: "SetPublicationLocale", locale, value }
-          : { _tag: "RemovedPublicationLocale", locale },
+          ? { _tag: "SetPublicationTranslation", language, value }
+          : { _tag: "RemovedPublicationTranslation", language },
       ),
     )
   })
@@ -98,14 +113,9 @@ const makePostSourceData = (input: {
   ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
   publishedAt: PublicationSourceData["metadata"]["publishedAt"]
 }): PublicationSourceData => ({
-  locales: {
-    pt: {
-      content: input.content,
-      originalLocale: "pt",
-      translatedAtCrdtFrontier: null,
-      translationSource: "ORIGINAL",
-    },
-  },
+  sourceContent: input.content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
   metadata: {
     handle: makeHandle(input.handle),
     kind: "POST",
@@ -124,14 +134,9 @@ const makeEventSourceData = (input: {
   publishedAt: PublicationSourceData["metadata"]["publishedAt"]
   startDate: PublicationSourceData["metadata"]["publishedAt"]
 }): PublicationSourceData => ({
-  locales: {
-    pt: {
-      content: input.content,
-      originalLocale: "pt",
-      translatedAtCrdtFrontier: null,
-      translationSource: "ORIGINAL",
-    },
-  },
+  sourceContent: input.content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
   metadata: {
     attendanceMode: "IN_PERSON",
     endDate: input.endDate,
@@ -186,7 +191,7 @@ describe("PublicationsRepository", () => {
 
       const pageData = yield* repository.findPublicationPageData({
         handle: sourceData.metadata.handle,
-        locale: "pt",
+        language: "pt",
       })
       expect(Option.isSome(pageData)).toBe(true)
       const page = Option.getOrThrow(pageData)
@@ -231,13 +236,9 @@ describe("PublicationsRepository", () => {
 
         const nextSourceData: PublicationSourceData = {
           ...initialSourceData,
-          locales: {
-            ...initialSourceData.locales,
-            pt: {
-              ...Option.getOrThrow(Option.fromNullishOr(initialSourceData.locales.pt)),
-              content: makeDocument("Depois"),
-            },
-          },
+          sourceContent: makeDocument("Depois"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
         }
 
         const crdtUpdate = makePublicationCrdtUpdate({
@@ -265,7 +266,7 @@ describe("PublicationsRepository", () => {
           crdtUpdate: Option.getOrThrow(Option.fromNullishOr(commits[1])).crdtUpdate,
           snapshot: beforeSnapshot.crdtSnapshot,
         })
-        expect((yield* PublicationCrdt.read(replayedDoc)).locales.pt?.content).toEqual(
+        expect((yield* PublicationCrdt.read(replayedDoc)).sourceContent).toEqual(
           makeDocument("Depois"),
         )
 
@@ -281,7 +282,7 @@ describe("PublicationsRepository", () => {
 
         const pageData = yield* repository.findPublicationPageData({
           handle: Option.getOrThrow(row).handle,
-          locale: "pt",
+          language: "pt",
         })
         expect(Option.isSome(pageData)).toBe(true)
         const page = Option.getOrThrow(pageData)
@@ -329,9 +330,10 @@ describe("PublicationsRepository", () => {
               workflowVersion: "test",
             }),
             expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
+            sourceCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
             publicationId,
-            sourceLocale: "pt",
-            targetLocale: "en",
+            sourceLanguage: ContentLanguage.make("pt"),
+            targetLanguage: "en",
             translatedContent: makeDocument("Translated text"),
           }),
         )
@@ -345,17 +347,22 @@ describe("PublicationsRepository", () => {
         })
 
         const replayed = yield* PublicationCrdt.read(replayedDoc)
-        expect(replayed.locales.en?.content).toEqual(makeDocument("Translated text"))
-        expect(replayed.locales.en?.translatedAtCrdtFrontier).toEqual(
-          Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
-        )
+        expect(
+          replayed.translations.en !== "original" ? replayed.translations.en?.content : undefined,
+        ).toEqual(makeDocument("Translated text"))
+
+        expect(
+          replayed.translations.en !== "original"
+            ? replayed.translations.en?.translatedAtCrdtFrontier
+            : undefined,
+        ).toEqual(Option.getOrThrow(beforeTranslation).currentCrdtFrontier)
 
         const row = yield* repository.findPublicationRowById(publicationId)
         expect(Option.isSome(row)).toBe(true)
 
         const pageData = yield* repository.findPublicationPageData({
           handle: Option.getOrThrow(row).handle,
-          locale: "en",
+          language: "en",
         })
         expect(Option.isSome(pageData)).toBe(true)
         const page = Option.getOrThrow(pageData)
@@ -363,66 +370,140 @@ describe("PublicationsRepository", () => {
       }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
   )
 
-  it.effect("updatePublication with SystemUpsertTranslation stores translation frontier", () =>
-    Effect.gen(function* () {
-      const repository = yield* PublicationsRepository
-      const sql = yield* SqlClient.SqlClient
+  it.effect(
+    "translations retain their source frontier across sibling writes and reject an edited source",
+    () =>
+      Effect.gen(function* () {
+        const repository = yield* PublicationsRepository
+        const sql = yield* SqlClient.SqlClient
 
-      const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
-      const profile = yield* makeProfileFixture({ id: person.id })
-      yield* insertPersonWithDependencies({ person, profile })
+        const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
+        const profile = yield* makeProfileFixture({ id: person.id })
+        yield* insertPersonWithDependencies({ person, profile })
 
-      const now = yield* DateTime.now
+        const now = yield* DateTime.now
 
-      const publicationId = yield* repository.createPublication({
-        createdById: person.id,
-        sourceData: makePostSourceData({
-          content: makeDocument("Texto original"),
-          handle: `pub-${person.id.slice(0, 8)}-frontier`,
-          ownerProfileId: profile.id,
-          publishedAt: now,
-        }),
-      })
-
-      const beforeTranslation = yield* repository.findPublicationRowById(publicationId)
-      expect(Option.isSome(beforeTranslation)).toBe(true)
-
-      yield* repository.updatePublication(
-        SystemUpsertTranslation.make({
-          commit: SystemCommit.make({
-            model: "translation/test",
-            workflowName: "PublicationTranslationWorkflow",
-            workflowVersion: "test",
+        const publicationId = yield* repository.createPublication({
+          createdById: person.id,
+          sourceData: makePostSourceData({
+            content: makeDocument("Texto original"),
+            handle: `pub-${person.id.slice(0, 8)}-frontier`,
+            ownerProfileId: profile.id,
+            publishedAt: now,
           }),
-          expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
-          publicationId,
-          sourceLocale: "pt",
-          targetLocale: "en",
-          translatedContent: makeDocument("Translated text"),
-        }),
-      )
+        })
 
-      const TranslatedFrontierRow = Schema.Struct({
-        translatedAtCrdtFrontier: Schema.fromJsonString(
-          Schema.NullOr(Schema.Array(Schema.Unknown)),
-        ),
-      })
+        const beforeTranslation = yield* repository.findPublicationRowById(publicationId)
+        expect(Option.isSome(beforeTranslation)).toBe(true)
 
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
-      const translationRows = Schema.decodeUnknownSync(Schema.Array(TranslatedFrontierRow))(
-        yield* sql`
+        yield* repository.updatePublication(
+          SystemUpsertTranslation.make({
+            commit: SystemCommit.make({
+              model: "translation/test",
+              workflowName: "PublicationTranslationWorkflow",
+              workflowVersion: "test",
+            }),
+            expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
+            sourceCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
+            publicationId,
+            sourceLanguage: ContentLanguage.make("pt"),
+            targetLanguage: "en",
+            translatedContent: makeDocument("Translated text"),
+          }),
+        )
+
+        const sourceCrdtFrontier = Option.getOrThrow(beforeTranslation).currentCrdtFrontier
+        const afterEnglish = Option.getOrThrow(
+          yield* repository.findPublicationRowById(publicationId),
+        )
+
+        yield* repository.updatePublication(
+          SystemUpsertTranslation.make({
+            commit: SystemCommit.make({
+              model: "translation/test",
+              workflowName: "PublicationTranslationWorkflow",
+              workflowVersion: "test",
+            }),
+            expectedCurrentCrdtFrontier: afterEnglish.currentCrdtFrontier,
+            sourceCrdtFrontier,
+            publicationId,
+            sourceLanguage: ContentLanguage.make("pt"),
+            targetLanguage: "es",
+            translatedContent: makeDocument("Texto traducido"),
+          }),
+        )
+
+        const TranslatedFrontierRow = Schema.Struct({
+          translatedAtCrdtFrontier: Schema.fromJsonString(
+            Schema.NullOr(Schema.Array(Schema.Unknown)),
+          ),
+        })
+
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
+        const translationRows = Schema.decodeUnknownSync(Schema.Array(TranslatedFrontierRow))(
+          yield* sql`
           SELECT translated_at_crdt_frontier
           FROM publication_translations
-          WHERE publication_id = ${publicationId} AND locale = 'en'
+          WHERE publication_id = ${publicationId} AND language IN ('en', 'es')
         `,
-      )
+        )
 
-      expect(translationRows).toHaveLength(1)
-      const frontier = translationRows[0]?.translatedAtCrdtFrontier
-      expect(frontier).not.toBeNull()
-      expect(frontier).not.toEqual([])
-      expect(frontier).not.toEqual("[]")
-    }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
+        expect(translationRows).toHaveLength(2)
+        expect(translationRows.map((row) => row.translatedAtCrdtFrontier)).toEqual([
+          sourceCrdtFrontier,
+          sourceCrdtFrontier,
+        ])
+        const frontier = translationRows[0]?.translatedAtCrdtFrontier
+        expect(frontier).not.toBeNull()
+        expect(frontier).not.toEqual([])
+        expect(frontier).not.toEqual("[]")
+        const afterSpanish = Option.getOrThrow(
+          yield* repository.findPublicationRowById(publicationId),
+        )
+        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
+        const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
+          yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
+        )
+
+        yield* repository.updatePublication(
+          HumanCrdtUpdate.make({
+            authorId: person.id,
+            expectedCurrentCrdtFrontier: afterSpanish.currentCrdtFrontier,
+            publicationId,
+            crdtUpdate: makePublicationCrdtUpdate({
+              snapshot: Option.getOrThrow(Option.fromNullishOr(snapshotRows[0])).crdtSnapshot,
+              nextSourceData: makePostSourceData({
+                content: makeDocument("Original editado"),
+                handle: afterSpanish.handle,
+                ownerProfileId: profile.id,
+                publishedAt: now,
+              }),
+            }),
+          }),
+        )
+
+        const afterEdit = Option.getOrThrow(yield* repository.findPublicationRowById(publicationId))
+
+        const staleError = yield* repository
+          .updatePublication(
+            SystemUpsertTranslation.make({
+              commit: SystemCommit.make({
+                model: "translation/test",
+                workflowName: "PublicationTranslationWorkflow",
+                workflowVersion: "test",
+              }),
+              expectedCurrentCrdtFrontier: afterEdit.currentCrdtFrontier,
+              sourceCrdtFrontier,
+              publicationId,
+              sourceLanguage: ContentLanguage.make("pt"),
+              targetLanguage: "en",
+              translatedContent: makeDocument("Stale result"),
+            }),
+          )
+          .pipe(Effect.flip)
+
+        expect(staleError).toBeInstanceOf(PublicationConcurrentUpdateError)
+      }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
   )
 
   it.effect("createPublication projects event metadata", () =>
@@ -496,13 +577,9 @@ describe("PublicationsRepository", () => {
         makePublicationCrdtUpdate({
           nextSourceData: {
             ...initialSourceData,
-            locales: {
-              ...initialSourceData.locales,
-              pt: {
-                ...Option.getOrThrow(Option.fromNullishOr(initialSourceData.locales.pt)),
-                content,
-              },
-            },
+            sourceContent: content,
+            sourceLanguage: ContentLanguage.make("pt"),
+            translations: { pt: "original" },
           },
           snapshot: initialSnapshot.crdtSnapshot,
         })
@@ -585,7 +662,7 @@ describe("PublicationsRepository", () => {
 
       const pageData = yield* repository.findPublicationPageData({
         handle: sourceData.metadata.handle,
-        locale: "pt",
+        language: "pt",
       })
       expect(Option.isSome(pageData)).toBe(true)
       expect(Option.getOrThrow(pageData).content).toEqual(makeDocument("Permanece"))

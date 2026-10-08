@@ -59,17 +59,17 @@ describe("Kind-specific wiki translations", () => {
   it("projects origin only for plants and accepts older translations without origin", () => {
     const id = Schema.decodeSync(WikiArticleId)("0199a000-0000-7000-8000-000000000001")
     const row = Option.getOrThrow(
-      projectTranslation({ article: plant, locale: "en", wikiArticleId: id }),
+      projectTranslation({ article: plant, language: "en", wikiArticleId: id }),
     )
     expect(row.kind).toBe("PLANT")
     assert(row.kind === "PLANT")
     expect(row.origin).toEqual(Option.some("Central America"))
     const portuguese = Option.getOrThrow(
-      projectTranslation({ article: plant, locale: "pt", wikiArticleId: id }),
+      projectTranslation({ article: plant, language: "pt", wikiArticleId: id }),
     )
     assert(portuguese.kind === "PLANT")
     expect(portuguese.origin).toEqual(Option.none())
-    expect(projectTranslation({ article: plant, locale: "es", wikiArticleId: id })).toEqual(
+    expect(projectTranslation({ article: plant, language: "es", wikiArticleId: id })).toEqual(
       Option.none(),
     )
     const encoded = Schema.encodeSync(WikiArticleTranslationProjectionRow)(row)
@@ -86,7 +86,7 @@ describe("Kind-specific wiki translations", () => {
   })
 
   it.effect(
-    "origin edits affect only the requested locale and reject missing locales and other kinds",
+    "origin edits affect only the requested language and reject missing languages and other kinds",
     () =>
       Effect.gen(function* () {
         const created = yield* WikiArticleCrdt.create(plant)
@@ -94,7 +94,7 @@ describe("Kind-specific wiki translations", () => {
 
         yield* WikiArticleCrdt.applyEdit(document, {
           _tag: "SetPlantOrigin",
-          locale: "pt",
+          language: "pt",
           value: "América Central",
         })
 
@@ -106,7 +106,7 @@ describe("Kind-specific wiki translations", () => {
         expect(parsed.data.translations.pt?.origin).toEqual(Option.some("América Central"))
         expect(parsed.data.translations.en?.origin).toEqual(Option.some("Central America"))
         expect(parsed.data.translations.en?.content).toEqual(plant.translations.en?.content)
-        yield* WikiArticleCrdt.applyEdit(document, { _tag: "UnsetPlantOrigin", locale: "pt" })
+        yield* WikiArticleCrdt.applyEdit(document, { _tag: "UnsetPlantOrigin", language: "pt" })
         parsed = yield* WikiArticleCrdt.parseUpdate({
           snapshot: created.crdtSnapshot,
           crdtUpdate: loroDocToUpdate(document),
@@ -119,7 +119,7 @@ describe("Kind-specific wiki translations", () => {
             yield* Effect.exit(
               WikiArticleCrdt.applyEdit(document, {
                 _tag: "SetPlantOrigin",
-                locale: "es",
+                language: "es",
                 value: "América Central",
               }),
             ),
@@ -131,7 +131,7 @@ describe("Kind-specific wiki translations", () => {
             yield* Effect.exit(
               WikiArticleCrdt.applyEdit(document, {
                 _tag: "UnsetPlantOrigin",
-                locale: "es",
+                language: "es",
               }),
             ),
           ),
@@ -145,7 +145,7 @@ describe("Kind-specific wiki translations", () => {
             yield* Effect.exit(
               WikiArticleCrdt.applyEdit(document, {
                 _tag: "SetPlantOrigin",
-                locale: "en",
+                language: "en",
                 value: "Africa",
               }),
             ),

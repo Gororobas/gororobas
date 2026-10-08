@@ -1,3 +1,4 @@
+import { ContentLanguage } from "@gororobas/domain"
 import { PublicationVisibility } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 
@@ -11,7 +12,7 @@ export const gelNoteToPublication = Effect.fn("gelNoteToPublication")(function* 
 
   // Publications have one content document; keep the original title nodes before the body.
   return {
-    locale: "pt",
+    sourceLanguage: ContentLanguage.make("pt"),
     visibility,
     content: {
       ...note.title,

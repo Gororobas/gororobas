@@ -75,12 +75,12 @@ export const findPublicationPageData = SqlSchema.findOneOption({
       best_translation AS (
         SELECT
           pt.publication_id,
-          pt.locale,
-          pt.original_locale,
+          pt.language,
+          pt.original_language,
           pt.content,
           ROW_NUMBER() OVER (
-            ORDER BY CASE pt.locale
-              WHEN ${req.locale} THEN 1
+            ORDER BY CASE pt.language
+              WHEN ${req.language} THEN 1
               WHEN 'en' THEN 2
               WHEN 'pt' THEN 3
               WHEN 'es' THEN 4
@@ -119,8 +119,8 @@ export const findPublicationPageData = SqlSchema.findOneOption({
         p.end_date,
         p.location_or_url,
         p.attendance_mode,
-        t.locale,
-        t.original_locale,
+        t.language,
+        t.original_language,
         t.content,
         tags.tags,
         vegs.wiki_articles
@@ -160,10 +160,10 @@ export const findPublicationApiData = SqlSchema.findOneOption({
   execute: (id) =>
     SqlClient.use(
       (sql) => sql` 
-    SELECT p.*, t.content, t.locale FROM publications p
+    SELECT p.*, t.content, t.language FROM publications p
     JOIN publication_translations t ON t.publication_id = p.id
     WHERE p.id = ${id}
-    ORDER BY CASE t.locale WHEN 'pt' THEN 0 WHEN 'en' THEN 1 ELSE 2 END LIMIT 1
+    ORDER BY CASE t.language WHEN 'pt' THEN 0 WHEN 'en' THEN 1 ELSE 2 END LIMIT 1
   `,
     ),
 })

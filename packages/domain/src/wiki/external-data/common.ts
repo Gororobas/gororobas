@@ -21,4 +21,4 @@ export const Observation = Schema.Struct({
 
 export type Observation = typeof Observation.Type
 
-export const ExternalLink = Schema.Struct({ locale: Schema.String, url: UrlAsString })
+export const ExternalLink = Schema.Struct({ language: Schema.String, url: UrlAsString })

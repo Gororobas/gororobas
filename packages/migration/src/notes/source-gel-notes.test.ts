@@ -1,5 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect, it, vi } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import { IdGen, PublicationVisibility } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { Effect, FileSystem, Schema } from "effect"
@@ -103,7 +104,8 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
               ownerProfileId: mappedId,
               publishedAt: timestamp.toISOString(),
             },
-            locales: { pt: { originalLocale: "pt", translationSource: "ORIGINAL" } },
+            sourceLanguage: ContentLanguage.make("pt"),
+            translations: { pt: "original" },
           },
           conversion_error: null,
           latest_source: {

@@ -4,7 +4,7 @@ import {
   CommentId,
   CommentRow,
   CommentTranslationRow,
-  Locale,
+  SupportedLanguage,
   PublicationId,
   TiptapDocument,
 } from "@gororobas/domain"
@@ -25,14 +25,14 @@ export const findCommentCrdtSnapshotById = SqlSchema.findOneOption({
     SqlClient.use((sql) => sql`SELECT crdt_snapshot FROM comment_crdts WHERE id = ${id}`),
 })
 
-export const findCommentContentByIdAndLocale = SqlSchema.findOneOption({
-  Request: Schema.Struct({ commentId: CommentId, locale: Locale }),
+export const findCommentContentByIdAndLanguage = SqlSchema.findOneOption({
+  Request: Schema.Struct({ commentId: CommentId, language: SupportedLanguage }),
   Result: Schema.Struct({ content: Schema.fromJsonString(TiptapDocument) }),
-  execute: ({ commentId, locale }) =>
+  execute: ({ commentId, language }) =>
     SqlClient.use(
       (sql) => sql`
       SELECT content FROM comment_translations
-      WHERE comment_id = ${commentId} AND locale = ${locale}
+      WHERE comment_id = ${commentId} AND language = ${language}
     `,
     ),
 })

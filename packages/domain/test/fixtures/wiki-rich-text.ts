@@ -1,6 +1,6 @@
 import { Option, Record, Schema } from "effect"
 
-import { Locale } from "../../src/common/enums.js"
+import { SupportedLanguage } from "../../src/common/enums.js"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { WikiArticleEditableData } from "../../src/wiki/wiki-article.js"
 
@@ -23,13 +23,13 @@ export const withEditorRichText = (article: WikiArticleEditableData): WikiArticl
   Schema.decodeSync(Schema.toType(WikiArticleEditableData))({
     ...article,
     translations: Record.fromEntries(
-      Locale.literals.flatMap((locale) => {
-        const translation = article.translations[locale]
+      SupportedLanguage.literals.flatMap((language) => {
+        const translation = article.translations[language]
 
         return translation
           ? [
               [
-                locale,
+                language,
                 {
                   ...translation,
                   content: Option.map(translation.content, () => wikiRichText),

@@ -1,6 +1,6 @@
 import { Match, Option, Schema } from "effect"
 
-import { Locale, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
+import { SupportedLanguage, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { strToSearchTokens } from "../common/utils/strings.js"
@@ -86,7 +86,7 @@ export const WikiArticleHandleProjectionRow = Schema.Struct({
   wikiArticleId: WikiArticleId,
   kind: WikiArticleKind,
   handle: Handle,
-  locale: Locale,
+  language: SupportedLanguage,
 })
 
 export type WikiArticleHandleProjectionRow = typeof WikiArticleHandleProjectionRow.Type
@@ -106,7 +106,7 @@ export const WikiArticleTranslationProjectionRow = Schema.Union([
 
 export type WikiArticleTranslationProjectionRow = typeof WikiArticleTranslationProjectionRow.Type
 
-/** A locale-specific article projection returned by the read APIs. */
+/** A language-specific article projection returned by the read APIs. */
 export const WikiArticleQueriedPageData = Schema.Union([
   WikiAnimalArticle.QueriedPageData,
   WikiBookArticle.QueriedPageData,
@@ -127,7 +127,7 @@ export const WikiArticleQueriedCardData = Schema.Struct({
   handle: Handle,
   kind: WikiArticleKind,
   commonNames: WikiArticleEditableTranslation.fields.commonNames,
-  locale: Locale,
+  language: SupportedLanguage,
 })
 
 export type WikiArticleQueriedCardData = typeof WikiArticleQueriedCardData.Type
@@ -204,14 +204,14 @@ export const projectArticle = (
 
 export const projectTranslation = ({
   article,
-  locale,
+  language,
   wikiArticleId,
 }: {
   article: WikiArticleEditableData
-  locale: Locale
+  language: SupportedLanguage
   wikiArticleId: WikiArticleId
 }): Option.Option<WikiArticleTranslationProjectionRow> => {
-  const translation = article.translations[locale]
+  const translation = article.translations[language]
 
   if (!translation) return Option.none()
 
@@ -220,7 +220,7 @@ export const projectTranslation = ({
       ...translation,
       wikiArticleId,
       kind: article.kind,
-      locale,
+      language,
       commonNames: translation.commonNames.map((name) => name.value),
       searchableNames: strToSearchTokens(
         translation.commonNames.map((name) => name.value).join(" "),

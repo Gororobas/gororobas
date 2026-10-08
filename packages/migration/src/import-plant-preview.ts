@@ -215,9 +215,9 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
 
       const routes = yield* SqlSchema.findAll({
         Request: WikiArticleId,
-        Result: Schema.Struct({ handle: Handle, locale: Schema.String }),
+        Result: Schema.Struct({ handle: Handle, language: Schema.String }),
         execute: (id) =>
-          sql`SELECT handle, locale FROM wiki_article_handles WHERE wiki_article_id = ${id}`,
+          sql`SELECT handle, language FROM wiki_article_handles WHERE wiki_article_id = ${id}`,
       })(plant.id)
 
       const revisions = yield* SqlSchema.findAll({
@@ -246,7 +246,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
         const page = yield* findPageByHandleAndKind({
           handle: Schema.decodeSync(Handle)(route.handle),
           kind: "PLANT",
-          locale: "pt",
+          language: "pt",
         })
 
         if (Option.isNone(page) || page.value.id !== plant.id) {
@@ -265,7 +265,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
         enrichmentRequests,
         articleId: plant.id,
         mediaAssets: mediaAssets.length,
-        translations: translations.map((item) => item.locale),
+        translations: translations.map((item) => item.language),
         routes,
         revisions: revisions[0].count,
         crdtBytes: crdt.crdtSnapshot.byteLength,

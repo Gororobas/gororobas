@@ -1,6 +1,7 @@
 import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import type { Locale } from "@gororobas/domain"
+import { ContentLanguage } from "@gororobas/domain"
+import type { SupportedLanguage } from "@gororobas/domain"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "@gororobas/domain"
 import { Effect, FileSystem, Path, Predicate, Record, Schema, String as EffectString } from "effect"
 
@@ -67,14 +68,14 @@ function collectContentShape(node: TiptapAnyNode): number[] {
 
 interface TranslationFixture {
   document: TiptapDocument
-  sourceLocale: Locale
-  targetLocale: Locale
+  sourceLanguage: ContentLanguage
+  targetLanguage: SupportedLanguage
 }
 
 const FIXTURES: Record<string, TranslationFixture> = {
   "simple paragraph (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -93,8 +94,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "bold and italic marks (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -114,8 +115,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "heading + paragraph (es→en)": {
-    sourceLocale: "es",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("es"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -139,8 +140,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "blockquote (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -164,8 +165,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "bullet list (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -197,8 +198,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "ordered list (es→en)": {
-    sourceLocale: "es",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("es"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -241,8 +242,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "link mark preservation (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -274,8 +275,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "media grid preservation (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -312,8 +313,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "complex mixed content (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -396,8 +397,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "nested bold inside link (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -430,8 +431,8 @@ const FIXTURES: Record<string, TranslationFixture> = {
   },
 
   "empty paragraphs preserved (pt→en)": {
-    sourceLocale: "pt",
-    targetLocale: "en",
+    sourceLanguage: ContentLanguage.make("pt"),
+    targetLanguage: "en",
     document: TiptapDocument.make({
       type: "doc",
       version: 1,
@@ -461,8 +462,8 @@ describe(
         Effect.gen(function* () {
           const result = yield* translateTiptapContent({
             content: fixture.document,
-            source: fixture.sourceLocale,
-            target: fixture.targetLocale,
+            source: fixture.sourceLanguage,
+            target: fixture.targetLanguage,
           })
 
           yield* saveTranslationResult({ name: name, input: fixture.document, result: result })

@@ -1,13 +1,15 @@
 /**
  * Durable translation workflow backed by Effect Cluster.
  *
- * Translates TiptapDocument content between locales using TranslationService.
+ * Translates TiptapDocument content between languages using TranslationService.
  * Each activity is memoized, so a crash mid-workflow won't re-invoke the translation API.
  */
 import {
+  ContentLanguage,
+  LoroDocFrontier,
   IdGen,
   InvalidCrdtUpdateError,
-  Locale,
+  SupportedLanguage,
   PublicationConcurrentUpdateError,
   PublicationId,
   PublicationNotFoundError,
@@ -16,7 +18,7 @@ import {
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
-import { DateTime, Duration, Effect, Option, Schema } from "effect"
+import { Duration, Effect, Option, Schema } from "effect"
 import { SchemaError } from "effect/Schema"
 import { SqlClient, SqlError } from "effect/sql"
 import { Activity, Workflow } from "effect/workflow"
@@ -30,20 +32,21 @@ import { TranslationError } from "./translation-service.js"
  * Bump this when internals change.
  * Format: ISO date + revision number within that day.
  */
-const WORKFLOW_VERSION = "2026-02-25.1" as const
+const WORKFLOW_VERSION = "2026-10-08.1" as const
 
 export const PublicationTranslationWorkflow = Workflow.make("PublicationTranslationWorkflow", {
   payload: {
     publicationId: PublicationId,
     updatedAt: TimestampColumn,
-    sourceLocale: Locale,
-    targetLocale: Locale,
+    sourceLanguage: ContentLanguage,
+    sourceCrdtFrontier: LoroDocFrontier,
+    targetLanguage: SupportedLanguage,
     sourceContent: TiptapDocument,
   },
   success: Schema.Null,
   error: Schema.Unknown, // @TODO: How to type TranslationError | SqlError | ParseError as schemas?
-  idempotencyKey: ({ publicationId, targetLocale, updatedAt }) =>
-    `${publicationId}:${targetLocale}:${DateTime.toEpochMillis(updatedAt)}`,
+  idempotencyKey: ({ publicationId, targetLanguage, sourceCrdtFrontier }) =>
+    `${publicationId}:${targetLanguage}:${Schema.encodeSync(Schema.fromJsonString(LoroDocFrontier))(sourceCrdtFrontier)}`,
 })
 
 export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflow.toLayer(
@@ -54,8 +57,8 @@ export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflo
       error: TranslationError,
       execute: translateTiptapContent({
         content: payload.sourceContent,
-        source: payload.sourceLocale,
-        target: payload.targetLocale,
+        source: payload.sourceLanguage,
+        target: payload.targetLanguage,
       }),
     })
 
@@ -104,8 +107,9 @@ export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflo
                   commit,
                   expectedCurrentCrdtFrontier: currentPublication.currentCrdtFrontier,
                   publicationId: payload.publicationId,
-                  sourceLocale: payload.sourceLocale,
-                  targetLocale: payload.targetLocale,
+                  sourceLanguage: payload.sourceLanguage,
+                  sourceCrdtFrontier: payload.sourceCrdtFrontier,
+                  targetLanguage: payload.targetLanguage,
                   translatedContent,
                 }),
               )

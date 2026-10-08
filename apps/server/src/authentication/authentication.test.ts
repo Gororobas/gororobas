@@ -144,13 +144,13 @@ test.live(
     const receipt = yield* call(AuthenticationApi.actions.requestMagicLink, {
       ...identity,
       requestId: "signup-request",
-      locale: "en",
+      language: "en",
     })
 
     yield* call(AuthenticationApi.actions.requestMagicLink, {
       ...identity,
       requestId: "signup-request",
-      locale: "en",
+      language: "en",
     })
 
     yield* Effect.tryPromise(async () => await expect.poll(() => deliveries.length).toBe(1))
@@ -315,7 +315,7 @@ test.live(
     yield* call(AuthenticationApi.actions.requestMagicLink, {
       ...login,
       requestId: "signin-request",
-      locale: "en",
+      language: "en",
     })
 
     yield* Effect.tryPromise(async () => await expect.poll(() => deliveries.length).toBe(2))
@@ -382,7 +382,7 @@ test.live(
       yield* call(AuthenticationApi.actions.requestMagicLink, {
         ...pendingIdentity,
         requestId: crypto.randomUUID(),
-        locale: "en",
+        language: "en",
       })
 
       yield* Effect.tryPromise(

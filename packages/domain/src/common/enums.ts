@@ -4,8 +4,8 @@
  */
 import { Schema } from "effect"
 
-export const Locale = Schema.Literals(["pt", "es", "en"])
-export type Locale = typeof Locale.Type
+export const SupportedLanguage = Schema.Literals(["pt", "es", "en"])
+export type SupportedLanguage = typeof SupportedLanguage.Type
 
 export const TrustedAccessLevel = Schema.Literals([
   "COMMUNITY", // Has been approved and has access to public & community content

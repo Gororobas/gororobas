@@ -51,13 +51,16 @@ export function createLoroDocFromData(
   const document = new LoroDoc()
   document.configDefaultTextStyle({ expand: "after" })
 
-  Record.toEntries(roots).forEach(([key, values]) =>
-    initializeLoroMap({
-      map: document.getMap(toLoroString(key)),
-      values,
-      omitNull: options?.omitNull ?? false,
-    }),
-  )
+  Record.toEntries(roots).forEach(([key, values]) => {
+    const map = document.getMap(toLoroString(key))
+
+    if (values.type === "doc") {
+      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate rich-text roots before initializing native containers.
+      initializeLoroRichText(map, Schema.decodeUnknownSync(TiptapDocument)(values))
+    } else {
+      initializeLoroMap({ map, values, omitNull: options?.omitNull ?? false })
+    }
+  })
 
   document.commit()
   return document

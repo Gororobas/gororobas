@@ -8,7 +8,7 @@ import {
   EvaluateWikiArticleRevisionInput,
   HumanCommit,
   IdGen,
-  Locale,
+  SupportedLanguage,
   LoroDocFrontier,
   loroDocToSnapshot,
   NameInCrdtList,
@@ -147,11 +147,11 @@ const persistTranslationProjections = Effect.fn("persistTranslationProjections")
       DELETE FROM wiki_article_translations WHERE wiki_article_id = ${input.wikiArticleId}
     `,
     insertRows: insertTranslationRows(
-      Locale.literals.flatMap((locale) =>
+      SupportedLanguage.literals.flatMap((language) =>
         Option.toArray(
           projectTranslation({
             article: input.sourceData,
-            locale: locale,
+            language: language,
             wikiArticleId: input.wikiArticleId,
           }),
         ),
@@ -161,15 +161,15 @@ const persistTranslationProjections = Effect.fn("persistTranslationProjections")
 })
 
 /**
- * When the target translation is not available, fall back to an existing locale,
- * as ordered by the Locale literal order.
+ * When the target translation is not available, fall back to an existing language,
+ * as ordered by the SupportedLanguage literal order.
  */
-const getTranslation = (sourceData: WikiArticleEditableData, locale: Locale) => {
-  const targetTranslation = sourceData.translations[locale]
+const getTranslation = (sourceData: WikiArticleEditableData, language: SupportedLanguage) => {
+  const targetTranslation = sourceData.translations[language]
   if (targetTranslation) return targetTranslation
 
-  const existingLocale = Locale.literals.find((l) => sourceData.translations[l])
-  return existingLocale ? sourceData.translations[existingLocale] : undefined
+  const existingLanguage = SupportedLanguage.literals.find((l) => sourceData.translations[l])
+  return existingLanguage ? sourceData.translations[existingLanguage] : undefined
 }
 
 const persistHandleProjections = Effect.fn("persistHandleProjections")(function* (input: {
@@ -179,9 +179,9 @@ const persistHandleProjections = Effect.fn("persistHandleProjections")(function*
   const sql = yield* SqlClient.SqlClient
 
   const handleRows = yield* Effect.all(
-    Locale.literals.flatMap((locale) =>
+    SupportedLanguage.literals.flatMap((language) =>
       Effect.gen(function* () {
-        const translation = getTranslation(input.sourceData, locale)
+        const translation = getTranslation(input.sourceData, language)
         if (!translation) return Result.failVoid
 
         const handle = yield* chooseAvailableHandle({
@@ -192,7 +192,7 @@ const persistHandleProjections = Effect.fn("persistHandleProjections")(function*
 
         return Result.succeed(
           WikiArticleHandleProjectionRow.make({
-            locale,
+            language,
             handle,
             kind: input.sourceData.kind,
             wikiArticleId: input.wikiArticleId,

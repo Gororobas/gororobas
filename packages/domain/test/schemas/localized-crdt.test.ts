@@ -6,6 +6,7 @@ import { LoroList, LoroMap, LoroText, type LoroDoc } from "loro-crdt"
 
 import { CommentCrdt } from "../../src/comments/comment-crdt.js"
 import { SourceCommentData } from "../../src/comments/domain.js"
+import { ContentLanguage } from "../../src/common/content-language.js"
 import { ProfileId } from "../../src/common/ids.js"
 import { PersonId } from "../../src/common/ids.js"
 import { CrdtCommitEncoded, HumanCommit } from "../../src/crdts/domain.js"
@@ -29,7 +30,7 @@ const content = (text: string): TiptapDocument =>
 
 const original = (text: string) => ({
   content: content(text),
-  originalLocale: "pt" as const,
+  originalLanguage: ContentLanguage.make("pt"),
   translationSource: "ORIGINAL" as const,
   translatedAtCrdtFrontier: null,
 })
@@ -43,14 +44,13 @@ const publication = (text: string): PublicationSourceData =>
       publishedAt: "2026-10-06T00:00:00Z",
       visibility: "PUBLIC",
     },
-    locales: { pt: original(text) },
+    sourceContent: content(text),
+    sourceLanguage: ContentLanguage.make("pt"),
+    translations: { pt: "original" },
   })
 
 const textContainer = (document: LoroDoc) => {
-  const locale = document.getMap("locales").get("pt")
-  assert(locale instanceof LoroMap)
-  const root = locale.get("content")
-  assert(root instanceof LoroMap)
+  const root = document.getMap("sourceContent")
   const paragraphs = root.get("children")
   assert(paragraphs instanceof LoroList)
   const paragraph = paragraphs.get(0)
@@ -63,6 +63,47 @@ const textContainer = (document: LoroDoc) => {
 }
 
 describe("Publication and comment CRDTs", () => {
+  it.effect(
+    "keeps the source text container stable when an undetermined language is corrected",
+    () =>
+      Effect.gen(function* () {
+        const document = (yield* CommentCrdt.create(
+          SourceCommentData.make({
+            sourceContent: content("你好"),
+            sourceLanguage: ContentLanguage.make("und"),
+            translations: {},
+          }),
+        )).document
+
+        const identity = textContainer(document).id
+        const sourceLanguage = Schema.decodeSync(ContentLanguage)("ZH-hans")
+        expect(sourceLanguage).toBe("zh-Hans")
+        yield* CommentCrdt.applyEdit(document, { _tag: "SetCommentSourceLanguage", sourceLanguage })
+        const corrected = yield* CommentCrdt.read(snapshotToLoroDoc(loroDocToSnapshot(document)))
+        expect(corrected.sourceLanguage).toBe("zh-Hans")
+        expect(corrected.translations).toEqual({})
+        expect(corrected.sourceContent).toEqual(content("你好"))
+        expect(textContainer(document).id).toBe(identity)
+        yield* CommentCrdt.applyEdit(document, {
+          _tag: "SetCommentSourceLanguage",
+          sourceLanguage: ContentLanguage.make("en-US"),
+        })
+        expect((yield* CommentCrdt.read(document)).translations.en).toBe("original")
+        yield* CommentCrdt.applyEdit(document, {
+          _tag: "SetCommentSourceLanguage",
+          sourceLanguage: ContentLanguage.make("fr"),
+        })
+        expect((yield* CommentCrdt.read(document)).translations.en).toBeUndefined()
+        expect(textContainer(document).id).toBe(identity)
+        const frontier = document.frontiers()
+        yield* CommentCrdt.applyEdit(document, {
+          _tag: "SetCommentSourceLanguage",
+          sourceLanguage: ContentLanguage.make("fr"),
+        })
+        expect(document.frontiers()).toEqual(frontier)
+      }),
+  )
+
   it.effect("round-trips domain encodings, dates and Unicode through snapshots", () =>
     assertPropertyEffect({
       arbitrary: Arbitrary.schema(Schema.NonEmptyString),
@@ -75,18 +116,24 @@ describe("Publication and comment CRDTs", () => {
           const decodedPublication = yield* PublicationCrdt.read(
             snapshotToLoroDoc(loroDocToSnapshot(publicationDocument)),
           )
-          const comment = SourceCommentData.make({ locales: { pt: original(text) } })
+
+          const comment = SourceCommentData.make({
+            sourceContent: content(text),
+            sourceLanguage: ContentLanguage.make("pt"),
+            translations: { pt: "original" },
+          })
+
           const commentDocument = yield* CommentCrdt.create(comment).pipe(
             Effect.map((created) => created.document),
           )
           const decodedComment = yield* CommentCrdt.read(
             snapshotToLoroDoc(loroDocToSnapshot(commentDocument)),
           )
-          expect(decodedComment.locales.pt?.content).toEqual(content(toLoroString(text)))
+          expect(decodedComment.sourceContent).toEqual(content(toLoroString(text)))
           expect(DateTime.formatIso(decodedPublication.metadata.publishedAt)).toBe(
             "2026-10-06T00:00:00.000Z",
           )
-          return Equal.equals(decodedPublication.locales, decodedComment.locales)
+          return Equal.equals(decodedPublication.sourceContent, decodedComment.sourceContent)
         }),
     }),
   )
@@ -108,14 +155,14 @@ describe("Publication and comment CRDTs", () => {
           const identity = textContainer(initial).id
 
           yield* PublicationCrdt.applyEdit(first, {
-            _tag: "SetPublicationContent",
-            locale: "pt",
+            _tag: "SetPublicationSourceContent",
+
             content: content(`A${text}`),
           })
 
           yield* PublicationCrdt.applyEdit(second, {
-            _tag: "SetPublicationContent",
-            locale: "pt",
+            _tag: "SetPublicationSourceContent",
+
             content: content(`${text}Z`),
           })
 
@@ -131,7 +178,11 @@ describe("Publication and comment CRDTs", () => {
   it.effect("preserves arbitrary attributes and changes only differing text/marks", () =>
     Effect.gen(function* () {
       const document = yield* CommentCrdt.create(
-        SourceCommentData.make({ locales: { pt: original("Growing") } }),
+        SourceCommentData.make({
+          sourceContent: content("Growing"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
+        }),
       ).pipe(Effect.map((created) => created.document))
 
       const next = TiptapDocument.make({
@@ -158,18 +209,17 @@ describe("Publication and comment CRDTs", () => {
       })
 
       yield* CommentCrdt.applyEdit(document, {
-        _tag: "SetCommentContent",
-        locale: "pt",
+        _tag: "SetCommentSourceContent",
+
         content: next,
       })
 
-      expect((yield* CommentCrdt.read(document)).locales.pt?.content).toEqual(next)
+      expect((yield* CommentCrdt.read(document)).sourceContent).toEqual(next)
       const frontier = document.frontiers()
 
       yield* CommentCrdt.applyEdit(document, {
-        _tag: "SetCommentLocale",
-        locale: "pt",
-        value: { ...original("unused"), content: next },
+        _tag: "SetCommentSourceContent",
+        content: next,
       })
 
       expect(document.frontiers()).toEqual(frontier)
@@ -179,8 +229,8 @@ describe("Publication and comment CRDTs", () => {
       firstText.mark({ start: 0, end: 3 }, "italic", {})
 
       yield* CommentCrdt.applyEdit(second, {
-        _tag: "SetCommentContent",
-        locale: "pt",
+        _tag: "SetCommentSourceContent",
+
         content: {
           ...next,
           content: [
@@ -209,41 +259,62 @@ describe("Publication and comment CRDTs", () => {
     }),
   )
 
-  it.effect("creates the same locale concurrently with mergeable rich-text roots", () =>
+  it.effect("creates the same language concurrently with mergeable rich-text roots", () =>
     Effect.gen(function* () {
       const initial = yield* CommentCrdt.create(
-        SourceCommentData.make({ locales: { pt: original("Original") } }),
+        SourceCommentData.make({
+          sourceContent: content("Original"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
+        }),
       ).pipe(Effect.map((created) => created.document))
+
       const first = initial.fork()
       const second = initial.fork()
 
       yield* CommentCrdt.applyEdit(first, {
-        _tag: "SetCommentLocale",
-        locale: "en",
-        value: { ...original("First"), originalLocale: "en" },
+        _tag: "SetCommentTranslation",
+        language: "en",
+        value: {
+          ...original("First"),
+          translationSource: "MANUAL",
+          translatedAtCrdtFrontier: initial.frontiers(),
+        },
       })
 
       yield* CommentCrdt.applyEdit(second, {
-        _tag: "SetCommentLocale",
-        locale: "en",
-        value: { ...original("Second"), originalLocale: "en" },
+        _tag: "SetCommentTranslation",
+        language: "en",
+        value: {
+          ...original("Second"),
+          translationSource: "MANUAL",
+          translatedAtCrdtFrontier: initial.frontiers(),
+        },
       })
 
       first.import(second.export({ from: initial.version(), mode: "update" }))
       const merged = yield* CommentCrdt.read(first)
-      expect(merged.locales.en?.content.content).toHaveLength(2)
-      expect(merged.locales.pt?.content).toEqual(content("Original"))
-      yield* CommentCrdt.applyEdit(first, { _tag: "RemovedCommentLocale", locale: "en" })
-      expect((yield* CommentCrdt.read(first)).locales.en).toBeUndefined()
+      expect(
+        merged.translations.en !== "original" ? merged.translations.en?.content.content : undefined,
+      ).toHaveLength(2)
+      expect(merged.sourceContent).toEqual(content("Original"))
+      yield* CommentCrdt.applyEdit(first, { _tag: "RemovedCommentTranslation", language: "en" })
+      expect((yield* CommentCrdt.read(first)).translations.en).toBeUndefined()
     }),
   )
 
   it.effect("publishes final edits with attribution and excludes intermediate private text", () =>
     Effect.gen(function* () {
       yield* TestClock.adjust("1 second")
+
       const initialDoc = yield* CommentCrdt.create(
-        SourceCommentData.make({ locales: { pt: original("Original") } }),
+        SourceCommentData.make({
+          sourceContent: content("Original"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
+        }),
       ).pipe(Effect.map((created) => created.document))
+
       const commit = HumanCommit.make({
         personId: PersonId.make("019a0dce-1fc0-7abc-8abc-123456789abc"),
       })
@@ -271,7 +342,7 @@ describe("Publication and comment CRDTs", () => {
       const change = result.getChangeAt(frontier)
       expect(change.message).toBe(Schema.encodeSync(CrdtCommitEncoded)(commit))
       expect(change.timestamp).toBeGreaterThan(0)
-      expect((yield* CommentCrdt.read(result)).locales.pt?.content).toEqual(content("Published"))
+      expect((yield* CommentCrdt.read(result)).sourceContent).toEqual(content("Published"))
     }),
   )
 })

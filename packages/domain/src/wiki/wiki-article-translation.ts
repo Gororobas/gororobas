@@ -1,6 +1,6 @@
 import { Schema } from "effect"
 
-import { GrammaticalGender, Locale } from "../common/enums.js"
+import { GrammaticalGender, SupportedLanguage } from "../common/enums.js"
 import { WikiArticleId } from "../common/ids.js"
 import { NameInCrdtList, OptionalColumn, ValidName } from "../common/primitives.js"
 import { TiptapDocument } from "../rich-text/domain.js"
@@ -21,13 +21,13 @@ export const WikiArticleEditableTranslations = Schema.Struct({
 
 export type WikiArticleEditableTranslations = typeof WikiArticleEditableTranslations.Type
 
-/** Per-locale projection of contributor-editable names and content. */
+/** Per-language projection of contributor-editable names and content. */
 export const commonWikiArticleTranslationProjectionFields = {
   ...WikiArticleEditableTranslation.fields,
   commonNames: Schema.fromJsonString(Schema.Array(ValidName)),
   content: OptionalColumn(Schema.fromJsonString(TiptapDocument)),
   wikiArticleId: WikiArticleId,
-  locale: Locale,
+  language: SupportedLanguage,
   contentPlainText: Schema.String,
   searchableNames: Schema.String,
 }

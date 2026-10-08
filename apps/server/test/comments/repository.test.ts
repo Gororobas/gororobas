@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import {
   CommentConcurrentUpdateError,
   InvalidCrdtUpdateError,
@@ -50,8 +51,8 @@ const makeClientUpdate = Effect.fn(function* (commentId: CommentId, text: string
   const version = document.version()
 
   yield* CommentCrdt.applyEdit(document, {
-    _tag: "SetCommentContent",
-    locale: "pt",
+    _tag: "SetCommentSourceContent",
+
     content: makeDocument(text),
   })
 
@@ -61,14 +62,9 @@ const makeClientUpdate = Effect.fn(function* (commentId: CommentId, text: string
 const makeHandle = Schema.decodeSync(Handle)
 
 const makeCommentSourceData = (content: TiptapDocument): SourceCommentData => ({
-  locales: {
-    pt: {
-      content,
-      originalLocale: "pt",
-      translatedAtCrdtFrontier: null,
-      translationSource: "ORIGINAL",
-    },
-  },
+  sourceContent: content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
 })
 
 describe("CommentsRepository", () => {
@@ -86,14 +82,9 @@ describe("CommentsRepository", () => {
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
-          locales: {
-            pt: {
-              content: makeDocument("Publication base"),
-              originalLocale: "pt",
-              translatedAtCrdtFrontier: null,
-              translationSource: "ORIGINAL",
-            },
-          },
+          sourceContent: makeDocument("Publication base"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-b`),
             kind: "POST",
@@ -115,9 +106,9 @@ describe("CommentsRepository", () => {
       const row = yield* comments.findCommentRowById(commentId)
       expect(Option.isSome(row)).toBe(true)
 
-      const content = yield* comments.findCommentContentByIdAndLocale({
+      const content = yield* comments.findCommentContentByIdAndLanguage({
         commentId,
-        locale: "pt",
+        language: "pt",
       })
       expect(Option.isSome(content)).toBe(true)
       expect(Option.getOrThrow(content).content).toEqual(makeDocument("Primeiro comentario"))
@@ -142,14 +133,9 @@ describe("CommentsRepository", () => {
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
-          locales: {
-            pt: {
-              content: makeDocument("Publication base"),
-              originalLocale: "pt",
-              translatedAtCrdtFrontier: null,
-              translationSource: "ORIGINAL",
-            },
-          },
+          sourceContent: makeDocument("Publication base"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-u`),
             kind: "POST",
@@ -205,9 +191,9 @@ describe("CommentsRepository", () => {
         }),
       )
 
-      const content = yield* comments.findCommentContentByIdAndLocale({
+      const content = yield* comments.findCommentContentByIdAndLanguage({
         commentId,
-        locale: "pt",
+        language: "pt",
       })
       expect(Option.isSome(content)).toBe(true)
       expect(Option.getOrThrow(content).content).toEqual(makeDocument("Depois"))
@@ -231,14 +217,9 @@ describe("CommentsRepository", () => {
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
-          locales: {
-            pt: {
-              content: makeDocument("Publication base"),
-              originalLocale: "pt",
-              translatedAtCrdtFrontier: null,
-              translationSource: "ORIGINAL",
-            },
-          },
+          sourceContent: makeDocument("Publication base"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-s`),
             kind: "POST",
@@ -289,7 +270,7 @@ describe("CommentsRepository", () => {
     }).pipe(Effect.provide(TestLayerWithRepositories)),
   )
 
-  it.effect("updateComment with SystemUpsertTranslation writes translated locale", () =>
+  it.effect("updateComment with SystemUpsertTranslation writes translated language", () =>
     Effect.gen(function* () {
       const comments = yield* CommentsRepository
       const publications = yield* PublicationsRepository
@@ -303,14 +284,9 @@ describe("CommentsRepository", () => {
       const publicationId = yield* publications.createPublication({
         createdById: person.id,
         sourceData: {
-          locales: {
-            pt: {
-              content: makeDocument("Publication base"),
-              originalLocale: "pt",
-              translatedAtCrdtFrontier: null,
-              translationSource: "ORIGINAL",
-            },
-          },
+          sourceContent: makeDocument("Publication base"),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
           metadata: {
             handle: makeHandle(`pc-${person.id.slice(0, 8)}-t`),
             kind: "POST",
@@ -341,20 +317,91 @@ describe("CommentsRepository", () => {
             workflowVersion: "test",
           }),
           expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
-          sourceLocale: "pt",
-          targetLocale: "en",
+          sourceCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
+          sourceLanguage: ContentLanguage.make("pt"),
+          targetLanguage: "en",
           translatedContent: makeDocument("Translated comment"),
         }),
       )
 
-      const translatedContent = yield* comments.findCommentContentByIdAndLocale({
+      const translatedContent = yield* comments.findCommentContentByIdAndLanguage({
         commentId,
-        locale: "en",
+        language: "en",
       })
       expect(Option.isSome(translatedContent)).toBe(true)
       expect(Option.getOrThrow(translatedContent).content).toEqual(
         makeDocument("Translated comment"),
       )
+      const sourceCrdtFrontier = Option.getOrThrow(beforeTranslation).currentCrdtFrontier
+      const afterEnglish = Option.getOrThrow(yield* comments.findCommentRowById(commentId))
+
+      yield* comments.updateComment(
+        SystemUpsertTranslation.make({
+          commentId,
+          commit: SystemCommit.make({
+            model: "translation/test",
+            workflowName: "CommentTranslationWorkflow",
+            workflowVersion: "test",
+          }),
+          expectedCurrentCrdtFrontier: afterEnglish.currentCrdtFrontier,
+          sourceCrdtFrontier,
+          sourceLanguage: ContentLanguage.make("pt"),
+          targetLanguage: "es",
+          translatedContent: makeDocument("Comentario traducido"),
+        }),
+      )
+
+      const translated = yield* CommentCrdt.read(
+        snapshotToLoroDoc(
+          Option.getOrThrow(yield* findCommentCrdtSnapshotById(commentId)).crdtSnapshot,
+        ),
+      )
+
+      const translationLanguages = ["en", "es"] as const
+
+      translationLanguages.forEach((language) => {
+        const translation = translated.translations[language]
+        expect(
+          translation !== "original" ? translation?.translatedAtCrdtFrontier : undefined,
+        ).toEqual(sourceCrdtFrontier)
+      })
+
+      yield* comments.updateComment(
+        HumanCrdtUpdate.make({
+          commentId,
+          authorId: person.id,
+          expectedCurrentCrdtFrontier: Option.getOrThrow(
+            yield* comments.findCommentRowById(commentId),
+          ).currentCrdtFrontier,
+          crdtUpdate: yield* makeClientUpdate(commentId, "Original editado"),
+        }),
+      )
+
+      const afterEdit = Option.getOrThrow(yield* comments.findCommentRowById(commentId))
+
+      const staleError = yield* comments
+        .updateComment(
+          SystemUpsertTranslation.make({
+            commentId,
+            commit: SystemCommit.make({
+              model: "translation/test",
+              workflowName: "CommentTranslationWorkflow",
+              workflowVersion: "test",
+            }),
+            expectedCurrentCrdtFrontier: afterEdit.currentCrdtFrontier,
+            sourceCrdtFrontier,
+            sourceLanguage: ContentLanguage.make("pt"),
+            targetLanguage: "en",
+            translatedContent: makeDocument("Stale result"),
+          }),
+        )
+        .pipe(Effect.flip)
+
+      expect(staleError).toBeInstanceOf(CommentConcurrentUpdateError)
+      const preserved = Option.getOrThrow(
+        yield* comments.findCommentContentByIdAndLanguage({ commentId, language: "en" }),
+      )
+      expect(preserved.content).toEqual(makeDocument("Translated comment"))
     }).pipe(Effect.provide(TestLayerWithRepositories)),
   )
 })

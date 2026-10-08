@@ -1,10 +1,10 @@
-import { Locale } from "@gororobas/domain"
+import { ContentLanguage, SupportedLanguage } from "@gororobas/domain"
 import { Array as EffectArray, Config, Effect, Layer, Redacted, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 
 import { TranslationError, TranslationService } from "./translation-service.js"
 
-const LOCALE_TO_DEEPL: Record<Locale, string> = {
+const LANGUAGE_TO_DEEPL: Record<SupportedLanguage, string> = {
   en: "EN",
   pt: "PT",
   es: "ES",
@@ -26,12 +26,12 @@ export const TranslationServiceDeepl = Layer.effect(TranslationService)(
 
     const translate = Effect.fn("TranslationServiceDeepl.translate")(function* ({
       text,
-      sourceLocale,
-      targetLocale,
+      sourceLanguage,
+      targetLanguage,
     }: {
       text: string
-      sourceLocale: Locale
-      targetLocale: Locale
+      sourceLanguage: ContentLanguage
+      targetLanguage: SupportedLanguage
     }) {
       const response = yield* HttpClientRequest.post(
         "https://api-free.deepl.com/v2/translate",
@@ -39,8 +39,10 @@ export const TranslationServiceDeepl = Layer.effect(TranslationService)(
         HttpClientRequest.setHeader("Authorization", `DeepL-Auth-Key ${Redacted.value(apiKey)}`),
         HttpClientRequest.bodyJson({
           text: [text],
-          source_lang: LOCALE_TO_DEEPL[sourceLocale],
-          target_lang: LOCALE_TO_DEEPL[targetLocale],
+          ...(sourceLanguage === "und" || sourceLanguage === "mul" || sourceLanguage === "zxx"
+            ? {}
+            : { source_lang: new Intl.Locale(sourceLanguage).language.toUpperCase() }),
+          target_lang: LANGUAGE_TO_DEEPL[targetLanguage],
         }),
         Effect.flatMap(client.execute),
         Effect.flatMap(HttpClientResponse.schemaBodyJson(DeeplResponse)),

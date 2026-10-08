@@ -53,7 +53,7 @@ const Request = Operations.makeOperation(`${authenticationNamespace}/magic-link/
   payload: Schema.Struct({
     ...identityFields,
     requestId: Proofs.ProofRequestId,
-    locale: AuthSchema.Locale,
+    language: AuthSchema.Locale,
   }),
   success: Proofs.ProofRequestReceipt,
   error: MagicLinkFailure,
@@ -164,7 +164,7 @@ const magicLinkHandlers = (origin: string) => {
           .prepareIssue({
             requestId: input.requestId,
             binding: proofBinding,
-            locale: input.locale,
+            locale: input.language,
             eligible: true,
           })
           .pipe(Effect.flatMap(Proofs.readProofCommit))

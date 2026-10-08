@@ -102,7 +102,7 @@ const projectWikiArticleDocument = (document: LoroDoc) => ({
     document
       .getMap("translations")
       .entries()
-      .map(([locale, translation]) => {
+      .map(([language, translation]) => {
         if (!(translation instanceof LoroMap)) {
           throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
         }
@@ -112,7 +112,7 @@ const projectWikiArticleDocument = (document: LoroDoc) => ({
         }
 
         return [
-          locale,
+          language,
           {
             ...Record.filter(translation.toJSON(), (_, key) => key !== "content"),
             ...(content instanceof LoroMap ? { content: loroRichTextToTiptap(content) } : {}),

@@ -1,18 +1,20 @@
 import { Effect, Schema } from "effect"
-import { type LoroDoc } from "loro-crdt"
 
 import { defineCrdtDocument } from "../crdts/define-crdt-document.js"
 import { defineCrdtOperations } from "../crdts/define-crdt-operations.js"
 import { createLoroDocFromData } from "../crdts/initialize-loro-document.js"
 import {
-  makeLocaleContentCrdtOperations,
-  projectLocaleContentCrdtDocument,
-} from "../crdts/locale-content-crdt-operations.js"
-import { CommentLocalizedData, SourceCommentData } from "./domain.js"
+  makeSourceContentCrdtOperations,
+  SourceContentStorageFields,
+  projectSourceContentCrdtDocument,
+} from "../crdts/source-content-crdt-operations.js"
+import { SourceCommentData } from "./domain.js"
 
-const operations = defineCrdtOperations(
-  makeLocaleContentCrdtOperations("Comment")(CommentLocalizedData),
+const CommentCrdtData = Schema.Struct(SourceContentStorageFields).pipe(
+  Schema.decodeTo(Schema.toType(SourceCommentData)),
 )
+
+const operations = defineCrdtOperations(makeSourceContentCrdtOperations("Comment"))
 
 export const CommentEdit = operations.AttributeEdit
 export type CommentEdit = typeof CommentEdit.Type
@@ -20,18 +22,15 @@ export type CommentEdit = typeof CommentEdit.Type
 const createCommentDocument = Effect.fn("createCommentCrdtDocument")(function* (
   sourceData: SourceCommentData,
 ) {
-  const encoded = yield* Schema.encodeEffect(Schema.toCodecJson(SourceCommentData))(sourceData)
+  const encoded = yield* Schema.encodeEffect(Schema.toCodecJson(CommentCrdtData))(sourceData)
 
   return createLoroDocFromData(encoded)
 })
 
-const projectCommentCrdtDocument = (document: LoroDoc) => ({
-  ...document.toJSON(),
-  locales: projectLocaleContentCrdtDocument(document),
-})
+const projectCommentCrdtDocument = projectSourceContentCrdtDocument
 
 export const CommentCrdt = defineCrdtDocument({
-  schema: SourceCommentData,
+  schema: CommentCrdtData,
   createDocument: createCommentDocument,
   projectDocument: projectCommentCrdtDocument,
   applyEdit: operations.applyAttributeEdit,

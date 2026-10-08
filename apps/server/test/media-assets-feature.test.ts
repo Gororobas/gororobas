@@ -1,5 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import {
   PublicationCrdt,
   WikiArticleCrdt,
@@ -370,11 +371,13 @@ await Effect.runPromise(
       "Media uploaded inside publications inherits the publication visibility",
       ({ Background, Scenario }) => {
         Background({ layer: MediaFeatureTestLayer, steps: () => runSteps(givenPeople()) })
-        ;
-[
+
+        const visibleScenarios = [
           "Public publication media is visible to the same audience as the publication",
           "Community publication media is visible to the same audience as the publication",
-        ].forEach((title) => {
+        ]
+
+        visibleScenarios.forEach((title) => {
           Scenario(title, {
             layer: MediaFeatureTestLayer,
             steps: () =>
@@ -396,13 +399,13 @@ await Effect.runPromise(
               sameVisibility(),
             ),
         })
-        ;
-(
-          [
-            ["Blocked person cannot upload media inside publications", loggedIn],
-            ["Visitors cannot upload media inside publications", visitor],
-          ] as const
-        ).forEach(([title, actor]) => {
+
+        const deniedScenarios = [
+          ["Blocked person cannot upload media inside publications", loggedIn],
+          ["Visitors cannot upload media inside publications", visitor],
+        ] as const
+
+        deniedScenarios.forEach(([title, actor]) => {
           Scenario(title, {
             layer: MediaFeatureTestLayer,
             steps: () => runSteps(actor(), deniedPublicationUpload(), accessDenied()),
@@ -511,8 +514,8 @@ const publicationEdit = (id: PublicationId, text: string) =>
     const next = initial.fork()
 
     yield* PublicationCrdt.applyEdit(next, {
-      _tag: "SetPublicationContent",
-      locale: "pt",
+      _tag: "SetPublicationSourceContent",
+
       content: textToRichTextDocument(text),
     })
 
@@ -535,7 +538,7 @@ it.effect("publication creation and edits commit content and media together", ()
       kind: "POST" as const,
       ownerProfileId: personId,
       content: textToRichTextDocument("Mango"),
-      locale: "pt" as const,
+      sourceLanguage: ContentLanguage.make("pt"),
       visibility: "PUBLIC" as const,
       mediaIds: [media.id],
     }

@@ -3,14 +3,14 @@ import { Array as EffectArray, Effect, HashSet, Record, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { LoroDoc } from "loro-crdt"
 
-import { Locale } from "../common/enums.js"
+import { SupportedLanguage } from "../common/enums.js"
 import { assertPropertyEffect } from "../testing.js"
 import { makeStringSetEditOperations } from "./string-set-edit-operations.js"
 
-const containerName = "locales"
+const containerName = "languages"
 
-const [added, removed] = makeStringSetEditOperations("Locale")({
-  ValueSchema: Locale,
+const [added, removed] = makeStringSetEditOperations("Language")({
+  ValueSchema: SupportedLanguage,
   getContainer: (document) => Effect.succeed(document.getMap(containerName)),
 })
 
@@ -58,11 +58,11 @@ const applyRemovedMessages = (
     concurrency: 1,
   })
 
-const removeMessage = (value: Locale) =>
-  Schema.decodeSync(removed.message)({ _tag: "RemovedLocale", value })
+const removeMessage = (value: SupportedLanguage) =>
+  Schema.decodeSync(removed.message)({ _tag: "RemovedLanguage", value })
 
 class PlainJsStringHashSetModel {
-  values = HashSet.empty<Locale>()
+  values = HashSet.empty<SupportedLanguage>()
 
   add(messages: ReadonlyArray<typeof added.message.Type>) {
     this.values = messages.reduce(
@@ -87,7 +87,7 @@ class PlainJsStringHashSetModel {
 
 const addThenRemoveArbitrary = Arbitrary.flatMap(addedMessagesArbitrary, (addedMessages) =>
   Arbitrary.map(
-    Arbitrary.array(Arbitrary.schema(Locale), { maxLength: addedMessages.length }),
+    Arbitrary.array(Arbitrary.schema(SupportedLanguage), { maxLength: addedMessages.length }),
     (removedValues) => ({
       addedMessages,
       removedMessages: removedValues.map(removeMessage),

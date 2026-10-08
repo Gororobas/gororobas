@@ -4,7 +4,7 @@ import { Schema } from "effect"
  */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
-import { Locale } from "../common/enums.js"
+import { SupportedLanguage } from "../common/enums.js"
 import { TagId } from "../common/ids.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 import { TagRow } from "./domain.js"
@@ -14,7 +14,9 @@ const CreateTagData = Schema.Struct({
   id: TagId,
   cluster: Schema.NullOr(Schema.String),
   description: Schema.NullOr(TiptapDocument),
-  names: Schema.fromJsonString(Schema.Record(Locale, Schema.Trimmed.check(Schema.isNonEmpty()))),
+  names: Schema.fromJsonString(
+    Schema.Record(SupportedLanguage, Schema.Trimmed.check(Schema.isNonEmpty())),
+  ),
 })
 
 export class TagsApiGroup extends HttpApiGroup.make("tags")

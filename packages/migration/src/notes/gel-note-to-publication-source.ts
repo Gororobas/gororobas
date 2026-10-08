@@ -1,3 +1,4 @@
+import { ContentLanguage } from "@gororobas/domain"
 import { PostSourceData, PublicationId, TagId, WikiArticleId } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 
@@ -29,14 +30,9 @@ export const gelNoteToPublicationSource = Effect.fn("gelNoteToPublicationSource"
       publishedAt: note.published_at.toISOString(),
       visibility: post.visibility,
     },
-    locales: {
-      pt: {
-        content,
-        originalLocale: "pt",
-        translationSource: "ORIGINAL",
-        translatedAtCrdtFrontier: null,
-      },
-    },
+    sourceContent: content,
+    sourceLanguage: ContentLanguage.make("pt"),
+    translations: { pt: "original" },
   })
 
   return publication

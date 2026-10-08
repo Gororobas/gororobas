@@ -1,7 +1,7 @@
 import {
   GbifDeprecatedSpeciesId,
   GbifTaxonId,
-  Locale,
+  SupportedLanguage,
   type WikiArticleEditableData,
   type WikiArticleProjectionRow,
   ExternalDataFetchError,
@@ -88,9 +88,9 @@ export const fetchPlantWikidata = Effect.fn(function* (wikidataId: string) {
           id: identifiers[0],
         }
       : null,
-    wikipediaLinks: Locale.literals.flatMap((locale) => {
-      const link = fetched.value.sitelinks[`${locale}wiki`]
-      return link ? [{ locale, url: link.url }] : []
+    wikipediaLinks: SupportedLanguage.literals.flatMap((language) => {
+      const link = fetched.value.sitelinks[`${language}wiki`]
+      return link ? [{ language, url: link.url }] : []
     }),
   })
 })

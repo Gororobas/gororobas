@@ -241,7 +241,7 @@ Feature: Wiki article revisions
       And "Ana" is a MODERATOR
       And the wiki article "Mandioca" exists with pt content "Raiz tuberosa"
 
-    Scenario: Add translation to another locale
+    Scenario: Add translation to another language
       Given "Maria" has submitted a es translation for "Mandioca" with content "Raíz rica en almidón"
       When "Ana" approves the revision
       Then "Mandioca" has es content "Raíz rica en almidón"

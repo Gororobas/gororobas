@@ -1,4 +1,4 @@
-import { Locale, TiptapDocument } from "@gororobas/domain"
+import { ContentLanguage, SupportedLanguage, TiptapDocument } from "@gororobas/domain"
 import { tiptapFromHtml, tiptapToHtml } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 
@@ -16,8 +16,8 @@ export const translateTiptapContent = Effect.fn("translateTiptapContent")(functi
   target,
 }: {
   content: TiptapDocument
-  source: Locale
-  target: Locale
+  source: ContentLanguage
+  target: SupportedLanguage
 }) {
   const html = tiptapToHtml(content)
 
@@ -25,8 +25,8 @@ export const translateTiptapContent = Effect.fn("translateTiptapContent")(functi
 
   const translatedHtml = yield* service.translate({
     text: html,
-    sourceLocale: source,
-    targetLocale: target,
+    sourceLanguage: source,
+    targetLanguage: target,
   })
 
   return {

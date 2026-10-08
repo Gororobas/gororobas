@@ -46,8 +46,8 @@ const extractWikiArticles = Effect.fn("extractWikiArticles")(function* (html: st
 
 function buildTagExtractionPrompt(existingTags: ReadonlyArray<TagRow>): string {
   const tagsForPrompt = existingTags.map((t) => {
-    const names = Record.toEntries(t.names).flatMap(([locale, name]) =>
-      name ? `${name} (${locale})` : [],
+    const names = Record.toEntries(t.names).flatMap(([language, name]) =>
+      name ? `${name} (${language})` : [],
     )
     return `- ${t.handle} (handle) - ${names.join("; ")}`
   })

@@ -107,12 +107,12 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
 
         // Synthetic migration history replaces rich-text subtrees; live editor
         // updates must retain their container identities through loro-prosemirror.
-        Record.toEntries(translations).forEach(([locale, translation]) => {
+        Record.toEntries(translations).forEach(([language, translation]) => {
           if (translation.content !== null && translation.content !== undefined) {
             initializeLoroRichText(
               document
                 .getMap("translations")
-                .ensureMergeableMap(locale)
+                .ensureMergeableMap(language)
                 .ensureMergeableMap("content"),
               // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translation content is arbitrary JSON until decoded as a rich-text document.
               Schema.decodeUnknownSync(TiptapDocument)(translation.content),

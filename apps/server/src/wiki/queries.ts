@@ -1,5 +1,5 @@
 import {
-  Locale,
+  SupportedLanguage,
   MediaAssetRow,
   OptionalColumn,
   TiptapDocument,
@@ -136,7 +136,7 @@ export const findTranslationRows = SqlSchema.findAll({
 })
 
 export const findPageByHandleAndKind = SqlSchema.findOneOption({
-  Request: Schema.Struct({ ...WikiArticleLookup.fields, locale: Locale }),
+  Request: Schema.Struct({ ...WikiArticleLookup.fields, language: SupportedLanguage }),
   Result: WikiArticleQueriedPageData.mapMembers((members) =>
     members.map((member) =>
       Schema.Struct({
@@ -148,7 +148,7 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
       }),
     ),
   ).pipe(Schema.decodeTo(Schema.toType(WikiArticleQueriedPageData))),
-  execute: ({ handle, kind, locale }) =>
+  execute: ({ handle, kind, language }) =>
     SqlClient.use((sql) =>
       sql`
     SELECT article.*, translation.*, route.handle
@@ -157,8 +157,8 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
     INNER JOIN wiki_article_translations AS translation
       ON translation.wiki_article_id = article.id AND translation.kind = article.kind
     WHERE route.handle = ${handle} AND article.kind = ${kind}
-    ORDER BY CASE WHEN translation.locale = ${locale} THEN 0
-      WHEN translation.locale = 'en' THEN 1 WHEN translation.locale = 'es' THEN 2 ELSE 3 END
+    ORDER BY CASE WHEN translation.language = ${language} THEN 0
+      WHEN translation.language = 'en' THEN 1 WHEN translation.language = 'es' THEN 2 ELSE 3 END
     LIMIT 1
   `.pipe(
         Effect.flatMap((rows) =>

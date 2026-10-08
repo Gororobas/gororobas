@@ -3,7 +3,7 @@
  */
 import { Schema } from "effect"
 
-import { Locale, SuggestedTagStatus } from "../common/enums.js"
+import { SupportedLanguage, SuggestedTagStatus } from "../common/enums.js"
 import { PersonId, PublicationId, SuggestedTagId, TagId } from "../common/ids.js"
 import { Handle, TimestampedStruct } from "../common/primitives.js"
 import { TiptapDocument } from "../rich-text/domain.js"
@@ -15,7 +15,9 @@ export const TagRow = Schema.Struct({
   createdById: Schema.NullOr(PersonId),
   description: Schema.NullOr(TiptapDocument),
   handle: Handle,
-  names: Schema.fromJsonString(Schema.Record(Locale, Schema.Trimmed.check(Schema.isNonEmpty()))),
+  names: Schema.fromJsonString(
+    Schema.Record(SupportedLanguage, Schema.Trimmed.check(Schema.isNonEmpty())),
+  ),
 })
 
 export type TagRow = typeof TagRow.Type

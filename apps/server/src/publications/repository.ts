@@ -1,10 +1,12 @@
 import {
+  projectContentTranslations,
+  SourceContent,
+  snapshotToLoroDoc,
   EMPTY_LORO_DOC_FRONTIER,
   type EventSourceData,
   HumanCommit,
   IdGen,
   InvalidCrdtUpdateError,
-  Locale,
   LoroDocFrontier,
   type PostSourceData,
   type PublicationClassification,
@@ -28,7 +30,6 @@ import {
   Effect,
   Equal,
   Option,
-  Record,
   Schema,
   Predicate,
 } from "effect"
@@ -53,6 +54,7 @@ import {
 } from "./mutations.js"
 import {
   HumanCrdtUpdate,
+  SystemUpsertTranslation,
   type CreatePublicationInput as CreatePublicationInputType,
   type UpdatePublicationInput as UpdatePublicationInputType,
 } from "./publication-repository-inputs.js"
@@ -119,26 +121,16 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
 
       const persistTranslationProjections = (input: {
-        locales: PostSourceData["locales"]
+        sourceData: SourceContent
         publicationId: PublicationId
       }) => {
-        const rows = Record.toEntries({
-          en: input.locales.en,
-          es: input.locales.es,
-          pt: input.locales.pt,
-        }).flatMap(([locale, localeData]) => {
-          if (!localeData || !Schema.is(Locale)(locale)) return []
-
-          return PublicationTranslationRow.make({
-            content: localeData.content,
-            contentPlainText: tiptapToText(localeData.content),
-            locale,
-            originalLocale: localeData.originalLocale,
+        const rows = projectContentTranslations(input.sourceData).map((translation) =>
+          PublicationTranslationRow.make({
+            ...translation,
+            contentPlainText: tiptapToText(translation.content),
             publicationId: input.publicationId,
-            translatedAtCrdtFrontier: localeData.translatedAtCrdtFrontier,
-            translationSource: localeData.translationSource,
-          })
-        })
+          }),
+        )
 
         return persistProjectionJunctionTables({
           deleteRows: sql`DELETE FROM publication_translations WHERE publication_id = ${input.publicationId}`,
@@ -206,7 +198,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
 
           yield* persistTranslationProjections({
-            locales: input.sourceData.locales,
+            sourceData: input.sourceData,
             publicationId: input.publicationId,
           })
 
@@ -316,6 +308,25 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             })
           }
 
+          if (Schema.is(SystemUpsertTranslation)(input)) {
+            const currentDocument = snapshotToLoroDoc(current.crdtSnapshot)
+            const sourceDocument = currentDocument.fork()
+            yield* Effect.try({
+              try: () => sourceDocument.checkout([...input.sourceCrdtFrontier]),
+              catch: () => new InvalidCrdtUpdateError({ reason: "InvalidFormat" }),
+            })
+            const source = yield* PublicationCrdt.read(sourceDocument)
+            const latest = yield* PublicationCrdt.read(currentDocument)
+
+            if (
+              source.sourceLanguage !== input.sourceLanguage ||
+              latest.sourceLanguage !== source.sourceLanguage ||
+              !Equal.equals(latest.sourceContent, source.sourceContent)
+            ) {
+              return yield* new PublicationConcurrentUpdateError({ id: input.publicationId })
+            }
+          }
+
           const commit = Schema.is(HumanCrdtUpdate)(input)
             ? HumanCommit.make({
                 personId: input.authorId,
@@ -333,12 +344,12 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
                 snapshot: current.crdtSnapshot,
                 edits: [
                   {
-                    _tag: "SetPublicationLocale",
-                    locale: input.targetLocale,
+                    _tag: "SetPublicationTranslation",
+                    language: input.targetLanguage,
                     value: {
                       content: input.translatedContent,
-                      originalLocale: input.sourceLocale,
-                      translatedAtCrdtFrontier: input.expectedCurrentCrdtFrontier,
+                      originalLanguage: input.sourceLanguage,
+                      translatedAtCrdtFrontier: input.sourceCrdtFrontier,
                       translationSource: "AUTOMATIC",
                     },
                   },

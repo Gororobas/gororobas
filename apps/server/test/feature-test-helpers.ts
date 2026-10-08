@@ -1,3 +1,4 @@
+import { ContentLanguage } from "@gororobas/domain"
 import {
   Handle,
   IdGen,
@@ -185,7 +186,7 @@ export const createPost = ({
         kind: "POST",
         ownerProfileId,
         content: textToRichTextDocument(content),
-        locale: "pt",
+        sourceLanguage: ContentLanguage.make("pt"),
         visibility,
       }),
       personId,

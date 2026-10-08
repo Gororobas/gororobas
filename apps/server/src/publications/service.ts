@@ -1,3 +1,4 @@
+import { ContentLanguage } from "@gororobas/domain"
 /**
  * Publications service - business operations for publications.
  *
@@ -15,13 +16,12 @@ import {
   CreatePostData,
   EventSourceData,
   Handle,
-  Locale,
+  SupportedLanguage,
   LoroDocFrontier,
   LoroDocUpdate,
   PostSourceData,
   Policies,
   PublicationId,
-  PublicationLocalizedData,
   PublicationNotFoundError,
   ProfileId,
   PersonId,
@@ -155,14 +155,15 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           const session = yield* assertAuthenticated
           yield* Policies.publications.canCreate(input)
 
-          const { locale } = input
+          const sourceLanguage = input.sourceLanguage ?? ContentLanguage.make("und")
 
-          const localeData = PublicationLocalizedData.make({
-            content: input.content,
-            originalLocale: locale,
-            translatedAtCrdtFrontier: null,
-            translationSource: "ORIGINAL",
-          })
+          const sourceContent = {
+            sourceContent: input.content,
+            sourceLanguage,
+            translations: Schema.is(SupportedLanguage)(sourceLanguage)
+              ? { [sourceLanguage]: "original" as const }
+              : {},
+          }
 
           const handle = input.handle ?? (yield* richTextToHandle(input.content))
 
@@ -178,18 +179,14 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           const sourceData: PostSourceData | EventSourceData =
             input.kind === "POST"
               ? PostSourceData.make({
-                  locales: {
-                    [locale]: localeData,
-                  },
+                  ...sourceContent,
                   metadata: {
                     ...coreMetadata,
                     kind: "POST",
                   },
                 })
               : EventSourceData.make({
-                  locales: {
-                    [locale]: localeData,
-                  },
+                  ...sourceContent,
                   metadata: {
                     ...coreMetadata,
                     kind: "EVENT",
@@ -241,11 +238,11 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           yield* repo.deletePublication(publicationId)
         })
 
-      const getPublicationPageData = (handle: Handle, locale: Locale = "pt") =>
+      const getPublicationPageData = (handle: Handle, language: SupportedLanguage = "pt") =>
         Effect.gen(function* () {
           yield* assertCanViewPublication(yield* getPublicationByHandle(handle))
 
-          const page = yield* repo.findPublicationPageData({ handle, locale }).pipe(
+          const page = yield* repo.findPublicationPageData({ handle, language }).pipe(
             Effect.flatMap(
               Option.match({
                 onNone: () => Effect.fail(new PublicationNotFoundError({ handle })),

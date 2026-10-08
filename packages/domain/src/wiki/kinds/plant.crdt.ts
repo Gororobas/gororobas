@@ -128,15 +128,15 @@ const wikidataIdOperations = makeOptionalScalarEditOperations("WikidataId")({
 const originOperations = makeOptionalTranslatedScalarEditOperations("PlantOrigin")({
   ValueSchema: Schema.String,
   // @todo I believe this can go into `makeOptionalTranslatedScalarEditOperations`, I don't see a reason to repeat this on every operation
-  getParentContainer: (document, locale) =>
+  getParentContainer: (document, language) =>
     Effect.gen(function* () {
       if (document.getMap("kind").get("value") !== "PLANT") {
         return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
       }
 
-      const translation = document.getMap("translations").get(locale)
+      const translation = document.getMap("translations").get(language)
       if (!(translation instanceof LoroMap)) {
-        return yield* new CrdtContainerNotFoundError({ path: ["translations", locale] })
+        return yield* new CrdtContainerNotFoundError({ path: ["translations", language] })
       }
 
       return translation

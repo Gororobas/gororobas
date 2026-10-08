@@ -29,7 +29,7 @@ export const PublicationsApiLive = HttpApiBuilder.group(GororobasApi, "publicati
           const created = yield* service.createPublication({
             ...payload,
             ownerProfileId: params.profileId,
-            locale: payload.locale ?? "pt",
+            sourceLanguage: payload.sourceLanguage,
           })
 
           return yield* service.getPublicationData(created.id)

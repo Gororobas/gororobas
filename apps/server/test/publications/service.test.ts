@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import { PublicationCrdt } from "@gororobas/domain"
 import {
   Handle,
@@ -8,7 +9,6 @@ import {
   UnauthorizedError,
   type PublicationSourceData,
   type TiptapDocument,
-  type TiptapNode,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId } from "@gororobas/server/session-service"
@@ -37,13 +37,12 @@ const TestLayerWithPublicationsService = Layer.mergeAll(
 
 const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
-const paragraph = (text: string): TiptapNode => ({
-  content: [{ text, type: "text" }],
-  type: "paragraph",
+const paragraph = (text: string) => ({
+  content: [{ text, type: "text" as const }],
+  type: "paragraph" as const,
 })
 
 const makeDocument = (text: string): TiptapDocument => ({
-  // @ts-expect-error not sure what's the issue here
   content: [paragraph(text)],
   type: "doc",
   version: 1,
@@ -64,16 +63,32 @@ const makePublicationCrdtUpdate = (input: {
       value: input.nextSourceData.metadata,
     }),
   )
-  ;
-(["en", "es", "pt"] as const).forEach((locale) => {
-    const value = input.nextSourceData.locales[locale]
+
+  Effect.runSync(
+    PublicationCrdt.applyEdit(nextDoc, {
+      _tag: "SetPublicationSourceContent",
+      content: input.nextSourceData.sourceContent,
+    }),
+  )
+
+  Effect.runSync(
+    PublicationCrdt.applyEdit(nextDoc, {
+      _tag: "SetPublicationSourceLanguage",
+      sourceLanguage: input.nextSourceData.sourceLanguage,
+    }),
+  )
+
+  const translationLanguages = ["en", "es", "pt"] as const
+
+  translationLanguages.forEach((language) => {
+    const value = input.nextSourceData.translations[language]
 
     Effect.runSync(
       PublicationCrdt.applyEdit(
         nextDoc,
         value
-          ? { _tag: "SetPublicationLocale", locale, value }
-          : { _tag: "RemovedPublicationLocale", locale },
+          ? { _tag: "SetPublicationTranslation", language, value }
+          : { _tag: "RemovedPublicationTranslation", language },
       ),
     )
   })
@@ -92,14 +107,9 @@ const makePostSourceData = (input: {
   ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
   publishedAt: PublicationSourceData["metadata"]["publishedAt"]
 }): PublicationSourceData => ({
-  locales: {
-    pt: {
-      content: input.content,
-      originalLocale: "pt",
-      translatedAtCrdtFrontier: null,
-      translationSource: "ORIGINAL",
-    },
-  },
+  sourceContent: input.content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
   metadata: {
     handle: makeHandle(input.handle),
     kind: "POST",
@@ -148,22 +158,16 @@ describe("PublicationsService", () => {
       const snapshot = snapshotRows[0]
       expect(snapshot).toBeDefined()
       if (snapshot === undefined) return
-      const ptLocale = sourceData.locales.pt
-      expect(ptLocale).toBeDefined()
-      if (ptLocale === undefined) return
+      const ptLanguage = sourceData.sourceContent
+      expect(ptLanguage).toBeDefined()
+      if (ptLanguage === undefined) return
 
       const result = yield* withSession(
         service.updatePublication({
           crdtUpdate: makePublicationCrdtUpdate({
             nextSourceData: {
               ...sourceData,
-              locales: {
-                ...sourceData.locales,
-                pt: {
-                  ...ptLocale,
-                  content: makeDocument("Tentativa sem permissao"),
-                },
-              },
+              sourceContent: makeDocument("Tentativa sem permissao"),
             },
             snapshot: snapshot.crdtSnapshot,
           }),
@@ -211,22 +215,16 @@ describe("PublicationsService", () => {
       const snapshot = snapshotRows[0]
       expect(snapshot).toBeDefined()
       if (snapshot === undefined) return
-      const ptLocale = sourceData.locales.pt
-      expect(ptLocale).toBeDefined()
-      if (ptLocale === undefined) return
+      const ptLanguage = sourceData.sourceContent
+      expect(ptLanguage).toBeDefined()
+      if (ptLanguage === undefined) return
 
       yield* withSession(
         service.updatePublication({
           crdtUpdate: makePublicationCrdtUpdate({
             nextSourceData: {
               ...sourceData,
-              locales: {
-                ...sourceData.locales,
-                pt: {
-                  ...ptLocale,
-                  content: makeDocument("Depois"),
-                },
-              },
+              sourceContent: makeDocument("Depois"),
             },
             snapshot: snapshot.crdtSnapshot,
           }),
@@ -239,7 +237,7 @@ describe("PublicationsService", () => {
       const handle = Option.getOrThrow(
         yield* repository.findPublicationRowById(publicationId),
       ).handle
-      const page = yield* repository.findPublicationPageData({ handle, locale: "pt" })
+      const page = yield* repository.findPublicationPageData({ handle, language: "pt" })
       expect(Option.isSome(page)).toBe(true)
       expect(Option.getOrThrow(page).content).toEqual(makeDocument("Depois"))
     }).pipe(Effect.provide(TestLayerWithPublicationsService)),

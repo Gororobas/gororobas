@@ -48,7 +48,7 @@ form.addEventListener('submit', async event => {
   try {
     const identity = { flowId: crypto.randomUUID(), name: form.elements.name.value.trim(), email: form.elements.email.value.trim().toLowerCase() };
     await call('beginMagicLink', { flowId: identity.flowId });
-    const receipt = await call('requestMagicLink', { ...identity, requestId: crypto.randomUUID(), locale: navigator.language || 'en' });
+    const receipt = await call('requestMagicLink', { ...identity, requestId: crypto.randomUUID(), language: navigator.language || 'en' });
     localStorage.setItem(storageKey, JSON.stringify({ identity, reference: receipt.reference, expiresAt: Date.now() + 300000 }));
     report('Check your email and open the link in this browser. Your account is created after confirmation.');
   } catch (error) { report(error.message); }

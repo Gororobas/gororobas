@@ -8,9 +8,9 @@ Feature: Wiki articles
     Background:
       Given the wiki article "Mandioca" exists with pt content "Raiz tuberosa"
 
-    Scenario: Viewing wiki article in unsupported locale falls back to original
+    Scenario: Viewing wiki article in unsupported language falls back to original
       Given "Mandioca" has only pt content "Raiz tuberosa"
-      When a user with es locale views "Mandioca"
+      When a user with es language views "Mandioca"
       Then they see content "Raiz tuberosa"
       And they see an indicator that Spanish translation is unavailable
 

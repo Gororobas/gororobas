@@ -429,14 +429,8 @@ it.live(
         const edited = current.fork()
 
         yield* PublicationCrdt.applyEdit(edited, {
-          _tag: "SetPublicationLocale",
-          locale: "pt",
-          value: {
-            content: textToRichTextDocument("Updated publication"),
-            originalLocale: "pt",
-            translationSource: "ORIGINAL",
-            translatedAtCrdtFrontier: null,
-          },
+          _tag: "SetPublicationSourceContent",
+          content: textToRichTextDocument("Updated publication"),
         })
 
         const updatedResponse = yield* request(`/publications/${publication.id}`, {

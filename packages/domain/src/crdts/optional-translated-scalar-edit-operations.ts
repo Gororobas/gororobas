@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect"
 import { LoroDoc, LoroMap } from "loro-crdt"
 
-import { Locale } from "../common/enums.js"
+import { SupportedLanguage } from "../common/enums.js"
 import { toLoroValue } from "./loro-values.js"
 
 export const makeOptionalTranslatedScalarEditOperations =
@@ -12,15 +12,18 @@ export const makeOptionalTranslatedScalarEditOperations =
     keyInParentContainer,
   }: {
     ValueSchema: Schema.Codec<D, string | number, never, never>
-    getParentContainer: (document: LoroDoc, locale: Locale) => Effect.Effect<LoroMap, E>
+    getParentContainer: (
+      document: LoroDoc,
+      language: SupportedLanguage,
+    ) => Effect.Effect<LoroMap, E>
     keyInParentContainer: string
   }) => {
     const SetPayload = Schema.TaggedStruct(`Set${id}`, {
-      locale: Locale,
+      language: SupportedLanguage,
       value: ValueSchema,
     })
 
-    const UnsetPayload = Schema.TaggedStruct(`Unset${id}`, { locale: Locale })
+    const UnsetPayload = Schema.TaggedStruct(`Unset${id}`, { language: SupportedLanguage })
 
     return [
       {
@@ -29,7 +32,7 @@ export const makeOptionalTranslatedScalarEditOperations =
           document: LoroDoc,
           payload: typeof SetPayload.Type,
         ) {
-          const parent = yield* getParentContainer(document, payload.locale)
+          const parent = yield* getParentContainer(document, payload.language)
           const encoded = yield* Schema.encodeEffect(ValueSchema)(payload.value)
           parent.set(keyInParentContainer, toLoroValue(encoded))
         }),
@@ -40,7 +43,7 @@ export const makeOptionalTranslatedScalarEditOperations =
           document: LoroDoc,
           payload: typeof UnsetPayload.Type,
         ) {
-          const parent = yield* getParentContainer(document, payload.locale)
+          const parent = yield* getParentContainer(document, payload.language)
           parent.delete(keyInParentContainer)
         }),
       },

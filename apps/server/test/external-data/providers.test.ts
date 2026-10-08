@@ -94,7 +94,7 @@ const wikidata = {
 }
 
 describe("external data providers", () => {
-  it.live("extracts accepted Wikidata claims and only supported locales", () =>
+  it.live("extracts accepted Wikidata claims and only supported languages", () =>
     Effect.gen(function* () {
       const provider = yield* makeWikidata
       const fetched = yield* provider.entity("Q23501")
@@ -112,7 +112,7 @@ describe("external data providers", () => {
       )
       expect(result.gbifId).toEqual({ kind: "deprecated-species", id: "2930137" })
       expect(result.wikipediaLinks).toEqual([
-        { locale: "en", url: "https://en.wikipedia.org/wiki/Tomato" },
+        { language: "en", url: "https://en.wikipedia.org/wiki/Tomato" },
       ])
       expect(result.observation.payload).toEqual(wikidata)
     }).pipe(

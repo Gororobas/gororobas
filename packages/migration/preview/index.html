@@ -435,7 +435,7 @@
         const article = version?.article ?? plant.article ?? plant.history?.at(-1)?.article
         const translation = article?.translations?.pt
         const publication = plant.publication
-        const publicationContent = publication?.locales?.pt?.content
+        const publicationContent = publication?.sourceContent
         detail.append(element("h1", title(source)))
         const live = element("a", "Comparar com o site atual ↗")
         live.href =

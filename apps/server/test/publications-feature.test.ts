@@ -1,5 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { assert, expect, it } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import {
   CommentCrdt,
   CommentId,
@@ -193,7 +194,7 @@ const createPublication = ({
         ownerProfileId,
         visibility,
         content: textToRichTextDocument(content),
-        locale: "pt",
+        sourceLanguage: ContentLanguage.make("pt"),
       }),
     ),
   ).pipe(Effect.map((publication) => ({ ...context, publication })))
@@ -392,7 +393,7 @@ const createEvent = () =>
               kind: "EVENT",
               ownerProfileId: Option.getOrThrow(Option.fromNullishOr(context.actorId)),
               visibility,
-              locale: "pt",
+              sourceLanguage: ContentLanguage.make("pt"),
               content: textToRichTextDocument("Publicação de teste"),
               startDate: DateTime.makeUnsafe(start),
               endDate: DateTime.makeUnsafe(end),
@@ -506,14 +507,8 @@ const editPost = (context: PublicationContext, content: string) =>
     const edited = current.fork()
 
     yield* PublicationCrdt.applyEdit(edited, {
-      _tag: "SetPublicationLocale",
-      locale: "pt",
-      value: {
-        content: textToRichTextDocument(content),
-        originalLocale: "pt",
-        translationSource: "ORIGINAL",
-        translatedAtCrdtFrontier: null,
-      },
+      _tag: "SetPublicationSourceContent",
+      content: textToRichTextDocument(content),
     })
 
     const row = Option.getOrThrow(
@@ -547,7 +542,7 @@ const readPublicationState = (context: PublicationContext) =>
     return {
       row: yield* repo.findPublicationRowById(id),
       snapshot: yield* findPublicationCrdtSnapshotById(id),
-      page: yield* repo.findPublicationPageData({ handle, locale: "pt" }),
+      page: yield* repo.findPublicationPageData({ handle, language: "pt" }),
       commits: yield* repo.listPublicationCommitRowsByPublicationIdAsc(id),
     }
   })
@@ -675,9 +670,7 @@ const historyMatches = () =>
               expect(expected.version).toBe(index + 1)
               expect(commit.createdById).toBe(personNamed(context.actors, expected.author))
               const data = yield* PublicationCrdt.read(replay)
-              expect(
-                tiptapToText(Option.getOrThrow(Option.fromNullishOr(data.locales.pt)).content),
-              ).toBe(expected.content)
+              expect(tiptapToText(data.sourceContent)).toBe(expected.content)
             }),
           { concurrency: 1 },
         )
@@ -705,14 +698,9 @@ const comment = (context: PublicationContext, content: string) =>
       service.createPublicationComment({
         publicationId: publicationIn(context).id,
         content: {
-          locales: {
-            pt: {
-              content: textToRichTextDocument(content),
-              originalLocale: "pt",
-              translationSource: "ORIGINAL",
-              translatedAtCrdtFrontier: null,
-            },
-          },
+          sourceContent: textToRichTextDocument(content),
+          sourceLanguage: ContentLanguage.make("pt"),
+          translations: { pt: "original" },
         },
       }),
     ),
@@ -1172,7 +1160,7 @@ it.effect("posts and events apply current author access to pages, attribution, a
             kind,
             visibility,
             ownerProfileId: ownerId,
-            locale: "pt",
+            sourceLanguage: ContentLanguage.make("pt"),
             content: textToRichTextDocument("Encontro agroecológico"),
             startDate: DateTime.makeUnsafe("2026-02-01"),
           }),
@@ -1287,14 +1275,8 @@ it.effect(
       const edited = current.fork()
 
       yield* CommentCrdt.applyEdit(edited, {
-        _tag: "SetCommentLocale",
-        locale: "pt",
-        value: {
-          content: textToRichTextDocument("Comentário editado"),
-          originalLocale: "pt",
-          translationSource: "ORIGINAL",
-          translatedAtCrdtFrontier: null,
-        },
+        _tag: "SetCommentSourceContent",
+        content: textToRichTextDocument("Comentário editado"),
       })
 
       const before = Option.getOrThrow(yield* repo.findCommentRowById(commentId))
@@ -1312,9 +1294,11 @@ it.effect(
       )
 
       expect(
-        Option.getOrThrow(yield* repo.findCommentContentByIdAndLocale({ commentId, locale: "pt" }))
-          .content,
+        Option.getOrThrow(
+          yield* repo.findCommentContentByIdAndLanguage({ commentId, language: "pt" }),
+        ).content,
       ).toEqual(textToRichTextDocument("Comentário editado"))
+
       expect(Option.getOrThrow(yield* repo.findCommentRowById(commentId)).moderationStatus).toBe(
         "CENSORED",
       )
@@ -1345,7 +1329,7 @@ it.effect("publication updates preserve kind and reject kind changes without per
           service.createPublication({
             kind,
             ownerProfileId: personId,
-            locale: "pt",
+            sourceLanguage: ContentLanguage.make("pt"),
             content: textToRichTextDocument("Original content"),
             handle: Schema.decodeSync(Handle)(`kind-preservation-${kind.toLowerCase()}`),
             visibility: "PUBLIC",
@@ -1361,14 +1345,8 @@ it.effect("publication updates preserve kind and reject kind changes without per
         const edited = current.fork()
 
         yield* PublicationCrdt.applyEdit(edited, {
-          _tag: "SetPublicationLocale",
-          locale: "pt",
-          value: {
-            content: textToRichTextDocument("Updated content"),
-            originalLocale: "pt",
-            translationSource: "ORIGINAL",
-            translatedAtCrdtFrontier: null,
-          },
+          _tag: "SetPublicationSourceContent",
+          content: textToRichTextDocument("Updated content"),
         })
 
         const before = yield* service.getPublicationById(publication.id)

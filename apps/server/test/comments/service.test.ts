@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import {
   CommentNotFoundError,
   Handle,
@@ -56,14 +57,9 @@ const makePostSourceData = (input: {
   ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
   publishedAt: PublicationSourceData["metadata"]["publishedAt"]
 }): PublicationSourceData => ({
-  locales: {
-    pt: {
-      content: input.content,
-      originalLocale: "pt",
-      translatedAtCrdtFrontier: null,
-      translationSource: "ORIGINAL",
-    },
-  },
+  sourceContent: input.content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
   metadata: {
     handle: makeHandle(input.handle),
     kind: "POST",
@@ -74,14 +70,9 @@ const makePostSourceData = (input: {
 })
 
 const makeCommentSourceData = (content: TiptapDocument): SourceCommentData => ({
-  locales: {
-    pt: {
-      content,
-      originalLocale: "pt",
-      translatedAtCrdtFrontier: null,
-      translationSource: "ORIGINAL",
-    },
-  },
+  sourceContent: content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
 })
 
 describe("CommentsService", () => {

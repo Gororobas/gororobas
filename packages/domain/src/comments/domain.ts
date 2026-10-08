@@ -3,47 +3,18 @@
  */
 import { Schema, Struct } from "effect"
 
-import { Locale, ModerationStatus, TranslationSource } from "../common/enums.js"
+import { ContentLanguage } from "../common/content-language.js"
+import { ModerationStatus, TranslationSource } from "../common/enums.js"
 import { CommentCommitId, CommentId, PersonId, PublicationId, ProfileId } from "../common/ids.js"
 import { TimestampColumn, TimestampedStruct } from "../common/primitives.js"
+import { SourceContent, TranslatedContent } from "../common/source-content.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
-const CommentLocalizedDataCommonFields = {
-  content: TiptapDocument,
-  originalLocale: Locale,
-}
-
-const OriginalCommentLocalizedData = Schema.Struct({
-  ...CommentLocalizedDataCommonFields,
-  translationSource: Schema.Literal("ORIGINAL" satisfies (typeof TranslationSource.literals)[0]),
-  translatedAtCrdtFrontier: Schema.Null,
-})
-
-const TranslatedCommentLocalizedData = Schema.Struct({
-  ...CommentLocalizedDataCommonFields,
-  translationSource: Schema.Literals([
-    "AUTOMATIC" satisfies (typeof TranslationSource.literals)[1],
-    "MANUAL" satisfies (typeof TranslationSource.literals)[2],
-  ]),
-  translatedAtCrdtFrontier: LoroDocFrontier,
-})
-
-export const CommentLocalizedData = Schema.Union([
-  OriginalCommentLocalizedData,
-  TranslatedCommentLocalizedData,
-])
+export const CommentLocalizedData = TranslatedContent
 export type CommentLocalizedData = typeof CommentLocalizedData.Type
 
-const CommentSourceLocales = Schema.Struct({
-  en: Schema.optional(CommentLocalizedData),
-  es: Schema.optional(CommentLocalizedData),
-  pt: Schema.optional(CommentLocalizedData),
-})
-
-export const SourceCommentData = Schema.Struct({
-  locales: CommentSourceLocales,
-})
+export const SourceCommentData = SourceContent
 export type SourceCommentData = typeof SourceCommentData.Type
 
 export const CommentCrdtRow = Schema.Struct({
@@ -80,8 +51,8 @@ export const CommentTranslationRow = Schema.Struct({
   commentId: CommentId,
   content: Schema.fromJsonString(TiptapDocument),
   contentPlainText: Schema.String,
-  locale: Locale,
-  originalLocale: Locale,
+  language: ContentLanguage,
+  originalLanguage: ContentLanguage,
   translatedAtCrdtFrontier: Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
   translationSource: TranslationSource,
 })

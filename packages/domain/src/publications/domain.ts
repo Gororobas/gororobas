@@ -4,9 +4,10 @@
 import { Schema } from "effect"
 
 import { PublicationClassification } from "../classification/domain.js"
+import { ContentLanguage } from "../common/content-language.js"
 import {
   EventAttendanceMode,
-  Locale,
+  SupportedLanguage,
   PublicationKind,
   PublicationVisibility,
   TranslationSource,
@@ -26,6 +27,7 @@ import {
   TimestampColumn,
   TimestampedStruct,
 } from "../common/primitives.js"
+import { SourceContent, SourceContentFields, TranslatedContent } from "../common/source-content.js"
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { MediaAssetRow } from "../media-assets/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
@@ -39,33 +41,10 @@ export const CorePublicationMetadata = Schema.Struct({
 
 export type CorePublicationMetadata = typeof CorePublicationMetadata.Type
 
-const PublicationLocalizedDataCommonFields = {
-  content: TiptapDocument,
-  originalLocale: Locale,
-}
-
 const PostKind = Schema.Literal("POST" satisfies (typeof PublicationKind.literals)[0])
 const EventKind = Schema.Literal("EVENT" satisfies (typeof PublicationKind.literals)[1])
 
-const OriginalPublicationLocalizedData = Schema.Struct({
-  ...PublicationLocalizedDataCommonFields,
-  translationSource: Schema.Literal("ORIGINAL" satisfies (typeof TranslationSource.literals)[0]),
-  translatedAtCrdtFrontier: Schema.Null,
-})
-
-const TranslatedPublicationLocalizedData = Schema.Struct({
-  ...PublicationLocalizedDataCommonFields,
-  translationSource: Schema.Literals([
-    "AUTOMATIC" satisfies (typeof TranslationSource.literals)[1],
-    "MANUAL" satisfies (typeof TranslationSource.literals)[2],
-  ]),
-  translatedAtCrdtFrontier: LoroDocFrontier,
-})
-
-export const PublicationLocalizedData = Schema.Union([
-  OriginalPublicationLocalizedData,
-  TranslatedPublicationLocalizedData,
-])
+export const PublicationLocalizedData = TranslatedContent
 export type PublicationLocalizedData = typeof PublicationLocalizedData.Type
 
 export const EventMetadata = Schema.Struct({
@@ -85,24 +64,32 @@ export const PostMetadata = Schema.Struct({
 })
 export type PostMetadata = typeof PostMetadata.Type
 
-const PublicationSourceLocales = Schema.Struct({
-  en: Schema.optional(PublicationLocalizedData),
-  es: Schema.optional(PublicationLocalizedData),
-  pt: Schema.optional(PublicationLocalizedData),
-})
-
 /** Data stored in Loro CRDT documents, the source of the persisted database projections */
 export const PostSourceData = Schema.Struct({
-  locales: PublicationSourceLocales,
+  ...SourceContentFields,
   metadata: PostMetadata,
-})
+}).check(
+  Schema.makeFilter((data) => Schema.is(SourceContent)(data), {
+    identifier: "PublicationSourceContent",
+    title: "Publication source content",
+    description: "Valid source content and original aliases.",
+  }),
+)
+
 export type PostSourceData = typeof PostSourceData.Type
 
 /** Data stored in Loro CRDT documents, the source of the persisted database projections */
 export const EventSourceData = Schema.Struct({
-  locales: PublicationSourceLocales,
+  ...SourceContentFields,
   metadata: EventMetadata,
-})
+}).check(
+  Schema.makeFilter((data) => Schema.is(SourceContent)(data), {
+    identifier: "PublicationSourceContent",
+    title: "Publication source content",
+    description: "Valid source content and original aliases.",
+  }),
+)
+
 export type EventSourceData = typeof EventSourceData.Type
 
 /** Data stored in Loro CRDT documents, the source of the persisted database projections */
@@ -127,8 +114,8 @@ const PublicationPageDataCommonFields = {
   content: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   id: PublicationId,
-  locale: Schema.NullOr(Locale),
-  originalLocale: Schema.NullOr(Locale),
+  language: Schema.NullOr(ContentLanguage),
+  originalLanguage: Schema.NullOr(ContentLanguage),
   tags: MatchedTagsAsJson,
   updatedAt: TimestampColumn,
   wikiArticles: MatchedWikiArticlesAsJson,
@@ -157,7 +144,7 @@ export const ApiPublicationSearchParams = Schema.Struct({
 
 export const ApiGetPublicationPageParams = Schema.Struct({
   handle: Handle,
-  locale: Locale,
+  language: SupportedLanguage,
 })
 export type ApiGetPublicationPageParams = typeof ApiGetPublicationPageParams.Type
 
@@ -179,7 +166,7 @@ export const ApiPostResponse = Schema.Struct({
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
   handle: Handle,
   id: PublicationId,
-  locale: Locale,
+  language: ContentLanguage,
   ownerProfileId: ProfileId,
   publishedAt: Schema.NullOr(TimestampColumn),
   kind: PostKind,
@@ -198,7 +185,7 @@ export const ApiEventResponse = Schema.Struct({
   endDate: Schema.NullOr(TimestampColumn),
   handle: Handle,
   id: PublicationId,
-  locale: Locale,
+  language: ContentLanguage,
   locationOrUrl: Schema.NullOr(Schema.String),
   ownerProfileId: ProfileId,
   publishedAt: Schema.NullOr(TimestampColumn),
@@ -215,7 +202,7 @@ export type ApiPublicationData = typeof ApiPublicationData.Type
 
 const ApiCreatePostData = Schema.Struct({
   kind: PostKind,
-  locale: Schema.optional(Locale),
+  sourceLanguage: Schema.optional(ContentLanguage),
   mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   content: TiptapDocument,
   handle: Handle,
@@ -224,7 +211,7 @@ const ApiCreatePostData = Schema.Struct({
 
 const ApiCreateEventData = Schema.Struct({
   kind: EventKind,
-  locale: Schema.optional(Locale),
+  sourceLanguage: Schema.optional(ContentLanguage),
   mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
   attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,
@@ -258,7 +245,7 @@ export type ApiPublicationHistoryEntry = typeof ApiPublicationHistoryEntry.Type
 export const CreatePostData = Schema.Struct({
   handle: Schema.optional(Handle),
   mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
-  locale: Locale,
+  sourceLanguage: Schema.optional(ContentLanguage),
   content: TiptapDocument,
   visibility: PublicationVisibility,
 })
@@ -268,7 +255,7 @@ export type CreatePostData = typeof CreatePostData.Type
 export const CreateEventData = Schema.Struct({
   handle: Schema.optional(Handle),
   mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
-  locale: Locale,
+  sourceLanguage: Schema.optional(ContentLanguage),
   attendanceMode: Schema.optional(Schema.NullOr(EventAttendanceMode)),
   content: TiptapDocument,
   endDate: Schema.optional(Schema.NullOr(TimestampColumn)),
@@ -331,8 +318,8 @@ export type PublicationRow = typeof PublicationRow.Type
 export const PublicationTranslationRow = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   contentPlainText: Schema.String,
-  locale: Locale,
-  originalLocale: Locale,
+  language: ContentLanguage,
+  originalLanguage: ContentLanguage,
   publicationId: PublicationId,
   translatedAtCrdtFrontier: Schema.fromJsonString(Schema.NullOr(LoroDocFrontier)),
   translationSource: TranslationSource,

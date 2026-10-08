@@ -1,22 +1,24 @@
 /**
  * Durable translation workflow backed by Effect Cluster.
  *
- * Translates TiptapDocument content between locales using TranslationService.
+ * Translates TiptapDocument content between languages using TranslationService.
  * Each activity is memoized, so a crash mid-workflow won't re-invoke the translation API.
  */
 import {
+  ContentLanguage,
+  LoroDocFrontier,
   CommentConcurrentUpdateError,
   CommentId,
   CommentNotFoundError,
   IdGen,
   InvalidCrdtUpdateError,
-  Locale,
+  SupportedLanguage,
   SystemCommit,
   TimestampColumn,
   TiptapDocument,
   tiptapFromHtml,
 } from "@gororobas/domain"
-import { DateTime, Duration, Effect, Option, Schema } from "effect"
+import { Duration, Effect, Option, Schema } from "effect"
 import { SchemaError } from "effect/Schema"
 import { SqlClient, SqlError } from "effect/sql"
 import { Activity, Workflow } from "effect/workflow"
@@ -30,20 +32,21 @@ import { TranslationError } from "./translation-service.js"
  * Bump this when internals change.
  * Format: ISO date + revision number within that day.
  */
-const WORKFLOW_VERSION = "2026-03-14.1" as const
+const WORKFLOW_VERSION = "2026-10-08.1" as const
 
 export const CommentTranslationWorkflow = Workflow.make("CommentTranslationWorkflow", {
   payload: {
     commentId: CommentId,
     updatedAt: TimestampColumn,
-    sourceLocale: Locale,
-    targetLocale: Locale,
+    sourceLanguage: ContentLanguage,
+    sourceCrdtFrontier: LoroDocFrontier,
+    targetLanguage: SupportedLanguage,
     sourceContent: TiptapDocument,
   },
   success: Schema.Null,
   error: Schema.Unknown,
-  idempotencyKey: ({ commentId, targetLocale, updatedAt }) =>
-    `${commentId}:${targetLocale}:${DateTime.toEpochMillis(updatedAt)}`,
+  idempotencyKey: ({ commentId, targetLanguage, sourceCrdtFrontier }) =>
+    `${commentId}:${targetLanguage}:${Schema.encodeSync(Schema.fromJsonString(LoroDocFrontier))(sourceCrdtFrontier)}`,
 })
 
 export const CommentTranslationWorkflowLayer = CommentTranslationWorkflow.toLayer(
@@ -54,8 +57,8 @@ export const CommentTranslationWorkflowLayer = CommentTranslationWorkflow.toLaye
       error: TranslationError,
       execute: translateTiptapContent({
         content: payload.sourceContent,
-        source: payload.sourceLocale,
-        target: payload.targetLocale,
+        source: payload.sourceLanguage,
+        target: payload.targetLanguage,
       }),
     })
 
@@ -101,8 +104,9 @@ export const CommentTranslationWorkflowLayer = CommentTranslationWorkflow.toLaye
                   commentId: payload.commentId,
                   commit,
                   expectedCurrentCrdtFrontier: currentComment.currentCrdtFrontier,
-                  sourceLocale: payload.sourceLocale,
-                  targetLocale: payload.targetLocale,
+                  sourceLanguage: payload.sourceLanguage,
+                  sourceCrdtFrontier: payload.sourceCrdtFrontier,
+                  targetLanguage: payload.targetLanguage,
                   translatedContent,
                 }),
               )

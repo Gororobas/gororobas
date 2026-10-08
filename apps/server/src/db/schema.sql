@@ -327,7 +327,7 @@ CREATE TABLE media_assets (
   content_type text,
   byte_size integer,
   category text,
-  descriptions json, -- { [locale]: TiptapDocument }
+  descriptions json, -- { [language]: TiptapDocument }
   metadata json NOT NULL,
   moderation_status text NOT NULL,
   created_at text NOT NULL,
@@ -410,11 +410,11 @@ CREATE UNIQUE INDEX idx_wiki_articles_id_kind ON wiki_articles (id, kind);
 
 CREATE INDEX idx_wiki_articles_kind_status ON wiki_articles (kind, status);
 
--- Per-locale queryable projection of contributor-editable CRDT data.
+-- Per-language queryable projection of contributor-editable CRDT data.
 CREATE TABLE wiki_article_translations (
   wiki_article_id text NOT NULL,
   kind text NOT NULL,
-  locale text NOT NULL,
+  language text NOT NULL,
   common_names json NOT NULL,
   searchable_names text NOT NULL,
   content json, -- TiptapDocument
@@ -425,17 +425,17 @@ CREATE TABLE wiki_article_translations (
     kind = 'PLANT'
     OR origin IS NULL
   ),
-  PRIMARY KEY (wiki_article_id, locale),
+  PRIMARY KEY (wiki_article_id, language),
   FOREIGN KEY (wiki_article_id, kind) REFERENCES wiki_articles (id, kind) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- Owns a route handle across all locales. `locales` records which translations
+-- Owns a route handle across all languages. `languages` records which translations
 -- use it while uniqueness remains scoped only to the article kind.
 CREATE TABLE wiki_article_handles (
   wiki_article_id text NOT NULL,
   kind text NOT NULL, -- WikiArticleKind
   handle text NOT NULL,
-  locale text NOT NULL, -- Locale
+  language text NOT NULL, -- SupportedLanguage
   PRIMARY KEY (wiki_article_id, kind, handle),
   UNIQUE (kind, handle),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
@@ -506,13 +506,13 @@ CREATE INDEX idx_publications_kind ON publications (kind);
 
 CREATE TABLE publication_translations (
   publication_id text NOT NULL,
-  locale text NOT NULL,
+  language text NOT NULL,
   content json NOT NULL,
   content_plain_text text NOT NULL,
   translated_at_crdt_frontier json NOT NULL,
   translation_source text NOT NULL,
-  original_locale text NOT NULL,
-  PRIMARY KEY (publication_id, locale),
+  original_language text NOT NULL,
+  PRIMARY KEY (publication_id, language),
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
@@ -590,13 +590,13 @@ CREATE TABLE comments (
 
 CREATE TABLE comment_translations (
   comment_id text NOT NULL,
-  locale text NOT NULL,
+  language text NOT NULL,
   content json NOT NULL,
   content_plain_text text NOT NULL,
   translated_at_crdt_frontier json NOT NULL,
   translation_source text NOT NULL,
-  original_locale text NOT NULL,
-  PRIMARY KEY (comment_id, locale),
+  original_language text NOT NULL,
+  PRIMARY KEY (comment_id, language),
   FOREIGN KEY (comment_id) REFERENCES comment_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
@@ -619,9 +619,9 @@ CREATE TABLE bookmarks_wiki_articles (
 -- =========
 CREATE TABLE wiki_article_external_links (
   wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
-  locale text NOT NULL,
+  language text NOT NULL,
   url text NOT NULL,
-  PRIMARY KEY (wiki_article_id, locale)
+  PRIMARY KEY (wiki_article_id, language)
 );
 
 CREATE TABLE wiki_plant_taxonomy_group (

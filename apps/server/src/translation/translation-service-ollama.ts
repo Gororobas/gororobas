@@ -1,20 +1,20 @@
-import { Locale } from "@gororobas/domain"
+import { ContentLanguage, SupportedLanguage } from "@gororobas/domain"
 import { Effect, Context } from "effect"
 import ollama from "ollama"
 
 import { CODE_TO_LANG, TranslationError, TranslationService } from "./translation-service.js"
 
 function generatePrompt({
-  sourceLocale,
-  targetLocale,
+  sourceLanguage,
+  targetLanguage,
   text,
 }: {
-  sourceLocale: Locale
-  targetLocale: Locale
+  sourceLanguage: ContentLanguage
+  targetLanguage: SupportedLanguage
   text: string
 }) {
-  return `You are a professional ${CODE_TO_LANG[sourceLocale]} (${sourceLocale}) to ${CODE_TO_LANG[targetLocale]} (${targetLocale}) translator. Your goal is to accurately convey the meaning and nuances of the original ${CODE_TO_LANG[sourceLocale]} text while adhering to ${CODE_TO_LANG[targetLocale]} grammar, vocabulary, and cultural sensitivities. Text is encoded as HTML.
-  Produce only the ${CODE_TO_LANG[targetLocale]} translation, without any additional explanations or commentary. Please translate the following ${CODE_TO_LANG[sourceLocale]} text into ${CODE_TO_LANG[targetLocale]}:
+  return `You are a professional ${new Intl.DisplayNames(["en"], { type: "language" }).of(sourceLanguage) ?? sourceLanguage} (${sourceLanguage}) to ${CODE_TO_LANG[targetLanguage]} (${targetLanguage}) translator. Your goal is to accurately convey the meaning and nuances of the original ${new Intl.DisplayNames(["en"], { type: "language" }).of(sourceLanguage) ?? sourceLanguage} text while adhering to ${CODE_TO_LANG[targetLanguage]} grammar, vocabulary, and cultural sensitivities. Text is encoded as HTML.
+  Produce only the ${CODE_TO_LANG[targetLanguage]} translation, without any additional explanations or commentary. Please translate the following ${new Intl.DisplayNames(["en"], { type: "language" }).of(sourceLanguage) ?? sourceLanguage} text into ${CODE_TO_LANG[targetLanguage]}:
 
   ${text}`
 }
@@ -23,12 +23,12 @@ export const TranslationServiceOllama = Context.make(TranslationService, {
   getServiceId: () => "ollama",
   translate: Effect.fn("TranslationServiceOllama.translate")(function* ({
     text,
-    sourceLocale,
-    targetLocale,
+    sourceLanguage,
+    targetLanguage,
   }: {
     text: string
-    sourceLocale: Locale
-    targetLocale: Locale
+    sourceLanguage: ContentLanguage
+    targetLanguage: SupportedLanguage
   }) {
     const response = yield* Effect.tryPromise({
       try: () =>
@@ -37,7 +37,7 @@ export const TranslationServiceOllama = Context.make(TranslationService, {
           messages: [
             {
               role: "user",
-              content: generatePrompt({ sourceLocale, targetLocale, text }),
+              content: generatePrompt({ sourceLanguage, targetLanguage, text }),
             },
           ],
           think: false,

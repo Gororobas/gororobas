@@ -5,6 +5,7 @@ import { LoroMap, type LoroDoc } from "loro-crdt"
 
 import { CommentCrdt } from "../../src/comments/comment-crdt.js"
 import { SourceCommentData } from "../../src/comments/domain.js"
+import { ContentLanguage } from "../../src/common/content-language.js"
 import { PersonId, ProfileId } from "../../src/common/ids.js"
 import { HumanCommit, LoroDocSnapshot, LoroDocUpdate } from "../../src/crdts/domain.js"
 import { InvalidCrdtUpdateError } from "../../src/crdts/errors.js"
@@ -26,12 +27,16 @@ const content = (text: string): TiptapDocument =>
 
 const original = {
   content: content("Original"),
-  originalLocale: "pt",
+  originalLanguage: ContentLanguage.make("pt"),
   translationSource: "ORIGINAL",
   translatedAtCrdtFrontier: null,
 } as const
 
-const comment: SourceCommentData = { locales: { pt: original } }
+const comment: SourceCommentData = {
+  sourceContent: original.content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
+}
 
 const publication = Schema.decodeSync(PublicationSourceData)({
   metadata: {
@@ -41,7 +46,9 @@ const publication = Schema.decodeSync(PublicationSourceData)({
     publishedAt: "2026-10-06T00:00:00Z",
     visibility: "PUBLIC",
   },
-  locales: { pt: original },
+  sourceContent: original.content,
+  sourceLanguage: ContentLanguage.make("pt"),
+  translations: { pt: "original" },
 })
 
 const wiki = Schema.decodeSync(WikiPlantArticle.EditableArticle)({
@@ -61,7 +68,7 @@ const requireMap = (value: ReturnType<LoroMap["get"]>) => {
 
 const rejectUnknownKeys = (parameters: {
   snapshot: LoroDocSnapshot
-  localeRoot: string
+  languageRoot: string
   metadataRoot: string | undefined
   apply: (update: LoroDocUpdate) => Effect.Effect<void, InvalidCrdtUpdateError | Schema.SchemaError>
 }) =>
@@ -74,10 +81,16 @@ const rejectUnknownKeys = (parameters: {
         const mutations: ReadonlyArray<(document: LoroDoc) => void> = [
           (document) => document.getMap(key).set("value", "untrusted"),
           (document) =>
-            requireMap(document.getMap(parameters.localeRoot).get("pt")).set(key, "untrusted"),
+            (parameters.languageRoot === "sourceContent"
+              ? document.getMap("sourceLanguage")
+              : requireMap(document.getMap(parameters.languageRoot).get("pt"))
+            ).set(key, "untrusted"),
           (document) =>
-            requireMap(
-              requireMap(document.getMap(parameters.localeRoot).get("pt")).get("content"),
+            (parameters.languageRoot === "sourceContent"
+              ? document.getMap("sourceContent")
+              : requireMap(
+                  requireMap(document.getMap(parameters.languageRoot).get("pt")).get("content"),
+                )
             ).set(key, "untrusted"),
           ...(parameters.metadataRoot
             ? [
@@ -118,7 +131,7 @@ describe("Shared CRDT document boundary", () => {
 
       yield* rejectUnknownKeys({
         snapshot: created.crdtSnapshot,
-        localeRoot: "locales",
+        languageRoot: "sourceContent",
         metadataRoot: undefined,
         apply: (crdtUpdate) =>
           CommentCrdt.applyUpdate({ commit, crdtUpdate, snapshot: created.crdtSnapshot }).pipe(
@@ -136,7 +149,7 @@ describe("Shared CRDT document boundary", () => {
 
       yield* rejectUnknownKeys({
         snapshot: created.crdtSnapshot,
-        localeRoot: "locales",
+        languageRoot: "sourceContent",
         metadataRoot: "metadata",
         apply: (crdtUpdate) =>
           PublicationCrdt.applyUpdate({ commit, crdtUpdate, snapshot: created.crdtSnapshot }).pipe(
@@ -152,7 +165,7 @@ describe("Shared CRDT document boundary", () => {
 
       yield* rejectUnknownKeys({
         snapshot: created.crdtSnapshot,
-        localeRoot: "translations",
+        languageRoot: "translations",
         metadataRoot: "attributes",
         apply: (crdtUpdate) =>
           WikiArticleCrdt.parseUpdate({ crdtUpdate, snapshot: created.crdtSnapshot }).pipe(
@@ -169,8 +182,8 @@ describe("Shared CRDT document boundary", () => {
       const version = created.document.version()
 
       yield* CommentCrdt.applyEdit(created.document, {
-        _tag: "SetCommentContent",
-        locale: "pt",
+        _tag: "SetCommentSourceContent",
+
         content: content("Changed"),
       })
 
@@ -190,14 +203,14 @@ describe("Shared CRDT document boundary", () => {
         commit,
         snapshot: created.crdtSnapshot,
         edits: [
-          { _tag: "SetCommentContent", locale: "pt", content: content("PRIVATE INTERMEDIATE") },
-          { _tag: "SetCommentContent", locale: "pt", content: content("Published") },
+          { _tag: "SetCommentSourceContent", content: content("PRIVATE INTERMEDIATE") },
+          { _tag: "SetCommentSourceContent", content: content("Published") },
           {
-            _tag: "SetCommentLocale",
-            locale: "en",
+            _tag: "SetCommentTranslation",
+            language: "en",
             value: {
               content: content("Translation"),
-              originalLocale: "pt",
+              originalLanguage: ContentLanguage.make("pt"),
               translationSource: "AUTOMATIC",
               translatedAtCrdtFrontier: created.currentCrdtFrontier,
             },
@@ -205,8 +218,14 @@ describe("Shared CRDT document boundary", () => {
         ],
       })
 
-      expect(evolved.data.locales.pt?.content).toEqual(content("Published"))
-      expect(evolved.data.locales.en?.content).toEqual(content("Translation"))
+      expect(evolved.data.sourceContent).toEqual(content("Published"))
+
+      expect(
+        evolved.data.translations.en !== "original"
+          ? evolved.data.translations.en?.content
+          : undefined,
+      ).toEqual(content("Translation"))
+
       expect(yield* CommentCrdt.read(created.document)).toEqual(comment)
       const history = evolved.document.exportJsonUpdates(created.document.version())
       expect(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(history)).not.toContain(
@@ -225,8 +244,12 @@ describe("Shared CRDT document boundary", () => {
           commit,
           snapshot: created.crdtSnapshot,
           edits: [
-            { _tag: "SetCommentContent", locale: "pt", content: content("Should not persist") },
-            { _tag: "SetCommentContent", locale: "en", content: content("Missing locale") },
+            { _tag: "SetCommentSourceContent", content: content("Should not persist") },
+            {
+              _tag: "SetCommentTranslationContent",
+              language: "en",
+              content: content("Missing language"),
+            },
           ],
         }),
       )

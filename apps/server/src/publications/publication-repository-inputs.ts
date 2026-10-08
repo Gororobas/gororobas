@@ -1,5 +1,6 @@
 import {
-  Locale,
+  ContentLanguage,
+  SupportedLanguage,
   LoroDocFrontier,
   LoroDocUpdate,
   PersonId,
@@ -22,8 +23,9 @@ export type HumanCrdtUpdate = typeof HumanCrdtUpdate.Type
 export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslation", {
   expectedCurrentCrdtFrontier: LoroDocFrontier,
   publicationId: PublicationId,
-  sourceLocale: Locale,
-  targetLocale: Locale,
+  sourceLanguage: ContentLanguage,
+  sourceCrdtFrontier: LoroDocFrontier,
+  targetLanguage: SupportedLanguage,
   translatedContent: TiptapDocument,
   commit: SystemCommit,
 })

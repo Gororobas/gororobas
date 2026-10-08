@@ -101,7 +101,7 @@ describe("Wiki CRDT review stress tests", () => {
 
           yield* WikiArticleCrdt.applyEdit(document, {
             _tag: "SetPlantOrigin",
-            locale: "en",
+            language: "en",
             value: "🌱 fixed",
           })
 
@@ -193,13 +193,13 @@ describe("Wiki CRDT review stress tests", () => {
 
           yield* WikiArticleCrdt.applyEdit(first, {
             _tag: "SetPlantOrigin",
-            locale: "en",
+            language: "en",
             value: englishOrigin,
           })
 
           yield* WikiArticleCrdt.applyEdit(second, {
             _tag: "SetPlantOrigin",
-            locale: "pt",
+            language: "pt",
             value: portugueseOrigin,
           })
 

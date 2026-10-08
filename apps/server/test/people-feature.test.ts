@@ -1,5 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
+import { ContentLanguage } from "@gororobas/domain"
 import {
   Handle,
   PersonId,
@@ -867,14 +868,9 @@ await Effect.runPromise(
                     comments.createPublicationComment({
                       publicationId: retainedPublication.id,
                       content: {
-                        locales: {
-                          pt: {
-                            content: textToRichTextDocument("Comentário pessoal"),
-                            originalLocale: "pt",
-                            translatedAtCrdtFrontier: null,
-                            translationSource: "ORIGINAL",
-                          },
-                        },
+                        sourceContent: textToRichTextDocument("Comentário pessoal"),
+                        sourceLanguage: ContentLanguage.make("pt"),
+                        translations: { pt: "original" },
                       },
                     }),
                     personId,
