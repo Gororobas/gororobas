@@ -288,6 +288,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         createWikiArticle,
         createRevision,
         evaluateRevision,
+        listRevisionHistory: repository.listRevisionHistory,
         getPage,
         resolveCultivar,
         getPublishedArticle,

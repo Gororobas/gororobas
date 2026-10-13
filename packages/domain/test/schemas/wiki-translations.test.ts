@@ -1,18 +1,23 @@
 import { assert, describe, expect, it } from "@effect/vitest"
 import { Effect, Exit, Option, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
+import { LoroMap } from "loro-crdt"
 
+import { GrammaticalGender, SupportedLanguage } from "../../src/common/enums.js"
 import { WikiArticleId } from "../../src/common/ids.js"
+import { ValidName } from "../../src/common/primitives.js"
 import { loroDocToUpdate, snapshotToLoroDoc } from "../../src/crdts/lib.js"
 import { toLoroValue } from "../../src/crdts/loro-values.js"
 import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
 import { WikiPlantArticle } from "../../src/wiki/kinds/plant.js"
 import { WikiArticleCrdt } from "../../src/wiki/wiki-article-crdt.js"
+import { WikiArticleEditableTranslation } from "../../src/wiki/wiki-article-translation.js"
 import {
   WikiArticleEditableData,
   WikiArticleTranslationProjectionRow,
   projectTranslation,
 } from "../../src/wiki/wiki-article.js"
+import { wikiRichText } from "../fixtures/wiki-rich-text.js"
 import { withEditorRichText } from "../fixtures/wiki-rich-text.js"
 
 const decodePlant = Schema.decodeSync(WikiPlantArticle.EditableArticle)
@@ -151,6 +156,331 @@ describe("Kind-specific wiki translations", () => {
             ),
           ),
         ).toBe(true)
+      }),
+  )
+
+  it.effect(
+    "translation field edits preserve unrelated data and list/rich-text identities across article kinds",
+    () =>
+      assertPropertyEffect({
+        arbitrary: Arbitrary.schema(
+          Schema.Struct({
+            article: WikiArticleEditableData,
+            language: SupportedLanguage,
+            addedName: ValidName,
+            updatedName: ValidName,
+            grammaticalGender: GrammaticalGender,
+          }),
+        ),
+        options: { runs: 30 },
+        predicate: ({ article, language, addedName, updatedName, grammaticalGender }) =>
+          Effect.gen(function* () {
+            const created = yield* WikiArticleCrdt.create(withEditorRichText(article))
+            const document = snapshotToLoroDoc(created.crdtSnapshot)
+
+            if (document.getMap("translations").get(language) === undefined) {
+              yield* WikiArticleCrdt.applyEdit(document, {
+                _tag: "AddedWikiArticleTranslation",
+                language,
+                value: Schema.decodeSync(WikiArticleEditableTranslation)({
+                  commonNames: [{ id: "translation1", value: "Pumpkin" }],
+                }),
+              })
+            }
+
+            const before = yield* WikiArticleCrdt.read(document)
+            const beforeTranslation = Option.getOrThrow(
+              Option.fromUndefinedOr(before.translations[language]),
+            )
+            const translation = document.getMap("translations").get(language)
+            assert(translation instanceof LoroMap)
+            const listId = translation.ensureMergeableMovableList("commonNames").id
+            const originalContent = translation.get("content")
+            const originalContentId =
+              originalContent instanceof LoroMap ? originalContent.id : undefined
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "AddedWikiArticleTranslationCommonName",
+              language,
+              value: addedName,
+            })
+
+            const added = yield* WikiArticleCrdt.read(document)
+            const names = Option.getOrThrow(
+              Option.fromUndefinedOr(added.translations[language]),
+            ).commonNames
+            const newName = Option.getOrThrow(
+              Option.fromUndefinedOr(names[beforeTranslation.commonNames.length]),
+            )
+            expect(names).toHaveLength(beforeTranslation.commonNames.length + 1)
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "UpdatedWikiArticleTranslationCommonName",
+              language,
+              id: newName.id,
+              updatedValue: updatedName,
+            })
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "MovedWikiArticleTranslationCommonName",
+              language,
+              id: newName.id,
+              newIndex: 0,
+            })
+
+            const moved = yield* WikiArticleCrdt.read(document)
+
+            expect(
+              Option.getOrThrow(Option.fromUndefinedOr(moved.translations[language]))
+                .commonNames[0],
+            ).toEqual({
+              id: newName.id,
+              value: toLoroValue(updatedName),
+            })
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "RemovedWikiArticleTranslationCommonName",
+              language,
+              id: newName.id,
+            })
+
+            expect(translation.ensureMergeableMovableList("commonNames").id).toBe(listId)
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "SetWikiArticleTranslationContent",
+              language,
+              content: wikiRichText,
+            })
+
+            const contentContainer = translation.get("content")
+            assert(contentContainer instanceof LoroMap)
+            const contentId = contentContainer.id
+            expect(contentId).toBe(originalContentId ?? contentId)
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "SetWikiArticleTranslationContent",
+              language,
+              content: wikiRichText,
+            })
+
+            const sameContent = translation.get("content")
+            assert(sameContent instanceof LoroMap)
+            expect(sameContent.id).toBe(contentId)
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "SetWikiArticleTranslationGrammaticalGender",
+              language,
+              value: grammaticalGender,
+            })
+
+            const set = yield* WikiArticleCrdt.read(document)
+            const setTranslation = Option.getOrThrow(
+              Option.fromUndefinedOr(set.translations[language]),
+            )
+            expect(setTranslation.content).toEqual(Option.some(wikiRichText))
+            expect(setTranslation.grammaticalGender).toEqual(Option.some(grammaticalGender))
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "UnsetWikiArticleTranslationContent",
+              language,
+            })
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "UnsetWikiArticleTranslationGrammaticalGender",
+              language,
+            })
+            const after = yield* WikiArticleCrdt.read(document)
+            const afterTranslation = Option.getOrThrow(
+              Option.fromUndefinedOr(after.translations[language]),
+            )
+            expect(afterTranslation.content).toEqual(Option.none())
+            expect(afterTranslation.grammaticalGender).toEqual(Option.none())
+
+            expect({
+              ...afterTranslation,
+              content: beforeTranslation.content,
+              grammaticalGender: beforeTranslation.grammaticalGender,
+            }).toEqual(beforeTranslation)
+
+            expect({ ...after.translations, [language]: beforeTranslation }).toEqual(
+              before.translations,
+            )
+            expect(deepEquals(after.attributes, before.attributes)).toBe(true)
+            expect(after.kind).toBe(before.kind)
+            return true
+          }),
+      }),
+  )
+
+  it.effect(
+    "adding and removing a translation leaves other languages intact and rejects duplicate additions",
+    () =>
+      Effect.gen(function* () {
+        const created = yield* WikiArticleCrdt.create(plant)
+        const document = snapshotToLoroDoc(created.crdtSnapshot)
+
+        const value = Schema.decodeSync(WikiArticleEditableTranslation)({
+          commonNames: [{ id: "translation1", value: "Calabaza" }],
+          grammaticalGender: "FEMALE",
+          content: wikiRichText,
+        })
+
+        yield* WikiArticleCrdt.applyEdit(document, {
+          _tag: "AddedWikiArticleTranslation",
+          language: "es",
+          value,
+        })
+
+        const added = yield* WikiArticleCrdt.read(document)
+        expect(added.translations.es).toMatchObject(value)
+        expect(added.translations.en).toEqual(created.data.translations.en)
+        expect(added.translations.pt).toEqual(created.data.translations.pt)
+        const before = document.toJSON()
+
+        expect(
+          Exit.isFailure(
+            yield* Effect.exit(
+              WikiArticleCrdt.applyEdit(document, {
+                _tag: "AddedWikiArticleTranslation",
+                language: "es",
+                value,
+              }),
+            ),
+          ),
+        ).toBe(true)
+
+        expect(document.toJSON()).toEqual(before)
+        yield* WikiArticleCrdt.applyEdit(document, {
+          _tag: "RemovedWikiArticleTranslation",
+          language: "es",
+        })
+        expect(yield* WikiArticleCrdt.read(document)).toEqual(created.data)
+      }),
+  )
+
+  it.effect(
+    "re-adding a deleted translation does not restore old names, content, gender, or kind-specific fields",
+    () =>
+      Effect.gen(function* () {
+        const created = yield* WikiArticleCrdt.create(plant)
+        const document = snapshotToLoroDoc(created.crdtSnapshot)
+
+        yield* WikiArticleCrdt.applyEdit(document, {
+          _tag: "SetWikiArticleTranslationGrammaticalGender",
+          language: "en",
+          value: "FEMALE",
+        })
+
+        yield* WikiArticleCrdt.applyEdit(document, {
+          _tag: "RemovedWikiArticleTranslation",
+          language: "en",
+        })
+        const value = Schema.decodeSync(WikiArticleEditableTranslation)({
+          commonNames: [{ id: "translation2", value: "Squash" }],
+        })
+
+        yield* WikiArticleCrdt.applyEdit(document, {
+          _tag: "AddedWikiArticleTranslation",
+          language: "en",
+          value,
+        })
+
+        const restored = yield* WikiArticleCrdt.read(document)
+        assert(restored.kind === "PLANT")
+        expect(restored.translations.en).toEqual({ ...value, origin: Option.none() })
+        expect(restored.translations.pt).toEqual(created.data.translations.pt)
+
+        yield* WikiArticleCrdt.applyEdit(document, {
+          _tag: "SetWikiArticleTranslationContent",
+          language: "en",
+          content: wikiRichText,
+        })
+
+        expect((yield* WikiArticleCrdt.read(document)).translations.en?.content).toEqual(
+          Option.some(wikiRichText),
+        )
+      }),
+  )
+
+  it.effect(
+    "missing translations, invalid moves, and removal of the last common name fail without changing the document",
+    () =>
+      Effect.gen(function* () {
+        const created = yield* WikiArticleCrdt.create(plant)
+        const document = snapshotToLoroDoc(created.crdtSnapshot)
+        const before = document.toJSON()
+        const name = Option.getOrThrow(
+          Option.fromUndefinedOr(created.data.translations.pt?.commonNames[0]),
+        )
+
+        const missingEdits = [
+          { _tag: "RemovedWikiArticleTranslation", language: "es" },
+          { _tag: "SetWikiArticleTranslationContent", language: "es", content: wikiRichText },
+          { _tag: "UnsetWikiArticleTranslationContent", language: "es" },
+          { _tag: "AddedWikiArticleTranslationCommonName", language: "es", value: name.value },
+          {
+            _tag: "UpdatedWikiArticleTranslationCommonName",
+            language: "es",
+            id: name.id,
+            updatedValue: name.value,
+          },
+          {
+            _tag: "MovedWikiArticleTranslationCommonName",
+            language: "es",
+            id: name.id,
+            newIndex: 0,
+          },
+          { _tag: "RemovedWikiArticleTranslationCommonName", language: "es", id: name.id },
+          { _tag: "SetWikiArticleTranslationGrammaticalGender", language: "es", value: "FEMALE" },
+          { _tag: "UnsetWikiArticleTranslationGrammaticalGender", language: "es" },
+        ] as const
+
+        yield* Effect.forEach(
+          missingEdits,
+          (edit) =>
+            Effect.gen(function* () {
+              expect(
+                Exit.isFailure(yield* Effect.exit(WikiArticleCrdt.applyEdit(document, edit))),
+              ).toBe(true)
+              expect(document.toJSON()).toEqual(before)
+            }),
+          { concurrency: 1 },
+        )
+
+        expect(
+          Exit.isFailure(
+            yield* Effect.exit(
+              WikiArticleCrdt.applyEdit(document, {
+                _tag: "RemovedWikiArticleTranslationCommonName",
+                language: "pt",
+                id: name.id,
+              }),
+            ),
+          ),
+        ).toBe(true)
+
+        expect(document.toJSON()).toEqual(before)
+
+        yield* Effect.forEach(
+          [-1, 1],
+          (newIndex) =>
+            Effect.gen(function* () {
+              expect(
+                Exit.isFailure(
+                  yield* Effect.exit(
+                    WikiArticleCrdt.applyEdit(document, {
+                      _tag: "MovedWikiArticleTranslationCommonName",
+                      language: "pt",
+                      id: name.id,
+                      newIndex,
+                    }),
+                  ),
+                ),
+              ).toBe(true)
+
+              expect(document.toJSON()).toEqual(before)
+            }),
+          { concurrency: 1 },
+        )
       }),
   )
 })

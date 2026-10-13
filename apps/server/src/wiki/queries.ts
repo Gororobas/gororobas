@@ -108,6 +108,23 @@ export const listPendingRevisionsByWikiArticleId = SqlSchema.findAll({
     ),
 })
 
+export const listRevisionHistory = SqlSchema.findAll({
+  Request: Schema.Struct({
+    wikiArticleId: WikiArticleId,
+    evaluation: Schema.optional(WikiArticleRevisionRow.fields.evaluation),
+  }),
+  Result: WikiArticleRevisionRow,
+  execute: ({ wikiArticleId, evaluation }) =>
+    SqlClient.use(
+      (sql) => sql`
+      SELECT * FROM wiki_article_revisions
+      WHERE wiki_article_id = ${wikiArticleId}
+        ${evaluation === undefined ? sql`` : sql`AND evaluation = ${evaluation}`}
+      ORDER BY created_at ASC, rowid ASC
+    `,
+    ),
+})
+
 export const listRevisionMediaAssets = SqlSchema.findAll({
   Request: WikiArticleRevisionId,
   Result: WikiArticleRevisionMediaAssetRow,

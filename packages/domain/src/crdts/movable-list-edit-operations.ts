@@ -13,7 +13,7 @@ const findItemIndexInCrdtList = (container: LoroMovableList | LoroList, id: Loro
       .toArray()
       .findIndex((item) => Predicate.isObject(item) && "id" in item && item.id === id)
 
-    if (itemIndex < 0) yield* new CrdtListItemNotFoundError({ id: id, list: "@todo" })
+    if (itemIndex < 0) yield* new CrdtListItemNotFoundError({ id: id, list: container.id })
 
     return itemIndex
   })

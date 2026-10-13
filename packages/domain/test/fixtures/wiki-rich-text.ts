@@ -4,7 +4,7 @@ import { SupportedLanguage } from "../../src/common/enums.js"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { WikiArticleEditableData } from "../../src/wiki/wiki-article.js"
 
-const wikiRichText = TiptapDocument.make({
+export const wikiRichText = TiptapDocument.make({
   type: "doc",
   version: 1,
   content: [

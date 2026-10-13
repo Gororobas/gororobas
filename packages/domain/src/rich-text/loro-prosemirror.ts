@@ -65,7 +65,7 @@ export const updateLoroRichText = (container: LoroMap, content: TiptapDocument) 
       Record.toEntries(values).map(([key, value]) => [toLoroString(key), toLoroValue(value)]),
     )
     attributes.keys().forEach((key) => {
-      if (!(key in normalizedValues)) attributes.delete(key)
+      if (!Record.has(normalizedValues, key)) attributes.delete(key)
     })
     Record.toEntries(normalizedValues).forEach(([key, value]) => {
       if (!Equal.equals(attributes.get(key), value)) attributes.set(key, value)

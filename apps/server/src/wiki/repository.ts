@@ -49,6 +49,7 @@ import {
 } from "./mutations.js"
 import {
   listCards,
+  listRevisionHistory,
   listPublishedCultivars,
   listBookmarks,
   listWikiArticleMedia,
@@ -473,6 +474,7 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         removeBookmark,
         setMainMedia,
         listCards,
+        listRevisionHistory,
         listPublishedCultivars,
         listBookmarks,
         listWikiArticleMedia,

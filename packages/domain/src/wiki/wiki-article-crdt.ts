@@ -15,6 +15,7 @@ import { WikiPlantArticleCrdtOperations } from "./kinds/plant.crdt.js"
 import { WikiResourceArticleCrdtOperations } from "./kinds/resource.crdt.js"
 import { WikiToolArticleCrdtOperations } from "./kinds/tool.crdt.js"
 import { WikiUncategorizedArticleCrdtOperations } from "./kinds/uncategorized.crdt.js"
+import { WikiArticleTranslationCrdtOperations } from "./wiki-article-translation.crdt.js"
 import { WikiArticleEditableData } from "./wiki-article.js"
 
 export const WikiArticleEdit = Schema.Union([
@@ -28,13 +29,16 @@ export const WikiArticleEdit = Schema.Union([
   WikiResourceArticleCrdtOperations.AttributeEdit,
   WikiToolArticleCrdtOperations.AttributeEdit,
   WikiUncategorizedArticleCrdtOperations.AttributeEdit,
-  // @todo wiki-article-translation
+  WikiArticleTranslationCrdtOperations.AttributeEdit,
 ])
 
 export type WikiArticleEdit = typeof WikiArticleEdit.Type
 
 /** @todo rewrite with Match */
 const applyWikiArticleEdit = (document: LoroDoc, edit: WikiArticleEdit) => {
+  if (Schema.is(WikiArticleTranslationCrdtOperations.AttributeEdit)(edit)) {
+    return WikiArticleTranslationCrdtOperations.applyAttributeEdit(document, edit)
+  }
   if (Schema.is(WikiAnimalArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiAnimalArticleCrdtOperations.applyAttributeEdit(document, edit)
   }
@@ -65,8 +69,7 @@ const applyWikiArticleEdit = (document: LoroDoc, edit: WikiArticleEdit) => {
   if (Schema.is(WikiUncategorizedArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiUncategorizedArticleCrdtOperations.applyAttributeEdit(document, edit)
   }
-  // @todo wiki-article-translation
-  return Effect.succeed(undefined)
+  return Effect.fail(new InvalidCrdtUpdateError({ reason: "SchemaValidation" }))
 }
 
 // Loro roots are containers; wrap the scalar kind while keeping attributes and translations at their existing roots.
