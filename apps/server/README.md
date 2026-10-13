@@ -1,21 +1,40 @@
 # Gororobas server
 
-Authentication uses @yielded/auth with magic links and Apple, Google, and Microsoft OAuth/OIDC. The login page is served at `/api/auth/login`; new accounts are provisioned only after mailbox verification. See [the decision log](auth-migration-decisions.md) for storage, session policy, and API limitations.
+The normal application server runs all implemented API groups, email magic-link authentication, and durable workflow registrations. OAuth is disabled in normal startup, regardless of provider environment variables. The older OAuth protocol and tests remain available for authentication experiments.
+
+## Run the application
+
+From the workspace root:
+
+```sh
+cp apps/server/.env.example apps/server/.env
+node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64url"))'
+```
+
+Set the generated value as `AUTH_BINDING_KEY`, and supply `DEEPL_API_KEY` for translation workflows. Start Mailpit and the HTTPS proxy with `docker compose -f apps/server/compose.auth.yaml up -d`, then run:
+
+```sh
+pnpm --filter @gororobas/server start
+```
+
+The HTTP listener binds port 4000; use the HTTPS origin for browser authentication. `APP_DB_FILENAME` selects the application database (default `gororobas.db`), `WORKFLOWS_DB_FILENAME` selects workflow storage, and `MEDIA_ASSETS_DIRECTORY` selects the media filesystem root. Relative paths resolve from `apps/server` when using the package command. Shutdown disposes shared SQL/cluster services before exit.
+
+The Gel migration writes to `apps/server/gororobas.db` by default. See the [ingestion instructions](../../packages/migration/README.md) for migration, caching, archives, and HTTP verification. Stop the server before replacing its database. Migration skips workflow submissions; subsequent application activity uses the registered workflows.
 
 ## Local authentication
 
 From `apps/server`:
 
 ```sh
-cp .env.auth.example .env.auth
+cp .env.auth-dev-experiments.example .env.auth-dev-experiments
 node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64url"))'
 ```
 
-Set the generated value as `AUTH_BINDING_KEY` in `.env.auth`, then start Mailpit and the HTTPS proxy:
+Set the generated value as `AUTH_BINDING_KEY` in `.env.auth-dev-experiments`, then start Mailpit and the HTTPS proxy:
 
 ```sh
 docker compose -f compose.auth.yaml up -d
-pnpm dev:auth
+pnpm dev:auth-experiments
 ```
 
 Open [the login page](https://localhost:4443/api/auth/login) and [Mailpit](http://localhost:8025). Request a link, open the captured email in the same browser, and confirm sign-in. New tabs work; a different browser/device needs a new request. Beginning another flow replaces the current browser's pending flow.
@@ -41,9 +60,9 @@ The standalone auth entry point uses the application database and its initial mi
 | `MAILPIT_URL` | Local delivery endpoint, default `http://localhost:8025`. |
 | `AUTH_EMAIL_FROM` | Required non-empty sender address in production; defaults to `auth@gororobas.local` for Mailpit. |
 
-Production uses [Resend’s email API](https://resend.com/docs/api-reference/emails/send-email) and fails startup if `RESEND_API_KEY` or `AUTH_EMAIL_FROM` is missing or empty. Use a verified sender domain, disable link tracking/rewriting in Resend, and set the actual HTTPS `AUTH_ORIGIN`. The main application entry point has unrelated incomplete API/workflow wiring documented in the decision log; `dev:auth` runs the complete authentication surface independently.
+Production uses [Resend’s email API](https://resend.com/docs/api-reference/emails/send-email) and fails startup if `RESEND_API_KEY` or `AUTH_EMAIL_FROM` is missing or empty. Use a verified sender domain, disable link tracking/rewriting in Resend, and set the actual HTTPS `AUTH_ORIGIN`. The normal application entry point includes its API and workflow layers; `dev:auth-experiments` runs the authentication experiments independently.
 
-## OAuth providers
+## OAuth providers in authentication experiments
 
 Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, `APPLE_CLIENT_ID` / `APPLE_CLIENT_SECRET`, and/or `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`. An omitted pair disables its provider; an incomplete pair fails startup. Enabled providers run OIDC discovery at startup. `MICROSOFT_TENANT` defaults to `common`; it can select a particular Entra tenant or `consumers`.
 

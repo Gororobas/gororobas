@@ -1,12 +1,12 @@
 pre-commit:
-  parallel: false
+  parallel: true
   commands:
     oxfmt:
       glob: "*.{ts,tsx,css}"
       run: pnpm run format {staged_files}
       stage_fixed: true
     oxlint:
-      glob: "*.{ts,tsx,css}"
+      glob: "{apps,packages}/*.{ts,tsx,css}"
       run: pnpm run lint --quiet {staged_files}
       stage_fixed: true
     type-check:

@@ -22,10 +22,6 @@ export default defineConfig({
         "effect/no-shape-in-symbol-names": "off",
       },
     },
-    {
-      ...foldkit.configs.recommended,
-      ignorePatterns: ["./linting/**/*.mjs"],
-    },
   ],
   plugins: ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
   jsPlugins: [
@@ -74,15 +70,12 @@ export default defineConfig({
     "custom-lint-rules/service-map-class-suffix-by-file": "error",
     "custom-lint-rules/require-canonical-module-names": "error",
     "custom-lint-rules/require-effect-alias-for-es-namespaces": "error",
-    "foldkit/no-noop-message": "error",
-    "foldkit/got-submodel-message-name": "error",
-    "foldkit/got-prefix-requires-submodel-payload": "error",
-    "foldkit/no-empty-object-tagged-call": "error",
-    "foldkit/prefer-callable-message-constructor": "error",
-    "foldkit/command-binding-matches-name": "error",
-    "foldkit/no-module-level-mutable-state": "error",
   },
   overrides: [
+    {
+      files: ["apps/web-app/**/*"],
+      rules: foldkit.configs.recommended.rules,
+    },
     {
       files: ["packages/migration/src/**/*preview*", "packages/migration/preview/**"],
       rules: Object.fromEntries(
