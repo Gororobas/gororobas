@@ -453,6 +453,12 @@ CREATE TABLE wiki_article_media_assets (
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
+CREATE TABLE wiki_article_main_media (
+  wiki_article_id text PRIMARY KEY,
+  media_asset_id text NOT NULL,
+  FOREIGN KEY (wiki_article_id, media_asset_id) REFERENCES wiki_article_media_assets (wiki_article_id, media_asset_id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
 -- =====
 -- PUBLICATIONS
 -- =====

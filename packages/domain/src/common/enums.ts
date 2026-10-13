@@ -86,7 +86,7 @@ export type BookmarkState = typeof BookmarkState.Type
 export const PublicationKind = Schema.Literals(["POST", "EVENT"])
 export type PublicationKind = typeof PublicationKind.Type
 
-export const WikiArticleStatus = Schema.Literals(["PENDING", "PUBLISHED", "ARCHIVED"])
+export const WikiArticleStatus = Schema.Literals(["PENDING_APPROVAL", "PUBLISHED", "ARCHIVED"])
 export type WikiArticleStatus = typeof WikiArticleStatus.Type
 
 export const AgroforestryStratum = Schema.Literals(["EMERGENT", "HIGH", "MEDIUM", "LOW", "GROUND"])

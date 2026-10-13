@@ -34,6 +34,9 @@ import {
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
+  setBookmark,
+  removeBookmark,
+  setMainMedia,
   attachMediaToWikiArticle,
   insertCrdtRow,
   insertHandleRows,
@@ -45,6 +48,11 @@ import {
   upsertArticleRow,
 } from "./mutations.js"
 import {
+  listCards,
+  listPublishedCultivars,
+  listBookmarks,
+  listWikiArticleMedia,
+  findMainMedia,
   findCrdtRowById,
   findDatabaseRowByHandle,
   findDatabaseRowById,
@@ -243,7 +251,7 @@ const persistArticleProjection = (input: {
 
 const createWikiArticle = (
   input: CreateWikiArticleInput,
-  options: { id?: WikiArticleId; enrichment?: "submit" | "skip" } = {},
+  options: { id?: WikiArticleId; enrichment?: "submit" | "skip"; isPendingApproval?: boolean } = {},
 ) =>
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
@@ -268,18 +276,20 @@ const createWikiArticle = (
           createdById: input.createdById,
           crdtUpdate: created.initialCrdtUpdate,
           fromCrdtFrontier: EMPTY_LORO_DOC_FRONTIER,
-          evaluatedAt: Option.some(now),
-          evaluatedById: Option.some(input.createdById),
-          evaluation: "APPROVED",
+          evaluatedAt: options.isPendingApproval ? Option.none() : Option.some(now),
+          evaluatedById: options.isPendingApproval ? Option.none() : Option.some(input.createdById),
+          evaluation: options.isPendingApproval ? "PENDING" : "APPROVED",
           evaluationReason: Option.none(),
           hasMediaSelection: input.mediaAssets !== undefined,
         }),
-        persistProjection: persistArticleProjection({
-          currentCrdtFrontier: created.currentCrdtFrontier,
-          sourceData: created.data,
-          status: input.status,
-          wikiArticleId,
-        }),
+        persistProjection: options.isPendingApproval
+          ? Effect.void
+          : persistArticleProjection({
+              currentCrdtFrontier: created.currentCrdtFrontier,
+              sourceData: created.data,
+              status: input.status,
+              wikiArticleId,
+            }),
       })
 
       yield* insertRevisionMediaAssetRows(
@@ -300,7 +310,7 @@ const createWikiArticle = (
     }).pipe(
       sql.withTransaction,
       Effect.tap((article) =>
-        options.enrichment === "skip"
+        options.isPendingApproval || options.enrichment === "skip"
           ? Effect.void
           : requestExternalDataFetch(article).pipe(
               Effect.catchCause((cause) =>
@@ -416,6 +426,7 @@ const evaluateRevision = (
       yield* persistCrdtDocumentUpdate({
         updateCrdtRow: updateCrdtRow({
           ...article,
+          status: article.status === "PENDING_APPROVAL" ? "PUBLISHED" : article.status,
           crdtSnapshot: loroDocToSnapshot(updated.document),
           updatedAt: now,
         }),
@@ -423,7 +434,7 @@ const evaluateRevision = (
         persistProjection: persistArticleProjection({
           currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
           sourceData: updated.data,
-          status: article.status,
+          status: article.status === "PENDING_APPROVAL" ? "PUBLISHED" : article.status,
           wikiArticleId: article.id,
         }),
       })
@@ -451,13 +462,24 @@ const evaluateRevision = (
     ),
   )
 
-/** @TODO add wiki search and card read paths. */
+/** @TODO add wiki search filters. */
 export class WikiArticlesRepository extends Context.Service<WikiArticlesRepository>()(
   "WikiArticlesRepository",
   {
     // oxlint-disable-next-line require-yield not sure if we can avoid having make as an Effect
     make: Effect.gen(function* () {
       return {
+        setBookmark,
+        removeBookmark,
+        setMainMedia,
+        listCards,
+        listPublishedCultivars,
+        listBookmarks,
+        listWikiArticleMedia,
+        findMainMedia,
+        findById: findDatabaseRowById,
+        findCrdtRowById,
+        findRevisionById,
         attachMediaToWikiArticle,
         createRevision,
         createWikiArticle,

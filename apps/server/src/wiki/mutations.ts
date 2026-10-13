@@ -1,4 +1,7 @@
 import {
+  BookmarkState,
+  PersonId,
+  WikiArticleId,
   WikiArticleMediaAssetRow,
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
@@ -84,5 +87,41 @@ export const attachMediaToWikiArticle = SqlSchema.void({
   execute: (row) =>
     SqlClient.use(
       (sql) => sql`INSERT INTO wiki_article_media_assets ${sql.insert(row)} ON CONFLICT DO NOTHING`,
+    ),
+})
+
+export const setBookmark = SqlSchema.void({
+  Request: Schema.Struct({
+    personId: PersonId,
+    wikiArticleId: WikiArticleId,
+    state: BookmarkState,
+  }),
+  execute: (row) =>
+    SqlClient.use(
+      (sql) => sql`
+    INSERT INTO bookmarks_wiki_articles ${sql.insert(row)}
+    ON CONFLICT(person_id, wiki_article_id) DO UPDATE SET state = excluded.state
+  `,
+    ),
+})
+
+export const removeBookmark = SqlSchema.void({
+  Request: Schema.Struct({ personId: PersonId, wikiArticleId: WikiArticleId }),
+  execute: ({ personId, wikiArticleId }) =>
+    SqlClient.use(
+      (sql) => sql`
+    DELETE FROM bookmarks_wiki_articles WHERE person_id = ${personId} AND wiki_article_id = ${wikiArticleId}
+  `,
+    ),
+})
+
+export const setMainMedia = SqlSchema.void({
+  Request: WikiArticleMediaAssetRow,
+  execute: (row) =>
+    SqlClient.use(
+      (sql) => sql`
+    INSERT INTO wiki_article_main_media ${sql.insert(row)}
+    ON CONFLICT(wiki_article_id) DO UPDATE SET media_asset_id = excluded.media_asset_id
+  `,
     ),
 })

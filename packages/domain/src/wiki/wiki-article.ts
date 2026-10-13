@@ -2,7 +2,13 @@ import { Match, Option, Schema } from "effect"
 
 import { SupportedLanguage, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
-import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
+import {
+  Handle,
+  ValidName,
+  OptionalColumn,
+  TimestampColumn,
+  TimestampedStruct,
+} from "../common/primitives.js"
 import { strToSearchTokens } from "../common/utils/strings.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { tiptapToText } from "../rich-text/tiptap-to-text.js"
@@ -16,7 +22,6 @@ import { WikiPlantArticle } from "./kinds/plant.js"
 import { WikiResourceArticle } from "./kinds/resource.js"
 import { WikiToolArticle } from "./kinds/tool.js"
 import { WikiUncategorizedArticle } from "./kinds/uncategorized.js"
-import { WikiArticleEditableTranslation } from "./wiki-article-translation.js"
 
 export const WikiArticleEditableData = Schema.Union([
   WikiAnimalArticle.EditableArticle,
@@ -126,7 +131,7 @@ export const WikiArticleQueriedCardData = Schema.Struct({
   id: WikiArticleId,
   handle: Handle,
   kind: WikiArticleKind,
-  commonNames: WikiArticleEditableTranslation.fields.commonNames,
+  commonNames: Schema.Array(ValidName),
   language: SupportedLanguage,
 })
 

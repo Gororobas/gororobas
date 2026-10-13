@@ -465,6 +465,13 @@ CREATE TABLE `wiki_article_media_assets` (
   CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
+-- Create "wiki_article_main_media" table
+CREATE TABLE `wiki_article_main_media` (
+  `wiki_article_id` text NOT NULL,
+  `media_asset_id` text NOT NULL,
+  PRIMARY KEY (`wiki_article_id`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `media_asset_id`) REFERENCES `wiki_article_media_assets` (`wiki_article_id`, `media_asset_id`) ON UPDATE NO ACTION ON DELETE CASCADE
+) WITHOUT ROWID;
 -- Create "publication_crdts" table
 CREATE TABLE `publication_crdts` (
   `id` text NOT NULL,

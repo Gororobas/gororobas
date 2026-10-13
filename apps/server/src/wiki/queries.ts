@@ -1,6 +1,10 @@
 import {
+  BookmarkState,
+  PersonId,
   SupportedLanguage,
   MediaAssetRow,
+  MediaAssetId,
+  WikiArticleQueriedCardData,
   OptionalColumn,
   TiptapDocument,
   WikiArticleQueriedPageData,
@@ -156,7 +160,7 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
     INNER JOIN wiki_article_handles AS route ON route.wiki_article_id = article.id
     INNER JOIN wiki_article_translations AS translation
       ON translation.wiki_article_id = article.id AND translation.kind = article.kind
-    WHERE route.handle = ${handle} AND article.kind = ${kind}
+    WHERE route.handle = ${handle} AND article.kind = ${kind} AND article.status = 'PUBLISHED'
     ORDER BY CASE WHEN translation.language = ${language} THEN 0
       WHEN translation.language = 'en' THEN 1 WHEN translation.language = 'es' THEN 2 ELSE 3 END
     LIMIT 1
@@ -185,5 +189,81 @@ export const listWikiArticleMedia = SqlSchema.findAll({
       (sql) => sql`
     SELECT m.* FROM media_assets m JOIN wiki_article_media_assets a ON a.media_asset_id = m.id
     WHERE a.wiki_article_id = ${id} AND m.moderation_status <> 'CENSORED' ORDER BY m.id`,
+    ),
+})
+
+export const listPublishedCultivars = SqlSchema.findAll({
+  Request: Schema.Struct({ parentPlantId: WikiArticleId, language: SupportedLanguage }),
+  Result: WikiArticleProjectionRow.mapMembers((members) =>
+    members.map((member) =>
+      Schema.Struct({
+        ...member.fields,
+        commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
+      }),
+    ),
+  ),
+  execute: ({ parentPlantId, language }) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT a.*, t.common_names FROM wiki_articles a
+    JOIN wiki_article_translations t ON t.wiki_article_id = a.id
+    WHERE a.kind = 'PLANT_CULTIVAR' AND a.status = 'PUBLISHED'
+      AND json_extract(a.attributes, '$.parentPlantId') = ${parentPlantId}
+      AND t.language = (
+        SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
+        ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
+          WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+    ORDER BY a.id
+  `,
+    ),
+})
+
+export const listBookmarks = SqlSchema.findAll({
+  Request: PersonId,
+  Result: Schema.Struct({ wikiArticleId: WikiArticleId, state: BookmarkState }),
+  execute: (personId) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT b.wiki_article_id, b.state FROM bookmarks_wiki_articles b
+    JOIN wiki_articles a ON a.id = b.wiki_article_id
+    WHERE b.person_id = ${personId} AND a.status = 'PUBLISHED' ORDER BY b.wiki_article_id
+  `,
+    ),
+})
+
+export const findMainMedia = SqlSchema.findOneOption({
+  Request: WikiArticleId,
+  Result: MediaAssetRow,
+  execute: (id) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT m.* FROM media_assets m JOIN wiki_article_main_media main ON main.media_asset_id = m.id
+    WHERE main.wiki_article_id = ${id} AND m.moderation_status <> 'CENSORED'
+  `,
+    ),
+})
+
+export const listCards = SqlSchema.findAll({
+  Request: SupportedLanguage,
+  Result: Schema.Struct({
+    ...WikiArticleQueriedCardData.fields,
+    commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
+    thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
+  }),
+  execute: (language) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT a.id, a.kind, t.language, t.common_names,
+      (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
+        ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
+      (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
+        WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
+    FROM wiki_articles a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
+    WHERE a.status = 'PUBLISHED' AND t.language = (
+      SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
+      ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
+        WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+    ORDER BY a.id
+  `,
     ),
 })
