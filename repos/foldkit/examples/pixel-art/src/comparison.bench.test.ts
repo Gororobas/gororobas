@@ -1,0 +1,226 @@
+/**
+ * Side-by-side benchmark: Foldkit update vs React reducer
+ *
+ * Run: pnpm --filter pixel-art-example exec vitest run src/comparison.bench.ts
+ */
+import { Option } from 'effect'
+import { modifyFields } from 'foldkit/struct'
+import { test } from 'vitest'
+
+import { Dialog, Listbox } from '@foldkit/ui'
+
+import { createEmptyGrid as createReactGrid } from '../../../comparisons/pixel-art-react/src/grid'
+import { reducer } from '../../../comparisons/pixel-art-react/src/reducer'
+import type { State } from '../../../comparisons/pixel-art-react/src/types'
+import { createEmptyGrid as createFoldkitGrid } from './grid'
+import { Message } from './message'
+import type { Model } from './model'
+import { update } from './update'
+
+const GRID_SIZE = 16
+const ITERATIONS = 10_000
+const WARMUP = 500
+
+const foldkitModel: Model = {
+  grid: createFoldkitGrid(GRID_SIZE),
+  undoStack: [],
+  redoStack: [],
+  selectedColorIndex: 0,
+  gridSize: GRID_SIZE,
+  tool: 'Brush' as const,
+  mirrorMode: 'None' as const,
+  isDrawing: false,
+  maybeHoveredCell: Option.none(),
+  errorDialog: Dialog.init({ id: 'error-dialog' }),
+  maybeExportError: Option.none(),
+  paletteThemeIndex: 0,
+  gridSizeConfirmDialog: Dialog.init({ id: 'confirm-dialog' }),
+  maybePendingGridSize: Option.none(),
+  themeListbox: Listbox.init({ id: 'themes' }),
+}
+
+const reactState: State = {
+  grid: createReactGrid(GRID_SIZE),
+  undoStack: [],
+  redoStack: [],
+  selectedColorIndex: 0,
+  gridSize: GRID_SIZE,
+  tool: 'Brush',
+  mirrorMode: 'None',
+  isDrawing: false,
+  hoveredCell: null,
+  paletteThemeIndex: 0,
+  exportError: null,
+  isErrorDialogOpen: false,
+  pendingGridSize: null,
+  isGridSizeDialogOpen: false,
+}
+
+const buildFoldkitHistory = (steps: number): Model => {
+  let model = foldkitModel
+  for (let i = 0; i < steps; i++) {
+    const x = i % GRID_SIZE
+    const y = Math.floor(i / GRID_SIZE) % GRID_SIZE
+    const pressedCell = update(model, Message.PressedCell({ x, y }))
+    const releasedMouse = update(pressedCell.model, Message.ReleasedMouse())
+    model = releasedMouse.model
+  }
+  return model
+}
+
+const buildReactHistory = (steps: number): State => {
+  let state = reactState
+  for (let i = 0; i < steps; i++) {
+    const x = i % GRID_SIZE
+    const y = Math.floor(i / GRID_SIZE) % GRID_SIZE
+    state = reducer(state, { type: 'PressedCell', x, y })
+    state = reducer(state, { type: 'ReleasedMouse' })
+  }
+  return state
+}
+
+const timeMs = (iterations: number, fn: () => void): number => {
+  for (let i = 0; i < WARMUP; i++) {
+    fn()
+  }
+  const start = performance.now()
+  for (let i = 0; i < iterations; i++) {
+    fn()
+  }
+  return performance.now() - start
+}
+
+const formatUs = (totalMs: number, iterations: number): string => {
+  const us = (totalMs / iterations) * 1000
+  if (us >= 100) {
+    return `${us.toFixed(0)}\u00b5s`
+  }
+  if (us >= 1) {
+    return `${us.toFixed(1)}\u00b5s`
+  }
+  return `${(us * 1000).toFixed(0)}ns`
+}
+
+const pad = (text: string, width: number): string => text.padEnd(width)
+const padR = (text: string, width: number): string => text.padStart(width)
+
+test('benchmark', () => {
+  const foldkitWith20 = buildFoldkitHistory(20)
+  const reactWith20 = buildReactHistory(20)
+
+  const benchmarks: ReadonlyArray<
+    Readonly<{ name: string; foldkit: () => void; react: () => void }>
+  > = [
+    {
+      name: 'Brush stroke',
+      foldkit: () => {
+        const pressedCell = update(
+          foldkitModel,
+          Message.PressedCell({ x: 5, y: 5 }),
+        )
+        update(pressedCell.model, Message.ReleasedMouse())
+      },
+      react: () => {
+        const s = reducer(reactState, { type: 'PressedCell', x: 5, y: 5 })
+        reducer(s, { type: 'ReleasedMouse' })
+      },
+    },
+    {
+      name: 'Brush drag (5 cells)',
+      foldkit: () => {
+        let brushUpdate = update(
+          foldkitModel,
+          Message.PressedCell({ x: 0, y: 0 }),
+        )
+        brushUpdate = update(
+          brushUpdate.model,
+          Message.EnteredCell({ x: 1, y: 0 }),
+        )
+        brushUpdate = update(
+          brushUpdate.model,
+          Message.EnteredCell({ x: 2, y: 0 }),
+        )
+        brushUpdate = update(
+          brushUpdate.model,
+          Message.EnteredCell({ x: 3, y: 0 }),
+        )
+        brushUpdate = update(
+          brushUpdate.model,
+          Message.EnteredCell({ x: 4, y: 0 }),
+        )
+        update(brushUpdate.model, Message.ReleasedMouse())
+      },
+      react: () => {
+        let s = reducer(reactState, { type: 'PressedCell', x: 0, y: 0 })
+        s = reducer(s, { type: 'EnteredCell', x: 1, y: 0 })
+        s = reducer(s, { type: 'EnteredCell', x: 2, y: 0 })
+        s = reducer(s, { type: 'EnteredCell', x: 3, y: 0 })
+        s = reducer(s, { type: 'EnteredCell', x: 4, y: 0 })
+        reducer(s, { type: 'ReleasedMouse' })
+      },
+    },
+    {
+      name: 'Flood fill (16\u00d716)',
+      foldkit: () => {
+        const m: Model = modifyFields(foldkitModel, { tool: () => 'Fill' })
+        update(m, Message.PressedCell({ x: 0, y: 0 }))
+      },
+      react: () => {
+        const s: State = { ...reactState, tool: 'Fill' }
+        reducer(s, { type: 'PressedCell', x: 0, y: 0 })
+      },
+    },
+    {
+      name: 'Single undo (20 entries)',
+      foldkit: () => {
+        update(foldkitWith20, Message.ClickedUndo())
+      },
+      react: () => {
+        reducer(reactWith20, { type: 'ClickedUndo' })
+      },
+    },
+    {
+      name: '5\u00d7 undo + 5\u00d7 redo',
+      foldkit: () => {
+        let model = foldkitWith20
+        for (let i = 0; i < 5; i++) {
+          const undo = update(model, Message.ClickedUndo())
+          model = undo.model
+        }
+        for (let i = 0; i < 5; i++) {
+          const redo = update(model, Message.ClickedRedo())
+          model = redo.model
+        }
+      },
+      react: () => {
+        let s = reactWith20
+        for (let i = 0; i < 5; i++) {
+          s = reducer(s, { type: 'ClickedUndo' })
+        }
+        for (let i = 0; i < 5; i++) {
+          s = reducer(s, { type: 'ClickedRedo' })
+        }
+      },
+    },
+  ]
+
+  console.log('')
+  console.log(
+    `  Pixel Art Editor \u2014 State Update Benchmark (${ITERATIONS.toLocaleString()} iterations, ${GRID_SIZE}\u00d7${GRID_SIZE} grid)`,
+  )
+  console.log('')
+  console.log(
+    `  ${pad('Operation', 28)} ${padR('Foldkit', 10)} ${padR('React', 10)}`,
+  )
+  console.log(`  ${'─'.repeat(48)}`)
+
+  for (const b of benchmarks) {
+    const foldkitMs = timeMs(ITERATIONS, b.foldkit)
+    const reactMs = timeMs(ITERATIONS, b.react)
+    console.log(
+      `  ${pad(b.name, 28)} ${padR(formatUs(foldkitMs, ITERATIONS), 10)} ${padR(formatUs(reactMs, ITERATIONS), 10)}`,
+    )
+  }
+
+  console.log('')
+})

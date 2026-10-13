@@ -1,0 +1,49 @@
+{
+  "name": "@pleat/core",
+  "version": "0.1.0",
+  "description": "Algebraic, typed, zero-per-render styles for Effect and Foldkit apps.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Manzanita-Research/pleat.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "css",
+    "css-in-ts",
+    "atomic-css",
+    "effect",
+    "foldkit",
+    "design-tokens",
+    "generative-ui"
+  ],
+  "exports": {
+    ".": {
+      "@pleat/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "csstype": "3.2.3"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0"
+  },
+  "devDependencies": {
+    "effect": "4.0.0",
+    "fast-check": "4.10.2",
+    "vitest": "5.0.3"
+  }
+}

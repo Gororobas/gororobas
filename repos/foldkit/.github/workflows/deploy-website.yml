@@ -1,0 +1,105 @@
+name: Deploy Website to Vercel
+
+on:
+  workflow_call:
+    inputs:
+      published_commit:
+        description: Commit whose packages the successful release job published
+        required: false
+        type: string
+        default: ''
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/website/**'
+      - 'packages/foldkit/**'
+      - 'packages/ui/**'
+      - 'packages/devtools/**'
+      - 'packages/markdown/**'
+      - 'packages/vite-plugin-foldkit/**'
+      - 'examples/**'
+      - 'scripts/build-examples.ts'
+      - 'scripts/check-playground-ssg-build.ts'
+      - 'scripts/check-published-versions.ts'
+      - 'scripts/coherent-release.mjs'
+      - 'scripts/example-bridge.js'
+      - 'scripts/plan-website-deploy.mjs'
+      - 'scripts/lib/coherent-release.mjs'
+      - 'scripts/lib/website-package-inputs.mjs'
+      - 'scripts/lib/workspace-packages.mjs'
+      - 'scripts/website-vercel-config.mjs'
+      - '.npmrc'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - '.github/workflows/deploy-website-build.yml'
+      - '.github/workflows/deploy-website.yml'
+
+concurrency:
+  group: deploy-website-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    name: Authorize package inputs
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.authorization.outputs.deploy }}
+      target: ${{ steps.authorization.outputs.target }}
+
+    steps:
+      - name: Checkout code and release tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ inputs.published_commit || 'main' }}
+
+      - name: Match package source to published versions
+        id: authorization
+        env:
+          PUBLISHED_COMMIT: ${{ inputs.published_commit }}
+        run: |
+          target=$(git rev-parse HEAD)
+          if [ -n "${PUBLISHED_COMMIT}" ]; then
+            expected=$(git rev-parse --verify "${PUBLISHED_COMMIT}^{commit}")
+            if [ "${target}" != "${expected}" ]; then
+              echo "the checked-out website commit ${target} is not the published commit ${expected}" >&2
+              exit 1
+            fi
+
+            if ! git merge-base --is-ancestor "${expected}" refs/remotes/origin/main; then
+              echo "the published website commit ${expected} is not on main" >&2
+              exit 1
+            fi
+          fi
+
+          result=$(node scripts/plan-website-deploy.mjs "${target}" "${PUBLISHED_COMMIT:+--allow-historical-target}")
+          echo "${result}"
+          deploy=${result#deploy=}
+
+          if [ -n "${PUBLISHED_COMMIT}" ] && [ "${deploy}" != 'true' ]; then
+            echo "the published website commit ${target} is not eligible for deployment" >&2
+            exit 1
+          fi
+
+          echo "deploy=${deploy}" >> "${GITHUB_OUTPUT}"
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+
+  deploy:
+    needs: authorize
+    if: needs.authorize.outputs.deploy == 'true'
+    uses: ./.github/workflows/deploy-website-build.yml
+    with:
+      target: ${{ needs.authorize.outputs.target }}
+      channel: production
+      hostname: foldkit.dev
+    secrets:
+      vercel_token: ${{ secrets.VERCEL_TOKEN }}
+      vercel_org_id: ${{ secrets.VERCEL_ORG_ID }}
+      vercel_project_id: ${{ secrets.VERCEL_WEBSITE_PROJECT_ID }}

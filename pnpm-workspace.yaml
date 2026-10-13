@@ -1,0 +1,26 @@
+packages:
+  - packages/*
+  - site
+  - bench
+  - test/browser
+# Alchemy's published dashboard ignores its @jsxImportSource pragma.
+patchedDependencies:
+  alchemy@2.0.0-beta.81: patches/alchemy@2.0.0-beta.81.patch
+# These adapters share Foldkit's exact Effect 4.0.0 peer.
+overrides:
+  '@effect/platform-node-shared': 4.0.0
+  '@effect/sql-d1': 4.0.0
+  '@effect/sql-sqlite-do': 4.0.0
+# This code generator uses TypeScript's JS API; source checks use root TS 7.
+packageExtensions:
+  capnp-es@0.0.16:
+    dependencies:
+      typescript: 5.9.3
+# These versions were already pinned before the pnpm 12 migration.
+minimumReleaseAgeExclude:
+  - vite@8.3.4
+  - '@puppeteer/browsers@3.2.4'
+
+# Alchemy uses workerd for the Cloudflare runtime.
+allowBuilds:
+  workerd@1.20260918.1: true

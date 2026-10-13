@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "types": ["node"],
+    "allowImportingTsExtensions": true
+  },
+  "include": ["*.ts", "*.mts", "fixtures/**/*.ts"],
+  "exclude": ["fixtures/packed-ssr-consumer"]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "pleat-browser-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "@pleat/core": "workspace:*",
+    "effect": "4.0.0",
+    "fast-check": "4.10.2",
+    "foldkit": "0.167.0",
+    "playwright-core": "1.64.0",
+    "tailwindcss": "4.3.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ \"${CLAUDE_CODE_REMOTE:-}\" = true ]; then bash scripts/cloud-session-setup.sh; fi",
+            "timeout": 300
+          }
+        ]
+      }
+    ]
+  }
+}
