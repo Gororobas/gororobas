@@ -1,7 +1,7 @@
 import { Match, Option, Schema } from "effect"
 
 import { SupportedLanguage, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
-import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
+import { MediaAssetId, PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import {
   Handle,
   ValidName,
@@ -129,6 +129,7 @@ export type WikiArticleQueriedPageData = typeof WikiArticleQueriedPageData.Type
 
 export const WikiArticleQueriedCardData = Schema.Struct({
   id: WikiArticleId,
+  thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
   handle: Handle,
   kind: WikiArticleKind,
   commonNames: Schema.Array(ValidName),

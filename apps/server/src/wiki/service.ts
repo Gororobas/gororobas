@@ -3,6 +3,7 @@ import {
   BookmarkState,
   CreateWikiArticlePayload,
   CreateWikiArticleRevisionPayload,
+  EvaluateWikiArticleRevisionPayload,
   InvalidCrdtUpdateError,
   MediaAssetId,
   MediaNotFoundError,
@@ -17,9 +18,10 @@ import {
   type PlantCultivarProjectedAttributes,
   type WikiArticleEditableData,
 } from "@gororobas/domain"
-import { Context, Effect, Match, Option } from "effect"
+import { Context, DateTime, Effect, Match, Option } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { requestExternalDataFetch } from "./external-data/workflow.js"
 import { WikiArticlesRepository } from "./repository.js"
@@ -42,6 +44,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
     make: Effect.gen(function* () {
       const repository = yield* WikiArticlesRepository
       const media = yield* MediaAssetsService
+      const mediaRepository = yield* MediaAssetsRepository
       const sql = yield* SqlClient.SqlClient
 
       const getPublishedArticle = (id: WikiArticleId) =>
@@ -106,7 +109,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
 
       const evaluateRevision = (
         revisionId: WikiArticleRevisionId,
-        evaluation: "APPROVED" | "REJECTED",
+        { status, reason }: EvaluateWikiArticleRevisionPayload,
       ) =>
         Effect.gen(function* () {
           const session = yield* assertAuthenticated
@@ -118,7 +121,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
 
           const previous = yield* repository.findById(revision.value.wikiArticleId)
 
-          if (evaluation === "APPROVED") {
+          if (status === "APPROVED") {
             const stored = yield* repository.findCrdtRowById(revision.value.wikiArticleId)
             if (Option.isNone(stored)) {
               return yield* new WikiArticleNotFoundError({ id: revision.value.wikiArticleId })
@@ -133,13 +136,14 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           yield* repository.evaluateRevision(
             {
               revisionId,
-              evaluation,
+              evaluation: status,
               evaluatedById: session.personId,
+              evaluationReason: reason,
             },
             { enrichment: "skip" },
           )
 
-          return evaluation === "APPROVED"
+          return status === "APPROVED"
             ? {
                 article: yield* getPublishedArticle(revision.value.wikiArticleId),
                 previous: Option.getOrUndefined(previous),
@@ -148,7 +152,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         }).pipe(
           sql.withTransaction,
           Effect.tap((updated) =>
-            updated && evaluation === "APPROVED"
+            updated && status === "APPROVED"
               ? requestExternalDataFetch(updated.article, updated.previous).pipe(
                   Effect.catchCause((cause) =>
                     Effect.logError("External data submission failed", cause),
@@ -214,6 +218,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
       const attachMediaToWikiArticle = (input: {
         wikiArticleId: WikiArticleId
         mediaAssetId: MediaAssetId
+        category?: string | null | undefined
       }) =>
         Effect.gen(function* () {
           yield* Policies.wiki.canRevise
@@ -224,6 +229,14 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           })
           if (asset.format !== "IMAGE") return yield* new MediaNotFoundError({ id: asset.id })
           yield* repository.attachMediaToWikiArticle(input)
+
+          if (input.category !== undefined) {
+            yield* mediaRepository.updateMediaAssetDescriptions({
+              ...asset,
+              category: input.category,
+              updatedAt: yield* DateTime.now,
+            })
+          }
         }).pipe(sql.withTransaction)
 
       const setMainMedia = (input: { wikiArticleId: WikiArticleId; mediaAssetId: MediaAssetId }) =>
@@ -239,6 +252,36 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           }
 
           yield* repository.setMainMedia(input)
+        }).pipe(sql.withTransaction)
+
+      const bookmark = (wikiArticleId: WikiArticleId, state: BookmarkState = "INTERESTED") =>
+        Effect.gen(function* () {
+          const session = yield* assertAuthenticated
+          yield* Policies.wiki.canBookmark
+          yield* getPublishedArticle(wikiArticleId)
+          yield* repository.setBookmark({ personId: session.personId, wikiArticleId, state })
+        })
+
+      const removeBookmark = (wikiArticleId: WikiArticleId) =>
+        Effect.gen(function* () {
+          const session = yield* assertAuthenticated
+          yield* Policies.wiki.canRemoveBookmark(session.personId)
+          yield* repository.removeBookmark({ personId: session.personId, wikiArticleId })
+        })
+
+      const listBookmarks = assertAuthenticated.pipe(
+        Effect.flatMap((session) => repository.listBookmarks(session.personId)),
+      )
+
+      const toggleBookmark = (wikiArticleId: WikiArticleId) =>
+        Effect.gen(function* () {
+          const bookmarks = yield* listBookmarks
+
+          if (bookmarks.some((bookmark) => bookmark.wikiArticleId === wikiArticleId)) {
+            yield* removeBookmark(wikiArticleId)
+          } else {
+            yield* bookmark(wikiArticleId)
+          }
         }).pipe(sql.withTransaction)
 
       return {
@@ -259,22 +302,10 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           ),
         getThumbnail: (id: WikiArticleId) =>
           getPublishedArticle(id).pipe(Effect.andThen(repository.findMainMedia(id))),
-        bookmark: (wikiArticleId: WikiArticleId, state: BookmarkState = "INTERESTED") =>
-          Effect.gen(function* () {
-            const session = yield* assertAuthenticated
-            yield* Policies.wiki.canBookmark
-            yield* getPublishedArticle(wikiArticleId)
-            yield* repository.setBookmark({ personId: session.personId, wikiArticleId, state })
-          }),
-        removeBookmark: (wikiArticleId: WikiArticleId) =>
-          Effect.gen(function* () {
-            const session = yield* assertAuthenticated
-            yield* Policies.wiki.canRemoveBookmark(session.personId)
-            yield* repository.removeBookmark({ personId: session.personId, wikiArticleId })
-          }),
-        listBookmarks: assertAuthenticated.pipe(
-          Effect.flatMap((session) => repository.listBookmarks(session.personId)),
-        ),
+        bookmark,
+        removeBookmark,
+        listBookmarks,
+        toggleBookmark,
       }
     }),
   },

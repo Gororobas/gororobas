@@ -1,6 +1,6 @@
 import { Schema, Struct } from "effect"
 
-import { WikiArticleStatus } from "../common/enums.js"
+import { RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { LoroDocUpdate } from "../crdts/domain.js"
@@ -51,10 +51,16 @@ export const CreateWikiArticleRevisionInput = Schema.Struct({
 
 export type CreateWikiArticleRevisionInput = typeof CreateWikiArticleRevisionInput.Type
 
+export const EvaluateWikiArticleRevisionPayload = Schema.Struct({
+  status: RevisionEvaluation.pick(["APPROVED", "REJECTED"]),
+  reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
+})
+export type EvaluateWikiArticleRevisionPayload = typeof EvaluateWikiArticleRevisionPayload.Type
+
 export const EvaluateWikiArticleRevisionInput = Schema.Struct({
   wikiArticleId: Schema.optional(WikiArticleId),
   evaluatedById: PersonId,
-  evaluation: Schema.Literals(["APPROVED", "REJECTED"]),
+  evaluation: EvaluateWikiArticleRevisionPayload.fields.status,
   evaluationReason: Schema.optional(Schema.String),
   revisionId: WikiArticleRevisionId,
 })

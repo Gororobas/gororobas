@@ -1,6 +1,10 @@
-import { NodeServices } from "@effect/platform-node"
+import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { assert, expect, it } from "@effect/vitest"
 import {
+  ApiAuthentication,
+  GororobasApi,
+  IdGen,
+  type Session,
   BookmarkState,
   PlatformAccessLevelOrVisitor,
   SessionContext,
@@ -33,11 +37,15 @@ import {
 import { VISITOR_SESSION } from "@gororobas/server/session-service"
 import { Effect, Layer, Option, Result, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
+import { HttpRouter } from "effect/http"
+import { HttpApi, HttpApiBuilder } from "effect/http-api"
 import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 import sharp from "sharp"
 
 import { MediaAssetsService } from "../src/media-assets/service.js"
+import { resolveSessionFromAuthSubjectId } from "../src/session-service.js"
+import { WikiApiLive } from "../src/wiki/api-live.js"
 import {
   findCrdtRowById,
   findDatabaseRowById,
@@ -210,7 +218,9 @@ const approve = (context: WikiContext) =>
     yield* asPerson({
       context: context,
       name: "Ana",
-      action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), "APPROVED"),
+      action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), {
+        status: "APPROVED",
+      }),
     })
 
     return context
@@ -253,7 +263,7 @@ const editParent = (context: WikiContext, edit: Parameters<typeof WikiArticleCrd
     yield* asPerson({
       context: context,
       name: "Ana",
-      action: service.evaluateRevision(revision, "APPROVED"),
+      action: service.evaluateRevision(revision, { status: "APPROVED" }),
     })
 
     return context
@@ -337,7 +347,9 @@ const approval = () =>
         yield* asPerson({
           context: context,
           name: name,
-          action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), "APPROVED"),
+          action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), {
+            status: "APPROVED",
+          }),
         })
 
         return context
@@ -396,7 +408,29 @@ const propertyState = () =>
       }),
   })
 
-const uploadPhoto = (context: WikiContext, title = "Mandioca") =>
+const view = (
+  context: WikiContext,
+  { title, language }: { title: string; language: SupportedLanguage },
+) =>
+  Effect.gen(function* () {
+    const row = Option.getOrThrow(
+      yield* (yield* WikiArticlesRepository).findBySearchableName(title.toLowerCase()),
+    )
+
+    return {
+      ...context,
+      page: yield* (yield* WikiArticlesService).getPage({
+        handle: row.handle,
+        kind: "PLANT",
+        language,
+      }),
+    }
+  })
+
+const uploadPhoto = (
+  context: WikiContext,
+  { title = "Mandioca", category }: { title?: string; category?: string } = {},
+) =>
   Effect.gen(function* () {
     const file = yield* Effect.tryPromise(() =>
       sharp({
@@ -427,6 +461,7 @@ const uploadPhoto = (context: WikiContext, title = "Mandioca") =>
       action: (yield* WikiArticlesService).attachMediaToWikiArticle({
         wikiArticleId: articleId(context, title),
         mediaAssetId: photo.id,
+        category,
       }),
     })
 
@@ -443,14 +478,14 @@ const photoAdded = () =>
       title: Schema.String,
     }),
     handler: (_, { title }) =>
-      background().pipe(Effect.flatMap((context) => uploadPhoto(context, title))),
+      background().pipe(Effect.flatMap((context) => uploadPhoto(context, { title }))),
   })
 
 const approvedPhotos = () =>
   Given("{string:title} has approved photos", {
     params: titleParams,
     handler: (_, { title }) =>
-      background().pipe(Effect.flatMap((context) => uploadPhoto(context, title))),
+      background().pipe(Effect.flatMap((context) => uploadPhoto(context, { title }))),
   })
 
 const bookmark = ({
@@ -702,16 +737,17 @@ await Effect.runPromise(
                     return context
                   }),
               }),
-              And("{string:title}'s parentPlantId references {string:parent}", {
+              And("{string:title} appears in {string:parent}'s cultivars list", {
                 params: Schema.Struct({
                   title: Schema.String,
                   parent: Schema.String,
                 }),
                 handler: (context: WikiContext, { title, parent }) =>
                   Effect.gen(function* () {
-                    expect((yield* cultivar(context, title)).attributes.parentPlantId).toBe(
-                      articleId(context, parent),
-                    )
+                    const page = yield* view(context, { title: parent, language: "pt" })
+                    expect(
+                      pageIn(page).cultivars.map((cultivar) => cultivar.commonNames),
+                    ).toContainEqual([title])
                     return context
                   }),
               }),
@@ -1099,10 +1135,39 @@ await Effect.runPromise(
         layer: WikiTestLayer,
         steps: () => runSteps(community(), articleExists()),
       })
-      // oxlint-disable-next-line vitest/warn-todo -- The feature explicitly defers category identifiers and data structures.
-      it.todo(
-        "Add photo with category — feature TODO: finalize category identifiers and data structures",
-      )
+
+      Scenario("Add photo with category", {
+        layer: WikiTestLayer,
+        steps: () =>
+          runSteps(
+            When("{string:name} adds a photo to {string:title} with category {string:category}", {
+              params: Schema.Struct({
+                name: Schema.Literal("Maria"),
+                title: Schema.String,
+                category: Schema.String,
+              }),
+              handler: (_, { title, category }) =>
+                background().pipe(
+                  Effect.flatMap((context) => uploadPhoto(context, { title, category })),
+                ),
+            }),
+            Then("the photo appears in {string:title}'s gallery under {string:category}", {
+              params: Schema.Struct({ title: Schema.String, category: Schema.String }),
+              handler: (context: WikiContext, { title, category }) =>
+                Effect.gen(function* () {
+                  const page = yield* view(context, { title, language: "pt" })
+
+                  expect(
+                    pageIn(page)
+                      .mediaAssets.filter((photo) => photo.category === category)
+                      .map((photo) => photo.id),
+                  ).toContain(photoIn(context).id)
+
+                  return context
+                }),
+            }),
+          ),
+      })
 
       Scenario("Photos are approved by default", {
         layer: WikiTestLayer,
@@ -1114,7 +1179,7 @@ await Effect.runPromise(
                 title: Schema.String,
               }),
               handler: (_, { title }) =>
-                background().pipe(Effect.flatMap((context) => uploadPhoto(context, title))),
+                background().pipe(Effect.flatMap((context) => uploadPhoto(context, { title }))),
             }),
             Then("the photo is visible in the encyclopedia", {
               handler: (context: WikiContext) =>
@@ -1474,6 +1539,9 @@ it.effect(
                 expect(error).toMatchObject({
                   _tag: "UnauthorizedError",
                 })
+                expect(yield* read(service.toggleBookmark(id)).pipe(Effect.flip)).toMatchObject({
+                  _tag: "UnauthorizedError",
+                })
                 expect(
                   yield* sql`SELECT * FROM bookmarks_wiki_articles ORDER BY person_id, wiki_article_id`,
                 ).toEqual(before)
@@ -1489,6 +1557,12 @@ it.effect(
                   },
                 ])
 
+                yield* read(service.toggleBookmark(id))
+                expect(yield* read(service.listBookmarks)).toEqual([])
+                yield* read(service.toggleBookmark(id))
+                expect(yield* read(service.listBookmarks)).toEqual([
+                  { wikiArticleId: id, state: "INTERESTED" },
+                ])
                 yield* read(service.removeBookmark(id))
                 expect(yield* read(service.listBookmarks)).toEqual([])
               }),
@@ -1609,7 +1683,7 @@ it.effect("pending and rejected creation remain unavailable; only evaluators can
       yield* asPerson({
         context: context,
         name: "Maria",
-        action: service.evaluateRevision(revisionId(context), "APPROVED"),
+        action: service.evaluateRevision(revisionId(context), { status: "APPROVED" }),
       }).pipe(Effect.flip),
     ).toMatchObject({
       _tag: "UnauthorizedError",
@@ -1620,7 +1694,7 @@ it.effect("pending and rejected creation remain unavailable; only evaluators can
     yield* asPerson({
       context: context,
       name: "Ana",
-      action: service.evaluateRevision(revisionId(context), "REJECTED"),
+      action: service.evaluateRevision(revisionId(context), { status: "REJECTED" }),
     })
 
     expect(yield* findDatabaseRowById(id)).toEqual(Option.none())
@@ -1632,7 +1706,7 @@ it.effect("pending and rejected creation remain unavailable; only evaluators can
       yield* asPerson({
         context: context,
         name: "Ana",
-        action: service.evaluateRevision(revisionId(context), "APPROVED"),
+        action: service.evaluateRevision(revisionId(context), { status: "APPROVED" }),
       }).pipe(Effect.flip),
     ).toMatchObject({
       _tag: "WikiArticleRevisionAlreadyEvaluatedError",
@@ -1818,5 +1892,113 @@ it.effect(
           (row) => row.id,
         ),
       ).toEqual([photo.id])
+    }).pipe(Effect.provide(WikiTestLayer)),
+)
+
+it.live(
+  "wiki HTTP mutations enforce moderation permissions and accept final revision statuses",
+  () =>
+    Effect.gen(function* () {
+      const context = yield* uploadPhoto(
+        yield* seedArticle({ context: yield* setupPeople(), title: "Mandioca" }),
+      )
+      let session: Session = yield* resolveSessionFromAuthSubjectId(
+        personNamed(context.actors, "Maria"),
+      )
+      const services = yield* Effect.context<
+        WikiArticlesService | IdGen | SqlClient.SqlClient | WorkflowEngine.WorkflowEngine
+      >()
+      const api = HttpApi.make(GororobasApi.identifier).add(GororobasApi.groups.wiki)
+
+      const app = yield* Effect.acquireRelease(
+        Effect.sync(() =>
+          HttpRouter.toWebHandler(
+            Layer.provide(HttpApiBuilder.layer(api), WikiApiLive).pipe(
+              HttpRouter.provideRequest(Layer.succeedContext(services)),
+              Layer.provide(
+                Layer.succeed(
+                  ApiAuthentication,
+                  ApiAuthentication.of((effect) =>
+                    Effect.suspend(() =>
+                      effect.pipe(Effect.provideService(SessionContext, session)),
+                    ),
+                  ),
+                ),
+              ),
+              Layer.provide(NodeHttpServer.layerHttpServices),
+            ),
+            { disableLogger: true },
+          ),
+        ),
+        (app) => Effect.tryPromise(() => app.dispose()).pipe(Effect.orDie),
+      )
+
+      const selectPhoto = (id: string) =>
+        Effect.tryPromise(() =>
+          app.handler(
+            new Request(`http://localhost/wiki/${articleId(context, "Mandioca")}/main-media`, {
+              method: "PUT",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ mediaAssetId: id }),
+            }),
+          ),
+        )
+
+      expect((yield* selectPhoto(photoIn(context).id)).status).toBe(403)
+      expect(
+        yield* (yield* WikiArticlesService).getThumbnail(articleId(context, "Mandioca")),
+      ).toEqual(Option.none())
+      session = yield* resolveSessionFromAuthSubjectId(personNamed(context.actors, "Ana"))
+      expect((yield* selectPhoto(photoIn(context).id)).status).toBe(204)
+      const listing = yield* Effect.tryPromise(() =>
+        app.handler(new Request("http://localhost/wiki")),
+      )
+      expect(listing.status).toBe(200)
+
+      expect(yield* Effect.tryPromise(() => listing.json())).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: articleId(context, "Mandioca"),
+            thumbnailMediaAssetId: photoIn(context).id,
+          }),
+        ]),
+      )
+
+      expect((yield* selectPhoto("00000000-0000-7000-8000-000000000099")).status).toBe(404)
+      expect((yield* selectPhoto("invalid")).status).toBe(400)
+
+      const proposedId = yield* asPerson({
+        context,
+        name: "Maria",
+        action: (yield* WikiArticlesService).createWikiArticle({
+          wikiArticle: plant("Mandioca Nova"),
+        }),
+      })
+
+      const pending = Option.getOrThrow(
+        Option.fromNullishOr((yield* listPendingRevisionsByWikiArticleId(proposedId))[0]),
+      )
+
+      const evaluate = (payload: { status: string; reason?: string } | { isApproved: boolean }) =>
+        Effect.tryPromise(() =>
+          app.handler(
+            new Request(`http://localhost/wiki/revisions/${pending.id}`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload),
+            }),
+          ),
+        )
+
+      expect((yield* evaluate({ status: "PENDING" })).status).toBe(400)
+      expect((yield* evaluate({ isApproved: true })).status).toBe(400)
+      expect(Option.getOrThrow(yield* findRevisionById(pending.id)).evaluation).toBe("PENDING")
+      expect((yield* evaluate({ status: "REJECTED", reason: "Needs more detail" })).status).toBe(
+        200,
+      )
+      expect(Option.getOrThrow(yield* findRevisionById(pending.id))).toMatchObject({
+        evaluation: "REJECTED",
+        evaluationReason: Option.some("Needs more detail"),
+      })
     }).pipe(Effect.provide(WikiTestLayer)),
 )

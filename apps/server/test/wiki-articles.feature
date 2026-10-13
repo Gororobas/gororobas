@@ -32,7 +32,7 @@ Feature: Wiki articles
       And "Banana Prata" is not visible in "Banana"'s cultivars list
       When "Ana" approves the creation revision
       Then "Banana Prata" is published with kind "PLANT_CULTIVAR"
-      And "Banana Prata"'s parentPlantId references "Banana"
+      And "Banana Prata" appears in "Banana"'s cultivars list
 
     Scenario: Omitted cultivar properties remain Unknown
       Given "Banana" has lifecycles "PERENNIAL"
@@ -78,7 +78,6 @@ Feature: Wiki articles
       And the wiki article "Mandioca" exists
 
     Scenario: Add photo with category
-      # @TODO finalize photo data structures and category identifiers before implementing this scenario; "raiz" is a placeholder.
       When "Maria" adds a photo to "Mandioca" with category "raiz"
       Then the photo appears in "Mandioca"'s gallery under "raiz"
 

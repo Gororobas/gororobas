@@ -18,6 +18,9 @@ import { PublicationsApiLive } from "./publications/api-live.js"
 import { PublicationsRepository } from "./publications/repository.js"
 import { PublicationsService } from "./publications/service.js"
 import { TagsApiLive } from "./tags/api-live.js"
+import { WikiApiLive } from "./wiki/api-live.js"
+import { WikiArticlesRepository } from "./wiki/repository.js"
+import { WikiArticlesService } from "./wiki/service.js"
 
 // Register the implemented API groups.
 const ImplementedApi = HttpApi.make(GororobasApi.identifier).add(
@@ -28,6 +31,7 @@ const ImplementedApi = HttpApi.make(GororobasApi.identifier).add(
   GororobasApi.groups.publications,
   GororobasApi.groups.profiles,
   GororobasApi.groups.tags,
+  GororobasApi.groups.wiki,
 )
 
 const MediaServicesLive = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
@@ -43,10 +47,15 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
   PublicationsApiLive,
   ProfilesApiLive,
   TagsApiLive,
+  WikiApiLive,
 ]).pipe(
   HttpRouter.provideRequest(
     Layer.mergeAll(
       MediaServicesLive,
+      Layer.effect(WikiArticlesService, WikiArticlesService.make).pipe(
+        Layer.provideMerge(Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)),
+        Layer.provide(MediaServicesLive),
+      ),
       Layer.effect(PublicationCommentsService, PublicationCommentsService.make),
       Layer.effect(PublicationsService, PublicationsService.make),
       Layer.effect(ProfilesRepository, ProfilesRepository.make),

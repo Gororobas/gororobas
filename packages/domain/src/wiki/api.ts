@@ -4,13 +4,14 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { UnauthorizedError } from "../authorization/session.js"
 import { SupportedLanguage } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
-import { WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
+import { MediaAssetId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import { InvalidMediaAssetError, MediaNotFoundError } from "../media-assets/errors.js"
 import {
   CreateWikiArticlePayload,
   CreateWikiArticleRevisionPayload,
+  EvaluateWikiArticleRevisionPayload,
   WikiArticleKind,
   WikiArticleLookup,
   WikiArticleQueriedCardData,
@@ -33,16 +34,17 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
   .add(
     HttpApiEndpoint.get("getWikiArticleByHandleAndKind", "/wiki/:kind/:handle", {
       success: WikiArticleQueriedPageData,
-      error: WikiArticleNotFoundError,
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
       params: WikiArticleLookup,
       query: Schema.Struct({ language: Schema.optional(SupportedLanguage) }),
     }),
   )
   .add(
     HttpApiEndpoint.post("createWikiArticle", "/wiki", {
-      success: Schema.Struct({ id: WikiArticleId, kind: WikiArticleKind, handle: Handle }),
+      success: Schema.Struct({ id: WikiArticleId }),
       error: [
         HandleTakenError,
+        WikiArticleNotFoundError,
         InvalidCrdtUpdateError,
         UnauthorizedError,
         InvalidMediaAssetError,
@@ -66,36 +68,34 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
     }),
   )
   .add(
-    HttpApiEndpoint.post(
-      "evaluateWikiArticleRevision",
-      "/wiki/:kind/:handle/revision/:revision_id",
-      {
-        success: Schema.Struct({ id: WikiArticleRevisionId }),
-        error: [
-          WikiArticleNotFoundError,
-          WikiArticleRevisionNotFoundError,
-          WikiArticleRevisionAlreadyEvaluatedError,
-          InvalidCrdtUpdateError,
-          UnauthorizedError,
-          InvalidMediaAssetError,
-          MediaNotFoundError,
-        ],
-        params: Schema.Struct({
-          handle: Handle,
-          kind: WikiArticleKind,
-          revisionId: WikiArticleRevisionId,
-        }),
-        payload: Schema.Struct({
-          isApproved: Schema.Boolean,
-          reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
-        }),
-      },
-    ),
+    HttpApiEndpoint.post("evaluateWikiArticleRevision", "/wiki/revisions/:revisionId", {
+      success: Schema.Struct({ id: WikiArticleRevisionId }),
+      error: [
+        WikiArticleNotFoundError,
+        WikiArticleRevisionNotFoundError,
+        WikiArticleRevisionAlreadyEvaluatedError,
+        InvalidCrdtUpdateError,
+        UnauthorizedError,
+        InvalidMediaAssetError,
+        MediaNotFoundError,
+      ],
+      params: Schema.Struct({
+        revisionId: WikiArticleRevisionId,
+      }),
+      payload: EvaluateWikiArticleRevisionPayload,
+    }),
   )
   .add(
     HttpApiEndpoint.post("toggleWikiArticleBookmark", "/wiki/:kind/:handle/bookmark", {
       success: Schema.Literal(true),
-      error: WikiArticleNotFoundError,
+      error: [WikiArticleNotFoundError, UnauthorizedError, InvalidCrdtUpdateError],
       params: Schema.Struct({ handle: Handle, kind: WikiArticleKind }),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.put("setMainMedia", "/wiki/:wikiArticleId/main-media", {
+      params: Schema.Struct({ wikiArticleId: WikiArticleId }),
+      payload: Schema.Struct({ mediaAssetId: MediaAssetId }),
+      error: [UnauthorizedError, WikiArticleNotFoundError, MediaNotFoundError],
     }),
   ) {}
