@@ -12,6 +12,7 @@ import {
   WikiArticleCommonNameInCrdtList,
   WikiArticleId,
   WikiArticleRevisionRow,
+  WikiArticleRevisionInsertRow,
   OrganizationAccessLevel,
 } from "@gororobas/domain"
 import {
@@ -999,6 +1000,11 @@ await Effect.runPromise(
                     evaluation: "APPROVED",
                     createdById: context.personId,
                   })
+                  const authorless = { ...history[0], createdById: null }
+                  expect(Schema.is(WikiArticleRevisionRow)(authorless)).toBe(true)
+                  expect(Schema.is(WikiArticleRevisionInsertRow)(authorless)).toBe(false)
+                  const { ...missingAuthor } = authorless
+                  expect(Schema.is(WikiArticleRevisionInsertRow)(missingAuthor)).toBe(false)
                   const article = yield* findDatabaseRowById(wikiArticleId)
                   return { ...context, wikiArticleId, history, article }
                 }),
@@ -1031,6 +1037,25 @@ await Effect.runPromise(
                       context.article,
                     )
                     yield* expectPersonDeleted(context.personId)
+                    const sql = yield* SqlClient.SqlClient
+
+                    expect(
+                      yield* sql`SELECT * FROM auth_subjects WHERE id = ${context.personId}`,
+                    ).toEqual([])
+                    expect(
+                      yield* sql`SELECT * FROM profiles WHERE id = ${context.personId}`,
+                    ).toEqual([])
+                    expect(yield* sql`SELECT * FROM people WHERE id = ${context.personId}`).toEqual(
+                      [],
+                    )
+
+                    expect(
+                      yield* sql`SELECT * FROM auth_credentials WHERE auth_subject_id = ${context.personId}`,
+                    ).toEqual([])
+                    expect(
+                      yield* sql`SELECT * FROM auth_sessions WHERE auth_subject_id = ${context.personId}`,
+                    ).toEqual([])
+                    expect(yield* sql`PRAGMA foreign_key_check`).toEqual([])
                     return context
                   }),
               },

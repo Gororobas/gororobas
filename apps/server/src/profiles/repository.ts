@@ -1,6 +1,6 @@
 import { Context, Effect } from "effect"
 
-import { deleteProfile, insertProfile, updateProfileRow } from "./mutations.js"
+import { deleteProfileReturningMediaAssets, insertProfile, updateProfileRow } from "./mutations.js"
 import {
   fetchProfileContentCounts,
   fetchProfileMetadata,
@@ -13,7 +13,7 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
   "ProfilesRepository",
   {
     make: Effect.succeed({
-      delete: deleteProfile,
+      deleteProfileReturningMediaAssets,
       fetchProfileContributions: (_handle: string) =>
         Effect.logDebug("fetchProfileContributions: stub").pipe(Effect.as([])),
       fetchProfileContentCounts,

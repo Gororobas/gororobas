@@ -1,4 +1,4 @@
-import { NodePath, NodeRuntime, NodeServices } from "@effect/platform-node"
+import { NodePath, NodeRuntime, NodeServices, NodeHttpClient } from "@effect/platform-node"
 import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   MediaAssetId,
@@ -6,6 +6,7 @@ import {
   EMPTY_LORO_DOC_FRONTIER,
   IdGen,
   AuthSecurityRevision,
+  SupportedLanguage,
   LoroDocFrontier,
   LoroDocSnapshot,
   LoroDocUpdate,
@@ -17,37 +18,46 @@ import {
   WikiArticleEditableData,
   WikiArticleId,
   WikiArticleRevisionId,
-  WikiArticleRevisionRow,
+  WikiArticleRevisionInsertRow,
   loroDocToUpdate,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
 import { IdGenLive } from "@gororobas/server/id-gen-live"
 import { insertMediaAsset, insertMediaAssetCredit } from "@gororobas/server/media-assets/mutations"
+import { MediaAssetsRepository } from "@gororobas/server/media-assets/repository"
+import { MediaAssetsService } from "@gororobas/server/media-assets/service"
+import { MediaAssetsStorage } from "@gororobas/server/media-assets/storage"
 import { PublicationsRepository } from "@gororobas/server/publications/repository"
-import { makeAppSqlClient } from "@gororobas/server/sql"
+import { makeAppSqlClient, makeAppSql } from "@gororobas/server/sql"
 import { updateCrdtRow } from "@gororobas/server/wiki/mutations"
 import { WikiArticlesRepository } from "@gororobas/server/wiki/repository"
 import {
   Array as EffectArray,
   DateTime,
+  ConfigProvider,
   Effect,
   FileSystem,
   Path,
   Layer,
   Option,
   Order,
+  Record,
   Schema,
 } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
+import { ingestMedia, IngestionImage } from "./ingest-media.js"
+import { prepareIngestion, archiveExcludedAccounts } from "./ingestion-policy.js"
 import { migrateMediaDescriptions } from "./migrate-media-descriptions.js"
 import { PreviewRecord, readPreviewExports } from "./preview-exports.js"
+import { richTextMediaIds } from "./rich-text-media.js"
 import {
   NoteDataForMigration,
   TagDataForMigration,
   UserDataForMigration,
 } from "./schemas/gel/entities.js"
+import { MigratedBookmark } from "./source-gel-bookmarks.js"
 import { WikiMigrationVersion } from "./wiki-migration-history.js"
 
 const { join, resolve } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
@@ -58,10 +68,12 @@ const ArticleExport = Schema.Struct({
   versions: Schema.optional(Schema.Array(WikiMigrationVersion)),
   photoIds: Schema.optional(Schema.Array(MediaAssetId)),
   thumbnailId: Schema.optional(Schema.NullOr(MediaAssetId)),
+  creatorId: Schema.optional(PersonId),
 })
 
 const ImageExport = Schema.Struct({
   id: MediaAssetId,
+  ownerProfileId: Schema.optional(ProfileId),
   latest_source: Schema.Struct({
     sanity_id: Schema.String,
     label: Schema.NullOr(Schema.String),
@@ -75,7 +87,15 @@ const ImageExport = Schema.Struct({
 })
 
 /** Import frozen conversions into a fresh database, preserving each run for comparison. */
-export const importPreview = (exportDirectory: string, outputRoot: string) =>
+export const importPreview = ({
+  exportDirectory,
+  outputRoot,
+  application,
+}: {
+  exportDirectory: string
+  outputRoot: string
+  application?: { mediaAssetsDirectory: string; mediaCacheDirectory: string }
+}) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
     const originals = yield* readPreviewExports(exportDirectory)
@@ -89,6 +109,53 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         records.map((entry) => ({ ...entry })),
       ]),
     )
+
+    const referencesDirectory = join(exportDirectory, "references")
+    const references: Array<Schema.Json> = []
+
+    for (const filename of EffectArray.sort(
+      (yield* fs.readDirectory(referencesDirectory)).filter((file) => file.endsWith(".json")),
+      Order.String,
+    )) {
+      const data = yield* fs
+        .readFileString(join(referencesDirectory, filename))
+        .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Json))))
+      if (Array.isArray(data)) references.push(...data)
+      else references.push(data)
+    }
+
+    const ingestion = application ? yield* prepareIngestion(exports) : undefined
+    const recoveredEmbeddedMedia: Array<string> = []
+
+    const EmbeddedImageReference = Schema.Struct({
+      id: MediaAssetId,
+      gelId: Schema.String,
+      entityType: Schema.Literal("Image"),
+      sanityId: Schema.String,
+      label: Schema.String,
+    })
+
+    if (application) {
+      references.filter(Schema.is(EmbeddedImageReference)).forEach((reference) => {
+        if (exports.images.some((entry) => entry.data.id === reference.id)) return
+
+        exports.images.push({
+          file: `embedded-${reference.id}.json`,
+          data: {
+            id: reference.id,
+            latest_source: {
+              id: reference.gelId,
+              sanity_id: reference.sanityId,
+              label: reference.label,
+              sources: [],
+              sourceMissing: true,
+            },
+          },
+        })
+
+        recoveredEmbeddedMedia.push(reference.id)
+      })
+    }
 
     const missingEmailAccounts: Array<string> = []
 
@@ -113,6 +180,15 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
 
     yield* fs.makeDirectory(outputRoot, { recursive: true })
     const directory = yield* fs.makeTempDirectory({ directory: outputRoot, prefix: "migration-" })
+
+    if (application) {
+      yield* archiveExcludedAccounts({ exportDirectory, directory, exports })
+      yield* fs.writeFileString(
+        join(directory, "ingestion-policy.json"),
+        JSON.stringify(ingestion, null, 2),
+      )
+    }
+
     const schema = yield* fs.readFileString(
       new URL("../../../apps/server/src/db/schema.sql", import.meta.url).pathname,
     )
@@ -137,20 +213,6 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
     if (yield* fs.exists(rawDirectory)) yield* fs.copy(rawDirectory, join(directory, "raw-gel"))
     const journal = join(exportDirectory, "journal", "notes.json")
     if (yield* fs.exists(journal)) yield* fs.copyFile(journal, join(directory, "journal.json"))
-    const referencesDirectory = join(exportDirectory, "references")
-    const references: Array<Schema.Json> = []
-
-    for (const filename of EffectArray.sort(
-      (yield* fs.readDirectory(referencesDirectory)).filter((file) => file.endsWith(".json")),
-      Order.String,
-    )) {
-      const data = yield* fs
-        .readFileString(join(referencesDirectory, filename))
-        .pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Json))))
-      if (Array.isArray(data)) references.push(...data)
-      else references.push(data)
-    }
-
     yield* fs.writeFileString(
       join(directory, "references.json"),
       JSON.stringify(references, null, 2),
@@ -164,23 +226,38 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
       const wiki = yield* WikiArticlesRepository
       const now = yield* DateTime.now
       const timestamp = DateTime.formatIso(now)
-      const importerId = yield* IdGen.make(PersonId)
+      const importerId = ingestion?.fallbackAuthorId ?? (yield* IdGen.make(PersonId))
       const people = new Set<string>([importerId])
       const unresolvedActors = new Set<string>()
       let revisionCount = 0
+      let bookmarkCount = 0
+      const unresolvedBookmarks: Array<string> = []
+
+      const storedMedia = application
+        ? yield* ingestMedia(
+            yield* Schema.decodeEffect(Schema.toCodecJson(Schema.Array(IngestionImage)))(
+              exports.images.map((entry) => entry.data),
+            ),
+            application.mediaCacheDirectory,
+          )
+        : undefined
 
       yield* Effect.gen(function* () {
-        // schema.sql contains plain DDL, with no triggers or semicolons in literals.
-        for (const statement of schema
-          .replace(/--[^\n]*/g, "")
-          .split(";")
-          .filter((part) => part.trim())) {
-          yield* sql.unsafe(statement)
+        // Preview DDL rolls back with the data; application imports use the normal migrator.
+        if (!application) {
+          for (const statement of schema
+            .replace(/--[^\n]*/g, "")
+            .split(";")
+            .filter((part) => part.trim())) {
+            yield* sql.unsafe(statement)
+          }
         }
 
-        yield* sql`INSERT INTO auth_subjects ${sql.insert({ id: importerId, name: "Migration import", email: "migration-preview@example.invalid", isEmailVerified: 0, securityRevision: yield* IdGen.make(AuthSecurityRevision), createdAt: timestamp, updatedAt: timestamp })}`
-        yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
-        yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
+        if (!application) {
+          yield* sql`INSERT INTO auth_subjects ${sql.insert({ id: importerId, name: "Migration import", email: "migration-preview@example.invalid", isEmailVerified: 0, securityRevision: yield* IdGen.make(AuthSecurityRevision), createdAt: timestamp, updatedAt: timestamp })}`
+          yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
+          yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
+        }
 
         for (const { data } of exports.users) {
           const user = yield* Schema.decodeEffect(Schema.toCodecJson(UserDataForMigration))(data)
@@ -208,20 +285,22 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
             )
           }
 
+          const stored = storedMedia?.images[image.id]
+
           yield* insertMediaAsset({
             id: image.id,
             format: "IMAGE",
-            metadata: {
+            metadata: stored?.metadata ?? {
               format: "IMAGE",
               originalWidth: Number(dimensions[1]),
               originalHeight: Number(dimensions[2]),
             },
-            contentType: null,
-            byteSize: null,
+            contentType: stored?.contentType ?? null,
+            byteSize: stored?.byteSize ?? null,
             moderationStatus: "APPROVED_BY_DEFAULT",
             category: null,
             descriptions: migrateMediaDescriptions(image.latest_source.label),
-            ownerProfileId: ProfileId.make(importerId),
+            ownerProfileId: image.ownerProfileId ?? ProfileId.make(importerId),
             createdAt: now,
             updatedAt: now,
           })
@@ -284,8 +363,13 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
             if (!editable) {
               return yield* Effect.fail(new Error(`No converted article: ${category}/${file}`))
             }
+
             yield* wiki.createWikiArticle(
-              { wikiArticle: editable, createdById: importerId, status: "PUBLISHED" },
+              {
+                wikiArticle: editable,
+                createdById: article.creatorId ?? importerId,
+                status: "PUBLISHED",
+              },
               { id: article.id, enrichment: "skip" },
             )
 
@@ -323,15 +407,12 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
                 }
 
                 yield* SqlSchema.void({
-                  Request: WikiArticleRevisionRow.mapFields((fields) => ({
-                    ...fields,
-                    createdById: Schema.NullOr(PersonId),
-                  })),
+                  Request: WikiArticleRevisionInsertRow,
                   execute: (row) => sql`INSERT INTO wiki_article_revisions ${sql.insert(row)}`,
                 })({
                   id: yield* IdGen.make(WikiArticleRevisionId),
                   wikiArticleId: article.id,
-                  createdById: knownPerson(version.actorId),
+                  createdById: knownPerson(version.actorId) ?? importerId,
                   evaluatedById: Option.fromNullishOr(knownPerson(version.reviewerId)),
                   evaluation: "APPROVED",
                   evaluationReason: Option.none(),
@@ -377,9 +458,24 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
               yield* sql`UPDATE wiki_articles SET current_crdt_frontier = ${JSON.stringify(frontier)}, created_at = ${DateTime.formatIso(createdAt)}, updated_at = ${DateTime.formatIso(updatedAt)} WHERE id = ${article.id}`
             } else revisionCount++
 
-            const photoIds = article.photoIds ?? (article.thumbnailId ? [article.thumbnailId] : [])
+            const photoIds = EffectArray.dedupe([
+              ...(article.photoIds ?? (article.thumbnailId ? [article.thumbnailId] : [])),
+              ...SupportedLanguage.literals
+                .map((language) => editable.translations[language])
+                .flatMap((translation) =>
+                  translation
+                    ? Option.toArray(translation.content).flatMap((content) =>
+                        richTextMediaIds(content.content),
+                      )
+                    : [],
+                ),
+            ])
+
             for (const mediaAssetId of photoIds) {
               yield* sql`INSERT INTO wiki_article_media_assets ${sql.insert({ wikiArticleId: article.id, mediaAssetId })}`
+            }
+            if (photoIds[0]) {
+              yield* sql`INSERT INTO wiki_article_main_media ${sql.insert({ wikiArticleId: article.id, mediaAssetId: photoIds[0] })}`
             }
           }
         }
@@ -402,12 +498,41 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
             { sourceData, createdById: PersonId.make(owner) },
             { id: PublicationId.make(note.id) },
           )
+          for (const mediaAssetId of richTextMediaIds(sourceData.sourceContent.content)) {
+            yield* sql`INSERT INTO publication_media_assets ${sql.insert({ publicationId: note.id, mediaAssetId })}`
+          }
           for (const tagId of note.tagIds) {
             yield* sql`INSERT INTO publication_tags ${sql.insert({ publicationId: note.id, tagId, extractionText: null })}`
           }
           for (const wikiArticleId of note.wikiArticleIds) {
             yield* sql`INSERT INTO publication_wiki_articles ${sql.insert({ publicationId: note.id, wikiArticleId, extractionText: null })}`
           }
+        }
+
+        const bookmarksFile = join(exportDirectory, "bookmarks.json")
+
+        if (yield* fs.exists(bookmarksFile)) {
+          const bookmarks = yield* fs
+            .readFileString(bookmarksFile)
+            .pipe(
+              Effect.flatMap(
+                Schema.decodeEffect(Schema.fromJsonString(Schema.Array(MigratedBookmark))),
+              ),
+            )
+
+          for (const bookmark of bookmarks) {
+            if (!people.has(bookmark.personId)) continue
+            if (Option.isNone(yield* wiki.findById(bookmark.wikiArticleId))) {
+              unresolvedBookmarks.push(bookmark.sourceId)
+              continue
+            }
+            yield* wiki.setBookmark(bookmark)
+            bookmarkCount++
+          }
+        } else if (application) {
+          return yield* Effect.fail(
+            new Error("Missing frozen bookmarks.json; run a fresh Gel export first"),
+          )
         }
 
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
@@ -437,6 +562,15 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
         ),
         revisions: revisionCount,
         unresolvedActors: [...unresolvedActors],
+        bookmarks: bookmarkCount,
+        unresolvedBookmarks,
+        media: storedMedia
+          ? {
+              downloaded: storedMedia.downloaded,
+              prepared: storedMedia.prepared,
+              total: Record.keys(storedMedia.images).length,
+            }
+          : undefined,
       }
     }).pipe(
       Effect.provide(
@@ -444,23 +578,40 @@ export const importPreview = (exportDirectory: string, outputRoot: string) =>
           Layer.effect(PublicationsRepository)(PublicationsRepository.make),
           Layer.effect(WikiArticlesRepository)(WikiArticlesRepository.make),
         ).pipe(
-          Layer.provideMerge(makeAppSqlClient(database)),
+          Layer.provideMerge(application ? makeAppSql(database) : makeAppSqlClient(database)),
+          Layer.provideMerge(
+            Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
+              Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+              Layer.provideMerge(Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make)),
+              Layer.provide(NodeServices.layer),
+              Layer.provide(
+                Layer.succeed(
+                  ConfigProvider.ConfigProvider,
+                  ConfigProvider.fromUnknown({
+                    MEDIA_ASSETS_DIRECTORY:
+                      application?.mediaAssetsDirectory ?? join(directory, "media-assets"),
+                  }),
+                ),
+              ),
+            ),
+          ),
+          Layer.provideMerge(NodeHttpClient.layerUndici),
           Layer.provideMerge(IdGenLive),
           Layer.provideMerge(WorkflowEngine.layerMemory),
         ),
       ),
     )
 
-    const report = { directory, database, missingEmailAccounts, ...result }
+    const report = { directory, database, missingEmailAccounts, recoveredEmbeddedMedia, ...result }
     yield* fs.writeFileString(join(directory, "verification.json"), JSON.stringify(report, null, 2))
     return report
   })
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
-  importPreview(
-    resolve(process.argv[2] ?? new URL("../debug", import.meta.url).pathname),
-    resolve(process.argv[3] ?? new URL("../debug/sqlite", import.meta.url).pathname),
-  ).pipe(
+  importPreview({
+    exportDirectory: resolve(process.argv[2] ?? new URL("../debug", import.meta.url).pathname),
+    outputRoot: resolve(process.argv[3] ?? new URL("../debug/sqlite", import.meta.url).pathname),
+  }).pipe(
     Effect.tap((report) => Effect.sync(() => console.log(JSON.stringify(report, null, 2)))),
     Effect.provide(NodeServices.layer),
     NodeRuntime.runMain,

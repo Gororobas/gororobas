@@ -83,7 +83,7 @@ export class PublicationsApiGroup extends HttpApiGroup.make("publications")
   .add(
     HttpApiEndpoint.get("getPublicationHistory", "/publications/:id/history", {
       success: Schema.Array(ApiPublicationHistoryEntry),
-      error: [PublicationNotFoundError, UnauthorizedError],
+      error: [PublicationNotFoundError, UnauthorizedError, InvalidCrdtUpdateError],
       params: Schema.Struct({ id: PublicationId }),
     }),
   ) {}

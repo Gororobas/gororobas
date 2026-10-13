@@ -234,7 +234,7 @@ export const ApiUpdatePublicationData = Schema.Struct({
 export type ApiUpdatePublicationData = typeof ApiUpdatePublicationData.Type
 
 export const ApiPublicationHistoryEntry = Schema.Struct({
-  authorId: ProfileId,
+  authorId: Schema.NullOr(ProfileId),
   content: TiptapDocument,
   createdAt: TimestampColumn,
   version: Schema.Int,

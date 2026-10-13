@@ -6,7 +6,7 @@ import {
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
   WikiArticleProjectionRow,
-  WikiArticleRevisionRow,
+  WikiArticleRevisionInsertRow,
   WikiArticleRevisionMediaAssetRow,
   WikiArticleRevisionUpdateRow,
   WikiArticleTranslationProjectionRow,
@@ -21,7 +21,7 @@ export const insertCrdtRow = SqlSchema.void({
 })
 
 export const insertRevisionRow = SqlSchema.void({
-  Request: WikiArticleRevisionRow,
+  Request: WikiArticleRevisionInsertRow,
   execute: (row) =>
     SqlClient.use((sql) => sql`INSERT INTO wiki_article_revisions ${sql.insert(row)}`),
 })

@@ -7,6 +7,22 @@ import { WikiArticlesService } from "./service.js"
 
 export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers) =>
   handlers
+    .handle("getWikiBookmarks", () =>
+      WikiArticlesService.use((service) => service.listBookmarks).pipe(
+        withApiInfrastructureErrors({ group: "wiki", endpoint: "getWikiBookmarks" }),
+      ),
+    )
+    .handle("getWikiRevisionHistory", ({ params }) =>
+      WikiArticlesService.use((service) =>
+        Effect.gen(function* () {
+          const article = yield* service.getPage({ ...params, language: "pt" })
+          return yield* service.listRevisionHistory({
+            wikiArticleId: article.id,
+            evaluation: "APPROVED",
+          })
+        }),
+      ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "getWikiRevisionHistory" })),
+    )
     .handle("searchWikiArticles", () =>
       WikiArticlesService.use((service) => service.listCards("pt")).pipe(
         withApiInfrastructureErrors({ group: "wiki", endpoint: "searchWikiArticles" }),

@@ -24,6 +24,7 @@ const contentTypes = {
   "image/webp": "IMAGE",
   "image/avif": "IMAGE",
   "image/gif": "IMAGE",
+  "image/svg+xml": "IMAGE",
   "audio/wav": "AUDIO",
   "audio/x-wav": "AUDIO",
   "audio/mpeg": "AUDIO",
@@ -52,6 +53,17 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
 
           const wiki = yield* repository.listMediaAssetWikiArticles(id)
           const publications = yield* repository.listMediaAssetPublications(id)
+          const profiles = yield* repository.listMediaAssetProfiles(id)
+
+          const profileAccess = yield* Effect.forEach(
+            profiles,
+            (profile) =>
+              Policies.profiles.canRead(profile).pipe(
+                Effect.as(true),
+                Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
+              ),
+            { concurrency: 1 },
+          )
 
           const access = yield* Effect.forEach(
             publications,
@@ -67,9 +79,11 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
             .canView(row, {
               hasWikiAttachment: EffectArray.isReadonlyArrayNonEmpty(wiki),
               canViewPublication: access.some((allowed) => allowed),
+              canViewProfile: profileAccess.some((allowed) => allowed),
               isAttached:
                 EffectArray.isReadonlyArrayNonEmpty(publications) ||
-                EffectArray.isReadonlyArrayNonEmpty(wiki),
+                EffectArray.isReadonlyArrayNonEmpty(wiki) ||
+                EffectArray.isReadonlyArrayNonEmpty(profiles),
             })
             .pipe(Effect.mapError(() => new MediaNotFoundError({ id })))
 

@@ -19,6 +19,7 @@ import { ConfigProvider, FileSystem } from "effect"
 import { DateTime, Effect, Exit, Layer, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient } from "effect/sql"
+import { WorkflowEngine } from "effect/workflow"
 
 import { IdGenLive } from "../src/id-gen-live.js"
 import { MediaAssetsRepository } from "../src/media-assets/repository.js"
@@ -112,7 +113,7 @@ export const TestLayerWithServices = Layer.mergeAll(
   TestLayer,
   PeopleServiceLayer,
   ProfilesServiceLayer,
-)
+).pipe(Layer.provideMerge(WorkflowEngine.layerMemory))
 
 /**
  * Shared transaction test contract:

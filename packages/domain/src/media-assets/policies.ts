@@ -29,12 +29,17 @@ export const mediaPolicies = {
     ),
   canView: (
     media: Pick<MediaAssetRow, "ownerProfileId" | "moderationStatus">,
-    audience: { hasWikiAttachment: boolean; canViewPublication: boolean; isAttached: boolean },
+    audience: {
+      hasWikiAttachment: boolean
+      canViewPublication: boolean
+      canViewProfile?: boolean
+      isAttached: boolean
+    },
   ) =>
     policy((session) =>
       media.moderationStatus === "CENSORED"
         ? deny("Media is censored")
-        : audience.hasWikiAttachment || audience.canViewPublication
+        : audience.hasWikiAttachment || audience.canViewPublication || audience.canViewProfile
           ? allow(session)
           : audience.isAttached
             ? deny()

@@ -67,6 +67,11 @@ export const EvaluateWikiArticleRevisionInput = Schema.Struct({
 
 export type EvaluateWikiArticleRevisionInput = typeof EvaluateWikiArticleRevisionInput.Type
 
+/** New revisions require an author even though deletion can clear persisted authorship. */
+export const WikiArticleRevisionInsertRow = WikiArticleRevisionRow.pipe(
+  Schema.fieldsAssign({ createdById: PersonId }),
+)
+
 export const WikiArticleRevisionUpdateRow = WikiArticleRevisionRow.mapFields(
   Struct.omit(["createdAt", "createdById", "crdtUpdate", "fromCrdtFrontier", "wikiArticleId"]),
 )

@@ -11,7 +11,7 @@ import { AppAuth, makeAuthentication } from "./app-auth.js"
 import { AuthStorageLive } from "./auth-storage.js"
 import { magicLinkPageRoutes } from "./magic-link-page.js"
 import { AuthenticationOrigin } from "./magic-link.js"
-import { OAuthProtocol, oauthProtocolLayer } from "./oauth-protocol.js"
+import { OAuthProtocol, makeOAuthProtocol, oauthProtocolLayer } from "./oauth-protocol.js"
 import { oauthCallbackRoutes } from "./oauth.js"
 
 export const ApiAuthenticationLive = Layer.effect(
@@ -83,6 +83,7 @@ export const AuthenticationLive = Layer.unwrap(
     return authenticationLayer({
       origin,
       requestBindingKey,
+      oauthProtocol: Layer.succeed(OAuthProtocol, makeOAuthProtocol(origin, {})),
     })
   }),
 )

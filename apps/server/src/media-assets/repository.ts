@@ -10,6 +10,7 @@ import {
   findMediaAssetById,
   listMediaAssetPublications,
   listMediaAssetWikiArticles,
+  listMediaAssetProfiles,
 } from "./queries.js"
 
 export class MediaAssetsRepository extends Context.Service<MediaAssetsRepository>()(
@@ -20,6 +21,7 @@ export class MediaAssetsRepository extends Context.Service<MediaAssetsRepository
       updateMediaAssetDescriptions,
       listMediaAssetPublications,
       listMediaAssetWikiArticles,
+      listMediaAssetProfiles,
       insertMediaAssetCredit,
       findMediaAssetById,
       moderateMediaAsset,

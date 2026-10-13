@@ -668,7 +668,14 @@ const approveOppositeCopies = (context: WikiContext, name: string) =>
         Effect.gen(function* () {
           const revision = Option.getOrThrow(yield* findRevisionById(id))
           const copiedId = yield* IdGen.make(WikiArticleRevisionId)
-          yield* insertRevisionRow({ ...revision, id: copiedId, wikiArticleId: copyId })
+
+          yield* insertRevisionRow({
+            ...revision,
+            createdById: Option.getOrThrow(Option.fromNullishOr(revision.createdById)),
+            id: copiedId,
+            wikiArticleId: copyId,
+          })
+
           return copiedId
         }),
       { concurrency: 1 },

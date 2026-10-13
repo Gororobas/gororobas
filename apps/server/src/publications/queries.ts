@@ -1,5 +1,6 @@
 import {
   ApiPublicationData,
+  ApiPublicationSearchParams,
   MediaAssetRow,
   PublicationMediaAssetRow,
   Handle,
@@ -14,6 +15,21 @@ import { GetPublicationPageParams } from "@gororobas/domain/publications/api"
 import { Schema, Struct } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
+
+export const searchPublicationRows = SqlSchema.findAll({
+  Request: ApiPublicationSearchParams,
+  Result: PublicationRow,
+  execute: (query) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT * FROM publications
+    WHERE ${query.ownerProfileId === undefined ? sql`1 = 1` : sql`owner_profile_id = ${query.ownerProfileId}`}
+      ${query.type === undefined ? sql`` : sql`AND kind = ${query.type}`}
+      ${query.visibility === undefined ? sql`` : sql`AND visibility = ${query.visibility}`}
+    ORDER BY published_at DESC, id
+  `,
+    ),
+})
 
 export const listPublicationCommitRowsByPublicationIdAsc = SqlSchema.findAll({
   Request: PublicationId,

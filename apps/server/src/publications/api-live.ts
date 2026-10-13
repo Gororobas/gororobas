@@ -7,7 +7,11 @@ import { PublicationsService } from "./service.js"
 
 export const PublicationsApiLive = HttpApiBuilder.group(GororobasApi, "publications", (handlers) =>
   handlers
-    .handle("searchPublications", () => Effect.succeed([]))
+    .handle("searchPublications", ({ query }) =>
+      PublicationsService.use((service) => service.searchPublications(query)).pipe(
+        withApiInfrastructureErrors({ group: "publications", endpoint: "searchPublications" }),
+      ),
+    )
     .handle("getPublication", ({ params }) =>
       PublicationsService.use((service) => service.getPublicationData(params.id)).pipe(
         withApiInfrastructureErrors({ group: "publications", endpoint: "getPublication" }),
@@ -49,5 +53,9 @@ export const PublicationsApiLive = HttpApiBuilder.group(GororobasApi, "publicati
         withApiInfrastructureErrors({ group: "publications", endpoint: "deletePublication" }),
       ),
     )
-    .handle("getPublicationHistory", () => Effect.die("stub")),
+    .handle("getPublicationHistory", ({ params }) =>
+      PublicationsService.use((service) => service.getApiHistory(params.id)).pipe(
+        withApiInfrastructureErrors({ group: "publications", endpoint: "getPublicationHistory" }),
+      ),
+    ),
 )

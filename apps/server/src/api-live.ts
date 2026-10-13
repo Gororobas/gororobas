@@ -8,7 +8,10 @@ import { MediaAssetsRepository } from "./media-assets/repository.js"
 import { MediaAssetsService } from "./media-assets/service.js"
 import { MediaAssetsStorage } from "./media-assets/storage.js"
 import { OrganizationsApiLive } from "./organizations/api-live.js"
+import { OrganizationsRepository } from "./organizations/repository.js"
+import { OrganizationsService } from "./organizations/service.js"
 import { PeopleApiLive } from "./people/api-live.js"
+import { PeopleRepository } from "./people/repository.js"
 import { ProfilesApiLive } from "./profiles/api-live.js"
 import { ProfilesRepository } from "./profiles/repository.js"
 import { PublicationCommentsApiLive } from "./publication-comments/api-live.js"
@@ -52,6 +55,11 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
   HttpRouter.provideRequest(
     Layer.mergeAll(
       MediaServicesLive,
+      Layer.effect(OrganizationsService, OrganizationsService.make).pipe(
+        Layer.provide(Layer.effect(PeopleRepository, PeopleRepository.make)),
+        Layer.provideMerge(Layer.effect(OrganizationsRepository, OrganizationsRepository.make)),
+        Layer.provide(Layer.effect(ProfilesRepository, ProfilesRepository.make)),
+      ),
       Layer.effect(WikiArticlesService, WikiArticlesService.make).pipe(
         Layer.provideMerge(Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)),
         Layer.provide(MediaServicesLive),

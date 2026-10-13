@@ -315,7 +315,7 @@ export class OrganizationsService extends Context.Service<OrganizationsService>(
           yield* Policies.organizations.canDelete(organizationId)
           yield* requireOrganization(organizationId)
           // Delete the owning profile so its content and organization dependencies cascade together.
-          yield* profiles.delete(organizationId)
+          yield* profiles.deleteProfileReturningMediaAssets(organizationId)
         }).pipe(sql.withTransaction)
 
       const listMembers = (organizationId: OrganizationId) =>

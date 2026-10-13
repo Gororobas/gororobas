@@ -87,6 +87,6 @@ it.live(
     const wiki = yield* Effect.tryPromise(() =>
       app.handler(new Request("http://localhost/wiki"), guest),
     )
-    expect(wiki.status).toBe(404)
+    expect(wiki.status).toBe(200)
   }),
 )

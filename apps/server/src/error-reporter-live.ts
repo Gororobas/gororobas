@@ -1,4 +1,4 @@
-import { OtelLogger } from "@effect/opentelemetry"
+import * as OtelLogger from "@effect/opentelemetry/OtelLogger"
 import { Context, Effect, ErrorReporter, Tracer, Predicate } from "effect"
 const RuntimeErrorReporter = ErrorReporter.make(
   ({ attributes, error, fiber, severity, timestamp }) => {

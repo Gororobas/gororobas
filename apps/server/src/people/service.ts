@@ -12,9 +12,10 @@ import {
   Policies,
   type PlatformAccessLevel,
 } from "@gororobas/domain"
-import { Array as EffectArray, DateTime, Effect, Option, Context } from "effect"
+import { Array as EffectArray, DateTime, Effect, Option, Context, Match } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { MediaDeletionWorkflow } from "../media-assets/media-deletion-workflow.js"
 import { OrganizationsRepository } from "../organizations/repository.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PeopleRepository } from "./repository.js"
@@ -133,21 +134,36 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
         /**
          * 3. FINALLY DELETING EVERYTHING
          */
-        yield* Effect.all(
+        const deletedMedia = yield* Effect.forEach(
           [
-            // Personal
-            profilesRepo.delete(session.personId),
-
-            // Deleting all organizations where sole manager
-            Effect.forEach(orgsWhereSoleManager, (org) => profilesRepo.delete(org.organizationId), {
-              concurrency: "unbounded",
-            }),
+            session.personId,
+            ...orgsWhereSoleManager.map((organization) => organization.organizationId),
           ],
-          { concurrency: "unbounded" },
+          (profileId) => profilesRepo.deleteProfileReturningMediaAssets(profileId),
+          { concurrency: 1 },
         )
 
-        return AccountDeletionResultSuccess.make({})
-      }).pipe(sql.withTransaction)
+        return {
+          ...AccountDeletionResultSuccess.make({}),
+          mediaAssetIds: deletedMedia.flat().map(({ mediaAssetId }) => mediaAssetId),
+        }
+      }).pipe(
+        sql.withTransaction,
+        // File deletion starts after commit so a rollback cannot remove files.
+        Effect.flatMap((result) =>
+          Match.value(result).pipe(
+            Match.tag("Success", ({ mediaAssetIds }) =>
+              EffectArray.match(mediaAssetIds, {
+                onEmpty: () => Effect.void,
+                onNonEmpty: (mediaAssetIds) =>
+                  MediaDeletionWorkflow.execute({ mediaAssetIds }, { discard: true }),
+              }).pipe(Effect.as(AccountDeletionResultSuccess.make({}))),
+            ),
+            Match.orElse((result) => Effect.succeed(result)),
+          ),
+        ),
+        Effect.uninterruptible,
+      )
 
     return {
       deleteCurrentPerson,

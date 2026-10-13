@@ -1,5 +1,5 @@
 import { expect, it as test } from "@effect/vitest"
-import { AuthenticationApi, AuthenticationHttp, SessionContext } from "@gororobas/domain"
+import { AuthenticationApi, AuthenticationHttp, ProfileId, SessionContext } from "@gororobas/domain"
 import { Proofs } from "@yielded/auth"
 import { Context, Effect, Layer, ManagedRuntime, Redacted, Schema, Predicate } from "effect"
 import { HttpRouter } from "effect/http"
@@ -14,6 +14,7 @@ import {
   makeAuthenticationTestBrowser,
   parseDeliveredMagicLink,
 } from "../../test/authentication-helpers.js"
+import { deleteProfileReturningMediaAssets } from "../profiles/mutations.js"
 import { SessionServiceLive } from "../session-service.js"
 import { makeAuthentication } from "./app-auth.js"
 import { authenticationLayer } from "./authentication-live.js"
@@ -475,5 +476,78 @@ test.live(
     expect(yield* query((sql) => sql`SELECT id FROM auth_subjects`)).toHaveLength(1)
     expect(yield* query((sql) => sql`SELECT id FROM profiles`)).toHaveLength(1)
     expect(yield* query((sql) => sql`SELECT credential_id FROM auth_credentials`)).toHaveLength(1)
+
+    yield* query((sql) => sql`UPDATE auth_proof_series SET last_issue_at = 0`)
+    const deletionProof = yield* requestProof(identity.email)
+
+    const deletionVerified = yield* call(AuthenticationApi.actions.verifyMagicLink, {
+      ...deletionProof.pendingIdentity,
+      reference: deletionProof.proof.reference,
+      secret: Redacted.value(deletionProof.proof.secret),
+    })
+
+    const unrelated = yield* query(
+      (sql) =>
+        sql`SELECT * FROM auth_proof_generations WHERE json_extract(binding, '$.identifier.value') = 'rollback@example.com'`,
+    )
+    expect(unrelated.length).toBeGreaterThan(0)
+
+    expect(
+      yield* query(
+        (sql) =>
+          sql`SELECT * FROM auth_proof_generations WHERE json_extract(binding, '$.identifier.value') = ${identity.email}`,
+      ),
+    ).not.toEqual([])
+
+    yield* deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)).pipe(
+      Effect.provide(runtimeContext),
+    )
+
+    yield* Effect.forEach(
+      [
+        "auth_proof_generations",
+        "auth_proof_continuations",
+        "auth_proof_series",
+        "auth_proof_scopes",
+        "auth_proof_abuse",
+        "auth_proof_failures",
+      ],
+      (table) =>
+        Effect.gen(function* () {
+          expect(
+            JSON.stringify(yield* query((sql) => sql`SELECT * FROM ${sql(table)}`)),
+          ).not.toContain(identity.email)
+        }),
+      { concurrency: 1 },
+    )
+
+    expect(
+      yield* query(
+        (sql) =>
+          sql`SELECT * FROM auth_proof_requests WHERE request_id IN ('signup-request', 'signin-request')`,
+      ),
+    ).toEqual([])
+
+    expect(
+      yield* query(
+        (sql) =>
+          sql`SELECT * FROM auth_proof_generations WHERE json_extract(binding, '$.identifier.value') = 'rollback@example.com'`,
+      ),
+    ).toEqual(unrelated)
+
+    expect(yield* call(AuthenticationApi.actions.getSession)).toBeNull()
+
+    expect(
+      (yield* fetchRoute({
+        path: "/api/auth/completeMagicLink",
+        method: "POST",
+        body: {
+          payload: {
+            ...deletionProof.pendingIdentity,
+            continuationId: deletionVerified.continuation.continuationId,
+          },
+        },
+      })).status,
+    ).not.toBe(200)
   }),
 )

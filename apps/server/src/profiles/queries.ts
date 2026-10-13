@@ -14,7 +14,7 @@ export const findByHandle = SqlSchema.findOneOption({
   execute: (handle) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      return yield* sql`SELECT * FROM profiles WHERE handle = ${handle}`
+      return yield* sql`SELECT p.* FROM profiles p WHERE handle = ${handle} AND NOT EXISTS (SELECT 1 FROM auth_subjects a WHERE a.id = p.id AND a.active = 0)`
     }),
 })
 
@@ -24,7 +24,7 @@ export const findById = SqlSchema.findOneOption({
   execute: (id) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      return yield* sql`SELECT * FROM profiles WHERE id = ${id}`
+      return yield* sql`SELECT p.* FROM profiles p WHERE id = ${id} AND NOT EXISTS (SELECT 1 FROM auth_subjects a WHERE a.id = p.id AND a.active = 0)`
     }),
 })
 
@@ -69,6 +69,7 @@ export const fetchProfileMetadata = SqlSchema.findOneOption({
       FROM profiles p
       LEFT JOIN organizations o ON p.id = o.id
       WHERE p.handle = ${handle}
+        AND NOT EXISTS (SELECT 1 FROM auth_subjects a WHERE a.id = p.id AND a.active = 0)
     `
     }),
 })

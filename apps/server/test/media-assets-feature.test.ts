@@ -9,6 +9,7 @@ import {
   snapshotToLoroDoc,
   MediaAssetRow,
   MediaAssetId,
+  MediaAssetStorageError,
   WikiArticleCommonNameInCrdtList,
   PersonId,
   ProfileVisibility,
@@ -28,6 +29,7 @@ import {
 import { VISITOR_SESSION } from "@gororobas/server/session-service"
 import {
   ConfigProvider,
+  Deferred,
   Effect,
   FileSystem,
   Path,
@@ -38,9 +40,14 @@ import {
   Record,
 } from "effect"
 import { SqlClient } from "effect/sql"
-import { WorkflowEngine } from "effect/workflow"
+import { TestClock } from "effect/testing"
+import { Workflow, WorkflowEngine } from "effect/workflow"
 import sharp from "sharp"
 
+import {
+  MediaDeletionWorkflow,
+  MediaDeletionWorkflowLayer,
+} from "../src/media-assets/media-deletion-workflow.js"
 import { MediaAssetsRepository } from "../src/media-assets/repository.js"
 import { MediaAssetsService } from "../src/media-assets/service.js"
 import { MediaAssetsStorage } from "../src/media-assets/storage.js"
@@ -81,6 +88,12 @@ const storage = Layer.effect(
 const MediaFeatureTestLayer = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
   Layer.provideMerge(
     Layer.mergeAll(storage, Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+  ),
+  Layer.provideMerge(
+    MediaDeletionWorkflowLayer.pipe(
+      Layer.provide(storage),
+      Layer.provideMerge(WorkflowEngine.layerMemory),
+    ),
   ),
   Layer.provideMerge(PeopleFeatureTestLayer),
   Layer.provideMerge(NodeServices.layer),
@@ -677,4 +690,128 @@ it.effect("revision media references preserve selections and roll back invalid a
       Option.getOrThrow(yield* (yield* MediaAssetsRepository).findMediaAssetById(media.id)).id,
     ).toBe(media.id)
   }).pipe(Effect.provide(MediaFeatureTestLayer)),
+)
+;
+[false, true].forEach((hasRevisions) => {
+  it.effect(`account deletion removes wiki media and files with revisions=${hasRevisions}`, () =>
+    Effect.gen(function* () {
+      const people = yield* provisionPeople([{ name: "Uploader", accessLevel: "COMMUNITY" }])
+      const personId = personNamed(people.actors, "Uploader")
+      const context = yield* createWikiArticles({ ...people, actorId: personId }, ["Mandioca"])
+      const wikiArticleId = articleIn(context, "Mandioca")
+      const media = yield* upload(context)
+      const wiki = yield* WikiArticlesRepository
+      yield* wiki.attachMediaToWikiArticle({ wikiArticleId, mediaAssetId: media.id })
+      yield* wiki.setMainMedia({ wikiArticleId, mediaAssetId: media.id })
+      let revisionId
+
+      if (hasRevisions) {
+        const original = Option.getOrThrow(yield* findCrdtRowById(wikiArticleId))
+        const document = snapshotToLoroDoc(original.crdtSnapshot)
+        const edited = document.fork()
+        yield* WikiArticleCrdt.applyEdit(edited, { _tag: "SetSuggestedKind", value: "Plant" })
+
+        revisionId = yield* wiki.createRevision({
+          wikiArticleId,
+          createdById: personId,
+          crdtUpdate: LoroDocUpdate.make(
+            edited.export({ mode: "update", from: document.version() }),
+          ),
+          mediaAssets: [{ mediaAssetId: media.id }],
+        })
+      }
+
+      const sql = yield* SqlClient.SqlClient
+      const before = yield* findCrdtRowById(wikiArticleId)
+      const files = yield* MediaAssetsStorage
+      const filesystem = yield* FileSystem.FileSystem
+      expect(yield* filesystem.exists(files.filePath(media.id, "original"))).toBe(true)
+
+      expect(
+        yield* withPerson(
+          (yield* PeopleService).deleteCurrentPerson({
+            shouldDeleteContent: true,
+            shouldDeleteOrgs: false,
+          }),
+          personId,
+        ),
+      ).toEqual({ _tag: "Success" })
+
+      yield* MediaDeletionWorkflow.execute({ mediaAssetIds: [media.id] })
+
+      expect(yield* filesystem.exists(files.filePath(media.id, "original"))).toBe(false)
+      expect(yield* sql`SELECT * FROM media_assets WHERE id = ${media.id}`).toEqual([])
+      expect(
+        yield* sql`SELECT * FROM wiki_article_media_assets WHERE media_asset_id = ${media.id}`,
+      ).toEqual([])
+      expect(
+        yield* sql`SELECT * FROM wiki_article_main_media WHERE wiki_article_id = ${wikiArticleId}`,
+      ).toEqual([])
+      expect(yield* findCrdtRowById(wikiArticleId)).toEqual(before)
+      const revision =
+        revisionId === undefined
+          ? undefined
+          : Option.getOrThrow(yield* findRevisionById(revisionId))
+      expect(revision?.createdById).toBe(hasRevisions ? null : undefined)
+      expect(
+        revisionId === undefined ? undefined : yield* listRevisionMediaAssets(revisionId),
+      ).toEqual(hasRevisions ? [] : undefined)
+      expect(yield* sql`PRAGMA foreign_key_check`).toEqual([])
+    }).pipe(Effect.provide(MediaFeatureTestLayer)),
+  )
+})
+
+it.effect("media deletion workflow retries failed removals and memoizes successful ones", () =>
+  Effect.gen(function* () {
+    const mediaAssetId = MediaAssetId.make("00000000-0000-7000-8000-000000000123")
+    const failed = yield* Deferred.make<void>()
+    let attempts = 0
+    const removed: MediaAssetId[] = []
+
+    const files = MediaAssetsStorage.of({
+      stage: () => Effect.die("unused staging"),
+      publish: () => Effect.void,
+      filePath: (id, name) => `${id}/${name}`,
+      remove: (id) =>
+        Effect.gen(function* () {
+          attempts += 1
+          if (attempts === 1) {
+            yield* Deferred.succeed(failed, undefined)
+            return yield* new MediaAssetStorageError({ cause: "temporary file removal failure" })
+          }
+          removed.push(id)
+        }),
+    })
+
+    const workflow = MediaDeletionWorkflowLayer.pipe(
+      Layer.provide(Layer.succeed(MediaAssetsStorage, files)),
+      Layer.provideMerge(WorkflowEngine.layerMemory),
+    )
+
+    yield* Effect.gen(function* () {
+      const payload = { mediaAssetIds: [mediaAssetId] }
+      const executionId = yield* MediaDeletionWorkflow.execute(payload, { discard: true })
+      yield* Deferred.await(failed)
+      const poll = MediaDeletionWorkflow.poll(executionId).pipe(Effect.tap(() => Effect.yieldNow))
+
+      yield* poll.pipe(
+        Effect.repeat({
+          until: (result) => Option.exists(result, (value) => value instanceof Workflow.Suspended),
+        }),
+      )
+
+      yield* TestClock.adjust("1 minute")
+
+      yield* poll.pipe(
+        Effect.repeat({
+          until: (result) => Option.exists(result, (value) => value instanceof Workflow.Complete),
+        }),
+      )
+
+      expect(attempts).toBe(2)
+      expect(removed).toEqual([mediaAssetId])
+      yield* MediaDeletionWorkflow.execute(payload)
+      expect(attempts).toBe(2)
+    }).pipe(Effect.provide(workflow))
+  }),
 )

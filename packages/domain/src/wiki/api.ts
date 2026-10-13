@@ -2,7 +2,7 @@ import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { UnauthorizedError } from "../authorization/session.js"
-import { SupportedLanguage } from "../common/enums.js"
+import { BookmarkState, SupportedLanguage } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { MediaAssetId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
@@ -23,8 +23,22 @@ import {
   WikiArticleRevisionNotFoundError,
   WikiArticleNotFoundError,
 } from "./errors.js"
+import { WikiArticleRevisionRow } from "./wiki-article.js"
 
 export class WikiApiGroup extends HttpApiGroup.make("wiki")
+  .add(
+    HttpApiEndpoint.get("getWikiBookmarks", "/wiki/bookmarks", {
+      success: Schema.Array(Schema.Struct({ wikiArticleId: WikiArticleId, state: BookmarkState })),
+      error: UnauthorizedError,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("getWikiRevisionHistory", "/wiki/:kind/:handle/revisions", {
+      success: Schema.Array(WikiArticleRevisionRow),
+      params: WikiArticleLookup,
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
+    }),
+  )
   .add(
     HttpApiEndpoint.get("searchWikiArticles", "/wiki", {
       success: Schema.Array(WikiArticleQueriedCardData),

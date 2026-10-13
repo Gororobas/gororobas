@@ -81,7 +81,10 @@ it.effect(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem
       const directory = yield* fixture
-      const report = yield* importPreview(directory, join(directory, "sqlite"))
+      const report = yield* importPreview({
+        exportDirectory: directory,
+        outputRoot: join(directory, "sqlite"),
+      })
       expect(report.revisions).toBe(3)
       const raw = JSON.parse(yield* fs.readFileString(join(report.directory, "raw.json")))
       expect(raw.plants[0].data).toEqual({ id: "gel-plant", handle: "test" })
@@ -141,7 +144,10 @@ it.effect(
       const data = JSON.parse(yield* fs.readFileString(filename))
       data.photoIds = ["01900000-0000-7000-8000-000000000002"]
       yield* fs.writeFileString(filename, JSON.stringify(data))
-      const result = yield* importPreview(directory, join(directory, "sqlite")).pipe(Effect.result)
+      const result = yield* importPreview({
+        exportDirectory: directory,
+        outputRoot: join(directory, "sqlite"),
+      }).pipe(Effect.result)
       expect(result._tag).toBe("Failure")
       const runs = yield* fs.readDirectory(join(directory, "sqlite"))
       const run = join(directory, "sqlite", runs[0])

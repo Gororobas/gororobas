@@ -28,6 +28,9 @@ export const mediaFileResponse = ({
           }
         : {}),
       headers: {
+        ...(contentType === "image/svg+xml"
+          ? { "content-security-policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'" }
+          : {}),
         "accept-ranges": "bytes",
         "cache-control": "private, no-cache",
         "x-content-type-options": "nosniff",

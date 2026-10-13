@@ -1,6 +1,7 @@
 import {
   MediaAssetId,
   MediaAssetRow,
+  ProfileRow,
   PublicationRow,
   WikiArticleMediaAssetRow,
 } from "@gororobas/domain"
@@ -30,5 +31,15 @@ export const listMediaAssetWikiArticles = SqlSchema.findAll({
   execute: (id) =>
     SqlClient.SqlClient.use(
       (sql) => sql`SELECT * FROM wiki_article_media_assets WHERE media_asset_id = ${id}`,
+    ),
+})
+
+export const listMediaAssetProfiles = SqlSchema.findAll({
+  Request: MediaAssetId,
+  Result: ProfileRow,
+  execute: (id) =>
+    SqlClient.SqlClient.use(
+      (sql) =>
+        sql`SELECT p.* FROM profiles p WHERE photo_id = ${id} AND NOT EXISTS (SELECT 1 FROM auth_subjects a WHERE a.id = p.id AND a.active = 0)`,
     ),
 })

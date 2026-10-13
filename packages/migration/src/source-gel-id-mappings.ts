@@ -42,7 +42,11 @@ export const sourceGelIdMappings = Effect.gen(function* () {
         "Publication",
         "notes",
       ],
-      ["select Image { id, sanity_id, label, crop, hotspot, sources: { * } }", "Image", "images"],
+      [
+        "select Image { id, sanity_id, label, crop, hotspot, created_by: { id }, sources: { * } }",
+        "Image",
+        "images",
+      ],
     ],
     ([query, entityType, collection]) =>
       Effect.gen(function* () {

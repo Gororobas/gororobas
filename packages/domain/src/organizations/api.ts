@@ -4,6 +4,7 @@ import { Schema } from "effect"
  */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
+import { UnauthorizedError } from "../authorization/session.js"
 import { OrganizationAccessLevel } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { OrganizationId, PersonId } from "../common/ids.js"
@@ -72,7 +73,7 @@ export class OrganizationsApiGroup extends HttpApiGroup.make("organizations")
   .add(
     HttpApiEndpoint.get("listMembers", "/organizations/:id/members", {
       success: Schema.Array(OrganizationMembershipData),
-      error: OrganizationNotFoundError,
+      error: [OrganizationNotFoundError, UnauthorizedError],
       params: Schema.Struct({ id: OrganizationId }),
     }),
   ) {}

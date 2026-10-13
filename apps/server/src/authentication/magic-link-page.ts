@@ -11,7 +11,6 @@ const html = `<!doctype html>
 <form id="request"><label>Name <input name="name" required maxlength="128" autocomplete="name"></label>
 <label>Email <input name="email" type="email" required maxlength="320" autocomplete="email"></label>
 <button>Send magic link</button></form>
-<p id="oauth"><button data-provider="apple">Continue with Apple</button> <button data-provider="google">Continue with Google</button> <button data-provider="microsoft">Continue with Microsoft</button></p>
 <button id="confirm" hidden>Confirm sign-in</button>
 <button id="sign-out" hidden>Sign out</button>
 <p id="status" role="status" aria-live="polite"></p>

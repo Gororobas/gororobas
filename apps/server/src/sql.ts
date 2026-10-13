@@ -3,7 +3,7 @@
  */
 import { NodeServices } from "@effect/platform-node"
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node"
-import { Array as EffectArray, Effect, Layer, String as EffectString } from "effect"
+import { Array as EffectArray, Config, Effect, Layer, String as EffectString } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { migrations } from "./db/migrations-effect/index.js"
@@ -42,5 +42,7 @@ export const makeAppSql = (filename: string) => {
   return migrate.pipe(Layer.provideMerge(client))
 }
 
-export const AppSqlLive = makeAppSql("gororobas.db")
+export const AppSqlLive = Layer.unwrap(
+  Effect.map(Config.String("APP_DB_FILENAME").pipe(Config.withDefault("gororobas.db")), makeAppSql),
+)
 export const AppSqlTest = makeAppSql(":memory:")

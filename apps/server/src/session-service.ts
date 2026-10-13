@@ -30,7 +30,10 @@ const MembershipQueryResult = Schema.Struct({
 
 const fetchPerson = SqlSchema.findOneOption({
   execute: (id) =>
-    SqlClient.SqlClient.use((sql) => sql`SELECT id, access_level FROM people WHERE id = ${id}`),
+    SqlClient.SqlClient.use(
+      (sql) =>
+        sql`SELECT p.id, p.access_level FROM people p JOIN auth_subjects a ON a.id = p.id WHERE p.id = ${id} AND a.active = 1`,
+    ),
   Request: Schema.String,
   Result: PersonQueryResult,
 })

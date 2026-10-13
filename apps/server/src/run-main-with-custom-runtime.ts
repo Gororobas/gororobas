@@ -1,4 +1,4 @@
-import { Effect, ManagedRuntime, Runtime } from "effect"
+import { Effect, Exit, ManagedRuntime, Runtime } from "effect"
 import { constVoid } from "effect/Function"
 
 /**
@@ -25,12 +25,16 @@ export const runMainWithCustomRuntime = <RuntimeServices, RuntimeError, ProgramE
       process.removeListener("SIGINT", onSigint)
       process.removeListener("SIGTERM", onSigint)
     }
-    clearInterval(keepAlive)
 
-    teardown(exit, (code) => {
-      if (receivedSignal || code !== 0) {
-        process.exit(code)
-      }
+    // Dispose shared SQL/cluster services before exiting so SQLite checkpoints and releases its files.
+    Effect.runFork(runtime.disposeEffect).addObserver((disposed) => {
+      clearInterval(keepAlive)
+
+      teardown(Exit.isFailure(disposed) ? disposed : exit, (code) => {
+        if (receivedSignal || code !== 0) {
+          process.exit(code)
+        }
+      })
     })
   })
 

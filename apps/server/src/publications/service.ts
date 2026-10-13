@@ -1,4 +1,9 @@
-import { ContentLanguage } from "@gororobas/domain"
+import {
+  ApiPublicationCardData,
+  ApiPublicationSearchParams,
+  ContentLanguage,
+  PublicationCrdt,
+} from "@gororobas/domain"
 /**
  * Publications service - business operations for publications.
  *
@@ -30,12 +35,17 @@ import {
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
+import { LoroDoc } from "loro-crdt"
 
 import { MediaAssetsService } from "../media-assets/service.js"
 import { findById as findOrganizationById } from "../organizations/queries.js"
 import { findById as findPersonById } from "../people/queries.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
-import { listPublicationMediaAssets, findPublicationApiData } from "./queries.js"
+import {
+  listPublicationMediaAssets,
+  findPublicationApiData,
+  searchPublicationRows,
+} from "./queries.js"
 import { PublicationsRepository } from "./repository.js"
 
 export const CreatePostInput = Schema.Struct({
@@ -265,11 +275,35 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
 
       const getHistory = (publicationId: PublicationId) =>
         Effect.gen(function* () {
+          yield* assertCanViewPublication(yield* getPublicationById(publicationId))
           yield* Policies.publications.canViewHistory(
             yield* getAttributionOrganization(publicationId),
           )
 
           return yield* repo.listPublicationCommitRowsByPublicationIdAsc(publicationId)
+        })
+
+      const getApiHistory = (publicationId: PublicationId) =>
+        Effect.gen(function* () {
+          const rows = yield* getHistory(publicationId)
+          const document = new LoroDoc()
+
+          return yield* Effect.forEach(
+            rows,
+            (row, index) =>
+              Effect.gen(function* () {
+                document.import(row.crdtUpdate)
+                const data = yield* PublicationCrdt.read(document)
+
+                return {
+                  authorId: row.createdById ? ProfileId.make(row.createdById) : null,
+                  content: data.sourceContent,
+                  createdAt: row.createdAt,
+                  version: index + 1,
+                }
+              }),
+            { concurrency: 1 },
+          )
         })
 
       const listPublicationMedia = (publicationId: PublicationId) =>
@@ -286,7 +320,24 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           return data.value
         })
 
+      const searchPublications = (query: typeof ApiPublicationSearchParams.Type) =>
+        Effect.gen(function* () {
+          const rows = yield* searchPublicationRows(query)
+
+          const visible = yield* Effect.filter(rows, (row) =>
+            assertCanViewPublication(row).pipe(
+              Effect.as(true),
+              Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
+            ),
+          )
+
+          return visible
+            .slice(query.currentPage * query.pageSize, (query.currentPage + 1) * query.pageSize)
+            .map((row) => ApiPublicationCardData.make(row))
+        })
+
       return {
+        searchPublications,
         attachMediaToPublication,
         getPublicationData,
         listPublicationMedia,
@@ -297,6 +348,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
         updatePublication,
         getPublicationPageData,
         getHistory,
+        getApiHistory,
         getContributors,
       } as const
     }),

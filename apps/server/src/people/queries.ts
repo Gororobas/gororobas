@@ -8,7 +8,7 @@ export const findById = SqlSchema.findOneOption({
   execute: (id) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient
-      return yield* sql`SELECT * FROM people WHERE id = ${id}`
+      return yield* sql`SELECT p.* FROM people p JOIN auth_subjects a ON a.id = p.id WHERE p.id = ${id} AND a.active = 1`
     }),
 })
 
