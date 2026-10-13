@@ -1,0 +1,9 @@
+diff --git a/lib/Cli/components/view/ProfileDashboard.js b/lib/Cli/components/view/ProfileDashboard.js
+--- a/lib/Cli/components/view/ProfileDashboard.js
++++ b/lib/Cli/components/view/ProfileDashboard.js
+@@ -1,4 +1,4 @@
+-import { Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
++import { Fragment as _Fragment, jsx as _jsx, jsxs as _jsxs } from "@alchemy.run/sigil/jsx-runtime";
+ import { useEffect, useState } from "@alchemy.run/sigil/react";
+ /** @jsxImportSource @alchemy.run/sigil */
+ /**

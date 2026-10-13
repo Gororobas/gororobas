@@ -1,0 +1,54 @@
+{
+  "name": "@pleat/foldkit",
+  "version": "0.1.0",
+  "description": "Pleat styles in Foldkit views, plus server and static rendering.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Manzanita-Research/pleat.git",
+    "directory": "packages/foldkit"
+  },
+  "keywords": [
+    "foldkit",
+    "css",
+    "atomic-css",
+    "effect",
+    "ssr"
+  ],
+  "exports": {
+    ".": {
+      "@pleat/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "@pleat/source": "./src/server.ts",
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@pleat/core": "workspace:^"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0",
+    "foldkit": ">=0.165.0"
+  },
+  "devDependencies": {
+    "@effect/platform-browser": "4.0.0",
+    "effect": "4.0.0",
+    "foldkit": "0.167.0",
+    "vitest": "5.0.3"
+  }
+}

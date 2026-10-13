@@ -1,0 +1,71 @@
+import { Schema } from 'effect'
+import { Submodel, type Update } from 'foldkit'
+import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
+
+import { Button } from '@foldkit/ui'
+
+// MODEL
+
+export const Model = Schema.Struct({ count: Schema.Number })
+export type Model = typeof Model.Type
+
+export const init: Model = { count: 0 }
+
+// MESSAGE
+
+export const Message = defineMessageUnion({
+  ClickedDecrement: {},
+  ClickedIncrement: {},
+})
+
+export type Message = typeof Message.Type
+
+// UPDATE
+
+export const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message>>(message, {
+    ClickedDecrement: () => ({
+      model: modifyFields(model, { count: count => count - 1 }),
+    }),
+    ClickedIncrement: () => ({
+      model: modifyFields(model, { count: count => count + 1 }),
+    }),
+  })
+
+// VIEW
+
+export const view = Submodel.defineView<Model, Message>((model, h) =>
+  h.div(
+    [
+      h.Class(
+        'flex items-center gap-3 rounded-lg border border-gray-200 px-4 py-3',
+      ),
+    ],
+    [
+      Button.view(
+        {
+          onClick: Message.ClickedDecrement(),
+          toView: attributes =>
+            h.button([...attributes.button, h.Class(buttonStyle)], ['-']),
+        },
+        h,
+      ),
+      h.span(
+        [h.Class('w-12 text-center text-2xl font-mono tabular-nums')],
+        [model.count.toString()],
+      ),
+      Button.view(
+        {
+          onClick: Message.ClickedIncrement(),
+          toView: attributes =>
+            h.button([...attributes.button, h.Class(buttonStyle)], ['+']),
+        },
+        h,
+      ),
+    ],
+  ),
+)
+
+const buttonStyle =
+  'h-9 w-9 rounded bg-gray-900 text-white text-lg leading-none hover:bg-gray-700 transition cursor-pointer'

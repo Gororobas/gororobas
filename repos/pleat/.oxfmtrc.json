@@ -1,0 +1,54 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "semi": false,
+  "singleQuote": true,
+  "arrowParens": "avoid",
+  "trailingComma": "all",
+  "printWidth": 90,
+  "overrides": [
+    {
+      "files": ["site/src/snippet/**", "site/src/demo/**"],
+      "options": {
+        "printWidth": 68
+      }
+    },
+    {
+      "files": [
+        "site/src/demo/theming/components.ts",
+        "site/src/demo/theming/hardcoded.ts"
+      ],
+      "options": {
+        "printWidth": 56
+      }
+    }
+  ],
+  "sortImports": {
+    "ignoreCase": false,
+    "customGroups": [
+      {
+        "groupName": "scoped",
+        "elementNamePattern": ["@*", "@*/**"]
+      }
+    ],
+    "groups": [
+      ["builtin", "external"],
+      "scoped",
+      ["parent", "sibling", "index"],
+      "unknown"
+    ]
+  },
+  "sortPackageJson": false,
+  "ignorePatterns": [
+    "**/pnpm-lock.yaml",
+    "**/dist/",
+    "**/node_modules/",
+    "**/.claude/",
+    "**/.mcp.json",
+    "**/.vscode/",
+    "**/.idea/",
+    "repos/",
+    "FOLDKIT.md",
+    ".agents/skills/",
+    "skills-lock.json"
+  ]
+}
