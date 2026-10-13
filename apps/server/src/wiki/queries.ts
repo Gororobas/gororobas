@@ -17,6 +17,7 @@ import {
   WikiArticleRevisionId,
   WikiArticleRevisionRow,
   WikiArticleRevisionMediaAssetRow,
+  WikiSearchParams,
 } from "@gororobas/domain"
 import { Handle } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
@@ -276,11 +277,56 @@ export const listCards = SqlSchema.findAll({
       (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
         WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
     FROM wiki_articles a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
-    WHERE a.status = 'PUBLISHED' AND t.language = (
+    WHERE a.status = 'PUBLISHED'
+      AND t.language = (
       SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
       ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
         WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
     ORDER BY a.id
   `,
     ),
+})
+
+export const searchCards = SqlSchema.findAll({
+  Request: Schema.Struct({ search: WikiSearchParams, language: SupportedLanguage }),
+  Result: Schema.Struct({
+    ...WikiArticleQueriedCardData.fields,
+    commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
+    thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
+  }),
+  execute: ({ search, language }) =>
+    SqlClient.use((sql) => {
+      const { kind, text } = search
+      const plantFilters = search.kind === "PLANT" ? search : undefined
+
+      return sql`
+      SELECT a.id, a.kind, t.language, t.common_names,
+        (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
+          ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
+        (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
+          WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
+      FROM wiki_articles a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
+      WHERE a.status = 'PUBLISHED' AND t.language = (
+        SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
+        ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
+          WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+        ${kind === undefined ? sql`` : sql`AND a.kind = ${kind}`}
+        ${
+          text === undefined
+            ? sql``
+            : sql`AND (
+          instr(lower(t.searchable_names), lower(${text})) > 0
+          OR instr(lower(t.content_plain_text), lower(${text})) > 0
+          OR instr(lower(t.common_names), lower(${text})) > 0
+          OR instr(lower((SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id LIMIT 1)), lower(${text})) > 0
+        )`
+        }
+        ${plantFilters?.plantUsage === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.usage') WHERE value = ${plantFilters.plantUsage})`}
+        ${plantFilters?.plantLifecycle === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.lifecycles') WHERE value = ${plantFilters.plantLifecycle})`}
+        ${plantFilters?.plantingMethod === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.plantingMethods') WHERE value = ${plantFilters.plantingMethod})`}
+        ${plantFilters?.stratum === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.strata') WHERE value = ${plantFilters.stratum})`}
+        ${plantFilters?.ediblePart === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.edibleParts') WHERE value = ${plantFilters.ediblePart})`}
+      ORDER BY a.id
+    `
+    }),
 })

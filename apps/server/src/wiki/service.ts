@@ -17,6 +17,7 @@ import {
   WikiArticleRevisionNotFoundError,
   type PlantCultivarProjectedAttributes,
   type WikiArticleEditableData,
+  type WikiSearchParams,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Match, Option } from "effect"
 import { SqlClient } from "effect/sql"
@@ -292,7 +293,9 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         getPage,
         resolveCultivar,
         getPublishedArticle,
-        listCards: repository.listCards,
+        listCards: (language: SupportedLanguage) => repository.listCards(language),
+        searchWikiArticles: (params: WikiSearchParams) =>
+          repository.searchCards({ ...params, language: "pt" }),
         attachMediaToWikiArticle,
         setMainMedia,
         listCultivars: (id: WikiArticleId) =>

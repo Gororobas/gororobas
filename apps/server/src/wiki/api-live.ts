@@ -23,8 +23,8 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
         }),
       ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "getWikiRevisionHistory" })),
     )
-    .handle("searchWikiArticles", () =>
-      WikiArticlesService.use((service) => service.listCards("pt")).pipe(
+    .handle("searchWikiArticles", ({ query }) =>
+      WikiArticlesService.use((service) => service.searchWikiArticles(query)).pipe(
         withApiInfrastructureErrors({ group: "wiki", endpoint: "searchWikiArticles" }),
       ),
     )

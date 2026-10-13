@@ -1,5 +1,16 @@
-import { Button } from "@foldkit/ui"
 import { GororobasApi } from "@gororobas/domain/apis"
+import {
+  AgroforestryStratum,
+  EdiblePlantPart,
+  PlantLifecycle,
+  PlantUsage,
+  PlantingMethod,
+} from "@gororobas/domain/common/enums"
+import {
+  WikiArticleKind,
+  WikiArticleQueriedCardData,
+  WikiSearchParams,
+} from "@gororobas/domain/wiki/domain"
 import { Context, Effect, Layer, Result, Schema, Stream } from "effect"
 import { FetchHttpClient } from "effect/http"
 import { HttpApiClient } from "effect/http-api"
@@ -8,56 +19,83 @@ import { Document, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 
-// MODEL
+const filterFields = [
+  "kind",
+  "plantUsage",
+  "plantLifecycle",
+  "plantingMethod",
+  "stratum",
+  "ediblePart",
+] as const
+
+type FilterField = (typeof filterFields)[number]
 
 export const Model = Schema.Struct({
-  count: Schema.Number,
-  wikiSearchStatus: Schema.String,
+  text: Schema.String,
+  kind: Schema.String,
+  plantUsage: Schema.String,
+  plantLifecycle: Schema.String,
+  plantingMethod: Schema.String,
+  stratum: Schema.String,
+  ediblePart: Schema.String,
+  articles: Schema.Array(WikiArticleQueriedCardData),
+  searchStatus: Schema.String,
 })
+
 export type Model = typeof Model.Type
 
-// MESSAGE
-
 export const Message = defineMessageUnion({
-  ClickedDecrement: {},
-  ClickedIncrement: {},
-  ClickedReset: {},
-  CompletedWikiSearch: { articleCount: Schema.Number },
-  FailedWikiSearch: { error: Schema.String },
+  ChangedFilter: { field: Schema.Literals(filterFields), value: Schema.String },
+  ChangedText: { value: Schema.String },
+  CompletedSearch: { articles: Schema.Array(WikiArticleQueriedCardData) },
+  FailedSearch: { error: Schema.String },
 })
 
 export type Message = typeof Message.Type
 
-// UPDATE
-
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedDecrement: () => ({
-      model: modifyFields(model, { count: (count) => count - 1 }),
+export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
+  Message.match(message, {
+    ChangedFilter: ({ field, value }) => ({
+      model:
+        field === "kind" && value !== "PLANT"
+          ? {
+              ...model,
+              kind: value,
+              plantUsage: "",
+              plantLifecycle: "",
+              plantingMethod: "",
+              stratum: "",
+              ediblePart: "",
+            }
+          : { ...model, [field]: value },
     }),
-    ClickedIncrement: () => ({
-      model: modifyFields(model, { count: (count) => count + 1 }),
-    }),
-    ClickedReset: () => ({ model: modifyFields(model, { count: () => 0 }) }),
-    CompletedWikiSearch: ({ articleCount }) => ({
+    ChangedText: ({ value }) => ({ model: modifyFields(model, { text: () => value }) }),
+    CompletedSearch: ({ articles }) => ({
       model: modifyFields(model, {
-        wikiSearchStatus: () => `Found ${articleCount} wiki articles`,
+        articles: () => articles,
+        searchStatus: () => `${articles.length} articles found`,
       }),
     }),
-    FailedWikiSearch: ({ error }) => ({
-      model: modifyFields(model, { wikiSearchStatus: () => `Wiki search failed: ${error}` }),
+    FailedSearch: ({ error }) => ({
+      model: modifyFields(model, { searchStatus: () => `Search failed: ${error}` }),
     }),
   })
 
-// INIT
-
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
-  model: { count: 0, wikiSearchStatus: "Searching wiki articles..." },
+  model: {
+    text: "",
+    kind: "",
+    plantUsage: "",
+    plantLifecycle: "",
+    plantingMethod: "",
+    stratum: "",
+    ediblePart: "",
+    articles: [],
+    searchStatus: "Searching...",
+  },
 })
 
-const makeGororobasApiClient = HttpApiClient.make(GororobasApi, {
-  baseUrl: "/api",
-})
+const makeGororobasApiClient = HttpApiClient.make(GororobasApi, { baseUrl: "/api" })
 
 class GororobasApiClient extends Context.Service<
   GororobasApiClient,
@@ -69,26 +107,53 @@ export const resources = Layer.effect(
   makeGororobasApiClient.pipe(Effect.provide(FetchHttpClient.layer)),
 )
 
+const searchParams = (model: Model) => {
+  const text = model.text.trim() || undefined
+
+  if (model.kind === "PLANT") {
+    return Schema.decodeSync(WikiSearchParams)({
+      kind: "PLANT",
+      text,
+      ...(isLiteral(PlantUsage.literals, model.plantUsage) ? { plantUsage: model.plantUsage } : {}),
+      ...(isLiteral(PlantLifecycle.literals, model.plantLifecycle)
+        ? { plantLifecycle: model.plantLifecycle }
+        : {}),
+      ...(isLiteral(PlantingMethod.literals, model.plantingMethod)
+        ? { plantingMethod: model.plantingMethod }
+        : {}),
+      ...(isLiteral(AgroforestryStratum.literals, model.stratum) ? { stratum: model.stratum } : {}),
+      ...(isLiteral(EdiblePlantPart.literals, model.ediblePart)
+        ? { ediblePart: model.ediblePart }
+        : {}),
+    })
+  }
+
+  if (isLiteral(WikiArticleKind.literals, model.kind)) {
+    return Schema.decodeSync(WikiSearchParams)({ kind: model.kind, text })
+  }
+  return Schema.decodeSync(WikiSearchParams)({ kind: undefined, text })
+}
+
+const isLiteral = <const Values extends ReadonlyArray<string>>(
+  values: Values,
+  value: string,
+): value is Values[number] => values.some((candidate) => candidate === value)
+
 export const subscriptions = Subscription.make<Model, Message, GororobasApiClient>()((entry) => ({
   searchWikiArticles: entry(
-    { isRunning: Schema.Boolean },
+    { query: WikiSearchParams },
     {
-      modelToDependencies: () => ({ isRunning: true }),
-      dependenciesToStream: () =>
+      modelToDependencies: (model) => ({ query: searchParams(model) }),
+      dependenciesToStream: ({ query }) =>
         Stream.fromEffect(
           Effect.gen(function* () {
             const api = yield* GororobasApiClient
-
             const result = yield* Effect.result(
-              api.wiki.searchWikiArticles({ query: {} }).pipe(
-                Effect.map((articles) => articles.length),
-                Effect.mapError(String),
-              ),
+              api.wiki.searchWikiArticles({ query }).pipe(Effect.mapError(String)),
             )
-
             return Result.match(result, {
-              onSuccess: (articleCount) => Message.CompletedWikiSearch({ articleCount }),
-              onFailure: (error) => Message.FailedWikiSearch({ error }),
+              onSuccess: (articles) => Message.CompletedSearch({ articles }),
+              onFailure: (error) => Message.FailedSearch({ error }),
             })
           }),
         ),
@@ -96,40 +161,103 @@ export const subscriptions = Subscription.make<Model, Message, GororobasApiClien
   ),
 }))
 
-// VIEW
-
-export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-  title: `Counter: ${model.count}`,
-  body: h.div(
+const select = ({
+  h,
+  field,
+  label,
+  current,
+  values,
+}: {
+  h: HtmlBuilder<Message>
+  field: FilterField
+  label: string
+  current: string
+  values: ReadonlyArray<string>
+}) =>
+  h.label(
     [],
     [
-      h.p([], [model.count.toString()]),
-      h.p([], [model.wikiSearchStatus]),
-      h.div(
+      `${label} `,
+      h.select(
+        [h.Value(current), h.OnChange((value) => Message.ChangedFilter({ field, value }))],
+        [
+          h.option([h.Value("")], ["Any"]),
+          ...values.map((value) => h.option([h.Value(value)], [value.replaceAll("_", " ")])),
+        ],
+      ),
+    ],
+  )
+
+export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
+  title: "Wiki article search",
+  body: h.main(
+    [],
+    [
+      h.h1([], ["Wiki article search"]),
+      h.label(
         [],
         [
-          Button.view(
-            {
-              onClick: Message.ClickedDecrement(),
-              toView: (attributes) => h.button([...attributes.button], ["-"]),
-            },
-            h,
-          ),
-          Button.view(
-            {
-              onClick: Message.ClickedReset(),
-              toView: (attributes) => h.button([...attributes.button], ["Reset"]),
-            },
-            h,
-          ),
-          Button.view(
-            {
-              onClick: Message.ClickedIncrement(),
-              toView: (attributes) => h.button([...attributes.button], ["+"]),
-            },
-            h,
-          ),
+          "Search text ",
+          h.input([
+            h.Type("search"),
+            h.Value(model.text),
+            h.Placeholder("Name or article text"),
+            h.OnInput((value) => Message.ChangedText({ value })),
+          ]),
         ],
+      ),
+      select({
+        h,
+        field: "kind",
+        label: "Kind",
+        current: model.kind,
+        values: WikiArticleKind.literals,
+      }),
+      ...(model.kind === "PLANT"
+        ? [
+            select({
+              h,
+              field: "plantUsage",
+              label: "Usage",
+              current: model.plantUsage,
+              values: PlantUsage.literals,
+            }),
+            select({
+              h,
+              field: "plantLifecycle",
+              label: "Lifecycle",
+              current: model.plantLifecycle,
+              values: PlantLifecycle.literals,
+            }),
+            select({
+              h,
+              field: "plantingMethod",
+              label: "Planting method",
+              current: model.plantingMethod,
+              values: PlantingMethod.literals,
+            }),
+            select({
+              h,
+              field: "stratum",
+              label: "Stratum",
+              current: model.stratum,
+              values: AgroforestryStratum.literals,
+            }),
+            select({
+              h,
+              field: "ediblePart",
+              label: "Edible part",
+              current: model.ediblePart,
+              values: EdiblePlantPart.literals,
+            }),
+          ]
+        : []),
+      h.p([], [model.searchStatus]),
+      h.ul(
+        [],
+        model.articles.map((article) =>
+          h.li([], [`${article.commonNames.map(({ name }) => name).join(", ")} (${article.kind})`]),
+        ),
       ),
     ],
   ),

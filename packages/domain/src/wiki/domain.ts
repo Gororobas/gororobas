@@ -1,6 +1,14 @@
 import { Schema, Struct } from "effect"
 
-import { RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
+import {
+  AgroforestryStratum,
+  EdiblePlantPart,
+  PlantLifecycle,
+  PlantUsage,
+  PlantingMethod,
+  RevisionEvaluation,
+  WikiArticleStatus,
+} from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { LoroDocUpdate } from "../crdts/domain.js"
@@ -12,8 +20,31 @@ export * from "./wiki-article-translation.js"
 export * from "./wiki-article.js"
 export * from "./external-data/domain.js"
 
-/** Search filters will be added once wiki-specific filtering is designed. */
-export const WikiSearchParams = Schema.Struct({})
+const WikiSearchText = Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty()))
+
+const NonPlantWikiArticleKind = Schema.Literals(
+  WikiArticleKind.literals.filter(
+    (kind): kind is Exclude<WikiArticleKind, "PLANT"> => kind !== "PLANT",
+  ),
+)
+
+export const WikiSearchParams = Schema.Union([
+  Schema.Struct({ kind: Schema.optional(Schema.Undefined), text: WikiSearchText }),
+  Schema.Struct({
+    kind: Schema.Literal("PLANT"),
+    text: WikiSearchText,
+    plantUsage: Schema.optional(PlantUsage),
+    plantLifecycle: Schema.optional(PlantLifecycle),
+    plantingMethod: Schema.optional(PlantingMethod),
+    stratum: Schema.optional(AgroforestryStratum),
+    ediblePart: Schema.optional(EdiblePlantPart),
+  }),
+  Schema.Struct({
+    kind: NonPlantWikiArticleKind,
+    text: WikiSearchText,
+  }),
+])
+
 export type WikiSearchParams = typeof WikiSearchParams.Type
 
 export const WikiArticleLookup = Schema.Struct({
