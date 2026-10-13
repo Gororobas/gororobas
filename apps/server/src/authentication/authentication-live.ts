@@ -41,7 +41,7 @@ export const ApiAuthenticationLive = Layer.effect(
 )
 
 export const authenticationOrigin = Config.String("AUTH_ORIGIN").pipe(
-  Config.withDefault("https://localhost:4443"),
+  Config.withDefault("https://localhost:5173"),
 )
 
 export const authenticationLayer = (options: {

@@ -2,10 +2,6 @@
   "name": "gororobas",
   "version": "0.0.0",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "type": "module",
   "scripts": {
     "clean": "node scripts/clean.mjs",

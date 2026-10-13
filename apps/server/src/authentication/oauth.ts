@@ -85,9 +85,9 @@ const handlers = Layer.mergeAll(
         command.credential,
       )
       const crypto = yield* EffectCrypto.Crypto
-      const state = yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))
-      const nonce = yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))
-      const pkceVerifier = `${yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))}${yield* crypto.randomUUIDv4.pipe(Effect.mapError(invalidFlow))}`
+      const state = yield* crypto.randomUUIDv4().pipe(Effect.mapError(invalidFlow))
+      const nonce = yield* crypto.randomUUIDv4().pipe(Effect.mapError(invalidFlow))
+      const pkceVerifier = `${yield* crypto.randomUUIDv4().pipe(Effect.mapError(invalidFlow))}${yield* crypto.randomUUIDv4().pipe(Effect.mapError(invalidFlow))}`
 
       const authorizationUrl = yield* (yield* OAuthProtocol).authorize({
         provider: input.provider,

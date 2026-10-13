@@ -1,5 +1,5 @@
 import { ContentLanguage, SupportedLanguage } from "@gororobas/domain"
-import { Array as EffectArray, Config, Effect, Layer, Redacted, Schema } from "effect"
+import { Array as EffectArray, Config, Effect, Layer, Option, Redacted, Schema } from "effect"
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http"
 
 import { TranslationError, TranslationService } from "./translation-service.js"
@@ -21,7 +21,7 @@ const DeeplResponse = Schema.Struct({
 
 export const TranslationServiceDeepl = Layer.effect(TranslationService)(
   Effect.gen(function* () {
-    const apiKey = yield* Config.Redacted("DEEPL_API_KEY")
+    const apiKeyOption = yield* Config.option(Config.Redacted("DEEPL_API_KEY"))
     const client = yield* HttpClient.HttpClient
 
     const translate = Effect.fn("TranslationServiceDeepl.translate")(function* ({
@@ -33,6 +33,14 @@ export const TranslationServiceDeepl = Layer.effect(TranslationService)(
       sourceLanguage: ContentLanguage
       targetLanguage: SupportedLanguage
     }) {
+      if (Option.isNone(apiKeyOption)) {
+        return yield* new TranslationError({
+          message: "DEEPL_API_KEY is not configured",
+        })
+      }
+
+      const apiKey = apiKeyOption.value
+
       const response = yield* HttpClientRequest.post(
         "https://api-free.deepl.com/v2/translate",
       ).pipe(

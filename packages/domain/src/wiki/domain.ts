@@ -8,7 +8,6 @@ import { WikiMediaSelection } from "../media-assets/attachments.js"
 import { WikiArticleEditableData, WikiArticleKind, WikiArticleRevisionRow } from "./wiki-article.js"
 
 export * from "./kinds/index.js"
-export * from "./wiki-article-crdt.js"
 export * from "./wiki-article-translation.js"
 export * from "./wiki-article.js"
 export * from "./external-data/domain.js"

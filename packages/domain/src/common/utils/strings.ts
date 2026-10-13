@@ -32,7 +32,7 @@ export function capitalize(str: string, allWords = true): string {
       .join(" ")
   }
 
-  return `${str[0].toUpperCase()}${str.slice(1) || ""}`
+  return `${str.charAt(0).toUpperCase()}${str.slice(1) || ""}`
 }
 
 /** @TODO turn into FTS-friendly string */

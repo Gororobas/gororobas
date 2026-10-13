@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - repos/pleat/packages/*
 
 allowBuilds:
   "@ariga/atlas": true
@@ -26,8 +27,8 @@ catalog:
   "@types/node": ^26.6.5
   "@yielded/auth": "0.1.0-beta.18"
   "@yielded/auth-persistence": "0.1.0-beta.18"
-  effect: 4.0.1
-  effect-units: 0.4.2
+  effect: 4.0.3
+  effect-units: 0.5.0
   glob: ^13.0.6
   loro-crdt: ^1.16.4
   loro-prosemirror: 0.4.4
@@ -35,6 +36,8 @@ catalog:
   typescript: 7.0.2
   uuid: ^14.0.3
   vitest: ^5.0.4
+  vite: npm:@voidzero-dev/vite-plus-core@1.1.0
+  vite-plus: 1.1.0
 
 minimumReleaseAgeExclude:
   - "@yielded/auth-crypto@0.1.0-beta.18"

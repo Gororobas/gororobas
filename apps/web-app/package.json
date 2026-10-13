@@ -1,0 +1,33 @@
+{
+  "name": "@gororobas/web-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "type-check": "tsc --noEmit",
+    "format": "oxfmt",
+    "test": "vitest run",
+    "lint": "oxlint src"
+  },
+  "dependencies": {
+    "@effect/platform-browser": "^4.0.3",
+    "@foldkit/ui": "0.168.0",
+    "@gororobas/domain": "workspace:^",
+    "@pleat/core": "workspace:^",
+    "@pleat/foldkit": "workspace:^",
+    "effect": "catalog:",
+    "foldkit": "0.168.0"
+  },
+  "devDependencies": {
+    "@foldkit/devtools": "0.168.0",
+    "@foldkit/devtools-mcp": "0.24.1",
+    "@foldkit/vite-plugin": "0.27.1",
+    "happy-dom": "^20.14.5",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

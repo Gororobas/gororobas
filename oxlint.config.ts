@@ -1,3 +1,4 @@
+import foldkit from "@foldkit/oxlint-plugin"
 import effect from "@mpsuesser/oxlint-plugin-effect"
 import { defineConfig } from "oxlint"
 
@@ -20,6 +21,10 @@ export default defineConfig({
         "effect/no-conditional-empty-object-spread": "off",
         "effect/no-shape-in-symbol-names": "off",
       },
+    },
+    {
+      ...foldkit.configs.recommended,
+      ignorePatterns: ["./linting/**/*.mjs"],
     },
   ],
   plugins: ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
