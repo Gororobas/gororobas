@@ -31,7 +31,6 @@ const article = (origin: string) =>
         commonNames: gelVegetableNamesToCrdtList(["Test plant"]),
         origin: Option.some(origin),
         content: Option.none(),
-        grammaticalGender: Option.none(),
       },
     },
   })

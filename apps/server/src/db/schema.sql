@@ -419,7 +419,6 @@ CREATE TABLE wiki_article_translations (
   searchable_names text NOT NULL,
   content json, -- TiptapDocument
   content_plain_text text NOT NULL,
-  grammatical_gender text, -- GrammaticalGender
   origin text,
   CHECK (
     kind = 'PLANT'

@@ -5,7 +5,6 @@ import { GelClient } from "../gel-client.js"
 import { migrateRichText } from "../migrate-rich-text.js"
 import { archiveGelResult } from "../preview-exports.js"
 import { GelVegetableWithEditSuggestions } from "../schemas/gel/entities.js"
-import { gelGenderToGrammaticalGender } from "../schemas/gel/enums.js"
 import { GelTiptapDocument } from "../schemas/gel/rich-text.js"
 import { MigrationContext } from "../services/migration-context.js"
 import { buildWikiMigrationHistory } from "../wiki-migration-history.js"
@@ -135,12 +134,12 @@ export const sourceGelVegetables = Effect.gen(function* () {
                   attributes: gelVegetableToPlantEditableAttributes(historyEntry.state),
                   translations: {
                     pt: {
-                      commonNames: gelVegetableNamesToCrdtList(historyEntry.state.names),
+                      commonNames: gelVegetableNamesToCrdtList(
+                        historyEntry.state.names,
+                        historyEntry.state.gender,
+                      ),
                       origin: Option.fromNullishOr(historyEntry.state.origin),
                       content: Option.fromNullishOr(content),
-                      grammaticalGender: Option.fromNullishOr(
-                        gelGenderToGrammaticalGender(historyEntry.state.gender),
-                      ),
                     },
                   },
                 }),

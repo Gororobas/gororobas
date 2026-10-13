@@ -62,3 +62,6 @@ export * from "./crdts/define-crdt-document.js"
 export * from "./media-assets/attachments.js"
 export * from "./common/content-language.js"
 export * from "./common/source-content.js"
+export * from "./wiki/wiki-article-common-name.js"
+
+export { initializeWikiArticleCommonNames } from "./wiki/wiki-article-common-name.crdt.js"

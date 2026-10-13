@@ -96,7 +96,7 @@ const makeArticle = (content: TiptapDocument) =>
     kind: "PLANT",
     attributes: {},
     translations: {
-      en: { commonNames: [{ id: "commonname01", value: "Pumpkin" }], content },
+      en: { commonNames: [{ id: "commonname01", name: "Pumpkin" }], content },
     },
   })
 

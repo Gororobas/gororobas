@@ -5,7 +5,7 @@ import {
   IdGen,
   LoroDocUpdate,
   type LoroDocSnapshot,
-  NameInCrdtList,
+  WikiArticleCommonNameInCrdtList,
   SessionContext,
   SupportedLanguage,
   WikiArticleCrdt,
@@ -101,9 +101,11 @@ const plant = (title: string, content: string) =>
     attributes: Schema.decodeSync(WikiPlantArticle.EditableAttributes)({}),
     translations: {
       pt: {
-        commonNames: [Schema.decodeSync(NameInCrdtList)({ id: "wikicommon01", value: title })],
+        commonNames: [
+          Schema.decodeSync(WikiArticleCommonNameInCrdtList)({ id: "wikicommon01", name: title }),
+        ],
         content: Option.some(textToRichTextDocument(content)),
-        grammaticalGender: Option.none(),
+
         origin: Option.none(),
       },
     },
@@ -189,7 +191,7 @@ const contentUpdate = ({
         _tag: "AddedWikiArticleTranslation",
         language,
         value: Schema.decodeSync(WikiPlantArticle.EditableTranslation)({
-          commonNames: [{ id: "wikispanish1", value: "Mandioca" }],
+          commonNames: [{ id: "wikispanish1", name: "Mandioca" }],
         }),
       })
     }

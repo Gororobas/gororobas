@@ -3,8 +3,10 @@ import {
   Centimeters,
   IntNonNegative,
   EdiblePlantPart,
+  GrammaticalGender,
   LoroListItemId,
   NameInCrdtList,
+  WikiArticleCommonNameInCrdtList,
   PlantLifecycle,
   PlantUsage,
   PlantingMethod,
@@ -16,6 +18,7 @@ import { HashSet, Option, Schema } from "effect"
 import { type GelVegetable } from "../schemas/gel/entities.js"
 import {
   GelEdiblePart,
+  GelGender,
   GelPlantingMethod,
   GelStratum,
   GelVegetableLifeCycle,
@@ -45,7 +48,7 @@ const hashNameToLoroListItemId = (name: string): LoroListItemId =>
       .slice(0, 12),
   )
 
-const namesToCrdtList = (names: ReadonlyArray<string>) =>
+export const stringsToCrdtList = (names: ReadonlyArray<string>) =>
   names.map((value) =>
     Schema.decodeSync(NameInCrdtList)({
       id: hashNameToLoroListItemId(value.trim()),
@@ -53,9 +56,24 @@ const namesToCrdtList = (names: ReadonlyArray<string>) =>
     }),
   )
 
-export const gelVegetableNamesToCrdtList = (names: ReadonlyArray<string>) =>
+const grammaticalGenderMap: Record<GelGender, GrammaticalGender> = {
+  FEMININO: "FEMALE",
+  MASCULINO: "MALE",
+  NEUTRO: "NEUTRAL",
+}
+
+export const gelVegetableNamesToCrdtList = (
+  names: ReadonlyArray<string>,
+  gender?: GelVegetable["gender"],
+) =>
   // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy names may be empty and must fail the non-empty array constraint.
-  Schema.decodeUnknownSync(Schema.NonEmptyArray(NameInCrdtList))(namesToCrdtList(names))
+  Schema.decodeUnknownSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(
+    stringsToCrdtList(names).map(({ id, value }, index) => ({
+      id,
+      name: value,
+      grammaticalGender: index === 0 && gender ? grammaticalGenderMap[gender] : null,
+    })),
+  )
 
 const stratumMap: Record<typeof GelStratum.Type, AgroforestryStratum> = {
   EMERGENTE: "EMERGENT",
@@ -137,7 +155,10 @@ export const gelVegetableToPlantEditableAttributes = (
     temperatureMin: Option.map(Option.fromNullishOr(vegetable.temperature_min), (value) =>
       Schema.decodeSync(TemperatureInCelsius)(value),
     ),
-    scientificNames: Option.map(Option.fromNullishOr(vegetable.scientific_names), namesToCrdtList),
+    scientificNames: Option.map(
+      Option.fromNullishOr(vegetable.scientific_names),
+      stringsToCrdtList,
+    ),
     edibleParts: toSet(
       Option.fromNullishOr(vegetable.edible_parts),
       (value) => ediblePartMap[value],

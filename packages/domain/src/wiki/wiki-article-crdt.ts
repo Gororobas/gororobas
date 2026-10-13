@@ -1,6 +1,7 @@
 import { Effect, Record, Schema, SchemaTransformation } from "effect"
-import { type LoroDoc, LoroMap } from "loro-crdt"
+import { type LoroDoc, LoroMap, LoroMovableList } from "loro-crdt"
 
+import { SupportedLanguage } from "../common/enums.js"
 import { defineCrdtDocument } from "../crdts/define-crdt-document.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import { createLoroDocFromData } from "../crdts/lib.js"
@@ -15,6 +16,7 @@ import { WikiPlantArticleCrdtOperations } from "./kinds/plant.crdt.js"
 import { WikiResourceArticleCrdtOperations } from "./kinds/resource.crdt.js"
 import { WikiToolArticleCrdtOperations } from "./kinds/tool.crdt.js"
 import { WikiUncategorizedArticleCrdtOperations } from "./kinds/uncategorized.crdt.js"
+import { initializeWikiArticleCommonNames } from "./wiki-article-common-name.crdt.js"
 import { WikiArticleTranslationCrdtOperations } from "./wiki-article-translation.crdt.js"
 import { WikiArticleEditableData } from "./wiki-article.js"
 
@@ -109,6 +111,15 @@ const projectWikiArticleDocument = (document: LoroDoc) => ({
         if (!(translation instanceof LoroMap)) {
           throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
         }
+        const names = translation.get("commonNames")
+
+        if (
+          !(names instanceof LoroMovableList) ||
+          names.toArray().some((name) => !(name instanceof LoroMap))
+        ) {
+          throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+        }
+
         const content = translation.get("content")
         if (content !== undefined && !(content instanceof LoroMap)) {
           throw new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
@@ -143,10 +154,26 @@ const createWikiArticleDocument = Effect.fn("createWikiArticleDocument")(functio
     {
       kind: { value: sourceData.kind },
       attributes: encoded.attributes,
-      translations: encoded.translations,
+      translations: Record.map(encoded.translations, (translation) =>
+        Record.filter(translation, (_, key) => key !== "commonNames"),
+      ),
     },
     { omitNull: true },
   )
+
+  SupportedLanguage.literals.forEach((language) => {
+    const sourceTranslation = sourceData.translations[language]
+    const translation = sourceDocument.getMap("translations").get(language)
+
+    if (sourceTranslation && translation instanceof LoroMap) {
+      initializeWikiArticleCommonNames(
+        translation.ensureMergeableMovableList("commonNames"),
+        sourceTranslation.commonNames,
+      )
+    }
+  })
+
+  sourceDocument.commit()
 
   return sourceDocument
 })

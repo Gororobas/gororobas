@@ -9,7 +9,7 @@ import {
   snapshotToLoroDoc,
   MediaAssetRow,
   MediaAssetId,
-  NameInCrdtList,
+  WikiArticleCommonNameInCrdtList,
   PersonId,
   ProfileVisibility,
   PublicationId,
@@ -345,10 +345,12 @@ const createWikiArticles = (context: MediaContext, names: readonly string[]) =>
                   translations: {
                     pt: {
                       commonNames: [
-                        Schema.decodeSync(NameInCrdtList)({ value: name, id: "mediaplant01" }),
+                        Schema.decodeSync(WikiArticleCommonNameInCrdtList)({
+                          name: name,
+                          id: "mediaplant01",
+                        }),
                       ],
                       content: Option.some(textToRichTextDocument(name)),
-                      grammaticalGender: Option.none(),
                     },
                   },
                 },

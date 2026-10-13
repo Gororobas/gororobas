@@ -11,7 +11,7 @@ import {
   SupportedLanguage,
   LoroDocFrontier,
   loroDocToSnapshot,
-  NameInCrdtList,
+  WikiArticleCommonNameInCrdtList,
   stringToHandle,
   WikiArticleEditableData,
   WikiArticleHandleProjectionRow,
@@ -76,7 +76,7 @@ const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(f
   kind,
   id,
 }: {
-  names: ReadonlyArray<NameInCrdtList>
+  names: ReadonlyArray<WikiArticleCommonNameInCrdtList>
   kind: WikiArticleKind
   id: WikiArticleId
 }) {
@@ -85,7 +85,7 @@ const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(f
       stringToHandle(
         names
           .slice(0, index + 1)
-          .map((name) => name.value)
+          .map((value) => value.name)
           .join(" ")
           .slice(0, 48),
       ),
@@ -119,7 +119,7 @@ const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(f
 
 const chooseAvailableHandle = (input: {
   kind: WikiArticleKind
-  names: ReadonlyArray<NameInCrdtList>
+  names: ReadonlyArray<WikiArticleCommonNameInCrdtList>
   wikiArticleId: WikiArticleId
 }) =>
   Effect.gen(function* () {

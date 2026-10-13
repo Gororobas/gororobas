@@ -1,5 +1,7 @@
 import {
   initializeLoroRichText,
+  initializeWikiArticleCommonNames,
+  WikiArticleCommonNameInCrdtList,
   TiptapDocument,
   WikiArticleEditableData,
   ProfileId,
@@ -35,8 +37,17 @@ const synchronizeMap = (map: LoroMap, target: Schema.JsonObject) => {
 
     if (Array.isArray(value)) {
       const list = map.ensureMergeableMovableList(key)
-      if (list.length) list.delete(0, list.length)
-      value.forEach((item, index) => list.insert(index, item))
+
+      if (key === "commonNames") {
+        initializeWikiArticleCommonNames(
+          list,
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Synthetic wiki history must use validated common-name map containers.
+          Schema.decodeUnknownSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(value),
+        )
+      } else {
+        if (list.length) list.delete(0, list.length)
+        value.forEach((item, index) => list.insert(index, item))
+      }
     } else if (Predicate.isObject(value) && !("type" in value) && !("_tag" in value)) {
       synchronizeMap(
         map.ensureMergeableMap(key),

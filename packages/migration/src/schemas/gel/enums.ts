@@ -1,7 +1,6 @@
 /**
  * Gel schema enums and scalar types.
  */
-import { GrammaticalGender } from "@gororobas/domain"
 import { Schema } from "effect"
 
 // ============ Scalar Types ============
@@ -108,19 +107,3 @@ export type GelNoteType = typeof GelNoteType.Type
 
 export const GelHistoryAction = Schema.Literals(["INSERT", "UPDATE", "DELETE"])
 export type GelHistoryAction = typeof GelHistoryAction.Type
-
-export const GEL_GENDER_MAP: Record<GelGender, GrammaticalGender> = {
-  FEMININO: "FEMALE",
-  MASCULINO: "MALE",
-  NEUTRO: "NEUTRAL",
-} as const
-
-export const gelGenderToGrammaticalGender = (
-  // oxlint-disable-next-line effect/prefer-option-over-null
-  gender: GelGender | null | undefined,
-  // oxlint-disable-next-line effect/prefer-option-over-null
-): GrammaticalGender | null => {
-  if (!gender) return null
-
-  return GEL_GENDER_MAP[gender]
-}

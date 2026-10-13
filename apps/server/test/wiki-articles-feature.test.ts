@@ -11,7 +11,8 @@ import {
   IntNonNegative,
   LoroDocUpdate,
   MediaAssetRow,
-  NameInCrdtList,
+  WikiArticleCommonNameInCrdtList,
+  WikiArticleCommonName,
   SupportedLanguage,
   WikiArticleCrdt,
   WikiArticleEditableData,
@@ -77,7 +78,9 @@ type WikiContext = typeof WikiBackground.Type & {
   photo?: MediaAssetRow
   page?: WikiArticleQueriedPageData & {
     translationUnavailable: boolean
-    cultivars: readonly (WikiArticleProjectionRow & { commonNames: readonly string[] })[]
+    cultivars: readonly (WikiArticleProjectionRow & {
+      commonNames: readonly WikiArticleCommonName[]
+    })[]
   }
   error?: unknown
 }
@@ -105,13 +108,12 @@ const asPerson = <A, E, R>({
 
 const translation = (title: string, content = title) => ({
   commonNames: [
-    Schema.decodeSync(NameInCrdtList)({
+    Schema.decodeSync(WikiArticleCommonNameInCrdtList)({
       id: "wikicommon01",
-      value: title,
+      name: title,
     }),
   ] as const,
   content: Option.some(textToRichTextDocument(content)),
-  grammaticalGender: Option.none(),
 })
 
 const plant = (title: string, content = title) =>
@@ -745,9 +747,13 @@ await Effect.runPromise(
                 handler: (context: WikiContext, { title, parent }) =>
                   Effect.gen(function* () {
                     const page = yield* view(context, { title: parent, language: "pt" })
+
                     expect(
-                      pageIn(page).cultivars.map((cultivar) => cultivar.commonNames),
+                      pageIn(page).cultivars.map((cultivar) =>
+                        cultivar.commonNames.map((name) => name.name),
+                      ),
                     ).toContainEqual([title])
+
                     return context
                   }),
               }),
@@ -1111,9 +1117,12 @@ await Effect.runPromise(
                 handler: (context: WikiContext, { first, second }) =>
                   Effect.sync(() => {
                     expect(pageIn(context).cultivars).toHaveLength(2)
-                    expect(pageIn(context).cultivars.flatMap((row) => row.commonNames)).toEqual(
-                      expect.arrayContaining([first, second]),
-                    )
+
+                    expect(
+                      pageIn(context).cultivars.flatMap((row) =>
+                        row.commonNames.map((name) => name.name),
+                      ),
+                    ).toEqual(expect.arrayContaining([first, second]))
 
                     expect(pageIn(context).cultivars.map((row) => row.id)).toEqual(
                       expect.arrayContaining([

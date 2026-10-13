@@ -16,7 +16,7 @@ const articleJson = Schema.toCodecJson(WikiArticleEditableData)
 const plant = Schema.decodeSync(WikiPlantArticle.EditableArticle)({
   kind: "PLANT",
   attributes: {},
-  translations: { en: { commonNames: [{ id: "commonname01", value: "Pumpkin" }] } },
+  translations: { en: { commonNames: [{ id: "commonname01", name: "Pumpkin" }] } },
 })
 
 describe("Wiki CRDT review stress tests", () => {
@@ -29,7 +29,7 @@ describe("Wiki CRDT review stress tests", () => {
         attributes: {},
         translations: {
           en: {
-            commonNames: [{ id: "commonname01", value: "Pumpkin" }],
+            commonNames: [{ id: "commonname01", name: "Pumpkin" }],
             origin: "América 🌱",
             content: {
               type: "doc",
@@ -148,7 +148,7 @@ describe("Wiki CRDT review stress tests", () => {
             ...Schema.encodeSync(WikiPlantArticle.EditableArticle)(plant),
             translations: {
               en: {
-                commonNames: [{ id: "commonname01", value: "Pumpkin" }],
+                commonNames: [{ id: "commonname01", name: "Pumpkin" }],
                 content: {
                   type: "doc",
                   version: 1,

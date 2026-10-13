@@ -67,7 +67,6 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
             pt: {
               commonNames: gelVegetableNamesToCrdtList(source.names),
               content: Option.none(),
-              grammaticalGender: Option.none(),
             },
           },
         })

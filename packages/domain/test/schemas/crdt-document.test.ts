@@ -47,7 +47,7 @@ const wiki = Schema.decodeSync(WikiPlantArticle.EditableArticle)({
   kind: "PLANT",
   attributes: {},
   translations: {
-    pt: { content: content("Original"), commonNames: [{ id: "commonname01", value: "Plant" }] },
+    pt: { content: content("Original"), commonNames: [{ id: "commonname01", name: "Plant" }] },
   },
 })
 

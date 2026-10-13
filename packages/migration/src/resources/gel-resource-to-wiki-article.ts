@@ -1,6 +1,7 @@
 import {
   MediaAssetId,
   WikiArticleEditableTranslations,
+  WikiArticleCommonNameInCrdtList,
   WikiArticleId,
   WikiBookArticle,
   WikiFilmArticle,
@@ -12,7 +13,10 @@ import { Effect, Match, Record, Schema } from "effect"
 import { migrateRichText } from "../migrate-rich-text.js"
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
 import { MigrationContext } from "../services/migration-context.js"
-import { gelVegetableNamesToCrdtList as stringsToCrdtList } from "../vegetables/gel-vegetable-to-wiki-plant-article.js"
+import {
+  gelVegetableNamesToCrdtList,
+  stringsToCrdtList,
+} from "../vegetables/gel-vegetable-to-wiki-plant-article.js"
 import { WikiMigrationVersion } from "../wiki-migration-history.js"
 
 export const ResourceWikiArticle = Schema.Union([
@@ -118,9 +122,10 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
   // Round-about way of using the encoded version of the translation in the decode calls below
   const translationsEncoded = yield* Schema.decodeEffect(WikiArticleEditableTranslations)({
     pt: {
-      commonNames: stringsToCrdtList([source.title]),
+      commonNames: Schema.encodeSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(
+        gelVegetableNamesToCrdtList([source.title]),
+      ),
       content: description ? yield* migrateRichText(description) : description,
-      grammaticalGender: null,
     },
   }).pipe(Effect.flatMap(Schema.encodeEffect(WikiArticleEditableTranslations)))
 

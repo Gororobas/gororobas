@@ -437,7 +437,6 @@ CREATE TABLE `wiki_article_translations` (
   `searchable_names` text NOT NULL,
   `content` json NULL,
   `content_plain_text` text NOT NULL,
-  `grammatical_gender` text NULL,
   `origin` text NULL,
   PRIMARY KEY (`wiki_article_id`, `language`),
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `kind`) REFERENCES `wiki_articles` (`id`, `kind`) ON UPDATE NO ACTION ON DELETE CASCADE,

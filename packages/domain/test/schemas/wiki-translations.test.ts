@@ -27,7 +27,7 @@ const plant = decodePlant({
   attributes: {},
   translations: {
     en: {
-      commonNames: [{ id: "commonname01", value: "Pumpkin" }],
+      commonNames: [{ id: "commonname01", name: "Pumpkin" }],
       origin: "Central America",
       content: {
         type: "doc",
@@ -35,7 +35,7 @@ const plant = decodePlant({
         content: [{ type: "paragraph", attrs: { ["__proto__"]: "retained" } }],
       },
     },
-    pt: { commonNames: [{ id: "commonname02", value: "Abóbora" }] },
+    pt: { commonNames: [{ id: "commonname02", name: "Abóbora" }] },
   },
 })
 
@@ -78,7 +78,7 @@ describe("Kind-specific wiki translations", () => {
       Option.none(),
     )
     const encoded = Schema.encodeSync(WikiArticleTranslationProjectionRow)(row)
-    expect(encoded.commonNames).toBe('["Pumpkin"]')
+    expect(JSON.parse(encoded.commonNames)).toEqual([{ name: "Pumpkin", grammaticalGender: null }])
 
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test supplies excess fields to verify that fields from other wiki kinds are stripped.
     const animal = Schema.decodeUnknownSync(WikiArticleTranslationProjectionRow)({
@@ -183,7 +183,7 @@ describe("Kind-specific wiki translations", () => {
                 _tag: "AddedWikiArticleTranslation",
                 language,
                 value: Schema.decodeSync(WikiArticleEditableTranslation)({
-                  commonNames: [{ id: "translation1", value: "Pumpkin" }],
+                  commonNames: [{ id: "translation1", name: "Pumpkin" }],
                 }),
               })
             }
@@ -202,7 +202,7 @@ describe("Kind-specific wiki translations", () => {
             yield* WikiArticleCrdt.applyEdit(document, {
               _tag: "AddedWikiArticleTranslationCommonName",
               language,
-              value: addedName,
+              value: { name: addedName, grammaticalGender: Option.none() },
             })
 
             const added = yield* WikiArticleCrdt.read(document)
@@ -218,7 +218,7 @@ describe("Kind-specific wiki translations", () => {
               _tag: "UpdatedWikiArticleTranslationCommonName",
               language,
               id: newName.id,
-              updatedValue: updatedName,
+              name: updatedName,
             })
 
             yield* WikiArticleCrdt.applyEdit(document, {
@@ -235,13 +235,8 @@ describe("Kind-specific wiki translations", () => {
                 .commonNames[0],
             ).toEqual({
               id: newName.id,
-              value: toLoroValue(updatedName),
-            })
-
-            yield* WikiArticleCrdt.applyEdit(document, {
-              _tag: "RemovedWikiArticleTranslationCommonName",
-              language,
-              id: newName.id,
+              name: updatedName,
+              grammaticalGender: Option.none(),
             })
 
             expect(translation.ensureMergeableMovableList("commonNames").id).toBe(listId)
@@ -268,8 +263,9 @@ describe("Kind-specific wiki translations", () => {
             expect(sameContent.id).toBe(contentId)
 
             yield* WikiArticleCrdt.applyEdit(document, {
-              _tag: "SetWikiArticleTranslationGrammaticalGender",
+              _tag: "SetWikiArticleTranslationCommonNameGrammaticalGender",
               language,
+              id: newName.id,
               value: grammaticalGender,
             })
 
@@ -278,27 +274,41 @@ describe("Kind-specific wiki translations", () => {
               Option.fromUndefinedOr(set.translations[language]),
             )
             expect(setTranslation.content).toEqual(Option.some(wikiRichText))
-            expect(setTranslation.grammaticalGender).toEqual(Option.some(grammaticalGender))
+            expect(setTranslation.commonNames[0].grammaticalGender).toEqual(
+              Option.some(grammaticalGender),
+            )
 
             yield* WikiArticleCrdt.applyEdit(document, {
               _tag: "UnsetWikiArticleTranslationContent",
               language,
             })
+
             yield* WikiArticleCrdt.applyEdit(document, {
-              _tag: "UnsetWikiArticleTranslationGrammaticalGender",
+              _tag: "UnsetWikiArticleTranslationCommonNameGrammaticalGender",
               language,
+              id: newName.id,
             })
+
+            expect(
+              (yield* WikiArticleCrdt.read(document)).translations[language]?.commonNames[0]
+                .grammaticalGender,
+            ).toEqual(Option.none())
+
+            yield* WikiArticleCrdt.applyEdit(document, {
+              _tag: "RemovedWikiArticleTranslationCommonName",
+              language,
+              id: newName.id,
+            })
+
             const after = yield* WikiArticleCrdt.read(document)
             const afterTranslation = Option.getOrThrow(
               Option.fromUndefinedOr(after.translations[language]),
             )
             expect(afterTranslation.content).toEqual(Option.none())
-            expect(afterTranslation.grammaticalGender).toEqual(Option.none())
 
             expect({
               ...afterTranslation,
               content: beforeTranslation.content,
-              grammaticalGender: beforeTranslation.grammaticalGender,
             }).toEqual(beforeTranslation)
 
             expect({ ...after.translations, [language]: beforeTranslation }).toEqual(
@@ -319,8 +329,7 @@ describe("Kind-specific wiki translations", () => {
         const document = snapshotToLoroDoc(created.crdtSnapshot)
 
         const value = Schema.decodeSync(WikiArticleEditableTranslation)({
-          commonNames: [{ id: "translation1", value: "Calabaza" }],
-          grammaticalGender: "FEMALE",
+          commonNames: [{ id: "translation1", name: "Calabaza", grammaticalGender: "FEMALE" }],
           content: wikiRichText,
         })
 
@@ -365,8 +374,9 @@ describe("Kind-specific wiki translations", () => {
         const document = snapshotToLoroDoc(created.crdtSnapshot)
 
         yield* WikiArticleCrdt.applyEdit(document, {
-          _tag: "SetWikiArticleTranslationGrammaticalGender",
+          _tag: "SetWikiArticleTranslationCommonNameGrammaticalGender",
           language: "en",
+          id: Option.getOrThrow(Option.fromUndefinedOr(plant.translations.en)).commonNames[0].id,
           value: "FEMALE",
         })
 
@@ -375,7 +385,7 @@ describe("Kind-specific wiki translations", () => {
           language: "en",
         })
         const value = Schema.decodeSync(WikiArticleEditableTranslation)({
-          commonNames: [{ id: "translation2", value: "Squash" }],
+          commonNames: [{ id: "translation2", name: "Squash" }],
         })
 
         yield* WikiArticleCrdt.applyEdit(document, {
@@ -416,12 +426,16 @@ describe("Kind-specific wiki translations", () => {
           { _tag: "RemovedWikiArticleTranslation", language: "es" },
           { _tag: "SetWikiArticleTranslationContent", language: "es", content: wikiRichText },
           { _tag: "UnsetWikiArticleTranslationContent", language: "es" },
-          { _tag: "AddedWikiArticleTranslationCommonName", language: "es", value: name.value },
+          {
+            _tag: "AddedWikiArticleTranslationCommonName",
+            language: "es",
+            value: { name: name.name, grammaticalGender: name.grammaticalGender },
+          },
           {
             _tag: "UpdatedWikiArticleTranslationCommonName",
             language: "es",
             id: name.id,
-            updatedValue: name.value,
+            name: name.name,
           },
           {
             _tag: "MovedWikiArticleTranslationCommonName",
@@ -430,8 +444,17 @@ describe("Kind-specific wiki translations", () => {
             newIndex: 0,
           },
           { _tag: "RemovedWikiArticleTranslationCommonName", language: "es", id: name.id },
-          { _tag: "SetWikiArticleTranslationGrammaticalGender", language: "es", value: "FEMALE" },
-          { _tag: "UnsetWikiArticleTranslationGrammaticalGender", language: "es" },
+          {
+            _tag: "SetWikiArticleTranslationCommonNameGrammaticalGender",
+            language: "es",
+            id: name.id,
+            value: "FEMALE",
+          },
+          {
+            _tag: "UnsetWikiArticleTranslationCommonNameGrammaticalGender",
+            language: "es",
+            id: name.id,
+          },
         ] as const
 
         yield* Effect.forEach(

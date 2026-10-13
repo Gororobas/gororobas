@@ -2,13 +2,7 @@ import { Match, Option, Schema } from "effect"
 
 import { SupportedLanguage, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { MediaAssetId, PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
-import {
-  Handle,
-  ValidName,
-  OptionalColumn,
-  TimestampColumn,
-  TimestampedStruct,
-} from "../common/primitives.js"
+import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { strToSearchTokens } from "../common/utils/strings.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { tiptapToText } from "../rich-text/tiptap-to-text.js"
@@ -22,6 +16,7 @@ import { WikiPlantArticle } from "./kinds/plant.js"
 import { WikiResourceArticle } from "./kinds/resource.js"
 import { WikiToolArticle } from "./kinds/tool.js"
 import { WikiUncategorizedArticle } from "./kinds/uncategorized.js"
+import { WikiArticleCommonName } from "./wiki-article-common-name.js"
 
 export const WikiArticleEditableData = Schema.Union([
   WikiAnimalArticle.EditableArticle,
@@ -132,7 +127,7 @@ export const WikiArticleQueriedCardData = Schema.Struct({
   thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
   handle: Handle,
   kind: WikiArticleKind,
-  commonNames: Schema.Array(ValidName),
+  commonNames: Schema.Array(WikiArticleCommonName),
   language: SupportedLanguage,
 })
 
@@ -227,9 +222,12 @@ export const projectTranslation = ({
       wikiArticleId,
       kind: article.kind,
       language,
-      commonNames: translation.commonNames.map((name) => name.value),
+      commonNames: translation.commonNames.map(({ name, grammaticalGender }) => ({
+        name,
+        grammaticalGender,
+      })),
       searchableNames: strToSearchTokens(
-        translation.commonNames.map((name) => name.value).join(" "),
+        translation.commonNames.map((name) => name.name).join(" "),
       ),
       contentPlainText: Option.match(translation.content, {
         onNone: () => "",

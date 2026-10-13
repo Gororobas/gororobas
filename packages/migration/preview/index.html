@@ -171,7 +171,7 @@
     const display = (value) => {
       if (value == null) return "—"
       if (Array.isArray(value))
-        return value.map((item) => item?.value ?? item).join(", ") || "(vazio)"
+        return value.map((item) => item?.name ?? item?.value ?? item).join(", ") || "(vazio)"
       if (typeof value === "object")
         return (
           Object.keys(value)
@@ -297,7 +297,7 @@
     const fields = [
       ["Nomes", "names", "commonNames"],
       ["Nomes científicos", "scientific_names", "scientificNames"],
-      ["Gênero gramatical", "gender", "grammaticalGender"],
+      ["Gênero gramatical", "gender", "commonNameGenders"],
       ["Estrato", "strata", "strata"],
       ["Métodos de plantio", "planting_methods", "plantingMethods"],
       ["Partes comestíveis", "edible_parts", "edibleParts"],
@@ -650,9 +650,14 @@
         table.append(heading)
         for (const [label, originalKey, convertedKey] of fields) {
           const row = element("tr")
-          const converted = ["commonNames", "grammaticalGender"].includes(convertedKey)
-            ? translation?.[convertedKey]
-            : article?.attributes?.[convertedKey]
+          const converted =
+            convertedKey === "commonNameGenders"
+              ? translation?.commonNames?.map(
+                  ({ name, grammaticalGender }) => `${name}: ${grammaticalGender ?? "—"}`,
+                )
+              : convertedKey === "commonNames"
+                ? translation?.commonNames
+                : article?.attributes?.[convertedKey]
           row.append(
             element("th", label),
             element("td", display(source[originalKey])),

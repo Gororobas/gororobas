@@ -9,7 +9,7 @@ import {
   ProfileVisibility,
   PublicationId,
   PublicationCommentId,
-  NameInCrdtList,
+  WikiArticleCommonNameInCrdtList,
   WikiArticleId,
   WikiArticleRevisionRow,
   OrganizationAccessLevel,
@@ -979,13 +979,12 @@ await Effect.runPromise(
                           translations: {
                             pt: {
                               commonNames: [
-                                yield* Schema.decodeEffect(NameInCrdtList)({
-                                  value: title,
+                                yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
+                                  name: title,
                                   id: "mandioca0001",
                                 }),
                               ],
                               content: Option.some(textToRichTextDocument("Cultivo da mandioca")),
-                              grammaticalGender: Option.none(),
                             },
                           },
                         },
