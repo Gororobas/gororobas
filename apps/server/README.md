@@ -7,19 +7,43 @@ The normal application server runs all implemented API groups, email authenticat
 From the workspace root:
 
 ```sh
-cp apps/server/.env.example apps/server/.env
-node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64url"))'
+pnpm --filter @gororobas/server setup:env
 ```
 
-Set generated values as `AUTH_BINDING_KEY` and `AUTH_PROOF_KEY` (distinct), and supply `DEEPL_API_KEY` for translation workflows. Start Mailpit with `docker compose -f apps/server/compose.auth.yaml up -d mailpit`, then run:
+This creates `apps/server/.env` from `.env.example` with distinct, freshly generated `AUTH_BINDING_KEY` and `AUTH_PROOF_KEY`; an existing `.env` is left untouched. Supply `DEEPL_API_KEY` for translation workflows. Start Mailpit with `docker compose -f apps/server/compose.auth.yaml up -d mailpit` (or the `mailpit` binary), then run:
 
 ```sh
 pnpm --filter @gororobas/server start
 ```
 
-The HTTP listener binds port 4000; open `http://localhost:4443/login` through the web app for development authentication. `APP_DB_FILENAME` selects the application database (default `gororobas.db`), `WORKFLOWS_DB_FILENAME` selects workflow storage, and `MEDIA_ASSETS_DIRECTORY` selects the media filesystem root. Relative paths resolve from `apps/server` when using the package command. Shutdown disposes shared SQL/cluster services before exit.
+The HTTP listener binds `API_PORT` (default 4000); open `http://localhost:4443/login` through the web app for development authentication. `APP_DB_FILENAME` selects the application database (default `gororobas.db`), `WORKFLOWS_DB_FILENAME` selects workflow storage, and `MEDIA_ASSETS_DIRECTORY` selects the media filesystem root. Relative paths resolve from `apps/server` when using the package command. Shutdown disposes shared SQL/cluster services before exit.
 
 The Gel migration writes to `apps/server/gororobas.db` by default. See the [ingestion instructions](../../packages/migration/README.md) for migration, caching, archives, and HTTP verification. Stop the server before replacing its database. Migration skips workflow submissions; subsequent application activity uses the registered workflows.
+
+## Fake data
+
+`pnpm --filter @gororobas/server seed` fills an empty database with legible fake data covering every table: people at every access level, organizations with memberships and invitations, tags, every wiki article kind with revisions, bookmarks and provider data, posts and events with translations, edits, media and comment threads. Writes go through the application's repositories, so CRDT documents and projections are real.
+
+```sh
+pnpm --filter @gororobas/server seed --scale medium --replace
+```
+
+| Scale | People | Wiki articles | Publications | Time |
+| --- | --- | --- | --- | --- |
+| `tiny` | 12 | 40 | 30 | ~2s |
+| `small` (default) | 60 | 150 | 200 | ~6s |
+| `medium` | 600 | 1,500 | 2,500 | ~45s |
+| `large` | 5,000 | 12,000 | 25,000 | a few minutes |
+
+The target is `APP_DB_FILENAME`; `--replace` deletes it first, and seeding refuses a database that has profiles or a running server's SQLite sidecars. Run `seed --help` for all flags.
+
+To start the server with a fresh, seeded in-memory database instead, set `APP_DB_FILENAME=:memory:`, `WORKFLOWS_DB_FILENAME=:memory:` and `SEED_SCALE`. Seeding then runs at startup whenever the database has no profiles. The `api-seeded` and `web-seeded` configurations in `.claude/launch.json` do this on ports 4100/4543, so they run beside the normal stack.
+
+- **Accounts**: `admin@`, `moderator@`, `community@`, `newcomer@` and `blocked@gororobas.test` have the matching access level, handle and a profile, identical for every seed. Sign in through the normal email flow; the code arrives in Mailpit (`GET http://localhost:8025/api/v1/search?query=to:community@gororobas.test`). Generated people use `<handle>@gororobas.test`.
+- **Determinism**: the same `--seed` (default `gororobas`, or `SEED` at startup), scale and `--anchor` (default: the start of today, UTC) produce identical identifiers, handles, timestamps and text. CRDT snapshots and frontiers differ between runs because Loro assigns random peer IDs.
+- **Shape and legibility**: schema arbitraries choose each record's structure (kinds, enums, optional attributes), so new kinds and enum values are seeded automatically; `src/seed/vocabulary.ts` supplies the Portuguese, Spanish and English text. A new wiki kind needs names there.
+- **Media**: a small pool of generated images goes through the real media pipeline once and is cached under `MEDIA_ASSETS_DIRECTORY/.seed-pool`; every seeded media asset is a symlink to a pool entry.
+- **Coverage**: `test/seed.test.ts` fails when a table receives no seeded rows or seeded rows don't decode with the read-side schemas. When adding a table, seed it in `src/seed/` or justify the exemption in that test.
 
 ## Local authentication
 
@@ -53,6 +77,9 @@ HTTP authentication is supported on loopback origins only in development, using 
 | `RESEND_API_KEY` | Required non-empty API key in production. |
 | `MAILPIT_URL` | Local delivery endpoint, default `http://localhost:8025`. |
 | `AUTH_EMAIL_FROM` | Required non-empty sender address in production; defaults to `auth@gororobas.local` for Mailpit. |
+| `API_PORT` | HTTP port, default 4000. The web app's Vite proxy reads the same variable; `WEB_PORT` (default 4443) moves the web app. Set `AUTH_ORIGIN` to the matching web origin. |
+| `SEED_SCALE` | When set (`tiny`, `small`, `medium`, `large`), seeds an empty database at startup. See [Fake data](#fake-data). |
+| `SEED` | Seed string for startup seeding, default `gororobas`. |
 
 Production uses [Resend’s email API](https://resend.com/docs/api-reference/emails/send-email) and fails startup if `RESEND_API_KEY` or `AUTH_EMAIL_FROM` is missing or empty. Use a verified sender domain, disable link tracking/rewriting in Resend, and set the actual HTTPS `AUTH_ORIGIN`. The normal application entry point includes its API and workflow layers.
 

@@ -81,6 +81,12 @@ Where possible, use Property-Based Testing (PBT) with Effect Schema and its arbi
 
 Avoid writing tests that are simply a re-statement of the promises already in the code. You can write trivial tests to help guide your implementation, but don't keep them around if all they do is assert obvious behavior that can't go wrong.
 
+## Running the app with data
+
+In a fresh checkout, run `pnpm --filter @gororobas/server setup:env` once. Then start the `api-seeded` and `web-seeded` configurations from `.claude/launch.json` (web app on http://localhost:4543): the API boots with an in-memory database seeded with fake data, so every restart is clean and nothing touches `gororobas.db`. Sign in as `admin@`, `moderator@`, `community@`, `newcomer@` or `blocked@gororobas.test` and read the code from Mailpit's API. `API_PORT`, `WEB_PORT` and `AUTH_ORIGIN` let several stacks run side by side. Details are in the server README's "Fake data" section.
+
+When you add a table, column or wiki kind, extend the seed in `apps/server/src/seed/`; `apps/server/test/seed.test.ts` fails until every table is covered.
+
 ## Ensuring quality
 
 ⚠️ **CRITICAL**: always run the following to ensure your contribution is correct:

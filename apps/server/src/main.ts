@@ -1,5 +1,5 @@
 import { NodeHttpServer } from "@effect/platform-node"
-import { Effect, Layer } from "effect"
+import { Config, Effect, Layer } from "effect"
 import { HttpRouter } from "effect/http"
 // oxlint-disable-next-line effect/use-http-client-service, custom-lint-rules/no-node-apis -- NodeHttpServer.layer requires the Node HTTP server factory.
 import * as Http from "node:http"
@@ -12,12 +12,13 @@ import { authenticationOrigin } from "./authentication/authentication-origin.js"
 import { environmentConfig } from "./environment-config.js"
 import { ProfilesRepository } from "./profiles/repository.js"
 import { runMainWithCustomRuntime } from "./run-main-with-custom-runtime.js"
+import { SeedOnStartupLive } from "./seed/seed-on-startup.js"
 import { ServerServicesLive } from "./server-services.js"
 import { LanguageDetectionServiceStub } from "./translation/language-detection-service.js"
 import { TranslationServiceDeepl } from "./translation/translation-service-deepl.js"
 import { WorkflowsLive } from "./workflows-live.js"
 
-const Services = Layer.mergeAll(WorkflowsLive).pipe(
+const Services = Layer.mergeAll(WorkflowsLive, SeedOnStartupLive).pipe(
   Layer.provideMerge(
     Layer.unwrap(
       Effect.gen(function* () {
@@ -46,7 +47,13 @@ const Services = Layer.mergeAll(WorkflowsLive).pipe(
 const HttpLive = HttpRouter.serve(Services).pipe(
   Layer.provide(ServerServicesLive),
 
-  Layer.provide(NodeHttpServer.layer(Http.createServer, { port: 4000 })),
+  Layer.provide(
+    Layer.unwrap(
+      Effect.map(Config.Port("API_PORT").pipe(Config.withDefault(4000)), (port) =>
+        NodeHttpServer.layer(Http.createServer, { port }),
+      ),
+    ),
+  ),
 )
 
 const program = Layer.launch(HttpLive)

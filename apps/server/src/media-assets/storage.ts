@@ -47,7 +47,7 @@ export class MediaAssetsStorage extends Context.Service<MediaAssetsStorage>()(
 
       const filePath = (id: MediaAssetId, filename: string) => path.join(root, id, filename)
 
-      return { stage, publish, remove, filePath }
+      return { root, stage, publish, remove, filePath }
     }),
   },
 ) {}

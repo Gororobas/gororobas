@@ -769,6 +769,7 @@ it.effect("media deletion workflow retries failed removals and memoizes successf
     const removed: MediaAssetId[] = []
 
     const files = MediaAssetsStorage.of({
+      root: "unused-root",
       stage: () => Effect.die("unused staging"),
       publish: () => Effect.void,
       filePath: (id, name) => `${id}/${name}`,

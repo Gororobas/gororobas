@@ -23,6 +23,8 @@ export default defineConfig({
             "apps/server/src/publication-comments/api-live.test.ts",
             "apps/server/src/translation/publication-comment-translation-workflow.test.ts",
             "apps/server/test/session-builders.test.ts",
+            "apps/server/test/seed.test.ts",
+            "apps/server/test/external-data/*.test.ts",
           ],
         },
       },
