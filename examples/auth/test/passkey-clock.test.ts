@@ -5,8 +5,7 @@ import * as Native from "@yielded/auth-persistence-drizzle/SqliteNode";
 import { AuthenticationAssurance } from "@yielded/auth/Operations";
 import { SubjectId } from "@yielded/auth/Schema";
 import { sql as drizzleSql } from "drizzle-orm";
-import { Array, DateTime, Deferred, Effect, Fiber, Layer, Logger, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
+import { Array, DateTime, Effect, Layer, Redacted, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { expect } from "vite-plus/test";
@@ -39,8 +38,6 @@ const verified = Passkey.PasskeyRegistrationVerified.make({
   counter: 0,
 });
 
-const invalidClaimId = Base64Url.encode(new Uint8Array(32).fill(2));
-
 const harness = (
   options: {
     verify?: (
@@ -50,7 +47,6 @@ const harness = (
       Passkey.PasskeyProtocolRejected | Passkey.PasskeyUnavailable,
       SqlClient.SqlClient
     >;
-    invalidClaim?: boolean;
   } = {},
 ) => {
   const database = Layer.effectDiscard(
@@ -79,34 +75,12 @@ const harness = (
         },
       });
 
-      const enrollment = yield* Native.makePasskeyEnrollmentContextServices({
-        moduleId: Tables.base.moduleId,
-        read: Tables.read,
-        module: Tables.base.module,
-      });
-
-      const persistence = options.invalidClaim
-        ? Passkey.PasskeyPersistence.of({
-            ...services.passkeyPersistence,
-            claim: (input, prepare) =>
-              services.passkeyPersistence.claim(input, (decision, journal) =>
-                prepare(
-                  decision._tag === "Claimed"
-                    ? {
-                        ...decision,
-                        claim: { ...decision.claim, claimId: invalidClaimId },
-                      }
-                    : decision,
-                  journal,
-                ),
-              ),
-          })
-        : services.passkeyPersistence;
+      const credentials = yield* Native.makePasskeyCredentialServices(Tables.read);
 
       return Layer.mergeAll(
-        Layer.succeed(Passkey.PasskeyPersistence, persistence),
+        Layer.succeed(Passkey.PasskeyPersistence, services.passkeyPersistence),
         Layer.succeed(Passkey.PasskeyManagementPersistence, services.passkeyManagementPersistence),
-        Layer.succeed(Passkey.PasskeyEnrollmentContext, enrollment.passkeyEnrollmentContext),
+        Layer.succeed(Passkey.PasskeyCredentials, credentials.passkeyCredentials),
       );
     }),
   ).pipe(Layer.provide(Native.databaseLayer), Layer.provideMerge(database));
@@ -175,11 +149,10 @@ const harness = (
 
   return module.layer.pipe(
     Layer.provide(module.binding.layer),
-    Layer.provide(
-      sessions.statelessLayer(Sessions.stateless({ keys }).policy(sessions.moduleId), keys),
-    ),
+    Layer.provide(sessions.statelessLayer(Sessions.stateless().policy(sessions.moduleId))),
     Layer.provide([
       protocol,
+      Layer.succeed(Sessions.SessionSigningKeys, keys),
       action,
       Auth.RequestBindingConfig.layer({ generation: 1, lifetimeMillis: 300000, keyring: keys }),
       Passkey.PasskeyConfig.layer({ profiles: [Tables.profile] }),
@@ -195,7 +168,7 @@ const start = Effect.gen(function* () {
   const caller = {
     _tag: "Authenticated" as const,
     subjectId: SubjectId.make("account"),
-    assurance: new AuthenticationAssurance({
+    assurance: AuthenticationAssurance.make({
       method: "existing-factor",
       factors: ["possession"],
       authenticatedAt: DateTime.makeUnsafe(0),
@@ -251,7 +224,7 @@ it.effect.each([
     }).pipe(Effect.provide(harness())),
 );
 
-it.effect("rejects enrollment when authority time expires the claim during verification", () =>
+it.effect("rejects enrollment when authority time expires the challenge during verification", () =>
   Effect.gen(function* () {
     const started = yield* start;
 
@@ -266,7 +239,7 @@ it.effect("rejects enrollment when authority time expires the claim during verif
       harness({
         verify: () =>
           Effect.gen(function* () {
-            yield* (yield* SqlClient.SqlClient)`UPDATE passkey_test_clock SET millis = 60242`;
+            yield* (yield* SqlClient.SqlClient)`UPDATE passkey_test_clock SET millis = 120001`;
 
             return verified;
           }).pipe(Effect.orDie),
@@ -274,63 +247,3 @@ it.effect("rejects enrollment when authority time expires the claim during verif
     ),
   ),
 );
-
-it.effect("bounds a stalled verifier by the claim duration and terminalizes it once", () =>
-  Effect.gen(function* () {
-    const entered = yield* Deferred.make<void>();
-    const closed = yield* Deferred.make<void>();
-
-    yield* Effect.gen(function* () {
-      const started = yield* start;
-
-      yield* (yield* SqlClient.SqlClient)`UPDATE passkey_test_clock SET millis = 242`;
-      const fiber = yield* started.complete.pipe(Effect.flip, Effect.forkChild);
-
-      expect(
-        yield* Effect.raceFirst(
-          Deferred.await(entered).pipe(Effect.as("entered")),
-          Fiber.await(fiber).pipe(Effect.as("finished")),
-        ),
-      ).toBe("entered");
-      yield* TestClock.adjust(60000);
-      expect((yield* Fiber.join(fiber))._tag).toBe("PasskeyUnavailable");
-      expect(yield* Deferred.isDone(closed)).toBe(true);
-      expect((yield* started.service.list(started.caller, { limit: 10 })).credentials).toHaveLength(
-        0,
-      );
-      expect((yield* started.complete.pipe(Effect.flip))._tag).toBe("PasskeyRejected");
-    }).pipe(
-      Effect.provide(
-        harness({
-          verify: () =>
-            Deferred.succeed(entered, undefined).pipe(
-              Effect.andThen(Effect.never),
-              Effect.ensuring(Deferred.succeed(closed, undefined)),
-            ),
-        }),
-      ),
-    );
-  }),
-);
-
-it.effect("reports an invalid claim receipt once without leaking credential content", () => {
-  const logs: string[] = [];
-
-  const logger = Logger.make((entry) =>
-    logs.push(JSON.stringify(Logger.formatStructured.log(entry))),
-  );
-
-  return Effect.gen(function* () {
-    const started = yield* start;
-
-    expect((yield* started.complete.pipe(Effect.flip))._tag).toBe("PasskeyUnavailable");
-    expect(logs).toHaveLength(1);
-    expect(logs[0]).toContain("Auth passkey-core failed");
-    expect(logs[0]).toContain("claimIdMatches");
-    for (const privateValue of ["account", invalidClaimId, "registration-response", "Synced ES256"])
-      expect(logs[0]).not.toContain(privateValue);
-    expect((yield* started.service.list(started.caller, { limit: 10 })).credentials).toHaveLength(
-      0,
-    );
-  }).pipe(Effect.provide([harness({ invalidClaim: true }), Logger.layer([logger])]));
-});

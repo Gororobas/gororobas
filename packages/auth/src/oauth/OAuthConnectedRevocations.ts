@@ -22,10 +22,9 @@ export const OAuthConnectedRevocationDecision = Schema.Union([
 ]);
 
 /** Optional durable revocation authority sharing Disconnect's physical store.
- * Claimed attempts never overlap by expired takeover. Retry only under explicit
- * provider quiescence/idempotency semantics; Unknown/timeout cannot clear barriers.
- * Cohort identity/order survives module/profile/secret rotation and queue cleanup.
- * Confirmed job alone cannot clear outstanding refresh or earlier ambiguous work. */
+ * Claimed attempts never overlap by expired takeover. Unknown outcomes do not
+ * authorize automatic retries. Provider-wide revocation can affect authorization
+ * obtained after this job; no local ordering fence can retract an external token. */
 export class OAuthConnectedRevocations extends Context.Service<
   OAuthConnectedRevocations,
   {

@@ -1,4 +1,4 @@
-import { Persistence, Record, Unavailable } from "@yielded/auth/OAuthServer";
+import { AssertionReceipt, Persistence, Record, Unavailable } from "@yielded/auth/OAuthServer";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
@@ -16,7 +16,8 @@ const Row = Schema.Struct({
  * Expired records may be deleted when expires_at_millis <= the current time.
  * Revocation has its own monotonic column so it cannot lose a race with rotation.
  */
-const migration = `CREATE TABLE yielded_oauth_server (
+const migrations = [
+  `CREATE TABLE yielded_oauth_server (
   namespace TEXT NOT NULL,
   grant_id TEXT NOT NULL,
   version TEXT NOT NULL,
@@ -24,7 +25,14 @@ const migration = `CREATE TABLE yielded_oauth_server (
   expires_at_millis BIGINT NOT NULL,
   payload TEXT NOT NULL,
   PRIMARY KEY (namespace, grant_id)
-)`;
+)`,
+  `CREATE TABLE yielded_oauth_client_assertion (
+  namespace TEXT NOT NULL,
+  assertion_id TEXT NOT NULL,
+  expires_at_millis BIGINT NOT NULL,
+  PRIMARY KEY (namespace, assertion_id)
+)`,
+];
 
 const layer = Layer.effect(
   Persistence,
@@ -39,6 +47,18 @@ const layer = Layer.effect(
       effect.pipe(Effect.mapError(() => Unavailable.make({})));
 
     return Persistence.of({
+      consumeAssertion: Effect.fn("OAuthServerPersistence.consumeAssertion")(function* (
+        namespace,
+        input,
+      ) {
+        yield* standalone;
+        const receipt = yield* Schema.decodeEffect(AssertionReceipt)(input);
+
+        const rows =
+          yield* sql`INSERT INTO yielded_oauth_client_assertion (namespace, assertion_id, expires_at_millis) VALUES (${namespace}, ${receipt.id}, ${receipt.expiresAtMillis}) ON CONFLICT (namespace, assertion_id) DO NOTHING RETURNING assertion_id`;
+
+        return rows.length === 1;
+      }, failure),
       get: Effect.fn("OAuthServerPersistence.get")(function* (namespace, id) {
         yield* standalone;
 
@@ -86,4 +106,4 @@ const layer = Layer.effect(
   }),
 );
 
-export const OAuthServerPersistence = { migration, layer };
+export const OAuthServerPersistence = { migrations, layer };

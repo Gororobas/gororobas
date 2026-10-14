@@ -1,4 +1,4 @@
-import { NativeDatabase } from "@yielded/auth-persistence/Adapter";
+import { withStorageValidation } from "@yielded/auth-persistence/Adapter";
 import {
   ExternalIdentityMutation,
   type ExternalIdentity,
@@ -12,13 +12,14 @@ import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import type { SubjectId } from "@yielded/auth/Schema";
 /* oxlint-disable no-explicit-any -- Drizzle generic query types are narrowed at this technology boundary. */
 import { and, eq } from "drizzle-orm";
-import type { QueryEffectHKTBase } from "drizzle-orm/effect-core";
+import type { EffectDrizzleQueryError, QueryEffectHKTBase } from "drizzle-orm/effect-core";
 import type { AnySQLiteTable, SQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { SQLiteEffectDatabase } from "drizzle-orm/sqlite-core/effect/db";
 import { Cause, Effect, Schema } from "effect";
 
 import {
   column,
+  SubjectProvisioningError,
   isMappedConstraintConflict,
   PersistenceMappingError,
   provisioningFingerprint,
@@ -26,9 +27,14 @@ import {
   type IdentityTables,
   type SubjectProvisioningTables,
 } from "./model";
+import { NativeDatabase } from "./native-database";
 import { validateDrizzleStorage } from "./storage-validation";
 
-type ClosedQueryEffectHKT = QueryEffectHKTBase & { readonly context: never };
+// Every installed Effect SQLite driver declares this query error and has its context supplied.
+type ClosedQueryEffectHKT = QueryEffectHKTBase & {
+  readonly error: EffectDrizzleQueryError;
+  readonly context: never;
+};
 type RuntimeDatabase = SQLiteEffectDatabase<ClosedQueryEffectHKT, unknown, any>;
 const unavailable = () => IdentityUnavailable.make();
 const isIdentityFailure = Schema.is(Schema.Union([IdentityConflict, IdentityUnavailable]));
@@ -75,12 +81,6 @@ export const makeSqliteSubjectProvisioningServices = Effect.fnUntraced(function*
 
   const identifierTable = mapping.identifier.table;
 
-  const identifierNamespaceColumn = column(
-    identifierTable,
-    mapping.identifier.namespace,
-  ) as SQLiteColumn;
-
-  const identifierValueColumn = column(identifierTable, mapping.identifier.value) as SQLiteColumn;
   const subjectIdColumn = column(mapping.subject.table, mapping.subject.id) as SQLiteColumn;
 
   const findReceipt = Effect.fn("DrizzleSqliteIdentity.findReceipt")(function* (requestId: string) {
@@ -132,7 +132,9 @@ export const makeSqliteSubjectProvisioningServices = Effect.fnUntraced(function*
         if (nativeId === undefined)
           return yield* PersistenceMappingError.make({
             operation: "provisionSubject.generatedId",
-            cause: new Error("subject insert did not return its native id"),
+            cause: SubjectProvisioningError.make({
+              message: "subject insert did not return its native id",
+            }),
           });
         if (input.identifier !== undefined)
           yield* tx
@@ -167,21 +169,8 @@ export const makeSqliteSubjectProvisioningServices = Effect.fnUntraced(function*
             Effect.flatMap((receipt) => {
               if (receipt !== undefined && receipt.fingerprint === fingerprint)
                 return Effect.succeed(receipt.subjectId as NativeId);
-              if (input.identifier === undefined) return IdentityConflict.make();
 
-              return db
-                .select({
-                  subjectId: column(identifierTable, mapping.identifier.subjectId) as SQLiteColumn,
-                })
-                .from(identifierTable as any)
-                .where(
-                  and(
-                    eq(identifierNamespaceColumn, input.identifier.namespace),
-                    eq(identifierValueColumn, input.identifier.value),
-                  ),
-                )
-                .limit(1)
-                .pipe(Effect.flatMap(() => IdentityConflict.make()));
+              return IdentityConflict.make();
             }),
           );
         },
@@ -326,4 +315,4 @@ export const makeSqliteIdentityServices = Effect.fnUntraced(function* <
     ...(yield* makeSqliteSubjectProvisioningServices(mapping, mode)),
     ...(yield* makeSqliteExternalIdentityServices(mapping)),
   };
-});
+}, withStorageValidation);

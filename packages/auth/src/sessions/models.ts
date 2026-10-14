@@ -46,26 +46,25 @@ export const AuthenticationProof = Schema.Struct({
 
 export type AuthenticationProof = typeof AuthenticationProof.Type;
 
-/** Trusted method evidence. No public endpoint accepts subject/factor assertions as proof. */
-export const AuthenticationEvidence = Schema.Struct({
+const authenticationSourceFields = {
   revision: AuthenticationRevision,
   flowId: AuthenticationFlowId,
   bindingDigest: TokenDigest,
   proofs: Schema.NonEmptyArray(AuthenticationProof).check(Schema.isMaxLength(64)),
+};
+
+/** Trusted method evidence. No public endpoint accepts subject/factor assertions as proof. */
+export const AuthenticationEvidence = Schema.Struct({
+  ...authenticationSourceFields,
+  /** Absolute flow-completion deadline, not a session lifetime. */
+  completionExpiresAt: Schema.optionalKey(Schema.DateTimeUtcFromMillis),
 });
 
 export type AuthenticationEvidence = typeof AuthenticationEvidence.Type;
 
-/** Private authenticated source evidence. Never derive this from public metadata. */
+/** Private source evidence; successful issuance consumes the flow-completion deadline. */
 export const SessionAuthenticationProvenance = Schema.Struct({
-  evidence: Schema.Struct({
-    ...AuthenticationEvidence.fields,
-    revision: Schema.Struct({
-      ...AuthenticationRevision.fields,
-      credentials: Schema.Array(CredentialRevision).check(Schema.isMaxLength(64)),
-    }),
-    proofs: Schema.NonEmptyArray(AuthenticationProof).check(Schema.isMaxLength(64)),
-  }),
+  evidence: Schema.Struct(authenticationSourceFields),
 });
 
 export type SessionAuthenticationProvenance = typeof SessionAuthenticationProvenance.Type;
@@ -91,6 +90,14 @@ export const AuthenticationRequirement = Schema.Struct({
 
 export type AuthenticationRequirement = typeof AuthenticationRequirement.Type;
 
+/** One authority read before verification; issuance rechecks current policy and revisions. */
+export const AuthenticationCapture = Schema.Struct({
+  revision: AuthenticationRevision,
+  requirement: AuthenticationRequirement,
+});
+
+export type AuthenticationCapture = typeof AuthenticationCapture.Type;
+
 export const SessionMetadata = Schema.Struct({
   sessionId: SessionId,
   subjectId: SubjectId,
@@ -109,6 +116,25 @@ export interface SessionInspection<Claims> {
   readonly credentialVersion: SessionCredentialVersion;
 }
 
+/** Private guard from the same authoritative read as the inspection. */
+export const SessionGuard = Schema.Union([
+  Schema.TaggedStruct("Stateful", { digest: TokenDigest }),
+  Schema.TaggedStruct("StateAssistedSigned", {}),
+  Schema.TaggedStruct("StatelessSigned", {}),
+]);
+
+export type SessionGuard = typeof SessionGuard.Type;
+
+/** Trusted request-local source. Cookie-cache public sessions never create this value. */
+export interface SessionSource<Claims> {
+  readonly inspection: SessionInspection<Claims>;
+  readonly guard: SessionGuard;
+}
+
+/** Mandatory discriminator in the shared pending store; every port predicates it. */
+export const PendingAuthenticationKind = Schema.Literals(["Login", "StepUp"]);
+export type PendingAuthenticationKind = typeof PendingAuthenticationKind.Type;
+
 export const PendingConsumption = Schema.Struct({
   flowId: AuthenticationFlowId,
   digest: TokenDigest,
@@ -125,14 +151,21 @@ export const SessionSignOut = Schema.Struct({
 
 export type SessionSignOut = typeof SessionSignOut.Type;
 
+export const SessionReadOptions = Schema.Struct({
+  /** Bypass the cookie cache and verify against authoritative state. */
+  fresh: Schema.optionalKey(Schema.Boolean),
+});
+
+export type SessionReadOptions = typeof SessionReadOptions.Type;
+
 export const SessionCapabilities = Schema.Struct({
   mode: Schema.Literals(["stateful", "stateless", "state-assisted"]),
   listing: Schema.Boolean,
   perSessionRevocation: Schema.Boolean,
   subjectInvalidation: Schema.Literals(["immediate", "absolute-expiry"]),
   renewal: Schema.Literals(["single-winner", "replayable"]),
-  /** Default authoritative checks never reuse positive authorization caches. */
-  positiveCacheMillis: Schema.Literal(0),
+  /** Maximum lifetime of an explicitly enabled session cookie snapshot; zero by default. */
+  positiveCacheMillis: Schema.Natural,
 });
 
 export type SessionCapabilities = typeof SessionCapabilities.Type;

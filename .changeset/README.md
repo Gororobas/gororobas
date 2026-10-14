@@ -10,3 +10,7 @@ the entire fixed group together. Add new public packages to the fixed group in
 Create a changeset, review the generated version plan, and merge the automated version PR to
 publish. The repository-specific publisher must be used instead of `changeset publish`; see the
 release runbook in `docs/TOOLCHAIN.md` for the automated path and manual fallback.
+
+Pending changesets live directly in this directory. Changesets moves consumed
+beta release notes to `pre/` and keeps only the prerelease mode and tag in
+`pre.json`. Retain the archived notes for the eventual stable release.

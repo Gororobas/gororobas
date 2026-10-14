@@ -1,9 +1,17 @@
 import { Schema } from "effect";
 
 import { HookDenied } from "../hooks/models";
+import { IdentityConflict } from "../identity/models";
 import { action } from "../operations/actions";
+import { AuthenticationRequired } from "../operations/errors";
+import { OAuthLinkedAccountsList, OAuthLinkedAccountsListResult } from "./accountsModels";
 import { OAuthGrantId, OAuthPermissionProfileKey } from "./permissionProfile";
-import { OAuthRegistrationRequired } from "./registrationModels";
+import {
+  OAuthRegistrationPrivateInput,
+  OAuthRegistrationRequired,
+  OAuthRegistrationResult,
+  registrationCompletionResult,
+} from "./registrationModels";
 import { OAuthMethodUnsupported, OAuthRejected, OAuthUnavailable } from "./signInErrors";
 import {
   OAuthReturnTarget,
@@ -72,4 +80,56 @@ export const completeSignIn = <S extends Schema.Codec<Completion, unknown, unkno
           ? value.completion.session.subjectId
           : undefined,
     },
+  });
+
+/** Opt-in completion is first-confirmed only; every replay returns RegistrationAccepted. */
+export const register = <
+  S extends Schema.Codec<Completion, unknown, unknown, unknown>,
+  Registration extends Schema.Top,
+  Authenticate extends boolean = false,
+>(
+  schemas: { readonly CompletionResult: S },
+  registration: Registration,
+  options?: { readonly strategy?: string; readonly authenticate?: Authenticate },
+) => {
+  // This selection mirrors the strategy constructor without widening default acceptance.
+  const success = (
+    options?.authenticate === true
+      ? registrationCompletionResult(schemas.CompletionResult)
+      : OAuthRegistrationResult
+  ) as Authenticate extends true
+    ? ReturnType<typeof registrationCompletionResult<S>>
+    : typeof OAuthRegistrationResult;
+
+  return action({
+    payload: Schema.Struct({
+      reference: OAuthRegistrationPrivateInput.fields.reference,
+      flowId: OAuthRegistrationPrivateInput.fields.flowId,
+      commandId: OAuthRegistrationPrivateInput.fields.commandId,
+      registration,
+    }),
+    success,
+    error: Schema.Union([Failure, IdentityConflict]),
+    mode: "mutation",
+    replay: "single-use",
+    credentials: true,
+    method: "register",
+    requestFields: { requestBinding: "request-binding", credential: "registration" },
+    ...(options?.strategy === undefined ? {} : { strategy: options.strategy }),
+    subject: {
+      fromSuccess: (value) =>
+        value._tag === "Authenticated" ? value.session.subjectId : undefined,
+    },
+  });
+};
+
+/** List the authenticated subject's login identities, independently of API grants. */
+export const listLinkedAccounts = (options?: { readonly strategy?: string }) =>
+  action({
+    payload: OAuthLinkedAccountsList,
+    success: OAuthLinkedAccountsListResult,
+    error: Schema.Union([AuthenticationRequired, OAuthUnavailable, OAuthMethodUnsupported]),
+    mode: "query",
+    method: "listLinkedAccounts",
+    ...options,
   });

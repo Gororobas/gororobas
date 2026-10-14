@@ -9,6 +9,7 @@ import {
   TotpRecoveryCode,
   TotpEnrollmentStarted,
   TotpManagementResult,
+  TotpRecoveryRegenerated,
   TotpRecoveryReset,
 } from "./totp/models";
 
@@ -81,7 +82,7 @@ export const make = <
 
   const Regenerate = makeOperation(`${moduleId}/totp/recovery/regenerate`, {
     payload: ManageInput,
-    success: TotpManagementResult,
+    success: TotpRecoveryRegenerated,
     error: TotpFailure,
     exposure: "public",
     access: "authenticated",

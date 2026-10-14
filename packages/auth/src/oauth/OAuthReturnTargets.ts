@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Schema } from "effect";
 
+import { exactReturnTargets } from "../internal/return-target";
 import { OAuthConfigurationError, OAuthRejected, type OAuthUnavailable } from "./signInErrors";
 import { OAuthReturnTarget } from "./signInModels";
 
@@ -13,29 +14,29 @@ export class OAuthReturnTargets extends Context.Service<
     ) => Effect.Effect<typeof OAuthReturnTarget.Type, OAuthRejected | OAuthUnavailable>;
   }
 >()("effect-auth/OAuthReturnTargets") {
-  static readonly exactRoutes = (routes: ReadonlyArray<string>) => {
-    const captured = [...routes];
+  /** Exact paths or absolute HTTPS URLs on explicitly trusted origins. No query,
+   * fragment, wildcard, normalization or prefix matching. Share trustedOrigins
+   * with Http configuration; HTTP mutation admission remains independent. */
+  static readonly exactRoutes = (
+    routes: ReadonlyArray<string>,
+    options?: { readonly trustedOrigins: ReadonlyArray<string> },
+  ) => {
+    const allowed = exactReturnTargets(routes, options?.trustedOrigins ?? []).pipe(
+      Effect.mapError(() => OAuthConfigurationError.make({ reason: "return-target" })),
+    );
 
     return Layer.effect(
       this,
       Effect.gen(function* () {
-        const checked = yield* Schema.decodeEffect(
-          Schema.Array(OAuthReturnTarget).check(Schema.isMinLength(1), Schema.isMaxLength(128)),
-        )(captured).pipe(
-          Effect.mapError(() => OAuthConfigurationError.make({ reason: "return-target" })),
-        );
-
-        const allowed = new Set<string>(checked);
+        const checked = yield* allowed;
 
         return OAuthReturnTargets.of({
           resolve: Effect.fn("OAuthReturnTargets.resolve")(function* (input) {
-            const target = yield* Schema.decodeEffect(OAuthReturnTarget)(input).pipe(
+            if (!checked.has(input)) return yield* OAuthRejected.make({});
+
+            return yield* Schema.decodeEffect(OAuthReturnTarget)(input).pipe(
               Effect.mapError(() => OAuthRejected.make({})),
             );
-
-            if (!allowed.has(target)) return yield* OAuthRejected.make({});
-
-            return target;
           }),
         });
       }),

@@ -27,7 +27,7 @@ const LocalDeliveryLive = Layer.unwrap(
       send: Effect.fn("Starter.deliverLocalEmail")(
         function* (message) {
           const body = yield* Schema.encodeEffect(LocalMessage)(message);
-          const id = yield* crypto.randomUUIDv4;
+          const id = yield* crypto.randomUUIDv4();
 
           yield* fs.writeFileString(path.join(directory, `${id}.json`), body, {
             flag: "wx",

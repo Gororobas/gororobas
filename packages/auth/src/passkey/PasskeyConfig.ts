@@ -29,7 +29,6 @@ export class PasskeyConfig extends Context.Service<PasskeyConfig, typeof Configu
                 profiles: [
                   {
                     profileId: "default",
-                    generation: 1,
                     rpId: configuration.id,
                     rpName: configuration.name,
                     origins: configuration.origins,

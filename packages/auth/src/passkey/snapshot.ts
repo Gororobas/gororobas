@@ -1,4 +1,4 @@
-import { DateTime, Effect, Predicate, Schema } from "effect";
+import { DateTime, Effect, Predicate, Result, Schema } from "effect";
 
 import { PasskeyUnavailable } from "./errors";
 
@@ -9,30 +9,40 @@ export const freezePasskey = (value: unknown): void => {
   Object.freeze(value);
 };
 
+export const snapshotPasskeyResult = <S extends Schema.Codec<unknown, unknown, never, never>>(
+  schema: S,
+  value: S["Type"],
+) =>
+  Result.try({
+    try: () => {
+      const codec = Schema.toCodecJson(Schema.toType(schema));
+      const result = Schema.decodeSync(codec)(Schema.encodeSync(codec)(value));
+
+      freezePasskey(result);
+
+      return result;
+    },
+    catch: () => PasskeyUnavailable.make({}),
+  });
+
 export const snapshotPasskeySync = <S extends Schema.Codec<unknown, unknown, never, never>>(
   schema: S,
   value: S["Type"],
 ): S["Type"] => {
-  try {
-    const codec = Schema.toCodecJson(Schema.toType(schema));
-    const result = Schema.decodeSync(codec)(Schema.encodeSync(codec)(value));
+  const result = snapshotPasskeyResult(schema, value);
 
-    freezePasskey(result);
-
-    return result;
-  } catch {
-    throw PasskeyUnavailable.make({});
+  if (Result.isFailure(result)) {
+    // oxlint-disable-next-line effect/no-untyped-throw -- Native persistence prepare callbacks require synchronous rejection before physical commit; workflows use snapshotPasskey.
+    throw result.failure;
   }
+
+  return result.success;
 };
 
 export const snapshotPasskey = <S extends Schema.Codec<unknown, unknown, never, never>>(
   schema: S,
   value: S["Type"],
-) =>
-  Effect.try({
-    try: () => snapshotPasskeySync(schema, value),
-    catch: () => PasskeyUnavailable.make({}),
-  });
+) => Effect.suspend(() => Effect.fromResult(snapshotPasskeyResult(schema, value)));
 
 export const samePasskey = <S extends Schema.Codec<unknown, unknown, never, never>>(
   schema: S,

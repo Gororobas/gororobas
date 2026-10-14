@@ -2,13 +2,22 @@ import { Context, type Effect, type Redacted } from "effect";
 
 import type { AuthInvocation } from "../operations/context";
 import type { AuthenticationEvidence, AuthenticationRequirement } from "../sessions/models";
-import type { OAuthActionChallenge, OAuthActionRequired } from "./accountsModels";
+import type {
+  OAuthActionChallenge,
+  OAuthActionRequired,
+  OAuthActionSource,
+} from "./accountsModels";
 import type { OAuthUnavailable } from "./signInErrors";
 
-/** Independent current action authority; no default grants access. Verify exact
- * challenge/subject/revisions and consume one-time factors in their own authority
- * before returning. Public session assurance, pending-login and registration
- * credentials are not action proof. Begin and Complete require separate evidence.
+/** Application action authority; no default grants access. Verify the exact
+ * challenge and revisions. A one-shot proof is consumed in its own authority.
+ * Recent session step-up may be accepted only after matching this invocation to
+ * its real private provenance, factor IDs/revisions and original proof times;
+ * public assurance ordinals must never be converted into credential IDs. Return
+ * Session source with the exact session ID and authenticatedAt. Core also checks
+ * both authentication and factor freshness. Link retains this begin authorization
+ * and requires no second proof at completion. Pending/registration capabilities
+ * do not authorize account changes.
  * Counter consumption need not replace semantic credential revision; replacement,
  * revocation and policy/binding changes must advance the corresponding revisions.
  * A later OAuth CAS rejection does not refund a factor or imply an atomic join.
@@ -22,6 +31,7 @@ export class OAuthActionEvidence extends Context.Service<
       readonly proof?: Redacted.Redacted<string>;
     }) => Effect.Effect<
       {
+        readonly source: OAuthActionSource;
         readonly evidence: AuthenticationEvidence;
         readonly requirement: AuthenticationRequirement;
       },

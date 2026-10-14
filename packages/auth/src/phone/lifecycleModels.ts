@@ -31,9 +31,6 @@ export const PhoneAdmissionPolicy = Schema.Struct({
   networkRequests: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10000 })),
   networkAttempts: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100000 })),
   maximumMessages: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000000 })),
-  requestRetentionMillis: Schema.Int.check(
-    Schema.isBetween({ minimum: 3600000, maximum: 2592000000 }),
-  ),
 });
 
 export type PhoneAdmissionPolicy = typeof PhoneAdmissionPolicy.Type;

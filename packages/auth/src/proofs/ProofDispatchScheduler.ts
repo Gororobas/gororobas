@@ -9,13 +9,13 @@ import { ProofUnavailable } from "./errors";
  *
  * Accept work without awaiting the provider. Bound both pending work and execution;
  * use an application Scope that outlives requests, and never create daemon fibers.
- * Every committed receipt, including suppression and replay, submits one task.
+ * Every committed receipt, including suppression, submits one task.
  * Reject full/closed admission with ProofUnavailable, without inspecting the task.
  *
  * Work has no remaining services or typed failures and contains no public result.
  * Keep its closure private: it contains credential material and is not an outbox
  * value. Do not serialize, inspect, log, or automatically retry it. Interruption
- * still propagates after ambiguous delivery settlement. A host that requires work
+ * still propagates; no delivery settlement transaction runs. A host that requires work
  * to start after sending the response must supply that release boundary itself.
  */
 export class ProofDispatchScheduler extends Context.Service<

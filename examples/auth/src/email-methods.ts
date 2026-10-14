@@ -1,5 +1,14 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Auth, EmailDelivery, Email, Hooks, Operations, Proofs, WebCrypto } from "@yielded/auth";
+import {
+  Auth,
+  EmailDelivery,
+  Email,
+  Hooks,
+  Operations,
+  Proofs,
+  Sessions,
+  WebCrypto,
+} from "@yielded/auth";
 import { Effect, Layer, Redacted } from "effect";
 import { Base64Url } from "effect/encoding";
 import { HttpRouter, HttpServerResponse } from "effect/http";
@@ -49,23 +58,31 @@ const program = Effect.gen(function* () {
       }).pipe(Layer.provide(base));
 
       const stateless = sessions
-        .statelessLayer(sessionPolicy, {
-          activeKeyId: "session",
-          keys: [
-            {
-              id: "session",
-              // Demo-only key material. Production requires independently generated random keys.
-              material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
-            },
-          ],
-        })
+        .statelessLayer(sessionPolicy)
+        .pipe(
+          Layer.provide(
+            Layer.succeed(Sessions.SessionSigningKeys, {
+              activeKeyId: "session",
+              keys: [
+                {
+                  id: "session",
+                  // Demo-only key material. Production requires independently generated random keys.
+                  material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
+                },
+              ],
+            }),
+          ),
+        )
         .pipe(Layer.provide(base));
 
       const stateful = sessions
         .statefulLayer(sessionPolicy)
         .pipe(Layer.provide(model.layer), Layer.provide(base));
 
-      const strategy = mode === "stateless" ? stateless : stateful;
+      const strategy: Layer.Layer<
+        Layer.Success<typeof stateless>,
+        Layer.Error<typeof stateless | typeof stateful>
+      > = mode === "stateless" ? stateless : stateful;
 
       const completion = sessions
         .completionLayer()
@@ -91,7 +108,9 @@ const program = Effect.gen(function* () {
 
       const sessionVerify = sessions.operations.Verify.handlerLayer(
         Effect.fn("ExampleEmail.VerifySession")(function* (input) {
-          return yield* (yield* sessions.SessionStrategy).verify(input.credential);
+          return yield* (yield* sessions.SessionStrategy)
+            .inspect(input.credential)
+            .pipe(Effect.map((source) => source.inspection.session));
         }),
       ).pipe(Layer.provide(strategy));
 
@@ -105,21 +124,21 @@ const program = Effect.gen(function* () {
           }),
       };
 
-      const latest = (slot: "request-binding" | "proof-continuation" | "session") => {
+      const latest = Effect.fnUntraced(function* (slot: "request-binding" | "session") {
         const command = [...commands].reverse().find((c) => c._tag === "Issue" && c.slot === slot);
 
-        if (command?._tag !== "Issue") throw new Error(`missing example ${slot}`);
+        if (command?._tag !== "Issue") return yield* Email.EmailUnavailable.make({});
 
         return Redacted.value(command.credential);
-      };
+      });
 
-      const delivered = () => {
+      const delivered = Effect.gen(function* () {
         const message = deliveries[deliveries.length - 1];
 
-        if (!message) throw new Error("missing example delivery");
+        if (!message) return yield* Email.EmailUnavailable.make({});
 
         return message;
-      };
+      });
 
       yield* Effect.gen(function* () {
         const auth = yield* emailAuth.make;
@@ -127,7 +146,7 @@ const program = Effect.gen(function* () {
         const begin = Effect.fn("ExampleEmail.begin")(function* (flowId: string) {
           yield* auth.beginSignIn({ flowId });
 
-          return { flowId, requestBinding: latest("request-binding") };
+          return { flowId, requestBinding: yield* latest("request-binding") };
         });
 
         const addressEmail = "reader@example.invalid";
@@ -145,17 +164,11 @@ const program = Effect.gen(function* () {
           locale: "en",
         });
 
-        const regProof = yield* auth.verifyRegistration("registration", {
-          ...registerBase,
-          reference: requested.reference,
-          secret: Redacted.value(delivered().text).match(/code is ([0-9]+)/)?.[1] ?? "",
-        });
-
         const registered = yield* auth.completeRegistration("registration", {
           ...registerBase,
           commandId: "register-command",
-          continuationId: regProof.continuation.continuationId,
-          credential: latest("proof-continuation"),
+          reference: requested.reference,
+          secret: Redacted.value((yield* delivered).text).match(/code is ([0-9]+)/)?.[1] ?? "",
         });
 
         if (
@@ -172,19 +185,11 @@ const program = Effect.gen(function* () {
           locale: "en",
         });
 
-        const codeSecret = Redacted.value(delivered().text).match(/code is ([0-9]+)/)?.[1] ?? "";
-
-        const duplicate = yield* auth.signIn({
-          ...signInBase,
-          requestId: "code-request",
-          locale: "en",
-        });
-
-        if (duplicate.reference.proofId !== codeRequest.reference.proofId)
-          return yield* Effect.die("request replay changed reference");
+        const codeSecret =
+          Redacted.value((yield* delivered).text).match(/code is ([0-9]+)/)?.[1] ?? "";
 
         const wrongPurpose = yield* auth
-          .verifySignIn({
+          .completeSignIn({
             ...signInBase,
             reference: { ...codeRequest.reference, purpose: "email-address-change" },
             secret: codeSecret,
@@ -194,16 +199,10 @@ const program = Effect.gen(function* () {
         if (wrongPurpose._tag !== "Failure")
           return yield* Effect.die("wrong-purpose proof accepted");
 
-        const codeProof = yield* auth.verifySignIn({
+        const signedIn = yield* auth.completeSignIn({
           ...signInBase,
           reference: codeRequest.reference,
           secret: codeSecret,
-        });
-
-        const signedIn = yield* auth.completeSignIn({
-          ...signInBase,
-          continuationId: codeProof.continuation.continuationId,
-          credential: latest("proof-continuation"),
         });
 
         if (
@@ -220,7 +219,7 @@ const program = Effect.gen(function* () {
           assurance: session.assurance,
         };
 
-        const firstSessionToken = latest("session");
+        const firstSessionToken = yield* latest("session");
         const linkFlow = yield* begin("link-sign-in");
         const linkBase = { ...linkFlow, email: addressEmail, returnTarget: "/account" };
 
@@ -230,7 +229,7 @@ const program = Effect.gen(function* () {
           locale: "en",
         });
 
-        const linkUrl = Redacted.value(delivered().text).match(/https:\/\/\S+/)?.[0];
+        const linkUrl = Redacted.value((yield* delivered).text).match(/https:\/\/\S+/)?.[0];
 
         if (!linkUrl) return yield* Effect.die("sign-in link missing from email");
         const parsedUrl = new URL(linkUrl);
@@ -272,7 +271,7 @@ const program = Effect.gen(function* () {
         const otherDevice = yield* begin("link-sign-in");
 
         const crossDevice = yield* auth
-          .verifySignIn("link", {
+          .completeSignIn("link", {
             ...linkBase,
             requestBinding: otherDevice.requestBinding,
             reference: extracted.reference,
@@ -285,16 +284,10 @@ const program = Effect.gen(function* () {
 
         // The next explicit operation represents intentional confirmation in the
         // originating client, using its retained binder/target rather than URL fields.
-        const linkProof = yield* auth.verifySignIn("link", {
+        const linked = yield* auth.completeSignIn("link", {
           ...linkBase,
           reference: linkRequest.reference,
           secret: Redacted.value(extracted.secret),
-        });
-
-        const linked = yield* auth.completeSignIn("link", {
-          ...linkBase,
-          continuationId: linkProof.continuation.continuationId,
-          credential: latest("proof-continuation"),
         });
 
         if (linked.completion._tag !== "Authenticated" || linked.returnTarget !== "/account")
@@ -312,19 +305,11 @@ const program = Effect.gen(function* () {
             ...verifyBase,
             requestId: "verify-request",
             locale: "en",
-            actionProof: "fixture:verify-request",
           })
           .pipe(Effect.provideService(Auth.AuthRequest, { ...call, invocation: caller }));
 
-        const verifyCode = Redacted.value(delivered().text).match(/code is ([0-9]+)/)?.[1] ?? "";
-
-        const verifiedProof = yield* auth
-          .verifyEmailAddress("addresses", {
-            ...verifyBase,
-            reference: verifyRequest.reference,
-            secret: verifyCode,
-          })
-          .pipe(Effect.provideService(Auth.AuthRequest, { ...call, invocation: caller }));
+        const verifyCode =
+          Redacted.value((yield* delivered).text).match(/code is ([0-9]+)/)?.[1] ?? "";
 
         const beforeVerification = commands.filter(
           (c) => c._tag === "Issue" && c.slot === "session",
@@ -333,8 +318,8 @@ const program = Effect.gen(function* () {
         const verified = yield* auth
           .completeEmailVerification("addresses", {
             ...verifyBase,
-            continuationId: verifiedProof.continuation.continuationId,
-            credential: latest("proof-continuation"),
+            reference: verifyRequest.reference,
+            secret: verifyCode,
             actionProof: "fixture:verify-complete",
           })
           .pipe(Effect.provideService(Auth.AuthRequest, { ...call, invocation: caller }));
@@ -371,16 +356,10 @@ const program = Effect.gen(function* () {
           locale: "en",
         });
 
-        const refreshProof = yield* auth.verifySignIn({
-          ...refreshBase,
-          reference: refreshRequest.reference,
-          secret: Redacted.value(delivered().text).match(/code is ([0-9]+)/)?.[1] ?? "",
-        });
-
         const refreshed = yield* auth.completeSignIn({
           ...refreshBase,
-          continuationId: refreshProof.continuation.continuationId,
-          credential: latest("proof-continuation"),
+          reference: refreshRequest.reference,
+          secret: Redacted.value((yield* delivered).text).match(/code is ([0-9]+)/)?.[1] ?? "",
         });
 
         if (refreshed.completion._tag !== "Authenticated")
@@ -409,22 +388,13 @@ const program = Effect.gen(function* () {
             ...changeBase,
             requestId: "change-request",
             locale: "en",
-            actionProof: "fixture:change-request",
-          })
-          .pipe(Effect.provideService(Auth.AuthRequest, { ...call, invocation: changeCaller }));
-
-        const changeProof = yield* auth
-          .verifyEmailChange("addresses", {
-            ...changeBase,
-            reference: changeRequest.reference,
-            secret: Redacted.value(delivered().text).match(/code is ([0-9]+)/)?.[1] ?? "",
           })
           .pipe(Effect.provideService(Auth.AuthRequest, { ...call, invocation: changeCaller }));
 
         const changeInput = {
           ...changeBase,
-          continuationId: changeProof.continuation.continuationId,
-          credential: latest("proof-continuation"),
+          reference: changeRequest.reference,
+          secret: Redacted.value((yield* delivered).text).match(/code is ([0-9]+)/)?.[1] ?? "",
           actionProof: "fixture:change-complete",
         };
 
@@ -449,17 +419,11 @@ const program = Effect.gen(function* () {
           locale: "en",
         });
 
-        const mfaProof = yield* auth.verifySignIn({
-          ...mfaBase,
-          reference: mfaRequest.reference,
-          secret: Redacted.value(delivered().text).match(/code is ([0-9]+)/)?.[1] ?? "",
-        });
-
         const mfa = yield* auth
           .completeSignIn({
             ...mfaBase,
-            continuationId: mfaProof.continuation.continuationId,
-            credential: latest("proof-continuation"),
+            reference: mfaRequest.reference,
+            secret: Redacted.value((yield* delivered).text).match(/code is ([0-9]+)/)?.[1] ?? "",
           })
           .pipe(Effect.result);
 

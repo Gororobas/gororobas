@@ -7,7 +7,6 @@ import {
   PasskeyBegin,
   PasskeyComplete,
   PasskeyAuthenticationStarted,
-  PasskeyCleanupResult,
   PasskeyRegistrationComplete,
   PasskeyRegistrationStarted,
   PasskeyRegistrationResult,
@@ -17,6 +16,7 @@ import {
   PasskeyEnrolled,
   PasskeyRemoved,
 } from "./passkey/models";
+import { CleanupLimit, CleanupResult } from "./persistence/cleanup";
 
 /** Canonical passkey contracts without a verifier, storage, or authority Layers. */
 export const make = <
@@ -49,9 +49,9 @@ export const make = <
 
   const Cleanup = makeOperation(`${moduleId}/passkey/cleanup`, {
     payload: Schema.Struct({
-      limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
+      limit: CleanupLimit,
     }),
-    success: PasskeyCleanupResult,
+    success: CleanupResult,
     error: PasskeyFailure,
     access: "system",
     exposure: "internal",
@@ -125,10 +125,7 @@ export const makeManagement = <const Id extends string>(moduleId: Id) => {
     actionProof: proof,
   });
 
-  const CompleteInput = Schema.Struct({
-    ...PasskeyRegistrationComplete.fields,
-    actionProof: proof,
-  });
+  const CompleteInput = PasskeyRegistrationComplete;
 
   const ListInput = Schema.Struct({
     cursor: listResult.fields.cursor,
@@ -180,7 +177,7 @@ export const makeManagement = <const Id extends string>(moduleId: Id) => {
 
   const Rename = makeOperation(`${moduleId}/passkey/rename`, {
     payload: RenameInput,
-    success: Schema.Struct({ credential: PasskeyCredentialSummary, replayed: Schema.Boolean }),
+    success: Schema.Struct({ credential: PasskeyCredentialSummary }),
     error: PasskeyFailure,
     exposure: "public",
     access: "authenticated",

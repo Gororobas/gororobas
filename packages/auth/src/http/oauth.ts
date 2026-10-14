@@ -1,8 +1,8 @@
 import { Context, Effect, Layer, Result, Schema } from "effect";
 
-import { cryptoLayer } from "../auth/defaults";
 import type { AnyRoute } from "../http-operation/contract";
 import { OperationHttpConfigurationError, OperationHttpError } from "../http-operation/errors";
+import { OperationHttpServerConfig } from "../http-operation/OperationHttpServerConfig";
 import { oauthCallback, type OAuthHttpCallback } from "../http-operation/server";
 import { origin as Origin } from "../internal/origin";
 import { selectCallback } from "../oauth/callback";
@@ -49,90 +49,91 @@ export const makeOAuth = <E, R, ResponseR>(
   basePath: string,
   actions: AuthActions,
 ) => {
-  const resolve = () => {
-    try {
-      Schema.decodeSync(Origin)(origin);
-      const names = Object.keys(options.providers);
+  // Snapshot once before any Layer runs, including all caller-owned getter reads.
+  const saved = Result.try({
+    try: () =>
+      Result.gen(function* () {
+        yield* Schema.decodeResult(Origin)(origin);
+        const names = Object.keys(options.providers);
 
-      if (
-        names.length === 0 ||
-        Object.keys(options.callbacks ?? {}).some((key) => !names.includes(key))
-      )
-        throw OperationHttpConfigurationError.make({ reason: "callback" });
+        if (
+          names.length === 0 ||
+          Object.keys(options.callbacks ?? {}).some((key) => !names.includes(key))
+        )
+          return yield* Result.fail(OperationHttpConfigurationError.make({ reason: "callback" }));
 
-      const selected = Object.entries(actions).filter(
-        ([name, action]) =>
-          action.oauthCallback === true &&
-          (options.complete === undefined || name === options.complete),
-      );
+        const selected = Object.entries(actions).filter(
+          ([name, action]) =>
+            action.oauthCallback === true &&
+            (options.complete === undefined || name === options.complete),
+        );
 
-      if (selected.length !== 1) throw OperationHttpConfigurationError.make({ reason: "callback" });
-      const [complete, action] = selected[0]!;
+        if (selected.length !== 1)
+          return yield* Result.fail(OperationHttpConfigurationError.make({ reason: "callback" }));
+        const [complete, action] = selected[0]!;
 
-      if (
-        action.mode !== "mutation" ||
-        action.route.operation.replay !== "single-use" ||
-        !action.route.operation.credentials ||
-        action.requestFields.requestBinding !== "request-binding"
-      )
-        throw OperationHttpConfigurationError.make({ reason: "callback" });
+        if (
+          action.mode !== "mutation" ||
+          action.route.operation.replay !== "single-use" ||
+          !action.route.operation.credentials ||
+          action.requestFields.requestBinding !== "request-binding"
+        )
+          return yield* Result.fail(OperationHttpConfigurationError.make({ reason: "callback" }));
+        const paths = new Set(Object.values(actions).map((action) => String(action.route.path)));
+        const entries = [];
 
-      const paths = new Set(Object.values(actions).map((action) => String(action.route.path)));
+        for (const [name, declaration] of Object.entries(options.providers)) {
+          const provider = yield* Schema.decodeResult(ProviderKey)(name);
+          const configured = options.callbacks?.[name];
 
-      const entries = Object.entries(options.providers).map(([name, declaration]) => {
-        const provider = Schema.decodeSync(ProviderKey)(name);
-        const configured = options.callbacks?.[name];
+          const callbacks: ReadonlyArray<OAuthCallbackOptions<ResponseR>> =
+            configured === undefined ? [{}] : Array.isArray(configured) ? configured : [configured];
 
-        const callbacks =
-          configured === undefined ? [{}] : Array.isArray(configured) ? configured : [configured];
+          const ids = new Set<string>();
 
-        const ids = new Set<string>();
+          if (callbacks.length === 0 || callbacks.length > 16)
+            return yield* Result.fail(OperationHttpConfigurationError.make({ reason: "callback" }));
+          const captured = [];
 
-        if (callbacks.length === 0 || callbacks.length > 16)
-          throw OperationHttpConfigurationError.make({ reason: "callback" });
+          for (const callback of callbacks) {
+            const callbackId = yield* Schema.decodeResult(OAuthCallbackId)(
+              callback.callbackId ?? provider,
+            );
 
-        return {
-          provider,
-          declaration,
-          callbacks: callbacks.map((callback: OAuthCallbackOptions<ResponseR>) => {
-            const callbackId = Schema.decodeSync(OAuthCallbackId)(callback.callbackId ?? provider);
-
-            const path = Schema.decodeSync(Path)(
+            const path = yield* Schema.decodeResult(Path)(
               callback.path ?? `${basePath}/${provider}/callback`,
             );
 
             if (paths.has(path) || ids.has(callbackId))
-              throw OperationHttpConfigurationError.make({ reason: "duplicate-route" });
+              return yield* Result.fail(
+                OperationHttpConfigurationError.make({ reason: "duplicate-route" }),
+              );
             paths.add(path);
             ids.add(callbackId);
-
-            return {
+            captured.push({
               ...callback,
               path,
               callbackId,
-              redirectUri: Schema.decodeSync(OAuthRedirectUri)(`${origin}${path}`),
-            };
-          }),
-        };
-      });
+              redirectUri: yield* Schema.decodeResult(OAuthRedirectUri)(`${origin}${path}`),
+            });
+          }
+          entries.push({ provider, declaration, callbacks: captured });
+        }
 
-      return { complete, entries };
-    } catch (error) {
-      throw Schema.is(OperationHttpConfigurationError)(error)
-        ? error
-        : OperationHttpConfigurationError.make({ reason: "callback" });
-    }
-  };
-
-  // Snapshot URL/route selection once so independently built route and provider
-  // Layers cannot observe different mutations of the caller's configuration.
-  const saved = Result.try({
-    try: resolve,
+        return { complete, entries };
+      }),
     catch: (error) =>
       Schema.is(OperationHttpConfigurationError)(error)
         ? error
         : OperationHttpConfigurationError.make({ reason: "callback" }),
-  });
+  }).pipe(
+    Result.flatMap((result) => result),
+    Result.mapError((error) =>
+      Schema.is(OperationHttpConfigurationError)(error)
+        ? error
+        : OperationHttpConfigurationError.make({ reason: "callback" }),
+    ),
+  );
 
   const configuration = Effect.fromResult(saved);
   const respond = options.respond;
@@ -185,10 +186,9 @@ export const makeOAuth = <E, R, ResponseR>(
   const callbacks = <Routes extends Readonly<Record<string, AnyRoute>>>(routes: Routes) =>
     Effect.gen(function* () {
       const { complete, entries } = yield* configuration;
+      const { trustedOrigins } = yield* OperationHttpServerConfig;
 
-      const flowId = yield* makeRequestBindingFlowResolver("oauth-entry").pipe(
-        Effect.provide(cryptoLayer),
-      );
+      const flowId = yield* makeRequestBindingFlowResolver("oauth-entry");
 
       // The selected name was validated against the same action table. Preserve
       // that table's concrete operation requirements through indexed lookup.
@@ -207,7 +207,7 @@ export const makeOAuth = <E, R, ResponseR>(
             ...(callbackRespond === undefined ? {} : { respond: callbackRespond }),
             provider: entry.provider,
             requestBinding: "context",
-            allowedRedirectOrigins: [],
+            allowedRedirectOrigins: trustedOrigins,
             flowId: (_request, credentials) => {
               const credential = credentials["request-binding"];
 
@@ -235,7 +235,9 @@ export const makeOAuth = <E, R, ResponseR>(
     const callback =
       entry === undefined ? undefined : selectCallback(provider, entry.callbacks, callbackId);
 
-    if (callback === undefined) throw OperationHttpConfigurationError.make({ reason: "callback" });
+    if (callback === undefined)
+      // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous callback URL lookup rejects an undeclared callback.
+      throw OperationHttpConfigurationError.make({ reason: "callback" });
 
     return callback.redirectUri;
   };

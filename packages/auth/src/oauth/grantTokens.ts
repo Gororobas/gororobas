@@ -6,12 +6,19 @@ import {
   type OAuthConnectedTokenContext,
   OAuthConnectedTokenMaterial,
 } from "./connectedModels";
-import { snapshotOAuth } from "./signInSnapshot";
+import { makeOAuthSnapshot } from "./signInSnapshot";
 
 export interface PreviousGrantTokens {
   readonly material: OAuthConnectedTokenMaterial;
   readonly context: Pick<OAuthConnectedTokenContext, "metadata">;
 }
+
+export const wipeConnectedMaterial = (material: OAuthConnectedTokenMaterial) => {
+  Redacted.wipeUnsafe(material.accessToken);
+  if (material.refreshToken) Redacted.wipeUnsafe(material.refreshToken);
+  if (material.continuation._tag === "Oidc" && material.continuation.nonce)
+    Redacted.wipeUnsafe(material.continuation.nonce);
+};
 
 /** An omitted refresh token preserves the old credential and its provider expiry.
  * Each workflow separately owns its local retention horizon. */
@@ -25,7 +32,7 @@ export const retainGrantTokens = Effect.fn("OAuth.retainGrantTokens")(function* 
       ? (response.material.refreshToken ?? previous?.material.refreshToken)
       : undefined;
 
-  const material = yield* snapshotOAuth(OAuthConnectedTokenMaterial, {
+  const material = yield* snapshotOAuthConnectedTokenMaterial.effect({
     namespace: response.material.namespace,
     accessToken: response.material.accessToken,
     continuation: response.material.continuation,
@@ -50,3 +57,5 @@ export const retainGrantTokens = Effect.fn("OAuth.retainGrantTokens")(function* 
 
   return { material, refreshExpiresAtMillis };
 });
+
+const snapshotOAuthConnectedTokenMaterial = makeOAuthSnapshot(OAuthConnectedTokenMaterial);

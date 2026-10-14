@@ -2,7 +2,11 @@ import { Schema } from "effect";
 
 import { RequestBindingCredential, RequestBindingFlowId } from "../operations/requestBinding";
 import { ProofReference } from "../proofs/models";
-import { AuthenticationRevision, SecurityRevision } from "../sessions/models";
+import {
+  AuthenticationRequirement,
+  AuthenticationRevision,
+  SecurityRevision,
+} from "../sessions/models";
 
 /** Canonical international input. Country eligibility belongs to the application. */
 export const PhoneNumber = Schema.String.check(Schema.isPattern(/^\+[1-9][0-9]{1,14}$/));
@@ -13,12 +17,14 @@ export const PhoneOtpComplete = Schema.Struct({
   phoneNumber: PhoneNumber,
   requestBinding: RequestBindingCredential,
   reference: ProofReference,
-  code: Schema.RedactedFromValue(Schema.String.check(Schema.isPattern(/^[0-9]{6,10}$/))),
+  code: Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(4096))),
 });
 
 export type PhoneOtpComplete = typeof PhoneOtpComplete.Type;
 
 export const PhoneCredentialSnapshot = Schema.Struct({
+  /** Current policy from the same authoritative read as the revision vector. */
+  requirement: AuthenticationRequirement,
   moduleId: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
   phoneNumber: PhoneNumber,
   custodyRevision: SecurityRevision,

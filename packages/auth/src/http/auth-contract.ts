@@ -142,7 +142,9 @@ export const httpGroup = <Actions extends AuthActions, const Name extends string
 
   const first = endpoints[0];
 
-  if (first === undefined) throw OperationHttpConfigurationError.make({ reason: "route" });
+  if (first === undefined)
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous HTTP contract construction requires at least one route.
+    throw OperationHttpConfigurationError.make({ reason: "route" });
 
   return HttpApiGroup.make(name).add(first, ...endpoints.slice(1));
 };

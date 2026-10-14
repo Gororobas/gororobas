@@ -44,7 +44,6 @@ const EmailFailure = Schema.Union([
 ]);
 
 const mutationResult = Schema.Struct({ invalidation: Sessions.SessionInvalidationWindow });
-const continuationResult = Schema.Struct({ continuation: Proofs.ProofContinuation });
 const resetBase = { flowId: Sessions.AuthenticationFlowId, email };
 
 const verifyBase = {
@@ -62,10 +61,7 @@ export const RegisterInput = Schema.Struct({
   registration: Registration,
 });
 
-export const RegisterResult = Schema.Union([
-  Schema.TaggedStruct("RegistrationAccepted", {}),
-  Schema.TaggedStruct("ProvisioningPending", { reference: Schema.String }),
-]);
+export const RegisterResult = Schema.TaggedStruct("RegistrationAccepted", {});
 
 type Completion =
   | { readonly _tag: "Authenticated"; readonly session: { readonly subjectId: string } }
@@ -126,23 +122,15 @@ export const accountActions = <
     success: Proofs.ProofRequestReceipt,
     error: PasswordFailure,
     mode: "mutation",
-    replay: "idempotent",
-    strategy: "password",
-  }),
-  verifyReset: AuthContract.action({
-    payload: Schema.Struct({ ...resetBase, reference: Proofs.ProofReference, secret }),
-    success: continuationResult,
-    error: PasswordFailure,
-    mode: "mutation",
-    replay: "single-use",
-    credentials: true,
+    replay: "non-idempotent",
     strategy: "password",
   }),
   completeReset: AuthContract.action({
     payload: Schema.Struct({
       ...resetBase,
       commandId: Password.PasswordCommandId,
-      continuationId: Proofs.ProofContinuationId,
+      reference: Proofs.ProofReference,
+      secret,
       newPassword: password,
     }),
     success: mutationResult,
@@ -151,7 +139,6 @@ export const accountActions = <
     replay: "single-use",
     credentials: true,
     strategy: "password",
-    requestFields: { credential: "proof-continuation" },
   }),
   beginEmailAddress: AuthContract.action({
     payload: Schema.Struct({ flowId: Operations.RequestBindingFlowId }),
@@ -170,36 +157,12 @@ export const accountActions = <
     success: Proofs.ProofRequestReceipt,
     error: EmailFailure,
     mode: "mutation",
-    replay: "idempotent",
-    strategy: "email",
-    requestFields: { requestBinding: "request-binding" },
-  }),
-  resendEmailVerification: AuthContract.action({
-    payload: Schema.Struct({
-      ...verifyBase,
-      requestId: Proofs.ProofRequestId,
-      locale: Schema.String,
-      supersedes: Proofs.ProofId,
-    }),
-    success: Proofs.ProofRequestReceipt,
-    error: EmailFailure,
-    mode: "mutation",
-    replay: "idempotent",
-    strategy: "email",
-    requestFields: { requestBinding: "request-binding" },
-  }),
-  verifyEmailAddress: AuthContract.action({
-    payload: Schema.Struct({ ...verifyBase, reference: Proofs.ProofReference, secret }),
-    success: continuationResult,
-    error: EmailFailure,
-    mode: "mutation",
-    replay: "single-use",
-    credentials: true,
+    replay: "non-idempotent",
     strategy: "email",
     requestFields: { requestBinding: "request-binding" },
   }),
   completeEmailVerification: AuthContract.action({
-    payload: Schema.Struct({ ...verifyBase, continuationId: Proofs.ProofContinuationId }),
+    payload: Schema.Struct({ ...verifyBase, reference: Proofs.ProofReference, secret }),
     success: Schema.Struct({
       invalidation: Schema.optionalKey(Sessions.SessionInvalidationWindow),
     }),
@@ -208,7 +171,7 @@ export const accountActions = <
     replay: "single-use",
     credentials: true,
     strategy: "email",
-    requestFields: { requestBinding: "request-binding", credential: "proof-continuation" },
+    requestFields: { requestBinding: "request-binding" },
   }),
 });
 

@@ -1,16 +1,10 @@
-import {
-  Auth,
-  OAuth,
-  type Operations,
-  type Schema as AuthSchema,
-  type Sessions,
-  WebCrypto,
-} from "@yielded/auth";
-import * as OAuthCrypto from "@yielded/auth-crypto/OAuth";
-import * as GitHub from "@yielded/auth-openid-client/GitHub";
+import { Auth, OAuth, type Operations, type Schema as AuthSchema, Sessions } from "@yielded/auth";
+import * as GitHub from "@yielded/auth/GitHub";
 import { Context, Effect, Layer, Schema, Stream } from "effect";
 import type { HttpClientResponse } from "effect/http";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
+
+import { CryptoLive } from "../../shared/crypto";
 
 // Application authority is local. Neither registration data nor Claims needs email.
 const Claims = Schema.Struct({ role: Schema.Literal("member"), displayName: Schema.String });
@@ -22,9 +16,7 @@ const Registration = Schema.Struct({
 const entryPolicy = {
   generation: 1,
   lifetimeMillis: 60_000,
-  claimLifetimeMillis: 30_000,
-  retentionMillis: 120_000,
-  settlementTimeoutMillis: 5_000,
+  exchangeTimeoutMillis: 30_000,
 };
 
 export class GitHubAuth extends Auth.Service<GitHubAuth>()("example/GitHubAuth", {
@@ -33,6 +25,7 @@ export class GitHubAuth extends Auth.Service<GitHubAuth>()("example/GitHubAuth",
   strategies: {
     github: OAuth.makeRegistration({
       namespace: "example/github-login",
+      profiles: { github: GitHub.GitHubUserProfile },
       policy: entryPolicy,
       registration: Registration,
       registrationPolicy: {
@@ -91,11 +84,11 @@ export const githubSignInLayer = (input: {
       lifetimeMillis: 120_000,
       keyring: input.bindingKeys,
     }),
-    OAuthCrypto.transactionLayer(input.transactionKeys),
+    OAuth.OAuthTransactionProtector.layer(input.transactionKeys),
     OAuth.OAuthReturnTargets.exactRoutes(["/account"]),
     claimsLayer,
-    githubSessions.statelessLayer(
-      {
+    githubSessions
+      .statelessLayer({
         issuer: "example",
         audience: "example",
         generation: 1,
@@ -105,9 +98,8 @@ export const githubSignInLayer = (input: {
         maximumIssuedAbsoluteLifetimeMillis: 300_000,
         maximumTokenBytes: 16_384,
         requireImmediateInvalidation: false,
-      },
-      input.sessionKeys,
-    ),
+      })
+      .pipe(Layer.provide(Layer.succeed(Sessions.SessionSigningKeys, input.sessionKeys))),
   );
 
   const completion = githubSessions
@@ -116,7 +108,7 @@ export const githubSignInLayer = (input: {
 
   return GitHubAuth.layer.pipe(
     Layer.provide(Layer.merge(shared, completion)),
-    Layer.provide(WebCrypto.layerWebCrypto),
+    Layer.provide(Layer.merge(CryptoLive, FetchHttpClient.layer)),
   );
 };
 
@@ -168,7 +160,7 @@ export const githubProfileConnection = (input: {
     maximumRefreshLifetimeMillis: 30 * 24 * 60 * 60 * 1000,
     refreshAheadMillis: 60_000,
     refresh: "rotating",
-    revocation: "cohort",
+    revocation: "provider",
   });
 
   const connected = OAuth.makeConnectedModule("example/github-api", {
@@ -176,7 +168,6 @@ export const githubProfileConnection = (input: {
     profiles: [profile],
     maximumEvidenceAgeMillis: 60_000,
     refreshClaimLifetimeMillis: 30_000,
-    useAdmissionLifetimeMillis: 5_000,
   });
 
   const shared = Layer.mergeAll(
@@ -186,8 +177,8 @@ export const githubProfileConnection = (input: {
       lifetimeMillis: 120_000,
       keyring: input.bindingKeys,
     }),
-    OAuthCrypto.connectedTransactionLayer(input.transactionKeys),
-    OAuthCrypto.connectedTokenLayer(input.tokenKeys),
+    OAuth.OAuthConnectedTransactionProtector.layer(input.transactionKeys),
+    OAuth.OAuthConnectedTokenProtector.layer(input.tokenKeys),
     OAuth.OAuthReturnTargets.exactRoutes(["/account/connections"]),
   );
 
@@ -195,7 +186,7 @@ export const githubProfileConnection = (input: {
     connected.layer,
     connected.accessLayer,
     connected.maintenanceLayer,
-  ).pipe(Layer.provide(shared), Layer.provide(WebCrypto.layerWebCrypto));
+  ).pipe(Layer.provide(shared), Layer.provide(Layer.merge(CryptoLive, FetchHttpClient.layer)));
 
   const readMyProfile = Effect.fn("example.GitHub.readMyProfile")(
     function* (caller: Operations.AuthInvocation, grantId: typeof OAuth.OAuthGrantId.Type) {

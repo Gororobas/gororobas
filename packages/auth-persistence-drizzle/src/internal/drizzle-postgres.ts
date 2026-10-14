@@ -1,6 +1,5 @@
 import {
   PersistenceConfigurationError,
-  makeComposedPasskeys,
   createPersistence,
 } from "@yielded/auth-persistence/Adapter";
 import type { StorageTable } from "@yielded/auth-persistence/Adapter";
@@ -12,12 +11,14 @@ import {
   pgTable,
   text,
   uniqueIndex,
+  index,
   type PgTable,
 } from "drizzle-orm/pg-core";
 import type { Effect } from "effect";
 import type { SqlClient } from "effect/sql/SqlClient";
 
-import { drizzleQueryOperations } from "../drizzle/query-operations";
+import { nativeDatabase, type NativeDatabaseHandle } from "../drizzle/native-database";
+import { makeDrizzleSqlTables } from "../drizzle/native-sql-table";
 
 const makeTable = (definition: StorageTable) =>
   pgTable(
@@ -34,11 +35,12 @@ const makeTable = (definition: StorageTable) =>
         return [key, column.nullable ? builder : builder.notNull()];
       }),
     ),
-    (columns) =>
-      definition.unique.map((keys, i) => {
+    (columns) => [
+      ...definition.unique.map((keys, i) => {
         const [first, ...rest] = keys;
 
         if (first === undefined)
+          // oxlint-disable-next-line effect/no-untyped-throw -- Drizzle table declaration callbacks must synchronously return constraints for schema generation.
           throw PersistenceConfigurationError.make({ reason: "An empty unique key is invalid" });
 
         return uniqueIndex(`${definition.name}_key_${i}`).on(
@@ -46,6 +48,19 @@ const makeTable = (definition: StorageTable) =>
           ...rest.map((key) => columns[key]),
         );
       }),
+      ...(definition.indexes ?? []).map((keys, i) => {
+        const [first, ...rest] = keys;
+
+        if (first === undefined)
+          // oxlint-disable-next-line effect/no-untyped-throw -- Drizzle table declaration callbacks must synchronously return constraints for schema generation.
+          throw PersistenceConfigurationError.make({ reason: "An empty index is invalid" });
+
+        return index(`${definition.name}_index_${i}`).on(
+          columns[first],
+          ...rest.map((key) => columns[key]),
+        );
+      }),
+    ],
   );
 
 const describe = (table: PgTable): StorageTable => {
@@ -74,10 +89,9 @@ const describe = (table: PgTable): StorageTable => {
 };
 
 export const postgresPersistence = <R>(acquire: Effect.Effect<object, never, R | SqlClient>) =>
-  createPersistence<PgTable, R>({
+  createPersistence<PgTable, R, NativeDatabaseHandle>({
+    nativeTables: (database) => makeDrizzleSqlTables(database.$client, database),
     makeTable,
     describe,
-    operations: drizzleQueryOperations,
-    acquire,
-    passkeys: makeComposedPasskeys(drizzleQueryOperations),
+    acquire: nativeDatabase(acquire),
   });

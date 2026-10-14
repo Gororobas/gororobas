@@ -8,7 +8,6 @@ import {
   ExternalProofRejected,
   ExternalProofVerifier,
   ExternalRegistration,
-  externalMethodContributions,
   externalMethodLayer,
   RegistrationAuthority,
   RegistrationTransaction,
@@ -16,15 +15,6 @@ import {
 
 const registrationGate = Hooks.hookContribution("example/registration-gate");
 const notification = Hooks.hookContribution("example/registration-notification");
-
-const consumer = Hooks.pluginContributions({
-  id: "example/consumer",
-  operations: [],
-  hooks: [registrationGate, notification],
-  routes: [],
-});
-
-const composition = Hooks.composePlugins(externalMethodContributions, consumer);
 
 const gates = registrationGate.layer({
   before: (snapshot) =>
@@ -43,7 +33,9 @@ const notifications = notification.layer({
     }),
 });
 
-const hooks = composition.hooks.pipe(Layer.provide(Layer.mergeAll(gates, notifications)));
+const hooks = Hooks.composeHooks(registrationGate, notification).pipe(
+  Layer.provide(Layer.mergeAll(gates, notifications)),
+);
 
 /** A small in-memory authoritative store: the semaphore and copy/swap own its actual commit. */
 const authority = Layer.effect(
@@ -107,18 +99,7 @@ const verifier = Layer.succeed(ExternalProofVerifier, {
   },
 });
 
-const onboarding = Hooks.interactiveContribution(
-  "example/onboarding",
-  Effect.fn("RegistrationOnboarding.record")(function* (snapshot) {
-    const transaction = yield* RegistrationTransaction;
-
-    if (snapshot.subjectId !== undefined) transaction.recordOnboarding(snapshot.subjectId);
-  }),
-);
-
-const method = externalMethodLayer([onboarding]).pipe(
-  Layer.provide(Layer.mergeAll(authority, verifier, hooks)),
-);
+const method = externalMethodLayer.pipe(Layer.provide(Layer.mergeAll(authority, verifier, hooks)));
 
 const group = Operations.remoteGroup([ExternalRegistration]);
 

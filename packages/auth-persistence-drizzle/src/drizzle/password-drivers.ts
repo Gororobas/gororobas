@@ -1,0 +1,292 @@
+import type { PasswordRegistrationAuthority } from "@yielded/auth-persistence/Adapter";
+import type { LifecycleHooks } from "@yielded/auth/Hooks";
+import { PasswordPersistence, type PasswordUnavailable } from "@yielded/auth/Password";
+import type { Table } from "drizzle-orm";
+import { type Context, Effect, type Crypto } from "effect";
+
+import type { NativeDriverDatabase, NativeDriverTransaction } from "./driver-types";
+import { NativeDatabase, nativeDatabase } from "./native-database";
+import type { NativeTargetConfiguration } from "./native-target";
+import type {
+  AnyPasswordPersistenceMapping,
+  AnyPasswordRegistrationMapping,
+  PasswordPersistenceMapping,
+  PasswordRegistrationMapping,
+} from "./password-model";
+import {
+  coordinateTargetPasswordPersistence,
+  coordinateTargetPasswordRegistration,
+  makeTargetPasswordPersistenceServices,
+  makeTargetPasswordRegistrationServices,
+} from "./password-target";
+import type { AnyProofPersistenceMapping, ProofPersistenceMapping } from "./proof-model";
+import type { SuppliedService } from "./SuppliedService";
+
+type ProofOption<Proof extends Table, Subject extends Table, NativeId> = {
+  readonly proofMapping?: ProofPersistenceMapping<Proof, Subject, NativeId>;
+};
+
+/** Foreign table callback variance is erased only after these public signatures;
+ * the target validates physical metadata and the workflow invokes row codecs. */
+export const makePasswordTarget = <DatabaseId, D extends NativeDriverDatabase>(
+  databaseService: Context.Service<DatabaseId, D>,
+  configuration: NativeTargetConfiguration,
+) => {
+  function coordinatePasswordPersistence<
+    Database extends D,
+    S extends Table,
+    I extends Table,
+    C extends Table,
+    AC extends Table,
+    N,
+    Proof extends Table,
+    PS extends Table,
+    PN,
+    A,
+    E,
+    R,
+    DE,
+    DR,
+  >(
+    acquire: Effect.Effect<Database, DE, DR>,
+    options: {
+      readonly mapping: PasswordPersistenceMapping<S, I, C, AC, N>;
+      readonly transaction?: never;
+    } & ProofOption<Proof, PS, PN>,
+    body: Effect.Effect<A, E, R>,
+  ): Effect.Effect<
+    A,
+    E | DE | PasswordUnavailable,
+    Exclude<R, PasswordPersistence> | DR | LifecycleHooks | Crypto.Crypto
+  >;
+  function coordinatePasswordPersistence<
+    Database extends D,
+    S extends Table,
+    I extends Table,
+    C extends Table,
+    AC extends Table,
+    N,
+    Proof extends Table,
+    PS extends Table,
+    PN,
+    A,
+    E,
+    R,
+    DE,
+    DR,
+    TxId,
+    TxShape,
+  >(
+    acquire: Effect.Effect<Database, DE, DR>,
+    options: {
+      readonly mapping: PasswordPersistenceMapping<S, I, C, AC, N>;
+      readonly transaction: SuppliedService<
+        TxId,
+        NoInfer<NativeDriverTransaction<Database>>,
+        TxShape
+      >;
+    } & ProofOption<Proof, PS, PN>,
+    body: Effect.Effect<A, E, R>,
+  ): Effect.Effect<
+    A,
+    E | DE | PasswordUnavailable,
+    Exclude<R, PasswordPersistence | TxId> | DR | LifecycleHooks | Crypto.Crypto
+  >;
+  function coordinatePasswordPersistence<
+    Database extends D,
+    S extends Table,
+    I extends Table,
+    C extends Table,
+    AC extends Table,
+    N,
+    Proof extends Table,
+    PS extends Table,
+    PN,
+    A,
+    E,
+    R,
+    DE,
+    DR,
+    TxId,
+    TxShape,
+  >(
+    acquire: Effect.Effect<Database, DE, DR>,
+    options: {
+      readonly mapping: PasswordPersistenceMapping<S, I, C, AC, N>;
+      readonly transaction?: SuppliedService<
+        TxId,
+        NoInfer<NativeDriverTransaction<Database>>,
+        TxShape
+      >;
+    } & ProofOption<Proof, PS, PN>,
+    body: Effect.Effect<A, E, R>,
+  ) {
+    return Effect.flatMap(nativeDatabase(acquire), (database) =>
+      coordinateTargetPasswordPersistence(
+        database,
+        options.mapping as unknown as AnyPasswordPersistenceMapping,
+        configuration,
+        (
+          transaction: NativeDriverTransaction<Database>,
+          services,
+        ): Effect.Effect<A, E, Exclude<R, PasswordPersistence>> => {
+          const work = Effect.provideService(
+            body,
+            PasswordPersistence,
+            services.passwordPersistence,
+          );
+
+          return options.transaction === undefined
+            ? work
+            : Effect.provideService(work, options.transaction, options.transaction.of(transaction));
+        },
+        options.proofMapping as unknown as AnyProofPersistenceMapping | undefined,
+      ),
+    );
+  }
+
+  function coordinatePasswordRegistration<
+    TargetId,
+    Registration,
+    Database extends D,
+    S extends Table,
+    I extends Table,
+    C extends Table,
+    AC extends Table,
+    N,
+    A,
+    E,
+    R,
+    DE,
+    DR,
+  >(
+    acquire: Effect.Effect<Database, DE, DR>,
+    options: {
+      readonly mapping: PasswordRegistrationMapping<NoInfer<Registration>, S, I, C, AC, N>;
+      readonly target: SuppliedService<TargetId, PasswordRegistrationAuthority<Registration>>;
+      readonly transaction?: never;
+    },
+    body: Effect.Effect<A, E, R>,
+  ): Effect.Effect<
+    A,
+    E | DE | PasswordUnavailable,
+    Exclude<R, TargetId> | DR | LifecycleHooks | Crypto.Crypto
+  >;
+  function coordinatePasswordRegistration<
+    TargetId,
+    Registration,
+    Database extends D,
+    S extends Table,
+    I extends Table,
+    C extends Table,
+    AC extends Table,
+    N,
+    A,
+    E,
+    R,
+    DE,
+    DR,
+    TxId,
+    TxShape,
+  >(
+    acquire: Effect.Effect<Database, DE, DR>,
+    options: {
+      readonly mapping: PasswordRegistrationMapping<NoInfer<Registration>, S, I, C, AC, N>;
+      readonly target: SuppliedService<TargetId, PasswordRegistrationAuthority<Registration>>;
+      readonly transaction: SuppliedService<
+        TxId,
+        NoInfer<NativeDriverTransaction<Database>>,
+        TxShape
+      >;
+    },
+    body: Effect.Effect<A, E, R>,
+  ): Effect.Effect<
+    A,
+    E | DE | PasswordUnavailable,
+    Exclude<R, TargetId | TxId> | DR | LifecycleHooks | Crypto.Crypto
+  >;
+  function coordinatePasswordRegistration<
+    TargetId,
+    Registration,
+    Database extends D,
+    S extends Table,
+    I extends Table,
+    C extends Table,
+    AC extends Table,
+    N,
+    A,
+    E,
+    R,
+    DE,
+    DR,
+    TxId,
+    TxShape,
+  >(
+    acquire: Effect.Effect<Database, DE, DR>,
+    options: {
+      readonly mapping: PasswordRegistrationMapping<NoInfer<Registration>, S, I, C, AC, N>;
+      readonly target: SuppliedService<TargetId, PasswordRegistrationAuthority<Registration>>;
+      readonly transaction?: SuppliedService<
+        TxId,
+        NoInfer<NativeDriverTransaction<Database>>,
+        TxShape
+      >;
+    },
+    body: Effect.Effect<A, E, R>,
+  ) {
+    return Effect.flatMap(nativeDatabase(acquire), (database) =>
+      coordinateTargetPasswordRegistration(
+        database,
+        options.mapping as unknown as AnyPasswordRegistrationMapping<Registration>,
+        configuration,
+        (
+          transaction: NativeDriverTransaction<Database>,
+          services,
+        ): Effect.Effect<A, E, Exclude<R, TargetId>> => {
+          const work = Effect.provideService(body, options.target, services.registrationAuthority);
+
+          return options.transaction === undefined
+            ? work
+            : Effect.provideService(work, options.transaction, options.transaction.of(transaction));
+        },
+      ),
+    );
+  }
+
+  return {
+    makePasswordPersistenceServices: <
+      S extends Table,
+      I extends Table,
+      C extends Table,
+      AC extends Table,
+      N,
+      Proof extends Table,
+      PS extends Table,
+      PN,
+    >(
+      mapping: PasswordPersistenceMapping<S, I, C, AC, N>,
+      proofMapping?: ProofPersistenceMapping<Proof, PS, PN>,
+    ) =>
+      makeTargetPasswordPersistenceServices(
+        mapping as unknown as AnyPasswordPersistenceMapping,
+        configuration,
+        proofMapping as unknown as AnyProofPersistenceMapping | undefined,
+      ).pipe(Effect.provideServiceEffect(NativeDatabase, nativeDatabase(databaseService))),
+    makePasswordRegistrationServices: <
+      Registration,
+      S extends Table,
+      I extends Table,
+      C extends Table,
+      AC extends Table,
+      N,
+    >(
+      mapping: PasswordRegistrationMapping<Registration, S, I, C, AC, N>,
+    ) =>
+      makeTargetPasswordRegistrationServices(
+        mapping as unknown as AnyPasswordRegistrationMapping<Registration>,
+        configuration,
+      ).pipe(Effect.provideServiceEffect(NativeDatabase, nativeDatabase(databaseService))),
+    coordinatePasswordPersistence,
+    coordinatePasswordRegistration,
+  };
+};

@@ -1,7 +1,6 @@
 import { Context, Crypto, Effect, Layer, Schema, type Types } from "effect";
 
 import { makeAuthStrategy } from "../../auth/AuthStrategy";
-import { cryptoLayer } from "../../auth/defaults";
 import { HookDenied } from "../../hooks/models";
 import type { AuthInvocation } from "../../operations/context";
 import { makeOperation, operationGroup } from "../../operations/operation";
@@ -16,6 +15,7 @@ import {
   PasswordUnavailable,
 } from "./errors";
 import type { PasswordCredentialSnapshot } from "./models";
+import { defaultPasswordAttemptLimiterLayer } from "./PasswordAttemptLimiter";
 import {
   defaultPasswordMethodPolicy,
   snapshotPasswordMethodPolicy,
@@ -106,19 +106,21 @@ export const makePasswordSignIn = <
           });
 
           return yield* (yield* sessions.AuthenticationCompletion)
-            .prepare({ evidence: verified.evidence, claims })
+            .prepare({
+              evidence: verified.evidence,
+              requirement: verified.requirement,
+              claims,
+            })
             .pipe(Effect.flatMap(readPasswordCommit), Effect.mapError(passwordCompletionFailure));
         }),
       );
     }),
-  );
-
-  const layer = handlersLayer.pipe(Layer.provide(cryptoLayer));
+  ).pipe(Layer.provide(defaultPasswordAttemptLimiterLayer));
 
   return Object.freeze({
     persistence: { kind: "password" as const, moduleId, management: false as const },
     SessionClaims,
-    layer,
+    layer: handlersLayer,
     handlersLayer,
     operations: { SignIn },
     group: operationGroup(SignIn),
@@ -128,14 +130,14 @@ export const makePasswordSignIn = <
           invocation: AuthInvocation,
           request: Omit<typeof Input.Encoded, "flowId">,
         ) {
-          const flowId = yield* (yield* Crypto.Crypto).randomUUIDv4.pipe(
-            Effect.mapError(() => PasswordUnavailable.make({})),
-          );
+          const flowId = yield* (yield* Crypto.Crypto)
+            .randomUUIDv4()
+            .pipe(Effect.mapError(() => PasswordUnavailable.make({})));
 
           return yield* SignIn.invoke(invocation, { ...request, flowId });
         }),
       },
-      layer.pipe(Layer.provideMerge(cryptoLayer)),
+      handlersLayer.pipe(Layer.merge(Layer.effect(Crypto.Crypto, Crypto.Crypto))),
       { completion: true },
     ),
   });

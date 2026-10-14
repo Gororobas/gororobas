@@ -19,8 +19,8 @@ import {
   SessionId,
   type AuthenticationEvidence,
   type SessionInspection,
+  type SessionSource,
 } from "./models";
-import type { PendingAuthenticationContext } from "./PendingAuthentication";
 
 export const SessionStepUpProfileId = Schema.String.check(
   Schema.isPattern(/^[A-Za-z0-9._-]{1,128}$/),
@@ -78,25 +78,19 @@ export const SessionStepUpIntent = Schema.TaggedStruct("SessionStepUpIntent", {
 
 export type SessionStepUpIntent = typeof SessionStepUpIntent.Type;
 
-/** Private guard from the SAME authoritative read as inspection. */
-export interface SessionStepUpSource<Claims> {
-  readonly inspection: SessionInspection<Claims>;
-  readonly guard:
-    | {
-        readonly _tag: "Stateful";
-        readonly digest: TokenDigest;
-        readonly rowVersion: SecurityRevision;
-      }
-    | { readonly _tag: "StateAssistedSigned" }
-    | { readonly _tag: "StatelessSigned" };
-}
+/** Detached trusted snapshot from the single authoritative StepUp-kind read. */
+export const SessionStepUpSnapshot = Schema.Struct({
+  intent: SessionStepUpIntent,
+  requirement: AuthenticationRequirement,
+});
+
+export type SessionStepUpSnapshot = typeof SessionStepUpSnapshot.Type;
 
 export type SessionStepUpReplacement<Claims> =
   | {
       readonly _tag: "Stateful";
       readonly inspection: SessionInspection<Claims>;
       readonly expectedDigest: TokenDigest;
-      readonly expectedRowVersion: SecurityRevision;
       readonly nextDigest: TokenDigest;
     }
   | {
@@ -111,10 +105,11 @@ export type SessionStepUpReplacement<Claims> =
  * trusted snapshots. Native owners must preserve the exact replacement metadata. */
 export interface SessionStepUpCompletionPlan<Claims> {
   readonly intent: SessionStepUpIntent;
-  readonly source: SessionStepUpSource<Claims>;
+  readonly source: SessionSource<Claims>;
   readonly evidence: AuthenticationEvidence;
   readonly baseRequirement: AuthenticationRequirement;
   readonly profileRequirement: AuthenticationRequirement;
+  /** Shared assessment clock for the prepared assurance, before hooks. */
   readonly now: DateTime.Utc;
   readonly replacement: SessionStepUpReplacement<Claims>;
 }
@@ -129,16 +124,12 @@ export interface SessionStepUpPersistence<Claims> {
     now: DateTime.Utc,
     prepare: PrepareSessionCommit<SessionStepUpIntent, A>,
   ) => Effect.Effect<PreparedCommit<A>, StaleAuthentication | SessionConflict | SessionUnavailable>;
-  /** Claims-free authoritative kind/source/revision/expiry/consumed/budget checks. */
-  readonly context: (input: {
-    readonly digest: TokenDigest;
-    readonly now: DateTime.Utc;
-  }) => Effect.Effect<PendingAuthenticationContext, SessionStepUpInvalid | SessionUnavailable>;
+  /** Check StepUp kind, source/revisions, expiry, consumption and budget, and return
+   * the current base requirement from the same read. Final completion rechecks all. */
   readonly read: (input: {
     readonly digest: TokenDigest;
-    readonly bindingDigest: TokenDigest;
     readonly now: DateTime.Utc;
-  }) => Effect.Effect<SessionStepUpIntent, SessionStepUpInvalid | SessionUnavailable>;
+  }) => Effect.Effect<SessionStepUpSnapshot, SessionStepUpInvalid | SessionUnavailable>;
   /** Authenticate binding internally, atomically cap/increment attempts, return a
    * decision VALUE. Unknown commits are unavailable, never automatically retried. */
   readonly reject: <A>(
@@ -146,11 +137,14 @@ export interface SessionStepUpPersistence<Claims> {
     prepare: PrepareSessionCommit<{ readonly _tag: "Rejected" }, A>,
   ) => Effect.Effect<PreparedCommit<A>, SessionUnavailable>;
   /** Recheck intent version/status/budget, exact source/profile/revisions and BOTH
-   * requirements at the actual commit clock. Stateful: guard source digest/row and
-   * credential versions, update in place + consume. Stored sourceKind must match
-   * both the inspected guard and replacement tag, including after deployment changes. Assisted: insert absent source
-   * lineage tombstone + consume. Pure signed: consume only; old source remains live.
-   * Preserve source authenticatedAt/absolute expiry and exact prepared metadata.
+   * requirements at the actual commit clock. Stateful: guard source digest and
+   * credential version, update in place + consume. Stored sourceKind must match
+   * both the inspected guard and replacement tag, including after deployment changes.
+   * Assisted: insert absent source lineage tombstone + consume. Pure signed:
+   * consume only; old source remains live.
+   * Preserve source absolute expiry and exact prepared metadata. Replacement
+   * authenticatedAt reflects the newly satisfied profile; retained proofs keep
+   * their original verifiedAt timestamps and private credential revisions.
    * A guard loss discards prepared bearer/events, including under an outer owner.
    * The callback is synchronous and must run before physical commit, including D1.
    */

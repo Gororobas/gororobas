@@ -2,6 +2,7 @@ import { Context, type Effect, type Redacted } from "effect";
 
 import type { AuthInvocation } from "../operations/context";
 import type { AuthenticationEvidence, AuthenticationRequirement } from "../sessions/models";
+import type { OAuthActionSource } from "./accountsModels";
 import type {
   OAuthConnectedActionChallenge,
   OAuthConnectedActionRequired,
@@ -19,6 +20,7 @@ export class OAuthConnectedActionEvidence extends Context.Service<
       readonly proof?: Redacted.Redacted<string>;
     }) => Effect.Effect<
       {
+        readonly source: OAuthActionSource;
         readonly evidence: AuthenticationEvidence;
         readonly requirement: AuthenticationRequirement;
       },

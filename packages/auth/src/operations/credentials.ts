@@ -1,17 +1,16 @@
-import { Context, Effect, Redacted, Schema } from "effect";
+import { Context, Effect, Redacted, Result, Schema } from "effect";
 
 import type { AuthInvocation } from "./context";
+import { OperationOutputError } from "./errors";
 import type { AuthRevealCommand, AuthRevealCommandCollector } from "./reveals";
 
 export type CredentialSlot =
   | "session"
+  | "session-cache"
   | "pending-proof"
-  | "proof-continuation"
   | "registration"
   | "request-binding"
-  | "session-step-up"
-  | "password-intent"
-  | "connected-intent";
+  | "session-step-up";
 
 /** Private delivery instructions. Never include these in a Schema/RPC success or lifecycle event. */
 export type AuthCredentialCommand =
@@ -20,8 +19,19 @@ export type AuthCredentialCommand =
       readonly slot: CredentialSlot;
       readonly credential: Redacted.Redacted<string>;
       readonly expiresAtMillis: number;
+      /** form_post callbacks. The HTTP layer requires a Secure cookie before setting it. */
+      readonly sameSite?: "none";
     }
   | { readonly _tag: "Clear"; readonly slot: CredentialSlot };
+
+/** An explicit SameSite=Lax cookie is omitted on a cross-site POST. None is sent. */
+export const formPostBinding = (
+  command: AuthCredentialCommand,
+  responseMode: "query" | "form_post" | undefined,
+): AuthCredentialCommand =>
+  command._tag === "Issue" && command.slot === "request-binding" && responseMode === "form_post"
+    ? Object.freeze({ ...command, sameSite: "none" })
+    : command;
 
 /** Acceptance into a caller-owned collector, not fallible cookie or secure-store persistence. */
 export type AuthCredentialCommandSink = (
@@ -56,68 +66,78 @@ export interface AuthResolvedCall {
 
 const slot = Schema.Literals([
   "session",
+  "session-cache",
   "pending-proof",
-  "proof-continuation",
   "registration",
   "request-binding",
   "session-step-up",
-  "password-intent",
-  "connected-intent",
 ]);
 
-const decodeCommand = Schema.decodeSync(
+const decodeCommand = Schema.decodeResult(
   Schema.Union([
     Schema.Struct({
       _tag: Schema.Literal("Issue"),
       slot,
       credential: Schema.Redacted(Schema.String),
       expiresAtMillis: Schema.Finite,
+      sameSite: Schema.optionalKey(Schema.Literal("none")),
     }),
     Schema.Struct({ _tag: Schema.Literal("Clear"), slot }),
   ]),
 );
 
-/** Package-private synchronous capture shared with the reveal operation boundary. */
-export const snapshotCredentialCommands = (
-  commands: ReadonlyArray<AuthCredentialCommand>,
-): ReadonlyArray<AuthCredentialCommand> => {
-  try {
-    if (!Array.isArray(commands)) throw new globalThis.Error();
-    const length = commands.length;
+/** Capture the entire private array synchronously before projecting public success. */
+export const snapshotCredentialCommands = (commands: ReadonlyArray<AuthCredentialCommand>) =>
+  Result.try({
+    try: () =>
+      Result.gen(function* () {
+        if (!Array.isArray(commands)) return yield* Result.fail(OperationOutputError.make({}));
+        const length = commands.length;
 
-    if (!Number.isInteger(length) || length < 0 || length > 8) throw new globalThis.Error();
-    const slots = new Set<CredentialSlot>();
-    const captured: AuthCredentialCommand[] = [];
+        if (!Number.isInteger(length) || length < 0 || length > 9)
+          return yield* Result.fail(OperationOutputError.make({}));
+        const slots = new Set<CredentialSlot>();
+        const captured: AuthCredentialCommand[] = [];
 
-    for (let index = 0; index < length; index++) {
-      const input = commands[index];
-      const tag = input._tag;
-      const slot = input.slot;
+        for (let index = 0; index < length; index++) {
+          const input = commands[index];
+          const tag = input._tag;
+          const slot = input.slot;
 
-      const value =
-        tag === "Issue"
-          ? {
-              _tag: tag,
-              slot,
-              credential: Redacted.make(Redacted.value(input.credential)),
-              expiresAtMillis: input.expiresAtMillis,
-            }
-          : { _tag: tag, slot };
+          const value =
+            tag === "Issue"
+              ? {
+                  _tag: tag,
+                  slot,
+                  credential: Redacted.make(Redacted.value(input.credential)),
+                  expiresAtMillis: input.expiresAtMillis,
+                  ...(input.sameSite === undefined ? {} : { sameSite: input.sameSite }),
+                }
+              : { _tag: tag, slot };
 
-      const command = decodeCommand(value);
+          const command = yield* decodeCommand(value);
 
-      if (slots.has(command.slot)) {
-        throw new globalThis.Error();
-      }
-      slots.add(command.slot);
-      captured.push(Object.freeze(command));
-    }
+          if (
+            command._tag === "Issue" &&
+            command.sameSite === "none" &&
+            command.slot !== "request-binding"
+          )
+            return yield* Result.fail(OperationOutputError.make({}));
 
-    return Object.freeze(captured);
-  } catch {
-    throw new globalThis.Error("Invalid auth credential commands");
-  }
-};
+          if (slots.has(command.slot)) {
+            return yield* Result.fail(OperationOutputError.make({}));
+          }
+          slots.add(command.slot);
+          captured.push(Object.freeze(command));
+        }
+
+        return Object.freeze(captured);
+      }),
+    catch: () => OperationOutputError.make({}),
+  }).pipe(
+    Result.flatMap((result) => result),
+    Result.mapError(() => OperationOutputError.make({})),
+  );
 
 export const validateCredentialCommands = (commands: ReadonlyArray<AuthCredentialCommand>) =>
-  Effect.sync(() => snapshotCredentialCommands(commands));
+  Effect.suspend(() => Effect.fromResult(snapshotCredentialCommands(commands))).pipe(Effect.orDie);

@@ -30,6 +30,8 @@ export class OAuthProtocol extends Context.Service<
        * Ambiguous configurations must reject rather than choose by array order. */
       readonly callbackId?: typeof OAuthCallbackId.Type;
       readonly flowId: RequestBindingFlowId;
+      readonly prompt?: "none" | "login" | "consent" | "select_account";
+      readonly loginHint?: string;
     }) => Effect.Effect<OAuthProtocolPreparation, OAuthRejected | OAuthUnavailable>;
     readonly exchangeVerifiedIdentity: (input: {
       readonly configuration: OAuthProtocolConfiguration;

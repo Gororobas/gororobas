@@ -29,6 +29,8 @@ export class OAuthConnectedProtocol extends Context.Service<
       readonly profile: OAuthConnectedProfile;
       readonly callbackId: typeof OAuthCallbackId.Type;
       readonly flowId: RequestBindingFlowId;
+      readonly prompt?: "none" | "login" | "consent" | "select_account";
+      readonly loginHint?: string;
     }) => Effect.Effect<
       Omit<OAuthProtocolPreparation, "configuration"> & {
         readonly configuration: OAuthConnectedConfiguration;

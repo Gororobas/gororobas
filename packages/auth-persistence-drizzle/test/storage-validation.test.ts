@@ -1,3 +1,4 @@
+import { NodeCrypto } from "@effect/platform-node";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { it } from "@effect/vitest";
 import { LifecycleHooks } from "@yielded/auth/Hooks";
@@ -55,7 +56,8 @@ it.effect(
       expect(entered).toBe(true);
     }).pipe(
       Effect.provide(
-        Layer.merge(
+        Layer.mergeAll(
+          NodeCrypto.layer,
           SqliteClient.layer({ filename: ":memory:" }),
           Layer.succeed(LifecycleHooks, {
             before: () => Effect.void,

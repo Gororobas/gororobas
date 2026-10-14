@@ -10,8 +10,8 @@ import type {
 } from "./errors";
 import type {
   AuthenticationEvidence,
+  AuthenticationCapture,
   AuthenticationRequirement,
-  AuthenticationRevision,
   PendingConsumption,
 } from "./models";
 
@@ -19,11 +19,15 @@ import type {
 export class AuthenticationAuthority extends Context.Service<
   AuthenticationAuthority,
   {
-    /** Before verification, read active subject + these independently resolved credential IDs. */
+    /** Read the active subject, current factor policy and complete active factor
+     * revision vector together. Every supplied credential ID is a required anchor,
+     * not a projection; an empty list still returns the full vector. This records
+     * authority, not proof of those factors. The requirement is planning data;
+     * approve/establish must recheck current policy under the committing authority. */
     readonly capture: (
       subjectId: SubjectId,
       credentialIds: ReadonlyArray<string>,
-    ) => Effect.Effect<AuthenticationRevision, StaleAuthentication | SessionUnavailable>;
+    ) => Effect.Effect<AuthenticationCapture, StaleAuthentication | SessionUnavailable>;
     /** Reject unless the captured revision is still current; never refresh old evidence's revision. */
     readonly requirements: (
       evidence: AuthenticationEvidence,
@@ -38,6 +42,8 @@ export class AuthenticationAuthority extends Context.Service<
       input: {
         readonly evidence: AuthenticationEvidence;
         readonly now: DateTime.Utc;
+        /** Preserve this prepared instant; bound its future lead with AuthenticationClock. */
+        readonly issuedAt: DateTime.Utc;
         readonly expiresAt: DateTime.Utc;
         readonly absoluteExpiresAt: DateTime.Utc;
         readonly pending?: PendingConsumption;

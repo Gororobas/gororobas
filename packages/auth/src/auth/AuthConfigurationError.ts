@@ -4,6 +4,13 @@ import { Schema } from "effect";
 export class AuthConfigurationError extends Schema.TaggedError<AuthConfigurationError>()(
   "AuthConfigurationError",
   {
-    reason: Schema.Literals(["id", "namespace", "strategies", "default-strategy", "method"]),
+    reason: Schema.Literals([
+      "id",
+      "namespace",
+      "strategies",
+      "default-strategy",
+      "method",
+      "secret",
+    ]),
   },
 ) {}

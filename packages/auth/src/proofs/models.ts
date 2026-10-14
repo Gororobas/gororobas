@@ -12,10 +12,6 @@ export const ProofRequestId = BoundedId.pipe(Schema.brand("effect-auth/ProofRequ
 export type ProofRequestId = typeof ProofRequestId.Type;
 export const ProofDeliveryId = BoundedId.pipe(Schema.brand("effect-auth/ProofDeliveryId"));
 export type ProofDeliveryId = typeof ProofDeliveryId.Type;
-export const ProofContinuationId = BoundedId.pipe(Schema.brand("effect-auth/ProofContinuationId"));
-export type ProofContinuationId = typeof ProofContinuationId.Type;
-export const ProofVersion = BoundedId.pipe(Schema.brand("effect-auth/ProofVersion"));
-export type ProofVersion = typeof ProofVersion.Type;
 export const ProofPurpose = BoundedId.pipe(Schema.brand("effect-auth/ProofPurpose"));
 export type ProofPurpose = typeof ProofPurpose.Type;
 
@@ -70,7 +66,7 @@ export const ProofBinding = Schema.Union([
 
 export type ProofBinding = typeof ProofBinding.Type;
 
-/** Same public shape for issued, duplicate, ineligible, and throttled requests. */
+/** Same public shape for issued, ineligible, and throttled requests. Request IDs are correlation only. */
 export const ProofReference = Schema.Struct({
   proofId: ProofId,
   purpose: ProofPurpose,
@@ -86,22 +82,47 @@ export const ProofRequestReceipt = Schema.Struct({
 
 export type ProofRequestReceipt = typeof ProofRequestReceipt.Type;
 
-export const ProofContinuation = Schema.Struct({
-  continuationId: ProofContinuationId,
+export const ProofDigest = Schema.Struct({ keyId: BoundedId, digest: TokenDigest });
+export type ProofDigest = typeof ProofDigest.Type;
+
+/** Issue timestamps come from the persistence owner's authoritative clock. */
+export const ProofIssueRecord = Schema.Struct({
+  moduleId: BoundedId,
   purpose: ProofPurpose,
+  proofId: ProofId,
+  binding: ProofBinding,
+  verifier: ProofDigest,
+});
+
+export type ProofIssueRecord = typeof ProofIssueRecord.Type;
+
+export const ProofRecord = Schema.Struct({
+  ...ProofIssueRecord.fields,
+  issuedAtMillis: ProofInstant,
   expiresAtMillis: ProofInstant,
 });
 
-export type ProofContinuation = typeof ProofContinuation.Type;
+export type ProofRecord = typeof ProofRecord.Type;
 
-export const ProofAttemptDecision = Schema.Union([
-  Schema.TaggedStruct("Accepted", { continuation: ProofContinuation }),
-  Schema.TaggedStruct("Rejected", {}),
+export const ProofIssueDecision = Schema.Union([
+  Schema.TaggedStruct("Issued", { record: ProofRecord }),
+  Schema.TaggedStruct("Suppressed", {}),
 ]);
 
-export type ProofAttemptDecision = typeof ProofAttemptDecision.Type;
-export const ProofCompletionDecision = Schema.Literals(["completed", "rejected"]);
-export type ProofCompletionDecision = typeof ProofCompletionDecision.Type;
+export type ProofIssueDecision = typeof ProofIssueDecision.Type;
+
+export const ProofRedemptionInput = Schema.Struct({
+  moduleId: BoundedId,
+  purpose: ProofPurpose,
+  proofId: ProofId,
+  binding: ProofBinding,
+  candidate: Schema.optionalKey(ProofDigest),
+  maximumFailedAttempts: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+});
+
+export type ProofRedemptionInput = typeof ProofRedemptionInput.Type;
+export const ProofRedemptionDecision = Schema.Literals(["redeemed", "rejected"]);
+export type ProofRedemptionDecision = typeof ProofRedemptionDecision.Type;
 
 export const ProofDeliveryOutcome = Schema.Union([
   Schema.TaggedStruct("Accepted", {}),
@@ -112,20 +133,3 @@ export const ProofDeliveryOutcome = Schema.Union([
 ]);
 
 export type ProofDeliveryOutcome = typeof ProofDeliveryOutcome.Type;
-
-export const ProofDeliveryStatus = Schema.Literals([
-  "accepted",
-  "failed",
-  "ambiguous",
-  "unavailable",
-  "not-dispatched",
-]);
-
-export type ProofDeliveryStatus = typeof ProofDeliveryStatus.Type;
-
-export const ProofCleanupResult = Schema.Struct({
-  removed: Schema.Natural,
-  hasMore: Schema.Boolean,
-});
-
-export type ProofCleanupResult = typeof ProofCleanupResult.Type;

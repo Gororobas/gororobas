@@ -1,10 +1,12 @@
 import type * as Shared from "@yielded/auth-persistence/Adapter";
 import type { SQL, Table } from "drizzle-orm";
 
+import type { ClockMapping } from "./native-clock";
 import type { DrizzleTableModel } from "./table-model";
 
 export {
   type SessionIdCodec,
+  type SessionPendingInsert,
   type RequiredSessionConstraints,
   type RequiredPendingAuthenticationConstraints,
   type RequiredStatefulPendingConstraints,
@@ -13,7 +15,6 @@ export {
   requiredPendingAuthenticationConstraints,
   requiredStatefulPendingConstraints,
   requiredSignedValidityConstraints,
-  type SessionConstraintClassifier,
 } from "@yielded/auth-persistence/Adapter";
 
 export type SessionSubjectTables<Subject extends Table, NativeId> = Shared.SessionSubjectTables<
@@ -31,36 +32,28 @@ export type SessionAuthorityTables<
   NativeId
 >;
 
-export type SessionFlowTables<Flow extends Table, NativeSubjectId> = Shared.SessionFlowTables<
-  DrizzleTableModel<Flow>,
-  NativeSubjectId
->;
-
 export type StatefulSessionTables<
   Claims,
   Session extends Table,
-  Flow extends Table,
   NativeSubjectId,
   NativeSessionId,
 > = Shared.StatefulSessionTables<
   Claims,
   DrizzleTableModel<Session>,
-  DrizzleTableModel<Flow>,
   NativeSubjectId,
   NativeSessionId
 >;
 
+export type SessionPendingTables<
+  Pending extends Table,
+  NativeSubjectId,
+> = Shared.SessionPendingTables<DrizzleTableModel<Pending>, NativeSubjectId>;
+
 export type PendingAuthenticationTables<
   Claims,
   Pending extends Table,
-  Flow extends Table,
   NativeSubjectId,
-> = Shared.PendingAuthenticationTables<
-  Claims,
-  DrizzleTableModel<Pending>,
-  DrizzleTableModel<Flow>,
-  NativeSubjectId
->;
+> = Shared.PendingAuthenticationTables<Claims, DrizzleTableModel<Pending>, NativeSubjectId>;
 
 export type SignedSessionValidityTables<
   Tombstone extends Table,
@@ -76,16 +69,17 @@ export type AuthenticationAuthorityMapping<
   Claims,
   Subject extends Table,
   Credential extends Table,
-  Flow extends Table,
   Pending extends Table,
   NativeSubjectId,
-> = Shared.AuthenticationAuthorityMapping<
-  Claims,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<Flow>,
-  DrizzleTableModel<Pending>,
-  NativeSubjectId
+> = ClockMapping<
+  Shared.AuthenticationAuthorityMapping<
+    Claims,
+    DrizzleTableModel<Subject>,
+    DrizzleTableModel<Credential>,
+    DrizzleTableModel<Pending>,
+    NativeSubjectId,
+    SQL
+  >
 >;
 
 export type StatefulSessionMapping<
@@ -93,19 +87,20 @@ export type StatefulSessionMapping<
   Subject extends Table,
   Credential extends Table,
   Session extends Table,
-  Flow extends Table,
   Pending extends Table,
   NativeSubjectId,
   NativeSessionId,
-> = Shared.StatefulSessionMapping<
-  Claims,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<Session>,
-  DrizzleTableModel<Flow>,
-  DrizzleTableModel<Pending>,
-  NativeSubjectId,
-  NativeSessionId
+> = ClockMapping<
+  Shared.StatefulSessionMapping<
+    Claims,
+    DrizzleTableModel<Subject>,
+    DrizzleTableModel<Credential>,
+    DrizzleTableModel<Session>,
+    DrizzleTableModel<Pending>,
+    NativeSubjectId,
+    NativeSessionId,
+    SQL
+  >
 >;
 
 export type PendingAuthenticationMapping<
@@ -113,15 +108,16 @@ export type PendingAuthenticationMapping<
   Subject extends Table,
   Credential extends Table,
   Pending extends Table,
-  Flow extends Table,
   NativeSubjectId,
-> = Shared.PendingAuthenticationMapping<
-  Claims,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<Pending>,
-  DrizzleTableModel<Flow>,
-  NativeSubjectId
+> = ClockMapping<
+  Shared.PendingAuthenticationMapping<
+    Claims,
+    DrizzleTableModel<Subject>,
+    DrizzleTableModel<Credential>,
+    DrizzleTableModel<Pending>,
+    NativeSubjectId,
+    SQL
+  >
 >;
 
 export type SignedSessionValidityMapping<
@@ -129,87 +125,27 @@ export type SignedSessionValidityMapping<
   Tombstone extends Table,
   NativeSubjectId,
   NativeSessionId,
-> = Shared.SignedSessionValidityMapping<
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Tombstone>,
-  NativeSubjectId,
-  NativeSessionId
+> = ClockMapping<
+  Shared.SignedSessionValidityMapping<
+    DrizzleTableModel<Subject>,
+    DrizzleTableModel<Tombstone>,
+    NativeSubjectId,
+    NativeSessionId,
+    SQL
+  >
 >;
 
-/** D1 evaluates these expressions inside the atomic batch, after queueing delay.
- * `engineNow` must use the exact native representation of every mapped instant
- * column. `engineNowMillis` is Unix epoch milliseconds for proof freshness.
- * Changes to the consumer's factor policy MUST bump subject.securityRevision.
- * Supply the authoritative primary D1 database, never a replica-affined
- * `withSession` handle, because verification and security revision reads must
- * observe completed revocation writes across clients.
- */
-export type D1SessionClockMapping = Shared.D1SessionClockMapping<SQL>;
-
-export type D1AuthenticationAuthorityMapping<
-  Claims,
-  Subject extends Table,
-  Credential extends Table,
-  Flow extends Table,
+export type SessionCleanupMapping<
   Pending extends Table,
-  NativeSubjectId,
-> = Shared.D1AuthenticationAuthorityMapping<
-  Claims,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<Flow>,
-  DrizzleTableModel<Pending>,
-  NativeSubjectId,
-  SQL
->;
-
-export type D1PendingAuthenticationMapping<
-  Claims,
-  Subject extends Table,
-  Credential extends Table,
-  Pending extends Table,
-  Flow extends Table,
-  NativeSubjectId,
-> = Shared.D1PendingAuthenticationMapping<
-  Claims,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<Pending>,
-  DrizzleTableModel<Flow>,
-  NativeSubjectId,
-  SQL
->;
-
-export type D1StatefulSessionMapping<
-  Claims,
-  Subject extends Table,
-  Credential extends Table,
-  Session extends Table,
-  Flow extends Table,
-  Pending extends Table,
-  NativeSubjectId,
-  NativeSessionId,
-> = Shared.D1StatefulSessionMapping<
-  Claims,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<Session>,
-  DrizzleTableModel<Flow>,
-  DrizzleTableModel<Pending>,
-  NativeSubjectId,
-  NativeSessionId,
-  SQL
->;
-
-export type D1SignedSessionValidityMapping<
-  Subject extends Table,
   Tombstone extends Table,
   NativeSubjectId,
   NativeSessionId,
-> = Shared.D1SignedSessionValidityMapping<
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Tombstone>,
-  NativeSubjectId,
-  NativeSessionId,
-  SQL
+> = ClockMapping<
+  Shared.SessionCleanupMapping<
+    DrizzleTableModel<Pending>,
+    DrizzleTableModel<Tombstone>,
+    NativeSubjectId,
+    NativeSessionId,
+    SQL
+  >
 >;

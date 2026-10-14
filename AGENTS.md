@@ -62,27 +62,33 @@ or investigation logs to the product repository.
 
 ## Documentation
 
-Write documentation for humans learning how the library works and how to use it.
-Keep it terse: explain the mental model, how pieces fit, and essential usage.
-Make code self-documenting through clear names, types, schemas, and structure;
-agents can read the implementation.
+Documentation teaches humans how to use the current API. Keep it terse and edit
+whole pages for a clear reading path. A feature or fix usually needs a small change
+to existing guidance; it does not justify appending another section.
 
-- Use small diagrams and code snippets only when they clarify ownership or usage.
-- Put detailed options, defaults, and API behavior in scannable reference pages.
-  Link to runnable examples for complete setup.
-- Keep implementation contracts in source, schemas, and API comments.
-- Keep crucial caveats beside the relevant concept; link to reference details.
-- Edit the page as a whole. Do not append feature inventories, change histories,
-  or long defensive explanations to an otherwise focused guide.
-- Use `bun add` for consumer package installation examples.
-- Draw architecture flows with `FlowMap` and request sequences with `Trace` from
-  `@yielded/starlight-theme/components`, in an `.mdx` page. Give each `FlowMap` a
-  `title` and `description`; the shared theme owns layout, ownership colors, and theming.
-- Never hardcode Effect's current version in documentation, including READMEs,
-  guides, reference pages, contributor docs, and installation commands. Use plain
-  `effect` without a version or release tag in install examples. Package manifests
-  and the root catalog own exact versions and peer compatibility; refer to them
-  instead of repeating version numbers in prose or tables.
+- Guides explain the mental model, ownership, and essential usage. Use one focused
+  example and link to runnable examples for complete setup.
+- References describe public options, defaults, and caller-visible limitations in
+  a scannable form. Keep essential security and recovery caveats beside their API.
+- Source, schemas, and API comments own implementation contracts. Keep SQL query
+  plans, predicate inventories, internal state-machine walkthroughs, and exhaustive
+  failure explanations out of guides and reference pages.
+- PRs and release notes own release history, package-version availability,
+  `main`/unreleased warnings, old-version fallbacks, migration stories, investigation
+  findings, and verification results. Do not put these in product documentation,
+  including banners, callouts, compatibility sections, or annotated examples.
+- Review every changed page as a whole before handoff. Remove repetition and material
+  that does not help a reader use the API or avoid a concrete usage pitfall. Preserve
+  the actual constraint in a short explanation; move its implementation rationale
+  to source or the PR. Documentation is not a work log or a feature inventory.
+- Use small diagrams only when they clarify ownership or usage. Draw architecture
+  flows with `FlowMap` and request sequences with `Trace` from
+  `@yielded/starlight-theme/components`, in `.mdx`. Give each `FlowMap` a `title` and
+  `description`; the shared theme owns layout, ownership colors, and theming.
+- Use `bun add` for consumer installation examples. Package manifests and the root
+  catalog own package versions and peer compatibility. Never repeat Effect's current
+  version in documentation or installation commands; use plain `effect`. Retain
+  protocol identifiers and contributor toolchain requirements where needed for usage.
 
 ## Non-negotiable architecture rules
 
@@ -96,6 +102,17 @@ agents can read the implementation.
    not authorize repeating credential issuance or provider exchange.
 8. Concurrency is bounded and uses Effect structured concurrency.
 9. Node platform assumptions must not enter core domain modules.
+
+## Composition and override
+
+Every auth concern is an Effect service an application can replace; library code supplies defaults.
+
+- Applications choose persistence integration per strategy: managed tables, mapped tables, their
+  own SQL integration, or a replacement persistence service.
+- Persistence services hold only state that commits atomically with credentials or authority.
+  Rate limiting, delivery, rendering, and hooks are separate services.
+- Default optional services with `defaultLayer` and document what the default does not guarantee.
+- Write each persistence operation once; keep dialect and execution constraints in small helpers.
 
 ## Designing strategies
 
@@ -206,3 +223,11 @@ bypassing checks. Bring main into a branch only to resolve a real conflict.
 Keep package READMEs to purpose, ownership, and non-obvious constraints. Code, schemas,
 configuration, and command help own implementation details; investigations belong in issues or
 pull requests. Do not patch owned dependencies in this consumer; fix and release their owners.
+
+## Worktree startup
+
+Create worktrees from cached refs; fetch explicitly when a newer base is needed.
+Run `vp install` when dependencies or `node_modules/effect/AGENTS.md` are needed.
+Installation uses Bun's shared store and keeps project-specific packages local.
+Start only the development services needed for the task, explicitly. Worktree
+creation itself should not install dependencies or start servers.

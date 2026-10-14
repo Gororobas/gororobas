@@ -49,7 +49,7 @@ it.effect("delivers outside the request scope without an application scheduler",
     const providerRelease = yield* Deferred.make<void>();
     const providerCompleted = yield* Deferred.make<void>();
 
-    const delivery = Proofs.SmsProofDelivery.layer({ vendorId: "test", idempotencyMillis: 0 }, () =>
+    const delivery = Proofs.SmsProofDelivery.layer(() =>
       Effect.gen(function* () {
         yield* Deferred.succeed(providerEntered, undefined);
         yield* Deferred.await(providerRelease);
@@ -151,7 +151,7 @@ it.effect("returns every committed receipt before host-owned delivery completes"
         ),
     });
 
-    const delivery = Proofs.SmsProofDelivery.layer({ vendorId: "test", idempotencyMillis: 0 }, () =>
+    const delivery = Proofs.SmsProofDelivery.layer(() =>
       Effect.gen(function* () {
         sends++;
         yield* Deferred.succeed(reachedBoundary, undefined);
@@ -185,14 +185,14 @@ it.effect("returns every committed receipt before host-owned delivery completes"
       if (result._tag !== "Success") return;
       expect(yield* Deferred.isDone(providerEntered)).toBe(false);
 
-      const replay = yield* request;
+      const reissued = yield* request;
 
       const suppressed = yield* proofs.operations.Request.invoke(
         invocation,
         input("suppressed", false),
       );
 
-      expect(replay).toEqual(result.success);
+      expect(reissued.reference).not.toEqual(result.success.reference);
       expect(suppressed.requestId).toBe("suppressed");
       expect(pending).toHaveLength(3);
 
@@ -214,7 +214,7 @@ it.effect("returns every committed receipt before host-owned delivery completes"
       expect(sends).toBe(1);
       yield* Deferred.succeed(providerRelease, undefined);
       yield* Fiber.join(drain);
-      expect(sends).toBe(1);
+      expect(sends).toBe(2);
     }).pipe(Effect.provide(live));
   }),
 );
@@ -239,9 +239,7 @@ it.effect("contains private provider defects inside the host-owned task", () =>
               pending.push(work);
             }),
         }),
-        Proofs.SmsProofDelivery.layer({ vendorId: "test", idempotencyMillis: 0 }, () =>
-          Effect.die(new Error("private-provider-body-marker")),
-        ),
+        Proofs.SmsProofDelivery.layer(() => Effect.die(new Error("private-provider-body-marker"))),
       ]),
     );
 
@@ -257,7 +255,7 @@ it.effect("contains private provider defects inside the host-owned task", () =>
   }),
 );
 
-it.effect("does not schedule an unknown commit or resend its recovered receipt", () =>
+it.effect("does not schedule delivery after an unknown commit", () =>
   Effect.gen(function* () {
     const pending: Effect.Effect<void>[] = [];
     let loseAcknowledgement = true;
@@ -297,7 +295,7 @@ it.effect("does not schedule an unknown commit or resend its recovered receipt",
               pending.push(work);
             }),
         }),
-        Proofs.SmsProofDelivery.layer({ vendorId: "test", idempotencyMillis: 0 }, () =>
+        Proofs.SmsProofDelivery.layer(() =>
           Effect.sync(() => {
             sends++;
 
@@ -312,8 +310,6 @@ it.effect("does not schedule an unknown commit or resend its recovered receipt",
 
       expect(yield* request.pipe(Effect.flip)).toBeInstanceOf(Proofs.ProofUnavailable);
       expect(pending).toHaveLength(0);
-      yield* request;
-      yield* Effect.forEach(pending, (work) => work);
       expect(sends).toBe(0);
     }).pipe(Effect.provide(live));
   }),

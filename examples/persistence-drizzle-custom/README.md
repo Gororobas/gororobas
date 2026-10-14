@@ -25,8 +25,6 @@ table, generate a migration, then review and commit it:
 vp -C examples/persistence-drizzle-custom run db:generate --name=describe_change
 ```
 
-Generation compacts JSON snapshots to one line; Git marks them as generated.
-
 [MigrationsLive](src/migrations.ts) applies the generated files with Drizzle and records
 them in `__drizzle_migrations`. Run `vp -C examples/persistence-drizzle-custom run db:migrate`
 to apply them separately. [live.ts](src/live.ts) also runs them before providing persistence;

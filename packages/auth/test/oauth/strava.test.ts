@@ -137,7 +137,6 @@ it.effect("cancels an oversized athlete response during refresh", () =>
       return yield* connected.refreshGrant({
         context: OAuth.OAuthConnectedTokenContext.make({
           namespace: "effect-auth/oauth-connected-token-context/v1",
-          exchangeOrder: "1",
           moduleId: OAuth.OAuthModuleId.make("test/strava"),
           subjectId: AuthSchema.SubjectId.make("subject"),
           identity: {
@@ -149,7 +148,6 @@ it.effect("cancels an oversized athlete response during refresh", () =>
           grantId: OAuth.OAuthGrantId.make("test-grant"),
           grantVersion: Sessions.SecurityRevision.make("1"),
           tokenVersion: Sessions.SecurityRevision.make("1"),
-          cohortGeneration: Sessions.SecurityRevision.make("1"),
           metadata: {
             scopes: ["read"],
             resources: [],

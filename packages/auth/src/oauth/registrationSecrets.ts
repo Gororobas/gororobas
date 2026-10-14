@@ -8,8 +8,8 @@ import {
   type OAuthRegistrationPolicy,
 } from "./registrationModels";
 import { OAuthRejected, OAuthUnavailable } from "./signInErrors";
-import type { OAuthClaim, OAuthVerifiedExternalIdentity } from "./signInModels";
-import { snapshotOAuthSync } from "./signInSnapshot";
+import type { OAuthSignInFlow, OAuthVerifiedExternalIdentity } from "./signInModels";
+import { makeOAuthSnapshot } from "./signInSnapshot";
 
 const tuple = Schema.fromJsonString(
   Schema.Tuple([
@@ -62,7 +62,7 @@ export const credentialDigest = Effect.fn("OAuthRegistration.credentialDigest")(
 });
 
 export const prepare = Effect.fn("OAuthRegistration.prepareIntent")(function* (
-  claim: OAuthClaim,
+  flow: OAuthSignInFlow,
   identity: OAuthVerifiedExternalIdentity,
   verifiedAtMillis: number,
   policy: OAuthRegistrationPolicy,
@@ -72,7 +72,7 @@ export const prepare = Effect.fn("OAuthRegistration.prepareIntent")(function* (
 
   const expiresAtMillis = Math.min(
     now + policy.lifetimeMillis,
-    claim.flow.context.requestBindingExpiresAtMillis,
+    flow.context.requestBindingExpiresAtMillis,
     verifiedAtMillis + policy.maximumVerificationAgeMillis,
   );
 
@@ -94,27 +94,25 @@ export const prepare = Effect.fn("OAuthRegistration.prepareIntent")(function* (
 
   credentialBytes.fill(0);
 
-  const intent = snapshotOAuthSync(OAuthRegistrationIntent, {
+  const intent = yield* snapshotOAuthRegistrationIntent.effect({
     namespace: "effect-auth/oauth-registration-intent/v1",
     reference,
-    context: claim.flow.context,
-    claimId: claim.claimId,
-    claimedAtMillis: claim.claimedAtMillis,
+    context: flow.context,
     identity: identity.identity,
     ...(identity.profile === undefined ? {} : { profile: identity.profile }),
+    ...(identity.upstreamAuthenticatedAt === undefined
+      ? {}
+      : { upstreamAuthenticatedAt: identity.upstreamAuthenticatedAt }),
     verifiedAtMillis,
     credentialDigest: yield* credentialDigest(
-      claim.flow.context.moduleId,
+      flow.context.moduleId,
       reference,
-      claim.flow.context.flowId,
+      flow.context.flowId,
       credential,
     ),
     issuedAtMillis: now,
     expiresAtMillis,
-    retentionUntilMillis: Math.max(
-      claim.flow.retentionUntilMillis,
-      expiresAtMillis + policy.retentionMillis,
-    ),
+    retentionUntilMillis: expiresAtMillis + policy.retentionMillis,
   });
 
   return {
@@ -127,3 +125,5 @@ export const prepare = Effect.fn("OAuthRegistration.prepareIntent")(function* (
     }),
   };
 });
+
+const snapshotOAuthRegistrationIntent = makeOAuthSnapshot(OAuthRegistrationIntent);

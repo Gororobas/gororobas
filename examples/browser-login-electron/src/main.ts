@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 import { NodeHttpClient, NodeServices } from "@effect/platform-node";
 import { BrowserLogin } from "@yielded/auth";
 import { BrowserLogin as ElectronLogin } from "@yielded/auth-electron";
-import { Effect, Exit, Fiber, Layer, Path, Schema, Scope } from "effect";
+import { Crypto, Effect, Exit, Fiber, Layer, Path, Schema, Scope } from "effect";
+import { Hex } from "effect/encoding";
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from "electron";
 
 import { makeHost } from "./host";
@@ -21,7 +21,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const startup = Effect.gen(function* () {
-  const hostedUrl = yield* Schema.decodeUnknownEffect(BrowserLogin.HostedUrl)(
+  const hostedUrl = yield* Schema.decodeEffect(BrowserLogin.HostedUrl)(
     process.env.YIELDED_HOSTED_URL ?? "http://localhost:4183/login",
   );
 
@@ -38,9 +38,16 @@ const launch = (config: Effect.Success<typeof startup>) =>
     const { join } = yield* Path.Path;
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const vaultNamespace = createHash("sha256")
-      .update(`electron\n${new URL(config.hostedUrl).origin}\ndev.yielded.auth://callback`)
-      .digest("hex");
+    const crypto = yield* Crypto.Crypto;
+
+    const vaultNamespace = Hex.encode(
+      yield* crypto.digest(
+        "SHA-256",
+        new TextEncoder().encode(
+          `electron\n${new URL(config.hostedUrl).origin}\ndev.yielded.auth://callback`,
+        ),
+      ),
+    );
 
     yield* Effect.tryPromise({
       try: () => app.whenReady(),

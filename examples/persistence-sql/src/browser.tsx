@@ -1,3 +1,5 @@
+import "@fontsource-variable/ibm-plex-sans/wght.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
 import { Effect, Layer } from "effect";
 import { KeyValueStore } from "effect/persistence";
 import { AtomRegistry } from "effect/reactivity";

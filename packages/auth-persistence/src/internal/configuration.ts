@@ -1,10 +1,15 @@
 import type { EmailAction, EmailAddressPersistence } from "@yielded/auth/Email";
 import type { LoginIdentifier } from "@yielded/auth/Identity";
 import type {
+  OAuthConnectedPersistence,
+  OAuthConnectedPolicy,
+  OAuthConnectedRevocations,
+  OAuthSignInPersistence,
+} from "@yielded/auth/OAuth";
+import type {
   PasskeyActionChallenge,
   PasskeyConfig,
   PasskeyCredentials,
-  PasskeyEnrollmentContext,
   PasskeyManagementPersistence,
   PasskeyManagementPolicy,
   PasskeyMethodPolicy,
@@ -16,7 +21,7 @@ import type {
   PasswordPersistence,
   PasswordUnavailable,
 } from "@yielded/auth/Password";
-import type { PhoneAdmission, PhoneSignInTargets } from "@yielded/auth/PhoneOtp";
+import type { PhoneSignInTargets } from "@yielded/auth/PhoneOtp";
 import type { ProofPersistence } from "@yielded/auth/Proofs";
 import type { SubjectId } from "@yielded/auth/Schema";
 import type {
@@ -24,10 +29,11 @@ import type {
   AuthenticationRequirement,
   make as makeSessions,
 } from "@yielded/auth/Sessions";
-import { type Context, type Effect, type Layer, Schema } from "effect";
+import { type Context, type Crypto, type Effect, type Layer, Schema } from "effect";
 import type { SqlClient } from "effect/sql";
 
 import type { PersistenceMappingError } from "./mapping-error";
+import type { IdentityImports } from "./oauth/identity-import";
 import type { StorageRole } from "./storage-tables";
 
 export class PersistenceConfigurationError extends Schema.TaggedError<PersistenceConfigurationError>()(
@@ -45,10 +51,19 @@ export interface PasskeyFeature {
   readonly managementPolicy?: PasskeyManagementPolicy;
 }
 
+export interface OAuthFeature {
+  readonly kind: "oauth";
+  readonly moduleId: string;
+  readonly signIn: boolean;
+  readonly connected?: OAuthConnectedPolicy;
+}
+
 export interface Strategy {
   readonly strategy: object;
+  /** Absent metadata leaves the strategy's persistence services application-supplied. */
   readonly persistence?:
     | PasskeyFeature
+    | OAuthFeature
     | {
         readonly kind: "password" | "phone" | "email";
         readonly moduleId: string;
@@ -70,7 +85,7 @@ export interface Definition<C extends ClaimsCodec, Id extends string> {
 type KeyId<T> = T extends Context.Key<infer Id, infer _Service> ? Id : never;
 type Enabled<
   A extends { readonly strategies: Readonly<Record<string, Strategy>> },
-  Kind extends "password" | "phone" | "email" | "passkey",
+  Kind extends "password" | "phone" | "email" | "passkey" | "oauth",
 > = Extract<A["strategies"][keyof A["strategies"]], { persistence: { kind: Kind } }>;
 
 type ManagedPassword<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> =
@@ -82,6 +97,14 @@ type ManagedPasskey<A extends { readonly strategies: Readonly<Record<string, Str
 export type PasskeyRequirement<
   A extends { readonly strategies: Readonly<Record<string, Strategy>> },
 > = Enabled<A, "passkey"> extends never ? never : PasskeyConfig;
+
+type OAuthSignIn<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> = Extract<
+  Enabled<A, "oauth">,
+  { persistence: { signIn: true } }
+>;
+
+type OAuthConnected<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> =
+  Extract<Enabled<A, "oauth">, { persistence: { connected: OAuthConnectedPolicy } }>;
 
 type RegistrationKey<S> = S extends { readonly RegistrationAuthority: infer K } ? K : never;
 type Registration<S> =
@@ -98,6 +121,27 @@ export interface ProvisioningId<Id extends string> {
   readonly service: "PersistenceProvisioning";
 }
 
+export interface SubjectProvisioningInput<Registration> {
+  readonly requestId: string;
+  readonly identifier: LoginIdentifier;
+  readonly registration: Registration;
+}
+
+/** Return application subject values for insertion by the auth commit owner.
+ * Include the allocated native ID, active status, and initial security revision.
+ * Preparing values may allocate IDs, but must not write to the database or perform
+ * external side effects. Interactive drivers also accept an existing insert callback.
+ */
+export type SubjectProvisioning<Registration> =
+  | {
+      readonly values: (
+        input: SubjectProvisioningInput<Registration>,
+      ) => Effect.Effect<Readonly<Record<string, unknown>>, PasswordUnavailable>;
+    }
+  | ((
+      input: SubjectProvisioningInput<Registration>,
+    ) => Effect.Effect<SubjectId, PasswordUnavailable>);
+
 export type Provisioning<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> = {
   readonly [
     K in keyof A["strategies"] as A["strategies"][K] extends {
@@ -105,25 +149,14 @@ export type Provisioning<A extends { readonly strategies: Readonly<Record<string
     }
       ? K
       : never
-  ]: (input: {
-    readonly identifier: LoginIdentifier;
-    readonly registration: Registration<A["strategies"][K]>;
-  }) => Effect.Effect<SubjectId, PasswordUnavailable>;
+  ]: SubjectProvisioning<Registration<A["strategies"][K]>>;
 };
 
 export type ProvisioningRequirement<
   A extends { readonly namespace: string; readonly strategies: Readonly<Record<string, Strategy>> },
 > = ManagedPassword<A> extends never ? never : ProvisioningId<A["namespace"]>;
 
-type ProofRoles =
-  | "proofRequests"
-  | "proofSeries"
-  | "proofGenerations"
-  | "proofContinuations"
-  | "proofScopes"
-  | "proofAbuse"
-  | "proofFailures"
-  | "proofCommands";
+type ProofRoles = "proofs";
 
 type UsesProofs<A extends { readonly strategies: Readonly<Record<string, Strategy>> }> =
   | Enabled<A, "phone">
@@ -132,46 +165,40 @@ type UsesProofs<A extends { readonly strategies: Readonly<Record<string, Strateg
 
 export type Ports<C extends ClaimsCodec, Id extends string, A extends Definition<C, Id>> =
   | AuthenticationAuthority
-  | KeyId<A["sessions"]["StatefulSessionPersistence"]>
-  | KeyId<A["sessions"]["SessionRepository"]>
+  | ("stateful" extends A["sessionMode"]
+      ?
+          | KeyId<A["sessions"]["StatefulSessionPersistence"]>
+          | KeyId<A["sessions"]["SessionRepository"]>
+      : never)
+  | KeyId<A["sessions"]["PendingAuthentication"]>
+  | KeyId<A["sessions"]["SessionStepUpPersistence"]>
+  | KeyId<A["sessions"]["SessionCleanup"]>
   | (Enabled<A, "password"> extends never ? never : PasswordPersistence)
   | KeyId<RegistrationKey<ManagedPassword<A>>>
   | (Enabled<A, "passkey"> extends never ? never : PasskeyPersistence | PasskeyCredentials)
-  | (ManagedPasskey<A> extends never
-      ? never
-      : PasskeyManagementPersistence | PasskeyEnrollmentContext)
+  | (ManagedPasskey<A> extends never ? never : PasskeyManagementPersistence)
   | (Enabled<A, "email"> extends never ? never : EmailAddressPersistence)
   | (UsesProofs<A> extends never ? never : ProofPersistence)
-  | (Enabled<A, "phone"> extends never ? never : PhoneAdmission | PhoneSignInTargets);
+  | (Enabled<A, "phone"> extends never ? never : PhoneSignInTargets)
+  | (OAuthSignIn<A> extends never ? never : OAuthSignInPersistence | IdentityImports)
+  | (OAuthConnected<A> extends never
+      ? never
+      : OAuthConnectedPersistence | OAuthConnectedRevocations);
 
 export type Roles<C extends ClaimsCodec, Id extends string, A extends Definition<C, Id>> =
   | "identifiers"
   | "credentials"
-  | "sessions"
-  | "sessionFlows"
-  | (Enabled<A, "password"> extends never
+  | ("stateful" extends A["sessionMode"] ? "sessions" : never)
+  | "pending"
+  | (Enabled<A, "password"> extends never ? never : "passwords")
+  | (Enabled<A, "email"> extends never ? never : "emailCredentials")
+  | (Enabled<A, "passkey"> extends never ? never : "passkeyCredentials" | "passkeyFlows")
+  | (UsesProofs<A> extends never ? never : ProofRoles)
+  | (Enabled<A, "oauth"> extends never ? never : "oauthIdentities" | "oauthCredentials")
+  | (OAuthSignIn<A> extends never ? never : "oauthSignInFlows")
+  | (OAuthConnected<A> extends never
       ? never
-      :
-          | "passwords"
-          | "passwordAttempts"
-          | "passwordScopes"
-          | "passwordCharges"
-          | "passwordCommands")
-  | (ManagedPassword<A> extends never ? never : "passwordRegistrations")
-  | (Enabled<A, "phone"> extends never ? never : "phoneState")
-  | (Enabled<A, "email"> extends never ? never : "emailCredentials" | "emailCommands")
-  | (Enabled<A, "passkey"> extends never
-      ? never
-      :
-          | "passkeyCredentials"
-          | "passkeyOwnership"
-          | "passkeyHandles"
-          | "passkeyModules"
-          | "passkeyFlows"
-          | "passkeyAdmissions"
-          | "passkeyCharges")
-  | (ManagedPasskey<A> extends never ? never : "passkeyCommands")
-  | (UsesProofs<A> extends never ? never : ProofRoles);
+      : "oauthConnectedFlows" | "oauthConnectedGrants" | "oauthConnectedRevocations");
 
 export interface SubjectOptions<T extends object, NativeId> {
   readonly table: T;
@@ -243,14 +270,27 @@ export interface BoundPersistence<
       value: StorageLayout<T, Roles<C, Id, A>>,
     ) => Layer.Layer<ConfigId<A["namespace"]>>;
   };
-  /** Create only the application subject. Runs inside the owning auth SQL transaction;
-   * use that SqlClient (including Drizzle over it), and return the new subject ID.
-   * Do not perform external side effects or open an independent transaction here.
+  /** Supply subject values through `{ values }` on every driver, including D1.
+   * Interactive drivers also accept callbacks that insert through the owning
+   * SqlClient and return the new subject ID. Never open an independent transaction
+   * or perform external side effects while preparing a subject.
    */
   readonly Provisioning: Context.Service<ProvisioningRequirement<A>, Provisioning<A>>;
+  /** Stateful sessions and OAuth-only stateless sessions are supported. Other session
+   * configurations fail acquisition with PersistenceConfigurationError.
+   * Capture dependencies at acquisition; validate SQL metadata and configure storage
+   * once on the first service operation. The configured SQL client's acquirer can
+   * resolve services from that operation's request context. Initialization failures become
+   * that port's unavailable error until layer reacquisition. Canceling a caller leaves initialization
+   * running for other waiting callers; if initialization is interrupted, later operations
+   * remain unavailable until layer reacquisition.
+   * Managed OAuth metadata/token-use authorizations bind policyRevision to the subject's
+   * securityRevision; changes to application authorization policy must advance it.
+   */
   readonly layer: Layer.Layer<
     Ports<C, Id, A>,
     PersistenceConfigurationError,
+    | Crypto.Crypto
     | ConfigId<A["namespace"]>
     | ProvisioningRequirement<A>
     | PasskeyRequirement<A>
@@ -260,7 +300,8 @@ export interface BoundPersistence<
   readonly managed: <N, Instant = number>(options: {
     readonly subjects: SubjectOptions<T, N>;
     readonly tables?: Partial<Record<Roles<C, Id, A>, T>>;
-    readonly prefix?: string;
+    /** Stable SQL identifier prefix; reuse the deployed prefix for existing tables. */
+    readonly prefix: string;
     readonly timestamps?: TimestampOptions<Instant>;
   }) => StorageLayout<T, Roles<C, Id, A>>;
   readonly map: <N, Instant = number>(options: {

@@ -26,8 +26,6 @@ export const emailProofDeliveryLayer = (options: {
 
       return proofDeliveryLayer(
         EmailProofDelivery,
-        // A plain email transport promises no delivery-ID deduplication.
-        { vendorId: "email", idempotencyMillis: 0 },
         Effect.fnUntraced(function* (message) {
           if (message.recipient.namespace !== "email")
             return { _tag: "DefiniteFailure", reason: "policy" } as const;

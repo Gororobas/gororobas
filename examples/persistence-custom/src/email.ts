@@ -4,7 +4,7 @@ import { Effect, Layer } from "effect";
 import { current, customer, evidenceDeadline, revision, satisfies } from "./accounts";
 import { AppAuth } from "./auth";
 import { nextId } from "./model";
-import { completionCurrent, consumeCompletion } from "./proofs";
+import { redeemInOwner } from "./proofs";
 import { AccountStore } from "./store";
 
 const moduleId = AppAuth.strategies.email.persistence.moduleId;
@@ -37,17 +37,13 @@ export const EmailLive = Layer.effect(
             }),
           )
           .pipe(Effect.catchTag("StoreUnavailable", () => Email.EmailUnavailable.make({}))),
-      checkCompletion: (input) =>
-        store
-          .read((state, now) => Effect.succeed(completionCurrent(state, input, now)))
-          .pipe(Effect.catchTag("StoreUnavailable", () => Email.EmailUnavailable.make({}))),
       verifyWithProof: (input, prepare) =>
         store
           .transaction((state, journal, now) =>
             Effect.gen(function* () {
-              const { authorization: auth, completion } = input;
+              const { authorization: auth, redemption } = input;
               const account = customer(state, input.captured.revision.subjectId);
-              const bound = completion.input.binding;
+              const bound = redemption.input.binding;
 
               if (
                 input.moduleId !== moduleId ||
@@ -72,31 +68,20 @@ export const EmailLive = Layer.effect(
                 !(yield* satisfies(state, auth.evidence, auth.requirement)) ||
                 bound._tag !== "IdentifierChange" ||
                 bound.revision.subjectId !== account.id ||
+                !current(state, bound.revision) ||
                 bound.identifier.value !== account.email ||
-                completion.input.moduleId !== `${moduleId}/verify-address` ||
-                completion.input.purpose !== "email-address-verification" ||
-                !completionCurrent(state, completion.input, now) ||
-                state.mutations.some(
-                  (item) => item.moduleId === moduleId && item.commandId === input.commandId,
-                )
+                redemption.input.moduleId !== `${moduleId}/verify-address` ||
+                redemption.input.purpose !== "email-address-verification"
               )
+                return prepare("rejected", journal);
+              if ((yield* redeemInOwner(state, redemption.input, now, journal)) !== "redeemed")
                 return prepare("rejected", journal);
               const receipt = prepare("changed", journal);
 
-              const expiresAt =
-                state.continuations.find(
-                  (row) =>
-                    row.id === completion.input.continuationId &&
-                    row.moduleId === completion.input.moduleId,
-                )?.expiresAt ?? 0;
-
               journal.beforeCommit(
-                (time) =>
-                  time >= now &&
-                  time < Math.min(expiresAt, evidenceDeadline(auth.evidence, auth.requirement)),
+                (time) => time >= now && time < evidenceDeadline(auth.evidence, auth.requirement),
               );
-              completion.prepare("completed", journal, () => undefined);
-              consumeCompletion(state, completion.input);
+              redemption.prepare("redeemed", journal, () => undefined);
               state.customers = state.customers.map((item) =>
                 item.id === account.id
                   ? {
@@ -112,16 +97,6 @@ export const EmailLive = Layer.effect(
                     }
                   : item,
               );
-              state.mutations = [
-                ...state.mutations,
-                {
-                  moduleId,
-                  commandId: input.commandId,
-                  subjectId: account.id,
-                  kind: "email",
-                  retentionUntil: now + 3_600_000,
-                },
-              ];
 
               return receipt;
             }),
@@ -129,25 +104,6 @@ export const EmailLive = Layer.effect(
           .pipe(Effect.mapError(() => Email.EmailUnavailable.make({}))),
       // This application exposes confirmation of its registered address, not address replacement.
       changeWithProof: () => Effect.fail(Email.EmailUnavailable.make({})),
-      cleanup: (input, prepare) =>
-        store
-          .transaction((state, journal, now) =>
-            Effect.sync(() => {
-              const expired = state.mutations.filter(
-                (item) => item.moduleId === input.moduleId && item.retentionUntil <= now,
-              );
-
-              const removed = expired.slice(0, input.limit);
-
-              state.mutations = state.mutations.filter((item) => !removed.includes(item));
-
-              return prepare(
-                { removed: removed.length, hasMore: expired.length > removed.length },
-                journal,
-              );
-            }),
-          )
-          .pipe(Effect.catchTag("StoreUnavailable", () => Email.EmailUnavailable.make({}))),
     });
   }),
 );

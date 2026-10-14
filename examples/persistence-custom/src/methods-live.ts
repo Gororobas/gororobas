@@ -1,5 +1,5 @@
 import { Hooks, Identity, Password, Schema as AuthSchema, Sessions } from "@yielded/auth";
-import { Crypto, DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import { Crypto, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { AppAuth } from "./auth";
@@ -14,11 +14,13 @@ export const AccountMethodsLive = Layer.effect(
     const registration = yield* AppAuth.strategies.password.RegistrationAuthority;
     const persistence = yield* Password.PasswordPersistence;
     const hasher = yield* Password.PasswordHashing;
+    const limiter = yield* Password.PasswordAttemptLimiter;
     const authority = yield* Sessions.AuthenticationAuthority;
     const claims = yield* AppAuth.strategies.password.SessionClaims;
     const completion = yield* AppAuth.sessions.AuthenticationCompletion;
     const crypto = yield* Crypto.Crypto;
     const moduleId = AppAuth.strategies.password.persistence.moduleId;
+    const attempts = Password.defaultPasswordMethodPolicy.attempts;
 
     return AccountMethods.of({
       register: Effect.fn("AccountMethods.register")(
@@ -52,38 +54,53 @@ export const AccountMethodsLive = Layer.effect(
         );
 
         const flowId = Sessions.AuthenticationFlowId.make(
-          yield* crypto.randomUUIDv4.pipe(
-            Effect.mapError(() => Password.PasswordUnavailable.make({})),
-          ),
+          yield* crypto
+            .randomUUIDv4()
+            .pipe(Effect.mapError(() => Password.PasswordUnavailable.make({}))),
         );
 
-        const admission = yield* persistence
-          .admitAttempt(
-            {
+        const admission = yield* Effect.gen(function* () {
+          yield* limiter.check({
+            moduleId,
+            action: "sign-in",
+            scope: "action",
+            key: "sign-in",
+            budget: attempts.action,
+          });
+          yield* limiter.check({
+            moduleId,
+            action: "sign-in",
+            scope: "identifier",
+            // Email keys match built-in sign-in; aliases also share the subject bucket.
+            key: JSON.stringify([identifier.namespace, identifier.value]),
+            budget: attempts.identifier,
+          });
+
+          const candidate = yield* persistence.findCredential({ moduleId, identifier });
+
+          if (Option.isSome(candidate))
+            yield* limiter.check({
               moduleId,
               action: "sign-in",
-              identifier,
-              policy: Password.defaultPasswordMethodPolicy.attempts,
-            },
-            (value, journal) => journal.prepare(value),
-          )
-          .pipe(
-            Effect.flatMap((receipt) => receipt.read),
-            Effect.mapError(() => Password.PasswordUnavailable.make({})),
-          );
+              scope: "subject",
+              key: candidate.value.revision.subjectId,
+              budget: attempts.subject,
+            });
 
-        if (admission._tag === "Denied") {
+          return candidate;
+        }).pipe(Effect.catchTag("PasswordRejected", () => Effect.succeed(undefined)));
+
+        if (admission === undefined) {
           yield* hasher.dummy(input.password).pipe(Effect.ignore);
 
           return yield* Password.PasswordRejected.make({});
         }
 
-        const captured =
-          admission.credential === undefined
-            ? undefined
-            : yield* Schema.decodeEffect(Schema.toType(Password.PasswordCredentialSnapshot))(
-                admission.credential,
-              ).pipe(Effect.mapError(() => Password.PasswordUnavailable.make({})));
+        const captured = Option.isNone(admission)
+          ? undefined
+          : yield* Schema.decodeEffect(Schema.toType(Password.PasswordCredentialSnapshot))(
+              admission.value,
+            ).pipe(Effect.mapError(() => Password.PasswordUnavailable.make({})));
 
         const checked = yield* Effect.gen(function* () {
           if (captured === undefined) {
@@ -94,7 +111,7 @@ export const AccountMethodsLive = Layer.effect(
             return yield* Password.PasswordRejected.make({});
           }
 
-          const original = yield* authority
+          const capture = yield* authority
             .capture(captured.revision.subjectId, [captured.credentialId])
             .pipe(
               Effect.mapError((error) =>
@@ -103,6 +120,9 @@ export const AccountMethodsLive = Layer.effect(
                   : Password.PasswordUnavailable.make({}),
               ),
             );
+
+          const original = Password.snapshotPasswordRevision(capture.revision);
+          const requirement = yield* Password.snapshotPasswordRequirement(capture.requirement);
 
           if (
             original.securityRevision !== captured.revision.securityRevision ||
@@ -138,15 +158,13 @@ export const AccountMethodsLive = Layer.effect(
           if (!result.matches) return yield* Password.PasswordRejected.make({});
           const verifiedAt = yield* DateTime.now;
 
-          const rehash = result.needsRehash
-            ? {
-                expectedVersion: captured.verifierVersion,
-                expectedVerifier: captured.verifier,
-                nextVerifier: yield* hasher
-                  .hash(password)
-                  .pipe(Effect.mapError(() => Password.PasswordUnavailable.make({}))),
-              }
-            : undefined;
+          if (result.needsRehash)
+            yield* persistence.rehashIfCurrent({
+              credential: captured,
+              nextVerifier: yield* hasher
+                .hash(password)
+                .pipe(Effect.mapError(() => Password.PasswordUnavailable.make({}))),
+            });
 
           const binding = yield* Schema.encodeEffect(
             Schema.fromJsonString(Schema.Array(Schema.String)),
@@ -174,34 +192,10 @@ export const AccountMethodsLive = Layer.effect(
             ],
           };
 
-          return { evidence, credential: captured, rehash };
+          return { evidence, credential: captured, requirement };
         }).pipe(Effect.result);
 
-        // Infrastructure failures retain the admission charge without credential rejection.
-        if (checked._tag === "Failure" && checked.failure._tag !== "PasswordRejected")
-          return yield* checked.failure;
-
-        // Definite credential rejection settles once; abandoned attempts remain charged.
-        const decision = yield* persistence
-          .settleAttempt(
-            {
-              moduleId,
-              attemptId: admission.attemptId,
-              ...(captured === undefined ? {} : { captured }),
-              outcome: checked._tag === "Success" ? "verified" : "rejected",
-              ...(checked._tag === "Success" && checked.success.rehash !== undefined
-                ? { rehash: checked.success.rehash }
-                : {}),
-            },
-            (value, journal) => journal.prepare(value),
-          )
-          .pipe(
-            Effect.flatMap((receipt) => receipt.read),
-            Effect.mapError(() => Password.PasswordUnavailable.make({})),
-          );
-
         if (checked._tag === "Failure") return yield* checked.failure;
-        if (decision !== "verified") return yield* Password.PasswordRejected.make({});
 
         const values = yield* claims.resolve({
           subjectId: checked.success.credential.revision.subjectId,
@@ -209,7 +203,11 @@ export const AccountMethodsLive = Layer.effect(
         });
 
         return yield* completion
-          .prepare({ evidence: checked.success.evidence, claims: values })
+          .prepare({
+            evidence: checked.success.evidence,
+            requirement: checked.success.requirement,
+            claims: values,
+          })
           .pipe(
             Effect.flatMap((receipt) => receipt.read),
             Effect.mapError((error) =>
@@ -221,4 +219,4 @@ export const AccountMethodsLive = Layer.effect(
       }),
     });
   }),
-);
+).pipe(Layer.provide(Password.PasswordAttemptLimiter.layer));

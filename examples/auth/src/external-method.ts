@@ -49,64 +49,45 @@ export const ExternalRegistration = Operations.makeOperation("example.external.r
   replay: "non-idempotent",
 });
 
-export interface RegistrationContribution<E = never, R = never> {
-  readonly id: string;
-  readonly mode: "interactive";
-  readonly run: (snapshot: Hooks.LifecycleSnapshot) => Effect.Effect<void, E, R>;
-}
+/** The application transaction owns registration and onboarding together. */
+export const externalMethodLayer = ExternalRegistration.handlerLayer(
+  Effect.fn("ExternalRegistration.handle")(function* (input) {
+    const verifier = yield* ExternalProofVerifier;
+    const authority = yield* RegistrationAuthority;
+    const hooks = yield* Hooks.LifecycleHooks;
+    const identifier = yield* verifier.verify(input.proof);
 
-/** This ordinary Layer is the method implementation. No registry or table declarations are needed. */
-export const externalMethodLayer = <R = never>(
-  contributions: ReadonlyArray<RegistrationContribution<Hooks.HookDenied, R>> = [],
-) =>
-  ExternalRegistration.handlerLayer(
-    Effect.fn("ExternalRegistration.handle")(function* (input) {
-      const verifier = yield* ExternalProofVerifier;
-      const authority = yield* RegistrationAuthority;
-      const hooks = yield* Hooks.LifecycleHooks;
-      const identifier = yield* verifier.verify(input.proof);
+    const before = Hooks.lifecycleSnapshot({
+      action: "registration",
+      operation: ExternalRegistration.rpc._tag,
+      method: "external-proof",
+      identifiers: [identifier],
+    });
 
-      const before = Hooks.lifecycleSnapshot({
-        action: "registration",
-        operation: ExternalRegistration.rpc._tag,
-        method: "external-proof",
-        identifiers: [identifier],
-      });
+    yield* hooks.before(before);
+    const occurredAt = yield* DateTime.now;
 
-      yield* hooks.before(before);
-      const occurredAt = yield* DateTime.now;
+    const result = yield* Hooks.coordinateCommit((journal) =>
+      authority.transaction(
+        Effect.gen(function* () {
+          const transaction = yield* RegistrationTransaction;
+          const subjectId = transaction.register(identifier);
+          const snapshot = Hooks.lifecycleSnapshot({ ...before, subjectId });
 
-      const result = yield* Hooks.coordinateCommit(
-        (journal) =>
-          authority.transaction(
-            Effect.gen(function* () {
-              const transaction = yield* RegistrationTransaction;
-              const subjectId = transaction.register(identifier);
-              const snapshot = Hooks.lifecycleSnapshot({ ...before, subjectId });
-
-              for (const contribution of contributions) yield* contribution.run(snapshot);
-              journal.stage(
-                Hooks.lifecycleEvent({
-                  id: Hooks.LifecycleEventId.make(globalThis.crypto.randomUUID()),
-                  occurredAtMillis: DateTime.toEpochMillis(occurredAt),
-                  snapshot,
-                }),
-              );
-
-              return subjectId;
+          transaction.recordOnboarding(subjectId);
+          journal.stage(
+            Hooks.lifecycleEvent({
+              id: Hooks.LifecycleEventId.make(globalThis.crypto.randomUUID()),
+              occurredAtMillis: DateTime.toEpochMillis(occurredAt),
+              snapshot,
             }),
-          ),
-        { mode: "interactive", contributions },
-      );
+          );
 
-      return { subjectId: result.value, commit: result._tag };
-    }),
-  );
+          return subjectId;
+        }),
+      ),
+    );
 
-/** Metadata is needed only when aggregating operations with other plugins. */
-export const externalMethodContributions = Hooks.pluginContributions({
-  id: "example/external-method",
-  operations: [ExternalRegistration],
-  hooks: [],
-  routes: [],
-});
+    return { subjectId: result.value, commit: result._tag };
+  }),
+);

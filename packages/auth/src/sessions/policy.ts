@@ -1,9 +1,13 @@
 import { DateTime, Effect, Schema } from "effect";
 
+import { reportAuthDiagnostic } from "../internal/diagnostics";
+import { AuthenticationClock } from "../operations/clock";
 import { SessionConfigurationError, SessionInvalid } from "./errors";
 import type { SessionCapabilities, SessionMetadata } from "./models";
 
 const PositiveMillis = Schema.Int.check(Schema.isGreaterThan(0));
+
+export const maximumCacheMillis = 300_000;
 
 export const SessionPolicy = Schema.Struct({
   issuer: Schema.NonEmptyString,
@@ -15,6 +19,8 @@ export const SessionPolicy = Schema.Struct({
   /** Deployment-wide upper bound including tokens issued under older policy versions. */
   maximumIssuedAbsoluteLifetimeMillis: PositiveMillis,
   maximumTokenBytes: Schema.Int.check(Schema.isBetween({ minimum: 256, maximum: 1048576 })),
+  /** Opt-in cookie cache. Revocation and claim changes may lag by this duration. */
+  positiveCacheMillis: Schema.optionalKey(Schema.Natural),
   requireImmediateInvalidation: Schema.Boolean,
 });
 
@@ -31,10 +37,16 @@ export const validateSessionPolicy = Effect.fn("validateSessionPolicy")(function
   if (
     policy.renewalIntervalMillis >= policy.idleLifetimeMillis ||
     policy.idleLifetimeMillis > policy.absoluteLifetimeMillis ||
-    policy.absoluteLifetimeMillis > policy.maximumIssuedAbsoluteLifetimeMillis
+    policy.absoluteLifetimeMillis > policy.maximumIssuedAbsoluteLifetimeMillis ||
+    (policy.positiveCacheMillis ?? 0) > Math.min(policy.renewalIntervalMillis, maximumCacheMillis)
   )
     return yield* SessionConfigurationError.make({ reason: "policy" });
-  if (policy.requireImmediateInvalidation && capabilities.subjectInvalidation !== "immediate") {
+  if (capabilities.mode !== "stateful" && (policy.positiveCacheMillis ?? 0) > 0)
+    return yield* SessionConfigurationError.make({ reason: "capability" });
+  if (
+    policy.requireImmediateInvalidation &&
+    (capabilities.subjectInvalidation !== "immediate" || (policy.positiveCacheMillis ?? 0) > 0)
+  ) {
     return yield* SessionConfigurationError.make({ reason: "capability" });
   }
 
@@ -46,6 +58,7 @@ export const validateSessionTimeline = Effect.fn("validateSessionTimeline")(func
   policy: SessionPolicy,
 ) {
   const now = DateTime.toEpochMillis(yield* DateTime.now);
+  const { futureToleranceMillis } = yield* AuthenticationClock;
   const authenticatedAt = DateTime.toEpochMillis(session.assurance.authenticatedAt);
   const issuedAt = DateTime.toEpochMillis(session.issuedAt);
   const expiresAt = DateTime.toEpochMillis(session.expiresAt);
@@ -60,17 +73,31 @@ export const validateSessionTimeline = Effect.fn("validateSessionTimeline")(func
 
       return verifiedAt > issuedAt;
     })
-  )
+  ) {
+    yield* reportAuthDiagnostic("session-timeline", "invalid-evidence");
+
     return yield* SessionInvalid.make({});
-  if (
-    authenticatedAt > issuedAt ||
-    issuedAt > now ||
-    now >= expiresAt ||
-    expiresAt > absoluteExpiresAt ||
-    expiresAt <= issuedAt ||
-    absoluteExpiresAt - authenticatedAt > policy.maximumIssuedAbsoluteLifetimeMillis
-  )
+  }
+  if (authenticatedAt > issuedAt || expiresAt > absoluteExpiresAt || expiresAt <= issuedAt) {
+    yield* reportAuthDiagnostic("session-timeline", "chronology");
+
     return yield* SessionInvalid.make({});
+  }
+  if (issuedAt - now > futureToleranceMillis) {
+    yield* reportAuthDiagnostic("session-timeline", "future-issued");
+
+    return yield* SessionInvalid.make({});
+  }
+  if (now >= expiresAt) {
+    yield* reportAuthDiagnostic("session-timeline", "expired");
+
+    return yield* SessionInvalid.make({});
+  }
+  if (absoluteExpiresAt - authenticatedAt > policy.maximumIssuedAbsoluteLifetimeMillis) {
+    yield* reportAuthDiagnostic("session-timeline", "lifetime");
+
+    return yield* SessionInvalid.make({});
+  }
 
   return session;
 });

@@ -5,8 +5,9 @@ on:
   push:
     branches: [main]
   pull_request:
-    # Retargeting changes the diff without changing the head commit.
-    types: [opened, reopened, synchronize, ready_for_review, edited]
+    # Even an all-skipped edited run can supersede the real required checks.
+    # Ignore metadata edits at the trigger, rather than skipping their jobs.
+    types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
   contents: read
@@ -108,9 +109,14 @@ jobs:
           task-cache: checks
 
       - name: Validate GitHub Actions workflows
-        uses: docker://rhysd/actionlint:1.7.12
-        with:
-          args: -color -shellcheck= -pyflakes=
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl --fail --location --retry 3 --output "$archive" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color -shellcheck= -pyflakes=
 
       - name: Check formatting for a limited diff
         id: format

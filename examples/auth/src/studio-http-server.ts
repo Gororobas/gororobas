@@ -1,11 +1,18 @@
 import { Http, OperationHttpServer as HttpServer, Operations } from "@yielded/auth";
 import { Database } from "@yielded/auth-persistence-drizzle/Postgres";
 import { eq } from "drizzle-orm";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import { StudioAuth } from "./studio-auth";
 import { subject } from "./studio-passkey-schema";
 import { MemberProfile, transport } from "./studio-transport";
+
+class MissingCurrentMember extends Schema.TaggedError<MissingCurrentMember>()(
+  "MissingCurrentMember",
+  {
+    message: Schema.String,
+  },
+) {}
 
 export const memberLayer = MemberProfile.handlerLayer(
   Effect.fn(function* (_input, invocation) {
@@ -18,7 +25,8 @@ export const memberLayer = MemberProfile.handlerLayer(
       .where(eq(subject.id, caller.subjectId))
       .pipe(Effect.orDie);
 
-    if (member === undefined) return yield* Effect.die(new Error("Missing current member"));
+    if (member === undefined)
+      return yield* Effect.die(MissingCurrentMember.make({ message: "Missing current member" }));
 
     return { memberId: caller.subjectId, organization: member.organization, name: member.name };
   }),

@@ -1,16 +1,40 @@
-import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema, type Types } from "effect";
+import {
+  Result,
+  Cause,
+  Context,
+  Crypto,
+  DateTime,
+  Effect,
+  Layer,
+  Schema,
+  type Types,
+} from "effect";
 import { Base64Url } from "effect/encoding";
 
-import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
+import { prepareCommit, hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
-import { HookDenied, LifecycleEventId, lifecycleEvent, lifecycleSnapshot } from "../hooks/models";
+import {
+  HookDenied,
+  LifecycleEventId,
+  lifecycleEventEffect,
+  lifecycleSnapshotEffect,
+} from "../hooks/models";
 import { IdentityConflict } from "../identity/models";
-import { reportAuthFailure } from "../internal/diagnostics";
+import {
+  reportAuthDiagnostic,
+  reportAuthFailure,
+  withoutObservability,
+} from "../internal/diagnostics";
 import type { AuthOperationResult } from "../operations/credentials";
 import { makeOperation, operationGroup } from "../operations/operation";
 import type { makeRequestBinding } from "../operations/requestBinding";
+import { CleanupResult } from "../persistence/cleanup";
 import type { TokenDigest } from "../Schema";
 import type { PrepareOAuthCommit } from "./OAuthSignInPersistence";
+import type {
+  OAuthRegistrationAuthentication,
+  OAuthRegistrationResult,
+} from "./registrationModels";
 import {
   OAuthRegistrationAccess,
   OAuthRegistrationFingerprint,
@@ -18,13 +42,13 @@ import {
   OAuthRegistrationInspection,
   OAuthRegistrationIntent,
   OAuthRegistrationPrivateInput,
-  OAuthRegistrationResult,
+  registrationCompletionResult,
 } from "./registrationModels";
 import { credentialDigest } from "./registrationSecrets";
 import { OAuthMethodUnsupported, OAuthRejected, OAuthUnavailable } from "./signInErrors";
 import type { OAuthCommandId } from "./signInModels";
 import { OAuthCleanupInput, OAuthModuleId } from "./signInModels";
-import { freezeOAuth, snapshotOAuthSync } from "./signInSnapshot";
+import { freezeOAuth, makeOAuthSnapshot } from "./signInSnapshot";
 
 const Failure = Schema.Union([
   OAuthRejected,
@@ -36,8 +60,14 @@ const Failure = Schema.Union([
 
 type Failure = typeof Failure.Type;
 
-const unexpected = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+const registrationBoundary = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
+    Effect.tapError((error) =>
+      reportAuthDiagnostic(
+        "oauth-registration",
+        Schema.is(OAuthUnavailable)(error) ? "unavailable" : "rejected",
+      ),
+    ),
     Effect.tapCause((cause) =>
       Cause.hasDies(cause) ? reportAuthFailure("oauth-registration", cause) : Effect.void,
     ),
@@ -55,11 +85,18 @@ export interface RegistrationModule<Id extends string, Kind extends string, Code
 export const makeOAuthRegistration = <
   const Id extends string,
   Registration extends Schema.Codec<unknown, unknown, unknown, unknown>,
+  Completion extends Schema.Top,
 >(
   moduleId: Id,
   codec: Registration,
   binding: ReturnType<typeof makeRequestBinding<Id, "oauth-entry">>,
+  options: {
+    readonly completion: Completion;
+    readonly authenticate: boolean;
+  },
 ) => {
+  const { authenticate, completion } = options;
+
   const RegistrationCodec: Schema.Codec<
     Registration["Type"],
     Registration["Encoded"],
@@ -75,6 +112,8 @@ export const makeOAuthRegistration = <
   const RegistrationAuthority = Context.Service<
     RegistrationModule<Id, "authority", Registration>,
     {
+      /** Only the first confirmed registration supplies its private authentication handoff. */
+      readonly authentication?: "first-confirmed-registration";
       /** Nonconsuming authenticated lookup. Match both private digests, module/flow/
        * reference, immutable expiry and accepted generation. Wrong input never binds. */
       readonly read: (
@@ -90,23 +129,14 @@ export const makeOAuthRegistration = <
         { readonly fingerprint: TokenDigest; readonly eligible: boolean },
         OAuthUnavailable
       >;
-      /** One physical owner compares exact intent/access/current time and first binds
-       * command + fingerprint while provisioning subject + unique full external tuple
-       * + usable OAuth credential/shared factor, or recording protected pending work.
-       * Before external work, pending must reserve the full external tuple across
-       * ALL intents and provisioning jobs in this same owner. Pending-vs-pending and
-       * pending-vs-registration races have one winner and one stable provisioning
-       * identity; an unresolved reservation is never released by bearer expiry.
-       * No orphan, email merge, existing-owner adoption or generic provision-then-bind.
-       * Final eligibility/uniqueness is authoritative. No standalone Bound state.
-       * Exact replay returns stored metadata with replayed=true, without provisioning
-       * or events. Replay equality includes the complete immutable intent (reference,
-       * original flow/binder and external tuple), not only its application fingerprint.
-       * Reusing a module/command for a different intent or data conflicts. Unknown is
-       * never rollback/reset.
-       * Pending preserves exact application data and stable provisioning identity
-       * BEFORE external work; its reference grants no recovery authority. Prepare and
-       * declarative provisioning snapshots are synchronous and precede physical commit.
+      /** One physical owner compares exact intent/access/current time and binds
+       * command + fingerprint while synchronously provisioning the subject, unique
+       * external identity and usable OAuth credential/shared factor. Provisioning is
+       * idempotent by requestId. Never adopt an existing owner or merge by email.
+       * Exact replay uses the retained intent decision without provisioning or events;
+       * compare the original flow, binding, external tuple and application fingerprint.
+       * Reusing a command with a different intent conflicts. An unknown commit outcome
+       * never authorizes resetting the intent or provisioning again.
        */
       readonly register: <A>(
         input: {
@@ -114,15 +144,19 @@ export const makeOAuthRegistration = <
           readonly intent: OAuthRegistrationIntent;
           readonly commandId: typeof OAuthCommandId.Type;
           readonly registration: Registration["Type"];
+          /** Exact encoded bytes supplied by this registration codec, retained on first bind. */
+          readonly payload: string;
+          /** Stable for the durable intent; replay reads its decision before provisioning. */
+          readonly requestId: string;
           readonly fingerprint: TokenDigest;
         },
         prepare: PrepareOAuthCommit<OAuthRegistrationDecision, A>,
       ) => Effect.Effect<PreparedCommit<A>, OAuthUnavailable>;
       /** Bounded authority-time/CAS cleanup of expired unbound or proven terminal
-       * records only after retention. Never remove unresolved ProvisioningPending. */
+       * records only after retention. Keep the intent decision through its replay retention. */
       readonly cleanup: <A>(
         input: OAuthCleanupInput,
-        prepare: PrepareOAuthCommit<{ readonly removed: number; readonly hasMore: boolean }, A>,
+        prepare: PrepareOAuthCommit<CleanupResult, A>,
       ) => Effect.Effect<PreparedCommit<A>, OAuthUnavailable>;
     }
   >(`effect-auth/oauth/${moduleId.length}:${moduleId}/RegistrationAuthority`);
@@ -131,12 +165,12 @@ export const makeOAuthRegistration = <
     | typeof OAuthRegistrationResult.Type
     | { readonly _tag: "Rejected" }
     | { readonly _tag: "Conflict" }
-  >;
+  > & { readonly authentication?: OAuthRegistrationAuthentication };
   type Plan = {
     /** One execution under the current authority. A fresh plan is required after failure. */
     readonly commit: Effect.Effect<
       PreparedCommit<Result>,
-      OAuthUnavailable,
+      OAuthUnavailable | OAuthMethodUnsupported,
       typeof RegistrationAuthority.Identifier
     >;
   };
@@ -159,16 +193,18 @@ export const makeOAuthRegistration = <
       );
 
       const { verify } = yield* binding.RequestBinding;
-      const { read, inspect, cleanup } = yield* RegistrationAuthority;
+      const authority = yield* RegistrationAuthority;
+      const { read, inspect, cleanup } = authority;
       const { before } = yield* LifecycleHooks;
       const crypto = yield* Crypto.Crypto;
       const { randomBytes } = crypto;
 
-      const services = yield* Effect.context<
+      const services = (yield* Effect.context<
         Registration["DecodingServices"] | Registration["EncodingServices"]
-      >();
+      >()).pipe(withoutObservability);
 
       const dataCodec = Schema.toCodecJson(Schema.toType(RegistrationCodec));
+      const intentCodec = Schema.fromJsonString(OAuthRegistrationIntent);
 
       const snapshotData = Effect.fn("OAuthRegistration.snapshotData")(
         function* (value: Registration["Type"]) {
@@ -191,7 +227,9 @@ export const makeOAuthRegistration = <
         planComplete: Effect.fn("OAuthRegistration.planComplete")(
           function* (raw) {
             yield* noAmbient();
-            const input = snapshotOAuthSync(OAuthRegistrationPrivateInput, raw);
+            if (authenticate && authority.authentication !== "first-confirmed-registration")
+              return yield* OAuthMethodUnsupported.make({});
+            const input = yield* snapshotOAuthRegistrationPrivateInput.effect(raw);
             const data = yield* snapshotData(raw.registration);
 
             const verified = yield* verify(input.flowId, input.requestBinding).pipe(
@@ -202,7 +240,7 @@ export const makeOAuthRegistration = <
               ),
             );
 
-            const access = snapshotOAuthSync(OAuthRegistrationAccess, {
+            const access = yield* snapshotOAuthRegistrationAccess.effect({
               moduleId: id,
               reference: input.reference,
               flowId: input.flowId,
@@ -214,13 +252,12 @@ export const makeOAuthRegistration = <
                 input.flowId,
                 input.credential,
               ),
-              nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
             });
 
-            const found = yield* read(snapshotOAuthSync(OAuthRegistrationAccess, access));
+            const found = yield* read(yield* snapshotOAuthRegistrationAccess.effect(access));
 
             if (found === undefined) return yield* OAuthRejected.make({});
-            const current = snapshotOAuthSync(OAuthRegistrationInspection, found);
+            const current = yield* snapshotOAuthRegistrationInspection.effect(found);
             const intent = current.intent;
             const context = intent.context;
 
@@ -233,113 +270,144 @@ export const makeOAuthRegistration = <
               intent.credentialDigest !== access.credentialDigest ||
               intent.identity.provider !== context.provider ||
               intent.identity.issuer !== context.issuer ||
-              intent.claimedAtMillis < context.issuedAtMillis ||
-              intent.claimedAtMillis >= context.expiresAtMillis ||
-              intent.issuedAtMillis < intent.claimedAtMillis ||
+              intent.issuedAtMillis < context.issuedAtMillis ||
               intent.verifiedAtMillis > intent.issuedAtMillis ||
+              (intent.upstreamAuthenticatedAt !== undefined &&
+                DateTime.toEpochMillis(intent.upstreamAuthenticatedAt) < intent.verifiedAtMillis) ||
               intent.expiresAtMillis <= intent.issuedAtMillis ||
               intent.expiresAtMillis > context.requestBindingExpiresAtMillis ||
-              intent.expiresAtMillis <= access.nowMillis ||
+              (current.application._tag === "Unbound" &&
+                intent.expiresAtMillis <= DateTime.toEpochMillis(yield* DateTime.now)) ||
               intent.retentionUntilMillis < intent.expiresAtMillis
             )
               return yield* OAuthRejected.make({});
 
             const inspected = yield* inspect({
-              intent: snapshotOAuthSync(OAuthRegistrationIntent, intent),
+              intent: yield* snapshotOAuthRegistrationIntent.effect(intent),
               registration: yield* snapshotData(data),
             });
 
-            const checked = snapshotOAuthSync(
-              Schema.Struct({
-                fingerprint: OAuthRegistrationFingerprint,
-                eligible: Schema.Boolean,
-              }),
-              inspected,
+            const checked = yield* snapshotEligibility.effect(inspected);
+
+            const payload = yield* Schema.encodeEffect(Schema.fromJsonString(RegistrationCodec))(
+              data,
+            ).pipe(
+              Effect.provide(services),
+              Effect.mapError(() => OAuthRejected.make({})),
             );
 
+            const requestId = "oauth-registration:" + intent.reference;
             const application = current.application;
 
             if (application._tag === "Unbound") {
               if (!checked.eligible) return yield* OAuthRejected.make({});
             } else if (
               application.commandId !== input.commandId ||
-              application.fingerprint !== checked.fingerprint
+              application.fingerprint !== checked.fingerprint ||
+              application.payload !== payload ||
+              application.requestId !== requestId
             )
               return yield* IdentityConflict.make({});
 
-            const snapshot = lifecycleSnapshot({
-              action: "registration",
-              operation: `${moduleId}/oauth-registration`,
-              method: context.protocol,
-              identifiers: [],
-            });
+            const event =
+              application._tag === "Unbound"
+                ? yield* Effect.gen(function* () {
+                    const snapshot = yield* lifecycleSnapshotEffect({
+                      action: "registration",
+                      operation: `${moduleId}/oauth-registration`,
+                      method: context.protocol,
+                      identifiers: [],
+                    }).pipe(Effect.orDie);
 
-            if (application._tag === "Unbound") yield* before(lifecycleSnapshot(snapshot));
+                    yield* before(yield* lifecycleSnapshotEffect(snapshot).pipe(Effect.orDie));
 
-            const eventBytes = yield* randomBytes(32).pipe(
-              Effect.mapError(() => OAuthUnavailable.make({})),
-            );
+                    const bytes = yield* randomBytes(32).pipe(
+                      Effect.mapError(() => OAuthUnavailable.make({})),
+                    );
 
-            const event = lifecycleEvent({
-              id: LifecycleEventId.make(Base64Url.encode(eventBytes)),
-              occurredAtMillis: DateTime.toEpochMillis(yield* DateTime.now),
-              snapshot,
-            });
+                    const value = yield* lifecycleEventEffect({
+                      id: LifecycleEventId.make(Base64Url.encode(bytes)),
+                      occurredAtMillis: DateTime.toEpochMillis(yield* DateTime.now),
+                      snapshot,
+                    }).pipe(Effect.orDie);
 
-            eventBytes.fill(0);
+                    bytes.fill(0);
+
+                    return value;
+                  })
+                : undefined;
+
             const ownerData = yield* snapshotData(data);
 
-            const prepare: PrepareOAuthCommit<OAuthRegistrationDecision, Result> = (
-              rawDecision,
-              journal,
-            ) => {
-              const decision = snapshotOAuthSync(OAuthRegistrationDecision, rawDecision);
+            const prepare: PrepareOAuthCommit<OAuthRegistrationDecision, Result> = prepareCommit(
+              (rawDecision, journal) =>
+                Result.gen(function* () {
+                  const decision = snapshotOAuthRegistrationDecision.sync(rawDecision);
 
-              if (decision._tag === "Registered" && !decision.replayed) journal.stage(event);
+                  const authentication =
+                    decision._tag === "Registered" && !decision.replayed && authenticate
+                      ? decision.authentication
+                      : undefined;
 
-              const accepted =
-                decision._tag === "Registered" || decision._tag === "ProvisioningPending";
+                  if (decision._tag === "Registered" && !decision.replayed) {
+                    if (event === undefined) return yield* Result.fail(OAuthUnavailable.make({}));
+                    if (
+                      authenticate &&
+                      (authentication === undefined ||
+                        Schema.encodeSync(intentCodec)(authentication.intent) !==
+                          Schema.encodeSync(intentCodec)(intent))
+                    )
+                      return yield* Result.fail(OAuthUnavailable.make({}));
+                    journal.stage(event);
+                  }
 
-              return journal.prepare({
-                value:
-                  decision._tag === "Registered"
-                    ? { _tag: "RegistrationAccepted" as const }
-                    : decision._tag === "ProvisioningPending"
-                      ? { _tag: "ProvisioningPending" as const, reference: decision.reference }
-                      : { _tag: decision._tag },
-                credentialCommands:
-                  accepted && !decision.replayed
-                    ? [
-                        { _tag: "Clear" as const, slot: "registration" as const },
-                        { _tag: "Clear" as const, slot: "request-binding" as const },
-                      ]
-                    : [],
-              });
-            };
+                  const accepted = decision._tag === "Registered";
+
+                  return journal.prepare({
+                    value:
+                      decision._tag === "Registered"
+                        ? { _tag: "RegistrationAccepted" as const }
+                        : { _tag: decision._tag },
+                    ...(authentication === undefined ? {} : { authentication }),
+                    credentialCommands:
+                      accepted && !decision.replayed
+                        ? [
+                            { _tag: "Clear" as const, slot: "registration" as const },
+                            { _tag: "Clear" as const, slot: "request-binding" as const },
+                          ]
+                        : [],
+                  });
+                }),
+            );
 
             let attempted = false;
 
             const commit = Effect.gen(function* () {
               if (attempted) return yield* OAuthUnavailable.make({});
               attempted = true;
-              const { register } = yield* RegistrationAuthority;
+              const owner = yield* RegistrationAuthority;
 
-              return yield* register(
+              if (authenticate && owner.authentication !== "first-confirmed-registration")
+                return yield* OAuthMethodUnsupported.make({});
+
+              return yield* owner.register(
                 {
-                  access: snapshotOAuthSync(OAuthRegistrationAccess, access),
-                  intent: snapshotOAuthSync(OAuthRegistrationIntent, intent),
+                  access: yield* snapshotOAuthRegistrationAccess.effect(access),
+                  intent: yield* snapshotOAuthRegistrationIntent.effect(intent),
                   commandId: input.commandId,
                   registration: ownerData,
+                  payload,
+                  requestId,
                   fingerprint: checked.fingerprint,
                 },
                 prepare,
               );
-            }).pipe(unexpected);
+            }).pipe(registrationBoundary);
 
             return Object.freeze({ commit });
           },
           Effect.provideService(Crypto.Crypto, crypto),
-          unexpected,
+          registrationBoundary,
         ),
         cleanup: Effect.fn("OAuthRegistration.cleanup")(function* (limit) {
           yield* noAmbient();
@@ -347,46 +415,27 @@ export const makeOAuthRegistration = <
           const input = yield* Schema.decodeEffect(OAuthCleanupInput)({
             moduleId: id,
             limit,
-            nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
           }).pipe(Effect.mapError(() => OAuthRejected.make({})));
 
           const receipt = yield* cleanup(input, (value, journal) =>
-            journal.prepare(
-              snapshotOAuthSync(
-                Schema.Struct({ removed: Schema.Natural, hasMore: Schema.Boolean }),
-                value,
-              ),
-            ),
+            journal.prepare(snapshotCleanupResult.sync(value)),
           );
 
           return yield* receipt.read.pipe(Effect.mapError(() => OAuthUnavailable.make({})));
-        }, unexpected),
+        }, registrationBoundary),
       });
     }),
   );
 
   const Complete = makeOperation(`${moduleId}/registration/complete`, {
     payload: CompleteInput,
-    success: OAuthRegistrationResult,
+    success: registrationCompletionResult(completion),
     error: Failure,
     access: "any",
     exposure: "public",
     replay: "single-use",
     credentials: true,
   });
-
-  const handlersLayer = Complete.credentialHandlerLayer(
-    Effect.fn("OAuthRegistration.Complete")(function* (input) {
-      const plan = yield* (yield* Registrations).planComplete(input);
-      const receipt = yield* plan.commit;
-      const result = yield* receipt.read.pipe(Effect.mapError(() => OAuthUnavailable.make({})));
-
-      if (result.value._tag === "Rejected") return yield* OAuthRejected.make({});
-      if (result.value._tag === "Conflict") return yield* IdentityConflict.make({});
-
-      return { value: result.value, credentialCommands: result.credentialCommands };
-    }),
-  );
 
   return Object.freeze({
     RegistrationCodec,
@@ -395,7 +444,17 @@ export const makeOAuthRegistration = <
     Registrations,
     layer,
     operations: Object.freeze({ Complete }),
-    handlersLayer,
     group: operationGroup(Complete),
   });
 };
+
+const snapshotOAuthRegistrationPrivateInput = makeOAuthSnapshot(OAuthRegistrationPrivateInput);
+const snapshotOAuthRegistrationAccess = makeOAuthSnapshot(OAuthRegistrationAccess);
+const snapshotOAuthRegistrationInspection = makeOAuthSnapshot(OAuthRegistrationInspection);
+const snapshotOAuthRegistrationIntent = makeOAuthSnapshot(OAuthRegistrationIntent);
+const snapshotOAuthRegistrationDecision = makeOAuthSnapshot(OAuthRegistrationDecision);
+const snapshotCleanupResult = makeOAuthSnapshot(CleanupResult);
+
+const snapshotEligibility = makeOAuthSnapshot(
+  Schema.Struct({ fingerprint: OAuthRegistrationFingerprint, eligible: Schema.Boolean }),
+);

@@ -30,6 +30,7 @@ export const snapshotEmailCredential = Effect.fn("Email.snapshotCredential")(fun
     ...value,
     identifier: Object.freeze(LoginIdentifier.make(value.identifier)),
     revision: snapshotEmailRevision(value.revision),
+    requirement: yield* snapshotEmailRequirement(value.requirement),
   });
 });
 

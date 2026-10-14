@@ -25,36 +25,16 @@ export const phoneDigest = Effect.fn("Phone.digest")(function* (values: Readonly
 export const phoneAdmission = Effect.fn("Phone.admission")(function* (
   moduleId: string,
   action: "request" | "attempt",
-  requestId: string,
-  fingerprint: string,
-  replayLifetimeMillis = 0,
 ) {
   const context = yield* PhoneRequestContext;
 
   return yield* (yield* PhoneAdmission).admit({
     moduleId,
     action,
-    requestId,
-    fingerprint,
-    replayLifetimeMillis,
     networkKey: Redacted.value(context.networkKey),
   });
 });
 
-export const phoneAttemptAdmission = Effect.fn("Phone.admitAttempt")(function* (
-  moduleId: string,
-  flowId: string,
-  proofId: string,
-) {
-  const requestId = yield* (yield* Crypto.Crypto).randomUUIDv4.pipe(Effect.mapError(phoneFailure));
-
-  if (
-    !(yield* phoneAdmission(
-      moduleId,
-      "attempt",
-      requestId,
-      yield* phoneDigest(["attempt", flowId, proofId]),
-    ))
-  )
-    return yield* PhoneOtpRejected.make({});
+export const phoneAttemptAdmission = Effect.fn("Phone.admitAttempt")(function* (moduleId: string) {
+  if (!(yield* phoneAdmission(moduleId, "attempt"))) return yield* PhoneOtpRejected.make({});
 });

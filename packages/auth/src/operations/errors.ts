@@ -51,3 +51,13 @@ export const OperationBoundaryError = Schema.Union([
 ]);
 
 export type OperationBoundaryError = typeof OperationBoundaryError.Type;
+
+/** Private boundary defect: never retain caller values, credentials, or parser causes. */
+export class OperationOutputError extends Schema.TaggedError<OperationOutputError>()(
+  "OperationOutputError",
+  {},
+) {
+  override get message() {
+    return "Auth operation failed";
+  }
+}

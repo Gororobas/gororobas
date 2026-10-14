@@ -1,223 +1,293 @@
 ---
 title: OAuth reference
-description: OAuth configuration, routes, sessions, and provider adapters.
+description: OAuth configuration, services, and provider adapters.
 ---
 
 Start with the [OAuth guide](../guide/oauth) for the flow and choice of API.
 
 ## Authorization server
 
-`OAuthServer.make(id, { scopes })` supplies `Identity`, `Service`, `routes`,
-`middleware(requiredScopes)`, and `paths`. The acquired `Service` exposes the
-origin-dependent `cookieName`. It implements authorization
-code with S256 PKCE for registered public clients. It issues MCP bearer tokens;
-it does not issue OIDC ID tokens or implement the MCP transport.
+`OAuthServer.make(id, { scopes })` provides `Identity`, `Service`, `routes`,
+`middleware(requiredScopes)`, and `paths`. It supports authorization code with PKCE
+for MCP clients, including static registrations and Client ID Metadata Documents
+(CIMD). Use the [OpenID profile](#shared-openid-sign-in) for shared browser sign-in.
 
 Provide these to `oauth.layer`:
 
-| Input                     | Purpose                                                                                                                            |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `origin`                  | Authorization server issuer; one server per origin                                                                                 |
-| `resource`                | Exact MCP resource URL on that origin, with a non-root path and no query or fragment                                               |
-| `clients`                 | `{ clientId, name, redirectUris }[]`; redirect URIs match exactly, including loopback ports                                        |
-| `loginPath`               | Local login route that returns to `oauth.paths.authorize`                                                                          |
-| `keys`                    | Signing keyring in the same format as session keys; use separate random key material                                               |
-| `oauth.Identity`          | `current`: an Effect that verifies the application session and returns `SubjectId` or `undefined`; may require `HttpServerRequest` |
-| `OAuthServer.Persistence` | Durable grant storage; use `OAuthServerPersistence.layer` with SQLite, D1, or PostgreSQL                                           |
+| Input            | Purpose                                                              |
+| ---------------- | -------------------------------------------------------------------- |
+| `origin`         | Public issuer origin                                                 |
+| `resource`       | Exact MCP resource URL on that origin                                |
+| `clients`        | Static client registrations; may be empty with CIMD                  |
+| `clientMetadata` | Optional `{ allowedOrigins }` policy for metadata and JWKS discovery |
+| `loginPath`      | Login route that returns to `oauth.paths.authorize`                  |
+| `keys`           | Signing keyring; use separate random material from session keys      |
+| `oauth.Identity` | Verify the current application session                               |
 
-`Identity.current` runs on every consent GET and POST. Return `undefined` for an
-absent or invalid session and fail with `OAuthServer.Unavailable` for an unavailable
-dependency. The built-in consent page names the client, subject, resource, scopes,
-and redirect host. Approval requires the bound cookie, form token, same Origin,
-and the same subject that saw the page. Switching accounts invalidates previously
-rendered consent forms. Pending authorization survives the login
-redirect in the cookie; do not put it into a login URL. HTTPS consent cookies use
-`__Host-yielded-${id}-consent`, Secure, HttpOnly, SameSite=Lax, and Path=/ without a
-Domain. Loopback HTTP development uses an unprefixed cookie.
+Provide durable `OAuthServer.Persistence` plus `HttpClient`, `Crypto`, `Hmac`, and
+`Signature`.
 
-Allow `oauth.paths.authorize` in `OAuthReturnTargets` and have your login page
-request that return target. Set `loginPath` to that page. Keep provider and MCP grants separate.
+`Identity.current` returns the verified `SubjectId` or `undefined`; dependency
+failure uses `OAuthServer.Unavailable`. Consent is bound to that user and browser.
+Allow `oauth.paths.authorize` in your login flow's `OAuthReturnTargets`.
 
-| Route (ID `mcp`, resource `/mcp`)               | Behavior                                                                  |
-| ----------------------------------------------- | ------------------------------------------------------------------------- |
-| `GET /.well-known/oauth-authorization-server`   | Issuer, endpoints, scopes, public-client authentication and PKCE metadata |
-| `GET /.well-known/oauth-protected-resource/mcp` | Resource and authorization server metadata                                |
-| `GET /oauth/mcp/authorize`                      | Validate the authorization request, sign in if needed, and show consent   |
-| `POST /oauth/mcp/authorize`                     | Approve or deny the browser-bound request                                 |
-| `POST /oauth/mcp/token`                         | Redeem a code or rotate a refresh token                                   |
-| `POST /oauth/mcp/revoke`                        | Revoke a token's entire grant; unknown tokens also return 200             |
+| Route, for ID `mcp` and resource `/mcp`         | Purpose                                 |
+| ----------------------------------------------- | --------------------------------------- |
+| `GET /.well-known/oauth-authorization-server`   | Issuer and supported protocol metadata  |
+| `GET /.well-known/oauth-protected-resource/mcp` | Resource metadata                       |
+| `GET/POST /oauth/mcp/authorize`                 | Validate the request and obtain consent |
+| `POST /oauth/mcp/token`                         | Redeem a code or rotate a refresh token |
+| `POST /oauth/mcp/revoke`                        | Revoke the token's grant                |
 
-Authorization requires `response_type=code`, `client_id`, `redirect_uri`, `resource`,
-`scope`, `code_challenge`, and `code_challenge_method=S256`. Optional `state` is echoed
-with the issuer (`iss`) in the callback. Token requests are form-encoded and require
-`client_id` and `resource`. Code redemption also requires the original `redirect_uri`
-and `code_verifier`. Refresh can retain or reduce scopes; it cannot expand them.
-Malformed or rejected requests return 400; dependency failures return 503.
+All clients use S256 PKCE. Code redemption includes the original callback and
+`code_verifier`; token requests also identify the client and resource. Refresh may
+retain or reduce scopes. Request errors return 400, failed HTTP Basic authentication
+returns 401 with a challenge, and unavailable dependencies return 503.
 
-Attach `oauth.middleware(scopes).layer` only to protected routes. It extracts Bearer
-credentials with Effect's HTTP APIs, verifies the grant, checks scopes, and supplies
-`CurrentAccess` for that request. Missing/invalid tokens return a 401 discovery
-challenge; insufficient scope returns 403; unavailable storage returns 503.
-`CurrentAccess` defaults to `undefined` outside those requests. Never install a
-principal at server startup. Use Effect's existing Origin checks and CORS middleware;
-expose `WWW-Authenticate` to browser MCP clients.
+### Clients and metadata discovery
+
+Static clients configure `clientId`, `name`, and `redirectUris`. Add a redacted
+`clientSecret` for Basic/form-secret authentication, or `clientAssertion: { jwks }`
+or `{ jwksUri }` for `private_key_jwt`. Configure one authentication method.
+`grantTypes` permits `authorization_code` and/or `refresh_token`.
+
+Callbacks match exactly. A native client's loopback callback may vary its port;
+the selected callback remains bound to the authorization code.
+
+Set `clientMetadata.allowedOrigins` to enable trusted HTTPS metadata discovery.
+A document declares its exact URL as `client_id`, a `client_name`, and
+`redirect_uris`. It can declare public authentication or `private_key_jwt` with a
+public key source. Static registrations take precedence.
+
+Use an HTTP client and network policy that reject private, loopback, and link-local
+destinations after DNS resolution. Disable redirects and ambient credentials.
+Origin allowlists alone do not provide network isolation.
+
+| Discovery limit               | Value                                     |
+| ----------------------------- | ----------------------------------------- |
+| Metadata / JWKS body          | 5 KiB / 128 KiB                           |
+| Request timeout / concurrency | 5 seconds / 8 requests per server Layer   |
+| Cache lifetime / entries      | At most 5 minutes / 256 entries per cache |
+
+Errors and private or non-cacheable responses are not cached. Metadata changes take
+effect when cached entries expire and can invalidate outstanding grants.
+
+### Private-key client assertions
+
+Send a fresh JWT in `client_assertion` with
+`client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`.
+Its issuer and subject identify the client, its audience identifies the issuer or
+endpoint, and its `jti` is unique for that client. Assertions expire within five
+minutes and are limited to 8 KiB. Supported algorithms are RS256, PS256, ES256, and
+EdDSA. Retain old public keys through the JWKS cache interval when rotating them.
+
+Each assertion is single-use across server instances. A lost acknowledgment needs
+a fresh assertion; an uncertain token-issuance outcome still requires a new
+authorization flow.
+
+### Protecting MCP routes
+
+Provide `oauth.middleware(scopes).layer` to protected routes. It verifies the bearer
+grant and supplies `OAuthServer.CurrentAccess` for that request. Require a defined
+value and apply your application's account and operation permissions.
+
+Missing or invalid credentials return 401 with discovery information; insufficient
+scope returns 403; unavailable storage returns 503. Configure CORS for the MCP,
+token, metadata, and revocation routes, exposing `WWW-Authenticate` as needed.
+Keep the consent endpoint under its same-origin policy.
 
 ### Token lifecycle and storage
 
-Consent expires after five minutes, authorization codes after one minute, access
-tokens after ten minutes, and grants after thirty days. Refresh does not extend
-the grant's lifetime. Signing keys must remain available through the lifetimes of
-the credentials they signed. Tokens are opaque to clients and use Yielded's signed
-envelope rather than JWT serialization.
+| Lifetime           | Default                             |
+| ------------------ | ----------------------------------- |
+| Pending consent    | 5 minutes                           |
+| Authorization code | 1 minute                            |
+| Access token       | 10 minutes                          |
+| Grant              | 30 days; refresh does not extend it |
 
-Each grant occupies one row in `yielded_oauth_server`. Apply
-`OAuthServerPersistence.migration` through your application's migrations. The adapter
-rejects ambient transactions and uses a conditional write for every transition;
-revocation cannot be overwritten by a concurrent refresh. It stores no bearer or
-provider tokens. Expired rows can be deleted using `expires_at_millis`.
+Use `OAuthServerPersistence.layer` with SQLite, D1, or PostgreSQL and apply its
+`migrations` through your application. Server replicas sharing an issuer share
+storage and signing keys. Keep keys and replay receipts until their credentials
+expire; schedule expired-row cleanup and ingress rate limits.
 
-Verification checks storage on every request. Refresh immediately invalidates the
-previous access token. Reusing a consumed code or refresh token revokes the entire
-grant, including after concurrent refresh attempts. Clients must serialize refresh
-and replace their stored token pair. Revocation stops subsequent requests, but does
-not cancel work already authorized. Application logout does not revoke MCP grants;
-trusted application code can call `Service.revoke(grantId)` when policy requires it.
+Tokens are opaque to clients. Refresh invalidates the previous access token, so
+clients serialize refresh and replace the token pair. Reusing a consumed code or
+refresh token revokes its grant. Logout is separate; trusted application code can
+call `Service.revoke(grantId)` when policy requires it.
 
-Issuance returns credentials only after a confirmed commit. An uncertain commit
-returns no credentials and is never retried by the server; start a new authorization.
-HTTP operations time out after thirty seconds and preserve caller interruption.
-Form bodies are limited to 16 KiB. Applications own ingress rate limits and database
-cleanup. Apply admission limits to authorization GET requests too: a valid request
-allocates a pending row before login. Pending rows expire after five minutes;
-schedule cleanup of expired rows using `expires_at_millis`. Exclude OAuth query strings, bodies, cookies, and credentials from access
-logs and tracing; the runnable example disables request logging and tracing.
+Credentials are delivered after confirmed commits. An uncertain issuance outcome
+requires a new authorization flow. Exclude credentials and authorization/callback
+URLs from logs and traces. HTTP operations have a 30-second cooperative deadline;
+form bodies are limited to 16 KiB.
 
-Run `vp run @yielded/example-auth#example:strava-mcp` with the Strava example's
-variables plus `MCP_SIGNING_KEY`, `MCP_CLIENT_ID`, and `MCP_REDIRECT_URI`. Configure
-that exact client ID and redirect URI in your MCP client. The example listens on
-port 3000 and owns `strava-mcp.sqlite`; use HTTPS outside loopback development.
+See the [Strava MCP example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/strava-mcp.ts)
+for a complete server composition.
+
+## Shared OpenID sign-in
+
+`OAuthServer.makeOpenId(id)` adds discovery, authorization code with PKCE, RS256 ID
+tokens, JWKS, and UserInfo for registered applications. Each application verifies
+the exchange and creates its own session.
+
+Supply the server options above, replacing `resource` and `clientMetadata` with:
+
+| Input              | Purpose                                                       |
+| ------------------ | ------------------------------------------------------------- |
+| `identityKeys`     | `{ activeKeyId, privateKey, publicKeys }` RSA signing keyring |
+| `Identity.current` | Verify the browser session and return `Authentication`        |
+| `Identity.active`  | Recheck current session authority                             |
+| `Identity.profile` | Authorize disclosure of profile and email claims              |
+
+`Authentication` carries the subject, session, security revision, original
+`authenticatedAtMillis`, and expiry. Viewing consent does not refresh authentication.
+
+| Route, for ID `identity`                | Purpose                    |
+| --------------------------------------- | -------------------------- |
+| `GET /.well-known/openid-configuration` | Issuer metadata            |
+| `GET /oauth/identity/jwks`              | Public verification keys   |
+| `GET/POST /oauth/identity/authorize`    | Authentication and consent |
+| `POST /oauth/identity/token`            | Code redemption            |
+| `GET/POST /oauth/identity/userinfo`     | Scoped claims              |
+| `POST /oauth/identity/revoke`           | Grant revocation           |
+
+Request `openid`, optionally `profile` and `email`. Supported prompts are `login`,
+`select_account`, `consent`, and `none`; `max_age` requires recent authentication.
+The default consent policy requires interaction. Supply `OAuthServer.OpenIdConsent`
+to recognize application-approved clients, callbacks, and claims.
+
+ID tokens last at most five minutes and access tokens at most ten, bounded by the
+originating session. Applications own local logout; revocation cannot retract an
+already accepted ID token. Refresh, dynamic clients, and coordinated browser logout
+are unsupported. Retain public verification keys through token expiry.
+
+Both server profiles accept `OAuthServer.ConsentRenderer`. A custom renderer must
+escape displayed values and preserve the supplied POST action, CSRF field, and
+decision. See the [shared sign-in example](https://github.com/yielded-dev/auth/tree/main/examples/persistence-sql#hosted-yielded-sign-in).
 
 ## Retained access
 
-`OAuth.make({ access: profile })` retains the provider grant during normal sign-in.
-Without `access`, verified sign-in discards all provider tokens. The profile selects
-provider/client registration, scopes/resources, token retention, refresh limits,
-and revocation support. It does not provision accounts or select a session mode.
+`OAuth.make({ access: profile })` retains an encrypted provider grant during sign-in.
+The profile declares scopes, resources, refresh limits, and revocation support.
+Account provisioning and session mode remain application choices.
 
-| Service/configuration                                        | Purpose                                                              |
-| ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `OAuthSignInPersistence`                                     | Existing account links and single-use sign-in flows                  |
-| `OAuthConnectedPersistence`                                  | Grant retention, refresh, disconnect, and durable operation ordering |
-| `OAuthConnectedProtocol`                                     | The single code exchange plus refresh and revocation                 |
-| `OAuthTransactionProtector`                                  | Encrypted sign-in transaction secrets                                |
-| `OAuthConnectedTransactionProtector`                         | Connected-operation transaction secrets                              |
-| `OAuthConnectedTokenProtector`                               | Encrypted provider tokens and cleanup jobs                           |
-| `OAuthConnectedUseAuthority`, `OAuthConnectedActionEvidence` | Current permission for token use and disconnect                      |
-| `SessionClaims`, shared session services                     | Application claims and authentication completion                     |
+- `OAuthSignInPersistence`: account links and sign-in flows.
+- `OAuthConnectedPersistence`: retained grants, refresh, disconnect, and cleanup.
+- `OAuthConnectedProtocol`: provider exchange, refresh, and revocation.
+- `OAuthTransactionProtector`: private sign-in transaction data.
+- `OAuthConnectedTransactionProtector`: private connected-operation data.
+- `OAuthConnectedTokenProtector`: encrypted provider tokens.
+- `OAuthConnectedUseAuthority`: permission to use a token.
+- `OAuthConnectedActionEvidence`: authorization for management actions.
+- `SessionClaims` and session services: application authentication completion.
 
-The Drizzle connected mapping must include `signIn: { credential, flow }` pointing
-to the same tables as sign-in persistence, plus `flow.encodeSignIn`. Connected-flow
-`subjectId` must allow NULL while identity is unknown. Keep every required unique
-constraint and use the database engine's wall clock. See the
-[example storage](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/oauth-storage.ts).
+Connected persistence and sign-in share login ownership and subject authority.
+[Composed persistence](./adapters#oauth) supplies the sign-in, connected, and
+revocation services when `access` is enabled. Your application still supplies
+provider configuration, encryption keys, claims, and use/action authorization.
+The strategy exposes `access.ConnectedAccess`, `access.accessLayer`, and
+`access.maintenanceLayer`. Provide those Layers with the same services.
 
-The bound strategy exposes `access.ConnectedAccess`, `access.accessLayer`, and
-`access.maintenanceLayer`. Install the maintenance service and run its bounded
-passes through an application-owned scheduler when profiles support remote
-revocation. `Auth` exposes `listAccountConnections` and `disconnectAccount`; public
-completion results may include `{ connection: { grantId, profileKey } }`.
+`withAccessToken` checks current access before releasing a redacted token to your
+callback. The library does not retry the callback. Refresh preserves identity and
+session assurance; an unknown refresh outcome requires fresh authorization.
+Reconnect replaces the unresolved grant while retaining its connection ID.
 
-Confirmed retention precedes session delivery. A lost commit response releases no
-session and never permits repeating the code. Refresh claims are single-use even
-after their deadline; unknown external outcomes remain unresolved. Retain the
-associated identities and receipts. Known losing exchanges use cohort cleanup jobs
-when supported, or discard their tokens locally when revocation is unsupported.
-Unresolved exchanges with unknown identity can block cohort cleanup for that client
-registration and require application-owned reconciliation; expiry alone is not proof
-that the provider operation did not happen.
+Disconnect stops future local use. Tokens already released may remain in flight.
+Profiles with provider revocation need an application-scheduled maintenance worker;
+provider-wide revocation can also affect a later authorization. Unknown revocation
+outcomes are not retried automatically.
 
-### Connect an authenticated account
+### Register and link accounts
 
-`OAuth.makeConnectedModule` manages provider access independently of sign-in.
-Call `Connected.prepareBegin` first: it retains the generated grant identity,
-PKCE/state, callback, profile, revisions, and expiry in native flow custody.
-Preparation returns only a public flow ID and expiry, plus a private
-`connected-intent` credential command. It cannot exchange a code or activate a grant.
+`OAuth.makeRegistration` retains verified identity while your application collects
+its registration payload. `RegistrationAuthority` owns admission and provisioning.
+By default, registration returns `RegistrationAccepted`; start a fresh sign-in to
+establish a session.
 
-A trusted server factor adapter calls `Connected.beginContext` with that private
-credential and the original input, verifies independent evidence for the returned
-challenge, and then calls `Connected.begin` with the same input and proof. Keep the
-challenge's flow ID, binding digest, and full revision unchanged. Re-reading a target
-must never rebind an already verified proof. `completeContext` resolves the original
-callback target; `disconnectContext` resolves the native grant and command target.
-These context methods are server-only services, not public HTTP operations. Factor
-selection, proof custody and one-time consumption remain application-owned through
-`OAuthConnectedActionEvidence`; ordinary session history is not an exact-action proof.
-
-Use the existing Operation HTTP credential mapping to keep credentials out of JSON:
+To continue authentication after registration, enable `authenticate` on both the
+strategy and its shared action:
 
 ```ts
-const beginRoute = OperationHttpContract.route(connected.operations.Begin, {
-  path: "/auth/provider/begin",
-  credentials: {
-    preparationCredential: "connected-intent",
-    actionProof: "pending-proof",
-  },
+OAuth.makeRegistration({ registration: Registration, registrationPolicy, authenticate: true });
+
+// For register inside AuthContract.make's actions callback:
+AuthContract.oauthRegister(sessions, Registration, {
+  strategy: "registration",
+  authenticate: true,
 });
 ```
 
-`Complete` maps `requestBinding` to `request-binding`; map `actionProof` to your
-private proof slot for complete and disconnect as well. Execute begin only after
-proof authorization to receive the retained authorization URL and move the original
-binder into `request-binding`. Keep flow and command IDs across retries. Duplicate
-preparations and uncertain commits never authorize issuing a replacement credential.
-Disconnect preserves its existing durable command replay and revocation receipts.
+The first confirmed registration returns `Authenticated` or `PendingAuthentication`
+according to your session policy. Provide the strategy's `SessionClaims` and session
+services. Exact replays return `RegistrationAccepted` without credentials; changing
+bound registration input conflicts.
 
-Custom persistence adapters must implement `prepare` and `inspectPrepared`, and
-change `issue` to atomically promote the exact retained preparation to `Pending`.
-Use `OAuthConnectedSealedTransaction` for connected flow storage and transaction
-protectors; its bounded envelope includes the retained authorization URL.
-Unclaimed connected-management flows from before this cutover must be restarted;
-retain grants, exchange receipts and unresolved revocation work. Ordinary sign-in
-flow envelopes are unchanged.
+SQL and Drizzle support this option. A replacement `RegistrationAuthority` must
+advertise `authentication: "first-confirmed-registration"`; otherwise registration
+fails with `OAuthMethodUnsupported`.
+
+Registration and session issuance commit separately. The account can remain after
+completion fails or its response is lost; recover with a fresh sign-in. External
+provisioning must be idempotent for the supplied `requestId` and payload.
+
+For linking, `OAuthActionEvidence.verify` supplies fresh authorization for the exact
+action challenge. Session-based evidence uses verified private provenance through
+`inspectInvocation`; public session metadata alone is insufficient.
+
+Linking preserves existing sessions. Unlinking applies last-login-method checks and
+the configured invalidation policy. `requireImmediateInvalidation` requires a zero
+positive-cache window.
+
+### Linked login inventory
+
+`OAuth.makeAccounts` exposes `listLinkedAccounts` and `operations.List`.
+`AuthContract.oauthListLinkedAccounts({ strategy })` adds the authenticated query to
+your HTTP/client contract.
+
+| Value  | Fields                                          |
+| ------ | ----------------------------------------------- |
+| Input  | `limit` (1–100), optional `cursor`              |
+| Item   | `credentialId`, `provider`, `issuer`, `subject` |
+| Result | `items`, optional continuation `cursor`         |
+
+Use `credentialId` with `unlinkAccount`; use `listAccountConnections` for API grants.
+Treat display strings as untrusted. Pass cursors unchanged and stop when no cursor
+is returned. Concurrent changes can produce short pages or require a fresh listing.
+
+Replacement persistence must recheck caller authority and metadata-access policy.
+SQL/Drizzle mappings supply `metadataAccess` for application permissions.
+`AuthAtom.make` refreshes named queries after named mutations; add reactivity keys
+for your other queries. The [SQL lifecycle example](https://github.com/yielded-dev/auth/blob/main/examples/persistence-sql/src/oauth-lifecycle-consumer.ts)
+shows pagination and unlinking.
+
+### Connect an authenticated account
+
+`Connected.begin` receives the flow ID, callback, Connect/Reconnect intent, return
+target, and private action proof. Its confirmed result supplies an authorization
+URL and privately delivers the browser binding. `Connected.complete` requires
+fresh completion evidence before exchanging the code.
+
+`Connected.disconnect` authorizes the exact subject and grant. These operations
+manage provider access while preserving the application's authentication assurance.
+Map request bindings and action proofs to private credential slots in the HTTP adapter.
 
 ### Runnable examples
 
-Run `vp run @yielded/example-auth#example:github` with `GITHUB_CLIENT_ID`,
-`GITHUB_CLIENT_SECRET`, `GITHUB_USER_ID`, `SESSION_KEY`, `OAUTH_TRANSACTION_KEY`,
-and `OAUTH_TOKEN_KEY`. Open `/login`; the Atom client starts sign-in through the shared
-POST action. Register `http://localhost:3000/auth/github/callback` with the provider.
-`APP_ORIGIN` overrides the origin; HTTPS is required outside loopback development.
+Use `example:github` or `example:strava` in the
+[Auth examples workspace](https://github.com/yielded-dev/auth/tree/main/examples/auth).
+The examples document provider credentials, allowlisted identities, keys, callbacks,
+and owned development storage.
 
-A keyring is `{ activeKeyId, keys: [{ id, material }] }`, where each material is a
-redacted base64url encoding of 32 random bytes. Use distinct keys for sessions,
-transactions, and provider tokens. Retain old keys while records reference them.
-The examples disable request logs and traces that could include callback credentials.
-
-The Strava task is `example:strava`; use `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`,
-and `STRAVA_ATHLETE_ID` instead, and register `/auth/strava/callback`. The examples own
-new `github-auth-v2.sqlite`, `strava-auth-v2.sqlite`, and `strava-mcp-auth-v2.sqlite`
-files. The allowlisted provider tuple is explicitly provisioned by the application;
-other identities cannot sign in. The example denies connected management actions
-until an application supplies independent exact-action evidence; ordinary session
-metadata is not treated as a fresh proof.
-
-The former OAuthApp cookie, flow, and grant format is removed. For development,
-clear its cookies and reset its flow/grant table before using shared Auth storage.
-Existing connected token envelopes also need resetting because they now bind the
-exchange order. Preserve account subject IDs, identity tuples, and any receipts or
-revocation work needed to reconcile real external credentials; the library performs
-no automatic deletion or migration.
+Protectors use keyrings of `{ activeKeyId, keys: [{ id, material }] }`, where each
+material is a redacted base64url encoding of 32 random bytes. Use separate keys for
+sessions, transactions, and provider tokens, retaining old keys while records need them.
 
 ## Shared auth setup
 
-Declare the actions for `OAuth` inside `Auth.make`:
+Declare the OAuth actions in the shared contract:
 
-```ts title="packages/domain/auth-contract.ts"
-import { Schema } from "effect";
-import { AuthContract } from "@yielded/auth";
-
-export const AuthApi = AuthContract.make("app/Auth", {
+```ts
+const AuthApi = AuthContract.make("app/Auth", {
   claims: Schema.Struct({ displayName: Schema.String }),
   actions: (sessions) => ({
     signIn: AuthContract.oauthSignIn(),
@@ -228,39 +298,71 @@ export const AuthApi = AuthContract.make("app/Auth", {
 
 ### Supply the services
 
-With `AppAuth` from the guide and `AuthRoutes` from a provider page:
+Provide storage, claims, private transaction keys, and allowed return targets:
 
-```ts title="apps/server/oauth-live.ts"
-import { Layer } from "effect";
-import { OAuth } from "@yielded/auth";
-import * as OAuthCrypto from "@yielded/auth-crypto/OAuth";
-import { AppAuth } from "./auth";
-import { AuthDependencies } from "./auth-dependencies";
-import { resolveOAuthClaims } from "./auth-accounts";
-import { transactionKeys } from "./auth-config";
-import { OAuthPersistenceLive } from "./auth-persistence";
-import { AuthRoutes } from "./github";
-
+```ts
 const OAuthLive = Layer.mergeAll(
   OAuthPersistenceLive,
   Layer.succeed(AppAuth.strategies.social.SessionClaims, { resolve: resolveOAuthClaims }),
-  OAuthCrypto.transactionLayer(transactionKeys),
+  OAuth.OAuthTransactionProtector.layer(transactionKeys),
   OAuth.OAuthReturnTargets.exactRoutes(["/account"]),
 );
 
-export const Routes = AuthRoutes.pipe(Layer.provide(OAuthLive), Layer.provide(AuthDependencies));
+export const Routes = AuthRoutes.pipe(
+  Layer.provide(OAuthLive),
+  Layer.provide(AuthDependencies),
+  Layer.provide(Layer.merge(CryptoLive, FetchHttpClient.layer)),
+);
 ```
 
-The application modules supply [OAuth persistence](./adapters#oauth), claims,
-transaction keys, and [shared auth dependencies](./adapters#compose-the-application-layer).
-Flows default to five minutes; the strategy's `policy` overrides this.
+The [runnable application](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/oauth-application.ts)
+supplies those application Layers. Native providers require HTTP and crypto services;
+OpenID Connect also requires `Signature`. Protectors require `Aead` and `Crypto`.
+Their Layers check for XChaCha20-Poly1305 support and fail with
+`OAuthConfigurationError` (`reason: "crypto"`) when it is absent. On Workers,
+provide `WorkerdPasswordlessServices.layer` from
+`@yielded/auth/WorkerdPasswordlessServices` for HTTP and crypto without Wasm.
+Use `WorkerdServices` when the application also hashes passwords; see
+[runtime composition](./crypto.md#use-with-auth).
+Keep the resulting Layer alive for the application's lifetime.
+
+Flows default to five minutes; strategy `policy` controls their lifetime. Account
+linking uses `OAuthLinkTransactionProtector`. Retained access also needs
+`OAuthConnectedTransactionProtector` and `OAuthConnectedTokenProtector` with distinct
+transaction and token keys.
+
+### Identity imports
+
+`OAuthPersistence.IdentityImports` from `@yielded/auth-persistence` is supplied by
+composed SQL and Drizzle persistence when OAuth sign-in is enabled. Its
+`importIdentity` accepts `OAuthPersistence.IdentityImport`: `moduleId`, `subjectId`,
+`provider`, `issuer`, and `subject`. Decode migration data with that Schema and use
+the module ID from the bound strategy's `persistence.moduleId`.
+
+The existing subject must be active. The operation commits identity ownership,
+the login credential and shared authority together, advances subject
+`securityRevision`, and returns `{ credentialId, credentialRevision }`. Matching
+active rows are an idempotent success without changing revisions. Another subject
+or module, inactive credentials, inconsistent authority, invalid input, or storage
+failure returns `OAuthUnavailable`. Imports do not provision subjects, retain
+provider tokens, register users, or issue sessions.
+
+Each call owns one transaction or D1 primary batch and rejects ambient transactions
+and commit scopes. After a lost acknowledgement, retry the same input. Concurrent
+conflicts may fail and can be retried after the competing import completes.
+
+For application-owned persistence, `OAuthPersistence.identityKey(identity)` returns
+the same stable key used by sign-in and requires Effect `Crypto`. It validates the
+exact provider/issuer/subject tuple, rejects malformed Unicode with
+`OAuthUnavailable`, and excludes the OAuth module from ownership. Use it inside
+your own atomic import; the key alone does not create login authority. See the
+[migration example](../guide/oauth#import-existing-identities).
 
 ## Customize callbacks
 
-Shared auth derives `/auth/{provider}/callback` from `origin` and the contract's
-base path. Callbacks require HTTPS, except HTTP on `localhost`, `127.0.0.1`, or
-`[::1]` for local development. Provider endpoints always require HTTPS.
-Override a provider's path through `Http.layer`:
+`Http` derives `/auth/{provider}/callback` from the origin and contract base path.
+Callbacks use HTTPS, with HTTP loopback support for local development. Provider
+endpoints use HTTPS.
 
 ```ts
 const AuthRoutes = Http.layer(AppAuth, {
@@ -272,96 +374,206 @@ const AuthRoutes = Http.layer(AppAuth, {
 });
 ```
 
-| Customization               | API                                                                                       |
-| --------------------------- | ----------------------------------------------------------------------------------------- |
-| Multiple destinations       | Array of `{ callbackId, path }`; paths must be unique                                     |
-| Select a destination        | Pass `callbackId` at sign-in; otherwise the provider-named or sole entry is used          |
-| Custom completion response  | `oauth.respond`, or a provider callback's `respond`                                       |
-| Multiple completion actions | Select with `oauth.complete`                                                              |
-| Custom HttpApi composition  | `Http.make(AppAuth, options)` exposes `handlers(api)`, `callbackRoutes()`, and middleware |
-| Application-owned callback  | Use `GitHub.layer` or `OpenIdClient.layer` with an explicit `redirectUri`                 |
+| Customization              | API                                                                     |
+| -------------------------- | ----------------------------------------------------------------------- |
+| Multiple callbacks         | Array of `{ callbackId, path }`; select `callbackId` at sign-in         |
+| Completion response        | `oauth.respond` or the callback's `respond`                             |
+| Completion action          | `oauth.complete`                                                        |
+| Existing HttpApi           | `Http.make` exposes `handlers(api)`, `callbackRoutes()`, and middleware |
+| Application-owned callback | `GitHub.layer` or `OpenIdConnect.layer` with `redirectUri`              |
 
-`respond` receives the schema-encoded public result and `{ flowId, provider, callbackId }`.
-It returns `Effect<Response, OperationHttpError, R>`; cookie delivery remains managed.
-Custom completion actions need `oauthCallback: true` and the single-use request-binding
-mapping. See the [registration example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/login-server.ts).
+`respond` receives the encoded public result and flow/provider/callback IDs. It
+returns an Effect response; the adapter owns cookie delivery. Custom completion
+actions need `oauthCallback: true` and the request-binding credential mapping.
+
+## Callback proxy
+
+`OAuthProxy` supports sign-in and registration for registered local and preview
+environments. Use native providers for linking and retained grants.
+
+### Callback server
+
+| `OAuthProxy.layer` option | Value                                                                  |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `origin`                  | Public HTTPS origin                                                    |
+| `path`                    | Route prefix; default `/oauth-proxy`                                   |
+| `providers`               | Native provider declarations                                           |
+| `environments`            | `{ id, secret, callbacks: [{ provider, callbackId, redirectUri }] }[]` |
+
+Give each environment a separate 32-byte secret. Completion URLs match exactly;
+only loopback completions may use HTTP with insecure host-only cookies.
+
+Mount `OAuthProxy.routes` and register the provider callback. Supply a separate
+protector keyring, an HTTP client, crypto, and `OAuthProxyPersistence.layer` with
+SQLite, D1, or PostgreSQL. Apply its migration. Replicas share storage and keys.
+Callbacks use the provider's declared GET query or POST form transport; Apple
+first-consent `user` data reaches provider verification. App handoffs use GET.
+The [proxy application](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/oauth-proxy-application.ts)
+shows the complete composition.
+
+For Drizzle, use the driver's `OAuthProxyPersistence.table` and `layer`. Export the
+table to Drizzle Kit and apply its migration before starting the server.
+
+### App provider
+
+| `OAuthProxy.provider` option | Value                             |
+| ---------------------------- | --------------------------------- |
+| `url`                        | Callback server's HTTPS base URL  |
+| `environment`                | Registered environment ID         |
+| `secret`                     | The environment's redacted secret |
+| `issuer`                     | Expected provider issuer          |
+
+The application retains its normal Auth services. Its HTTP client must avoid retries,
+redirects, and ambient cookies. See [local and preview setup](../guide/oauth#local-and-preview-environments).
+
+### Hosting and recovery
+
+A trusted TLS proxy must preserve the public Host and replace forwarded-protocol
+headers. Restrict the upstream listener to that proxy; custom `Server.handle` hosts
+supply the public HTTPS URL. Exclude callback URLs and credentials from logs.
+
+Attempts expire after five minutes. Completion handoffs are single-use and expire
+within sixty seconds, bounded by the attempt. A timeout or lost response requires
+a fresh sign-in. Retain keys while stored attempts need them; applications own
+expired-row cleanup and ingress limits.
 
 ## Providers
 
-| Integration             | Configure                                                                                                         |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| GitHub sign-in          | [`GitHub.provider`](../guide/github)                                                                              |
-| GitHub with API access  | `GitHub.accessProfile({ clientId, scopes })` and `GitHub.provider({ clientId, clientSecret, access: [profile] })` |
-| Strava sign-in / access | `Strava.provider({ clientId, clientSecret, access: profile })`; omit `access` for sign-in only                    |
-| OIDC                    | [`OpenIdClient.provider`](../guide/google) with issuer and credentials                                            |
-| Plain OAuth             | `OpenIdClient.provider` with endpoints and an identity decoder                                                    |
+| Integration        | Configure                                                              |
+| ------------------ | ---------------------------------------------------------------------- |
+| Apple              | [`Apple.provider`](../guide/apple)                                     |
+| Atlassian          | [`Atlassian.provider`](../guide/atlassian)                             |
+| Auth0              | [`Auth0.provider`](../guide/enterprise-oidc)                           |
+| Cognito            | [`Cognito.provider`](../guide/enterprise-oidc)                         |
+| Dropbox            | [`Dropbox.provider`](../guide/dropbox)                                 |
+| Figma              | [`Figma.provider`](../guide/figma)                                     |
+| GitHub             | [`GitHub.provider`](../guide/github)                                   |
+| GitLab             | [`GitLab.provider`](../guide/gitlab), with optional self-hosted issuer |
+| Google             | [`Google.provider`](../guide/google)                                   |
+| Hugging Face       | [`HuggingFace.provider`](../guide/huggingface)                         |
+| Keycloak           | [`Keycloak.provider`](../guide/enterprise-oidc)                        |
+| Kick               | [`Kick.provider`](../guide/kick)                                       |
+| LINE               | [`Line.provider`](../guide/line)                                       |
+| Linear             | [`Linear.provider`](../guide/linear)                                   |
+| Microsoft Entra ID | [`Microsoft.provider`](../guide/microsoft)                             |
+| Notion             | [`Notion.provider`](../guide/notion)                                   |
+| Okta               | [`Okta.provider`](../guide/enterprise-oidc)                            |
+| Railway            | [`Railway.provider`](../guide/railway)                                 |
+| Roblox             | [`Roblox.provider`](../guide/roblox)                                   |
+| Slack              | [`Slack.provider`](../guide/slack)                                     |
+| Vercel             | [`Vercel.provider`](../guide/vercel)                                   |
+| X                  | [`X.provider`](../guide/x)                                             |
+| Zitadel            | [`Zitadel.provider`](../guide/enterprise-oidc)                         |
+| Zoom               | [`Zoom.provider`](../guide/zoom)                                       |
+| GitHub API access  | `GitHub.accessProfile` plus provider `access`                          |
+| Strava             | `Strava.provider`, with optional access profile                        |
+| Other OAuth/OIDC   | `OpenIdConnect.provider`                                               |
 
-`GitHub.accessProfile` defaults to `read:user`, rotating refresh tokens, cohort
+`GitHub.accessProfile` defaults to `read:user`, rotating refresh tokens, provider
 revocation, and thirty days of local refresh retention. `Strava.accessProfile`
-requires scopes and declares unsupported remote revocation. Its adapter rechecks
-athlete identity on refresh and limits response bodies to 1 MiB. Custom Effect HTTP clients must reject redirects and
-must not retry token exchanges.
+requires scopes and supports local disconnection. Custom HTTP clients must reject
+redirects and must not retry token exchanges.
 
-For generic providers, registration `access` supplies `clientRegistrationId`,
-`profiles`, `resourceIndicators`, `refreshExpiry`, `revocation`, and optional
-`refreshParameters`. Those are explicit provider contracts; no refresh or revocation
-behavior is inferred from the sign-in scopes.
+### GitHub email permission
 
-For plain OAuth with `OpenIdClient`, provide `authorizationEndpoint`, `tokenEndpoint`,
-`identitySource.url`, and `identitySource.decodeIdentity`. The decoder returns an
-Effect containing the stable `subject` and optional profile. Set scopes explicitly.
+Set `verifiedPrimaryEmail: true` on a GitHub registration to request `user:email`
+and select a verified primary address. It defaults to false and applies to
+`GitHub.provider`, `GitHub.layer`, and `GitHub.gitHubOAuthAppProvider`.
 
-### OpenIdClient defaults
+| Behavior       | Contract                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| Result         | One verified primary address sets normalized `email` and `emailVerified`; otherwise both are absent |
+| Identity       | Numeric GitHub ID; email never selects the account                                                  |
+| `providerData` | The `/user` profile, including its separate nullable email                                          |
+| Lookup limits  | 64 KiB per response, ten pages of 100 entries, bounded by the configured timeout                    |
 
-| Setting                                | Default               |
-| -------------------------------------- | --------------------- |
-| `callbackId`                           | Provider key          |
-| `configurationGeneration` / `issuance` | `1` / `active`        |
-| `timeoutSeconds`                       | `10` (range: 1–30)    |
-| `tokenEndpointAuthMethod`              | `client_secret_basic` |
-| OIDC scopes / signing algorithm        | `["openid"]` / RS256  |
-| Plain OAuth scopes                     | `[]`                  |
+Connected profiles must explicitly include `user:email` when lookup is enabled.
+Refresh rechecks identity and preserves the stored email snapshot. Update the
+configuration generation when changing this option. Failed or incomplete lookups
+require a fresh sign-in.
 
-S256 PKCE and response issuer validation are required by default. Set
-`responseIssuerMode: "unsupported"` only for providers without issuer responses.
-Public clients use `authentication: { method: "none", publicClient: true }`.
-Load secrets with `Config.Redacted`. Invalid settings fail Layer construction with
-`OpenIdClientConfigurationError`.
+### Generic providers
+
+For plain OAuth, configure authorization/token endpoints and
+`identitySource: { url, decodeIdentity }`. The decoder returns an Effect with the
+stable subject and optional profile; its service requirements remain visible.
+
+For retained access, declare `clientRegistrationId`, permission `profiles`,
+`resourceIndicators`, `refreshExpiry`, and `revocation`. These contracts belong to
+the provider configuration and are independent of sign-in scopes.
+
+### OpenIdConnect defaults
+
+| Setting                                | Default                               |
+| -------------------------------------- | ------------------------------------- |
+| `callbackId`                           | Provider key                          |
+| `configurationGeneration` / `issuance` | `1` / `active`                        |
+| `timeoutSeconds`                       | `10`, range 1–30                      |
+| OIDC scopes                            | `["openid"]`                          |
+| ID-token algorithms                    | Advertised RS256, PS256, ES256, EdDSA |
+| Profile / UserInfo                     | `OidcUserProfile` / `id-token`        |
+| Plain OAuth scopes                     | `[]`                                  |
+
+`tokenEndpointAuthMethod` defaults to `client_secret_basic`.
+
+Keep S256 PKCE and issuer-response validation enabled for providers that support
+them. `pkceS256: false` and `responseIssuerMode: "unsupported"` are explicit provider
+configuration choices. `userInfo: "merge"` fills missing ID-token claims after
+checking the same subject; ID-token claims take precedence. Discovery accepts a
+`{tenantid}` path segment when it matches the configured authority; verification
+substitutes the signed `tid` and checks the selected signing key's issuer. A
+concrete GUID authority discovered from that template keeps its own issuer, and
+the signing key must still publish a matching issuer. Commercial `consumers` pins the
+personal-account issuer. A tenant domain does not match that template. `common`
+and `organizations` stay on it. Refresh against the template requires that
+original `iss`.
+
+Sign-in accepts per-request `prompt` and `loginHint`. Public clients use
+`authentication: { method: "none", publicClient: true }`. Load secrets with
+`Config.Redacted`; invalid settings fail Layer construction.
 
 ### Configuration rotation
 
-For shared auth, use `provider({ registrations: [...] })` to retain older entries
-with `issuance: "retired"` while flows or connected grants reference them. Assign
-a new `configurationGeneration` when settings change and keep one active generation.
-Retain old callback paths until their flows expire. When moving a retained permission
-profile to another client registration, increase its profile `generation` too; client
-exchange counters are independent, and an older profile cannot replace a newer grant.
-
-Earlier GitHub adapters used the issuer `https://github.com`; the current identity
-uses `https://github.com/login/oauth`. Old bindings are not reused automatically.
-Revoke old grants before upgrading, then register/link and reconnect. Do not rewrite
-stored issuers: they are part of identity keys and encrypted context.
+Use `registrations` with one active entry and retired previous entries while flows
+or grants reference them. Increase `configurationGeneration` when client settings
+change and retain the old callbacks and keys for outstanding work. Moving a retained
+permission profile to another registration also needs a new profile generation.
 
 ## Provider profiles
 
-Verified identity is the provider/issuer/subject tuple. `profile` is optional
-metadata: display fields plus bounded `providerData`. It does not authorize account
-linking or local roles. Normalized profile display URLs accept only HTTP(S).
-Expose only needed fields in claims; still treat profile URLs as untrusted input.
+Verified identity is the provider/issuer/subject tuple. Optional profile fields are
+display data; they do not authorize linking or local roles. Expose only needed claims
+and treat profile strings and URLs as untrusted input.
 
-| Consumer                      | Profile access                                               |
-| ----------------------------- | ------------------------------------------------------------ |
-| Returning shared-auth sign-in | `SessionClaims.resolve({ subjectId, credential, identity })` |
-| Shared-auth registration      | Server-side `OAuthRegistrationIntent.profile`                |
+Declare schemas by the provider keys used in `Http.make`:
 
-`GitHubUserProfile` and `OidcUserProfile` schemas decode the adapters' provider data.
-Missing fields remain absent; GitHub nullable values remain null. GitHub's `/user`
-email is not asserted verified. Adapters do not fetch additional email or UserInfo
-endpoints or retain unknown fields. Connected-grant refresh need not update profiles.
+```ts
+const social = OAuth.make({
+  profiles: {
+    github: GitHub.GitHubUserProfile,
+    google: Google.GoogleUserProfile,
+  },
+});
+```
 
-The OIDC adapter also includes Google's `hd` hosted-domain claim in `providerData`
-for verified Google ID tokens. Applications can use it to restrict access to a
-Google Workspace or Cloud organization. Other issuers' private `hd` claims remain ignored.
+`SessionClaims.resolve` receives validated `providerData`, narrowed by `provider`.
+A supplied map rejects undeclared providers or malformed data. Omit it for a generic
+JSON profile, or provide your own service-free JSON-object Schema. Registration
+exposes profile data on the server-side `OAuthRegistrationIntent`.
 
-Detailed signatures and invariants live beside the
+Missing claims stay absent. GitHub's nullable `/user.email` is separate from its
+opt-in verified email fields. Google exposes verified `hd` for
+[Workspace policy](../guide/google#identity-and-workspace-policy); GitLab can expose
+`groups`, and Slack exposes its workspace and user identifiers for
+[workspace policy](../guide/slack#identity-and-workspace-policy). LINE keeps
+optional `amr`. Roblox keeps optional `type` and `created_at` and preserves the
+trailing-slash issuer. Railway merges UserInfo because its ID token omits name,
+email, and picture. `Microsoft.provider` keeps `oid` and `tid`. The durable
+subject is `oid:tid` when the token issuer equals the configured authority, and
+`tid:oid:tid` when it does not. `Apple.provider` decodes string
+`email_verified` and `is_private_email` flags and merges the first-consent name.
+
+Set `userInfo: "merge"` when an OIDC identity token omits needed profile claims.
+Provider schemas describe the returned projection; applications choose permission
+policy and account admission. Detailed signatures live beside the
 [OAuth source](https://github.com/yielded-dev/auth/tree/main/packages/auth/src/oauth).

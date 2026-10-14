@@ -1,3 +1,5 @@
+import "@fontsource-variable/ibm-plex-sans/wght.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
 import { KeyValueStore } from "effect/persistence";
 
 import { mountAccountApp } from "../../shared/account/browser";

@@ -1,225 +1,108 @@
-import type { NativeDatabase } from "@yielded/auth-persistence/Adapter";
 import {
-  coordinateCommit,
-  hasCommitScope,
-  LifecycleHooks,
-  type HookConfigurationError,
-} from "@yielded/auth/Hooks";
-import { PasswordUnavailable, PasswordPersistence } from "@yielded/auth/Password";
-/* oxlint-disable no-explicit-any -- public driver wrappers restore concrete Drizzle generics. */
-import { type Context, Effect, Layer } from "effect";
-import type * as SqlError from "effect/sql/SqlError";
-
-import {
-  makeSqlPasswordRegistrationAuthority,
+  makeNativePasswordServices,
+  makeNativePasswordRegistrationServices,
+  requireStandalone,
+  type AnyPasswordPersistenceMapping as SharedPasswordMapping,
   type PasswordRegistrationAuthority,
-  type PasswordRegistrationConfiguration,
-} from "./password-registration";
+} from "@yielded/auth-persistence/Adapter";
+import { PasswordPersistence, PasswordUnavailable } from "@yielded/auth/Password";
+import { type Context, Effect, Layer } from "effect";
+
+import { nativeClock } from "./native-clock";
+import type { NativeDatabaseHandle } from "./native-database";
 import {
-  CurrentPasswordSql,
-  makeSqlPasswordPersistence,
-  type PasswordSqlConfiguration,
-  type PasswordSqlDatabase,
-  type PasswordSqlQuery,
-} from "./password-sql";
-import type { ProofTargetConfiguration } from "./proof-target";
-import { sqlClientStandaloneGuard, type TransactionService } from "./standalone-guard";
+  nativeTarget,
+  coordinateNativeTarget,
+  type NativeTargetConfiguration,
+} from "./native-target";
+import type {
+  AnyPasswordPersistenceMapping,
+  AnyPasswordRegistrationMapping,
+} from "./password-model";
+import type { AnyProofPersistenceMapping } from "./proof-model";
+import { nativeProofMapping } from "./proof-target";
 import { validateDrizzleStorage } from "./storage-validation";
 
-export interface PasswordTargetConfiguration {
-  readonly mode: "interactive" | "synchronous";
-  readonly locking: boolean;
-  readonly standaloneGuard: Effect.Effect<void, PasswordUnavailable>;
-  readonly coordinatorGuard?: Effect.Effect<void, PasswordUnavailable>;
-  readonly insertIfAbsent: (
-    query: PasswordSqlQuery,
-    selfKey: string,
-    selfValue: unknown,
-  ) => PasswordSqlQuery;
-  readonly generatedSubjectRows: (query: PasswordSqlQuery) => PasswordSqlQuery;
-  readonly proof: ProofTargetConfiguration;
-}
+const unavailable = () => PasswordUnavailable.make({});
 
-interface TransactionOwner<Transaction> {
-  readonly transaction: <A, E, R>(
-    body: (transaction: Transaction) => Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E | SqlError.SqlError, R>;
-}
+export const sqlClientPasswordStandaloneGuard = (marker: Parameters<typeof requireStandalone>[1]) =>
+  requireStandalone(unavailable, marker);
 
-export type PasswordCoordinatorError<E> =
-  | E
-  | PasswordUnavailable
-  | HookConfigurationError
-  | SqlError.SqlError;
-
-export const sqlClientPasswordStandaloneGuard = (
-  service: TransactionService | undefined,
-): Effect.Effect<void, PasswordUnavailable> =>
-  sqlClientStandaloneGuard(service, () => PasswordUnavailable.make({}));
-
-export const passwordOptions = (
-  configuration: PasswordTargetConfiguration,
-  proofMapping?: any,
-  coordinated = false,
-): PasswordSqlConfiguration => ({
-  mode: configuration.mode,
-  locking: configuration.locking,
-
-  standaloneGuard: !coordinated ? configuration.standaloneGuard : Effect.void,
-  insertIfAbsent: configuration.insertIfAbsent,
-  coordinated,
-  ...(proofMapping === undefined
-    ? {}
-    : {
-        proof: {
-          mapping: proofMapping,
-          configuration: {
-            mode: configuration.proof.mode,
-            locking: configuration.proof.locking,
-
-            standaloneGuard: Effect.void,
-
-            coordinated,
-            insertIfAbsent: configuration.proof.insertIfAbsent,
-          },
-        },
-      }),
+const mapped = (value: AnyPasswordPersistenceMapping): SharedPasswordMapping => ({
+  ...value,
+  clock: nativeClock(value.clock),
 });
 
-const registrationOptions = (
-  configuration: PasswordTargetConfiguration,
-  coordinated = false,
-): PasswordRegistrationConfiguration => ({
-  mode: configuration.mode,
-  locking: configuration.locking,
+export const makeTargetPasswordPersistenceServices = Effect.fnUntraced(function* (
+  mapping: AnyPasswordPersistenceMapping,
+  configuration: NativeTargetConfiguration,
+  proofs?: AnyProofPersistenceMapping,
+) {
+  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+  if (proofs !== undefined)
+    yield* validateDrizzleStorage(proofs).pipe(Effect.mapError(unavailable));
+  if (
+    configuration.mode === "batch" &&
+    (mapping.d1?.primary !== true || (proofs !== undefined && proofs.d1?.primary !== true))
+  )
+    return yield* unavailable();
+  const target = yield* nativeTarget(configuration);
 
-  standaloneGuard: !coordinated ? configuration.standaloneGuard : Effect.void,
-  generatedSubjectRows: configuration.generatedSubjectRows,
-  coordinated,
+  return yield* target.provide(
+    makeNativePasswordServices(
+      target.tables,
+      mapped(mapping),
+      proofs === undefined ? undefined : nativeProofMapping(proofs),
+    ),
+  );
 });
 
-export const makeTargetPasswordPersistenceServices = (
-  mapping: any,
-  configuration: PasswordTargetConfiguration,
-  proofMapping?: any,
-) =>
-  Effect.gen(function* () {
-    return {
-      passwordPersistence: yield* makeSqlPasswordPersistence(
-        mapping,
-        passwordOptions(configuration, proofMapping),
-      ),
-    };
-  });
+export const makeTargetPasswordRegistrationServices = Effect.fnUntraced(function* <Registration>(
+  mapping: AnyPasswordRegistrationMapping<Registration>,
+  configuration: NativeTargetConfiguration,
+) {
+  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+  const target = yield* nativeTarget(configuration);
 
-export const makeTargetPasswordRegistrationServices = <Registration>(
-  mapping: any,
-  configuration: PasswordTargetConfiguration,
-) =>
-  Effect.gen(function* () {
-    return {
-      registrationAuthority: yield* makeSqlPasswordRegistrationAuthority<Registration>(
-        mapping,
-        registrationOptions(configuration),
-      ),
-    };
-  });
+  return yield* target.provide(
+    makeNativePasswordRegistrationServices(target.tables, mapping, target.batch),
+  );
+});
 
-/** Native transaction acquisition exposes SqlError; caller errors propagate unchanged. */
 export const coordinateTargetPasswordPersistence = <Transaction, A, E, R>(
-  database: TransactionOwner<Transaction>,
-  mapping: any,
-  configuration: PasswordTargetConfiguration,
-  proofMapping: any | undefined,
-  owner: (
+  database: NativeDatabaseHandle,
+  mapping: AnyPasswordPersistenceMapping,
+  configuration: NativeTargetConfiguration,
+  body: (
     transaction: Transaction,
     services: { readonly passwordPersistence: PasswordPersistence["Service"] },
   ) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, PasswordCoordinatorError<E>, R | LifecycleHooks | NativeDatabase> =>
-  Effect.gen(function* (): Effect.fn.Return<
-    A,
-    PasswordCoordinatorError<E>,
-    R | LifecycleHooks | NativeDatabase
-  > {
-    const hooks = yield* LifecycleHooks;
-
-    if (yield* hasCommitScope) return yield* PasswordUnavailable.make({});
-    yield* configuration.coordinatorGuard ?? configuration.standaloneGuard;
-
-    yield* validateDrizzleStorage({ ...mapping, proof: proofMapping }).pipe(
-      Effect.mapError(() => PasswordUnavailable.make({})),
-    );
-
-    const result = yield* coordinateCommit(
-      () =>
-        database.transaction((transaction) =>
-          Effect.gen(function* () {
-            return yield* owner(transaction, {
-              passwordPersistence: yield* makeSqlPasswordPersistence(
-                mapping,
-                passwordOptions(configuration, proofMapping, true),
-              ).pipe(
-                Effect.provideService(
-                  CurrentPasswordSql,
-                  transaction as unknown as PasswordSqlDatabase,
-                ),
-              ),
-            });
-          }),
-        ),
-      { mode: configuration.mode },
-    ).pipe(Effect.provideService(LifecycleHooks, hooks));
-
-    return result.value;
-  });
+  proofs?: AnyProofPersistenceMapping,
+) =>
+  coordinateNativeTarget(
+    unavailable,
+    database,
+    configuration,
+    makeTargetPasswordPersistenceServices(mapping, configuration, proofs),
+    body,
+  );
 
 export const coordinateTargetPasswordRegistration = <Registration, Transaction, A, E, R>(
-  database: TransactionOwner<Transaction>,
-  mapping: any,
-  configuration: PasswordTargetConfiguration,
-  owner: (
+  database: NativeDatabaseHandle,
+  mapping: AnyPasswordRegistrationMapping<Registration>,
+  configuration: NativeTargetConfiguration,
+  body: (
     transaction: Transaction,
-    services: {
-      readonly registrationAuthority: PasswordRegistrationAuthority<Registration>;
-    },
+    services: { readonly registrationAuthority: PasswordRegistrationAuthority<Registration> },
   ) => Effect.Effect<A, E, R>,
-): Effect.Effect<A, PasswordCoordinatorError<E>, R | LifecycleHooks | NativeDatabase> =>
-  Effect.gen(function* (): Effect.fn.Return<
-    A,
-    PasswordCoordinatorError<E>,
-    R | LifecycleHooks | NativeDatabase
-  > {
-    const hooks = yield* LifecycleHooks;
-
-    if (yield* hasCommitScope) return yield* PasswordUnavailable.make({});
-    yield* configuration.coordinatorGuard ?? configuration.standaloneGuard;
-
-    yield* validateDrizzleStorage(mapping).pipe(
-      Effect.mapError(() => PasswordUnavailable.make({})),
-    );
-
-    const result = yield* coordinateCommit(
-      () =>
-        database.transaction((transaction) =>
-          Effect.gen(function* () {
-            return yield* owner(transaction, {
-              registrationAuthority: yield* makeSqlPasswordRegistrationAuthority<Registration>(
-                mapping,
-                registrationOptions(configuration, true),
-              ).pipe(
-                Effect.provideService(
-                  CurrentPasswordSql,
-                  transaction as unknown as PasswordSqlDatabase,
-                ),
-              ),
-            });
-          }),
-        ),
-      { mode: configuration.mode },
-    ).pipe(Effect.provideService(LifecycleHooks, hooks));
-
-    return result.value;
-  });
+) =>
+  coordinateNativeTarget(
+    unavailable,
+    database,
+    configuration,
+    makeTargetPasswordRegistrationServices(mapping, configuration),
+    body,
+  );
 
 export const passwordPersistenceLayer = <E, R>(
   services: Effect.Effect<{ readonly passwordPersistence: PasswordPersistence["Service"] }, E, R>,
@@ -230,7 +113,7 @@ export const passwordPersistenceLayer = <E, R>(
   );
 
 export const passwordRegistrationLayer = <Id, Registration, E, R>(
-  tag: Context.Key<Id, PasswordRegistrationAuthority<Registration>>,
+  target: Context.Key<Id, PasswordRegistrationAuthority<Registration>>,
   services: Effect.Effect<
     { readonly registrationAuthority: PasswordRegistrationAuthority<Registration> },
     E,
@@ -238,6 +121,6 @@ export const passwordRegistrationLayer = <Id, Registration, E, R>(
   >,
 ) =>
   Layer.effect(
-    tag,
+    target,
     Effect.map(services, (value) => value.registrationAuthority),
   );

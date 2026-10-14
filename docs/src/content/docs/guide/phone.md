@@ -36,7 +36,6 @@ or `policy` only to change that behavior. Keys and delivery come from Layers.
 
 With `Effect` imported from `effect`, supply the request's host-verified network key:
 
-<!-- prettier-ignore -->
 ```ts
 const auth = yield* AppAuth;
 const started = yield* auth.signIn({ phoneNumber, locale: "en" }).pipe(
@@ -57,7 +56,6 @@ from private request credentials. In a shared action, map it with
 `requestFields: { requestBinding: "request-binding" }`; the named server and client
 calls then take only the public fields.
 
-<!-- prettier-ignore -->
 ```ts
 const auth = yield* AppAuth;
 const result = yield* auth.completeSignIn({
@@ -71,28 +69,28 @@ const result = yield* auth.completeSignIn({
 );
 ```
 
-```text
-signIn({ phoneNumber })
-  → SMS + private request binder
-  → user enters code
-  → completeSignIn(original flow, binder, reference, code)
-  → session or additional-factor result
-```
+Grant access only when the result is `Authenticated`; otherwise complete the
+required additional factor. A consumed code cannot be reused if session issuance
+fails: start a new ceremony. The strategy's lower-level `operations.SignIn` accepts
+the original flow and private `requestBinding` for resends after cooldown. The
+convenience `signIn` call starts a new flow, which cannot replace a live code.
+SMS proves possession, without phishing resistance.
 
-A consumed code cannot be reused if session issuance subsequently fails. Request
-a new code. SMS proves possession; it does not provide phishing resistance.
+`PhoneAdmission.layer(policy)` controls network and message limits. Defaults are
+10 requests and 100 attempts per network per minute, plus 10 message reservations
+per instance per minute. Suppressed requests count too. [Share network limits](./passwords#share-rate-limits)
+across replicas or per-request runtimes; the message budget stays per instance.
+See [proof limits](./codes#proof-expiry-and-rate-limits) for expiry and cooldown.
 
 ## Supply the services
 
 The strategy handles code generation and verification. Supply these implementations:
 
-| Layer or service           | What it does                                                        | Where it comes from                           |
-| -------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
-| `PhonePersistenceLive`     | Finds the account for a phone number and enforces admission limits. | Your database, using a library adapter below. |
-| `ProofPersistenceLive`     | Stores code digests, expiry, failed attempts, and consumption.      | Your database, using a library adapter below. |
-| `PhoneDeliveryEligibility` | Decides which destination numbers you support.                      | Your application policy.                      |
-| `SessionClaims`            | Returns the session fields declared in `AppAuth.claims`.            | Your application.                             |
-| `SmsDelivery`              | Sends the message.                                                  | `Twilio.layer` or another transport.          |
+- **`PhonePersistenceLive`**: Finds the account and owns protected number changes. Your database, using a library adapter below.
+- **`ProofPersistenceLive`**: Stores code digests, expiry, failed attempts, and consumption. Your database, using a library adapter below.
+- **`PhoneDeliveryEligibility`**: Decides which destination numbers you support. Your application policy.
+- **`SessionClaims`**: Returns the session fields declared in `AppAuth.claims`. Your application.
+- **`SmsDelivery`**: Sends the message. `Twilio.layer` or another transport.
 
 `PhonePersistenceLive` and `ProofPersistenceLive` are names for the Layers you build
 below, not package exports. The adapters implement the storage operations; you
@@ -157,13 +155,10 @@ account fields to claims, accept `resolve: ({ subjectId }) => …` and query you
 instead of `from` for a Twilio Messaging Service. The adapter uses Effect HTTP and
 requires no Twilio SDK.
 
-`AuthDependencies` is defined in the [shared application composition](../reference/adapters#compose-the-application-layer).
-It supplies session storage, account authority, request-binding configuration, and
-`ProofKeys`. Web Crypto, empty lifecycle hooks, and a bounded delivery worker have
-defaults. Database storage, destination policy, claims, and delivery have no automatic
-implementations. Build Auth in an application scope that outlives requests; the built-in
-worker keeps SMS provider latency outside the response path without extra wiring.
-See [delivery lifetime and overrides](./email-delivery#compose-auth), which also apply to SMS.
+`AuthDependencies` supplies shared [crypto, session, account, and key configuration](../reference/adapters#compose-the-application-layer).
+Build Auth in a scope that outlives requests so its SMS delivery worker can finish.
+The [delivery lifetime and retry limits](./email-delivery#compose-auth) also apply
+to SMS.
 
 <details>
 <summary>Customize the SMS message</summary>
@@ -205,7 +200,9 @@ a number change. Start with `auth.begin(input)` and finish with
 `auth.completeLifecycle(input)`. Supply `PhoneRequestContext`
 for each request, as for sign-in.
 
-Do not link accounts because their phone strings match. See the
+Changing a number permanently retires its old identifier; a later registration
+cannot adopt it. Reassignment requires independently authorized recovery, never
+account linking based only on matching phone strings. See the
 [complete phone composition](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/phone-sqlite-bun.ts).
 
 </details>

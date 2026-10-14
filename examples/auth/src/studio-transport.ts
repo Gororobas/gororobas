@@ -1,5 +1,4 @@
 import {
-  Hooks,
   OperationHttp as Http,
   Operations,
   PasskeyContract,
@@ -26,13 +25,6 @@ export const MemberProfile = Operations.makeOperation("studio/member-profile", {
   replay: "read-only",
 });
 
-export const memberPlugin = Hooks.pluginContributions({
-  id: "studio/member-profile",
-  operations: [MemberProfile],
-  hooks: [],
-  routes: [],
-});
-
 const modules = {
   passkey: PasskeyContract.make("studio/passkey", sessions),
   registration: PasskeyContract.makeRegistration("studio/passkey", registrationSchema),
@@ -57,7 +49,7 @@ export const transport = Http.make({
   }),
   completeKey: Http.route(modules.keys.operations.Complete, {
     path: "/auth/keys/complete",
-    credentials: { actionProof: "session", bindingCredential: "request-binding" },
+    credentials: { bindingCredential: "request-binding" },
   }),
   listKeys: Http.route(modules.keys.operations.List, { path: "/auth/keys/list" }),
   renameKey: Http.route(modules.keys.operations.Rename, { path: "/auth/keys/rename" }),

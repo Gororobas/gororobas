@@ -187,7 +187,7 @@ const acquire = Effect.fn("Client.make")(function* <Actions extends AuthActions,
 
               if (subject !== undefined && subject !== state.subject) {
                 yield* transport.transition;
-                yield* publish(subject);
+                yield* publish(subject, String(name), callOptions?.origin);
               }
             }),
           ),

@@ -12,7 +12,6 @@ export const registrationSchema = Schema.Struct({
 
 export const profile = Passkey.PasskeyProfile.make({
   profileId: "primary",
-  generation: 1,
   rpId: "localhost",
   rpName: "Design Studio",
   origins: ["http://localhost:4179"],
@@ -25,13 +24,8 @@ export const profile = Passkey.PasskeyProfile.make({
 });
 
 export const policy = Passkey.PasskeyMethodPolicy.make({
-  generation: 1,
   profiles: [profile],
   lifetimeMillis: 120000,
-  claimLifetimeMillis: 60000,
-  retentionMillis: 86400000,
-  maximumPending: 100,
-  maximumPendingPerSubject: 10,
   admission: {
     global: { limit: 1000, windowMillis: 60000 },
     subject: { limit: 100, windowMillis: 60000 },

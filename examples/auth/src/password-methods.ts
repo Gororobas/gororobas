@@ -1,9 +1,18 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Auth, EmailDelivery, Hooks, Operations, Password, Proofs, WebCrypto } from "@yielded/auth";
-import * as PasswordCrypto from "@yielded/auth-crypto/Password";
+import {
+  Auth,
+  EmailDelivery,
+  Hooks,
+  Operations,
+  Password,
+  Proofs,
+  Sessions,
+  WebCrypto,
+} from "@yielded/auth";
 import { DateTime, Effect, Layer, Redacted } from "effect";
 import { Base64Url } from "effect/encoding";
 
+import { CryptoLive } from "../../shared/crypto";
 import {
   makePasswordConsumer,
   passwordAuth,
@@ -11,10 +20,7 @@ import {
   sessionPolicy,
 } from "./password-method-consumer";
 
-const hashing = PasswordCrypto.layer().pipe(
-  Layer.provide(Password.PasswordKdfAdmission.layer()),
-  Layer.provide(WebCrypto.layerWebCrypto),
-);
+const hashing = Password.PasswordHashing.layer().pipe(Layer.provide(CryptoLive));
 
 const base = Layer.mergeAll(
   WebCrypto.layerWebCrypto,
@@ -47,16 +53,21 @@ const program = Effect.gen(function* () {
   };
 
   const strategy = sessions
-    .statelessLayer(sessionPolicy, {
-      activeKeyId: "example",
-      keys: [
-        {
-          id: "example",
-          // Demo-only key material. Production requires independently generated random keys.
-          material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
-        },
-      ],
-    })
+    .statelessLayer(sessionPolicy)
+    .pipe(
+      Layer.provide(
+        Layer.succeed(Sessions.SessionSigningKeys, {
+          activeKeyId: "example",
+          keys: [
+            {
+              id: "example",
+              // Demo-only key material. Production requires independently generated random keys.
+              material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
+            },
+          ],
+        }),
+      ),
+    )
     .pipe(Layer.provide(base));
 
   const completion = sessions
@@ -173,26 +184,13 @@ const program = Effect.gen(function* () {
     if (!resetUrl) return yield* Effect.die("reset link missing from email");
     const extracted = yield* EmailDelivery.parseLinkFragment(Redacted.make(new URL(resetUrl).hash));
 
-    const proof = yield* auth.verifyReset({
-      flowId: "reset-flow",
-      email,
-      reference: request.reference,
-      secret: Redacted.value(extracted.secret),
-    });
-
-    const continuation = [...collector]
-      .reverse()
-      .find((command) => command._tag === "Issue" && command.slot === "proof-continuation");
-
-    if (continuation?._tag !== "Issue") return yield* Effect.die("private continuation missing");
-
     const resetInput = {
       flowId: "reset-flow",
       email,
       commandId: "reset-command",
       newPassword: resetPassword,
-      continuationId: proof.continuation.continuationId,
-      credential: Redacted.value(continuation.credential),
+      reference: request.reference,
+      secret: Redacted.value(extracted.secret),
     };
 
     yield* auth.completeReset(resetInput);

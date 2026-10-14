@@ -1,33 +1,43 @@
-import { Cause, Context, DateTime, Effect, Layer, Redacted, Schema, type Types } from "effect";
+import {
+  Result,
+  Cause,
+  Context,
+  DateTime,
+  Effect,
+  Layer,
+  Redacted,
+  Schema,
+  type Types,
+} from "effect";
 
 import { defaultLayer } from "../auth/defaults";
-import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
+import {
+  prepareCommit,
+  hasCommitScope,
+  type CommitJournal,
+  type PreparedCommit,
+} from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
 import {
   HookDenied,
   LifecycleEventId,
   type LifecycleAction,
-  lifecycleEvent,
-  lifecycleSnapshot,
+  lifecycleEventEffect,
+  lifecycleSnapshotEffect,
 } from "../hooks/models";
 import { reportAuthFailure } from "../internal/diagnostics";
-import type { AuthOperationResult } from "../operations/credentials";
 import { makeOperation, operationGroup } from "../operations/operation";
+import { CleanupLimit, CleanupResult } from "../persistence/cleanup";
 import { Locale } from "../Schema";
-import type { ProofCompletionPlan } from "./completion";
+import { proofAbuseScope } from "./abuse";
 import {
   makeProofCrypto,
   proofKeysFor,
   type ProofSecretPolicy,
   validateProofBinding,
 } from "./crypto";
-import type { ProofDelivery } from "./delivery";
-import {
-  type PreparedProofDispatch,
-  type ProofIssuePlan,
-  makeProofDispatch,
-  readProofCommit,
-} from "./dispatch";
+import type { ProofDelivery, ProofDeliveryMessage } from "./delivery";
+import { type PreparedProofDispatch, type ProofIssuePlan, readProofCommit } from "./dispatch";
 import { EmailProofDelivery, emailProofDeliveryLayer } from "./EmailProofDelivery";
 import {
   ProofCapabilityUnsupported,
@@ -37,22 +47,21 @@ import {
   ProofUnavailable,
 } from "./errors";
 import {
-  type ProofCompletionDecision,
+  type ProofRedemptionDecision,
   type ProofBinding,
-  ProofCleanupResult,
-  ProofContinuation,
-  ProofContinuationId,
+  type ProofIssueRecord,
   ProofDeliveryId,
   ProofId,
   ProofPurpose,
   ProofReference,
   ProofRequestId,
   ProofRequestReceipt,
-  ProofVersion,
 } from "./models";
 import { type ProofPolicy, validateProofPolicy } from "./policy";
 import { ProofDispatchScheduler } from "./ProofDispatchScheduler";
-import { ProofPersistence, type ProofRecord } from "./ProofPersistence";
+import { ProofLimiter, defaultProofLimiterLayer } from "./ProofLimiter";
+import { ProofPersistence } from "./ProofPersistence";
+import type { ProofRedemptionPlan } from "./redemption";
 import { SmsProofDelivery } from "./SmsProofDelivery";
 
 export interface ProofModule<Id extends string, Binding> {
@@ -134,44 +143,27 @@ export const makeProofModule = <
     eligible: Schema.Boolean,
   });
 
-  const ResendInput = Schema.Struct({ ...RequestInput.fields, supersedes: ProofId });
-
-  const AttemptInput = Schema.Struct({
+  const RedeemInput = Schema.Struct({
     reference: ProofReference,
     binding: BindingCodec,
     credential: Credential,
   });
 
-  const CompleteInput = Schema.Struct({
-    continuationId: ProofContinuationId,
-    binding: BindingCodec,
-    credential: Credential,
-  });
-
-  const Accepted = Schema.TaggedStruct("Accepted", { continuation: ProofContinuation });
-
-  type Accepted = typeof Accepted.Type;
-  type IssueInput = typeof RequestInput.Type & { readonly supersedes?: ProofId };
-  type PrivateAttempt =
-    | AuthOperationResult<Accepted>
-    | { readonly value: { readonly _tag: "Rejected" }; readonly credentialCommands: readonly [] };
+  type IssueInput = typeof RequestInput.Type;
   type Failure = ProofError | HookDenied;
   type Service = {
     readonly planIssue: (input: IssueInput) => Effect.Effect<ProofIssuePlan, Failure>;
     readonly prepareIssue: (
       input: IssueInput,
     ) => Effect.Effect<PreparedCommit<PreparedProofDispatch>, Failure>;
-    readonly prepareAttempt: (
-      input: typeof AttemptInput.Type,
-    ) => Effect.Effect<PreparedCommit<PrivateAttempt>, Failure>;
-    readonly planComplete: (
-      input: typeof CompleteInput.Type,
-    ) => Effect.Effect<ProofCompletionPlan, Failure>;
-    readonly prepareComplete: (
-      input: typeof CompleteInput.Type,
-    ) => Effect.Effect<PreparedCommit<ProofCompletionDecision>, Failure>;
+    readonly planRedeem: (
+      input: typeof RedeemInput.Type,
+    ) => Effect.Effect<ProofRedemptionPlan, Failure>;
+    readonly prepareRedeem: (
+      input: typeof RedeemInput.Type,
+    ) => Effect.Effect<PreparedCommit<ProofRedemptionDecision>, Failure>;
     readonly cancel: (binding: BindingValue) => Effect.Effect<PreparedCommit<void>, Failure>;
-    readonly cleanup: (limit: number) => Effect.Effect<PreparedCommit<ProofCleanupResult>, Failure>;
+    readonly cleanup: (limit: number) => Effect.Effect<PreparedCommit<CleanupResult>, Failure>;
   };
 
   const Proofs = Context.Service<ProofModule<Id, BindingValue>, Service>(
@@ -197,12 +189,6 @@ export const makeProofModule = <
         const policy = yield* validateProofPolicy(options.policy);
         const delivery = yield* deliveryKey;
 
-        if (
-          policy.maximumDeliveryAttempts > 1 &&
-          delivery.vendor.idempotencyMillis < policy.lifetimeMillis
-        )
-          return yield* ProofConfigurationError.make({ reason: "delivery" });
-
         const crypto = yield* makeProofCrypto(
           moduleId,
           options.purpose,
@@ -212,12 +198,7 @@ export const makeProofModule = <
 
         const store = yield* ProofPersistence;
         const scheduler = yield* ProofDispatchScheduler;
-
-        // Bind only owned services; dispatch still observes its execution-time commit scope.
-        const dispatchServices = Context.make(ProofPersistence, store).pipe(
-          Context.add(deliveryKey, delivery),
-        );
-
+        const limiter = yield* ProofLimiter;
         const hooks = yield* LifecycleHooks;
 
         const services = yield* Effect.context<
@@ -238,30 +219,30 @@ export const makeProofModule = <
           action: LifecycleAction,
           binding: ProofBinding,
         ) {
-          const snapshot = lifecycleSnapshot({
+          const snapshot = yield* lifecycleSnapshotEffect({
             action,
             operation: `${moduleId}/${action}`,
             identifiers: [binding.identifier],
             ...(binding._tag === "Identifier" ? {} : { subjectId: binding.revision.subjectId }),
-          });
+          }).pipe(Effect.orDie);
 
           yield* hooks.before(snapshot);
 
-          return lifecycleEvent({
+          return yield* lifecycleEventEffect({
             id: LifecycleEventId.make(Redacted.value(yield* crypto.generateOpaque())),
             occurredAtMillis: DateTime.toEpochMillis(yield* DateTime.now),
             snapshot,
-          });
+          }).pipe(Effect.orDie);
         });
 
-        const planIssue = Effect.fn("Proofs.planIssue")(function* (request: IssueInput) {
+        const planIssue = Effect.fn("Proofs.planIssue")(function* (
+          request: IssueInput,
+        ): Effect.fn.Return<ProofIssuePlan, Failure> {
           const binding = yield* projectBinding(request.binding);
 
           const eligible = yield* Schema.decodeEffect(Schema.Boolean)(request.eligible).pipe(
             Effect.mapError(() => ProofInvalid.make({})),
           );
-
-          const supersedes = request.supersedes;
 
           const locale = yield* Schema.decodeEffect(Locale)(request.locale).pipe(
             Effect.mapError(() => ProofInvalid.make({})),
@@ -271,19 +252,25 @@ export const makeProofModule = <
             Effect.mapError(() => ProofInvalid.make({})),
           );
 
-          const fingerprint = yield* crypto.fingerprint(
-            binding,
-            {
-              channel: options.channel,
-              vendor: delivery.vendor.vendorId,
-              template: options.template,
-              locale,
-            },
-            supersedes,
-          );
+          const admitted = yield* limiter
+            .check({
+              kind: "issue",
+              scope: proofAbuseScope(moduleId, options.purpose, binding),
+              policy: policy.abuse,
+            })
+            .pipe(
+              Effect.as(true),
+              Effect.catchTag("ProofIngressDenied", () => Effect.succeed(false)),
+            );
 
           const proofId = ProofId.make(Redacted.value(yield* crypto.generateOpaque()));
-          const reference = { proofId, purpose: options.purpose, keyId: crypto.activeKeyId };
+
+          const reference = Object.freeze({
+            proofId,
+            purpose: options.purpose,
+            keyId: crypto.activeKeyId,
+          });
+
           const before = yield* eventFor("proof-request", binding).pipe(Effect.result);
 
           if (
@@ -295,116 +282,129 @@ export const makeProofModule = <
           const verifier = yield* crypto.digest(proofId, binding, secret, crypto.activeKeyId);
 
           if (verifier === undefined) return yield* ProofUnavailable.make({});
-          const issuedAtMillis = DateTime.toEpochMillis(yield* DateTime.now);
 
-          const record: ProofRecord = {
+          const record: ProofIssueRecord = {
             moduleId,
             purpose: options.purpose,
             proofId,
-            requestId,
-            fingerprint,
-            deliveryId: ProofDeliveryId.make(proofId),
             binding,
             verifier,
-            issuedAtMillis,
-            expiresAtMillis: issuedAtMillis + policy.lifetimeMillis,
-            version: ProofVersion.make(Redacted.value(yield* crypto.generateOpaque())),
           };
 
-          const message = {
-            deliveryId: record.deliveryId,
-            purpose: options.purpose,
-            reference,
-            recipient: binding.identifier,
-            secret,
-            format: crypto.format,
-            expiresAtMillis: record.expiresAtMillis,
-            template: options.template,
-            locale,
-          };
+          // Allocate both once guards before the synchronous owner callback. The
+          // message is installed only for a confirmed issued result; no receipt can
+          // expose scheduling until its physical owner has committed.
+          let message: ProofDeliveryMessage | undefined;
 
-          return {
-            commit: store.issue(
-              {
-                record,
-                policy,
-                eligible: eligible && before._tag === "Success",
-                ...(supersedes === undefined ? {} : { supersedes }),
-              },
-              (decision, journal) => {
-                if (
-                  decision._tag === "Issued" &&
-                  (decision.record.proofId !== record.proofId ||
-                    decision.record.verifier.digest !== record.verifier.digest ||
-                    decision.record.verifier.keyId !== record.verifier.keyId ||
-                    decision.record.version !== record.version ||
-                    decision.record.fingerprint !== record.fingerprint)
-                )
-                  throw ProofUnavailable.make({});
-                if (decision._tag === "Issued") {
-                  if (before._tag !== "Success") throw ProofUnavailable.make({});
-                  journal.stage(before.success);
-                }
-
-                const prepared =
-                  decision._tag === "Issued"
-                    ? makeProofDispatch(deliveryKey, record, message, policy)
-                    : { receipt: decision.receipt, dispatch: Effect.void };
-
-                const work = prepared.dispatch.pipe(
-                  Effect.provide(dispatchServices),
-                  Effect.asVoid,
-                  Effect.catchCause((cause) =>
-                    reportAuthFailure("proof-delivery", cause).pipe(
-                      Effect.andThen(Cause.hasInterrupts(cause) ? Effect.interrupt : Effect.void),
-                    ),
-                  ),
-                  Effect.withTracerEnabled(false),
-                );
-
-                return journal.prepare(
-                  Object.freeze({
-                    receipt: prepared.receipt,
-                    // Admission is identical for issued, suppressed and replayed receipts.
-                    schedule: noAmbient().pipe(Effect.andThen(() => scheduler.schedule(work))),
-                  }),
-                );
-              },
+          const work = yield* Effect.cached(
+            Effect.suspend(() =>
+              message === undefined ? Effect.void : delivery.send(message),
+            ).pipe(
+              Effect.asVoid,
+              Effect.catchCause((cause) =>
+                reportAuthFailure("proof-delivery", cause).pipe(
+                  Effect.andThen(Cause.hasInterrupts(cause) ? Effect.interrupt : Effect.void),
+                ),
+              ),
+              Effect.withTracerEnabled(false),
             ),
-          };
-        });
-
-        const planComplete = Effect.fn("Proofs.planComplete")(function* (
-          request: typeof CompleteInput.Type,
-        ): Effect.fn.Return<ProofCompletionPlan, Failure> {
-          const binding = yield* projectBinding(request.binding);
-          const event = yield* eventFor("proof-completion", binding);
-
-          const digest = yield* crypto.continuationDigest(
-            request.continuationId,
-            binding,
-            request.credential,
           );
 
-          if (digest === undefined) return yield* ProofInvalid.make({});
+          const schedule = yield* Effect.cached(scheduler.schedule(work));
+
+          const commit = yield* Effect.cached(
+            store.issue(
+              {
+                record,
+                lifetimeMillis: policy.lifetimeMillis,
+                resendCooldownMillis: policy.abuse.resendCooldownMillis,
+                eligible: eligible && admitted && before._tag === "Success",
+              },
+              prepareCommit((decision, journal) =>
+                Result.gen(function* () {
+                  if (decision._tag === "Issued") {
+                    if (
+                      before._tag !== "Success" ||
+                      !admitted ||
+                      !eligible ||
+                      decision.record.proofId !== proofId ||
+                      decision.record.moduleId !== moduleId ||
+                      decision.record.purpose !== options.purpose ||
+                      decision.record.verifier.digest !== verifier.digest ||
+                      decision.record.verifier.keyId !== verifier.keyId ||
+                      decision.record.expiresAtMillis - decision.record.issuedAtMillis !==
+                        policy.lifetimeMillis ||
+                      JSON.stringify(decision.record.binding) !== JSON.stringify(binding)
+                    )
+                      return yield* Result.fail(ProofUnavailable.make({}));
+                    journal.stage(before.success);
+                    message = Object.freeze({
+                      deliveryId: ProofDeliveryId.make(proofId),
+                      purpose: options.purpose,
+                      reference,
+                      recipient: Object.freeze(binding.identifier),
+                      secret,
+                      format: crypto.format,
+                      expiresAtMillis: decision.record.expiresAtMillis,
+                      template: options.template,
+                      locale,
+                    });
+                  }
+
+                  return journal.prepare(
+                    Object.freeze({
+                      receipt: Object.freeze({ requestId, reference }),
+                      // Suppression uses the same scheduler boundary with a no-op task.
+                      schedule: noAmbient().pipe(Effect.andThen(schedule)),
+                    }),
+                  );
+                }),
+              ),
+            ),
+          );
+
+          return { commit };
+        });
+
+        const planRedeem = Effect.fn("Proofs.planRedeem")(function* (
+          request: typeof RedeemInput.Type,
+        ): Effect.fn.Return<ProofRedemptionPlan, Failure> {
+          const binding = yield* projectBinding(request.binding);
+
+          yield* limiter.check({
+            kind: "attempt",
+            scope: proofAbuseScope(moduleId, options.purpose, binding),
+            policy: policy.abuse,
+          });
+          const event = yield* eventFor("proof-verification", binding);
+
+          const candidate =
+            request.reference.purpose === options.purpose
+              ? yield* crypto.digest(
+                  request.reference.proofId,
+                  binding,
+                  request.credential,
+                  request.reference.keyId,
+                )
+              : undefined;
 
           return Object.freeze({
             input: Object.freeze({
               moduleId,
               purpose: options.purpose,
-              continuationId: request.continuationId,
-              continuationDigest: digest,
+              proofId: request.reference.proofId,
               binding,
-              nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
+              maximumFailedAttempts: policy.maximumFailedAttempts,
+              ...(candidate === undefined ? {} : { candidate }),
             }),
             prepare: <A>(
-              decision: ProofCompletionDecision,
-              journal: import("../hooks/commit").CommitJournal,
-              project: (decision: ProofCompletionDecision) => A,
+              decision: ProofRedemptionDecision,
+              journal: CommitJournal,
+              project: (decision: ProofRedemptionDecision) => A,
             ) => {
               const value = project(decision);
 
-              if (decision === "completed") journal.stage(event);
+              if (decision === "redeemed") journal.stage(event);
 
               return journal.prepare(value);
             },
@@ -414,75 +414,11 @@ export const makeProofModule = <
         return Proofs.of({
           planIssue,
           prepareIssue: (request) => planIssue(request).pipe(Effect.flatMap((plan) => plan.commit)),
-          prepareAttempt: Effect.fn("Proofs.prepareAttempt")(function* (request) {
-            const binding = yield* projectBinding(request.binding);
-            const event = yield* eventFor("proof-verification", binding);
-
-            const candidate =
-              request.reference.purpose === options.purpose
-                ? yield* crypto.digest(
-                    request.reference.proofId,
-                    binding,
-                    request.credential,
-                    request.reference.keyId,
-                  )
-                : undefined;
-
-            const credential = yield* crypto.generateOpaque();
-
-            const continuationId = ProofContinuationId.make(
-              Redacted.value(yield* crypto.generateOpaque()),
-            );
-
-            const continuationDigest = yield* crypto.continuationDigest(
-              continuationId,
-              binding,
-              credential,
-            );
-
-            if (continuationDigest === undefined) return yield* ProofUnavailable.make({});
-
-            return yield* store.attempt<PrivateAttempt>(
-              {
-                moduleId,
-                purpose: options.purpose,
-                proofId: request.reference.proofId,
-                binding,
-                ...(candidate === undefined ? {} : { candidate }),
-                continuationId,
-                continuationDigest,
-                nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
-                policy,
-              },
-              (decision, journal) => {
-                if (decision._tag === "Rejected")
-                  return journal.prepare({ value: decision, credentialCommands: [] });
-                if (
-                  decision.continuation.continuationId !== continuationId ||
-                  decision.continuation.purpose !== options.purpose
-                )
-                  throw ProofUnavailable.make({});
-                journal.stage(event);
-
-                return journal.prepare({
-                  value: decision,
-                  credentialCommands: [
-                    {
-                      _tag: "Issue" as const,
-                      slot: "proof-continuation" as const,
-                      credential,
-                      expiresAtMillis: decision.continuation.expiresAtMillis,
-                    },
-                  ],
-                });
-              },
-            );
-          }),
-          planComplete,
-          prepareComplete: (request) =>
-            planComplete(request).pipe(
+          planRedeem,
+          prepareRedeem: (request) =>
+            planRedeem(request).pipe(
               Effect.flatMap((plan) =>
-                store.complete(plan.input, (decision, journal) =>
+                store.redeem(plan.input, (decision, journal) =>
                   plan.prepare(decision, journal, (value) => value),
                 ),
               ),
@@ -491,28 +427,25 @@ export const makeProofModule = <
             const binding = yield* projectBinding(input);
 
             return yield* store.cancel(
-              {
-                moduleId,
-                purpose: options.purpose,
-                binding,
-                nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
-              },
+              { moduleId, purpose: options.purpose, binding },
               (_, journal) => journal.prepare(undefined),
             );
           }),
-          cleanup: Effect.fn("Proofs.cleanup")(function* (limit) {
-            yield* Schema.decodeEffect(
-              Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-            )(limit).pipe(Effect.mapError(() => ProofInvalid.make({})));
+          cleanup: Effect.fn("Proofs.cleanup")(function* (input) {
+            const limit = yield* Schema.decodeEffect(CleanupLimit)(input).pipe(
+              Effect.mapError(() => ProofInvalid.make({})),
+            );
 
-            return yield* store.cleanup(
-              { moduleId, nowMillis: DateTime.toEpochMillis(yield* DateTime.now), limit },
-              (decision, journal) => journal.prepare(decision),
+            return yield* store.cleanup({ moduleId, limit }, (decision, journal) =>
+              journal.prepare(decision),
             );
           }),
         });
       }),
-    ).pipe(Layer.provide(defaultLayer(ProofDispatchScheduler, ProofDispatchScheduler.layer)));
+    ).pipe(
+      Layer.provide(defaultLayer(ProofDispatchScheduler, ProofDispatchScheduler.layer)),
+      Layer.provide(defaultProofLimiterLayer),
+    );
 
   const emailLayer = makeLayer(EmailProofDelivery, "email").pipe(
     Layer.provide(emailProofDeliveryLayer(options)),
@@ -526,33 +459,15 @@ export const makeProofModule = <
     success: ProofRequestReceipt,
     error: errors,
     access: "system",
-    replay: "idempotent",
+    replay: "non-idempotent",
   });
 
-  const Resend = makeOperation(`${moduleId}/resend`, {
-    payload: ResendInput,
-    success: ProofRequestReceipt,
-    error: errors,
-    access: "system",
-    replay: "idempotent",
-  });
-
-  const Attempt = makeOperation(`${moduleId}/attempt`, {
-    payload: AttemptInput,
-    success: Accepted,
-    error: errors,
-    access: "system",
-    replay: "single-use",
-    credentials: true,
-  });
-
-  const Complete = makeOperation(`${moduleId}/complete`, {
-    payload: CompleteInput,
+  const Redeem = makeOperation(`${moduleId}/redeem`, {
+    payload: RedeemInput,
     success: Schema.Void,
     error: errors,
     access: "system",
     replay: "single-use",
-    credentials: true,
   });
 
   const Cancel = makeOperation(`${moduleId}/cancel`, {
@@ -564,48 +479,30 @@ export const makeProofModule = <
   });
 
   const Cleanup = makeOperation(`${moduleId}/cleanup`, {
-    payload: Schema.Struct({
-      limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-    }),
-    success: ProofCleanupResult,
+    payload: Schema.Struct({ limit: CleanupLimit }),
+    success: CleanupResult,
     error: errors,
     access: "system",
     replay: "idempotent",
   });
 
-  const requestHandler = Effect.fn("ProofOperation.request")(function* (input: IssueInput) {
-    yield* noAmbient();
-    const dispatch = yield* readProofCommit(yield* (yield* Proofs).prepareIssue(input));
-
-    yield* dispatch.schedule;
-
-    return dispatch.receipt;
-  });
-
   const handlersLayer = Layer.mergeAll(
-    Request.handlerLayer(requestHandler),
-    Resend.handlerLayer(requestHandler),
-    Attempt.credentialHandlerLayer(
-      Effect.fn("ProofOperation.attempt")(function* (input) {
+    Request.handlerLayer(
+      Effect.fn("ProofOperation.request")(function* (input) {
         yield* noAmbient();
-        const result = yield* readProofCommit(yield* (yield* Proofs).prepareAttempt(input));
+        const dispatch = yield* readProofCommit(yield* (yield* Proofs).prepareIssue(input));
 
-        if (result.value._tag === "Rejected") return yield* ProofInvalid.make({});
+        yield* dispatch.schedule;
 
-        return { value: result.value, credentialCommands: result.credentialCommands };
+        return dispatch.receipt;
       }),
     ),
-    Complete.credentialHandlerLayer(
-      Effect.fn("ProofOperation.complete")(function* (input) {
+    Redeem.handlerLayer(
+      Effect.fn("ProofOperation.redeem")(function* (input) {
         yield* noAmbient();
-        const result = yield* readProofCommit(yield* (yield* Proofs).prepareComplete(input));
+        const decision = yield* readProofCommit(yield* (yield* Proofs).prepareRedeem(input));
 
-        if (result === "rejected") return yield* ProofInvalid.make({});
-
-        return {
-          value: undefined,
-          credentialCommands: [{ _tag: "Clear" as const, slot: "proof-continuation" as const }],
-        };
+        if (decision === "rejected") return yield* ProofInvalid.make({});
       }),
     ),
     Cancel.handlerLayer(
@@ -624,7 +521,7 @@ export const makeProofModule = <
     ),
   );
 
-  const operations = { Request, Resend, Attempt, Complete, Cancel, Cleanup };
+  const operations = { Request, Redeem, Cancel, Cleanup };
 
   return Object.freeze({
     Proofs,

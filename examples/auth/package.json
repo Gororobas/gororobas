@@ -25,14 +25,12 @@
     "@effect/sql-sqlite-node": "catalog:",
     "@effect/sql-sqlite-wasm": "catalog:",
     "@yielded/auth": "workspace:*",
-    "@yielded/auth-crypto": "workspace:*",
-    "@yielded/auth-openid-client": "workspace:*",
     "@yielded/auth-persistence": "workspace:*",
     "@yielded/auth-persistence-drizzle": "workspace:*",
     "@yielded/auth-simplewebauthn": "workspace:*",
+    "@yielded/crypto": "workspace:*",
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
-    "openid-client": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "scheduler": "catalog:"
@@ -42,6 +40,8 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "typescript": "catalog:",
-    "vite-plus": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   }
 }

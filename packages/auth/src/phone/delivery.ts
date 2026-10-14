@@ -4,13 +4,13 @@ import { SmsProofDelivery } from "../proofs/SmsProofDelivery";
 import { SmsDelivery } from "../sms/SmsDelivery";
 import { Template } from "./Template";
 
-/** Render inside the durable delivery claim; the transport never receives proof internals. */
+/** Render inside the private, locally once delivery task; the transport never receives proof internals. */
 export const deliveryLayer = Layer.unwrap(
   Effect.gen(function* () {
     const delivery = yield* SmsDelivery;
     const template = yield* Template;
 
-    return SmsProofDelivery.layer({ vendorId: "sms", idempotencyMillis: 0 }, (message) =>
+    return SmsProofDelivery.layer((message) =>
       Effect.suspend(() =>
         delivery.send({
           id: message.deliveryId,

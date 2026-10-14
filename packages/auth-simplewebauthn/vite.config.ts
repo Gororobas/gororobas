@@ -8,5 +8,9 @@ export default defineConfig({
     unbundle: true,
     sourcemap: true,
   },
-  test: { cache: false, silent: "passed-only", include: ["test/**/*.test.ts"] },
+  test: {
+    cache: false,
+    silent: "passed-only",
+    include: ["test/**/*.test.ts"],
+  },
 });

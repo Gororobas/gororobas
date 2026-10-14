@@ -4,7 +4,8 @@ import type { LoginIdentifier } from "../identity/models";
 import type { EmailUnavailable } from "./errors";
 import type { EmailCredentialSnapshot } from "./models";
 
-/** Active subject + verified exact identifier + active configured email credential.
+/** The joined lookup returns the full current active-factor revision vector.
+ * Active subject + verified exact identifier + active configured email credential.
  * Capture their SAME revisions before verification; absent/ineligible returns None.
  * Every identifier change invalidating captured login bumps subject securityRevision
  * atomically because AuthenticationRevision does not contain identifierRevision.

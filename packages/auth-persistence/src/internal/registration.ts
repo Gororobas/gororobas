@@ -1,176 +1,144 @@
-import { randomId } from "@yielded/auth-crypto";
-import { coordinateCommit, hasCommitScope, LifecycleHooks } from "@yielded/auth/Hooks";
-import type { LoginIdentifier } from "@yielded/auth/Identity";
+import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { PasswordUnavailable } from "@yielded/auth/Password";
-import { reportPersistenceFailure } from "@yielded/auth/Persistence";
-import type { SubjectId } from "@yielded/auth/Schema";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { type Context, Effect, Schema } from "effect";
+import { type Context, Crypto, Effect, Schema, Option, Cause } from "effect";
+import { SqlClient } from "effect/sql/SqlClient";
 
-import { PersistenceConfigurationError } from "./configuration";
-import { CurrentPasswordSql } from "./password-kernel";
-import type { QueryOperations } from "./query-operations";
+import { PersistenceConfigurationError, type SubjectProvisioning } from "./configuration";
+import { randomId } from "./crypto";
+import type { AnyPasswordPersistenceMapping } from "./models/password-model";
+import type { NativeSqlTables } from "./native-sql-table";
+import {
+  makeNativePasswordRegistrationStore,
+  PasswordIdentifierTaken,
+} from "./password-registration-native";
 import type { PasswordRegistrationAuthority } from "./registration-contract";
-import type { makeMappings } from "./storage-mapping";
+import { makeSqlCommitExecutor, CurrentSqlCommit, SqlBatchCommit } from "./sql-commit";
 
-class IdentifierTaken extends Schema.TaggedError<IdentifierTaken>()("IdentifierTaken", {}) {}
+const SubjectValues = Schema.Record(Schema.String, Schema.Unknown);
 
-type CreateSubject = (input: {
-  readonly identifier: LoginIdentifier;
-  readonly registration: unknown;
-}) => Effect.Effect<SubjectId, PasswordUnavailable>;
-
-/** Registration reserves the command, provisions the application's subject, and
- * creates the unverified identifier and password in one SQL transaction. Replays
- * always suppress; a public request ID never recovers a private password intent.
- */
-export const makeRegistrationAuthority = Effect.fn("makeRegistrationAuthority")(function* <R>(
-  mappings: ReturnType<typeof makeMappings>,
-  operations: QueryOperations,
-  standalone: Effect.Effect<void, PasswordUnavailable>,
+/** Application provisioning and the unverified identifier/password binding share
+ * one physical owner. Identifier uniqueness arbitrates registration; correlation
+ * request IDs never become a retained credential-issuance receipt. */
+export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
+  tables: NativeSqlTables,
+  mapping: AnyPasswordPersistenceMapping,
   provisioning: Context.Key<R, object>,
   strategy: string,
 ): Effect.fn.Return<
   PasswordRegistrationAuthority<unknown>,
   PersistenceConfigurationError,
-  LifecycleHooks | CurrentPasswordSql | R
+  LifecycleHooks | SqlClient | Crypto.Crypto | SqlBatchCommit | R
 > {
-  const database = yield* CurrentPasswordSql;
-  const hooks = yield* LifecycleHooks;
-  // Core has already decoded registration with the selected strategy's Schema;
-  // the dynamic strategy table erases only that heterogeneous callback signature.
-  const creators = (yield* provisioning) as Readonly<Record<string, CreateSubject>>;
+  const sql = (yield* SqlClient).withoutTransforms();
+  const crypto = yield* Crypto.Crypto;
+  const executor = yield* makeSqlCommitExecutor(() => PasswordUnavailable.make({}));
+  const parent = yield* Effect.serviceOption(CurrentSqlCommit);
+  const batch = yield* SqlBatchCommit;
+  const store = yield* makeNativePasswordRegistrationStore(tables, mapping, batch !== undefined);
+  // The strategy has already decoded its registration Schema. Only its callback
+  // signature is erased by the heterogeneous strategy service map.
+  const creators = (yield* provisioning) as Readonly<Record<string, SubjectProvisioning<unknown>>>;
   const createSubject = creators[strategy];
 
   if (createSubject === undefined)
     return yield* PersistenceConfigurationError.make({
       reason: `Missing subject provisioning for ${strategy}`,
     });
-  const { and, eq, column } = operations;
-  const mapping = mappings.passwords();
-  const receipts = mappings.table("passwordRegistrations");
+  if (batch !== undefined && typeof createSubject === "function")
+    return yield* PersistenceConfigurationError.make({
+      reason: `D1 subject provisioning for ${strategy} requires { values }; return the new subject row instead of inserting it`,
+    });
+  const s = mapping.subject;
+  const subject = tables(s.table);
+  const lock = sql.onDialectOrElse({ sqlite: () => sql``, orElse: () => sql`for update` });
+
+  const run = <A, E, R2>(work: Effect.Effect<A, E, R2>, suppressed: Effect.Effect<A, E, R2>) =>
+    batch !== undefined
+      ? executor.batch(work).pipe(Effect.provideService(SqlBatchCommit, batch))
+      : Option.isSome(parent)
+        ? executor.run(work)
+        : executor
+            .operation(
+              work.pipe(
+                Effect.mapError((error) =>
+                  error instanceof PasswordIdentifierTaken ? error : PasswordUnavailable.make({}),
+                ),
+              ),
+            )
+            .pipe(
+              Effect.catchCause((cause) =>
+                cause.reasons.length > 0 &&
+                cause.reasons.every(
+                  (reason) =>
+                    Cause.isFailReason(reason) && reason.error instanceof PasswordIdentifierTaken,
+                )
+                  ? executor.run(suppressed, "statement")
+                  : Effect.failCause(cause),
+              ),
+              Effect.mapError(() => PasswordUnavailable.make({})),
+            );
 
   return {
-    register: (input, prepare) =>
-      Effect.gen(function* () {
-        if (yield* hasCommitScope) return yield* PasswordUnavailable.make({});
-        yield* standalone;
+    register: (input, project) =>
+      executor.read(store.available(input.identifier)).pipe(
+        Effect.flatMap((existing) =>
+          existing.length !== 0
+            ? executor.run(store.prepare({ _tag: "Suppressed" }, project), "statement")
+            : run(
+                Effect.gen(function* () {
+                  const provisioningInput = {
+                    requestId: input.requestId,
+                    identifier: input.identifier,
+                    registration: input.registration,
+                  };
 
-        const receipt = { moduleId: input.moduleId, requestId: input.requestId };
+                  const row = yield* Effect.gen(function* () {
+                    if (typeof createSubject !== "function")
+                      return yield* createSubject
+                        .values(provisioningInput)
+                        .pipe(Effect.flatMap(Schema.decodeEffect(SubjectValues)));
+                    const subjectId = yield* createSubject(provisioningInput);
+                    const nativeId = yield* mapping.subjectId.toNative(subjectId);
 
-        const suppress = coordinateCommit(
-          (journal) =>
-            database.transaction((tx) =>
-              Effect.gen(function* () {
-                yield* tx.insert(receipts).values(receipt).onConflictDoNothing();
+                    const rows =
+                      yield* sql`select ${subject.fields("registration_subject_")} from ${subject.name} where ${subject.column(s.id)} = ${subject.value(s.id, nativeId)} limit 2 ${lock}`;
 
-                return prepare({ _tag: "Suppressed" }, journal);
-              }),
-            ),
-          { mode: "interactive" },
-        );
+                    if (rows.length !== 1) return yield* PasswordUnavailable.make({});
 
-        const committed = yield* coordinateCommit(
-          (journal) =>
-            database.transaction((tx) =>
-              Effect.gen(function* () {
-                const reserved = yield* tx
-                  .insert(receipts)
-                  .values(receipt)
-                  .onConflictDoNothing()
-                  .returning();
+                    return subject.decode(rows[0]!, "registration_subject_");
+                  });
 
-                if (reserved.length === 0) return prepare({ _tag: "Suppressed" }, journal);
+                  if (!s.isActiveStatus(row[s.status])) return yield* PasswordUnavailable.make({});
+                  const subjectId = yield* mapping.subjectId.toSubject(row[s.id]);
 
-                const identifiers = yield* tx
-                  .select()
-                  .from(mapping.identifier.table)
-                  .where(
-                    and(
-                      eq(
-                        column(mapping.identifier.table, mapping.identifier.namespace),
-                        input.identifier.namespace,
-                      ),
-                      eq(
-                        column(mapping.identifier.table, mapping.identifier.value),
-                        input.identifier.value,
-                      ),
-                    ),
-                  )
-                  .limit(1);
+                  const securityRevision = yield* Schema.decodeUnknownEffect(SecurityRevision)(
+                    row[s.securityRevision],
+                  );
 
-                if (identifiers.length !== 0) return prepare({ _tag: "Suppressed" }, journal);
+                  if (typeof createSubject !== "function")
+                    yield* store.stage(sql`${subject.insert(row)}`);
 
-                const subjectId = yield* createSubject({
-                  identifier: input.identifier,
-                  registration: input.registration,
-                });
+                  const identifierRevision = SecurityRevision.make(yield* randomId);
+                  const credentialId = yield* randomId;
+                  const credentialRevision = SecurityRevision.make(yield* randomId);
+                  const verifierVersion = SecurityRevision.make(yield* randomId);
 
-                const nativeId = yield* mapping.subjectId.toNative(subjectId);
-
-                const subjects = yield* tx
-                  .select()
-                  .from(mapping.subject.table)
-                  .where(eq(column(mapping.subject.table, mapping.subject.id), nativeId))
-                  .limit(1);
-
-                if (
-                  subjects.length !== 1 ||
-                  !mapping.subject.isActiveStatus(subjects[0][mapping.subject.status])
-                )
-                  return yield* PasswordUnavailable.make({});
-                yield* Schema.decodeUnknownEffect(SecurityRevision)(
-                  subjects[0][mapping.subject.securityRevision],
-                );
-
-                const bound = yield* tx
-                  .insert(mapping.identifier.table)
-                  .values(
-                    mapping.identifier.encodeInitialInsert(
-                      input.identifier,
-                      nativeId,
-                      SecurityRevision.make(randomId()),
-                    ),
-                  )
-                  .onConflictDoNothing()
-                  .returning();
-
-                // A concurrent registration won the identifier. Roll back the application
-                // subject too, then persist a non-authorizing receipt in a new transaction.
-                if (bound.length !== 1) return yield* new IdentifierTaken({});
-
-                const credentialId = randomId();
-                const credentialRevision = SecurityRevision.make(randomId());
-
-                yield* tx.insert(mapping.credential.table).values(
-                  mapping.credential.encodeInsert({
-                    moduleId: input.moduleId,
-                    subjectId: nativeId,
+                  yield* store.bind({
+                    ...input,
+                    subjectId,
+                    securityRevision,
+                    identifierRevision,
                     credentialId,
                     credentialRevision,
-                    verifierVersion: SecurityRevision.make(randomId()),
-                    replacement: input.replacement,
-                  }),
-                );
-                yield* tx.insert(mapping.authorityCredential.table).values(
-                  mapping.authorityCredential.encodeInsert({
-                    subjectId: nativeId,
-                    credentialId,
-                    revision: credentialRevision,
-                  }),
-                );
+                    verifierVersion,
+                  });
 
-                return prepare({ _tag: "Created", subjectId }, journal);
-              }),
-            ),
-          { mode: "interactive" },
-        ).pipe(Effect.catchTag("IdentifierTaken", () => suppress));
-
-        return committed.value;
-      }).pipe(
-        Effect.provideService(LifecycleHooks, hooks),
-        (work) => reportPersistenceFailure(work, Schema.is(PasswordUnavailable)),
-        Effect.mapError(() => PasswordUnavailable.make({})),
+                  return yield* store.prepare({ _tag: "Created", subjectId }, project);
+                }).pipe(Effect.provideService(Crypto.Crypto, crypto)),
+                store.prepare({ _tag: "Suppressed" }, project),
+              ),
+        ),
       ),
   };
 });

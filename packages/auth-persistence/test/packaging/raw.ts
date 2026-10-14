@@ -23,6 +23,7 @@ const subjects = AuthPersistence.table({
 export const Persistence = AuthPersistence.make(App);
 
 export const storage = Persistence.managed({
+  prefix: "auth_qioX37kywXU_",
   subjects: {
     table: subjects,
     id: "id",

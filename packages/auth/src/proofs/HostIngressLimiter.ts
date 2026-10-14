@@ -2,15 +2,13 @@ import { Context, Duration, Effect, Layer, Redacted, Schema } from "effect";
 import * as RateLimiter from "effect/persistence/RateLimiter";
 
 import { defaultLayer } from "../auth/defaults";
+import { boundedMemoryRateLimiter } from "../auth/rateLimiter";
 import { ProofConfigurationError, ProofIngressDenied, ProofUnavailable } from "./errors";
 import { ProofBudget } from "./policy";
 
-const rateLimiterLayer = defaultLayer(
-  RateLimiter.RateLimiter,
-  RateLimiter.layer.pipe(
-    Layer.provide(defaultLayer(RateLimiter.RateLimiterStore, RateLimiter.layerStoreMemory)),
-  ),
-);
+// Nothing bounds how quickly new network keys arrive, so rejecting at capacity
+// would let rotated addresses deny every client. Eviction keeps service up.
+const rateLimiterLayer = boundedMemoryRateLimiter("evict");
 
 /**
  * Admission before target lookup for every email proof and password reset request.
@@ -29,8 +27,9 @@ export class HostIngressLimiter extends Context.Service<
 >()("effect-auth/HostIngressLimiter") {
   /** A shared network bucket with capacity 20, refilling over one hour by default.
    * Uses a supplied Effect RateLimiter or RateLimiterStore when present. Otherwise,
-   * counters are process-local and keys remain in memory for the runtime's lifetime.
-   * Supply a shared store for coordination across servers. Hosts separately limit
+   * counters are process-local, reset with the runtime, and hold at most 10,000
+   * network keys; at capacity the least recently checked key is evicted and later
+   * restarts with a full bucket. Supply a shared store for coordination across servers. Hosts separately limit
    * malformed traffic before HTTP/RPC parsing.
    */
   static readonly layer = (options: Partial<ProofBudget> = {}) =>

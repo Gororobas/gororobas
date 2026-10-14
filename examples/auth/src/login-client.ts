@@ -80,15 +80,10 @@ export const confirmEmailCode = auth.runtime.fn<{
     const client = yield* AppClient;
     const base = { flowId: input.flowId, email: input.email, returnTarget: "/account" };
 
-    const verified = yield* client.auth.verifyEmailCode({
+    return yield* client.auth.completeEmailSignIn({
       ...base,
       reference: input.reference,
       secret: input.code,
-    });
-
-    return yield* client.auth.completeEmailSignIn({
-      ...base,
-      continuationId: verified.continuation.continuationId,
     });
   }),
 );

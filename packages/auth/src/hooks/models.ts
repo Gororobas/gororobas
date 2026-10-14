@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Effect, Result, Schema } from "effect";
 
 import { LoginIdentifier } from "../identity/models";
 import { SubjectId } from "../Schema";
@@ -85,27 +85,70 @@ const encodeEvent = Schema.encodeSync(eventCodec);
 const decodeEvent = Schema.decodeSync(eventCodec);
 
 /** Projection also strips undeclared own properties of identifier Schema.Class instances. */
-export const lifecycleSnapshot = (input: LifecycleSnapshot): LifecycleSnapshot => {
-  try {
-    const snapshot = decodeSnapshot(encodeSnapshot(input));
+const captureSnapshot = (input: LifecycleSnapshot) =>
+  Result.try({
+    try: () => {
+      const snapshot = decodeSnapshot(encodeSnapshot(input));
 
-    return Object.freeze({
-      ...snapshot,
-      identifiers: Object.freeze(
-        snapshot.identifiers.map((identifier) => Object.freeze(identifier)),
+      return Object.freeze({
+        ...snapshot,
+        identifiers: Object.freeze(
+          snapshot.identifiers.map((identifier) => Object.freeze(identifier)),
+        ),
+      });
+    },
+    catch: () =>
+      HookConfigurationError.make({ reason: "invalid-snapshot", contribution: "snapshot" }),
+  });
+
+const captureEvent = (input: LifecycleEvent) =>
+  Result.try({
+    try: () => decodeEvent(encodeEvent(input)),
+    catch: () => HookConfigurationError.make({ reason: "invalid-snapshot", contribution: "event" }),
+  }).pipe(
+    Result.flatMap((event) =>
+      captureSnapshot(event.snapshot).pipe(
+        Result.map((snapshot) => Object.freeze({ ...event, snapshot })),
+        Result.mapError(() =>
+          HookConfigurationError.make({ reason: "invalid-snapshot", contribution: "event" }),
+        ),
       ),
-    });
-  } catch {
-    throw HookConfigurationError.make({ reason: "invalid-snapshot", contribution: "snapshot" });
+    ),
+  );
+
+/** Synchronous projection for native persistence prepare callbacks. */
+export const lifecycleSnapshot = (input: LifecycleSnapshot): LifecycleSnapshot => {
+  const result = captureSnapshot(input);
+
+  if (Result.isFailure(result)) {
+    // oxlint-disable-next-line effect/no-untyped-throw -- Native prepare callbacks must reject invalid snapshots before the transaction commits.
+    throw result.failure;
   }
+
+  return result.success;
 };
 
+/** Synchronous projection for native persistence prepare callbacks. */
 export const lifecycleEvent = (input: LifecycleEvent): LifecycleEvent => {
-  try {
-    const event = decodeEvent(encodeEvent(input));
+  const result = captureEvent(input);
 
-    return Object.freeze({ ...event, snapshot: lifecycleSnapshot(event.snapshot) });
-  } catch {
-    throw HookConfigurationError.make({ reason: "invalid-snapshot", contribution: "event" });
+  if (Result.isFailure(result)) {
+    // oxlint-disable-next-line effect/no-untyped-throw -- Native prepare callbacks must reject invalid events before the transaction commits.
+    throw result.failure;
   }
+
+  return result.success;
 };
+
+/** Internal projection of library-built lifecycle data, after domain input validation.
+ * Workflow callers retain the previous defect channel with orDie: malformed metadata
+ * violates the producer contract, while an expected policy denial is HookDenied.
+ * This does not replace configuration/input admission or native journal validation. */
+export const lifecycleSnapshotEffect = (input: LifecycleSnapshot) =>
+  Effect.suspend(() => Effect.fromResult(captureSnapshot(input)));
+
+/** Same producer invariant as lifecycleSnapshotEffect. A malformed event remains a
+ * defect even after commit; it must not enter ordinary failure recovery as though
+ * the committed mutation had been rejected. Native prepare uses lifecycleEvent. */
+export const lifecycleEventEffect = (input: LifecycleEvent) =>
+  Effect.suspend(() => Effect.fromResult(captureEvent(input)));

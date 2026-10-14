@@ -6,6 +6,17 @@ import { Effect } from "effect";
 const docsAssets = {
   base: "/auth/",
   notFoundHandling: "404-page",
+  // Own canonical redirects and the 404 document. Every other request stays
+  // on the asset layer, whose manifest paths already include /auth.
+  runWorkerFirst: [
+    "/auth",
+    "/auth/index",
+    "/auth/index.html",
+    "/auth/404",
+    "/auth/404/",
+    "/auth/404.html",
+    "/auth/404/index.html",
+  ],
 } satisfies Omit<Cloudflare.Workers.AssetsProps, "directory">;
 
 export default Alchemy.Stack(
@@ -25,6 +36,7 @@ export default Alchemy.Stack(
       name: "effect-auth-docs",
       command: "vp run docs:build",
       outdir: "docs/dist",
+      main: "./docs/worker.ts",
       domain: "effect-auth.com",
       routes: [{ pattern: "yielded.dev/auth*", zoneName: "yielded.dev" }],
       workersDev: false,

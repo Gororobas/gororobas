@@ -3,9 +3,9 @@ import * as Client from "@yielded/auth/Client";
 import { Effect, Redacted } from "effect";
 import { AtomRegistry, AsyncResult } from "effect/reactivity";
 
-import { OAuthApi } from "./oauth-contract";
+import { OAuthSignInApi } from "./oauth-contract";
 
-const AppClient = Client.make(OAuthApi, { baseUrl: location.origin });
+const AppClient = Client.make(OAuthSignInApi, { baseUrl: location.origin });
 const auth = AuthAtom.make(AppClient);
 
 const login = auth.runtime.fn<{ readonly provider: string; readonly returnTarget: string }>()(

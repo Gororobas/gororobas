@@ -18,76 +18,47 @@ const decodeInteger = Schema.decodeUnknownOption(SqlInteger);
 export type Dialect = "pg" | "sqlite";
 export type Row = Readonly<Record<string, unknown>>;
 
-export interface Compiler {
-  readonly dialect: Dialect;
-  readonly parameters: unknown[];
-}
-
 export const identifier = (name: string) => '"' + name.replaceAll('"', '""') + '"';
-
-export class Fragment {
-  constructor(
-    readonly render: (compiler: Compiler) => string,
-    readonly decode: (value: unknown) => unknown = (value) => value,
-  ) {}
-
-  mapWith(decode: (value: unknown) => unknown): Fragment {
-    return new Fragment(this.render, decode);
-  }
-
-  as(_name: string): Fragment {
-    return this;
-  }
-
-  getSQL(): Fragment {
-    return this;
-  }
-}
 
 export interface ColumnOptions {
   readonly name: string;
+  /** Driver value representation, not the database column's physical SQL type. */
   readonly type: "text" | "integer" | "boolean";
   readonly nullable?: boolean;
 }
 
-export class Column extends Fragment {
+export class Column {
   constructor(
     readonly tableName: string,
     readonly options: ColumnOptions,
     readonly schema?: string,
-  ) {
-    super(
-      () =>
-        `${schema === undefined ? "" : identifier(schema) + "."}${identifier(tableName)}.${identifier(options.name)}`,
-      (value) => {
-        if (value === null) return value;
-        if (options.type === "boolean") {
-          if (value === true || value === 1) return true;
-          if (value === false || value === 0) return false;
-          throw PersistenceMappingError.make({ operation: "decode", cause: "Invalid SQL boolean" });
-        }
-        if (options.type === "integer") {
-          const number = decodeInteger(value);
+  ) {}
 
-          if (Option.isSome(number)) return number.value;
-          throw PersistenceMappingError.make({
-            operation: "decode",
-            cause: "SQL integer is outside the safe range",
-          });
-        }
+  decode(value: unknown): unknown {
+    if (value === null) return value;
+    if (this.options.type === "boolean") {
+      if (value === true || value === 1) return true;
+      if (value === false || value === 0) return false;
+      // oxlint-disable-next-line effect/no-untyped-throw -- SQL column codecs expose a synchronous decode contract; workflow adapters capture these mapping failures.
+      throw PersistenceMappingError.make({ operation: "decode", cause: "Invalid SQL boolean" });
+    }
+    if (this.options.type === "integer") {
+      const number = decodeInteger(value);
 
-        return value;
-      },
-    );
-  }
+      if (Option.isSome(number)) return number.value;
+      // oxlint-disable-next-line effect/no-untyped-throw -- SQL column codecs expose a synchronous decode contract; workflow adapters capture these mapping failures.
+      throw PersistenceMappingError.make({
+        operation: "decode",
+        cause: "SQL integer is outside the safe range",
+      });
+    }
 
-  mapToDriverValue(value: unknown): unknown {
     return value;
   }
 }
 
 /** Plain SQL identifiers and column representations, independent of an ORM. */
-export class Table extends Fragment {
+export class Table {
   readonly columns: Readonly<Record<string, Column>>;
 
   constructor(
@@ -95,8 +66,8 @@ export class Table extends Fragment {
     columns: Readonly<Record<string, ColumnOptions>>,
     readonly unique: ReadonlyArray<ReadonlyArray<string>>,
     readonly schema?: string,
+    readonly indexes: ReadonlyArray<ReadonlyArray<string>> = [],
   ) {
-    super(() => (schema === undefined ? "" : identifier(schema) + ".") + identifier(name));
     this.columns = Object.fromEntries(
       Object.entries(columns).map(([key, options]) => [key, new Column(name, options, schema)]),
     );

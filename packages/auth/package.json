@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth",
-  "version": "0.1.0-beta.18",
+  "version": "0.1.0-beta.39",
   "description": "Composable authentication, sessions, and identity workflows for Effect.",
   "keywords": [
     "authentication",
@@ -38,19 +38,44 @@
     "./Atom": "./src/Atom.ts",
     "./Hooks": "./src/Hooks.ts",
     "./Identity": "./src/Identity.ts",
+    "./Okta": "./src/Okta.ts",
     "./OAuth": "./src/OAuth.ts",
+    "./OAuthProxy": "./src/OAuthProxy.ts",
     "./OAuthServer": "./src/OAuthServer.ts",
     "./Strava": "./src/Strava.ts",
+    "./Slack": "./src/Slack.ts",
+    "./Google": "./src/Google.ts",
+    "./GitLab": "./src/GitLab.ts",
+    "./Vercel": "./src/Vercel.ts",
+    "./HuggingFace": "./src/HuggingFace.ts",
+    "./Zitadel": "./src/Zitadel.ts",
+    "./Zoom": "./src/Zoom.ts",
+    "./Apple": "./src/Apple.ts",
+    "./Auth0": "./src/Auth0.ts",
+    "./Atlassian": "./src/Atlassian.ts",
+    "./Cognito": "./src/Cognito.ts",
+    "./Dropbox": "./src/Dropbox.ts",
+    "./Figma": "./src/Figma.ts",
+    "./Keycloak": "./src/Keycloak.ts",
+    "./Kick": "./src/Kick.ts",
+    "./X": "./src/X.ts",
+    "./Linear": "./src/Linear.ts",
+    "./Line": "./src/Line.ts",
+    "./Microsoft": "./src/Microsoft.ts",
+    "./Notion": "./src/Notion.ts",
+    "./Railway": "./src/Railway.ts",
+    "./Roblox": "./src/Roblox.ts",
     "./Operations": "./src/Operations.ts",
     "./Schema": "./src/Schema.ts",
     "./WebCrypto": "./src/WebCrypto.ts",
+    "./WorkerdServices": "./src/WorkerdServices.ts",
+    "./WorkerdPasswordlessServices": "./src/WorkerdPasswordlessServices.ts",
     "./Sessions": "./src/Sessions.ts",
     "./SessionContract": "./src/SessionContract.ts",
     "./Proofs": "./src/Proofs.ts",
     "./Password": "./src/Password.ts",
     "./Email": "./src/Email.ts",
     "./Passkey": "./src/Passkey.ts",
-    "./PasskeyPassword": "./src/PasskeyPassword.ts",
     "./PhoneOtp": "./src/PhoneOtp.ts",
     "./SmsDelivery": "./src/SmsDelivery.ts",
     "./adapters/Twilio": "./src/Twilio.ts",
@@ -62,7 +87,9 @@
     "./Persistence": "./src/Persistence.ts",
     "./EmailDelivery": "./src/EmailDelivery.ts",
     "./BrowserLogin": "./src/BrowserLogin.ts",
-    "./BrowserLoginContract": "./src/BrowserLoginContract.ts"
+    "./BrowserLoginContract": "./src/BrowserLoginContract.ts",
+    "./OpenIdConnect": "./src/OpenIdConnect.ts",
+    "./GitHub": "./src/GitHub.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -72,15 +99,22 @@
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vp test --passWithNoTests"
   },
+  "dependencies": {
+    "@yielded/crypto": "workspace:*",
+    "@yielded/jose": "workspace:*",
+    "@yielded/oauth": "workspace:*"
+  },
   "devDependencies": {
     "@effect/platform-bun": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
     "effect": "catalog:",
     "typescript": "catalog:",
-    "vite-plus": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.0"
+    "effect": "^4.0.3"
   }
 }

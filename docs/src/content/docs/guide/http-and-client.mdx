@@ -13,7 +13,7 @@ For browser queries and mutations, continue with the [Effect Atom client](./clie
 
 <FlowMap
   title="Auth beside your routes"
-  description="Browser requests reach two route sets. Auth routes from Http.layer decode the shared contract and set cookies. Your routes run under http.middleware, which reads request credentials and sets cookies. Both call the same Auth service, which uses your Layers for accounts, policy, and storage."
+  description="Auth routes and your application routes share one Auth service. Each request has its own credentials and cookie delivery."
   columns={3}
   boundary={{ row: 2, above: "Browser", below: "Server" }}
   nodes={[
@@ -38,7 +38,7 @@ For browser queries and mutations, continue with the [Effect Atom client](./clie
       at: [3, 3],
       owner: "library",
       title: "Auth routes",
-      code: "Http.layer(AppAuth, …)",
+      code: "http.routes()",
       note: "Decodes the contract, sets cookies",
     },
     { id: "auth", at: [4, 2], owner: "library", title: "Auth service", code: "AppAuth" },
@@ -74,11 +74,9 @@ export const AuthApi = AuthContract.make("app/Auth", {
 ```
 
 The contract includes `getSession`, `requireSession`, `signOut`, and `renewSession`.
-It exposes only the additional actions you select. Installing a strategy does
-not publish all its methods.
-
-The [HTTP reference](../reference/http#route-defaults) lists default routes and
-how to change the shared base path.
+Only the additional actions you select become public; installing a strategy does
+not expose all its methods. Set paths in the shared contract's `basePath`; see
+[route defaults](../reference/http#route-defaults).
 
 ## Configure the server
 
@@ -95,110 +93,55 @@ export const AppAuth = Auth.make(AuthApi, {
   defaultStrategy: "password",
 });
 
-export const AuthRoutes = Http.layer(AppAuth, { origin: "https://app.example.com" });
-```
-
-`Http.layer` mounts the shared actions and configured OAuth callbacks, and
-supplies `AppAuth.layer`. Provide your stores and account authority to the result.
-The [adapter guide](../reference/adapters#compose-the-application-layer) shows the
-`AuthDependencies` composition used below.
-
-For an existing raw `HttpRouter`, merge the auth route Layer with your application
-routes:
-
-```ts title="apps/server/routes.ts"
-import { Layer } from "effect";
-
-import { ApplicationRoutes } from "./application-routes";
-import { AuthRoutes } from "./auth";
-import { AuthDependencies } from "./auth-live";
-
-export const Routes = Layer.mergeAll(AuthRoutes, ApplicationRoutes).pipe(
-  Layer.provide(AuthDependencies),
-);
-```
-
-### Proof request admission
-
-Email code/link and password-reset requests have built-in rate limiting. Auth
-shares one limiter across these methods; HTTP uses the current socket peer, so
-normal server setup needs no additional service or middleware.
-
-The default allows a burst of twenty requests per network and replenishes one
-request every three minutes. It checks every request before account lookup,
-including retries and unknown addresses. Change the policy with
-`Proofs.HostIngressLimiter.layer({ limit: 40 })`, or provide your own service.
-
-The default store is local to the Auth runtime. Multiple server instances can use
-a shared Effect `RateLimiterStore`. Behind a proxy, provide the trusted client
-identity per request; forwarded headers are not trusted automatically. See the
-[rate-limit reference](../reference/http#proof-request-rate-limits) for those overrides.
-
-### Application routes
-
-For application routes that call auth, build the middleware with `Http.make`:
-
-```ts title="apps/server/auth-http.ts"
-import { Http } from "@yielded/auth";
-
-import { AppAuth } from "./auth";
-
 export const http = Http.make(AppAuth, { origin: "https://app.example.com" });
 ```
 
-Wrap the application routes before merging them with the generated auth routes:
+`http.layer` supplies the shared auth service and any configured OAuth providers.
+Compose it with your crypto, persistence, and account Layers:
+
+```ts title="apps/server/auth-live.ts"
+import { Layer } from "effect";
+
+import { http } from "./auth";
+import { AuthDependencies } from "./auth-dependencies";
+
+export const AuthLive = http.layer.pipe(Layer.provide(AuthDependencies));
+```
+
+`AuthDependencies` is application-owned; the [adapter reference](../reference/adapters)
+and [account examples](./examples#run-an-account-app) show complete storage wiring.
+`http.routes()` mounts the contract actions and OAuth callbacks. For auth-only
+mounting, `Http.layer(AppAuth, options)` supplies its own auth Layer.
+
+### Proof request admission
+
+Email code/link and password-reset requests share a built-in network rate limiter.
+HTTP uses the socket peer; forwarded headers are not trusted automatically.
+Behind a proxy, supply a verified client identity per request. Multiple servers
+or per-request runtimes need a shared limiter store. See
+[rate-limit options and overrides](../reference/http#proof-request-rate-limits).
+
+### Application routes
+
+Wrap application routes that call auth before merging them with the auth routes:
 
 ```ts title="apps/server/routes.ts"
 import { Layer } from "effect";
 
 import { ApplicationRoutes } from "./application-routes";
-import { AppAuth, AuthRoutes } from "./auth";
-import { http } from "./auth-http";
-import { AuthDependencies } from "./auth-live";
+import { http } from "./auth";
+import { AuthLive } from "./auth-live";
 
 export const Routes = Layer.mergeAll(
-  AuthRoutes,
-  ApplicationRoutes.pipe(http.middleware, Layer.provide(AppAuth.layer)),
-).pipe(Layer.provide(AuthDependencies));
+  http.routes(),
+  ApplicationRoutes.pipe(http.middleware),
+).pipe(Layer.provide(AuthLive));
 ```
 
-The middleware reads request credentials and delivers cookies on the response.
-Handlers can call auth directly, including from JSON, form, and multipart routes.
-
-### Join an existing HttpApi
-
-Add the native auth group beside your application groups in the shared API:
-
-```ts title="packages/domain/api.ts"
-import { AuthContract } from "@yielded/auth";
-import { HttpApi } from "effect/http-api";
-
-import { AuthApi } from "./auth-contract";
-import { Projects } from "./projects-contract";
-
-export const Api = HttpApi.make("app").add(Projects, AuthContract.httpGroup(AuthApi));
-```
-
-```ts title="apps/server/api-server.ts"
-import { Layer } from "effect";
-import { HttpApiBuilder } from "effect/http-api";
-
-import { Api } from "@app/domain/api";
-import { http } from "./auth-http";
-import { AuthLive } from "./auth-live";
-import { ProjectHandlers } from "./projects-handlers";
-
-export const Routes = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
-  Layer.provide(http.handlers(Api)),
-  Layer.provide(ProjectHandlers),
-  http.middleware,
-  Layer.provide(AuthLive),
-);
-```
-
-Auth appears as the `auth` group in the API and its OpenAPI document. Set route
-paths in the shared contract's `basePath`; see the [HTTP reference](../reference/http#route-defaults)
-for path and group-name options.
+`AuthLive` owns the shared service. `http.middleware` makes it available during
+request execution and supplies a request-local `Auth.AuthRequest` for credentials
+and cookie delivery, including JSON, form, and multipart handlers. Generated auth
+routes handle their own request boundary; they do not provide it to sibling routes.
 
 ### Protect an application handler
 
@@ -218,144 +161,164 @@ export const currentMember = Effect.fn("app.currentMember")(function* () {
 ```
 
 `requireSession()` fails with `AuthenticationRequired` when there is no valid
-session. Use `getSession()` for an optional session. Both read the current request
-context; neither makes an HTTP call.
+session. Use `getSession()` for an optional session. Neither makes an HTTP call;
+your handler still owns authorization for the application action.
+
+### Verify credentials outside the HTTP middleware
+
+For RPC, WebSocket handshakes, or background work, use an explicit credential:
+
+```ts
+import { Effect, Redacted } from "effect";
+
+import { AppAuth } from "./auth";
+
+export const verifyCredential = Effect.fn("app.verifyCredential")(function* (
+  credential: Redacted.Redacted<string>,
+) {
+  const auth = yield* AppAuth;
+
+  return yield* auth.verifySession(credential);
+});
+```
+
+Run this Effect in your application's shared `AuthLive` runtime, keeping its Scope
+open while handlers use it. `verifySession` needs no `AuthRequest`, does not renew
+credentials, and fails with `SessionInvalid` for invalid credentials. Availability
+failures remain failures. Your host owns credential extraction, authorization,
+WebSocket Origin checks, and revalidation of long-lived connections.
+
+For raw `HttpRouter` handlers using explicit verification,
+`ApplicationRoutes.pipe(HttpRouter.provideRequest(AuthLive))` supplies the service
+during requests; `Layer.provide` alone supplies Layer construction. Use
+`http.middleware` instead when calling request-aware methods such as `getSession`,
+`requireSession`, or `signOut`.
+
+### Join an existing HttpApi
+
+Add the auth group beside your application groups in the shared API:
+
+```ts title="packages/domain/api.ts"
+import { AuthContract } from "@yielded/auth";
+import { HttpApi } from "effect/http-api";
+
+import { AuthApi } from "./auth-contract";
+import { Projects } from "./projects-contract";
+
+export const Api = HttpApi.make("app").add(Projects, AuthContract.httpGroup(AuthApi));
+```
+
+```ts title="apps/server/api-server.ts"
+import { Layer } from "effect";
+import { HttpApiBuilder } from "effect/http-api";
+
+import { Api } from "@app/domain/api";
+import { http } from "./auth";
+import { AuthLive } from "./auth-live";
+import { ProjectHandlers } from "./projects-handlers";
+
+export const Routes = HttpApiBuilder.layer(Api, { openapiPath: "/openapi.json" }).pipe(
+  Layer.provide(http.handlers(Api)),
+  Layer.provide(ProjectHandlers),
+  http.middleware,
+  Layer.provide(AuthLive),
+);
+```
+
+Auth appears as the `auth` group in the API and OpenAPI document. If OAuth is
+configured, mount `http.callbackRoutes()` alongside these routes with the same
+`AuthLive`. See the [HTTP reference](../reference/http#route-defaults) for group names.
 
 ### Protect an HttpApi group
 
-Declare the session requirement in your shared API:
-
-```ts title="packages/domain/profile-api.ts"
-import { SessionContract } from "@yielded/auth";
-import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
-
-import { AuthApi } from "./auth-contract";
-
-export const SessionHttp = SessionContract.makeSessionHttpContract(
-  "app/Auth",
-  AuthApi.sessions.Session,
-  { cookieName: "__Host-app-session" },
-);
-
-export const ProfileApi = HttpApi.make("profile").add(
-  HttpApiGroup.make("profile")
-    .add(HttpApiEndpoint.get("current", "/me", { success: AuthApi.claims }))
-    .middleware(SessionHttp.RequireSession),
-);
-```
-
-On the server, supply the middleware and read `CurrentSession` in the handler:
-
-```ts title="apps/server/profile-routes.ts"
-import { Http } from "@yielded/auth";
-import { Effect, Layer } from "effect";
-import { HttpApiBuilder } from "effect/http-api";
-
-import { ProfileApi, SessionHttp } from "@app/domain/profile-api";
-import { AppAuth } from "./auth";
-import { AuthLive } from "./auth-live";
-
-const http = Http.make(AppAuth, {
-  origin: "https://app.example.com",
-  cookie: { name: SessionHttp.cookieName },
-});
-
-const ProfileHandlers = HttpApiBuilder.group(ProfileApi, "profile", (handlers) =>
-  handlers.handle("current", () =>
-    Effect.map(SessionHttp.CurrentSession, (session) => session.claims),
-  ),
-);
-
-const ProfileRoutes = HttpApiBuilder.layer(ProfileApi).pipe(
-  Layer.provide(ProfileHandlers),
-  Layer.provide(http.securityLayer(SessionHttp)),
-  http.middleware,
-);
-
-export const Routes = Layer.mergeAll(http.routes(), ProfileRoutes).pipe(Layer.provide(AuthLive));
-```
-
-Both route sets use the same cookie configuration. The session middleware returns
-401 for absent or invalid sessions and 503 when verification is unavailable.
-Your handler still decides whether the authenticated account may perform an
-application action.
+Declare `SessionContract.makeSessionHttpContract` in the shared API and attach
+its `RequireSession` middleware to the protected group. On the server, provide
+`http.securityLayer(SessionHttp)` inside `http.middleware`; handlers read
+`SessionHttp.CurrentSession`. Match the contract's cookie name to `Http.make`.
+The [session HTTP example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/session-http.ts)
+shows the composition. Missing or invalid sessions return 401; unavailable
+verification returns 503. Authentication does not replace application authorization.
 
 ## Cookies and deployment
 
-For HTTPS, set your trusted application origin. The defaults use `Secure`,
-`HttpOnly`, and `SameSite=Lax` cookies:
+Use a trusted HTTPS origin in production. Cookies default to `Secure`, `HttpOnly`,
+and `SameSite=Lax`. Plain HTTP development requires a loopback origin and
+`cookie: { secure: false }`. Never derive trusted origins from request headers.
+The client sends the CSRF header automatically; align any custom settings with
+[the server](../reference/http#cookies-and-request-policy).
+
+### Browser clients on another origin
+
+Configure both auth request admission and credentialed CORS. For a web client on
+port 3000 and an API on port 3003:
 
 ```ts
-export const http = Http.make(AppAuth, {
-  origin: "https://app.example.com",
-});
-```
+import { Http } from "@yielded/auth";
+import { Layer } from "effect";
+import { HttpRouter } from "effect/http";
 
-For local development over plain HTTP:
+import { AppAuth } from "./auth";
+import { AuthDependencies } from "./auth-dependencies";
 
-```ts
-export const http = Http.make(AppAuth, {
-  origin: "http://localhost:3000",
+const apiOrigin = "http://localhost:3003";
+const webOrigin = "http://localhost:3000";
+
+const http = Http.make(AppAuth, {
+  origin: apiOrigin,
+  trustedOrigins: [webOrigin],
   cookie: { secure: false },
 });
+
+export const Routes = Layer.mergeAll(
+  http.routes(),
+  HttpRouter.cors({
+    allowedOrigins: [apiOrigin, webOrigin],
+    allowedMethods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["content-type", "x-effect-auth-csrf"],
+    credentials: true,
+  }),
+).pipe(Layer.provide(http.layer), Layer.provide(AuthDependencies));
 ```
 
-The auth client sends the required CSRF header automatically. Keep custom cookie
-names and CSRF settings aligned with the server; [cookies and request policy](../reference/http#cookies-and-request-policy)
-lists the options.
+Mount CORS alongside all routes the client calls, so it handles preflights and adds
+headers to error responses. Keep its exact-origin allowlist aligned with
+`trustedOrigins`, and allow your configured CSRF header. CORS does not replace
+Origin and CSRF checks on mutations.
+
+Set `baseUrl: apiOrigin` on `Client.make`; it already sends credentials. Custom
+fetch calls need `credentials: "include"`. Cookies are host-scoped, so localhost
+apps on different ports share them. Cross-origin does not necessarily mean
+cross-site: `SameSite=Lax` or `Strict` still blocks cross-site cookie requests,
+regardless of CORS. A CORS or network failure can hide a committed mutation;
+follow the operation's recovery flow rather than retrying it.
+
+### Sharing sessions across apps
+
+Use matching cookie names and session policy, backed by the same session store or
+compatible signing keys:
+
+```ts
+export const http = Http.make(AppAuth, {
+  origin: "https://yielded.dev",
+  cookie: { domain: "yielded.dev" },
+  trustedOrigins: ["https://agent.yielded.dev"],
+});
+```
+
+Domain cookies require HTTPS and use `__Secure-` names; see
+[cookie options](../reference/http#cookies-and-request-policy).
+OAuth and email return targets need their own exact-route allowlists; trusting an
+origin for requests does not authorize redirects to it.
+
+**Every subdomain receives these cookies and can set them.** Never host user- or
+AI-generated content under this domain. Validate sessions server-side, retain
+Origin/CSRF checks, and monitor dangling DNS.
 
 ## Expose another method
 
-To add passkeys alongside passwords, declare the begin and complete actions in
-the shared contract:
-
-```ts title="packages/domain/auth-contract.ts"
-import { AuthContract, PasskeyContract } from "@yielded/auth";
-import { Schema } from "effect";
-
-export const AuthApi = AuthContract.make("app/Auth", {
-  claims: Schema.Struct({ displayName: Schema.String }),
-  actions: (sessions) => {
-    const passkey = PasskeyContract.make("app/Auth/passkey", sessions);
-
-    return {
-      signIn: AuthContract.passwordSignIn(sessions),
-      beginPasskey: AuthContract.fromOperation(passkey.operations.Begin, {
-        strategy: "passkey",
-        method: "signIn",
-      }),
-      completePasskey: AuthContract.fromOperation(passkey.operations.Complete, {
-        strategy: "passkey",
-        method: "completeSignIn",
-        requestFields: { bindingCredential: "request-binding" },
-        subject: {
-          fromSuccess: (result) =>
-            result._tag === "Authenticated" ? result.session.subjectId : undefined,
-        },
-      }),
-    };
-  },
-});
-```
-
-Bind the new actions to a passkey strategy on the server:
-
-```ts title="apps/server/auth.ts"
-import { Auth, Passkey, Password, Sessions } from "@yielded/auth";
-
-import { AuthApi } from "@app/domain/auth-contract";
-
-export const AppAuth = Auth.make(AuthApi, {
-  sessions: Sessions.stateful(),
-  strategies: { password: Password.make(), passkey: Passkey.make() },
-  defaultStrategy: "password",
-});
-```
-
-The client now has `beginPasskey` and `completePasskey` actions. `requestFields`
-supplies the private binding from a cookie; `subject` publishes the authenticated
-account after completion. The [passkey guide](./passkeys#install-the-server-verifier)
-shows verifier and storage Layers, and the [client guide](./client#compose-a-passkey-workflow)
-shows the browser ceremony.
-
-For custom actions, see [action schemas and credential mapping](../reference/http#declare-an-action).
+Add explicit contract actions, then bind them to the server strategy. The
+[passkey guide](./passkeys#define-the-shared-actions) shows begin and complete
+actions; the [client workflow](./client#compose-a-passkey-workflow) runs the ceremony.
+Use `requestFields` to supply private bindings from request credentials, and a
+`subject` projection to publish the authenticated account. See
+[action declarations](../reference/http#declare-an-action) for custom schemas.

@@ -37,27 +37,34 @@ The optional `@yielded/auth/contracts` group exports `AuthContract`,
 `PhoneOtp`, and `Totp`. These are the same modules exposed at the root.
 
 Optional adapters are direct imports, for example `@yielded/auth-persistence-drizzle/Postgres`,
-`@yielded/auth-openid-client`, `@yielded/auth-simplewebauthn/Browser`, or
+`@yielded/auth-simplewebauthn/Browser`, or
 `@yielded/auth/adapters/Twilio`. Install only the peers
 required by the selected adapters.
+
+For Cloudflare Workers, import `@yielded/auth/WorkerdPasswordlessServices` directly
+for runtime crypto and HTTP without Wasm. Use `@yielded/auth/WorkerdServices` when
+the application also hashes passwords. Provide the selected `layer` once to your
+application. These modules are absent from the package root; see
+[runtime setup](./crypto#use-with-auth).
 
 ## Application composition
 
 Import application services and authentication methods from the root:
 
-| Modules                                | Purpose                                                                  |
-| -------------------------------------- | ------------------------------------------------------------------------ |
-| `Auth`                                 | Application service, strategies, and request boundaries.                 |
-| `Identity`, `Schema`                   | Subject identifiers, claims, and shared schemas.                         |
-| `Operations`, `Hooks`                  | Operation contracts and lifecycle hooks.                                 |
-| `Sessions`                             | Session strategies, persistence ports, and lifecycle operations.         |
-| `BrowserLogin`, `BrowserLoginContract` | Native browser sign-in, shared handoff operations and platform services. |
-| `Password`                             | Password registration, sign-in, and account changes.                     |
-| `Email`, `PhoneOtp`, `Proofs`          | Email and phone methods, bound proofs, and private delivery.             |
-| `EmailDelivery`                        | Rendered private email, transport failures, templates, and link parsing. |
-| `Totp`, `Passkey`                      | Additional factors and passkey workflows.                                |
-| `PasskeyPassword`                      | Password-backed authority for passkey workflows.                         |
-| `OAuth`                                | Provider sign-in, registration, linked accounts, and connected grants.   |
+| Modules                                                                                                                                                                                                                                                                   | Purpose                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `Auth`                                                                                                                                                                                                                                                                    | Application services, configuration, and request boundaries.             |
+| `Identity`, `Schema`                                                                                                                                                                                                                                                      | Subject identifiers, claims, and shared schemas.                         |
+| `Operations`, `Hooks`                                                                                                                                                                                                                                                     | Operation contracts and lifecycle hooks.                                 |
+| `Sessions`                                                                                                                                                                                                                                                                | Session strategies, persistence ports, and lifecycle operations.         |
+| `BrowserLogin`, `BrowserLoginContract`                                                                                                                                                                                                                                    | Native browser sign-in, shared handoff operations and platform services. |
+| `Password`                                                                                                                                                                                                                                                                | Password registration, sign-in, and account changes.                     |
+| `Email`, `PhoneOtp`, `Proofs`                                                                                                                                                                                                                                             | Email and phone methods, bound proofs, and private delivery.             |
+| `EmailDelivery`                                                                                                                                                                                                                                                           | Rendered private email, transport failures, templates, and link parsing. |
+| `Totp`, `Passkey`                                                                                                                                                                                                                                                         | Additional factors and passkey workflows.                                |
+| `OAuth`                                                                                                                                                                                                                                                                   | Provider sign-in, registration, linked accounts, and connected grants.   |
+| `OAuthProxy`                                                                                                                                                                                                                                                              | Stable callbacks for local and preview sign-in and registration.         |
+| `OpenIdConnect`, `Apple`, `Atlassian`, `Auth0`, `Cognito`, `Dropbox`, `Figma`, `GitHub`, `GitLab`, `Google`, `HuggingFace`, `Keycloak`, `Kick`, `Linear`, `Line`, `Microsoft`, `Notion`, `Okta`, `Railway`, `Roblox`, `Slack`, `Strava`, `Vercel`, `X`, `Zitadel`, `Zoom` | Native provider configuration and protocol Layers.                       |
 
 ## Browser and transport boundaries
 
@@ -93,29 +100,38 @@ See [HTTP integration](../guide/http-and-client) for contract sharing,
 SDK integrations live in companion packages. Import the platform entrypoint
 you use.
 
-| Package or import                         | Integration                                                                                     |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `@yielded/auth-simplewebauthn/Browser`    | Browser WebAuthn ceremonies through `make()` or `layer`.                                        |
-| `@yielded/auth-simplewebauthn/Server`     | Server verification through `make(options)` or `layer`.                                         |
-| `@yielded/auth-react-native`              | iOS passkey ceremonies through `make()` or `layer`; import only in the native entrypoint.       |
-| `@yielded/auth-react-native/BrowserLogin` | iOS authentication browser and Keychain vault.                                                  |
-| `@yielded/auth-electron/BrowserLogin`     | Main-process system browser and encrypted vault.                                                |
-| `@yielded/auth-openid-client`             | OAuth/OIDC verification and provider configuration.                                             |
-| `@yielded/auth-openid-client/Connected`   | Connected grant management.                                                                     |
-| `@yielded/auth-openid-client/GitHub`      | GitHub configuration and operations using OpenID Client.                                        |
-| `@yielded/auth-crypto`                    | Password hashing, TOTP, and OAuth secret protection through `/Password`, `/Totp`, and `/OAuth`. |
-| `@yielded/auth-persistence`               | Direct Effect SQL persistence; requires an application-provided SQL client.                     |
-| `@yielded/auth-persistence-drizzle`       | Drizzle mappings and explicit driver modules such as `/Postgres` and `/SqliteBun`.              |
-| `@yielded/auth/adapters/Twilio`           | SMS delivery through Effect HTTP; requires `TwilioConfig`.                                      |
+- **`@yielded/auth-simplewebauthn/Browser`**: Browser WebAuthn ceremonies through `make()` or `layer`.
+- **`@yielded/auth-simplewebauthn/Server`**: Server verification through `make(options)` or `layer`.
+- **`@yielded/auth-react-native`**: iOS passkey ceremonies through `make()` or `layer`; import only in the native entrypoint.
+- **`@yielded/auth-react-native/BrowserLogin`**: iOS authentication browser and Keychain vault.
+- **`@yielded/auth-electron/BrowserLogin`**: Main-process system browser and encrypted vault.
+- **`@yielded/auth-persistence`**: Direct Effect SQL persistence; requires an application-provided SQL client.
+- **`@yielded/auth-persistence-drizzle`**: Drizzle mappings and explicit driver modules such as `/Postgres` and `/SqliteBun`.
+- **`@yielded/auth/adapters/Twilio`**: SMS delivery through Effect HTTP; requires `TwilioConfig`.
 
-Core has only Effect as a runtime peer. It owns schemas, workflows, and service contracts. Adapters depend on those
-public contracts; core never imports or re-exports an SDK adapter. An application
-chooses the adapter Layer and supplies storage, policy, and delivery authority.
+Auth owns schemas, workflows, and direct password, TOTP, and OAuth implementations.
+Its runtime dependencies are Effect and the first-party `@yielded/crypto`,
+`@yielded/jose`, and `@yielded/oauth` packages.
+`OpenIdConnect` and `GitHub` configure native providers without a provider SDK.
+Optional SDK adapters depend on Auth's public contracts; Auth never imports or
+re-exports them. Applications supply storage, policy, delivery authority, and
+explicit crypto/HTTP Layers.
+
+The direct `GitHub` module loads plain OAuth; its provider setup requires Effect
+`Crypto` and `HttpClient` in a `Scope`. `OpenIdConnect` additionally installs
+discovery and signed ID-token verification, requiring `Hmac` and `Signature`.
+The `OAuth` module separately owns encryption of flow secrets and retained tokens.
+Direct paths narrow module loading; they do not change installed package dependencies.
 
 `@yielded/auth-persistence` exports the named `AuthPersistence` facade for direct
 Effect SQL and has no Drizzle dependency or declarations. The Drizzle companion's
 driver modules export the same facade; its root exposes the Drizzle mapping contracts.
-Adapter authors can use `@yielded/auth-persistence/Adapter` for the shared SQL kernels.
+Adapter authors use mapped table contracts or `NativeSqlTables` from
+`@yielded/auth-persistence/Adapter`.
+The root also exports `OAuthProxyPersistence` for the
+[callback proxy's durable handoffs](./oauth#callback-proxy).
+Drizzle's SQLite/D1 and PostgreSQL driver modules expose the same facade with
+Drizzle table definitions and column mapping.
 
 The [adapter guide](./adapters) covers transaction authority, durable receipts,
 and runtime constraints.
@@ -127,7 +143,9 @@ implementations that `Auth.make` binds. Use them when you own operation composit
 `Auth.make` supplies the application service and request boundary.
 
 Storage implements the strategy ports in `Password`, `Email`, `Proofs`, and
-`Sessions`. Password hashing comes from `@yielded/auth-crypto/Password`.
+`Sessions`. Use `Password.PasswordHashing.layer()`, `Totp.TotpCryptography.layer`,
+and the `OAuth` protector services' `.layer(keyring)` methods with an explicit
+[crypto backend](./crypto#use-with-auth).
 Application account services provide identity authority and session claims.
 `SmsDelivery` and `EmailDelivery.EmailDelivery` own private delivery. Auth renders
 email content before sending it; see the [transport recipes](../guide/email-delivery).

@@ -3,7 +3,7 @@ import type {
   PasskeyUnavailable,
   PasskeyActionAuthorization,
   PasskeyCeremony,
-  PasskeyClaim,
+  PasskeyAccess,
   PasskeyCredential,
   PasskeyCredentialSummary,
   PasskeyIssueDecision,
@@ -14,23 +14,20 @@ import type {
   PasskeyManagementPersistence,
   PreparePasskeyCommit,
   PasskeyManagementPolicy,
-  PasskeyMethodPolicy,
 } from "@yielded/auth/Passkey";
 import type { TokenDigest } from "@yielded/auth/Schema";
 import type { SessionInvalidationWindow } from "@yielded/auth/Sessions";
 import type { Effect, Schema } from "effect";
 
-import type { TableModel as Table, SqlExpression } from "../query-operations";
+import type { TableModel as Table, SqlExpression } from "../table-model";
 import type { PersistenceMappingError } from "./common";
 import type {
   PasskeyColumn,
   PasskeyCredentialMapping,
   PasskeyFlowTable,
-  PasskeyHandleReservationTable,
   PasskeyPersistenceMapping,
   PasskeyPersistenceServices,
 } from "./passkey-model";
-import type { PasskeyRegistrationIntentReadTable } from "./passkey-registration-ceremony-model";
 
 export interface PasskeyCredentialInsert<N> {
   readonly subjectId: N;
@@ -43,8 +40,6 @@ export interface PasskeyWriteTables<
   S extends Table,
   C extends Table,
   F extends Table,
-  O extends Table,
-  H extends Table,
   N,
   Expression extends SqlExpression = SqlExpression,
 > {
@@ -63,21 +58,7 @@ export interface PasskeyWriteTables<
     readonly activeStatus: unknown;
     readonly removedStatus: unknown;
   };
-  readonly credentialOwnership: {
-    readonly encodeInsert: (input: PasskeyCredentialInsert<N>) => O["insert"];
-    readonly ownedState: unknown;
-    readonly removedState: unknown;
-  };
-  readonly handleOwnership: {
-    readonly encodeInsert: (input: {
-      readonly subjectId: N;
-      readonly rpId: string;
-      readonly userHandle: string;
-      readonly marker: string;
-    }) => H["insert"];
-    readonly ownedState: unknown;
-  };
-  /** All mutable policy dependencies must be subject columns or declared module guards. */
+  /** Mutable management policy dependencies belong to the locked subject row. */
   readonly policy: {
     readonly subjectColumns: ReadonlyArray<PasskeyColumn<S>>;
     readonly management: (row: Readonly<Partial<S["select"]>>) => PasskeyManagementPolicy;
@@ -122,50 +103,21 @@ export const passkeyInvalidationMutation = <
   readonly postcondition: (input: PasskeyInvalidationInput<N>) => Expression;
 }): PasskeyInvalidationMutation<N, Expression> => input;
 
-export interface PasskeyCommandTable<T extends Table, N> {
-  readonly table: T["table"];
-  readonly moduleId: PasskeyColumn<T>;
-  readonly commandId: PasskeyColumn<T>;
-  readonly subjectId: PasskeyColumn<T>;
-  readonly credentialId: PasskeyColumn<T>;
-  readonly intent: PasskeyColumn<T>;
-  readonly decision: PasskeyColumn<T>;
-  readonly retentionUntil: PasskeyColumn<T>;
-  readonly version: PasskeyColumn<T>;
-  readonly encodeInsert: (input: {
-    readonly moduleId: string;
-    readonly commandId: string;
-    readonly subjectId: N;
-    readonly credentialId: string;
-  }) => T["insert"];
-}
-
 export interface PasskeyManagementMapping<
   S extends Table,
   C extends Table,
   F extends Table,
-  O extends Table,
-  H extends Table,
-  M extends Table,
   Flow extends Table,
-  A extends Table,
-  Charge extends Table,
-  Command extends Table,
   N,
   Expression extends SqlExpression = SqlExpression,
 > extends PasskeyPersistenceMapping<
-  PasskeyCredentialMapping<S, C, F, O, H, N, Expression>,
-  M,
+  PasskeyCredentialMapping<S, C, F, N, Expression>,
   Flow,
-  A,
-  Charge,
   N,
   Expression,
   C
 > {
-  readonly write: PasskeyWriteTables<S, C, F, O, H, N, Expression>;
-  readonly command: PasskeyCommandTable<Command, N>;
-  readonly managementConstraints: typeof requiredPasskeyManagementConstraints;
+  readonly write: PasskeyWriteTables<S, C, F, N, Expression>;
   /** Removal must match the installed session strategy and change the subject revision; immediate sessions must consult that authority or be updated here. Enrollment preserves existing authentication. */
   readonly invalidation: {
     readonly window: SessionInvalidationWindow;
@@ -173,8 +125,6 @@ export interface PasskeyManagementMapping<
     readonly postcondition: (input: PasskeyInvalidationInput<N>) => Expression;
   };
 }
-
-export const requiredPasskeyManagementConstraints = { command: ["moduleId", "commandId"] } as const;
 
 export interface PasskeyManagementServices extends PasskeyPersistenceServices {
   readonly passkeyManagementPersistence: PasskeyManagementPersistence["Service"];
@@ -193,16 +143,15 @@ export interface PasskeyRegistrationWriter<R> {
   readonly issueRegistration: <A>(
     input: {
       readonly ceremony: PasskeyCeremony;
-      readonly policy: PasskeyMethodPolicy;
       readonly registration: R;
     },
     prepare: PreparePasskeyCommit<PasskeyIssueDecision, A>,
   ) => Effect.Effect<PreparedCommit<A>, PasskeyUnavailable>;
   readonly completeRegistration: <A>(
     input: {
-      readonly claim: PasskeyClaim;
+      readonly access: PasskeyAccess;
+      readonly ceremony: PasskeyCeremony;
       readonly verified: PasskeyRegistrationVerified;
-      readonly nowMillis: number;
     },
     prepare: PreparePasskeyCommit<
       | PasskeyRegistrationResult
@@ -222,45 +171,21 @@ export interface PasskeyRegistrationMapping<
   S extends Table,
   C extends Table,
   F extends Table,
-  O extends Table,
-  H extends Table,
-  M extends Table,
   Flow extends Table,
-  A extends Table,
-  Charge extends Table,
-  Intent extends Table,
   N,
   R,
   Expression extends SqlExpression = SqlExpression,
 > extends PasskeyPersistenceMapping<
-  PasskeyCredentialMapping<S, C, F, O, H, N, Expression>,
-  M,
+  PasskeyCredentialMapping<S, C, F, N, Expression>,
   Flow,
-  A,
-  Charge,
   N,
   Expression,
   C
 > {
-  readonly write: PasskeyWriteTables<S, C, F, O, H, N, Expression>;
+  readonly write: PasskeyWriteTables<S, C, F, N, Expression>;
   readonly flow: PasskeyFlowTable<Flow>;
-  readonly handle: PasskeyHandleReservationTable<H, Expression> & {
-    readonly reservedState: unknown;
-    readonly encodeInsert: (input: {
-      readonly ceremony: PasskeyCeremony;
-      readonly reservationId: string;
-    }) => H["insert"];
-  };
-  readonly intent: PasskeyRegistrationIntentReadTable<Intent, Expression> & {
-    readonly pendingState: unknown;
-    readonly acceptedState: unknown;
-    readonly rejectedState: unknown;
-    readonly encodeInsert: (input: {
-      readonly ceremony: PasskeyCeremony;
-      readonly registration: R;
-      readonly reservationId: string;
-    }) => Intent["insert"];
-  };
+  /** Schema-encoded original registration payload on the same immutable flow row. */
+  readonly applicationSnapshot: PasskeyColumn<Flow>;
   /** Consumer-owned data and identity, synchronously encoded inside the owner. A SQL-local registration creates no session and needs no email address. */
   readonly registration: {
     readonly schema: Schema.Codec<R, unknown, never, never>;
@@ -271,12 +196,13 @@ export interface PasskeyRegistrationMapping<
     readonly eligible: (registration: R) => Expression;
     /** Commit-time application policy after provisioning. Unlike `eligible`, this
      * must permit the newly created subject and retain every mutable prerequisite.
-     * Declare mutable external policy rows in module.guards so native locking
-     * owners serialize revocation through commit; this predicate alone is not a lock. */
+     * Subject-local prerequisites are checked under its lock. */
     readonly finalEligibility: (input: {
       readonly registration: R;
       readonly subjectId: N;
     }) => Expression;
+    /** D1 plans require explicit subject identity, status, and security revision
+     * values; they cannot read database defaults before the atomic batch runs. */
     readonly subject: (input: {
       readonly registration: R;
       readonly ceremony: PasskeyCeremony;
@@ -287,11 +213,4 @@ export interface PasskeyRegistrationMapping<
     };
     readonly activeStatus: unknown;
   };
-  readonly registrationConstraints: typeof requiredPasskeyRegistrationWriteConstraints;
 }
-
-export const requiredPasskeyRegistrationWriteConstraints = {
-  intentFlow: ["moduleId", "flowId"],
-  intentCommand: ["moduleId", "commandId"],
-  handle: ["handleKey"],
-} as const;

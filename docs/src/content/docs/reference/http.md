@@ -9,10 +9,9 @@ and the [Effect Atom client](../guide/client) to call it. Both use the same
 
 ## Route defaults
 
-| Actions                             | HTTP method | Default path                                          |
-| ----------------------------------- | ----------- | ----------------------------------------------------- |
-| `getSession`, `requireSession`      | GET         | `/auth/getSession`, `/auth/requireSession`            |
-| `signIn`, `signOut`, `renewSession` | POST        | `/auth/signIn`, `/auth/signOut`, `/auth/renewSession` |
+- **`requireSession`**: GET `/auth/requireSession`
+- **`getSession`**: POST `/auth/getSession`
+- **`signIn`, `signOut`, `renewSession`**: POST `/auth/signIn`, `/auth/signOut`, `/auth/renewSession`
 
 No-input queries use GET. Queries with payloads use POST so their inputs stay out
 of URLs. Change the shared prefix with `basePath` on `AuthContract.make`; server
@@ -31,12 +30,15 @@ http.handlers(Api, { name: "account" });
 
 Configure paths through `basePath` rather than prefixing the generated endpoints.
 
+`getSession` accepts `{}` or `{ "payload": { "fresh": true } }` as its JSON body.
+The fresh option bypasses the cookie cache; the call remains a read-only query.
+
 ## Cookies and request policy
 
 Cookies default to `Secure`, `HttpOnly`, `SameSite=Lax`, path `/`, and the
 `__Host-effect-auth-` prefix. Override `cookie.name` for the session slot or
 `cookie.prefix` for all slots. Secure custom names and prefixes must begin with
-`__Host-`; their cookies retain path `/` and no Domain. `cookie.secure: false` is
+`__Host-` without a cookie domain. `cookie.secure: false` is
 allowed only with HTTP loopback origins (`localhost`, `127.0.0.1`, or `[::1]`).
 Use your real HTTPS origin; never derive trusted origins from an untrusted request
 header. Invalid combinations fail startup.
@@ -44,10 +46,36 @@ header. Invalid combinations fail startup.
 OAuth callbacks need the request-binding cookie on a cross-site return. Keep
 `SameSite=Lax`; configuring OAuth with `cookie.sameSite: "strict"` fails startup.
 
-POST auth actions require the configured Origin, JSON content type, and
+`cookie.domain` shares every auth cookie with a bare host and its subdomains
+(no scheme, port, path, or leading dot). It requires HTTPS, `Secure`, and
+`__Secure-` names; the default prefix becomes `__Secure-effect-auth-`.
+`__Host-` names fail startup with `OperationHttpConfigurationError`.
+
+`trustedOrigins` adds exact origins alongside `origin` for request admission.
+HTTPS origins are supported in every configuration. A host-only HTTP loopback
+`origin` with `cookie.secure: false` also admits additional HTTP loopback origins
+(`localhost`, `127.0.0.1`, or `[::1]`). An HTTPS primary origin and domain cookies require HTTPS throughout;
+with a cookie domain, all origins must be inside it. Wildcards and URL paths are
+rejected, and ports must match. Absolute OAuth and email return targets keep their
+separate HTTPS allowlist policy.
+
+Native `Http.layer`, `http.routes()`, and `http.handlers(Api)` mount the selected
+GET/POST actions. Configure global credentialed CORS for cross-origin clients so
+`OPTIONS` reaches middleware before route lookup and errors receive CORS headers.
+Allow the exact client origin, credentials, `content-type`, and the configured
+CSRF header (`x-effect-auth-csrf` by default). The
+[cross-origin example](../guide/http-and-client#browser-clients-on-another-origin)
+shows the `HttpRouter.cors` composition. The lower-level
+`OperationHttpServer.handle` has its own preflight handling.
+
+Use domain cookies only when you trust every subdomain to receive and set them.
+See [shared-session setup and security](../guide/http-and-client#sharing-sessions-across-apps).
+
+POST auth actions require an admitted Origin, JSON content type, and
 `x-effect-auth-csrf: 1` by default. GET actions have no body or CSRF header and
-reject an explicitly untrusted Origin. Duplicate credential cookies are rejected,
-and session responses are not cacheable. If you override `csrf` on the server,
+reject an explicitly untrusted Origin. Duplicate authority credentials are rejected;
+invalid or duplicate optional cache cookies are ignored. Session responses are
+not cacheable. If you override `csrf` on the server,
 pass matching settings to `Client.make`.
 
 Named mutations enforce Origin and CSRF before side effects, including local
@@ -56,6 +84,27 @@ For a custom credential-producing workflow, call `http.protect(effect)` inside
 the request boundary; it applies mutation policy and supplies private collectors
 without imposing a body format. Custom hosts still own webhook validation and
 ordinary application mutation policy.
+
+### Session cache cookies
+
+Enable caching with [`Sessions.stateful({ cacheFor })`](../guide/sessions#cache-ordinary-session-reads).
+Both cookies follow the configured auth cookie policy:
+
+- **`session-cache`**: Signed public snapshot bound to the credential and browser generation; expires within `cacheFor` and the session lifetime.
+- **`${sessionCacheCookieName}-generation`**: HttpOnly mutation generation; lasts `maximumIssuedAge`.
+
+Caching starts through authoritative session reads without requiring another
+sign-in. The HTTP response must be able to set cookies; anonymous reads do not
+initialize caching, and disabling it sends no cache cookies.
+
+Admitted mutations clear the snapshot. Other clients and lost responses retain
+the bounded `cacheFor` revocation delay. Do not use cached public claims as private
+authentication evidence.
+
+Snapshot values are capped at `min(maximumTokenBytes, 3072)` bytes; the complete
+serialized cookie, including name and attributes, must fit 4,096 bytes. Oversize,
+encoding, and backend failures report sanitized diagnostics and fall back to
+authoritative reads. Invalid, expired, or duplicate snapshots fall back silently.
 
 ## Proof request rate limits
 
@@ -76,10 +125,13 @@ const AuthLive = AppAuth.layer.pipe(
 );
 ```
 
-Both options must be positive integers. The default Effect memory store retains
-network keys for the runtime's lifetime and resets when it is recreated. For
-shared enforcement across servers, provide an Effect `RateLimiterStore`, such as
-`RateLimiter.layerStoreRedis({ prefix: "auth:requests" })`, to the Auth Layer.
+Both options must be positive integers. The default store is process-local, resets
+when it is recreated, and holds at most 10,000 network keys. At capacity it evicts the
+least recently checked key, which later starts with a full bucket. For
+shared enforcement across servers or per-request runtimes, provide an Effect
+`RateLimiterStore` to the Auth Layer, such as
+[`keyValueRateLimiterStore`](../guide/passwords#share-rate-limits) or
+`RateLimiter.layerStoreRedis({ prefix: "auth:requests" })`.
 An explicitly provided `RateLimiter` or `HostIngressLimiter` also replaces its
 default. Limit malformed traffic at the host before HTTP/RPC parsing.
 
@@ -113,16 +165,16 @@ accepts explicit payload, success, and error schemas.
 Each action selects a server `method` and, when needed, a `strategy`. The method
 defaults to the action's name. You can expose two strategies under different names
 without making the client choose a strategy string. Configure only actions your
-application intends to serve. Passkey and TOTP have dedicated pure contract modules;
-the email, phone, and OAuth flows currently require explicit action schemas.
+application intends to serve. Password and OAuth have shared action helpers;
+passkey and TOTP have dedicated pure contract modules. Email and phone flows
+require explicit action schemas.
 
 Map private method inputs through `requestFields` when declaring an action:
 
-| Method input                                                         | Credential slot      |
-| -------------------------------------------------------------------- | -------------------- |
-| Email, phone, or OAuth `requestBinding`; passkey `bindingCredential` | `request-binding`    |
-| Email continuation `credential`                                      | `proof-continuation` |
-| TOTP `pendingCredential`                                             | `pending-proof`      |
+| Method input                                                         | Credential slot   |
+| -------------------------------------------------------------------- | ----------------- |
+| Email, phone, or OAuth `requestBinding`; passkey `bindingCredential` | `request-binding` |
+| TOTP `pendingCredential`                                             | `pending-proof`   |
 
 The server injects those values from `Auth.AuthRequest`; both named local calls and
 remote payloads omit them. Set `credentials: true` for actions that issue or clear
@@ -134,12 +186,39 @@ delivery, and reveal declarations; the subject projection remains explicit.
 See the [passkey contract](../guide/passkeys#define-the-shared-actions) for a complete
 example and [TOTP](../guide/totp#expose-private-reveals-over-http) for private reveals.
 
+## Diagnostics
+
+Auth emits fixed `stage` and `reason` fields at Effect's `Debug` level for session,
+persistence, and OAuth failures. Unexpected failures retain sanitized `Error` logs;
+public errors stay redacted. Enable diagnostics in your server's request context:
+
+```ts
+import { Layer, Logger, References } from "effect";
+
+const DiagnosticsLive = Layer.mergeAll(
+  Logger.layer([Logger.consoleJson]),
+  Layer.succeed(References.MinimumLogLevel, "Debug"),
+);
+const ServerLive = Routes.pipe(Layer.provideMerge(DiagnosticsLive));
+```
+
+With `HttpRouter.toWebHandler`, expose logging and tracing configuration in the
+built Layer's output as above, or pass it in the handler's request `Context`.
+Auth logs and spans use that invocation context. Failed persistence initialization
+stays cached until its owning Layer is reacquired.
+
+Auth's diagnostic payloads exclude credentials and raw causes. Your application
+owns redaction of its annotations, span names, and logger output. Keep HTTP headers,
+bodies, OAuth URL queries, and SQL parameters out of logs and traces.
+
 ## Lower-level transports
 
 `http.withRequest` wraps a custom Effect returning `HttpServerResponse`.
-`http.operationLayer` supplies browser policy and caller resolution to existing
-`OperationHttpServer` contracts. Those descriptors continue to own private payload
-injection and explicitly selected reveals.
+Raw strategy calls retain mutation admission, including inside GET handlers;
+declare a named query action to expose a read.
+`http.operationLayer` supplies browser policy, caller resolution and configured
+session-cache invalidation to existing `OperationHttpServer` contracts. Those
+descriptors continue to own private payload injection and explicitly selected reveals.
 Encode expected response failures before leaving the request wrapper.
 
 `OperationHttpServer.make` retains configuration and caller resolution. Supply

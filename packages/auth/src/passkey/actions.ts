@@ -1,9 +1,9 @@
 import {
   Cause,
-  Clock,
   Context,
   Crypto,
   DateTime,
+  Duration,
   Effect,
   Fiber,
   Layer,
@@ -11,27 +11,27 @@ import {
   Schema,
 } from "effect";
 import { Base64Url } from "effect/encoding";
+import * as RateLimiter from "effect/persistence/RateLimiter";
 
+import { boundedMemoryRateLimiter, localRateLimiter } from "../auth/rateLimiter";
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
-import { lifecycleSnapshot } from "../hooks/models";
+import { lifecycleSnapshotEffect } from "../hooks/models";
 import { reportAuthFailure } from "../internal/diagnostics";
 import type { AuthOperationResult } from "../operations/credentials";
 import { makeRequestBinding } from "../operations/requestBinding";
-import { AuthenticationAuthority } from "../sessions/AuthenticationAuthority";
 import { AuthenticationFlowId, type AuthenticationEvidence } from "../sessions/models";
 import {
   PasskeyActionRequired,
   PasskeyConfigurationError,
   type PasskeyFailure,
+  type PasskeyProtocolRejected,
   PasskeyMethodUnsupported,
-  PasskeyProtocolRejected,
   PasskeyRejected,
   PasskeyUnavailable,
 } from "./errors";
 import {
-  type PasskeyClaim,
-  PasskeyProfile as PasskeyProfileSchema,
+  type PasskeyRevision,
   PasskeyAccess,
   PasskeyAssertion,
   PasskeyAssertionVerified,
@@ -40,7 +40,6 @@ import {
   type PasskeyAuthenticationStarted,
   PasskeyBegin,
   PasskeyCeremony,
-  PasskeyClaimDecision,
   PasskeyComplete,
   PasskeyContext,
   PasskeyCredential,
@@ -52,7 +51,6 @@ import {
   type PasskeyPurpose,
   PasskeyRegistrationOptions,
   PasskeyRegistrationVerified,
-  PasskeyRevision,
   PasskeyTarget,
   PasskeyUserHandle,
   PasskeyRegistrationComplete,
@@ -61,11 +59,21 @@ import {
 } from "./models";
 import type { PasskeyConfig } from "./PasskeyConfig";
 import { PasskeyCredentials } from "./PasskeyCredentials";
-import { PasskeyEnrollmentContext } from "./PasskeyEnrollmentContext";
 import { PasskeyPersistence, type PreparePasskeyCommit } from "./PasskeyPersistence";
 import { PasskeyProtocol } from "./PasskeyProtocol";
 import { PasskeyMethodPolicy, validatePasskeyPolicy } from "./policy";
-import { freezePasskey, samePasskey, snapshotPasskey, snapshotPasskeySync } from "./snapshot";
+import { freezePasskey, samePasskey, snapshotPasskey, snapshotPasskeyResult } from "./snapshot";
+
+/** Module-wide budgets stay per instance and are shared by every passkey facet. */
+class PasskeyModuleLimiter extends Context.Service<PasskeyModuleLimiter, RateLimiter.RateLimiter>()(
+  "effect-auth/PasskeyModuleLimiter",
+) {}
+
+// One memoized Layer per Auth graph, so all facets charge the same buckets.
+export const passkeyRateLimiterLayer = Layer.merge(
+  boundedMemoryRateLimiter("reject"),
+  Layer.effect(PasskeyModuleLimiter, localRateLimiter("reject")),
+);
 
 export const passkeyNoAmbient = Effect.fn("Passkey.noAmbient")(function* () {
   if (yield* hasCommitScope) return yield* PasskeyMethodUnsupported.make({});
@@ -81,13 +89,11 @@ export const passkeyFailure = (error: { readonly _tag: string }) =>
       ? PasskeyUnavailable.make({})
       : PasskeyRejected.make({});
 
-export const capturePasskeyPolicy = (input: PasskeyMethodPolicy) => {
-  try {
-    return validatePasskeyPolicy(snapshotPasskeySync(PasskeyMethodPolicy, input));
-  } catch {
-    return Effect.fail(PasskeyConfigurationError.make({}));
-  }
-};
+export const capturePasskeyPolicy = (input: PasskeyMethodPolicy) =>
+  Effect.fromResult(snapshotPasskeyResult(PasskeyMethodPolicy, input)).pipe(
+    Effect.mapError(() => PasskeyConfigurationError.make({})),
+    Effect.flatMap(validatePasskeyPolicy),
+  );
 
 const clear = { _tag: "Clear", slot: "request-binding" } as const;
 
@@ -160,6 +166,38 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
     const binder = yield* binding.RequestBinding;
     const crypto = yield* Crypto.Crypto;
     const hooks = yield* LifecycleHooks;
+    const shared = yield* RateLimiter.RateLimiter;
+    const local = yield* PasskeyModuleLimiter;
+
+    const admit = (scope: "global" | "subject" | "target", key: string) =>
+      (scope === "global" ? local : shared)
+        .consume({
+          key: `effect-auth:passkey:${JSON.stringify([moduleId, scope, key])}`,
+          algorithm: "token-bucket",
+          limit: policy.admission[scope].limit,
+          window: Duration.millis(policy.admission[scope].windowMillis),
+          tokens: 1,
+          onExceeded: "fail",
+        })
+        .pipe(
+          Effect.asVoid,
+          Effect.mapError((error) =>
+            error.reason._tag === "RateLimitExceeded"
+              ? PasskeyRejected.make({})
+              : PasskeyUnavailable.make({}),
+          ),
+        );
+
+    const admitContext = Effect.fnUntraced(function* (context: PasskeyContext) {
+      if (context._tag === "Enrollment") yield* admit("subject", context.revision.subjectId);
+      if ("target" in context) {
+        yield* admit("subject", context.target.revision.subjectId);
+        yield* admit(
+          "target",
+          JSON.stringify([context.target.moduleId, context.target.kind, context.target.flowId]),
+        );
+      }
+    });
 
     const random = () =>
       crypto.randomBytes(32).pipe(
@@ -187,13 +225,48 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
 
       return yield* snapshotPasskey(PasskeyAccess, {
         moduleId: id,
-        generation: policy.generation,
         purpose,
         flowId: input.flowId,
         requestBindingVerifier: verified.verifier,
         requestBindingExpiresAtMillis: verified.expiresAtMillis,
-        nowMillis: yield* now,
       });
+    });
+
+    const validateInspection = Effect.fnUntraced(function* (
+      key: PasskeyAccess,
+      raw: PasskeyCeremony,
+      expected?: PasskeyContext,
+    ) {
+      const ceremony = yield* snapshotPasskey(PasskeyCeremony, raw),
+        clock = yield* now;
+
+      if (
+        ceremony.moduleId !== id ||
+        ceremony.purpose !== purpose ||
+        contextPurpose[ceremony.context._tag] !== purpose ||
+        ceremony.flowId !== key.flowId ||
+        ceremony.requestBindingVerifier !== key.requestBindingVerifier ||
+        ceremony.requestBindingExpiresAtMillis !== key.requestBindingExpiresAtMillis ||
+        ceremony.issuedAtMillis > clock ||
+        ceremony.expiresAtMillis <= clock ||
+        ceremony.expiresAtMillis > ceremony.requestBindingExpiresAtMillis ||
+        ceremony.expiresAtMillis <= ceremony.issuedAtMillis
+      )
+        return yield* PasskeyRejected.make({});
+      if (
+        ceremony.context._tag === "SignIn" &&
+        (!ceremony.profile.primarySignIn ||
+          ceremony.profile.residentKey !== "required" ||
+          ceremony.profile.userVerification !== "required")
+      )
+        return yield* PasskeyRejected.make({});
+      if (
+        expected !== undefined &&
+        !(yield* samePasskey(PasskeyContext, ceremony.context, expected))
+      )
+        return yield* PasskeyRejected.make({});
+
+      return { key, ceremony };
     });
 
     const inspect = Effect.fn("Passkey.inspect")(function* (
@@ -211,50 +284,23 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
         input,
       );
 
+      yield* admit("global", moduleId);
+
       const key = yield* access(input),
         raw = yield* persistence.context(key);
 
       if (raw === undefined) return yield* PasskeyRejected.make({});
 
-      const ceremony = yield* snapshotPasskey(PasskeyCeremony, raw),
-        clock = yield* now;
+      const inspected = yield* validateInspection(key, raw, expected);
 
-      if (
-        ceremony.moduleId !== id ||
-        ceremony.generation !== policy.generation ||
-        ceremony.purpose !== purpose ||
-        contextPurpose[ceremony.context._tag] !== purpose ||
-        ceremony.flowId !== input.flowId ||
-        ceremony.requestBindingVerifier !== key.requestBindingVerifier ||
-        ceremony.requestBindingExpiresAtMillis !== key.requestBindingExpiresAtMillis ||
-        ceremony.issuedAtMillis > clock ||
-        ceremony.expiresAtMillis <= clock ||
-        ceremony.expiresAtMillis > ceremony.requestBindingExpiresAtMillis ||
-        ceremony.expiresAtMillis - ceremony.issuedAtMillis > policy.lifetimeMillis ||
-        ceremony.retentionUntilMillis !== ceremony.issuedAtMillis + policy.retentionMillis ||
-        ceremony.claimLifetimeMillis !== policy.claimLifetimeMillis
-      )
-        return yield* PasskeyRejected.make({});
-      if (
-        !(yield* samePasskey(
-          PasskeyProfileSchema,
-          ceremony.profile,
-          yield* profile(ceremony.profile.profileId),
-        ))
-      )
-        return yield* PasskeyRejected.make({});
-      if (
-        expected !== undefined &&
-        !(yield* samePasskey(PasskeyContext, ceremony.context, expected))
-      )
-        return yield* PasskeyRejected.make({});
+      yield* admitContext(inspected.ceremony.context);
 
-      return { key, ceremony };
+      return inspected;
     });
 
     const before = Effect.fn("Passkey.before")(function* (context: PasskeyContext) {
       yield* hooks.before(
-        lifecycleSnapshot({
+        yield* lifecycleSnapshotEffect({
           action:
             purpose === "registration"
               ? "registration"
@@ -271,7 +317,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
             : "target" in context
               ? { subjectId: context.target.revision.subjectId }
               : {}),
-        }),
+        }).pipe(Effect.orDie),
       );
     });
 
@@ -281,6 +327,9 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
       allowed: ReadonlyArray<typeof PasskeyDescriptor.Type>,
     ) {
       yield* passkeyNoAmbient();
+      yield* admit("global", moduleId);
+      yield* admitContext(context);
+
       const selected = yield* profile(input.profileId);
 
       if (contextPurpose[context._tag] !== purpose) return yield* PasskeyRejected.make({});
@@ -315,7 +364,6 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
 
       const ceremony = yield* snapshotPasskey(PasskeyCeremony, {
         moduleId: id,
-        generation: policy.generation,
         flowId: input.flowId,
         commandId: input.commandId,
         purpose,
@@ -325,8 +373,6 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
         requestBindingExpiresAtMillis: verified.expiresAtMillis,
         issuedAtMillis: timestamp,
         expiresAtMillis,
-        retentionUntilMillis: timestamp + policy.retentionMillis,
-        claimLifetimeMillis: policy.claimLifetimeMillis,
         allowedCredentials: allowed,
         context: fixed,
       });
@@ -377,7 +423,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
 
       const result = yield* snapshotPasskey(
         PasskeyIssueDecision,
-        yield* readPasskeyCommit(yield* persistence.issue({ ceremony, policy }, prepare)),
+        yield* readPasskeyCommit(yield* persistence.issue({ ceremony }, prepare)),
       );
 
       if (result._tag !== "Issued") return yield* PasskeyRejected.make({});
@@ -472,108 +518,13 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
       } satisfies AuthOperationResult<PasskeyRegistrationStarted>;
     }, passkeyUnexpected);
 
-    const claim = Effect.fn("Passkey.claim")(function* (
-      inspected: Effect.Success<ReturnType<typeof inspect>>,
-      credential?: PasskeyCredential,
-    ) {
-      const claimId = yield* random();
-      const startedNanos = yield* Clock.monotonicTimeNanos;
-
-      const decision = yield* snapshotPasskey(
-        PasskeyClaimDecision,
-        yield* readPasskeyCommit(
-          yield* persistence.claim(
-            {
-              ...inspected,
-              access: inspected.key,
-              policy,
-              claimId,
-              ...(credential === undefined ? {} : { credential }),
-            },
-            prepare,
-          ),
-        ),
-      );
-
-      if (decision._tag !== "Claimed") return yield* PasskeyRejected.make({});
-
-      const result = decision.claim;
-
-      const diagnostic = {
-        claimIdMatches: result.claimId === claimId,
-        ceremonyMatches: yield* samePasskey(PasskeyCeremony, result.ceremony, inspected.ceremony),
-        claimChronologyValid:
-          result.claimedAtMillis >= inspected.ceremony.issuedAtMillis &&
-          result.claimedAtMillis < inspected.ceremony.expiresAtMillis,
-        claimExpiryMatches:
-          result.claimExpiresAtMillis ===
-          Math.min(
-            result.claimedAtMillis + policy.claimLifetimeMillis,
-            inspected.ceremony.expiresAtMillis,
-          ),
-      };
-
-      if (!Object.values(diagnostic).every(Boolean))
-        return yield* Effect.die(new globalThis.Error("Invalid passkey claim receipt")).pipe(
-          passkeyUnexpected,
-          Effect.annotateLogs({ passkeyGuard: "claim", ...diagnostic }),
-        );
-
-      // Persistence owns epoch timestamps and final liveness. Count its granted
-      // duration from before the claim round trip, using only our monotonic clock.
-      // This conservatively subtracts transport/commit time without assuming that
-      // the database and application wall clocks agree. Never persist this timer.
-      return {
-        claim: result,
-        deadlineNanos:
-          startedNanos + BigInt(result.claimExpiresAtMillis - result.claimedAtMillis) * 1_000_000n,
-      };
-    });
-
-    const terminal = Effect.fn("Passkey.terminal")(function* (
-      claimed: PasskeyClaim,
-      outcome: "Rejected" | "Ambiguous",
-    ) {
-      const result = yield* readPasskeyCommit(
-        yield* persistence.settle(
-          { claim: claimed, outcome: { _tag: outcome }, nowMillis: yield* now },
-          prepare,
-        ),
-      );
-
-      if (result !== outcome) return yield* PasskeyUnavailable.make({});
-    });
-
-    const verify = <A, E, R>(
-      claimed: PasskeyClaim,
-      deadlineNanos: bigint,
-      operation: Effect.Effect<A, E, R>,
+    const verify = <A, R>(
+      ceremony: PasskeyCeremony,
+      operation: Effect.Effect<A, PasskeyFailure | PasskeyProtocolRejected, R>,
     ) =>
-      Effect.gen(function* () {
-        const remaining = Number(deadlineNanos - (yield* Clock.monotonicTimeNanos)) / 1_000_000;
-
-        if (remaining <= 0) return yield* PasskeyRejected.make({});
-
-        return yield* bounded(operation, remaining);
-      }).pipe(
-        passkeyUnexpected,
-        Effect.catch((error) =>
-          terminal(
-            claimed,
-            error instanceof PasskeyProtocolRejected || error instanceof PasskeyRejected
-              ? "Rejected"
-              : "Ambiguous",
-          ).pipe(
-            Effect.andThen(
-              Effect.fail(
-                error instanceof PasskeyProtocolRejected || error instanceof PasskeyRejected
-                  ? PasskeyRejected.make({})
-                  : PasskeyUnavailable.make({}),
-              ),
-            ),
-          ),
-        ),
-        Effect.onInterrupt(() => terminal(claimed, "Ambiguous").pipe(Effect.ignore)),
+      bounded(operation, ceremony.expiresAtMillis - ceremony.issuedAtMillis).pipe(
+        Effect.catchTag("TimeoutError", () => Effect.fail(PasskeyUnavailable.make({}))),
+        Effect.catchTag("PasskeyProtocolRejected", () => Effect.fail(PasskeyRejected.make({}))),
       );
 
     const authentication = Effect.fn("Passkey.authentication")(function* (
@@ -603,16 +554,14 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
 
         if (found !== undefined) credential = yield* snapshotPasskey(PasskeyCredential, found);
       }
-      const { claim: claimed, deadlineNanos } = yield* claim(inspected, credential);
 
       const verified = yield* verify(
-        claimed,
-        deadlineNanos,
+        inspected.ceremony,
         Effect.gen(function* () {
           if (credential === undefined || decoded._tag !== "Success")
             return yield* PasskeyRejected.make({});
 
-          const ceremony = claimed.ceremony,
+          const ceremony = inspected.ceremony,
             context = ceremony.context;
 
           const supplied = decoded.success.response.userHandle ?? undefined;
@@ -622,6 +571,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
             credential.rpId !== ceremony.profile.rpId ||
             credential.protocolCredentialId !== decoded.success.id ||
             credential.profile.rpId !== credential.rpId ||
+            !ceremony.profile.algorithms.includes(credential.algorithm) ||
             (credential.backupState && !credential.backupEligible) ||
             !credential.revision.credentials.some(
               (item) => item.credentialId === credential.credentialId,
@@ -650,41 +600,15 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
             return yield* PasskeyRejected.make({});
           const original = "target" in context ? context.target.revision : credential.revision;
 
-          const ids = [
-            ...new Set([
-              ...original.credentials.map((item) => item.credentialId),
-              credential.credentialId,
-            ]),
-          ];
+          const revision = credential.revision;
 
-          const revision = yield* snapshotPasskey(
-            PasskeyRevision,
-            yield* (yield* AuthenticationAuthority)
-              .capture(original.subjectId, ids)
-              .pipe(
-                Effect.mapError((error) =>
-                  error._tag === "SessionUnavailable"
-                    ? PasskeyUnavailable.make({})
-                    : PasskeyRejected.make({}),
-                ),
-              ),
-          );
+          if (context._tag === "SignIn") yield* admit("subject", revision.subjectId);
 
           if (
             revision.securityRevision !== original.securityRevision ||
             revision.subjectId !== original.subjectId ||
             original.credentials.some(
               (item) =>
-                !revision.credentials.some(
-                  (current) =>
-                    current.credentialId === item.credentialId &&
-                    current.revision === item.revision,
-                ),
-            ) ||
-            credential.revision.securityRevision !== original.securityRevision ||
-            credential.revision.credentials.some(
-              (item) =>
-                item.credentialId === credential.credentialId &&
                 !revision.credentials.some(
                   (current) =>
                     current.credentialId === item.credentialId &&
@@ -708,11 +632,11 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
             result.userHandle !== supplied ||
             result.backupEligible !== credential.backupEligible ||
             (result.backupState && !result.backupEligible) ||
-            (ceremony.profile.userVerification === "required" && !result.userVerified) ||
+            ((context._tag === "SignIn" || ceremony.profile.userVerification === "required") &&
+              !result.userVerified) ||
             (!credential.backupEligible &&
               (credential.counter > 0 || result.counter > 0) &&
-              result.counter <= credential.counter) ||
-            (yield* Clock.monotonicTimeNanos) >= deadlineNanos
+              result.counter <= credential.counter)
           )
             return yield* PasskeyRejected.make({});
 
@@ -740,33 +664,30 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
         }),
       );
 
-      const settled = yield* readPasskeyCommit(
-        yield* persistence.settle(
+      const consumed = yield* readPasskeyCommit(
+        yield* persistence.consume(
           {
-            claim: claimed,
-            outcome: {
-              _tag: "Assertion",
-              credential: verified.credential,
-              assertion: verified.assertion,
-              evidence: verified.evidence,
-            },
-            nowMillis: yield* now,
+            access: inspected.key,
+            ceremony: verified.ceremony,
+            credential: verified.credential,
+            assertion: verified.assertion,
           },
           prepare,
         ),
       );
 
-      if (settled !== "Verified") return yield* PasskeyRejected.make({});
+      if (consumed !== "Verified") return yield* PasskeyRejected.make({});
 
       return { ...verified, credentialCommands: [clear] as const };
     }, passkeyUnexpected);
 
     const verifyRegistration = Effect.fn("Passkey.verifyRegistration")(function* (
       input: PasskeyRegistrationComplete,
-      expected: PasskeyContext | undefined,
+      captured: Effect.Success<ReturnType<typeof inspect>>,
     ) {
+      yield* passkeyNoAmbient();
       input = yield* snapshotPasskey(Schema.toType(PasskeyRegistrationComplete), input);
-      const inspected = yield* inspect(input, expected);
+      const inspected = captured;
 
       yield* before(inspected.ceremony.context);
 
@@ -778,25 +699,22 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
       yield* Schema.decodeEffect(Schema.toType(PasskeyAttestation))(input.response).pipe(
         Effect.mapError(() => PasskeyRejected.make({})),
       );
-      const { claim: claimed, deadlineNanos } = yield* claim(inspected);
 
       const verified = yield* verify(
-        claimed,
-        deadlineNanos,
+        inspected.ceremony,
         Effect.gen(function* () {
           const result = yield* snapshotPasskey(
             PasskeyRegistrationVerified,
             yield* protocol.verifyRegistration({
-              ceremony: claimed.ceremony,
+              ceremony: inspected.ceremony,
               response: input.response,
             }),
           );
 
           if (
             (result.backupState && !result.backupEligible) ||
-            (claimed.ceremony.profile.userVerification === "required" && !result.userVerified) ||
-            !claimed.ceremony.profile.algorithms.includes(result.algorithm) ||
-            (yield* Clock.monotonicTimeNanos) >= deadlineNanos
+            (inspected.ceremony.profile.userVerification === "required" && !result.userVerified) ||
+            !inspected.ceremony.profile.algorithms.includes(result.algorithm)
           )
             return yield* PasskeyRejected.make({});
 
@@ -804,7 +722,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
         }),
       );
 
-      return Object.freeze({ claim: claimed, verified });
+      return Object.freeze({ access: inspected.key, ceremony: inspected.ceremony, verified });
     }, passkeyUnexpected);
 
     const exclusions = Effect.fn("Passkey.exclusions")(function* (
@@ -813,7 +731,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
     ) {
       const selected = yield* profile(profileId);
 
-      const captured = yield* (yield* PasskeyEnrollmentContext).capture({
+      const captured = yield* (yield* PasskeyCredentials).listForSubject({
         moduleId: id,
         rpId: selected.rpId,
         subjectId,
@@ -875,27 +793,24 @@ export const makePasskeyActions = <const Id extends string>(
     PasskeyActionAssertions,
     Effect.gen(function* () {
       const runtime = yield* ceremony.make,
-        authority = yield* AuthenticationAuthority,
-        credentials = yield* PasskeyCredentials,
-        enrollment = yield* PasskeyEnrollmentContext;
+        credentials = yield* PasskeyCredentials;
 
       return PasskeyActionAssertions.of({
         begin: Effect.fn("PasskeyActionAssertions.begin")(
           function* (input, target) {
-            const authority = yield* AuthenticationAuthority;
             const fixed = yield* snapshotPasskey(PasskeyTarget, target);
             const captured = yield* runtime.exclusions(input.profileId, fixed.revision.subjectId);
 
-            const current = yield* authority
-              .capture(
-                fixed.revision.subjectId,
-                fixed.revision.credentials.map((item) => item.credentialId),
-              )
-              .pipe(Effect.mapError(() => PasskeyActionRequired.make({})));
-
             if (
-              !(yield* samePasskey(PasskeyRevision, current, fixed.revision)) ||
-              captured.revision.securityRevision !== fixed.revision.securityRevision
+              captured.revision.securityRevision !== fixed.revision.securityRevision ||
+              fixed.revision.credentials.some(
+                (item) =>
+                  !captured.revision.credentials.some(
+                    (current) =>
+                      current.credentialId === item.credentialId &&
+                      current.revision === item.revision,
+                  ),
+              )
             )
               return yield* PasskeyActionRequired.make({});
 
@@ -906,8 +821,7 @@ export const makePasskeyActions = <const Id extends string>(
             );
           },
           passkeyUnexpected,
-          Effect.provideService(AuthenticationAuthority, authority),
-          Effect.provideService(PasskeyEnrollmentContext, enrollment),
+          Effect.provideService(PasskeyCredentials, credentials),
         ),
         complete: Effect.fn("PasskeyActionAssertions.complete")(
           function* (input, target) {
@@ -916,12 +830,11 @@ export const makePasskeyActions = <const Id extends string>(
             return yield* runtime.authentication(input, { _tag: "Action", target: fixed });
           },
           passkeyUnexpected,
-          Effect.provideService(AuthenticationAuthority, authority),
           Effect.provideService(PasskeyCredentials, credentials),
         ),
       });
     }),
-  );
+  ).pipe(Layer.provide(passkeyRateLimiterLayer));
 
   return Object.freeze({ PasskeyActionAssertions, binding: ceremony.binding, layer });
 };

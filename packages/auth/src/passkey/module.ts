@@ -1,18 +1,19 @@
-import { Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
+import { Context, Effect, Layer, Schema, type Types } from "effect";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
-import { cryptoLayer, defaultLayer, hooksLayer } from "../auth/defaults";
+import { defaultLayer, hooksLayer } from "../auth/defaults";
 import type { AuthInvocation } from "../operations/context";
 import type { AuthOperationResult } from "../operations/credentials";
 import { operationGroup } from "../operations/operation";
 import { make as makePasskeyContract } from "../PasskeyContract";
+import { CleanupLimit, type CleanupResult } from "../persistence/cleanup";
 import type { SubjectId } from "../Schema";
-import type { AuthenticationAuthority } from "../sessions/AuthenticationAuthority";
 import type { makeSessionModule } from "../sessions/module";
 import {
   makePasskeyActions,
   capturePasskeyPolicy,
   passkeyUnexpected,
+  passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
   readPasskeyCommit,
@@ -22,7 +23,6 @@ import { PasskeyMethodUnsupported, PasskeyRejected, PasskeyUnavailable } from ".
 import { makePasskeyManagement } from "./management";
 import {
   type PasskeyAuthenticationStarted,
-  type PasskeyCleanupResult,
   PasskeyBegin,
   PasskeyComplete,
   type PasskeyCredential,
@@ -45,12 +45,7 @@ export const capturePasskeyConfiguration = (options: PasskeyConfiguration) => {
   const configured = options.policy;
 
   const policy = {
-    generation: configured?.generation ?? 1,
     lifetimeMillis: configured?.lifetimeMillis ?? 300_000,
-    claimLifetimeMillis: configured?.claimLifetimeMillis ?? 30_000,
-    retentionMillis: configured?.retentionMillis ?? 3_600_000,
-    maximumPending: configured?.maximumPending ?? 1000,
-    maximumPendingPerSubject: configured?.maximumPendingPerSubject ?? 5,
     admission:
       configured?.admission === undefined
         ? {
@@ -122,8 +117,8 @@ export const makePasskeyMethod = <
       >;
       readonly cleanup: (
         invocation: AuthInvocation,
-        limit: number,
-      ) => Effect.Effect<PasskeyCleanupResult, PasskeyFailure>;
+        limit: CleanupLimit,
+      ) => Effect.Effect<CleanupResult, PasskeyFailure>;
     }
   >(`effect-auth/Passkeys/${moduleId.length}:${moduleId}`);
 
@@ -136,10 +131,7 @@ export const makePasskeyMethod = <
         persistence = yield* PasskeyPersistence;
 
       const services = yield* Effect.context<
-        | PasskeyCredentials
-        | AuthenticationAuthority
-        | Claims["EncodingServices"]
-        | Claims["DecodingServices"]
+        PasskeyCredentials | Claims["EncodingServices"] | Claims["DecodingServices"]
       >();
 
       const claimsCodec = Schema.toCodecJson(Schema.toType(sessions.claims));
@@ -178,7 +170,11 @@ export const makePasskeyMethod = <
 
           const result = yield* readPasskeyCommit(
             yield* completion
-              .prepare({ evidence: verified.evidence, claims: captured })
+              .prepare({
+                evidence: verified.evidence,
+                requirement: verified.credential.requirement,
+                claims: captured,
+              })
               .pipe(
                 Effect.mapError((error) =>
                   error._tag === "HookDenied"
@@ -200,20 +196,19 @@ export const makePasskeyMethod = <
         cleanup: Effect.fn("Passkeys.cleanup")(function* (invocation, limit) {
           yield* passkeyNoAmbient();
           if (invocation._tag !== "System") return yield* PasskeyMethodUnsupported.make({});
-          yield* Schema.decodeEffect(
-            Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-          )(limit).pipe(Effect.mapError(() => PasskeyRejected.make({})));
+          yield* Schema.decodeEffect(CleanupLimit)(limit).pipe(
+            Effect.mapError(() => PasskeyRejected.make({})),
+          );
 
           return yield* readPasskeyCommit(
-            yield* persistence.cleanup(
-              { moduleId, nowMillis: DateTime.toEpochMillis(yield* DateTime.now), limit },
-              (value, journal) => journal.prepare(value),
+            yield* persistence.cleanup({ moduleId, limit }, (value, journal) =>
+              journal.prepare(value),
             ),
           );
         }, passkeyUnexpected),
       });
     }),
-  );
+  ).pipe(Layer.provide(passkeyRateLimiterLayer));
 
   const { Begin, Complete, Cleanup } = makePasskeyContract(moduleId, sessions).operations;
 
@@ -237,7 +232,6 @@ export const makePasskeyMethod = <
     Layer.provide(defaultLayer(Passkeys, layer)),
     Layer.provide(defaultLayer(ceremony.binding.RequestBinding, ceremony.binding.layer)),
     Layer.provide(hooksLayer),
-    Layer.provide(cryptoLayer),
   );
 
   const registration = <Registration extends Schema.Codec<unknown, unknown, unknown, unknown>>(
@@ -256,7 +250,6 @@ export const makePasskeyMethod = <
           Layer.provide(defaultLayer(module.Registrations, module.layer)),
           Layer.provide(defaultLayer(module.binding.RequestBinding, module.binding.layer)),
           Layer.provide(hooksLayer),
-          Layer.provide(cryptoLayer),
         ),
       ),
     });
@@ -287,7 +280,6 @@ export const makePasskeyMethod = <
           Layer.provide(defaultLayer(module.Management, module.layer)),
           Layer.provide(defaultLayer(module.binding.RequestBinding, module.binding.layer)),
           Layer.provide(hooksLayer),
-          Layer.provide(cryptoLayer),
         ),
       ),
     });
@@ -308,7 +300,6 @@ export const makePasskeyMethod = <
           defaultLayer(pendingModule.binding.RequestBinding, pendingModule.binding.layer),
         ),
         Layer.provide(hooksLayer),
-        Layer.provide(cryptoLayer),
       ),
       { completion: true },
     ),
@@ -329,7 +320,6 @@ export const makePasskeyMethod = <
           defaultLayer(stepUpModule.binding.RequestBinding, stepUpModule.binding.layer),
         ),
         Layer.provide(hooksLayer),
-        Layer.provide(cryptoLayer),
       ),
     ),
   });

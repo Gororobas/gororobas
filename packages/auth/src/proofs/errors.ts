@@ -20,11 +20,6 @@ export class ProofConfigurationError extends Schema.TaggedError<ProofConfigurati
   },
 ) {}
 
-export class ProofRequestConflict extends Schema.TaggedError<ProofRequestConflict>()(
-  "ProofRequestConflict",
-  {},
-) {}
-
 export class ProofCapabilityUnsupported extends Schema.TaggedError<ProofCapabilityUnsupported>()(
   "ProofCapabilityUnsupported",
   {},
@@ -38,7 +33,6 @@ export class ProofIngressDenied extends Schema.TaggedError<ProofIngressDenied>()
 export const ProofError = Schema.Union([
   ProofInvalid,
   ProofUnavailable,
-  ProofRequestConflict,
   ProofCapabilityUnsupported,
   ProofIngressDenied,
 ]);

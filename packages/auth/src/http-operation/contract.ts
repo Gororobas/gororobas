@@ -53,8 +53,10 @@ export const route = <
   },
 ): OperationHttpRoute<O, NoInfer<Fields>> => {
   if (!Schema.is(Schema.String.check(Schema.isPattern(/^\/(?:[A-Za-z0-9_-]+\/?)*$/)))(options.path))
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous route construction rejects invalid static contracts.
     throw OperationHttpConfigurationError.make({ reason: "route" });
   if (operation.exposure !== "public" && options.allowInternal !== true)
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous route construction rejects invalid static contracts.
     throw OperationHttpConfigurationError.make({ reason: "internal-operation" });
   const reveals = [...(options.reveals ?? [])];
 
@@ -62,6 +64,7 @@ export const route = <
     new Set(reveals).size !== reveals.length ||
     reveals.some((kind) => !operation.reveals.includes(kind))
   )
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous route construction rejects invalid static contracts.
     throw OperationHttpConfigurationError.make({ reason: "credentials" });
 
   return Object.freeze({
@@ -97,8 +100,10 @@ export const make = <const Routes extends Readonly<Record<string, AnyRoute>>>(ro
 
   for (const value of Object.values(routes)) {
     if (paths.has(value.path))
+      // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous route construction rejects invalid static contracts.
       throw OperationHttpConfigurationError.make({ reason: "duplicate-route" });
     if (tags.has(value.operation.rpc._tag))
+      // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous route construction rejects invalid static contracts.
       throw OperationHttpConfigurationError.make({ reason: "duplicate-operation" });
     paths.add(value.path);
     tags.add(value.operation.rpc._tag);

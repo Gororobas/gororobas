@@ -1,10 +1,11 @@
-import { Hooks, Passkey, Password, WebCrypto } from "@yielded/auth";
+import { Hooks, Passkey, Password } from "@yielded/auth";
 import { layer as layerSimpleWebAuthnPasskeyProtocol } from "@yielded/auth-simplewebauthn/Server";
 import { Layer } from "effect";
 
 import { sessionConfiguration } from "../../shared/account/auth";
 import { minimumPasswordLength } from "../../shared/account/contract";
 import { HashingLive } from "../../shared/account/hashing";
+import { CryptoLive } from "../../shared/crypto";
 import { AppAuth } from "./auth";
 import { EmailLive } from "./email";
 import { AccountMethodsLive } from "./methods-live";
@@ -60,5 +61,5 @@ export const AuthLive = AppAuth.layer.pipe(
       developmentLocalhost: true,
     }),
   ),
-  Layer.provide([WebCrypto.layerWebCrypto, Hooks.LifecycleHooks.empty]),
+  Layer.provide([CryptoLive, Hooks.LifecycleHooks.empty]),
 );

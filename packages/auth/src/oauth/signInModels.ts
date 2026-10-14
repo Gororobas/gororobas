@@ -1,8 +1,10 @@
 import { Schema } from "effect";
 
+import { returnTarget } from "../internal/return-target";
 import { RequestBindingCredential, RequestBindingFlowId } from "../operations/requestBinding";
+import { CleanupLimit } from "../persistence/cleanup";
 import { SubjectId, TokenDigest } from "../Schema";
-import { SecurityRevision } from "../sessions/models";
+import { AuthenticationRequirement, SecurityRevision } from "../sessions/models";
 import { OAuthConnectedProfile } from "./permissionProfile";
 import { OAuthGeneration, OAuthProviderKey } from "./schema";
 
@@ -37,10 +39,7 @@ export const OAuthRedirectUri = Schema.String.check(
   Schema.isPattern(/^[^\s\\\u0000-\u001f\u007f#]+$/),
 ).pipe(Schema.brand("effect-auth/OAuthRedirectUri"));
 
-export const OAuthReturnTarget = Schema.String.check(
-  Schema.isMaxLength(2048),
-  Schema.isPattern(/^\/(?!\/)[A-Za-z0-9/_-]*$/),
-).pipe(Schema.brand("effect-auth/OAuthReturnTarget"));
+export const OAuthReturnTarget = returnTarget.pipe(Schema.brand("effect-auth/OAuthReturnTarget"));
 
 export const OAuthProtocolKind = Schema.Literals(["oidc", "oauth"]);
 
@@ -61,7 +60,6 @@ export const OAuthSignInTransactionContext = Schema.Struct({
   moduleId: OAuthModuleId,
   generation: OAuthGeneration,
   flowId: RequestBindingFlowId,
-  commandId: OAuthCommandId,
   ...OAuthProtocolConfiguration.fields,
   /** Captured permission/retention policy; part of the encrypted transaction context. */
   access: Schema.optionalKey(OAuthConnectedProfile),
@@ -74,7 +72,9 @@ export const OAuthSignInTransactionContext = Schema.Struct({
   requestBindingExpiresAtMillis: OAuthInstant,
   issuedAtMillis: OAuthInstant,
   expiresAtMillis: OAuthInstant,
-  claimLifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 120000 })),
+  exchangeTimeoutMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 120000 })),
+  /** Captured at begin. form_post completion can recover the sealed caller without the session cookie. */
+  responseMode: Schema.optionalKey(Schema.Literals(["query", "form_post"])),
 });
 
 export type OAuthSignInTransactionContext = typeof OAuthSignInTransactionContext.Type;
@@ -86,8 +86,8 @@ const randomSecret = Schema.RedactedFromValue(
 export const OAuthTransactionSecrets = Schema.Struct({
   namespace: Schema.Literal("effect-auth/oauth-transaction-secrets/v1"),
   state: randomSecret,
-  pkceVerifier: Schema.RedactedFromValue(
-    Schema.String.check(Schema.isPattern(/^[A-Za-z0-9._~-]{43,128}$/)),
+  pkceVerifier: Schema.optionalKey(
+    Schema.RedactedFromValue(Schema.String.check(Schema.isPattern(/^[A-Za-z0-9._~-]{43,128}$/))),
   ),
   oidcNonce: Schema.optionalKey(randomSecret),
 });
@@ -118,6 +118,7 @@ export const OAuthProtocolPreparation = Schema.Struct({
   configuration: OAuthProtocolConfiguration,
   authorizationUrl: OAuthAuthorizationUrl,
   secrets: OAuthTransactionSecrets,
+  responseMode: Schema.optionalKey(Schema.Literals(["query", "form_post"])),
 });
 
 export type OAuthProtocolPreparation = typeof OAuthProtocolPreparation.Type;
@@ -158,8 +159,9 @@ export const OAuthDisplayProfile = Schema.Struct({
   profileUrl: Schema.optionalKey(displayUrl),
   email: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(320))),
   emailVerified: Schema.optionalKey(Schema.Boolean),
-  /** Provider-specific fields. Use the provider's exported profile Schema to
-   * decode them. Availability follows the existing provider permissions. */
+  /** Provider-specific fields. Declare profile schemas on the OAuth strategy for
+   * typed SessionClaims, or decode with the provider's exported profile Schema.
+   * Availability follows the existing provider permissions. */
   providerData: Schema.optionalKey(
     Schema.JsonObject.check(
       Schema.makeFilter(
@@ -180,6 +182,8 @@ export const OAuthVerifiedExternalIdentity = Schema.Struct({
 export type OAuthVerifiedExternalIdentity = typeof OAuthVerifiedExternalIdentity.Type;
 
 export const OAuthCredentialSnapshot = Schema.Struct({
+  /** Current policy from the same authoritative read as the revision vector. */
+  requirement: AuthenticationRequirement,
   moduleId: OAuthModuleId,
   identity: OAuthExternalIdentity,
   credentialId: Schema.NonEmptyString.check(Schema.isMaxLength(256)),
@@ -198,45 +202,41 @@ export const OAuthCredentialSnapshot = Schema.Struct({
 
 export type OAuthCredentialSnapshot = typeof OAuthCredentialSnapshot.Type;
 
-export const OAuthPendingFlow = Schema.Struct({
+/** The stored flow is deleted before the single provider exchange. */
+export const OAuthSignInFlow = Schema.Struct({
   context: OAuthSignInTransactionContext,
   sealed: OAuthSealedTransaction,
-  retentionUntilMillis: OAuthInstant,
 });
 
-export type OAuthPendingFlow = typeof OAuthPendingFlow.Type;
+export type OAuthSignInFlow = typeof OAuthSignInFlow.Type;
 
-export const OAuthClaim = Schema.Struct({
-  flow: OAuthPendingFlow,
-  claimId: OAuthClaimId,
-  claimedAtMillis: OAuthInstant,
-  claimExpiresAtMillis: OAuthInstant,
+export const OAuthSignInAccess = Schema.Struct({
+  moduleId: OAuthModuleId,
+  generation: OAuthGeneration,
+  flowId: RequestBindingFlowId,
+  provider: OAuthProviderKey,
+  callbackId: OAuthCallbackId,
+  stateDigest: OAuthSignInTransactionContext.fields.stateDigest,
+  requestBindingVerifier: OAuthSignInTransactionContext.fields.requestBindingVerifier,
+  requestBindingExpiresAtMillis: OAuthInstant,
+  responseIssuer: Schema.optionalKey(OAuthIssuer),
 });
 
-export type OAuthClaim = typeof OAuthClaim.Type;
+export type OAuthSignInAccess = typeof OAuthSignInAccess.Type;
 
 export const OAuthIssueDecision = Schema.Union([
-  Schema.TaggedStruct("Issued", { flow: OAuthPendingFlow }),
+  Schema.TaggedStruct("Issued", { flow: OAuthSignInFlow }),
   Schema.TaggedStruct("Rejected", {}),
 ]);
 
 export type OAuthIssueDecision = typeof OAuthIssueDecision.Type;
 
-export const OAuthClaimDecision = Schema.Union([
-  Schema.TaggedStruct("Claimed", { claim: OAuthClaim }),
+export const OAuthConsumeDecision = Schema.Union([
+  Schema.TaggedStruct("Consumed", { flow: OAuthSignInFlow }),
   Schema.TaggedStruct("Rejected", {}),
 ]);
 
-export type OAuthClaimDecision = typeof OAuthClaimDecision.Type;
-
-export const OAuthSettlementDecision = Schema.Union([
-  Schema.TaggedStruct("Verified", { credential: OAuthCredentialSnapshot }),
-  Schema.TaggedStruct("Cancelled", {}),
-  Schema.TaggedStruct("Rejected", {}),
-  Schema.TaggedStruct("Ambiguous", {}),
-]);
-
-export type OAuthSettlementDecision = typeof OAuthSettlementDecision.Type;
+export type OAuthConsumeDecision = typeof OAuthConsumeDecision.Type;
 
 const responseBase = {
   state: Schema.RedactedFromValue(
@@ -252,6 +252,8 @@ export const OAuthCodeResponse = Schema.TaggedStruct("Code", {
   ),
   /** Provider callback scope receipt; adapters must validate before trusting it. */
   scope: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(16384))),
+  /** First-consent name payload. Apple sends this once as a `user` form field. */
+  user: Schema.optionalKey(Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096))),
   error: Schema.optionalKey(Schema.Never),
 });
 
@@ -266,16 +268,26 @@ export const OAuthCallbackResponse = Schema.Union([
   }),
 ]);
 
-/** Public sign-in request. The server generates the attempt and command IDs. */
+export const OAuthAuthorizationPrompt = Schema.Literals([
+  "none",
+  "login",
+  "consent",
+  "select_account",
+]);
+
+export const OAuthLoginHint = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1024));
+
+/** Public sign-in request. The server generates its flow identity. */
 export const OAuthSignInInput = Schema.Struct({
   provider: OAuthProviderKey,
   callbackId: Schema.optionalKey(OAuthCallbackId),
   returnTarget: Schema.String.check(Schema.isMaxLength(2048)),
+  prompt: Schema.optionalKey(OAuthAuthorizationPrompt),
+  loginHint: Schema.optionalKey(OAuthLoginHint),
 });
 
 export const OAuthSignInBegin = Schema.Struct({
   flowId: RequestBindingFlowId,
-  commandId: OAuthCommandId,
   ...OAuthSignInInput.fields,
 });
 
@@ -296,17 +308,14 @@ export const OAuthSignInAuthorization = Schema.Struct({
 export const OAuthSignInPolicy = Schema.Struct({
   generation: OAuthGeneration,
   lifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 1800000 })),
-  claimLifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 120000 })),
-  settlementTimeoutMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30000 })),
-  retentionMillis: Schema.Int.check(Schema.isBetween({ minimum: 120000, maximum: 2592000000 })),
+  exchangeTimeoutMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 120000 })),
 });
 
 export type OAuthSignInPolicy = typeof OAuthSignInPolicy.Type;
 
 export const OAuthCleanupInput = Schema.Struct({
   moduleId: OAuthModuleId,
-  limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-  nowMillis: OAuthInstant,
+  limit: CleanupLimit,
 });
 
 export type OAuthCleanupInput = typeof OAuthCleanupInput.Type;
@@ -314,7 +323,5 @@ export type OAuthCleanupInput = typeof OAuthCleanupInput.Type;
 export const defaultOAuthSignInPolicy: OAuthSignInPolicy = {
   generation: 1,
   lifetimeMillis: 300_000,
-  claimLifetimeMillis: 30_000,
-  settlementTimeoutMillis: 10_000,
-  retentionMillis: 3_600_000,
+  exchangeTimeoutMillis: 30_000,
 };

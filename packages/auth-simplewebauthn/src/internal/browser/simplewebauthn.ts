@@ -90,18 +90,19 @@ const readCapabilities = Effect.gen(function* () {
     };
   const raw = yield* maintained(() => globalThis.PublicKeyCredential.getClientCapabilities());
 
-  const fields = yield* Effect.try({
-    try: () => {
-      if (!Predicate.isObject(raw)) throw unavailable();
+  const fields = yield* Effect.suspend(() => {
+    try {
+      if (!Predicate.isObject(raw)) return Effect.fail(unavailable());
 
-      return {
+      return Effect.succeed({
         conditionalGet: raw.conditionalGet,
         userVerifyingPlatformAuthenticator: raw.userVerifyingPlatformAuthenticator,
         hybridTransport: raw.hybridTransport,
         passkeyPlatformAuthenticator: raw.passkeyPlatformAuthenticator,
-      };
-    },
-    catch: unavailable,
+      });
+    } catch {
+      return Effect.fail(unavailable());
+    }
   });
 
   return yield* decode(nativeCapabilities, fields);
@@ -416,14 +417,14 @@ const registrationResponse = Effect.fn("passkeyBrowserRegistrationResponse")(fun
 ) {
   if (value === null) return yield* incomplete();
 
-  const fields = yield* Effect.try({
-    try: () => {
-      if (!Predicate.isObject(value)) throw unavailable();
+  const fields = yield* Effect.suspend(() => {
+    try {
+      if (!Predicate.isObject(value)) return Effect.fail(unavailable());
       const response = value.response;
 
-      if (!Predicate.isObject(response)) throw unavailable();
+      if (!Predicate.isObject(response)) return Effect.fail(unavailable());
 
-      return {
+      return Effect.succeed({
         id: value.id,
         rawId: value.rawId,
         type: value.type,
@@ -431,9 +432,10 @@ const registrationResponse = Effect.fn("passkeyBrowserRegistrationResponse")(fun
           attestationObject: response.attestationObject,
           clientDataJSON: response.clientDataJSON,
         },
-      };
-    },
-    catch: unavailable,
+      });
+    } catch {
+      return Effect.fail(unavailable());
+    }
   });
 
   const credential = yield* decode(nativeRegistration, fields);
@@ -458,15 +460,15 @@ const authenticationResponse = Effect.fn("passkeyBrowserAuthenticationResponse")
 ) {
   if (value === null) return yield* incomplete();
 
-  const fields = yield* Effect.try({
-    try: () => {
-      if (!Predicate.isObject(value)) throw unavailable();
+  const fields = yield* Effect.suspend(() => {
+    try {
+      if (!Predicate.isObject(value)) return Effect.fail(unavailable());
       const response = value.response;
 
-      if (!Predicate.isObject(response)) throw unavailable();
+      if (!Predicate.isObject(response)) return Effect.fail(unavailable());
       const userHandle = response.userHandle;
 
-      return {
+      return Effect.succeed({
         id: value.id,
         rawId: value.rawId,
         type: value.type,
@@ -476,9 +478,10 @@ const authenticationResponse = Effect.fn("passkeyBrowserAuthenticationResponse")
           signature: response.signature,
           ...(userHandle === undefined ? {} : { userHandle }),
         },
-      };
-    },
-    catch: unavailable,
+      });
+    } catch {
+      return Effect.fail(unavailable());
+    }
   });
 
   const credential = yield* decode(nativeAuthentication, fields);

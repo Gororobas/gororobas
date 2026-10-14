@@ -1,6 +1,10 @@
 import { Context, Effect, Exit, Layer, Option, Schema, Scope, type Types } from "effect";
 
-import { make as makeContract, type AnyAuthContract } from "../operations/actions";
+import {
+  make as makeContract,
+  sessionContractFor,
+  type AnyAuthContract,
+} from "../operations/actions";
 import type { AuthenticationAuthority } from "../sessions/AuthenticationAuthority";
 import {
   configuredLayer,
@@ -11,7 +15,7 @@ import type { SessionConfigurationError } from "../sessions/errors";
 import { makeSessionModule, type ModuleService } from "../sessions/module";
 import { makeActionApi } from "./actions";
 import { AuthConfigurationError } from "./AuthConfigurationError";
-import { cryptoLayer, hooksLayer } from "./defaults";
+import { hooksLayer } from "./defaults";
 import type {
   BoundSelection,
   BoundStrategies,
@@ -230,8 +234,21 @@ const bind = <
   const sessionNamespace = (options.sessionNamespace ?? `${namespace}/sessions`) as SessionId;
   const invalid = configurationError(strategies, defaultStrategy, namespace, sessionNamespace);
 
-  if (invalid !== undefined) throw invalid;
-  const sessions = makeSessionModule(sessionNamespace, options.claims);
+  if (invalid !== undefined)
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous Auth construction rejects invalid static configuration.
+    throw invalid;
+  type ContractDefinition = Contract extends AnyAuthContract
+    ? Contract
+    : ReturnType<typeof makeContract<Id, Claims>>;
+
+  const contract = (shared ??
+    makeContract(namespace, { claims: options.claims })) as ContractDefinition;
+
+  const sessions = makeSessionModule(
+    sessionNamespace,
+    options.claims,
+    sessionContractFor(contract, sessionNamespace, options.claims),
+  );
 
   const modules = Object.fromEntries(
     Object.entries(strategies).map(([key, strategy]) => [
@@ -252,18 +269,11 @@ const bind = <
     Object.entries(modules).map(([key, module]) => [key, module.strategy]),
   ) as BoundSelection<typeof modules>;
 
-  type ContractDefinition = Contract extends AnyAuthContract
-    ? Contract
-    : ReturnType<typeof makeContract<Id, Claims>>;
-
-  const contract = (shared ??
-    makeContract(namespace, { claims: options.claims })) as ContractDefinition;
-
   const create = Effect.gen(function* () {
     const built = yield* build(selected, defaultStrategy);
     const sessionApi = yield* makeSessionApi(sessions);
 
-    const raw = { ...built.api, ...sessionApi };
+    const raw: typeof built.api & typeof sessionApi = { ...built.api, ...sessionApi };
 
     const actions = yield* makeActionApi<
       typeof sessionApi,
@@ -291,7 +301,7 @@ const bind = <
               .completionLayer()
               .pipe(
                 Layer.provideMerge(configuredLayer(sessions, options.sessions)),
-                Layer.provide([cryptoLayer, hooksLayer]),
+                Layer.provide(hooksLayer),
               ),
           );
 
@@ -310,6 +320,7 @@ const bind = <
 
   // Runtime selection mirrors the session mode and presence of selected methods.
   // Unconfigured definitions retain their explicit strategy/completion requirements.
+  // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
   const make = configured as Effect.Effect<
     Effect.Success<typeof create>,
     | Effect.Error<typeof create>
@@ -319,7 +330,10 @@ const bind = <
 
   return Object.freeze({
     claims: options.claims,
-    sessionMode: options.sessions?.mode,
+    // Persistence capability types retain the constructor's selected mode.
+    sessionMode: options.sessions?.mode as Sessions extends SessionConfiguration
+      ? Sessions["mode"]
+      : undefined,
     contract,
     namespace,
     sessions,
@@ -362,7 +376,9 @@ const makeService = <
   options: Options<Claims, S, Default, Namespace, SessionId, Id, Sessions>,
   contract?: Contract,
 ) => {
-  if (!Schema.is(Schema.NonEmptyString)(id)) throw AuthConfigurationError.make({ reason: "id" });
+  if (!Schema.is(Schema.NonEmptyString)(id))
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous Auth construction rejects invalid static configuration.
+    throw AuthConfigurationError.make({ reason: "id" });
 
   const definition = bind<Claims, S, Default, Namespace, SessionId, Sessions, Contract>(
     {
@@ -446,7 +462,9 @@ export function make(
       definition,
     );
   }
-  if (options.claims === undefined) throw AuthConfigurationError.make({ reason: "method" });
+  if (options.claims === undefined)
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous Auth construction rejects invalid static configuration.
+    throw AuthConfigurationError.make({ reason: "method" });
   const namespace = options.namespace ?? definition;
 
   return makeService(definition, {
@@ -472,7 +490,9 @@ export const Service =
     id: Id,
     options: Options<Claims, S, Default, Namespace, SessionId, Id, Sessions>,
   ) => {
-    if (!Schema.is(Schema.NonEmptyString)(id)) throw AuthConfigurationError.make({ reason: "id" });
+    if (!Schema.is(Schema.NonEmptyString)(id))
+      // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous Auth construction rejects invalid static configuration.
+      throw AuthConfigurationError.make({ reason: "id" });
 
     const definition = bind<Claims, S, Default, Namespace, SessionId, Sessions>({
       ...options,

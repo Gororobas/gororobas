@@ -1,9 +1,6 @@
-/** Shared storage contracts and kernels for persistence adapter authors.
- * Supply the captured root through NativeDatabase for catalog validation and
- * standalone execution, alongside each constructor's matching Current*Sql service.
- * Provide a coordinator's exact transaction through Current*Sql when constructing
- * bound services; do not provide the root around their later operations, where
- * Current*Sql identifies an active transaction. */
+/** Adapter integration has two levels: typed table mappings, or NativeSqlTables
+ * with the shared strategy factories. Drivers supply physical codecs, SQL
+ * expressions and transaction/batch capabilities to one commit owner. */
 export {
   type EmailSubjectReadTable,
   type EmailSubjectTable,
@@ -12,18 +9,13 @@ export {
   type EmailCredentialReadTable,
   type EmailCredentialTable,
   type EmailAuthorityCredentialTable,
-  type EmailCommandTable,
   type RequiredEmailSignInConstraints,
   requiredEmailSignInConstraints,
   type EmailSignInMapping,
   type RequiredEmailAddressConstraints,
   requiredEmailAddressConstraints,
-  type EmailD1Clock,
   type EmailAddressMapping,
-  type D1EmailAddressMapping,
-  type EmailRegistrationState,
   type EmailRegistrationIntent,
-  type EmailRegistrationTable,
   type EmailRegistrationProvisioning,
   type EmailRegistrationIdentifierTable,
   type EmailRegistrationCredentialTable,
@@ -34,7 +26,6 @@ export {
   type AnyEmailSignInMapping,
   type AnyEmailAddressMapping,
   type AnyEmailRegistrationMapping,
-  type D1EmailRegistrationMapping,
 } from "./internal/models/email-model";
 
 export {
@@ -42,43 +33,26 @@ export {
   type PasskeyMappingSource,
   type PasskeyCredentialServices,
   type PasskeyPersistenceServices,
-  type PasskeyEnrollmentContextServices,
   passkeyCredentialsLayer,
   passkeyPersistenceLayer,
-  passkeyEnrollmentContextLayer,
   type PasskeySubjectIdCodec,
   type PasskeyClock,
   type PasskeySubjectReadTable,
   type PasskeyFactorReadTable,
   type PasskeyCredentialReadTable,
-  type PasskeyCredentialOwnershipTable,
-  type PasskeyHandleReadTable,
-  type PasskeyHandleReservationTable,
-  type PasskeyHandleOwnershipTable,
   requiredPasskeyCredentialConstraints,
   type PasskeyCredentialMapping,
-  type PasskeyPolicyGuard,
-  passkeyPolicyGuard,
-  type PasskeyModuleTable,
-  type PasskeyFlowState,
   type PasskeyFlowInsert,
   type PasskeyFlowTable,
-  type PasskeyAdmissionTable,
-  type PasskeyChargeKind,
-  type PasskeyChargeInsert,
-  type PasskeyChargeTable,
   requiredPasskeyPersistenceConstraints,
   type PasskeyCeremonyMapping,
   type PasskeyPersistenceMapping,
-  type PasskeyEnrollmentContextMapping,
   type D1PasskeyMapping,
 } from "./internal/models/passkey-model";
 
 export {
   type PasskeyRegistrationCeremonyCapabilities,
   type PasskeyRegistrationCeremonyServices,
-  type PasskeyRegistrationIntentReadTable,
-  requiredPasskeyRegistrationCeremonyConstraints,
   type PasskeyRegistrationCeremonyMapping,
 } from "./internal/models/passkey-registration-ceremony-model";
 
@@ -88,39 +62,22 @@ export {
   type PasskeyInvalidationInput,
   type PasskeyInvalidationMutation,
   passkeyInvalidationMutation,
-  type PasskeyCommandTable,
   type PasskeyManagementMapping,
-  requiredPasskeyManagementConstraints,
   type PasskeyManagementServices,
   type PasskeyRegistrationWriter,
   type PasskeyRegistrationServices,
   type PasskeyRegistrationMapping,
-  requiredPasskeyRegistrationWriteConstraints,
 } from "./internal/models/passkey-write-model";
 
 export {
-  type PasswordAttemptAction,
-  type PasswordAttemptState,
-  type PasswordRateScopeKind,
-  type PasswordScopeKeys,
   type PasswordSubjectTable,
   type PasswordIdentifierTable,
   type PasswordAuthorityCredentialTable,
   type PasswordCredentialTable,
-  type PasswordAttemptRecord,
-  type PasswordAttemptTable,
-  type PasswordRateScopeTable,
-  type PasswordChargeTable,
-  type PasswordCommandTable,
   type RequiredPasswordConstraints,
   requiredPasswordConstraints,
-  type PasswordConstraintClassifier,
-  type PasswordD1Clock,
   type PasswordPersistenceMapping,
-  type D1PasswordPersistenceMapping,
-  type PasswordRegistrationState,
   type PasswordRegistrationIntent,
-  type PasswordRegistrationTable,
   type PasswordRegistrationProvisioning,
   type RequiredPasswordRegistrationConstraints,
   requiredPasswordRegistrationConstraints,
@@ -131,38 +88,22 @@ export {
 } from "./internal/models/password-model";
 
 export {
-  type ProofAction,
-  type ProofScopeKind,
-  type ProofGenerationState,
-  type ProofDeliveryState,
-  type ProofCommandKind,
-  type ProofCommandDecision,
-  type ProofScopeKeys,
-  type ProofAuthorityInput,
-  type ProofAuthorityTables,
-  type ProofRequestTable,
-  type ProofSeriesTable,
-  type ProofGenerationTable,
-  type ProofContinuationRecord,
-  type ProofContinuationTable,
-  type ProofRateScopeTable,
-  type ProofAbuseEventTable,
-  type ProofFailureEventTable,
-  type ProofCommandTable,
+  type ProofTable,
+  type ProofClock,
   type RequiredProofConstraints,
   requiredProofConstraints,
-  type ProofConstraintClassifier,
-  type ProofD1Clock,
   type ProofPersistenceMapping,
-  type D1ProofPersistenceMapping,
   type AnyProofPersistenceMapping,
 } from "./internal/models/proof-model";
 
 export {
   type SessionIdCodec,
+  type SessionExecution,
+  type SessionPendingTables,
+  type SessionPendingInsert,
+  type SessionCleanupMapping,
   type SessionSubjectTables,
   type SessionAuthorityTables,
-  type SessionFlowTables,
   type StatefulSessionTables,
   type PendingAuthenticationTables,
   type SignedSessionValidityTables,
@@ -174,119 +115,30 @@ export {
   requiredPendingAuthenticationConstraints,
   requiredStatefulPendingConstraints,
   requiredSignedValidityConstraints,
-  type SessionConstraintClassifier,
   type AuthenticationAuthorityMapping,
   type StatefulSessionMapping,
   type PendingAuthenticationMapping,
   type SignedSessionValidityMapping,
-  type D1SessionClockMapping,
-  type D1AuthenticationAuthorityMapping,
-  type D1PendingAuthenticationMapping,
-  type D1StatefulSessionMapping,
-  type D1SignedSessionValidityMapping,
 } from "./internal/models/session-model";
 
 export {
-  type SessionStepUpIntentTables,
   type RequiredSessionStepUpConstraints,
   requiredSessionStepUpConstraints,
   type SessionStepUpSourceTables,
   type SessionStepUpMapping,
-  type D1SessionStepUpMapping,
 } from "./internal/models/step-up-model";
 
 export { requireStandalone } from "./internal/standalone";
 
-export {
-  decodeStepUpIntent,
-  encodeStepUpIntent,
-  stepUpIntentLive,
-  validateStepUpPlan,
-} from "./internal/step-up-state";
-
-export {
-  type CurrentAddress,
-  CurrentEmailSql,
-  type EmailSqlConfiguration,
-  type EmailSqlDatabase,
-  type EmailSqlQuery,
-  makeEmailKernel,
-} from "./internal/email-kernel";
+export { makeOAuthProxyPersistence, type OAuthProxySqlTable } from "./internal/oauth-proxy";
 
 export { PersistenceMappingError, isMappedConstraintConflict } from "./internal/mapping-error";
-export { type PasskeyKernel, makePasskeyKernel } from "./internal/passkey-kernel";
-export { type PasskeyOwner, CurrentPasskeyTransaction } from "./internal/passkey/state";
-
-export {
-  type PasskeyCoordinatorError,
-  type PasskeyExecution,
-  type PasskeyTargetConfiguration,
-} from "./internal/passkey/target";
-
-export {
-  CurrentPasswordPreparedTransaction,
-  PasswordPreparedJournalGuards,
-  type PasswordPreparedPostcondition,
-  PasswordPreparedPostconditions,
-} from "./internal/PasswordPreparedPostconditions";
-
-export {
-  CurrentPasswordSql,
-  type PasswordSqlConfiguration,
-  type PasswordSqlDatabase,
-  type PasswordSqlQuery,
-  makePasswordKernel,
-} from "./internal/password-kernel";
-
-export { CurrentPhoneTransaction, makePhoneKernel } from "./internal/phone-kernel";
-
-export {
-  CurrentProofSql,
-  type ProofSqlConfiguration,
-  type ProofSqlDatabase,
-  type ProofSqlQuery,
-  makeProofKernel,
-} from "./internal/proof-kernel";
-
-export {
-  type QueryFailure,
-  type QueryOperations,
-  type SqlColumn,
-  type SqlExpression,
-  type SqlFragment,
-  type TableModel,
-} from "./internal/query-operations";
-
-export {
-  CurrentSessionSql,
-  type SessionSqlDatabase,
-  type SessionSqlOptions,
-  makeSessionKernel,
-} from "./internal/session-kernel";
-
-export {
-  type TransactionBound,
-  type TransactionCoordinatorError,
-  type TransactionExecution,
-  type TransactionTargetConfiguration,
-  makeTransactionExecutionKernel,
-} from "./internal/transaction-execution-kernel";
-
-export {
-  type GuardedUpdate,
-  type Observation,
-  type Row,
-  NativeDatabase,
-  type TransactionNativeDatabase,
-  type TransactionOwner,
-  makeTransactionKernel,
-} from "./internal/transaction-kernel";
+export type { TableModel, SqlExpression } from "./internal/table-model";
 
 export { PersistenceConfigurationError } from "./internal/configuration";
-export { makeComposedPasskeys } from "./internal/passkeys";
 export { createPersistence } from "./internal/persistence";
 export { makeMappings as makeStorageMappings } from "./internal/storage-mapping";
-export { type StorageTable } from "./internal/storage-tables";
+export { storageTables, type StorageRole, type StorageTable } from "./internal/storage-tables";
 export type { SubjectIdCodec } from "./internal/models/common";
 export type { PasswordRegistrationAuthority } from "./internal/registration-contract";
 
@@ -297,4 +149,191 @@ export type {
   PersistenceApi,
 } from "./internal/configuration";
 
-export { validateStorage, type PhysicalStorageTable } from "./internal/storage-validation";
+export {
+  validateStorage,
+  validateStorageBatch,
+  withStorageValidation,
+  type PhysicalStorageTable,
+  type StorageValidation,
+} from "./internal/storage-validation";
+
+export type { MappingInput } from "./internal/configuration";
+
+export type { Backend } from "./internal/persistence";
+
+export {
+  makeNativeSqlTables,
+  nativeSqlAlias,
+  type NativeSqlTables,
+  type SqlTable,
+} from "./internal/native-sql-table";
+
+export {
+  makeNativePasskeyServices,
+  makeBatchPasskeyServices,
+  makeNativePasskeyCredentialServices,
+} from "./internal/passkey-native";
+
+export {
+  makeNativePasskeyCeremonyServices,
+  type NativePasskeyCeremonyMapping,
+} from "./internal/passkey-native-ceremony";
+
+export {
+  makePasskeyNativeManagement,
+  type NativePasskeyManagementMapping,
+} from "./internal/passkey-native-write";
+
+export {
+  makePasskeyNativeRegistration,
+  type NativePasskeyRegistrationMapping,
+} from "./internal/passkey-native-registration";
+
+export { type PasskeyNativeRead, type PasskeyNativeMapping } from "./internal/passkey-native-state";
+
+export {
+  makeSqlCommitExecutor,
+  SqlBatchCommit,
+  SqlNativeCommit,
+  captureSqlBatchStatements,
+} from "./internal/sql-commit";
+
+export { storageKeyPlans } from "./internal/storage-plans";
+
+export {
+  type OAuthAction,
+  type OAuthClock,
+  type OAuthSubjectReadTable,
+  type OAuthSubjectTable,
+  type OAuthOwnershipReadTable,
+  type OAuthOwnershipTable,
+  type OAuthCredentialReadTable,
+  type OAuthCredentialTable,
+  type OAuthAuthorityReadTable,
+  type OAuthAuthorityTable,
+  type OAuthFlowTable,
+  type OAuthEligibilityFact,
+  type OAuthEligibilityTable,
+  type OAuthCleanupTable,
+  type OAuthRegistrationGuardTable,
+  type OAuthRegistrationGuardDescriptor,
+  oauthRegistrationGuardTable,
+  type OAuthEligibilityDescriptor,
+  oauthEligibilityTable,
+  type OAuthCleanupDescriptor,
+  oauthCleanupTable,
+  type OAuthRegistrationIntentTable,
+  type OAuthD1Mapping,
+  requiredOAuthSignInConstraints,
+  requiredOAuthRegistrationConstraints,
+  type OAuthSignInMapping,
+  type OAuthRegistrationIntentMapping,
+  type OAuthRegistrationMapping,
+  type OAuthAccountsMapping,
+  type OAuthRegistrationAuthority,
+} from "./internal/models/oauth-model";
+
+export {
+  type OAuthConnectedAction,
+  type OAuthConnectedGrantTable,
+  type OAuthConnectedRevocationJobTable,
+  type OAuthConnectedPolicyInput,
+  type OAuthConnectedSqlPolicy,
+  requiredOAuthConnectedConstraints,
+  requiredOAuthConnectedRevocationConstraints,
+  type OAuthConnectedMapping,
+  type OAuthConnectedRevocationMapping,
+} from "./internal/models/oauth-connected-model";
+
+export { makeNativeOAuthSignInServices } from "./internal/oauth/native-sign-in";
+export type { OAuthNativeReadMapping } from "./internal/oauth/native-state";
+
+export {
+  makeNativeOAuthAccountsServices,
+  type OAuthNativeAccountsMapping,
+} from "./internal/oauth/native-accounts";
+
+export {
+  makeNativeOAuthRegistrationIntentServices,
+  makeNativeOAuthRegistrationServices,
+  type OAuthNativeRegistrationIntentMapping,
+  type OAuthNativeRegistrationMapping,
+} from "./internal/oauth/native-registration";
+
+export { makeNativeOAuthConnectedServices } from "./internal/oauth/native-connected";
+export type { OAuthNativeConnectedMapping } from "./internal/oauth/native-connected-state";
+
+export {
+  makeNativeOAuthRevocationServices,
+  type OAuthNativeRevocationMapping,
+} from "./internal/oauth/native-revocations";
+
+export { captureOAuthMapping } from "./internal/oauth/state";
+
+export {
+  oauthAccountsPersistenceLayer,
+  oauthSignInPersistenceLayer,
+  oauthRegistrationIntentsLayer,
+  oauthConnectedPersistenceLayer,
+  oauthConnectedRevocationsLayer,
+  oauthRegistrationAuthorityLayer,
+} from "./internal/oauth/native-layers";
+
+export { makeNativeProofServices } from "./internal/proof-native";
+
+export { makeNativePasswordServices } from "./internal/password-native";
+
+export { makeNativePasswordRegistrationServices } from "./internal/password-registration-native";
+
+export {
+  type PhoneMapping,
+  type AnyPhoneMapping,
+  requiredPhoneConstraints,
+} from "./internal/models/phone-model";
+
+export { makeNativePhoneServices } from "./internal/phone-native";
+
+export {
+  makeNativeEmailSignInServices,
+  makeNativeEmailAddressServices,
+} from "./internal/email-native";
+
+export {
+  makeNativeEmailRegistrationServices,
+  type EmailRegistrationAuthority,
+} from "./internal/email-registration-native";
+
+export {
+  makeNativeAuthenticationAuthorityServices,
+  type NativeAuthenticationAuthorityMapping,
+} from "./internal/session-native-authority";
+
+export {
+  makeNativePendingAuthenticationServices,
+  type NativePendingAuthenticationMapping,
+} from "./internal/session-native-login";
+
+export {
+  makeNativeStatefulSessionServices,
+  type NativeStatefulSessionMapping,
+} from "./internal/session-native-stateful";
+
+export {
+  makeNativeSignedSessionValidityServices,
+  type NativeSignedSessionValidityMapping,
+} from "./internal/session-native-validity";
+
+export {
+  makeNativeSessionStepUpServices,
+  type NativeSessionStepUpMapping,
+} from "./internal/session-native-step-up";
+
+export { makeNativeSessionCleanupServices } from "./internal/session-native-cleanup";
+
+export {
+  type TotpMapping,
+  type TotpMappingSource,
+  requiredTotpConstraints,
+} from "./internal/models/totp-model";
+
+export { makeNativeTotpServices, type NativeTotpMapping } from "./internal/totp-native";

@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 
 import { PasskeyConfigurationError } from "./errors";
-import { PasskeyGeneration, PasskeyProfile, PasskeyRequirement } from "./models";
+import { PasskeyProfile, PasskeyRequirement } from "./models";
 import { snapshotPasskey } from "./snapshot";
 
 const budget = Schema.Struct({
@@ -10,13 +10,10 @@ const budget = Schema.Struct({
 });
 
 export const PasskeyMethodPolicy = Schema.Struct({
-  generation: PasskeyGeneration,
   profiles: Schema.NonEmptyArray(PasskeyProfile).check(Schema.isMaxLength(32)),
   lifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 300000 })),
-  claimLifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 120000 })),
-  retentionMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 604800000 })),
-  maximumPending: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100000 })),
-  maximumPendingPerSubject: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+  /** Charge begin and completion separately; discoverable sign-in adds its subject
+   * charge after credential lookup. Rejected requests also consume budget. */
   admission: Schema.Struct({ global: budget, subject: budget, target: budget }),
 });
 
@@ -26,7 +23,8 @@ export const PasskeyManagementPolicy = Schema.Struct({
   maximumCredentials: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 64 })),
   /** Application-selected age limit; action requirements can impose a shorter one. */
   maximumEvidenceAgeMillis: PasskeyRequirement.fields.maximumAgeMillis,
-  /** Credential removal must support immediate revocation of existing authentication. */
+  /** Require immediate revocation for removal; enrollment and metadata remain available
+   * for session strategies without that capability. Unsupported removal fails before proof. */
   requireImmediateInvalidation: Schema.Boolean,
 });
 
@@ -39,14 +37,6 @@ export const validatePasskeyPolicy = Effect.fn("validatePasskeyPolicy")(function
     Effect.mapError(() => PasskeyConfigurationError.make({})),
   );
 
-  if (
-    policy.retentionMillis <
-    Math.max(
-      policy.lifetimeMillis + policy.claimLifetimeMillis,
-      ...Object.values(policy.admission).map((b) => b.windowMillis),
-    )
-  )
-    return yield* PasskeyConfigurationError.make({});
   const ids = new Set<string>();
 
   for (const profile of policy.profiles) {

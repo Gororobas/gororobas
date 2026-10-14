@@ -1,7 +1,6 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Hooks, Operations, Schema as AuthSchema, Sessions, WebCrypto } from "@yielded/auth";
+import { Auth, Hooks, Operations, Schema as AuthSchema, Sessions, WebCrypto } from "@yielded/auth";
 import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
-import { Base64Url } from "effect/encoding";
 import { HttpRouter } from "effect/http";
 import { RpcSerialization, RpcServer } from "effect/rpc";
 
@@ -9,29 +8,27 @@ import {
   exampleAuthority,
   initialRevision,
   policy,
+  requirement,
   staffSessions,
   subjectId,
 } from "./session-consumer";
 
-const keyring = {
-  activeKeyId: "current",
-  keys: [
-    {
-      id: "current",
-      // Demo-only key material. Production requires independently generated random keys.
-      material: Redacted.make(Base64Url.encode(new Uint8Array(32).fill(42))),
-    },
-  ],
-};
+const base = Layer.mergeAll(
+  WebCrypto.layerWebCrypto,
+  Hooks.LifecycleHooks.empty,
+  Auth.AuthConfig.layer({
+    // Public demo secret. Production loads a stable, randomly generated secret.
+    secret: Redacted.make("public-session-example-application-secret"),
+  }),
+);
 
-const base = Layer.mergeAll(WebCrypto.layerWebCrypto, Hooks.LifecycleHooks.empty);
 const authority = Layer.unwrap(exampleAuthority).pipe(Layer.provide(base));
 
 const stateful = staffSessions
   .statefulLayer(policy)
   .pipe(Layer.provide(authority), Layer.provide(base));
 
-const stateless = staffSessions.statelessLayer(policy, keyring).pipe(Layer.provide(base));
+const stateless = staffSessions.statelessLayer(policy).pipe(Layer.provide(base));
 
 const application = (strategy: typeof stateless) => {
   const capabilities = Layer.mergeAll(strategy, authority);
@@ -44,6 +41,11 @@ const application = (strategy: typeof stateless) => {
     .handlersLayer({ maximumAgeMillis: 60_000 })
     .pipe(Layer.provideMerge(Layer.mergeAll(capabilities, completion)));
 };
+
+class SessionExampleInvariant extends Schema.TaggedError<SessionExampleInvariant>()(
+  "SessionExampleInvariant",
+  { message: Schema.String },
+) {}
 
 const program = Effect.gen(function* () {
   for (const [mode, strategy] of [
@@ -86,6 +88,7 @@ const program = Effect.gen(function* () {
 
       const input = {
         evidence: yield* Schema.encodeEffect(Sessions.AuthenticationEvidence)(evidence),
+        requirement,
         claims: { tenant: "acme", staffNumber: "42" },
       };
 
@@ -100,14 +103,18 @@ const program = Effect.gen(function* () {
       );
 
       if (complete._tag !== "Authenticated")
-        return yield* Effect.die(new Error("Example unexpectedly required another factor"));
+        return yield* Effect.die(
+          SessionExampleInvariant.make({ message: "Example unexpectedly required another factor" }),
+        );
 
       const issued = captured.find(
         (command) => command._tag === "Issue" && command.slot === "session",
       );
 
       if (issued?._tag !== "Issue")
-        return yield* Effect.die(new Error("Example collector did not receive a session"));
+        return yield* Effect.die(
+          SessionExampleInvariant.make({ message: "Example collector did not receive a session" }),
+        );
       const token = Redacted.value(issued.credential);
 
       const verified = yield* staffSessions.operations.Verify.invoke(Operations.guest, {
@@ -117,8 +124,8 @@ const program = Effect.gen(function* () {
       const inspected = yield* (yield* staffSessions.SessionStrategy).inspect(issued.credential);
 
       if (
-        inspected.provenance.evidence.flowId !== evidence.flowId ||
-        !Object.isFrozen(inspected.provenance.evidence.proofs[0].verifiedAt) ||
+        inspected.inspection.provenance.evidence.flowId !== evidence.flowId ||
+        !Object.isFrozen(inspected.inspection.provenance.evidence.proofs[0].verifiedAt) ||
         "provenance" in verified ||
         "credentialVersion" in verified
       )
@@ -161,7 +168,9 @@ const program = Effect.gen(function* () {
         // This verifier installs no AuthenticationAuthority, persistence, or completion capability.
         const pureVerify = staffSessions.operations.Verify.handlerLayer(
           Effect.fn("Example.verifyOnly")(function* (input) {
-            return yield* (yield* staffSessions.SessionStrategy).verify(input.credential);
+            return yield* (yield* staffSessions.SessionStrategy)
+              .inspect(input.credential)
+              .pipe(Effect.map((source) => source.inspection.session));
           }),
         ).pipe(Layer.provide(stateless));
 

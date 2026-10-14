@@ -2,8 +2,7 @@ import { Context, type Effect } from "effect";
 
 import type { CommitJournal, PreparedCommit } from "../hooks/commit";
 import type { LoginIdentifier } from "../identity/models";
-import type { ProofCompletionPlan } from "../proofs/completion";
-import type { ProofCompletionInput } from "../proofs/ProofPersistence";
+import type { ProofRedemptionPlan } from "../proofs/redemption";
 import type { SubjectId } from "../Schema";
 import type { SessionInvalidationWindow } from "../sessions/invalidation";
 import type { AuthenticationRevision, SecurityRevision } from "../sessions/models";
@@ -28,7 +27,7 @@ export interface EmailAddressMutation {
   readonly target: LoginIdentifier;
   readonly captured: EmailAddressTarget;
   readonly authorization: EmailActionAuthorization;
-  readonly completion: ProofCompletionPlan;
+  readonly redemption: ProofRedemptionPlan;
   /** Absent only when confirming an existing identifier without replacing authentication. */
   readonly invalidation?: SessionInvalidationWindow;
 }
@@ -37,7 +36,7 @@ export interface EmailAddressMutation {
  * run before locks; plan.commit resolves the actual transaction-bound implementation
  * from Effect context when it executes.
  * Root implementations reject ambient ownership they cannot join before writes.
- * Verify/change consume the exact continuation, enforce current subject/source and
+ * Verify/change consume the exact proof, enforce current subject/source and
  * factor-policy/fresh-clock predicates, global target uniqueness, write verified
  * identifier + email credential, and bump binding/credential revisions in ONE physical
  * transaction/batch. Confirming an existing bound identifier preserves the subject's
@@ -56,10 +55,6 @@ export class EmailAddressPersistence extends Context.Service<
       readonly target: LoginIdentifier;
       readonly sourceCredentialId?: string;
     }) => Effect.Effect<EmailAddressTarget, EmailUnavailable>;
-    /** Nonconsuming authoritative preflight before consuming independent action proof. Final mutation repeats it. */
-    readonly checkCompletion: (
-      input: ProofCompletionInput,
-    ) => Effect.Effect<boolean, EmailUnavailable>;
     readonly verifyWithProof: <A>(
       input: EmailAddressMutation,
       prepare: PrepareEmailCommit<EmailAddressDecision, A>,
@@ -67,10 +62,6 @@ export class EmailAddressPersistence extends Context.Service<
     readonly changeWithProof: <A>(
       input: EmailAddressMutation,
       prepare: PrepareEmailCommit<EmailAddressDecision, A>,
-    ) => Effect.Effect<PreparedCommit<A>, EmailUnavailable>;
-    readonly cleanup: <A>(
-      input: { readonly moduleId: string; readonly limit: number },
-      prepare: PrepareEmailCommit<{ readonly removed: number; readonly hasMore: boolean }, A>,
     ) => Effect.Effect<PreparedCommit<A>, EmailUnavailable>;
   }
 >()("effect-auth/EmailAddressPersistence") {}

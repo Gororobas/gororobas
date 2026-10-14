@@ -67,11 +67,10 @@ export const transportInvocation = OperationHttpServer.invocationLayer(
   Effect.fn("Example.HttpInvocation")(function* (_request, credentials) {
     if (credentials.session === undefined) return Operations.guest;
 
-    const session = yield* (yield* staffSessions.SessionStrategy)
-      .verify(credentials.session)
-      .pipe(
-        Effect.mapError(() => OperationHttp.OperationHttpError.make({ reason: "credentials" })),
-      );
+    const session = yield* (yield* staffSessions.SessionStrategy).inspect(credentials.session).pipe(
+      Effect.map((source) => source.inspection.session),
+      Effect.mapError(() => OperationHttp.OperationHttpError.make({ reason: "credentials" })),
+    );
 
     return {
       _tag: "Authenticated" as const,

@@ -5,9 +5,10 @@ import * as OAuthServer from "@yielded/auth/OAuthServer";
 import * as Strava from "@yielded/auth/Strava";
 import { Config, Effect, Layer, Redacted, Schema } from "effect";
 import { McpProtocol, McpServer, Tool, Toolkit } from "effect/ai";
-import { HttpMiddleware, HttpRouter, HttpServerRequest } from "effect/http";
+import { FetchHttpClient, HttpMiddleware, HttpRouter, HttpServerRequest } from "effect/http";
 import { SqlClient } from "effect/sql";
 
+import { CryptoLive } from "../../shared/crypto";
 import { makeExample } from "./oauth-application";
 
 const oauth = OAuthServer.make("mcp", { scopes: ["athlete:read"] });
@@ -45,7 +46,12 @@ const runtime = Layer.unwrap(
     const transactionKey = yield* Config.Redacted("OAUTH_TRANSACTION_KEY");
     const tokenKey = yield* Config.Redacted("OAUTH_TOKEN_KEY");
     const issuerKey = yield* Config.Redacted("MCP_SIGNING_KEY");
-    const mcpClientId = yield* Config.String("MCP_CLIENT_ID");
+    const mcpClientId = yield* Config.String("MCP_CLIENT_ID").pipe(Config.withDefault(""));
+
+    const metadataOrigin = yield* Config.String("MCP_CLIENT_METADATA_ORIGIN").pipe(
+      Config.withDefault(""),
+    );
+
     const mcpRedirectUri = yield* Config.String("MCP_REDIRECT_URI");
 
     const keyring = (material: Redacted.Redacted<string>) => ({
@@ -58,7 +64,7 @@ const runtime = Layer.unwrap(
         const sql = yield* SqlClient.SqlClient;
 
         // The example owns this file. Production applications apply each migration once.
-        for (const migration of [OAuthServerPersistence.migration]) {
+        for (const migration of OAuthServerPersistence.migrations) {
           yield* sql.unsafe(migration.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
         }
       }),
@@ -114,10 +120,15 @@ const runtime = Layer.unwrap(
         resource: `${origin}/mcp`,
         loginPath: "/login",
         keys: keyring(issuerKey),
-        clients: [{ clientId: mcpClientId, name: "My MCP client", redirectUris: [mcpRedirectUri] }],
+        clients:
+          mcpClientId === ""
+            ? []
+            : [{ clientId: mcpClientId, name: "My MCP client", redirectUris: [mcpRedirectUri] }],
+        ...(metadataOrigin === "" ? {} : { clientMetadata: { allowedOrigins: [metadataOrigin] } }),
       })
       .pipe(
         Layer.provide(identity),
+        Layer.provide(FetchHttpClient.layer),
         Layer.provide(OAuthServerPersistence.layer.pipe(Layer.provide(database))),
       );
 
@@ -135,14 +146,23 @@ const runtime = Layer.unwrap(
       Layer.provide(oauth.middleware(["athlete:read"]).layer),
     );
 
+    const cors = HttpMiddleware.cors({
+      allowedOrigins: [new URL(mcpRedirectUri).origin],
+      allowedMethods: ["GET", "POST", "OPTIONS"],
+      exposedHeaders: ["WWW-Authenticate", "Mcp-Session-Id"],
+    });
+
     return Layer.mergeAll(mcp, oauth.routes, login.routes).pipe(
       Layer.provide(authorization),
       Layer.provide(
-        HttpRouter.middleware(
-          HttpMiddleware.cors({
-            allowedOrigins: [new URL(mcpRedirectUri).origin],
-            allowedMethods: ["GET", "POST", "OPTIONS"],
-            exposedHeaders: ["WWW-Authenticate", "Mcp-Session-Id"],
+        HttpRouter.middleware((effect) =>
+          Effect.gen(function* () {
+            const request = yield* HttpServerRequest.HttpServerRequest;
+
+            // Authorization is browser navigation; OAuth forbids CORS on this endpoint.
+            return yield* new URL(request.url, origin).pathname === oauth.paths.authorize
+              ? effect
+              : cors(effect);
           }),
         ).layer,
       ),
@@ -155,6 +175,7 @@ HttpRouter.serve(runtime, { disableLogger: true }).pipe(
   Layer.provide(BunHttpServer.layer({ hostname: "127.0.0.1", port: 3000 })),
   Layer.provide(Layer.succeed(HttpMiddleware.TracerDisabledWhen, () => true)),
   Layer.provide(BunServices.layer),
+  Layer.provide(CryptoLive),
   Layer.launch,
   BunRuntime.runMain,
 );

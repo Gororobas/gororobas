@@ -9,6 +9,7 @@ import { makeRegistration as makePasskeyRegistrationContract } from "../PasskeyC
 import { TokenDigest } from "../Schema";
 import {
   passkeyUnexpected,
+  passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
   readPasskeyCommit,
@@ -17,14 +18,14 @@ import type { PasskeyConfigurationError, PasskeyFailure } from "./errors";
 import { PasskeyRejected, PasskeyUnavailable } from "./errors";
 import type {
   PasskeyCeremony,
-  PasskeyClaim,
-  PasskeyRegistrationComplete,
+  PasskeyAccess,
   PasskeyRegistrationStarted,
   PasskeyRegistrationVerified,
 } from "./models";
 import {
   PasskeyIssueDecision,
   PasskeyLabel,
+  PasskeyRegistrationComplete,
   PasskeyRegistrationResult,
   PasskeyUserHandle,
 } from "./models";
@@ -70,26 +71,25 @@ export const makePasskeyRegistration = <
         registration: Registration["Type"],
       ) => Effect.Effect<typeof inspection.Type, PasskeyUnavailable>;
       /** Reserve exact application intent/fingerprint, random handle, challenge and
-       * admission in SAME owner; no subject yet. No adoption by command/flow. */
+       * application snapshot in SAME owner; no subject yet. No adoption by command/flow. */
       readonly issueRegistration: <A>(
         input: {
           readonly ceremony: PasskeyCeremony;
-          readonly policy: PasskeyMethodPolicy;
           readonly registration: Registration["Type"];
         },
         prepare: PreparePasskeyCommit<PasskeyIssueDecision, A>,
       ) => Effect.Effect<PreparedCommit<A>, PasskeyUnavailable>;
-      /** Exact claim/fingerprint/original reserved data; active eligible profile and
-       * RP-global id/handle ownership including unresolved jobs. Atomically consume,
-       * provision subject + credential/shared factor or reserve ProvisioningPending.
-       * No sequential public provision call; pending retains all exact original data
-       * and credential ownership before external work. Unknown never releases it.
+      /** Exact challenge/fingerprint/original schema-decoded application data;
+       * RP-global credential uniqueness and the selected enrollment profile. Atomically consume,
+       * provision the subject and credential/shared factor synchronously.
+       * Provisioning is idempotent by requestId; an unknown commit outcome never
+       * authorizes a second account or credential issuance.
        * Final owner clock checks expiry and all postconditions after last writes. */
       readonly completeRegistration: <A>(
         input: {
-          readonly claim: PasskeyClaim;
+          readonly access: PasskeyAccess;
+          readonly ceremony: PasskeyCeremony;
           readonly verified: PasskeyRegistrationVerified;
-          readonly nowMillis: number;
         },
         prepare: PreparePasskeyCommit<typeof decision.Type, A>,
       ) => Effect.Effect<PreparedCommit<A>, PasskeyUnavailable>;
@@ -176,7 +176,7 @@ export const makePasskeyRegistration = <
 
             const issued = yield* readPasskeyCommit(
               yield* authority.issueRegistration(
-                { ceremony: draft.ceremony, policy: runtime.policy, registration },
+                { ceremony: draft.ceremony, registration },
                 (value, journal) =>
                   journal.prepare(snapshotPasskeySync(PasskeyIssueDecision, value)),
               ),
@@ -191,13 +191,21 @@ export const makePasskeyRegistration = <
           function* (invocation, input) {
             yield* passkeyNoAmbient();
             if (invocation._tag !== "Guest") return yield* PasskeyRejected.make({});
-            const { claim, verified } = yield* runtime.verifyRegistration(input, undefined);
+            input = yield* snapshotPasskey(Schema.toType(PasskeyRegistrationComplete), input);
+            const inspected = yield* runtime.inspect(input);
+
+            const {
+              access,
+              ceremony: original,
+              verified,
+            } = yield* runtime.verifyRegistration(input, inspected);
+
             const authority = yield* RegistrationAuthority;
             const timestamp = DateTime.toEpochMillis(yield* DateTime.now);
 
             const result = yield* readPasskeyCommit(
               yield* authority.completeRegistration(
-                { claim, verified, nowMillis: timestamp },
+                { access, ceremony: original, verified },
                 (value, journal) => {
                   const projected = snapshotPasskeySync(decision, value);
 
@@ -205,7 +213,7 @@ export const makePasskeyRegistration = <
                     journal.stage(
                       lifecycleEvent({
                         id: LifecycleEventId.make(
-                          `passkey-registration/${moduleId}/${claim.ceremony.flowId}`,
+                          `passkey-registration/${moduleId}/${original.flowId}`,
                         ),
                         occurredAtMillis: timestamp,
                         snapshot: lifecycleSnapshot({
@@ -231,7 +239,7 @@ export const makePasskeyRegistration = <
         ),
       });
     }),
-  );
+  ).pipe(Layer.provide(passkeyRateLimiterLayer));
 
   return Object.freeze({
     RegistrationAuthority,

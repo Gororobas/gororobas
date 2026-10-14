@@ -9,21 +9,10 @@ export {
 } from "./hooks/LifecycleHooks";
 
 export {
-  type AtomicContribution,
-  type CommitMode,
-  batchContribution,
-  interactiveContribution,
-  synchronousContribution,
-  validateContributions,
-} from "./hooks/transactions";
-
-export {
-  type BatchEventOutbox,
   CommitDiscarded,
   type CommitJournal,
   CommitPending,
   type CommitResult,
-  type EventOutbox,
   type PreparedCommit,
   coordinateCommit,
   hasCommitScope,
@@ -41,12 +30,5 @@ export {
   lifecycleEvent,
   lifecycleSnapshot,
 } from "./hooks/models";
-
-export {
-  type PluginContributions,
-  type RouteContribution,
-  composePlugins,
-  pluginContributions,
-} from "./hooks/plugins";
 
 export { CurrentCommitJournal } from "./hooks/commit";

@@ -3,6 +3,14 @@ import { Effect, Schema } from "effect";
 import { PasswordConfigurationError } from "./errors";
 
 export const PasswordHashingConfig = Schema.Struct({
+  /** Select native scrypt for new hashes; omitted keeps Argon2id. */
+  scrypt: Schema.optionalKey(
+    Schema.Struct({
+      cost: Schema.Literals([8192, 16384, 32768]),
+      blockSize: Schema.Literal(8),
+      parallelism: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 10 })),
+    }),
+  ),
   memoryKiB: Schema.Int.check(Schema.isBetween({ minimum: 19456, maximum: 65536 })),
   passes: Schema.Int.check(Schema.isBetween({ minimum: 2, maximum: 6 })),
   parallelism: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 4 })),
@@ -33,6 +41,14 @@ export const defaultPasswordHashingConfig: PasswordHashingConfig = Object.freeze
   maximumPasswordBytes: 16384,
 });
 
+/** OWASP's 16 MiB scrypt profile. Requires a native scrypt KDF backend.
+ * Existing Argon2id/PBKDF2 hashes are rehashed on successful sign-in.
+ */
+export const defaultScryptPasswordHashingConfig: PasswordHashingConfig = Object.freeze({
+  ...defaultPasswordHashingConfig,
+  scrypt: Object.freeze({ cost: 16384, blockSize: 8, parallelism: 5 }),
+});
+
 export const validatePasswordHashingConfig = Effect.fn("validatePasswordHashingConfig")(function* (
   input: PasswordHashingConfig,
 ) {
@@ -47,6 +63,20 @@ export const validatePasswordHashingConfig = Effect.fn("validatePasswordHashingC
     config.memoryKiB * config.passes > config.maximumMemoryPasses
   )
     return yield* PasswordConfigurationError.make({ component: "hashing" });
+
+  if (config.scrypt !== undefined) {
+    const { cost, blockSize, parallelism } = config.scrypt;
+    const minimumParallelism = cost === 8192 ? 10 : cost === 16384 ? 5 : 3;
+
+    if (
+      parallelism < minimumParallelism ||
+      128 * blockSize * (cost + parallelism + 2) > config.maximumMemoryKiB * 1024 ||
+      (cost * blockSize * parallelism) / 8 > config.maximumMemoryPasses
+    )
+      return yield* PasswordConfigurationError.make({ component: "hashing" });
+
+    Object.freeze(config.scrypt);
+  }
 
   return Object.freeze(config);
 });
