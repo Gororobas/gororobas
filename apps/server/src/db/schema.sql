@@ -39,6 +39,8 @@ CREATE INDEX auth_oauth_identities_auth_subject_id_idx ON auth_oauth_identities 
 CREATE TABLE auth_identifiers (
   namespace text NOT NULL,
   value text NOT NULL,
+  module_id text,
+  credential_id text,
   auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
   revision text NOT NULL,
   verified_at integer,
@@ -60,7 +62,6 @@ CREATE TABLE auth_sessions (
   session_id text NOT NULL,
   auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
   digest text NOT NULL,
-  version text NOT NULL,
   security_revision text NOT NULL,
   issued_at integer NOT NULL,
   expires_at integer NOT NULL,
@@ -72,13 +73,20 @@ CREATE TABLE auth_sessions (
 
 CREATE INDEX auth_sessions_auth_subject_id_idx ON auth_sessions (auth_subject_id);
 
-CREATE TABLE auth_session_flows (
+CREATE TABLE auth_pending (
+  module_id text NOT NULL,
+  kind text NOT NULL,
+  digest text NOT NULL,
+  version text NOT NULL,
   flow_id text NOT NULL,
   auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
-  state text NOT NULL,
-  pending_digest text,
-  dedup_until integer NOT NULL,
-  UNIQUE (flow_id)
+  binding_digest text NOT NULL,
+  snapshot text NOT NULL,
+  expires_at integer NOT NULL,
+  attempt_limit integer NOT NULL,
+  failed_attempts integer NOT NULL,
+  consumed integer NOT NULL,
+  UNIQUE (digest)
 );
 
 CREATE TABLE auth_email_credentials (
@@ -93,124 +101,19 @@ CREATE TABLE auth_email_credentials (
   UNIQUE (module_id, identifier_namespace, identifier_value)
 );
 
-CREATE TABLE auth_email_commands (
-  module_id text NOT NULL,
-  command_id text NOT NULL,
-  action text NOT NULL,
-  binding_digest text NOT NULL,
-  retention_until integer NOT NULL,
-  UNIQUE (module_id, command_id)
-);
-
-CREATE TABLE auth_proof_requests (
-  module_id text NOT NULL,
-  request_id text NOT NULL,
-  fingerprint text NOT NULL,
-  proof_id text NOT NULL,
-  purpose text NOT NULL,
-  key_id text NOT NULL,
-  created_at integer NOT NULL,
-  retention_until integer NOT NULL,
-  receipt text NOT NULL,
-  UNIQUE (module_id, request_id)
-);
-
-CREATE TABLE auth_proof_series (
+CREATE TABLE auth_proofs (
   module_id text NOT NULL,
   purpose text NOT NULL,
-  scope_key text NOT NULL,
-  active_proof_id text,
-  last_issue_at integer,
-  version text NOT NULL,
-  UNIQUE (module_id, purpose, scope_key)
-);
-
-CREATE TABLE auth_proof_generations (
-  module_id text NOT NULL,
-  purpose text NOT NULL,
-  proof_id text NOT NULL,
-  request_id text NOT NULL,
   series_key text NOT NULL,
-  delivery_id text NOT NULL,
+  proof_id text NOT NULL,
   binding text NOT NULL,
   verifier_key_id text NOT NULL,
   verifier_digest text NOT NULL,
   issued_at integer NOT NULL,
   expires_at integer NOT NULL,
-  version text NOT NULL,
-  state text NOT NULL,
-  send_count integer NOT NULL,
-  delivery_state text NOT NULL,
-  claim_version text,
-  claim_deadline integer,
-  retry_at integer,
-  delivery_retry_millis integer NOT NULL,
-  retention_until integer NOT NULL,
-  fingerprint text NOT NULL,
-  UNIQUE (module_id, proof_id),
-  UNIQUE (module_id, delivery_id)
-);
-
-CREATE TABLE auth_proof_continuations (
-  module_id text NOT NULL,
-  purpose text NOT NULL,
-  continuation_id text NOT NULL,
-  digest text NOT NULL,
-  proof_id text NOT NULL,
-  series_key text NOT NULL,
-  binding text NOT NULL,
-  expires_at integer NOT NULL,
-  consumed integer NOT NULL,
-  version text NOT NULL,
-  retention_until integer NOT NULL,
-  UNIQUE (module_id, continuation_id),
-  UNIQUE (module_id, digest)
-);
-
-CREATE TABLE auth_proof_scopes (
-  module_id text NOT NULL,
-  purpose text NOT NULL,
-  action text NOT NULL,
-  scope_kind text NOT NULL,
-  scope_key text NOT NULL,
-  UNIQUE (module_id, purpose, action, scope_kind, scope_key)
-);
-
-CREATE TABLE auth_proof_abuse (
-  module_id text NOT NULL,
-  purpose text NOT NULL,
-  action text NOT NULL,
-  scope_kind text NOT NULL,
-  scope_key text NOT NULL,
-  command_id text NOT NULL,
-  occurred_at integer NOT NULL,
-  retention_until integer NOT NULL,
-  UNIQUE (
-    module_id,
-    action,
-    scope_kind,
-    scope_key,
-    command_id
-  )
-);
-
-CREATE TABLE auth_proof_failures (
-  module_id text NOT NULL,
-  purpose text NOT NULL,
-  series_key text NOT NULL,
-  command_id text NOT NULL,
-  occurred_at integer NOT NULL,
-  retention_until integer NOT NULL,
-  UNIQUE (module_id, series_key, command_id)
-);
-
-CREATE TABLE auth_proof_commands (
-  module_id text NOT NULL,
-  command_id text NOT NULL,
-  kind text NOT NULL,
-  decision text NOT NULL,
-  retention_until integer NOT NULL,
-  UNIQUE (module_id, command_id)
+  failed_attempts integer NOT NULL,
+  UNIQUE (module_id, purpose, series_key),
+  UNIQUE (module_id, proof_id)
 );
 
 -- ========

@@ -18,10 +18,12 @@
     "@gororobas/domain": "workspace:^",
     "@pleat/core": "workspace:^",
     "@pleat/foldkit": "workspace:^",
+    "@yielded/auth": "catalog:",
     "effect": "catalog:",
     "foldkit": "0.168.0"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:",
     "@foldkit/devtools": "0.168.0",
     "@foldkit/devtools-mcp": "0.24.1",
     "@foldkit/vite-plugin": "0.27.1",

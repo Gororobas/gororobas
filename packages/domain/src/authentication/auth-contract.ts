@@ -111,27 +111,11 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
         requestBinding: "request-binding",
       },
     }),
-    verifyMagicLink: AuthContract.action({
+    completeMagicLink: AuthContract.action({
       payload: Schema.Struct({
         ...MagicLinkIdentity.fields,
         reference: Proofs.ProofReference,
         secret: Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(4096))),
-      }),
-      success: Schema.Struct({
-        continuation: Proofs.ProofContinuation,
-      }),
-      error: MagicLinkFailure,
-      mode: "mutation",
-      credentials: true,
-      replay: "single-use",
-      requestFields: {
-        requestBinding: "request-binding",
-      },
-    }),
-    completeMagicLink: AuthContract.action({
-      payload: Schema.Struct({
-        ...MagicLinkIdentity.fields,
-        continuationId: Proofs.ProofContinuationId,
       }),
       success: sessions.CompletionResult,
       error: MagicLinkFailure,
@@ -140,7 +124,6 @@ export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
       replay: "single-use",
       requestFields: {
         requestBinding: "request-binding",
-        credential: "proof-continuation",
       },
       subject: {
         fromSuccess: (value) =>

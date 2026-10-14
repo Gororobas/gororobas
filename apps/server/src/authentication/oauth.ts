@@ -16,8 +16,8 @@ import {
   Effect,
   Layer,
   Option,
-  Schema,
   Predicate,
+  Schema,
 } from "effect"
 import { HttpIncomingMessage, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
 
@@ -161,19 +161,20 @@ const handlers = Layer.mergeAll(
       })
 
       const subjectId = AuthSchema.SubjectId.make(account.authSubjectId)
-      const revision = yield* (yield* Sessions.AuthenticationAuthority).capture(subjectId, [
+      const authority = yield* (yield* Sessions.AuthenticationAuthority).capture(subjectId, [
         account.credentialId,
       ])
 
       const completed = yield* (yield* sessions.AuthenticationCompletion)
         .prepare({
+          requirement: authority.requirement,
           claims: {
             authSubjectId: account.authSubjectId,
           },
           evidence: {
             flowId: Sessions.AuthenticationFlowId.make(input.flowId),
             bindingDigest: AuthSchema.TokenDigest.make(verified.verifier),
-            revision,
+            revision: authority.revision,
             proofs: [
               {
                 method: `oauth:${input.provider}`,
@@ -240,7 +241,7 @@ const relay = (provider: "apple" | "google" | "microsoft") =>
       parameters.getAll("code").length !== 1 ||
       parameters.getAll("state").length !== 1
     ) {
-      return HttpServerResponse.redirect("/api/auth/login#oauth-error", {
+      return HttpServerResponse.redirect("/login#oauth-error", {
         headers: {
           "cache-control": "no-store",
           "referrer-policy": "no-referrer",
@@ -249,7 +250,7 @@ const relay = (provider: "apple" | "google" | "microsoft") =>
     }
 
     return HttpServerResponse.redirect(
-      `/api/auth/login#oauth=${encodeURIComponent(
+      `/login#oauth=${encodeURIComponent(
         Schema.encodeSync(
           Schema.fromJsonString(
             Schema.Struct({ provider: OAuthProvider, code: Schema.String, state: Schema.String }),
@@ -272,7 +273,7 @@ const relay = (provider: "apple" | "google" | "microsoft") =>
     Effect.provideService(HttpIncomingMessage.MaxBodySize, ByteSize.kibibytes(16)),
     Effect.catchTag("HttpServerError", () =>
       Effect.succeed(
-        HttpServerResponse.redirect("/api/auth/login#oauth-error", {
+        HttpServerResponse.redirect("/login#oauth-error", {
           headers: { "cache-control": "no-store", "referrer-policy": "no-referrer" },
         }),
       ),

@@ -1,4 +1,13 @@
 https://localhost:4443 {
   tls internal
-  reverse_proxy host.docker.internal:4000
+  handle /api/auth/* {
+    reverse_proxy host.docker.internal:4000
+  }
+  handle /api/* {
+    uri strip_prefix /api
+    reverse_proxy host.docker.internal:4000
+  }
+  handle {
+    reverse_proxy host.docker.internal:5173
+  }
 }

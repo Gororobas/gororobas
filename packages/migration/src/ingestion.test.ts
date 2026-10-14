@@ -402,16 +402,12 @@ it.live(
       )
       const { proof } = yield* parseDeliveredMagicLink(deliveries[0])
 
-      const continuation = yield* browser.call(AuthenticationApi.actions.verifyMagicLink, {
+      yield* browser.call(AuthenticationApi.actions.completeMagicLink, {
         ...identity,
         reference: proof.reference,
         secret: Redacted.value(proof.secret),
       })
 
-      yield* browser.call(AuthenticationApi.actions.completeMagicLink, {
-        ...identity,
-        continuationId: continuation.continuation.continuationId,
-      })
       const bookmarks = yield* browser.fetchRoute({ path: "/wiki/bookmarks" })
       expect(bookmarks.status).toBe(200)
       expect(yield* Effect.tryPromise(() => bookmarks.json())).toEqual([

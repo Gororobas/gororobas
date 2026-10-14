@@ -47,6 +47,8 @@ CREATE INDEX `auth_oauth_identities_auth_subject_id_idx` ON `auth_oauth_identiti
 CREATE TABLE `auth_identifiers` (
   `namespace` text NOT NULL,
   `value` text NOT NULL,
+  `module_id` text NULL,
+  `credential_id` text NULL,
   `auth_subject_id` text NOT NULL,
   `revision` text NOT NULL,
   `verified_at` integer NULL,
@@ -72,7 +74,6 @@ CREATE TABLE `auth_sessions` (
   `session_id` text NOT NULL,
   `auth_subject_id` text NOT NULL,
   `digest` text NOT NULL,
-  `version` text NOT NULL,
   `security_revision` text NOT NULL,
   `issued_at` integer NOT NULL,
   `expires_at` integer NOT NULL,
@@ -86,17 +87,24 @@ CREATE UNIQUE INDEX `auth_sessions_session_id` ON `auth_sessions` (`session_id`)
 CREATE UNIQUE INDEX `auth_sessions_digest` ON `auth_sessions` (`digest`);
 -- Create index "auth_sessions_auth_subject_id_idx" to table: "auth_sessions"
 CREATE INDEX `auth_sessions_auth_subject_id_idx` ON `auth_sessions` (`auth_subject_id`);
--- Create "auth_session_flows" table
-CREATE TABLE `auth_session_flows` (
+-- Create "auth_pending" table
+CREATE TABLE `auth_pending` (
+  `module_id` text NOT NULL,
+  `kind` text NOT NULL,
+  `digest` text NOT NULL,
+  `version` text NOT NULL,
   `flow_id` text NOT NULL,
   `auth_subject_id` text NOT NULL,
-  `state` text NOT NULL,
-  `pending_digest` text NULL,
-  `dedup_until` integer NOT NULL,
+  `binding_digest` text NOT NULL,
+  `snapshot` text NOT NULL,
+  `expires_at` integer NOT NULL,
+  `attempt_limit` integer NOT NULL,
+  `failed_attempts` integer NOT NULL,
+  `consumed` integer NOT NULL,
   CONSTRAINT `0` FOREIGN KEY (`auth_subject_id`) REFERENCES `auth_subjects` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
--- Create index "auth_session_flows_flow_id" to table: "auth_session_flows"
-CREATE UNIQUE INDEX `auth_session_flows_flow_id` ON `auth_session_flows` (`flow_id`);
+-- Create index "auth_pending_digest" to table: "auth_pending"
+CREATE UNIQUE INDEX `auth_pending_digest` ON `auth_pending` (`digest`);
 -- Create "auth_email_credentials" table
 CREATE TABLE `auth_email_credentials` (
   `module_id` text NOT NULL,
@@ -112,131 +120,23 @@ CREATE TABLE `auth_email_credentials` (
 CREATE UNIQUE INDEX `auth_email_credentials_module_id_credential_id` ON `auth_email_credentials` (`module_id`, `credential_id`);
 -- Create index "auth_email_credentials_module_id_identifier_namespace_identifier_value" to table: "auth_email_credentials"
 CREATE UNIQUE INDEX `auth_email_credentials_module_id_identifier_namespace_identifier_value` ON `auth_email_credentials` (`module_id`, `identifier_namespace`, `identifier_value`);
--- Create "auth_email_commands" table
-CREATE TABLE `auth_email_commands` (
-  `module_id` text NOT NULL,
-  `command_id` text NOT NULL,
-  `action` text NOT NULL,
-  `binding_digest` text NOT NULL,
-  `retention_until` integer NOT NULL
-);
--- Create index "auth_email_commands_module_id_command_id" to table: "auth_email_commands"
-CREATE UNIQUE INDEX `auth_email_commands_module_id_command_id` ON `auth_email_commands` (`module_id`, `command_id`);
--- Create "auth_proof_requests" table
-CREATE TABLE `auth_proof_requests` (
-  `module_id` text NOT NULL,
-  `request_id` text NOT NULL,
-  `fingerprint` text NOT NULL,
-  `proof_id` text NOT NULL,
-  `purpose` text NOT NULL,
-  `key_id` text NOT NULL,
-  `created_at` integer NOT NULL,
-  `retention_until` integer NOT NULL,
-  `receipt` text NOT NULL
-);
--- Create index "auth_proof_requests_module_id_request_id" to table: "auth_proof_requests"
-CREATE UNIQUE INDEX `auth_proof_requests_module_id_request_id` ON `auth_proof_requests` (`module_id`, `request_id`);
--- Create "auth_proof_series" table
-CREATE TABLE `auth_proof_series` (
+-- Create "auth_proofs" table
+CREATE TABLE `auth_proofs` (
   `module_id` text NOT NULL,
   `purpose` text NOT NULL,
-  `scope_key` text NOT NULL,
-  `active_proof_id` text NULL,
-  `last_issue_at` integer NULL,
-  `version` text NOT NULL
-);
--- Create index "auth_proof_series_module_id_purpose_scope_key" to table: "auth_proof_series"
-CREATE UNIQUE INDEX `auth_proof_series_module_id_purpose_scope_key` ON `auth_proof_series` (`module_id`, `purpose`, `scope_key`);
--- Create "auth_proof_generations" table
-CREATE TABLE `auth_proof_generations` (
-  `module_id` text NOT NULL,
-  `purpose` text NOT NULL,
-  `proof_id` text NOT NULL,
-  `request_id` text NOT NULL,
   `series_key` text NOT NULL,
-  `delivery_id` text NOT NULL,
+  `proof_id` text NOT NULL,
   `binding` text NOT NULL,
   `verifier_key_id` text NOT NULL,
   `verifier_digest` text NOT NULL,
   `issued_at` integer NOT NULL,
   `expires_at` integer NOT NULL,
-  `version` text NOT NULL,
-  `state` text NOT NULL,
-  `send_count` integer NOT NULL,
-  `delivery_state` text NOT NULL,
-  `claim_version` text NULL,
-  `claim_deadline` integer NULL,
-  `retry_at` integer NULL,
-  `delivery_retry_millis` integer NOT NULL,
-  `retention_until` integer NOT NULL,
-  `fingerprint` text NOT NULL
+  `failed_attempts` integer NOT NULL
 );
--- Create index "auth_proof_generations_module_id_proof_id" to table: "auth_proof_generations"
-CREATE UNIQUE INDEX `auth_proof_generations_module_id_proof_id` ON `auth_proof_generations` (`module_id`, `proof_id`);
--- Create index "auth_proof_generations_module_id_delivery_id" to table: "auth_proof_generations"
-CREATE UNIQUE INDEX `auth_proof_generations_module_id_delivery_id` ON `auth_proof_generations` (`module_id`, `delivery_id`);
--- Create "auth_proof_continuations" table
-CREATE TABLE `auth_proof_continuations` (
-  `module_id` text NOT NULL,
-  `purpose` text NOT NULL,
-  `continuation_id` text NOT NULL,
-  `digest` text NOT NULL,
-  `proof_id` text NOT NULL,
-  `series_key` text NOT NULL,
-  `binding` text NOT NULL,
-  `expires_at` integer NOT NULL,
-  `consumed` integer NOT NULL,
-  `version` text NOT NULL,
-  `retention_until` integer NOT NULL
-);
--- Create index "auth_proof_continuations_module_id_continuation_id" to table: "auth_proof_continuations"
-CREATE UNIQUE INDEX `auth_proof_continuations_module_id_continuation_id` ON `auth_proof_continuations` (`module_id`, `continuation_id`);
--- Create index "auth_proof_continuations_module_id_digest" to table: "auth_proof_continuations"
-CREATE UNIQUE INDEX `auth_proof_continuations_module_id_digest` ON `auth_proof_continuations` (`module_id`, `digest`);
--- Create "auth_proof_scopes" table
-CREATE TABLE `auth_proof_scopes` (
-  `module_id` text NOT NULL,
-  `purpose` text NOT NULL,
-  `action` text NOT NULL,
-  `scope_kind` text NOT NULL,
-  `scope_key` text NOT NULL
-);
--- Create index "auth_proof_scopes_module_id_purpose_action_scope_kind_scope_key" to table: "auth_proof_scopes"
-CREATE UNIQUE INDEX `auth_proof_scopes_module_id_purpose_action_scope_kind_scope_key` ON `auth_proof_scopes` (`module_id`, `purpose`, `action`, `scope_kind`, `scope_key`);
--- Create "auth_proof_abuse" table
-CREATE TABLE `auth_proof_abuse` (
-  `module_id` text NOT NULL,
-  `purpose` text NOT NULL,
-  `action` text NOT NULL,
-  `scope_kind` text NOT NULL,
-  `scope_key` text NOT NULL,
-  `command_id` text NOT NULL,
-  `occurred_at` integer NOT NULL,
-  `retention_until` integer NOT NULL
-);
--- Create index "auth_proof_abuse_module_id_action_scope_kind_scope_key_command_id" to table: "auth_proof_abuse"
-CREATE UNIQUE INDEX `auth_proof_abuse_module_id_action_scope_kind_scope_key_command_id` ON `auth_proof_abuse` (`module_id`, `action`, `scope_kind`, `scope_key`, `command_id`);
--- Create "auth_proof_failures" table
-CREATE TABLE `auth_proof_failures` (
-  `module_id` text NOT NULL,
-  `purpose` text NOT NULL,
-  `series_key` text NOT NULL,
-  `command_id` text NOT NULL,
-  `occurred_at` integer NOT NULL,
-  `retention_until` integer NOT NULL
-);
--- Create index "auth_proof_failures_module_id_series_key_command_id" to table: "auth_proof_failures"
-CREATE UNIQUE INDEX `auth_proof_failures_module_id_series_key_command_id` ON `auth_proof_failures` (`module_id`, `series_key`, `command_id`);
--- Create "auth_proof_commands" table
-CREATE TABLE `auth_proof_commands` (
-  `module_id` text NOT NULL,
-  `command_id` text NOT NULL,
-  `kind` text NOT NULL,
-  `decision` text NOT NULL,
-  `retention_until` integer NOT NULL
-);
--- Create index "auth_proof_commands_module_id_command_id" to table: "auth_proof_commands"
-CREATE UNIQUE INDEX `auth_proof_commands_module_id_command_id` ON `auth_proof_commands` (`module_id`, `command_id`);
+-- Create index "auth_proofs_module_id_purpose_series_key" to table: "auth_proofs"
+CREATE UNIQUE INDEX `auth_proofs_module_id_purpose_series_key` ON `auth_proofs` (`module_id`, `purpose`, `series_key`);
+-- Create index "auth_proofs_module_id_proof_id" to table: "auth_proofs"
+CREATE UNIQUE INDEX `auth_proofs_module_id_proof_id` ON `auth_proofs` (`module_id`, `proof_id`);
 -- Create "profiles" table
 CREATE TABLE `profiles` (
   `id` text NOT NULL,

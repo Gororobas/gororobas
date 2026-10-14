@@ -5,10 +5,15 @@ import { defineConfig } from "vite"
 export default defineConfig({
   plugins: [tailwindcss(), foldkit()],
   server: {
+    host: true,
     proxy: {
+      "/api/auth": {
+        target: "http://localhost:4000",
+        changeOrigin: false,
+      },
       "/api": {
         target: "http://localhost:4000",
-        changeOrigin: true,
+        changeOrigin: false,
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },

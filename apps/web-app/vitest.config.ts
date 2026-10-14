@@ -1,6 +1,14 @@
 import { defineConfig } from "vitest/config"
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^@gororobas\/domain(\/.*)?$/,
+        replacement: new URL("../../packages/domain/src", import.meta.url).pathname + "$1",
+      },
+    ],
+  },
   test: {
     include: ["src/**/*.{test,spec}.ts"],
     environment: "happy-dom",

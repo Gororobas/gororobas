@@ -1,6 +1,6 @@
 import { ApiAuthentication, SessionContext } from "@gororobas/domain"
 import { AuthenticationHttp } from "@gororobas/domain"
-import { Auth } from "@yielded/auth"
+import { Auth, WebCrypto } from "@yielded/auth"
 import { Option } from "effect"
 import { Config, Effect, Layer, Redacted } from "effect"
 import { SqlClient } from "effect/sql"
@@ -9,7 +9,6 @@ import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors
 import { resolveSession } from "../session-service.js"
 import { AppAuth, makeAuthentication } from "./app-auth.js"
 import { AuthStorageLive } from "./auth-storage.js"
-import { magicLinkPageRoutes } from "./magic-link-page.js"
 import { AuthenticationOrigin } from "./magic-link.js"
 import { OAuthProtocol, makeOAuthProtocol, oauthProtocolLayer } from "./oauth-protocol.js"
 import { oauthCallbackRoutes } from "./oauth.js"
@@ -65,13 +64,17 @@ export const authenticationLayer = (options: {
     }),
   )
 
+  // Auth routes admit requests themselves; extra middleware consumes native POST streams twice.
   return Layer.mergeAll(
     http.routes(),
-    magicLinkPageRoutes,
     oauthCallbackRoutes,
     http.securityLayer(AuthenticationHttp),
     ApiAuthenticationLive,
-  ).pipe(http.middleware, Layer.provideMerge(http.layer), Layer.provide(dependencies))
+  ).pipe(
+    Layer.provideMerge(http.layer),
+    Layer.provide(dependencies),
+    Layer.provide(WebCrypto.layerWebCrypto),
+  )
 }
 
 export const AuthenticationLive = Layer.unwrap(

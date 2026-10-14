@@ -1,13 +1,13 @@
-import { GororobasApi } from "@gororobas/domain/apis"
 import { ProfileType } from "@gororobas/domain/common/enums"
 import { ProfileSearchParams, ProfileCardData } from "@gororobas/domain/profiles/domain"
-import { Context, Effect, Layer, Result, Schema, Stream } from "effect"
-import { FetchHttpClient } from "effect/http"
-import { HttpApiClient } from "effect/http-api"
+import { Effect, Result, Schema, Stream } from "effect"
 import { Runtime, Subscription, type Update } from "foldkit"
 import { Document, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
+import { defineView } from "foldkit/submodel"
+
+import { GororobasApiClient } from "./api-client"
 
 export const Model = Schema.Struct({
   text: Schema.String,
@@ -45,17 +45,6 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
   model: { text: "", type: "", profiles: [], searchStatus: "Searching..." },
 })
-
-const makeGororobasApiClient = HttpApiClient.make(GororobasApi, { baseUrl: "/api" })
-class GororobasApiClient extends Context.Service<
-  GororobasApiClient,
-  Effect.Success<typeof makeGororobasApiClient>
->()("GororobasApiClient") {}
-
-export const resources = Layer.effect(
-  GororobasApiClient,
-  makeGororobasApiClient.pipe(Effect.provide(FetchHttpClient.layer)),
-)
 
 export const subscriptions = Subscription.make<Model, Message, GororobasApiClient>()((entry) => ({
   searchProfiles: entry(
@@ -129,3 +118,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
     ],
   ),
 })
+
+export const submodelView = defineView<Model, Message>(
+  (model: Model, h: HtmlBuilder<Message>) => view(model, h).body,
+)

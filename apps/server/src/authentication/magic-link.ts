@@ -23,7 +23,6 @@ import {
   Option,
   Redacted,
   Schema,
-  Predicate,
 } from "effect"
 import { Base64Url } from "effect/encoding"
 
@@ -62,27 +61,11 @@ const Request = Operations.makeOperation(`${authenticationNamespace}/magic-link/
   replay: "idempotent",
 })
 
-const Verify = Operations.makeOperation(`${authenticationNamespace}/magic-link/verify`, {
+const Complete = Operations.makeOperation(`${authenticationNamespace}/magic-link/complete`, {
   payload: Schema.Struct({
     ...identityFields,
     reference: Proofs.ProofReference,
     secret: Schema.RedactedFromValue(Schema.String),
-  }),
-  success: Schema.Struct({
-    continuation: Proofs.ProofContinuation,
-  }),
-  error: MagicLinkFailure,
-  access: "any",
-  exposure: "public",
-  replay: "single-use",
-  credentials: true,
-})
-
-const Complete = Operations.makeOperation(`${authenticationNamespace}/magic-link/complete`, {
-  payload: Schema.Struct({
-    ...identityFields,
-    continuationId: Proofs.ProofContinuationId,
-    credential: Schema.RedactedFromValue(Schema.String),
   }),
   success: sessions.CompletionResult,
   error: MagicLinkFailure,
@@ -136,7 +119,7 @@ const magicLinkHandlers = (origin: string) => {
     purpose: Proofs.ProofPurpose.make("magic-link-sign-in"),
     binding: Proofs.IdentifierProofBinding,
     channel: "email",
-    url: `${origin}/api/auth/login`,
+    url: `${origin}/login`,
     secret: {
       _tag: "Token",
     },
@@ -173,61 +156,38 @@ const magicLinkHandlers = (origin: string) => {
         return dispatch.receipt
       }),
     ),
-    Verify.credentialHandlerLayer(
-      Effect.fn(function* (input) {
-        const proofBinding = yield* bindIdentity(input)
-
-        const result = yield* (yield* proofs.Proofs)
-          .prepareAttempt({
-            binding: proofBinding,
-            reference: input.reference,
-            credential: input.secret,
-          })
-          .pipe(Effect.flatMap(Proofs.readProofCommit))
-
-        if (!Predicate.isTagged(result.value, "Accepted")) {
-          return yield* Proofs.ProofInvalid.make({})
-        }
-
-        return {
-          value: {
-            continuation: result.value.continuation,
-          },
-          credentialCommands: result.credentialCommands,
-        }
-      }),
-    ),
     Complete.credentialHandlerLayer(
       Effect.fn(function* (input) {
         const proofBinding = yield* bindIdentity(input)
         const verifiedAt = yield* DateTime.now
 
         const consumed = yield* (yield* proofs.Proofs)
-          .prepareComplete({
+          .prepareRedeem({
             binding: proofBinding,
-            continuationId: input.continuationId,
-            credential: input.credential,
+            reference: input.reference,
+            credential: input.secret,
           })
           .pipe(Effect.flatMap(Proofs.readProofCommit))
 
-        if (consumed !== "completed") return yield* Proofs.ProofInvalid.make({})
-        // Standalone proof completion burns on downstream failure, matching Yielded's
+        if (consumed !== "redeemed") return yield* Proofs.ProofInvalid.make({})
+        // Standalone proof redemption burns on downstream failure, matching Yielded's
         // email strategy. Provisioning is transactional; a retry needs a fresh link.
         const authSubjectId = yield* provisionMagicLinkAccount(input)
         const subjectId = AuthSchema.SubjectId.make(authSubjectId)
-        const revision = yield* (yield* Sessions.AuthenticationAuthority).capture(subjectId, [
+        const authority = yield* (yield* Sessions.AuthenticationAuthority).capture(subjectId, [
           authSubjectId,
         ])
 
         const established = yield* (yield* sessions.AuthenticationCompletion)
           .prepare({
+            requirement: authority.requirement,
             claims: {
               authSubjectId: authSubjectId,
             },
             evidence: {
               flowId: Sessions.AuthenticationFlowId.make(input.flowId),
               bindingDigest: proofBinding.contextDigest,
-              revision,
+              revision: authority.revision,
               proofs: [
                 {
                   method: "magic-link",
@@ -249,10 +209,6 @@ const magicLinkHandlers = (origin: string) => {
           value: established.value,
           credentialCommands: [
             ...established.credentialCommands,
-            {
-              _tag: "Clear" as const,
-              slot: "proof-continuation" as const,
-            },
             {
               _tag: "Clear" as const,
               slot: "request-binding" as const,
@@ -295,7 +251,6 @@ export const magicLinkStrategy = Auth.makeStrategy(
   {
     beginMagicLink: Begin.invoke,
     requestMagicLink: Request.invoke,
-    verifyMagicLink: Verify.invoke,
     completeMagicLink: Complete.invoke,
   },
   Layer.unwrap(Effect.map(AuthenticationOrigin, magicLinkHandlers)),
