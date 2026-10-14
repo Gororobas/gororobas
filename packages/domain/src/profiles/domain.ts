@@ -21,6 +21,7 @@ export const ProfileCardData = Schema.Struct({
   handle: Handle,
   name: Schema.String,
   location: Schema.NullOr(Schema.String),
+  photoId: Schema.NullOr(MediaAssetId),
 })
 
 export type ProfileCardData = typeof ProfileCardData.Type

@@ -8,6 +8,7 @@ import { modifyFields } from "foldkit/struct"
 import { defineView } from "foldkit/submodel"
 
 import { GororobasApiClient } from "./api-client"
+import { imageUrl } from "./media-urls"
 
 export const Model = Schema.Struct({
   text: Schema.String,
@@ -111,8 +112,14 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       h.p([], [model.searchStatus]),
       h.ul(
         [],
-        model.profiles.map(({ handle, name, location, type }) =>
-          h.li([], [`${name} (@${handle}) — ${type}${location === null ? "" : ` — ${location}`}`]),
+        model.profiles.map(({ handle, name, location, type, photoId }) =>
+          h.li(
+            [],
+            [
+              ...(photoId === null ? [] : [h.img([h.Src(imageUrl(photoId, 300)), h.Alt(name)])]),
+              `${name} (@${handle}) — ${type}${location === null ? "" : ` — ${location}`}`,
+            ],
+          ),
         ),
       ),
     ],

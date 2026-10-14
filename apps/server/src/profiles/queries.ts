@@ -19,13 +19,14 @@ export const searchProfiles = SqlSchema.findAll({
       const text = query.text?.toLowerCase()
 
       return yield* sql`
-        SELECT id, type, handle, name, location
-        FROM profiles
-        WHERE visibility = 'PUBLIC'
-          AND NOT EXISTS (SELECT 1 FROM auth_subjects a WHERE a.id = profiles.id AND a.active = 0)
-          ${query.type === undefined ? sql`` : sql`AND type = ${query.type}`}
-          ${text === undefined ? sql`` : sql`AND (instr(lower(name), ${text}) > 0 OR instr(handle, ${text}) > 0 OR instr(lower(coalesce(location, '')), ${text}) > 0)`}
-        ORDER BY name COLLATE NOCASE, handle, id
+        SELECT p.id, p.type, p.handle, p.name, p.location, m.id AS photo_id
+        FROM profiles p
+        LEFT JOIN media_assets m ON m.id = p.photo_id AND m.moderation_status <> 'CENSORED'
+        WHERE p.visibility = 'PUBLIC'
+          AND NOT EXISTS (SELECT 1 FROM auth_subjects a WHERE a.id = p.id AND a.active = 0)
+          ${query.type === undefined ? sql`` : sql`AND p.type = ${query.type}`}
+          ${text === undefined ? sql`` : sql`AND (instr(lower(p.name), ${text}) > 0 OR instr(p.handle, ${text}) > 0 OR instr(lower(coalesce(p.location, '')), ${text}) > 0)`}
+        ORDER BY p.name COLLATE NOCASE, p.handle, p.id
         LIMIT 100
       `
     }),

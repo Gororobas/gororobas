@@ -15,7 +15,7 @@ import {
   WikiArticleQueriedCardData,
   WikiSearchParams,
 } from "@gororobas/domain/wiki/domain"
-import { Effect, Option, Result, Schema, Stream } from "effect"
+import { Array as EffectArray, Effect, Option, Result, Schema, Stream } from "effect"
 import { Runtime, Subscription, type Update } from "foldkit"
 import { Document, HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
@@ -23,6 +23,7 @@ import { modifyFields } from "foldkit/struct"
 import { defineView } from "foldkit/submodel"
 
 import { GororobasApiClient } from "./api-client"
+import { imageUrl } from "./media-urls"
 
 const filterFields = [
   "kind",
@@ -645,9 +646,21 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       h.p([], [model.searchStatus]),
       h.ul(
         [],
-        model.articles.map((article) =>
-          h.li([], [`${article.commonNames.map(({ name }) => name).join(", ")} (${article.kind})`]),
-        ),
+        model.articles.map((article) => {
+          const names = article.commonNames.map(({ name }) => name).join(", ")
+
+          return h.li(
+            [],
+            [
+              ...EffectArray.fromOption(
+                Option.map(article.thumbnailMediaAssetId, (id) =>
+                  h.img([h.Src(imageUrl(id, 300)), h.Alt(names)]),
+                ),
+              ),
+              `${names} (${article.kind})`,
+            ],
+          )
+        }),
       ),
     ],
   ),
