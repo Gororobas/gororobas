@@ -32,6 +32,12 @@ export {
 // @barrel: Auto-generated exports. Do not edit manually.
 
 /**
+ * @stability unstable
+ * @since 4.0.0
+ */
+export * as Arbitrary from "./Arbitrary.ts"
+
+/**
  * @since 2.0.0
  */
 export * as Array from "./Array.ts"
@@ -55,6 +61,11 @@ export * as Boolean from "./Boolean.ts"
  * @since 2.0.0
  */
 export * as Brand from "./Brand.ts"
+
+/**
+ * @since 4.0.0
+ */
+export * as ByteSize from "./ByteSize.ts"
 
 /**
  * @since 4.0.0
@@ -155,11 +166,6 @@ export * as Effect from "./Effect.ts"
  * @since 4.0.0
  */
 export * as Effectable from "./Effectable.ts"
-
-/**
- * @since 4.0.0
- */
-export * as Encoding from "./Encoding.ts"
 
 /**
  * @since 2.0.0
@@ -575,6 +581,11 @@ export * as Semaphore from "./Semaphore.ts"
  * @since 2.0.0
  */
 export * as Sink from "./Sink.ts"
+
+/**
+ * @since 4.0.0
+ */
+export * as StandardSchema from "./StandardSchema.ts"
 
 /**
  * @since 4.0.0

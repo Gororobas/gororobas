@@ -4,17 +4,18 @@ import {
   Effect,
   Equal,
   Function,
-  Match as M,
+  Match,
   Option,
   Predicate,
-  type Schema,
-  String as String_,
+  Schema,
+  String,
   pipe,
 } from 'effect'
 import { dual } from 'effect/Function'
 
 import { kebabToPascal } from '../customElement/index.js'
-import type { CustomElementSpec } from '../customElement/index.js'
+import type { CustomElementSpec, EventSchema } from '../customElement/index.js'
+import { serializedStylePropertyName } from '../domReflection.js'
 import type { File } from '../file/index.js'
 import type { FoldkitMountMarker } from '../html/index.js'
 import {
@@ -33,7 +34,8 @@ import type {
 import type { Entry as ManagedResourceEntry } from '../managedResource/index.js'
 import { MountTracker } from '../mount/index.js'
 import type { MountDefinition } from '../mount/index.js'
-import { Dispatch } from '../runtime/index.js'
+import { Dispatch } from '../runtime/dispatch.js'
+import { tagNameFromSelector } from '../tagName.js'
 import type { VNode } from '../vdom.js'
 import type {
   AnyCommand,
@@ -48,6 +50,7 @@ import type {
   ResolvableCommandMatcher,
   Resolver,
   ResolverEntry,
+  SimulationUpdateReturn,
 } from './internal.js'
 import {
   assertAllCommandsResolved,
@@ -168,7 +171,9 @@ export type SceneSimulation<Model, Message, OutMessage = undefined> = Readonly<{
   _phantom: [Model, Message]
   commands: ReadonlyArray<AnyCommand>
   mounts: ReadonlyArray<PendingMount>
-  outMessage: OutMessage
+  /** The sole OutMessage from the latest update-producing Scene step.
+   *  Undefined when that step emitted none or more than one. */
+  outMessage: OutMessage | undefined
   html: VNode
 }>
 
@@ -178,12 +183,47 @@ type GivenStep<Model> = Readonly<{ _phantomModel: Model }> &
     simulation: SceneSimulation<M, Message, OutMessage>,
   ) => SceneSimulation<M, Message, OutMessage>)
 
-/** A single step in a scene: either a `given` step or a scene simulation transform. */
+/** A typed Subscription Message step. */
+export type SubscriptionMessageStep<Message> = Readonly<{
+  _tag: 'SubscriptionMessageStep'
+  message: Message
+}>
+
+/** A typed OutMessage assertion step. */
+export type OutMessageStep<OutMessage> = Readonly<{
+  _tag: 'OutMessageStep'
+  expected: OutMessage
+}>
+
+/** A typed OutMessage sequence assertion step. */
+export type OutMessagesStep<OutMessage> = Readonly<{
+  _tag: 'OutMessagesStep'
+  expected: readonly [OutMessage, OutMessage, ...ReadonlyArray<OutMessage>]
+}>
+
+/** A single step in a scene: a `given` step, typed Message or OutMessage step,
+ *  or scene simulation transform. */
 export type SceneStep<Model, Message, OutMessage> =
   | GivenStep<NoInfer<Model>>
+  | Readonly<{
+      _tag: 'SubscriptionMessageStep'
+      message: NoInfer<Message>
+    }>
+  | Readonly<{
+      _tag: 'OutMessageStep'
+      expected: NoInfer<OutMessage>
+    }>
+  | Readonly<{
+      _tag: 'OutMessagesStep'
+      expected: readonly [
+        NoInfer<OutMessage>,
+        NoInfer<OutMessage>,
+        ...ReadonlyArray<NoInfer<OutMessage>>,
+      ]
+    }>
   | ((
-      simulation: SceneSimulation<Model, Message, OutMessage>,
-    ) => SceneSimulation<Model, Message, OutMessage>)
+      simulation: SceneSimulation<any, any, any>,
+    ) => SceneSimulation<any, any, any>)
 
 // INTERNAL
 
@@ -194,7 +234,7 @@ type DispatchService = Readonly<{
 
 type CapturingDispatch = Readonly<{
   dispatch: DispatchService
-  getCapturedMessage: () => unknown | undefined
+  getCapturedMessages: () => ReadonlyArray<unknown>
   reset: () => void
 }>
 
@@ -216,10 +256,6 @@ type IgnoredInteraction = Readonly<{
   eventName: string
   description: string
 }>
-
-type UpdateResult<Model, OutMessage> =
-  | readonly [Model, ReadonlyArray<AnyCommand>]
-  | readonly [Model, ReadonlyArray<AnyCommand>, OutMessage]
 
 type MountStatus =
   | Readonly<{ _tag: 'Pending' }>
@@ -247,12 +283,14 @@ type InternalSceneSimulation<
     updateFn: (
       model: Model,
       message: Message,
-    ) => UpdateResult<Model, OutMessage>
+    ) => SimulationUpdateReturn<Model, OutMessage>
     resolvers: ReadonlyArray<ResolverEntry>
     viewFn: (model: Model, h: HtmlBuilder<Message>) => Html | Document
     capturingDispatch: CapturingDispatch
     scope: Option.Option<Locator>
     mountSlots: ReadonlyArray<MountSlotState>
+    outMessages: ReadonlyArray<OutMessage>
+    outMessageRevision: number
     lastInteractionOutcome: InteractionOutcome
     maybeUnacknowledgedIgnored: Option.Option<IgnoredInteraction>
   }>
@@ -362,6 +400,60 @@ const toInternal = <Model, Message, OutMessage>(
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   simulation as InternalSceneSimulation<Model, Message, OutMessage>
 
+type OutMessageCapture<Model, Message, OutMessage> = Readonly<{
+  updateFn: (
+    model: Model,
+    message: Message,
+  ) => SimulationUpdateReturn<Model, OutMessage>
+  getOutMessages: () => ReadonlyArray<OutMessage>
+  isUpdateApplied: () => boolean
+}>
+
+const createOutMessageCapture = <Model, Message, OutMessage>(
+  updateFn: (
+    model: Model,
+    message: Message,
+  ) => SimulationUpdateReturn<Model, OutMessage>,
+): OutMessageCapture<Model, Message, OutMessage> => {
+  const outMessages: Array<OutMessage> = []
+  let isUpdateApplied = false
+
+  return {
+    updateFn: (model, message) => {
+      isUpdateApplied = true
+      const messageUpdate = updateFn(model, message)
+
+      if (!Predicate.isUndefined(messageUpdate.outMessage)) {
+        outMessages.push(messageUpdate.outMessage)
+      }
+
+      return messageUpdate
+    },
+    getOutMessages: () => outMessages,
+    isUpdateApplied: () => isUpdateApplied,
+  }
+}
+
+const withOutMessages = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  outMessages: ReadonlyArray<OutMessage>,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+  const outMessage = Array.matchLeft(outMessages, {
+    onEmpty: () => undefined,
+    onNonEmpty: (head, tail) =>
+      Array.isReadonlyArrayEmpty(tail) ? head : undefined,
+  })
+
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  return {
+    ...internal,
+    outMessage,
+    outMessages,
+    outMessageRevision: internal.outMessageRevision + 1,
+  } as unknown as SceneSimulation<Model, Message, OutMessage>
+}
+
 const applyScopeToTarget = (
   scope: Option.Option<Locator>,
   target: string | Locator,
@@ -404,18 +496,18 @@ const applyScopeToLocatorAll = (
 // CAPTURING DISPATCH
 
 const createCapturingDispatch = (): CapturingDispatch => {
-  let capturedMessage: unknown | undefined
+  let capturedMessages: Array<unknown> = []
 
   return {
     dispatch: Dispatch.of({
       dispatchAsync: () => Effect.void,
       dispatchSync: (dispatchedMessage: unknown) => {
-        capturedMessage = dispatchedMessage
+        capturedMessages.push(dispatchedMessage)
       },
     }),
-    getCapturedMessage: () => capturedMessage,
+    getCapturedMessages: () => capturedMessages,
     reset: () => {
-      capturedMessage = undefined
+      capturedMessages = []
     },
   }
 }
@@ -467,11 +559,15 @@ const EVENT_NAMES: Record<string, string> = {
   submit: 'OnSubmit',
   input: 'OnInput',
   change: 'OnChange',
+  beforeinput: 'OnBeforeInput or OnBeforeInputPreventDefault',
   focus: 'OnFocus',
   blur: 'OnBlur',
+  focusin: 'OnFocusEnter',
+  focusout: 'OnFocusLeave',
   mouseenter: 'OnMouseEnter',
   mouseover: 'OnMouseOver',
-  keydown: 'OnKeyDown or OnKeyDownPreventDefault',
+  keydown:
+    'OnKeyDown, OnKeyDownPreventDefault, OnKeyDownSelf, or OnKeyDownSelfPreventDefault',
   pointerdown: 'OnPointerDown',
   pointerup: 'OnPointerUp',
 }
@@ -497,16 +593,111 @@ const maybeCaptureFromElement = <Model, Message, OutMessage>(
   internal.capturingDispatch.reset()
   // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
   invokeHandler(maybeHandler.value as Function)
+  const capturedMessages = internal.capturingDispatch.getCapturedMessages()
 
-  return Option.map(
-    Option.fromNullishOr(internal.capturingDispatch.getCapturedMessage()),
-    captured =>
-      applyExternalMessage(
-        simulation,
-        captured,
-        'when an interaction dispatched a new Message',
+  return Array.match(capturedMessages, {
+    onEmpty: () => Option.none(),
+    onNonEmpty: messages =>
+      Option.some(
+        applyExternalMessages(
+          simulation,
+          messages,
+          'when an interaction dispatched a new Message',
+        ),
       ),
+  })
+}
+
+const finishCapturedInteraction = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  description: string,
+  eventName: string,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const capturedMessages =
+    toInternal(simulation).capturingDispatch.getCapturedMessages()
+
+  return Array.match(capturedMessages, {
+    onEmpty: () =>
+      advanceInteraction(
+        simulation,
+        Ignored,
+        Option.some({ eventName, description }),
+      ),
+    onNonEmpty: messages =>
+      advanceInteraction(
+        applyExternalMessages(
+          simulation,
+          messages,
+          'when an interaction dispatched a new Message',
+        ),
+        Handled,
+        Option.none(),
+      ),
+  })
+}
+
+const applyMessageWithoutBoundaryChecks = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  message: unknown,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+
+  /* eslint-disable @typescript-eslint/consistent-type-assertions */
+  const messageAsParent = message as unknown as Message
+  const messageUpdate = internal.updateFn(internal.model, messageAsParent)
+  return {
+    ...internal,
+    model: messageUpdate.model,
+    message: messageAsParent,
+    commands: Array.appendAll(internal.commands, messageUpdate.commands ?? []),
+    outMessage: messageUpdate.outMessage,
+  } as unknown as SceneSimulation<Model, Message, OutMessage>
+  /* eslint-enable @typescript-eslint/consistent-type-assertions */
+}
+
+const assertExternalMessageBoundary = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  context: string,
+): void => {
+  const internal = toInternal(simulation)
+
+  assertNoUnresolvedCommands(internal.commands, context)
+  assertNoUnresolvedMounts(internal.mounts, context)
+  assertNoUnacknowledgedUnmounts(
+    unacknowledgedEndedMountsOf(internal.mountSlots),
+    context,
   )
+}
+
+const applyExternalMessages = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  messages: ReadonlyArray<unknown>,
+  context: string,
+): SceneSimulation<Model, Message, OutMessage> => {
+  assertExternalMessageBoundary(simulation, context)
+
+  return Array.reduce(messages, simulation, applyMessageWithoutBoundaryChecks)
+}
+
+const applySubscriptionMessage = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  message: Message,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+  const context = 'when a Subscription emitted a new Message'
+
+  assertExternalMessageBoundary(simulation, context)
+
+  const messageUpdate = internal.updateFn(internal.model, message)
+
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  return {
+    ...internal,
+    model: messageUpdate.model,
+    message,
+    commands: Array.appendAll(internal.commands, messageUpdate.commands ?? []),
+    outMessage: messageUpdate.outMessage,
+  } as SceneSimulation<Model, Message, OutMessage>
 }
 
 /** Clears the pending fall-through, marking it acknowledged. Paired with
@@ -616,25 +807,80 @@ const invokeAndCapture = <Model, Message, OutMessage>(
   )
 }
 
-const lookupTypeAttribute = (vnode: VNode): string | undefined => {
-  const fromAttrs = vnode.data?.attrs?.['type']
-  const fromProps = vnode.data?.props?.['type']
-  return typeof fromAttrs === 'string'
-    ? fromAttrs
-    : typeof fromProps === 'string'
-      ? fromProps
-      : undefined
+const lookupStringAttribute = (
+  vnode: VNode,
+  name: string,
+): string | undefined => {
+  const fromAttrs = vnode.data?.attrs?.[name]
+  const fromProps = vnode.data?.props?.[name]
+  if (Predicate.isString(fromAttrs)) {
+    return fromAttrs
+  }
+
+  if (Predicate.isString(fromProps)) {
+    return fromProps
+  }
+
+  return undefined
 }
 
 const isSubmitButton = (element: VNode): boolean => {
-  const type = lookupTypeAttribute(element)
+  const maybeType = pipe(
+    lookupStringAttribute(element, 'type'),
+    Option.fromNullishOr,
+    Option.map(String.toLowerCase),
+  )
+
   if (element.sel === 'button') {
-    return type === undefined || type === 'submit'
+    return Option.match(maybeType, {
+      onNone: () => true,
+      onSome: value => value !== 'button' && value !== 'reset',
+    })
   }
+
   if (element.sel === 'input') {
-    return type === 'submit' || type === 'image'
+    return Option.exists(
+      maybeType,
+      value => value === 'submit' || value === 'image',
+    )
   }
+
   return false
+}
+
+const findElementById = (root: VNode, id: string): Option.Option<VNode> => {
+  if (lookupStringAttribute(root, 'id') === id) {
+    return Option.some(root)
+  }
+
+  for (const child of root.children ?? []) {
+    if (Predicate.isString(child)) {
+      continue
+    }
+
+    const maybeMatch = findElementById(child, id)
+    if (Option.isSome(maybeMatch)) {
+      return maybeMatch
+    }
+  }
+
+  return Option.none()
+}
+
+const formOwnerOf = (root: VNode, submitter: VNode): Option.Option<VNode> => {
+  const formId = lookupStringAttribute(submitter, 'form')
+  if (formId !== undefined) {
+    return pipe(
+      findElementById(root, formId),
+      Option.filter(element => element.sel === 'form'),
+    )
+  }
+
+  return pipe(
+    root,
+    ancestorsOf(submitter),
+    Array.findLast(element => element.sel === 'form'),
+  )
 }
 
 const isElementDisabled = (element: VNode): boolean => {
@@ -996,29 +1242,7 @@ const applyExternalMessage = <Model, Message, OutMessage>(
   message: unknown,
   context: string,
 ): SceneSimulation<Model, Message, OutMessage> => {
-  const internal = toInternal(simulation)
-
-  assertNoUnresolvedCommands(internal.commands, context)
-  assertNoUnresolvedMounts(internal.mounts, context)
-  assertNoUnacknowledgedUnmounts(
-    unacknowledgedEndedMountsOf(internal.mountSlots),
-    context,
-  )
-
-  /* eslint-disable @typescript-eslint/consistent-type-assertions */
-  const messageAsParent = message as unknown as Message
-  const result = internal.updateFn(internal.model, messageAsParent)
-  const [nextModel, commands] = result
-  const outMessage = result.length === 3 ? result[2] : internal.outMessage
-
-  return {
-    ...internal,
-    model: nextModel,
-    message: messageAsParent,
-    commands: Array.appendAll(internal.commands, commands),
-    outMessage,
-  } as unknown as SceneSimulation<Model, Message, OutMessage>
-  /* eslint-enable @typescript-eslint/consistent-type-assertions */
+  return applyExternalMessages(simulation, [message], context)
 }
 
 /** Feeds a Message through update as if a Subscription had emitted it,
@@ -1029,16 +1253,12 @@ const applyExternalMessage = <Model, Message, OutMessage>(
  *  the test exercises the handler wiring this step skips. Like an
  *  interaction, it throws if unresolved Commands, unresolved Mounts, or
  *  unacknowledged unmounts are pending. */
-const emitSubscriptionMessage =
-  <MessageInput>(message: MessageInput) =>
-  <Model, Message, OutMessage = undefined>(
-    simulation: SceneSimulation<Model, Message, OutMessage>,
-  ): SceneSimulation<Model, Message, OutMessage> =>
-    applyExternalMessage(
-      simulation,
-      message,
-      'when a Subscription emitted a new Message',
-    )
+const emitSubscriptionMessage = <Message>(
+  message: Message,
+): SubscriptionMessageStep<Message> => ({
+  _tag: 'SubscriptionMessageStep',
+  message,
+})
 
 const MANAGED_RESOURCE_CONTEXT =
   'when a ManagedResource dispatched a new Message'
@@ -1103,7 +1323,7 @@ const acquireManagedResource =
 /** Declares that a ManagedResource's acquire failed, feeding the entry's
  *  `onAcquireError(error)` Message through update the way the runtime
  *  would. Requires the current Model to request the resource, the same as
- *  {@link acquireManagedResource}: the runtime only attempts acquisition
+ *  `ManagedResource.acquire`: the runtime only attempts acquisition
  *  while `modelToMaybeRequirements` returns Some. */
 const failAcquireManagedResource =
   <EntryModel, EntryMessage, Value>(
@@ -1164,18 +1384,19 @@ const releaseManagedResource =
 
 /** Dispatches a CustomEvent a rendered custom element declares, feeding the
  *  Message its `On*` event mapping produces through update. The event name
- *  and detail are typed by the spec's event Schemas. The element must be in
- *  the rendered tree with the event's attribute attached, so the test
- *  exercises the same mapping the browser event would. */
+ *  and detail are typed by the encoded side of the spec's event Schemas. The
+ *  runtime decodes the detail before invoking the event mapping. The element
+ *  must be in the rendered tree with the event's attribute attached, so the
+ *  test exercises the same mapping the browser event would. */
 const emitCustomElementEvent =
   <
-    Events extends Record<string, Schema.Top>,
+    Events extends Record<string, EventSchema>,
     Name extends keyof Events & string,
   >(
     spec: CustomElementSpec<string, Record<string, Schema.Top>, Events>,
     target: string | Locator,
     eventName: Name,
-    detail: Schema.Schema.Type<Events[Name]>,
+    detail: Schema.Codec.Encoded<Events[Name]>,
   ) =>
   <Model, Message, OutMessage = undefined>(
     simulation: SceneSimulation<Model, Message, OutMessage>,
@@ -1184,7 +1405,7 @@ const emitCustomElementEvent =
       const declared = Object.keys(spec.events).join(', ')
       throw new Error(
         `I tried to emit "${eventName}" but the '${spec.tag}' element does not declare it.\n\n` +
-          `Declared events: ${String_.isEmpty(declared) ? '(none)' : declared}.`,
+          `Declared events: ${String.isEmpty(declared) ? '(none)' : declared}.`,
       )
     }
 
@@ -1211,13 +1432,9 @@ const emitCustomElementEvent =
       )
     }
 
-    // NOTE: the OnCustomEvent handler only dispatches when the event is a
-    // real CustomEvent instance, so the synthetic event must be constructed
-    // with `new CustomEvent(...)`, never a plain object literal like the
-    // other interaction helpers use. A None capture means nothing was
-    // dispatched, and since the handler dispatches unconditionally for a
-    // genuine CustomEvent, that can only be the instanceof check failing
-    // (a CustomEvent realm mismatch in the test environment).
+    // NOTE: the OnCustomEvent handler only handles real CustomEvent instances,
+    // so the synthetic event must be constructed with `new CustomEvent(...)`,
+    // never a plain object literal like the other interaction helpers use.
     const maybeNext = maybeCaptureFromElement(
       simulation,
       element,
@@ -1234,7 +1451,7 @@ const emitCustomElementEvent =
         () =>
           new Error(
             `I dispatched "${eventName}" on the element matching ${description} but its handler produced no Message.\n\n` +
-              "The OnCustomEvent handler only dispatches for CustomEvent instances, so the synthetic event failed the runtime's instanceof check. This points to a CustomEvent realm mismatch in the test environment.",
+              'Its detail may have failed the declared Schema. Check the console for the decoding error.',
           ),
       ),
       Handled,
@@ -1320,55 +1537,81 @@ export const CustomElement = {
   emit: emitCustomElementEvent,
 } as const
 
-/** Asserts that the OutMessage is Some with the expected value.
- *
- *  The tracked OutMessage is the third element of the most recent update
- *  result that had one. An update branch that returns a two-tuple leaves
- *  the previous value latched in place, so keep every branch of an
- *  OutMessage-returning update on the three-tuple shape, returning
- *  `Option.none()` when there is nothing to report. */
-export const expectOutMessage =
-  <Expected>(expected: Expected) =>
-  <Model, Message, OutMessage>(
-    simulation: SceneSimulation<Model, Message, Option.Option<OutMessage>>,
-  ): SceneSimulation<Model, Message, Option.Option<OutMessage>> => {
-    const internal = toInternal(simulation)
-    const outMessage = internal.outMessage
+/** Asserts by structural equality that the latest update-producing Scene step
+ *  emitted exactly the expected OutMessage. */
+export const expectOutMessage = <OutMessage>(
+  expected: OutMessage,
+): OutMessageStep<OutMessage> => ({
+  _tag: 'OutMessageStep',
+  expected,
+})
 
-    if (
-      !Option.isOption(outMessage) ||
-      Option.isNone(outMessage) ||
-      !Equal.equals(outMessage.value, expected)
-    ) {
-      throw new Error(
-        `Expected OutMessage:\n\n    Some(${JSON.stringify(expected)})\n\nBut got:\n\n    ${JSON.stringify(outMessage)}`,
-      )
-    }
+const assertOutMessage = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  expected: unknown,
+): void => {
+  const internal = toInternal(simulation)
+  const maybeOutMessage = Array.head(internal.outMessages)
 
-    return simulation
+  if (Option.isNone(maybeOutMessage)) {
+    throw new Error(
+      `Expected OutMessage:\n\n    ${JSON.stringify(expected)}\n\nBut got:\n\n    undefined`,
+    )
   }
 
-/** Asserts that the OutMessage is None.
- *
- *  The tracked OutMessage is the third element of the most recent update
- *  result that had one. An update branch that returns a two-tuple leaves
- *  the previous value latched in place, so keep every branch of an
- *  OutMessage-returning update on the three-tuple shape, returning
- *  `Option.none()` when there is nothing to report. */
+  if (Array.isReadonlyArrayNonEmpty(Array.drop(internal.outMessages, 1))) {
+    throw new Error(
+      `Expected exactly one OutMessage but got multiple:\n\n    ${JSON.stringify(internal.outMessages)}`,
+    )
+  }
+
+  if (!Equal.equals(maybeOutMessage.value, expected)) {
+    throw new Error(
+      `Expected OutMessage:\n\n    ${JSON.stringify(expected)}\n\nBut got:\n\n    ${JSON.stringify(maybeOutMessage.value)}`,
+    )
+  }
+}
+
+/** Asserts by structural equality that the latest update-producing Scene
+ *  step emitted two or more expected OutMessages in runtime order. */
+export const expectOutMessages = <
+  Expected extends readonly [unknown, unknown, ...ReadonlyArray<unknown>],
+>(
+  ...expected: Expected
+): OutMessagesStep<Expected[number]> => ({
+  _tag: 'OutMessagesStep',
+  expected,
+})
+
+const assertOutMessages = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  expected: ReadonlyArray<unknown>,
+): void => {
+  const actual = toInternal(simulation).outMessages
+
+  if (!Equal.equals(actual, expected)) {
+    throw new Error(
+      `Expected OutMessages:\n\n    ${JSON.stringify(expected)}\n\nBut got:\n\n    ${JSON.stringify(actual)}`,
+    )
+  }
+}
+
+/** Asserts that the latest update-producing Scene step emitted no OutMessages. */
 export const expectNoOutMessage =
   () =>
   <Model, Message, OutMessage>(
-    simulation: SceneSimulation<Model, Message, Option.Option<OutMessage>>,
-  ): SceneSimulation<Model, Message, Option.Option<OutMessage>> => {
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
     const internal = toInternal(simulation)
-    const outMessage = internal.outMessage
 
-    if (
-      !Predicate.isUndefined(outMessage) &&
-      !(Option.isOption(outMessage) && Option.isNone(outMessage))
-    ) {
+    if (Array.isReadonlyArrayNonEmpty(internal.outMessages)) {
+      const actual = Array.isReadonlyArrayEmpty(
+        Array.drop(internal.outMessages, 1),
+      )
+        ? Array.headNonEmpty(internal.outMessages)
+        : internal.outMessages
       throw new Error(
-        `Expected no OutMessage but got:\n\n    ${JSON.stringify(outMessage)}`,
+        `Expected no OutMessage but got:\n\n    ${JSON.stringify(actual)}`,
       )
     }
 
@@ -1406,9 +1649,9 @@ export const expectHandled =
   <Model, Message, OutMessage>(
     simulation: SceneSimulation<Model, Message, OutMessage>,
   ): SceneSimulation<Model, Message, OutMessage> =>
-    M.value(toInternal(simulation).lastInteractionOutcome).pipe(
-      M.withReturnType<SceneSimulation<Model, Message, OutMessage>>(),
-      M.tagsExhaustive({
+    Match.value(toInternal(simulation).lastInteractionOutcome).pipe(
+      Match.withReturnType<SceneSimulation<Model, Message, OutMessage>>(),
+      Match.tagsExhaustive({
         NotRun: () => {
           throw new Error(
             'I was asked whether the last interaction was handled, but no interaction has run yet.\n\n' +
@@ -1447,9 +1690,9 @@ export const expectIgnored =
   <Model, Message, OutMessage>(
     simulation: SceneSimulation<Model, Message, OutMessage>,
   ): SceneSimulation<Model, Message, OutMessage> =>
-    M.value(toInternal(simulation).lastInteractionOutcome).pipe(
-      M.withReturnType<SceneSimulation<Model, Message, OutMessage>>(),
-      M.tagsExhaustive({
+    Match.value(toInternal(simulation).lastInteractionOutcome).pipe(
+      Match.withReturnType<SceneSimulation<Model, Message, OutMessage>>(),
+      Match.tagsExhaustive({
         NotRun: () => {
           throw new Error(
             'I was asked whether the last interaction was ignored, but no interaction has run yet.\n\n' +
@@ -1477,17 +1720,58 @@ export const tap =
     return simulation
   }
 
+const applySceneStep = <Model, Message, OutMessage>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: SceneStep<Model, Message, OutMessage>,
+): SceneSimulation<Model, Message, OutMessage> => {
+  if (Predicate.isTagged(step, 'SubscriptionMessageStep')) {
+    return applySubscriptionMessage(simulation, step.message)
+  }
+
+  if (Predicate.isTagged(step, 'OutMessageStep')) {
+    assertOutMessage(simulation, step.expected)
+    return simulation
+  }
+
+  if (Predicate.isTagged(step, 'OutMessagesStep')) {
+    assertOutMessages(simulation, step.expected)
+    return simulation
+  }
+
+  if (Predicate.isFunction(step)) {
+    return step(simulation)
+  }
+
+  return simulation
+}
+
 const runSteps = <Model, Message, OutMessage>(
   seed: SceneSimulation<Model, Message, OutMessage>,
   steps: ReadonlyArray<SceneStep<Model, Message, OutMessage>>,
 ): SceneSimulation<Model, Message, OutMessage> =>
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
   Array.reduce(steps, seed, (current, step) => {
-    const next = (
-      step as (
-        simulation: SceneSimulation<Model, Message, OutMessage>,
-      ) => SceneSimulation<Model, Message, OutMessage>
-    )(current)
+    const currentInternal = toInternal(current)
+    const outMessageCapture = createOutMessageCapture(currentInternal.updateFn)
+    const capturingSimulation = {
+      ...currentInternal,
+      updateFn: outMessageCapture.updateFn,
+    } as unknown as SceneSimulation<Model, Message, OutMessage>
+    const stepResult = applySceneStep(capturingSimulation, step)
+    const restoredSimulation = {
+      ...toInternal(stepResult),
+      updateFn: currentInternal.updateFn,
+    } as unknown as SceneSimulation<Model, Message, OutMessage>
+    const isSequenceUpdatedByNestedSteps =
+      toInternal(restoredSimulation).outMessageRevision !==
+      currentInternal.outMessageRevision
+    const next =
+      outMessageCapture.isUpdateApplied() && !isSequenceUpdatedByNestedSteps
+        ? withOutMessages(
+            restoredSimulation,
+            outMessageCapture.getOutMessages(),
+          )
+        : restoredSimulation
 
     const internal = toInternal(next)
 
@@ -1555,15 +1839,42 @@ const findAncestorWithHandler = (
     Array.findFirst(vnode => vnode.data?.on?.[eventName] !== undefined),
   )
 
+type SimulatedClick = Readonly<{
+  event: Readonly<{
+    preventDefault: () => void
+    stopPropagation: () => void
+  }>
+  isDefaultPrevented: () => boolean
+  isPropagationStopped: () => boolean
+}>
+
+const createSimulatedClick = (): SimulatedClick => {
+  let isDefaultPrevented = false
+  let isPropagationStopped = false
+
+  return {
+    event: {
+      preventDefault: () => {
+        isDefaultPrevented = true
+      },
+      stopPropagation: () => {
+        isPropagationStopped = true
+      },
+    },
+    isDefaultPrevented: () => isDefaultPrevented,
+    isPropagationStopped: () => isPropagationStopped,
+  }
+}
+
 // INTERACTION STEPS
 
 /** Simulates a click on the element matching the target.
- *  When the element has no click handler, the event bubbles up to the
- *  nearest ancestor with one, mirroring browser event propagation.
- *  When the element is a submit button (`<button>` with no type or
- *  `type="submit"`, `<input type="submit">`, `<input type="image">`) with no
- *  click handler in its ancestor chain, the click falls through to the
- *  `submit` handler of the nearest ancestor `<form>`. */
+ *  Runs click handlers from the target through its ancestors until one stops
+ *  propagation, mirroring browser event propagation.
+ *  When the target activates a submit button and no click handler prevents
+ *  the default, the click falls through to the `submit` handler of its form
+ *  owner. Scene honors an explicit `form` attribute before looking for the
+ *  nearest ancestor `<form>`. */
 export const click =
   (target: string | Locator) =>
   <Model, Message, OutMessage = undefined>(
@@ -1584,8 +1895,17 @@ export const click =
     }
 
     const { value: element } = maybeElement
+    const propagationPath = [
+      element,
+      ...pipe(internal.html, ancestorsOf(element), Array.reverse),
+    ]
+    const activationElement = pipe(
+      propagationPath,
+      Array.findFirst(currentElement => currentElement.sel === 'button'),
+      Option.getOrElse(() => element),
+    )
 
-    if (isElementDisabled(element)) {
+    if (isElementDisabled(activationElement)) {
       throw new Error(
         `I found an element matching ${description} but it is disabled.\n\n` +
           'Disabled elements do not receive click events in the browser. ' +
@@ -1595,62 +1915,59 @@ export const click =
       )
     }
 
-    const hasClickHandler = element.data?.on?.['click'] !== undefined
+    const simulatedClick = createSimulatedClick()
+    let isClickHandled = false
+    let isSubmitHandled = false
 
-    if (hasClickHandler) {
-      return captureFromElement(
-        simulation,
-        element,
-        description,
-        'click',
-        handler => {
-          handler()
-        },
+    internal.capturingDispatch.reset()
+
+    for (const currentElement of propagationPath) {
+      const maybeClickHandler = Option.fromNullishOr(
+        currentElement.data?.on?.['click'],
       )
-    }
+      if (Option.isNone(maybeClickHandler)) {
+        continue
+      }
 
-    const maybeAncestor = findAncestorWithHandler(
-      internal.html,
-      element,
-      'click',
-    )
+      isClickHandled = true
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      const clickHandler = maybeClickHandler.value as Function
+      clickHandler(simulatedClick.event)
 
-    if (Option.isSome(maybeAncestor)) {
-      return captureFromElement(
-        simulation,
-        maybeAncestor.value,
-        `ancestor of ${description}`,
-        'click',
-        handler => {
-          handler()
-        },
-      )
-    }
-
-    if (isSubmitButton(element)) {
-      const maybeForm = pipe(
-        internal.html,
-        ancestorsOf(element),
-        Array.findLast(vnode => vnode.sel === 'form'),
-      )
-      if (Option.isSome(maybeForm)) {
-        return captureFromElement(
-          simulation,
-          maybeForm.value,
-          `form containing ${description}`,
-          'submit',
-          handler => {
-            handler({ preventDefault: Function.constVoid })
-          },
-        )
+      if (simulatedClick.isPropagationStopped()) {
+        break
       }
     }
 
-    const attributeName = EVENT_NAMES['click'] ?? 'click'
-    throw new Error(
-      `I found an element matching ${description} but neither it nor any ancestor has a click handler.\n\n` +
-        `Make sure the element or a parent has an ${attributeName} attribute.`,
-    )
+    if (!simulatedClick.isDefaultPrevented()) {
+      const maybeSubmitter = Array.findFirst(propagationPath, isSubmitButton)
+      const maybeForm = pipe(
+        maybeSubmitter,
+        Option.flatMap(submitter => formOwnerOf(internal.html, submitter)),
+      )
+
+      if (Option.isSome(maybeForm)) {
+        const maybeSubmitHandler = Option.fromNullishOr(
+          maybeForm.value.data?.on?.['submit'],
+        )
+        if (Option.isSome(maybeSubmitHandler)) {
+          isSubmitHandled = true
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          const submitHandler = maybeSubmitHandler.value as Function
+          submitHandler({ preventDefault: Function.constVoid })
+        }
+      }
+    }
+
+    if (!isClickHandled && !isSubmitHandled) {
+      const attributeName = EVENT_NAMES['click'] ?? 'click'
+      throw new Error(
+        `I found an element matching ${description} but neither it nor any ancestor has a click handler.\n\n` +
+          `Make sure the element or a parent has an ${attributeName} attribute.`,
+      )
+    }
+
+    return finishCapturedInteraction(simulation, description, 'click')
   }
 
 /** Simulates a double-click on the element matching the target.
@@ -1782,6 +2099,7 @@ type PointerDownOptions = Readonly<{
   screenY?: number
   clientX?: number
   clientY?: number
+  pointerId?: number
 }>
 
 const DEFAULT_POINTER_DOWN_OPTIONS: Required<PointerDownOptions> = {
@@ -1791,12 +2109,41 @@ const DEFAULT_POINTER_DOWN_OPTIONS: Required<PointerDownOptions> = {
   screenY: 0,
   clientX: 0,
   clientY: 0,
+  pointerId: 0,
+}
+
+const simulatedPointerTarget = (root: VNode, target: VNode): Element => {
+  const createElement = (vnode: VNode): Element => {
+    const element = document.createElement(
+      tagNameFromSelector(vnode.sel ?? 'div'),
+    )
+
+    for (const [name, value] of Object.entries(vnode.data?.attrs ?? {})) {
+      element.setAttribute(name, globalThis.String(value))
+    }
+
+    return element
+  }
+
+  const targetElement = createElement(target)
+  let child = targetElement
+
+  for (const ancestor of pipe(root, ancestorsOf(target), Array.reverse)) {
+    const parent = createElement(ancestor)
+    parent.appendChild(child)
+    child = parent
+  }
+
+  return targetElement
 }
 
 /** Simulates a pointerdown event on the element matching the target.
  *  When the element has no pointerdown handler, the event bubbles up to
  *  the nearest ancestor with one, mirroring browser event propagation.
- *  Defaults to `pointerType: 'mouse'`, `button: 0`, and `screenX/screenY: 0`. */
+ *  The `OnPointerDown` callback receives a detached element representing
+ *  the target and its ancestors, so `closest()` checks work in Scene tests.
+ *  Defaults to `pointerType: 'mouse'`, `button: 0`, `screenX/screenY: 0`,
+ *  `clientX/clientY: 0`, and `pointerId: 0`. */
 export const pointerDown =
   (target: string | Locator, options?: PointerDownOptions) =>
   <Model, Message, OutMessage = undefined>(
@@ -1817,7 +2164,15 @@ export const pointerDown =
     }
 
     const { value: element } = maybeElement
-    const { pointerType, button, screenX, screenY, clientX, clientY } = {
+    const {
+      pointerType,
+      button,
+      screenX,
+      screenY,
+      clientX,
+      clientY,
+      pointerId,
+    } = {
       ...DEFAULT_POINTER_DOWN_OPTIONS,
       ...options,
     }
@@ -1830,6 +2185,8 @@ export const pointerDown =
         timeStamp: 0,
         clientX,
         clientY,
+        pointerId,
+        target: simulatedPointerTarget(internal.html, element),
       })
     }
 
@@ -1981,6 +2338,26 @@ export const blur =
       handler({ relatedTarget: null })
     })
 
+/** Simulates focus entering the subtree of the element matching the target. */
+export const focusEnter =
+  (target: string | Locator) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> =>
+    invokeAndCapture(simulation, target, 'focusin', handler => {
+      handler({ currentTarget: null, relatedTarget: null })
+    })
+
+/** Simulates focus leaving the subtree of the element matching the target. */
+export const focusLeave =
+  (target: string | Locator) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> =>
+    invokeAndCapture(simulation, target, 'focusout', handler => {
+      handler({ currentTarget: null, relatedTarget: null })
+    })
+
 /** Simulates a change event on the element matching the target.
  *  Dual: `change(target, value)` or `change(value)` for data-last piping. */
 export const change: {
@@ -2110,7 +2487,77 @@ const type_: {
       }),
 )
 
-/** Simulates a keydown event on the element matching the target.
+/** Simulates typing into a contenteditable host matching the target. A
+ *  contenteditable element has no `value`, so the `input` event reports the
+ *  host's rendered text. Use this to drive `OnInput` on a `Contenteditable`
+ *  element. Dual: `typeContentEditable(target, text)` or
+ *  `typeContentEditable(text)` for data-last piping. */
+export const typeContentEditable: {
+  (
+    target: string | Locator,
+    text: string,
+  ): <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ) => SceneSimulation<Model, Message, OutMessage>
+  (
+    text: string,
+  ): (
+    target: string | Locator,
+  ) => <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ) => SceneSimulation<Model, Message, OutMessage>
+} = dual(
+  2,
+  (target: string | Locator, text: string) =>
+    <Model, Message, OutMessage = undefined>(
+      simulation: SceneSimulation<Model, Message, OutMessage>,
+    ): SceneSimulation<Model, Message, OutMessage> =>
+      invokeAndCapture(simulation, target, 'input', handler => {
+        handler({ target: { innerText: text } })
+      }),
+)
+
+/** Simulates a `beforeinput` event on the element matching the target. Drives
+ *  `OnBeforeInput` and `OnBeforeInputPreventDefault`. Pass the edit's
+ *  `inputType` (e.g. `'insertText'`, `'deleteContentBackward'`) and its `data`
+ *  as an `Option` (the inserted text, or `None` for edits that carry none). Dual:
+ *  `beforeInput(target, inputType, data)` or `beforeInput(inputType, data)` for
+ *  data-last piping. */
+export const beforeInput: {
+  (
+    target: string | Locator,
+    inputType: string,
+    data: Option.Option<string>,
+  ): <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ) => SceneSimulation<Model, Message, OutMessage>
+  (
+    inputType: string,
+    data: Option.Option<string>,
+  ): (
+    target: string | Locator,
+  ) => <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ) => SceneSimulation<Model, Message, OutMessage>
+} = dual(
+  3,
+  (target: string | Locator, inputType: string, data: Option.Option<string>) =>
+    <Model, Message, OutMessage = undefined>(
+      simulation: SceneSimulation<Model, Message, OutMessage>,
+    ): SceneSimulation<Model, Message, OutMessage> =>
+      invokeAndCapture(simulation, target, 'beforeinput', handler => {
+        handler({
+          inputType,
+          data: Option.getOrNull(data),
+          cancelable: true,
+          preventDefault: Function.constVoid,
+        })
+      }),
+)
+
+/** Simulates a keydown event on the element matching the target. The event is
+ *  self-targeted (`target === currentTarget`), so `OnKeyDownSelf` and
+ *  `OnKeyDownSelfPreventDefault` handlers fire.
  *  Dual: `keydown(target, key, modifiers?)` or `keydown(key, modifiers?)` for data-last piping. */
 export const keydown: {
   (
@@ -2152,10 +2599,13 @@ export const keydown: {
       simulation: SceneSimulation<Model, Message, OutMessage>,
     ): SceneSimulation<Model, Message, OutMessage> =>
       invokeAndCapture(simulation, target, 'keydown', handler => {
+        const node = {}
         handler({
           key,
           ...DEFAULT_KEYBOARD_MODIFIERS,
           ...modifiers,
+          target: node,
+          currentTarget: node,
           preventDefault: Function.constVoid,
         })
       }),
@@ -2304,7 +2754,9 @@ const assertHasStyle = (
 ): SceneAssertion =>
   assertOnElement(
     vnode => {
-      const maybeActualValue = Option.fromNullishOr(vnode.data?.style?.[name])
+      const maybeActualValue = Option.fromNullishOr(
+        vnode.data?.style?.[serializedStylePropertyName(name)],
+      )
       if (Predicate.isUndefined(value)) {
         return {
           pass: Option.isSome(maybeActualValue),
@@ -2314,7 +2766,7 @@ const assertHasStyle = (
       return Option.match(maybeActualValue, {
         onNone: () => ({ pass: false, actual: 'it is not present' }),
         onSome: actualValue => ({
-          pass: String(actualValue) === value,
+          pass: globalThis.String(actualValue) === value,
           actual: `received "${actualValue}"`,
         }),
       })
@@ -2427,8 +2879,8 @@ const assertIsEmpty: SceneAssertion = assertOnElement(vnode => {
   const childCount = (vnode.children ?? []).length
   const text = textContent(vnode)
   return {
-    pass: String_.isEmpty(text) && childCount === 0,
-    actual: String_.isNonEmpty(text)
+    pass: String.isEmpty(text) && childCount === 0,
+    actual: String.isNonEmpty(text)
       ? `received text "${text}"`
       : `received ${childCount} child(ren)`,
   }
@@ -2579,29 +3031,44 @@ export const withViewInputs =
  *  unresolved, any unmount is unacknowledged, or any interaction fell
  *  through unacknowledged. */
 export const scene: {
-  <Model, Message, OutMessage>(
+  <Model, Message, OutMessage = never>(
     config: Readonly<{
       update: (
         model: Model,
         message: Message,
-      ) => readonly [Model, ReadonlyArray<AnyCommand>, OutMessage]
+      ) => Readonly<{
+        model: Model
+        commands?: ReadonlyArray<AnyCommand>
+        outMessage?: OutMessage
+      }>
       view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
     }>,
-    ...steps: ReadonlyArray<SceneStep<Model, Message, OutMessage>>
+    ...steps: ReadonlyArray<
+      SceneStep<NoInfer<Model>, NoInfer<Message>, NoInfer<OutMessage>>
+    >
   ): void
   <Model, Message>(
     config: Readonly<{
       update: (
         model: Model,
         message: Message,
-      ) => readonly [Model, ReadonlyArray<AnyCommand>]
+      ) => Readonly<{
+        model: Model
+        commands?: ReadonlyArray<AnyCommand>
+        outMessage?: never
+      }>
       view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
     }>,
-    ...steps: ReadonlyArray<SceneStep<Model, Message, undefined>>
+    ...steps: ReadonlyArray<
+      SceneStep<NoInfer<Model>, NoInfer<Message>, undefined>
+    >
   ): void
 } = <Model, Message, OutMessage = undefined>(
   config: Readonly<{
-    update: (model: Model, message: Message) => UpdateResult<Model, OutMessage>
+    update: (
+      model: Model,
+      message: Message,
+    ) => SimulationUpdateReturn<Model, OutMessage>
     view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
   }>,
   ...steps: ReadonlyArray<SceneStep<Model, Message, OutMessage>>
@@ -2612,10 +3079,12 @@ export const scene: {
   const seed = {
     model: UNINITIALIZED as unknown,
     message: undefined,
-    commands: [],
+    commands: Array.empty(),
     mounts: [],
     mountSlots: [],
-    outMessage: undefined as unknown,
+    outMessage: undefined,
+    outMessages: [],
+    outMessageRevision: 0,
     updateFn: config.update,
     resolvers: [],
     html: undefined as unknown,

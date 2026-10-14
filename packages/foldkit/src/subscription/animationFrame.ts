@@ -1,7 +1,7 @@
-import { Effect, Queue, Schema as S, Stream } from 'effect'
+import { Effect, Queue, Schema, Stream } from 'effect'
 
 /**
- * Configuration for the `animationFrame` Subscription helper.
+ * Configuration for the `animationFrameEntry` Subscription helper.
  *
  * `isActive(model)` controls whether the request-animation-frame loop is
  * scheduled at all. When it returns `false` (e.g. the game is paused, the
@@ -40,13 +40,13 @@ const makeAnimationFrameStream = <Message>(
   )
 
 /**
- * Build a Subscription that emits a Message on every
+ * Build a Subscription entry that emits a Message on every
  * `requestAnimationFrame` tick, with the inter-frame delta in milliseconds.
  *
  * @example
  * ```typescript
  * const subscriptions = Subscription.make<Model, Message>()(_entry => ({
- *   frame: Subscription.animationFrame({
+ *   frame: Subscription.animationFrameEntry({
  *     isActive: model => model.isPlaying,
  *     toMessage: deltaTime => Tick({ deltaTime }),
  *   }),
@@ -63,10 +63,10 @@ const makeAnimationFrameStream = <Message>(
  * Returns an entry shape, not a branded Subscription. Pass it into
  * `Subscription.make` as an entry value.
  */
-export const animationFrame = <Model, Message>(
+export const animationFrameEntry = <Model, Message>(
   config: AnimationFrameConfig<Model, Message>,
 ) => ({
-  dependenciesSchema: S.Struct({ isActive: S.Boolean }),
+  dependenciesSchema: Schema.Struct({ isActive: Schema.Boolean }),
   modelToDependencies: (model: Model) => ({
     isActive: config.isActive(model),
   }),

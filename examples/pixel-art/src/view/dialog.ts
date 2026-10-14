@@ -3,12 +3,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Button, Dialog } from '@foldkit/ui'
 
-import {
-  ConfirmedGridSizeChange,
-  GotErrorDialogMessage,
-  GotGridSizeConfirmDialogMessage,
-  type Message,
-} from '../message'
+import { Message } from '../message'
 
 const dialogClassName =
   'bg-transparent p-0 open:flex items-center justify-center'
@@ -26,6 +21,7 @@ export const errorDialogView = (
     model: errorDialog,
     view: Dialog.view,
     viewInputs: {
+      hasDescription: true,
       toView: ({
         dialog,
         backdrop,
@@ -72,7 +68,7 @@ export const errorDialogView = (
             : [],
         ),
     },
-    toParentMessage: message => GotErrorDialogMessage({ message }),
+    toParentMessage: message => Message.GotErrorDialogMessage({ message }),
   })
 
 export const gridSizeConfirmDialogView = (
@@ -85,6 +81,7 @@ export const gridSizeConfirmDialogView = (
     model: gridSizeConfirmDialog,
     view: Dialog.view,
     viewInputs: {
+      hasDescription: true,
       toView: ({
         dialog,
         backdrop,
@@ -129,7 +126,7 @@ export const gridSizeConfirmDialogView = (
                           ),
                           Button.view(
                             {
-                              onClick: ConfirmedGridSizeChange(),
+                              onClick: Message.ConfirmedGridSizeChange(),
                               toView: attributes =>
                                 h.button(
                                   [
@@ -152,5 +149,6 @@ export const gridSizeConfirmDialogView = (
             : [],
         ),
     },
-    toParentMessage: message => GotGridSizeConfirmDialogMessage({ message }),
+    toParentMessage: message =>
+      Message.GotGridSizeConfirmDialogMessage({ message }),
   })

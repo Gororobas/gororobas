@@ -9,13 +9,14 @@ import {
   scene,
   text,
 } from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import { RadioGroup } from '@foldkit/ui'
 
 import { SyncChart } from './command'
-import { loadingModel, readyModel, sampleTelemetry } from './main.fixtures'
-import { SucceededMountChart, SucceededSyncChart } from './message'
+import { loadingModel, readyModel, sampleTelemetry } from './main.fixture'
+import { Message } from './message'
 import { TelemetryAsyncData } from './model'
 import { update } from './update'
 import { CHART_HOST_ID, MountChart } from './view/chart'
@@ -23,14 +24,17 @@ import { view } from './view/index'
 
 const acknowledgeChartMount = Mount.resolve(
   MountChart,
-  SucceededMountChart({ hostId: CHART_HOST_ID }),
+  Message.SucceededMountChart({ hostId: CHART_HOST_ID }),
 )
 
-const acknowledgeChartSync = Command.resolve(SyncChart, SucceededSyncChart())
+const acknowledgeChartSync = Command.resolve(
+  SyncChart,
+  Message.SucceededSyncChart(),
+)
 
 const resolveFocusOption = Command.resolve(
   RadioGroup.FocusOption,
-  RadioGroup.CompletedFocusOption(),
+  RadioGroup.Message.CompletedFocusOption(),
 )
 
 describe('view', () => {
@@ -63,7 +67,7 @@ describe('view', () => {
       acknowledgeChartSync,
       click(role('radio', { name: 'Velocity' })),
       resolveFocusOption,
-      Command.resolve(SyncChart, SucceededSyncChart()),
+      Command.resolve(SyncChart, Message.SucceededSyncChart()),
       expect(role('radio', { name: 'Velocity' })).toHaveAttr(
         'aria-checked',
         'true',
@@ -74,10 +78,12 @@ describe('view', () => {
   test('refreshing state keeps the dashboard visible', () => {
     scene(
       { update, view },
-      given({
-        ...readyModel,
-        telemetry: TelemetryAsyncData.Refreshing({ data: sampleTelemetry }),
-      }),
+      given(
+        modifyFields(readyModel, {
+          telemetry: () =>
+            TelemetryAsyncData.Refreshing({ data: sampleTelemetry }),
+        }),
+      ),
       acknowledgeChartMount,
       acknowledgeChartSync,
       expect(text('Refreshing public data')).toExist(),
@@ -88,10 +94,11 @@ describe('view', () => {
   test('failure without stale data shows retry', () => {
     scene(
       { update, view },
-      given({
-        ...loadingModel,
-        telemetry: TelemetryAsyncData.Failure({ error: 'offline' }),
-      }),
+      given(
+        modifyFields(loadingModel, {
+          telemetry: () => TelemetryAsyncData.Failure({ error: 'offline' }),
+        }),
+      ),
       expect(label('Telemetry failed')).toExist(),
       expect(role('button', { name: 'Retry' })).toExist(),
     )

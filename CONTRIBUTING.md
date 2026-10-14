@@ -12,12 +12,31 @@ Foldkit is a pnpm workspace.
 pnpm install
 ```
 
-Node `>=20.19.0` and pnpm `>=11`. The repository pins `pnpm@11.8.0` via `packageManager`, so Corepack will select the right version on its own.
+Node `^22.22.2 || ^24.15.0 || >=26.0.0` and pnpm `>=11`. The repository pins `pnpm@11.8.0` via `packageManager`, so Corepack will select the right version on its own.
 
 `pnpm install` also installs the git hooks. Two of them run:
 
 - **commit-msg** rejects a `Co-Authored-By` line naming Claude.
 - **pre-push** runs the full check suite described below.
+
+To run the Counter example while changing library code, build the libraries in watch mode, then start the example in another terminal:
+
+```sh
+pnpm dev:libs
+```
+
+```sh
+pnpm dev:example:counter
+```
+
+## Vendored Reference Source
+
+The repository includes reference source under `repos/` as git subtrees, so it comes down with the clone. Each snapshot is pinned to the release tag matching the dependency in `package.json`. Re-pin `repos/effect` whenever the Effect dependency changes:
+
+```sh
+EFFECT_VERSION=$(node -p "require('./packages/foldkit/package.json').devDependencies.effect")
+git subtree pull --prefix=repos/effect https://github.com/Effect-TS/effect.git "effect@${EFFECT_VERSION}" --squash
+```
 
 ## Before You Push
 
@@ -50,6 +69,7 @@ Beyond the usual lint, typecheck, and test steps, the suite enforces a few repos
 | `check:changeset-unwrapped`        | Changeset prose is not hard-wrapped. Write each paragraph as one line.                                                                                             |
 | `changeset status`                 | Every change to a publishable package has a changeset.                                                                                                             |
 | `check:dead-code`                  | No unused files, exports, or dependencies.                                                                                                                         |
+| `check:ui-subpath-exports`         | Every `packages/ui/src` component with a `public.ts` has an exports entry, a matching main-entry namespace and an example alias pointing at its source.            |
 
 ## Commits
 
@@ -88,7 +108,7 @@ Four things the tool will not do for you:
 
 **Rename the file.** The generator produces a random slug like `tidy-menus-travel.md`. Rename it to describe the change: `anchor-lock-placement.md`, `command-defer-execute-body.md`, `route-transition-naming.md`. Every changeset in the history is named this way.
 
-**Pick the right bump.** Anything that widens the public API surface is `minor`, including a new export, a new config field, or a new function. `patch` is for fixes that leave the surface unchanged. Breaking changes are also `minor`, because the repository is pre-1.0 and `major` is rejected outright. Note that `foldkit`, `@foldkit/ui`, and `@foldkit/devtools` are version-fixed, so bumping one bumps all three.
+**Pick the right bump.** Anything that widens the public API surface is `minor`, including a new export, a new config field, or a new function. `patch` is for fixes that leave the surface unchanged. An internal change with no user-facing effect, such as a refactor or a test-only change, takes an empty changeset from `pnpm changeset add --empty`, which satisfies `changeset status` without adding a changelog entry. Breaking changes are also `minor`, because the repository is pre-1.0 and `major` is rejected outright. Note that `foldkit`, `@foldkit/ui`, and `@foldkit/devtools` are version-fixed, so bumping one bumps all three.
 
 **Write it as release notes.** The changeset is what users read in the changelog, so it is not a commit message and not a one-line summary. Explain what changed, what was wrong or missing before, how the new thing behaves, and what stays the same. Writing multiple paragraphs is normal, and a short code example is welcome. `.changeset/` in the git history has the models; `anchor-lock-placement.md` from release 0.137.0 is a good one.
 

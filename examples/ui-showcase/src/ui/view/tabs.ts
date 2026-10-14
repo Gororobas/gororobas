@@ -1,14 +1,10 @@
-import { Array, Match as M } from 'effect'
+import { Array, Match } from 'effect'
 import { Submodel } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { Tabs } from '@foldkit/ui'
 
-import {
-  GotHorizontalTabsDemoMessage,
-  GotVerticalTabsDemoMessage,
-  type UiMessage,
-} from '../message'
+import { Message as UiMessage } from '../message'
 import { type DemoTab, type UiModel } from '../model'
 
 const demoTabs: ReadonlyArray<DemoTab> = ['Foldkit', 'React', 'Elm']
@@ -91,15 +87,71 @@ const elmPanel = (h: HtmlBuilder<UiMessage>): Html => {
 }
 
 const panelFor = (tab: DemoTab, h: HtmlBuilder<UiMessage>): Html =>
-  M.value(tab).pipe(
-    M.when('Foldkit', () => foldkitPanel(h)),
-    M.when('React', () => reactPanel(h)),
-    M.when('Elm', () => elmPanel(h)),
-    M.exhaustive,
+  Match.value(tab).pipe(
+    Match.when('Foldkit', () => foldkitPanel(h)),
+    Match.when('React', () => reactPanel(h)),
+    Match.when('Elm', () => elmPanel(h)),
+    Match.exhaustive,
   )
 
 export const view = Submodel.defineView<UiModel, UiMessage>(
   (model, h): Html => {
+    const horizontalTabsView = ({
+      tablist,
+      tabs,
+      activeIndex,
+    }: Tabs.RenderInfo<DemoTab>): Html =>
+      h.div(
+        [],
+        [
+          h.div(
+            [...tablist, h.Class('flex')],
+            tabs.map(tab =>
+              h.button(
+                [...tab.tab, h.Class(horizontalButtonClassName)],
+                [h.span([], [tab.value])],
+              ),
+            ),
+          ),
+          ...Array.map(
+            Array.filter(tabs, tab => tab.index === activeIndex),
+            tab =>
+              h.div(
+                [...tab.panel, h.Class(horizontalPanelClassName)],
+                [panelFor(tab.value, h)],
+              ),
+          ),
+        ],
+      )
+
+    const verticalTabsView = ({
+      tablist,
+      tabs,
+      activeIndex,
+    }: Tabs.RenderInfo<DemoTab>): Html =>
+      h.div(
+        [h.Class('flex')],
+        [
+          h.div(
+            [...tablist, h.Class('flex flex-col')],
+            tabs.map(tab =>
+              h.button(
+                [...tab.tab, h.Class(verticalButtonClassName)],
+                [h.span([], [tab.value])],
+              ),
+            ),
+          ),
+          ...Array.map(
+            Array.filter(tabs, tab => tab.index === activeIndex),
+            tab =>
+              h.div(
+                [...tab.panel, h.Class(verticalPanelClassName)],
+                [panelFor(tab.value, h)],
+              ),
+          ),
+        ],
+      )
+
     return h.div(
       [],
       [
@@ -117,31 +169,10 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
             tabs: demoTabs,
             selectedValue: model.horizontalTabsDemoTab,
             ariaLabel: 'Framework comparison tabs',
-            toView: ({ tablist, tabs, activeIndex }) =>
-              h.div(
-                [],
-                [
-                  h.div(
-                    [...tablist, h.Class('flex')],
-                    tabs.map(tab =>
-                      h.button(
-                        [...tab.tab, h.Class(horizontalButtonClassName)],
-                        [h.span([], [tab.value])],
-                      ),
-                    ),
-                  ),
-                  ...Array.map(
-                    Array.filter(tabs, tab => tab.index === activeIndex),
-                    tab =>
-                      h.div(
-                        [...tab.panel, h.Class(horizontalPanelClassName)],
-                        [panelFor(tab.value, h)],
-                      ),
-                  ),
-                ],
-              ),
+            toView: horizontalTabsView,
           },
-          toParentMessage: message => GotHorizontalTabsDemoMessage({ message }),
+          toParentMessage: message =>
+            UiMessage.GotHorizontalTabsDemoMessage({ message }),
         }),
 
         h.h3(
@@ -157,31 +188,10 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
             selectedValue: model.verticalTabsDemoTab,
             ariaLabel: 'Framework comparison tabs',
             orientation: 'Vertical',
-            toView: ({ tablist, tabs, activeIndex }) =>
-              h.div(
-                [h.Class('flex')],
-                [
-                  h.div(
-                    [...tablist, h.Class('flex flex-col')],
-                    tabs.map(tab =>
-                      h.button(
-                        [...tab.tab, h.Class(verticalButtonClassName)],
-                        [h.span([], [tab.value])],
-                      ),
-                    ),
-                  ),
-                  ...Array.map(
-                    Array.filter(tabs, tab => tab.index === activeIndex),
-                    tab =>
-                      h.div(
-                        [...tab.panel, h.Class(verticalPanelClassName)],
-                        [panelFor(tab.value, h)],
-                      ),
-                  ),
-                ],
-              ),
+            toView: verticalTabsView,
           },
-          toParentMessage: message => GotVerticalTabsDemoMessage({ message }),
+          toParentMessage: message =>
+            UiMessage.GotVerticalTabsDemoMessage({ message }),
         }),
       ],
     )

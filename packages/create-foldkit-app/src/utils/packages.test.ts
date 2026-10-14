@@ -9,15 +9,16 @@ import {
   buildUnresolvedDevDeps,
   dependencyExample,
   devCommand,
+  foldkitSubtreeRef,
   installCommand,
   scaffoldDevDependencies,
 } from './packages.js'
 
 describe('buildUnresolvedDeps', () => {
-  it('keeps third-party versions, resolves Foldkit workspace deps to latest, and drops foreign workspace deps', () => {
+  it('keeps third-party versions and defers every workspace package to the CLI release manifest', () => {
     const result = buildUnresolvedDeps({
-      effect: '4.0.0-beta.106',
-      '@effect/platform-browser': '4.0.0-beta.106',
+      effect: '4.0.0',
+      '@effect/platform-browser': '4.0.0',
       foldkit: 'workspace:*',
       '@foldkit/ui': 'workspace:*',
       tailwindcss: '^4.3.1',
@@ -25,20 +26,21 @@ describe('buildUnresolvedDeps', () => {
     })
 
     expect(result).toEqual({
-      effect: { _tag: 'Keep', version: '4.0.0-beta.106' },
-      '@effect/platform-browser': { _tag: 'Keep', version: '4.0.0-beta.106' },
-      foldkit: { _tag: 'Latest' },
-      '@foldkit/ui': { _tag: 'Latest' },
+      effect: { _tag: 'Keep', version: '4.0.0' },
+      '@effect/platform-browser': { _tag: 'Keep', version: '4.0.0' },
+      foldkit: { _tag: 'Workspace' },
+      '@foldkit/ui': { _tag: 'Workspace' },
       tailwindcss: { _tag: 'Keep', version: '^4.3.1' },
+      'some-internal-package': { _tag: 'Workspace' },
     })
   })
 })
 
 describe('buildUnresolvedDevDeps', () => {
-  it('merges template tooling with the example, letting concrete example versions win over the template latest marker', () => {
+  it('merges template tooling with the example, letting concrete example versions win over the release marker', () => {
     const result = buildUnresolvedDevDeps(
       {
-        prettier: '^3.8.4',
+        oxfmt: '^0.65.0',
         typescript: '^6.0.3',
         vite: '^8.0.16',
         '@foldkit/vite-plugin': 'workspace:*',
@@ -47,24 +49,25 @@ describe('buildUnresolvedDevDeps', () => {
     )
 
     expect(result).toEqual({
-      '@foldkit/devtools': { _tag: 'Latest' },
-      '@foldkit/vite-plugin': { _tag: 'Latest' },
-      '@foldkit/devtools-mcp': { _tag: 'Latest' },
-      '@foldkit/oxlint-plugin': { _tag: 'Latest' },
-      '@trivago/prettier-plugin-sort-imports': { _tag: 'Latest' },
-      'happy-dom': { _tag: 'Latest' },
-      oxlint: { _tag: 'Latest' },
-      prettier: { _tag: 'Keep', version: '^3.8.4' },
-      vitest: { _tag: 'Latest' },
+      '@effect/tsgo': { _tag: 'Release' },
+      '@foldkit/devtools': { _tag: 'Release' },
+      '@foldkit/vite-plugin': { _tag: 'Release' },
+      '@foldkit/devtools-mcp': { _tag: 'Release' },
+      '@foldkit/oxlint-plugin': { _tag: 'Release' },
+      'happy-dom': { _tag: 'Release' },
+      oxfmt: { _tag: 'Keep', version: '^0.65.0' },
+      oxlint: { _tag: 'Release' },
+      'oxlint-tsgolint': { _tag: 'Release' },
+      vitest: { _tag: 'Release' },
       typescript: { _tag: 'Keep', version: '^6.0.3' },
       vite: { _tag: 'Keep', version: '^8.0.16' },
     })
   })
 
-  it('marks extra scaffold devDependencies for latest-version resolution', () => {
+  it('marks extra scaffold devDependencies for release-version resolution', () => {
     const result = buildUnresolvedDevDeps({ tsx: '^4.22.4' }, ['@types/node'])
 
-    expect(result['@types/node']).toEqual({ _tag: 'Latest' })
+    expect(result['@types/node']).toEqual({ _tag: 'Release' })
     expect(result['tsx']).toEqual({ _tag: 'Keep', version: '^4.22.4' })
   })
 })
@@ -89,6 +92,46 @@ describe('scaffoldDevDependencies', () => {
   })
 })
 
+describe('foldkitSubtreeRef', () => {
+  const sourceCommit = '4aab52dcbe58d06414a74e108307b9bcdab56df6'
+
+  it('pins a stable release to the foldkit tag for the released version', () => {
+    expect(
+      foldkitSubtreeRef({
+        schemaVersion: 1,
+        channel: 'stable',
+        sourceCommit,
+        packages: { foldkit: '0.156.0', '@foldkit/ui': '0.42.0' },
+        dependencies: { effect: '4.0.0' },
+      }),
+    ).toBe('foldkit@0.156.0')
+  })
+
+  it('pins a canary release to its source commit, which no tag names', () => {
+    expect(
+      foldkitSubtreeRef({
+        schemaVersion: 1,
+        channel: 'canary',
+        sourceCommit,
+        packages: { foldkit: `0.156.0-canary.${sourceCommit.slice(0, 12)}` },
+        dependencies: {},
+      }),
+    ).toBe(sourceCommit)
+  })
+
+  it('falls back to the source commit when a stable manifest omits foldkit', () => {
+    expect(
+      foldkitSubtreeRef({
+        schemaVersion: 1,
+        channel: 'stable',
+        sourceCommit,
+        packages: {},
+        dependencies: {},
+      }),
+    ).toBe(sourceCommit)
+  })
+})
+
 describe('installCommand', () => {
   it('installs with the selected package manager', () => {
     expect(installCommand('pnpm')).toBe('pnpm install')
@@ -108,7 +151,7 @@ describe('devCommand', () => {
 })
 
 // A server-rendered scaffold derives its production `dependencies` from the
-// reference example's manifest (buildUnresolvedDeps keeps every @foldkit/*
+// reference example's manifest (buildUnresolvedDeps keeps every public
 // workspace dependency), so @foldkit/devtools must stay in devDependencies
 // there. In production `dependencies` it would make `vite build` inject the
 // DevTools overlay into the shipped client template, and every SSR response and
@@ -139,4 +182,15 @@ describe('server-rendered example manifests', () => {
       )
     })
   }
+
+  it('pins the SSR Node platform packages to one Effect version', () => {
+    const manifest = readManifest('ssr')
+    const effectVersion = manifest.dependencies?.['effect']
+
+    expect(effectVersion).toBeDefined()
+    expect(manifest.dependencies?.['@effect/platform-node']).toBe(effectVersion)
+    expect(manifest.dependencies?.['@effect/platform-node-shared']).toBe(
+      effectVersion,
+    )
+  })
 })

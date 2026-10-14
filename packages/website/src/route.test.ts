@@ -4,7 +4,7 @@ import { describe, expect, test } from 'vitest'
 
 import * as Route from './route'
 
-const SITE = 'https://foldkit.dev'
+const SITE = Route.SITE_URL
 
 // Routers that take route data; excluded from the parameterless round-trip
 // below because calling them without it throws.
@@ -48,6 +48,32 @@ describe('route table', () => {
   )
 })
 
+describe('route canonical URLs', () => {
+  test.each(parameterlessRouters)(
+    '%s canonical round-trips through the route parser',
+    (name, path) => {
+      const canonical = Route.routeToCanonicalUrl(
+        Route.urlToAppRoute(Option.getOrThrow(urlFromString(`${SITE}${path}`))),
+      )
+      expect(canonical).toBe(`${SITE}${path}`)
+      expect(
+        Route.urlToAppRoute(Option.getOrThrow(urlFromString(canonical)))._tag,
+      ).toBe(expectedTag(name))
+    },
+  )
+
+  test('excludes query parameters from canonical URLs', () => {
+    const route = Route.urlToAppRoute(
+      Option.getOrThrow(
+        urlFromString(`${SITE}/blog/some-post?utm_source=newsletter`),
+      ),
+    )
+    expect(Route.routeToCanonicalUrl(route)).toBe(
+      'https://foldkit.dev/blog/some-post',
+    )
+  })
+})
+
 describe('blog routes', () => {
   test('parses /blog/<slug> into BlogPost', () => {
     const parsed = Route.urlToAppRoute(
@@ -57,7 +83,7 @@ describe('blog routes', () => {
     )
 
     expect(parsed).toEqual(
-      Route.BlogPostRoute({ postSlug: 'introducing-the-foldkit-blog' }),
+      Route.AppRoute.BlogPost({ postSlug: 'introducing-the-foldkit-blog' }),
     )
   })
 
@@ -69,7 +95,7 @@ describe('blog routes', () => {
     const parsed = Route.urlToAppRoute(
       Option.getOrThrow(urlFromString(`${SITE}${path}`)),
     )
-    expect(parsed).toEqual(Route.BlogPostRoute({ postSlug: 'some-post' }))
+    expect(parsed).toEqual(Route.AppRoute.BlogPost({ postSlug: 'some-post' }))
   })
 
   test('leaves /blog/rss.xml to the static feed file', () => {
@@ -83,22 +109,78 @@ describe('blog routes', () => {
 
 describe('section predicates', () => {
   const cases: ReadonlyArray<
-    readonly [string, Route.AppRoute, boolean, boolean]
+    Readonly<{
+      name: string
+      route: Route.AppRoute
+      isDocsSection: boolean
+      isBlog: boolean
+      isSearch: boolean
+    }>
   > = [
-    ['GettingStarted', Route.GettingStartedRoute(), true, false],
-    ['CoreArchitecture', Route.CoreArchitectureRoute(), true, false],
-    ['Home', Route.HomeRoute(), false, false],
-    ['Newsletter', Route.NewsletterRoute(), false, false],
-    ['NotFound', Route.NotFoundRoute({ path: '/missing' }), false, false],
-    ['Blog', Route.BlogRoute(), false, true],
-    ['BlogPost', Route.BlogPostRoute({ postSlug: 'some-post' }), false, true],
+    {
+      name: 'GetStarted',
+      route: Route.AppRoute.GetStarted(),
+      isDocsSection: true,
+      isBlog: false,
+      isSearch: true,
+    },
+    {
+      name: 'CoreArchitecture',
+      route: Route.AppRoute.CoreArchitecture(),
+      isDocsSection: true,
+      isBlog: false,
+      isSearch: true,
+    },
+    {
+      name: 'Home',
+      route: Route.AppRoute.Home(),
+      isDocsSection: false,
+      isBlog: false,
+      isSearch: true,
+    },
+    {
+      name: 'Newsletter',
+      route: Route.AppRoute.Newsletter(),
+      isDocsSection: false,
+      isBlog: false,
+      isSearch: true,
+    },
+    {
+      name: 'Playground',
+      route: Route.AppRoute.Playground({ exampleSlug: 'counter' }),
+      isDocsSection: false,
+      isBlog: false,
+      isSearch: false,
+    },
+    {
+      name: 'NotFound',
+      route: Route.AppRoute.NotFound({ path: '/missing' }),
+      isDocsSection: false,
+      isBlog: false,
+      isSearch: true,
+    },
+    {
+      name: 'Blog',
+      route: Route.AppRoute.Blog(),
+      isDocsSection: false,
+      isBlog: true,
+      isSearch: true,
+    },
+    {
+      name: 'BlogPost',
+      route: Route.AppRoute.BlogPost({ postSlug: 'some-post' }),
+      isDocsSection: false,
+      isBlog: true,
+      isSearch: true,
+    },
   ]
 
   test.each(cases)(
-    '%s: isDocsSectionRoute %s, isBlogRoute %s',
-    (_name, route, isDocsSection, isBlog) => {
+    '$name: isDocsSectionRoute $isDocsSection, isBlogRoute $isBlog, isSearchRoute $isSearch',
+    ({ route, isDocsSection, isBlog, isSearch }) => {
       expect(Route.isDocsSectionRoute(route)).toBe(isDocsSection)
       expect(Route.isBlogRoute(route)).toBe(isBlog)
+      expect(Route.isSearchRoute(route)).toBe(isSearch)
     },
   )
 })

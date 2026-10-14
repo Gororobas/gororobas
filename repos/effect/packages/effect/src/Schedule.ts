@@ -1321,6 +1321,13 @@ export const upTo: {
 })
 
 const while_: {
+  <Input, Output, Meta extends Metadata<Output, Input>>(
+    predicate: (
+      metadata: Metadata<Output, Input>
+    ) => metadata is Meta
+  ): <Error, Env>(
+    self: Schedule<Output, Input, Error, Env>
+  ) => Schedule<Meta["output"], Meta["input"], Error, Env>
   <Input, Output, Error2 = never, Env2 = never>(
     predicate: (
       metadata: Metadata<Output, Input>
@@ -1328,6 +1335,12 @@ const while_: {
   ): <Error, Env>(
     self: Schedule<Output, Input, Error, Env>
   ) => Schedule<Output, Input, Error | Error2, Env | Env2>
+  <Output, Input, Error, Env, Meta extends Metadata<Output, Input>>(
+    self: Schedule<Output, Input, Error, Env>,
+    predicate: (
+      metadata: Metadata<Output, Input>
+    ) => metadata is Meta
+  ): Schedule<Meta["output"], Meta["input"], Error, Env>
   <Output, Input, Error, Env, Error2 = never, Env2 = never>(
     self: Schedule<Output, Input, Error, Env>,
     predicate: (
@@ -1445,6 +1458,20 @@ export const windowed = (interval: Duration.Input): Schedule<number> => {
  * @since 2.0.0
  */
 export const forever: Schedule<number> = spaced(Duration.zero)
+
+/**
+ * Returns a schedule that recurs immediately once, then completes.
+ *
+ * **Details**
+ *
+ * The output of both the recurrence and completion is `void`. When used with
+ * `Effect.repeat`, the effect runs twice in total: once initially and once
+ * after the schedule recurs.
+ *
+ * @category constructors
+ * @since 4.0.0
+ */
+export const once: Schedule<void> = map(recurs(1), () => void 0)
 
 const constIdentity = fromStep(
   effect.succeed((_now, input: unknown) => effect.succeed([input, Duration.zero] as [unknown, Duration.Duration]))

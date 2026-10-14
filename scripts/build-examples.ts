@@ -1,5 +1,6 @@
-import { Match as M } from 'effect'
+import { Match } from 'effect'
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import {
   copyFileSync,
   cpSync,
@@ -13,7 +14,7 @@ import {
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { examples } from '../packages/website/src/page/example/meta'
+import { examples } from '../packages/website/src/page/example/meta.ts'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = resolve(SCRIPT_DIR, '..')
@@ -26,14 +27,24 @@ const BRIDGE_SCRIPT_PATH = resolve(REPO_ROOT, 'scripts/example-bridge.js')
 const BRIDGE_SCRIPT_TAG = '<script src="bridge.js"></script></head>'
 const MAX_CONCURRENT_EXAMPLE_BUILDS = 4
 
+// The id the embed's client bundle and prerendered pages agree on. It names one
+// build of one example, so it is generated per example rather than shared, and
+// FOLDKIT_BUILD_ID overrides it when the deployment already names its builds.
+const buildIdForEmbed = (): string => {
+  const supplied = process.env['FOLDKIT_BUILD_ID']
+  return supplied !== undefined && supplied !== '' ? supplied : randomUUID()
+}
+
 const runExampleCommand = (
   exampleDir: string,
   slug: string,
   commandArguments: ReadonlyArray<string>,
+  environment: Readonly<Record<string, string>> = {},
 ): Promise<void> =>
   new Promise((resolvePromise, rejectPromise) => {
     const childProcess = spawn('pnpm', ['exec', ...commandArguments], {
       cwd: exampleDir,
+      env: { ...process.env, ...environment },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
@@ -92,33 +103,23 @@ const buildSpaExample = async (
   ])
 }
 
-// NOTE: a prerendered example's prerender script reads its template from
-// dist/client and its compiled entry from dist/server, so the client build
-// lands in the example's own dist first and the finished output is copied to
-// the embed directory afterwards.
+// NOTE: one `vite build` produces the browser bundle, the server bundle and the
+// generated pages, so the embed runs the example's own build with its own base
+// and copies the finished browser output afterwards. The build id is still
+// supplied here: the embed wants one it can reproduce rather than the fresh one
+// the example's config generates when the variable is unset.
 const buildPrerenderedExample = async (
   exampleDir: string,
   slug: string,
   outputDir: string,
 ): Promise<void> => {
   rmSync(resolve(exampleDir, 'dist'), { recursive: true, force: true })
-  await runExampleCommand(exampleDir, slug, [
-    'vite',
-    'build',
-    '--base',
-    `/example-apps-embed/${slug}/`,
-    '--outDir',
-    'dist/client',
-  ])
-  await runExampleCommand(exampleDir, slug, [
-    'vite',
-    'build',
-    '--ssr',
-    'src/entry.server.ts',
-    '--outDir',
-    'dist/server',
-  ])
-  await runExampleCommand(exampleDir, slug, ['tsx', 'scripts/prerender.ts'])
+  await runExampleCommand(
+    exampleDir,
+    slug,
+    ['vite', 'build', '--base', `/example-apps-embed/${slug}/`],
+    { FOLDKIT_BUILD_ID: buildIdForEmbed() },
+  )
   cpSync(resolve(exampleDir, 'dist/client'), outputDir, { recursive: true })
 }
 
@@ -131,12 +132,12 @@ const buildExample = async (
   const exampleDir = resolve(EXAMPLES_DIR, slug)
   const outputDir = resolve(OUTPUT_DIR, slug)
 
-  await M.value(livePreview).pipe(
-    M.when('Prerendered', () =>
+  await Match.value(livePreview).pipe(
+    Match.when('Prerendered', () =>
       buildPrerenderedExample(exampleDir, slug, outputDir),
     ),
-    M.when('Spa', () => buildSpaExample(exampleDir, slug, outputDir)),
-    M.exhaustive,
+    Match.when('Spa', () => buildSpaExample(exampleDir, slug, outputDir)),
+    Match.exhaustive,
   )
 
   injectBridgeScript(outputDir)
@@ -144,8 +145,21 @@ const buildExample = async (
   console.log(`  → ${outputDir}`)
 }
 
+// The slugs `--only` names, or none for every embedded example. CI uses it to
+// run the deployment's own build path over the prerendered examples without
+// paying for all of them; the deploy runs the whole set.
+const requestedSlugs = (): ReadonlySet<string> => {
+  const flagIndex = process.argv.indexOf('--only')
+  if (flagIndex === -1) {
+    return new Set()
+  }
+  const value = process.argv[flagIndex + 1] ?? ''
+  return new Set(value.split(',').filter(slug => slug !== ''))
+}
+
 const main = async (): Promise<void> => {
-  if (existsSync(OUTPUT_DIR)) {
+  const only = requestedSlugs()
+  if (only.size === 0 && existsSync(OUTPUT_DIR)) {
     rmSync(OUTPUT_DIR, { recursive: true, force: true })
   }
   mkdirSync(OUTPUT_DIR, { recursive: true })
@@ -155,7 +169,10 @@ const main = async (): Promise<void> => {
       example,
     ): example is (typeof examples)[number] & {
       livePreview: 'Spa' | 'Prerendered'
-    } => example.livePreview !== 'PlaygroundOnly',
+    } =>
+      (example.livePreview === 'Spa' ||
+        example.livePreview === 'Prerendered') &&
+      (only.size === 0 || only.has(example.slug)),
   )
   const skippedSlugs = examples
     .filter(example => example.livePreview === 'PlaygroundOnly')

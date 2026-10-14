@@ -10,7 +10,11 @@ export default defineConfig({
     tailwindcss(),
     foldkit({
       devToolsMcpPort: 9993,
-      ssr: { serverEntry: '/src/entry.server.ts' },
+      ssr: {
+        serverEntry: '/src/entry.server.ts',
+        clientEntry: '/src/entry.ts',
+        build: { prerender: { origin: 'https://example.com' } },
+      },
     }),
   ],
   resolve: {

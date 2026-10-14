@@ -2,15 +2,15 @@
 // as the basic tabs; only the view config changes to set orientation and
 // use flex + flex-col for layout.
 import type { HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
+import { defineMessageUnion } from 'foldkit/message'
 
 import { Tabs } from '@foldkit/ui'
 
-const GotTabsMessage = m('GotTabsMessage', {
-  message: Tabs.Message,
+const Message = defineMessageUnion({
+  GotTabsMessage: { message: Tabs.Message },
 })
 
-const Framework = S.Literals(['Foldkit', 'React', 'Elm'])
+const Framework = Schema.Literals(['Foldkit', 'React', 'Elm'])
 type Framework = typeof Framework.Type
 
 const FrameworkTabs = Tabs.create<Framework>()
@@ -24,8 +24,41 @@ const descriptions: Record<Framework, string> = {
 
 // Inside your view function, set orientation to 'Vertical' and use flex +
 // flex-col for layout:
-const view = (model: Model, h: HtmlBuilder<Message>) =>
-  h.submodel({
+const view = (model: Model, h: HtmlBuilder<Message>) => {
+  const tabsView = ({
+    tablist,
+    tabs,
+    activeIndex,
+  }: Tabs.RenderInfo<Framework>) =>
+    h.div(
+      [h.Class('flex')],
+      [
+        h.div(
+          [...tablist, h.Class('flex flex-col')],
+          tabs.map(tab =>
+            h.button(
+              [
+                ...tab.tab,
+                h.Class(
+                  'px-4 py-2 text-left rounded-l-lg border mr-[-1px] data-[selected]:bg-white data-[selected]:border-r-0',
+                ),
+              ],
+              [h.span([], [tab.value])],
+            ),
+          ),
+        ),
+        ...tabs
+          .filter(tab => tab.index === activeIndex)
+          .map(tab =>
+            h.div(
+              [...tab.panel, h.Class('flex-1 p-6 border rounded-r-lg')],
+              [h.p([], [descriptions[tab.value]])],
+            ),
+          ),
+      ],
+    )
+
+  return h.submodel({
     slotId: 'framework-tabs',
     model: model.tabs,
     view: FrameworkTabs.view,
@@ -34,34 +67,8 @@ const view = (model: Model, h: HtmlBuilder<Message>) =>
       selectedValue: model.activeFramework,
       ariaLabel: 'Framework comparison',
       orientation: 'Vertical',
-      toView: ({ tablist, tabs, activeIndex }) =>
-        h.div(
-          [h.Class('flex')],
-          [
-            h.div(
-              [...tablist, h.Class('flex flex-col')],
-              tabs.map(tab =>
-                h.button(
-                  [
-                    ...tab.tab,
-                    h.Class(
-                      'px-4 py-2 text-left rounded-l-lg border mr-[-1px] data-[selected]:bg-white data-[selected]:border-r-0',
-                    ),
-                  ],
-                  [h.span([], [tab.value])],
-                ),
-              ),
-            ),
-            ...tabs
-              .filter(tab => tab.index === activeIndex)
-              .map(tab =>
-                h.div(
-                  [...tab.panel, h.Class('flex-1 p-6 border rounded-r-lg')],
-                  [h.p([], [descriptions[tab.value]])],
-                ),
-              ),
-          ],
-        ),
+      toView: tabsView,
     },
-    toParentMessage: message => GotTabsMessage({ message }),
+    toParentMessage: message => Message.GotTabsMessage({ message }),
   })
+}

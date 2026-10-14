@@ -1,20 +1,22 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Match as M, Option, Schema as S } from 'effect'
-import { Command, Update } from 'foldkit'
+import { Option, Schema } from 'effect'
+import { Subscription, Update } from 'foldkit'
 import type { HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
+import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
 
 import { Toast as UiToast } from '@foldkit/ui'
 
-// Define the payload shape for your toast. The Toast component owns only
-// lifecycle + a11y fields (id, variant, transition, dismiss timer, hover
-// state). The payload is yours, whatever you can encode in a Schema:
-const ToastPayload = S.Struct({
-  bodyText: S.String,
-  maybeLink: S.Option(S.Struct({ href: S.String, text: S.String })),
+// Define the payload shape for your toast. Toast owns the entry lifecycle,
+// accessibility role, optional dismiss timer, hover state, and swipe state.
+// The payload is yours, whatever you can encode in a Schema:
+const ToastPayload = Schema.Struct({
+  bodyText: Schema.String,
+  maybeLink: Schema.Option(
+    Schema.Struct({ href: Schema.String, text: Schema.String }),
+  ),
 })
 
 // Bind a Toast module to your payload schema. The factory returns Model,
@@ -25,42 +27,48 @@ export const Toast = UiToast.make(ToastPayload)
 // Add Toast.Model to your app Model. Track anything you want to lift from
 // a toast's lifecycle alongside it. Here, the last dismissed bodyText so
 // the UI can show "just dismissed: ..." after a toast goes away:
-const Model = S.Struct({
+const Model = Schema.Struct({
   toast: Toast.Model,
-  maybeLastDismissedBody: S.Option(S.String),
+  maybeLastDismissedBody: Schema.Option(Schema.String),
   // ...your other fields
 })
+type Model = typeof Model.Type
 
-// In your init function, initialize it:
-const init = () => [
-  {
-    toast: Toast.init({ id: 'app-toast' }),
+// In your init function, initialize it. Swipe is opt-in: omit
+// swipeToDismiss to leave it disabled, or pass {} for the default rightward
+// 40px gesture. Set threshold to customize the dismissal distance:
+const init = () => ({
+  model: {
+    toast: Toast.init({
+      id: 'app-toast',
+      swipeToDismiss: {},
+    }),
     maybeLastDismissedBody: Option.none(),
     // ...your other fields
   },
-  [],
-]
+})
 
 // Embed the Toast Message in your parent Message, plus any domain Messages
 // that should push a toast:
-const GotToastMessage = m('GotToastMessage', { message: Toast.Message })
-const ClickedSave = m('ClickedSave')
+const Message = defineMessageUnion({
+  GotToastMessage: { message: Toast.Message },
+  ClickedSave: {},
+})
+type Message = typeof Message.Type
 
 // At module scope, fold the OutMessage into your own Model, lifting the
 // DismissedToast event into domain state. The arm returns an Update.Step over
 // the parent Model, which already has the next Toast Model written back:
-const foldToastOutMessage = M.type<typeof Toast.OutMessage.Type>().pipe(
-  M.withReturnType<Update.Step<Model, Message>>(),
-  M.tagsExhaustive({
+const foldToastOutMessage = Toast.OutMessage.match<Update.Step<Model, Message>>(
+  {
     DismissedToast:
       ({ payload }) =>
-      model => [
-        evo(model, {
+      model => ({
+        model: modifyFields(model, {
           maybeLastDismissedBody: () => Option.some(payload.bodyText),
         }),
-        [],
-      ],
-  }),
+      }),
+  },
 )
 
 // Update.foldChild wires the child into the parent: it delegates Toast's own
@@ -70,16 +78,24 @@ const foldToastOutMessage = M.type<typeof Toast.OutMessage.Type>().pipe(
 const foldToast = Update.foldChild({
   update: Toast.update,
   read: (model: Model) => Option.some(model.toast),
-  write: (model, nextToast) => evo(model, { toast: () => nextToast }),
-  toParentMessage: message => GotToastMessage({ message }),
+  write: (model, nextToast) => modifyFields(model, { toast: () => nextToast }),
+  toParentMessage: message => Message.GotToastMessage({ message }),
   foldOutMessage: foldToastOutMessage,
 })
 
-// Inside your update's M.tagsExhaustive({...}), call the fold:
+const foldToastShow = Update.foldChild({
+  update: Toast.show,
+  read: (model: Model) => Option.some(model.toast),
+  write: (model, nextToast) => modifyFields(model, { toast: () => nextToast }),
+  toParentMessage: message => Message.GotToastMessage({ message }),
+  foldOutMessage: foldToastOutMessage,
+})
+
+// In the corresponding Message.match handler, call the fold:
 GotToastMessage: ({ message }) => foldToast(model, message)
 
-ClickedSave: () => {
-  const [nextToast, commands] = Toast.show(model.toast, {
+ClickedSave: () =>
+  foldToastShow(model, {
     variant: 'Success',
     payload: {
       bodyText: 'Changes saved',
@@ -90,16 +106,22 @@ ClickedSave: () => {
     },
   })
 
-  return [
-    evo(model, { toast: () => nextToast }),
-    Command.mapMessages(commands, message => GotToastMessage({ message })),
-  ]
-}
+// Wire pointer subscriptions once at the app root so swipe tracking
+// continues when the pointer leaves the entry. Without this lift the
+// view still sets data-swipe on pointerdown but never receives move/up.
+export const subscriptions = Subscription.lift(Toast.subscriptions)<
+  Model,
+  Message
+>({
+  read: model => Option.some(model.toast),
+  toParentMessage: message => Message.GotToastMessage({ message }),
+})
 
 // In your view, embed Toast via h.submodel once at the app root. The
 // entryToView callback lays out each entry from its payload. The
-// component handles the <li> wrapper, hover-to-pause, and enter/leave
-// animations.
+// component handles the <div> wrapper, hover-to-pause, swipe-to-dismiss
+// (pointerdown + data-swipe="move"/"settling"/"end" +
+// translate/--toast-swipe-move-x), and enter/leave animations.
 const view = (h: HtmlBuilder<Message>) =>
   h.submodel({
     slotId: 'app-toast',
@@ -107,7 +129,7 @@ const view = (h: HtmlBuilder<Message>) =>
     view: Toast.view,
     viewInputs: {
       position: 'BottomRight',
-      entryClassName: 'w-80',
+      entryClassName: 'toast-entry w-80',
       entryToView: (entry, handlers) =>
         h.div(
           [
@@ -121,7 +143,12 @@ const view = (h: HtmlBuilder<Message>) =>
               [
                 h.p(
                   [h.Class('font-semibold text-sm')],
-                  [entry.payload.bodyText],
+                  [
+                    h.span(
+                      [h.DataAttribute('toast-swipe-ignore', '')],
+                      [entry.payload.bodyText],
+                    ),
+                  ],
                 ),
                 ...Option.match(entry.payload.maybeLink, {
                   onNone: () => [],
@@ -135,5 +162,5 @@ const view = (h: HtmlBuilder<Message>) =>
           ],
         ),
     },
-    toParentMessage: message => GotToastMessage({ message }),
+    toParentMessage: message => Message.GotToastMessage({ message }),
   })

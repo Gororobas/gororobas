@@ -5,15 +5,24 @@ import { Link } from '../link'
 import { pageTitle, para } from '../prose'
 import {
   exampleDetailRouter,
-  gettingStartedRouter,
+  getStartedRouter,
   typingTerminalRouter,
 } from '../route'
 import { type ExampleMeta, examples as exampleMetas } from './example/meta'
 
 export const exampleAppCount = exampleMetas.length + 1
 
-const nameClassName =
-  'text-accent-600 dark:text-accent-500 underline decoration-accent-600/30 dark:decoration-accent-500/30 hover:decoration-accent-600 dark:hover:decoration-accent-500 font-medium'
+const nameClassName = 'link-accent font-medium'
+
+const pausedLabel = (): Html =>
+  ih.span(
+    [
+      ih.Class(
+        'ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900 dark:bg-amber-900/50 dark:text-amber-200',
+      ),
+    ],
+    ['Paused'],
+  )
 
 const exampleRow = (example: ExampleMeta): Html =>
   ih.tr(
@@ -27,12 +36,15 @@ const exampleRow = (example: ExampleMeta): Html =>
               ih.Href(exampleDetailRouter({ exampleSlug: example.slug })),
               ih.Class(nameClassName),
             ],
-            [example.title],
+            [
+              example.title,
+              ...(example.livePreview === 'Unavailable' ? [pausedLabel()] : []),
+            ],
           ),
         ],
       ),
       ih.td(
-        [ih.Class('py-2.5 text-gray-600 dark:text-gray-400')],
+        [ih.Class('py-2.5 text-gray-700 dark:text-gray-400')],
         [example.description],
       ),
     ],
@@ -52,20 +64,18 @@ const typingTerminalRow = (): Html =>
         ],
       ),
       ih.td(
-        [ih.Class('py-2.5 text-gray-600 dark:text-gray-400')],
+        [ih.Class('py-2.5 text-gray-700 dark:text-gray-400')],
         [
           ih.div(
             [],
             [
-              'A production real-time multiplayer typing speed game. Full stack Effect app with RPC backend and Foldkit frontend.',
+              'A production real-time multiplayer typing speed game. A full-stack Effect application with an RPC backend and Foldkit frontend.',
             ],
           ),
           ih.a(
             [
               ih.Href(Link.typingTerminal),
-              ih.Class(
-                'text-accent-600 dark:text-accent-500 underline decoration-accent-600/30 dark:decoration-accent-500/30 hover:decoration-accent-600 dark:hover:decoration-accent-500 mt-1 inline-block',
-              ),
+              ih.Class('link-accent mt-1 inline-block'),
             ],
             ['Race your friends →'],
           ),
@@ -113,23 +123,13 @@ export const view = (): Html =>
       para(
         'Each example is available as a starter template via ',
         ih.a(
-          [
-            ih.Href(Link.createFoldkitApp),
-            ih.Class(
-              'text-accent-600 dark:text-accent-500 underline decoration-accent-600/30 dark:decoration-accent-500/30 hover:decoration-accent-600 dark:hover:decoration-accent-500',
-            ),
-          ],
+          [ih.Href(Link.createFoldkitApp), ih.Class('link-accent')],
           ['Create Foldkit App'],
         ),
         '. Pick one that matches what you’re building, or start with Counter and work your way up. See ',
         ih.a(
-          [
-            ih.Href(gettingStartedRouter()),
-            ih.Class(
-              'text-accent-600 dark:text-accent-500 underline decoration-accent-600/30 dark:decoration-accent-500/30 hover:decoration-accent-600 dark:hover:decoration-accent-500',
-            ),
-          ],
-          ['Getting Started'],
+          [ih.Href(getStartedRouter()), ih.Class('link-accent')],
+          ['Get Started'],
         ),
         ' to get up and running.',
       ),

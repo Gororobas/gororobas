@@ -1,5 +1,6 @@
-import { Option, Predicate } from 'effect'
+import { Option } from 'effect'
 
+import { onUnmountModule } from './onUnmountModule.js'
 import { propsModule } from './propsModule.js'
 import {
   type VNode,
@@ -28,6 +29,7 @@ export const patch = init([
   classModule,
   datasetModule,
   eventListenersModule,
+  onUnmountModule,
   propsModule,
   styleModule,
 ])
@@ -108,36 +110,56 @@ export const dedupeSharedVNodes = (
 /** Dedupes the freshly built subtree of a memoized view (a
  *  createLazy/createKeyedLazy result) so a const shared inside it, or across
  *  memoized siblings sharing `seen`, is cloned even though the top-level pass
- *  leaves memoized subtrees opaque. The result root itself is left untracked, so
- *  the top-level pass still exempts it by membership rather than treating it as
- *  a duplicate. */
+ *  leaves memoized subtrees opaque. A root owned by an earlier tree or lazy slot
+ *  is cloned before this slot caches it. The result root stays untracked so the
+ *  top-level pass exempts it rather than treating it as a duplicate. */
 export const dedupeMemoizedResult = (
   root: VNode,
   seen: Set<object> = new Set(),
 ): VNode => {
-  if (root.children === undefined) {
-    return root
+  const base: VNode =
+    seen.has(root) || root.elm != null || memoizedVNodes.has(root)
+      ? { ...root, elm: undefined }
+      : root
+
+  if (base.children === undefined) {
+    return base
   }
-  const nextChildren = dedupeChildList(root.children, seen)
-  return nextChildren === undefined ? root : { ...root, children: nextChildren }
+
+  const nextChildren = dedupeChildList(base.children, seen)
+
+  if (nextChildren === undefined) {
+    return base
+  }
+
+  if (base === root) {
+    return { ...root, children: nextChildren }
+  }
+
+  base.children = nextChildren
+  return base
 }
 
 // NOTE: a fresh boot builds the whole tree so snabbdom fires every insert hook,
 // which is what runs Mounts. Patching `toVNode(container)` directly would let
 // snabbdom reuse a container whose existing DOM happens to match the new tree (a
-// fresh `run` over server-rendered DOM, or an HMR restore), leaving those hooks
-// unfired and Mounts unattached. Patching against a comment placed where the
-// container was is never `sameVnode` with an element, so `createElm` builds the
-// tree fresh and replaces the container, exactly as a boot into an empty
-// container does.
-const patchFreshInto = (container: HTMLElement, nextVNode: VNode): VNode => {
+// fresh `run` over server-rendered DOM, or a Model-preservation restore),
+// leaving those hooks unfired and Mounts unattached. Patching against a comment
+// placed where the container was is never `sameVnode` with an element, so
+// `createElm` builds the tree fresh and replaces the container, exactly as a
+// boot into an empty container does.
+const patchFreshInto = (
+  container: HTMLElement,
+  nextVNode: VNode,
+  onRootPatched?: (vnode: VNode) => void,
+): VNode => {
   const parent = container.parentNode
   if (parent === null) {
-    return patch(toVNode(container), nextVNode)
+    return patch(toVNode(container), nextVNode, onRootPatched)
   }
   const placeholder = container.ownerDocument.createComment('')
   parent.replaceChild(placeholder, container)
-  return patch(toVNode(placeholder), nextVNode)
+  return patch(toVNode(placeholder), nextVNode, onRootPatched)
 }
 
 export const __patchVNode = (
@@ -145,13 +167,23 @@ export const __patchVNode = (
   nextVNode: VNode | null,
   container: HTMLElement,
   seen?: Set<object>,
+  onRootPatched?: (vnode: VNode) => void,
 ): VNode => {
-  const dedupedVNode = Predicate.isNotNull(nextVNode)
-    ? dedupeSharedVNodes(nextVNode, seen)
-    : h('!')
+  const dedupedVNode =
+    nextVNode !== null ? dedupeSharedVNodes(nextVNode, seen) : h('!')
 
-  return Option.match(maybeCurrentVNode, {
-    onNone: () => patchFreshInto(container, dedupedVNode),
-    onSome: currentVNode => patch(currentVNode, dedupedVNode),
-  })
+  if (Option.isNone(maybeCurrentVNode)) {
+    return patchFreshInto(container, dedupedVNode, onRootPatched)
+  }
+
+  return patch(maybeCurrentVNode.value, dedupedVNode, onRootPatched)
+}
+
+export const __recoverVNodeAfterPatchFailure = (currentVNode: VNode): VNode => {
+  const currentElement = currentVNode.elm
+  const recoveryVNode = patch(currentVNode, h('!'))
+  if (recoveryVNode.elm !== currentElement && currentElement?.parentNode) {
+    currentElement.parentNode.removeChild(currentElement)
+  }
+  return recoveryVNode
 }

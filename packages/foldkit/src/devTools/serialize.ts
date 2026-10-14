@@ -1,10 +1,11 @@
 import {
-  Array as Array_,
+  Array,
   Function,
-  Match as M,
+  Match,
   Option,
   Predicate,
   Record,
+  Redacted,
 } from 'effect'
 
 import type {
@@ -18,26 +19,28 @@ import { extractSubmodelInfo } from './submodelPath.js'
 const inspectableCache = new WeakMap<object, unknown>()
 
 const computeInspectableValue = (value: unknown): unknown =>
-  M.value(value).pipe(
-    M.when(M.instanceOf(File), file => ({
+  Match.value(value).pipe(
+    Match.when(Redacted.isRedacted, globalThis.String),
+    Match.when(Match.instanceOf(File), file => ({
       name: file.name,
       size: file.size,
       type: file.type,
       lastModified: file.lastModified,
     })),
-    M.when(M.instanceOf(Blob), blob => ({
+    Match.when(Match.instanceOf(Blob), blob => ({
       size: blob.size,
       type: blob.type,
     })),
-    M.when(M.instanceOf(Date), date => date.toISOString()),
-    M.when(M.instanceOf(URL), ({ href }) => href),
-    M.when(Array.isArray, Array_.map(toInspectableValue)),
-    M.when(Predicate.isObject, Record.map(toInspectableValue)),
-    M.orElse(Function.identity),
+    Match.when(Match.instanceOf(Date), date => date.toISOString()),
+    Match.when(Match.instanceOf(URL), ({ href }) => href),
+    Match.when(globalThis.Array.isArray, Array.map(toInspectableValue)),
+    Match.when(Predicate.isObject, Record.map(toInspectableValue)),
+    Match.orElse(Function.identity),
   )
 
 /**
- * Convert DOM-class instances (File, Blob, Date, URL) to plain-object
+ * Convert Effect `Redacted` values to their labeled placeholder strings and
+ * DOM-class instances (File, Blob, Date, URL) to plain-object
  * representations so the tree renderer's key-enumeration walk can see their
  * meaningful data, which otherwise lives on the prototype as getters and
  * is invisible to `Object.keys`. Recurses through arrays and records so
@@ -45,7 +48,7 @@ const computeInspectableValue = (value: unknown): unknown =>
  * because File extends Blob.
  *
  * Memoized by reference. The transform allocates fresh wrappers via
- * `Array_.map` / `Record.map` even when the input contains no DOM classes
+ * `Array.map` / `Record.map` even when the input contains no DOM classes
  * (because `map` always allocates), which would otherwise produce a fresh
  * tree of references on every call. Without memoization, the inspector
  * tree's row-level `lazyTreeNode` cache would miss on every row of every
@@ -69,30 +72,40 @@ export const toInspectableValue = (value: unknown): unknown => {
 /**
  * Convert a runtime `CommandRecord` to its wire shape. Args are wrapped in an
  * `Option` so `None` cleanly distinguishes argless Commands from Commands that
- * happen to have an empty args record.
+ * happen to have an empty args record. Nested Effect `Redacted` values become
+ * their placeholder strings before transmission.
  */
 export const toSerializedCommand = (
   command: CommandRecord,
 ): SerializedCommand => ({
   name: command.name,
-  args: Option.fromNullishOr(command.args),
+  args: Option.map(
+    Option.fromNullishOr(command.args),
+    Record.map(toInspectableValue),
+  ),
+  maybeSubmodelPath: command.maybeSubmodelPath,
 })
 
 /**
  * Convert a runtime `MountRecord` to its wire shape. Args are wrapped in an
  * `Option` so `None` cleanly distinguishes argless Mounts from Mounts that
- * happen to have an empty args record.
+ * happen to have an empty args record. Nested Effect `Redacted` values become
+ * their placeholder strings before transmission.
  */
 export const toSerializedMount = (mount: MountRecord): SerializedMount => ({
   name: mount.name,
-  args: Option.fromNullishOr(mount.args),
+  args: Option.map(
+    Option.fromNullishOr(mount.args),
+    Record.map(toInspectableValue),
+  ),
 })
 
 /**
  * Convert a `HistoryEntry` plus its absolute index into the wire-friendly
  * `SerializedEntry` shape. Flattens the diff's `HashSet` path collections to
  * plain string arrays for JSON transmission and runs the message body through
- * `toInspectableValue` so DOM-class instances become inspectable objects.
+ * `toInspectableValue` so Effect `Redacted` values become placeholders and
+ * DOM-class instances become inspectable objects.
  */
 export const toSerializedEntry = (
   entry: HistoryEntry,
@@ -107,13 +120,13 @@ export const toSerializedEntry = (
     index,
     tag: entry.tag,
     message: toInspectableValue(entry.message),
-    commands: Array_.map(entry.commands, toSerializedCommand),
-    mountStarts: Array_.map(entry.mountStarts, toSerializedMount),
-    mountEnds: Array_.map(entry.mountEnds, toSerializedMount),
+    commands: Array.map(entry.commands, toSerializedCommand),
+    mountStarts: Array.map(entry.mountStarts, toSerializedMount),
+    mountEnds: Array.map(entry.mountEnds, toSerializedMount),
     timestamp: entry.timestamp,
     isModelChanged: entry.isModelChanged,
-    changedPaths: Array_.fromIterable(entry.diff.changedPaths),
-    affectedPaths: Array_.fromIterable(entry.diff.affectedPaths),
+    changedPaths: Array.fromIterable(entry.diff.changedPaths),
+    affectedPaths: Array.fromIterable(entry.diff.affectedPaths),
     submodelPath,
     maybeLeafTag,
   }

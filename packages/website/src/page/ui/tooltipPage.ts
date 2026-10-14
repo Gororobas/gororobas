@@ -1,12 +1,12 @@
 import { Submodel } from 'foldkit'
 import type { Html } from 'foldkit/html'
 
+import { type CodeBlock } from '../../component'
 import { slotDocPage } from '../../markdown'
 import { type RenderHeadingLink, demoContainer } from '../../prose'
-import type { RenderCopyButton } from '../../view/codeBlock'
+import * as Tooltip from './demo/tooltip'
 import type { Message } from './message'
 import type { Model } from './model'
-import * as Tooltip from './tooltip'
 import raw from './tooltipPage.md'
 
 const { tableOfContents, view: renderPage } = slotDocPage<'demo'>(
@@ -17,17 +17,19 @@ const { tableOfContents, view: renderPage } = slotDocPage<'demo'>(
 export { tableOfContents }
 
 type ViewInputs = Readonly<{
-  renderCopyButton: RenderCopyButton
+  renderCopyButton: CodeBlock.RenderCopyButton
+  renderSnippet: CodeBlock.RenderSnippet
   renderHeadingLink: RenderHeadingLink
 }>
 
 export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, { renderCopyButton, renderHeadingLink }, h): Html =>
+  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h): Html =>
     renderPage({
       demos: {
         demo: demoContainer(...Tooltip.demo(model.tooltipDemo, h)),
       },
       renderCopyButton,
+      renderSnippet,
       renderHeadingLink,
     }),
 )

@@ -1,26 +1,26 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit each into your own Model, init, Message,
 // update, view, and subscription definitions.
-import { Match as M, Option, Schema as S } from 'effect'
+import { Option, Schema } from 'effect'
 import { Subscription, Update } from 'foldkit'
 import type { HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
+import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
 
 import { Slider } from '@foldkit/ui'
 
 // Add two fields to your Model: the value you own, and the Slider Submodel's
 // interaction state:
-const Model = S.Struct({
-  ratingValue: S.Number,
+const Model = Schema.Struct({
+  ratingValue: Schema.Number,
   ratingDemo: Slider.Model,
   // ...your other fields
 })
 
 // In your init function, seed the value (snapped to the range) and initialize
 // the Slider Submodel with min / max / step and a unique id:
-const init = () => [
-  {
+const init = () => ({
+  model: {
     ratingValue: Slider.snapAndClamp(3, 0, 10, 1),
     ratingDemo: Slider.init({
       id: 'rating',
@@ -30,29 +30,27 @@ const init = () => [
     }),
     // ...your other fields
   },
-  [],
-]
+})
 
 // Embed the Slider Message in your parent Message:
-const GotSliderMessage = m('GotSliderMessage', {
-  message: Slider.Message,
+const Message = defineMessageUnion({
+  GotSliderMessage: { message: Slider.Message },
 })
 
 // At module scope, fold the OutMessage into your own Model. `ChangedValue`
 // carries the new number. Lift it to domain state, validate, or persist on
 // each commit. The arm returns an Update.Step over the parent Model, which
 // already has the next Slider Model written back:
-const foldSliderOutMessage = M.type<Slider.OutMessage>().pipe(
-  M.withReturnType<Update.Step<Model, Message>>(),
-  M.tagsExhaustive({
-    // The child has emitted `ChangedValue`. Store the new value in the field
-    // you own. This arm is also where the parent can validate, persist, or
-    // trigger a downstream Command.
-    ChangedValue:
-      ({ value }) =>
-      model => [evo(model, { ratingValue: () => value }), []],
-  }),
-)
+const foldSliderOutMessage = Slider.OutMessage.match<
+  Update.Step<Model, Message>
+>({
+  // The child has emitted `ChangedValue`. Store the new value in the field
+  // you own. This arm is also where the parent can validate, persist, or
+  // trigger a downstream Command.
+  ChangedValue:
+    ({ value }) =>
+    model => ({ model: modifyFields(model, { ratingValue: () => value }) }),
+})
 
 // Update.foldChild wires the child into the parent: it runs Slider.update,
 // writes the next Slider Model back, maps the Submodel's Commands into your
@@ -61,12 +59,12 @@ const foldSlider = Update.foldChild({
   update: Slider.update,
   read: (model: Model) => Option.some(model.ratingDemo),
   write: (model, nextRatingDemo) =>
-    evo(model, { ratingDemo: () => nextRatingDemo }),
-  toParentMessage: message => GotSliderMessage({ message }),
+    modifyFields(model, { ratingDemo: () => nextRatingDemo }),
+  toParentMessage: message => Message.GotSliderMessage({ message }),
   foldOutMessage: foldSliderOutMessage,
 })
 
-// Inside your update function's M.tagsExhaustive({...}), call the fold:
+// In the corresponding Message.match handler, call the fold:
 GotSliderMessage: ({ message }) => foldSlider(model, message)
 
 // NOTE: wire BOTH dragPointer and dragEscape. Without dragEscape, pressing
@@ -76,11 +74,11 @@ const sliderSubscriptions = Subscription.lift({
   sliderPointer: Slider.subscriptions.dragPointer,
   sliderEscape: Slider.subscriptions.dragEscape,
 })<Model, Message>({
-  toChildModel: model => model.ratingDemo,
-  toParentMessage: message => GotSliderMessage({ message }),
+  read: model => Option.some(model.ratingDemo),
+  toParentMessage: message => Message.GotSliderMessage({ message }),
 })
 
-const subscriptions = Subscription.aggregate<Model, Message>()(
+const subscriptions = Subscription.aggregate(
   sliderSubscriptions,
   // ...your other subscription records
 )
@@ -88,59 +86,59 @@ const subscriptions = Subscription.aggregate<Model, Message>()(
 // Inside your view function, render the slider. You control every element's
 // markup and classes through the `toView` callback. The `attributes` groups
 // provide ARIA, pointer, and keyboard wiring:
-const view = (model: Model, h: HtmlBuilder<Message>) =>
-  h.submodel({
+const view = (model: Model, h: HtmlBuilder<Message>) => {
+  const sliderView = (attributes: Slider.SliderAttributes) =>
+    h.div(
+      [h.Class('flex flex-col gap-2 w-full max-w-sm')],
+      [
+        h.div(
+          [h.Class('flex items-center justify-between text-sm')],
+          [
+            h.label([...attributes.label, h.Class('font-medium')], ['Rating']),
+            h.span(
+              [h.Class('tabular-nums text-gray-600')],
+              [`${String(model.ratingValue)} / 10`],
+            ),
+          ],
+        ),
+        h.div(
+          [
+            ...attributes.root,
+            h.Class('relative h-6 w-full flex items-center'),
+          ],
+          [
+            h.div(
+              [
+                ...attributes.track,
+                h.Class('h-1.5 w-full rounded-full bg-gray-200'),
+              ],
+              [
+                h.div([
+                  ...attributes.filledTrack,
+                  h.Class('h-full rounded-full bg-blue-600'),
+                ]),
+              ],
+            ),
+            h.div([
+              ...attributes.thumb,
+              h.Class(
+                'h-5 w-5 rounded-full bg-white border-2 border-blue-600 shadow cursor-grab focus-visible:ring-2 focus-visible:ring-blue-600 data-[dragging]:cursor-grabbing',
+              ),
+            ]),
+          ],
+        ),
+      ],
+    )
+
+  return h.submodel({
     slotId: 'rating',
     model: model.ratingDemo,
     view: Slider.view,
     viewInputs: {
       value: model.ratingValue,
       formatValue: value => `${String(value)} of 10`,
-      toView: attributes =>
-        h.div(
-          [h.Class('flex flex-col gap-2 w-full max-w-sm')],
-          [
-            h.div(
-              [h.Class('flex items-center justify-between text-sm')],
-              [
-                h.label(
-                  [...attributes.label, h.Class('font-medium')],
-                  ['Rating'],
-                ),
-                h.span(
-                  [h.Class('tabular-nums text-gray-600')],
-                  [`${String(model.ratingValue)} / 10`],
-                ),
-              ],
-            ),
-            h.div(
-              [
-                ...attributes.root,
-                h.Class('relative h-6 w-full flex items-center'),
-              ],
-              [
-                h.div(
-                  [
-                    ...attributes.track,
-                    h.Class('h-1.5 w-full rounded-full bg-gray-200'),
-                  ],
-                  [
-                    h.div([
-                      ...attributes.filledTrack,
-                      h.Class('h-full rounded-full bg-blue-600'),
-                    ]),
-                  ],
-                ),
-                h.div([
-                  ...attributes.thumb,
-                  h.Class(
-                    'h-5 w-5 rounded-full bg-white border-2 border-blue-600 shadow cursor-grab focus-visible:ring-2 focus-visible:ring-blue-600 data-[dragging]:cursor-grabbing',
-                  ),
-                ]),
-              ],
-            ),
-          ],
-        ),
+      toView: sliderView,
     },
-    toParentMessage: message => GotSliderMessage({ message }),
+    toParentMessage: message => Message.GotSliderMessage({ message }),
   })
+}

@@ -4,12 +4,12 @@ export {
   Model,
   Message,
   OutMessage,
-  Selected,
-  SelectedTab,
-  FocusedTab,
-  CompletedFocusTab,
+  type Selected,
+  type SelectedTab,
+  type FocusedTab,
   FocusTab,
   Orientation,
+  PanelMount,
 } from './index.js'
 
 export type {

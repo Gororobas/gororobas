@@ -1,6 +1,6 @@
 {
   "name": "@effect/sql-libsql",
-  "version": "4.0.0-rc.109",
+  "version": "4.0.0",
   "type": "module",
   "license": "MIT",
   "description": "A libSQL toolkit for Effect",
@@ -64,12 +64,12 @@
   },
   "devDependencies": {
     "effect": "workspace:^",
-    "testcontainers": "^12.0.4"
+    "testcontainers": "^12.1.0"
   },
   "peerDependencies": {
     "effect": "workspace:^"
   },
   "dependencies": {
-    "@libsql/client": "^0.17.4"
+    "@libsql/client": "^0.18.0"
   }
 }

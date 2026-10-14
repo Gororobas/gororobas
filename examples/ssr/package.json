@@ -5,29 +5,28 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --outDir dist/client && vite build --ssr server/main.ts --outDir dist/server",
-    "start": "node dist/server/main.js",
+    "build": "vite build",
+    "start": "node scripts/serve.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@effect/platform-browser": "4.0.0-rc.109",
-    "@effect/platform-node": "4.0.0-rc.109",
+    "@effect/platform-browser": "4.0.0",
+    "@effect/platform-node": "4.0.0",
+    "@effect/platform-node-shared": "4.0.0",
+    "@foldkit/node": "workspace:*",
     "@foldkit/ui": "workspace:*",
-    "effect": "4.0.0-rc.109",
+    "effect": "4.0.0",
     "foldkit": "workspace:*"
   },
   "devDependencies": {
     "@foldkit/devtools": "workspace:*",
     "@foldkit/vite-plugin": "workspace:*",
-    "@tailwindcss/vite": "^4.3.1",
-    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "happy-dom": "^20.10.4",
-    "prettier": "^3.8.4",
-    "tailwindcss": "^4.3.1",
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.16",
-    "vitest": "^4.1.9"
+    "@tailwindcss/vite": "^4.3.3",
+    "happy-dom": "^20.14.5",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
   }
 }

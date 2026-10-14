@@ -5,25 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --outDir dist/client && vite build --ssr src/entry.server.ts --outDir dist/server && tsx scripts/prerender.ts",
+    "build": "vite build",
     "preview": "vite preview --outDir dist/client",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@effect/platform-browser": "4.0.0-rc.109",
-    "@effect/platform-node": "4.0.0-rc.109",
-    "@tailwindcss/vite": "^4.3.1",
-    "effect": "4.0.0-rc.109",
-    "foldkit": "workspace:*",
-    "tailwindcss": "^4.3.1"
+    "@effect/platform-browser": "4.0.0",
+    "effect": "4.0.0",
+    "foldkit": "workspace:*"
   },
   "devDependencies": {
     "@foldkit/devtools": "workspace:*",
     "@foldkit/vite-plugin": "workspace:*",
-    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "prettier": "^3.8.4",
-    "tsx": "^4.22.4",
-    "typescript": "^6.0.3",
-    "vite": "^8.0.16"
+    "@tailwindcss/vite": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1"
   }
 }

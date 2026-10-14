@@ -1,30 +1,27 @@
-import { Match as M, Option } from 'effect'
-import { Command, Update } from 'foldkit'
-import { evo } from 'foldkit/struct'
+import { Option } from 'effect'
+import { Update } from 'foldkit'
+import { modifyFields } from 'foldkit/struct'
 
-const foldLoginOutMessage = M.type<Login.OutMessage>().pipe(
-  M.withReturnType<Update.Step<Model, Message>>(),
-  M.tagsExhaustive({
+const foldLoginOutMessage = Login.OutMessage.match<Update.Step<Model, Message>>(
+  {
     SucceededLogin:
       ({ sessionId }) =>
-      () => [LoggedIn({ sessionId }), [SaveSession(sessionId)]],
-  }),
+      () => ({
+        model: LoggedIn({ sessionId }),
+        commands: [SaveSession(sessionId)],
+      }),
+  },
 )
 
 const foldLogin = Update.foldChild({
   update: Login.update,
   read: (model: Model) => Option.some(model.login),
-  write: (model, nextLogin) => evo(model, { login: () => nextLogin }),
+  write: (model, nextLogin) => modifyFields(model, { login: () => nextLogin }),
   toParentMessage: message => GotLoginMessage({ message }),
   foldOutMessage: foldLoginOutMessage,
 })
 
-export const update = (
-  model: Model,
-  message: Message,
-): readonly [Model, ReadonlyArray<Command.Command<Message>>] =>
-  M.value(message).pipe(
-    M.tagsExhaustive({
-      GotLoginMessage: ({ message }) => foldLogin(model, message),
-    }),
-  )
+export const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message>>(message, {
+    GotLoginMessage: ({ message }) => foldLogin(model, message),
+  })

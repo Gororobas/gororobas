@@ -5,27 +5,30 @@ import {
   Exit,
   Fiber,
   Layer,
-  Match as M,
-  Schema as S,
+  Schema,
   Stream,
 } from 'effect'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as Command from '../command/index.js'
 import { __htmlBuilder } from '../html/index.js'
-import { m } from '../message/index.js'
+import { defineMessageUnion } from '../message/index.js'
 import * as Subscription from '../subscription/subscription.js'
-import { makeApplication, makeElement, run } from './runtime.js'
+import type * as Update from '../update/index.js'
+import { makeApplication } from './makeApplication.js'
+import { makeElement } from './makeElement.js'
+import { run } from './start.js'
 
-const ClickedReadValue = m('ClickedReadValue')
-const SucceededReadValue = m('SucceededReadValue', { value: S.String })
-const Message = S.Union([ClickedReadValue, SucceededReadValue])
+const Message = defineMessageUnion({
+  ClickedReadValue: {},
+  SucceededReadValue: { value: Schema.String },
+})
 type Message = typeof Message.Type
 
-const Model = S.Struct({ label: S.String })
+const Model = Schema.Struct({ label: Schema.String })
 type Model = typeof Model.Type
 
-const Flags = S.Struct({ initialLabel: S.String })
+const Flags = Schema.Struct({ initialLabel: Schema.String })
 type Flags = typeof Flags.Type
 
 type ResourceShape = Readonly<{ value: string }>
@@ -35,10 +38,10 @@ class ResourceService extends Context.Service<ResourceService, ResourceShape>()(
 ) {}
 
 const ReadValue = Command.define('ReadValue', {
-  messages: [SucceededReadValue],
+  messages: [Message.SucceededReadValue],
   execute: Effect.gen(function* () {
     const { value } = yield* ResourceService
-    return SucceededReadValue({ value })
+    return Message.SucceededReadValue({ value })
   }),
 })
 
@@ -48,27 +51,24 @@ const FailingResourceLive = Layer.sync(ResourceService, (): ResourceShape => {
   throw new Error(LAYER_BUILD_ERROR)
 })
 
-type UpdateReturn = readonly [
-  Model,
-  ReadonlyArray<Command.Command<Message, never, ResourceService>>,
-]
-
-const update = (model: Model, message: Message): UpdateReturn =>
-  M.value(message).pipe(
-    M.withReturnType<UpdateReturn>(),
-    M.tagsExhaustive({
-      ClickedReadValue: () => [{ label: 'reading' }, [ReadValue()]],
-      SucceededReadValue: ({ value }) => [
-        { label: `${model.label} ${value}` },
-        [],
-      ],
+const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message, ResourceService>>(message, {
+    ClickedReadValue: () => ({
+      model: { label: 'reading' },
+      commands: [ReadValue()],
     }),
-  )
+    SucceededReadValue: ({ value }) => ({
+      model: { label: `${model.label} ${value}` },
+    }),
+  })
 
 const h = __htmlBuilder<Message>()
 
 const view = (model: Model) =>
-  h.div([], [h.button([h.OnClick(ClickedReadValue())], ['read']), model.label])
+  h.div(
+    [],
+    [h.button([h.OnClick(Message.ClickedReadValue())], ['read']), model.label],
+  )
 
 const crash = {
   view: (context: Readonly<{ error: Error }>) =>
@@ -107,7 +107,7 @@ describe('resources', () => {
   it('renders the crash view when the Layer fails to build for an init Command', async () => {
     const element = makeElement({
       Model,
-      init: () => [{ label: 'ready' }, [ReadValue()]],
+      init: () => ({ model: { label: 'ready' }, commands: [ReadValue()] }),
       update,
       view,
       crash,
@@ -127,7 +127,7 @@ describe('resources', () => {
   it('keeps the crash view visible when the crashing Message also dirtied the model', async () => {
     const element = makeElement({
       Model,
-      init: () => [{ label: 'ready' }, []],
+      init: () => ({ model: { label: 'ready' } }),
       update,
       view,
       crash,
@@ -161,7 +161,10 @@ describe('resources', () => {
 
     const element = makeElement({
       Model,
-      init: () => [{ label: 'ready' }, [ReadValue(), ReadValue()]],
+      init: () => ({
+        model: { label: 'ready' },
+        commands: [ReadValue(), ReadValue()],
+      }),
       update,
       view,
       crash: { ...crash, report },
@@ -184,11 +187,11 @@ describe('resources', () => {
   it('renders the crash view when the Layer fails to build for a Subscription', async () => {
     const subscriptions = Subscription.make<Model, Message, ResourceService>()(
       _entry => ({
-        resourceValue: Subscription.persistent(
+        resourceValue: Subscription.persistentEntry(
           Stream.fromEffect(
             Effect.gen(function* () {
               const { value } = yield* ResourceService
-              return SucceededReadValue({ value })
+              return Message.SucceededReadValue({ value })
             }),
           ),
         ),
@@ -197,7 +200,7 @@ describe('resources', () => {
 
     const element = makeElement({
       Model,
-      init: () => [{ label: 'ready' }, []],
+      init: () => ({ model: { label: 'ready' } }),
       update,
       view,
       subscriptions,
@@ -235,7 +238,7 @@ describe('resources', () => {
 
     const element = makeElement({
       Model,
-      init: () => [{ label: 'start' }, [ReadValue()]],
+      init: () => ({ model: { label: 'start' }, commands: [ReadValue()] }),
       update,
       view,
       crash,
@@ -289,7 +292,10 @@ describe('resources', () => {
       Model,
       Flags,
       flags,
-      init: ({ initialLabel }) => [{ label: initialLabel }, [ReadValue()]],
+      init: ({ initialLabel }) => ({
+        model: { label: initialLabel },
+        commands: [ReadValue()],
+      }),
       update,
       view,
       crash,
@@ -310,7 +316,7 @@ describe('resources', () => {
     expect(releaseCount).toBe(1)
   })
 
-  it('leaves the Layer unbuilt when an HMR restore skips init', async () => {
+  it('leaves the Layer unbuilt when a preserved Model skips init', async () => {
     let buildCount = 0
 
     const CountedResourceLive = Layer.effect(
@@ -325,7 +331,7 @@ describe('resources', () => {
       Model,
       Flags,
       flags: Effect.succeed({ initialLabel: 'fresh' }),
-      init: ({ initialLabel }) => [{ label: initialLabel }, []],
+      init: ({ initialLabel }) => ({ model: { label: initialLabel } }),
       update,
       view,
       crash,
@@ -343,7 +349,7 @@ describe('resources', () => {
     }
   })
 
-  it('does not run the flags Effect when an HMR restore skips init', async () => {
+  it('does not run the flags Effect when a preserved Model skips init', async () => {
     let flagsRunCount = 0
 
     const element = makeElement({
@@ -353,7 +359,7 @@ describe('resources', () => {
         flagsRunCount += 1
         return { initialLabel: 'fresh' }
       }),
-      init: ({ initialLabel }) => [{ label: initialLabel }, []],
+      init: ({ initialLabel }) => ({ model: { label: initialLabel } }),
       update,
       view,
       crash,
@@ -370,7 +376,7 @@ describe('resources', () => {
     }
   })
 
-  it('builds the Layer when an unreadable HMR Model falls back to init', async () => {
+  it('builds the Layer when an unreadable preserved Model falls back to init', async () => {
     let buildCount = 0
 
     const CountedResourceLive = Layer.effect(
@@ -385,7 +391,7 @@ describe('resources', () => {
       Model,
       Flags,
       flags: Effect.succeed({ initialLabel: 'fresh' }),
-      init: ({ initialLabel }) => [{ label: initialLabel }, []],
+      init: ({ initialLabel }) => ({ model: { label: initialLabel } }),
       update,
       view,
       crash,
@@ -408,7 +414,10 @@ describe('resources', () => {
       Model,
       Flags,
       flags: Effect.succeed({ initialLabel: 'ready' }),
-      init: ({ initialLabel }) => [{ label: initialLabel }, [ReadValue()]],
+      init: ({ initialLabel }) => ({
+        model: { label: initialLabel },
+        commands: [ReadValue()],
+      }),
       update,
       view,
       crash,
@@ -434,7 +443,7 @@ describe('resources', () => {
       flags: Effect.sync((): Flags => {
         throw new Error(FLAGS_ERROR)
       }),
-      init: ({ initialLabel }) => [{ label: initialLabel }, []],
+      init: ({ initialLabel }) => ({ model: { label: initialLabel } }),
       update,
       view,
       crash,
@@ -462,7 +471,7 @@ describe('resources', () => {
       Model,
       Flags,
       flags,
-      init: ({ initialLabel }) => [{ label: initialLabel }, []],
+      init: ({ initialLabel }) => ({ model: { label: initialLabel } }),
       update,
       view,
       crash,
@@ -492,7 +501,7 @@ describe('resources', () => {
 
     const element = makeElement({
       Model,
-      init: () => [{ label: 'ready' }, []],
+      init: () => ({ model: { label: 'ready' } }),
       update,
       view,
       crash,
@@ -524,14 +533,11 @@ describe('resources', () => {
 
     const resourceFreeUpdate = (
       model: Model,
-    ): readonly [Model, ReadonlyArray<never>] => [model, []]
+    ): Update.Return<Model, Message> => ({ model })
 
-    const resourceFreeInit = (
-      flags: Flags,
-    ): readonly [Model, ReadonlyArray<never>] => [
-      { label: flags.initialLabel },
-      [],
-    ]
+    const resourceFreeInit = (flags: Flags): Update.Return<Model, Message> => ({
+      model: { label: flags.initialLabel },
+    })
 
     expect(Effect.isEffect(flagsNeedingResource)).toBe(true)
 
@@ -542,12 +548,12 @@ describe('resources', () => {
       // infer `ResourceService` from `flags`, leave the optional `resources`
       // absent, and compile. It has to be `makeElement`. `makeApplication` has
       // four overloads, so TypeScript reports only the last one and blames
-      // `init` for an arity mismatch, which a directive here cannot pin.
-      // @ts-expect-error the flags Effect requires ResourceService and no `resources` Layer provides it
+      // `init` for an arity mismatch.
       makeElement({
         Model,
         Flags,
         flags: flagsNeedingResource,
+        // @ts-expect-error the flags Effect requires ResourceService and no `resources` Layer provides it
         init: resourceFreeInit,
         update: resourceFreeUpdate,
         view,
@@ -568,7 +574,10 @@ describe('resources', () => {
       const application = makeApplication({
         Model,
         Flags,
-        init: ({ initialLabel }) => [{ label: initialLabel }, [ReadValue()]],
+        init: ({ initialLabel }) => ({
+          model: { label: initialLabel },
+          commands: [ReadValue()],
+        }),
         update,
         view: documentView,
         container,

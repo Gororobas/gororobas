@@ -53,7 +53,7 @@ export interface CommandDefinitionNoArgs<
   Eff extends Effect.Effect<any, any, any>,
 > {
   readonly [CommandDefinitionTypeId]: CommandDefinitionTypeId
-  readonly name: Name;
+  readonly name: Name
   (): Readonly<{ name: Name; effect: Eff }>
 }
 
@@ -64,7 +64,7 @@ export interface CommandDefinitionWithArgs<
   Eff extends Effect.Effect<any, any, any>,
 > {
   readonly [CommandDefinitionTypeId]: CommandDefinitionTypeId
-  readonly name: Name;
+  readonly name: Name
   (args: Schema.Schema.Type<Schema.Struct<Fields>>): Readonly<{
     name: Name
     args: Schema.Schema.Type<Schema.Struct<Fields>>
@@ -178,7 +178,7 @@ const suspendExecute = (
  * @example With args
  * ```ts
  * const FetchWeather = Command.define('FetchWeather', {
- *   args: { zipCode: S.String },
+ *   args: { zipCode: Schema.String },
  *   messages: [SucceededFetchWeather, FailedFetchWeather],
  *   execute: ({ zipCode }) => Effect.gen(function* () { ... }),
  * })
@@ -189,7 +189,7 @@ const suspendExecute = (
  * @example Interruptible, keyed by the Command name
  * ```ts
  * const SaveDraft = Command.define('SaveDraft', {
- *   args: { draftId: S.String, body: S.String },
+ *   args: { draftId: Schema.String, body: Schema.String },
  *   messages: [SucceededSaveDraft, FailedSaveDraft],
  *   interrupt: true,
  *   execute: ({ draftId, body }) => Effect.gen(function* () { ... }),
@@ -202,7 +202,7 @@ const suspendExecute = (
  * @example Interruptible, keyed by args
  * ```ts
  * const UploadFile = Command.define('UploadFile', {
- *   args: { uploadId: S.Number, file: S.instanceOf(File) },
+ *   args: { uploadId: Schema.Number, file: Schema.instanceOf(File) },
  *   messages: [SucceededUploadFile, FailedUploadFile],
  *   interrupt: {
  *     keyFields: ['uploadId'],
@@ -388,36 +388,38 @@ export function define(name: string, config: DefineConfig): unknown {
   return definition
 }
 
-/** Transforms the Effect inside a Command while preserving its name, args, and
- *  message-mapping chain. Reach for this to adjust the Effect itself (provide a
- *  service, add a delay or retry), not to lift the result Message. Never use it
- *  to transform the result Message, even via
- *  `Effect.map(childMessage => Parent({ childMessage }))`. That dispatches
+/** Transforms the Effect inside a Command while preserving its result Message,
+ *  name, args, and message-mapping chain. Reach for this to provide a service,
+ *  add a delay or retry, or change the error or requirement channel. Its type
+ *  prevents the transform from changing the result Message. Never use it to
+ *  lift that Message, even via
+ *  `Effect.map(message => Message.GotChildMessage({ message }))`. That dispatches
  *  correctly in production but is invisible to `Story`/`Scene` `resolve`, which
  *  replays only the recorded chain and never runs the Effect, so the test would
  *  see the child's raw Message instead of the wrapped one. Lift result Messages
- *  with {@link mapMessage} / {@link mapMessages}, which record the lift. */
+ *  with {@link mapMessage} / {@link mapMessages}, which record the lift. The
+ *  `foldkit/prefer-command-mapmessage` lint rule flags this misuse. */
 export const mapEffect: {
-  <A, E1, R1, B, E2, R2>(
-    f: (effect: Effect.Effect<A, E1, R1>) => Effect.Effect<B, E2, R2>,
-  ): (command: Command<A, E1, R1>) => Command<B, E2, R2>
-  <A, E1, R1, B, E2, R2>(
+  <A, E1, R1, E2, R2>(
+    f: (effect: Effect.Effect<A, E1, R1>) => Effect.Effect<NoInfer<A>, E2, R2>,
+  ): (command: Command<A, E1, R1>) => Command<A, E2, R2>
+  <A, E1, R1, E2, R2>(
     command: Command<A, E1, R1>,
-    f: (effect: Effect.Effect<A, E1, R1>) => Effect.Effect<B, E2, R2>,
-  ): Command<B, E2, R2>
+    f: (effect: Effect.Effect<A, E1, R1>) => Effect.Effect<NoInfer<A>, E2, R2>,
+  ): Command<A, E2, R2>
 } = Function.dual(
   2,
-  <A, E1, R1, B, E2, R2>(
+  <A, E1, R1, E2, R2>(
     command: Readonly<{
       name: string
       args?: Record<string, unknown>
       effect: Effect.Effect<A, E1, R1>
     }>,
-    f: (effect: Effect.Effect<A, E1, R1>) => Effect.Effect<B, E2, R2>,
+    f: (effect: Effect.Effect<A, E1, R1>) => Effect.Effect<NoInfer<A>, E2, R2>,
   ): Readonly<{
     name: string
     args?: Record<string, unknown>
-    effect: Effect.Effect<B, E2, R2>
+    effect: Effect.Effect<A, E2, R2>
   }> => ({ ...command, effect: f(command.effect) }),
 )
 
@@ -482,20 +484,18 @@ export const mapMessage: {
 )
 
 /** Lifts every Command in a list through `f`, transforming the result
- *  Message type from `FromMessage` to `ToMessage`. Reach for this at the
- *  boundary where a child Submodel's `update` returns Commands typed in
- *  the child's Message and the parent needs them typed in the parent's
- *  Message:
+ *  Message type from `FromMessage` to `ToMessage`. When `commands` is
+ *  `undefined`, it returns an empty array. `Update.foldChild`,
+ *  `Update.foldChildStep`, `Update.foldChildInit`, `Update.foldChildInits`,
+ *  and `Update.foldChildAt` handle this mapping for application Submodels.
+ *  Use `mapMessages` for a standalone batch of Commands or when route-gated
+ *  initialization includes only the active child's Commands:
  *
  *  ```ts
- *  GotChildMessage: ({ message }) => {
- *    const [nextChild, commands, maybeOutMessage] = Child.update(model.child, message)
- *    const mappedCommands = Command.mapMessages(
- *      commands,
- *      message => GotChildMessage({ message }),
- *    )
- *    // ...
- *  }
+ *  const commands = Command.mapMessages(
+ *    [Feed.RefreshSummary(), Feed.RefreshTimeline()],
+ *    toGotFeedMessage,
+ *  )
  *  ```
  *
  *  Fuses `f` into each Command's Effect and also records it on the Command's
@@ -511,19 +511,19 @@ export const mapMessage: {
  *  `Command.Command<Message>` directly. */
 export const mapMessages: {
   <FromMessage, ToMessage, E = never, R = never>(
-    commands: ReadonlyArray<Command<FromMessage, E, R>>,
+    commands: ReadonlyArray<Command<FromMessage, E, R>> | undefined,
     f: (message: FromMessage) => ToMessage,
   ): ReadonlyArray<Command<ToMessage, E, R>>
   <FromMessage, ToMessage>(
     f: (message: FromMessage) => ToMessage,
   ): <E = never, R = never>(
-    commands: ReadonlyArray<Command<FromMessage, E, R>>,
+    commands: ReadonlyArray<Command<FromMessage, E, R>> | undefined,
   ) => ReadonlyArray<Command<ToMessage, E, R>>
 } = Function.dual(
   2,
   <FromMessage, ToMessage, E = never, R = never>(
-    commands: ReadonlyArray<Command<FromMessage, E, R>>,
+    commands: ReadonlyArray<Command<FromMessage, E, R>> | undefined,
     f: (message: FromMessage) => ToMessage,
   ): ReadonlyArray<Command<ToMessage, E, R>> =>
-    Array.map(commands, command => mapMessage(command, f)),
+    Array.map(commands ?? [], command => mapMessage(command, f)),
 )

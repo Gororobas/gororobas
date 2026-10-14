@@ -1,15 +1,25 @@
-import { Command } from 'foldkit'
-import { evo } from 'foldkit/struct'
+import { Command as ChildCommand } from 'foldkit'
+import { modifyFields } from 'foldkit/struct'
 import { Child } from './child'
 import { ForwardedChildMessage } from './message'
 import { Model } from './model'
 
+const GotLocallyShadowedMessage = (input: { message: Child.Message }) => input
+
 // UPDATE
 
 export const update = (model: Model, message: Child.Message) => {
-  const [childModel, childCommands] = Child.update(model.child, message)
-  const commands = Command.mapMessages(childCommands, (childMessage) =>
-    ForwardedChildMessage({ message: childMessage }),
+  const childUpdate = Child.update(model.child, message)
+  const commands = ChildCommand.mapMessages(
+    childUpdate.commands,
+    childMessage => ForwardedChildMessage({ message: childMessage }),
   )
-  return [evo(model, { child: () => childModel }), commands]
+  const shadowedCommands = ChildCommand.mapMessages(
+    childUpdate.commands,
+    childMessage => GotLocallyShadowedMessage({ message: childMessage }),
+  )
+  return {
+    model: modifyFields(model, { child: () => childUpdate.model }),
+    commands: [...commands, ...shadowedCommands],
+  }
 }

@@ -8,28 +8,27 @@ import {
   submit,
   text,
 } from 'foldkit/scene'
+import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import { SaveSession } from './command'
 import { Session } from './domain/session'
-import { CompletedNavigateInternal, SucceededSaveSession } from './message'
+import { Message } from './message'
 import { LoggedOut } from './model'
 import {
-  Model as LoginModel,
+  Message as LoginMessage,
   SimulateAuthRequest,
-  SucceededSimulateAuthRequest,
   initModel as initLoginModel,
 } from './page/loggedOut/page/login'
-import { LoginRoute } from './route'
+import { AppRoute } from './route'
 import { RedirectToDashboard, update } from './update'
 import { view } from './view'
 
 const validModel = LoggedOut.Model({
-  route: LoginRoute(),
-  loginModel: LoginModel.make({
-    ...initLoginModel(),
-    email: Valid({ value: 'alice@example.com' }),
-    password: Valid({ value: 'password' }),
+  route: AppRoute.Login(),
+  loginModel: modifyFields(initLoginModel(), {
+    email: () => Valid({ value: 'alice@example.com' }),
+    password: () => Valid({ value: 'password' }),
   }),
 })
 
@@ -48,12 +47,12 @@ describe('login flow', () => {
       Command.expectExact(SimulateAuthRequest),
       Command.resolve(
         SimulateAuthRequest,
-        SucceededSimulateAuthRequest({ session: aliceSession }),
+        LoginMessage.SucceededSimulateAuthRequest({ session: aliceSession }),
       ),
       Command.expectExact(SaveSession, RedirectToDashboard),
       Command.resolveAll(
-        [SaveSession, SucceededSaveSession()],
-        [RedirectToDashboard, CompletedNavigateInternal()],
+        [SaveSession, Message.SucceededSaveSession()],
+        [RedirectToDashboard, Message.CompletedNavigateInternal()],
       ),
       expect(text('Welcome back, alice!')).toExist(),
     )

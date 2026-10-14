@@ -1,13 +1,26 @@
 // view/docs.ts (inside the parent's view, with its builder `h` in scope)
+const renderCopyButton = SnippetCopy.renderer(
+  model.snippetCopy,
+  message => Message.GotSnippetCopyMessage({ message }),
+  h,
+)
+
 h.submodel({
   slotId: 'coming-from-react',
   model: model.comingFromReact,
-  view: Page.ComingFromReact.view,
+  view: ComingFromReact.view,
   viewInputs: {
-    // Both close over the parent's builder, so the app-level Messages they
-    // dispatch reach update unwrapped however deep the child renders them.
-    renderCopyButton: defaultRenderCopyButton(model.copiedSnippets, h),
-    renderHeadingLink: defaultRenderHeadingLink(h),
+    renderCopyButton,
+    renderSnippet: SnippetDisclosure.renderer(
+      model.snippetDisclosure,
+      message => Message.GotSnippetDisclosureMessage({ message }),
+      renderCopyButton,
+      h,
+    ),
+    renderHeadingLink: Prose.renderHeadingLink(
+      hash => Message.ClickedCopyLink({ hash }),
+      h,
+    ),
   },
-  toParentMessage: message => GotComingFromReactMessage({ message }),
+  toParentMessage: message => Message.GotComingFromReactMessage({ message }),
 })

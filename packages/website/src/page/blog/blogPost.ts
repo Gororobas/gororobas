@@ -1,16 +1,8 @@
 import { Option } from 'effect'
-import {
-  type Html,
-  type HtmlBuilder,
-  createKeyedLazy,
-  inertHtml as ih,
-} from 'foldkit/html'
+import { type Html, inertHtml as ih } from 'foldkit/html'
 
-import { docPage } from '../../markdown'
-import { type Message } from '../../message'
-import { pageTitle } from '../../prose'
+import * as Prose from '../../prose'
 import { blogRouter } from '../../route'
-import { type CopiedSnippets } from '../../view/codeBlock'
 import { type PostCover, maybePostCover } from './frontmatter'
 import { BLOG_AUTHOR } from './meta'
 import { type BlogPost, formatPostDate } from './posts'
@@ -21,7 +13,7 @@ const backToBlogLink: Html = ih.a(
   [
     ih.Href(blogRouter()),
     ih.Class(
-      'inline-block mb-6 text-sm font-medium text-accent-600 dark:text-accent-400 hover:underline',
+      'inline-block mb-6 text-sm font-medium text-accent-700 dark:text-accent-400 hover:underline',
     ),
   ],
   ['← Blog'],
@@ -44,11 +36,7 @@ const coverImageView = (cover: PostCover): Html =>
     ],
   )
 
-const postView = (
-  post: BlogPost,
-  copiedSnippets: CopiedSnippets,
-  h: HtmlBuilder<Message>,
-): Html =>
+export const view = (post: BlogPost, content: Html): Html =>
   ih.article(
     [],
     [
@@ -60,21 +48,13 @@ const postView = (
       ih.header(
         [ih.Class('mb-8')],
         [
-          pageTitle(post.slug, post.frontmatter.title),
+          Prose.pageTitle(post.slug, post.frontmatter.title, 'mb-3'),
           ih.p(
-            [ih.Class('text-gray-500 dark:text-gray-400')],
+            [ih.Class('text-gray-600 dark:text-gray-400')],
             [`${formatPostDate(post.frontmatter.date)} · ${BLOG_AUTHOR}`],
           ),
         ],
       ),
-      docPage(post.document, post.slug).view(copiedSnippets, h),
+      content,
     ],
   )
-
-const lazyPostView = createKeyedLazy()
-
-export const view = (
-  post: BlogPost,
-  copiedSnippets: CopiedSnippets,
-  h: HtmlBuilder<Message>,
-): Html => lazyPostView(post.slug, postView, [post, copiedSnippets, h])

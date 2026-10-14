@@ -1,25 +1,25 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Effect, Match as M, Option } from 'effect'
+import { Effect, Match, Option, Schema } from 'effect'
 import { Calendar, Update } from 'foldkit'
 import type { ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
+import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
 
 import { Calendar as UiCalendar } from '@foldkit/ui'
 
 // Add a field to your Model for the Calendar Submodel, plus a field the
 // parent owns for the selected date. The calendar no longer stores the
 // selection; the parent holds it and passes it back in as `maybeSelectedDate`.
-const Model = S.Struct({
+const Model = Schema.Struct({
   calendarDemo: UiCalendar.Model,
-  maybeSelectedDate: S.Option(Calendar.CalendarDate),
+  maybeSelectedDate: Schema.Option(Calendar.CalendarDate),
   // ...your other fields
 })
 
 // Fetch `today` once at the app boundary via flags so init stays pure:
-const Flags = S.Struct({
+const Flags = Schema.Struct({
   today: Calendar.CalendarDate,
   // ...your other flags
 })
@@ -32,8 +32,8 @@ const flags = Effect.gen(function* () {
 // In your init function, pass the flags-resolved today into UiCalendar.init.
 // `initialViewDate` seeds the month the calendar opens onto (pass your
 // initial selection to open on it). The parent owns the selection itself:
-const init = (flags: Flags) => [
-  {
+const init = (flags: Flags) => ({
+  model: {
     calendarDemo: UiCalendar.init({
       id: 'calendar-demo',
       today: flags.today,
@@ -42,13 +42,12 @@ const init = (flags: Flags) => [
     maybeSelectedDate: Option.none(),
     // ...your other fields
   },
-  [],
-]
+})
 
 // Embed the Calendar Message in your parent Message for navigation and
 // keyboard routing:
-const GotCalendarMessage = m('GotCalendarMessage', {
-  message: UiCalendar.Message,
+const Message = defineMessageUnion({
+  GotCalendarMessage: { message: UiCalendar.Message },
 })
 
 // At module scope, fold the OutMessage into your own Model. When the user
@@ -56,22 +55,25 @@ const GotCalendarMessage = m('GotCalendarMessage', {
 // `ChangedViewMonth` fires when navigation shifts the visible month without
 // selecting a date. Each arm returns an Update.Step over the parent Model,
 // which already has the next Calendar Model written back:
-const foldCalendarOutMessage = M.type<UiCalendar.OutMessage>().pipe(
-  M.withReturnType<Update.Step<Model, Message>>(),
-  M.tagsExhaustive({
-    // The child has emitted `SelectedDate`. This is where the parent lifts
-    // the committed date into its own field. That field is then passed back
-    // to the calendar as `maybeSelectedDate`, so the parent stays the single
-    // source of truth for the selection.
-    SelectedDate:
-      ({ date }) =>
-      model => [evo(model, { maybeSelectedDate: () => Option.some(date) }), []],
-    // The child has emitted `ChangedViewMonth`. In this arm the parent can
-    // update its own state or dispatch its own Commands, for example
-    // prefetch month data, fire analytics, or trigger a downstream Command.
-    ChangedViewMonth: () => model => [model, []],
-  }),
-)
+const foldCalendarOutMessage = UiCalendar.OutMessage.match<
+  Update.Step<Model, Message>
+>({
+  // The child has emitted `SelectedDate`. This is where the parent lifts
+  // the committed date into its own field. That field is then passed back
+  // to the calendar as `maybeSelectedDate`, so the parent stays the single
+  // source of truth for the selection.
+  SelectedDate:
+    ({ date }) =>
+    model => ({
+      model: modifyFields(model, {
+        maybeSelectedDate: () => Option.some(date),
+      }),
+    }),
+  // The child has emitted `ChangedViewMonth`. In this arm the parent can
+  // update its own state or dispatch its own Commands, for example
+  // prefetch month data, fire analytics, or trigger a downstream Command.
+  ChangedViewMonth: () => model => ({ model }),
+})
 
 // Update.foldChild wires the child into the parent: it delegates navigation,
 // focus, and picker-mode transitions to UiCalendar.update, writes the next
@@ -81,12 +83,12 @@ const foldCalendar = Update.foldChild({
   update: UiCalendar.update,
   read: (model: Model) => Option.some(model.calendarDemo),
   write: (model, nextCalendarDemo) =>
-    evo(model, { calendarDemo: () => nextCalendarDemo }),
-  toParentMessage: message => GotCalendarMessage({ message }),
+    modifyFields(model, { calendarDemo: () => nextCalendarDemo }),
+  toParentMessage: message => Message.GotCalendarMessage({ message }),
   foldOutMessage: foldCalendarOutMessage,
 })
 
-// Inside your update function's M.tagsExhaustive({...}), call the fold:
+// In the corresponding Message.match handler, call the fold:
 GotCalendarMessage: ({ message }) => foldCalendar(model, message)
 
 // Class names live at module scope, and each view mode gets its own view
@@ -112,7 +114,7 @@ const columnHeaderClassName = 'text-center text-xs uppercase'
 const cellClassName = 'group flex items-center justify-center'
 
 const dayButtonClassName =
-  'h-9 w-9 rounded-full text-sm group-data-[today]:ring-1 group-data-[selected]:bg-accent-600 group-data-[selected]:text-white group-data-[outside-month]:text-gray-400 group-data-[disabled]:opacity-40'
+  'h-9 w-9 rounded-full text-sm group-data-[today]:ring-1 group-data-[selected]:bg-accent-600 group-data-[selected]:text-white group-data-[outside-month]:text-gray-600 group-data-[disabled]:opacity-40'
 
 const monthYearGridClassName = 'grid grid-cols-3 gap-1 outline-none'
 
@@ -265,21 +267,24 @@ const yearsView = (
 // receives a discriminated `CalendarAttributes` whose variant matches the
 // calendar's current `viewMode`, so the match hands each grid to its own view
 // function:
-const view = (model: Model, h: HtmlBuilder<Message>) =>
-  h.submodel({
+const view = (model: Model, h: HtmlBuilder<Message>) => {
+  const calendarView = Match.type<UiCalendar.CalendarAttributes>().pipe(
+    Match.tagsExhaustive({
+      Days: days => daysView(days, h),
+      Months: months => monthsView(months, h),
+      Years: years => yearsView(years, h),
+    }),
+  )
+
+  return h.submodel({
     slotId: model.calendarDemo.id,
     model: model.calendarDemo,
     view: UiCalendar.view,
     viewInputs: {
       // The parent-owned selection. The selected-day marker derives from it.
       maybeSelectedDate: model.maybeSelectedDate,
-      toView: M.type<UiCalendar.CalendarAttributes>().pipe(
-        M.tagsExhaustive({
-          Days: days => daysView(days, h),
-          Months: months => monthsView(months, h),
-          Years: years => yearsView(years, h),
-        }),
-      ),
+      toView: calendarView,
     },
-    toParentMessage: message => GotCalendarMessage({ message }),
+    toParentMessage: message => Message.GotCalendarMessage({ message }),
   })
+}

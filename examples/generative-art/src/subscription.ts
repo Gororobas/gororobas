@@ -1,39 +1,35 @@
+import { Option } from 'effect'
 import { Subscription } from 'foldkit'
 
 import { Slider } from '@foldkit/ui'
 
-import {
-  GotFlowStrengthSliderMessage,
-  GotNoiseScaleSliderMessage,
-  TickedFrame,
-} from './message'
-import type { Message } from './message'
+import { Message } from './message'
 import type { Model } from './model'
 
 const flowStrengthSliderSubscriptions = Subscription.lift({
   flowStrengthSliderPointer: Slider.subscriptions.dragPointer,
   flowStrengthSliderEscape: Slider.subscriptions.dragEscape,
 })<Model, Message>({
-  toChildModel: model => model.flowStrengthSlider,
-  toParentMessage: message => GotFlowStrengthSliderMessage({ message }),
+  read: model => Option.some(model.flowStrengthSlider),
+  toParentMessage: message => Message.GotFlowStrengthSliderMessage({ message }),
 })
 
 const noiseScaleSliderSubscriptions = Subscription.lift({
   noiseScaleSliderPointer: Slider.subscriptions.dragPointer,
   noiseScaleSliderEscape: Slider.subscriptions.dragEscape,
 })<Model, Message>({
-  toChildModel: model => model.noiseScaleSlider,
-  toParentMessage: message => GotNoiseScaleSliderMessage({ message }),
+  read: model => Option.some(model.noiseScaleSlider),
+  toParentMessage: message => Message.GotNoiseScaleSliderMessage({ message }),
 })
 
 const frameSubscription = Subscription.make<Model, Message>()(_entry => ({
-  frame: Subscription.animationFrame({
+  frame: Subscription.animationFrameEntry({
     isActive: model => model.isRunning,
-    toMessage: deltaTimeMs => TickedFrame({ deltaTimeMs }),
+    toMessage: deltaTimeMs => Message.TickedFrame({ deltaTimeMs }),
   }),
 }))
 
-export const subscriptions = Subscription.aggregate<Model, Message>()(
+export const subscriptions = Subscription.aggregate(
   frameSubscription,
   flowStrengthSliderSubscriptions,
   noiseScaleSliderSubscriptions,

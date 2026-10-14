@@ -1,7 +1,14 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { Array } from 'effect'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { createServer, resolveConfig } from 'vite'
+import { dirname, join, resolve } from 'node:path'
+import { type DepOptimizationOptions, createServer, resolveConfig } from 'vite'
 import { describe, expect, it, onTestFinished } from 'vitest'
 
 import {
@@ -64,7 +71,7 @@ const PLUGIN_CONTEXT = {
   meta: {
     rollupVersion: '4',
     rolldownVersion: '1',
-    viteVersion: '7',
+    viteVersion: '8',
     watchMode: false,
   },
   debug: () => {},
@@ -99,6 +106,53 @@ const transformProductionHtml = async (root: string) => {
     filename: join(root, 'index.html'),
   })
 }
+
+const installFoldkit = (root: string): void => {
+  const packageRoot = join(root, 'node_modules', 'foldkit')
+  mkdirSync(packageRoot, { recursive: true })
+  writeFileSync(
+    join(packageRoot, 'package.json'),
+    JSON.stringify({ name: 'foldkit', type: 'module' }),
+  )
+}
+
+const linkPackage = (
+  root: string,
+  packageName: string,
+  exports?: Record<string, unknown>,
+): void => {
+  const sourceDirectory = join(root, `${packageName.replace('/', '-')}-source`)
+  mkdirSync(sourceDirectory, { recursive: true })
+  writeFileSync(
+    join(sourceDirectory, 'package.json'),
+    JSON.stringify({
+      name: packageName,
+      type: 'module',
+      ...(exports ? { exports } : {}),
+    }),
+  )
+  mkdirSync(dirname(join(root, 'node_modules', packageName)), {
+    recursive: true,
+  })
+  symlinkSync(sourceDirectory, join(root, 'node_modules', packageName))
+}
+
+const runConfigHook = (root: string, command: 'serve' | 'build') => {
+  const plugin = devToolsOverlayPlugin()
+
+  if (typeof plugin.config !== 'function') {
+    throw new Error('DevTools overlay plugin hooks changed shape')
+  }
+
+  return plugin.config.call(
+    PLUGIN_CONTEXT,
+    { root },
+    { command, mode: command === 'serve' ? 'development' : 'production' },
+  )
+}
+
+const isFoldkitPackageSpecifier = (specifier: string): boolean =>
+  specifier === 'foldkit' || specifier.startsWith('foldkit/')
 
 // NOTE: the counter's own config supplies the workspace aliases that resolve
 // `@foldkit/devtools/vite` to source, and those aliases are what a synthetic
@@ -137,6 +191,86 @@ describe('DevTools overlay injection', () => {
 
     expect(transformedOverlay?.code).toContain('__setDevToolsOverlay')
     expect(transformedOverlay?.code).toContain('devtools/src/vite')
+  })
+
+  it('declares the DevTools Vite entry to the dependency optimizer during development', () => {
+    const root = makeRoot({ section: 'devDependencies' })
+    installFoldkit(root)
+
+    expect(runConfigHook(root, 'serve')).toEqual({
+      optimizeDeps: {
+        include: ['@foldkit/devtools/vite'],
+      },
+    })
+  })
+
+  it('declares the DevTools Vite entry when Foldkit is linked', () => {
+    const root = makeRoot({ section: 'devDependencies' })
+    linkPackage(root, 'foldkit')
+
+    expect(runConfigHook(root, 'serve')).toEqual({
+      optimizeDeps: {
+        include: ['@foldkit/devtools/vite'],
+      },
+    })
+  })
+
+  it('declares no optimizer entry when DevTools is linked', () => {
+    const root = makeRoot()
+    linkPackage(root, '@foldkit/devtools', DEV_TOOLS_VITE_EXPORTS)
+    installFoldkit(root)
+
+    expect(runConfigHook(root, 'serve')).toBeUndefined()
+  })
+
+  it('declares no optimizer entry when both packages are linked', () => {
+    const root = makeRoot()
+    linkPackage(root, '@foldkit/devtools', DEV_TOOLS_VITE_EXPORTS)
+    linkPackage(root, 'foldkit')
+
+    expect(runConfigHook(root, 'serve')).toBeUndefined()
+  })
+
+  it('declares no optimizer entry when the overlay is not served', () => {
+    expect(runConfigHook(makeRoot(), 'serve')).toBeUndefined()
+    expect(
+      runConfigHook(
+        makeRoot({
+          section: 'dependencies',
+          exports: DEV_TOOLS_LEGACY_EXPORTS,
+        }),
+        'serve',
+      ),
+    ).toBeUndefined()
+    expect(
+      runConfigHook(makeRoot({ section: 'dependencies' }), 'build'),
+    ).toBeUndefined()
+  })
+
+  it('keeps Foldkit out of the dependency optimizer for a registry install', async () => {
+    const root = makeRoot({ section: 'devDependencies' })
+    installFoldkit(root)
+
+    const config = await resolveConfig(
+      { root, configFile: false, logLevel: 'silent', plugins: [foldkit()] },
+      'serve',
+    )
+    const optimizerOptions: ReadonlyArray<DepOptimizationOptions> = [
+      config.optimizeDeps,
+      ...Array.map(
+        Object.values(config.environments),
+        environment => environment.optimizeDeps,
+      ),
+    ]
+    const clientOptimizerOptions = config.environments['client']?.optimizeDeps
+    const includedFoldkitSpecifiers = Array.flatMap(
+      optimizerOptions,
+      ({ include = [] }) => Array.filter(include, isFoldkitPackageSpecifier),
+    )
+
+    expect(clientOptimizerOptions?.exclude).toContain('foldkit')
+    expect(clientOptimizerOptions?.include).toContain('@foldkit/devtools/vite')
+    expect(includedFoldkitSpecifiers).toEqual([])
   })
 
   it('serves a development dependency', () => {
