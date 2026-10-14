@@ -23,3 +23,16 @@ export class AccountDeletionError extends Schema.TaggedError<AccountDeletionErro
     reason: AccountDeletionErrorReason,
   },
 ) {}
+
+/** Onboarding needs a signed-in account; visitors have none. */
+export class SignInRequiredError extends Schema.TaggedError<SignInRequiredError>()(
+  "SignInRequiredError",
+  {},
+  { httpApiStatus: 401 },
+) {}
+
+export class ProfileAlreadyExistsError extends Schema.TaggedError<ProfileAlreadyExistsError>()(
+  "ProfileAlreadyExistsError",
+  { id: PersonId },
+  { httpApiStatus: 409 },
+) {}

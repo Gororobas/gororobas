@@ -2,6 +2,7 @@ import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
 import {
   AuthenticationApi,
+  DEFAULT_AUTHENTICATION_RETURN_TARGET,
   AuthSubjectId,
   ContentLanguage,
   Email,
@@ -40,10 +41,11 @@ import { WorkflowEngine } from "effect/workflow"
 
 import {
   authenticationTestBindingKey,
+  authenticationTestProofKey,
   authenticationTestOrigin,
   captureEmailDelivery,
   makeAuthenticationTestBrowser,
-  parseDeliveredMagicLink,
+  parseDeliveredCode,
 } from "../../../apps/server/test/authentication-helpers.js"
 import { ingestApplication } from "./ingest-application.js"
 import { angieGelProfileId, fallbackGelProfileId, fredGelProfileId } from "./ingestion-policy.js"
@@ -334,11 +336,13 @@ it.live(
         Effect.sync(() =>
           HttpRouter.toWebHandler(
             ApiLive.pipe(
-              makeAuthentication(authenticationTestOrigin).http.middleware,
+              makeAuthentication(authenticationTestOrigin, "test").http.middleware,
               Layer.provide(
                 authenticationLayer({
                   origin: authenticationTestOrigin,
+                  environment: "test",
                   requestBindingKey: authenticationTestBindingKey,
+                  proofKey: authenticationTestProofKey,
                 }).pipe(Layer.provide(deliveryLayer)),
               ),
               HttpRouter.provideRequest(dependencies),
@@ -387,25 +391,31 @@ it.live(
       expect(
         (yield* browser.fetchRoute({ path: `/media/${data.imageId}/images/1280` })).status,
       ).toBe(200)
-      const identity = { flowId: "migrated-fred", email: "fred@gororobas.com", name: "Fred" }
-      yield* browser.call(AuthenticationApi.actions.beginMagicLink, { flowId: identity.flowId })
 
-      yield* browser.call(AuthenticationApi.actions.requestMagicLink, {
-        ...identity,
+      const signIn = {
+        flowId: "migrated-fred",
+        email: "fred@gororobas.com",
+        returnTarget: DEFAULT_AUTHENTICATION_RETURN_TARGET,
+      }
+
+      yield* browser.call(AuthenticationApi.actions.beginEmailSignIn, { flowId: signIn.flowId })
+
+      const receipt = yield* browser.call(AuthenticationApi.actions.requestEmailCode, {
+        ...signIn,
         requestId: "migrated-fred-request",
-        language: "pt",
+        locale: "pt",
       })
 
       yield* Effect.sync(() => deliveries.length).pipe(
         Effect.repeat({ until: (count) => count === 1, schedule: Schedule.spaced("10 millis") }),
         Effect.timeout("5 seconds"),
       )
-      const { proof } = yield* parseDeliveredMagicLink(deliveries[0])
+      const { code } = parseDeliveredCode(deliveries[0])
 
-      yield* browser.call(AuthenticationApi.actions.completeMagicLink, {
-        ...identity,
-        reference: proof.reference,
-        secret: Redacted.value(proof.secret),
+      yield* browser.call(AuthenticationApi.actions.completeEmailSignIn, {
+        ...signIn,
+        reference: receipt.reference,
+        secret: code,
       })
 
       const bookmarks = yield* browser.fetchRoute({ path: "/wiki/bookmarks" })

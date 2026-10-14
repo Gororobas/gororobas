@@ -8,6 +8,7 @@ export interface CheckArgs {
   testPattern: string
   format: OutputFormat
   ignore?: string
+  quiet?: boolean
 }
 
 export function runCheckCommand(args: CheckArgs) {
@@ -16,5 +17,6 @@ export function runCheckCommand(args: CheckArgs) {
     ignore: args.ignore ? Option.some(args.ignore) : Option.none(),
     patterns: args.patterns,
     testPattern: args.testPattern,
+    quiet: args.quiet ?? false,
   })
 }

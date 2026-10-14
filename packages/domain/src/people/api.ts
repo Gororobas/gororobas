@@ -7,9 +7,14 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { PlatformAccessLevel } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { PersonId } from "../common/ids.js"
-import { ProfileRowUpdate } from "../profiles/domain.js"
-import { AccountDeletionConfirmation, AccountDeletionResult } from "./domain.js"
-import { AccountDeletionError, PersonNotFoundError } from "./errors.js"
+import { PersonProfileRow, ProfileRowUpdate } from "../profiles/domain.js"
+import { AccountDeletionConfirmation, AccountDeletionResult, OnboardingInput } from "./domain.js"
+import {
+  AccountDeletionError,
+  PersonNotFoundError,
+  ProfileAlreadyExistsError,
+  SignInRequiredError,
+} from "./errors.js"
 
 export class PeopleApiGroup extends HttpApiGroup.make("people")
   .add(
@@ -25,6 +30,20 @@ export class PeopleApiGroup extends HttpApiGroup.make("people")
       success: AccountDeletionResult,
       error: AccountDeletionError,
       payload: Schema.Struct({ confirm: Schema.optional(AccountDeletionConfirmation) }),
+    }),
+  )
+  .add(
+    /** `null` when the signed-in account hasn't completed onboarding yet. */
+    HttpApiEndpoint.get("getMyProfile", "/people/me/profile", {
+      success: Schema.NullOr(PersonProfileRow),
+      error: SignInRequiredError,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("completeOnboarding", "/people/me/profile", {
+      success: PersonProfileRow,
+      error: [SignInRequiredError, ProfileAlreadyExistsError],
+      payload: OnboardingInput,
     }),
   )
   .add(

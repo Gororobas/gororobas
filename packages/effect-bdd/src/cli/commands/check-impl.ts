@@ -24,6 +24,7 @@ export interface CheckConfig {
   testPattern: string
   format: OutputFormat
   ignore: Option.Option<string>
+  quiet: boolean
 }
 
 export function splitPatterns(patterns: string): Array<string> {
@@ -112,8 +113,8 @@ function filterTestFilesWithFeature(
   })
 }
 
-function createCheckLayer(format: OutputFormat) {
-  return Layer.mergeAll(StepMatcherLive, StepDiscoveryLive, makeReporter(format))
+function createCheckLayer(format: OutputFormat, quiet: boolean) {
+  return Layer.mergeAll(StepMatcherLive, StepDiscoveryLive, makeReporter(format, quiet))
 }
 
 export function runCheck(
@@ -132,7 +133,7 @@ export function runCheck(
     const stepDiscovery = yield* StepDiscovery
     const discoveredSteps = stepDiscovery.discoverSteps(relevantTestFiles)
 
-    if (EffectArray.isArrayEmpty(discoveredSteps)) {
+    if (EffectArray.isArrayEmpty(discoveredSteps) && !config.quiet) {
       yield* Console.log("No step definitions found in test files")
     }
 
@@ -161,5 +162,5 @@ export function runCheck(
     if (!result.passed) {
       return yield* Effect.fail(new CheckFailedError({}))
     }
-  }).pipe(Effect.provide(createCheckLayer(config.format)))
+  }).pipe(Effect.provide(createCheckLayer(config.format, config.quiet)))
 }

@@ -65,3 +65,12 @@ Verification after this update: `pnpm run quality-gates` passed with 261 tests p
 - `authSubjectId` in claims is redundant with session metadata and is retained for the requested rename. Feature policies need person identity, current platform role, and current organization memberships; the latter two remain database-resolved, rather than frozen into authentication claims.
 
 Verification: `pnpm run quality-gates` passed with 264 tests passing and 11 skipped. Atlas validation passed and reports no difference between the migration directory and `schema.sql`.
+
+## Beta.39 and Foldkit login
+
+- Upgrade auth and auth-persistence together to beta.39. The intervening beta.26 changes replace continuation-based proof completion with redemption of the original proof reference and secret. The HTTP contract now has one completeMagicLink operation.
+- Regenerate the initial Atlas migration for current identifiers, sessions, pending authentication, email-address storage and proofs. Old development databases and pending links need to be replaced. Account deletion removes unredeemed identifier proofs through their binding before deleting the subject.
+- AuthenticationAuthority.capture now supplies both revision and requirement; pass both to AuthenticationCompletion.prepare. Provide WebCrypto to the whole authentication layer as required since beta.19.
+- The web app uses one routed Foldkit model, with retained search submodels and an authentication submodel. Search subscriptions run only on their respective routes. A shared API client replaces per-search clients.
+- Login and email/OAuth confirmation live at /login. The typed Yielded client handles POST session reads, credential settlement and CSRF. The confirmation service holds bearer secrets outside the model and consumes its pending action once; fragments are removed immediately and confirmation requires a user click.
+- Vite preserves /api/auth paths and the original Origin header while stripping /api only for application API routes. The HTTPS development proxy must route the login page to Vite and authentication requests to the server.

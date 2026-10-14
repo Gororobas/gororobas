@@ -9,6 +9,9 @@ export const authenticationTestOrigin = "https://localhost:4443"
 export const authenticationTestBindingKey = Redacted.make(
   Base64Url.encode(new Uint8Array(32).fill(42)),
 )
+export const authenticationTestProofKey = Redacted.make(
+  Base64Url.encode(new Uint8Array(32).fill(7)),
+)
 export const AuthenticationTestInfrastructure = TestLayer.pipe(
   Layer.provideMerge(NodeHttpServer.layerHttpServices),
 )
@@ -41,7 +44,10 @@ const envelope = Schema.Union([
   }),
 ])
 
-export const makeAuthenticationTestBrowser = (handler: (request: Request) => Promise<Response>) => {
+export const makeAuthenticationTestBrowser = (
+  handler: (request: Request) => Promise<Response>,
+  origin = authenticationTestOrigin,
+) => {
   // oxlint-disable-next-line effect/avoid-native-object-helpers -- The mutable HTTP cookie jar preserves insertion order when named cookies are replaced.
   const cookies = new Map<string, string>()
   const cookieHeader = () => [...cookies].map(([key, value]) => `${key}=${value}`).join("; ")
@@ -60,7 +66,7 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
     const options: RequestInit = {
       method,
       headers: {
-        origin: authenticationTestOrigin,
+        origin,
         "content-type": "application/json",
         "x-effect-auth-csrf": "1",
         cookie: cookieHeader(),
@@ -72,7 +78,7 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
       options.body = yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(body)
     }
     const response = yield* Effect.tryPromise(() =>
-      handler(new Request(`${authenticationTestOrigin}${path}`, options)),
+      handler(new Request(`${origin}${path}`, options)),
     )
 
     response.headers.getSetCookie().forEach((header) => {
@@ -84,7 +90,8 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
       if (value === "" || /Max-Age=0/i.test(header)) cookies.delete(key)
       else cookies.set(key, value)
       expect(header).toMatch(/HttpOnly/i)
-      expect(header).toMatch(/Secure/i)
+      expect(/;\s*Secure(?:;|$)/i.test(header)).toBe(origin.startsWith("https:"))
+      expect(key.startsWith("__Host-")).toBe(origin.startsWith("https:"))
     })
 
     return response
@@ -118,10 +125,9 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
               },
     })
 
-    const result = yield* Schema.decodeEffect(envelope)(
-      yield* Effect.tryPromise(() => response.json()),
-    )
-    expect(response.status).toBe(200)
+    const body = yield* Effect.tryPromise(() => response.json())
+    expect(response.status, `${action.route.path}: ${JSON.stringify(body)}`).toBe(200)
+    const result = yield* Schema.decodeEffect(envelope)(body)
     assert(Predicate.isTagged(result, "Success"), `${action.route.path} failed`)
     return yield* Schema.decodeEffect(action.route.operation.rpc.successSchema)(result.value)
   })
@@ -133,13 +139,14 @@ export const makeAuthenticationTestBrowser = (handler: (request: Request) => Pro
   }
 }
 
-export const parseDeliveredMagicLink = Effect.fn(function* (message: EmailDelivery.EmailMessage) {
-  const match = Redacted.value(message.text).match(/https:\/\/\S+/)
-  assert(match !== null, "missing magic link")
-  const link = new URL(match[0])
-  const proof = yield* EmailDelivery.parseLinkFragment(Redacted.make(link.hash))
-  return {
-    link,
-    proof,
-  }
-})
+/** Every sign-in email carries the same code twice: to type in, and in the link's fragment. */
+export const parseDeliveredCode = (message: EmailDelivery.EmailMessage) => {
+  const text = Redacted.value(message.text)
+  const link = text.match(/https?:\/\/\S+/)
+  assert(link !== null, "missing sign-in link")
+  const url = new URL(link[0])
+  const code = /^#code=(\d{6})$/.exec(url.hash)?.[1]
+  assert(code !== undefined, "missing code in link")
+  expect(text.split("\n")).toContain(code)
+  return { code, link: url }
+}

@@ -238,6 +238,7 @@ overrides:
   '@mpsuesser/oxlint-plugin-effect>effect': 4.0.3
 
 patchedDependencies:
+  '@yielded/auth@0.1.0-beta.39': 4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7
   loro-crdt@1.16.4: 14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd
 
 importers:
@@ -363,7 +364,7 @@ importers:
         version: 3.31.4
       '@yielded/auth':
         specifier: 'catalog:'
-        version: 0.1.0-beta.39(effect@4.0.3)
+        version: 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.3)
       '@yielded/auth-persistence':
         specifier: 'catalog:'
         version: 0.1.0-beta.39(effect@4.0.3)
@@ -382,9 +383,6 @@ importers:
       ollama:
         specifier: ^0.6.4
         version: 0.6.4
-      openid-client:
-        specifier: ^6.8.8
-        version: 6.8.8
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@26.6.5)
@@ -428,7 +426,7 @@ importers:
         version: link:../../repos/pleat/packages/foldkit
       '@yielded/auth':
         specifier: 'catalog:'
-        version: 0.1.0-beta.39(effect@4.0.3)
+        version: 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.3)
       effect:
         specifier: 'catalog:'
         version: 4.0.3
@@ -474,7 +472,7 @@ importers:
         version: 3.31.4
       '@yielded/auth':
         specifier: 'catalog:'
-        version: 0.1.0-beta.39(effect@4.0.3)
+        version: 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.3)
       effect:
         specifier: 'catalog:'
         version: 4.0.3
@@ -3913,9 +3911,6 @@ packages:
     resolution: {integrity: sha512-6eZs5Ls3WtCisHWp9S2GUy8dqkpGi4BVSz3GaqiE6ezub0512ESztXUwUB6C6IKbQkY2Pnb/mD4WYojCRwcwLA==}
     engines: {node: '>=0.10.0'}
 
-  oauth4webapi@3.8.8:
-    resolution: {integrity: sha512-8N28E+a/oxfXWBgOMt+ZP/JUf/XR+IFbvkAEPP3gznXOMv9BpAAwiIj0TFNz3tGTPc0ZQ8zmWBNgN1nAys0gng==}
-
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
     engines: {node: '>=0.10.0'}
@@ -3941,9 +3936,6 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
-
-  openid-client@6.8.8:
-    resolution: {integrity: sha512-ZsucJA5Ad04Uv7YN4ql+s4GXNmb9uAYQwyJTsJx7CH/MX3JZioLE2pVKi1SC+YrbSLA4Px3Gi30dMjgOZtb6pA==}
 
   ordered-binary@1.6.2:
     resolution: {integrity: sha512-BY+qgDArmYpvvmij141xbkB4Cw8RFLBQM5Zj4MODFb1SyXBRE/xO4Xj/QWbR7aUEBxbkjuNdsFVCL2TmbYrlNg==}
@@ -6451,11 +6443,11 @@ snapshots:
 
   '@yielded/auth-persistence@0.1.0-beta.39(effect@4.0.3)':
     dependencies:
-      '@yielded/auth': 0.1.0-beta.39(effect@4.0.3)
+      '@yielded/auth': 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.3)
       '@yielded/crypto': 0.1.0-beta.39(effect@4.0.3)
       effect: 4.0.3
 
-  '@yielded/auth@0.1.0-beta.39(effect@4.0.3)':
+  '@yielded/auth@0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.3)':
     dependencies:
       '@yielded/crypto': 0.1.0-beta.39(effect@4.0.3)
       '@yielded/jose': 0.1.0-beta.39(effect@4.0.3)
@@ -7438,8 +7430,6 @@ snapshots:
 
   normalize-path@3.0.0: {}
 
-  oauth4webapi@3.8.8: {}
-
   object-assign@4.1.1: {}
 
   object-inspect@1.13.4: {}
@@ -7459,11 +7449,6 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
-
-  openid-client@6.8.8:
-    dependencies:
-      jose: 6.2.12
-      oauth4webapi: 3.8.8
 
   ordered-binary@1.6.2: {}
 

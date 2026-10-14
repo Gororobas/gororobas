@@ -40,3 +40,10 @@ apps/client-prototypes
 *.db-wal.before-migration-*
 /packages/migration/debug/media-cache/
 !/apps/server/.env.example
+
+.maple-perf-data.maintenance-token
+chdb-config.xml
+maple.pid
+maple-store-open
+maple-store-version.json
+.maple-perf-data

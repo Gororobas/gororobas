@@ -1,41 +1,49 @@
 import { NodeHttpServer } from "@effect/platform-node"
 import { expect, it as test } from "@effect/vitest"
-import { AuthenticationApi, AuthenticationHttp, ProfileId, SessionContext } from "@gororobas/domain"
+import {
+  AuthenticationApi,
+  AuthenticationHttp,
+  PersonId,
+  ProfileId,
+  SessionContext,
+  DEFAULT_AUTHENTICATION_RETURN_TARGET,
+} from "@gororobas/domain"
 import { Proofs } from "@yielded/auth"
 import {
   Context,
+  DateTime,
   Effect,
   Layer,
   ManagedRuntime,
   Redacted,
-  Schema,
-  Predicate,
   Schedule,
+  Schema,
 } from "effect"
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder, HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { SqlClient } from "effect/sql"
 
 import {
-  authenticationTestOrigin as origin,
+  authenticationTestOrigin,
   authenticationTestBindingKey,
+  authenticationTestProofKey,
   AuthenticationTestInfrastructure,
   captureEmailDelivery,
   makeAuthenticationTestBrowser,
-  parseDeliveredMagicLink,
+  parseDeliveredCode,
 } from "../../test/authentication-helpers.js"
+import { completeOnboarding } from "../people/onboarding.js"
 import { deleteProfileReturningMediaAssets } from "../profiles/mutations.js"
 import { SessionServiceLive } from "../session-service.js"
 import { makeAuthentication } from "./app-auth.js"
 import { authenticationLayer } from "./authentication-live.js"
+import { deleteUnclaimedAccounts } from "./unclaimed-accounts.js"
+
 const ProtectedApi = HttpApi.make("test/authentication").add(
   HttpApiGroup.make("protected")
     .add(
       HttpApiEndpoint.get("account", "/protected", {
-        success: Schema.Struct({
-          authSubjectId: Schema.String,
-          accessLevel: Schema.String,
-        }),
+        success: Schema.Struct({ authSubjectId: Schema.String, sessionType: Schema.String }),
       }),
     )
     .middleware(AuthenticationHttp.RequireSession),
@@ -46,487 +54,330 @@ const ProtectedHandlers = HttpApiBuilder.group(ProtectedApi, "protected", (handl
     Effect.gen(function* () {
       const authentication = yield* AuthenticationHttp.CurrentSession
       const session = yield* SessionContext
-      if (authentication === null || session.type !== "ACCOUNT") {
-        return yield* Effect.die("authenticated account missing")
-      }
+      if (authentication === null) return yield* Effect.die("authenticated account missing")
       return {
         authSubjectId: authentication.subjectId,
-        accessLevel: session.accessLevel,
+        sessionType: session.type === "ACCOUNT" ? session.accessLevel : session.type,
       }
     }).pipe(Effect.provide(SessionServiceLive), Effect.orDie),
   ),
 )
 
-test.live(
-  "HTTP vertical slice: magic-link signup, protected access, sign-out and existing-account sign-in",
-  Effect.fn(function* () {
+test.live.each([authenticationTestOrigin, "http://localhost:4443"])(
+  "%s: one email flow signs up, claims, onboards and signs back in",
+  Effect.fn(function* (origin) {
     const runtime = yield* Effect.acquireRelease(
       Effect.sync(() => ManagedRuntime.make(AuthenticationTestInfrastructure)),
       (resource) => Effect.orDie(Effect.tryPromise(() => resource.dispose())),
     )
     const runtimeContext = yield* runtime.contextEffect
-    const database = Layer.succeedContext(yield* runtime.contextEffect)
     const { deliveries, layer: deliveryLayer } = captureEmailDelivery()
+
     const authentication = authenticationLayer({
       origin,
+      environment: "development",
       requestBindingKey: authenticationTestBindingKey,
+      proofKey: authenticationTestProofKey,
     }).pipe(Layer.provide(deliveryLayer))
-    const protectedRoutes = HttpApiBuilder.layer(ProtectedApi).pipe(
+
+    const routes = HttpApiBuilder.layer(ProtectedApi).pipe(
       Layer.provide(ProtectedHandlers),
       Layer.provide(authentication),
-    )
-
-    const routes = protectedRoutes.pipe(
-      makeAuthentication(origin).http.middleware,
+      makeAuthentication(origin, "development").http.middleware,
       Layer.provideMerge(authentication),
-      Layer.provide(database),
+      Layer.provide(Layer.succeedContext(runtimeContext)),
     )
 
     const app = yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        HttpRouter.toWebHandler(routes, {
-          disableLogger: true,
-        }),
-      ),
+      Effect.sync(() => HttpRouter.toWebHandler(routes, { disableLogger: true })),
       (resource) => Effect.orDie(Effect.tryPromise(() => resource.dispose())),
     )
 
     const requestContext = Context.add(
-      yield* runtime.contextEffect,
+      runtimeContext,
       Proofs.ProofRequestContext,
-      Effect.succeed({
-        networkKey: Redacted.make("127.0.0.1"),
-      }),
+      Effect.succeed({ networkKey: Redacted.make("127.0.0.1") }),
     )
 
-    const { fetchRoute, call, cookieHeader } = makeAuthenticationTestBrowser((request) =>
-      app.handler(request, requestContext),
+    const { fetchRoute, call, cookieHeader } = makeAuthenticationTestBrowser(
+      (request) => app.handler(request, requestContext),
+      origin,
     )
 
-    const identity = {
-      flowId: "signup-flow",
-      email: "person@example.com",
-      name: "Agroecology Person",
-    }
+    const run = <A, E>(
+      effect: Effect.Effect<A, E, Layer.Success<typeof AuthenticationTestInfrastructure>>,
+    ) => effect.pipe(Effect.provide(runtimeContext))
 
     const query = <A extends object>(
       statement: (sql: SqlClient.SqlClient) => Effect.Effect<ReadonlyArray<A>, unknown>,
-    ) => Effect.flatMap(SqlClient.SqlClient, statement).pipe(Effect.provide(runtimeContext))
+    ) => run(Effect.flatMap(SqlClient.SqlClient, statement))
 
-    expect(
-      (yield* fetchRoute({
-        path: "/protected",
-      })).status,
-    ).toBe(401)
-
-    const noCsrf = yield* fetchRoute({
-      path: "/api/auth/beginMagicLink",
-      method: "POST",
-      body: {
-        payload: {
-          flowId: "csrf",
-        },
-      },
-      customHeaders: {
-        "x-effect-auth-csrf": "",
-      },
+    const flow = (flowId: string, email: string) => ({
+      flowId,
+      email,
+      returnTarget: DEFAULT_AUTHENTICATION_RETURN_TARGET,
     })
 
-    expect(noCsrf.status).not.toBe(200)
+    const requestCode = Effect.fn(function* (input: ReturnType<typeof flow>) {
+      const count = deliveries.length
+      yield* call(AuthenticationApi.actions.beginEmailSignIn, { flowId: input.flowId })
 
-    const wrongOrigin = yield* fetchRoute({
-      path: "/api/auth/beginMagicLink",
-      method: "POST",
-      body: {
-        payload: {
-          flowId: "origin",
-        },
-      },
-      customHeaders: {
-        origin: "https://evil.example",
-      },
-    })
-
-    expect(wrongOrigin.status).not.toBe(200)
-    yield* call(AuthenticationApi.actions.beginMagicLink, {
-      flowId: identity.flowId,
-    })
-
-    const receipt = yield* call(AuthenticationApi.actions.requestMagicLink, {
-      ...identity,
-      requestId: "signup-request",
-      language: "en",
-    })
-
-    yield* call(AuthenticationApi.actions.requestMagicLink, {
-      ...identity,
-      requestId: "signup-request",
-      language: "en",
-    })
-
-    yield* Effect.sync(() => deliveries.length).pipe(
-      Effect.repeat({ until: (count) => count === 1, schedule: Schedule.spaced("10 millis") }),
-      Effect.timeout("5 seconds"),
-    )
-    expect(yield* query((sql) => sql`SELECT id FROM auth_subjects`)).toHaveLength(0)
-    const message = deliveries[0]
-    if (message === undefined) return yield* Effect.die("missing email")
-    expect(message.to).toBe(identity.email)
-    const { link, proof } = yield* parseDeliveredMagicLink(message)
-    expect(link.search).toBe("")
-    expect(proof.reference).toEqual(receipt.reference)
-
-    const tampered = yield* fetchRoute({
-      path: "/api/auth/completeMagicLink",
-      method: "POST",
-      body: {
-        payload: {
-          ...identity,
-          name: "Different Person",
-          reference: proof.reference,
-          secret: Redacted.value(proof.secret),
-        },
-      },
-    })
-
-    expect(tampered.status).not.toBe(200)
-
-    const withoutBinding = yield* fetchRoute({
-      path: "/api/auth/completeMagicLink",
-      method: "POST",
-      body: {
-        payload: {
-          ...identity,
-          reference: proof.reference,
-          secret: Redacted.value(proof.secret),
-        },
-      },
-      customHeaders: {
-        cookie: "",
-      },
-    })
-
-    expect(withoutBinding.status).not.toBe(200)
-
-    const completed = yield* call(AuthenticationApi.actions.completeMagicLink, {
-      ...identity,
-      reference: proof.reference,
-      secret: Redacted.value(proof.secret),
-    })
-
-    expect(completed._tag).toBe("Authenticated")
-    if (!Predicate.isTagged(completed, "Authenticated")) return yield* Effect.die("session missing")
-    const authSubjectId = completed.session.subjectId
-
-    expect(
-      yield* query(
-        (sql) => sql`SELECT a.id, a.is_email_verified, p.type, pe.access_level
-      FROM auth_subjects a JOIN profiles p ON p.id = a.id JOIN people pe ON pe.id = a.id`,
-      ),
-    ).toEqual([
-      {
-        id: authSubjectId,
-        isEmailVerified: 1,
-        type: "PERSON",
-        accessLevel: "NEWCOMER",
-      },
-    ])
-
-    const protectedResponse = yield* fetchRoute({
-      path: "/protected",
-    })
-    expect(protectedResponse.status).toBe(200)
-    expect(yield* Effect.tryPromise(() => protectedResponse.json())).toEqual({
-      authSubjectId,
-      accessLevel: "NEWCOMER",
-    })
-    expect((yield* call(AuthenticationApi.actions.getSession))?.subjectId).toBe(authSubjectId)
-    yield* query(
-      (sql) => sql`UPDATE people SET access_level = 'COMMUNITY' WHERE id = ${authSubjectId}`,
-    )
-
-    expect(
-      yield* Effect.gen(function* () {
-        const response0 = yield* fetchRoute({
-          path: "/protected",
-        })
-        return yield* Effect.tryPromise(() => response0.json())
-      }),
-    ).toEqual({
-      authSubjectId,
-      accessLevel: "COMMUNITY",
-    })
-
-    const replay = yield* fetchRoute({
-      path: "/api/auth/completeMagicLink",
-      method: "POST",
-      body: {
-        payload: {
-          ...identity,
-          reference: proof.reference,
-          secret: Redacted.value(proof.secret),
-        },
-      },
-    })
-
-    expect(replay.status).not.toBe(200)
-
-    const repeatCompletion = yield* fetchRoute({
-      path: "/api/auth/completeMagicLink",
-      method: "POST",
-      body: {
-        payload: {
-          ...identity,
-          reference: proof.reference,
-          secret: Redacted.value(proof.secret),
-        },
-      },
-    })
-
-    expect(repeatCompletion.status).not.toBe(200)
-    const previousCookies = cookieHeader()
-    yield* query(
-      (sql) =>
-        sql`UPDATE auth_credentials SET revision = 'stale' WHERE auth_subject_id = ${authSubjectId}`,
-    )
-    yield* call(AuthenticationApi.actions.signOut)
-    expect(yield* call(AuthenticationApi.actions.getSession)).toBeNull()
-
-    expect(
-      (yield* fetchRoute({
-        path: "/protected",
-        method: "GET",
-        body: undefined,
-        customHeaders: {
-          cookie: previousCookies,
-        },
-      })).status,
-    ).toBe(401)
-
-    expect(yield* query((sql) => sql`SELECT session_id FROM auth_sessions`)).toHaveLength(0)
-
-    // Move the stored cooldown into the past to simulate waiting between logins.
-
-    const login = {
-      ...identity,
-      flowId: "signin-flow",
-      name: "Name must not overwrite existing profile",
-    }
-
-    yield* call(AuthenticationApi.actions.beginMagicLink, {
-      flowId: login.flowId,
-    })
-
-    yield* call(AuthenticationApi.actions.requestMagicLink, {
-      ...login,
-      requestId: "signin-request",
-      language: "en",
-    })
-
-    yield* Effect.sync(() => deliveries.length).pipe(
-      Effect.repeat({ until: (count) => count === 2, schedule: Schedule.spaced("10 millis") }),
-      Effect.timeout("5 seconds"),
-    )
-    const next = deliveries[1]
-    if (next === undefined) return yield* Effect.die("missing sign-in email")
-    const { proof: nextProof } = yield* parseDeliveredMagicLink(next)
-
-    const signedIn = yield* call(AuthenticationApi.actions.completeMagicLink, {
-      ...login,
-      reference: nextProof.reference,
-      secret: Redacted.value(nextProof.secret),
-    })
-
-    expect(signedIn._tag).toBe("Authenticated")
-
-    expect(
-      yield* query(
-        (sql) =>
-          sql`SELECT c.revision = s.security_revision AS reconciled FROM auth_credentials c JOIN auth_subjects s ON s.id = c.auth_subject_id WHERE c.auth_subject_id = ${authSubjectId}`,
-      ),
-    ).toEqual([
-      {
-        reconciled: 1,
-      },
-    ])
-
-    expect((yield* call(AuthenticationApi.actions.getSession))?.subjectId).toBe(authSubjectId)
-
-    expect(yield* query((sql) => sql`SELECT id, name FROM auth_subjects`)).toEqual([
-      {
-        id: authSubjectId,
-        name: identity.name,
-      },
-    ])
-
-    expect(yield* query((sql) => sql`SELECT id FROM profiles`)).toHaveLength(1)
-    expect(yield* query((sql) => sql`SELECT id FROM people`)).toHaveLength(1)
-    yield* query((sql) => sql`UPDATE auth_subjects SET active = 0 WHERE id = ${authSubjectId}`)
-
-    expect(
-      (yield* fetchRoute({
-        path: "/protected",
-      })).status,
-    ).toBe(401)
-
-    expect(yield* call(AuthenticationApi.actions.getSession)).toBeNull()
-    yield* query((sql) => sql`UPDATE auth_subjects SET active = 1 WHERE id = ${authSubjectId}`)
-
-    const requestProof = Effect.fn(function* (email: string) {
-      const pendingIdentity = {
-        email,
-        name: "Pending Person",
-        flowId: crypto.randomUUID(),
-      }
-
-      yield* call(AuthenticationApi.actions.beginMagicLink, {
-        flowId: pendingIdentity.flowId,
-      })
-
-      yield* call(AuthenticationApi.actions.requestMagicLink, {
-        ...pendingIdentity,
+      const receipt = yield* call(AuthenticationApi.actions.requestEmailCode, {
+        ...input,
         requestId: crypto.randomUUID(),
-        language: "en",
+        locale: "en",
       })
 
-      yield* Effect.sync(() => deliveries.at(-1)?.to).pipe(
-        Effect.repeat({
-          until: (recipient) => recipient === email,
-          schedule: Schedule.spaced("10 millis"),
-        }),
+      yield* Effect.sync(() => deliveries.length).pipe(
+        Effect.repeat({ until: (n) => n > count, schedule: Schedule.spaced("10 millis") }),
         Effect.timeout("5 seconds"),
       )
-
-      const delivery = deliveries.at(-1)
-      if (delivery === undefined || delivery.to !== email) {
-        return yield* Effect.die("missing pending email")
-      }
-      const { proof: parsed } = yield* parseDeliveredMagicLink(delivery)
-      return {
-        pendingIdentity,
-        proof: parsed,
-      }
+      const message = deliveries.at(-1)
+      if (message?.to !== input.email) return yield* Effect.die("missing email")
+      return { receipt, message, ...parseDeliveredCode(message) }
     })
 
-    const expired = yield* requestProof("expired@example.com")
-    yield* query(
-      (sql) =>
-        sql`UPDATE auth_proofs SET expires_at = 0 WHERE proof_id = ${expired.proof.reference.proofId}`,
-    )
-
-    expect(
-      (yield* fetchRoute({
-        path: "/api/auth/completeMagicLink",
+    const complete = ({
+      input,
+      reference,
+      secret,
+    }: {
+      readonly input: ReturnType<typeof flow>
+      readonly reference: Proofs.ProofReference
+      readonly secret: string
+    }) =>
+      fetchRoute({
+        path: AuthenticationApi.actions.completeEmailSignIn.route.path,
         method: "POST",
-        body: {
-          payload: {
-            ...expired.pendingIdentity,
-            reference: expired.proof.reference,
-            secret: Redacted.value(expired.proof.secret),
-          },
-        },
-      })).status,
-    ).not.toBe(200)
+        body: { payload: { ...input, reference, secret } },
+      })
 
-    expect(yield* query((sql) => sql`SELECT id FROM auth_subjects`)).toHaveLength(1)
-    const failed = yield* requestProof("rollback@example.com")
-
-    yield* query(
-      (sql) =>
-        sql`CREATE TRIGGER reject_profile BEFORE INSERT ON profiles BEGIN SELECT RAISE(ABORT, 'simulate profile write failure'); END`,
-    )
-
-    expect(
-      (yield* fetchRoute({
-        path: "/api/auth/completeMagicLink",
-        method: "POST",
-        body: {
-          payload: {
-            ...failed.pendingIdentity,
-            reference: failed.proof.reference,
-            secret: Redacted.value(failed.proof.secret),
-          },
-        },
-      })).status,
-    ).not.toBe(200)
-
-    expect(yield* query((sql) => sql`SELECT id FROM auth_subjects`)).toHaveLength(1)
-    expect(yield* query((sql) => sql`SELECT id FROM profiles`)).toHaveLength(1)
-    expect(yield* query((sql) => sql`SELECT credential_id FROM auth_credentials`)).toHaveLength(1)
-
-    const deletionProof = yield* requestProof(identity.email)
-
-    const unrelated = yield* query(
-      (sql) =>
-        sql`SELECT * FROM auth_proofs WHERE json_extract(binding, '$.identifier.value') = 'expired@example.com'`,
-    )
-    expect(unrelated.length).toBeGreaterThan(0)
-
-    expect(
-      yield* query(
-        (sql) =>
-          sql`SELECT * FROM auth_proofs WHERE json_extract(binding, '$.identifier.value') = ${identity.email}`,
-      ),
-    ).not.toEqual([])
-
-    yield* deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)).pipe(
-      Effect.provide(runtimeContext),
-    )
+    expect((yield* fetchRoute({ path: "/protected" })).status).toBe(401)
 
     yield* Effect.forEach(
-      ["auth_proofs"],
-      (table) =>
-        Effect.gen(function* () {
-          expect(
-            JSON.stringify(yield* query((sql) => sql`SELECT * FROM ${sql(table)}`)),
-          ).not.toContain(identity.email)
-        }),
+      [{ "x-effect-auth-csrf": "" }, { origin: "https://evil.example" }],
+      Effect.fn(function* (customHeaders) {
+        const rejected = yield* fetchRoute({
+          path: AuthenticationApi.actions.beginEmailSignIn.route.path,
+          method: "POST",
+          body: { payload: { flowId: "forged" } },
+          customHeaders,
+        })
+
+        expect(rejected.status).not.toBe(200)
+      }),
       { concurrency: 1 },
     )
 
+    // Sign-up: an unknown address reserves an unclaimed account and gets the welcome wording.
+    const signup = flow("signup-flow", "person@example.com")
+    const firstCode = yield* requestCode(signup)
+    expect(firstCode.message.subject).toContain("join Gororobas")
+    expect(firstCode.link.origin + firstCode.link.pathname).toBe(`${origin}/login`)
+
     expect(
       yield* query(
         (sql) =>
-          sql`SELECT * FROM auth_proofs WHERE json_extract(binding, '$.identifier.value') = 'expired@example.com'`,
+          sql`SELECT is_email_verified, claimed_at FROM auth_subjects WHERE email = ${signup.email}`,
       ),
-    ).toEqual(unrelated)
+    ).toEqual([{ isEmailVerified: 0, claimedAt: null }])
 
-    expect(yield* call(AuthenticationApi.actions.getSession)).toBeNull()
+    const wrongCode = firstCode.code === "000000" ? "111111" : "000000"
+
+    expect(
+      (yield* complete({
+        input: signup,
+        reference: firstCode.receipt.reference,
+        secret: wrongCode,
+      })).status,
+    ).not.toBe(200)
 
     expect(
       (yield* fetchRoute({
-        path: "/api/auth/completeMagicLink",
+        path: AuthenticationApi.actions.completeEmailSignIn.route.path,
         method: "POST",
         body: {
-          payload: {
-            ...deletionProof.pendingIdentity,
-            reference: deletionProof.proof.reference,
-            secret: Redacted.value(deletionProof.proof.secret),
-          },
+          payload: { ...signup, reference: firstCode.receipt.reference, secret: firstCode.code },
         },
+        customHeaders: { cookie: "" },
       })).status,
     ).not.toBe(200)
+
+    const completed = yield* call(AuthenticationApi.actions.completeEmailSignIn, {
+      ...signup,
+      reference: firstCode.receipt.reference,
+      secret: firstCode.code,
+    })
+
+    if (completed.completion._tag !== "Authenticated") return yield* Effect.die("session missing")
+    const authSubjectId = completed.completion.session.subjectId
+    expect(completed.returnTarget).toBe(DEFAULT_AUTHENTICATION_RETURN_TARGET)
+
+    expect(
+      (yield* complete({
+        input: signup,
+        reference: firstCode.receipt.reference,
+        secret: firstCode.code,
+      })).status,
+    ).not.toBe(200)
+
+    const [claimed] = yield* query(
+      (sql) =>
+        sql`SELECT is_email_verified, claimed_at FROM auth_subjects WHERE id = ${authSubjectId}`,
+    )
+    expect(claimed).toMatchObject({ isEmailVerified: 1, claimedAt: expect.any(String) })
+
+    // Signed in without a person: a visitor until onboarding.
+    const beforeOnboarding = yield* fetchRoute({ path: "/protected" })
+    expect(yield* Effect.tryPromise(() => beforeOnboarding.json())).toEqual({
+      authSubjectId,
+      sessionType: "VISITOR",
+    })
+
+    const profile = yield* run(
+      completeOnboarding(PersonId.make(authSubjectId), { name: "Agroecology Person" }),
+    )
+    expect(profile.handle).toBe("agroecology-person")
+    const afterOnboarding = yield* fetchRoute({ path: "/protected" })
+    expect(yield* Effect.tryPromise(() => afterOnboarding.json())).toEqual({
+      authSubjectId,
+      sessionType: "NEWCOMER",
+    })
+
+    const previousCookies = cookieHeader()
+    yield* call(AuthenticationApi.actions.signOut)
+    expect(yield* call(AuthenticationApi.actions.getSession)).toBeNull()
+    expect(
+      (yield* fetchRoute({ path: "/protected", customHeaders: { cookie: previousCookies } }))
+        .status,
+    ).toBe(401)
+
+    // Sign-in: same address, sign-in wording, same account.
+    const signin = flow("signin-flow", signup.email)
+    const secondCode = yield* requestCode(signin)
+    expect(secondCode.message.subject).toContain("sign-in code")
+
+    const signedIn = yield* call(AuthenticationApi.actions.completeEmailSignIn, {
+      ...signin,
+      reference: secondCode.receipt.reference,
+      secret: secondCode.code,
+    })
+
+    expect(
+      signedIn.completion._tag === "Authenticated" && signedIn.completion.session.subjectId,
+    ).toBe(authSubjectId)
+    expect(yield* query((sql) => sql`SELECT id FROM auth_subjects`)).toHaveLength(1)
+
+    // Accounts created outside sign-in (like migrated ones) get their email credential on first use.
+    const migratedId = "00000000-0000-7000-8000-00000000000a"
+    const timestamp = DateTime.formatIso(yield* DateTime.now)
+
+    yield* query(
+      (sql) =>
+        sql`INSERT INTO auth_subjects ${sql.insert({
+          id: migratedId,
+          email: "migrated@example.com",
+          isEmailVerified: 0,
+          securityRevision: "01900000-0000-7000-8000-000000000001",
+          claimedAt: timestamp,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })} RETURNING id`,
+    )
+
+    const migrated = flow("migrated-flow", "migrated@example.com")
+    const migratedCode = yield* requestCode(migrated)
+    expect(migratedCode.message.subject).toContain("sign-in code")
+
+    const migratedSignIn = yield* call(AuthenticationApi.actions.completeEmailSignIn, {
+      ...migrated,
+      reference: migratedCode.receipt.reference,
+      secret: migratedCode.code,
+    })
+
+    expect(
+      migratedSignIn.completion._tag === "Authenticated" &&
+        migratedSignIn.completion.session.subjectId,
+    ).toBe(migratedId)
+
+    // Abandoned sign-ups disappear; claimed accounts stay.
+    yield* requestCode(flow("typo-flow", "persn@example.com"))
+    yield* query(
+      (sql) => sql`UPDATE auth_subjects SET active = 0 WHERE id = ${migratedId} RETURNING id`,
+    )
+    const inactive = flow("inactive-flow", "migrated@example.com")
+    yield* call(AuthenticationApi.actions.beginEmailSignIn, { flowId: inactive.flowId })
+    const deliveredBefore = deliveries.length
+
+    yield* call(AuthenticationApi.actions.requestEmailCode, {
+      ...inactive,
+      requestId: crypto.randomUUID(),
+      locale: "en",
+    })
+
+    yield* Effect.sleep("100 millis")
+    expect(deliveries.length).toBe(deliveredBefore)
+
+    yield* run(
+      deleteUnclaimedAccounts({
+        createdBefore: DateTime.add(yield* DateTime.now, { minutes: 1 }),
+      }),
+    )
+
+    expect(
+      (yield* query((sql) => sql`SELECT email FROM auth_subjects ORDER BY email`)).map(
+        (row) => row.email,
+      ),
+    ).toEqual(["migrated@example.com", signup.email])
+
+    // Deleting an account removes the proofs bound to its address.
+    yield* requestCode(flow("deletion-flow", signup.email))
+    yield* run(deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)))
+    expect(JSON.stringify(yield* query((sql) => sql`SELECT * FROM auth_proofs`))).not.toContain(
+      signup.email,
+    )
+    expect(yield* call(AuthenticationApi.actions.getSession)).toBeNull()
   }),
 )
 
 // Web Request fixtures reuse their body; a native Node request exposes stream consumption bugs.
-test.live("native HTTP auth routes admit a POST body exactly once", () => {
-  const { layer: deliveryLayer } = captureEmailDelivery()
-  const routes = authenticationLayer({
-    origin,
-    requestBindingKey: authenticationTestBindingKey,
-  }).pipe(Layer.provide(deliveryLayer), Layer.provide(AuthenticationTestInfrastructure))
-  const server = HttpRouter.serve(routes).pipe(Layer.provideMerge(NodeHttpServer.layerTest))
+test.live.each([
+  { environment: "development", origin: "http://localhost:4443", secure: false },
+  { environment: "development", origin: authenticationTestOrigin, secure: true },
+  { environment: "test", origin: "http://localhost:4443", secure: true },
+  { environment: "test", origin: authenticationTestOrigin, secure: true },
+  { environment: "production", origin: "http://localhost:4443", secure: true },
+  { environment: "production", origin: authenticationTestOrigin, secure: true },
+] as const)(
+  "native HTTP auth routes admit a POST body with cookie settings: %j",
+  ({ environment, origin, secure }) => {
+    const { layer: deliveryLayer } = captureEmailDelivery()
 
-  return Effect.gen(function* () {
-    const context = yield* Layer.build(server)
-    const http = Context.get(context, HttpClient.HttpClient)
-    const request = yield* HttpClientRequest.post("/api/auth/beginMagicLink").pipe(
-      HttpClientRequest.setHeaders({ origin, "x-effect-auth-csrf": "1" }),
-      HttpClientRequest.bodyJson({ payload: { flowId: "native-browser-flow" } }),
-    )
-    const response = yield* http.execute(request)
-    expect(response.status).toBe(200)
-    expect(response.headers["set-cookie"]).toContain("HttpOnly")
-  })
-})
+    const routes = authenticationLayer({
+      origin,
+      environment,
+      requestBindingKey: authenticationTestBindingKey,
+      proofKey: authenticationTestProofKey,
+    }).pipe(Layer.provide(deliveryLayer), Layer.provide(AuthenticationTestInfrastructure))
+
+    const server = HttpRouter.serve(routes).pipe(Layer.provideMerge(NodeHttpServer.layerTest))
+
+    return Effect.gen(function* () {
+      const context = yield* Layer.build(server)
+      const http = Context.get(context, HttpClient.HttpClient)
+
+      const request = yield* HttpClientRequest.post(
+        AuthenticationApi.actions.beginEmailSignIn.route.path,
+      ).pipe(
+        HttpClientRequest.setHeaders({ origin, "x-effect-auth-csrf": "1" }),
+        HttpClientRequest.bodyJson({ payload: { flowId: "native-browser-flow" } }),
+      )
+
+      const response = yield* http.execute(request)
+      expect(response.status).toBe(200)
+      expect(response.headers["set-cookie"]).toContain("HttpOnly")
+      expect(/;\s*Secure(?:;|$)/i.test(response.headers["set-cookie"] ?? "")).toBe(secure)
+      expect(response.headers["set-cookie"]?.startsWith("__Host-")).toBe(secure)
+    })
+  },
+)

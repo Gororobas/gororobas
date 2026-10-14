@@ -1,48 +1,19 @@
 -- Create "auth_subjects" table
 CREATE TABLE `auth_subjects` (
   `id` text NOT NULL,
-  `name` text NOT NULL,
   `email` text NOT NULL,
   `is_email_verified` integer NOT NULL,
-  `image` text NULL,
   `active` integer NOT NULL DEFAULT 1,
   `security_revision` text NOT NULL,
+  `claimed_at` text NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
   PRIMARY KEY (`id`)
 );
 -- Create index "auth_subjects_email" to table: "auth_subjects"
 CREATE UNIQUE INDEX `auth_subjects_email` ON `auth_subjects` (`email`);
--- Create "auth_oauth_flows" table
-CREATE TABLE `auth_oauth_flows` (
-  `state` text NOT NULL,
-  `flow_id` text NOT NULL,
-  `provider` text NOT NULL,
-  `binding_verifier` text NOT NULL,
-  `nonce` text NOT NULL,
-  `pkce_verifier` text NOT NULL,
-  `link_auth_subject_id` text NULL,
-  `expires_at` integer NOT NULL,
-  PRIMARY KEY (`state`),
-  CONSTRAINT `0` FOREIGN KEY (`link_auth_subject_id`) REFERENCES `auth_subjects` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "auth_oauth_flows_flow_id" to table: "auth_oauth_flows"
-CREATE UNIQUE INDEX `auth_oauth_flows_flow_id` ON `auth_oauth_flows` (`flow_id`);
--- Create "auth_oauth_identities" table
-CREATE TABLE `auth_oauth_identities` (
-  `provider` text NOT NULL,
-  `issuer` text NOT NULL,
-  `subject` text NOT NULL,
-  `auth_subject_id` text NOT NULL,
-  `credential_id` text NOT NULL,
-  CONSTRAINT `0` FOREIGN KEY (`auth_subject_id`) REFERENCES `auth_subjects` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
-);
--- Create index "auth_oauth_identities_credential_id" to table: "auth_oauth_identities"
-CREATE UNIQUE INDEX `auth_oauth_identities_credential_id` ON `auth_oauth_identities` (`credential_id`);
--- Create index "auth_oauth_identities_provider_issuer_subject" to table: "auth_oauth_identities"
-CREATE UNIQUE INDEX `auth_oauth_identities_provider_issuer_subject` ON `auth_oauth_identities` (`provider`, `issuer`, `subject`);
--- Create index "auth_oauth_identities_auth_subject_id_idx" to table: "auth_oauth_identities"
-CREATE INDEX `auth_oauth_identities_auth_subject_id_idx` ON `auth_oauth_identities` (`auth_subject_id`);
+-- Create index "auth_subjects_unclaimed_idx" to table: "auth_subjects"
+CREATE INDEX `auth_subjects_unclaimed_idx` ON `auth_subjects` (`created_at`) WHERE claimed_at IS NULL;
 -- Create "auth_identifiers" table
 CREATE TABLE `auth_identifiers` (
   `namespace` text NOT NULL,

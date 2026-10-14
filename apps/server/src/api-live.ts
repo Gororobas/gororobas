@@ -67,6 +67,7 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
       Layer.effect(PublicationCommentsService, PublicationCommentsService.make),
       Layer.effect(PublicationsService, PublicationsService.make),
       Layer.effect(ProfilesRepository, ProfilesRepository.make),
+      Layer.effect(PeopleRepository, PeopleRepository.make),
     ),
   ),
   Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),

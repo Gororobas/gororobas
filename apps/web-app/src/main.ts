@@ -159,7 +159,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           " · ",
           h.a(
             [h.Href(Routes.loginRouter())],
-            [model.authentication.isSignedIn ? "Account" : "Log in"],
+            [Authentication.isSignedIn(model.authentication) ? "Account" : "Log in"],
           ),
         ],
       ),

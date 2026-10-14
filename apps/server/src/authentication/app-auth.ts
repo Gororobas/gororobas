@@ -1,20 +1,31 @@
-import { AuthenticationApi, sessionCookieName } from "@gororobas/domain"
-import { Auth, Http } from "@yielded/auth"
+import { AuthenticationApi, AuthenticationHttp, sessionCookieName } from "@gororobas/domain"
+import { Auth, Email, Http } from "@yielded/auth"
+import { makeSessionHttpContract } from "@yielded/auth/SessionContract"
 
+import type { Environment } from "../environment-config.js"
 import { sessionConfiguration } from "./auth-storage.js"
-import { magicLinkStrategy } from "./magic-link.js"
-import { oauthStrategy } from "./oauth.js"
 
 export const AppAuth = Auth.make(AuthenticationApi, {
   sessions: sessionConfiguration,
-  strategies: { oauth: oauthStrategy, magicLink: magicLinkStrategy },
-  defaultStrategy: "magicLink",
+  strategies: { email: Email.makeCode() },
+  defaultStrategy: "email",
 })
 
-export const makeAuthentication = (origin: string) => {
+export const makeAuthentication = (origin: string, environment: Environment) => {
+  const secure = environment !== "development" || origin.startsWith("https:")
+  const cookieName = secure ? sessionCookieName : "gororobas-session"
+
   const http = Http.make(AppAuth, {
     origin,
-    cookie: { name: sessionCookieName, prefix: "__Host-gororobas-" },
+    cookie: {
+      name: cookieName,
+      prefix: secure ? "__Host-gororobas-" : "gororobas-",
+      secure,
+    },
   })
-  return { AppAuth, http }
+
+  const securityLayer = http.securityLayer(
+    makeSessionHttpContract(AuthenticationHttp.id, AuthenticationHttp.session, { cookieName }),
+  )
+  return { AppAuth, http, securityLayer }
 }

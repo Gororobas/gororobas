@@ -17,8 +17,9 @@ export const authenticationRequirement: Sessions.AuthenticationRequirement = {
 
 export const sessionConfiguration = Sessions.stateful({ maxAge: "30 days", idleTimeout: "7 days" })
 
-// This descriptor selects the adapter's proof/session storage ports. Its email
-// address operations are never installed in the public authentication service.
+// Composed persistence doesn't support sign-in-only email strategies, so this descriptor selects
+// the adapter's proof/session storage ports instead of `AppAuth`. Its email address operations are
+// never installed in the public authentication service; `EmailSignInTargetsLive` covers sign-in.
 const StorageAuth = Auth.make(authenticationNamespace, {
   claims: AuthenticationClaims,
   sessions: sessionConfiguration,

@@ -34,6 +34,7 @@ function performCheck(
       ignore: args.ignore,
       patterns: args.patterns,
       testPattern: args.testPattern,
+      quiet: false,
     }),
     {
       onFailure: () =>

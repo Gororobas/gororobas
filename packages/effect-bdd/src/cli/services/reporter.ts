@@ -32,6 +32,7 @@ const ANSI = {
   red: "\x1b[31m",
   reset: "\x1b[0m",
   yellow: "\x1b[33m",
+  cyan: "\x1b[36m",
 }
 
 function formatStepPretty(step: MatchedStep, indent: string): string {
@@ -135,6 +136,107 @@ function reportPretty(result: CheckResult): Effect.Effect<void> {
   )
 }
 
+function reportMissingSteps(result: CheckResult): Effect.Effect<void> {
+  const color = (value: string, ...codes: Array<string>) => `${codes.join("")}${value}${ANSI.reset}`
+
+  const previewSteps = (steps: Array<MatchedStep>): Array<string> => {
+    const missingSteps = steps.filter((step) => !step.matched)
+
+    const preview = missingSteps
+      .slice(0, 3)
+      .map(
+        (step) =>
+          `    ${color("✗", ANSI.red)} ${step.step.keyword} ${step.step.text} ${color(`(line ${step.step.line})`, ANSI.dim)}`,
+      )
+
+    if (missingSteps.length > preview.length) {
+      preview.push(
+        `    ${color(`… ${missingSteps.length - preview.length} more missing steps`, ANSI.dim)}`,
+      )
+    }
+
+    return preview
+  }
+
+  const messages = result.features.flatMap((feature) => {
+    const formatScenarios = (scenarios: Array<ScenarioResult>, indent: string): Array<string> =>
+      scenarios.flatMap((scenario) => {
+        const steps = previewSteps(scenario.steps)
+
+        return EffectArray.match(steps, {
+          onEmpty: () => [],
+          onNonEmpty: (steps) => [
+            `${indent}${color("✗", ANSI.red)} ${color(scenario.name, ANSI.bold)}`,
+            ...steps,
+          ],
+        })
+      })
+
+    const scenarios = [
+      ...formatScenarios(feature.scenarios, "  "),
+      ...feature.rules.flatMap((rule) => {
+        const failingScenarios = formatScenarios(rule.scenarios, "    ")
+
+        const background = previewSteps(rule.backgroundSteps ?? []).map((step) => `  ${step}`)
+
+        return EffectArray.match(failingScenarios, {
+          onEmpty: () =>
+            EffectArray.match(background, {
+              onEmpty: () => [],
+              onNonEmpty: (background) => [
+                `  ${color(`Rule: ${rule.name}`, ANSI.cyan, ANSI.bold)}`,
+                `    ${color("Background", ANSI.dim)}`,
+                ...background,
+              ],
+            }),
+          onNonEmpty: (failingScenarios) => [
+            `  ${color(`Rule: ${rule.name}`, ANSI.cyan, ANSI.bold)}`,
+            ...EffectArray.match(background, {
+              onEmpty: () => [],
+              onNonEmpty: (background) => [`    ${color("Background", ANSI.dim)}`, ...background],
+            }),
+            ...failingScenarios,
+          ],
+        })
+      }),
+    ]
+
+    const backgroundSteps = previewSteps(feature.backgroundSteps ?? [])
+
+    return EffectArray.match(scenarios, {
+      onEmpty: () =>
+        EffectArray.match(backgroundSteps, {
+          onEmpty: () => [],
+          onNonEmpty: (backgroundSteps) => [
+            color(`▸ ${feature.file}`, ANSI.bold, ANSI.cyan),
+            color(`  ${feature.name}`, ANSI.dim),
+            `  ${color("Background", ANSI.dim)}`,
+            ...backgroundSteps,
+            "",
+          ],
+        }),
+      onNonEmpty: (scenarios) => [
+        color(`▸ ${feature.file}`, ANSI.bold, ANSI.cyan),
+        color(`  ${feature.name}`, ANSI.dim),
+        ...EffectArray.match(backgroundSteps, {
+          onEmpty: () => [],
+          onNonEmpty: (backgroundSteps) => [
+            `  ${color("Background", ANSI.dim)}`,
+            ...backgroundSteps,
+          ],
+        }),
+        ...scenarios,
+        "",
+      ],
+    })
+  })
+
+  return Effect.forEach(messages, (message) => Console.log(message), {
+    discard: true,
+    concurrency: 1,
+  })
+}
+
 function reportJson(result: CheckResult): Effect.Effect<void> {
   return Console.log(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(result))
 }
@@ -201,11 +303,13 @@ function reportGithubActions(result: CheckResult): Effect.Effect<void> {
   )
 }
 
-export function makeReporter(format: OutputFormat): Layer.Layer<Reporter> {
+export function makeReporter(format: OutputFormat, quiet = false): Layer.Layer<Reporter> {
   return Layer.succeed(
     Reporter,
     Reporter.of({
       report: (result) => {
+        if (quiet) return reportMissingSteps(result)
+
         return Match.value(format).pipe(
           Match.when("json", () => reportJson(result)),
           Match.when("github-actions", () => reportGithubActions(result)),

@@ -30,6 +30,11 @@ const ignoreOption = Flag.String("ignore").pipe(
   Flag.optional,
 )
 
+const quietOption = Flag.Boolean("quiet").pipe(
+  Flag.withDescription("Output only steps without test implementations"),
+  Flag.withDefault(false),
+)
+
 const debounceOption = Flag.Int("debounce").pipe(
   Flag.withAlias("d"),
   Flag.withDescription("Debounce time in milliseconds (watch only)"),
@@ -41,6 +46,7 @@ const checkOptions = {
   testPattern: testPatternOption,
   format: formatOption,
   ignore: ignoreOption,
+  quiet: quietOption,
 }
 
 const watchOptions = {
@@ -56,12 +62,14 @@ function runCheckHandler(config: {
   testPattern: string
   format: OutputFormat
   ignore: Option.Option<string>
+  quiet: boolean
 }) {
   return runCheck({
     format: config.format,
     ignore: config.ignore,
     patterns: config.patterns,
     testPattern: config.testPattern,
+    quiet: config.quiet,
   })
 }
 
@@ -71,6 +79,7 @@ const checkCommand = Command.make("check", checkOptions, (config) =>
     ignore: config.ignore,
     patterns: config.patterns,
     testPattern: config.testPattern,
+    quiet: config.quiet,
   }),
 )
 

@@ -1,12 +1,13 @@
 import {
   AuthContract,
   Schema as AuthSchema,
+  Email,
   Hooks,
   Operations,
   Proofs,
   Sessions,
 } from "@yielded/auth"
-import { Schema, Predicate } from "effect"
+import { Schema } from "effect"
 export const authenticationNamespace = "gororobas/auth"
 export const sessionCookieName = "__Host-gororobas-session"
 export const AuthenticationClaims = Schema.Struct({})
@@ -15,119 +16,80 @@ export const AuthenticationSession = Schema.Struct({
   claims: AuthenticationClaims,
 })
 
-export const MagicLinkIdentity = Schema.Struct({
-  flowId: Operations.RequestBindingFlowId,
-  email: Schema.String.check(Schema.isMaxLength(320)).pipe(Schema.decodeTo(AuthSchema.Email)),
-  name: Schema.Trimmed.check(Schema.isMinLength(1), Schema.isMaxLength(128)),
-})
+/** The only return target: sign-in always lands on the app, which routes to onboarding when needed. */
+export const DEFAULT_AUTHENTICATION_RETURN_TARGET = "/"
 
-export const MagicLinkFailure = Schema.Union([
-  Proofs.ProofError,
-  Operations.RequestBindingInvalid,
-  Operations.RequestBindingUnavailable,
-  Sessions.SessionError,
+/**
+ * Signing in and signing up share one flow: requesting a code for an unknown address
+ * reserves an unclaimed account, which the first successful code redemption claims.
+ */
+export const EmailSignInFailure = Schema.Union([
+  Email.EmailRejected,
+  Email.EmailUnavailable,
+  Email.EmailActionRequired,
+  Email.EmailMethodUnsupported,
   Hooks.HookDenied,
 ])
 
-export const OAuthProvider = Schema.Literals(["apple", "google", "microsoft"])
-export const OAuthBeginPayload = Schema.Struct({
+const EmailSignInFields = {
   flowId: Operations.RequestBindingFlowId,
-  provider: OAuthProvider,
+  email: Schema.String.check(Schema.isMaxLength(320)).pipe(Schema.decodeTo(AuthSchema.Email)),
+  returnTarget: Schema.String.check(Schema.isMaxLength(2048)),
+}
+
+export const EmailCodeRequest = Schema.Struct({
+  ...EmailSignInFields,
+  requestId: Proofs.ProofRequestId,
+  locale: AuthSchema.Locale,
 })
 
-export const OAuthCompletePayload = Schema.Struct({
-  flowId: Operations.RequestBindingFlowId,
-  provider: OAuthProvider,
-  state: Schema.String.check(Schema.isMaxLength(128)),
-  code: Schema.RedactedFromValue(
-    Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4096)),
-  ),
+export const EmailCodeCompletion = Schema.Struct({
+  ...EmailSignInFields,
+  reference: Proofs.ProofReference,
+  secret: Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(4096))),
 })
-
-export class OAuthLoginRejected extends Schema.TaggedError<OAuthLoginRejected>()(
-  "OAuthLoginRejected",
-  {
-    reason: Schema.Literals([
-      "provider-disabled",
-      "invalid-flow",
-      "email-verification-required",
-      "account-conflict",
-    ]),
-  },
-) {}
-
-export const OAuthLoginFailure = Schema.Union([OAuthLoginRejected, MagicLinkFailure])
 
 export const AuthenticationApi = AuthContract.make(authenticationNamespace, {
   claims: AuthenticationClaims,
   basePath: "/api/auth",
   actions: (sessions) => ({
-    beginOAuth: AuthContract.action({
-      strategy: "oauth",
-      payload: OAuthBeginPayload,
-      success: Schema.Struct({
-        authorizationUrl: Schema.String,
-      }),
-      error: OAuthLoginFailure,
-      mode: "mutation",
-      credentials: true,
-    }),
-    completeOAuth: AuthContract.action({
-      strategy: "oauth",
-      payload: OAuthCompletePayload,
-      success: sessions.CompletionResult,
-      error: OAuthLoginFailure,
-      mode: "mutation",
-      credentials: true,
-      replay: "single-use",
-      requestFields: {
-        requestBinding: "request-binding",
-      },
-      subject: {
-        fromSuccess: (value) =>
-          Predicate.isTagged(value, "Authenticated") ? value.session.subjectId : undefined,
-      },
-    }),
-    beginMagicLink: AuthContract.action({
-      payload: Schema.Struct({
-        flowId: Operations.RequestBindingFlowId,
-      }),
+    beginEmailSignIn: AuthContract.action({
+      payload: Schema.Struct({ flowId: Operations.RequestBindingFlowId }),
       success: Operations.RequestBindingPublic,
-      error: MagicLinkFailure,
+      error: EmailSignInFailure,
       mode: "mutation",
       credentials: true,
+      method: "beginSignIn",
+      strategy: "email",
     }),
-    requestMagicLink: AuthContract.action({
-      payload: Schema.Struct({
-        ...MagicLinkIdentity.fields,
-        requestId: Proofs.ProofRequestId,
-        language: AuthSchema.Locale,
-      }),
+    requestEmailCode: AuthContract.action({
+      payload: EmailCodeRequest,
       success: Proofs.ProofRequestReceipt,
-      error: MagicLinkFailure,
+      error: EmailSignInFailure,
       mode: "mutation",
       credentials: true,
-      requestFields: {
-        requestBinding: "request-binding",
-      },
+      method: "signIn",
+      strategy: "email",
+      requestFields: { requestBinding: "request-binding" },
     }),
-    completeMagicLink: AuthContract.action({
-      payload: Schema.Struct({
-        ...MagicLinkIdentity.fields,
-        reference: Proofs.ProofReference,
-        secret: Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(4096))),
+    completeEmailSignIn: AuthContract.action({
+      payload: EmailCodeCompletion,
+      success: Schema.Struct({
+        completion: sessions.CompletionResult,
+        returnTarget: Email.SafeReturnTarget,
       }),
-      success: sessions.CompletionResult,
-      error: MagicLinkFailure,
+      error: EmailSignInFailure,
       mode: "mutation",
       credentials: true,
       replay: "single-use",
-      requestFields: {
-        requestBinding: "request-binding",
-      },
+      method: "completeSignIn",
+      strategy: "email",
+      requestFields: { requestBinding: "request-binding" },
       subject: {
         fromSuccess: (value) =>
-          Predicate.isTagged(value, "Authenticated") ? value.session.subjectId : undefined,
+          value.completion._tag === "Authenticated"
+            ? value.completion.session.subjectId
+            : undefined,
       },
     }),
   }),

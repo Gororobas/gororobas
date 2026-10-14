@@ -4,37 +4,19 @@
 -- ========
 CREATE TABLE auth_subjects (
   id text NOT NULL PRIMARY KEY,
-  name text NOT NULL,
   email text NOT NULL UNIQUE,
   is_email_verified integer NOT NULL,
-  image text,
   active integer NOT NULL DEFAULT 1,
   security_revision text NOT NULL,
+  -- NULL while an email sign-up awaits its first code
+  claimed_at text,
   created_at text NOT NULL,
   updated_at text NOT NULL
 );
 
-CREATE TABLE auth_oauth_flows (
-  state text NOT NULL PRIMARY KEY,
-  flow_id text NOT NULL UNIQUE,
-  provider text NOT NULL,
-  binding_verifier text NOT NULL,
-  nonce text NOT NULL,
-  pkce_verifier text NOT NULL,
-  link_auth_subject_id text REFERENCES auth_subjects (id) ON DELETE CASCADE,
-  expires_at integer NOT NULL
-);
-
-CREATE TABLE auth_oauth_identities (
-  provider text NOT NULL,
-  issuer text NOT NULL,
-  subject text NOT NULL,
-  auth_subject_id text NOT NULL REFERENCES auth_subjects (id) ON DELETE CASCADE,
-  credential_id text NOT NULL UNIQUE,
-  UNIQUE (provider, issuer, subject)
-);
-
-CREATE INDEX auth_oauth_identities_auth_subject_id_idx ON auth_oauth_identities (auth_subject_id);
+CREATE INDEX auth_subjects_unclaimed_idx ON auth_subjects (created_at)
+WHERE
+  claimed_at IS NULL;
 
 CREATE TABLE auth_identifiers (
   namespace text NOT NULL,

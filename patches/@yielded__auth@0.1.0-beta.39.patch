@@ -1,0 +1,17 @@
+diff --git a/dist/http/auth-http.mjs b/dist/http/auth-http.mjs
+index e2baf65610d12d460e530733d0a5fee5bce60854..86c932f78f3aeb5cf924bfe459dfcfa2649a4103 100644
+--- a/dist/http/auth-http.mjs
++++ b/dist/http/auth-http.mjs
+@@ -114,7 +114,11 @@ const make = (auth, options) => {
+ 	}));
+ 	const wrap = (api, config) => Effect.fn("AuthHttp.request")(function* (effect) {
+ 		const incoming = yield* HttpServerRequest.HttpServerRequest;
+-		const request = yield* HttpServerRequest.toWeb(incoming).pipe(Effect.mapError(() => OperationHttpError.make({ reason: "request" })));
++		// Admission only reads the URL, method and headers. A body stream here would drain the
++		// request before the wrapped route reads it, whenever admission awaits (e.g. session checks).
++		const url = HttpServerRequest.toURL(incoming);
++		if (Option.isNone(url)) return yield* OperationHttpError.make({ reason: "request" });
++		const request = new Request(url.value, { method: incoming.method, headers: incoming.headers });
+ 		if (new TextEncoder().encode(request.url).byteLength > config.maximumUrlBytes) return yield* OperationHttpError.make({ reason: "too-large" });
+ 		const security = yield* requestSecurity(request, "request").pipe(Effect.provideService(OperationHttpServerConfig, config));
+ 		const commands = [];

@@ -47,6 +47,7 @@ import { makeAppSql } from "../src/sql.js"
 import {
   authenticationTestOrigin,
   authenticationTestBindingKey,
+  authenticationTestProofKey,
   captureEmailDelivery,
 } from "./authentication-helpers.js"
 import { textToRichTextDocument } from "./feature-test-helpers.js"
@@ -72,10 +73,9 @@ it.live(
     let authentication = Schema.decodeSync(CurrentAuthenticationData)({
       account: {
         id: personId,
-        name: "Reviewer",
         email: "reviewer@example.invalid",
         isEmailVerified: true,
-        image: null,
+        claimedAt: timestamp,
         createdAt: timestamp,
         updatedAt: timestamp,
       },
@@ -141,7 +141,9 @@ it.live(
       Layer.provide(
         authenticationLayer({
           origin: authenticationTestOrigin,
+          environment: "test",
           requestBindingKey: authenticationTestBindingKey,
+          proofKey: authenticationTestProofKey,
         }).pipe(Layer.provide(captureEmailDelivery().layer), Layer.provide(services)),
       ),
     )
@@ -180,7 +182,7 @@ it.live(
 
     yield* SqlClient.SqlClient.use((sql) =>
       Effect.gen(function* () {
-        yield* sql`INSERT INTO auth_subjects (id, name, email, is_email_verified, security_revision, created_at, updated_at) VALUES (${personId}, 'Reviewer', 'reviewer@example.invalid', 1, ${personId}, ${timestamp}, ${timestamp})`
+        yield* sql`INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at) VALUES (${personId}, 'reviewer@example.invalid', 1, ${personId}, ${timestamp}, ${timestamp}, ${timestamp})`
         yield* sql`INSERT INTO profiles (id, type, handle, name, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'reviewer', 'Reviewer', 'PUBLIC', ${timestamp}, ${timestamp})`
         yield* sql`INSERT INTO people (id, access_level) VALUES (${personId}, 'ADMIN')`
       }),

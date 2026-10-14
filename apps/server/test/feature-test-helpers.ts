@@ -1,8 +1,8 @@
 import { ContentLanguage } from "@gororobas/domain"
 import {
+  AuthSecurityRevision,
   Handle,
   IdGen,
-  MagicLinkIdentity,
   PersonId,
   PersonProfileRow,
   ProfileVisibility,
@@ -13,10 +13,11 @@ import {
   type ProfileRowUpdate,
 } from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId } from "@gororobas/server/session-service"
-import { Effect, Layer, Match, Option, Record, Schema } from "effect"
+import { DateTime, Effect, Layer, Match, Option, Record, Schema } from "effect"
+import { SqlClient } from "effect/sql"
 
-import { provisionMagicLinkAccount } from "../src/authentication/auth-subjects.js"
 import { OrganizationsRepository } from "../src/organizations/repository.js"
+import { completeOnboarding } from "../src/people/onboarding.js"
 import { PeopleService } from "../src/people/service.js"
 import { PublicationCommentsRepository } from "../src/publication-comments/repository.js"
 import { PublicationCommentsService } from "../src/publication-comments/service.js"
@@ -74,14 +75,25 @@ export const profileUpdateFromTestDataTable = (table: typeof ProfileTestDataTabl
 export const personNamed = (actors: typeof PeopleBackground.Type.actors, name: string) =>
   Option.getOrThrow(Option.fromNullishOr(actors[name]))
 
+/** A claimed email account that completed onboarding, as after its first sign-in. */
 export const provisionPerson = (name: string) =>
   Effect.gen(function* () {
-    const emailId = yield* IdGen.make(PersonId)
-    const email = yield* Schema.decodeEffect(MagicLinkIdentity.fields.email)(
-      `${emailId}@example.com`,
-    )
-    const subjectId = yield* provisionMagicLinkAccount({ name, email })
-    return yield* Schema.decodeEffect(PersonId)(subjectId)
+    const id = yield* IdGen.make(PersonId)
+    const sql = yield* SqlClient.SqlClient
+    const now = DateTime.formatIso(yield* DateTime.now)
+
+    yield* sql`INSERT INTO auth_subjects ${sql.insert({
+      id,
+      email: `${id}@example.com`,
+      isEmailVerified: 1,
+      securityRevision: yield* IdGen.make(AuthSecurityRevision),
+      claimedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })}`
+
+    yield* completeOnboarding(id, { name })
+    return id
   })
 
 export const provisionCommunityPerson = (administratorId: PersonId, name: string) =>

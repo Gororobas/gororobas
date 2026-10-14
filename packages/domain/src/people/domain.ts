@@ -17,6 +17,13 @@ export const PersonRow = Schema.Struct({
 
 export type PersonRow = typeof PersonRow.Type
 
+/** What a newly signed-in person tells us before they get a profile. */
+export const OnboardingInput = Schema.Struct({
+  // @todo perhaps add location & profile picture to the onboarding input?
+  name: Schema.Trimmed.check(Schema.isMinLength(1), Schema.isMaxLength(128)),
+})
+export type OnboardingInput = typeof OnboardingInput.Type
+
 export const AccountDeletionConfirmation = Schema.Struct({
   shouldDeleteOrgs: Schema.Boolean,
   shouldDeleteContent: Schema.Boolean,

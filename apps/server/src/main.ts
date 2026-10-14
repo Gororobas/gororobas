@@ -7,7 +7,9 @@ import * as Http from "node:http"
 import { ApiLive } from "./api-live.js"
 import { AppRuntimeLive } from "./app-runtime.js"
 import { makeAuthentication } from "./authentication/app-auth.js"
-import { AuthenticationLive, authenticationOrigin } from "./authentication/authentication-live.js"
+import { AuthenticationLive } from "./authentication/authentication-live.js"
+import { authenticationOrigin } from "./authentication/authentication-origin.js"
+import { environmentConfig } from "./environment-config.js"
 import { ProfilesRepository } from "./profiles/repository.js"
 import { runMainWithCustomRuntime } from "./run-main-with-custom-runtime.js"
 import { ServerServicesLive } from "./server-services.js"
@@ -18,9 +20,11 @@ import { WorkflowsLive } from "./workflows-live.js"
 const Services = Layer.mergeAll(WorkflowsLive).pipe(
   Layer.provideMerge(
     Layer.unwrap(
-      Effect.map(authenticationOrigin, (origin) =>
-        ApiLive.pipe(makeAuthentication(origin).http.middleware),
-      ),
+      Effect.gen(function* () {
+        const origin = yield* authenticationOrigin
+        const environment = yield* environmentConfig
+        return ApiLive.pipe(makeAuthentication(origin, environment).http.middleware)
+      }),
     ),
   ),
   Layer.provideMerge(TranslationServiceDeepl),

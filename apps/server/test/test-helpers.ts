@@ -247,8 +247,8 @@ export const insertPersonWithDependencies = ({
     const generatedHandle = Schema.decodeSync(Handle)(`user-${handleIdPart}`)
 
     yield* sql`
-      INSERT INTO auth_subjects (id, name, email, is_email_verified, security_revision, image, created_at, updated_at)
-      VALUES (${person.id}, ${profile.name}, ${`${emailIdPart}@example.com`}, ${1}, ${yield* IdGen.make(AuthSecurityRevision)}, ${null}, ${now}, ${now})
+      INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at)
+      VALUES (${person.id}, ${`${emailIdPart}@example.com`}, ${1}, ${yield* IdGen.make(AuthSecurityRevision)}, ${now}, ${now}, ${now})
       ON CONFLICT (id) DO NOTHING
     `
 

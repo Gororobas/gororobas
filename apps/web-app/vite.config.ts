@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [tailwindcss(), foldkit()],
   server: {
     host: true,
+    port: 4443,
+    strictPort: true,
     proxy: {
       "/api/auth": {
         target: "http://localhost:4000",

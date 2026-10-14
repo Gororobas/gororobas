@@ -1,17 +1,21 @@
-import { ApiAuthentication, SessionContext } from "@gororobas/domain"
-import { AuthenticationHttp } from "@gororobas/domain"
-import { Auth, WebCrypto } from "@yielded/auth"
-import { Option } from "effect"
-import { Config, Effect, Layer, Redacted } from "effect"
+import {
+  ApiAuthentication,
+  SessionContext,
+  DEFAULT_AUTHENTICATION_RETURN_TARGET,
+} from "@gororobas/domain"
+import { Auth, Email, Proofs, WebCrypto } from "@yielded/auth"
+import { Config, Effect, Layer, Option, Redacted } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
+import { environmentConfig, type Environment } from "../environment-config.js"
 import { resolveSession } from "../session-service.js"
 import { AppAuth, makeAuthentication } from "./app-auth.js"
 import { AuthStorageLive } from "./auth-storage.js"
-import { AuthenticationOrigin } from "./magic-link.js"
-import { OAuthProtocol, makeOAuthProtocol, oauthProtocolLayer } from "./oauth-protocol.js"
-import { oauthCallbackRoutes } from "./oauth.js"
+import { AuthenticationEmailsLive } from "./authentication-emails.js"
+import { authenticationOrigin } from "./authentication-origin.js"
+import { EmailSignInTargetsLive, claimEmailAccount } from "./email-sign-in.js"
+import { UnclaimedAccountsCleanupLive } from "./unclaimed-accounts.js"
 
 export const ApiAuthenticationLive = Layer.effect(
   ApiAuthentication,
@@ -39,37 +43,54 @@ export const ApiAuthenticationLive = Layer.effect(
   }),
 )
 
-export const authenticationOrigin = Config.String("AUTH_ORIGIN").pipe(
-  Config.withDefault("https://localhost:5173"),
+const EmailSessionClaimsLive = Layer.effect(
+  AppAuth.strategies.email.SessionClaims,
+  Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient
+
+    return {
+      resolve: ({ subjectId }) =>
+        claimEmailAccount(subjectId).pipe(
+          Effect.provideService(SqlClient.SqlClient, sql),
+          Effect.mapError(() => Email.EmailUnavailable.make({})),
+        ),
+    }
+  }),
 )
+
+const keyring = (id: string, material: Redacted.Redacted<string>) => ({
+  activeKeyId: id,
+  keys: [{ id, material }],
+})
 
 export const authenticationLayer = (options: {
   readonly origin: string
-  readonly oauthProtocol?: Layer.Layer<OAuthProtocol>
+  readonly environment: Environment
   readonly requestBindingKey: Redacted.Redacted<string>
+  readonly proofKey: Redacted.Redacted<string>
 }) => {
-  const { http } = makeAuthentication(options.origin)
+  const { http, securityLayer } = makeAuthentication(options.origin, options.environment)
 
   const dependencies = Layer.mergeAll(
     AuthStorageLive,
-    options.oauthProtocol ?? oauthProtocolLayer(options.origin),
-    Layer.succeed(AuthenticationOrigin, options.origin),
+    EmailSignInTargetsLive,
+    EmailSessionClaimsLive,
+    Email.EmailReturnTargets.exactRoutes([DEFAULT_AUTHENTICATION_RETURN_TARGET]),
+    AuthenticationEmailsLive(options.origin),
+    Proofs.ProofKeys.layer(keyring("proof-v1", options.proofKey)),
     Auth.RequestBindingConfig.layer({
       generation: 1,
       lifetimeMillis: 600_000,
-      keyring: {
-        activeKeyId: "binding-v1",
-        keys: [{ id: "binding-v1", material: options.requestBindingKey }],
-      },
+      keyring: keyring("binding-v1", options.requestBindingKey),
     }),
   )
 
   // Auth routes admit requests themselves; extra middleware consumes native POST streams twice.
   return Layer.mergeAll(
     http.routes(),
-    oauthCallbackRoutes,
-    http.securityLayer(AuthenticationHttp),
+    securityLayer,
     ApiAuthenticationLive,
+    UnclaimedAccountsCleanupLive,
   ).pipe(
     Layer.provideMerge(http.layer),
     Layer.provide(dependencies),
@@ -79,14 +100,11 @@ export const authenticationLayer = (options: {
 
 export const AuthenticationLive = Layer.unwrap(
   Effect.gen(function* () {
-    const origin = yield* authenticationOrigin
-
-    const requestBindingKey = yield* Config.Redacted("AUTH_BINDING_KEY")
-
     return authenticationLayer({
-      origin,
-      requestBindingKey,
-      oauthProtocol: Layer.succeed(OAuthProtocol, makeOAuthProtocol(origin, {})),
+      origin: yield* authenticationOrigin,
+      environment: yield* environmentConfig,
+      requestBindingKey: yield* Config.Redacted("AUTH_BINDING_KEY"),
+      proofKey: yield* Config.Redacted("AUTH_PROOF_KEY"),
     })
   }),
 )

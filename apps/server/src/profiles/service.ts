@@ -31,13 +31,6 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
 
     const updateProfile = (profileId: ProfileId, data: ProfileRowUpdate) =>
       Effect.gen(function* () {
-        if (data.handle !== undefined) {
-          const inUse = yield* repo.isHandleInUse(data.handle)
-          if (inUse) {
-            return yield* new HandleTakenError({ handle: data.handle, entity: "profile" })
-          }
-        }
-
         const profile = yield* repo.findById(profileId).pipe(
           Effect.flatMap(
             Option.match({
@@ -48,6 +41,14 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
         )
 
         yield* Policies.profiles.canEdit(profile)
+
+        // Keeping one's current handle isn't a conflict.
+        if (data.handle !== undefined && data.handle !== profile.handle) {
+          const inUse = yield* repo.isHandleInUse(data.handle)
+          if (inUse) {
+            return yield* new HandleTakenError({ handle: data.handle, entity: "profile" })
+          }
+        }
 
         return yield* repo.updateProfileRow({
           id: profileId,

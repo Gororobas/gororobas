@@ -19,8 +19,7 @@
     "type-check:watch": "tsc --noEmit -p tsconfig.json -w",
     "test": "vitest",
     "coverage": "vitest --coverage",
-    "migrate": "npx tsx scripts/migrate.ts",
-    "dev:auth-experiments": "npx tsx --env-file=.env.auth-dev-experiments ./src/auth-dev-experiments-server.ts"
+    "migrate": "npx tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@durable-streams/server": "^0.3.9",
@@ -46,7 +45,6 @@
     "loro-crdt": "catalog:",
     "mediabunny": "^1.61.3",
     "ollama": "^0.6.4",
-    "openid-client": "^6.8.8",
     "sharp": "^0.35.5",
     "uuid": "catalog:"
   },

@@ -8,6 +8,7 @@ import { WorkflowEngine } from "effect/workflow"
 import {
   authenticationTestOrigin,
   authenticationTestBindingKey,
+  authenticationTestProofKey,
   captureEmailDelivery,
 } from "../test/authentication-helpers.js"
 import { ApiLive } from "./api-live.js"
@@ -41,11 +42,13 @@ it.live(
       Effect.sync(() =>
         HttpRouter.toWebHandler(
           ApiLive.pipe(
-            makeAuthentication(authenticationTestOrigin).http.middleware,
+            makeAuthentication(authenticationTestOrigin, "test").http.middleware,
             Layer.provide(
               authenticationLayer({
                 origin: authenticationTestOrigin,
+                environment: "test",
                 requestBindingKey: authenticationTestBindingKey,
+                proofKey: authenticationTestProofKey,
               }).pipe(Layer.provide(captureEmailDelivery().layer)),
             ),
             HttpRouter.provideRequest(dependencies),

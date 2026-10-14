@@ -1,6 +1,6 @@
 # Gororobas server
 
-The normal application server runs all implemented API groups, email magic-link authentication, and durable workflow registrations. OAuth is disabled in normal startup, regardless of provider environment variables. The older OAuth protocol and tests remain available for authentication experiments.
+The normal application server runs all implemented API groups, email authentication, and durable workflow registrations. Email is the only sign-in method.
 
 ## Run the application
 
@@ -11,13 +11,13 @@ cp apps/server/.env.example apps/server/.env
 node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64url"))'
 ```
 
-Set the generated value as `AUTH_BINDING_KEY`, and supply `DEEPL_API_KEY` for translation workflows. Start Mailpit and the HTTPS proxy with `docker compose -f apps/server/compose.auth.yaml up -d`, then run:
+Set generated values as `AUTH_BINDING_KEY` and `AUTH_PROOF_KEY` (distinct), and supply `DEEPL_API_KEY` for translation workflows. Start Mailpit with `docker compose -f apps/server/compose.auth.yaml up -d mailpit`, then run:
 
 ```sh
 pnpm --filter @gororobas/server start
 ```
 
-The HTTP listener binds port 4000; use the HTTPS origin for browser authentication. `APP_DB_FILENAME` selects the application database (default `gororobas.db`), `WORKFLOWS_DB_FILENAME` selects workflow storage, and `MEDIA_ASSETS_DIRECTORY` selects the media filesystem root. Relative paths resolve from `apps/server` when using the package command. Shutdown disposes shared SQL/cluster services before exit.
+The HTTP listener binds port 4000; open `http://localhost:4443/login` through the web app for development authentication. `APP_DB_FILENAME` selects the application database (default `gororobas.db`), `WORKFLOWS_DB_FILENAME` selects workflow storage, and `MEDIA_ASSETS_DIRECTORY` selects the media filesystem root. Relative paths resolve from `apps/server` when using the package command. Shutdown disposes shared SQL/cluster services before exit.
 
 The Gel migration writes to `apps/server/gororobas.db` by default. See the [ingestion instructions](../../packages/migration/README.md) for migration, caching, archives, and HTTP verification. Stop the server before replacing its database. Migration skips workflow submissions; subsequent application activity uses the registered workflows.
 
@@ -26,79 +26,63 @@ The Gel migration writes to `apps/server/gororobas.db` by default. See the [inge
 From `apps/server`:
 
 ```sh
-cp .env.auth-dev-experiments.example .env.auth-dev-experiments
+cp .env.example .env
 node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64url"))'
 ```
 
-Set the generated value as `AUTH_BINDING_KEY` in `.env.auth-dev-experiments`, then start Mailpit and the HTTPS proxy:
+Set distinct generated values as `AUTH_BINDING_KEY` and `AUTH_PROOF_KEY` in `.env`, with `AUTH_ORIGIN=http://localhost:4443`, then start Mailpit and the server:
 
 ```sh
-docker compose -f compose.auth.yaml up -d
-pnpm dev:auth-experiments
+docker compose -f compose.auth.yaml up -d mailpit
+pnpm dev
 ```
 
-Open [the login page](https://localhost:4443/api/auth/login) and [Mailpit](http://localhost:8025). Request a link, open the captured email in the same browser, and confirm sign-in. New tabs work; a different browser/device needs a new request. Beginning another flow replaces the current browser's pending flow.
+Start the web app with `pnpm --filter @gororobas/web-app dev` from the workspace root and open [the login page](http://localhost:4443/login). Vite proxies authentication and application API requests to port 4000 while preserving the browser's Origin header. `AUTH_ORIGIN` must match the web app's origin exactly.
 
-Caddy uses a local certificate authority. Export its public root certificate and trust it in your browser/OS before opening the login page:
+Open [Mailpit](http://localhost:8025) to read the captured email. Open the sign-in link in the same browser that requested it, or enter the code. New tabs work; a different browser/device needs a new request. Beginning another flow replaces the current browser's pending flow.
 
-```sh
-docker compose -f compose.auth.yaml cp auth-proxy:/data/caddy/pki/authorities/local/root.crt /tmp/gororobas-auth-root.crt
-```
-
-On macOS, import that certificate into Keychain Access and explicitly trust it for local development. The private CA key stays in the Docker volume. Both published ports bind only to the loopback interface. The app listener is HTTP on port 4000; browsers should use the HTTPS proxy origin. Mailpit supports [sending messages through its HTTP API](https://mailpit.axllent.org/docs/usage/sending-messages/), so no SMTP library is required.
-
-The standalone auth entry point uses the application database and its initial migration. An old local `gororobas.db` created before this schema reset is incompatible: archive it and start with a fresh file. No existing database files are deleted by this change.
+HTTP authentication is supported on loopback origins only in development, using cookies without `Secure` or the `__Host-` prefix. Tests and production require an explicit HTTPS `AUTH_ORIGIN` and retains secure `__Host-` cookies. If the optional Caddy HTTPS proxy is running, stop it with `docker compose -f compose.auth.yaml stop auth-proxy` so Vite can use port 4443.
 
 ## Configuration
 
 | Variable | Purpose |
 | --- | --- |
 | `AUTH_BINDING_KEY` | Required 32 random bytes, encoded as base64url; keep stable across restarts/instances. |
-| `AUTH_ORIGIN` | Trusted HTTPS origin, default `https://localhost:4443`; also used for the landing URL and main API CORS. |
+| `AUTH_ORIGIN` | Trusted origin, default `http://localhost:4443` in development; required HTTPS origin in tests and production. Also used for emailed links and main API CORS. |
 | `NODE_ENV` | `production` selects Resend; `development` (default) and `test` select Mailpit. |
 | `RESEND_API_KEY` | Required non-empty API key in production. |
 | `MAILPIT_URL` | Local delivery endpoint, default `http://localhost:8025`. |
 | `AUTH_EMAIL_FROM` | Required non-empty sender address in production; defaults to `auth@gororobas.local` for Mailpit. |
 
-Production uses [Resend’s email API](https://resend.com/docs/api-reference/emails/send-email) and fails startup if `RESEND_API_KEY` or `AUTH_EMAIL_FROM` is missing or empty. Use a verified sender domain, disable link tracking/rewriting in Resend, and set the actual HTTPS `AUTH_ORIGIN`. The normal application entry point includes its API and workflow layers; `dev:auth-experiments` runs the authentication experiments independently.
+Production uses [Resend’s email API](https://resend.com/docs/api-reference/emails/send-email) and fails startup if `RESEND_API_KEY` or `AUTH_EMAIL_FROM` is missing or empty. Use a verified sender domain, disable link tracking/rewriting in Resend, and set the actual HTTPS `AUTH_ORIGIN`. The normal application entry point includes its API and workflow layers.
 
-## OAuth providers in authentication experiments
+## How sign-in works
 
-Set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, `APPLE_CLIENT_ID` / `APPLE_CLIENT_SECRET`, and/or `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`. An omitted pair disables its provider; an incomplete pair fails startup. Enabled providers run OIDC discovery at startup. `MICROSOFT_TENANT` defaults to `common`; it can select a particular Entra tenant or `consumers`.
+Signing in and signing up are one flow, built on `@yielded/auth`'s `Email.makeCode`. The person enters their email; the email carries a 6-digit code and a `/login#code=…` link with the same code, so they can either paste the code or click the link (in the same browser, which holds the request-binding cookie).
 
-Register these exact redirect URLs using your HTTPS `AUTH_ORIGIN`:
+Yielded never emails addresses without an account, so requesting a code for an unknown address reserves an _unclaimed_ account (`auth_subjects.claimed_at` is NULL), and its email uses welcome wording. Redeeming the code claims the account and verifies its email. Unclaimed accounts are deleted after a day (`unclaimed-accounts.ts`). Accounts created elsewhere, such as migrated ones, get their email credential on first sign-in.
 
-- `/api/auth/google/callback` (GET)
-- `/api/auth/apple/callback` (POST with `response_mode=form_post`)
-- `/api/auth/microsoft/callback` (GET)
+A signed-in account without a profile is a visitor until onboarding: `POST /people/me/profile` with `{ name }` creates its profile and NEWCOMER person. `GET /people/me/profile` returns `null` until then.
 
-Apple requires a Services ID and an ES256 client-secret JWT created with your Apple developer signing key. Set that JWT as `APPLE_CLIENT_SECRET` and rotate it before expiry. Apple's web redirect must use a registered public HTTPS domain; the localhost setup cannot complete a real Apple login. Register outbound email sources for Apple's private email relay if users will receive magic links at relay addresses.
-
-Google and Apple can create accounts from explicitly verified email claims. Microsoft does not supply that assurance consistently: first sign in through a magic link, then use its provider button to connect the identity within five minutes. Existing email addresses are never automatically linked. An authenticated user can connect any of the providers; that external identity can subsequently sign in without mailbox verification. Revoked credentials and inactive accounts cannot sign in or be silently reactivated.
-
-The provider library validates signed ID tokens, issuer, audience, expiration and nonce. Google and Microsoft additionally use S256 PKCE. One-use SQL flows bind state/provider/flow to the originating browser, expire after at most ten minutes, and are consumed before code exchange. Failed exchange or completion needs a fresh flow. Callback routes only relay to a first-party confirmation page; the page completes through CSRF-protected Yielded operations, keeping Apple's cross-site POST compatible with SameSite=Lax cookies.
-
-Provider configuration and consent screens require credentials from your own provider applications. Automated tests use generated signed ID tokens and a fake upstream transport, plus real Yielded HTTP/session/database integration; they do not call live providers.
+`patches/@yielded__auth@0.1.0-beta.39.patch` keeps Yielded's HTTP middleware from draining request bodies of signed-in API mutations. Drop it once the upstream fix ships.
 
 ## Auth HTTP API
 
 The shared `AuthenticationApi` in the domain package drives the routes and Yielded client. Auth POSTs carry `{ "payload": ... }` and require `Origin: <AUTH_ORIGIN>` plus `x-effect-auth-csrf: 1`; browser cookies carry private credentials automatically. Auth responses use Yielded's `Success`/`Failure` envelopes.
 
-1. `POST /api/auth/beginMagicLink`: `{ flowId }`.
-2. `POST /api/auth/requestMagicLink`: `{ flowId, email, name, requestId, language }`.
-3. `POST /api/auth/verifyMagicLink`: `{ flowId, email, name, reference, secret }`, after explicit confirmation of the email link. The originating request-binding cookie is required.
-4. `POST /api/auth/completeMagicLink`: `{ flowId, email, name, continuationId }`. The continuation and request-binding credentials remain in HttpOnly cookies.
-5. `POST /api/auth/beginOAuth`: `{ provider, flowId }`; returns an authorization URL. `POST /api/auth/completeOAuth`: `{ provider, flowId, state, code }`; the request-binding cookie is required.
-6. `GET /api/auth/getSession`, `POST /api/auth/signOut`, and `POST /api/auth/renewSession` use the session cookie.
+1. `POST /api/auth/beginEmailSignIn`: `{ flowId }`; sets the request-binding cookie.
+2. `POST /api/auth/requestEmailCode`: `{ flowId, email, returnTarget: "/", requestId, locale }`; returns the proof `reference`. Resend within the same flow after the 30-second cooldown.
+3. `POST /api/auth/completeEmailSignIn`: `{ flowId, email, returnTarget, reference, secret }`, where `secret` is the code. The request-binding cookie is required.
+4. `POST /api/auth/getSession`, `POST /api/auth/signOut`, and `POST /api/auth/renewSession` use the session cookie.
 
-Email links contain their secret only in the fragment. A landing GET does not authenticate. Yielded's `EmailDelivery.parseLinkFragment` is available to typed browser clients; the supplied small page decodes the same fragment format without a browser bundle. Failed completion burns the continuation; request a fresh link. Session results contain metadata and claims, never session credentials.
+The Foldkit app serves sign-in and onboarding at `/login`, keeping the pending flow (`flowId`, `email`, `reference`) in `localStorage` so a link opened in a new tab can finish it. The link's code lives only in the URL fragment, which never reaches a server; the app strips it immediately and completes sign-in without a confirmation step, since completion requires the originating browser's request-binding cookie. A wrong code can be retried up to Yielded's attempt limit. Session results contain metadata and claims, never session credentials.
 
 ## Verification
 
 From the workspace root:
 
 ```sh
-pnpm exec vitest run apps/server/src/authentication/authentication.test.ts
+pnpm --filter @gororobas/server exec vitest run src/authentication/authentication.test.ts
 pnpm run quality-gates
 ```
 
