@@ -41,7 +41,7 @@ export const SessionsLive = Layer.effectContext(
               )
                 return yield* Sessions.StaleAuthentication.make({});
 
-              return revision(state, account, ids);
+              return { revision: revision(state, account), requirement };
             }),
           )
           .pipe(Effect.catchTag("StoreUnavailable", () => Sessions.SessionUnavailable.make({}))),
@@ -112,18 +112,12 @@ export const SessionsLive = Layer.effectContext(
                   )
               )
                 return yield* Sessions.StaleAuthentication.make({});
-              if (
-                state.flows.some(
-                  (row) => row.id === input.evidence.flowId && row.expiresAt > now,
-                ) ||
-                state.sessions.some((row) => row.digest === input.session.digest)
-              )
+              if (state.sessions.some((row) => row.digest === input.session.digest))
                 return yield* Sessions.SessionConflict.make({});
 
               const row: Session = {
                 ...input.session,
                 sessionId: Sessions.SessionId.make(nextId(state, "session")),
-                version: Sessions.SecurityRevision.make(nextId(state, "session-version")),
               };
 
               if (row.sessionId === input.handoffSourceSessionId)
@@ -142,13 +136,6 @@ export const SessionsLive = Layer.effectContext(
                     ),
               );
               state.sessions = [...state.sessions, row];
-              state.flows = [
-                ...state.flows.filter((flow) => flow.expiresAt > now),
-                {
-                  id: input.evidence.flowId,
-                  expiresAt: DateTime.toEpochMillis(row.absoluteExpiresAt),
-                },
-              ];
 
               return receipt;
             }),
@@ -176,14 +163,17 @@ export const SessionsLive = Layer.effectContext(
         store
           .transaction((state, journal, now) =>
             Effect.gen(function* () {
-              const row = state.sessions.find((row) => row.sessionId === input.sessionId);
+              const row = state.sessions.find((row) => row.sessionId === input.record.sessionId);
 
               if (
                 row === undefined ||
-                !validSession(state, row, now) ||
-                row.digest !== input.expectedDigest ||
-                row.version !== input.expectedVersion ||
-                row.securityRevision !== input.expectedSecurityRevision ||
+                now >=
+                  Math.min(
+                    DateTime.toEpochMillis(row.expiresAt),
+                    DateTime.toEpochMillis(row.absoluteExpiresAt),
+                  ) ||
+                row.subjectId !== input.record.subjectId ||
+                row.digest !== input.record.digest ||
                 DateTime.toEpochMillis(input.nextExpiresAt) <= now ||
                 DateTime.toEpochMillis(input.nextExpiresAt) >
                   DateTime.toEpochMillis(row.absoluteExpiresAt) ||
@@ -197,7 +187,6 @@ export const SessionsLive = Layer.effectContext(
                 credentialVersion: input.nextCredentialVersion,
                 issuedAt: DateTime.makeUnsafe(now),
                 expiresAt: input.nextExpiresAt,
-                version: Sessions.SecurityRevision.make(nextId(state, "session-version")),
               };
 
               const receipt = prepare(next, journal);
@@ -205,8 +194,11 @@ export const SessionsLive = Layer.effectContext(
               journal.beforeCommit(
                 (fresh) =>
                   fresh >= now &&
-                  validSession(state, row, fresh) &&
-                  fresh < DateTime.toEpochMillis(next.expiresAt),
+                  fresh <
+                    Math.min(
+                      DateTime.toEpochMillis(next.expiresAt),
+                      DateTime.toEpochMillis(next.absoluteExpiresAt),
+                    ),
               );
               state.sessions = state.sessions.map((item) =>
                 item.sessionId === row.sessionId ? next : item,
@@ -232,12 +224,7 @@ export const SessionsLive = Layer.effectContext(
       revoke: (input, prepare) =>
         store
           .transaction((state, journal) =>
-            Effect.gen(function* () {
-              if (
-                customer(state, input.subjectId)?.securityRevision !==
-                input.expectedSecurityRevision
-              )
-                return yield* Sessions.StaleAuthentication.make({});
+            Effect.sync(() => {
               const receipt = prepare(undefined, journal);
 
               state.sessions = state.sessions.filter(

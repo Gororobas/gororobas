@@ -1,4 +1,4 @@
-import { Passkey, Password, Schema as AuthSchema, Sessions, WebCrypto } from "@yielded/auth";
+import { Passkey, Password, Schema as AuthSchema, Sessions } from "@yielded/auth";
 import { layer as layerSimpleWebAuthnPasskeyProtocol } from "@yielded/auth-simplewebauthn/Server";
 import { Crypto, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -6,6 +6,7 @@ import { SqlClient } from "effect/sql";
 import { AppAuth, sessionConfiguration } from "../../shared/account/auth";
 import { Claims, minimumPasswordLength } from "../../shared/account/contract";
 import { HashingLive } from "../../shared/account/hashing";
+import { CryptoLive } from "../../shared/crypto";
 import { MigrationsLive } from "./migrations";
 import { ActionPoliciesLive } from "./policy";
 import { Persistence, storage } from "./schema";
@@ -25,20 +26,20 @@ const ProvisioningLive = Layer.effect(
     return {
       password: Effect.fn("Customers.create")(
         function* ({ registration }) {
-          const id = yield* crypto.randomUUIDv4;
-          const revision = yield* crypto.randomUUIDv4;
+          const id = yield* crypto.randomUUIDv4();
+          const revision = yield* crypto.randomUUIDv4();
 
           // The same SqlClient joins AuthPersistence's registration transaction.
           yield* sql`insert into customers (customer_key, enabled, auth_revision, display_name)
             values (${id}, ${active}, ${revision}, ${registration.displayName})`;
 
-          return yield* Schema.decodeUnknownEffect(AuthSchema.SubjectId)(id);
+          return yield* Schema.decodeEffect(AuthSchema.SubjectId)(id);
         },
         Effect.mapError(() => Password.PasswordUnavailable.make({})),
       ),
     };
   }),
-).pipe(Layer.provide(WebCrypto.layerWebCrypto));
+);
 
 const ClaimsLive = Layer.effect(
   AppAuth.strategies.password.SessionClaims,
@@ -102,8 +103,8 @@ const SessionClaimsLive = Layer.effect(
   AppAuth.sessions.StatefulSessionPersistence,
   Effect.gen(function* () {
     const sessions = yield* AppAuth.sessions.StatefulSessionPersistence;
-    const passwords = yield* Password.PasswordPersistence;
-    const claims = yield* AppAuth.strategies.password.SessionClaims;
+    const sql = yield* SqlClient.SqlClient;
+    const active = sql.onDialectOrElse({ pg: () => true, orElse: () => 1 });
 
     return {
       ...sessions,
@@ -111,23 +112,25 @@ const SessionClaimsLive = Layer.effect(
         function* (input) {
           const session = yield* sessions.verify(input);
 
-          const current = yield* passwords.readForSubject({
-            moduleId: AppAuth.strategies.password.persistence.moduleId,
-            subjectId: session.subjectId,
-          });
+          // Claims need the current account and identifier in one snapshot.
+          const rows = yield* sql`select c.display_name as "displayName", i.c_value as email,
+              i.c_verified_at as "verifiedAt"
+            from customers c
+            join app_identifiers i on i.c_subject_id = c.customer_key and i.c_active = ${active}
+            join app_passwords p on p.c_subject_id = c.customer_key
+              and p.c_module_id = ${AppAuth.strategies.password.persistence.moduleId}
+            where c.customer_key = ${session.subjectId} and c.enabled = ${active}
+              and c.auth_revision = ${session.securityRevision}
+            limit 1`;
 
-          if (
-            Option.isNone(current) ||
-            current.value.revision.subjectId !== session.subjectId ||
-            current.value.revision.securityRevision !== session.securityRevision
-          )
-            return yield* Sessions.SessionInvalid.make({});
+          if (rows.length !== 1) return yield* Sessions.SessionInvalid.make({});
 
           return {
             ...session,
-            claims: yield* claims.resolve({
-              subjectId: current.value.revision.subjectId,
-              credential: current.value,
+            claims: yield* Schema.decodeUnknownEffect(Claims)({
+              displayName: rows[0].displayName,
+              email: rows[0].email,
+              emailVerified: rows[0].verifiedAt !== null,
             }),
           };
         },
@@ -137,10 +140,7 @@ const SessionClaimsLive = Layer.effect(
       ),
     };
   }),
-).pipe(
-  Layer.provide(ClaimsLive),
-  Layer.provideMerge(Persistence.layer.pipe(Layer.provide(ProvisioningLive))),
-);
+).pipe(Layer.provideMerge(Persistence.layer.pipe(Layer.provide(ProvisioningLive))));
 
 const ServicesLive = Layer.mergeAll(ClaimsLive, PasskeyClaimsLive, ActionPoliciesLive).pipe(
   Layer.provideMerge(SessionClaimsLive),
@@ -148,7 +148,11 @@ const ServicesLive = Layer.mergeAll(ClaimsLive, PasskeyClaimsLive, ActionPolicie
 
 export const NativeSessionLive = AppAuth.sessions
   .layer(sessionConfiguration.policy(AppAuth.sessions.moduleId))
-  .pipe(Layer.provideMerge(ServicesLive), Layer.provideMerge(DatabaseReady));
+  .pipe(
+    Layer.provideMerge(ServicesLive),
+    Layer.provideMerge(DatabaseReady),
+    Layer.provide(CryptoLive),
+  );
 
 // The host supplies SQL, delivery, proof keys, and compromised-password screening.
 export const AuthLive = AppAuth.layer.pipe(
@@ -162,4 +166,5 @@ export const AuthLive = AppAuth.layer.pipe(
   Layer.provide(ServicesLive),
   Layer.provideMerge(DatabaseReady),
   Layer.provideMerge(HashingLive),
+  Layer.provide(CryptoLive),
 );

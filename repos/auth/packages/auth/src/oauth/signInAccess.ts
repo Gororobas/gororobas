@@ -2,12 +2,12 @@ import { Crypto, DateTime, Effect } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { SecurityRevision } from "../sessions/models";
+import { OAuthAccountRevision } from "./accountsModels";
 import {
   connectedGrantResponse,
   connectedRead,
   connectedSame,
   validateConnectedPolicy,
-  wipeConnectedMaterial,
 } from "./connectedAccess";
 import {
   OAuthConnectedConfiguration,
@@ -15,26 +15,24 @@ import {
   OAuthConnectedProfile,
   OAuthConnectedSettlementDecision,
   OAuthConnectedStoredGrant,
-  OAuthConnectedRevocationContext,
-  OAuthConnectedRevocationJob,
+  OAuthConnectedTarget,
   OAuthConnectedTokenContext,
   OAuthGrantId,
 } from "./connectedModels";
+import { wipeConnectedMaterial } from "./grantTokens";
 import { OAuthConnectedPersistence } from "./OAuthConnectedPersistence";
 import { OAuthConnectedProtocol } from "./OAuthConnectedProtocol";
 import { OAuthConnectedTokenProtector } from "./OAuthConnectedTokenProtector";
-import { OAuthSignInAccessClaim, OAuthSignInAccessInspection } from "./signInAccessModels";
 import { OAuthConfigurationError, OAuthRejected, OAuthUnavailable } from "./signInErrors";
 import {
   OAuthCallbackId,
-  OAuthClaimId,
-  type OAuthClaim,
+  type OAuthSignInFlow,
   type OAuthCredentialSnapshot,
   OAuthProtocolConfiguration,
   type OAuthSignInPolicy,
   OAuthVerifiedExternalIdentity,
 } from "./signInModels";
-import { snapshotOAuth, snapshotOAuthSync } from "./signInSnapshot";
+import { makeOAuthSnapshot } from "./signInSnapshot";
 
 /** The ordinary sign-in workflow owns the callback and session. This capability
  * adds the single connected exchange and confirmed grant retention to that flow. */
@@ -43,16 +41,15 @@ const make = Effect.fnUntraced(function* (
   policy: OAuthSignInPolicy,
   raw: OAuthConnectedProfile,
 ) {
-  const profile = yield* snapshotOAuth(OAuthConnectedProfile, raw).pipe(
-    Effect.mapError(() => OAuthConfigurationError.make({ reason: "policy" })),
-  );
+  const profile = yield* snapshotOAuthConnectedProfile
+    .effect(raw)
+    .pipe(Effect.mapError(() => OAuthConfigurationError.make({ reason: "policy" })));
 
   yield* validateConnectedPolicy(moduleId, {
     ...policy,
     profiles: [profile],
     maximumEvidenceAgeMillis: 300_000,
-    refreshClaimLifetimeMillis: policy.claimLifetimeMillis,
-    useAdmissionLifetimeMillis: 5_000,
+    refreshClaimLifetimeMillis: policy.exchangeTimeoutMillis,
   });
   const protocol = yield* OAuthConnectedProtocol;
   const persistence = yield* OAuthConnectedPersistence;
@@ -80,6 +77,8 @@ const make = Effect.fnUntraced(function* (
           profile,
           callbackId: input.callbackId ?? OAuthCallbackId.make(input.provider),
           flowId: input.flowId,
+          ...(input.prompt === undefined ? {} : { prompt: input.prompt }),
+          ...(input.loginHint === undefined ? {} : { loginHint: input.loginHint }),
         })
         .pipe(
           Effect.mapError((error) =>
@@ -93,44 +92,32 @@ const make = Effect.fnUntraced(function* (
       return prepared;
     });
 
-  const claim = Effect.fn("OAuth.access.claim")(function* (claim: OAuthClaim) {
+  const configurationFor = Effect.fn("OAuth.access.configuration")(function* (
+    flow: OAuthSignInFlow,
+  ) {
     if (
-      claim.flow.context.access === undefined ||
-      !connectedSame(OAuthConnectedProfile, claim.flow.context.access, profile)
+      flow.context.access === undefined ||
+      !connectedSame(OAuthConnectedProfile, flow.context.access, profile)
     )
       return yield* OAuthRejected.make({});
 
-    const configuration = yield* snapshotOAuth(OAuthConnectedConfiguration, {
-      ...snapshotOAuthSync(OAuthProtocolConfiguration, claim.flow.context),
-      profile: claim.flow.context.access,
+    return yield* snapshotOAuthConnectedConfiguration.effect({
+      ...(yield* snapshotOAuthProtocolConfiguration.effect(flow.context)),
+      profile: flow.context.access,
     });
-
-    const reservation = yield* persistence
-      .claimSignIn({ claim, configuration }, (value, journal) =>
-        journal.prepare(snapshotOAuthSync(OAuthSignInAccessClaim, value)),
-      )
-      .pipe(Effect.flatMap(connectedRead));
-
-    if (
-      !connectedSame(OAuthConnectedConfiguration, reservation.configuration, configuration) ||
-      !connectedSame(OAuthSignInAccessClaim.fields.claim, reservation.claim, claim)
-    )
-      return yield* OAuthUnavailable.make({});
-
-    return reservation;
   });
 
   const exchange = Effect.fn("OAuth.access.exchange")(function* (
-    reservation: OAuthSignInAccessClaim,
+    flow: OAuthSignInFlow,
     input: Omit<Parameters<typeof protocol.exchangeGrant>[0], "configuration">,
   ) {
     const grant = yield* protocol
-      .exchangeGrant({ ...input, configuration: reservation.configuration })
-      .pipe(Effect.flatMap((value) => snapshotOAuth(OAuthConnectedGrantResponse, value)));
+      .exchangeGrant({ ...input, configuration: yield* configurationFor(flow) })
+      .pipe(Effect.flatMap((value) => snapshotOAuthConnectedGrantResponse.effect(value)));
 
     const continuation = grant.material.continuation;
 
-    const identity = yield* snapshotOAuth(OAuthVerifiedExternalIdentity, {
+    const identity = yield* snapshotOAuthVerifiedExternalIdentity.effect({
       identity: grant.identity,
       ...(grant.profile === undefined ? {} : { profile: grant.profile }),
       ...(continuation._tag === "Oidc" && continuation.authTime !== undefined
@@ -141,90 +128,72 @@ const make = Effect.fnUntraced(function* (
     return { identity, grant };
   });
 
-  const abandon = (
-    reservation: OAuthSignInAccessClaim,
-    outcome: "Cancelled" | "Rejected" | "Unissued" | "Ambiguous",
-  ) =>
-    persistence
-      .settleSignIn({ reservation, outcome: { _tag: outcome } }, (value, journal) =>
-        journal.prepare(snapshotOAuthSync(OAuthConnectedSettlementDecision, value)),
-      )
-      .pipe(Effect.flatMap(connectedRead), Effect.asVoid);
-
   const retain = Effect.fn("OAuth.access.retain")(function* (
-    reservation: OAuthSignInAccessClaim,
+    flow: OAuthSignInFlow,
     credential: OAuthCredentialSnapshot,
     grant: OAuthConnectedGrantResponse,
     startedAtMillis: number,
   ) {
-    const inspected = yield* persistence
-      .inspectSignIn({
-        reservation,
-        credential,
-        grantId: OAuthGrantId.make(yield* random),
-      })
-      .pipe(Effect.flatMap((value) => snapshotOAuth(OAuthSignInAccessInspection, value)));
+    const configuration = yield* configurationFor(flow);
 
-    if (inspected._tag === "Rejected") return yield* OAuthRejected.make({});
+    const found = yield* persistence.read({
+      moduleId: flow.context.moduleId,
+      subjectId: credential.revision.subjectId,
+      selector: { _tag: "Identity", profileKey: profile.key, identity: credential.identity },
+    });
 
-    const projected = yield* connectedGrantResponse(
-      reservation.configuration,
-      grant,
-      startedAtMillis,
-    );
+    if (
+      found === undefined ||
+      !connectedSame(OAuthAccountRevision, found.revision, credential.revision)
+    )
+      return yield* OAuthRejected.make({});
+
+    const previous =
+      found.grant === undefined
+        ? undefined
+        : yield* snapshotOAuthConnectedTarget.effect(found.grant.context);
+
+    if (
+      previous !== undefined &&
+      (previous.identity.provider !== credential.identity.provider ||
+        previous.identity.issuer !== credential.identity.issuer ||
+        previous.identity.subject !== credential.identity.subject ||
+        previous.configuration.profile.key !== profile.key)
+    )
+      return yield* OAuthUnavailable.make({});
+
+    const projected = yield* connectedGrantResponse(configuration, grant, startedAtMillis);
 
     return yield* Effect.gen(function* () {
       const version = SecurityRevision.make(yield* random);
 
-      const context = yield* snapshotOAuth(OAuthConnectedTokenContext, {
+      const context = yield* snapshotOAuthConnectedTokenContext.effect({
         namespace: "effect-auth/oauth-connected-token-context/v1",
-        moduleId: reservation.claim.flow.context.moduleId,
+        moduleId: flow.context.moduleId,
         subjectId: credential.revision.subjectId,
         identity: projected.identity,
-        configuration: reservation.configuration,
-        grantId: inspected.grantId,
+        configuration: configuration,
+        grantId: previous?.grantId ?? OAuthGrantId.make(yield* random),
         grantVersion: version,
-        exchangeOrder: reservation.order,
         tokenVersion: version,
-        cohortGeneration: inspected.cohortGeneration,
         metadata: projected.metadata,
       });
 
-      const stored = yield* snapshotOAuth(OAuthConnectedStoredGrant, {
+      const stored = yield* snapshotOAuthConnectedStoredGrant.effect({
         context,
         sealed: yield* protector.seal({ context, material: projected.material }),
       });
 
-      let cleanup: typeof OAuthConnectedRevocationJob.Type | undefined;
-
-      if (profile.revocation === "cohort") {
-        const cleanupContext = yield* snapshotOAuth(OAuthConnectedRevocationContext, {
-          namespace: "effect-auth/oauth-connected-revocation-context/v1",
-          jobId: OAuthClaimId.make(yield* random),
-          token: context,
-        });
-
-        cleanup = yield* snapshotOAuth(OAuthConnectedRevocationJob, {
-          context: cleanupContext,
-          sealed: yield* protector.seal({ context: cleanupContext, material: projected.material }),
-        });
-      }
-
       const settled = yield* persistence
-        .settleSignIn(
+        .settle(
           {
-            reservation,
-            outcome: {
-              _tag: "Verified",
-              credential,
-              grant: stored,
-              quarantine: inspected._tag === "Quarantine",
-              ...(cleanup === undefined ? {} : { cleanup }),
-              ...(inspected.previous === undefined ? {} : { previous: inspected.previous }),
-            },
+            _tag: "SignIn",
+            flow,
+            credential,
+            grant: stored,
+            ...(previous === undefined ? {} : { previous }),
           },
-          (value, journal) =>
-            journal.prepare(snapshotOAuthSync(OAuthConnectedSettlementDecision, value)),
+          (value, journal) => journal.prepare(snapshotOAuthConnectedSettlementDecision.sync(value)),
         )
         .pipe(Effect.flatMap(connectedRead));
 
@@ -236,7 +205,7 @@ const make = Effect.fnUntraced(function* (
     }).pipe(Effect.ensuring(Effect.sync(() => wipeConnectedMaterial(projected.material))));
   });
 
-  return { profile, prepare, claim, exchange, abandon, retain };
+  return { profile, prepare, exchange, retain };
 });
 
 export type SignInAccess = Effect.Success<ReturnType<typeof make>>;
@@ -252,6 +221,8 @@ export const signInAccess = <Access extends OAuthConnectedProfile | undefined>(
   OAuthConfigurationError,
   Access extends OAuthConnectedProfile ? AccessServices : never
 > =>
+  // AccessServices is acquired only when the profile is present, matching the conditional public requirement.
+  // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
   (profile === undefined
     ? Effect.succeed(undefined)
     : make(moduleId, policy, profile)) as Effect.Effect<
@@ -259,3 +230,16 @@ export const signInAccess = <Access extends OAuthConnectedProfile | undefined>(
     OAuthConfigurationError,
     Access extends OAuthConnectedProfile ? AccessServices : never
   >;
+
+const snapshotOAuthConnectedProfile = makeOAuthSnapshot(OAuthConnectedProfile);
+const snapshotOAuthConnectedConfiguration = makeOAuthSnapshot(OAuthConnectedConfiguration);
+const snapshotOAuthProtocolConfiguration = makeOAuthSnapshot(OAuthProtocolConfiguration);
+const snapshotOAuthConnectedGrantResponse = makeOAuthSnapshot(OAuthConnectedGrantResponse);
+const snapshotOAuthVerifiedExternalIdentity = makeOAuthSnapshot(OAuthVerifiedExternalIdentity);
+const snapshotOAuthConnectedTarget = makeOAuthSnapshot(OAuthConnectedTarget);
+const snapshotOAuthConnectedTokenContext = makeOAuthSnapshot(OAuthConnectedTokenContext);
+const snapshotOAuthConnectedStoredGrant = makeOAuthSnapshot(OAuthConnectedStoredGrant);
+
+const snapshotOAuthConnectedSettlementDecision = makeOAuthSnapshot(
+  OAuthConnectedSettlementDecision,
+);

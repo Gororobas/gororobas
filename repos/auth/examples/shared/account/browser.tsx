@@ -12,6 +12,7 @@ import type { AsyncResult } from "effect/reactivity";
 import { useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 
+import { Brand } from "./brand";
 import { FlowExpired, type AccountClient } from "./client";
 
 import "./style.css";
@@ -511,10 +512,7 @@ export const mountAccountApp = (client: AccountClient, options: AccountAppOption
     return (
       <main>
         <header>
-          <a className="wordmark" href="/">
-            <span aria-hidden="true">y</span>yielded<span className="wordmark-divider">/</span>
-            account
-          </a>
+          <Brand href="/" />
           <span className="local-indicator">
             <span />
             EXAMPLE {options.number}
@@ -522,9 +520,15 @@ export const mountAccountApp = (client: AccountClient, options: AccountAppOption
         </header>
         {options.banner}
         <section className="intro">
-          <p className="eyebrow">YOUR SPACE</p>
+          <p className="eyebrow">YOUR ACCOUNT</p>
           <h1>
-            {signedIn ? `Welcome, ${signedIn.claims.displayName}.` : "Make yourself at home."}
+            {signedIn ? (
+              `Welcome, ${signedIn.claims.displayName}.`
+            ) : (
+              <>
+                Your account. <span>Your way in.</span>
+              </>
+            )}
           </h1>
           <p>
             {signedIn
@@ -630,15 +634,14 @@ export const mountAccountApp = (client: AccountClient, options: AccountAppOption
                 </section>
               ) : !signedIn ? (
                 <section className="panel welcome">
-                  <p className="eyebrow">{signedIn ? "ALL SET" : "A PLACE TO RETURN TO"}</p>
-                  <div className="success-mark" aria-hidden="true">
-                    {signedIn ? "✓" : "↗"}
-                  </div>
-                  <h2>{signedIn ? "You’re in." : "Start here. Stay a while."}</h2>
+                  <p className="eyebrow">PASSWORDS & PASSKEYS</p>
+                  <h2>
+                    A familiar way in.
+                    <br />A simpler way back.
+                  </h2>
                   <p>
-                    {signedIn
-                      ? "Your email is verified and your account is ready."
-                      : "Your account stays with you. Close the tab, come back later, and pick up where you left off."}
+                    Start with a password, then add a passkey for your next visit. Verify your email
+                    so you can recover your account when you need to.
                   </p>
                 </section>
               ) : null}
@@ -647,7 +650,9 @@ export const mountAccountApp = (client: AccountClient, options: AccountAppOption
         )}
         <footer>
           <p>Yielded Auth · {options.description}</p>
-          <p>Email verification · Password recovery</p>
+          <a href="https://yielded.dev/auth/">
+            Documentation <span aria-hidden="true">↗</span>
+          </a>
         </footer>
       </main>
     );

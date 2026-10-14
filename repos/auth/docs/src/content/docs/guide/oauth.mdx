@@ -6,23 +6,23 @@ description: Sign in with a provider and optionally retain access to its API.
 import { FlowMap, Trace } from "@yielded/starlight-theme/components";
 
 An **app session** identifies your signed-in user. A **provider grant** lets your
-server call a provider's API. Configure both through an OAuth strategy in `Auth.make`.
-Your app owns accounts, claims, and permission policy.
+server call a provider's API. Your application owns accounts, claims, and permission
+policy; an OAuth strategy connects provider verification to that policy.
 
-| Your app needs                                             | Strategy                                                       |
-| ---------------------------------------------------------- | -------------------------------------------------------------- |
-| Sign in with an existing account link                      | `OAuth.make()`                                                 |
-| Sign in and retain provider API access in the same consent | `OAuth.make({ access: profile })`                              |
-| Create an account after provider verification              | `OAuth.makeRegistration({ registration, registrationPolicy })` |
-| Link another login method                                  | `OAuth.makeAccounts({ policy })`                               |
-| Connect an API to an already authenticated account         | `OAuth.makeConnected({ policy })`                              |
+| Your app needs                                  | Strategy                                                       |
+| ----------------------------------------------- | -------------------------------------------------------------- |
+| Sign in with an existing account link           | `OAuth.make()`                                                 |
+| Sign in and retain API access                   | `OAuth.make({ access: profile })`                              |
+| Register an account after provider verification | `OAuth.makeRegistration({ registration, registrationPolicy })` |
+| List, link, and unlink login methods            | `OAuth.makeAccounts({ policy })`                               |
+| Connect an API for a signed-in account          | `OAuth.makeConnected({ policy })`                              |
 
 ## Sign in and retain provider access
 
 ```ts title="apps/server/auth.ts"
 import { Auth, Sessions } from "@yielded/auth";
 import { OAuth } from "@yielded/auth/strategies";
-import * as GitHub from "@yielded/auth-openid-client/GitHub";
+import * as GitHub from "@yielded/auth/GitHub";
 import { AuthApi } from "@app/domain/auth-contract";
 import { clientId } from "./config";
 
@@ -35,10 +35,8 @@ export const AppAuth = Auth.make(AuthApi, {
 });
 ```
 
-Omit `access` to discard provider tokens after verifying identity. With `access`,
-the strategy encrypts and saves the grant before completing authentication through
-the same session authority used by passwords, passkeys, and email. Choose stateful,
-stateless, or state-assisted sessions independently.
+Omit `access` for sign-in only. With it, the strategy encrypts and saves the provider
+grant before completing authentication through your configured session authority.
 
 <Trace
   lanes={[
@@ -48,145 +46,189 @@ stateless, or state-assisted sessions independently.
     { id: "app", label: "Your storage" },
   ]}
   steps={[
-    {
-      lane: "browser",
-      title: "Start sign-in",
-      detail: "The contract's OAuth `signIn` action starts a single-use flow.",
-    },
-    {
-      lane: "provider",
-      title: "Sign in and consent",
-      detail: "The person signs in at the provider and approves the requested scopes.",
-    },
-    {
-      lane: "library",
-      title: "Receive the callback",
-      code: "/auth/{provider}/callback",
-      detail: "The HTTP adapter routes the provider's callback to the OAuth strategy.",
-    },
-    {
-      lane: "provider",
-      title: "Exchange the code",
-      detail:
-        "The strategy makes a single code exchange. An unknown outcome never permits repeating it.",
-    },
-    {
-      lane: "app",
-      title: "Retain the grant",
-      detail:
-        "Your storage resolves the existing account link and saves the encrypted provider grant.",
-    },
-    {
-      lane: "library",
-      title: "Complete authentication",
-      detail:
-        "Only after the grant is saved does shared authentication deliver the session, as it does for passwords and passkeys.",
-    },
-    {
-      lane: "browser",
-      title: "Read the result",
-      detail:
-        "The browser receives a session or a request for additional authentication. Provider tokens never enter browser results.",
-    },
+    { lane: "browser", title: "Start sign-in" },
+    { lane: "provider", title: "Authenticate and approve access" },
+    { lane: "library", title: "Verify the callback and exchange the code" },
+    { lane: "app", title: "Resolve the account and save the encrypted grant" },
+    { lane: "library", title: "Complete authentication and deliver the session" },
   ]}
 />
 
 Declare the [OAuth actions](../reference/oauth#shared-auth-setup), then configure
 `Http.make` with `GitHub.provider({ clientId, clientSecret, access: [profile] })`.
-The HTTP adapter owns callback routing and private cookie delivery. Supply shared
-sign-in and connected persistence, account claims, and separate transaction/token
-keyrings through Layers. The [runnable composition](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/oauth-application.ts)
-shows the full setup; [GitHub](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/github-app.ts)
-and [Strava](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/strava-app.ts)
-provide concrete configuration and a single-account allowlist.
+Supply [persistence, claims, crypto and keys](../reference/oauth#supply-the-services)
+through Layers. `AuthPersistence.make(AppAuth).managed({ prefix, subjects })` supplies
+OAuth storage and shared authentication authority on composed SQL and Drizzle
+drivers, including D1. Export its tables and apply migrations as shown in the
+[storage guide](./storage.mdx#managed-tables).
+The [runnable explicit composition](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/oauth-application.ts)
+shows provider configuration and application-owned services.
 
-Retained sign-in currently requires an existing local account link. For new users,
-use registration first, then connect provider access after authentication.
+Retained sign-in requires an existing account link. [Register new users](#register-new-users)
+first, then connect provider access after authentication. After a failed or uncertain
+callback, start a fresh sign-in; authorization codes are single-use.
+
+### Import existing identities
+
+When moving existing users from another auth provider, create their application
+subjects first, then import each verified provider identity. Composed
+`AuthPersistence.layer` supplies `OAuthPersistence.IdentityImports` for configured
+OAuth sign-in strategies with managed or mapped tables, including D1:
+
+```ts
+import { OAuthPersistence } from "@yielded/auth-persistence";
+import { Effect, Schema } from "effect";
+
+const importGitHub = Effect.gen(function* () {
+  const imports = yield* OAuthPersistence.IdentityImports;
+  const identity = yield* Schema.decodeEffect(OAuthPersistence.IdentityImport)({
+    moduleId: AppAuth.strategies.social.persistence.moduleId,
+    subjectId: "existing-user",
+    provider: "github",
+    issuer: "https://github.com/login/oauth",
+    subject: "12345678",
+  });
+
+  return yield* imports.importIdentity(identity);
+});
+```
+
+Run this in your trusted migration job with the same persistence Layer as sign-in.
+Use the exact provider key, issuer and durable subject emitted by your configured
+adapter: GitHub's numeric user ID as a string with `https://github.com/login/oauth`,
+or Google's `sub` with `https://accounts.google.com`. Email and display names do not establish
+ownership. Keep this service outside public routes.
+
+The import atomically stores ownership, the login credential and shared authority.
+The next sign-in returns the existing subject through the normal session flow.
+An exact retry returns the same credential; conflicting ownership, inactive or
+missing subjects, and inconsistent records fail with `OAuthUnavailable`.
+See the [import contract](../reference/oauth#identity-imports) for commit and key details.
 
 ### Use the session and provider access
 
 Under the HTTP middleware, use the regular Auth API:
 
-{/* prettier-ignore */}
 ```ts
 const auth = yield* AppAuth;
 const session = yield* auth.requireSession();
 const connections = yield* auth.listAccountConnections({ limit: 20 });
 ```
 
-The server-side connected service handles refresh and token use:
+Use the connected service for server-side API calls:
 
-{/* prettier-ignore */}
 ```ts
 const access = yield* AppAuth.strategies.social.access.ConnectedAccess;
 yield* access.withAccessToken(invocation, { grantId, profileKey: profile.key }, readProfile);
 ```
 
-Provide `AppAuth.strategies.social.access.accessLayer` with the same connected
-services. `invocation` must come from a verified session or a trusted job authority;
-the service rechecks the subject, grant, and application permission. `readProfile`
-receives a redacted token and is never retried by the library. Refresh does not
-upgrade session assurance. Provider tokens never enter browser results or sessions.
+Provide `AppAuth.strategies.social.access.accessLayer` with the connected services.
+`invocation` comes from a verified session or trusted job authority. The service checks access and refreshes
+when supported; `readProfile` receives a redacted token. Keep provider tokens on the
+server and handle retries of your API work explicitly.
 
-`auth.disconnectAccount` uses the same connected-grant authority. Provider revocation
-depends on the profile; cohort revocation needs the shared maintenance worker.
-See [retained access](../reference/oauth#retained-access) for dependencies and recovery.
+`auth.disconnectAccount` stops future local use. Provider revocation depends on the
+profile and its maintenance worker. See [retained access](../reference/oauth#retained-access)
+for configuration and recovery.
 
-## Authorize MCP clients
+## Register new users
 
-`OAuthServer` lets a signed-in user grant a registered MCP client access to your
-application. `Auth` supplies the application session; the OAuth strategy owns retained
-upstream provider credentials. The two grants stay separate:
+Use `OAuth.makeRegistration({ registration, registrationPolicy })` with your
+application's registration Schema. An unknown provider identity returns
+`RegistrationRequired`. Collect the application details and call `register` using
+the returned flow and reference.
+
+Registration returns `RegistrationAccepted` by default; start a fresh `auth.signIn`
+to establish a session. To continue authentication immediately, set `authenticate: true`
+on the strategy and its `AuthContract.oauthRegister` action. Replays remain
+credential-free. See [registration](../reference/oauth#register-and-link-accounts)
+for configuration and recovery, and [GitHub email](./github#private-email-for-registration)
+when account provisioning requires an address.
+
+## Show linked login methods
+
+Add `OAuth.makeAccounts({ policy })` under an `accounts` strategy with the same
+namespace and login persistence as sign-in:
+
+```ts
+const page = yield* auth.listLinkedAccounts("accounts", { limit: 20 });
+// page.items: { credentialId, provider, issuer, subject }[]
+```
+
+Use an item's `credentialId` with `unlinkAccount`. Linking preserves the session;
+unlinking applies the configured invalidation policy. `listAccountConnections`
+lists retained API grants separately.
+
+Expose the query to HTTP and Effect Atom through your shared contract:
+
+```ts
+listLinkedAccounts: AuthContract.oauthListLinkedAccounts({ strategy: "accounts" })
+```
+
+Named mutations refresh named queries automatically. The
+[client guide](./client.mdx) covers custom invalidation, and the
+[account reference](../reference/oauth#linked-login-inventory) covers pagination.
+
+## Shared sign-in across applications
+
+Use `OAuthServer.makeOpenId("identity")` when one service owns identity and several
+applications consume it. Each application registers an exact callback, verifies the
+OpenID exchange, and creates its own local session and permissions.
 
 <FlowMap
-  title="Separate MCP and provider grants"
-  description="The browser signs in through your login page and approves the MCP client on the OAuthServer consent page. The MCP client sends its MCP token to Effect McpServer, where the OAuthServer middleware supplies CurrentAccess to your tool handler. When the handler needs provider data, the OAuth strategy uses its provider grant to call the provider API. The MCP grant and the provider grant stay separate."
+  title="Shared identity, application-owned sessions"
+  description="The identity service verifies the provider account. Each application verifies an OpenID exchange and owns its local session."
   columns={3}
   nodes={[
-    { id: "browser", at: [1, 1], owner: "external", title: "Browser" },
-    { id: "login", at: [1, 2], owner: "app", title: "Your login page", code: "loginPath" },
-    { id: "consent", at: [1, 3], owner: "library", title: "Consent", code: "OAuthServer.make(…)" },
-    { id: "client", at: [2, 3], owner: "external", title: "MCP client" },
-    {
-      id: "server",
-      at: [3, 3],
-      owner: "external",
-      title: "Effect McpServer",
-      code: "oauth.middleware(…)",
-    },
-    {
-      id: "handler",
-      at: [4, 3],
-      owner: "app",
-      title: "Your tool handler",
-      code: "OAuthServer.CurrentAccess",
-    },
-    {
-      id: "strategy",
-      at: [4, 2],
-      owner: "library",
-      title: "OAuth strategy",
-      note: "Optional provider access",
-    },
-    { id: "provider", at: [4, 1], owner: "external", title: "Provider API" },
+    { id: "provider", at: [1, 1], owner: "external", title: "Provider" },
+    { id: "identity", at: [1, 2], owner: "app", title: "Identity service" },
+    { id: "oidc", at: [2, 2], owner: "library", title: "OpenID + consent", code: "OAuthServer.makeOpenId(…)" },
+    { id: "app", at: [2, 3], owner: "app", title: "Your application", note: "Its own account and session" },
   ]}
   edges={[
-    { from: "browser", to: "login" },
-    { from: "login", to: "consent" },
-    { from: "consent", to: "client" },
-    { from: "client", to: "server", label: "MCP token" },
-    { from: "server", to: "handler" },
-    { from: "handler", to: "strategy" },
-    { from: "strategy", to: "provider" },
-  ]}
-  groups={[
-    { label: "MCP grant", from: [1, 3], to: [3, 3] },
-    { label: "Provider grant", from: [4, 1], to: [4, 2] },
+    { from: "provider", to: "identity", label: "Provider sign-in" },
+    { from: "identity", to: "oidc", label: "Verified session" },
+    { from: "oidc", to: "app", label: "Code + PKCE" },
   ]}
 />
 
-Define supported scopes, supply an identity service that verifies your existing
-session, and mount the authorization routes beside Effect's MCP routes:
+Provide `Identity.current`, `Identity.active`, and `Identity.profile`, durable grant
+storage, signing keys, and client registrations. An optional `OpenIdConsent` service
+recognizes application-approved consent. Each application's local session has its
+own logout policy. See the [OpenID reference](../reference/oauth#shared-openid-sign-in)
+and [hosted example](https://github.com/yielded-dev/site/tree/main/apps/auth).
+
+## Local and preview environments
+
+`OAuthProxy` lets localhost and preview deployments share one provider callback.
+The callback server holds provider credentials; each application keeps its own
+accounts, cookies, and sessions.
+
+Register each application's exact completion URL and a separate secret on the
+callback server, then configure the application provider:
+
+```ts title="apps/server/oauth.ts"
+import { OAuthProxy } from "@yielded/auth";
+import { proxySecret } from "./config";
+
+export const github = OAuthProxy.provider({
+  url: "https://auth.example.com/oauth-proxy",
+  environment: "local",
+  secret: proxySecret,
+  issuer: "https://github.com/login/oauth",
+});
+```
+
+Pass this provider to `Http.layer`. The proxy supports sign-in and registration;
+use native providers for account linking or retained API access. See the
+[callback proxy reference](../reference/oauth#callback-proxy) and
+[runnable composition](https://github.com/yielded-dev/auth/tree/main/examples/auth#shared-github-callback-host).
+
+## Authorize MCP clients
+
+`OAuthServer` lets a signed-in user grant a Model Context Protocol (MCP) client
+access to your application. Your app session identifies the user, the MCP grant
+authorizes the client, and any upstream provider grant stays on your server.
 
 ```ts
 const oauth = OAuthServer.make("mcp", { scopes: ["athlete:read"] });
@@ -205,33 +247,46 @@ const protectedMcp = McpServer.toolkit(toolkit).pipe(
 );
 ```
 
-The [runnable Strava MCP example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/strava-mcp.ts)
-provides the login, SQL migration, signing keys, client registration, CORS, and
-server. It uses the built-in consent page and a single allowlisted athlete; its
-tool returns the authenticated subject without calling Strava's API.
+Mount the authorization routes beside the protected MCP routes. Supply a service
+that verifies your existing session, grant storage, signing keys, and an HTTP client.
+Inside handlers, require `OAuthServer.CurrentAccess` and apply your application
+permissions. Resolve provider connections from trusted storage when tools need
+upstream API access.
 
-Inside a tool handler, read `OAuthServer.CurrentAccess`; reject `undefined`.
-The value contains the authenticated `subjectId`, `clientId`, resource, scopes,
-and grant ID. Your application still decides which accounts and operations that
-subject may access. Your application owns the subject-to-provider connection
-mapping. Resolve that connection from trusted storage, then call `withAccessToken`
-on the strategy’s `access.ConnectedAccess` service; MCP clients never receive provider tokens.
-
-This initial server supports explicitly registered public clients. Clients must
-support supplying their registered client ID; there is no dynamic registration
-or Client ID Metadata Document endpoint. See the
-[authorization server reference](../reference/oauth#authorization-server) for
-the setup and token lifecycle.
+Clients can be pre-registered or use a
+[Client ID Metadata Document](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration).
+For metadata discovery, configure `clientMetadata.allowedOrigins` and an HTTP client
+that restricts network destinations. See the [server reference](../reference/oauth#authorization-server)
+for options and supported protocol behavior, and the
+[Strava MCP example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/strava-mcp.ts)
+for complete Layer construction.
 
 ## Other providers
 
-`OpenIdClient.provider` supports OIDC discovery and plain OAuth endpoints.
-Its optional `access` settings declare permission profiles and the provider's
-refresh/resource/revocation contract. A custom `ProviderDefinition.configure`
-returns the sign-in protocol and optionally a `connected` protocol. Configuration,
-secrets, and required services remain in the provider Layer.
-See [provider configuration](../reference/oauth#providers).
+First-party OpenID presets share discovery and ID-token verification:
 
-The [combined login example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/login-server.ts)
-shares sessions across email, GitHub, and Google. Provider display metadata never
-authorizes linking accounts by matching email addresses.
+- [Apple](./apple)
+- [Okta, Auth0, Keycloak, Zitadel, and Cognito](./enterprise-oidc)
+- [Google](./google)
+- [GitLab](./gitlab), including self-hosted issuers
+- [Hugging Face](./huggingface)
+- [LINE](./line)
+- [Linear](./linear), [Dropbox](./dropbox), and [Notion](./notion)
+- [Microsoft Entra ID](./microsoft)
+- [Railway](./railway)
+- [Roblox](./roblox)
+- [Slack](./slack)
+- [Vercel](./vercel)
+- [Zoom](./zoom)
+
+[Atlassian](./atlassian), [Figma](./figma), [Kick](./kick), and [X](./x) sign in
+with authorization-code PKCE and one identity GET.
+
+Use `OpenIdConnect.provider` for other OIDC issuers or plain OAuth endpoints.
+Configure identity decoding, scopes, and any retained-access contract explicitly;
+see [provider configuration](../reference/oauth#providers).
+
+Declare a `profiles` schema map on the strategy for typed `providerData` in
+`SessionClaims.resolve`. Provider display data never authorizes account linking by
+email. See [provider profiles](../reference/oauth#provider-profiles) and the
+[combined login example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/login-server.ts).

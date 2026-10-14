@@ -1,12 +1,12 @@
-import { Context, Effect, Layer, Schema, type Types } from "effect";
+import { Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
 
 import type { AuthInvocation } from "../operations/context";
 import type { AuthOperationResult } from "../operations/credentials";
 import { makeOperation, operationGroup } from "../operations/operation";
-import type { AuthenticationAuthority } from "../sessions/AuthenticationAuthority";
 import type { makeSessionModule } from "../sessions/module";
 import {
   passkeyUnexpected,
+  passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
   readPasskeyCommit,
@@ -26,7 +26,6 @@ import {
 } from "./models";
 import type { PasskeyConfig } from "./PasskeyConfig";
 import type { PasskeyCredentials } from "./PasskeyCredentials";
-import type { PasskeyEnrollmentContext } from "./PasskeyEnrollmentContext";
 import type { PasskeyMethodPolicy } from "./policy";
 import { snapshotPasskey } from "./snapshot";
 const credential = Schema.RedactedFromValue(Schema.NonEmptyString.check(Schema.isMaxLength(16384)));
@@ -71,11 +70,10 @@ export const makePasskeyStepUp = <
     StepUp,
     Effect.gen(function* () {
       const runtime = yield* ceremony.make,
-        stepUp = yield* sessions.SessionStepUp;
+        stepUp = yield* sessions.SessionStepUp,
+        strategy = yield* sessions.SessionStrategy;
 
-      const services = yield* Effect.context<
-        PasskeyCredentials | PasskeyEnrollmentContext | AuthenticationAuthority
-      >();
+      const services = yield* Effect.context<PasskeyCredentials>();
 
       const target = Effect.fn("PasskeyStepUp.target")(function* (
         invocation: AuthInvocation,
@@ -83,8 +81,8 @@ export const makePasskeyStepUp = <
       ) {
         if (invocation._tag !== "Authenticated") return yield* PasskeyRejected.make({});
 
-        const context = yield* stepUp
-          .context(token)
+        const pending = yield* stepUp
+          .inspect(token)
           .pipe(
             Effect.mapError((error) =>
               error._tag === "HookDenied"
@@ -97,15 +95,22 @@ export const makePasskeyStepUp = <
             ),
           );
 
+        const context = pending.intent;
+
         if (context.revision.subjectId !== invocation.subjectId)
           return yield* PasskeyRejected.make({});
 
-        return yield* snapshotPasskey(PasskeyTarget, {
-          ...context,
+        const fixed = yield* snapshotPasskey(PasskeyTarget, {
+          flowId: context.flowId,
+          bindingDigest: context.bindingDigest,
+          revision: context.revision,
+          expiresAtMillis: DateTime.toEpochMillis(context.expiresAt),
           moduleId: sessions.moduleId,
           kind: "session-step-up",
           commandId: context.flowId,
         });
+
+        return { pending, fixed };
       }, passkeyUnexpected);
 
       return StepUp.of({
@@ -113,7 +118,7 @@ export const makePasskeyStepUp = <
           input = yield* snapshotPasskey(Schema.toType(BeginInput), input);
           yield* passkeyNoAmbient();
 
-          const fixed = yield* target(invocation, input.stepUpCredential),
+          const { fixed } = yield* target(invocation, input.stepUpCredential),
             captured = yield* runtime
               .exclusions(input.profileId, fixed.revision.subjectId)
               .pipe(Effect.provide(services));
@@ -127,7 +132,18 @@ export const makePasskeyStepUp = <
         complete: Effect.fn("PasskeyStepUp.complete")(function* (invocation, input) {
           input = yield* snapshotPasskey(Schema.toType(CompleteInput), input);
           yield* passkeyNoAmbient();
-          const fixed = yield* target(invocation, input.stepUpCredential);
+          const { pending, fixed } = yield* target(invocation, input.stepUpCredential);
+
+          const source = yield* sessions.inspectInvocation(invocation, input.sourceCredential).pipe(
+            Effect.provideService(sessions.SessionStrategy, strategy),
+            Effect.mapError((error) =>
+              error._tag === "HookDenied"
+                ? error
+                : error._tag === "SessionUnavailable"
+                  ? PasskeyUnavailable.make({})
+                  : PasskeyRejected.make({}),
+            ),
+          );
 
           const verified = yield* runtime
             .authentication(input, { _tag: "StepUp", target: fixed })
@@ -149,8 +165,8 @@ export const makePasskeyStepUp = <
           const result = yield* readPasskeyCommit(
             yield* stepUp
               .prepareComplete({
-                sourceCredential: input.sourceCredential,
-                stepUpCredential: input.stepUpCredential,
+                source,
+                pending,
                 additional: verified.evidence,
               })
               .pipe(
@@ -173,7 +189,7 @@ export const makePasskeyStepUp = <
         }, passkeyUnexpected),
       });
     }),
-  );
+  ).pipe(Layer.provide(passkeyRateLimiterLayer));
 
   const Begin = makeOperation(`${moduleId}/passkey/step-up/begin`, {
     payload: BeginInput,

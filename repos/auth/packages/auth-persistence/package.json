@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-persistence",
-  "version": "0.1.0-beta.18",
+  "version": "0.1.0-beta.39",
   "description": "Direct Effect SQL persistence and shared storage contracts for Yielded Auth.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {
@@ -20,7 +20,9 @@
   "sideEffects": [],
   "exports": {
     ".": "./src/index.ts",
-    "./Adapter": "./src/Adapter.ts"
+    "./Adapter": "./src/Adapter.ts",
+    "./OAuthPersistence": "./src/OAuthPersistence.ts",
+    "./Testing": "./src/Testing.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -31,20 +33,22 @@
     "test": "vp test --passWithNoTests"
   },
   "dependencies": {
-    "@noble/hashes": "catalog:",
     "@yielded/auth": "workspace:*",
-    "@yielded/auth-crypto": "workspace:*"
+    "@yielded/crypto": "workspace:*"
   },
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/sql-libsql": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@effect/vitest": "catalog:",
+    "@yielded/jose": "workspace:*",
     "effect": "catalog:",
     "typescript": "catalog:",
-    "vite-plus": "catalog:"
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
-    "effect": "^4.0.0"
+    "effect": "^4.0.3"
   }
 }

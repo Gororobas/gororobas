@@ -2,7 +2,11 @@ import { Schema } from "effect";
 
 import { LoginIdentifier } from "../identity/models";
 import { TokenDigest } from "../Schema";
-import { AuthenticationRevision, SecurityRevision } from "../sessions/models";
+import {
+  AuthenticationRequirement,
+  AuthenticationRevision,
+  SecurityRevision,
+} from "../sessions/models";
 
 export const EmailCommandId = Schema.NonEmptyString.check(Schema.isMaxLength(256)).pipe(
   Schema.brand("effect-auth/EmailCommandId"),
@@ -17,6 +21,8 @@ export const SafeReturnTarget = Schema.NonEmptyString.check(Schema.isMaxLength(2
 export type SafeReturnTarget = typeof SafeReturnTarget.Type;
 
 export const EmailCredentialSnapshot = Schema.Struct({
+  /** Current policy from the same authoritative read as the revision vector. */
+  requirement: AuthenticationRequirement,
   moduleId: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
   identifier: LoginIdentifier,
   identifierRevision: SecurityRevision,
@@ -48,5 +54,4 @@ export type EmailAddressDecision = "changed" | "rejected";
 
 export type EmailRegistrationDecision =
   | { readonly _tag: "Registered" }
-  | { readonly _tag: "Rejected" }
-  | { readonly _tag: "ProvisioningPending"; readonly reference: string };
+  | { readonly _tag: "Rejected" };

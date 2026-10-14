@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+
 import { BunRuntime } from "@effect/platform-bun";
 import * as SqliteClient from "@effect/sql-sqlite-bun/SqliteClient";
 import {
@@ -25,6 +27,7 @@ import { SqlClient } from "effect/sql";
 
 import { keyring, phone, sessionPolicy, sessions, shopAuth } from "./phone-application";
 import {
+  admissionPolicy,
   customer,
   credential,
   identifier,
@@ -36,10 +39,6 @@ import {
   subjectId,
 } from "./phone-sqlite-schema";
 
-const assert: (condition: unknown, message: string) => asserts condition = (condition, message) => {
-  if (!condition) throw new Error(message);
-};
-
 export const phoneConsumer = Effect.gen(function* () {
   const database = yield* Database;
 
@@ -48,8 +47,8 @@ export const phoneConsumer = Effect.gen(function* () {
   // Phone completion owns these proof writes, even without a separate proof service.
   const sql = yield* SqlClient.SqlClient;
 
-  yield* sql`drop table phone_proof_command`;
-  yield* sql`create table phone_proof_command(moduleId text not null,commandId text not null,kind text not null,decision text not null,retentionUntil text not null)`;
+  yield* sql`drop table phone_proof`;
+  yield* sql`create table phone_proof(moduleId text not null,purpose text not null,seriesKey text not null,proofId text not null,binding text not null,verifierKeyId text not null,verifierDigest text not null,issuedAt text not null,expiresAt text not null,failedAttempts integer not null,unique(moduleId,proofId))`;
 
   const drifted = yield* makePhonePersistenceServices(mapping).pipe(Effect.result);
   let entered = false;
@@ -66,29 +65,33 @@ export const phoneConsumer = Effect.gen(function* () {
 
   assert(
     drifted._tag === "Failure" && Schema.is(PhoneOtp.PhoneConfigurationError)(drifted.failure),
-    "Phone storage accepted a missing proof-command key",
+    "Phone storage accepted a missing proof-series key",
   );
   assert(
     driftedOwner._tag === "Failure" &&
       Schema.is(PhoneOtp.PhoneConfigurationError)(driftedOwner.failure) &&
       !entered,
-    "Phone coordination accepted a missing proof-command key",
+    "Phone coordination accepted a missing proof-series key",
   );
-  yield* sql`create unique index phone_command_unique on phone_proof_command(moduleId,commandId)`;
+  yield* sql`create unique index phone_proof_series_unique on phone_proof(moduleId,purpose,seriesKey)`;
   yield* coordinate;
-  assert(entered, "Phone coordination did not recover after restoring the proof-command key");
+  assert(entered, "Phone coordination did not recover after restoring the proof-series key");
 
   const phoneStorage = phonePersistenceLayer(makePhonePersistenceServices(mapping));
   const proofServices = yield* makeProofPersistenceServices(proofs);
 
   const authority = yield* makeAuthenticationAuthorityServices({
+    moduleId: sessions.moduleId,
+    clock: proofs.clock,
     subjectId,
     subject: {
       table: customer,
       id: "customerNo",
       status: "enabled",
       securityRevision: "security",
-      isActiveStatus: (value) => value === true,
+      activeStatusValue: true,
+      isActiveStatus: (value: unknown) => value === true,
+      requirementColumns: [],
       decodeRequirement: () => Effect.succeed(requirement),
     },
     credential: {
@@ -97,7 +100,8 @@ export const phoneConsumer = Effect.gen(function* () {
       credentialId: "key",
       revision: "revision",
       status: "enabled",
-      isActiveStatus: (value) => value === true,
+      activeStatusValue: true,
+      isActiveStatus: (value: unknown) => value === true,
     },
     isConstraintConflict: () => false,
   });
@@ -159,7 +163,9 @@ export const phoneConsumer = Effect.gen(function* () {
     }),
   );
 
-  const strategy = sessions.statelessLayer(sessionPolicy, keyring).pipe(Layer.provide(base));
+  const strategy = sessions
+    .statelessLayer(sessionPolicy)
+    .pipe(Layer.provide(Layer.succeed(Sessions.SessionSigningKeys, keyring)), Layer.provide(base));
 
   const completion = sessions
     .completionLayer()
@@ -177,11 +183,11 @@ export const phoneConsumer = Effect.gen(function* () {
             .inspect(proof)
             .pipe(Effect.mapError(() => PhoneOtp.PhoneActionRequired.make({})));
 
-          if (inspected.provenance.evidence.revision.subjectId !== invocation.subjectId)
+          if (inspected.inspection.provenance.evidence.revision.subjectId !== invocation.subjectId)
             return yield* PhoneOtp.PhoneActionRequired.make({});
 
           const evidence = {
-            ...inspected.provenance.evidence,
+            ...inspected.inspection.provenance.evidence,
             flowId: challenge.flowId,
             bindingDigest: challenge.bindingDigest,
           };
@@ -195,7 +201,13 @@ export const phoneConsumer = Effect.gen(function* () {
     })),
   ).pipe(Layer.provide(strategy));
 
-  const dependencies = Layer.mergeAll(ports, strategy, completion, actionEvidence, base);
+  const dependencies = Layer.mergeAll(
+    ports,
+    strategy,
+    completion,
+    actionEvidence,
+    PhoneOtp.PhoneAdmission.layer(admissionPolicy),
+  ).pipe(Layer.provideMerge(base));
 
   return yield* Effect.gen(function* () {
     const auth = yield* shopAuth.make,
@@ -220,13 +232,13 @@ export const phoneConsumer = Effect.gen(function* () {
         }),
       );
 
-    const token = (slot: "request-binding" | "session") => {
+    const token = Effect.fnUntraced(function* (slot: "request-binding" | "session") {
       const found = [...commands].reverse().find((c) => c._tag === "Issue" && c.slot === slot);
 
-      if (found?._tag !== "Issue") throw new Error("missing private credential");
+      if (found?._tag !== "Issue") return yield* PhoneOtp.PhoneOtpUnavailable.make({});
 
       return Redacted.value(found.credential);
-    };
+    });
 
     const begin = (
       action: "register" | "verify" | "change",
@@ -247,7 +259,7 @@ export const phoneConsumer = Effect.gen(function* () {
 
         const challenge = yield* as(invocation, auth.begin(input));
 
-        return { input, challenge, binding: token("request-binding") };
+        return { input, challenge, binding: yield* token("request-binding") };
       });
 
     const complete = (
@@ -291,27 +303,19 @@ export const phoneConsumer = Effect.gen(function* () {
 
     assert(wrong._tag === "Failure", "wrong code accepted");
 
-    const resendInput = {
+    const reissueInput = {
       ...registered.input,
       requestId: crypto.randomUUID(),
       requestBinding: registered.binding,
-      reference: registered.challenge.reference,
     };
 
-    const resent = yield* as(Operations.guest, auth.resend(resendInput));
-    const delivered = sent.length;
-    const duplicateResend = yield* as(Operations.guest, auth.resend(resendInput));
-
-    assert(
-      duplicateResend.reference.proofId === resent.reference.proofId && sent.length === delivered,
-      "resend retry duplicated SMS",
-    );
+    const resent = yield* as(Operations.guest, auth.begin(reissueInput));
     const superseded = yield* complete(registered, Operations.guest).pipe(Effect.result);
 
     assert(superseded._tag === "Failure", "superseded code accepted");
     registered = {
       ...registered,
-      input: { ...registered.input, requestId: resendInput.requestId },
+      input: { ...registered.input, requestId: reissueInput.requestId },
       challenge: resent,
     };
     const registration = yield* complete(registered, Operations.guest);
@@ -321,8 +325,10 @@ export const phoneConsumer = Effect.gen(function* () {
       "phone registration failed",
     );
 
-    const initialToken = token("session"),
-      initial = yield* sessionStrategy.verify(Redacted.make(initialToken));
+    const initialToken = yield* token("session"),
+      initial = yield* sessionStrategy
+        .inspect(Redacted.make(initialToken))
+        .pipe(Effect.map((source) => source.inspection.session));
 
     assert(
       initial.claims.customerNumber === nativeSubject(initial.subjectId),
@@ -354,7 +360,7 @@ export const phoneConsumer = Effect.gen(function* () {
         auth.signIn({ phoneNumber: number, locale: "en-ZA" }),
       );
 
-      const requestBinding = token("request-binding"),
+      const requestBinding = yield* token("request-binding"),
         message = sent.find((m) => m.id === challenge.reference.proofId);
 
       assert(message !== undefined, "sign-in was not delivered");
@@ -371,9 +377,14 @@ export const phoneConsumer = Effect.gen(function* () {
       );
 
       assert(result._tag === "Authenticated", "phone-only sign-in failed");
-      const signed = token("session");
+      const signed = yield* token("session");
 
-      return { signed, session: yield* sessionStrategy.verify(Redacted.make(signed)) };
+      return {
+        signed,
+        session: yield* sessionStrategy
+          .inspect(Redacted.make(signed))
+          .pipe(Effect.map((source) => source.inspection.session)),
+      };
     });
 
     const verifiedLogin = yield* signIn("+27820000002"),
@@ -402,7 +413,10 @@ export const phoneConsumer = Effect.gen(function* () {
       !sent.some((m) => m.id === failed.challenge.reference.proofId),
       "failed delivery created accepted message",
     );
-    const old = yield* sessionStrategy.verify(Redacted.make(initialToken));
+
+    const old = yield* sessionStrategy
+      .inspect(Redacted.make(initialToken))
+      .pipe(Effect.map((source) => source.inspection.session));
 
     assert(
       old.absoluteExpiresAt.epochMilliseconds === initial.absoluteExpiresAt.epochMilliseconds,

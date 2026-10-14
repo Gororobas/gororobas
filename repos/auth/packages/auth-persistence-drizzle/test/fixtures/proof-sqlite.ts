@@ -1,10 +1,11 @@
+import { NodeCrypto } from "@effect/platform-node";
 import { D1Client } from "@effect/sql-d1/D1Client";
 import type { D1Client as D1ClientService } from "@effect/sql-d1/D1Client";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { Auth, Email, Password, PhoneOtp, Sessions } from "@yielded/auth";
 import { makeStorageMappings } from "@yielded/auth-persistence/Adapter";
 import { SubjectId } from "@yielded/auth/Schema";
-import { getTableColumns, is, sql } from "drizzle-orm";
+import { is, sql, type SQL } from "drizzle-orm";
 import * as DrizzleD1 from "drizzle-orm/effect-d1";
 import {
   getTableConfig,
@@ -20,7 +21,7 @@ import type { SqlError } from "effect/sql/SqlError";
 import type { Statement } from "effect/sql/Statement";
 
 import { Database as D1Database } from "../../src/drizzle/d1-database";
-import type { D1ProofPersistenceMapping } from "../../src/drizzle/proof-model";
+import type { ProofPersistenceMapping } from "../../src/drizzle/proof-model";
 import { AuthPersistence } from "../../src/SqliteNode";
 
 const app = Auth.make("test/proof-d1", {
@@ -68,48 +69,26 @@ export const storage = persistence.managed({
 });
 
 // Use production codecs and table mapping, rather than a test proof-store implementation.
-export const proofMapping = makeStorageMappings(storage).proofs();
-const identifiers = getTableColumns(storage.schema.identifiers);
+export const proofMapping = Effect.flatMap(makeStorageMappings(storage), (mappings) =>
+  mappings.proofs(),
+);
+
 const clock = sql`(select now from proof_clock)`;
 
-export const d1Mapping = {
-  ...proofMapping,
-  d1: {
-    engineNow: clock,
-    engineNowMillis: clock,
-    engineInstantMinus: (millis: number) => sql`${clock} - ${millis}`,
-    engineInstantPlus: (millis: number) => sql`${clock} + ${millis}`,
-  },
-  authority: {
-    ...proofMapping.authority,
-    identifier: {
-      ...proofMapping.authority.identifier,
-      d1CurrentCondition: ({
-        binding,
-      }: Parameters<typeof proofMapping.authority.identifier.isCurrent>[0]) =>
-        binding._tag === "Identifier"
-          ? sql`not exists(select 1 from ${storage.schema.identifiers}
-              where ${identifiers.namespace} = ${binding.identifier.namespace}
-                and ${identifiers.value} = ${binding.identifier.value})`
-          : sql`0 = 1`,
-    },
-  },
-  // The shared factory erases foreign table shapes; these are the actual Drizzle
-  // tables supplied above. This adapter cast crosses no value/schema boundary.
-} as unknown as D1ProofPersistenceMapping<
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  SQLiteTable,
-  string
->;
+export const d1Mapping = Effect.map(
+  proofMapping,
+  (mapping) =>
+    ({
+      ...mapping,
+      d1: { primary: true },
+      clock: {
+        ...mapping.clock,
+        engineNowMillis: clock,
+        toMillis: (value: SQL) => value,
+        fromMillis: (value: SQL) => value,
+      },
+    }) as unknown as ProofPersistenceMapping<SQLiteTable, SQLiteTable, string>,
+);
 
 const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"';
 
@@ -142,32 +121,55 @@ export const database = Layer.effectDiscard(
     yield* client`create table proof_clock (now integer not null)`;
     yield* client`insert into proof_clock values (0)`;
   }),
-).pipe(Layer.provideMerge(SqliteClient.layer({ filename: ":memory:" })));
+).pipe(
+  Layer.provideMerge(SqliteClient.layer({ filename: ":memory:" })),
+  Layer.provideMerge(NodeCrypto.layer),
+);
 
 /** Only the SQL transport differs: production D1 planning and generated batch SQL
  * run unchanged, in a real atomic SQLite transaction. The callback introduces a
  * competing committed writer immediately before that transaction begins. */
+export const makeD1Transport = Effect.fnUntraced(function* (
+  beforeBatch: Effect.Effect<void, SqlError, SqlClient.SqlClient> = Effect.void,
+): Effect.fn.Return<D1ClientService, never, SqlClient.SqlClient> {
+  const client = yield* SqlClient.SqlClient;
+
+  const batch = (statements: ReadonlyArray<Statement<unknown>>) =>
+    beforeBatch.pipe(
+      Effect.andThen(
+        client.withTransaction(
+          Effect.forEach(statements, (statement) => statement, { concurrency: 1 }),
+        ),
+      ),
+      Effect.provideService(SqlClient.SqlClient, client),
+    );
+
+  const unsupported = Effect.die("transactions are not supported in D1");
+
+  const transport: SqlClient.SqlClient & { readonly batch: typeof batch } = Object.assign(
+    client.bind(undefined),
+    client,
+    {
+      batch,
+      withTransaction: () => unsupported,
+      reserve: unsupported,
+      withoutTransforms: () => transport,
+    },
+  );
+
+  // Keep SQLite's transaction owner private to batches; D1 views cannot recover it.
+  Object.assign(transport, { safe: transport });
+
+  return transport as unknown as D1ClientService;
+});
+
 export const d1Database = (
   beforeBatch: Effect.Effect<void, SqlError, SqlClient.SqlClient> = Effect.void,
 ) =>
   Layer.effect(
     D1Database,
     Effect.gen(function* () {
-      const client = yield* SqlClient.SqlClient;
-
-      const batch = (statements: ReadonlyArray<Statement<unknown>>) =>
-        beforeBatch.pipe(
-          Effect.andThen(
-            client.withTransaction(
-              Effect.forEach(statements, (statement) => statement, { concurrency: 1 }),
-            ),
-          ),
-          Effect.provideService(SqlClient.SqlClient, client),
-        );
-
-      // Keep the client callable for catalog validation as well as generated batches.
-      // Native Workers binding/config are absent; every query uses real SQLite.
-      const transport = Object.assign(client, { batch }) as unknown as D1ClientService;
+      const transport = yield* makeD1Transport(beforeBatch);
 
       return yield* DrizzleD1.makeWithDefaults({}).pipe(Effect.provideService(D1Client, transport));
     }),

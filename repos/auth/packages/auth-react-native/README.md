@@ -34,17 +34,11 @@ Open your hosted sign-in page with Expo WebBrowser and keep the native session i
 Expo SecureStore. See the [browser-login guide](../../docs/src/content/docs/guide/browser-login.mdx)
 for the shared client, server policy, and recovery flow.
 
-Install the peers matching your Expo SDK:
-
-| Expo SDK | `expo-web-browser` | `expo-secure-store` | Minimum iOS |
-| -------- | ------------------ | ------------------- | ----------- |
-| 54       | `~15.0.11`         | `~15.0.8`           | 16          |
-| 57       | `~57.0.3`          | `~57.0.4`           | 16.4        |
-
-For SDK 54:
+Install `expo-web-browser` and `expo-secure-store` matching your Expo SDK and the
+[package's peer requirements](package.json), alongside:
 
 ```sh
-bun add @yielded/auth-react-native@beta effect expo-web-browser@~15.0.11 expo-secure-store@~15.0.8 react-native-url-polyfill
+bun add @yielded/auth-react-native@beta effect react-native-url-polyfill
 ```
 
 Plain React Native apps must first [install Expo Modules](https://docs.expo.dev/bare/installing-expo-modules/).
@@ -79,7 +73,7 @@ survive app deletion.
 
 Your app also supplies `Crypto.Crypto` with cryptographically secure random bytes
 and SHA-256. React Native does not supply browser `SubtleCrypto`.
-With [`expo-crypto`](https://docs.expo.dev/versions/v54.0.0/sdk/crypto/), use
+With [`expo-crypto`](https://docs.expo.dev/versions/latest/sdk/crypto/), use
 `getRandomValues` and `digest`; `getRandomBytes` can fall back to `Math.random`
 in development.
 
@@ -96,5 +90,5 @@ belong to your association setup. The optional
 contributes paths to your app-owned file. Older iOS versions reject HTTPS callbacks.
 
 Let this adapter own the authentication session: do not open a competing
-WebBrowser session or handle its callback through `Linking`. On SDK 54, a failed
-presentation can stay pending; interrupt login before trying again.
+WebBrowser session or handle its callback through `Linking`. If presentation
+stays pending, interrupt login before trying again.

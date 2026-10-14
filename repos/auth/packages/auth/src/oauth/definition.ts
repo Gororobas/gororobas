@@ -1,7 +1,7 @@
-import { Array, Layer } from "effect";
+import { Crypto, Array, Layer } from "effect";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
-import { cryptoLayer, defaultLayer, hooksLayer } from "../auth/defaults";
+import { defaultLayer, hooksLayer } from "../auth/defaults";
 import type {
   BindingOf,
   ClaimsCodec,
@@ -11,38 +11,50 @@ import type {
 } from "../auth/definition";
 import type { OAuthAccountsPolicy } from "./accountsModels";
 import type { OAuthConnectedPolicy, OAuthConnectedProfile } from "./connectedModels";
+import type { OAuthProviderProfiles, ProfileOptions } from "./profiles";
 import type { OAuthRegistrationPolicy } from "./registrationModels";
 import { defaultOAuthSignInPolicy, type OAuthSignInPolicy } from "./signInModels";
 import { makeOAuthMethod } from "./signInModule";
 
-export interface OAuthOptions<
+export type OAuthOptions<
   Namespace extends string | undefined = undefined,
   Access extends OAuthConnectedProfile | undefined = undefined,
-> {
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+> = ProfileOptions<Profiles> & {
   readonly access?: Access;
   readonly namespace?: Namespace;
   readonly policy?: Partial<OAuthSignInPolicy>;
-}
+};
 
-export interface OAuthRegistrationOptions<
+export type OAuthRegistrationOptions<
   Registration extends ClaimsCodec,
   Namespace extends string | undefined = undefined,
-> extends OAuthOptions<Namespace> {
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+  Authenticate extends boolean = false,
+> = OAuthOptions<Namespace, undefined, Profiles> & {
   readonly registration: Registration;
   readonly registrationPolicy: OAuthRegistrationPolicy;
-}
+  /** Authenticate only the first confirmed registration; replays remain metadata-only. */
+  readonly authenticate?: Authenticate;
+};
 
 const captureDefine = <
   const Namespace extends string | undefined,
   Access extends OAuthConnectedProfile | undefined,
+  Profiles extends OAuthProviderProfiles,
 >(
   _namespace: Namespace,
-  input: OAuthOptions<Namespace, Access>,
+  input: OAuthOptions<Namespace, Access, Profiles>,
 ) => {
-  const options = Object.freeze({
+  const options: OAuthOptions<Namespace, Access, Profiles> & {
+    readonly policy: OAuthSignInPolicy;
+  } = {
     ...input,
+    ...(input.profiles === undefined ? {} : { profiles: Object.freeze({ ...input.profiles }) }),
     policy: Object.freeze({ ...defaultOAuthSignInPolicy, ...input.policy }),
-  });
+  };
+
+  Object.freeze(options);
 
   return { options };
 };
@@ -53,25 +65,31 @@ const bindSignIn = <
   const Id extends string,
   const SessionId extends string,
   Access extends OAuthConnectedProfile | undefined,
+  Profiles extends OAuthProviderProfiles,
 >(
   binding: StrategyBinding<Claims, Id, SessionId>,
-  captured: ReturnType<typeof captureDefine<Namespace, Access>>,
+  captured: ReturnType<typeof captureDefine<Namespace, Access, Profiles>>,
 ) => {
   const { options } = captured;
 
-  const module = makeOAuthMethod<Id, SessionId, Claims, Access>(binding.namespace, {
+  const module = makeOAuthMethod<Id, SessionId, Claims, Access, Profiles>(binding.namespace, {
+    ...options,
     sessions: binding.sessions,
-    ...(options.access === undefined ? {} : { access: options.access }),
   });
 
   return Object.freeze({
     ...module,
+    persistence: Object.freeze({
+      kind: "oauth" as const,
+      moduleId: binding.namespace,
+      signIn: true as const,
+    }),
     strategy: makeAuthStrategy(
       {
         signIn: module.signIn,
         completeSignIn: module.operations.Complete.invoke,
       },
-      module.layer(options.policy).pipe(Layer.provideMerge(cryptoLayer)),
+      module.layer(options.policy).pipe(Layer.merge(Layer.effect(Crypto.Crypto, Crypto.Crypto))),
       { completion: true },
     ),
   });
@@ -82,30 +100,36 @@ const bindAccess = <
   Claims extends ClaimsCodec,
   const Id extends string,
   const SessionId extends string,
+  Profiles extends OAuthProviderProfiles,
 >(
   binding: StrategyBinding<Claims, Id, SessionId>,
-  captured: ReturnType<typeof captureDefine<Namespace, OAuthConnectedProfile>>,
+  captured: ReturnType<typeof captureDefine<Namespace, OAuthConnectedProfile, Profiles>>,
   profile: OAuthConnectedProfile,
 ) => {
-  const base = bindSignIn(binding, captured);
+  const base = bindSignIn<Namespace, Claims, Id, SessionId, OAuthConnectedProfile, Profiles>(
+    binding,
+    captured,
+  );
 
-  const access = base.connected({
+  const policy: OAuthConnectedPolicy = Object.freeze({
     ...captured.options.policy,
-    profiles: [profile],
+    profiles: Object.freeze([profile] as const),
     maximumEvidenceAgeMillis: 300_000,
-    refreshClaimLifetimeMillis: captured.options.policy.claimLifetimeMillis,
-    useAdmissionLifetimeMillis: 5_000,
+    refreshClaimLifetimeMillis: captured.options.policy.exchangeTimeoutMillis,
   });
+
+  const access = base.connected(policy);
 
   const connectedLayer = access.handlersLayer.pipe(
     Layer.provide(defaultLayer(access.Connected, access.layer)),
     Layer.provide(defaultLayer(access.binding.RequestBinding, access.binding.layer)),
-    Layer.provide([cryptoLayer, hooksLayer]),
+    Layer.provide(hooksLayer),
   );
 
   return Object.freeze({
     ...base,
     access,
+    persistence: Object.freeze({ ...base.persistence, connected: policy }),
     strategy: makeAuthStrategy(
       {
         signIn: base.signIn,
@@ -114,7 +138,7 @@ const bindAccess = <
         disconnectAccount: access.operations.Disconnect.invoke,
       },
       Layer.merge(base.layer(captured.options.policy), connectedLayer).pipe(
-        Layer.provideMerge(cryptoLayer),
+        Layer.merge(Layer.effect(Crypto.Crypto, Crypto.Crypto)),
       ),
       { completion: true },
     ),
@@ -127,28 +151,30 @@ const bindDefine = <
   const Id extends string,
   const SessionId extends string,
   Access extends OAuthConnectedProfile | undefined,
+  Profiles extends OAuthProviderProfiles,
 >(
   binding: StrategyBinding<Claims, Id, SessionId>,
-  captured: ReturnType<typeof captureDefine<Namespace, Access>>,
+  captured: ReturnType<typeof captureDefine<Namespace, Access, Profiles>>,
 ) => {
   // The conditional type follows the constructor's explicit capability selection.
   const result =
     captured.options.access === undefined
-      ? bindSignIn(binding, captured)
-      : bindAccess(
+      ? bindSignIn<Namespace, Claims, Id, SessionId, Access, Profiles>(binding, captured)
+      : bindAccess<Namespace, Claims, Id, SessionId, Profiles>(
           binding,
-          { options: { ...captured.options, access: captured.options.access } },
+          { options: Object.assign({}, captured.options, { access: captured.options.access }) },
           captured.options.access,
         );
 
   return result as Access extends OAuthConnectedProfile
-    ? ReturnType<typeof bindAccess<Namespace, Claims, Id, SessionId>>
-    : ReturnType<typeof bindSignIn<Namespace, Claims, Id, SessionId, undefined>>;
+    ? ReturnType<typeof bindAccess<Namespace, Claims, Id, SessionId, Profiles>>
+    : ReturnType<typeof bindSignIn<Namespace, Claims, Id, SessionId, undefined, Profiles>>;
 };
 
 export interface DefineStrategy<
   Namespace extends string | undefined,
   Access extends OAuthConnectedProfile | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
 > extends StrategyTypeLambda {
   readonly type: ReturnType<
     typeof bindDefine<
@@ -156,7 +182,8 @@ export interface DefineStrategy<
       BindingOf<this>["claims"],
       BindingOf<this>["namespace"],
       BindingOf<this>["sessionNamespace"],
-      Access
+      Access,
+      Profiles
     >
   >;
 }
@@ -164,11 +191,12 @@ export interface DefineStrategy<
 const define = <
   const Namespace extends string | undefined,
   Access extends OAuthConnectedProfile | undefined,
+  Profiles extends OAuthProviderProfiles,
 >(
   namespace: Namespace,
-  input: OAuthOptions<Namespace, Access>,
+  input: OAuthOptions<Namespace, Access, Profiles>,
 ) => {
-  const captured = captureDefine<Namespace, Access>(namespace, input);
+  const captured = captureDefine<Namespace, Access, Profiles>(namespace, input);
 
   const bind = <
     Claims extends ClaimsCodec,
@@ -176,9 +204,9 @@ const define = <
     const SessionId extends string,
   >(
     binding: StrategyBinding<Claims, Id, SessionId>,
-  ) => bindDefine<Namespace, Claims, Id, SessionId, Access>(binding, captured);
+  ) => bindDefine<Namespace, Claims, Id, SessionId, Access, Profiles>(binding, captured);
 
-  const definition: StrategyDefinition<DefineStrategy<Namespace, Access>, Namespace> = {
+  const definition: StrategyDefinition<DefineStrategy<Namespace, Access, Profiles>, Namespace> = {
     namespace,
     bind,
   };
@@ -189,36 +217,50 @@ const define = <
 export function make<
   const Namespace extends string,
   Access extends OAuthConnectedProfile | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
 >(
-  options: OAuthOptions<Namespace, Access> & { readonly namespace: Namespace },
-): ReturnType<typeof define<Namespace, Access>>;
+  options: OAuthOptions<Namespace, Access, Profiles> & { readonly namespace: Namespace },
+): ReturnType<typeof define<Namespace, Access, Profiles>>;
+
+export function make<
+  const Namespace extends string | undefined = undefined,
+  Access extends OAuthConnectedProfile | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+>(
+  options: OAuthOptions<Namespace, Access, Profiles>,
+): ReturnType<typeof define<Namespace | undefined, Access, Profiles>>;
 
 export function make<
   const Namespace extends string | undefined = undefined,
   Access extends OAuthConnectedProfile | undefined = undefined,
 >(
   options?: OAuthOptions<Namespace, Access>,
-): ReturnType<typeof define<Namespace | undefined, Access>>;
+): ReturnType<typeof define<Namespace | undefined, Access, OAuthProviderProfiles>>;
 
-export function make<
-  const Namespace extends string | undefined,
-  Access extends OAuthConnectedProfile | undefined,
->(options: OAuthOptions<Namespace, Access> = {}) {
+export function make(
+  options: OAuthOptions<string | undefined, OAuthConnectedProfile | undefined> = {},
+) {
   return define(options.namespace, options);
 }
 
 const captureDefineRegistration = <
   Registration extends ClaimsCodec,
   const Namespace extends string | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+  Authenticate extends boolean = false,
 >(
   _namespace: Namespace,
-  input: OAuthRegistrationOptions<Registration, Namespace>,
+  input: OAuthRegistrationOptions<Registration, Namespace, Profiles, Authenticate>,
 ) => {
-  const options = Object.freeze({
-    ...input,
+  const options: OAuthRegistrationOptions<Registration, Namespace, Profiles, Authenticate> & {
+    readonly policy: OAuthSignInPolicy;
+  } = Object.assign({}, input, {
+    ...(input.profiles === undefined ? {} : { profiles: Object.freeze({ ...input.profiles }) }),
     policy: Object.freeze({ ...defaultOAuthSignInPolicy, ...input.policy }),
     registrationPolicy: Object.freeze({ ...input.registrationPolicy }),
   });
+
+  Object.freeze(options);
 
   return { options };
 };
@@ -229,17 +271,22 @@ const bindDefineRegistration = <
   Claims extends ClaimsCodec,
   const Id extends string,
   const SessionId extends string,
+  Profiles extends OAuthProviderProfiles,
+  Authenticate extends boolean,
 >(
   binding: StrategyBinding<Claims, Id, SessionId>,
-  captured: ReturnType<typeof captureDefineRegistration<Registration, Namespace>>,
+  captured: ReturnType<
+    typeof captureDefineRegistration<Registration, Namespace, Profiles, Authenticate>
+  >,
 ) => {
   const { options } = captured;
 
-  const module = makeOAuthMethod<Id, SessionId, Claims>(binding.namespace, {
+  const module = makeOAuthMethod<Id, SessionId, Claims, undefined, Profiles>(binding.namespace, {
+    ...options,
     sessions: binding.sessions,
   });
 
-  const registration = module.registration(options.registration);
+  const registration = module.registration(options.registration, options);
 
   const layer = Layer.merge(module.handlersLayer, registration.handlersLayer).pipe(
     Layer.provide(
@@ -252,7 +299,7 @@ const bindDefineRegistration = <
       ),
     ),
     Layer.provide(defaultLayer(module.binding.RequestBinding, module.binding.layer)),
-    Layer.provide([cryptoLayer, hooksLayer]),
+    Layer.provide(hooksLayer),
   );
 
   return Object.freeze({
@@ -264,7 +311,7 @@ const bindDefineRegistration = <
         completeSignIn: module.operations.Complete.invoke,
         register: registration.operations.Complete.invoke,
       },
-      layer.pipe(Layer.provideMerge(cryptoLayer)),
+      layer.pipe(Layer.merge(Layer.effect(Crypto.Crypto, Crypto.Crypto))),
       { completion: true },
     ),
   });
@@ -273,6 +320,8 @@ const bindDefineRegistration = <
 export interface DefineRegistrationStrategy<
   Registration extends ClaimsCodec,
   Namespace extends string | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+  Authenticate extends boolean = false,
 > extends StrategyTypeLambda {
   readonly type: ReturnType<
     typeof bindDefineRegistration<
@@ -280,7 +329,9 @@ export interface DefineRegistrationStrategy<
       Namespace,
       BindingOf<this>["claims"],
       BindingOf<this>["namespace"],
-      BindingOf<this>["sessionNamespace"]
+      BindingOf<this>["sessionNamespace"],
+      Profiles,
+      Authenticate
     >
   >;
 }
@@ -288,11 +339,16 @@ export interface DefineRegistrationStrategy<
 const defineRegistration = <
   Registration extends ClaimsCodec,
   const Namespace extends string | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+  Authenticate extends boolean = false,
 >(
   namespace: Namespace,
-  input: OAuthRegistrationOptions<Registration, Namespace>,
+  input: OAuthRegistrationOptions<Registration, Namespace, Profiles, Authenticate>,
 ) => {
-  const captured = captureDefineRegistration<Registration, Namespace>(namespace, input);
+  const captured = captureDefineRegistration<Registration, Namespace, Profiles, Authenticate>(
+    namespace,
+    input,
+  );
 
   const bind = <
     Claims extends ClaimsCodec,
@@ -300,10 +356,14 @@ const defineRegistration = <
     const SessionId extends string,
   >(
     binding: StrategyBinding<Claims, Id, SessionId>,
-  ) => bindDefineRegistration<Registration, Namespace, Claims, Id, SessionId>(binding, captured);
+  ) =>
+    bindDefineRegistration<Registration, Namespace, Claims, Id, SessionId, Profiles, Authenticate>(
+      binding,
+      captured,
+    );
 
   const definition: StrategyDefinition<
-    DefineRegistrationStrategy<Registration, Namespace>,
+    DefineRegistrationStrategy<Registration, Namespace, Profiles, Authenticate>,
     Namespace
   > = {
     namespace,
@@ -313,22 +373,35 @@ const defineRegistration = <
   return Object.freeze(definition);
 };
 
-export function makeRegistration<Registration extends ClaimsCodec, const Namespace extends string>(
-  options: OAuthRegistrationOptions<Registration, Namespace> & { readonly namespace: Namespace },
-): ReturnType<typeof defineRegistration<Registration, Namespace>>;
+export function makeRegistration<
+  Registration extends ClaimsCodec,
+  const Namespace extends string,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+  Authenticate extends boolean = false,
+>(
+  options: OAuthRegistrationOptions<Registration, Namespace, Profiles, Authenticate> & {
+    readonly namespace: Namespace;
+  },
+): ReturnType<typeof defineRegistration<Registration, Namespace, Profiles, Authenticate>>;
 
 export function makeRegistration<
   Registration extends ClaimsCodec,
   const Namespace extends string | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
+  Authenticate extends boolean = false,
 >(
-  options: OAuthRegistrationOptions<Registration, Namespace>,
-): ReturnType<typeof defineRegistration<Registration, Namespace | undefined>>;
+  options: OAuthRegistrationOptions<Registration, Namespace, Profiles, Authenticate>,
+): ReturnType<
+  typeof defineRegistration<Registration, Namespace | undefined, Profiles, Authenticate>
+>;
 
 /** Registration selects the protocol's registration transition and its separate completion. */
 export function makeRegistration<
   Registration extends ClaimsCodec,
   const Namespace extends string | undefined,
->(options: OAuthRegistrationOptions<Registration, Namespace>) {
+  Profiles extends OAuthProviderProfiles,
+  Authenticate extends boolean,
+>(options: OAuthRegistrationOptions<Registration, Namespace, Profiles, Authenticate>) {
   return defineRegistration(options.namespace, options);
 }
 
@@ -456,9 +529,19 @@ const bindDefineConnected = <
 ) => {
   const { options } = captured;
 
-  return makeOAuthMethod<Id, SessionId, Claims>(binding.namespace, {
+  const module = makeOAuthMethod<Id, SessionId, Claims>(binding.namespace, {
     sessions: binding.sessions,
   }).connected(options.policy);
+
+  return Object.freeze({
+    ...module,
+    persistence: Object.freeze({
+      kind: "oauth" as const,
+      moduleId: binding.namespace,
+      signIn: false as const,
+      connected: options.policy,
+    }),
+  });
 };
 
 export interface DefineConnectedStrategy<

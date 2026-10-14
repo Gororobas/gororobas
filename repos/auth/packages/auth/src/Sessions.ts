@@ -4,16 +4,21 @@ export {
   AuthenticationFlowId,
   AuthenticationProof,
   AuthenticationRequirement,
+  AuthenticationCapture,
   AuthenticationRevision,
   CredentialRevision,
   PendingConsumption,
+  PendingAuthenticationKind,
   SecurityRevision,
   SessionAuthenticationProvenance,
   SessionCapabilities,
   SessionCredentialVersion,
   SessionId,
   type SessionInspection,
+  SessionGuard,
+  type SessionSource,
   SessionMetadata,
+  SessionReadOptions,
   SessionSignOut,
 } from "./sessions/models";
 
@@ -23,6 +28,7 @@ export {
   type PendingAuthentication,
   PendingAuthenticationContext,
   type PendingAuthenticationRecord,
+  type PendingAuthenticationSnapshot,
   type PendingAuthenticationState,
   pendingAuthenticationContext,
   snapshotPendingAuthenticationContext,
@@ -61,6 +67,7 @@ export {
 
 export {
   type SessionRepository,
+  type SessionCleanup,
   type SignedSessionValidity,
   type StatefulSessionPersistence,
   type StatefulSessionRecord,
@@ -68,6 +75,7 @@ export {
 
 export {
   type SessionSigningKeyring,
+  SessionSigningKeys,
   makeSessionSecrets,
   makeSessionSigningCodec,
 } from "./sessions/crypto";
@@ -80,7 +88,7 @@ export {
   SessionStepUpProfileId,
   type SessionStepUpReplacement,
   SessionStepUpRequirement,
-  type SessionStepUpSource,
+  SessionStepUpSnapshot,
   StepUpPending,
 } from "./sessions/SessionStepUpPersistence";
 

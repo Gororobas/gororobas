@@ -1,19 +1,31 @@
-import { Context, DateTime, Effect, Exit, Layer, Option, Schema, Crypto, Cause } from "effect";
+import {
+  Result,
+  Context,
+  DateTime,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Schema,
+  Crypto,
+  Cause,
+} from "effect";
 import { Base64Url } from "effect/encoding";
 
-import { hasCommitScope } from "../hooks/commit";
+import { prepareCommit, hasCommitScope } from "../hooks/commit";
 import type { AuthInvocation } from "../operations/context";
 import { OperationForbidden } from "../operations/errors";
 import { makeOperation, operationGroup } from "../operations/operation";
+import { CleanupResult } from "../persistence/cleanup";
 import {
   captureConnectedPolicy,
   connectedBounded,
   connectedRead,
   connectedSafe,
   validateConnectedPolicy,
-  wipeConnectedMaterial,
 } from "./connectedAccess";
 import * as M from "./connectedModels";
+import { wipeConnectedMaterial } from "./grantTokens";
 import { OAuthConnectedPersistence } from "./OAuthConnectedPersistence";
 import { OAuthConnectedProtocol } from "./OAuthConnectedProtocol";
 import {
@@ -24,7 +36,7 @@ import {
 import { OAuthConnectedTokenProtector } from "./OAuthConnectedTokenProtector";
 import { OAuthMethodUnsupported, OAuthUnavailable } from "./signInErrors";
 import { OAuthClaimId, OAuthCleanupInput } from "./signInModels";
-import { snapshotOAuth, snapshotOAuthSync } from "./signInSnapshot";
+import { makeOAuthSnapshot } from "./signInSnapshot";
 
 const Failure = Schema.Union([OperationForbidden, OAuthMethodUnsupported, OAuthUnavailable]);
 const RunResult = Schema.Struct({ outcome: Schema.Literals(["Empty", "Confirmed", "Unknown"]) });
@@ -53,7 +65,7 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
       readonly cleanup: (
         invocation: AuthInvocation,
         limit: number,
-      ) => Effect.Effect<typeof M.OAuthConnectedCleanupResult.Type, typeof Failure.Type>;
+      ) => Effect.Effect<CleanupResult, typeof Failure.Type>;
       readonly runRevocation: (
         invocation: AuthInvocation,
       ) => Effect.Effect<typeof RunResult.Type, typeof Failure.Type>;
@@ -78,19 +90,24 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
       ) {
         yield* authorize(invocation);
 
-        const input = yield* snapshotOAuth(OAuthCleanupInput, {
+        const input = yield* snapshotOAuthCleanupInput.effect({
           moduleId: id,
           limit,
-          nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
         });
 
-        const receipt = yield* clean(input, (value, journal) => {
-          const result = snapshotOAuthSync(M.OAuthConnectedCleanupResult, value);
+        const receipt = yield* clean(
+          input,
+          prepareCommit((value, journal) =>
+            Result.gen(function* () {
+              const result = snapshotCleanupResult.sync(value);
 
-          if (result.terminalized + result.removed > input.limit) throw OAuthUnavailable.make({});
+              if (result.removed > input.limit)
+                return yield* Result.fail(OAuthUnavailable.make({}));
 
-          return journal.prepare(result);
-        });
+              return journal.prepare(result);
+            }),
+          ),
+        );
 
         return yield* connectedRead(receipt);
       }, connectedSafe);
@@ -112,18 +129,18 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
               claim(
                 { moduleId: id, claimId, lifetimeMillis: policy.refreshClaimLifetimeMillis },
                 (value, journal) =>
-                  journal.prepare(snapshotOAuthSync(OAuthConnectedRevocationDecision, value)),
+                  journal.prepare(snapshotOAuthConnectedRevocationDecision.sync(value)),
               ),
             );
 
             const decision = yield* connectedRead(receipt);
 
             if (decision._tag === "Empty") return { outcome: "Empty" as const };
-            const owned = snapshotOAuthSync(OAuthConnectedRevocationClaim, decision.claim);
+            const owned = yield* snapshotOAuthConnectedRevocationClaim.effect(decision.claim);
 
             if (
               owned.claimId !== claimId ||
-              owned.job.context.token.moduleId !== id ||
+              owned.job.grant.context.moduleId !== id ||
               owned.claimExpiresAtMillis !==
                 owned.claimedAtMillis + policy.refreshClaimLifetimeMillis ||
               owned.claimedAtMillis > DateTime.toEpochMillis(yield* DateTime.now)
@@ -131,28 +148,29 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
               return yield* OAuthUnavailable.make({});
 
             const call = Effect.gen(function* () {
-              const context = owned.job.context.token;
+              const context = owned.job.grant.context;
 
               if (
-                context.configuration.profile.revocation !== "cohort" ||
+                context.configuration.profile.revocation !== "provider" ||
                 DateTime.toEpochMillis(yield* DateTime.now) >= owned.claimExpiresAtMillis
               )
                 return yield* OAuthUnavailable.make({});
 
               const material = yield* open({
-                context: owned.job.context,
-                sealed: owned.job.sealed,
-              }).pipe(
-                Effect.flatMap((value) => snapshotOAuth(M.OAuthConnectedTokenMaterial, value)),
-              );
+                context: owned.job.grant.context,
+                sealed: owned.job.grant.sealed,
+              }).pipe(Effect.flatMap((value) => snapshotOAuthConnectedTokenMaterial.effect(value)));
 
-              return yield* revokeGrant({
-                context: snapshotOAuthSync(M.OAuthConnectedTokenContext, context),
-                material: snapshotOAuthSync(M.OAuthConnectedTokenMaterial, material),
-              }).pipe(
-                Effect.flatMap((value) => Schema.decodeEffect(Schema.Literal("Confirmed"))(value)),
-                Effect.ensuring(Effect.sync(() => wipeConnectedMaterial(material))),
-              );
+              return yield* Effect.gen(function* () {
+                return yield* revokeGrant({
+                  context: yield* snapshotOAuthConnectedTokenContext.effect(context),
+                  material: yield* snapshotOAuthConnectedTokenMaterial.effect(material),
+                }).pipe(
+                  Effect.flatMap((value) =>
+                    Schema.decodeEffect(Schema.Literal("Confirmed"))(value),
+                  ),
+                );
+              }).pipe(Effect.ensuring(Effect.sync(() => wipeConnectedMaterial(material))));
             });
 
             const result = yield* Effect.exit(
@@ -173,17 +191,14 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
                 ? ("Confirmed" as const)
                 : ("Unknown" as const);
 
+            // Request settlement cancellation after five seconds. Scoped driver
+            // cleanup may take longer; an unknown outcome permits no retry.
             const final = yield* connectedBounded(
               settle({ claim: owned, outcome }, (value, journal) =>
-                journal.prepare(
-                  snapshotOAuthSync(Schema.Struct({ settled: Schema.Boolean }), value),
-                ),
-              ),
-              policy.settlementTimeoutMillis,
-            ).pipe(
-              Effect.flatMap(connectedRead),
-              Effect.mapError(() => OAuthUnavailable.make({})),
-            );
+                journal.prepare(snapshotSettlement.sync(value)),
+              ).pipe(Effect.flatMap(connectedRead)),
+              5_000,
+            ).pipe(Effect.mapError(() => OAuthUnavailable.make({})));
 
             if (Exit.isFailure(result)) {
               if (Cause.hasInterrupts(result.cause)) return yield* Effect.interrupt;
@@ -204,7 +219,7 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
 
   const CleanupOperation = makeOperation(`${moduleId}/connected/maintenance/cleanup`, {
     payload: Cleanup,
-    success: M.OAuthConnectedCleanupResult,
+    success: CleanupResult,
     error: Failure,
     access: "system",
     exposure: "internal",
@@ -241,3 +256,16 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
     maintenanceGroup: operationGroup(CleanupOperation, RunRevocation),
   };
 };
+
+const snapshotOAuthCleanupInput = makeOAuthSnapshot(OAuthCleanupInput);
+const snapshotCleanupResult = makeOAuthSnapshot(CleanupResult);
+
+const snapshotOAuthConnectedRevocationDecision = makeOAuthSnapshot(
+  OAuthConnectedRevocationDecision,
+);
+
+const snapshotOAuthConnectedRevocationClaim = makeOAuthSnapshot(OAuthConnectedRevocationClaim);
+const snapshotOAuthConnectedTokenMaterial = makeOAuthSnapshot(M.OAuthConnectedTokenMaterial);
+const snapshotOAuthConnectedTokenContext = makeOAuthSnapshot(M.OAuthConnectedTokenContext);
+
+const snapshotSettlement = makeOAuthSnapshot(Schema.Struct({ settled: Schema.Boolean }));

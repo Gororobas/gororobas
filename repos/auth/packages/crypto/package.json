@@ -1,0 +1,57 @@
+{
+  "name": "@yielded/crypto",
+  "version": "0.1.0-beta.39",
+  "description": "Effect cryptography services with explicit native and portable backends.",
+  "homepage": "https://yielded.dev/auth/",
+  "bugs": {
+    "url": "https://github.com/yielded-dev/auth/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/auth.git",
+    "directory": "packages/crypto"
+  },
+  "files": [
+    "dist",
+    "src",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "exports": {
+    ".": "./src/index.ts",
+    "./Aead": "./src/Aead.ts",
+    "./Errors": "./src/Errors.ts",
+    "./Hmac": "./src/Hmac.ts",
+    "./Kdf": "./src/Kdf.ts",
+    "./KdfAdmission": "./src/KdfAdmission.ts",
+    "./Signature": "./src/Signature.ts",
+    "./WebCrypto": "./src/WebCrypto.ts",
+    "./platform-node": "./src/platform-node.ts",
+    "./platform-bun": "./src/platform-bun.ts",
+    "./platform-workerd": "./src/platform-workerd.ts",
+    "./Portable": "./src/Portable.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "build:wasm": "clang --target=wasm32 -O3 -msimd128 -ffreestanding -fno-builtin -nostdlib -Wl,--no-entry -Wl,--import-memory -Wl,--export=argon2_block -Wl,--export=__heap_base -Wl,--strip-all src/internal/argon2-block.c -o src/internal/argon2.wasm",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vp test"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.3"
+  }
+}

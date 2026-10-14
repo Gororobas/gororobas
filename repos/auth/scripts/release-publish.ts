@@ -212,7 +212,7 @@ export const withPublishManifests = <A, E, R>(
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
 
-    const rootManifest = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(RootManifest))(
+    const rootManifest = yield* Schema.decodeEffect(Schema.fromJsonString(RootManifest))(
       yield* fs.readFileString(path.join(root, "package.json")),
     );
 
@@ -324,9 +324,7 @@ export const withPublishManifests = <A, E, R>(
     if (yield* fs.exists(prePath)) {
       const original = yield* fs.readFileString(prePath);
 
-      const state = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(PrereleaseState))(
-        original,
-      );
+      const state = yield* Schema.decodeEffect(Schema.fromJsonString(PrereleaseState))(original);
 
       const temporary = yield* Schema.encodeEffect(Schema.fromJsonString(PrereleaseState))({
         ...state,

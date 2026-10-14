@@ -1,4 +1,6 @@
-import { type Effect, Predicate, Redacted, Schema } from "effect";
+import { type Effect, Predicate, Redacted, Result, Schema } from "effect";
+
+import { OperationOutputError } from "./errors";
 
 export const AuthRevealKind = Schema.Literals(["totp-enrollment", "recovery-codes"]);
 export type AuthRevealKind = typeof AuthRevealKind.Type;
@@ -62,86 +64,102 @@ export interface AuthRevealCommandCollector {
   readonly accept: (commands: ReadonlyArray<AuthRevealCommand>) => Effect.Effect<void>;
 }
 
-const decodeKinds = Schema.decodeSync(Schema.Array(AuthRevealKind));
+const decodeKinds = Schema.decodeResult(Schema.Array(AuthRevealKind));
 // oxlint-disable-next-line no-restricted-properties -- Provider output is captured as unknown before validating this closed private boundary.
-const decodeCommand = Schema.decodeUnknownSync(AuthRevealCommand);
-const invalid = () => new globalThis.Error("Auth operation failed");
+const decodeCommand = Schema.decodeUnknownResult(AuthRevealCommand);
+const invalid = () => Result.fail(OperationOutputError.make({}));
 
 /** Package-private: do not expose the snapshot mechanics through the public barrel. */
-export const snapshotRevealKinds = (input: ReadonlyArray<AuthRevealKind>) => {
-  if (!Array.isArray(input)) throw invalid();
-  const length = input.length;
+export const snapshotRevealKinds = (input: ReadonlyArray<AuthRevealKind>) =>
+  Result.try({
+    try: () =>
+      Result.gen(function* () {
+        if (!Array.isArray(input)) return yield* invalid();
+        const length = input.length;
 
-  if (!Number.isInteger(length) || length < 0 || length > 2) throw invalid();
-  const captured = [];
+        if (!Number.isInteger(length) || length < 0 || length > 2) return yield* invalid();
+        const captured = [];
 
-  for (let index = 0; index < length; index++) captured.push(input[index]);
-  const kinds = decodeKinds(captured);
+        for (let index = 0; index < length; index++) captured.push(input[index]);
+        const kinds = yield* decodeKinds(captured);
 
-  if (new Set(kinds).size !== kinds.length) throw invalid();
+        if (new Set(kinds).size !== kinds.length) return yield* invalid();
 
-  return Object.freeze([...kinds]);
-};
+        return Object.freeze([...kinds]);
+      }),
+    catch: () => OperationOutputError.make({}),
+  }).pipe(
+    Result.flatMap((result) => result),
+    Result.mapError(() => OperationOutputError.make({})),
+  );
 
 /** Fully detach before a consumer's success Iso projection can suspend. */
 export const snapshotRevealCommands = (
   input: ReadonlyArray<AuthRevealCommand> | undefined,
   declared: ReadonlyArray<AuthRevealKind>,
-): ReadonlyArray<AuthRevealCommand> => {
-  if (input === undefined) return Object.freeze([]);
-  if (!Array.isArray(input)) throw invalid();
-  const length = input.length;
+) =>
+  Result.try({
+    try: () =>
+      Result.gen(function* () {
+        if (input === undefined) return Object.freeze([]);
+        if (!Array.isArray(input)) return yield* invalid();
+        const length = input.length;
 
-  if (
-    !Number.isInteger(length) ||
-    length < 0 ||
-    length > 2 ||
-    (declared.length === 0 && length > 0)
-  )
-    throw invalid();
-  const kinds = new Set<AuthRevealKind>();
-  const ids = new Set<string>();
-  const commands: AuthRevealCommand[] = [];
+        if (
+          !Number.isInteger(length) ||
+          length < 0 ||
+          length > 2 ||
+          (declared.length === 0 && length > 0)
+        )
+          return yield* invalid();
+        const kinds = new Set<AuthRevealKind>();
+        const ids = new Set<string>();
+        const commands: AuthRevealCommand[] = [];
 
-  for (let index = 0; index < length; index++) {
-    const command = input[index];
-    const kind = command.kind;
-    const revealId = command.revealId;
-    const expiresAtMillis = command.expiresAtMillis;
-    // Capture each caller-owned primitive once. Redacted's schema validates but
-    // preserves its wrapper, so validating the original would not detach it.
-    let payload: unknown;
+        for (let index = 0; index < length; index++) {
+          const command = input[index];
+          const kind = command.kind;
+          const revealId = command.revealId;
+          const expiresAtMillis = command.expiresAtMillis;
+          // Capture each caller-owned primitive once. Redacted's schema validates but
+          // preserves its wrapper, so validating the original would not detach it.
+          let payload: unknown;
 
-    if (kind === "totp-enrollment") {
-      const value = Redacted.value(command.payload);
+          if (kind === "totp-enrollment") {
+            const value = Redacted.value(command.payload);
 
-      if (!Predicate.isObject(value)) throw invalid();
-      payload = Object.freeze({ uri: value.uri, manualKey: value.manualKey });
-    } else if (kind === "recovery-codes") {
-      const source = Redacted.value(command.payload);
+            if (!Predicate.isObject(value)) return yield* invalid();
+            payload = Object.freeze({ uri: value.uri, manualKey: value.manualKey });
+          } else if (kind === "recovery-codes") {
+            const source = Redacted.value(command.payload);
 
-      if (!Array.isArray(source) || source.length !== 10) throw invalid();
-      const codes: unknown[] = [];
+            if (!Array.isArray(source) || source.length !== 10) return yield* invalid();
+            const codes: unknown[] = [];
 
-      for (let code = 0; code < 10; code++) codes.push(source[code]);
-      payload = Object.freeze(codes);
-    } else {
-      throw invalid();
-    }
+            for (let code = 0; code < 10; code++) codes.push(source[code]);
+            payload = Object.freeze(codes);
+          } else {
+            return yield* invalid();
+          }
 
-    const value = decodeCommand({
-      kind,
-      revealId,
-      expiresAtMillis,
-      payload: Redacted.make(payload, { label: "Auth reveal" }),
-    });
+          const value = yield* decodeCommand({
+            kind,
+            revealId,
+            expiresAtMillis,
+            payload: Redacted.make(payload, { label: "Auth reveal" }),
+          });
 
-    if (!declared.includes(value.kind) || kinds.has(value.kind) || ids.has(value.revealId))
-      throw invalid();
-    kinds.add(value.kind);
-    ids.add(value.revealId);
-    commands.push(Object.freeze(value));
-  }
+          if (!declared.includes(value.kind) || kinds.has(value.kind) || ids.has(value.revealId))
+            return yield* invalid();
+          kinds.add(value.kind);
+          ids.add(value.revealId);
+          commands.push(Object.freeze(value));
+        }
 
-  return Object.freeze(commands);
-};
+        return Object.freeze(commands);
+      }),
+    catch: () => OperationOutputError.make({}),
+  }).pipe(
+    Result.flatMap((result) => result),
+    Result.mapError(() => OperationOutputError.make({})),
+  );

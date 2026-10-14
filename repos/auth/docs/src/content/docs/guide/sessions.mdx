@@ -1,14 +1,12 @@
 ---
 title: Sessions
-description: Configure session lifetimes, read a session, and sign out.
+description: Configure sessions, opt into cookie caching, and read current authority when needed.
 ---
 
 import { Trace } from "@yielded/starlight-theme/components";
 
-Configure sessions on `Auth.make`. Request-aware methods handle credential lookup
-and delivery through the [HTTP boundary](./http-and-client).
-For Electron and iOS, [browser sign-in](./browser-login) establishes a distinct
-native session after hosted authentication and account confirmation.
+Configure sessions on `Auth.make`. The [HTTP boundary](./http-and-client)
+supplies incoming credentials and delivers cookies for request-aware methods.
 
 ## Configure sessions
 
@@ -26,93 +24,107 @@ export const AppAuth = Auth.make("app/Auth", {
 });
 ```
 
-This service only reads and manages sessions. Supply its bound
-`AppAuth.sessions.StatefulSessionPersistence` and `SessionRepository` through your
-storage Layer. It does not require authentication or provisioning authority.
-Adding an authentication strategy also selects the default completion authority;
-your account Layer supplies `AuthenticationAuthority` for issuing sessions.
+Supply the bound session persistence services through your [storage Layer](./storage).
+Adding an authentication strategy also requires your account Layer's
+`AuthenticationAuthority` to approve session issuance.
 
-| Configuration                                  | How it verifies                               | Sign-out                                                      |
-| ---------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------- |
-| `Sessions.stateful(options)`                   | Checks the stored session.                    | Revokes through persistence.                                  |
-| `Sessions.stateless({ keys, ...options })`     | Verifies a signed token.                      | Clears this client only; existing tokens retain their expiry. |
-| `Sessions.stateAssisted({ keys, ...options })` | Verifies a signed token and current validity. | Uses `SignedSessionValidity` for immediate invalidation.      |
+| Mode              | Verification                                    | Revocation visibility                                 |
+| ----------------- | ----------------------------------------------- | ----------------------------------------------------- |
+| `stateful()`      | Persistence, or an opt-in cookie snapshot       | Immediate without caching; otherwise up to `cacheFor` |
+| `stateless()`     | Signed token                                    | At token expiry                                       |
+| `stateAssisted()` | Signed token and authoritative validity storage | Immediate                                             |
 
-Signed modes require an explicit keyring. Stateless sessions default to a
-fifteen-minute maximum age because sign-out cannot revoke an issued token. Their
-idle timeout and renewal interval are bounded by that lifetime. Stateful and
-state-assisted sessions default to a thirty-day maximum age, seven-day idle
-timeout, and renewal after one day. Explicit options select application policy;
-shorter lifetimes bound the idle and renewal intervals.
+State-assisted validity must share the authority that commits identity changes.
+Signed claims remain snapshots; checking validity does not refresh profile data.
+See [lifetime defaults and options](../reference/sessions#lifetimes).
 
-Issuer and audience default to the stable session namespace, generation to `1`,
-and the token limit to `4096` bytes. The shorter stateless default rejects older
-tokens issued with a longer lifetime. Keep an explicit `maxAge` to retain that
-policy, or set `maximumIssuedAge` to the previous limit until those tokens expire
-while issuing new shorter-lived tokens.
+### Application secret
+
+Signed sessions and cookie caching get default signing keys from `AUTH_SECRET`
+through Effect Config. Set a stable secret generated from at least 32 random
+bytes, encoded as hex or base64, and share it across instances. Uncached stateful
+sessions do not need it. Supply [crypto capabilities](../reference/crypto#use-with-auth)
+with your platform Layer.
+
+To supply the secret yourself, provide `Auth.AuthConfig` at the root:
+
+```ts
+import { Layer } from "effect";
+
+const AuthLive = AppAuth.layer.pipe(
+  Layer.provide(Auth.AuthConfig.layer({ secret: authSecret })), // Redacted<string>
+);
+```
+
+For validation and custom key rotation, see [signing keys](../reference/sessions#signing-keys).
+
+### Cache ordinary session reads
+
+Caching is off by default. Opt in for stateful sessions:
+
+```ts
+Sessions.stateful({ cacheFor: "1 minute" });
+```
+
+A valid cookie snapshot avoids a persistence read. It contains public claims and
+is signed, not encrypted. Revocation, password changes, disablement, and claim
+updates may remain unseen for up to `cacheFor`.
+
+The limit is the shorter of five minutes and `renewAfter`. Features configured
+with `requireImmediateInvalidation: true` reject caching when they require server
+invalidation. Management, step-up, and mutations use authoritative state, not
+cookie snapshots. Mutation responses clear the browser's snapshot; other clients
+and lost responses retain the bounded delay. See
+[cookie behavior](../reference/http#session-cache-cookies).
 
 ## Read the current session
 
-Inside an existing Effect handler covered by `http.middleware`:
+Inside an Effect handler covered by `http.middleware`:
 
-{/* prettier-ignore */}
 ```ts
 const auth = yield* AppAuth;
-const session = yield* auth.getSession();
+
+const session = yield* auth.getSession();               // Allows a cached snapshot
+const current = yield* auth.getSession({ fresh: true }); // Reads authoritative state
+const required = yield* auth.requireSession();          // Fails when anonymous
 ```
 
-The method reads the incoming session credential from `Auth.AuthRequest`. Missing,
-invalid, or expired credentials return `null`. An unavailable session store,
-defect, or interruption remains a failure. No cookie parsing or catch handler is
-needed in application code.
+Missing, invalid, or expired credentials return `null`; storage failures remain
+failures. `requireSession()` allows caching and fails with `AuthenticationRequired`
+when anonymous. Reads do not renew credentials. A handler that already resolved
+an authoritative caller reuses that same private source for ordinary session
+reads; `{ fresh: true }` requests a new inspection. Cookie snapshots never become
+private authentication evidence.
 
-For a handler that requires authentication:
-
-{/* prettier-ignore */}
-```ts
-const auth = yield* AppAuth;
-const session = yield* auth.requireSession();
-```
-
-An anonymous request fails with `AuthenticationRequired`. The
-[HTTP guide](./http-and-client#protect-an-httpapi-group) shows how to require a
-session for an entire HttpApi group.
-
-Outside a request, verify an explicit credential:
-
-{/* prettier-ignore */}
-```ts
-const auth = yield* AppAuth;
-const session = yield* auth.verifySession(redactedCredential);
-```
+The Effect client accepts the same options: `client.auth.getSession({ fresh: true })`.
+See the [client guide](./client#read-a-session-and-sign-out) for Atom usage.
+Outside a request, provide the same long-lived Auth Layer and call
+`auth.verifySession(redactedCredential)`. It verifies through the configured
+strategy without `AuthRequest`, cookie snapshots, renewal, or credential delivery.
+`Http.layer` provides Auth to its own routes; other runtimes and raw handlers need
+explicit service provisioning. See
+[non-HTTP verification](./http-and-client#verify-credentials-outside-the-http-middleware)
+for the runtime and request-level composition.
 
 ## Sign out
 
-In the same request context, call the service directly:
-
-{/* prettier-ignore */}
 ```ts
-const auth = yield* AppAuth;
 const result = yield* auth.signOut();
 ```
 
-Sign-out reads the incoming credential without first verifying it and clears the
-client cookie through private delivery. Its result reports `revoked`,
-`already-invalid`, `client-only`, or `SessionSignOutUnavailable`. Local clearing
-is not proof of server revocation; do not report global sign-out after a storage
-failure. [Mounting the auth routes](./http-and-client#configure-the-server) supplies
-request context and cookie delivery.
+Sign-out clears the client credential and reports server invalidation separately.
+Its result distinguishes `revoked`, `already-invalid`, `client-only`, and
+`SessionSignOutUnavailable`. Local clearing alone does not prove server revocation.
 
 ## Renew a session
 
-{/* prettier-ignore */}
 ```ts
-const auth = yield* AppAuth;
 const session = yield* auth.renewSession();
 ```
 
 Renewal delivers a replacement credential through the request boundary.
-`getSession()` and `requireSession()` do not rotate credentials.
+For Electron and iOS, [browser sign-in](./browser-login) establishes a distinct
+native session after hosted authentication and account confirmation.
 
 ## Session lifecycle
 
@@ -128,14 +140,20 @@ Renewal delivers a replacement credential through the request boundary.
 
 ## Custom completion and additional factors
 
-Omit `sessions` from `Auth.make` when supplying custom session/completion Layers.
-The lower-level `AppAuth.sessions.statefulLayer`, `statelessLayer`, and
-`stateAssistedLayer` constructors remain available for runtime-selected policy.
+Omit `sessions` when supplying your own session/completion Layers; see
+[custom composition](../reference/sessions#custom-composition).
 
 Configure `completionLayer({ pendingLifetimeMillis, attemptLimit })` with
 `PendingAuthentication` persistence to support a second factor. A pending proof
 is not an authenticated session. [TOTP](./totp) shows the complete Layer setup.
 
-`SessionStrategy.inspect` returns private provenance for authorization decisions;
-ordinary verification results omit it. Step-up binds its challenge to the source
-session and credential revision and rechecks both before replacing the session.
+For action-specific authorization, call
+`AppAuth.sessions.inspectInvocation(invocation, credential)` to obtain private
+evidence from the verification that admitted that action. Public session data
+and cached claims are not substitutes. The mutation's persistence owner still
+checks current authority before commit.
+
+Step-up can authorize a protected change, such as a password change or account
+link, under your policy. It refreshes `authenticatedAt` without extending the
+original absolute expiry. Each factor retains its own verification time: a recent
+step-up does not make every retained factor fresh.

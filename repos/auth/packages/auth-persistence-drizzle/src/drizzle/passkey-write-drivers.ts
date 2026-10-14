@@ -1,23 +1,23 @@
-import { NativeDatabase } from "@yielded/auth-persistence/Adapter";
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { PasskeyManagementPersistence, PasskeyPersistence } from "@yielded/auth/Passkey";
 import type { Table } from "drizzle-orm";
-import { Context, Effect } from "effect";
+import { type Crypto, Context, Effect } from "effect";
 
-import { nativeDatabase } from "./native-database";
+import type { D1BatchStatements } from "./D1BatchStatements";
+import { NativeDatabase, nativeDatabase } from "./native-database";
 import type { PasskeyMappingSource } from "./passkey-model";
-import type { PasskeyCoordinatorError, PasskeyTargetConfiguration } from "./passkey-target";
 import type {
   PasskeyManagementMapping,
   PasskeyRegistrationMapping,
   PasskeyRegistrationWriter,
 } from "./passkey-write-model";
+import type { PasskeyCoordinatorError, PasskeyTargetConfiguration } from "./passkey/target";
 import {
   coordinateTargetPasskeyManagement,
   coordinateTargetPasskeyRegistrationWriter,
   makeTargetPasskeyManagement,
   makeTargetPasskeyRegistrationWriter,
-} from "./passkey-write-target";
+} from "./passkey/write-target";
 import type { SuppliedService } from "./SuppliedService";
 // oxlint-disable-next-line no-explicit-any -- inspect the installed concrete transaction callback.
 type TransactionOf<D> = D extends { readonly transaction: (...args: any[]) => any }
@@ -29,7 +29,7 @@ export const makePasskeyWriteTarget = <
   D,
   T extends Table,
   Extra = unknown,
-  Synchronous extends boolean = false,
+  Provided extends D1BatchStatements = never,
 >(
   databaseService: Context.Service<DatabaseId, D>,
   configuration: PasskeyTargetConfiguration,
@@ -39,13 +39,7 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Command extends T,
     N,
     A,
     E,
@@ -57,22 +51,17 @@ export const makePasskeyWriteTarget = <
     acquire: Effect.Effect<Database, DatabaseError, DatabaseRequirements>,
     options: {
       readonly mapping: PasskeyMappingSource<
-        PasskeyManagementMapping<S, C, F, O, H, M, Flow, Admission, Charge, Command, N> & Extra,
+        PasskeyManagementMapping<S, C, F, Flow, N> & Extra,
         RSetup
       >;
       readonly transaction?: never;
     },
-    body: Effect.Effect<
-      A,
-      E,
-      Synchronous extends true ? NoInfer<PasskeyPersistence | PasskeyManagementPersistence> : R
-    >,
+    body: Effect.Effect<A, E, R>,
   ): Effect.Effect<
     A,
     PasskeyCoordinatorError<E> | DatabaseError,
-    | (Synchronous extends true
-        ? never
-        : Exclude<R, PasskeyPersistence | PasskeyManagementPersistence>)
+    | Exclude<R, PasskeyPersistence | PasskeyManagementPersistence | Provided>
+    | Crypto.Crypto
     | LifecycleHooks
     | RSetup
     | DatabaseRequirements
@@ -82,13 +71,7 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Command extends T,
     N,
     A,
     E,
@@ -102,24 +85,21 @@ export const makePasskeyWriteTarget = <
     acquire: Effect.Effect<Database, DatabaseError, DatabaseRequirements>,
     options: {
       readonly mapping: PasskeyMappingSource<
-        PasskeyManagementMapping<S, C, F, O, H, M, Flow, Admission, Charge, Command, N> & Extra,
+        PasskeyManagementMapping<S, C, F, Flow, N> & Extra,
         RSetup
       >;
-      readonly transaction: SuppliedService<TxId, NoInfer<TransactionOf<Database>>, TxShape>;
+      readonly transaction: SuppliedService<
+        TxId,
+        NoInfer<[Provided] extends [never] ? TransactionOf<Database> : never>,
+        TxShape
+      >;
     },
-    body: Effect.Effect<
-      A,
-      E,
-      Synchronous extends true
-        ? NoInfer<PasskeyPersistence | PasskeyManagementPersistence | TxId>
-        : R
-    >,
+    body: Effect.Effect<A, E, R>,
   ): Effect.Effect<
     A,
     PasskeyCoordinatorError<E> | DatabaseError,
-    | (Synchronous extends true
-        ? never
-        : Exclude<R, PasskeyPersistence | PasskeyManagementPersistence | TxId>)
+    | Exclude<R, PasskeyPersistence | PasskeyManagementPersistence | TxId | Provided>
+    | Crypto.Crypto
     | LifecycleHooks
     | RSetup
     | DatabaseRequirements
@@ -129,13 +109,7 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Command extends T,
     N,
     A,
     E,
@@ -149,7 +123,7 @@ export const makePasskeyWriteTarget = <
     acquire: Effect.Effect<Database, DatabaseError, DatabaseRequirements>,
     options: {
       readonly mapping: PasskeyMappingSource<
-        PasskeyManagementMapping<S, C, F, O, H, M, Flow, Admission, Charge, Command, N> & Extra,
+        PasskeyManagementMapping<S, C, F, Flow, N> & Extra,
         RSetup
       >;
       readonly transaction?: SuppliedService<TxId, NoInfer<TransactionOf<Database>>, TxShape>;
@@ -159,6 +133,7 @@ export const makePasskeyWriteTarget = <
     A,
     PasskeyCoordinatorError<E> | DatabaseError,
     | Exclude<R, PasskeyPersistence | PasskeyManagementPersistence>
+    | Crypto.Crypto
     | LifecycleHooks
     | RSetup
     | DatabaseRequirements
@@ -190,20 +165,11 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Command extends T,
     N,
     RSetup = never,
   >(
-    mapping: PasskeyMappingSource<
-      PasskeyManagementMapping<S, C, F, O, H, M, Flow, Admission, Charge, Command, N> & Extra,
-      RSetup
-    >,
+    mapping: PasskeyMappingSource<PasskeyManagementMapping<S, C, F, Flow, N> & Extra, RSetup>,
   ) =>
     makeTargetPasskeyManagement(mapping, configuration).pipe(
       Effect.provideServiceEffect(NativeDatabase, nativeDatabase(databaseService)),
@@ -214,13 +180,7 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Intent extends T,
     N,
     Value,
     A,
@@ -234,22 +194,18 @@ export const makePasskeyWriteTarget = <
     acquire: Effect.Effect<Database, DatabaseError, DatabaseRequirements>,
     options: {
       readonly mapping: PasskeyMappingSource<
-        PasskeyRegistrationMapping<S, C, F, O, H, M, Flow, Admission, Charge, Intent, N, Value> &
-          Extra,
+        PasskeyRegistrationMapping<S, C, F, Flow, N, Value> & Extra,
         RSetup
       >;
       readonly authority: Context.Key<AuthorityId, PasskeyRegistrationWriter<Value>>;
       readonly transaction?: never;
     },
-    body: Effect.Effect<
-      A,
-      E,
-      Synchronous extends true ? NoInfer<PasskeyPersistence | AuthorityId> : R
-    >,
+    body: Effect.Effect<A, E, R>,
   ): Effect.Effect<
     A,
     PasskeyCoordinatorError<E> | DatabaseError,
-    | (Synchronous extends true ? never : Exclude<R, PasskeyPersistence | AuthorityId>)
+    | Exclude<R, PasskeyPersistence | AuthorityId | Provided>
+    | Crypto.Crypto
     | LifecycleHooks
     | RSetup
     | DatabaseRequirements
@@ -259,13 +215,7 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Intent extends T,
     N,
     Value,
     A,
@@ -281,22 +231,22 @@ export const makePasskeyWriteTarget = <
     acquire: Effect.Effect<Database, DatabaseError, DatabaseRequirements>,
     options: {
       readonly mapping: PasskeyMappingSource<
-        PasskeyRegistrationMapping<S, C, F, O, H, M, Flow, Admission, Charge, Intent, N, Value> &
-          Extra,
+        PasskeyRegistrationMapping<S, C, F, Flow, N, Value> & Extra,
         RSetup
       >;
       readonly authority: Context.Key<AuthorityId, PasskeyRegistrationWriter<Value>>;
-      readonly transaction: SuppliedService<TxId, NoInfer<TransactionOf<Database>>, TxShape>;
+      readonly transaction: SuppliedService<
+        TxId,
+        NoInfer<[Provided] extends [never] ? TransactionOf<Database> : never>,
+        TxShape
+      >;
     },
-    body: Effect.Effect<
-      A,
-      E,
-      Synchronous extends true ? NoInfer<PasskeyPersistence | AuthorityId | TxId> : R
-    >,
+    body: Effect.Effect<A, E, R>,
   ): Effect.Effect<
     A,
     PasskeyCoordinatorError<E> | DatabaseError,
-    | (Synchronous extends true ? never : Exclude<R, PasskeyPersistence | AuthorityId | TxId>)
+    | Exclude<R, PasskeyPersistence | AuthorityId | TxId | Provided>
+    | Crypto.Crypto
     | LifecycleHooks
     | RSetup
     | DatabaseRequirements
@@ -306,13 +256,7 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Intent extends T,
     N,
     Value,
     A,
@@ -328,8 +272,7 @@ export const makePasskeyWriteTarget = <
     acquire: Effect.Effect<Database, DatabaseError, DatabaseRequirements>,
     options: {
       readonly mapping: PasskeyMappingSource<
-        PasskeyRegistrationMapping<S, C, F, O, H, M, Flow, Admission, Charge, Intent, N, Value> &
-          Extra,
+        PasskeyRegistrationMapping<S, C, F, Flow, N, Value> & Extra,
         RSetup
       >;
       readonly authority: Context.Key<AuthorityId, PasskeyRegistrationWriter<Value>>;
@@ -339,7 +282,11 @@ export const makePasskeyWriteTarget = <
   ): Effect.Effect<
     A,
     PasskeyCoordinatorError<E> | DatabaseError,
-    Exclude<R, PasskeyPersistence | AuthorityId> | LifecycleHooks | RSetup | DatabaseRequirements
+    | Exclude<R, PasskeyPersistence | AuthorityId>
+    | Crypto.Crypto
+    | LifecycleHooks
+    | RSetup
+    | DatabaseRequirements
   > {
     return Effect.flatMap(nativeDatabase(acquire), (database) =>
       coordinateTargetPasskeyRegistrationWriter(
@@ -368,26 +315,18 @@ export const makePasskeyWriteTarget = <
     S extends T,
     C extends T,
     F extends T,
-    O extends T,
-    H extends T,
-    M extends T,
     Flow extends T,
-    Admission extends T,
-    Charge extends T,
-    Intent extends T,
     N,
     Value,
     RSetup = never,
   >(
     mapping: PasskeyMappingSource<
-      PasskeyRegistrationMapping<S, C, F, O, H, M, Flow, Admission, Charge, Intent, N, Value> &
-        Extra,
+      PasskeyRegistrationMapping<S, C, F, Flow, N, Value> & Extra,
       RSetup
     >,
   ) =>
     makeTargetPasskeyRegistrationWriter<
-      PasskeyRegistrationMapping<S, C, F, O, H, M, Flow, Admission, Charge, Intent, N, Value> &
-        Extra,
+      PasskeyRegistrationMapping<S, C, F, Flow, N, Value> & Extra,
       Value,
       RSetup
     >(mapping, configuration).pipe(

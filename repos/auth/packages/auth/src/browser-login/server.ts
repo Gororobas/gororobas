@@ -1,13 +1,11 @@
 import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
 
-import { cryptoLayer } from "../auth/defaults";
 import { hasCommitScope } from "../hooks/commit";
 import { credentialSlots } from "../http-operation/models";
 import { OperationHttpServerConfig } from "../http-operation/OperationHttpServerConfig";
 import { make as makeHttpServer } from "../http-operation/server";
+import { CleanupLimit, CleanupResult } from "../persistence/cleanup";
 import { TokenDigest } from "../Schema";
-import { assessAuthentication } from "../sessions/assurance";
-import { AuthenticationAuthority } from "../sessions/AuthenticationAuthority";
 import {
   AuthenticationFlowId,
   SessionAuthenticationProvenance,
@@ -105,6 +103,8 @@ export const make = <
 
         if (!(yield* store.compareAndSet(namespace, id, record.version, next)))
           return yield* Invalid.make({});
+
+        return next;
       });
 
       const { initiate, describe, authorize, exchange, status, cancel } = contract.operations;
@@ -178,7 +178,10 @@ export const make = <
               (input.decision === "automatic" && client.browserSession !== "automatic")
             )
               return yield* Invalid.make({});
-            const source = yield* strategy.inspect(input.credential);
+
+            const source = (yield* sessions
+              .inspectInvocation(caller, input.credential)
+              .pipe(Effect.provideService(sessions.SessionStrategy, strategy))).inspection;
 
             if (
               caller._tag !== "Authenticated" ||
@@ -189,15 +192,6 @@ export const make = <
                   record.createdAtMillis)
             )
               return yield* Invalid.make({});
-            const authority = yield* AuthenticationAuthority;
-            const requirement = yield* authority.requirements(source.provenance.evidence);
-
-            const assessed = yield* assessAuthentication(
-              source.provenance.evidence,
-              requirement,
-            ).pipe(Effect.mapError(() => Invalid.make({})));
-
-            if (!assessed.satisfied) return yield* Invalid.make({});
             const code = yield* secrets.random;
 
             yield* update(input.attemptId, record, {
@@ -251,7 +245,7 @@ export const make = <
               return yield* Invalid.make({});
 
             // Claim before issuance. A crash can sacrifice availability but never licenses a second issuance.
-            yield* update(input.attemptId, record, {
+            const claimed = yield* update(input.attemptId, record, {
               status: "Exchanging",
             }).pipe(Effect.mapError(() => Indeterminate.make({})));
 
@@ -265,8 +259,6 @@ export const make = <
               const result = yield* receipt.read.pipe(
                 Effect.mapError(() => Indeterminate.make({})),
               );
-
-              const claimed = yield* read(input.attemptId);
 
               yield* update(input.attemptId, claimed, {
                 status: "Complete",
@@ -314,7 +306,7 @@ export const make = <
         ),
       );
     }),
-  ).pipe(Layer.provide(cryptoLayer));
+  );
 
   /** Mount this wrapper: authorization is browser-only; all host operations are
    * native-only. The existing transport still enforces native admission, Origin,
@@ -347,5 +339,20 @@ export const make = <
     };
   });
 
-  return { ...contract, layer, http };
+  const cleanup = Effect.fn("BrowserLogin.cleanup")(function* (input: CleanupLimit) {
+    if (yield* hasCommitScope) return yield* Unavailable.make({});
+
+    const limit = yield* Schema.decodeEffect(CleanupLimit)(input).pipe(
+      Effect.mapError(() => Unavailable.make({})),
+    );
+
+    const store = yield* Persistence;
+    const result = yield* store.cleanup({ namespace: `${sessions.moduleId}/browser-login`, limit });
+
+    return yield* Schema.decodeEffect(CleanupResult)(result).pipe(
+      Effect.mapError(() => Unavailable.make({})),
+    );
+  });
+
+  return { ...contract, layer, http, cleanup };
 };

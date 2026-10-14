@@ -15,6 +15,8 @@ export const customers = AuthPersistence.table({
 export const identifiers = AuthPersistence.table({
   name: "app_identifiers",
   columns: {
+    moduleId: { name: "c_module_id", type: "text", nullable: true },
+    credentialId: { name: "c_credential_id", type: "text", nullable: true },
     namespace: { name: "c_namespace", type: "text" },
     value: { name: "c_value", type: "text" },
     subjectId: { name: "c_subject_id", type: "text" },
@@ -53,201 +55,24 @@ export const passwords = AuthPersistence.table({
   ],
 });
 
-export const passwordAttempts = AuthPersistence.table({
-  name: "app_password_attempts",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    action: { name: "c_action", type: "text" },
-    attemptId: { name: "c_attempt_id", type: "text" },
-    identifierNamespace: { name: "c_identifier_namespace", type: "text" },
-    identifierValue: { name: "c_identifier_value", type: "text" },
-    subjectId: { name: "c_subject_id", type: "text", nullable: true },
-    credentialId: { name: "c_credential_id", type: "text", nullable: true },
-    securityRevision: { name: "c_security_revision", type: "text", nullable: true },
-    credentialRevision: { name: "c_credential_revision", type: "text", nullable: true },
-    verifierVersion: { name: "c_verifier_version", type: "text", nullable: true },
-    identifierBindingRevision: {
-      name: "c_identifier_binding_revision",
-      type: "text",
-      nullable: true,
-    },
-    admittedAt: { name: "c_admitted_at", type: "integer" },
-    deadline: { name: "c_deadline", type: "integer" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-    state: { name: "c_state", type: "text" },
-  },
-  unique: [["moduleId", "attemptId"]],
-});
-
-export const passwordScopes = AuthPersistence.table({
-  name: "app_password_scopes",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    action: { name: "c_action", type: "text" },
-    scopeKind: { name: "c_scope_kind", type: "text" },
-    scopeKey: { name: "c_scope_key", type: "text" },
-  },
-  unique: [["moduleId", "action", "scopeKind", "scopeKey"]],
-});
-
-export const passwordCharges = AuthPersistence.table({
-  name: "app_password_charges",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    action: { name: "c_action", type: "text" },
-    scopeKind: { name: "c_scope_kind", type: "text" },
-    scopeKey: { name: "c_scope_key", type: "text" },
-    attemptId: { name: "c_attempt_id", type: "text" },
-    occurredAt: { name: "c_occurred_at", type: "integer" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-  },
-  unique: [["moduleId", "action", "scopeKind", "scopeKey", "attemptId"]],
-});
-
-export const passwordCommands = AuthPersistence.table({
-  name: "app_password_commands",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    commandId: { name: "c_command_id", type: "text" },
-    action: { name: "c_action", type: "text" },
-    bindingDigest: { name: "c_binding_digest", type: "text" },
-    decision: { name: "c_decision", type: "text" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-  },
-  unique: [["moduleId", "commandId"]],
-});
-
-export const proofRequests = AuthPersistence.table({
-  name: "app_proof_requests",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    requestId: { name: "c_request_id", type: "text" },
-    fingerprint: { name: "c_fingerprint", type: "text" },
-    proofId: { name: "c_proof_id", type: "text" },
-    purpose: { name: "c_purpose", type: "text" },
-    keyId: { name: "c_key_id", type: "text" },
-    createdAt: { name: "c_created_at", type: "integer" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-    receipt: { name: "c_receipt", type: "text" },
-  },
-  unique: [["moduleId", "requestId"]],
-});
-
-export const proofSeries = AuthPersistence.table({
-  name: "app_proof_series",
+export const proofs = AuthPersistence.table({
+  name: "app_proofs",
   columns: {
     moduleId: { name: "c_module_id", type: "text" },
     purpose: { name: "c_purpose", type: "text" },
-    scopeKey: { name: "c_scope_key", type: "text" },
-    activeProofId: { name: "c_active_proof_id", type: "text", nullable: true },
-    lastIssueAt: { name: "c_last_issue_at", type: "integer", nullable: true },
-    version: { name: "c_version", type: "text" },
-  },
-  unique: [["moduleId", "purpose", "scopeKey"]],
-});
-
-export const proofGenerations = AuthPersistence.table({
-  name: "app_proof_generations",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    purpose: { name: "c_purpose", type: "text" },
-    proofId: { name: "c_proof_id", type: "text" },
-    requestId: { name: "c_request_id", type: "text" },
     seriesKey: { name: "c_series_key", type: "text" },
-    deliveryId: { name: "c_delivery_id", type: "text" },
+    proofId: { name: "c_proof_id", type: "text" },
     binding: { name: "c_binding", type: "text" },
     verifierKeyId: { name: "c_verifier_key_id", type: "text" },
     verifierDigest: { name: "c_verifier_digest", type: "text" },
     issuedAt: { name: "c_issued_at", type: "integer" },
     expiresAt: { name: "c_expires_at", type: "integer" },
-    version: { name: "c_version", type: "text" },
-    state: { name: "c_state", type: "text" },
-    sendCount: { name: "c_send_count", type: "integer" },
-    deliveryState: { name: "c_delivery_state", type: "text" },
-    claimVersion: { name: "c_claim_version", type: "text", nullable: true },
-    claimDeadline: { name: "c_claim_deadline", type: "integer", nullable: true },
-    retryAt: { name: "c_retry_at", type: "integer", nullable: true },
-    deliveryRetryMillis: { name: "c_delivery_retry_millis", type: "integer" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-    fingerprint: { name: "c_fingerprint", type: "text" },
+    failedAttempts: { name: "c_failed_attempts", type: "integer" },
   },
   unique: [
+    ["moduleId", "purpose", "seriesKey"],
     ["moduleId", "proofId"],
-    ["moduleId", "deliveryId"],
   ],
-});
-
-export const proofContinuations = AuthPersistence.table({
-  name: "app_proof_continuations",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    purpose: { name: "c_purpose", type: "text" },
-    continuationId: { name: "c_continuation_id", type: "text" },
-    digest: { name: "c_digest", type: "text" },
-    proofId: { name: "c_proof_id", type: "text" },
-    seriesKey: { name: "c_series_key", type: "text" },
-    binding: { name: "c_binding", type: "text" },
-    expiresAt: { name: "c_expires_at", type: "integer" },
-    consumed: { name: "c_consumed", type: "boolean" },
-    version: { name: "c_version", type: "text" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-  },
-  unique: [
-    ["moduleId", "continuationId"],
-    ["moduleId", "digest"],
-  ],
-});
-
-export const proofScopes = AuthPersistence.table({
-  name: "app_proof_scopes",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    purpose: { name: "c_purpose", type: "text" },
-    action: { name: "c_action", type: "text" },
-    scopeKind: { name: "c_scope_kind", type: "text" },
-    scopeKey: { name: "c_scope_key", type: "text" },
-  },
-  unique: [["moduleId", "purpose", "action", "scopeKind", "scopeKey"]],
-});
-
-export const proofAbuse = AuthPersistence.table({
-  name: "app_proof_abuse",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    purpose: { name: "c_purpose", type: "text" },
-    action: { name: "c_action", type: "text" },
-    scopeKind: { name: "c_scope_kind", type: "text" },
-    scopeKey: { name: "c_scope_key", type: "text" },
-    commandId: { name: "c_command_id", type: "text" },
-    occurredAt: { name: "c_occurred_at", type: "integer" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-  },
-  unique: [["moduleId", "action", "scopeKind", "scopeKey", "commandId"]],
-});
-
-export const proofFailures = AuthPersistence.table({
-  name: "app_proof_failures",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    purpose: { name: "c_purpose", type: "text" },
-    seriesKey: { name: "c_series_key", type: "text" },
-    commandId: { name: "c_command_id", type: "text" },
-    occurredAt: { name: "c_occurred_at", type: "integer" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-  },
-  unique: [["moduleId", "seriesKey", "commandId"]],
-});
-
-export const proofCommands = AuthPersistence.table({
-  name: "app_proof_commands",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    commandId: { name: "c_command_id", type: "text" },
-    kind: { name: "c_kind", type: "text" },
-    decision: { name: "c_decision", type: "text" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-  },
-  unique: [["moduleId", "commandId"]],
 });
 
 export const sessions = AuthPersistence.table({
@@ -256,7 +81,6 @@ export const sessions = AuthPersistence.table({
     sessionId: { name: "c_session_id", type: "text" },
     subjectId: { name: "c_subject_id", type: "text" },
     digest: { name: "c_digest", type: "text" },
-    version: { name: "c_version", type: "text" },
     securityRevision: { name: "c_security_revision", type: "text" },
     issuedAt: { name: "c_issued_at", type: "integer" },
     expiresAt: { name: "c_expires_at", type: "integer" },
@@ -266,25 +90,23 @@ export const sessions = AuthPersistence.table({
   unique: [["sessionId"], ["digest"]],
 });
 
-export const sessionFlows = AuthPersistence.table({
-  name: "app_session_flows",
-  columns: {
-    flowId: { name: "c_flow_id", type: "text" },
-    subjectId: { name: "c_subject_id", type: "text" },
-    state: { name: "c_state", type: "text" },
-    pendingDigest: { name: "c_pending_digest", type: "text", nullable: true },
-    dedupUntil: { name: "c_dedup_until", type: "integer" },
-  },
-  unique: [["flowId"]],
-});
-
-export const passwordRegistrations = AuthPersistence.table({
-  name: "app_password_registrations",
+export const pending = AuthPersistence.table({
+  name: "app_pending",
   columns: {
     moduleId: { name: "c_module_id", type: "text" },
-    requestId: { name: "c_request_id", type: "text" },
+    kind: { name: "c_kind", type: "text" },
+    digest: { name: "c_digest", type: "text" },
+    version: { name: "c_version", type: "text" },
+    flowId: { name: "c_flow_id", type: "text" },
+    subjectId: { name: "c_subject_id", type: "text" },
+    bindingDigest: { name: "c_binding_digest", type: "text" },
+    snapshot: { name: "c_snapshot", type: "text" },
+    expiresAt: { name: "c_expires_at", type: "integer" },
+    attemptLimit: { name: "c_attempt_limit", type: "integer" },
+    failedAttempts: { name: "c_failed_attempts", type: "integer" },
+    consumed: { name: "c_consumed", type: "boolean" },
   },
-  unique: [["moduleId", "requestId"]],
+  unique: [["digest"]],
 });
 
 export const emailCredentials = AuthPersistence.table({
@@ -302,16 +124,4 @@ export const emailCredentials = AuthPersistence.table({
     ["moduleId", "credentialId"],
     ["moduleId", "identifierNamespace", "identifierValue"],
   ],
-});
-
-export const emailCommands = AuthPersistence.table({
-  name: "app_email_commands",
-  columns: {
-    moduleId: { name: "c_module_id", type: "text" },
-    commandId: { name: "c_command_id", type: "text" },
-    action: { name: "c_action", type: "text" },
-    bindingDigest: { name: "c_binding_digest", type: "text" },
-    retentionUntil: { name: "c_retention_until", type: "integer" },
-  },
-  unique: [["moduleId", "commandId"]],
 });

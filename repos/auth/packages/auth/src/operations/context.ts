@@ -1,6 +1,7 @@
 import { DateTime, Effect, Schema } from "effect";
 
 import type { SubjectId } from "../Schema";
+import { AuthenticationClock } from "./clock";
 import { AssuranceRequired, AuthenticationRequired, OperationForbidden } from "./errors";
 
 export const AuthenticationFactor = Schema.Literals(["knowledge", "possession", "inherence"]);
@@ -77,7 +78,7 @@ export interface AssuranceRequirement {
   readonly phishingResistant?: true;
 }
 
-/** Reject future timestamps as well as stale authentication. */
+/** Bound future lead with AuthenticationClock; accepted future evidence has age zero. */
 export const requireAssurance = Effect.fn("AuthOperation.requireAssurance")(function* (
   context: AuthInvocation,
   requirement: AssuranceRequirement,
@@ -93,16 +94,19 @@ export const requireAssurance = Effect.fn("AuthOperation.requireAssurance")(func
   )(requirement.minimumCredentials ?? 1).pipe(Effect.orDie);
 
   const now = DateTime.toEpochMillis(yield* DateTime.now);
+  const { futureToleranceMillis } = yield* AuthenticationClock;
 
   if (
-    DateTime.toEpochMillis(caller.assurance.authenticatedAt) > now ||
-    caller.assurance.evidence?.some((proof) => DateTime.toEpochMillis(proof.verifiedAt) > now)
+    DateTime.toEpochMillis(caller.assurance.authenticatedAt) - now > futureToleranceMillis ||
+    caller.assurance.evidence?.some(
+      (proof) => DateTime.toEpochMillis(proof.verifiedAt) - now > futureToleranceMillis,
+    )
   )
     return yield* AssuranceRequired.make({});
 
   const fresh =
     caller.assurance.evidence?.filter(
-      (proof) => now - DateTime.toEpochMillis(proof.verifiedAt) < maximumAge,
+      (proof) => Math.max(0, now - DateTime.toEpochMillis(proof.verifiedAt)) < maximumAge,
     ) ?? [];
 
   const factors = new Set(fresh.flatMap((proof) => proof.factors));

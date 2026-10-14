@@ -65,15 +65,13 @@ from the repository root:
 vp -C examples/persistence-drizzle-managed run db:generate --name=describe_change
 ```
 
-Generation compacts JSON snapshots to one line; Git marks them as generated.
-
 Review and commit the generated migration. [MigrationsLive](src/migrations.ts) applies
 those files with Drizzle before auth starts, recording them in `__drizzle_migrations`.
 Run `vp -C examples/persistence-drizzle-managed run db:migrate` from the root to apply them separately.
 Startup never generates or pushes schema changes.
 
 [Layers](src/live.ts) provide subject creation, claims, and [custom hashing](../shared/account/hashing.ts). The library commits customer creation,
-identifier binding, password storage, and the registration receipt together. Existing
+identifier binding and password storage together. Existing
 account registration and exact request replays never overwrite a password.
 `Passkey.make()` and `Passkey.makeManagement()` enable the managed passkey tables.
 `PasskeyConfig` supplies the relying party to both persistence and the server verifier;
@@ -87,7 +85,3 @@ and [client](../shared/account/email-client.ts) are shared with the repository's
 other account examples.
 This app's [live.ts](src/live.ts) supplies persistence and account Layers;
 [delivery.ts](src/delivery.ts) selects local or Cloudflare email.
-
-`vp -C examples/persistence-drizzle-managed run test` checks registration rollback
-after credential storage fails, plus password recovery through the client's resend
-action, using HTTP against a temporary database.

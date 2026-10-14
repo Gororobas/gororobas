@@ -1,0 +1,199 @@
+---
+title: JOSE and typed JWTs
+description: Sign and verify Schema-typed claims, import keys, and compose bounded local or remote key sets.
+---
+
+import { FlowMap } from "@yielded/starlight-theme/components";
+
+`@yielded/jose` owns JOSE wire formats and verification. Your application owns the
+claims Schema, keys, accepted algorithms, issuers, audiences and token purpose.
+Cryptographic execution comes from [a crypto backend](./crypto.md); remote key
+retrieval uses an explicitly supplied Effect HttpClient. Neither reusable package
+depends on Auth.
+
+<FlowMap
+  title="JWT verification boundaries"
+  description="The application supplies its verification policy and claims Schema. JOSE authenticates the token through the selected crypto backend, checks registered claims, then decodes the application claims. Only remote key sets require HTTP."
+  columns={3}
+  nodes={[
+    {
+      id: "app",
+      at: [1, 2],
+      owner: "app",
+      title: "Application",
+      note: "Claims Schema and trust policy",
+    },
+    {
+      id: "jose",
+      at: [2, 2],
+      owner: "library",
+      title: "JOSE",
+      note: "Signature, registered claims, Schema",
+    },
+    {
+      id: "crypto",
+      at: [3, 1],
+      owner: "library",
+      title: "Crypto backend",
+      note: "Application-selected Layer",
+    },
+    { id: "http", at: [3, 3], owner: "app", title: "HttpClient", note: "Only for remote JWKS" },
+  ]}
+  edges={[
+    { from: "app", to: "jose" },
+    { from: "jose", to: "crypto" },
+    { from: "jose", to: "http", label: "Configured HTTPS endpoint" },
+  ]}
+/>
+
+## Verify typed claims
+
+```sh
+bun add @yielded/jose@beta @yielded/crypto@beta effect
+```
+
+Import modules from the root; select the crypto runtime through its direct path.
+Bun uses `@yielded/crypto/platform-bun`. WebCrypto and portable backends are also
+available through the crypto package.
+
+```ts
+import { KdfAdmission } from "@yielded/crypto";
+import * as PlatformCrypto from "@yielded/crypto/platform-node";
+import { Jwk, Jwt } from "@yielded/jose";
+import { Effect, Layer, Redacted, Schema } from "effect";
+
+const Claims = Schema.Struct({
+  sub: Schema.String.check(Schema.isPattern(/^user_[0-9]+$/)).pipe(Schema.brand("Subject")),
+  role: Schema.Literals(["admin", "member"]),
+});
+const Cryptography = PlatformCrypto.layer().pipe(Layer.provide(KdfAdmission.layer()));
+
+// Read these from application-owned key configuration and the incoming request.
+declare const publicJwk: unknown;
+declare const token: Redacted.Redacted<string>;
+
+const verified = Effect.gen(function* () {
+  const key = yield* Jwk.importPublic(publicJwk, "ES256");
+  return yield* Jwt.verify(Claims, token, key, {
+    algorithms: ["ES256"],
+    issuer: "https://issuer.example",
+    audience: "api",
+    typ: "JWT",
+    requiredClaims: ["exp"],
+  });
+}).pipe(Effect.provide(Cryptography));
+```
+
+The result's `claims` has the Schema's decoded type, including the branded subject
+and constrained role. `registeredClaims` retains validated standard fields even
+when the application Schema omits them. `protectedHeader` contains the supported
+header fields.
+
+`Jwt.sign(schema, claims, privateKey, header)` encodes the Schema before signing.
+Asymmetric signing requires `Signature` in the signing effect's environment,
+even when the private key was imported earlier. Provide the crypto Layer there.
+Verification checks the signature and registered claims before decoding the
+application Schema. Both operations preserve `SchemaError` and the Schema's
+encoding/decoding service requirements in `E` and `R`. Schema input reporting is
+disabled; caller-authored messages, annotations and paths remain caller-owned.
+
+`Jwt.decodeUnverified(token)` returns an explicitly tagged `UnverifiedJwt` with
+redacted JSON claims. It performs no signature or claim-policy checks.
+
+## Keys and compact operations
+
+| Module | Entry points                                                   | Contract                                                                                                                    |
+| ------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `Jwk`  | `importPublic`, `importPrivate`, `importSecret`, `importPkcs8` | Validate a JWK, or import PKCS8 DER, and bind it to an explicitly chosen algorithm; private/symmetric inputs are `Redacted` |
+| `Jwk`  | `exportPublic`, `exportPrivate`                                | Export imported JWKs; private/symmetric output stays `Redacted`                                                             |
+| `Jwk`  | `generateKeyPair`                                              | Generate typed public and redacted private JWKs through the selected crypto backend                                         |
+| `Jws`  | `sign`, `verify`, `verifyWithKeySet`                           | Compact JWS over redacted bytes, with an explicit verification algorithm list                                               |
+| `Jwt`  | `sign`, `verify`, `verifyWithKeySet`                           | Compact signed JWT with a claims Schema                                                                                     |
+| `Jwe`  | `encrypt`, `decrypt`                                           | Compact `dir` / `A256GCM`; redacted plaintext and tokens                                                                    |
+
+Private keys require complete RSA CRT parameters, P-256 coordinates and scalar,
+or Ed25519 public and private bytes. Native key parsing validates the components.
+`Jwk.generateKeyPair({ algorithm: "RS256", kid: "v1" })` returns `publicKey` and
+redacted `privateKey` JWK values ready for application-owned persistence or import.
+Generation supports the asymmetric algorithms above; RSA accepts `modulusLength`
+2048 (default), 3072 or 4096. Generated JWKs carry the selected `alg`, `use: "sig"`
+and optional `kid`.
+Public imports and JWKS reject private keys; `alg`, `use`, and `key_ops` restrict
+operations. Key sets and each `key_ops` array are limited to 256 entries. JWKS select
+one public key by algorithm, optional `kid`, use and operations; missing or ambiguous
+selections fail.
+
+`Jwe.encrypt(plaintext, key, { alg: "dir", enc: "A256GCM" })` requires `Aead` and
+Effect `Crypto`, which supplies a fresh 12-byte nonce. The compact protected header
+is authenticated; decryption releases plaintext only after tag verification.
+Supply the platform's Effect Crypto Layer alongside the reusable crypto backend.
+
+## Verification policy and limits
+
+| Option or profile    | Behavior                                                                                                                            |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| JWS/JWT algorithms   | `HS256`, `RS256`, `PS256`, `ES256`, `EdDSA` using Ed25519; `algorithms` must be a nonempty allowlist                                |
+| Keys                 | HS256 requires at least 32 bytes; RSA JWK imports from 2048 to 8192 bits; ES256 uses P-256; EdDSA uses Ed25519                      |
+| JWE                  | `dir` with `A256GCM`, a 32-byte key and 16-byte authentication tag                                                                  |
+| `issuer`, `audience` | Optional exact expected string or nonempty list; configured values require the corresponding claim                                  |
+| `subject`, `typ`     | Optional expected subject and token type; type comparison ignores case and treats a bare subtype such as `JWT` as `application/jwt` |
+| `exp`, `nbf`         | Checked whenever present; use `requiredClaims` to require their presence                                                            |
+| `clockTolerance`     | Nonnegative seconds, default `0`; time comes from Effect Clock                                                                      |
+| `maxTokenAge`        | Optional nonnegative seconds; requires `iat`, rejects future issuance and excessive age                                             |
+| Input limits         | Compact tokens up to 64 KiB of ASCII; protected segment up to 4 KiB; signing/encryption payloads up to 45,000 bytes                 |
+
+JSON serialization, multiple signatures/recipients, unsecured `none`, other
+algorithms, detached/unencoded payloads, critical extensions, compression,
+PEM/certificate helpers and OAuth discovery are outside this profile. Token
+headers never select a network URL or introduce a trusted key. Authentication
+flows, sessions, replay prevention and account authority remain application or
+Auth concerns.
+
+Protocol errors contain fixed classifications without input or native causes.
+Tokens, private material and plaintext use `Redacted`; JavaScript cannot guarantee
+that every secret copy is erased. Keep keys dedicated to their protocol purpose.
+
+## Local and remote public key sets
+
+Provide `Jwks.layerLocal({ keys })` to `Jwt.verifyWithKeySet` or
+`Jws.verifyWithKeySet`. Local verification requires only the selected crypto
+services. Public key sets accept the supported RSA, P-256 and Ed25519 profiles,
+with at most 256 keys; malformed or unsupported entries reject the set. Share the
+Layer across requests to reuse successful public-key imports. Returned key bytes
+remain independent, and crypto service overrides retain their own imports.
+
+Remote verification adds a scoped Layer:
+
+```ts
+import { Jwks } from "@yielded/jose";
+import { FetchHttpClient } from "effect/http";
+import { Layer } from "effect";
+
+const TrustedKeys = Jwks.layerRemote({
+  url: "https://issuer.example/keys",
+}).pipe(Layer.provide(FetchHttpClient.layer));
+```
+
+Build this Layer once in the application's runtime and share it across requests.
+Every Layer instance owns its cache, coalesced refresh and shutdown. The URL must
+be application-configured HTTPS without credentials or a fragment. The supplied
+client owns egress policy and must not follow redirects; the fetch client is
+configured to reject them, and responses from a different URL are rejected.
+
+| Remote option      | Default               | Range        |
+| ------------------ | --------------------- | ------------ |
+| `cacheTimeMs`      | 600,000               | 1–86,400,000 |
+| `cooldownMs`       | 30,000                | 0–3,600,000  |
+| `timeoutMs`        | 5,000                 | 1–60,000     |
+| `maxResponseBytes` | 131,072               | 1–1,048,576  |
+| `maxKeys`          | 64                    | 1–256        |
+| `maxWaiters`       | 64 concurrent lookups | 1–1,024      |
+
+Unknown keys refresh at most once per cooldown. Concurrent lookups share a
+refresh; overflow fails immediately. Failed refreshes also consume the cooldown,
+and expired keys are never served after a refresh failure. Scope closure aborts
+requests, releases waiting callers and discards the cache. Cache lifetime is local
+policy; server cache headers do not override it. There is no background polling.
+
+The [shipped notices](https://github.com/yielded-dev/auth/blob/main/packages/jose/THIRD_PARTY_NOTICES.md)
+credit the selected upstream contracts and their source revisions.

@@ -89,53 +89,19 @@ to preserve private links. EU regional subusers use `api.eu.sendgrid.com`.
 
 ## Use Alchemy
 
-This example uses Alchemy's Cloudflare binding; [AWS SES bindings](https://alchemy.run/aws/email/sending/)
-can implement the same service. Declare
-`const sender = yield* Cloudflare.Email.SendEmail("AUTH_EMAIL")` in your stack, then
-bind it inside the Worker's construction effect:
+Alchemy's Cloudflare binding and [AWS SES bindings](https://alchemy.run/aws/email/sending/)
+can implement the same `EmailDelivery` service. For Cloudflare, declare
+`Cloudflare.Email.SendEmail("AUTH_EMAIL")` in your stack and acquire
+`Cloudflare.Email.Send(sender)` inside the Worker's construction Effect.
 
-<!-- prettier-ignore -->
-```ts
-import {
-  EmailDelivery,
-  EmailAcceptanceUnknown,
-} from "@yielded/auth/EmailDelivery";
-import * as Cloudflare from "alchemy/Cloudflare";
-import { RuntimeContext } from "alchemy/RuntimeContext";
-import { Effect, Layer, Redacted } from "effect";
+Build `EmailLive` per request, capturing Alchemy's `RuntimeContext` and providing
+it to the send Effect. Do not cache that context across requests. Keep the Auth
+scope alive through the Worker's background-work lifetime. `SendEmailError` does
+not establish definite rejection, so map it to `EmailAcceptanceUnknown`.
+Configure sender permissions and destination eligibility.
 
-const mail = yield* Cloudflare.Email.Send(sender);
-
-const EmailLive = Layer.effect(
-  EmailDelivery,
-  Effect.gen(function* () {
-    const runtime = yield* RuntimeContext;
-
-    return EmailDelivery.of({
-      send: (message) =>
-        mail.send({
-          from: "hello@example.com",
-          to: message.to,
-          subject: message.subject,
-          text: Redacted.value(message.text),
-          ...(message.html === undefined
-            ? {}
-            : { html: Redacted.value(message.html) }),
-        }).pipe(
-          Effect.provideService(RuntimeContext, runtime),
-          Effect.asVoid,
-          Effect.mapError(() => EmailAcceptanceUnknown.make({})),
-        ),
-    });
-  }),
-);
-```
-
-Build this Layer per request, where Alchemy supplies `RuntimeContext`; never cache
-it across requests. Keep that request's Auth scope alive through the Worker's
-background-work lifetime, as described below. `SendEmailError` does not establish
-rejection certainty, so it maps to uncertainty. Configure sender permissions and
-destination eligibility.
+For a complete REST-based Cloudflare transport, see the
+[account examples' delivery service](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/delivery.ts).
 
 ## Compose Auth
 
@@ -145,36 +111,24 @@ Provide your chosen `EmailLive` alongside your application services:
 const AuthLive = AppAuth.layer.pipe(Layer.provide(EmailLive), Layer.provide(AuthDependencies));
 ```
 
-Build `AuthLive` once in your server's application scope. Auth supplies one shared
-delivery worker automatically; there is no scheduler to implement or wire up.
-It accepts up to 64 pending tasks, runs one at a time, and requests cancellation
-after ten seconds of execution. A full queue returns `ProofUnavailable` without waiting for the
-provider. Every committed receipt uses the same admission path, including suppression
-and replay.
+Build `AuthLive` once in your server's application scope. Auth supplies a worker
+with room for 64 pending tasks, running one at a time with a ten-second cancellation
+budget. A full queue returns `ProofUnavailable` without waiting for the provider.
 
-The worker stops with the application scope; a scope that closes at the end of each
-request also cancels its delivery. Workers and other hosts that suspend after returning
-a response must keep the scope alive using their background-work mechanism. This also
-applies when a provider requires request-local services, as in the Alchemy example.
+Closing the scope cancels delivery. Hosts that suspend after a response, including
+Workers, must keep it alive through their background-work mechanism. This also
+applies to request-local providers such as Alchemy's binding.
 
-A queued task may start before the response is sent. Persistence and application
-hooks can still vary in latency; Auth does not promise constant-time requests.
-For host-specific scheduling, override `Proofs.ProofDispatchScheduler` when constructing
-`AuthLive`. A host requiring strictly post-response execution must release work from
-its completion hook.
+Delivery may begin before the response is sent. Override
+`Proofs.ProofDispatchScheduler` if your host requires a post-response start.
+`Proofs.ProofDispatchScheduler.layerInline` instead waits for delivery; reserve it
+for trusted workflows, not public requests that must conceal account eligibility.
 
-For CLI or trusted workflows that must await delivery, explicitly provide
-`Proofs.ProofDispatchScheduler.layerInline`. It exposes provider latency and should
-not serve public requests that must conceal account eligibility.
-
-Keep bodies and capability URLs out of logs and telemetry. Disable transport/SDK
-retries and use `maximumDeliveryAttempts: 1`; the service promises no deduplication.
-Generic auth receipts do not confirm delivery. Scheduling is process-local, without
-a durable outbox; a crash or shutdown can discard accepted work. An exact retry
-recovers its receipt without authorizing another send.
-
-When replacing proof-level delivery, start new email flows with fresh request IDs
-and let old proofs expire. Account, password, and session data need no reset.
+Keep bodies and capability URLs out of logs and telemetry, and disable transport
+retries. Delivery is process-local, without a durable outbox or automatic retry.
+A crash, queue rejection, or shutdown can leave a proof unsent; an unknown commit
+outcome schedules nothing. To resend, explicitly request a new proof after cooldown
+with the original binding. Request IDs do not recover earlier receipts or delivery.
 
 ## Customize wording
 

@@ -3,7 +3,12 @@ import { Base64Url } from "effect/encoding";
 
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
-import { HookDenied, LifecycleEventId, lifecycleEvent, lifecycleSnapshot } from "../hooks/models";
+import {
+  HookDenied,
+  LifecycleEventId,
+  lifecycleEventEffect,
+  lifecycleSnapshotEffect,
+} from "../hooks/models";
 import { LoginIdentifier } from "../identity/models";
 import type { AuthInvocation } from "../operations/context";
 import type { AuthOperationResult } from "../operations/credentials";
@@ -13,14 +18,7 @@ import { RequestBindingCredential, RequestBindingFlowId } from "../operations/re
 import { proofRequestAdmission } from "../proofs/admission";
 import { readProofCommit } from "../proofs/dispatch";
 import type { ProofBinding } from "../proofs/models";
-import {
-  ProofContinuation,
-  ProofContinuationId,
-  ProofId,
-  ProofReference,
-  ProofRequestId,
-  ProofRequestReceipt,
-} from "../proofs/models";
+import { ProofReference, ProofRequestId, ProofRequestReceipt } from "../proofs/models";
 import type { makeProofModule } from "../proofs/module";
 import { Email, Locale, TokenDigest } from "../Schema";
 import { assessAuthentication, snapshotAuthenticationEvidence } from "../sessions/assurance";
@@ -53,7 +51,6 @@ const base = {
   commandId: EmailCommandId,
   email: Schema.String.check(Schema.isMaxLength(320)).pipe(Schema.decodeTo(Email)),
   sourceCredentialId: Schema.optionalKey(BoundedId),
-  actionProof: Schema.optionalKey(Secret),
 };
 
 const BindingInput = Schema.Struct(base);
@@ -64,21 +61,16 @@ const RequestInput = Schema.Struct({
   locale: Locale,
 });
 
-const ResendInput = Schema.Struct({ ...RequestInput.fields, supersedes: ProofId });
-const AttemptInput = Schema.Struct({ ...base, reference: ProofReference, secret: Secret });
-
 const CompleteInput = Schema.Struct({
   ...base,
-  continuationId: ProofContinuationId,
-  credential: Secret,
+  reference: ProofReference,
+  secret: Secret,
+  actionProof: Schema.optionalKey(Secret),
 });
 
 const ChangeRequest = Schema.Struct({ ...RequestInput.fields, sourceCredentialId: BoundedId });
-const ChangeResend = Schema.Struct({ ...ResendInput.fields, sourceCredentialId: BoundedId });
-const ChangeAttempt = Schema.Struct({ ...AttemptInput.fields, sourceCredentialId: BoundedId });
 const ChangeComplete = Schema.Struct({ ...CompleteInput.fields, sourceCredentialId: BoundedId });
 const Success = Schema.Struct({ invalidation: Schema.optionalKey(SessionInvalidationWindow) });
-const AttemptSuccess = Schema.Struct({ continuation: ProofContinuation });
 
 const Failure = Schema.Union([
   EmailRejected,
@@ -140,21 +132,12 @@ export const makeEmailAddresses = <
         action: EmailAction,
         invocation: AuthInvocation,
         input: typeof RequestInput.Type,
-        supersedes?: ProofId,
       ) => Effect.Effect<ProofRequestReceipt, Failure>;
-      readonly attempt: (
-        action: EmailAction,
-        invocation: AuthInvocation,
-        input: typeof AttemptInput.Type,
-      ) => Effect.Effect<AuthOperationResult<typeof AttemptSuccess.Type>, Failure>;
       readonly planComplete: (
         action: EmailAction,
         invocation: AuthInvocation,
         input: typeof CompleteInput.Type,
       ) => Effect.Effect<Plan, Failure>;
-      readonly cleanup: (
-        limit: number,
-      ) => Effect.Effect<{ readonly removed: number; readonly hasMore: boolean }, Failure>;
     }
   >(`effect-auth/email/${moduleId}/Addresses`);
 
@@ -165,12 +148,20 @@ export const makeEmailAddresses = <
         Effect.mapError(() => EmailConfigurationError.make({})),
       );
 
+      const strategy = yield* sessions.SessionStrategy;
+
+      if (
+        policy.requireImmediateInvalidation &&
+        (strategy.capabilities.subjectInvalidation !== "immediate" ||
+          strategy.capabilities.positiveCacheMillis > 0)
+      )
+        return yield* EmailConfigurationError.make({});
+
       const binder = yield* binding.RequestBinding;
       const persistence = yield* EmailAddressPersistence;
       const actionAuthority = yield* EmailActionEvidence;
       const verify = yield* verifyProof.Proofs;
       const change = yield* changeProof.Proofs;
-      const strategy = yield* sessions.SessionStrategy;
       const crypto = yield* Crypto.Crypto;
       const hooks = yield* LifecycleHooks;
 
@@ -227,13 +218,6 @@ export const makeEmailAddresses = <
             ? {}
             : { source: yield* snapshotEmailCredential(current.source) }),
         });
-
-        if (
-          !(action === "verify-address" && captured.targetIdentifierRevision !== undefined) &&
-          policy.requireImmediateInvalidation &&
-          strategy.capabilities.subjectInvalidation !== "immediate"
-        )
-          return yield* EmailMethodUnsupported.make({});
 
         if (
           captured.revision.subjectId !== invocation.subjectId ||
@@ -306,7 +290,7 @@ export const makeEmailAddresses = <
 
       const authorize = Effect.fn("EmailAddresses.authorize")(function* (
         invocation: AuthInvocation,
-        request: typeof BindingInput.Type,
+        request: typeof CompleteInput.Type,
         challenge: EmailActionChallenge,
       ) {
         const grant = yield* actionAuthority.verify({
@@ -361,51 +345,27 @@ export const makeEmailAddresses = <
       });
 
       return Addresses.of({
-        request: Effect.fn("EmailAddresses.request")(
-          function* (action, invocation, input, supersedes) {
-            yield* noAmbient();
-            const current = yield* bound(action, invocation, input);
-
-            yield* authorize(invocation, input, current.challenge);
-            const proofs = action === "verify-address" ? verify : change;
-
-            const dispatch = yield* proofs
-              .prepareIssue({
-                requestId: input.requestId,
-                binding: current.binding,
-                locale: input.locale,
-                eligible: current.captured.eligible,
-                ...(supersedes === undefined ? {} : { supersedes }),
-              })
-              .pipe(
-                Effect.flatMap(readProofCommit),
-                Effect.mapError(() => EmailUnavailable.make({})),
-              );
-
-            yield* dispatch.schedule.pipe(Effect.mapError(() => EmailUnavailable.make({})));
-
-            return dispatch.receipt;
-          },
-        ),
-        attempt: Effect.fn("EmailAddresses.attempt")(function* (action, invocation, input) {
+        request: Effect.fn("EmailAddresses.request")(function* (action, invocation, input) {
           yield* noAmbient();
           const current = yield* bound(action, invocation, input);
+
           const proofs = action === "verify-address" ? verify : change;
 
-          const result = yield* proofs
-            .prepareAttempt({
-              reference: input.reference,
-              credential: input.secret,
+          const dispatch = yield* proofs
+            .prepareIssue({
+              requestId: input.requestId,
               binding: current.binding,
+              locale: input.locale,
+              eligible: current.captured.eligible,
             })
-            .pipe(Effect.flatMap(readProofCommit), Effect.mapError(emailCompletionFailure));
+            .pipe(
+              Effect.flatMap(readProofCommit),
+              Effect.mapError(() => EmailUnavailable.make({})),
+            );
 
-          if (result.value._tag === "Rejected") return yield* EmailRejected.make({});
+          yield* dispatch.schedule.pipe(Effect.mapError(() => EmailUnavailable.make({})));
 
-          return {
-            value: { continuation: result.value.continuation },
-            credentialCommands: result.credentialCommands,
-          };
+          return dispatch.receipt;
         }),
         planComplete: Effect.fn("EmailAddresses.planComplete")(
           function* (action, invocation, input) {
@@ -413,16 +373,14 @@ export const makeEmailAddresses = <
             const current = yield* bound(action, invocation, input);
             const proofs = action === "verify-address" ? verify : change;
 
-            const completion = yield* proofs
-              .planComplete({
-                continuationId: input.continuationId,
-                credential: input.credential,
+            const redemption = yield* proofs
+              .planRedeem({
+                reference: input.reference,
+                credential: input.secret,
                 binding: current.binding,
               })
               .pipe(Effect.mapError(emailCompletionFailure));
 
-            if (!(yield* persistence.checkCompletion(completion.input)))
-              return yield* EmailRejected.make({});
             const authorization = yield* authorize(invocation, input, current.challenge);
 
             const invalidation =
@@ -434,7 +392,7 @@ export const makeEmailAddresses = <
                     strategy.policy,
                   );
 
-            const snapshot = lifecycleSnapshot({
+            const snapshot = yield* lifecycleSnapshotEffect({
               action: "identifier-change",
               operation: `${moduleId}/${action}`,
               method: "email-code",
@@ -445,7 +403,7 @@ export const makeEmailAddresses = <
                   : []),
                 current.identifier,
               ],
-            });
+            }).pipe(Effect.orDie);
 
             yield* hooks.before(snapshot);
 
@@ -453,11 +411,11 @@ export const makeEmailAddresses = <
               .randomBytes(32)
               .pipe(Effect.mapError(() => EmailUnavailable.make({})));
 
-            const event = lifecycleEvent({
+            const event = yield* lifecycleEventEffect({
               id: LifecycleEventId.make(Base64Url.encode(bytes)),
               occurredAtMillis: DateTime.toEpochMillis(yield* DateTime.now),
               snapshot,
-            });
+            }).pipe(Effect.orDie);
 
             const mutation = Object.freeze({
               moduleId,
@@ -465,7 +423,7 @@ export const makeEmailAddresses = <
               target: current.identifier,
               captured: current.captured,
               authorization,
-              completion,
+              redemption,
               ...(invalidation === undefined ? {} : { invalidation }),
             });
 
@@ -491,7 +449,6 @@ export const makeEmailAddresses = <
                           ? []
                           : [{ _tag: "Clear" as const, slot: "session" as const }]),
                         { _tag: "Clear", slot: "pending-proof" },
-                        { _tag: "Clear", slot: "proof-continuation" },
                         { _tag: "Clear", slot: "request-binding" },
                       ]
                     : [],
@@ -509,18 +466,6 @@ export const makeEmailAddresses = <
             return Object.freeze({ commit });
           },
         ),
-        cleanup: Effect.fn("EmailAddresses.cleanup")(function* (limit) {
-          yield* noAmbient();
-          yield* Schema.decodeEffect(
-            Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-          )(limit).pipe(Effect.mapError(() => EmailRejected.make({})));
-
-          const receipt = yield* persistence.cleanup({ moduleId, limit }, (value, journal) =>
-            journal.prepare(value),
-          );
-
-          return yield* receipt.read.pipe(Effect.mapError(() => EmailUnavailable.make({})));
-        }),
       });
     }),
   );
@@ -529,8 +474,6 @@ export const makeEmailAddresses = <
     const Mode extends "verify" | "change",
     const Schemas extends {
       readonly request: typeof RequestInput | typeof ChangeRequest;
-      readonly resend: typeof ResendInput | typeof ChangeResend;
-      readonly attempt: typeof AttemptInput | typeof ChangeAttempt;
       readonly complete: typeof CompleteInput | typeof ChangeComplete;
     },
   >(
@@ -550,27 +493,7 @@ export const makeEmailAddresses = <
       error: Failure,
       access: "authenticated",
       exposure: "public",
-      replay: "idempotent",
-    });
-
-    const Resend = makeOperation(`${moduleId}/address/${mode}/resend`, {
-      authorize: () => admitRequest,
-      payload: schemas.resend,
-      success: ProofRequestReceipt,
-      error: Failure,
-      access: "authenticated",
-      exposure: "public",
-      replay: "idempotent",
-    });
-
-    const Attempt = makeOperation(`${moduleId}/address/${mode}/attempt`, {
-      payload: schemas.attempt,
-      success: AttemptSuccess,
-      error: Failure,
-      access: "authenticated",
-      exposure: "public",
-      replay: "single-use",
-      credentials: true,
+      replay: "non-idempotent",
     });
 
     const Complete = makeOperation(`${moduleId}/address/${mode}/complete`, {
@@ -589,16 +512,6 @@ export const makeEmailAddresses = <
           return yield* (yield* Addresses).request(action, invocation, input);
         }),
       ),
-      Resend.handlerLayer(
-        Effect.fn("EmailAddresses.Resend")(function* (input, invocation) {
-          return yield* (yield* Addresses).request(action, invocation, input, input.supersedes);
-        }),
-      ),
-      Attempt.credentialHandlerLayer(
-        Effect.fn("EmailAddresses.Attempt")(function* (input, invocation) {
-          return yield* (yield* Addresses).attempt(action, invocation, input);
-        }),
-      ),
       Complete.credentialHandlerLayer(
         Effect.fn("EmailAddresses.Complete")(function* (input, invocation) {
           const plan = yield* (yield* Addresses).planComplete(action, invocation, input);
@@ -613,50 +526,27 @@ export const makeEmailAddresses = <
     );
 
     return Object.freeze({
-      operations: { Request, Resend, Attempt, Complete },
+      operations: { Request, Complete },
       handlersLayer,
-      group: operationGroup(Request, Resend, Attempt, Complete),
+      group: operationGroup(Request, Complete),
     });
   };
 
   const verify = makeOperations("verify", {
     request: RequestInput,
-    resend: ResendInput,
-    attempt: AttemptInput,
     complete: CompleteInput,
   });
 
   const change = makeOperations("change", {
     request: ChangeRequest,
-    resend: ChangeResend,
-    attempt: ChangeAttempt,
     complete: ChangeComplete,
   });
-
-  const Cleanup = makeOperation(`${moduleId}/address/cleanup`, {
-    payload: Schema.Struct({
-      limit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-    }),
-    success: Schema.Struct({ removed: Schema.Natural, hasMore: Schema.Boolean }),
-    error: Failure,
-    access: "system",
-    exposure: "internal",
-    replay: "idempotent",
-  });
-
-  const cleanupLayer = Cleanup.handlerLayer(
-    Effect.fn("EmailAddresses.Cleanup")(function* (input) {
-      return yield* (yield* Addresses).cleanup(input.limit);
-    }),
-  );
 
   return Object.freeze({
     Addresses,
     layer,
     verify,
     change,
-    Cleanup,
-    cleanupLayer,
     verifyProof,
     changeProof,
   });

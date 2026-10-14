@@ -76,10 +76,8 @@ exclusions, and App Clips. For macOS, combine the contributed callback paths wit
 that app's existing `applinks.details` components. Components are ordered: an
 earlier exclusion can prevent a callback from matching.
 
-| Platform                          | Signed entitlement and matching AASA entry                                   |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| iOS 17.4+ authentication sessions | `webcredentials:app.example.com`; app ID in `webcredentials.apps`.           |
-| Packaged macOS Electron           | `applinks:app.example.com`; app ID and callback paths in `applinks.details`. |
+- **iOS 17.4+ authentication sessions**: `webcredentials:app.example.com`; app ID in `webcredentials.apps`.
+- **Packaged macOS Electron**: `applinks:app.example.com`; app ID and callback paths in `applinks.details`.
 
 Serve the complete JSON at `/.well-known/apple-app-site-association` over public
 HTTPS, without redirects, with `Content-Type: application/json`; keep its

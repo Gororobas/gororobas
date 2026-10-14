@@ -1,10 +1,9 @@
-import { Auth, Email, Http, OAuth, Sessions } from "@yielded/auth";
-import * as OAuthCrypto from "@yielded/auth-crypto/OAuth";
-import * as OpenIdClient from "@yielded/auth-openid-client";
-import * as GitHub from "@yielded/auth-openid-client/GitHub";
+import { Auth, Email, Google, Http, OAuth, Sessions } from "@yielded/auth";
+import * as GitHub from "@yielded/auth/GitHub";
 import { Effect, Layer, Schema } from "effect";
-import { HttpRouter, HttpServerResponse } from "effect/http";
+import { FetchHttpClient, HttpRouter, HttpServerResponse } from "effect/http";
 
+import { CryptoLive } from "../../shared/crypto";
 import { LoginApi, Registration } from "./login-contract";
 
 export const makeAppAuth = (email: Email.EmailCodeOptions) =>
@@ -19,13 +18,12 @@ export const makeAppAuth = (email: Email.EmailCodeOptions) =>
       }),
       social: OAuth.makeRegistration({
         namespace: "example/social-login",
+        profiles: { github: GitHub.GitHubUserProfile, google: Google.GoogleUserProfile },
         registration: Registration,
         policy: {
           generation: 1,
           lifetimeMillis: 300_000,
-          claimLifetimeMillis: 30_000,
-          settlementTimeoutMillis: 5_000,
-          retentionMillis: 600_000,
+          exchangeTimeoutMillis: 30_000,
         },
         registrationPolicy: {
           lifetimeMillis: 300_000,
@@ -63,10 +61,7 @@ export const makeServer = (config: {
         ...(config.google === undefined
           ? {}
           : {
-              google: OpenIdClient.provider({
-                protocol: "oidc",
-                issuer: "https://accounts.google.com",
-                tokenEndpointAuthMethod: "client_secret_post",
+              google: Google.provider({
                 ...config.google,
               }),
             }),
@@ -113,11 +108,12 @@ export const makeServer = (config: {
           lifetimeMillis: 600_000,
           keyring: config.binding,
         }),
-        OAuthCrypto.transactionLayer(config.transactions),
+        OAuth.OAuthTransactionProtector.layer(config.transactions),
         OAuth.OAuthReturnTargets.exactRoutes(["/account"]),
         Email.EmailReturnTargets.exactRoutes(["/account"]),
       ),
     ),
+    Layer.provide(Layer.merge(CryptoLive, FetchHttpClient.layer)),
   );
 
   return { AppAuth, http, Routes };

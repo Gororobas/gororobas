@@ -73,6 +73,10 @@ a second confirmation; the browser may still require an **Open in app** action.
 Provide session services and `BrowserLogin.Persistence`, then mount `login.http`
 with `OperationHttpServer`. The [SQL account example](https://github.com/yielded-dev/auth/tree/main/examples/persistence-sql)
 shows persistence, HTTP configuration, and the hosted page together.
+Run `login.cleanup(limit)` periodically with a limit of 1–1,000. It removes expired
+handoff records in this login namespace and returns `{ removed, hasMore }`;
+`hasMore` means the limit was reached. Cleanup does not make an uncertain exchange
+safe to retry.
 
 ## Connect the browser and app
 

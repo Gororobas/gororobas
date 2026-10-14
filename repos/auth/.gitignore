@@ -19,3 +19,4 @@ coverage
 .alchemy
 packages/*/src/**/*.d.ts
 scripts/*.d.ts
+.vitest/

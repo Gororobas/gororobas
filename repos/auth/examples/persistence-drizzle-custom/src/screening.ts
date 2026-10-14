@@ -39,7 +39,7 @@ export const ScreeningLive = Layer.effect(
           );
 
           const text = yield* response.text;
-          const lines = yield* Schema.decodeUnknownEffect(Suffixes)(text.trim().split(/\r?\n/));
+          const lines = yield* Schema.decodeEffect(Suffixes)(text.trim().split(/\r?\n/));
 
           const found = lines.some((line) => {
             const [suffix, count] = line.split(":");

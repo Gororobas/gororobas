@@ -1,5 +1,4 @@
-import { Password, WebCrypto } from "@yielded/auth";
-import * as PasswordCrypto from "@yielded/auth-crypto/Password";
+import { Password } from "@yielded/auth";
 import { Context, Effect, Layer, Ref } from "effect";
 
 export class HashingStats extends Context.Service<
@@ -13,43 +12,37 @@ export class HashingStats extends Context.Service<
   }
 >()("example/HashingStats") {}
 
-const PortableHashing = PasswordCrypto.layer().pipe(
-  Layer.provide(Password.PasswordKdfAdmission.layer()),
-  Layer.provide(WebCrypto.layerWebCrypto),
-);
-
-// Replace functions with ordinary Effect.fn values. This application adds tracing
-// and counters while retaining the portable Argon2id implementation and admission.
+// Add tracing and counters while retaining the application's KDF backend and admission.
 export const HashingLive = Layer.effectContext(
   Effect.gen(function* () {
-    const portable = yield* Password.PasswordHashing;
+    const hashing = yield* Password.PasswordHashing;
     const counters = yield* Ref.make({ hashes: 0, verifications: 0, dummies: 0 });
 
     const hashPassword = Effect.fn("Customers.hashPassword")(function* (
-      ...args: Parameters<typeof portable.hash>
+      ...args: Parameters<typeof hashing.hash>
     ) {
       yield* Ref.update(counters, (value) => ({ ...value, hashes: value.hashes + 1 }));
 
-      return yield* portable.hash(...args);
+      return yield* hashing.hash(...args);
     });
 
     const verifyPassword = Effect.fn("Customers.verifyPassword")(function* (
-      ...args: Parameters<typeof portable.verify>
+      ...args: Parameters<typeof hashing.verify>
     ) {
       yield* Ref.update(counters, (value) => ({
         ...value,
         verifications: value.verifications + 1,
       }));
 
-      return yield* portable.verify(...args);
+      return yield* hashing.verify(...args);
     });
 
     const dummy = Effect.fn("Customers.dummyPassword")(function* (
-      ...args: Parameters<typeof portable.dummy>
+      ...args: Parameters<typeof hashing.dummy>
     ) {
       yield* Ref.update(counters, (value) => ({ ...value, dummies: value.dummies + 1 }));
 
-      return yield* portable.dummy(...args);
+      return yield* hashing.dummy(...args);
     });
 
     return Context.make(Password.PasswordHashing, {
@@ -58,4 +51,4 @@ export const HashingLive = Layer.effectContext(
       dummy,
     }).pipe(Context.add(HashingStats, { read: Ref.get(counters) }));
   }),
-).pipe(Layer.provide(PortableHashing));
+).pipe(Layer.provide(Password.PasswordHashing.layer()));

@@ -19,7 +19,6 @@ export const accountStrategies = {
   }),
   passkey: Passkey.make(),
   passkeys: Passkey.makeManagement({
-    policy: { generation: 2 },
     management: {
       maximumCredentials: 5,
       maximumEvidenceAgeMillis: 300_000,

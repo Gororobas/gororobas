@@ -1,0 +1,56 @@
+{
+  "name": "@yielded/jose",
+  "version": "0.1.0-beta.39",
+  "description": "Schema-typed Effect JOSE with explicit keys, cryptography, and remote JWKS trust.",
+  "homepage": "https://yielded.dev/auth/",
+  "bugs": {
+    "url": "https://github.com/yielded-dev/auth/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yielded-dev/auth.git",
+    "directory": "packages/jose"
+  },
+  "files": [
+    "dist",
+    "src",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "type": "module",
+  "sideEffects": [],
+  "exports": {
+    ".": "./src/index.ts",
+    "./Errors": "./src/Errors.ts",
+    "./Jwk": "./src/Jwk.ts",
+    "./Jwks": "./src/Jwks.ts",
+    "./Jws": "./src/Jws.ts",
+    "./Jwt": "./src/Jwt.ts",
+    "./Jwe": "./src/Jwe.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@yielded/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@effect/platform-node": "catalog:",
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "effect": "catalog:",
+    "jose": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.3"
+  }
+}

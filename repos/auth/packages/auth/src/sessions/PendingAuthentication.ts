@@ -13,6 +13,7 @@ import {
   AuthenticationFlowId,
   AuthenticationRevision,
   type AuthenticationEvidence,
+  type AuthenticationRequirement,
   type SecurityRevision,
 } from "./models";
 
@@ -28,9 +29,16 @@ export interface PendingAuthenticationRecord<Claims> extends PendingAuthenticati
   readonly claims: Claims;
 }
 
+/** Detached trusted snapshot from the single authoritative Login-kind read. */
+export interface PendingAuthenticationSnapshot<Claims> {
+  readonly record: PendingAuthenticationRecord<Claims>;
+  readonly requirement: AuthenticationRequirement;
+}
+
 /** Internal correlation for an independently verified additional factor. This is
  * neither a session nor reusable authorization; final completion rechecks it. */
 export const PendingAuthenticationContext = Schema.Struct({
+  digest: TokenDigest,
   flowId: AuthenticationFlowId,
   bindingDigest: TokenDigest,
   revision: AuthenticationRevision,
@@ -62,6 +70,7 @@ export const snapshotPendingAuthenticationContext = Effect.fn(
   }
 
   return Object.freeze({
+    digest: value.digest,
     flowId: value.flowId,
     bindingDigest: value.bindingDigest,
     expiresAtMillis: value.expiresAtMillis,
@@ -82,6 +91,7 @@ export const snapshotPendingAuthenticationContext = Effect.fn(
 
 export const pendingAuthenticationContext = (record: PendingAuthenticationState) =>
   snapshotPendingAuthenticationContext({
+    digest: record.digest,
     flowId: record.evidence.flowId,
     bindingDigest: record.evidence.bindingDigest,
     revision: record.evidence.revision,
@@ -90,36 +100,23 @@ export const pendingAuthenticationContext = (record: PendingAuthenticationState)
 
 /** Optional MFA persistence; minimal single-factor sessions do not require this capability. */
 export interface PendingAuthentication<Claims> {
-  /** Authoritative non-consuming private-bearer lookup. Reject expired, consumed,
-   * exhausted, stale or inactive subject/credential state. Do not decode Claims.
-   * Locks end at this read; final completion must recheck after factor verification.
-   */
-  readonly context: (input: {
-    readonly digest: TokenDigest;
-    readonly now: DateTime.Utc;
-  }) => Effect.Effect<
-    PendingAuthenticationContext,
-    PendingAuthenticationInvalid | SessionUnavailable
-  >;
-
-  /** Conditional on active subject and original revisions, unique by initiating flow.
-   * Duplicate flow MUST fail SessionConflict. Interactive owners reject before
-   * prepare. Ordered-batch owners may prepare speculatively during a concurrent
-   * race, but MUST discard the losing receipt and events. Never return an existing
-   * record paired with this attempt's newly generated secret.
+  /** Conditional on active subject and original revisions, unique by digest.
+   * Conflicts fail SessionConflict; discard any speculative losing receipt and
+   * events. Never pair an existing record with this attempt's generated secret.
+   * The authentication method owns single use of its proof before this call.
    */
   readonly create: <A>(
     input: Omit<PendingAuthenticationRecord<Claims>, "version">,
     now: DateTime.Utc,
     prepare: PrepareSessionCommit<PendingAuthenticationRecord<Claims>, A>,
   ) => Effect.Effect<PreparedCommit<A>, StaleAuthentication | SessionConflict | SessionUnavailable>;
-  /** Authoritative expiry, binding, revision, consumed status, and budget checks. */
+  /** Authoritative Login-kind expiry, revision, consumed-status and budget checks.
+   * Return current requirement from that same read. Final completion still rechecks. */
   readonly read: (input: {
     readonly digest: TokenDigest;
-    readonly bindingDigest: TokenDigest;
     readonly now: DateTime.Utc;
   }) => Effect.Effect<
-    PendingAuthenticationRecord<Claims>,
+    PendingAuthenticationSnapshot<Claims>,
     PendingAuthenticationInvalid | SessionUnavailable
   >;
   /** Prepare a rejection VALUE; translate it to a public failure only after the root
@@ -127,7 +124,6 @@ export interface PendingAuthentication<Claims> {
   readonly reject: <A>(
     input: {
       readonly digest: TokenDigest;
-      readonly bindingDigest: TokenDigest;
       readonly now: DateTime.Utc;
     },
     prepare: PrepareSessionCommit<{ readonly _tag: "Rejected" }, A>,

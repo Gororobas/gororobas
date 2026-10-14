@@ -2,7 +2,11 @@ import { Persistence, Record, Unavailable } from "@yielded/auth/BrowserLogin";
 import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
-import { requireStandalone } from "./standalone";
+import { makeNativeSqlTables } from "./native-sql-table";
+import { exactSqlText } from "./sql-change";
+import { cleanupSqlRows } from "./sql-cleanup";
+import { makeSqlCommitExecutor } from "./sql-commit";
+import { Table } from "./sql-table";
 
 const codec = Schema.fromJsonString(Record);
 const Row = Schema.Struct({ payload: Schema.String, version: Schema.String });
@@ -26,10 +30,19 @@ const layer = Layer.effect(
 
     if (!sql.onDialectOrElse({ sqlite: () => true, pg: () => true, orElse: () => false }))
       return yield* Unavailable.make({});
-    const standalone = requireStandalone(() => Unavailable.make({}), sql.transactionService);
+    const executor = yield* makeSqlCommitExecutor(() => Unavailable.make({}));
 
-    const failure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-      effect.pipe(Effect.mapError(() => Unavailable.make({})));
+    const table = makeNativeSqlTables(sql)(
+      new Table(
+        "yielded_browser_login",
+        {
+          namespace: { name: "namespace", type: "text" },
+          attemptId: { name: "attempt_id", type: "text" },
+          expiresAt: { name: "expires_at_millis", type: "integer" },
+        },
+        [["namespace", "attemptId"]],
+      ),
+    );
 
     const clock = sql.onDialectOrElse({
       sqlite: () => sql.literal("CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"),
@@ -37,9 +50,22 @@ const layer = Layer.effect(
     });
 
     return Persistence.of({
+      cleanup: ({ namespace, limit }) =>
+        executor.run(
+          cleanupSqlRows(
+            [
+              {
+                table,
+                keys: ["namespace", "attemptId"],
+                due: sql`${exactSqlText(sql, table.column("namespace"), table.value("namespace", namespace))} and ${table.column("expiresAt")} <= ${clock}`,
+                order: [table.column("expiresAt"), table.column("attemptId")],
+              },
+            ],
+            limit,
+          ),
+          "statement",
+        ),
       get: Effect.fnUntraced(function* (namespace, id) {
-        yield* standalone;
-
         const rows =
           yield* sql`SELECT payload, version FROM yielded_browser_login WHERE namespace = ${namespace} AND attempt_id = ${id}`;
 
@@ -51,32 +77,36 @@ const layer = Layer.effect(
         if (record.version !== row.version) return yield* Unavailable.make({});
 
         return record;
-      }, failure),
-      insert: Effect.fnUntraced(function* (namespace, id, record) {
-        yield* standalone;
-        const payload = yield* Schema.encodeEffect(codec)(record);
+      }, executor.read),
+      insert: Effect.fnUntraced(
+        function* (namespace, id, record) {
+          const payload = yield* Schema.encodeEffect(codec)(record);
 
-        const rows =
-          yield* sql`INSERT INTO yielded_browser_login (namespace, attempt_id, version, expires_at_millis, payload)
+          const rows =
+            yield* sql`INSERT INTO yielded_browser_login (namespace, attempt_id, version, expires_at_millis, payload)
         SELECT ${namespace}, ${id}, ${record.version}, ${record.expiresAtMillis}, ${payload}
         WHERE ${record.expiresAtMillis} > ${clock}
         ON CONFLICT (namespace, attempt_id) DO NOTHING RETURNING version`;
 
-        return rows.length === 1;
-      }, failure),
-      compareAndSet: Effect.fnUntraced(function* (namespace, id, version, record) {
-        yield* standalone;
-        if (version === record.version) return yield* Unavailable.make({});
-        const payload = yield* Schema.encodeEffect(codec)(record);
+          return rows.length === 1;
+        },
+        (effect) => executor.run(effect, "statement"),
+      ),
+      compareAndSet: Effect.fnUntraced(
+        function* (namespace, id, version, record) {
+          if (version === record.version) return yield* Unavailable.make({});
+          const payload = yield* Schema.encodeEffect(codec)(record);
 
-        const rows =
-          yield* sql`UPDATE yielded_browser_login SET version = ${record.version}, payload = ${payload}
+          const rows =
+            yield* sql`UPDATE yielded_browser_login SET version = ${record.version}, payload = ${payload}
         WHERE namespace = ${namespace} AND attempt_id = ${id} AND version = ${version}
         AND expires_at_millis = ${record.expiresAtMillis} AND expires_at_millis > ${clock}
         RETURNING version`;
 
-        return rows.length === 1;
-      }, failure),
+          return rows.length === 1;
+        },
+        (effect) => executor.run(effect, "statement"),
+      ),
     });
   }),
 );

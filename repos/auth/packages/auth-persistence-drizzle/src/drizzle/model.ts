@@ -6,9 +6,7 @@ import {
   type LoginIdentifier,
 } from "@yielded/auth/Identity";
 import { getTableColumns, type AnyColumn, type InferInsertModel, type Table } from "drizzle-orm";
-import { Context, DateTime, Effect, Layer } from "effect";
-
-export type CommitMode = "interactive" | "synchronous" | "batch";
+import { Context, DateTime, Effect, Layer, Schema } from "effect";
 
 export {
   PersistenceMappingError,
@@ -16,6 +14,11 @@ export {
 } from "@yielded/auth-persistence/Adapter";
 
 import type { PersistenceMappingError, SubjectIdCodec } from "@yielded/auth-persistence/Adapter";
+
+export class SubjectProvisioningError extends Schema.TaggedError<SubjectProvisioningError>()(
+  "SubjectProvisioningError",
+  { message: Schema.String },
+) {}
 
 export interface InstantCodec<NativeInstant> {
   readonly encode: (instant: DateTime.Utc) => NativeInstant;

@@ -1,13 +1,8 @@
 # @yielded/drizzle-effect-v4-patch
 
-Drizzle RC4's Effect integration still uses APIs removed from the current stable
-Effect release. This temporary patch lets you use Drizzle with the Effect version
-required by Yielded Auth until Drizzle ships a compatible release.
-
-The CLI saves a native Bun patch and runs `bun install`; subsequent installs apply
-it from your lockfile. It updates Drizzle's SQL type imports, error classes, and
-schema length helper in its ESM and CommonJS artifacts. Your application's Effect
-package stays unchanged.
+Patch Drizzle's Effect integration for use with Yielded Auth in a Bun project.
+The CLI saves a native Bun patch and installs it; subsequent installs apply it
+from your lockfile. Your application's Effect package stays unchanged.
 
 ## Apply
 
@@ -31,13 +26,12 @@ If installation fails after saving configuration, rerun the command to finish.
 
 ## Remove
 
-Before upgrading to a compatible upstream Drizzle release:
+Remove this tool's patch before changing the installed Drizzle version:
 
 ```sh
 bunx @yielded/drizzle-effect-v4-patch@beta unpatch
 ```
 
-Then upgrade Drizzle and commit the manifest, lockfile, and patch deletion.
-The command removes only this tool's unchanged patch. This package can be retired
-once the application's selected Drizzle release works with the Effect version
-required by its adapter.
+The command removes only this tool's unchanged patch. Commit the manifest,
+lockfile, and patch deletion, and check your adapter's declared peer requirements
+before selecting another Drizzle version.

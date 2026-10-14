@@ -1,7 +1,12 @@
 import { Context, type Effect, Schema } from "effect";
 
 import { SubjectId } from "../Schema";
-import { type IdentityUnavailable, RecoveryReference } from "./models";
+import type { IdentityUnavailable } from "./models";
+
+/** Application-owned cleanup reference; never an authentication capability. */
+export const SubjectCleanupReference = Schema.NonEmptyString.pipe(
+  Schema.brand("effect-auth/SubjectCleanupReference"),
+);
 
 export class InvalidationUnsupported extends Schema.TaggedError<InvalidationUnsupported>()(
   "InvalidationUnsupported",
@@ -39,7 +44,7 @@ export class SubjectCleanupPending extends Schema.TaggedClass<SubjectCleanupPend
   {
     subjectId: SubjectId,
     invalidation: SubjectInvalidation,
-    recoveryReference: RecoveryReference,
+    recoveryReference: SubjectCleanupReference,
   },
 ) {}
 

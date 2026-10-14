@@ -1,0 +1,87 @@
+import { Cause, Duration, Effect, Redacted, Schema } from "effect";
+import { Cookies } from "effect/http";
+
+import { reportAuthFailure } from "../internal/diagnostics";
+import type { AuthCredentialCommand } from "../operations/credentials";
+import { SessionUnavailable } from "../sessions/errors";
+import type { OperationCookie } from "./models";
+
+export const maximumCookieBytes = 4096;
+
+export const generationCookieConfiguration = (cookie: OperationCookie): OperationCookie => ({
+  ...cookie,
+  name: `${cookie.name}-generation`,
+});
+
+export const makeCacheCookie = (cookie: OperationCookie, value: string, lifetimeMillis: number) =>
+  Cookies.makeCookie(cookie.name, value, {
+    ...cookie,
+    httpOnly: true,
+    maxAge: Duration.millis(lifetimeMillis),
+  });
+
+export const cookieFits = (cookie: Cookies.Cookie): boolean =>
+  new TextEncoder().encode(Cookies.serializeCookie(cookie)).byteLength <= maximumCookieBytes;
+
+const OptionalCookieValue = Schema.String.check(
+  Schema.isMinLength(1),
+  Schema.isMaxLength(maximumCookieBytes),
+  Schema.isPattern(/^[A-Za-z0-9._~-]+$/),
+);
+
+/** Optional cache input has no authority. Missing or ambiguous pairs are misses. */
+export const optionalCookie = (pair: string | undefined, name: string): string | undefined => {
+  if (pair === undefined || new TextEncoder().encode(pair).byteLength > maximumCookieBytes)
+    return undefined;
+  const value = Cookies.parseHeader(pair)[name];
+
+  return Schema.is(OptionalCookieValue)(value) ? value : undefined;
+};
+
+/** Cookies for a rotated mutation binding; failure prevents mutation admission. */
+export const rotationCookies = Effect.fnUntraced(function* (
+  cookie: OperationCookie,
+  generation: Redacted.Redacted<string>,
+  lifetimeMillis: number,
+) {
+  const binding = makeCacheCookie(
+    generationCookieConfiguration(cookie),
+    Redacted.value(generation),
+    lifetimeMillis,
+  );
+
+  const clear = makeCacheCookie(cookie, "", 0);
+
+  if (
+    binding._tag === "Failure" ||
+    clear._tag === "Failure" ||
+    !cookieFits(binding.success) ||
+    !cookieFits(clear.success)
+  ) {
+    yield* reportAuthFailure("session-cache", Cause.fail(SessionUnavailable.make({})));
+
+    return yield* SessionUnavailable.make({});
+  }
+
+  return [clear.success, binding.success];
+});
+
+/** Optional snapshots must never turn authoritative success into a failure.
+ * Check the same serialized cookie that both HTTP delivery paths will send. */
+export const snapshotCookie = Effect.fnUntraced(function* (
+  cookie: OperationCookie,
+  command: AuthCredentialCommand,
+  nowMillis: number,
+) {
+  const result = makeCacheCookie(
+    cookie,
+    command._tag === "Issue" ? Redacted.value(command.credential) : "",
+    command._tag === "Issue" ? Math.max(0, command.expiresAtMillis - nowMillis) : 0,
+  );
+
+  if (result._tag === "Success" && cookieFits(result.success)) return result.success;
+  yield* reportAuthFailure("session-cache", Cause.fail(SessionUnavailable.make({})));
+  const clear = makeCacheCookie(cookie, "", 0);
+
+  return clear._tag === "Success" && cookieFits(clear.success) ? clear.success : undefined;
+});

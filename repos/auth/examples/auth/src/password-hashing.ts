@@ -1,7 +1,8 @@
 import { BunRuntime } from "@effect/platform-bun";
-import { Password, WebCrypto } from "@yielded/auth";
-import * as PasswordCrypto from "@yielded/auth-crypto/Password";
+import { Password } from "@yielded/auth";
 import { Effect, Layer, Redacted } from "effect";
+
+import { CryptoLive } from "../../shared/crypto";
 
 // Disposable tiny corpus demonstrates explicit offline screening. A production
 // consumer supplies a maintained compromised/common-password corpus or service.
@@ -17,10 +18,7 @@ const fixtureScreening = Layer.succeed(
   }),
 );
 
-const hashing = PasswordCrypto.layer().pipe(
-  Layer.provide(Password.PasswordKdfAdmission.layer()),
-  Layer.provide(WebCrypto.layerWebCrypto),
-);
+const hashing = Password.PasswordHashing.layer().pipe(Layer.provide(CryptoLive));
 
 const check = Password.NewPasswordCheck.layer().pipe(Layer.provide(fixtureScreening));
 

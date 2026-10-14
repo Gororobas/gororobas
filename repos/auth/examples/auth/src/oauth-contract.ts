@@ -10,8 +10,17 @@ import {
 import { AuthenticationRequired } from "@yielded/auth/Operations";
 import { Schema } from "effect";
 
-export const OAuthApi = AuthContract.make("example/oauth", {
+/** Browser sign-in contract shared by direct and proxied providers. */
+export const OAuthSignInApi = AuthContract.make("example/oauth", {
   claims: Schema.Struct({ role: Schema.Literal("owner") }),
+  actions: (sessions) => ({
+    signIn: AuthContract.oauthSignIn(),
+    completeSignIn: AuthContract.oauthCompleteSignIn(sessions),
+  }),
+});
+
+export const OAuthApi = AuthContract.make("example/oauth", {
+  claims: OAuthSignInApi.claims,
   actions: (sessions) => ({
     signIn: AuthContract.oauthSignIn(),
     completeSignIn: AuthContract.oauthCompleteSignIn(sessions),

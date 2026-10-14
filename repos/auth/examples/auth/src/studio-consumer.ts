@@ -6,9 +6,7 @@ import {
   Schema as AuthSchema,
   Sessions,
   Totp,
-  WebCrypto,
 } from "@yielded/auth";
-import * as TotpCrypto from "@yielded/auth-crypto/Totp";
 import * as Mapping from "@yielded/auth-persistence-drizzle";
 import * as Native from "@yielded/auth-persistence-drizzle/Postgres";
 import * as PasskeyProtocol from "@yielded/auth-simplewebauthn/Server";
@@ -17,24 +15,19 @@ import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg
 import type { Redacted } from "effect";
 import { DateTime, Effect, Layer, Schema } from "effect";
 
+import { CryptoLive } from "../../shared/crypto";
 import { StudioAuth, StudioClaims, sessions, authenticatorPolicy } from "./studio-auth";
 import * as Studio from "./studio-passkey-schema";
 export { StudioAuth, StudioClaims, sessions, authenticatorPolicy } from "./studio-auth";
 type Claims = typeof StudioClaims.Type;
 const instant = () => timestamp({ withTimezone: true, mode: "date" });
 
-export const loginFlows = pgTable("studio_login_flows", {
-  flowId: text().primaryKey(),
-  subjectId: uuid().notNull(),
-  state: text().notNull(),
-  pendingDigest: text(),
-  dedupUntil: instant().notNull(),
-});
-
 export const pendingLogins = pgTable("studio_pending_logins", {
+  moduleId: text().notNull(),
+  kind: text().notNull(),
   digest: text().primaryKey(),
   version: text().notNull(),
-  flowId: text().notNull().unique(),
+  flowId: text().notNull(),
   subjectId: uuid().notNull(),
   bindingDigest: text().notNull(),
   expiresAt: instant().notNull(),
@@ -48,13 +41,10 @@ export const activeSessions = pgTable("studio_sessions", {
   sessionId: text().primaryKey(),
   subjectId: uuid().notNull(),
   digest: text().notNull().unique(),
-  version: text().notNull(),
   securityRevision: text().notNull(),
   issuedAt: instant().notNull(),
   expiresAt: instant().notNull(),
   absoluteExpiresAt: instant().notNull(),
-  credentialVersion: text().notNull(),
-  authenticatedAt: instant().notNull(),
   payload: text().notNull(),
 });
 
@@ -62,19 +52,6 @@ export const factorSecrets = pgTable("studio_authenticators", {
   scope: text().primaryKey(),
   state: text().notNull(),
   version: text().notNull(),
-});
-
-export const stepUpIntents = pgTable("studio_step_up", {
-  digest: text().primaryKey(),
-  version: text().notNull(),
-  flowId: text().notNull().unique(),
-  subjectId: uuid().notNull(),
-  bindingDigest: text().notNull(),
-  snapshot: text().notNull(),
-  expiresAt: instant().notNull(),
-  attemptLimit: integer().notNull(),
-  failedAttempts: integer().notNull(),
-  consumed: boolean().notNull(),
 });
 
 export const registrationEvents = pgTable("studio_registration_events", {
@@ -86,7 +63,6 @@ const sessionCodec = Schema.fromJsonString(
   Schema.Struct({
     ...sessions.Session.fields,
     digest: AuthSchema.TokenDigest,
-    version: Sessions.SecurityRevision,
     provenance: Sessions.SessionAuthenticationProvenance,
     credentialVersion: Sessions.SessionCredentialVersion,
   }),
@@ -122,7 +98,9 @@ const common = {
     id: "id",
     status: "status",
     securityRevision: "securityRevision",
+    activeStatusValue: "active",
     isActiveStatus: (value: unknown) => value === "active",
+    requirementColumns: ["totpEnabled"],
     decodeRequirement: (member) => Effect.succeed(requirementFor(member)),
     nextSecurityRevisionSync: nextRevision,
   },
@@ -137,102 +115,67 @@ const common = {
     credentialId: "credentialId",
     revision: "revision",
     status: "status",
+    activeStatusValue: "active",
     isActiveStatus: (value: unknown) => value === "active",
   },
 } satisfies Mapping.SessionAuthorityTables<typeof Studio.subject, typeof Studio.factor, string>;
 
-const flowMapping = {
-  table: loginFlows,
-  flowId: "flowId",
-  subjectId: "subjectId",
-  state: "state",
-  pendingDigest: "pendingDigest",
-  dedupUntil: "dedupUntil",
-  pendingStateValue: "pending",
-  establishedStateValue: "established",
-  encodeInstant: DateTime.toDateUtc,
-  decodeInstant: (value: unknown) =>
-    // oxlint-disable-next-line no-restricted-properties -- native database timestamp is an unknown boundary.
-    Schema.decodeUnknownEffect(Schema.Date)(value).pipe(
-      Effect.map(DateTime.makeUnsafe),
-      Effect.mapError(() =>
-        Mapping.PersistenceMappingError.make({ operation: "studio.decode", cause: undefined }),
-      ),
-    ),
-  encodePendingInsert: ({ evidence, subjectId, pendingDigest, dedupUntil }) => ({
-    flowId: evidence.flowId,
-    subjectId,
-    state: "pending",
-    pendingDigest,
-    dedupUntil: DateTime.toDateUtc(dedupUntil),
-  }),
-  encodeEstablishedInsert: ({ evidence, subjectId, dedupUntil }) => ({
-    flowId: evidence.flowId,
-    subjectId,
-    state: "established",
-    pendingDigest: null,
-    dedupUntil: DateTime.toDateUtc(dedupUntil),
-  }),
-} satisfies Mapping.SessionFlowTables<typeof loginFlows, string>["flow"];
-
 const pendingMapping = {
   table: pendingLogins,
+  moduleId: "moduleId",
+  kind: "kind",
   digest: "digest",
   version: "version",
   flowId: "flowId",
   subjectId: "subjectId",
   bindingDigest: "bindingDigest",
+  snapshot: "payload",
   expiresAt: "expiresAt",
   attemptLimit: "attemptLimit",
   failedAttempts: "failedAttempts",
   consumed: "consumed",
   encodeInstant: DateTime.toDateUtc,
   allocateVersionSync: nextRevision,
-  encodeInsert: (
-    record: Sessions.PendingAuthenticationRecord<Claims>,
-    ids: { subjectId: string },
-  ) => ({
+  encodeInsert: (record) => ({
+    moduleId: record.moduleId,
+    kind: record.kind,
     digest: record.digest,
     version: record.version,
-    flowId: record.evidence.flowId,
-    subjectId: ids.subjectId,
-    bindingDigest: record.evidence.bindingDigest,
+    flowId: record.flowId,
+    subjectId: record.subjectId,
+    bindingDigest: record.bindingDigest,
+    payload: record.snapshot,
     expiresAt: DateTime.toDateUtc(record.expiresAt),
     attemptLimit: record.attemptLimit,
     failedAttempts: 0,
     consumed: false,
-    payload: Schema.encodeSync(pendingCodec)(record),
   }),
-  decode: (row: typeof pendingLogins.$inferSelect) =>
-    Schema.decodeEffect(pendingCodec)(row.payload).pipe(
+} satisfies Mapping.SessionPendingTables<typeof pendingLogins, string>["pending"];
+
+const login = {
+  encode: (record) =>
+    Schema.encodeEffect(pendingCodec)(record).pipe(
+      Effect.mapError(() =>
+        Mapping.PersistenceMappingError.make({ operation: "studio.encode", cause: undefined }),
+      ),
+    ),
+  decode: (snapshot) =>
+    // oxlint-disable-next-line no-restricted-properties -- persisted canonical JSON is an unknown boundary.
+    Schema.decodeUnknownEffect(pendingCodec)(snapshot).pipe(
       Effect.mapError(() =>
         Mapping.PersistenceMappingError.make({ operation: "studio.decode", cause: undefined }),
       ),
     ),
-  decodeContext: (row: typeof pendingLogins.$inferSelect) =>
-    Schema.decodeEffect(pendingCodec)(row.payload).pipe(
-      Effect.mapError(() =>
-        Mapping.PersistenceMappingError.make({ operation: "studio.decode", cause: undefined }),
-      ),
-    ),
-} satisfies Mapping.PendingAuthenticationTables<
-  Claims,
-  typeof pendingLogins,
-  typeof loginFlows,
-  string
->["pending"];
+} satisfies Mapping.PendingAuthenticationTables<Claims, typeof pendingLogins, string>["login"];
 
 const encodeSession = (record: Sessions.StatefulSessionRecord<Claims>) => ({
   sessionId: record.sessionId,
   subjectId: record.subjectId,
   digest: record.digest,
-  version: record.version,
   securityRevision: record.securityRevision,
   issuedAt: DateTime.toDateUtc(record.issuedAt),
   expiresAt: DateTime.toDateUtc(record.expiresAt),
   absoluteExpiresAt: DateTime.toDateUtc(record.absoluteExpiresAt),
-  credentialVersion: record.credentialVersion,
-  authenticatedAt: DateTime.toDateUtc(record.assurance.authenticatedAt),
   payload: Schema.encodeSync(sessionCodec)(record),
 });
 
@@ -241,7 +184,6 @@ const sessionMapping = {
   sessionId: "sessionId",
   subjectId: "subjectId",
   digest: "digest",
-  version: "version",
   securityRevision: "securityRevision",
   issuedAt: "issuedAt",
   expiresAt: "expiresAt",
@@ -254,21 +196,13 @@ const sessionMapping = {
       Effect.map((record) => ({
         ...record,
         digest: AuthSchema.TokenDigest.make(row.digest),
-        version: Sessions.SecurityRevision.make(row.version),
       })),
       Effect.mapError(() =>
         Mapping.PersistenceMappingError.make({ operation: "studio.decode", cause: undefined }),
       ),
     ),
   allocateIdSync: () => globalThis.crypto.randomUUID(),
-  allocateVersionSync: nextRevision,
-} satisfies Mapping.StatefulSessionTables<
-  Claims,
-  typeof activeSessions,
-  typeof loginFlows,
-  string,
-  string
->["session"];
+} satisfies Mapping.StatefulSessionTables<Claims, typeof activeSessions, string, string>["session"];
 
 const sessionId = {
   toNative: (id: Sessions.SessionId) => Effect.succeed(String(id)),
@@ -276,7 +210,12 @@ const sessionId = {
   equals: (left: string, right: string) => left === right,
 };
 
-const nativeCommon = { ...common, isConstraintConflict: () => false };
+const nativeCommon = {
+  ...common,
+  moduleId: sessions.moduleId,
+  clock: Studio.base.clock,
+  isConstraintConflict: () => false,
+};
 
 export const sessionPolicy = Sessions.SessionPolicy.make({
   issuer: "design-studio",
@@ -302,10 +241,11 @@ const actionEvidence = Effect.fn("Studio.actionEvidence")(function* (
   const strategy = yield* sessions.SessionStrategy;
   const inspected = yield* strategy.inspect(proof);
 
-  if (inspected.session.subjectId !== subjectId) return yield* Sessions.SessionInvalid.make({});
+  if (inspected.inspection.session.subjectId !== subjectId)
+    return yield* Sessions.SessionInvalid.make({});
 
   return Sessions.AuthenticationEvidence.make({
-    ...inspected.provenance.evidence,
+    ...inspected.inspection.provenance.evidence,
     flowId: Sessions.AuthenticationFlowId.make(flowId),
     bindingDigest,
   });
@@ -317,7 +257,7 @@ export const studioStorage = Layer.unwrap(
 
     const authMapping = {
       ...nativeCommon,
-      pending: { pending: pendingMapping, flow: flowMapping },
+      pending: { pending: pendingMapping, login },
       constraints: Mapping.requiredPendingAuthenticationConstraints,
     };
 
@@ -327,7 +267,7 @@ export const studioStorage = Layer.unwrap(
     const { pendingAuthentication } = yield* Native.makePendingAuthenticationServices({
       ...nativeCommon,
       pending: pendingMapping,
-      flow: flowMapping,
+      login,
       constraints: Mapping.requiredPendingAuthenticationConstraints,
     });
 
@@ -335,50 +275,17 @@ export const studioStorage = Layer.unwrap(
       ...nativeCommon,
       session: sessionMapping,
       sessionId,
-      flow: flowMapping,
-      pending: pendingMapping,
+      pending: { pending: pendingMapping, login },
       constraints: Mapping.requiredStatefulPendingConstraints,
     });
 
     const stepUp = yield* Native.makeSessionStepUpServices(
       {
         ...nativeCommon,
-        intent: {
-          table: stepUpIntents,
-          digest: "digest",
-          version: "version",
-          flowId: "flowId",
-          subjectId: "subjectId",
-          bindingDigest: "bindingDigest",
-          snapshot: "snapshot",
-          expiresAt: "expiresAt",
-          attemptLimit: "attemptLimit",
-          failedAttempts: "failedAttempts",
-          consumed: "consumed",
-          encodeInstant: DateTime.toDateUtc,
-          encodeInsert: (intent, ids) => ({
-            digest: intent.digest,
-            version: intent.version,
-            flowId: intent.flowId,
-            subjectId: ids.subjectId,
-            bindingDigest: intent.bindingDigest,
-            snapshot: Schema.encodeSync(Schema.fromJsonString(Sessions.SessionStepUpIntent))(
-              intent,
-            ),
-            expiresAt: DateTime.toDateUtc(intent.expiresAt),
-            attemptLimit: intent.attemptLimit,
-            failedAttempts: 0,
-            consumed: false,
-          }),
-          allocateVersionSync: nextRevision,
-        },
+        pending: pendingMapping,
         source: {
           kind: "Stateful",
-          session: {
-            ...sessionMapping,
-            credentialVersion: "credentialVersion",
-            authenticatedAt: "authenticatedAt",
-          },
+          session: sessionMapping,
           sessionId,
           constraints: { sessionDigest: "unique(session.digest)" },
         },
@@ -386,6 +293,12 @@ export const studioStorage = Layer.unwrap(
       },
       sessions.SessionStepUpPersistence,
     );
+
+    const { sessionCleanup } = yield* Native.makeSessionCleanupServices({
+      moduleId: sessions.moduleId,
+      clock: nativeCommon.clock,
+      pending: pendingMapping,
+    });
 
     const registration = yield* Native.makePasskeyRegistrationServices(Studio.registrationMapping);
 
@@ -404,26 +317,13 @@ export const studioStorage = Layer.unwrap(
     });
 
     const assertions = yield* Native.makePasskeyPersistenceServices(Studio.base);
-    const credentials = yield* Native.makePasskeyCredentialServices(Studio.read);
 
-    const enrollment = yield* Native.makePasskeyEnrollmentContextServices({
-      moduleId: Studio.base.moduleId,
-      read: Studio.read,
-      module: Studio.base.module,
-    });
-
-    const select = (purpose: string) =>
-      purpose === "registration"
-        ? registration.passkeyPersistence
-        : purpose === "enrollment"
-          ? management.passkeyPersistence
-          : assertions.passkeyPersistence;
-
-    const persistence = Passkey.PasskeyPersistence.of({
-      ...assertions.passkeyPersistence,
-      context: (input) => select(input.purpose).context(input),
-      claim: (input, prepare) => select(input.ceremony.purpose).claim(input, prepare),
-      settle: (input, prepare) => select(input.claim.ceremony.purpose).settle(input, prepare),
+    const credentials = yield* Native.makePasskeyCredentialServices({
+      ...Studio.read,
+      subject: {
+        ...Studio.read.subject,
+        decodeRequirement: (row) => Effect.succeed(requirementFor(row)),
+      },
     });
 
     const totp = yield* Native.makeTotpPersistenceServices({
@@ -438,6 +338,7 @@ export const studioStorage = Layer.unwrap(
         factorEnabled: "totpEnabled",
         activeCondition: Studio.read.subject.activeCondition,
         encodeEnabled: (value) => value,
+        requirementColumns: ["totpEnabled"],
         decodeRequirement: requirementFor,
       },
       factor: {
@@ -462,6 +363,12 @@ export const studioStorage = Layer.unwrap(
           status: value.active ? "active" : "removed",
         }),
       },
+      pending: {
+        moduleId: sessions.moduleId,
+        clock: nativeCommon.clock,
+        pending: pendingMapping,
+        login,
+      },
       engineNowMillis: Studio.base.clock.engineNowMillis,
     });
 
@@ -471,9 +378,9 @@ export const studioStorage = Layer.unwrap(
       Layer.succeed(sessions.StatefulSessionPersistence, state.statefulSessionPersistence),
       Layer.succeed(sessions.SessionRepository, state.sessionRepository),
       Layer.succeed(sessions.SessionStepUpPersistence, stepUp.sessionStepUpPersistence),
-      Layer.succeed(Passkey.PasskeyPersistence, persistence),
+      Layer.succeed(sessions.SessionCleanup, sessionCleanup),
+      Layer.succeed(Passkey.PasskeyPersistence, assertions.passkeyPersistence),
       Layer.succeed(Passkey.PasskeyCredentials, credentials.passkeyCredentials),
-      Layer.succeed(Passkey.PasskeyEnrollmentContext, enrollment.passkeyEnrollmentContext),
       Layer.succeed(Passkey.PasskeyManagementPersistence, management.passkeyManagementPersistence),
       Layer.succeed(
         StudioAuth.strategies.registration.RegistrationAuthority,
@@ -533,10 +440,9 @@ export const makeStudioLive = (binding: Operations.RequestBindingConfiguration) 
         storage,
         Passkey.PasskeyConfig.layer({ profiles: [Studio.profile] }),
         hookLayer,
-        WebCrypto.layerWebCrypto,
         Auth.RequestBindingConfig.layer(binding),
-        TotpCrypto.layer,
-      );
+        Totp.TotpCryptography.layer,
+      ).pipe(Layer.provideMerge(CryptoLive));
 
       const strategy = sessions.statefulLayer(sessionPolicy).pipe(Layer.provide(base));
 

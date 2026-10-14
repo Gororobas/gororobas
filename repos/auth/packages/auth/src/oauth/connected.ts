@@ -1,29 +1,29 @@
-import {
-  Cause,
-  Context,
-  Crypto,
-  DateTime,
-  Effect,
-  Exit,
-  Layer,
-  Redacted,
-  Result,
-  Schema,
-} from "effect";
+import { Context, Crypto, DateTime, Effect, Layer, Redacted, Result, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
+import { prepareCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
-import { HookDenied, LifecycleEventId, lifecycleEvent, lifecycleSnapshot } from "../hooks/models";
+import {
+  HookDenied,
+  LifecycleEventId,
+  lifecycleEventEffect,
+  lifecycleSnapshotEffect,
+} from "../hooks/models";
 import { IdentityConflict } from "../identity/models";
+import { AuthenticationClock } from "../operations/clock";
 import type { AuthInvocation } from "../operations/context";
-import type { AuthCredentialCommand, AuthOperationResult } from "../operations/credentials";
+import {
+  formPostBinding,
+  type AuthCredentialCommand,
+  type AuthOperationResult,
+} from "../operations/credentials";
 import { AuthenticationRequired } from "../operations/errors";
 import { makeOperation, operationGroup } from "../operations/operation";
-import { makeRequestBinding, RequestBindingPublic } from "../operations/requestBinding";
+import { makeRequestBinding } from "../operations/requestBinding";
 import { TokenDigest } from "../Schema";
-import { assessAuthentication } from "../sessions/assurance";
-import { AuthenticationFlowId, SecurityRevision } from "../sessions/models";
+import { SecurityRevision } from "../sessions/models";
 import { OAuthAccountRevision } from "./accountsModels";
+import { authorizeOAuthEvidence } from "./actionAuthorization";
 import {
   captureConnectedPolicy,
   connectedBounded,
@@ -36,10 +36,10 @@ import {
   connectedUseAuthorization,
   makeOAuthConnectedAccess,
   validateConnectedPolicy,
-  wipeConnectedMaterial,
 } from "./connectedAccess";
 import { makeOAuthConnectedMaintenance } from "./connectedMaintenance";
 import * as M from "./connectedModels";
+import { wipeConnectedMaterial } from "./grantTokens";
 import { OAuthConnectedActionEvidence } from "./OAuthConnectedActionEvidence";
 import { OAuthConnectedPersistence } from "./OAuthConnectedPersistence";
 import { OAuthConnectedProtocol } from "./OAuthConnectedProtocol";
@@ -61,8 +61,9 @@ import {
   OAuthReturnTarget,
   OAuthSignInAuthorization,
   OAuthTransactionSecrets,
+  OAuthSealedTransaction,
 } from "./signInModels";
-import { snapshotOAuth, snapshotOAuthSync } from "./signInSnapshot";
+import { makeOAuthSnapshot } from "./signInSnapshot";
 
 const Failure = Schema.Union([
   AuthenticationRequired,
@@ -80,17 +81,19 @@ type Failure = typeof Failure.Type;
 
 const capturedSchema = Schema.Struct({
   revision: OAuthAccountRevision,
-  target: Schema.optionalKey(M.OAuthConnectedTarget),
+  grant: Schema.optionalKey(M.OAuthConnectedGrantSnapshot),
 });
 
 const preparationSchema = Schema.Struct({
   configuration: M.OAuthConnectedConfiguration,
   authorizationUrl: OAuthAuthorizationUrl,
   secrets: OAuthTransactionSecrets,
+  responseMode: Schema.optionalKey(Schema.Literals(["query", "form_post"])),
 });
 
 const encoder = new TextEncoder();
 const strings = Schema.fromJsonString(Schema.Array(Schema.String));
+const intentJson = Schema.fromJsonString(M.OAuthConnectedIntentContext);
 const contextJson = Schema.fromJsonString(M.OAuthConnectedTransactionContext);
 
 const clearBinding: ReadonlyArray<AuthCredentialCommand> = Object.freeze([
@@ -112,29 +115,6 @@ export const makeOAuthConnected = <const Id extends string>(
   const Connected = Context.Service<
     ConnectedModule<Id>,
     {
-      /** Retain the generated OAuth context before independent proof verification.
-       * Deliver the connected-intent command through the private transport. */
-      readonly prepareBegin: (
-        invocation: AuthInvocation,
-        input: typeof M.OAuthConnectedPrepareBegin.Type,
-      ) => Effect.Effect<AuthOperationResult<typeof RequestBindingPublic.Type>, Failure>;
-      /** Server-only private-bearer target lookup for a trusted factor adapter.
-       * Reuse the same input at begin; never expose or replace this challenge. */
-      readonly beginContext: (
-        invocation: AuthInvocation,
-        input: typeof M.OAuthConnectedBegin.Type,
-      ) => Effect.Effect<M.OAuthConnectedActionChallenge, Failure>;
-      /** Resolve the original callback target before claiming an independent factor. */
-      readonly completeContext: (
-        invocation: AuthInvocation,
-        input: typeof M.OAuthConnectedComplete.Type,
-      ) => Effect.Effect<M.OAuthConnectedActionChallenge, Failure>;
-      /** Resolve the current native grant and command target. A later grant/revision
-       * change invalidates the proof; a committed command replays via disconnect. */
-      readonly disconnectContext: (
-        invocation: AuthInvocation,
-        input: typeof M.OAuthConnectedDisconnect.Type,
-      ) => Effect.Effect<M.OAuthConnectedActionChallenge, Failure>;
       readonly begin: (
         invocation: AuthInvocation,
         input: typeof M.OAuthConnectedBegin.Type,
@@ -160,19 +140,15 @@ export const makeOAuthConnected = <const Id extends string>(
     Connected,
     Effect.gen(function* () {
       const { id, policy } = yield* validateConnectedPolicy(moduleId, captured);
+      const clockPolicy = yield* AuthenticationClock;
       const { issue: issueBinding, verify: verifyBinding } = yield* binding.RequestBinding;
 
       const {
-        capture,
+        read,
         issue,
-        prepare: prepareFlow,
-        inspectPrepared,
-        preflight,
-        claim,
-        inspectGrant,
+        consume,
         settle,
         list: listRows,
-        inspectDisconnect,
         disconnect: disconnectRow,
       } = yield* OAuthConnectedPersistence;
 
@@ -180,7 +156,7 @@ export const makeOAuthConnected = <const Id extends string>(
       const { authorize: authorizeUse } = yield* OAuthConnectedUseAuthority;
       const { prepareAuthorization, exchangeGrant } = yield* OAuthConnectedProtocol;
       const { seal: sealFlow, open: openFlow } = yield* OAuthConnectedTransactionProtector;
-      const { seal: sealTokens, open: openTokens } = yield* OAuthConnectedTokenProtector;
+      const { seal: sealTokens } = yield* OAuthConnectedTokenProtector;
       const { resolve: resolveTarget } = yield* OAuthReturnTargets;
       const { before } = yield* LifecycleHooks;
       const { randomBytes, digest } = yield* Crypto.Crypto;
@@ -234,17 +210,15 @@ export const makeOAuthConnected = <const Id extends string>(
       const challenge = Effect.fn("OAuthConnected.challenge")(function* (
         action: M.OAuthConnectedActionChallenge["action"],
         flowId: M.OAuthConnectedActionChallenge["flowId"],
-        commandId: M.OAuthConnectedActionChallenge["commandId"],
         revision: OAuthAccountRevision,
         intent: string,
       ) {
         const intentDigest = yield* hash(intent);
 
-        return snapshotOAuthSync(M.OAuthConnectedActionChallenge, {
+        return yield* snapshotOAuthConnectedActionChallenge.effect({
           moduleId: id,
           action,
           flowId,
-          commandId,
           revision,
           intentDigest,
           bindingDigest: yield* hash(
@@ -253,7 +227,6 @@ export const makeOAuthConnected = <const Id extends string>(
               id,
               action,
               flowId,
-              commandId,
               intentDigest,
             ]),
           ),
@@ -268,36 +241,24 @@ export const makeOAuthConnected = <const Id extends string>(
       ) {
         const granted = yield* verifyAction({
           invocation: { ...caller },
-          challenge: snapshotOAuthSync(M.OAuthConnectedActionChallenge, expected),
+          challenge: yield* snapshotOAuthConnectedActionChallenge.effect(expected),
           ...(proof === undefined ? {} : { proof: Redacted.make(Redacted.value(proof)) }),
         });
 
-        const authorization = yield* snapshotOAuth(M.OAuthConnectedActionAuthorization, {
+        const accepted = yield* authorizeOAuthEvidence(
+          caller,
+          expected,
+          granted,
+          Math.min(maximumAge, policy.maximumEvidenceAgeMillis),
+        ).pipe(
+          Effect.provideService(AuthenticationClock, clockPolicy),
+          Effect.mapError(() => M.OAuthConnectedActionRequired.make({})),
+        );
+
+        const authorization = yield* snapshotOAuthConnectedActionAuthorization.effect({
           challenge: expected,
-          evidence: granted.evidence,
-          requirement: {
-            ...granted.requirement,
-            maximumAgeMillis: Math.min(
-              maximumAge,
-              policy.maximumEvidenceAgeMillis,
-              granted.requirement.maximumAgeMillis,
-            ),
-          },
-        }).pipe(Effect.mapError(() => M.OAuthConnectedActionRequired.make({})));
-
-        const evidence = authorization.evidence;
-
-        if (
-          evidence.flowId !== AuthenticationFlowId.make(expected.flowId) ||
-          evidence.bindingDigest !== expected.bindingDigest ||
-          !connectedSame(OAuthAccountRevision, evidence.revision, expected.revision) ||
-          new Set(evidence.revision.credentials.map((v) => v.credentialId)).size !==
-            evidence.revision.credentials.length ||
-          !(yield* assessAuthentication(evidence, authorization.requirement).pipe(
-            Effect.mapError(() => M.OAuthConnectedActionRequired.make({})),
-          )).satisfied
-        )
-          return yield* M.OAuthConnectedActionRequired.make({});
+          ...accepted,
+        });
 
         return authorization;
       });
@@ -309,43 +270,45 @@ export const makeOAuthConnected = <const Id extends string>(
         operation: "connect" | "disconnect",
         subjectId: OAuthAccountRevision["subjectId"],
       ) {
-        const snapshot = lifecycleSnapshot({
+        const snapshot = yield* lifecycleSnapshotEffect({
           action: "linking",
           operation: moduleId + "/connected/" + operation,
           subjectId,
           method: "oauth-connected",
           identifiers: [],
-        });
+        }).pipe(Effect.orDie);
 
         yield* before(snapshot);
 
-        return lifecycleEvent({
+        return yield* lifecycleEventEffect({
           id: LifecycleEventId.make(yield* random()),
           occurredAtMillis: DateTime.toEpochMillis(yield* DateTime.now),
           snapshot,
-        });
+        }).pipe(Effect.orDie);
       });
 
-      const prepareBegin = Effect.fn("OAuthConnected.prepareBegin")(function* (
+      const begin = Effect.fn("OAuthConnected.begin")(function* (
         invocation: AuthInvocation,
-        raw: typeof M.OAuthConnectedPrepareBegin.Type,
+        raw: typeof M.OAuthConnectedBegin.Type,
       ) {
         const caller = yield* connectedCaller(invocation);
-        const request = yield* snapshotOAuth(M.OAuthConnectedPrepareBegin, raw);
+        const request = yield* snapshotOAuthConnectedBegin.effect(raw);
 
-        const found = yield* capture({
+        const found = yield* read({
           moduleId: id,
           subjectId: caller.subjectId,
-          ...(request.intent._tag === "Reconnect" ? { grantId: request.intent.grantId } : {}),
+          ...(request.intent._tag === "Reconnect"
+            ? { selector: { _tag: "Grant" as const, grantId: request.intent.grantId } }
+            : {}),
         });
 
         if (!found) return yield* OAuthRejected.make({});
-        const owned = yield* snapshotOAuth(capturedSchema, found);
+        const owned = yield* snapshotCapturedSchema.effect(found);
 
         if (
           owned.revision.subjectId !== caller.subjectId ||
           (request.intent._tag === "Reconnect" &&
-            (!owned.target || owned.target.grantId !== request.intent.grantId))
+            (!owned.grant || owned.grant.context.grantId !== request.intent.grantId))
         )
           return yield* OAuthUnavailable.make({});
 
@@ -356,19 +319,19 @@ export const makeOAuthConnected = <const Id extends string>(
         const provider =
           request.intent._tag === "Connect"
             ? request.intent.provider
-            : owned.target!.identity.provider;
+            : owned.grant!.context.identity.provider;
 
         if (
           !profile ||
           profile.provider !== provider ||
           (request.intent._tag === "Reconnect" &&
             profile.clientRegistrationId !==
-              owned.target!.configuration.profile.clientRegistrationId)
+              owned.grant!.context.configuration.profile.clientRegistrationId)
         )
           return yield* OAuthRejected.make({});
 
         const returnTarget = yield* resolveTarget(request.returnTarget).pipe(
-          Effect.flatMap((value) => snapshotOAuth(OAuthReturnTarget, value)),
+          Effect.flatMap((value) => snapshotOAuthReturnTarget.effect(value)),
         );
 
         const issued = yield* issueBinding(request.flowId).pipe(Effect.mapError(binderError));
@@ -401,14 +364,14 @@ export const makeOAuthConnected = <const Id extends string>(
           return yield* OAuthUnavailable.make({});
 
         const prepared = yield* prepareAuthorization({
-          profile: snapshotOAuthSync(M.OAuthConnectedProfile, profile),
+          profile: yield* snapshotOAuthConnectedProfile.effect(profile),
           callbackId: request.callbackId,
           flowId: request.flowId,
         }).pipe(
           Effect.mapError((error) =>
             error._tag === "OAuthProtocolRejected" ? OAuthRejected.make({}) : error,
           ),
-          Effect.flatMap((value) => snapshotOAuth(preparationSchema, value)),
+          Effect.flatMap((value) => snapshotPreparationSchema.effect(value)),
         );
 
         if (
@@ -418,7 +381,7 @@ export const makeOAuthConnected = <const Id extends string>(
           (prepared.configuration.protocol === "oidc") !==
             (prepared.secrets.oidcNonce !== undefined) ||
           (request.intent._tag === "Reconnect" &&
-            prepared.configuration.issuer !== owned.target!.identity.issuer)
+            prepared.configuration.issuer !== owned.grant!.context.identity.issuer)
         )
           return yield* OAuthUnavailable.make({});
         const now = DateTime.toEpochMillis(yield* DateTime.now);
@@ -426,63 +389,73 @@ export const makeOAuthConnected = <const Id extends string>(
 
         if (expiresAtMillis <= now) return yield* OAuthRejected.make({});
 
-        const context = snapshotOAuthSync(M.OAuthConnectedTransactionContext, {
+        const intent = yield* snapshotOAuthConnectedIntentContext.effect({
           ...prepared.configuration,
+          ...(prepared.responseMode === undefined ? {} : { responseMode: prepared.responseMode }),
           namespace: "effect-auth/oauth-connected-context/v1",
           moduleId: id,
           generation: policy.generation,
           flowId: request.flowId,
-          commandId: request.commandId,
           revision: owned.revision,
           grantId:
             request.intent._tag === "Reconnect"
               ? request.intent.grantId
               : M.OAuthGrantId.make(yield* random()),
-          ...(request.intent._tag === "Reconnect" ? { reconnect: owned.target } : {}),
+          ...(request.intent._tag === "Reconnect"
+            ? { reconnect: yield* snapshotOAuthConnectedTarget.effect(owned.grant!.context) }
+            : {}),
           maximumEvidenceAgeMillis: policy.maximumEvidenceAgeMillis,
+          authenticatedCaller: caller,
           returnTarget,
           stateDigest: yield* stateDigest(request.flowId, provider, prepared.secrets.state),
           requestBindingVerifier: binder.verifier,
           requestBindingExpiresAtMillis: binder.expiresAtMillis,
           issuedAtMillis: now,
           expiresAtMillis,
-          claimLifetimeMillis: policy.claimLifetimeMillis,
+          exchangeTimeoutMillis: policy.exchangeTimeoutMillis,
         });
 
-        const authorization = yield* connectedUseAuthorization(
-          yield* authorizeUse({ invocation: caller, moduleId: id, purpose: "metadata" }),
-          id,
-          caller.subjectId,
-          "metadata",
+        const authorization = yield* authorize(
+          caller,
+          yield* challenge(
+            "connected-begin",
+            intent.flowId,
+            intent.revision,
+            Schema.encodeSync(intentJson)(intent),
+          ),
+          request.actionProof,
         );
+
+        const context = yield* snapshotOAuthConnectedTransactionContext.effect({
+          ...intent,
+          authorization,
+        });
 
         const sealed = yield* sealFlow({
           context,
-          secrets: snapshotOAuthSync(M.OAuthConnectedTransactionSecrets, {
-            ...prepared.secrets,
-            authorizationUrl: prepared.authorizationUrl,
-          }),
-        }).pipe(Effect.flatMap((value) => snapshotOAuth(M.OAuthConnectedSealedTransaction, value)));
+          secrets: yield* snapshotOAuthTransactionSecrets.effect(prepared.secrets),
+        }).pipe(Effect.flatMap((value) => snapshotOAuthSealedTransaction.effect(value)));
 
-        const flow = snapshotOAuthSync(M.OAuthConnectedPendingFlow, {
+        const flow = yield* snapshotOAuthConnectedFlow.effect({
           context,
           sealed,
-          retentionUntilMillis: expiresAtMillis + policy.retentionMillis,
         });
 
-        const receipt = yield* prepareFlow(
-          { flow: snapshotOAuthSync(M.OAuthConnectedPendingFlow, flow), authorization },
-          (value, journal) => {
-            const decision = snapshotOAuthSync(M.OAuthConnectedIssueDecision, value);
+        const receipt = yield* issue(
+          yield* snapshotOAuthConnectedFlow.effect(flow),
+          prepareCommit((value, journal) =>
+            Result.gen(function* () {
+              const decision = snapshotOAuthConnectedIssueDecision.sync(value);
 
-            if (
-              decision._tag === "Issued" &&
-              !connectedSame(M.OAuthConnectedPendingFlow, decision.flow, flow)
-            )
-              throw OAuthUnavailable.make({});
+              if (
+                decision._tag === "Issued" &&
+                !connectedSame(M.OAuthConnectedFlow, decision.flow, flow)
+              )
+                return yield* Result.fail(OAuthUnavailable.make({}));
 
-            return journal.prepare(decision._tag === "Issued");
-          },
+              return journal.prepare(decision._tag === "Issued");
+            }),
+          ),
         );
 
         if (!(yield* connectedRead(receipt))) return yield* OAuthRejected.make({});
@@ -490,153 +463,22 @@ export const makeOAuthConnected = <const Id extends string>(
         return {
           value: {
             flowId: request.flowId,
+            authorizationUrl: prepared.authorizationUrl,
             expiresAtMillis,
           },
-          credentialCommands: [{ ...command, slot: "connected-intent" as const }],
+          credentialCommands: [formPostBinding(command, prepared.responseMode)],
         };
       }, connectedSafe);
 
-      const preparedBegin = Effect.fn("OAuthConnected.preparedBegin")(function* (
-        invocation: AuthInvocation,
-        raw: typeof M.OAuthConnectedBegin.Type,
-      ) {
-        const caller = yield* connectedCaller(invocation);
-        const request = yield* snapshotOAuth(M.OAuthConnectedBegin, raw);
-
-        const binder = yield* verifyBinding(request.flowId, request.preparationCredential).pipe(
-          Effect.mapError(binderError),
-        );
-
-        const access = snapshotOAuthSync(M.OAuthConnectedPreparedAccess, {
-          moduleId: id,
-          generation: policy.generation,
-          subjectId: caller.subjectId,
-          flowId: request.flowId,
-          commandId: request.commandId,
-          requestBindingVerifier: binder.verifier,
-          requestBindingExpiresAtMillis: binder.expiresAtMillis,
-          nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
-        });
-
-        const inspected = yield* inspectPrepared(access);
-
-        if (inspected === undefined) return yield* OAuthRejected.make({});
-        const flow = yield* snapshotOAuth(M.OAuthConnectedPendingFlow, inspected);
-        const context = flow.context;
-        const returnTarget = yield* resolveTarget(request.returnTarget);
-
-        if (
-          context.moduleId !== id ||
-          context.generation !== policy.generation ||
-          context.flowId !== request.flowId ||
-          context.commandId !== request.commandId ||
-          context.revision.subjectId !== caller.subjectId ||
-          context.callbackId !== request.callbackId ||
-          context.profile.key !== request.intent.profileKey ||
-          !connectedSame(OAuthReturnTarget, context.returnTarget, returnTarget) ||
-          context.requestBindingVerifier !== binder.verifier ||
-          context.requestBindingExpiresAtMillis !== binder.expiresAtMillis ||
-          access.nowMillis < context.issuedAtMillis ||
-          access.nowMillis >= context.expiresAtMillis ||
-          !connectedProfile(policy, context.profile) ||
-          (request.intent._tag === "Connect"
-            ? context.reconnect !== undefined || context.provider !== request.intent.provider
-            : context.reconnect === undefined || context.grantId !== request.intent.grantId)
-        )
-          return yield* OAuthRejected.make({});
-
-        const current = yield* capture({
-          moduleId: id,
-          subjectId: caller.subjectId,
-          ...(context.reconnect === undefined ? {} : { grantId: context.grantId }),
-        });
-
-        if (
-          current === undefined ||
-          !connectedSame(OAuthAccountRevision, current.revision, context.revision) ||
-          (context.reconnect !== undefined &&
-            (current.target === undefined ||
-              !connectedSame(M.OAuthConnectedTarget, current.target, context.reconnect)))
-        )
-          return yield* OAuthRejected.make({});
-        const secrets = yield* openFlow({ context, sealed: flow.sealed });
-
-        return {
-          caller,
-          request,
-          flow,
-          context,
-          authorizationUrl: secrets.authorizationUrl,
-        };
-      }, connectedSafe);
-
-      const beginChallenge = (context: M.OAuthConnectedTransactionContext) =>
-        challenge(
-          "connected-begin",
-          context.flowId,
-          context.commandId,
-          context.revision,
-          Schema.encodeSync(contextJson)(context),
-        );
-
-      const beginContext = Effect.fn("OAuthConnected.beginContext")(function* (
-        invocation: AuthInvocation,
-        raw: typeof M.OAuthConnectedBegin.Type,
-      ) {
-        return yield* beginChallenge((yield* preparedBegin(invocation, raw)).context);
-      }, connectedSafe);
-
-      const begin = Effect.fn("OAuthConnected.begin")(function* (
-        invocation: AuthInvocation,
-        raw: typeof M.OAuthConnectedBegin.Type,
-      ) {
-        const { caller, request, flow, context, authorizationUrl } = yield* preparedBegin(
-          invocation,
-          raw,
-        );
-
-        const authorization = yield* authorize(
-          caller,
-          yield* beginChallenge(context),
-          request.actionProof,
-        );
-
-        const receipt = yield* issue({ flow, authorization }, (decision, journal) => {
-          if (
-            decision._tag === "Issued" &&
-            !connectedSame(M.OAuthConnectedPendingFlow, decision.flow, flow)
-          )
-            throw OAuthUnavailable.make({});
-
-          return journal.prepare(decision._tag === "Issued");
-        });
-
-        if (!(yield* connectedRead(receipt))) return yield* OAuthRejected.make({});
-
-        return {
-          value: {
-            flowId: context.flowId,
-            authorizationUrl,
-            expiresAtMillis: context.expiresAtMillis,
-          },
-          credentialCommands: [
-            {
-              _tag: "Issue" as const,
-              slot: "request-binding" as const,
-              credential: request.preparationCredential,
-              expiresAtMillis: context.requestBindingExpiresAtMillis,
-            },
-            { _tag: "Clear" as const, slot: "connected-intent" as const },
-          ],
-        };
-      }, connectedSafe);
-
-      const preparedComplete = Effect.fn("OAuthConnected.preparedComplete")(function* (
+      const consumeCallback = Effect.fn("OAuthConnected.consumeCallback")(function* (
         invocation: AuthInvocation,
         raw: typeof M.OAuthConnectedComplete.Type,
       ) {
-        const caller = yield* connectedCaller(invocation);
-        const request = yield* snapshotOAuth(M.OAuthConnectedComplete, raw);
+        const authenticated = yield* connectedCaller(invocation).pipe(
+          Effect.catchTag("AuthenticationRequired", () => Effect.succeed(undefined)),
+        );
+
+        const request = yield* snapshotOAuthConnectedComplete.effect(raw);
         const response = request.response;
 
         if (
@@ -651,10 +493,9 @@ export const makeOAuthConnected = <const Id extends string>(
           )),
         };
 
-        const access = snapshotOAuthSync(M.OAuthConnectedAccess, {
+        const binding = {
           moduleId: id,
           generation: policy.generation,
-          subjectId: caller.subjectId,
           flowId: request.flowId,
           provider: request.provider,
           callbackId: request.callbackId,
@@ -662,14 +503,32 @@ export const makeOAuthConnected = <const Id extends string>(
           requestBindingVerifier: binder.verifier,
           requestBindingExpiresAtMillis: binder.expiresAtMillis,
           ...(response.issuer === undefined ? {} : { responseIssuer: response.issuer }),
-          nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
-        });
+        };
 
-        const inspected = yield* preflight(access);
+        const access = yield* snapshotOAuthConnectedAccess.effect(
+          authenticated === undefined
+            ? { ...binding, formPostSubject: true as const }
+            : { ...binding, subjectId: authenticated.subjectId },
+        );
 
-        if (!inspected) return yield* OAuthRejected.make({});
-        const flow = yield* snapshotOAuth(M.OAuthConnectedPendingFlow, inspected);
+        const consumed = yield* consume(access, (value, journal) =>
+          journal.prepare(snapshotOAuthConnectedConsumeDecision.sync(value)),
+        ).pipe(Effect.flatMap(connectedRead));
+
+        if (consumed._tag !== "Consumed") {
+          if (authenticated === undefined) return yield* AuthenticationRequired.make({});
+
+          return yield* OAuthRejected.make({});
+        }
+        const flow = yield* snapshotOAuthConnectedFlow.effect(consumed.flow);
         const context = flow.context;
+
+        if (authenticated === undefined && context.responseMode !== "form_post")
+          return yield* AuthenticationRequired.make({});
+
+        const caller = authenticated ?? context.authenticatedCaller;
+
+        if (caller === undefined) return yield* AuthenticationRequired.make({});
 
         if (
           context.moduleId !== id ||
@@ -682,8 +541,6 @@ export const makeOAuthConnected = <const Id extends string>(
           context.requestBindingVerifier !== binder.verifier ||
           context.requestBindingExpiresAtMillis !== binder.expiresAtMillis ||
           context.expiresAtMillis > binder.expiresAtMillis ||
-          access.nowMillis < context.issuedAtMillis ||
-          access.nowMillis >= context.expiresAtMillis ||
           !connectedProfile(policy, context.profile) ||
           (context.responseIssuerMode === "required"
             ? response.issuer !== context.issuer
@@ -698,24 +555,22 @@ export const makeOAuthConnected = <const Id extends string>(
         challenge(
           "connected-complete",
           context.flowId,
-          context.commandId,
           context.revision,
           Schema.encodeSync(contextJson)(context),
         );
-
-      const completeContext = Effect.fn("OAuthConnected.completeContext")(function* (
-        invocation: AuthInvocation,
-        raw: typeof M.OAuthConnectedComplete.Type,
-      ) {
-        return yield* completeChallenge((yield* preparedComplete(invocation, raw)).context);
-      }, connectedSafe);
 
       const complete = Effect.fn("OAuthConnected.complete")(function* (
         invocation: AuthInvocation,
         raw: typeof M.OAuthConnectedComplete.Type,
       ) {
-        const { caller, request, flow, context, access } = yield* preparedComplete(invocation, raw);
+        const { caller, request, flow, context } = yield* consumeCallback(invocation, raw);
         const response = request.response;
+
+        if (response._tag === "Error")
+          return {
+            value: { _tag: "Cancelled" as const, returnTarget: context.returnTarget },
+            credentialCommands: clearBinding,
+          };
 
         const authorization = yield* authorize(
           caller,
@@ -724,234 +579,105 @@ export const makeOAuthConnected = <const Id extends string>(
           context.maximumEvidenceAgeMillis,
         );
 
-        const event = yield* eventFor("connect", caller.subjectId);
-        const claimId = yield* random();
-
-        const finished = yield* Effect.uninterruptibleMask((restore) =>
+        const grant = yield* connectedBounded(
           Effect.gen(function* () {
-            const receipt = yield* restore(
-              claim({ access, flow, claimId, authorization }, (value, journal) =>
-                journal.prepare(snapshotOAuthSync(M.OAuthConnectedClaimDecision, value)),
-              ),
+            const secrets = yield* openFlow({ context, sealed: flow.sealed }).pipe(
+              Effect.flatMap((value) => snapshotOAuthTransactionSecrets.effect(value)),
             );
-
-            const decision = yield* connectedRead(receipt);
-
-            if (decision._tag !== "Claimed") return yield* OAuthRejected.make({});
-            const owned = snapshotOAuthSync(M.OAuthConnectedClaim, decision.claim);
 
             if (
-              owned.claimId !== claimId ||
-              !connectedSame(M.OAuthConnectedPendingFlow, owned.flow, flow) ||
-              owned.claimedAtMillis < context.issuedAtMillis ||
-              owned.claimedAtMillis >= context.expiresAtMillis ||
-              owned.claimedAtMillis > DateTime.toEpochMillis(yield* DateTime.now) ||
-              owned.claimExpiresAtMillis !== owned.claimedAtMillis + context.claimLifetimeMillis ||
-              flow.retentionUntilMillis < owned.claimExpiresAtMillis
+              (context.protocol === "oidc") !== (secrets.oidcNonce !== undefined) ||
+              (yield* stateDigest(context.flowId, context.provider, secrets.state)) !==
+                context.stateDigest ||
+              Redacted.value(secrets.state) !== Redacted.value(response.state)
             )
               return yield* OAuthUnavailable.make({});
+            const start = DateTime.toEpochMillis(yield* DateTime.now);
 
-            let remoteTokens = false;
+            const protocolConfiguration =
+              yield* snapshotOAuthConnectedConfiguration.effect(context);
 
-            const exchange = Effect.gen(function* () {
-              const secrets = yield* openFlow({ context, sealed: flow.sealed }).pipe(
-                Effect.flatMap((value) => snapshotOAuth(OAuthTransactionSecrets, value)),
-              );
-
-              if (
-                (context.protocol === "oidc") !== (secrets.oidcNonce !== undefined) ||
-                (yield* stateDigest(context.flowId, context.provider, secrets.state)) !==
-                  context.stateDigest ||
-                Redacted.value(secrets.state) !== Redacted.value(response.state)
-              )
-                return yield* OAuthUnavailable.make({});
-              if (response._tag !== "Code") return yield* OAuthProtocolRejected.make({});
-              const start = DateTime.toEpochMillis(yield* DateTime.now);
-
-              if (start >= owned.claimExpiresAtMillis) return yield* OAuthUnavailable.make({});
-
-              const protocolConfiguration = snapshotOAuthSync(
-                M.OAuthConnectedConfiguration,
-                context,
-              );
-
-              const rawGrant = yield* exchangeGrant({
-                configuration: protocolConfiguration,
-                secrets,
-                response,
-                verificationStartedAt: DateTime.makeUnsafe(start),
-              });
-
-              const projected = yield* connectedGrantResponse(
-                protocolConfiguration,
-                rawGrant,
-                start,
-              );
-
-              remoteTokens = true;
-
-              return yield* Effect.gen(function* () {
-                if (
-                  (context.reconnect &&
-                    !connectedSame(
-                      OAuthExternalIdentity,
-                      context.reconnect.identity,
-                      projected.identity,
-                    )) ||
-                  (projected.material.continuation._tag === "Oidc" &&
-                    (!projected.material.continuation.nonce ||
-                      !secrets.oidcNonce ||
-                      Redacted.value(projected.material.continuation.nonce) !==
-                        Redacted.value(secrets.oidcNonce)))
-                )
-                  return yield* OAuthProtocolRejected.make({});
-
-                const inspectedGrant = yield* inspectGrant({
-                  claim: owned,
-                  identity: projected.identity,
-                }).pipe(
-                  Effect.flatMap((value) => snapshotOAuth(M.OAuthConnectedGrantInspection, value)),
-                );
-
-                if (inspectedGrant._tag === "Conflict") return { _tag: "Conflict" as const };
-                if (inspectedGrant._tag === "Rejected") return { _tag: "Rejected" as const };
-
-                const tokenContext = snapshotOAuthSync(M.OAuthConnectedTokenContext, {
-                  namespace: "effect-auth/oauth-connected-token-context/v1",
-                  moduleId: id,
-                  subjectId: caller.subjectId,
-                  identity: projected.identity,
-                  configuration: protocolConfiguration,
-                  grantId: context.grantId,
-                  exchangeOrder: owned.order,
-                  grantVersion: SecurityRevision.make(yield* random()),
-                  tokenVersion: SecurityRevision.make(yield* random()),
-                  cohortGeneration: inspectedGrant.cohortGeneration,
-                  metadata: projected.metadata,
-                });
-
-                const sealed = yield* sealTokens({
-                  context: tokenContext,
-                  material: snapshotOAuthSync(M.OAuthConnectedTokenMaterial, projected.material),
-                });
-
-                const grant = snapshotOAuthSync(M.OAuthConnectedStoredGrant, {
-                  context: tokenContext,
-                  sealed,
-                });
-
-                let cleanup: M.OAuthConnectedRevocationJob | undefined;
-
-                if (context.profile.revocation === "cohort") {
-                  const cleanupContext = snapshotOAuthSync(M.OAuthConnectedRevocationContext, {
-                    namespace: "effect-auth/oauth-connected-revocation-context/v1",
-                    jobId: yield* random(),
-                    token: tokenContext,
-                  });
-
-                  cleanup = snapshotOAuthSync(M.OAuthConnectedRevocationJob, {
-                    context: cleanupContext,
-                    sealed: yield* sealTokens({
-                      context: cleanupContext,
-                      material: snapshotOAuthSync(
-                        M.OAuthConnectedTokenMaterial,
-                        projected.material,
-                      ),
-                    }),
-                  });
-                }
-
-                return snapshotOAuthSync(M.OAuthConnectedOutcome, {
-                  _tag: inspectedGrant._tag === "Quarantine" ? "Quarantined" : "Verified",
-                  grant,
-                  ...(cleanup ? { cleanup } : {}),
-                });
-              }).pipe(
-                Effect.ensuring(Effect.sync(() => wipeConnectedMaterial(projected.material))),
-              );
+            const rawGrant = yield* exchangeGrant({
+              configuration: protocolConfiguration,
+              secrets,
+              response,
+              verificationStartedAt: DateTime.makeUnsafe(start),
             });
 
-            const remaining = Math.max(
-              1,
-              owned.claimExpiresAtMillis - DateTime.toEpochMillis(yield* DateTime.now),
-            );
+            const projected = yield* connectedGrantResponse(protocolConfiguration, rawGrant, start);
 
-            const exchanged =
-              response._tag === "Error"
-                ? undefined
-                : yield* Effect.exit(restore(connectedBounded(exchange, remaining)));
+            return yield* Effect.gen(function* () {
+              if (
+                (context.reconnect &&
+                  !connectedSame(
+                    OAuthExternalIdentity,
+                    context.reconnect.identity,
+                    projected.identity,
+                  )) ||
+                (projected.material.continuation._tag === "Oidc" &&
+                  (!projected.material.continuation.nonce ||
+                    !secrets.oidcNonce ||
+                    Redacted.value(projected.material.continuation.nonce) !==
+                      Redacted.value(secrets.oidcNonce)))
+              )
+                return yield* OAuthProtocolRejected.make({});
 
-            const rejected =
-              exchanged &&
-              Exit.isFailure(exchanged) &&
-              exchanged.cause.reasons.length === 1 &&
-              exchanged.cause.reasons[0]?._tag === "Fail" &&
-              Schema.is(OAuthProtocolRejected)(exchanged.cause.reasons[0].error);
+              const tokenContext = yield* snapshotOAuthConnectedTokenContext.effect({
+                namespace: "effect-auth/oauth-connected-token-context/v1",
+                moduleId: id,
+                subjectId: caller.subjectId,
+                identity: projected.identity,
+                configuration: protocolConfiguration,
+                grantId: context.grantId,
+                grantVersion: SecurityRevision.make(yield* random()),
+                tokenVersion: SecurityRevision.make(yield* random()),
+                metadata: projected.metadata,
+              });
 
-            const outcome: M.OAuthConnectedOutcome =
-              exchanged === undefined
-                ? { _tag: "Cancelled" }
-                : Exit.isSuccess(exchanged)
-                  ? exchanged.value
-                  : rejected && !remoteTokens
-                    ? { _tag: "Unissued" }
-                    : rejected
-                      ? { _tag: "Rejected" }
-                      : { _tag: "Ambiguous" };
-
-            const committed = yield* connectedBounded(
-              settle(
-                {
-                  claim: owned,
-                  outcome,
-                  authorization,
-                  nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
-                },
-                (value, journal) => {
-                  const result = snapshotOAuthSync(M.OAuthConnectedSettlementDecision, value);
-
-                  if (result._tag === "Connected") {
-                    if (
-                      outcome._tag !== "Verified" ||
-                      !connectedSame(M.OAuthConnectedStoredGrant, result.grant, outcome.grant)
-                    )
-                      throw OAuthUnavailable.make({});
-                    journal.stage(event);
-                  } else if (result._tag === "Cancelled" && outcome._tag !== "Cancelled")
-                    throw OAuthUnavailable.make({});
-
-                  return journal.prepare(result);
-                },
-              ),
-              policy.settlementTimeoutMillis,
-            ).pipe(
-              Effect.flatMap(connectedRead),
-              Effect.mapError(() => OAuthUnavailable.make({})),
-            );
-
-            if (exchanged && Exit.isFailure(exchanged) && Cause.hasInterrupts(exchanged.cause))
-              return yield* Effect.interrupt;
-
-            return committed;
+              return yield* snapshotOAuthConnectedStoredGrant.effect({
+                context: tokenContext,
+                sealed: yield* sealTokens({ context: tokenContext, material: projected.material }),
+              });
+            }).pipe(Effect.ensuring(Effect.sync(() => wipeConnectedMaterial(projected.material))));
+          }),
+          context.exchangeTimeoutMillis,
+        ).pipe(
+          Effect.catchTags({
+            TimeoutError: () => Effect.fail(OAuthUnavailable.make({})),
+            OAuthProtocolRejected: () => Effect.fail(OAuthRejected.make({})),
           }),
         );
 
-        if (finished._tag === "Ambiguous") return yield* OAuthUnavailable.make({});
-        if (finished._tag === "Busy") return yield* M.OAuthConnectedBusy.make({});
+        const event = yield* eventFor("connect", caller.subjectId);
+
+        const finished = yield* settle(
+          { _tag: "Connect", flow, authorization, grant },
+          prepareCommit((value, journal) =>
+            Result.gen(function* () {
+              const result = snapshotOAuthConnectedSettlementDecision.sync(value);
+
+              if (result._tag === "Connected") {
+                if (!connectedSame(M.OAuthConnectedStoredGrant, result.grant, grant))
+                  return yield* Result.fail(OAuthUnavailable.make({}));
+                journal.stage(event);
+              }
+
+              return journal.prepare(result);
+            }),
+          ),
+        ).pipe(Effect.flatMap(connectedRead));
+
         if (finished._tag === "Conflict") return yield* IdentityConflict.make({});
-        if (finished._tag === "Rejected") return yield* OAuthRejected.make({});
+        if (finished._tag !== "Connected") return yield* OAuthRejected.make({});
 
         return {
-          value:
-            finished._tag === "Cancelled"
-              ? { _tag: "Cancelled" as const, returnTarget: context.returnTarget }
-              : {
-                  _tag: "Connected" as const,
-                  grantId: context.grantId,
-                  profileKey: context.profile.key,
-                  status: "Active" as const,
-                  returnTarget: context.returnTarget,
-                },
+          value: {
+            _tag: "Connected" as const,
+            grantId: context.grantId,
+            profileKey: context.profile.key,
+            status: "Active" as const,
+            returnTarget: context.returnTarget,
+          },
           credentialCommands: clearBinding,
         };
       }, connectedSafe);
@@ -961,7 +687,7 @@ export const makeOAuthConnected = <const Id extends string>(
         raw: typeof M.OAuthConnectedList.Type,
       ) {
         const caller = yield* connectedCaller(invocation);
-        const input = yield* snapshotOAuth(M.OAuthConnectedList, raw);
+        const input = yield* snapshotOAuthConnectedList.effect(raw);
 
         const authorization = yield* connectedUseAuthorization(
           yield* authorizeUse({ invocation: caller, moduleId: id, purpose: "metadata" }),
@@ -971,7 +697,7 @@ export const makeOAuthConnected = <const Id extends string>(
         );
 
         const result = yield* listRows({ authorization, ...input }).pipe(
-          Effect.flatMap((value) => snapshotOAuth(M.OAuthConnectedListResult, value)),
+          Effect.flatMap((value) => snapshotOAuthConnectedListResult.effect(value)),
         );
 
         if (
@@ -983,79 +709,23 @@ export const makeOAuthConnected = <const Id extends string>(
         return result;
       }, connectedSafe);
 
-      const preparedDisconnect = Effect.fn("OAuthConnected.preparedDisconnect")(function* (
-        invocation: AuthInvocation,
-        raw: typeof M.OAuthConnectedDisconnect.Type,
-      ) {
-        const caller = yield* connectedCaller(invocation);
-        const request = yield* snapshotOAuth(M.OAuthConnectedDisconnect, raw);
-
-        const metadataAuthorization = yield* connectedUseAuthorization(
-          yield* authorizeUse({ invocation: caller, moduleId: id, purpose: "metadata" }),
-          id,
-          caller.subjectId,
-          "metadata",
-        );
-
-        const inspected = yield* inspectDisconnect({
-          moduleId: id,
-          subjectId: caller.subjectId,
-          authorization: metadataAuthorization,
-          commandId: request.commandId,
-          grantId: request.grantId,
-        }).pipe(
-          Effect.flatMap((value) => snapshotOAuth(M.OAuthConnectedDisconnectInspection, value)),
-        );
-
-        return { caller, request, inspected };
-      }, connectedSafe);
-
-      const disconnectChallenge = (
-        request: typeof M.OAuthConnectedDisconnect.Type,
-        inspected: Extract<
-          typeof M.OAuthConnectedDisconnectInspection.Type,
-          { readonly _tag: "Target" }
-        >,
-      ) =>
-        challenge(
-          "connected-disconnect",
-          M.OAuthConnectedActionChallenge.fields.flowId.make(request.commandId),
-          request.commandId,
-          inspected.revision,
-          Schema.encodeSync(Schema.fromJsonString(M.OAuthConnectedDisconnectGrant))(
-            inspected.grant,
-          ),
-        );
-
-      const disconnectContext = Effect.fn("OAuthConnected.disconnectContext")(function* (
-        invocation: AuthInvocation,
-        raw: typeof M.OAuthConnectedDisconnect.Type,
-      ) {
-        const { request, inspected } = yield* preparedDisconnect(invocation, raw);
-
-        if (inspected._tag === "Conflict") return yield* IdentityConflict.make({});
-        if (inspected._tag !== "Target") return yield* OAuthRejected.make({});
-
-        return yield* disconnectChallenge(request, inspected);
-      }, connectedSafe);
-
       const disconnect = Effect.fn("OAuthConnected.disconnect")(function* (
         invocation: AuthInvocation,
         raw: typeof M.OAuthConnectedDisconnect.Type,
       ) {
-        const { caller, request, inspected } = yield* preparedDisconnect(invocation, raw);
+        const caller = yield* connectedCaller(invocation);
+        const request = yield* snapshotOAuthConnectedDisconnect.effect(raw);
 
-        if (inspected._tag === "Rejected") return yield* OAuthRejected.make({});
-        if (inspected._tag === "Conflict") return yield* IdentityConflict.make({});
-        if (inspected._tag === "Replay") {
-          if (inspected.result.grantId !== request.grantId || !inspected.result.replayed)
-            return yield* OAuthUnavailable.make({});
+        const inspected = yield* read({
+          moduleId: id,
+          subjectId: caller.subjectId,
+          selector: { _tag: "Grant", grantId: request.grantId },
+        });
 
-          return inspected.result;
-        }
-
-        const grant = inspected.grant,
-          context = grant.context;
+        if (inspected === undefined || inspected.grant === undefined)
+          return yield* OAuthRejected.make({});
+        const grant = yield* snapshotOAuthConnectedStoredGrant.effect(inspected.grant);
+        const context = grant.context;
 
         if (
           context.moduleId !== id ||
@@ -1067,76 +737,51 @@ export const makeOAuthConnected = <const Id extends string>(
 
         const authorization = yield* authorize(
           caller,
-          yield* disconnectChallenge(request, inspected),
+          yield* challenge(
+            "connected-disconnect",
+            M.OAuthConnectedActionChallenge.fields.flowId.make(request.commandId),
+            inspected.revision,
+            Schema.encodeSync(Schema.fromJsonString(M.OAuthConnectedDisconnectIntent))({
+              key: { moduleId: id, subjectId: caller.subjectId, grantId: request.grantId },
+              grantVersion: context.grantVersion,
+            }),
+          ),
           request.actionProof,
         );
 
         const event = yield* eventFor("disconnect", caller.subjectId);
-        let revocation: M.OAuthConnectedRevocationJob | undefined;
 
-        if (grant.sealed && context.configuration.profile.revocation === "cohort") {
-          const material = yield* openTokens({ context, sealed: grant.sealed }).pipe(
-            Effect.flatMap((value) => snapshotOAuth(M.OAuthConnectedTokenMaterial, value)),
-          );
-
-          revocation = yield* Effect.gen(function* () {
-            const jobContext = snapshotOAuthSync(M.OAuthConnectedRevocationContext, {
-              namespace: "effect-auth/oauth-connected-revocation-context/v1",
-              jobId: yield* random(),
-              token: context,
-            });
-
-            return snapshotOAuthSync(M.OAuthConnectedRevocationJob, {
-              context: jobContext,
-              sealed: yield* sealTokens({ context: jobContext, material }),
-            });
-          }).pipe(Effect.ensuring(Effect.sync(() => wipeConnectedMaterial(material))));
-        }
-
-        const receipt = yield* disconnectRow(
+        const result = yield* disconnectRow(
           {
-            moduleId: id,
-            commandId: request.commandId,
-            grant,
+            key: { moduleId: id, subjectId: caller.subjectId, grantId: request.grantId },
+            grantVersion: context.grantVersion,
             authorization,
-            ...(revocation ? { revocation } : {}),
-            retentionUntilMillis:
-              DateTime.toEpochMillis(yield* DateTime.now) + policy.retentionMillis,
           },
-          (value, journal) => {
-            const decision = snapshotOAuthSync(M.OAuthConnectedDisconnectDecision, value);
+          prepareCommit((value, journal) =>
+            Result.gen(function* () {
+              const decision = snapshotOAuthConnectedDisconnectDecision.sync(value);
 
-            if (decision._tag === "Disconnected") {
-              if (
-                decision.grantId !== request.grantId ||
-                (!decision.replayed &&
-                  context.configuration.profile.revocation === "unsupported" &&
-                  decision.remoteRevocation !== "Unsupported") ||
-                (!decision.replayed &&
-                  revocation !== undefined &&
-                  decision.remoteRevocation !== "Pending")
-              )
-                throw OAuthUnavailable.make({});
-              if (!decision.replayed) journal.stage(event);
-            }
+              if (decision._tag === "Disconnected") {
+                if (
+                  decision.grantId !== request.grantId ||
+                  (context.configuration.profile.revocation === "unsupported" &&
+                    decision.remoteRevocation !== "Unsupported")
+                )
+                  return yield* Result.fail(OAuthUnavailable.make({}));
+                journal.stage(event);
+              }
 
-            return journal.prepare(decision);
-          },
-        );
-
-        const result = yield* connectedRead(receipt);
+              return journal.prepare(decision);
+            }),
+          ),
+        ).pipe(Effect.flatMap(connectedRead));
 
         if (result._tag === "Rejected") return yield* OAuthRejected.make({});
-        if (result._tag === "Conflict") return yield* IdentityConflict.make({});
 
         return result;
       }, connectedSafe);
 
       return Connected.of({
-        prepareBegin,
-        beginContext,
-        completeContext,
-        disconnectContext,
         begin,
         complete,
         list,
@@ -1144,16 +789,6 @@ export const makeOAuthConnected = <const Id extends string>(
       });
     }),
   );
-
-  const PrepareBegin = makeOperation(`${moduleId}/connected/prepare-begin`, {
-    payload: M.OAuthConnectedPrepareBegin,
-    success: RequestBindingPublic,
-    error: Failure,
-    access: "authenticated",
-    exposure: "public",
-    replay: "non-idempotent",
-    credentials: true,
-  });
 
   const Begin = makeOperation(`${moduleId}/connected/begin`, {
     payload: M.OAuthConnectedBegin,
@@ -1165,11 +800,14 @@ export const makeOAuthConnected = <const Id extends string>(
     credentials: true,
   });
 
+  // form_post completion carries the binding cookie. A guest reaches the handler,
+  // which accepts only a form_post continuation whose sealed caller and binding
+  // match. Begin, list, and disconnect stay authenticated.
   const Complete = makeOperation(`${moduleId}/connected/complete`, {
     payload: M.OAuthConnectedComplete,
     success: M.OAuthConnectedResult,
     error: Failure,
-    access: "authenticated",
+    access: "any",
     exposure: "public",
     replay: "single-use",
     credentials: true,
@@ -1190,13 +828,10 @@ export const makeOAuthConnected = <const Id extends string>(
     error: Failure,
     access: "authenticated",
     exposure: "public",
-    replay: "idempotent",
+    replay: "single-use",
   });
 
   const handlersLayer = Layer.mergeAll(
-    PrepareBegin.credentialHandlerLayer((input, invocation) =>
-      Effect.flatMap(Connected, (connected) => connected.prepareBegin(invocation, input)),
-    ),
     Begin.credentialHandlerLayer(
       Effect.fn("OAuthConnected.Begin")(function* (input, invocation) {
         return yield* (yield* Connected).begin(invocation, input);
@@ -1223,10 +858,51 @@ export const makeOAuthConnected = <const Id extends string>(
     Connected,
     binding,
     layer,
-    operations: Object.freeze({ PrepareBegin, Begin, Complete, List, Disconnect }),
+    operations: Object.freeze({ Begin, Complete, List, Disconnect }),
     handlersLayer,
-    group: operationGroup(PrepareBegin, Begin, Complete, List, Disconnect),
+    group: operationGroup(Begin, Complete, List, Disconnect),
     ...makeOAuthConnectedAccess(moduleId, configuration),
     ...makeOAuthConnectedMaintenance(moduleId, configuration),
   });
 };
+
+const snapshotOAuthConnectedActionChallenge = makeOAuthSnapshot(M.OAuthConnectedActionChallenge);
+
+const snapshotOAuthConnectedActionAuthorization = makeOAuthSnapshot(
+  M.OAuthConnectedActionAuthorization,
+);
+
+const snapshotOAuthConnectedBegin = makeOAuthSnapshot(M.OAuthConnectedBegin);
+const snapshotCapturedSchema = makeOAuthSnapshot(capturedSchema);
+const snapshotOAuthReturnTarget = makeOAuthSnapshot(OAuthReturnTarget);
+const snapshotOAuthConnectedProfile = makeOAuthSnapshot(M.OAuthConnectedProfile);
+const snapshotPreparationSchema = makeOAuthSnapshot(preparationSchema);
+const snapshotOAuthConnectedIntentContext = makeOAuthSnapshot(M.OAuthConnectedIntentContext);
+const snapshotOAuthConnectedTarget = makeOAuthSnapshot(M.OAuthConnectedTarget);
+
+const snapshotOAuthConnectedTransactionContext = makeOAuthSnapshot(
+  M.OAuthConnectedTransactionContext,
+);
+
+const snapshotOAuthTransactionSecrets = makeOAuthSnapshot(OAuthTransactionSecrets);
+const snapshotOAuthSealedTransaction = makeOAuthSnapshot(OAuthSealedTransaction);
+const snapshotOAuthConnectedFlow = makeOAuthSnapshot(M.OAuthConnectedFlow);
+const snapshotOAuthConnectedIssueDecision = makeOAuthSnapshot(M.OAuthConnectedIssueDecision);
+const snapshotOAuthConnectedComplete = makeOAuthSnapshot(M.OAuthConnectedComplete);
+const snapshotOAuthConnectedAccess = makeOAuthSnapshot(M.OAuthConnectedAccess);
+const snapshotOAuthConnectedConsumeDecision = makeOAuthSnapshot(M.OAuthConnectedConsumeDecision);
+const snapshotOAuthConnectedConfiguration = makeOAuthSnapshot(M.OAuthConnectedConfiguration);
+const snapshotOAuthConnectedTokenContext = makeOAuthSnapshot(M.OAuthConnectedTokenContext);
+const snapshotOAuthConnectedStoredGrant = makeOAuthSnapshot(M.OAuthConnectedStoredGrant);
+
+const snapshotOAuthConnectedSettlementDecision = makeOAuthSnapshot(
+  M.OAuthConnectedSettlementDecision,
+);
+
+const snapshotOAuthConnectedList = makeOAuthSnapshot(M.OAuthConnectedList);
+const snapshotOAuthConnectedListResult = makeOAuthSnapshot(M.OAuthConnectedListResult);
+const snapshotOAuthConnectedDisconnect = makeOAuthSnapshot(M.OAuthConnectedDisconnect);
+
+const snapshotOAuthConnectedDisconnectDecision = makeOAuthSnapshot(
+  M.OAuthConnectedDisconnectDecision,
+);

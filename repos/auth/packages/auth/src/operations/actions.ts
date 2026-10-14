@@ -5,7 +5,7 @@ import type { Rpc } from "effect/rpc";
 import { HookDenied } from "../hooks/models";
 import { makeSessionContract } from "../sessions/contract";
 import { SessionError, SessionSignOutUnavailable } from "../sessions/errors";
-import { SessionSignOut } from "../sessions/models";
+import { SessionReadOptions, SessionSignOut } from "../sessions/models";
 import type { AuthInvocation } from "./context";
 import type { CredentialSlot } from "./credentials";
 import { OperationConfigurationError } from "./errors";
@@ -96,6 +96,7 @@ export const fromOperation = <
   } = {},
 ) => {
   if (operation.exposure !== "public")
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous action construction rejects invalid static contracts.
     throw OperationConfigurationError.make({
       reason: "internal-exposure",
       operation: options.method ?? "action",
@@ -152,6 +153,7 @@ const bindAction = <
         reveals.length > 0 ||
         (definition.replay !== undefined && definition.replay !== "read-only")))
   )
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous action construction rejects invalid static contracts.
     throw OperationConfigurationError.make({ reason: "invalid-action", operation: name });
 
   const operation = makeOperation(`${namespace}/api/${name}`, {
@@ -243,7 +245,7 @@ const sessionActions = <
   session: S,
 ) => ({
   getSession: action({
-    payload: Schema.Void,
+    payload: Schema.UndefinedOr(SessionReadOptions),
     success: Schema.NullOr(session),
     error: Schema.Never,
     mode: "query",
@@ -274,6 +276,29 @@ const sessionActions = <
   }),
 });
 
+// Only exact contracts constructed here can donate their session operations.
+// Structural contracts may have arbitrary `sessions` properties; never trust them.
+const ownedSessionContracts = new WeakMap<
+  AnyAuthContract,
+  { readonly moduleId: string; readonly claims: Schema.Top; readonly contract: unknown }
+>();
+
+export const sessionContractFor = <
+  Id extends string,
+  Claims extends Schema.Codec<unknown, unknown, unknown, unknown>,
+>(
+  contract: AnyAuthContract,
+  moduleId: Id,
+  claims: Claims,
+) => {
+  const sessions = ownedSessionContracts.get(contract);
+
+  if (sessions?.moduleId !== moduleId || sessions.claims !== claims) return undefined;
+
+  // The identity checks retain the exact constructor's namespace and claims codec.
+  return sessions.contract as ReturnType<typeof makeSessionContract<Id, Claims>>;
+};
+
 /** A browser-safe contract. The action callback only receives schemas; it never
  * receives server configuration, keys, persistence or service implementations. */
 export const make = <
@@ -295,6 +320,7 @@ export const make = <
       Schema.NonEmptyString.check(Schema.isMaxLength(128), Schema.isPattern(/^[A-Za-z0-9._:/-]+$/)),
     )(namespace)
   )
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous action construction rejects invalid static contracts.
     throw OperationConfigurationError.make({ reason: "invalid-action", operation: namespace });
 
   const basePath = options.basePath ?? "/auth";
@@ -304,6 +330,7 @@ export const make = <
       basePath,
     )
   )
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous action construction rejects invalid static contracts.
     throw OperationConfigurationError.make({ reason: "invalid-action", operation: namespace });
 
   const sessions = makeSessionContract(`${namespace}/sessions`, options.claims);
@@ -311,6 +338,7 @@ export const make = <
   const additional = options.actions?.(sessions) ?? {};
 
   if (Object.keys(additional).some((name) => Object.hasOwn(defaults, name)))
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous action construction rejects invalid static contracts.
     throw OperationConfigurationError.make({ reason: "duplicate-operation", operation: namespace });
 
   const definitions = { ...defaults, ...additional };
@@ -323,13 +351,21 @@ export const make = <
   );
 
   // Each entry is bound with the exact schemas from the corresponding definition.
-  return Object.freeze({
+  const contract = Object.freeze({
     namespace,
     basePath,
     claims: options.claims,
     sessions,
     actions: Object.freeze(actions) as unknown as BoundActions<typeof defaults & Additional>,
   });
+
+  ownedSessionContracts.set(contract, {
+    moduleId: sessions.moduleId,
+    claims: options.claims,
+    contract: sessions,
+  });
+
+  return contract;
 };
 
 export interface AnyAuthContract {

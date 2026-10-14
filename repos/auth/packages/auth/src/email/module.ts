@@ -2,7 +2,7 @@ import { Context, Crypto, DateTime, Effect, Layer, Option, Schema, type Types } 
 import { Base64Url } from "effect/encoding";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
-import { cryptoLayer, defaultLayer, hooksLayer } from "../auth/defaults";
+import { defaultLayer, hooksLayer } from "../auth/defaults";
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { HookDenied } from "../hooks/models";
 import { LoginIdentifier } from "../identity/models";
@@ -20,9 +20,6 @@ import { readProofCommit } from "../proofs/dispatch";
 import { defaultIngressLayer } from "../proofs/HostIngressLimiter";
 import {
   ProofBinding,
-  ProofContinuation,
-  ProofContinuationId,
-  ProofId,
   ProofPurpose,
   ProofReference,
   ProofRequestId,
@@ -31,7 +28,6 @@ import {
 import { makeProofModule } from "../proofs/module";
 import type { ProofPolicy } from "../proofs/policy";
 import { Email, Locale, type SubjectId, TokenDigest } from "../Schema";
-import { AuthenticationAuthority } from "../sessions/AuthenticationAuthority";
 import type { AuthenticationEvidence } from "../sessions/models";
 import { AuthenticationFlowId } from "../sessions/models";
 import type { makeSessionModule } from "../sessions/module";
@@ -48,7 +44,7 @@ import {
 } from "./errors";
 import { SafeReturnTarget, type EmailCredentialSnapshot } from "./models";
 import { makeEmailRegistration } from "./registration";
-import { snapshotEmailCredential, snapshotEmailRevision } from "./snapshot";
+import { snapshotEmailCredential } from "./snapshot";
 
 const EmailInput = Schema.String.check(Schema.isMaxLength(320)).pipe(Schema.decodeTo(Email));
 const Secret = Schema.RedactedFromValue(Schema.String.check(Schema.isMaxLength(4096)));
@@ -68,16 +64,7 @@ const RequestInput = Schema.Struct({
   locale: Locale,
 });
 
-const ResendInput = Schema.Struct({ ...RequestInput.fields, supersedes: ProofId });
-const AttemptInput = Schema.Struct({ ...SignInBase, reference: ProofReference, secret: Secret });
-
-const CompleteInput = Schema.Struct({
-  ...SignInBase,
-  continuationId: ProofContinuationId,
-  credential: Secret,
-});
-
-const AttemptResult = Schema.Struct({ continuation: ProofContinuation });
+const CompleteInput = Schema.Struct({ ...SignInBase, reference: ProofReference, secret: Secret });
 
 const Failure = Schema.Union([
   EmailRejected,
@@ -190,11 +177,7 @@ export const makeEmailSignInModule = <
       {
         readonly request: (
           input: typeof RequestInput.Type,
-          supersedes?: ProofId,
         ) => Effect.Effect<ProofRequestReceipt, Failure>;
-        readonly attempt: (
-          input: typeof AttemptInput.Type,
-        ) => Effect.Effect<AuthOperationResult<typeof AttemptResult.Type>, Failure>;
         readonly complete: (
           input: typeof CompleteInput.Type,
         ) => Effect.Effect<AuthOperationResult<typeof CompletionResult.Type>, Failure>;
@@ -214,7 +197,6 @@ export const makeEmailSignInModule = <
         const proofs = yield* proof.Proofs;
         const claims = yield* SessionClaims;
         const completion = yield* sessions.AuthenticationCompletion;
-        const authority = yield* AuthenticationAuthority;
         const crypto = yield* Crypto.Crypto;
 
         const bound = Effect.fn("Email.signInBinding")(function* (
@@ -238,31 +220,17 @@ export const makeEmailSignInModule = <
           if (Option.isSome(candidate)) {
             const snapshot = yield* snapshotEmailCredential(candidate.value);
 
-            const current = yield* authority
-              .capture(snapshot.revision.subjectId, [snapshot.credentialId])
-              .pipe(
-                Effect.map(Option.some),
-                Effect.catchTag("StaleAuthentication", () => Effect.succeed(Option.none())),
-                Effect.mapError(() => EmailUnavailable.make({})),
-              );
-
-            if (Option.isSome(current)) {
-              const captured = snapshotEmailRevision(current.value);
-
-              if (
-                snapshot.moduleId === moduleId &&
-                snapshot.identifier.namespace === "email" &&
-                snapshot.identifier.value === identifier.value &&
-                captured.subjectId === snapshot.revision.subjectId &&
-                captured.securityRevision === snapshot.revision.securityRevision &&
-                captured.credentials.some(
-                  (item) =>
-                    item.credentialId === snapshot.credentialId &&
-                    item.revision === snapshot.credentialRevision,
-                )
+            if (
+              snapshot.moduleId === moduleId &&
+              snapshot.identifier.namespace === "email" &&
+              snapshot.identifier.value === identifier.value &&
+              snapshot.revision.credentials.some(
+                (item) =>
+                  item.credentialId === snapshot.credentialId &&
+                  item.revision === snapshot.credentialRevision,
               )
-                target = Option.some(Object.freeze({ ...snapshot, revision: captured }));
-            }
+            )
+              target = Option.some(snapshot);
           }
 
           const message = yield* Schema.encodeEffect(tupleCodec)([
@@ -293,7 +261,7 @@ export const makeEmailSignInModule = <
         });
 
         return SignIn.of({
-          request: Effect.fn("Email.signInRequest")(function* (request, supersedes) {
+          request: Effect.fn("Email.signInRequest")(function* (request) {
             yield* noAmbient();
             const current = yield* bound(request);
 
@@ -303,7 +271,6 @@ export const makeEmailSignInModule = <
                 binding: current.binding,
                 locale: request.locale,
                 eligible: Option.isSome(current.target),
-                ...(supersedes === undefined ? {} : { supersedes }),
               })
               .pipe(
                 Effect.flatMap(readProofCommit),
@@ -314,43 +281,24 @@ export const makeEmailSignInModule = <
 
             return dispatch.receipt;
           }),
-          attempt: Effect.fn("Email.signInAttempt")(function* (request) {
+          complete: Effect.fn("Email.signInComplete")(function* (request) {
             yield* noAmbient();
             const current = yield* bound(request);
 
-            const result = yield* proofs
-              .prepareAttempt({
+            // Verification starts here. Never timestamp the
+            // later claims/crypto/session work, or refresh the captured semantic revision.
+            const verifiedAt = yield* DateTime.now;
+
+            const consumed = yield* proofs
+              .prepareRedeem({
                 binding: current.binding,
                 reference: request.reference,
                 credential: request.secret,
               })
               .pipe(Effect.flatMap(readProofCommit), Effect.mapError(emailCompletionFailure));
 
-            if (result.value._tag === "Rejected") return yield* EmailRejected.make({});
-
-            return {
-              value: { continuation: result.value.continuation },
-              credentialCommands: result.credentialCommands,
-            };
-          }),
-          complete: Effect.fn("Email.signInComplete")(function* (request) {
-            yield* noAmbient();
-            const current = yield* bound(request);
-
-            if (Option.isNone(current.target)) return yield* EmailRejected.make({});
-            // Verifying the restricted continuation starts here. Never timestamp the
-            // later claims/crypto/session work, or refresh the captured semantic revision.
-            const verifiedAt = yield* DateTime.now;
-
-            const consumed = yield* proofs
-              .prepareComplete({
-                binding: current.binding,
-                continuationId: request.continuationId,
-                credential: request.credential,
-              })
-              .pipe(Effect.flatMap(readProofCommit), Effect.mapError(emailCompletionFailure));
-
-            if (consumed !== "completed") return yield* EmailRejected.make({});
+            if (consumed !== "redeemed" || Option.isNone(current.target))
+              return yield* EmailRejected.make({});
 
             const evidence: AuthenticationEvidence = {
               flowId: AuthenticationFlowId.make(request.flowId),
@@ -378,14 +326,17 @@ export const makeEmailSignInModule = <
             // Proof consumption has committed. Session failure burns this proof and
             // requires a fresh request; no cross-owner atomicity is claimed here.
             const established = yield* completion
-              .prepare({ evidence, claims: applicationClaims })
+              .prepare({
+                evidence,
+                requirement: current.target.value.requirement,
+                claims: applicationClaims,
+              })
               .pipe(Effect.flatMap(read), Effect.mapError(emailCompletionFailure));
 
             return {
               value: { completion: established.value, returnTarget: current.returnTarget },
               credentialCommands: [
                 ...established.credentialCommands,
-                { _tag: "Clear", slot: "proof-continuation" },
                 { _tag: "Clear", slot: "request-binding" },
               ],
             };
@@ -405,27 +356,7 @@ export const makeEmailSignInModule = <
       error: Failure,
       access: "any",
       exposure: "public",
-      replay: "idempotent",
-    });
-
-    const Resend = makeOperation(`${moduleId}/${mode}/sign-in/resend`, {
-      authorize: () => admitRequest,
-      payload: ResendInput,
-      success: ProofRequestReceipt,
-      error: Failure,
-      access: "any",
-      exposure: "public",
-      replay: "idempotent",
-    });
-
-    const Attempt = makeOperation(`${moduleId}/${mode}/sign-in/attempt`, {
-      payload: AttemptInput,
-      success: AttemptResult,
-      error: Failure,
-      access: "any",
-      exposure: "public",
-      replay: "single-use",
-      credentials: true,
+      replay: "non-idempotent",
     });
 
     const Complete = makeOperation(`${moduleId}/${mode}/sign-in/complete`, {
@@ -444,16 +375,6 @@ export const makeEmailSignInModule = <
           return yield* (yield* SignIn).request(input);
         }),
       ),
-      Resend.handlerLayer(
-        Effect.fn("Email.Resend")(function* (input) {
-          return yield* (yield* SignIn).request(input, input.supersedes);
-        }),
-      ),
-      Attempt.credentialHandlerLayer(
-        Effect.fn("Email.Attempt")(function* (input) {
-          return yield* (yield* SignIn).attempt(input);
-        }),
-      ),
       Complete.credentialHandlerLayer(
         Effect.fn("Email.Complete")(function* (input) {
           return yield* (yield* SignIn).complete(input);
@@ -466,15 +387,13 @@ export const makeEmailSignInModule = <
         {
           beginSignIn: Begin.invoke,
           signIn: Request.invoke,
-          resendSignIn: Resend.invoke,
-          verifySignIn: Attempt.invoke,
           completeSignIn: Complete.invoke,
         },
         Layer.merge(beginLayer, handlersLayer).pipe(
           Layer.provide(defaultLayer(SignIn, layer)),
           Layer.provide(defaultLayer(proof.Proofs, proof.emailLayer)),
           Layer.provide(defaultLayer(binding.RequestBinding, binding.layer)),
-          Layer.provide([cryptoLayer, hooksLayer]),
+          Layer.provide(hooksLayer),
           Layer.merge(defaultIngressLayer),
         ),
         { completion: true },
@@ -482,7 +401,7 @@ export const makeEmailSignInModule = <
       SignIn,
       layer,
       proof,
-      operations: { Request, Resend, Attempt, Complete },
+      operations: { Request, Complete },
       handlersLayer,
     });
   };
@@ -547,15 +466,13 @@ export const makeEmailAccountModule = <
         {
           beginRegistration: Begin.invoke,
           register: module.operations.Request.invoke,
-          resendRegistration: module.operations.Resend.invoke,
-          verifyRegistration: module.operations.Attempt.invoke,
           completeRegistration: module.operations.Complete.invoke,
         },
         Layer.merge(beginLayer, module.handlersLayer).pipe(
           Layer.provide(defaultLayer(module.Registrations, module.layer)),
           Layer.provide(defaultLayer(registrationProof.Proofs, registrationProof.emailLayer)),
           Layer.provide(defaultLayer(binding.RequestBinding, binding.layer)),
-          Layer.provide([cryptoLayer, hooksLayer]),
+          Layer.provide(hooksLayer),
           Layer.merge(defaultIngressLayer),
         ),
       ),
@@ -579,12 +496,8 @@ export const makeEmailAccountModule = <
         {
           beginEmailAddress: Begin.invoke,
           requestEmailVerification: module.verify.operations.Request.invoke,
-          resendEmailVerification: module.verify.operations.Resend.invoke,
-          verifyEmailAddress: module.verify.operations.Attempt.invoke,
           completeEmailVerification: module.verify.operations.Complete.invoke,
           requestEmailChange: module.change.operations.Request.invoke,
-          resendEmailChange: module.change.operations.Resend.invoke,
-          verifyEmailChange: module.change.operations.Attempt.invoke,
           completeEmailChange: module.change.operations.Complete.invoke,
         },
         Layer.mergeAll(beginLayer, module.verify.handlersLayer, module.change.handlersLayer).pipe(
@@ -594,7 +507,7 @@ export const makeEmailAccountModule = <
             defaultLayer(changeProof.Proofs, changeProof.emailLayer),
           ]),
           Layer.provide(defaultLayer(binding.RequestBinding, binding.layer)),
-          Layer.provide([cryptoLayer, hooksLayer]),
+          Layer.provide(hooksLayer),
           Layer.merge(defaultIngressLayer),
         ),
       ),

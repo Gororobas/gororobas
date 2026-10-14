@@ -1,6 +1,7 @@
 import type * as Shared from "@yielded/auth-persistence/Adapter";
 import type { SQL, Table } from "drizzle-orm";
 
+import type { ClockMapping } from "./native-clock";
 import type { DrizzleTableModel } from "./table-model";
 
 export {
@@ -8,7 +9,6 @@ export {
   requiredEmailSignInConstraints,
   type RequiredEmailAddressConstraints,
   requiredEmailAddressConstraints,
-  type EmailRegistrationState,
   type EmailRegistrationIntent,
   type RequiredEmailRegistrationConstraints,
   requiredEmailRegistrationConstraints,
@@ -60,63 +60,36 @@ export type EmailAuthorityCredentialTable<
   NativeSubjectId,
 > = Shared.EmailAuthorityCredentialTable<DrizzleTableModel<Credential>, NativeSubjectId>;
 
-export type EmailCommandTable<Command extends Table> = Shared.EmailCommandTable<
-  DrizzleTableModel<Command>
->;
-
 export type EmailSignInMapping<
   Subject extends Table,
   Identifier extends Table,
   Credential extends Table,
+  AuthorityCredential extends Table,
   NativeSubjectId,
 > = Shared.EmailSignInMapping<
   DrizzleTableModel<Subject>,
   DrizzleTableModel<Identifier>,
   DrizzleTableModel<Credential>,
+  DrizzleTableModel<AuthorityCredential>,
   NativeSubjectId
 >;
-
-export type EmailD1Clock = Shared.EmailD1Clock<SQL>;
 
 export type EmailAddressMapping<
   Subject extends Table,
   Identifier extends Table,
   Credential extends Table,
   AuthorityCredential extends Table,
-  Command extends Table,
   NativeSubjectId,
-> = Shared.EmailAddressMapping<
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Identifier>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<AuthorityCredential>,
-  DrizzleTableModel<Command>,
-  NativeSubjectId,
-  SQL
+> = ClockMapping<
+  Shared.EmailAddressMapping<
+    DrizzleTableModel<Subject>,
+    DrizzleTableModel<Identifier>,
+    DrizzleTableModel<Credential>,
+    DrizzleTableModel<AuthorityCredential>,
+    NativeSubjectId,
+    SQL
+  >
 >;
-
-export type D1EmailAddressMapping<
-  Subject extends Table,
-  Identifier extends Table,
-  Credential extends Table,
-  AuthorityCredential extends Table,
-  Command extends Table,
-  NativeSubjectId,
-> = Shared.D1EmailAddressMapping<
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Identifier>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<AuthorityCredential>,
-  DrizzleTableModel<Command>,
-  NativeSubjectId,
-  SQL
->;
-
-export type EmailRegistrationTable<
-  Registration,
-  Request extends Table,
-  NativeSubjectId,
-> = Shared.EmailRegistrationTable<Registration, DrizzleTableModel<Request>, NativeSubjectId>;
 
 export type EmailRegistrationProvisioning<
   Registration,
@@ -148,29 +121,22 @@ export type EmailRegistrationMapping<
   Identifier extends Table,
   Credential extends Table,
   AuthorityCredential extends Table,
-  Request extends Table,
   NativeSubjectId,
-> = Shared.EmailRegistrationMapping<
-  Registration,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Identifier>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<AuthorityCredential>,
-  DrizzleTableModel<Request>,
-  NativeSubjectId,
-  SQL
+> = ClockMapping<
+  Shared.EmailRegistrationMapping<
+    Registration,
+    DrizzleTableModel<Subject>,
+    DrizzleTableModel<Identifier>,
+    DrizzleTableModel<Credential>,
+    DrizzleTableModel<AuthorityCredential>,
+    NativeSubjectId,
+    SQL
+  >
 >;
 
-export type AnyEmailSignInMapping = EmailSignInMapping<Table, Table, Table, unknown>;
+export type AnyEmailSignInMapping = EmailSignInMapping<Table, Table, Table, Table, unknown>;
 
-export type AnyEmailAddressMapping = EmailAddressMapping<
-  Table,
-  Table,
-  Table,
-  Table,
-  Table,
-  unknown
->;
+export type AnyEmailAddressMapping = EmailAddressMapping<Table, Table, Table, Table, unknown>;
 
 export type AnyEmailRegistrationMapping<Registration = unknown> = EmailRegistrationMapping<
   Registration,
@@ -178,25 +144,5 @@ export type AnyEmailRegistrationMapping<Registration = unknown> = EmailRegistrat
   Table,
   Table,
   Table,
-  Table,
   unknown
->;
-
-export type D1EmailRegistrationMapping<
-  Registration,
-  Subject extends Table,
-  Identifier extends Table,
-  Credential extends Table,
-  AuthorityCredential extends Table,
-  Request extends Table,
-  NativeSubjectId,
-> = Shared.D1EmailRegistrationMapping<
-  Registration,
-  DrizzleTableModel<Subject>,
-  DrizzleTableModel<Identifier>,
-  DrizzleTableModel<Credential>,
-  DrizzleTableModel<AuthorityCredential>,
-  DrizzleTableModel<Request>,
-  NativeSubjectId,
-  SQL
 >;

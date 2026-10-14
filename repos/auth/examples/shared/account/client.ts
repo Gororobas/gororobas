@@ -17,7 +17,6 @@ const Challenge = Schema.Struct({
   commandId: Schema.NonEmptyString,
   expiresAtMillis: Schema.Int,
   resendAtMillis: Schema.Int,
-  continuation: Schema.optionalKey(Proofs.ProofContinuation),
 });
 
 export class FlowExpired extends Schema.TaggedError<FlowExpired>()("FlowExpired", {}) {}
@@ -112,12 +111,7 @@ export const makeAccountClient = <Auth extends AccountAuth>(
 
       return {
         loading: saved._tag !== "Success" || time._tag !== "Success",
-        expired:
-          challenge !== null &&
-          Math.min(
-            challenge.expiresAtMillis,
-            challenge.continuation?.expiresAtMillis ?? challenge.expiresAtMillis,
-          ) <= now,
+        expired: challenge !== null && challenge.expiresAtMillis <= now,
         resendInSeconds:
           challenge === null ? 0 : Math.max(0, Math.ceil((challenge.resendAtMillis - now) / 1000)),
       };
@@ -139,13 +133,12 @@ export const makeAccountClient = <Auth extends AccountAuth>(
       if (current !== null && current.email === email && now < current.resendAtMillis) return;
 
       if (current !== null && current.email === email && now < current.expiresAtMillis) {
-        const next = yield* get.setResult(auth.resendEmailVerification, {
+        const next = yield* get.setResult(auth.requestEmailVerification, {
           email,
           flowId: current.flowId,
           commandId: current.commandId,
           requestId: yield* id,
           locale: "en",
-          supersedes: current.reference.proofId,
         });
 
         get.set(verification, {
@@ -187,13 +180,7 @@ export const makeAccountClient = <Auth extends AccountAuth>(
       get.set(verification, null);
       get.set(recovery, null);
 
-      const result = yield* register({ ...input, requestId: yield* id }, get);
-
-      if (result._tag === "ProvisioningPending") {
-        get.set(notice, "Your registration is being processed. Please try signing in shortly.");
-
-        return;
-      }
+      yield* register({ ...input, requestId: yield* id }, get);
 
       // Registration alone grants no session; verify the supplied password normally.
       const signedIn = yield* passwordSignIn({ login: input.email, password: input.password }, get);
@@ -291,24 +278,10 @@ export const makeAccountClient = <Auth extends AccountAuth>(
         return yield* FlowExpired.make({});
       const base = { email: current.email, flowId: current.flowId, commandId: current.commandId };
 
-      if (
-        current.continuation !== undefined &&
-        current.continuation.expiresAtMillis <= (yield* nowMillis)
-      )
-        return yield* FlowExpired.make({});
-
-      const continuation =
-        current.continuation ??
-        (yield* get.setResult(auth.verifyEmailAddress, {
-          ...base,
-          reference: current.reference,
-          secret: code,
-        })).continuation;
-
-      get.set(verification, { ...current, continuation });
       yield* get.setResult(auth.completeEmailVerification, {
         ...base,
-        continuationId: continuation.continuationId,
+        reference: current.reference,
+        secret: code,
       });
       get.set(verification, null);
       get.set(notice, "Email verified.");
@@ -358,28 +331,12 @@ export const makeAccountClient = <Auth extends AccountAuth>(
       if (current === null || current.expiresAtMillis <= (yield* nowMillis))
         return yield* FlowExpired.make({});
       const base = { email: current.email, flowId: current.flowId };
-      const now = DateTime.toEpochMillis(yield* DateTime.now);
-      const saved = current.continuation;
 
-      if (saved !== undefined && saved.expiresAtMillis <= now) {
-        get.set(recovery, null);
-
-        return yield* FlowExpired.make({});
-      }
-
-      const continuation =
-        saved ??
-        (yield* get.setResult(auth.verifyReset, {
-          ...base,
-          reference: current.reference,
-          secret: code,
-        })).continuation;
-
-      get.set(recovery, { ...current, continuation });
       yield* get.setResult(auth.completeReset, {
         ...base,
         commandId: current.commandId,
-        continuationId: continuation.continuationId,
+        reference: current.reference,
+        secret: code,
         newPassword: password,
       });
       get.set(recovery, null);

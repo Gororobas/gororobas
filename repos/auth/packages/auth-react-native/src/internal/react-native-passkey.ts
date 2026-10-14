@@ -28,10 +28,10 @@ import {
 } from "./wire";
 
 type Native = PasskeyReactNative["Service"];
-const unavailable = () => new PasskeyReactNativeUnavailable({});
-const rejected = () => new PasskeyReactNativeInputRejected({});
-const invalid = () => new PasskeyReactNativeInvalidResponse({});
-const timedOut = () => new PasskeyReactNativeNotCompleted({ reason: "timed-out" });
+const unavailable = () => PasskeyReactNativeUnavailable.make({});
+const rejected = () => PasskeyReactNativeInputRejected.make({});
+const invalid = () => PasskeyReactNativeInvalidResponse.make({});
+const timedOut = () => PasskeyReactNativeNotCompleted.make({ reason: "timed-out" });
 
 const redactDefects =
   <Failure>(failure: () => Failure) =>
@@ -69,13 +69,13 @@ const environment = Effect.sync(() => {
   // The maintained helper only checks OS version (and includes iOS 15).
   // Decode platform metadata before applying this adapter's iOS 16 minimum.
   // eslint-disable-next-line no-restricted-properties
-  const version = Schema.decodeUnknownSync(
-    Schema.String.check(Schema.isPattern(/^\d+(?:\.\d+){0,2}$/)),
-  )(Platform.Version);
+  const version = Schema.decodeSync(Schema.String.check(Schema.isPattern(/^\d+(?:\.\d+){0,2}$/)))(
+    Platform.Version,
+  );
 
   const [major = 0, minor = 0] = version.split(".").map(Number);
   // eslint-disable-next-line no-restricted-properties
-  const supported = Schema.decodeUnknownSync(Schema.Boolean)(Passkey.isSupported());
+  const supported = Schema.decodeSync(Schema.Boolean)(Passkey.isSupported());
 
   return {
     supported: major >= 16 && supported,
@@ -97,7 +97,7 @@ const settle = (lease: Lease): void => {
 };
 
 const acquire = Effect.gen(function* () {
-  if (activeLease !== undefined) return yield* new PasskeyReactNativeBusy({});
+  if (activeLease !== undefined) return yield* PasskeyReactNativeBusy.make({});
   const lease: Lease = { phase: "pre-native", listening: true };
 
   activeLease = lease;
@@ -122,26 +122,30 @@ const nativeFailure = (value: unknown): Effect.Effect<never, PasskeyReactNativeF
     if (code._tag === "None") return Effect.die(value);
     switch (code.value) {
       case "NotSupported":
-        return Effect.fail(new PasskeyReactNativeUnsupported({}));
+        return Effect.fail(PasskeyReactNativeUnsupported.make({}));
       case "InvalidChallenge":
       case "InvalidUserId":
         return Effect.fail(rejected());
       case "UserCancelled":
-        return Effect.fail(new PasskeyReactNativeNotCompleted({ reason: "cancelled" }));
+        return Effect.fail(PasskeyReactNativeNotCompleted.make({ reason: "cancelled" }));
       case "NoCredentials":
-        return Effect.fail(new PasskeyReactNativeNotCompleted({ reason: "no-credentials" }));
+        return Effect.fail(PasskeyReactNativeNotCompleted.make({ reason: "no-credentials" }));
       case "CredentialAlreadyExists":
-        return Effect.fail(new PasskeyReactNativeNotCompleted({ reason: "credential-exists" }));
+        return Effect.fail(PasskeyReactNativeNotCompleted.make({ reason: "credential-exists" }));
       case "Interrupted":
-        return Effect.fail(new PasskeyReactNativeNotCompleted({ reason: "interrupted" }));
+        return Effect.fail(PasskeyReactNativeNotCompleted.make({ reason: "interrupted" }));
       case "TimedOut":
         return Effect.fail(timedOut());
       case "RequestFailed":
-        return Effect.fail(new PasskeyReactNativeNotCompleted({ reason: "request-failed" }));
+        return Effect.fail(PasskeyReactNativeNotCompleted.make({ reason: "request-failed" }));
       default:
         return Effect.die(value);
     }
   });
+
+class InvalidNativeLease extends Schema.TaggedError<InvalidNativeLease>()("InvalidNativeLease", {
+  message: Schema.String,
+}) {}
 
 const native = (lease: Lease, call: () => Promise<unknown>) =>
   Effect.callback<unknown, PasskeyReactNativeFailure>((resume, signal) => {
@@ -151,7 +155,7 @@ const native = (lease: Lease, call: () => Promise<unknown>) =>
       lease.phase !== "pre-native" ||
       activeLease !== lease
     ) {
-      resume(Effect.die(new Error("Invalid passkey native lease")));
+      resume(Effect.die(InvalidNativeLease.make({ message: "Invalid passkey native lease" })));
 
       return;
     }
@@ -237,7 +241,7 @@ export const make = (): Effect.Effect<Native> =>
         !started.options.pubKeyCredParams.some(({ alg }) => alg === -7) ||
         (started.options.excludeCredentials.length > 0 && !env.exclusions)
       )
-        return yield* new PasskeyReactNativeUnsupported({});
+        return yield* PasskeyReactNativeUnsupported.make({});
 
       return yield* runCeremony(started, (lease, deadline) =>
         Effect.gen(function* () {
@@ -285,7 +289,7 @@ export const make = (): Effect.Effect<Native> =>
       );
 
       if (mediation === "conditional" || !(yield* environment).supported)
-        return yield* new PasskeyReactNativeUnsupported({});
+        return yield* PasskeyReactNativeUnsupported.make({});
 
       return yield* runCeremony(started, (lease, deadline) =>
         Effect.gen(function* () {

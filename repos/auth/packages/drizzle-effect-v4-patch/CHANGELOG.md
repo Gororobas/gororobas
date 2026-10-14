@@ -1,5 +1,87 @@
 # @yielded/drizzle-effect-v4-patch
 
+## 0.1.0-beta.39
+
+No changes in this release.
+
+## 0.1.0-beta.38
+
+No changes in this release.
+
+## 0.1.0-beta.37
+
+No changes in this release.
+
+## 0.1.0-beta.36
+
+No changes in this release.
+
+## 0.1.0-beta.35
+
+No changes in this release.
+
+## 0.1.0-beta.34
+
+### Patch Changes
+
+- [#203](https://github.com/yielded-dev/auth/pull/203) [`5264de7`](https://github.com/yielded-dev/auth/commit/5264de78aee570c82718b2841ec38ea17544fa3e) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Support Effect 4.0.3 across authentication workflows and companion packages. Require Effect 4.0.3 or later.
+
+## 0.1.0-beta.33
+
+No changes in this release.
+
+## 0.1.0-beta.32
+
+No changes in this release.
+
+## 0.1.0-beta.31
+
+No changes in this release.
+
+## 0.1.0-beta.30
+
+No changes in this release.
+
+## 0.1.0-beta.29
+
+No changes in this release.
+
+## 0.1.0-beta.28
+
+No changes in this release.
+
+## 0.1.0-beta.27
+
+No changes in this release.
+
+## 0.1.0-beta.26
+
+No changes in this release.
+
+## 0.1.0-beta.25
+
+No changes in this release.
+
+## 0.1.0-beta.24
+
+No changes in this release.
+
+## 0.1.0-beta.23
+
+No changes in this release.
+
+## 0.1.0-beta.22
+
+No changes in this release.
+
+## 0.1.0-beta.21
+
+No changes in this release.
+
+## 0.1.0-beta.20
+
+## 0.1.0-beta.19
+
 ## 0.1.0-beta.18
 
 ## 0.1.0-beta.17

@@ -7,6 +7,8 @@ export default defineConfig({
     platform: "node",
     dts: false,
     sourcemap: true,
-    deps: { onlyBundle: [/^effect$/, /^@effect\//] },
+    deps: {
+      onlyBundle: [/^effect$/, /^@effect\//],
+    },
   },
 });

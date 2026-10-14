@@ -11,6 +11,70 @@ import { parse } from "tldts";
 
 import { SimpleWebAuthnPasskeyProtocolOptions } from "./models";
 
+/** Validate an immutable profile selected at issue. Verification intentionally
+ * accepts that persisted selection through its ceremony lifetime during deploys. */
+export const validateSimpleWebAuthnProfile = Effect.fn("validateSimpleWebAuthnProfile")(function* (
+  input: PasskeyProfile,
+) {
+  const profile = yield* snapshotPasskey(PasskeyProfile, input).pipe(
+    Effect.mapError(() => PasskeyConfigurationError.make({})),
+  );
+
+  if (
+    new Set(profile.origins).size !== profile.origins.length ||
+    new Set(profile.algorithms).size !== profile.algorithms.length ||
+    (profile.primarySignIn &&
+      (profile.residentKey !== "required" || profile.userVerification !== "required"))
+  ) {
+    return yield* PasskeyConfigurationError.make({});
+  }
+
+  const valid = yield* Effect.try({
+    try: () => {
+      const host = new URL(`https://${profile.rpId}`).hostname;
+
+      if (host !== profile.rpId) return false;
+
+      const domain = parse(host, {
+        allowIcannDomains: true,
+        allowPrivateDomains: true,
+        extractHostname: false,
+        validateHostname: true,
+        detectIp: true,
+      });
+
+      if (
+        host === "localhost"
+          ? !profile.developmentLocalhost
+          : domain.isIp || domain.domain === null || domain.publicSuffix === host
+      )
+        return false;
+
+      return profile.origins.every((origin) => {
+        const url = new URL(origin);
+
+        return (
+          url.origin === origin &&
+          url.username === "" &&
+          url.password === "" &&
+          (url.protocol === "https:" ||
+            (profile.developmentLocalhost &&
+              profile.rpId === "localhost" &&
+              url.hostname === "localhost" &&
+              url.protocol === "http:")) &&
+          (url.hostname === profile.rpId ||
+            (profile.rpId !== "localhost" && url.hostname.endsWith(`.${profile.rpId}`)))
+        );
+      });
+    },
+    catch: () => PasskeyConfigurationError.make({}),
+  });
+
+  if (!valid) return yield* PasskeyConfigurationError.make({});
+
+  return profile;
+});
+
 export const captureSimpleWebAuthnProfiles = Effect.fn("captureSimpleWebAuthnProfiles")(
   function* (options: SimpleWebAuthnPasskeyProtocolOptions) {
     const captured = yield* snapshotPasskey(SimpleWebAuthnPasskeyProtocolOptions, options).pipe(
@@ -20,69 +84,16 @@ export const captureSimpleWebAuthnProfiles = Effect.fn("captureSimpleWebAuthnPro
     const keys = new Set<string>();
 
     for (const profile of captured.profiles) {
-      const key = `${profile.rpId}/${profile.profileId}/${profile.generation}`;
+      const key = `${profile.rpId}/${profile.profileId}`;
 
-      if (
-        keys.has(key) ||
-        new Set(profile.origins).size !== profile.origins.length ||
-        new Set(profile.algorithms).size !== profile.algorithms.length ||
-        (profile.primarySignIn &&
-          (profile.residentKey !== "required" || profile.userVerification !== "required"))
-      ) {
-        return yield* PasskeyConfigurationError.make({});
-      }
+      if (keys.has(key)) return yield* PasskeyConfigurationError.make({});
       keys.add(key);
-
-      const valid = yield* Effect.try({
-        try: () => {
-          const host = new URL(`https://${profile.rpId}`).hostname;
-
-          if (host !== profile.rpId) return false;
-
-          const domain = parse(host, {
-            allowIcannDomains: true,
-            allowPrivateDomains: true,
-            extractHostname: false,
-            validateHostname: true,
-            detectIp: true,
-          });
-
-          if (
-            host === "localhost"
-              ? !profile.developmentLocalhost
-              : domain.isIp || domain.domain === null || domain.publicSuffix === host
-          )
-            return false;
-
-          return profile.origins.every((origin) => {
-            const url = new URL(origin);
-
-            return (
-              url.origin === origin &&
-              url.username === "" &&
-              url.password === "" &&
-              (url.protocol === "https:" ||
-                (profile.developmentLocalhost &&
-                  profile.rpId === "localhost" &&
-                  url.hostname === "localhost" &&
-                  url.protocol === "http:")) &&
-              (url.hostname === profile.rpId ||
-                (profile.rpId !== "localhost" && url.hostname.endsWith(`.${profile.rpId}`)))
-            );
-          });
-        },
-        catch: () => PasskeyConfigurationError.make({}),
-      });
-
-      if (!valid) return yield* PasskeyConfigurationError.make({});
+      yield* validateSimpleWebAuthnProfile(profile);
     }
 
     return Effect.fn("selectSimpleWebAuthnProfile")(function* (input: PasskeyProfile) {
       const profile = captured.profiles.find(
-        (value) =>
-          value.rpId === input.rpId &&
-          value.profileId === input.profileId &&
-          value.generation === input.generation,
+        (value) => value.rpId === input.rpId && value.profileId === input.profileId,
       );
 
       if (profile === undefined || !(yield* samePasskey(PasskeyProfile, profile, input)))

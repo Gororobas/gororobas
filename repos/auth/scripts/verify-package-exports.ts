@@ -1,10 +1,77 @@
+import { isBuiltin } from "node:module";
+
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { Console, Effect, FileSystem, Path, Schema } from "effect";
 import ts from "typescript-twoslash";
 
 const coreDependencies = new Set(["effect"]);
+const authPackage = /^@yielded\/auth(?:$|[-/])/;
 
 const Dependencies = Schema.Record(Schema.String, Schema.String);
+const BundledDependencies = Schema.Union([Schema.Boolean, Schema.Array(Schema.String)]);
+
+export const ReusableManifest = Schema.Struct({
+  name: Schema.String,
+  dependencies: Schema.optionalKey(Dependencies),
+  optionalDependencies: Schema.optionalKey(Dependencies),
+  peerDependencies: Schema.optionalKey(Dependencies),
+  bundledDependencies: Schema.optionalKey(BundledDependencies),
+  bundleDependencies: Schema.optionalKey(BundledDependencies),
+});
+
+const reusableDependencies = (name: string): ReadonlySet<string> | undefined =>
+  name === "@yielded/crypto"
+    ? coreDependencies
+    : name === "@yielded/jose"
+      ? new Set(["effect", "@yielded/crypto"])
+      : name === "@yielded/oauth"
+        ? new Set(["effect", "@yielded/jose"])
+        : name === "@yielded/auth"
+          ? new Set(["effect", "@yielded/crypto", "@yielded/jose", "@yielded/oauth"])
+          : name === "@yielded/auth-persistence"
+            ? new Set(["effect", "@yielded/auth", "@yielded/crypto"])
+            : undefined;
+
+/** Check source and publisher-resolved manifests, including aliases and optional peers. */
+export const reusableDependencyProblems = (
+  manifest: typeof ReusableManifest.Type,
+  catalog: Readonly<Record<string, string>>,
+): Array<string> => {
+  const allowed = reusableDependencies(manifest.name);
+  const problems: Array<string> = [];
+
+  if (allowed === undefined) return problems;
+  for (const section of ["dependencies", "optionalDependencies", "peerDependencies"] as const) {
+    for (const [name, range] of Object.entries(manifest[section] ?? {})) {
+      const resolved = range === "catalog:" ? catalog[name] : range;
+
+      const alias = resolved?.startsWith("npm:")
+        ? /^npm:((?:@[^/]+\/)?[^@]+)(?:@.+)?$/.exec(resolved)?.[1]
+        : name;
+
+      const permittedRange =
+        resolved !== undefined &&
+        (resolved.startsWith("npm:")
+          ? alias === name
+          : resolved.startsWith("workspace:")
+            ? name.startsWith("@yielded/") && allowed.has(name) && resolved === "workspace:*"
+            : !resolved.includes(":") && !resolved.includes("/"));
+
+      if (!allowed.has(name) || !permittedRange)
+        problems.push(
+          `${manifest.name} ${section}.${name} (${range}${resolved !== range ? ` -> ${resolved ?? "missing catalog entry"}` : ""}) is outside its runtime dependency graph`,
+        );
+    }
+  }
+  for (const section of ["bundledDependencies", "bundleDependencies"] as const) {
+    const bundled = manifest[section];
+
+    if (bundled === true || (Array.isArray(bundled) && bundled.length > 0))
+      problems.push(`${manifest.name} must not bundle installed dependencies (${section})`);
+  }
+
+  return problems;
+};
 
 const Manifest = Schema.Struct({
   name: Schema.String,
@@ -15,6 +82,8 @@ const Manifest = Schema.Struct({
   optionalDependencies: Schema.optionalKey(Dependencies),
   peerDependencies: Schema.optionalKey(Dependencies),
   devDependencies: Schema.optionalKey(Dependencies),
+  bundledDependencies: Schema.optionalKey(BundledDependencies),
+  bundleDependencies: Schema.optionalKey(BundledDependencies),
 });
 
 class PackageExportsError extends Schema.TaggedError<PackageExportsError>()("PackageExportsError", {
@@ -42,8 +111,8 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
       return yield* fs
         .readFileString(path.join(root, file))
         .pipe(
-          Effect.mapError(
-            (cause) => new PackageExportsError({ message: `Cannot read ${file}`, cause }),
+          Effect.mapError((cause) =>
+            PackageExportsError.make({ message: `Cannot read ${file}`, cause }),
           ),
         );
     });
@@ -62,6 +131,10 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
       );
     });
 
+    const { catalog } = yield* Schema.decodeEffect(
+      Schema.fromJsonString(Schema.Struct({ catalog: Dependencies })),
+    )(yield* read("package.json"));
+
     const packages = yield* Effect.forEach(
       (yield* fs.readDirectory(path.join(root, "packages")))
         .filter((name) => !name.startsWith("."))
@@ -70,11 +143,9 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
         const file = `packages/${directory}/package.json`;
         const source = yield* read(file);
 
-        const manifest = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(Manifest))(
-          source,
-        ).pipe(
-          Effect.mapError(
-            (cause) => new PackageExportsError({ message: `Invalid ${file}`, cause }),
+        const manifest = yield* Schema.decodeEffect(Schema.fromJsonString(Manifest))(source).pipe(
+          Effect.mapError((cause) =>
+            PackageExportsError.make({ message: `Invalid ${file}`, cause }),
           ),
         );
 
@@ -101,6 +172,19 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
     );
 
     for (const pkg of packages) {
+      for (const problem of reusableDependencyProblems(pkg.manifest, catalog))
+        report(pkg.file, problem);
+      if (["@yielded/crypto", "@yielded/jose", "@yielded/oauth"].includes(pkg.manifest.name)) {
+        for (const dependency of Object.keys({
+          ...pkg.manifest.dependencies,
+          ...pkg.manifest.optionalDependencies,
+          ...pkg.manifest.peerDependencies,
+          ...pkg.manifest.devDependencies,
+        })) {
+          if (authPackage.test(dependency))
+            report(pkg.file, `${pkg.manifest.name} must not depend on Auth package ${dependency}`);
+        }
+      }
       if (pkg.manifest.name === "@yielded/auth-persistence") {
         for (const dependency of Object.keys({
           ...pkg.manifest.dependencies,
@@ -118,15 +202,6 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
           if (/drizzle/i.test(key))
             report(pkg.file, `Drizzle export ${key} belongs in @yielded/auth-persistence-drizzle`);
         }
-      }
-      if (pkg.manifest.name !== "@yielded/auth") continue;
-      for (const dependency of Object.keys({
-        ...pkg.manifest.dependencies,
-        ...pkg.manifest.optionalDependencies,
-        ...pkg.manifest.peerDependencies,
-      })) {
-        if (!coreDependencies.has(dependency))
-          report(pkg.file, `Core dependency ${dependency} belongs in a companion package`);
       }
     }
 
@@ -288,7 +363,7 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
 
         if (!(yield* fs.exists(directory))) continue;
         for (const filename of yield* fs.readDirectory(directory)) {
-          const file = `${base}/${relative}/${filename}`;
+          const file: string = `${base}/${relative}/${filename}`;
 
           if ((yield* fs.stat(path.join(root, file))).type === "Directory") {
             pending.push(`${relative}/${filename}`);
@@ -297,10 +372,10 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
           if (!/\.[cm]?tsx?$/.test(filename)) continue;
           const source = yield* parse(file);
 
-          const testOnly =
+          const testOnly: boolean =
             /(?:^|\/)(?:test|tests|__tests__|fixtures)(?:\/|$)|\.(?:test|spec)\./.test(file) ||
             Object.entries(manifest.exports).some(
-              ([key, target]) =>
+              ([key, target]): boolean =>
                 (key === "./Testing" || key.startsWith("./Testing/")) &&
                 target === `./${relative}/${filename}`,
             );
@@ -312,6 +387,10 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
           };
 
           const imports: Array<{ specifier: string; typeOnly: boolean }> = [];
+
+          const allowed: ReadonlySet<string> | undefined = testOnly
+            ? undefined
+            : reusableDependencies(manifest.name);
 
           walk(source, (node) => {
             if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
@@ -349,14 +428,34 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
             )
               imports.push({ specifier: node.argument.literal.text, typeOnly: true });
             if (
-              ts.isCallExpression(node) &&
-              node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-              node.arguments[0] &&
-              ts.isStringLiteral(node.arguments[0])
+              ts.isImportEqualsDeclaration(node) &&
+              ts.isExternalModuleReference(node.moduleReference) &&
+              node.moduleReference.expression &&
+              ts.isStringLiteral(node.moduleReference.expression)
             )
-              imports.push({ specifier: node.arguments[0].text, typeOnly: false });
+              imports.push({
+                specifier: node.moduleReference.expression.text,
+                typeOnly: node.isTypeOnly,
+              });
+            if (
+              ts.isCallExpression(node) &&
+              (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+                (ts.isIdentifier(node.expression) && node.expression.text === "require"))
+            ) {
+              const argument = node.arguments[0];
+
+              if (argument && ts.isStringLiteralLike(argument))
+                imports.push({ specifier: argument.text, typeOnly: false });
+              else if (allowed !== undefined)
+                report(file, `${manifest.name} dependency loading must use a literal specifier`);
+            }
           });
           for (const { specifier, typeOnly } of imports) {
+            if (
+              ["@yielded/crypto", "@yielded/jose", "@yielded/oauth"].includes(manifest.name) &&
+              authPackage.test(specifier)
+            )
+              report(file, `${manifest.name} must not import Auth module ${specifier}`);
             if (manifest.name === "@yielded/auth-persistence" && /drizzle/i.test(specifier))
               report(
                 file,
@@ -369,6 +468,11 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
 
               if (resolved.startsWith("packages/") && !resolved.startsWith(`${base}/`))
                 report(file, `Import ${specifier} must use the owning package's public module`);
+              if (
+                allowed !== undefined &&
+                (!resolved.startsWith(`${base}/src/`) || resolved.includes("/node_modules/"))
+              )
+                report(file, `${manifest.name} relative import ${specifier} leaves owned source`);
               if (
                 !testOnly &&
                 !publicBarrels.has(file) &&
@@ -386,15 +490,18 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
               : specifier.split("/")[0];
 
             if (
-              manifest.name === "@yielded/auth" &&
-              !testOnly &&
-              name !== undefined &&
+              allowed !== undefined &&
               name !== manifest.name &&
-              !coreDependencies.has(name)
+              !(name !== undefined && allowed.has(name)) &&
+              !(manifest.name === "@yielded/crypto" && isBuiltin(specifier))
             )
-              report(file, `Core import ${specifier} belongs in a companion package`);
+              report(
+                file,
+                `${manifest.name} import ${specifier} is outside its runtime dependency graph`,
+              );
 
-            const owner = name === undefined ? undefined : byName.get(name);
+            const owner: (typeof packages)[number] | undefined =
+              name === undefined ? undefined : byName.get(name);
 
             if (!owner) {
               if (
@@ -428,7 +535,7 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
       }
     }
     if (problems.length > 0)
-      return yield* new PackageExportsError({ message: problems.join("\n") });
+      return yield* PackageExportsError.make({ message: problems.join("\n") });
     yield* Console.log(
       `Package exports check passed: ${packages.filter((pkg) => !pkg.manifest.private).length} public packages, ${entries} entries.`,
     );
@@ -436,7 +543,7 @@ export const verifyPackageExports = Effect.fn("verifyPackageExports")(
   Effect.mapError((cause) =>
     cause._tag === "PackageExportsError"
       ? cause
-      : new PackageExportsError({
+      : PackageExportsError.make({
           message: `Could not inspect package exports: ${cause.message}`,
           cause,
         }),

@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 
-import { RequestBindingFlowId, RequestBindingCredential } from "../operations/requestBinding";
+import { AssuranceEvidence, AuthenticationAssurance } from "../operations/context";
+import { RequestBindingFlowId } from "../operations/requestBinding";
 import { SecurityRevision } from "../sessions/models";
 import {
   OAuthAccountRevision,
@@ -17,11 +18,13 @@ import {
 import { OAuthProviderKey } from "./schema";
 import {
   OAuthCallbackId,
+  OAuthCredentialSnapshot,
+  OAuthSignInAccess,
+  OAuthSignInFlow,
   OAuthClaimId,
   OAuthCommandId,
   OAuthDisplayProfile,
   OAuthExternalIdentity,
-  OAuthGeneration,
   OAuthInstant,
   OAuthModuleId,
   OAuthProtocolConfiguration,
@@ -30,7 +33,6 @@ import {
   OAuthSignInPolicy,
   OAuthSignInTransactionContext,
   OAuthTransactionSecrets,
-  OAuthAuthorizationUrl,
 } from "./signInModels";
 
 const revision = SecurityRevision.check(Schema.isMaxLength(256));
@@ -44,14 +46,12 @@ export {
   OAuthConnectedProfile,
 } from "./permissionProfile";
 
-/** Durable authority-issued total order, comparable with cohort cutoffs. Never caller time. */
-export const OAuthConnectedOrder = Schema.String.check(Schema.isPattern(/^[0-9]{1,128}$/));
-
 export const OAuthConnectedPolicy = Schema.Struct({
   ...OAuthSignInPolicy.fields,
   maximumEvidenceAgeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 300000 })),
-  refreshClaimLifetimeMillis: OAuthSignInPolicy.fields.claimLifetimeMillis,
-  useAdmissionLifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 30000 })),
+  refreshClaimLifetimeMillis: Schema.Int.check(
+    Schema.isBetween({ minimum: 1000, maximum: 300000 }),
+  ),
   profiles: Schema.NonEmptyArray(OAuthConnectedProfile).check(Schema.isMaxLength(64)),
 });
 
@@ -90,17 +90,11 @@ export const OAuthConnectedIntent = Schema.Union([
   }),
 ]);
 
-export const OAuthConnectedPrepareBegin = Schema.Struct({
+export const OAuthConnectedBegin = Schema.Struct({
   flowId: RequestBindingFlowId,
-  commandId: OAuthCommandId,
   callbackId: OAuthCallbackId,
   intent: OAuthConnectedIntent,
   returnTarget: Schema.String.check(Schema.isMaxLength(2048)),
-});
-
-export const OAuthConnectedBegin = Schema.Struct({
-  ...OAuthConnectedPrepareBegin.fields,
-  preparationCredential: RequestBindingCredential,
   actionProof: Schema.optionalKey(
     Schema.RedactedFromValue(Schema.NonEmptyString.check(Schema.isMaxLength(16384))),
   ),
@@ -131,71 +125,16 @@ export const OAuthConnectedTarget = Schema.Struct({
   grantId: OAuthGrantId,
   grantVersion: revision,
   tokenVersion: revision,
-  cohortGeneration: revision,
   identity: OAuthExternalIdentity,
   configuration: OAuthConnectedConfiguration,
 });
 
 export type OAuthConnectedTarget = typeof OAuthConnectedTarget.Type;
 
-export const OAuthConnectedTransactionContext = Schema.Struct({
-  ...OAuthSignInTransactionContext.fields,
-  namespace: Schema.Literal("effect-auth/oauth-connected-context/v1"),
-  revision: OAuthAccountRevision,
-  profile: OAuthConnectedProfile,
-  grantId: OAuthGrantId,
-  reconnect: Schema.optionalKey(OAuthConnectedTarget),
-  maximumEvidenceAgeMillis: OAuthConnectedPolicy.fields.maximumEvidenceAgeMillis,
-});
-
-export type OAuthConnectedTransactionContext = typeof OAuthConnectedTransactionContext.Type;
-
-/** The authorization URL contains state and remains encrypted during preparation. */
-export const OAuthConnectedTransactionSecrets = Schema.Struct({
-  ...OAuthTransactionSecrets.fields,
-  authorizationUrl: OAuthAuthorizationUrl,
-});
-
-export type OAuthConnectedTransactionSecrets = typeof OAuthConnectedTransactionSecrets.Type;
-
-/** 100 KiB plaintext covers the URL's worst-case JSON escaping plus transaction
- * secrets. Include the 16-byte authentication tag in the base64url bound. */
-export const OAuthConnectedSealedTransaction = Schema.Struct({
-  ...OAuthSealedTransaction.fields,
-  ciphertext: Schema.RedactedFromValue(
-    Schema.String.check(
-      Schema.isMinLength(22),
-      Schema.isMaxLength(Math.ceil(((100 * 1024 + 16) * 4) / 3)),
-      Schema.isPattern(/^[A-Za-z0-9_-]+$/),
-    ),
-  ),
-});
-
-export type OAuthConnectedSealedTransaction = typeof OAuthConnectedSealedTransaction.Type;
-
-export const OAuthConnectedPendingFlow = Schema.Struct({
-  context: OAuthConnectedTransactionContext,
-  sealed: OAuthConnectedSealedTransaction,
-  retentionUntilMillis: OAuthInstant,
-});
-
-export type OAuthConnectedPendingFlow = typeof OAuthConnectedPendingFlow.Type;
-
-export const OAuthConnectedClaim = Schema.Struct({
-  flow: OAuthConnectedPendingFlow,
-  claimId: OAuthClaimId,
-  claimedAtMillis: OAuthInstant,
-  claimExpiresAtMillis: OAuthInstant,
-  order: OAuthConnectedOrder,
-});
-
-export type OAuthConnectedClaim = typeof OAuthConnectedClaim.Type;
-
 export const OAuthConnectedActionChallenge = Schema.Struct({
   moduleId: OAuthModuleId,
   action: Schema.Literals(["connected-begin", "connected-complete", "connected-disconnect"]),
   flowId: RequestBindingFlowId,
-  commandId: OAuthCommandId,
   revision: OAuthAccountRevision,
   intentDigest: OAuthActionDigest,
   bindingDigest: OAuthActionDigest,
@@ -209,6 +148,56 @@ export const OAuthConnectedActionAuthorization = Schema.Struct({
 });
 
 export type OAuthConnectedActionAuthorization = typeof OAuthConnectedActionAuthorization.Type;
+
+/** Authenticated caller sealed at begin so form_post completion can authorize without the session cookie. */
+export const OAuthConnectedCaller = Schema.TaggedStruct("Authenticated", {
+  subjectId: OAuthAccountRevision.fields.subjectId,
+  sessionId: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(256))),
+  assurance: Schema.Struct({
+    ...AuthenticationAssurance.fields,
+    method: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
+    factors: AuthenticationAssurance.fields.factors.check(Schema.isMaxLength(8)),
+    evidence: Schema.optionalKey(
+      Schema.NonEmptyArray(
+        Schema.Struct({
+          ...AssuranceEvidence.fields,
+          method: Schema.NonEmptyString.check(Schema.isMaxLength(128)),
+          factors: AssuranceEvidence.fields.factors.check(Schema.isMaxLength(8)),
+        }),
+      ).check(Schema.isMaxLength(64)),
+    ),
+  }),
+});
+
+export type OAuthConnectedCaller = typeof OAuthConnectedCaller.Type;
+
+/** Digest this immutable intent before adding its accepted begin authorization. */
+export const OAuthConnectedIntentContext = Schema.Struct({
+  ...OAuthSignInTransactionContext.fields,
+  namespace: Schema.Literal("effect-auth/oauth-connected-context/v1"),
+  revision: OAuthAccountRevision,
+  profile: OAuthConnectedProfile,
+  grantId: OAuthGrantId,
+  reconnect: Schema.optionalKey(OAuthConnectedTarget),
+  maximumEvidenceAgeMillis: OAuthConnectedPolicy.fields.maximumEvidenceAgeMillis,
+  authenticatedCaller: Schema.optionalKey(OAuthConnectedCaller),
+});
+
+export type OAuthConnectedIntentContext = typeof OAuthConnectedIntentContext.Type;
+
+export const OAuthConnectedTransactionContext = Schema.Struct({
+  ...OAuthConnectedIntentContext.fields,
+  authorization: OAuthConnectedActionAuthorization,
+});
+
+export type OAuthConnectedTransactionContext = typeof OAuthConnectedTransactionContext.Type;
+
+export const OAuthConnectedFlow = Schema.Struct({
+  context: OAuthConnectedTransactionContext,
+  sealed: OAuthSealedTransaction,
+});
+
+export type OAuthConnectedFlow = typeof OAuthConnectedFlow.Type;
 
 export const OAuthConnectedUseAuthorization = Schema.Struct({
   moduleId: OAuthModuleId,
@@ -230,6 +219,12 @@ export const OAuthConnectedContinuation = Schema.Union([
     clientId: Schema.NonEmptyString.check(Schema.isMaxLength(1024)),
     nonce: OAuthTransactionSecrets.fields.oidcNonce,
     authTime: Schema.optionalKey(numericDate),
+    /** ID-token `sub` for verifier continuity when the durable subject differs. */
+    subject: Schema.optionalKey(Schema.NonEmptyString.check(Schema.isMaxLength(1024))),
+    /** Concrete ID-token `iss` from the original authentication. */
+    issuer: Schema.optionalKey(
+      Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2048)),
+    ),
   }),
   Schema.TaggedStruct("OAuth", {}),
 ]);
@@ -268,8 +263,6 @@ export const OAuthConnectedTokenMetadata = Schema.Struct({
 
 export const OAuthConnectedTokenContext = Schema.Struct({
   namespace: Schema.Literal("effect-auth/oauth-connected-token-context/v1"),
-  /** Order reserved before this token exchange, including refresh. */
-  exchangeOrder: OAuthConnectedOrder,
   moduleId: OAuthModuleId,
   subjectId: OAuthAccountRevision.fields.subjectId,
   identity: OAuthExternalIdentity,
@@ -277,26 +270,10 @@ export const OAuthConnectedTokenContext = Schema.Struct({
   grantId: OAuthGrantId,
   grantVersion: revision,
   tokenVersion: revision,
-  cohortGeneration: revision,
   metadata: OAuthConnectedTokenMetadata,
 });
 
 export type OAuthConnectedTokenContext = typeof OAuthConnectedTokenContext.Type;
-
-export const OAuthConnectedRevocationContext = Schema.Struct({
-  namespace: Schema.Literal("effect-auth/oauth-connected-revocation-context/v1"),
-  jobId: OAuthClaimId,
-  token: OAuthConnectedTokenContext,
-});
-
-export type OAuthConnectedRevocationContext = typeof OAuthConnectedRevocationContext.Type;
-
-export const OAuthConnectedProtectionContext = Schema.Union([
-  OAuthConnectedTokenContext,
-  OAuthConnectedRevocationContext,
-]);
-
-export type OAuthConnectedProtectionContext = typeof OAuthConnectedProtectionContext.Type;
 
 export const OAuthConnectedSealedTokens = Schema.Struct({
   format: Schema.Literal("oauth-connected-xchacha20poly1305-v1"),
@@ -320,23 +297,26 @@ export const OAuthConnectedStoredGrant = Schema.Struct({
 
 export type OAuthConnectedStoredGrant = typeof OAuthConnectedStoredGrant.Type;
 
-export const OAuthConnectedDisconnectGrant = Schema.Struct({
-  context: OAuthConnectedTokenContext,
-  sealed: Schema.optionalKey(OAuthConnectedSealedTokens),
+/** Advisory joined read; only a successful refresh CAS authorizes exchange. */
+export const OAuthConnectedGrantSnapshot = Schema.Struct({
+  ...OAuthConnectedStoredGrant.fields,
+  state: Schema.Literals(["Active", "Refreshing", "ReauthorizationRequired"]),
+  refreshClaimExpiresAtMillis: Schema.optionalKey(OAuthInstant),
 });
 
-export type OAuthConnectedDisconnectGrant = typeof OAuthConnectedDisconnectGrant.Type;
+export type OAuthConnectedGrantSnapshot = typeof OAuthConnectedGrantSnapshot.Type;
 
+/** Disconnect copies the exact persisted ciphertext; decrypt with grant.context.
+ * Remote revocation may affect a later provider authorization. */
 export const OAuthConnectedRevocationJob = Schema.Struct({
-  context: OAuthConnectedRevocationContext,
-  sealed: OAuthConnectedSealedTokens,
+  jobId: OAuthClaimId,
+  grant: OAuthConnectedStoredGrant,
 });
 
 export type OAuthConnectedRevocationJob = typeof OAuthConnectedRevocationJob.Type;
 
 export const OAuthConnectedRefreshClaim = Schema.Struct({
   grant: OAuthConnectedStoredGrant,
-  order: OAuthConnectedOrder,
   claimId: OAuthClaimId,
   claimedAtMillis: OAuthInstant,
   claimExpiresAtMillis: OAuthInstant,
@@ -378,105 +358,86 @@ export const OAuthConnectedResult = Schema.Union([
 export const OAuthConnectedDisconnected = Schema.TaggedStruct("Disconnected", {
   grantId: OAuthGrantId,
   remoteRevocation: OAuthConnectedSummary.fields.remoteRevocation,
-  affectedGrantCount: Schema.Int.check(
-    Schema.isBetween({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
-  ),
-  replayed: Schema.Boolean,
 });
 
 export const OAuthConnectedAccess = Schema.Struct({
-  moduleId: OAuthModuleId,
-  generation: OAuthGeneration,
-  subjectId: OAuthAccountRevision.fields.subjectId,
-  flowId: RequestBindingFlowId,
-  provider: OAuthProviderKey,
-  callbackId: OAuthCallbackId,
-  stateDigest: OAuthConnectedTransactionContext.fields.stateDigest,
-  requestBindingVerifier: OAuthConnectedTransactionContext.fields.requestBindingVerifier,
-  requestBindingExpiresAtMillis: OAuthInstant,
-  responseIssuer: Schema.optionalKey(OAuthExternalIdentity.fields.issuer),
-  nowMillis: OAuthInstant,
-});
+  ...OAuthSignInAccess.fields,
+  subjectId: Schema.optionalKey(OAuthAccountRevision.fields.subjectId),
+  /** Read the subject sealed at begin. Only a form_post continuation may be consumed this way. */
+  formPostSubject: Schema.optionalKey(Schema.Literal(true)),
+}).check(
+  Schema.makeFilter(
+    (value) => (value.formPostSubject === true) !== (value.subjectId !== undefined),
+  ),
+);
 
 export type OAuthConnectedAccess = typeof OAuthConnectedAccess.Type;
 
-export const OAuthConnectedPreparedAccess = Schema.Struct({
+export const OAuthConnectedGrantKey = Schema.Struct({
   moduleId: OAuthModuleId,
-  generation: OAuthGeneration,
   subjectId: OAuthAccountRevision.fields.subjectId,
-  flowId: RequestBindingFlowId,
-  commandId: OAuthCommandId,
-  requestBindingVerifier: OAuthConnectedTransactionContext.fields.requestBindingVerifier,
-  requestBindingExpiresAtMillis: OAuthInstant,
-  nowMillis: OAuthInstant,
+  grantId: OAuthGrantId,
 });
 
-export type OAuthConnectedPreparedAccess = typeof OAuthConnectedPreparedAccess.Type;
+export type OAuthConnectedGrantKey = typeof OAuthConnectedGrantKey.Type;
+
+/** Indexed target selection; an omitted selector captures only subject authority. */
+export const OAuthConnectedReadInput = Schema.Struct({
+  moduleId: OAuthModuleId,
+  subjectId: OAuthAccountRevision.fields.subjectId,
+  selector: Schema.optionalKey(
+    Schema.Union([
+      Schema.TaggedStruct("Grant", { grantId: OAuthGrantId }),
+      Schema.TaggedStruct("Identity", {
+        profileKey: OAuthPermissionProfileKey,
+        identity: OAuthExternalIdentity,
+      }),
+    ]),
+  ),
+});
+
+export type OAuthConnectedReadInput = typeof OAuthConnectedReadInput.Type;
+
+export const OAuthConnectedDisconnectIntent = Schema.Struct({
+  key: OAuthConnectedGrantKey,
+  grantVersion: revision,
+});
 
 export const OAuthConnectedIssueDecision = Schema.Union([
-  Schema.TaggedStruct("Issued", { flow: OAuthConnectedPendingFlow }),
+  Schema.TaggedStruct("Issued", { flow: OAuthConnectedFlow }),
   Schema.TaggedStruct("Rejected", {}),
 ]);
 
-export const OAuthConnectedClaimDecision = Schema.Union([
-  Schema.TaggedStruct("Claimed", { claim: OAuthConnectedClaim }),
+export const OAuthConnectedConsumeDecision = Schema.Union([
+  Schema.TaggedStruct("Consumed", { flow: OAuthConnectedFlow }),
   Schema.TaggedStruct("Rejected", {}),
 ]);
 
-export const OAuthConnectedGrantInspection = Schema.Union([
-  Schema.TaggedStruct("Target", { cohortGeneration: revision }),
-  Schema.TaggedStruct("Quarantine", { cohortGeneration: revision }),
-  Schema.TaggedStruct("Rejected", {}),
-  Schema.TaggedStruct("Conflict", {}),
-]);
-
-export const OAuthConnectedOutcome = Schema.Union([
-  Schema.TaggedStruct("Verified", {
+/** Consumed flows cannot be retried after an unknown exchange or commit. */
+export const OAuthConnectedSettlement = Schema.Union([
+  Schema.TaggedStruct("Connect", {
+    flow: OAuthConnectedFlow,
+    authorization: OAuthConnectedActionAuthorization,
     grant: OAuthConnectedStoredGrant,
-    cleanup: Schema.optionalKey(OAuthConnectedRevocationJob),
   }),
-  Schema.TaggedStruct("Quarantined", {
+  Schema.TaggedStruct("SignIn", {
+    flow: OAuthSignInFlow,
+    credential: OAuthCredentialSnapshot,
+    previous: Schema.optionalKey(OAuthConnectedTarget),
     grant: OAuthConnectedStoredGrant,
-    cleanup: Schema.optionalKey(OAuthConnectedRevocationJob),
   }),
-  Schema.TaggedStruct("Cancelled", {}),
-  Schema.TaggedStruct("Rejected", {}),
-  Schema.TaggedStruct("Unissued", {}),
-  Schema.TaggedStruct("Conflict", {}),
-  Schema.TaggedStruct("Ambiguous", {}),
 ]);
 
-export type OAuthConnectedOutcome = typeof OAuthConnectedOutcome.Type;
+export type OAuthConnectedSettlement = typeof OAuthConnectedSettlement.Type;
 
 export const OAuthConnectedSettlementDecision = Schema.Union([
   Schema.TaggedStruct("Connected", { grant: OAuthConnectedStoredGrant }),
-  Schema.TaggedStruct("Cancelled", {}),
-  Schema.TaggedStruct("Rejected", {}),
-  Schema.TaggedStruct("Conflict", {}),
-  Schema.TaggedStruct("Busy", {}),
-  Schema.TaggedStruct("Ambiguous", {}),
-]);
-
-export const OAuthConnectedDisconnectInspection = Schema.Union([
-  Schema.TaggedStruct("Target", {
-    grant: OAuthConnectedDisconnectGrant,
-    revision: OAuthAccountRevision,
-  }),
-  Schema.TaggedStruct("Replay", { result: OAuthConnectedDisconnected }),
   Schema.TaggedStruct("Rejected", {}),
   Schema.TaggedStruct("Conflict", {}),
 ]);
 
 export const OAuthConnectedDisconnectDecision = Schema.Union([
   OAuthConnectedDisconnected,
-  Schema.TaggedStruct("Rejected", {}),
-  Schema.TaggedStruct("Conflict", {}),
-]);
-
-export const OAuthConnectedAccessInspection = Schema.Union([
-  Schema.TaggedStruct("Target", { grant: OAuthConnectedStoredGrant }),
-  Schema.TaggedStruct("Busy", {}),
-  Schema.TaggedStruct("ReauthorizationRequired", {}),
   Schema.TaggedStruct("Rejected", {}),
 ]);
 
@@ -490,7 +451,6 @@ export const OAuthConnectedRefreshDecision = Schema.Union([
 export const OAuthConnectedRefreshOutcome = Schema.Union([
   Schema.TaggedStruct("Refreshed", {
     grant: OAuthConnectedStoredGrant,
-    cleanup: Schema.optionalKey(OAuthConnectedRevocationJob),
   }),
   Schema.TaggedStruct("ReauthorizationRequired", {}),
 ]);
@@ -502,22 +462,3 @@ export const OAuthConnectedRefreshSettlement = Schema.Union([
   Schema.TaggedStruct("ReauthorizationRequired", {}),
   Schema.TaggedStruct("Rejected", {}),
 ]);
-
-export const OAuthConnectedUseAdmission = Schema.Union([
-  Schema.TaggedStruct("Admitted", {
-    admissionId: OAuthClaimId,
-    grantId: OAuthGrantId,
-    tokenVersion: revision,
-    admittedAtMillis: OAuthInstant,
-    expiresAtMillis: OAuthInstant,
-  }),
-  Schema.TaggedStruct("Rejected", {}),
-  Schema.TaggedStruct("Busy", {}),
-  Schema.TaggedStruct("ReauthorizationRequired", {}),
-]);
-
-export const OAuthConnectedCleanupResult = Schema.Struct({
-  terminalized: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
-  removed: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1000 })),
-  hasMore: Schema.Boolean,
-});

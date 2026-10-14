@@ -37,7 +37,7 @@ const program = Effect.gen(function* () {
   const cookies = new Map<string, string>();
   const clock = yield* TestClock.make();
 
-  // Passkey persistence also checks SQLite's wall clock.
+  // Only the resend UI uses simulated time; server authentication uses real time.
   yield* clock.setTime(yield* Clock.currentTimeMillis);
   const clockLayer = Layer.succeed(Clock.Clock, clock);
   const messages: Array<EmailDelivery.EmailMessage> = [];
@@ -84,7 +84,6 @@ const program = Effect.gen(function* () {
       Layer.provide(caller.layer),
       Layer.provide(application),
       Layer.provide(BunHttpServer.layerHttpServices),
-      Layer.provideMerge(clockLayer),
     );
 
   const open = Effect.acquireRelease(
@@ -175,11 +174,6 @@ const program = Effect.gen(function* () {
           const rows = yield* db`select * from customers`;
 
           assert(rows.length === 1, "Failed registration left an orphan customer");
-
-          const receipts =
-            yield* db`select * from customer_auth_passwordRegistrations where request_id = 'rolled-back'`;
-
-          assert(receipts.length === 0, "A failed registration left a committed receipt");
         }),
       );
 
@@ -265,6 +259,18 @@ const program = Effect.gen(function* () {
       assert(messages[0] !== undefined, "The initial reset code was not delivered");
 
       yield* clock.adjust("31 seconds");
+      yield* sql(
+        Effect.gen(function* () {
+          const db = yield* SqlClient.SqlClient;
+
+          // The resend UI uses Effect time; durable cooldown uses SQLite time.
+          // Age both proof timestamps together to preserve its original lifetime.
+          yield* db`update customer_auth_proofs set
+            issued_at = issued_at - 31000,
+            expires_at = expires_at - 31000
+            where purpose = 'password-reset'`;
+        }),
+      );
       registry.set(client.requestReset, email);
       yield* AtomRegistry.getResult(registry, client.requestReset, { suspendOnWaiting: true });
       const replacement = messages[1];
@@ -281,7 +287,7 @@ const program = Effect.gen(function* () {
       yield* call.passwordSignIn({ email, password: newPassword });
     }),
   );
-  yield* Effect.log("Failed credential storage rolled back the customer and registration receipt.");
+  yield* Effect.log("Failed credential storage rolled back the customer and identifier binding.");
   yield* Effect.log(
     "The resend button delivered a replacement code and completed password recovery.",
   );

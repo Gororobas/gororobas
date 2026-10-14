@@ -8,6 +8,236 @@ import { AsyncResult, Atom, AtomRegistry } from "effect/reactivity";
 import { TestClock } from "effect/testing";
 import { expect, test } from "vite-plus/test";
 
+// d1f2799 retires the SSR seed between confirming its subject and publishing the
+// session result. Observe every notification; a browser can batch away this gap.
+// Requested regression: one mounted session verifies once, with or without an SSR seed.
+test.each(["confirmation", "replacement", "unseeded"] as const)(
+  "verifies a mounted session and preserves seed visibility through %s",
+  (mode) =>
+    Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const contract = AuthContract.make("test/ssr-session", {
+            claims: Schema.Struct({ name: Schema.String }),
+          });
+
+          const seed = {
+            sessionId: "session",
+            subjectId: "member",
+            securityRevision: "1",
+            assurance: { method: "password", factors: ["knowledge"], authenticatedAt: 0 },
+            issuedAt: 0,
+            expiresAt: 3_600_000,
+            absoluteExpiresAt: 3_600_000,
+            claims: { name: "seed" },
+          } satisfies typeof contract.sessions.Session.Encoded;
+
+          const entered = yield* Deferred.make<void>();
+          const response = yield* Deferred.make<void>();
+          let calls = 0;
+          let name = "confirmed";
+
+          const http = HttpClient.make((request) =>
+            Effect.gen(function* () {
+              calls++;
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(response);
+
+              return HttpClientResponse.fromWeb(
+                request,
+                Response.json({
+                  _tag: "Success",
+                  value: { ...seed, claims: { name } },
+                }),
+              );
+            }),
+          );
+
+          const AppClient = Client.make(contract, { baseUrl: "https://example.test" });
+
+          const auth = AuthAtom.make(AppClient, {
+            ...(mode === "unseeded" ? {} : { initialSession: seed }),
+            layer: AppClient.layer.pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, http))),
+          });
+
+          const registry = yield* Effect.acquireRelease(
+            Effect.sync(() => AtomRegistry.make()),
+            (value) => Effect.sync(() => value.dispose()),
+          );
+
+          const context = yield* AtomRegistry.getResult(registry, auth.runtime);
+          const states: Array<string> = [];
+
+          yield* Effect.acquireRelease(
+            Effect.sync(() => registry.subscribe(auth.session, (value) => states.push(value._tag))),
+            (unsubscribe) => Effect.sync(unsubscribe),
+          );
+          expect(registry.get(auth.session)).toMatchObject(
+            mode === "unseeded"
+              ? { _tag: "Initial" }
+              : { _tag: "Success", value: { claims: { name: "seed" } }, waiting: true },
+          );
+          yield* Deferred.await(entered);
+          if (mode === "replacement") {
+            yield* Context.get(context, AuthAtom.AuthAtomLifetime).replaceSubject("member");
+            expect(registry.get(auth.session)._tag).toBe("Initial");
+          }
+          yield* Deferred.succeed(response, undefined);
+
+          const session = yield* AtomRegistry.getResult(registry, auth.session, {
+            suspendOnWaiting: true,
+          }).pipe(Effect.timeout("1 second"));
+
+          expect(session?.claims.name).toBe("confirmed");
+          expect(calls).toBe(mode === "replacement" ? 2 : 1);
+          if (mode !== "unseeded") expect(states.includes("Initial")).toBe(mode === "replacement");
+
+          name = "refreshed";
+          registry.refresh(auth.session);
+          expect(
+            (yield* AtomRegistry.getResult(registry, auth.session, {
+              suspendOnWaiting: true,
+            }))?.claims.name,
+          ).toBe("refreshed");
+          expect(calls).toBe(mode === "replacement" ? 3 : 2);
+        }),
+      ),
+    ),
+);
+
+// d1f2799 also restarts custom queries that discover the account. Their own
+// transition must retire account work; unrelated replacements clear their results.
+test("subject queries retire account work and discard unrelated account results", () =>
+  Effect.runPromise(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const contract = AuthContract.make("test/session-replacement", {
+          claims: Schema.Struct({}),
+          actions: (sessions) => ({
+            discover: AuthContract.action({
+              payload: Schema.Void,
+              success: Schema.NullOr(sessions.Session),
+              error: Schema.Never,
+              mode: "query",
+              subject: { fromSuccess: (value) => value?.subjectId ?? null },
+            }),
+          }),
+        });
+
+        const session = {
+          sessionId: "session",
+          subjectId: "member",
+          securityRevision: "1",
+          assurance: { method: "password", factors: ["knowledge"], authenticatedAt: 0 },
+          issuedAt: 0,
+          expiresAt: 3_600_000,
+          absoluteExpiresAt: 3_600_000,
+          claims: {},
+        } satisfies typeof contract.sessions.Session.Encoded;
+
+        const entered = yield* Deferred.make<void>();
+        const stale = yield* Deferred.make<void>();
+        const replacement = yield* Deferred.make<void>();
+        let phase: "initial" | "pending" | "replacement" | "signed-out" = "initial";
+        let calls = 0;
+
+        const http = HttpClient.make((request) =>
+          Effect.gen(function* () {
+            calls++;
+            const started = phase;
+
+            if (started === "pending") {
+              yield* Deferred.succeed(entered, undefined);
+              yield* Deferred.await(stale);
+            } else if (started === "replacement") yield* Deferred.await(replacement);
+
+            return HttpClientResponse.fromWeb(
+              request,
+              Response.json({
+                _tag: "Success",
+                value:
+                  started === "signed-out"
+                    ? null
+                    : { ...session, subjectId: started === "replacement" ? "other" : "member" },
+              }),
+            );
+          }),
+        );
+
+        const AppClient = Client.make(contract, { baseUrl: "https://example.test" });
+
+        const auth = AuthAtom.make(AppClient, {
+          layer: AppClient.layer.pipe(Layer.provide(Layer.succeed(HttpClient.HttpClient, http))),
+        });
+
+        const registry = yield* Effect.acquireRelease(
+          Effect.sync(() => AtomRegistry.make()),
+          (value) => Effect.sync(() => value.dispose()),
+        );
+
+        const context = yield* AtomRegistry.getResult(registry, auth.runtime);
+        const lifetime = Context.get(context, AuthAtom.AuthAtomLifetime);
+        const finalized: Array<string | null> = [];
+
+        const account = auth.runtime.atom(
+          Effect.gen(function* () {
+            const { subject } = yield* lifetime.get;
+
+            yield* Effect.addFinalizer(() => Effect.sync(() => void finalized.push(subject)));
+
+            return subject;
+          }),
+        );
+
+        const workflowEntered = yield* Deferred.make<void>();
+
+        const workflow = auth.runtime.fn<void>()(() =>
+          Deferred.succeed(workflowEntered, undefined).pipe(Effect.andThen(Effect.never)),
+        );
+
+        yield* AtomRegistry.mount(registry, account);
+        expect(yield* AtomRegistry.getResult(registry, account)).toBe(null);
+        yield* AtomRegistry.mount(registry, workflow);
+        registry.set(workflow, undefined);
+        yield* Deferred.await(workflowEntered);
+        yield* AtomRegistry.mount(registry, auth.discover);
+        expect((yield* AtomRegistry.getResult(registry, auth.discover))?.subjectId).toBe("member");
+        expect(calls).toBe(1);
+        expect(finalized).toEqual([null]);
+        expect(registry.get(workflow)).toMatchObject({ _tag: "Failure", waiting: false });
+        expect(yield* AtomRegistry.getResult(registry, account)).toBe("member");
+
+        phase = "pending";
+        registry.refresh(auth.discover);
+        yield* Deferred.await(entered);
+        phase = "replacement";
+        yield* lifetime.replaceSubject("other");
+        expect(registry.get(auth.discover)).toMatchObject({ _tag: "Initial" });
+        yield* Deferred.succeed(stale, undefined);
+        expect(AsyncResult.value(registry.get(auth.discover))._tag).toBe("None");
+        yield* Deferred.succeed(replacement, undefined);
+        expect(
+          (yield* AtomRegistry.getResult(registry, auth.discover, { suspendOnWaiting: true }))
+            ?.subjectId,
+        ).toBe("other");
+        expect(yield* lifetime.get).toMatchObject({ subject: "other", generation: 2 });
+        expect(finalized).toEqual([null, "member"]);
+        expect(calls).toBe(3);
+
+        phase = "signed-out";
+        yield* lifetime.replaceSubject(null);
+        expect(AsyncResult.value(registry.get(auth.discover))).not.toMatchObject({
+          _tag: "Some",
+          value: { subjectId: "other" },
+        });
+        expect(
+          yield* AtomRegistry.getResult(registry, auth.discover, { suspendOnWaiting: true }),
+        ).toBe(null);
+        expect(calls).toBe(4);
+      }),
+    ),
+  ));
+
 // https://github.com/yielded-dev/auth/commit/32be91d2
 // Force the scheduler gap between the caller's fence and credential admission;
 // a real browser cannot reliably pause at that boundary.

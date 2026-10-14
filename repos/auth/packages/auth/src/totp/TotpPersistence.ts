@@ -14,10 +14,14 @@ export type PrepareTotpCommit<A> = (
 export class TotpPersistence extends Context.Service<
   TotpPersistence,
   {
+    /** Return current policy, the complete active credential vector and factor state
+     * from one authoritative snapshot; verification preserves that original vector. */
     readonly snapshot: (input: {
       readonly moduleId: string;
       readonly subjectId: SubjectId;
     }) => Effect.Effect<TotpSnapshot | undefined, TotpUnavailable>;
+    /** Regeneration changes factor version and codes, preserving subject and
+     * credential revisions. Confirm, disable and reset still invalidate sessions. */
     readonly mutate: <A>(
       input: TotpMutation,
       prepare: PrepareTotpCommit<A>,

@@ -1,12 +1,7 @@
 import { Schema } from "effect";
 
 import { HookDenied } from "../hooks/models";
-import {
-  ProofInvalid,
-  ProofRequestConflict,
-  ProofIngressDenied,
-  ProofCapabilityUnsupported,
-} from "../proofs/errors";
+import { ProofInvalid, ProofIngressDenied, ProofCapabilityUnsupported } from "../proofs/errors";
 import {
   SessionCapabilityUnsupported,
   SessionInvalid,
@@ -53,7 +48,6 @@ export const emailCompletionFailure = (
         PendingAuthenticationInvalid,
         StaleAuthentication,
         ProofInvalid,
-        ProofRequestConflict,
       ]),
     )(error)
   )

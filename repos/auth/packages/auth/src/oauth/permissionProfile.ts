@@ -32,7 +32,7 @@ export const OAuthConnectedProfile = Schema.Struct({
   maximumRefreshLifetimeMillis: Schema.optionalKey(duration),
   refreshAheadMillis: Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 300000 })),
   refresh: Schema.Literals(["unsupported", "confidential", "rotating"]),
-  revocation: Schema.Literals(["unsupported", "cohort"]),
+  revocation: Schema.Literals(["unsupported", "provider"]),
 });
 
 export type OAuthConnectedProfile = typeof OAuthConnectedProfile.Type;

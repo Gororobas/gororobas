@@ -14,7 +14,7 @@ import {
   AuthRevealCommandCollectorService,
 } from "../operations/credentials";
 import { InvalidOperationInput } from "../operations/errors";
-import type { makeOperation } from "../operations/operation";
+import { type makeOperation, provideOperationHandler } from "../operations/operation";
 import type { AuthRevealCommand } from "../operations/reveals";
 import { AuthConfigurationError } from "./AuthConfigurationError";
 import { AuthRequest } from "./AuthRequest";
@@ -60,7 +60,7 @@ export type LocalActionApi<
   Default,
 > = {
   readonly [Name in keyof Actions]: (
-    ...args: [ActionInput<Actions[Name]>] extends [void]
+    ...args: undefined extends ActionInput<Actions[Name]>
       ? [input?: ActionInput<Actions[Name]>]
       : [input: ActionInput<Actions[Name]>]
   ) => Effect.Effect<
@@ -116,6 +116,8 @@ export const makeActionApi = Effect.fn("Auth.makeActionApi")(function* <
 
       // The action has decoded and validated the complete public codec. Existing
       // strategy methods accept encoded inputs at their own operation boundary.
+      // The heterogeneous action table erases codec services here; LocalActionApi restores each action's exact schema services.
+      // @effect-diagnostics-next-line anyUnknownInErrorContext:off
       const encoded = yield* Schema.encodeEffect(action.route.operation.rpc.payloadSchema)(
         input,
       ).pipe(Effect.mapError(() => InvalidOperationInput.make({})));
@@ -150,10 +152,12 @@ export const makeActionApi = Effect.fn("Auth.makeActionApi")(function* <
           }),
       };
 
+      // The selected method's existential error is validated by the exact operation error schema before leaving LocalActionApi.
+      // @effect-diagnostics-next-line anyUnknownInErrorContext:off
       const value = yield* method(payload).pipe(
         Effect.provideService(AuthRequest, {
           ...request,
-          actionMode: action.mode,
+          actionMode: request.actionMode === "mutation" ? "mutation" : action.mode,
           credentialCommandSink: sink,
           revealCommandCollector: collector,
         }),
@@ -170,15 +174,12 @@ export const makeActionApi = Effect.fn("Auth.makeActionApi")(function* <
       return { value, credentialCommands, revealCommands };
     });
 
-    // Restore the handler constructors hidden by the heterogeneous descriptor.
+    // Restore the invocation contract hidden by the heterogeneous descriptor.
     const operation = action.route.operation as unknown as ReturnType<
       typeof makeOperation<string, Schema.Top, Schema.Top, Schema.Top>
     >;
 
-    const layer =
-      operation.credentials || operation.reveals.length > 0
-        ? operation.privateHandlerLayer(run)
-        : operation.handlerLayer((input) => run(input).pipe(Effect.map((result) => result.value)));
+    const provideHandler = provideOperationHandler(operation.rpc._tag, run);
 
     entries.push([
       name,
@@ -195,8 +196,10 @@ export const makeActionApi = Effect.fn("Auth.makeActionApi")(function* <
         )
           return yield* InvalidOperationInput.make({});
 
+        // Indexed iteration erases the paired contract; LocalActionApi retains the exact per-action errors and services.
+        // @effect-diagnostics-next-line anyUnknownInErrorContext:off
         return yield* operation.invokeUnknown(guest, input).pipe(
-          Effect.provide(layer, { local: true }),
+          provideHandler,
           Effect.provideService(AuthCredentialCommandCollector, request.credentialCommandSink),
           Effect.provideService(
             AuthRevealCommandCollectorService,

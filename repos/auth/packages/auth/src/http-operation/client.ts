@@ -194,15 +194,15 @@ const readBody = Effect.fnUntraced(function* (
   let size = 0;
 
   const chunks = yield* response.stream.pipe(
-    Stream.mapEffect((chunk) =>
-      Effect.try({
-        try: () => {
-          size += chunk.length;
-          if (size > maximum) throw OperationHttpError.make({ reason: "response" });
+    Stream.mapEffect(
+      Effect.fnUntraced(function* (chunk) {
+        size += chunk.length;
+        if (size > maximum) return yield* OperationHttpError.make({ reason: "response" });
 
-          return decoder.decode(chunk, { stream: true });
-        },
-        catch: () => OperationHttpError.make({ reason: "response" }),
+        return yield* Effect.try({
+          try: () => decoder.decode(chunk, { stream: true }),
+          catch: () => OperationHttpError.make({ reason: "response" }),
+        });
       }),
     ),
     Stream.runCollect,
@@ -446,7 +446,10 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
         try: () =>
           snapshotRevealCommands((envelope.private ?? []).map(decodeRevealWire), route.reveals),
         catch: () => OperationHttpError.make({ reason: "private-output" }),
-      });
+      }).pipe(
+        Effect.flatMap(Effect.fromResult),
+        Effect.mapError(() => OperationHttpError.make({ reason: "private-output" })),
+      );
 
       const now = DateTime.toEpochMillis(yield* DateTime.now);
 

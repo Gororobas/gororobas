@@ -13,7 +13,7 @@ export { type PhoneOtpOptions, type PhoneLifecycleOptions, make } from "./phone/
 export { makePhoneOtp as makeModule } from "./phone/module";
 
 export { PhoneRequestContext } from "./phone/PhoneRequestContext";
-export { PhoneAdmission } from "./phone/PhoneAdmission";
+export { PhoneAdmission, defaultPhoneAdmissionPolicy } from "./phone/PhoneAdmission";
 export { PhoneDeliveryEligibility } from "./phone/PhoneDeliveryEligibility";
 export { PhoneActionEvidence } from "./phone/PhoneActionEvidence";
 export { PhonePersistence, type PhoneMutation } from "./phone/PhonePersistence";

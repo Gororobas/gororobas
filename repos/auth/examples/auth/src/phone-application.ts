@@ -7,12 +7,7 @@ const budget = { limit: 30, windowMillis: 60_000 };
 
 export const proofPolicy = {
   lifetimeMillis: 60_000,
-  continuationLifetimeMillis: 30_000,
   maximumFailedAttempts: 3,
-  maximumDeliveryAttempts: 1,
-  deliveryClaimMillis: 5_000,
-  deliveryRetryMillis: 10_000,
-  requestRetentionMillis: 3_600_000,
   abuse: {
     issues: budget,
     attempts: budget,

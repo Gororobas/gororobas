@@ -1,14 +1,7 @@
-import { Cause, Context, Effect, Option, Schema } from "effect";
+import { Cause, Context, Effect, Option, Result, Schema } from "effect";
 
 import { LifecycleHooks } from "./LifecycleHooks";
-import {
-  HookConfigurationError,
-  type HookDelivery,
-  type LifecycleEvent,
-  type LifecycleEventId,
-  lifecycleEvent,
-} from "./models";
-import { type AtomicContribution, type CommitMode, validateContributions } from "./transactions";
+import { HookConfigurationError, type LifecycleEvent, lifecycleEvent } from "./models";
 
 export class CommitPending extends Schema.TaggedError<CommitPending>()("CommitPending", {}) {}
 export class CommitDiscarded extends Schema.TaggedError<CommitDiscarded>()("CommitDiscarded", {}) {}
@@ -28,9 +21,22 @@ export interface CommitJournal {
   readonly prepare: <A>(value: A) => PreparedCommit<A>;
   /** Stage only work belonging to this transaction/savepoint, before its commit returns. */
   readonly stage: (event: LifecycleEvent) => void;
-  /** Call only after staging this event's outbox write in the same transaction/batch. */
-  readonly defer: (event: LifecycleEvent) => void;
 }
+
+/** Adapt pure validation to the native persistence owner's synchronous prepare contract.
+ * A rejected preparation must abort that owner's transaction before physical commit. */
+export const prepareCommit =
+  <V, A, E>(prepare: (value: V, journal: CommitJournal) => Result.Result<PreparedCommit<A>, E>) =>
+  (value: V, journal: CommitJournal): PreparedCommit<A> => {
+    const result = prepare(value, journal);
+
+    if (Result.isFailure(result)) {
+      // oxlint-disable-next-line effect/no-untyped-throw -- Native transaction/batch owners require synchronous prepare rejection to roll back before committing.
+      throw result.failure;
+    }
+
+    return result.success;
+  };
 
 /** Current journal for internal transaction operations. Public commit-owner
  * continuations still receive the journal explicitly at the native boundary. */
@@ -38,18 +44,13 @@ export class CurrentCommitJournal extends Context.Service<CurrentCommitJournal, 
   "effect-auth/hooks/CurrentCommitJournal",
 ) {}
 
-interface StagedEvent {
-  readonly event: LifecycleEvent;
-  readonly deferred: boolean;
-}
-
 class CurrentCommit extends Context.Service<
   CurrentCommit,
   {
     readonly reservations: Set<string>;
     readonly assertOpen: () => void;
     readonly promote: (
-      events: ReadonlyArray<StagedEvent>,
+      events: ReadonlyArray<LifecycleEvent>,
       participants: ReadonlyArray<CommitParticipant>,
       reservations: ReadonlySet<string>,
     ) => void;
@@ -64,8 +65,6 @@ export type CommitResult<A> =
   | {
       readonly _tag: "Committed";
       readonly value: A;
-      readonly delivery: ReadonlyArray<HookDelivery>;
-      readonly deferred: ReadonlyArray<LifecycleEventId>;
     };
 
 /**
@@ -74,16 +73,11 @@ export type CommitResult<A> =
  * cannot dispatch until the outermost owner succeeds. Wrap a caught savepoint
  * rollback in its own coordinateCommit call so its events are discarded too.
  * Direct delivery is best effort: a process crash loses staged memory and no
- * retry is automatic. Once the owner returns, interruption is masked during
- * dispatch; that makes reporting coherent, not durable. An outbox owner stages
- * its writes before calling journal.defer and owns worker retries/deduplication.
+ * retry is automatic. Post-commit delivery stays interruptible; a delivery failure
+ * never authorizes repeating the committed operation.
  */
 export const coordinateCommit = <A, E, R>(
   owner: (journal: CommitJournal) => Effect.Effect<A, E, R>,
-  options: {
-    readonly mode: CommitMode;
-    readonly contributions?: ReadonlyArray<AtomicContribution>;
-  },
 ): Effect.Effect<
   CommitResult<A>,
   E | HookConfigurationError,
@@ -91,19 +85,9 @@ export const coordinateCommit = <A, E, R>(
 > =>
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      yield* Effect.try({
-        try: () => validateContributions(options.mode, options.contributions ?? []),
-        catch: (error) =>
-          Schema.is(HookConfigurationError)(error)
-            ? error
-            : HookConfigurationError.make({
-                reason: "incompatible-transaction",
-                contribution: "transaction",
-              }),
-      });
       const parent = yield* Effect.serviceOption(CurrentCommit);
       const hooks = yield* LifecycleHooks;
-      const events: StagedEvent[] = [];
+      const events: LifecycleEvent[] = [];
       const participants: CommitParticipant[] = [];
       const reservations = Option.isSome(parent) ? parent.value.reservations : new Set<string>();
       const ownedReservations = new Set<string>();
@@ -118,6 +102,7 @@ export const coordinateCommit = <A, E, R>(
 
       const assertOpen = (): void => {
         if (!open)
+          // oxlint-disable-next-line effect/no-untyped-throw -- CommitJournal is a synchronous native transaction callback API; closed journals must reject before physical commit.
           throw HookConfigurationError.make({
             reason: "closed-journal",
             contribution: "transaction",
@@ -126,14 +111,15 @@ export const coordinateCommit = <A, E, R>(
       };
 
       const append = (
-        incoming: ReadonlyArray<StagedEvent>,
+        incoming: ReadonlyArray<LifecycleEvent>,
         incomingParticipants: ReadonlyArray<CommitParticipant> = [],
       ): void => {
         assertOpen();
         const next = new Set(reservations);
 
-        for (const { event } of incoming) {
+        for (const event of incoming) {
           if (next.has(event.id))
+            // oxlint-disable-next-line effect/no-untyped-throw -- Native journal staging must reject duplicate events while the transaction can still roll back.
             throw HookConfigurationError.make({
               reason: "duplicate-event",
               contribution: event.id,
@@ -143,15 +129,15 @@ export const coordinateCommit = <A, E, R>(
         // Reserve while the native owner can still roll back. Successful child
         // owners transfer these reservations without another duplicate check.
         for (const item of incoming) {
-          reservations.add(item.event.id);
-          ownedReservations.add(item.event.id);
+          reservations.add(item.id);
+          ownedReservations.add(item.id);
           events.push(item);
         }
         participants.push(...incomingParticipants);
       };
 
       const promote = (
-        incoming: ReadonlyArray<StagedEvent>,
+        incoming: ReadonlyArray<LifecycleEvent>,
         incomingParticipants: ReadonlyArray<CommitParticipant>,
         incomingReservations: ReadonlySet<string>,
       ): void => {
@@ -192,8 +178,7 @@ export const coordinateCommit = <A, E, R>(
             ),
           });
         },
-        stage: (input) => append([{ event: lifecycleEvent(input), deferred: false }]),
-        defer: (input) => append([{ event: lifecycleEvent(input), deferred: true }]),
+        stage: (input) => append([lifecycleEvent(input)]),
       };
 
       const value = yield* restore(Effect.suspend(() => owner(journal))).pipe(
@@ -243,31 +228,8 @@ export const coordinateCommit = <A, E, R>(
         return { _tag: "PendingCommit", value } as const;
       }
       for (const participant of participants) participant.commit();
-      const delivery: HookDelivery[] = [];
-      const deferred: LifecycleEventId[] = [];
+      for (const event of events) yield* restore(hooks.after(event));
 
-      for (const { event, deferred: isDeferred } of events) {
-        if (isDeferred) deferred.push(event.id);
-        // The commit above is already durable. Post-commit work stays interruptible
-        // so a caller deadline can finish without repeating that commit.
-        else delivery.push(...(yield* restore(hooks.after(event))));
-      }
-
-      return { _tag: "Committed", value, delivery, deferred } as const;
+      return { _tag: "Committed", value } as const;
     }),
   );
-
-/**
- * An outbox implementation stages this immutable event in the same authority's
- * transaction/batch. A delivery worker later calls LifecycleHooks.after(event),
- * retaining the same ID on every attempt and deduplicating each contribution.
- * Delivery is at least once when the consumer provides persistence and retries;
- * this interface alone supplies no persistence or exactly-once guarantee.
- */
-export interface EventOutbox<E = never, R = never> {
-  readonly stage: (event: LifecycleEvent) => Effect.Effect<void, E, R>;
-}
-
-export interface BatchEventOutbox<Statement> {
-  readonly statements: (event: LifecycleEvent) => ReadonlyArray<Statement>;
-}

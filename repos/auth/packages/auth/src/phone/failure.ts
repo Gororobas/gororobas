@@ -2,7 +2,7 @@ import { Schema } from "effect";
 
 import { HookDenied } from "../hooks/models";
 import { RequestBindingInvalid } from "../operations/requestBinding";
-import { ProofInvalid, ProofRequestConflict } from "../proofs/errors";
+import { ProofInvalid, ProofIngressDenied } from "../proofs/errors";
 import {
   PendingAuthenticationInvalid,
   SessionConflict,
@@ -22,7 +22,7 @@ export const phoneFailure = (
     Schema.is(PhoneOtpRejected)(error) ||
     Schema.is(RequestBindingInvalid)(error) ||
     Schema.is(ProofInvalid)(error) ||
-    Schema.is(ProofRequestConflict)(error) ||
+    Schema.is(ProofIngressDenied)(error) ||
     Schema.is(StaleAuthentication)(error) ||
     Schema.is(PendingAuthenticationInvalid)(error) ||
     Schema.is(SessionInvalid)(error) ||

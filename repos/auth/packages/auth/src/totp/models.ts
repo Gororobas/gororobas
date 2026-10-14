@@ -72,6 +72,7 @@ export type TotpRecord = typeof TotpRecord.Type;
 
 export const TotpSnapshot = Schema.Struct({
   revision: AuthenticationRevision,
+  requirement: AuthenticationRequirement,
   record: Schema.NullOr(TotpRecord),
 });
 
@@ -117,6 +118,11 @@ export const TotpManagementResult = Schema.Struct({
   invalidation: SessionInvalidationWindow,
 });
 
+/** Recovery-code rotation keeps existing sessions and assurance revisions valid. */
+export const TotpRecoveryRegenerated = Schema.Struct({
+  enabled: Schema.Literal(true),
+});
+
 export const TotpEnrollmentStarted = Schema.Struct({
   enrollmentId: TotpId,
   expiresAtMillis: TotpInstant,
@@ -138,7 +144,6 @@ export const TotpMutation = Schema.Struct({
   snapshot: TotpSnapshot,
   moduleId: TotpId,
   subjectId: SubjectId,
-  commandId: TotpId,
   policy: TotpPolicy,
   authorization: Schema.optionalKey(TotpActionAuthorization),
   action: Schema.Union([

@@ -5,14 +5,13 @@ description: Read sessions, dispatch auth mutations, and compose workflows with 
 
 import { FlowMap } from "@yielded/starlight-theme/components";
 
-The auth client is an Effect service. Effect Atom turns its contract actions into
-queries and mutations; React renders their state and dispatches inputs. The
-client uses Effect `HttpClient`, so it fits the same transport and Layer
-composition as the rest of your application.
+The auth client is an Effect service backed by Effect `HttpClient`. Effect Atom
+owns queries, mutations, shared state, and workflows; React renders their state
+and dispatches inputs.
 
 <FlowMap
   title="From a React action to an authenticated session"
-  description="React dispatches to an Effect Atom mutation. The client service sends it over Effect HttpClient to the auth HTTP routes. A successful mutation refreshes the session query, which React renders."
+  description="React dispatches an Atom mutation through the client. A successful auth mutation refreshes the session query."
   columns={3}
   boundary={{ row: 3, above: "Browser", below: "Server" }}
   nodes={[
@@ -92,9 +91,13 @@ export function App() {
 }
 ```
 
-Reuse an existing provider if you have one. React renders and dispatches; put
-multi-step logic in [workflow atoms](#compose-a-passkey-workflow). Successful
-auth mutations refresh the session, so the UI follows the new account state.
+Reuse an existing provider if you have one. Successful auth mutations refresh
+`auth.session` automatically.
+
+When the server enables [cookie caching](./sessions#cache-ordinary-session-reads),
+use `auth.getSession({ fresh: true })` to bypass it. Define this atom outside React
+renders. “Fresh” applies to each server fetch; Atom retention still applies between
+fetches. Auth mutations refresh both queries.
 
 ## Dispatch a sign-in
 
@@ -111,14 +114,15 @@ signIn({ email, password });
 ```
 
 Render pending state from `result.waiting` and failures from its `AsyncResult`.
-An `Authenticated` success contains the typed session; a request for another
-factor must be completed before granting access. The [sign-in form](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/browser.tsx)
-and [workflow](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/client.ts)
-in the account app show complete UI handling.
+An `Authenticated` success contains the typed session; complete any requested
+additional factor before granting access. The account app's
+[form](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/browser.tsx)
+and [Atom workflow](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/client.ts)
+show complete handling. Keep multi-step logic in atoms, not component promise chains.
 
 ## Compose queries
 
-`auth.runtime` supplies the same client and account lifetime to your own atoms:
+Use the same client from `auth.runtime`:
 
 ```ts title="apps/web/member-name.ts"
 import { Effect } from "effect";
@@ -137,8 +141,8 @@ export const memberName = auth.runtime.atom(
 
 ## Refresh application queries
 
-Auth mutations refresh auth queries automatically. To also refresh application
-queries, replace the `AuthAtom.make` call with a shared runtime and reactivity keys:
+To refresh application queries after auth mutations, use a shared runtime factory
+and declare reactivity keys on the mutations:
 
 ```ts
 import { Atom } from "effect/reactivity";
@@ -150,7 +154,7 @@ export const auth = AuthAtom.make(AppClient, {
 });
 ```
 
-Subscribe an application query through that same runtime factory:
+Subscribe an application query through that same factory:
 
 ```ts title="apps/web/projects.ts"
 import { Effect } from "effect";
@@ -170,29 +174,25 @@ export const projects = projectsRuntime
   .pipe(appRuntime.withReactivity(["projects"]));
 ```
 
-`ProjectsClient` and its Layer are your application's Effect service. Matching
-keys and a shared runtime factory let a successful auth mutation refresh this
+`ProjectsClient` and its Layer are application-owned. Matching keys refresh this
 query without a component calling `refetch()`.
 
 ## Keep work with its account
 
-Use `auth.runtime` for queries, workflows, and shared state that belong to the
-current account. An account change disposes that work before publishing its
-replacement. For example, a pending member query cannot populate the new
-account's state with the previous account's result.
+Queries, workflows, and shared state in `auth.runtime` belong to the current
+account. An account change disposes them before publishing the replacement, so a
+pending query cannot populate the new account with the previous account's data.
 
-Application atoms such as `projects` above keep their own lifetime. Reactivity
-keys refresh data; they do not make those atoms account-scoped. Use the
-[account lifetime reference](../reference/client#account-lifetime) when combining
-both kinds of state.
+Separate application atoms such as `projects` keep their own lifetime: reactivity
+keys refresh them but do not make them account-scoped. See the
+[account lifetime reference](../reference/client#account-lifetime).
 
 ## Server rendering and hydration
 
 Default atoms render `Initial` on the server without fetching. For session-aware
 rendering, use request-local atoms and registries; serialize only public session
 data. Follow the [hydration reference](../reference/client#server-rendering) and
-[SSR example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/auth-ssr.ts)
-for acquisition and cleanup.
+[SSR example](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/auth-ssr.ts).
 
 ## Use your Effect HttpClient
 
@@ -207,26 +207,11 @@ export const ClientLive = AppClient.layer.pipe(Layer.provide(ApplicationHttpClie
 export const auth = AuthAtom.make(AppClient, { layer: ClientLive });
 ```
 
-For example, configure Effect's Fetch transport with browser credentials:
-
-```ts title="apps/web/http-client.ts"
-import { Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
-
-export const ApplicationHttpClient = FetchHttpClient.layer.pipe(
-  Layer.provide(
-    Layer.succeed(FetchHttpClient.RequestInit, {
-      credentials: "include",
-      redirect: "error",
-    }),
-  ),
-);
-```
-
-Supply a transport without retries, redirects, or status filtering: auth mutations
-make one attempt, and auth decodes expected failures from response bodies. A timeout
-may leave a mutation committed; reconcile with the server instead of retrying it.
-See [transport options](../reference/client#transport) for deadlines and native clients.
+Your transport must send browser credentials, reject redirects, and disable retries
+and status filtering. Auth decodes expected failures from response bodies. A timeout
+may hide a committed mutation; follow the operation's recovery flow rather than
+retrying it. See [transport options](../reference/client#transport) for Fetch defaults,
+deadlines, and native clients.
 
 ## Call the client directly
 
@@ -243,15 +228,13 @@ export const session = Effect.gen(function* () {
 }).pipe(Effect.provide(AppClient.layerFetch));
 ```
 
-To use your transport, replace `Effect.provide(AppClient.layerFetch)` with
-`Effect.provide(ClientLive)` from the previous example. To share the Atom client,
-compose through `auth.runtime` instead of acquiring a separate Layer.
+Use `ClientLive` instead for your own transport. To share the Atom client and its
+account lifetime, compose through `auth.runtime` rather than acquiring another Layer.
 
 ## Compose a passkey workflow
 
-Use the `PasskeyApi` contract and server configuration from the
-[passkey guide](./passkeys#define-the-shared-actions). The workflow starts the
-ceremony, opens the browser prompt, and sends its response back to the server:
+Use the contract and server setup from the [passkey guide](./passkeys#define-the-shared-actions).
+The atom owns begin → browser prompt → complete, including cancellation:
 
 ```ts title="apps/web/passkey-workflow.ts"
 import { Effect, Redacted } from "effect";
@@ -281,7 +264,6 @@ export const signIn = passkeys.runtime.fn<{ flowId: string; commandId: string }>
 );
 ```
 
-The atom owns the ceremony and cancellation. An admitted credential response
-settles before publishing an account change; that change then retires this custom
-workflow. Render the updated session rather than chaining UI work after its
-completion. Unknown write outcomes require authoritative lookup or a fresh flow.
+An account change retires this custom workflow, including when it completes
+sign-in. Render the updated session rather than chaining UI work after completion.
+Do not retry completion after an uncertain write; follow the server flow's recovery policy.

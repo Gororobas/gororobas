@@ -8,8 +8,8 @@ import {
   type HookDenied,
   type LifecycleEvent,
   type LifecycleSnapshot,
-  lifecycleEvent,
-  lifecycleSnapshot,
+  lifecycleEventEffect,
+  lifecycleSnapshotEffect,
 } from "./models";
 
 export interface HookHandlers<R = never, E = HookDeliveryFailed> {
@@ -108,14 +108,14 @@ export const composeHooks = <const Tag extends string>(
 
       return {
         before: Effect.fn("LifecycleHooks.before")(function* (input: LifecycleSnapshot) {
-          const snapshot = lifecycleSnapshot(input);
+          const snapshot = yield* lifecycleSnapshotEffect(input).pipe(Effect.orDie);
 
           for (const { handler } of handlers) {
             if (handler.before !== undefined) yield* handler.before(snapshot);
           }
         }),
         after: Effect.fn("LifecycleHooks.after")(function* (input: LifecycleEvent) {
-          const event = lifecycleEvent(input);
+          const event = yield* lifecycleEventEffect(input).pipe(Effect.orDie);
           const reports: HookDelivery[] = [];
 
           for (const { id, handler } of handlers) {

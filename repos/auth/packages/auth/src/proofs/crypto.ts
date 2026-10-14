@@ -1,11 +1,10 @@
+import { Hmac, type Key } from "@yielded/crypto/Hmac";
 import { Context, Crypto, Effect, Layer, Redacted, Result, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { TokenDigest } from "../Schema";
-import { SubtleCrypto } from "../WebCrypto";
 import { ProofConfigurationError, ProofUnavailable } from "./errors";
-import { ProofBinding, type ProofId, type ProofPurpose } from "./models";
-import type { ProofDigest } from "./ProofPersistence";
+import { ProofBinding, type ProofId, type ProofPurpose, type ProofDigest } from "./models";
 
 export const ProofSecretPolicy = Schema.Union([
   Schema.TaggedStruct("Token", {}),
@@ -50,6 +49,8 @@ type KeyRequirement<Secret extends ProofSecretPolicy> =
 
 /** The policy discriminant determines the service requirement; token proofs need no keyring. */
 export const proofKeysFor = <Secret extends ProofSecretPolicy>(secret: Secret) =>
+  // The policy discriminant excludes ProofKeys exactly for Token, matching KeyRequirement<Secret>.
+  // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
   (secret._tag === "Token" ? Effect.succeed(undefined) : ProofKeys) as Effect.Effect<
     ProofKeyring | undefined,
     never,
@@ -78,20 +79,6 @@ const DigestInput = Schema.fromJsonString(
     Schema.String,
     Schema.String,
     BindingTuple,
-    Schema.String,
-    Schema.String,
-  ]),
-);
-
-const FingerprintInput = Schema.fromJsonString(
-  Schema.Tuple([
-    Schema.Literal("effect-auth/proof-request/v1"),
-    Schema.String,
-    Schema.String,
-    BindingTuple,
-    Schema.String,
-    Schema.String,
-    Schema.String,
     Schema.String,
     Schema.String,
   ]),
@@ -149,7 +136,7 @@ export const validateProofBinding = Effect.fn("validateProofBinding")(function* 
       });
 });
 
-export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
+const makeCrypto = Effect.fn("makeProofCrypto")(function* (
   moduleId: string,
   purpose: ProofPurpose,
   input: ProofSecretPolicy,
@@ -160,8 +147,7 @@ export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
   );
 
   const crypto = yield* Crypto.Crypto;
-  const subtle = yield* SubtleCrypto;
-  const keys = new Map<string, CryptoKey>();
+  const keys = new Map<string, Key>();
   let activeKeyId = "token";
 
   if (policy._tag === "NumericCode") {
@@ -171,6 +157,8 @@ export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
     const keyring = yield* Schema.decodeEffect(Keyring)(configuredKeys).pipe(
       Effect.mapError(() => ProofConfigurationError.make({ reason: "keyring" })),
     );
+
+    const hmac = yield* Hmac;
 
     for (const entry of keyring.keys) {
       const material = Result.getOrUndefined(Base64Url.decode(Redacted.value(entry.material)));
@@ -183,17 +171,12 @@ export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
       )
         return yield* ProofConfigurationError.make({ reason: "keyring" });
 
-      const key = yield* Effect.tryPromise({
-        try: () =>
-          subtle.importKey(
-            "raw",
-            material as BufferSource,
-            { name: "HMAC", hash: "SHA-256" },
-            false,
-            ["sign"],
-          ),
-        catch: () => ProofConfigurationError.make({ reason: "keyring" }),
-      });
+      const key = yield* hmac
+        .importKey({ algorithm: "SHA-256", key: Redacted.make(material) })
+        .pipe(
+          Effect.mapError(() => ProofConfigurationError.make({ reason: "keyring" })),
+          Effect.ensuring(Effect.sync(() => material.fill(0))),
+        );
 
       keys.set(entry.id, key);
     }
@@ -232,6 +215,7 @@ export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
   ): Effect.fn.Return<ProofDigest | undefined, ProofUnavailable> {
     binding = yield* validateProofBinding(binding);
     const value = Redacted.value(secret);
+    const key = keys.get(keyId);
 
     const secretSchema =
       policy._tag === "Token"
@@ -240,7 +224,7 @@ export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
 
     if (
       !Schema.is(secretSchema)(value) ||
-      (policy._tag === "Token" ? keyId !== "token" : !keys.has(keyId))
+      (policy._tag === "Token" ? keyId !== "token" : key === undefined)
     )
       return undefined;
 
@@ -257,82 +241,15 @@ export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
     if (encoder.encode(message).byteLength > 16384) return yield* ProofUnavailable.make({});
 
     const bytes =
-      policy._tag === "Token"
+      key === undefined
         ? yield* crypto
             .digest("SHA-256", encoder.encode(message))
             .pipe(Effect.mapError(() => ProofUnavailable.make({})))
-        : new Uint8Array(
-            yield* Effect.tryPromise({
-              try: () => subtle.sign("HMAC", keys.get(keyId)!, encoder.encode(message)),
-              catch: () => ProofUnavailable.make({}),
-            }),
-          );
+        : yield* key
+            .sign(encoder.encode(message))
+            .pipe(Effect.mapError(() => ProofUnavailable.make({})));
 
     return { keyId, digest: TokenDigest.make(Base64Url.encode(bytes)) };
-  });
-
-  const continuationDigest = Effect.fn("ProofCrypto.continuationDigest")(function* (
-    id: string,
-    binding: ProofBinding,
-    secret: Redacted.Redacted<string>,
-  ) {
-    binding = yield* validateProofBinding(binding);
-    if (!Schema.is(OpaqueSecret)(Redacted.value(secret))) return undefined;
-
-    const message = yield* Schema.encodeEffect(DigestInput)([
-      "effect-auth/proof/v1",
-      moduleId,
-      purpose,
-      id,
-      bindingTuple(binding),
-      "continuation",
-      Redacted.value(secret),
-    ]).pipe(Effect.mapError(() => ProofUnavailable.make({})));
-
-    if (encoder.encode(message).byteLength > 16384) return yield* ProofUnavailable.make({});
-
-    return TokenDigest.make(
-      Base64Url.encode(
-        yield* crypto
-          .digest("SHA-256", encoder.encode(message))
-          .pipe(Effect.mapError(() => ProofUnavailable.make({}))),
-      ),
-    );
-  });
-
-  const fingerprint = Effect.fn("ProofCrypto.fingerprint")(function* (
-    binding: ProofBinding,
-    delivery: {
-      readonly channel: string;
-      readonly vendor: string;
-      readonly template: string;
-      readonly locale: string;
-    },
-    supersedes?: ProofId,
-  ) {
-    binding = yield* validateProofBinding(binding);
-
-    const message = yield* Schema.encodeEffect(FingerprintInput)([
-      "effect-auth/proof-request/v1",
-      moduleId,
-      purpose,
-      bindingTuple(binding),
-      delivery.channel,
-      delivery.vendor,
-      delivery.template,
-      delivery.locale,
-      supersedes ?? "",
-    ]).pipe(Effect.mapError(() => ProofUnavailable.make({})));
-
-    if (encoder.encode(message).byteLength > 16384) return yield* ProofUnavailable.make({});
-
-    return TokenDigest.make(
-      Base64Url.encode(
-        yield* crypto
-          .digest("SHA-256", encoder.encode(message))
-          .pipe(Effect.mapError(() => ProofUnavailable.make({}))),
-      ),
-    );
   });
 
   return Object.freeze({
@@ -341,7 +258,30 @@ export const makeProofCrypto = Effect.fn("makeProofCrypto")(function* (
     generate,
     generateOpaque,
     digest,
-    continuationDigest,
-    fingerprint,
   });
 });
+
+/** Token proofs need only entropy and SHA digests; numeric keys belong to Scope. */
+export function makeProofCrypto(
+  moduleId: string,
+  purpose: ProofPurpose,
+  input: Extract<ProofSecretPolicy, { readonly _tag: "Token" }>,
+  configuredKeys?: ProofKeyring,
+): Effect.Effect<
+  Effect.Success<ReturnType<typeof makeCrypto>>,
+  ProofConfigurationError,
+  Crypto.Crypto
+>;
+
+export function makeProofCrypto(
+  moduleId: string,
+  purpose: ProofPurpose,
+  input: ProofSecretPolicy,
+  configuredKeys?: ProofKeyring,
+): ReturnType<typeof makeCrypto>;
+
+export function makeProofCrypto(
+  ...args: Parameters<typeof makeCrypto>
+): ReturnType<typeof makeCrypto> {
+  return makeCrypto(...args);
+}

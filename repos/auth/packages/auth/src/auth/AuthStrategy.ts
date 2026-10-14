@@ -1,10 +1,16 @@
 import { Context, Effect, Layer, Scope } from "effect";
 
+import { AuthenticationClock } from "../operations/clock";
 import type { AuthInvocation } from "../operations/context";
 import {
   AuthCredentialCommandCollector,
   AuthRevealCommandCollectorService,
 } from "../operations/credentials";
+import {
+  CurrentSessionInvocation,
+  SessionVerificationCapture,
+  withSessionInvocation,
+} from "../sessions/invocation";
 import { AuthConfigurationError } from "./AuthConfigurationError";
 import { AuthRequest } from "./AuthRequest";
 import type { SessionApiError } from "./session";
@@ -71,14 +77,24 @@ export const makeAuthStrategy = <
         layer,
         yield* Layer.CurrentMemoMap,
         yield* Effect.scope,
+      ).pipe(
+        Effect.updateContext((context: Context.Context<R>) =>
+          // These private, optional services are never a strategy dependency.
+          // Keep its declared R while removing ambient invocation state.
+          Context.makeUnsafe<R>(
+            Context.omit(CurrentSessionInvocation, SessionVerificationCapture)(context).mapUnsafe,
+          ),
+        ),
       );
 
       const services = Context.omit(
         AuthRequest,
+        CurrentSessionInvocation,
+        SessionVerificationCapture,
         Scope.Scope,
         AuthCredentialCommandCollector,
         AuthRevealCommandCollectorService,
-      )(built);
+      )(built).pipe(Context.add(AuthenticationClock, yield* AuthenticationClock));
 
       const bound = Object.fromEntries(
         entries.map(([name, invoke]) => [
@@ -92,16 +108,19 @@ export const makeAuthStrategy = <
             if (request.actionMode !== "query" && request.beforeMutation !== undefined)
               yield* request.beforeMutation;
 
-            const invocation = yield* (
-              request.resolveInvocation ?? Effect.succeed(request.invocation)
-            );
-
             const revealCollector = request.revealCommandCollector ?? unsupportedRevealCollector;
 
-            return yield* invoke(invocation, input).pipe(
-              Effect.provideService(AuthCredentialCommandCollector, request.credentialCommandSink),
-              Effect.provideService(AuthRevealCommandCollectorService, revealCollector),
-              Effect.provide(services),
+            return yield* withSessionInvocation(
+              request.resolveInvocation ?? Effect.succeed(request.invocation),
+              (invocation) =>
+                invoke(invocation, input).pipe(
+                  Effect.provideService(
+                    AuthCredentialCommandCollector,
+                    request.credentialCommandSink,
+                  ),
+                  Effect.provideService(AuthRevealCommandCollectorService, revealCollector),
+                  Effect.provide(services),
+                ),
             );
           }),
         ]),

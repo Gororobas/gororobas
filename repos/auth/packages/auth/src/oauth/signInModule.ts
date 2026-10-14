@@ -4,7 +4,6 @@ import {
   Crypto,
   DateTime,
   Effect,
-  Exit,
   Fiber,
   Layer,
   Redacted,
@@ -15,12 +14,13 @@ import {
 import { Base64Url } from "effect/encoding";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
-import { cryptoLayer, defaultLayer, hooksLayer } from "../auth/defaults";
-import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
+import { defaultLayer, hooksLayer } from "../auth/defaults";
+import { prepareCommit, hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { HookDenied } from "../hooks/models";
-import { reportAuthFailure } from "../internal/diagnostics";
+import { IdentityConflict } from "../identity/models";
+import { reportAuthDiagnostic, reportAuthFailure } from "../internal/diagnostics";
 import type { AuthInvocation } from "../operations/context";
-import type { AuthOperationResult } from "../operations/credentials";
+import { formPostBinding, type AuthOperationResult } from "../operations/credentials";
 import { InvalidOperationInput } from "../operations/errors";
 import { makeOperation, operationGroup } from "../operations/operation";
 import { makeRequestBinding } from "../operations/requestBinding";
@@ -30,39 +30,48 @@ import type { makeSessionModule } from "../sessions/module";
 import { makeOAuthAccounts } from "./accounts";
 import type { OAuthAccountsPolicy } from "./accountsModels";
 import { makeOAuthConnected } from "./connected";
-import { wipeConnectedMaterial } from "./connectedAccess";
 import {
   type OAuthConnectedPolicy,
   type OAuthConnectedProfile,
   type OAuthConnectedGrantResponse,
 } from "./connectedModels";
 import { completionResult } from "./contracts";
+import { wipeConnectedMaterial } from "./grantTokens";
 import { OAuthProtocol } from "./OAuthProtocol";
-import { OAuthRegistrationIntents, OAuthRegistrationSettlement } from "./OAuthRegistrationIntents";
+import {
+  OAuthRegistrationIntents,
+  OAuthRegistrationIssueDecision,
+} from "./OAuthRegistrationIntents";
 import { OAuthReturnTargets } from "./OAuthReturnTargets";
-import { OAuthSignInPersistence, type PrepareOAuthCommit } from "./OAuthSignInPersistence";
+import { OAuthSignInPersistence } from "./OAuthSignInPersistence";
 import { OAuthTransactionProtector } from "./OAuthTransactionProtector";
+import {
+  claimsIdentitySchema,
+  type OAuthClaimsIdentity,
+  type OAuthProviderProfiles,
+  type ProfileOptions,
+} from "./profiles";
 import { makeOAuthRegistration } from "./registration";
-import { OAuthRegistrationIntent, OAuthRegistrationPolicy } from "./registrationModels";
+import {
+  OAuthRegistrationAuthentication,
+  OAuthRegistrationIntent,
+  OAuthRegistrationPolicy,
+} from "./registrationModels";
 import * as registrationSecrets from "./registrationSecrets";
 import { signInAccess } from "./signInAccess";
-import type { OAuthSignInAccessClaim } from "./signInAccessModels";
 import {
   OAuthConfigurationError,
   OAuthMethodUnsupported,
-  OAuthProtocolRejected,
   OAuthRejected,
   OAuthUnavailable,
 } from "./signInErrors";
 import {
   OAuthCallbackResponse,
-  OAuthClaim,
-  OAuthClaimDecision,
-  OAuthClaimId,
+  OAuthConsumeDecision,
   OAuthCredentialSnapshot,
   OAuthIssueDecision,
   OAuthModuleId,
-  OAuthPendingFlow,
+  OAuthSignInFlow,
   OAuthProtocolConfiguration,
   OAuthProtocolPreparation,
   OAuthReturnTarget,
@@ -76,7 +85,7 @@ import {
   OAuthTransactionSecrets,
   OAuthVerifiedExternalIdentity,
 } from "./signInModels";
-import { snapshotOAuth, snapshotOAuthSync } from "./signInSnapshot";
+import { freezeOAuth, makeOAuthSnapshot } from "./signInSnapshot";
 
 const Failure = Schema.Union([OAuthRejected, OAuthUnavailable, OAuthMethodUnsupported, HookDenied]);
 
@@ -104,7 +113,7 @@ const bounded = <A, E, R>(effect: Effect.Effect<A, E, R>, millis: number) =>
     );
   });
 
-const flowJson = Schema.fromJsonString(OAuthPendingFlow);
+const flowJson = Schema.fromJsonString(OAuthSignInFlow);
 const contextJson = Schema.fromJsonString(OAuthSignInTransactionContext);
 const responseJson = Schema.fromJsonString(OAuthCallbackResponse);
 
@@ -134,28 +143,195 @@ export const makeOAuthMethod = <
   const SessionId extends string,
   Claims extends Schema.Codec<unknown, unknown, unknown, unknown>,
   Access extends OAuthConnectedProfile | undefined = undefined,
+  Profiles extends OAuthProviderProfiles = OAuthProviderProfiles,
 >(
   moduleId: Id,
-  options: {
+  options: ProfileOptions<Profiles> & {
     readonly sessions: ReturnType<typeof makeSessionModule<SessionId, Claims>>;
     readonly access?: Access;
   },
 ) => {
   const sessions = options.sessions;
   const binding = makeRequestBinding(moduleId, "oauth-entry");
+  const ClaimsIdentity = claimsIdentitySchema(options.profiles);
 
   /** Supply application session claims after provider verification and local account matching. */
   const SessionClaims = Context.Service<
     OAuthModule<Id, "claims", Claims["Type"]>,
     {
-      readonly resolve: (input: {
-        readonly subjectId: SubjectId;
-        readonly credential: OAuthCredentialSnapshot;
-        /** Fresh provider metadata. Select claims explicitly; profile email grants no linking authority. */
-        readonly identity: OAuthVerifiedExternalIdentity;
-      }) => Effect.Effect<Claims["Type"], OAuthUnavailable>;
+      readonly resolve: (
+        input: OAuthClaimsIdentity<Profiles> & {
+          readonly subjectId: SubjectId;
+          readonly credential: OAuthCredentialSnapshot;
+        },
+      ) => Effect.Effect<Claims["Type"], OAuthUnavailable>;
     }
   >(`effect-auth/oauth/${moduleId.length}:${moduleId}/Claims`);
+
+  const checkCredential = Effect.fnUntraced(function* (
+    resolved: OAuthCredentialSnapshot,
+    identity: OAuthVerifiedExternalIdentity,
+  ) {
+    const credential = yield* snapshotOAuthCredentialSnapshot.effect(resolved);
+    const expectedModule: string = moduleId;
+
+    if (
+      credential.moduleId !== expectedModule ||
+      credential.identity.provider !== identity.identity.provider ||
+      credential.identity.issuer !== identity.identity.issuer ||
+      credential.identity.subject !== identity.identity.subject ||
+      new Set(credential.revision.credentials.map((item) => item.credentialId)).size !==
+        credential.revision.credentials.length ||
+      !credential.revision.credentials.some(
+        (item) =>
+          item.credentialId === credential.credentialId &&
+          item.revision === credential.credentialRevision,
+      )
+    )
+      return yield* OAuthUnavailable.make({});
+
+    return credential;
+  });
+
+  const makeAuthentication = Effect.gen(function* () {
+    const { resolve: resolveClaims } = yield* SessionClaims;
+    const { prepare: completeAuthentication } = yield* sessions.AuthenticationCompletion;
+    const { digest } = yield* Crypto.Crypto;
+
+    return Effect.fn("OAuth.authenticate")(function* (input: {
+      readonly context: OAuthSignInTransactionContext;
+      readonly identity: OAuthVerifiedExternalIdentity;
+      readonly credential: OAuthCredentialSnapshot;
+      readonly verifiedAtMillis: number;
+      readonly completionExpiresAtMillis?: number;
+    }) {
+      const { context, identity, credential } = input;
+
+      yield* noAmbient();
+
+      const encoded = yield* Schema.encodeEffect(contextJson)(context).pipe(
+        Effect.mapError(() => OAuthUnavailable.make({})),
+      );
+
+      const bindingDigest = TokenDigest.make(
+        Base64Url.encode(
+          yield* digest("SHA-256", encoder.encode(encoded)).pipe(
+            Effect.mapError(() => OAuthUnavailable.make({})),
+          ),
+        ),
+      );
+
+      // Validate the selected projection even for replacement protocol services.
+      const claimsIdentity = yield* Schema.decodeEffect(ClaimsIdentity)({
+        provider: identity.identity.provider,
+        identity: yield* snapshotOAuthVerifiedExternalIdentity.effect(identity),
+      }).pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+
+      freezeOAuth(claimsIdentity);
+
+      const claims = yield* resolveClaims({
+        subjectId: credential.revision.subjectId,
+        credential: yield* snapshotOAuthCredentialSnapshot.effect(credential),
+        ...claimsIdentity,
+      });
+
+      return yield* completeAuthentication({
+        claims,
+        requirement: credential.requirement,
+        evidence: {
+          revision: credential.revision,
+          flowId: AuthenticationFlowId.make(context.flowId),
+          bindingDigest,
+          ...(input.completionExpiresAtMillis === undefined
+            ? {}
+            : { completionExpiresAt: DateTime.makeUnsafe(input.completionExpiresAtMillis) }),
+          proofs: [
+            {
+              method: context.protocol,
+              credentialId: credential.credentialId,
+              factors: ["possession"],
+              userVerified: false,
+              phishingResistant: false,
+              verifiedAt: DateTime.makeUnsafe(input.verifiedAtMillis),
+            },
+          ],
+        },
+      }).pipe(
+        Effect.tapError((error) =>
+          reportAuthDiagnostic(
+            "oauth-completion",
+            error._tag === "SessionUnavailable"
+              ? "unavailable"
+              : error._tag === "StaleAuthentication"
+                ? "authority-rejected"
+                : "rejected",
+          ),
+        ),
+        Effect.mapError((error) =>
+          error._tag === "HookDenied"
+            ? error
+            : error._tag === "SessionUnavailable"
+              ? OAuthUnavailable.make({})
+              : OAuthRejected.make({}),
+        ),
+        Effect.flatMap(read),
+      );
+    });
+  });
+
+  const completeRegistration = Effect.fn("OAuthRegistration.authenticate")(function* (
+    raw: OAuthRegistrationAuthentication,
+  ) {
+    const authentication = yield* snapshotOAuthRegistrationAuthentication.effect(raw);
+    const { intent, revision } = authentication;
+    const now = DateTime.toEpochMillis(yield* DateTime.now);
+
+    if (now >= intent.expiresAtMillis) return yield* OAuthRejected.make({});
+
+    const identity = yield* snapshotOAuthVerifiedExternalIdentity.effect({
+      identity: intent.identity,
+      ...(intent.profile === undefined ? {} : { profile: intent.profile }),
+      ...(intent.upstreamAuthenticatedAt === undefined
+        ? {}
+        : { upstreamAuthenticatedAt: intent.upstreamAuthenticatedAt }),
+    });
+
+    const persistence = yield* OAuthSignInPersistence;
+
+    const resolved = yield* persistence.resolve({
+      moduleId: intent.context.moduleId,
+      identity: intent.identity,
+    });
+
+    if (resolved === undefined) return yield* OAuthRejected.make({});
+    const current = yield* checkCredential(resolved, identity);
+
+    if (
+      current.credentialId !== authentication.credentialId ||
+      current.credentialRevision !== authentication.credentialRevision ||
+      current.revision.subjectId !== revision.subjectId ||
+      current.revision.securityRevision !== revision.securityRevision ||
+      current.revision.credentials.length !== revision.credentials.length ||
+      new Set(revision.credentials.map((item) => item.credentialId)).size !==
+        revision.credentials.length ||
+      !revision.credentials.every((item) =>
+        current.revision.credentials.some(
+          (expected) =>
+            expected.credentialId === item.credentialId && expected.revision === item.revision,
+        ),
+      )
+    )
+      return yield* OAuthRejected.make({});
+    const authenticate = yield* makeAuthentication;
+
+    return yield* authenticate({
+      context: intent.context,
+      identity,
+      credential: yield* snapshotOAuthCredentialSnapshot.effect({ ...current, revision }),
+      verifiedAtMillis: intent.verifiedAtMillis,
+      completionExpiresAtMillis: intent.expiresAtMillis,
+    });
+  });
 
   const CompletionResult = completionResult(sessions.CompletionResult);
 
@@ -177,7 +353,7 @@ export const makeOAuthMethod = <
     configuration: OAuthSignInPolicy,
     registrationSource: Effect.Effect<
       | {
-          readonly settle: OAuthRegistrationIntents["Service"]["settle"];
+          readonly issue: OAuthRegistrationIntents["Service"]["issue"];
           readonly policy: OAuthRegistrationPolicy;
         }
       | undefined,
@@ -185,13 +361,7 @@ export const makeOAuthMethod = <
       R
     >,
   ) => {
-    let captured: OAuthSignInPolicy | undefined;
-
-    try {
-      captured = snapshotOAuthSync(OAuthSignInPolicy, configuration);
-    } catch {
-      /* Layer reports configuration failure */
-    }
+    const captured = Result.getOrUndefined(snapshotOAuthSignInPolicy.result(configuration));
 
     return Layer.effect(
       SignIn,
@@ -209,11 +379,10 @@ export const makeOAuthMethod = <
         const { prepareAuthorization, exchangeVerifiedIdentity } = yield* OAuthProtocol;
         const { resolve: returnTarget } = yield* OAuthReturnTargets;
         const { seal, open } = yield* OAuthTransactionProtector;
-        const { issue, claim, settle } = yield* OAuthSignInPersistence;
-        const { resolve: resolveClaims } = yield* SessionClaims;
-        const { prepare: completeAuthentication } = yield* sessions.AuthenticationCompletion;
+        const { issue, consume, resolve } = yield* OAuthSignInPersistence;
+        const authenticate = yield* makeAuthentication;
         const crypto = yield* Crypto.Crypto;
-        const { randomBytes, digest } = crypto;
+        const { digest } = crypto;
 
         const hash = Effect.fn("OAuth.hash")(function* (message: string) {
           const result = yield* digest("SHA-256", encoder.encode(message)).pipe(
@@ -261,7 +430,7 @@ export const makeOAuthMethod = <
         const begin = Effect.fn("OAuth.SignIn.begin")(
           function* (raw: typeof OAuthSignInBegin.Type) {
             yield* noAmbient();
-            const request = yield* snapshotOAuth(OAuthSignInBegin, raw);
+            const request = yield* snapshotOAuthSignInBegin.effect(raw);
             const target = yield* returnTarget(request.returnTarget);
 
             const canonicalTarget = yield* Schema.decodeEffect(OAuthReturnTarget)(target).pipe(
@@ -305,8 +474,10 @@ export const makeOAuthMethod = <
                 provider: request.provider,
                 ...(request.callbackId === undefined ? {} : { callbackId: request.callbackId }),
                 flowId: request.flowId,
+                ...(request.prompt === undefined ? {} : { prompt: request.prompt }),
+                ...(request.loginHint === undefined ? {} : { loginHint: request.loginHint }),
               }),
-            ).pipe(Effect.flatMap((value) => snapshotOAuth(OAuthProtocolPreparation, value)));
+            ).pipe(Effect.flatMap((value) => snapshotOAuthProtocolPreparation.effect(value)));
 
             if (
               prepared.configuration.provider !== request.provider ||
@@ -321,12 +492,11 @@ export const makeOAuthMethod = <
 
             if (expiresAtMillis <= now) return yield* OAuthRejected.make({});
 
-            const context = yield* snapshotOAuth(OAuthSignInTransactionContext, {
+            const context = yield* snapshotOAuthSignInTransactionContext.effect({
               namespace: "effect-auth/oauth-sign-in-context/v1",
               moduleId: id,
               generation: policy.generation,
               flowId: request.flowId,
-              commandId: request.commandId,
               ...prepared.configuration,
               ...(access === undefined ? {} : { access: access.profile }),
               returnTarget: canonicalTarget,
@@ -339,18 +509,17 @@ export const makeOAuthMethod = <
               requestBindingExpiresAtMillis: binder.expiresAtMillis,
               issuedAtMillis: now,
               expiresAtMillis,
-              claimLifetimeMillis: policy.claimLifetimeMillis,
+              exchangeTimeoutMillis: policy.exchangeTimeoutMillis,
             });
 
             const sealed = yield* seal({
-              context: snapshotOAuthSync(OAuthSignInTransactionContext, context),
-              secrets: snapshotOAuthSync(OAuthTransactionSecrets, prepared.secrets),
-            }).pipe(Effect.flatMap((value) => snapshotOAuth(OAuthSealedTransaction, value)));
+              context: yield* snapshotOAuthSignInTransactionContext.effect(context),
+              secrets: yield* snapshotOAuthTransactionSecrets.effect(prepared.secrets),
+            }).pipe(Effect.flatMap((value) => snapshotOAuthSealedTransaction.effect(value)));
 
-            const flow = snapshotOAuthSync(OAuthPendingFlow, {
+            const flow = yield* snapshotOAuthSignInFlow.effect({
               context,
               sealed,
-              retentionUntilMillis: expiresAtMillis + policy.retentionMillis,
             });
 
             const expected = Schema.encodeSync(flowJson)(flow);
@@ -363,27 +532,31 @@ export const makeOAuthMethod = <
                 };
 
             const receipt = yield* issue<Issuance>(
-              snapshotOAuthSync(OAuthPendingFlow, flow),
-              (decision, journal) => {
-                const checked = snapshotOAuthSync(OAuthIssueDecision, decision);
+              yield* snapshotOAuthSignInFlow.effect(flow),
+              prepareCommit<OAuthIssueDecision, Issuance, OAuthUnavailable>((decision, journal) =>
+                Result.gen(function* () {
+                  const checked = snapshotOAuthIssueDecision.sync(decision);
 
-                if (checked._tag === "Rejected")
-                  return journal.prepare({ _tag: "Rejected" as const });
-                if (Schema.encodeSync(flowJson)(checked.flow) !== expected)
-                  throw OAuthUnavailable.make({});
+                  if (checked._tag === "Rejected")
+                    return journal.prepare({ _tag: "Rejected" as const });
+                  if (Schema.encodeSync(flowJson)(checked.flow) !== expected)
+                    return yield* Result.fail(OAuthUnavailable.make({}));
 
-                return journal.prepare({
-                  _tag: "Issued" as const,
-                  result: Object.freeze({
-                    value: Object.freeze({
-                      flowId: request.flowId,
-                      authorizationUrl: prepared.authorizationUrl,
-                      expiresAtMillis,
+                  return journal.prepare({
+                    _tag: "Issued" as const,
+                    result: Object.freeze({
+                      value: Object.freeze({
+                        flowId: request.flowId,
+                        authorizationUrl: prepared.authorizationUrl,
+                        expiresAtMillis,
+                      }),
+                      credentialCommands: Object.freeze([
+                        formPostBinding(command, prepared.responseMode),
+                      ]),
                     }),
-                    credentialCommands: Object.freeze([command]),
-                  }),
-                });
-              },
+                  });
+                }),
+              ),
             );
 
             const committed = yield* read(receipt);
@@ -402,7 +575,6 @@ export const makeOAuthMethod = <
           function* (raw: typeof OAuthSignInComplete.Type) {
             let privateGrant: OAuthConnectedGrantResponse | undefined;
             let grantStartedAt: number | undefined;
-            let reservation: OAuthSignInAccessClaim | undefined;
 
             yield* Effect.addFinalizer(() =>
               Effect.sync(() => {
@@ -410,7 +582,7 @@ export const makeOAuthMethod = <
               }),
             );
             yield* noAmbient();
-            const request = yield* snapshotOAuth(OAuthSignInComplete, raw);
+            const request = yield* snapshotOAuthSignInComplete.effect(raw);
             const response = request.response;
 
             const serialized = yield* Schema.encodeEffect(responseJson)(response).pipe(
@@ -427,371 +599,177 @@ export const makeOAuthMethod = <
 
             const state = yield* stateDigest(request.flowId, request.provider, response.state);
 
-            const random = yield* randomBytes(32).pipe(
-              Effect.mapError(() => OAuthUnavailable.make({})),
-            );
+            const decision = yield* consume(
+              {
+                moduleId: id,
+                generation: policy.generation,
+                flowId: request.flowId,
+                provider: request.provider,
+                callbackId: request.callbackId,
+                stateDigest: state,
+                requestBindingVerifier: binder.verifier,
+                requestBindingExpiresAtMillis: binder.expiresAtMillis,
+                ...(response.issuer === undefined ? {} : { responseIssuer: response.issuer }),
+              },
+              (value, journal) => journal.prepare(snapshotOAuthConsumeDecision.sync(value)),
+            ).pipe(Effect.flatMap(read));
 
-            const claimId = OAuthClaimId.make(Base64Url.encode(random));
+            if (decision._tag !== "Consumed") return yield* OAuthRejected.make({});
+            const flow = yield* snapshotOAuthSignInFlow.effect(decision.flow);
+            const context = flow.context;
 
-            random.fill(0);
+            if (
+              context.moduleId !== id ||
+              context.generation !== policy.generation ||
+              context.flowId !== request.flowId ||
+              context.provider !== request.provider ||
+              context.callbackId !== request.callbackId ||
+              context.stateDigest !== state ||
+              context.requestBindingVerifier !== binder.verifier ||
+              context.requestBindingExpiresAtMillis !== binder.expiresAtMillis ||
+              context.expiresAtMillis > context.requestBindingExpiresAtMillis ||
+              (context.responseIssuerMode === "required"
+                ? response.issuer !== context.issuer
+                : response.issuer !== undefined)
+            )
+              return yield* OAuthUnavailable.make({});
 
-            const input = Object.freeze({
-              moduleId: id,
-              generation: policy.generation,
-              flowId: request.flowId,
-              provider: request.provider,
-              callbackId: request.callbackId,
-              stateDigest: state,
-              requestBindingVerifier: binder.verifier,
-              requestBindingExpiresAtMillis: binder.expiresAtMillis,
-              claimId,
-              ...(response.issuer === undefined ? {} : { responseIssuer: response.issuer }),
-              nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
-            });
-
-            const settled = yield* Effect.uninterruptibleMask((restore) =>
-              Effect.gen(function* () {
-                const receipt = yield* restore(
-                  claim(input, (decision, journal) =>
-                    journal.prepare(snapshotOAuthSync(OAuthClaimDecision, decision)),
-                  ),
-                );
-
-                const decision = yield* read(receipt);
-
-                if (decision._tag !== "Claimed") return yield* OAuthRejected.make({});
-                const owned = snapshotOAuthSync(OAuthClaim, decision.claim);
-                const context = owned.flow.context;
-
-                if (
-                  owned.claimId !== claimId ||
-                  context.moduleId !== id ||
-                  context.generation !== policy.generation ||
-                  context.flowId !== request.flowId ||
-                  context.provider !== request.provider ||
-                  context.callbackId !== request.callbackId ||
-                  context.stateDigest !== state ||
-                  context.requestBindingVerifier !== binder.verifier ||
-                  context.requestBindingExpiresAtMillis !== binder.expiresAtMillis ||
-                  owned.claimedAtMillis < context.issuedAtMillis ||
-                  owned.claimedAtMillis >= context.expiresAtMillis ||
-                  context.expiresAtMillis > context.requestBindingExpiresAtMillis ||
-                  owned.claimExpiresAtMillis !==
-                    owned.claimedAtMillis + context.claimLifetimeMillis ||
-                  owned.flow.retentionUntilMillis < owned.claimExpiresAtMillis ||
-                  (context.responseIssuerMode === "required"
-                    ? response.issuer !== context.issuer
-                    : response.issuer !== undefined)
-                )
-                  return yield* OAuthUnavailable.make({});
-                let verifiedAt = owned.claimedAtMillis;
-
-                const exchange = Effect.gen(function* () {
-                  const secrets = yield* open({
-                    context: snapshotOAuthSync(OAuthSignInTransactionContext, context),
-                    sealed: snapshotOAuthSync(OAuthSealedTransaction, owned.flow.sealed),
-                  }).pipe(Effect.flatMap((value) => snapshotOAuth(OAuthTransactionSecrets, value)));
-
-                  if (
-                    (context.protocol === "oidc") !== (secrets.oidcNonce !== undefined) ||
-                    (yield* stateDigest(context.flowId, context.provider, secrets.state)) !==
-                      context.stateDigest ||
-                    Redacted.value(secrets.state) !== Redacted.value(response.state)
-                  )
-                    return yield* OAuthUnavailable.make({});
-                  if (response._tag !== "Code") return yield* OAuthProtocolRejected.make({});
-                  const start = yield* DateTime.now;
-
-                  verifiedAt = DateTime.toEpochMillis(start);
-                  if (verifiedAt >= owned.claimExpiresAtMillis)
-                    return yield* OAuthUnavailable.make({});
-
-                  const exchangeInput = {
-                    configuration: snapshotOAuthSync(OAuthProtocolConfiguration, context),
-                    response: snapshotOAuthSync(OAuthCallbackResponse, response) as typeof response,
-                    secrets: snapshotOAuthSync(OAuthTransactionSecrets, secrets),
-                    verificationStartedAt: start,
-                  };
-
-                  let identity: OAuthVerifiedExternalIdentity;
-
-                  if (access === undefined) {
-                    if (context.access !== undefined) return yield* OAuthRejected.make({});
-                    identity = yield* exchangeVerifiedIdentity(exchangeInput).pipe(
-                      Effect.flatMap((value) =>
-                        snapshotOAuth(OAuthVerifiedExternalIdentity, value),
-                      ),
-                    );
-                  } else {
-                    reservation = yield* access.claim(owned);
-                    grantStartedAt = DateTime.toEpochMillis(start);
-                    const exchanged = yield* access.exchange(reservation, exchangeInput);
-
-                    privateGrant = exchanged.grant;
-                    identity = exchanged.identity;
-                  }
-
-                  if (
-                    identity.identity.provider !== context.provider ||
-                    identity.identity.issuer !== context.issuer
-                  )
-                    return yield* OAuthProtocolRejected.make({});
-                  if (identity.upstreamAuthenticatedAt !== undefined)
-                    verifiedAt = Math.min(
-                      verifiedAt,
-                      DateTime.toEpochMillis(identity.upstreamAuthenticatedAt),
-                    );
-
-                  return identity;
-                });
-
-                const remaining = Math.max(
-                  1,
-                  owned.claimExpiresAtMillis - DateTime.toEpochMillis(yield* DateTime.now),
-                );
-
-                const exchanged =
-                  response._tag === "Error"
-                    ? undefined
-                    : yield* Effect.exit(restore(bounded(exchange, remaining)));
-
-                const definiteRejection =
-                  exchanged !== undefined &&
-                  Exit.isFailure(exchanged) &&
-                  exchanged.cause.reasons.length === 1 &&
-                  exchanged.cause.reasons[0]?._tag === "Fail" &&
-                  Schema.is(OAuthProtocolRejected)(exchanged.cause.reasons[0].error);
-
-                if (exchanged !== undefined && Exit.isFailure(exchanged) && !definiteRejection)
-                  yield* reportAuthFailure("oauth-exchange", exchanged.cause);
-
-                let outcome =
-                  exchanged === undefined
-                    ? { _tag: "Cancelled" as const }
-                    : Exit.isSuccess(exchanged)
-                      ? { _tag: "Verified" as const, identity: exchanged.value }
-                      : definiteRejection
-                        ? { _tag: "Rejected" as const }
-                        : { _tag: "Ambiguous" as const };
-
-                let registrationPrepared: Effect.Success<
-                  ReturnType<typeof registrationSecrets.prepare>
-                >;
-
-                if (outcome._tag === "Verified" && registration !== undefined) {
-                  const prepared = yield* Effect.exit(
-                    bounded(
-                      registrationSecrets.prepare(
-                        owned,
-                        outcome.identity,
-                        verifiedAt,
-                        registration.policy,
-                      ),
-                      remaining,
-                    ),
-                  );
-
-                  if (Exit.isSuccess(prepared)) registrationPrepared = prepared.value;
-                  else {
-                    yield* reportAuthFailure("oauth-sign-in", prepared.cause);
-                    outcome = { _tag: "Ambiguous" };
-                  }
-                }
-                const intentCodec = Schema.fromJsonString(OAuthRegistrationIntent);
-
-                const expectedIntent =
-                  registrationPrepared === undefined
-                    ? undefined
-                    : Schema.encodeSync(intentCodec)(registrationPrepared.intent);
-
-                const prepare: PrepareOAuthCommit<
-                  OAuthRegistrationSettlement,
-                  OAuthRegistrationSettlement
-                > = (value, journal) => {
-                  const result = snapshotOAuthSync(OAuthRegistrationSettlement, value);
-
-                  if (result._tag === "RegistrationIssued") {
-                    if (
-                      outcome._tag !== "Verified" ||
-                      expectedIntent === undefined ||
-                      Schema.encodeSync(intentCodec)(result.intent) !== expectedIntent
-                    )
-                      throw OAuthUnavailable.make({});
-                  } else if (result._tag !== "Rejected" && result._tag !== outcome._tag)
-                    throw OAuthUnavailable.make({});
-
-                  return journal.prepare(result);
-                };
-
-                const nowMillis = DateTime.toEpochMillis(yield* DateTime.now);
-
-                const commit =
-                  outcome._tag === "Verified" && registration !== undefined
-                    ? registration.settle(
-                        {
-                          claim: snapshotOAuthSync(OAuthClaim, owned),
-                          identity: snapshotOAuthSync(
-                            OAuthVerifiedExternalIdentity,
-                            outcome.identity,
-                          ),
-                          ...(registrationPrepared === undefined
-                            ? {}
-                            : {
-                                intent: snapshotOAuthSync(
-                                  OAuthRegistrationIntent,
-                                  registrationPrepared.intent,
-                                ),
-                              }),
-                          nowMillis,
-                        },
-                        prepare,
-                      )
-                    : settle(
-                        { claim: snapshotOAuthSync(OAuthClaim, owned), outcome, nowMillis },
-                        prepare,
-                      );
-
-                const finished = yield* bounded(commit, policy.settlementTimeoutMillis).pipe(
-                  Effect.flatMap(read),
-                  Effect.mapError(() => OAuthUnavailable.make({})),
-                );
-
-                if (
-                  exchanged !== undefined &&
-                  Exit.isFailure(exchanged) &&
-                  Cause.hasInterrupts(exchanged.cause)
-                )
-                  return yield* Effect.interrupt;
-
-                return {
-                  finished,
-                  ambiguous: outcome._tag === "Ambiguous",
-                  // A protocol rejection before any grant is definite no-issuance.
-                  // Identity mismatch after exchange still keeps the reservation open.
-                  unissued:
-                    reservation !== undefined && privateGrant === undefined && definiteRejection,
-                  registrationCommand: registrationPrepared?.command,
-                  context,
-                  verifiedAt,
-                  identity: outcome._tag === "Verified" ? outcome.identity : undefined,
-                };
-              }),
-            );
-
-            const { finished, context, verifiedAt, identity, registrationCommand, unissued } =
-              settled;
-
-            if (access !== undefined && reservation !== undefined && finished._tag !== "Verified") {
-              yield* access.abandon(
-                reservation,
-                finished._tag === "Cancelled"
-                  ? "Cancelled"
-                  : finished._tag === "Ambiguous" || settled.ambiguous
-                    ? "Ambiguous"
-                    : unissued
-                      ? "Unissued"
-                      : "Rejected",
-              );
-            }
-
-            if (finished._tag === "RegistrationIssued") {
-              if (registrationCommand === undefined) return yield* OAuthUnavailable.make({});
-
-              return {
-                value: {
-                  _tag: "RegistrationRequired" as const,
-                  reference: finished.intent.reference,
-                  expiresAtMillis: finished.intent.expiresAtMillis,
-                  returnTarget: context.returnTarget,
-                },
-                credentialCommands: [registrationCommand],
-              };
-            }
-
-            if (finished._tag === "Cancelled")
+            if (response._tag === "Error")
               return {
                 value: { _tag: "Cancelled" as const, returnTarget: context.returnTarget },
                 credentialCommands: [{ _tag: "Clear" as const, slot: "request-binding" as const }],
               };
-            if (finished._tag === "Ambiguous" || settled.ambiguous)
-              return yield* OAuthUnavailable.make({});
-            if (finished._tag !== "Verified" || identity === undefined)
-              return yield* OAuthRejected.make({});
-            const credential = snapshotOAuthSync(OAuthCredentialSnapshot, finished.credential);
+
+            const start = yield* DateTime.now;
+            let verifiedAt = DateTime.toEpochMillis(start);
+
+            const identity = yield* bounded(
+              Effect.gen(function* () {
+                const secrets = yield* open({ context, sealed: flow.sealed }).pipe(
+                  Effect.flatMap((value) => snapshotOAuthTransactionSecrets.effect(value)),
+                );
+
+                if (
+                  (context.protocol === "oidc") !== (secrets.oidcNonce !== undefined) ||
+                  (yield* stateDigest(context.flowId, context.provider, secrets.state)) !==
+                    context.stateDigest ||
+                  Redacted.value(secrets.state) !== Redacted.value(response.state)
+                )
+                  return yield* OAuthUnavailable.make({});
+
+                const exchangeInput = {
+                  configuration: yield* snapshotOAuthProtocolConfiguration.effect(context),
+                  response,
+                  secrets,
+                  verificationStartedAt: start,
+                };
+
+                if (access === undefined) {
+                  if (context.access !== undefined) return yield* OAuthRejected.make({});
+
+                  return yield* exchangeVerifiedIdentity(exchangeInput).pipe(
+                    Effect.flatMap((value) => snapshotOAuthVerifiedExternalIdentity.effect(value)),
+                  );
+                }
+                grantStartedAt = DateTime.toEpochMillis(start);
+                const exchanged = yield* access.exchange(flow, exchangeInput);
+
+                privateGrant = exchanged.grant;
+
+                return exchanged.identity;
+              }),
+              context.exchangeTimeoutMillis,
+            ).pipe(
+              Effect.tapError((error) =>
+                reportAuthDiagnostic(
+                  "oauth-exchange",
+                  error._tag === "TimeoutError"
+                    ? "timeout"
+                    : error._tag === "OAuthProtocolRejected" || error._tag === "OAuthRejected"
+                      ? "rejected"
+                      : "unavailable",
+                ),
+              ),
+              Effect.catchTag("TimeoutError", () => Effect.fail(OAuthUnavailable.make({}))),
+              Effect.catchTag("OAuthProtocolRejected", () => Effect.fail(OAuthRejected.make({}))),
+            );
 
             if (
-              credential.moduleId !== id ||
-              credential.identity.provider !== identity.identity.provider ||
-              credential.identity.issuer !== identity.identity.issuer ||
-              credential.identity.subject !== identity.identity.subject ||
-              new Set(credential.revision.credentials.map((item) => item.credentialId)).size !==
-                credential.revision.credentials.length ||
-              !credential.revision.credentials.some(
-                (item) =>
-                  item.credentialId === credential.credentialId &&
-                  item.revision === credential.credentialRevision,
-              )
+              identity.identity.provider !== context.provider ||
+              identity.identity.issuer !== context.issuer
             )
-              return yield* OAuthUnavailable.make({});
+              return yield* OAuthRejected.make({});
+            if (identity.upstreamAuthenticatedAt !== undefined)
+              verifiedAt = Math.min(
+                verifiedAt,
+                DateTime.toEpochMillis(identity.upstreamAuthenticatedAt),
+              );
+
+            const resolved = yield* resolve({ moduleId: id, identity: identity.identity });
+
+            if (resolved === undefined) {
+              if (registration === undefined) return yield* OAuthRejected.make({});
+
+              const prepared = yield* registrationSecrets.prepare(
+                flow,
+                identity,
+                verifiedAt,
+                registration.policy,
+              );
+
+              if (prepared === undefined) return yield* OAuthRejected.make({});
+              const intentCodec = Schema.fromJsonString(OAuthRegistrationIntent);
+              const expected = Schema.encodeSync(intentCodec)(prepared.intent);
+
+              const issued = yield* registration
+                .issue(
+                  { intent: prepared.intent },
+                  prepareCommit((value, journal) =>
+                    Result.gen(function* () {
+                      const checked = snapshotOAuthRegistrationIssueDecision.sync(value);
+
+                      if (
+                        checked._tag === "RegistrationIssued" &&
+                        Schema.encodeSync(intentCodec)(checked.intent) !== expected
+                      )
+                        return yield* Result.fail(OAuthUnavailable.make({}));
+
+                      return journal.prepare(checked);
+                    }),
+                  ),
+                )
+                .pipe(Effect.flatMap(read));
+
+              if (issued._tag !== "RegistrationIssued") return yield* OAuthRejected.make({});
+
+              return {
+                value: {
+                  _tag: "RegistrationRequired" as const,
+                  reference: issued.intent.reference,
+                  expiresAtMillis: issued.intent.expiresAtMillis,
+                  returnTarget: context.returnTarget,
+                },
+                credentialCommands: [prepared.command],
+              };
+            }
+            const credential = yield* checkCredential(resolved, identity);
 
             const connection =
               access === undefined
                 ? undefined
                 : yield* Effect.gen(function* () {
-                    if (
-                      reservation === undefined ||
-                      privateGrant === undefined ||
-                      grantStartedAt === undefined
-                    )
+                    if (privateGrant === undefined || grantStartedAt === undefined)
                       return yield* OAuthUnavailable.make({});
 
-                    return yield* bounded(
-                      access.retain(reservation, credential, privateGrant, grantStartedAt),
-                      policy.settlementTimeoutMillis,
-                    ).pipe(
-                      Effect.catchTag("TimeoutError", () => Effect.fail(OAuthUnavailable.make({}))),
-                    );
+                    return yield* access.retain(flow, credential, privateGrant, grantStartedAt);
                   });
 
-            const bindingDigest = yield* hash(
-              yield* Schema.encodeEffect(contextJson)(context).pipe(
-                Effect.mapError(() => OAuthUnavailable.make({})),
-              ),
-            );
-
-            const claims = yield* resolveClaims({
-              subjectId: credential.revision.subjectId,
-              credential: snapshotOAuthSync(OAuthCredentialSnapshot, credential),
-              identity: snapshotOAuthSync(OAuthVerifiedExternalIdentity, identity),
+            const established = yield* authenticate({
+              context,
+              identity,
+              credential,
+              verifiedAtMillis: verifiedAt,
             });
-
-            const established = yield* completeAuthentication({
-              claims,
-              evidence: {
-                revision: credential.revision,
-                flowId: AuthenticationFlowId.make(context.flowId),
-                bindingDigest,
-                proofs: [
-                  {
-                    method: context.protocol,
-                    credentialId: credential.credentialId,
-                    factors: ["possession"],
-                    userVerified: false,
-                    phishingResistant: false,
-                    verifiedAt: DateTime.makeUnsafe(verifiedAt),
-                  },
-                ],
-              },
-            }).pipe(
-              Effect.mapError((error) =>
-                error._tag === "HookDenied"
-                  ? error
-                  : error._tag === "SessionUnavailable"
-                    ? OAuthUnavailable.make({})
-                    : OAuthRejected.make({}),
-              ),
-              Effect.flatMap(read),
-            );
 
             return {
               value: {
@@ -807,6 +785,12 @@ export const makeOAuthMethod = <
           },
           Effect.scoped,
           Effect.provideService(Crypto.Crypto, crypto),
+          Effect.tapError((error) =>
+            reportAuthDiagnostic(
+              "oauth-completion",
+              error._tag === "OAuthUnavailable" ? "unavailable" : "rejected",
+            ),
+          ),
           Effect.tapCause((cause) =>
             Cause.hasDies(cause) ? reportAuthFailure("oauth-sign-in", cause) : Effect.void,
           ),
@@ -821,48 +805,99 @@ export const makeOAuthMethod = <
   const signInLayer = (configuration: OAuthSignInPolicy) =>
     makeSignInLayer(configuration, Effect.succeed(undefined));
 
-  const registration = <Registration extends Schema.Codec<unknown, unknown, unknown, unknown>>(
-    codec: Registration,
-  ) => {
-    const capability = makeOAuthRegistration(moduleId, codec, binding);
+  function registration<
+    Registration extends Schema.Codec<unknown, unknown, unknown, unknown>,
+    Authenticate extends boolean = false,
+  >(codec: Registration, configuration?: { readonly authenticate?: Authenticate }) {
+    type Completion = Authenticate extends true ? typeof sessions.CompletionResult : Schema.Never;
+    const authenticate = configuration?.authenticate === true;
+    const completion = (authenticate ? sessions.CompletionResult : Schema.Never) as Completion;
+
+    const capability = makeOAuthRegistration(moduleId, codec, binding, {
+      completion,
+      authenticate,
+    });
+
+    type Services =
+      | typeof capability.Registrations.Identifier
+      | typeof capability.RegistrationAuthority.Identifier
+      | (Authenticate extends true
+          ? Effect.Services<ReturnType<typeof completeRegistration>>
+          : never);
+
+    // The runtime opt-in selects the success schema and the handler's completion requirements.
+    const handlersLayer = capability.operations.Complete.credentialHandlerLayer(
+      Effect.fn("OAuthRegistration.Complete")(
+        function* (input: typeof capability.CompleteInput.Type) {
+          const plan = yield* (yield* capability.Registrations).planComplete(input);
+          const receipt = yield* plan.commit;
+          const result = yield* read(receipt);
+
+          if (result.value._tag === "Rejected") return yield* OAuthRejected.make({});
+          if (result.value._tag === "Conflict") return yield* IdentityConflict.make({});
+
+          if (result.authentication !== undefined) {
+            if (!authenticate) return yield* OAuthUnavailable.make({});
+            const authenticated = yield* completeRegistration(result.authentication);
+
+            return {
+              value: authenticated.value,
+              credentialCommands: [
+                ...authenticated.credentialCommands,
+                ...result.credentialCommands,
+              ],
+            };
+          }
+
+          return { value: result.value, credentialCommands: result.credentialCommands };
+        },
+        Effect.tapError((error) =>
+          reportAuthDiagnostic(
+            "oauth-registration",
+            error._tag === "OAuthUnavailable" ? "unavailable" : "rejected",
+          ),
+        ),
+        Effect.tapCause((cause) =>
+          Cause.hasDies(cause) ? reportAuthFailure("oauth-registration", cause) : Effect.void,
+        ),
+        Effect.catchDefect(() => Effect.fail(OAuthUnavailable.make({}))),
+      ) as Parameters<typeof capability.operations.Complete.credentialHandlerLayer<Services>>[0],
+    );
 
     const registrationSignInLayer = (
       configuration: OAuthSignInPolicy,
       registrationConfiguration: OAuthRegistrationPolicy,
     ) => {
-      let captured: OAuthRegistrationPolicy | undefined;
-
-      try {
-        captured = snapshotOAuthSync(OAuthRegistrationPolicy, registrationConfiguration);
-      } catch {
-        /* Layer reports invalid policy. */
-      }
+      const captured = Result.getOrUndefined(
+        snapshotOAuthRegistrationPolicy.result(registrationConfiguration),
+      );
 
       return makeSignInLayer(
         configuration,
         Effect.gen(function* () {
           if (captured === undefined)
             return yield* OAuthConfigurationError.make({ reason: "policy" });
-          const { settle } = yield* OAuthRegistrationIntents;
+          const { issue } = yield* OAuthRegistrationIntents;
 
-          return { settle, policy: captured };
+          return { issue, policy: captured };
         }),
       );
     };
 
     return Object.freeze({
       ...capability,
+      handlersLayer,
       signInLayer: registrationSignInLayer,
       strategy: makeAuthStrategy(
         { register: capability.operations.Complete.invoke },
-        capability.handlersLayer.pipe(
+        handlersLayer.pipe(
           Layer.provide(defaultLayer(capability.Registrations, capability.layer)),
           Layer.provide(defaultLayer(binding.RequestBinding, binding.layer)),
-          Layer.provide([cryptoLayer, hooksLayer]),
+          Layer.provide(hooksLayer),
         ),
       ),
     });
-  };
+  }
 
   const Begin = makeOperation(`${moduleId}/sign-in/begin`, {
     payload: OAuthSignInBegin,
@@ -896,15 +931,11 @@ export const makeOAuthMethod = <
 
     const crypto = yield* Crypto.Crypto;
 
-    const flowId = yield* crypto.randomUUIDv4.pipe(
-      Effect.mapError(() => OAuthUnavailable.make({})),
-    );
+    const flowId = yield* crypto
+      .randomUUIDv4()
+      .pipe(Effect.mapError(() => OAuthUnavailable.make({})));
 
-    const commandId = yield* crypto.randomUUIDv4.pipe(
-      Effect.mapError(() => OAuthUnavailable.make({})),
-    );
-
-    return yield* Begin.invoke(invocation, { ...input, flowId, commandId });
+    return yield* Begin.invoke(invocation, { ...input, flowId });
   });
 
   const handlersLayer = Layer.mergeAll(
@@ -924,7 +955,7 @@ export const makeOAuthMethod = <
     handlersLayer.pipe(
       Layer.provide(defaultLayer(SignIn, signInLayer(policy))),
       Layer.provide(defaultLayer(binding.RequestBinding, binding.layer)),
-      Layer.provide([cryptoLayer, hooksLayer]),
+      Layer.provide(hooksLayer),
     );
 
   const accounts = (policy: OAuthAccountsPolicy) => {
@@ -934,6 +965,7 @@ export const makeOAuthMethod = <
       ...module,
       strategy: makeAuthStrategy(
         {
+          listLinkedAccounts: module.operations.List.invoke,
           linkAccount: module.operations.Link.Begin.invoke,
           completeAccountLink: module.operations.Link.Complete.invoke,
           unlinkAccount: module.operations.Unlink.invoke,
@@ -941,7 +973,7 @@ export const makeOAuthMethod = <
         module.handlersLayer.pipe(
           Layer.provide(defaultLayer(module.Accounts, module.layer)),
           Layer.provide(defaultLayer(module.binding.RequestBinding, module.binding.layer)),
-          Layer.provide([cryptoLayer, hooksLayer]),
+          Layer.provide(hooksLayer),
         ),
       ),
     });
@@ -962,7 +994,7 @@ export const makeOAuthMethod = <
         module.handlersLayer.pipe(
           Layer.provide(defaultLayer(module.Connected, module.layer)),
           Layer.provide(defaultLayer(module.binding.RequestBinding, module.binding.layer)),
-          Layer.provide([cryptoLayer, hooksLayer]),
+          Layer.provide(hooksLayer),
         ),
       ),
     });
@@ -984,3 +1016,20 @@ export const makeOAuthMethod = <
     group: operationGroup(Begin, Complete),
   });
 };
+
+const snapshotOAuthCredentialSnapshot = makeOAuthSnapshot(OAuthCredentialSnapshot);
+const snapshotOAuthVerifiedExternalIdentity = makeOAuthSnapshot(OAuthVerifiedExternalIdentity);
+const snapshotOAuthRegistrationAuthentication = makeOAuthSnapshot(OAuthRegistrationAuthentication);
+const snapshotOAuthSignInPolicy = makeOAuthSnapshot(OAuthSignInPolicy);
+const snapshotOAuthSignInBegin = makeOAuthSnapshot(OAuthSignInBegin);
+const snapshotOAuthProtocolPreparation = makeOAuthSnapshot(OAuthProtocolPreparation);
+const snapshotOAuthSignInTransactionContext = makeOAuthSnapshot(OAuthSignInTransactionContext);
+const snapshotOAuthTransactionSecrets = makeOAuthSnapshot(OAuthTransactionSecrets);
+const snapshotOAuthSealedTransaction = makeOAuthSnapshot(OAuthSealedTransaction);
+const snapshotOAuthSignInFlow = makeOAuthSnapshot(OAuthSignInFlow);
+const snapshotOAuthIssueDecision = makeOAuthSnapshot(OAuthIssueDecision);
+const snapshotOAuthSignInComplete = makeOAuthSnapshot(OAuthSignInComplete);
+const snapshotOAuthConsumeDecision = makeOAuthSnapshot(OAuthConsumeDecision);
+const snapshotOAuthProtocolConfiguration = makeOAuthSnapshot(OAuthProtocolConfiguration);
+const snapshotOAuthRegistrationIssueDecision = makeOAuthSnapshot(OAuthRegistrationIssueDecision);
+const snapshotOAuthRegistrationPolicy = makeOAuthSnapshot(OAuthRegistrationPolicy);

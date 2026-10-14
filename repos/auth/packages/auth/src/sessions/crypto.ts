@@ -1,8 +1,11 @@
-import { Crypto, Effect, Redacted, Result, Schema } from "effect";
+import { Hmac, type Key } from "@yielded/crypto/Hmac";
+import { Context, Crypto, Effect, Layer, Redacted, Result, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
+import { AuthConfig } from "../auth/AuthConfig";
+import { defaultLayer } from "../auth/defaults";
+import { reportAuthFailure, withoutObservability } from "../internal/diagnostics";
 import { TokenDigest } from "../Schema";
-import { SubtleCrypto } from "../WebCrypto";
 import { SessionConfigurationError, SessionInvalid, SessionUnavailable } from "./errors";
 
 export interface SessionSigningKeyring {
@@ -14,6 +17,25 @@ export interface SessionSigningKeyring {
   }>;
 }
 
+/** Override the application-secret default to manage signing-key IDs and rotation. */
+export class SessionSigningKeys extends Context.Service<
+  SessionSigningKeys,
+  SessionSigningKeyring
+>()("effect-auth/sessions/SessionSigningKeys") {
+  static readonly layer = Layer.effect(
+    SessionSigningKeys,
+    Effect.map(AuthConfig, ({ secret }) => ({
+      activeKeyId: "default",
+      keys: [{ id: "default", material: Redacted.make(Base64Url.encode(Redacted.value(secret))) }],
+    })),
+  );
+}
+
+export const sessionSigningKeysLayer = defaultLayer(
+  SessionSigningKeys,
+  SessionSigningKeys.layer.pipe(Layer.provide(defaultLayer(AuthConfig, AuthConfig.layer()))),
+);
+
 const opaqueCredential = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
 const keyIdSchema = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{1,64}$/));
 
@@ -23,10 +45,6 @@ const Keyring = Schema.Struct({
     Schema.Struct({ id: keyIdSchema, material: Schema.Redacted(Schema.String) }),
   ).check(Schema.isMinLength(1)),
 });
-
-const tokenFormat = Schema.String.check(
-  Schema.isPattern(/^eas1\.[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/),
-);
 
 const textEncoder = new TextEncoder();
 
@@ -74,17 +92,43 @@ export const makeSessionSecrets = Effect.fn("makeSessionSecrets")(function* (mod
   };
 });
 
-/** Immutable key snapshot: retirement is effective only after every runtime installs it. */
+/** Scoped key snapshot: retirement is effective only after every runtime installs it. */
 export const makeSessionSigningCodec = Effect.fn("makeSessionSigningCodec")(function* <
   S extends Schema.Top,
->(schema: S, configuration: SessionSigningKeyring, maximumTokenBytes: number) {
+>(
+  schema: S,
+  configuration: SessionSigningKeyring,
+  maximumTokenBytes: number,
+  purpose: "session" | "session-cache" = "session",
+) {
   const checked = yield* Schema.decodeEffect(Keyring)(configuration).pipe(
     Effect.mapError(() => SessionConfigurationError.make({ reason: "keyring" })),
   );
 
-  const subtle = yield* SubtleCrypto;
-  const services = yield* Effect.context<S["DecodingServices"] | S["EncodingServices"]>();
-  const keys = new Map<string, CryptoKey>();
+  const hmac = yield* Hmac;
+
+  const services = (yield* Effect.context<S["DecodingServices"] | S["EncodingServices"]>()).pipe(
+    withoutObservability,
+  );
+
+  const keys = new Map<string, Key>();
+
+  const version = purpose === "session-cache" ? "eac1" : "eas1";
+
+  const tokenFormat = Schema.String.check(
+    Schema.isPattern(
+      purpose === "session-cache"
+        ? /^eac1\.[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/
+        : /^eas1\.[A-Za-z0-9_-]{1,64}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+    ),
+  );
+
+  const importKey = (material: Uint8Array) =>
+    hmac.importKey({ algorithm: "SHA-256", key: Redacted.make(material) }).pipe(
+      Effect.tapCause((cause) => reportAuthFailure("session-crypto", cause)),
+      Effect.mapError(() => SessionConfigurationError.make({ reason: "keyring" })),
+      Effect.ensuring(Effect.sync(() => material.fill(0))),
+    );
 
   for (const entry of checked.keys) {
     yield* Schema.decodeEffect(keyIdSchema)(entry.id).pipe(
@@ -97,17 +141,16 @@ export const makeSessionSigningCodec = Effect.fn("makeSessionSigningCodec")(func
       return yield* SessionConfigurationError.make({ reason: "keyring" });
     }
 
-    const key = yield* Effect.tryPromise({
-      try: () =>
-        subtle.importKey(
-          "raw",
-          material as BufferSource,
-          { name: "HMAC", hash: "SHA-256" },
-          false,
-          ["sign", "verify"],
-        ),
-      catch: () => SessionConfigurationError.make({ reason: "keyring" }),
-    });
+    const root = yield* importKey(material);
+
+    const key =
+      purpose === "session-cache"
+        ? yield* root.sign(textEncoder.encode("effect-auth/session-cache/key/v1")).pipe(
+            Effect.tapCause((cause) => reportAuthFailure("session-crypto", cause)),
+            Effect.mapError(() => SessionConfigurationError.make({ reason: "keyring" })),
+            Effect.flatMap(importKey),
+          )
+        : root;
 
     keys.set(entry.id, key);
   }
@@ -123,19 +166,33 @@ export const makeSessionSigningCodec = Effect.fn("makeSessionSigningCodec")(func
     encode: Effect.fn("SessionSigningCodec.encode")(function* (claims: S["Type"]) {
       const json = yield* encode(claims).pipe(
         Effect.provide(services),
+        Effect.tapCause((cause) =>
+          reportAuthFailure(
+            purpose === "session-cache" ? "session-cache" : "session-crypto",
+            cause,
+          ),
+        ),
         Effect.mapError(() => SessionUnavailable.make({})),
       );
 
-      const message = `eas1.${activeKeyId}.${Base64Url.encode(json)}`;
+      const message = `${version}.${activeKeyId}.${Base64Url.encode(json)}`;
 
-      const signature = yield* Effect.tryPromise({
-        try: () => subtle.sign("HMAC", activeKey, textEncoder.encode(message)),
-        catch: () => SessionUnavailable.make({}),
-      });
+      const signature = yield* activeKey.sign(textEncoder.encode(message)).pipe(
+        Effect.tapCause((cause) => reportAuthFailure("session-crypto", cause)),
+        Effect.mapError(() => SessionUnavailable.make({})),
+      );
 
-      const token = `${message}.${Base64Url.encode(new Uint8Array(signature))}`;
+      const token = `${message}.${Base64Url.encode(signature)}`;
 
-      if (token.length > maximumTokenBytes) return yield* SessionUnavailable.make({});
+      if (token.length > maximumTokenBytes)
+        return yield* SessionUnavailable.make({}).pipe(
+          Effect.tapCause((cause) =>
+            reportAuthFailure(
+              purpose === "session-cache" ? "session-cache" : "session-crypto",
+              cause,
+            ),
+          ),
+        );
 
       return Redacted.make(token);
     }),
@@ -155,16 +212,12 @@ export const makeSessionSigningCodec = Effect.fn("makeSessionSigningCodec")(func
       if (key === undefined || signature === undefined || signature.length !== 32)
         return yield* SessionInvalid.make({});
 
-      const valid = yield* Effect.tryPromise({
-        try: () =>
-          subtle.verify(
-            "HMAC",
-            key,
-            signature as BufferSource,
-            textEncoder.encode(`${version}.${keyId}.${payload}`),
-          ),
-        catch: () => SessionUnavailable.make({}),
-      });
+      const valid = yield* key
+        .verify(textEncoder.encode(`${version}.${keyId}.${payload}`), signature)
+        .pipe(
+          Effect.tapCause((cause) => reportAuthFailure("session-crypto", cause)),
+          Effect.mapError(() => SessionUnavailable.make({})),
+        );
 
       if (!valid) return yield* SessionInvalid.make({});
       const json = Result.getOrUndefined(Base64Url.decodeString(payload));

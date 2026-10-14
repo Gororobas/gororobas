@@ -151,42 +151,36 @@ export class AccountStore extends Context.Service<
           Effect.gen(function* () {
             if (yield* Hooks.hasCommitScope) return yield* StoreUnavailable.make({});
 
-            const result = yield* Hooks.coordinateCommit(
-              (journal) =>
-                mutex.withPermits(1)(
-                  Effect.gen(function* () {
-                    if (!available) return yield* StoreUnavailable.make({});
+            const result = yield* Hooks.coordinateCommit((journal) =>
+              mutex.withPermits(1)(
+                Effect.gen(function* () {
+                  if (!available) return yield* StoreUnavailable.make({});
 
-                    const next = yield* Schema.encodeEffect(codec)(state).pipe(
-                      Effect.flatMap(Schema.decodeEffect(codec)),
-                      Effect.mapError(() => StoreUnavailable.make({})),
-                    );
+                  const next = yield* Schema.encodeEffect(codec)(state).pipe(
+                    Effect.flatMap(Schema.decodeEffect(codec)),
+                    Effect.mapError(() => StoreUnavailable.make({})),
+                  );
 
-                    const working: State = next;
-                    const now = DateTime.toEpochMillis(yield* DateTime.now);
+                  const working: State = next;
+                  const now = DateTime.toEpochMillis(yield* DateTime.now);
+                  const checks: Array<(now: number) => boolean> = [];
 
-                    working.charges = working.charges.filter(
-                      (event) => event.retentionUntil >= now,
-                    );
-                    const checks: Array<(now: number) => boolean> = [];
-
-                    const value = yield* body(
-                      working,
-                      {
-                        ...journal,
-                        beforeCommit: (check) => {
-                          checks.push(check);
-                        },
+                  const value = yield* body(
+                    working,
+                    {
+                      ...journal,
+                      beforeCommit: (check) => {
+                        checks.push(check);
                       },
-                      now,
-                    );
+                    },
+                    now,
+                  );
 
-                    yield* publish(working, checks);
+                  yield* publish(working, checks);
 
-                    return value;
-                  }),
-                ),
-              { mode: "interactive" },
+                  return value;
+                }),
+              ),
             ).pipe(Effect.catchTag("HookConfigurationError", () => StoreUnavailable.make({})));
 
             return result.value;

@@ -9,6 +9,7 @@ import {
   sessionConfiguration,
   sessionRequirement,
 } from "../../shared/account/auth";
+import { authorizePasswordSession } from "../../shared/account/password-authorization";
 
 const SessionReader = AppAuth.sessions
   .statefulLayer(sessionConfiguration.policy(AppAuth.sessions.moduleId))
@@ -27,18 +28,22 @@ const EmailActions = Layer.effect(
 
           if (invocation._tag !== "Authenticated" || token === undefined)
             return yield* Email.EmailActionRequired.make({});
-          const source = yield* sessions.inspect(token);
-          const original = source.provenance.evidence;
+
+          const source = yield* AppAuth.sessions
+            .inspectInvocation(invocation, token)
+            .pipe(Effect.provideService(AppAuth.sessions.SessionStrategy, sessions));
+
+          const original = source.inspection.provenance.evidence;
 
           const confirmsRegisteredAddress =
             challenge.action === "verify-address" &&
             challenge.targetIdentifierRevision !== undefined &&
-            challenge.target.value === source.session.claims.email;
+            challenge.target.value === source.inspection.session.claims.email;
 
           if (
             (challenge.action === "verify-address" && !confirmsRegisteredAddress) ||
-            source.session.sessionId !== invocation.sessionId ||
-            source.session.subjectId !== invocation.subjectId ||
+            source.inspection.session.sessionId !== invocation.sessionId ||
+            source.inspection.session.subjectId !== invocation.subjectId ||
             original.revision.subjectId !== challenge.revision.subjectId ||
             original.revision.securityRevision !== challenge.revision.securityRevision ||
             original.revision.credentials.some(
@@ -79,14 +84,13 @@ const RecoveryCredential = Schema.Struct({
 const PasswordActions = Layer.effect(
   Password.PasswordActionEvidence,
   Effect.gen(function* () {
-    const passwords = yield* Password.PasswordPersistence;
-    const authority = yield* Sessions.AuthenticationAuthority;
+    const sessions = yield* AppAuth.sessions.SessionStrategy;
     const sql = yield* SqlClient.SqlClient;
     const active = sql.onDialectOrElse({ pg: () => true, orElse: () => 1 });
 
     return Password.PasswordActionEvidence.of({
       verify: Effect.fn("Customers.authorizePasswordChange")(
-        function* ({ challenge, currentPasswordEvidence, recovery }) {
+        function* ({ invocation, challenge, currentPasswordEvidence, recovery }) {
           if (challenge.action === "change-password" && currentPasswordEvidence !== undefined) {
             return {
               evidence: {
@@ -97,17 +101,31 @@ const PasswordActions = Layer.effect(
               requirement,
             };
           }
+          if (challenge.action === "change-password") {
+            const request = yield* Effect.serviceOption(Auth.AuthRequest);
+            const token = Option.isSome(request) ? request.value.credentials.session : undefined;
+
+            if (invocation._tag !== "Authenticated" || token === undefined)
+              return yield* Password.PasswordActionRequired.make({});
+
+            const source = yield* AppAuth.sessions
+              .inspectInvocation(invocation, token)
+              .pipe(Effect.provideService(AppAuth.sessions.SessionStrategy, sessions));
+
+            return yield* authorizePasswordSession(invocation, challenge, source);
+          }
           if (
             challenge.action !== "reset-password" ||
             recovery === undefined ||
             recovery.binding._tag !== "Subject" ||
             recovery.moduleId !== `${AppAuth.strategies.password.persistence.moduleId}/reset` ||
-            recovery.binding.revision.subjectId !== challenge.revision.subjectId ||
-            !(yield* passwords.checkReset(recovery))
+            recovery.binding.revision.subjectId !== challenge.revision.subjectId
           )
             return yield* Password.PasswordActionRequired.make({});
 
-          // This app's single-factor recovery policy requires its independently verified email credential.
+          const verifiedAt = yield* DateTime.now;
+
+          // The mutation owner redeems the candidate atomically; policy also requires a verified email credential.
           const rows = yield* sql`select c_credential_id as "credentialId",
             c_credential_revision as "credentialRevision" from app_email_credentials
             where c_module_id = ${AppAuth.strategies.email.persistence.moduleId}
@@ -119,17 +137,18 @@ const PasswordActions = Layer.effect(
           if (rows.length !== 1) return yield* Password.PasswordActionRequired.make({});
           const email = yield* Schema.decodeUnknownEffect(RecoveryCredential)(rows[0]);
 
-          const revision = yield* authority.capture(challenge.revision.subjectId, [
-            ...challenge.revision.credentials.map((item) => item.credentialId),
-            email.credentialId,
-          ]);
-
-          if (revision.securityRevision !== challenge.revision.securityRevision)
+          if (
+            !challenge.revision.credentials.some(
+              (item) =>
+                item.credentialId === email.credentialId &&
+                item.revision === email.credentialRevision,
+            )
+          )
             return yield* Password.PasswordActionRequired.make({});
 
           return {
             evidence: {
-              revision,
+              revision: challenge.revision,
               flowId: Sessions.AuthenticationFlowId.make(challenge.commandId),
               bindingDigest: challenge.bindingDigest,
               proofs: [
@@ -139,7 +158,7 @@ const PasswordActions = Layer.effect(
                   factors: ["possession" as const],
                   userVerified: false,
                   phishingResistant: false,
-                  verifiedAt: DateTime.makeUnsafe(recovery.nowMillis),
+                  verifiedAt,
                 },
               ] as const,
             },
@@ -154,7 +173,7 @@ const PasswordActions = Layer.effect(
       ),
     });
   }),
-);
+).pipe(Layer.provide(SessionReader));
 
 const PasskeyActions = Layer.effect(
   Passkey.PasskeyActionEvidence,
@@ -169,12 +188,16 @@ const PasskeyActions = Layer.effect(
 
           if (invocation._tag !== "Authenticated" || token === undefined)
             return yield* Passkey.PasskeyActionRequired.make({});
-          const source = yield* sessions.inspect(token);
-          const original = source.provenance.evidence;
+
+          const source = yield* AppAuth.sessions
+            .inspectInvocation(invocation, token)
+            .pipe(Effect.provideService(AppAuth.sessions.SessionStrategy, sessions));
+
+          const original = source.inspection.provenance.evidence;
 
           if (
-            source.session.sessionId !== invocation.sessionId ||
-            source.session.subjectId !== invocation.subjectId ||
+            source.inspection.session.sessionId !== invocation.sessionId ||
+            source.inspection.session.subjectId !== invocation.subjectId ||
             original.revision.subjectId !== challenge.revision.subjectId ||
             original.revision.securityRevision !== challenge.revision.securityRevision ||
             original.revision.credentials.some(

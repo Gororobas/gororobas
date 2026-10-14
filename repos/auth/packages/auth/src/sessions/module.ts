@@ -15,19 +15,26 @@ import {
 } from "effect";
 import { Base64Url } from "effect/encoding";
 
-import { cryptoLayer, hooksLayer } from "../auth/defaults";
-import { type PreparedCommit, hasCommitScope, coordinateCommit } from "../hooks/commit";
+import { hooksLayer } from "../auth/defaults";
+import { type PreparedCommit, hasCommitScope } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
 import type { HookDenied } from "../hooks/models";
-import { LifecycleEventId, lifecycleEvent, lifecycleSnapshot } from "../hooks/models";
-import { reportAuthFailure } from "../internal/diagnostics";
+import { LifecycleEventId, lifecycleEventEffect, lifecycleSnapshotEffect } from "../hooks/models";
+import {
+  reportAuthDiagnostic,
+  reportAuthFailure,
+  withoutObservability,
+} from "../internal/diagnostics";
+import { AuthenticationClock } from "../operations/clock";
 import {
   AuthenticationAssurance,
+  type AuthInvocation,
   type AssuranceRequirement,
   requireAssurance,
   requireAuthenticated,
 } from "../operations/context";
 import { type AuthOperationResult } from "../operations/credentials";
+import { CleanupLimit } from "../persistence/cleanup";
 import { TokenDigest } from "../Schema";
 import {
   assessAuthentication,
@@ -37,7 +44,12 @@ import {
 } from "./assurance";
 import { AuthenticationAuthority } from "./AuthenticationAuthority";
 import { makeSessionContract } from "./contract";
-import { makeSessionSecrets, makeSessionSigningCodec, type SessionSigningKeyring } from "./crypto";
+import {
+  makeSessionSecrets,
+  makeSessionSigningCodec,
+  SessionSigningKeys,
+  sessionSigningKeysLayer,
+} from "./crypto";
 import type { SessionError } from "./errors";
 import {
   SessionCapabilityUnsupported,
@@ -49,10 +61,11 @@ import {
   SessionStepUpInvalid,
 } from "./errors";
 import { sessionInvalidationWindow } from "./invalidation";
+import { CurrentSessionInvocation, SessionVerificationCapture } from "./invocation";
 import {
-  type AuthenticationEvidence,
+  AuthenticationEvidence,
   type PendingConsumption,
-  type SessionMetadata,
+  SessionMetadata,
   AuthenticationFlowId,
   AuthenticationRequirement,
   SessionId,
@@ -60,14 +73,17 @@ import {
   SessionCredentialVersion,
   type SessionCapabilities,
   type SessionInspection,
+  SessionGuard,
+  SecurityRevision,
+  type SessionSource,
 } from "./models";
 import {
   type PendingAuthentication as PendingPort,
-  type PendingAuthenticationContext,
-  snapshotPendingAuthenticationContext,
+  type PendingAuthenticationSnapshot,
 } from "./PendingAuthentication";
 import type {
   SessionRepository as RepositoryPort,
+  SessionCleanup as CleanupPort,
   SignedSessionValidity as ValidityPort,
   StatefulSessionPersistence as PersistencePort,
 } from "./persistence";
@@ -80,6 +96,7 @@ import {
   validateSessionTimeline,
 } from "./policy";
 import {
+  type SessionStepUpSnapshot,
   type SessionStepUpProfileId,
   SessionStepUpIntent,
   SessionStepUpProfile,
@@ -88,7 +105,6 @@ import {
   type SessionStepUpCompletionPlan,
   type SessionStepUpPersistence as StepUpPort,
   type SessionStepUpReplacement,
-  type SessionStepUpSource,
 } from "./SessionStepUpPersistence";
 
 export interface ModuleService<Id extends string, Kind extends string, Claims> {
@@ -96,6 +112,16 @@ export interface ModuleService<Id extends string, Kind extends string, Claims> {
   readonly kind: Kind;
   readonly claims: Types.Invariant<Claims>;
 }
+
+const reportAuthorityFailure = (error: SessionError) =>
+  reportAuthDiagnostic(
+    "session-authority",
+    error._tag === "StaleAuthentication"
+      ? "authority-rejected"
+      : error._tag === "SessionUnavailable"
+        ? "unavailable"
+        : "rejected",
+  );
 
 const reportSignOutFailure = <A, E extends { readonly _tag: string }, R>(
   effect: Effect.Effect<A, E, R>,
@@ -138,9 +164,12 @@ export const makeSessionModule = <
 >(
   moduleId: Id,
   claims: Claims,
+  contract?: ReturnType<typeof makeSessionContract<Id, Claims>>,
 ) => {
   const { Session, CompletionResult, operations, group, stepUpOperations, stepUpGroup } =
-    makeSessionContract(moduleId, claims);
+    contract?.moduleId === moduleId && contract.Session.fields.claims === claims
+      ? contract
+      : makeSessionContract(moduleId, claims);
 
   const ClaimsCodec: Schema.Codec<
     Claims["Type"],
@@ -158,7 +187,10 @@ export const makeSessionModule = <
     readonly evidence: AuthenticationEvidence;
     readonly claims: Claims["Type"];
     readonly pending?: PendingConsumption;
+    /** Trusted capture from the method authority; commit still rechecks current policy. */
+    readonly requirement: AuthenticationRequirement;
   };
+
   type Inspection = SessionInspection<Claims["Type"]>;
   type Strategy = {
     readonly policy: SessionPolicy;
@@ -180,13 +212,15 @@ export const makeSessionModule = <
       readonly flowId: AuthenticationFlowId;
       readonly bindingDigest: TokenDigest;
     }) => Prepared<Session, AuthenticationAuthority>;
-    /** Trusted method-only authentication source. Never expose through a public RPC. */
-    readonly inspectForStepUp: (
+    /** Trusted method-only source from one authoritative read; never a public RPC value. */
+    readonly inspect: (
       credential: Redacted.Redacted<string>,
-    ) => Effect.Effect<SessionStepUpSource<Claims["Type"]>, Failure>;
-    readonly inspect: (credential: Redacted.Redacted<string>) => Effect.Effect<Inspection, Failure>;
-    readonly verify: (credential: Redacted.Redacted<string>) => Effect.Effect<Session, Failure>;
-    readonly prepareRenew: (credential: Redacted.Redacted<string>) => Prepared<Session>;
+    ) => Effect.Effect<SessionSource<Claims["Type"]>, Failure>;
+    /** Standalone renewal returns after any storage commit and lifecycle delivery.
+     * A signed renewal without storage changes needs no commit receipt. */
+    readonly renew: (
+      credential: Redacted.Redacted<string>,
+    ) => Effect.Effect<AuthOperationResult<Session>, Failure>;
     readonly signOut: (
       credential: Redacted.Redacted<string>,
     ) => Effect.Effect<AuthOperationResult<SignOutResult>, Failure>;
@@ -206,7 +240,7 @@ export const makeSessionModule = <
     ModuleService<Id, "step-up-planner", Claims["Type"]>,
     {
       readonly plan: (
-        source: SessionStepUpSource<Claims["Type"]>,
+        source: SessionSource<Claims["Type"]>,
         evidence: AuthenticationEvidence,
         assurance: AuthenticationAssurance,
       ) => Effect.Effect<
@@ -233,6 +267,10 @@ export const makeSessionModule = <
     ModuleService<Id, "repository", Claims["Type"]>,
     RepositoryPort
   >(`effect-auth/sessions/${moduleId}/Repository`);
+
+  const SessionCleanup = Context.Service<ModuleService<Id, "cleanup", Claims["Type"]>, CleanupPort>(
+    `effect-auth/sessions/${moduleId}/Cleanup`,
+  );
 
   const SignedSessionValidity = Context.Service<
     ModuleService<Id, "validity", Claims["Type"]>,
@@ -272,23 +310,23 @@ export const makeSessionModule = <
     const hooks = yield* LifecycleHooks;
     const secrets = yield* makeSessionSecrets(moduleId);
 
-    const snapshot = lifecycleSnapshot({
+    const snapshot = yield* lifecycleSnapshotEffect({
       action,
       operation: `${moduleId}/session`,
       ...(session === undefined
         ? {}
         : { subjectId: session.subjectId, method: session.assurance.method }),
       identifiers: [],
-    });
+    }).pipe(Effect.orDie);
 
     yield* hooks.before(snapshot);
     const id = yield* secrets.generate();
 
-    return lifecycleEvent({
+    return yield* lifecycleEventEffect({
       id: LifecycleEventId.make(Redacted.value(id)),
       occurredAtMillis: DateTime.toEpochMillis(yield* DateTime.now),
       snapshot,
-    });
+    }).pipe(Effect.orDie);
   });
 
   // Detach mutable date/collection declarations as well as projecting declared fields.
@@ -385,8 +423,15 @@ export const makeSessionModule = <
     if (input.flowId === original.flowId || input.bindingDigest === original.bindingDigest)
       return yield* SessionInvalid.make({});
 
+    const authority = yield* AuthenticationAuthority;
+
+    const requirement = yield* authority
+      .requirements(original)
+      .pipe(Effect.tapError(reportAuthorityFailure));
+
     return {
       issuance: {
+        requirement,
         evidence: {
           ...original,
           flowId: input.flowId,
@@ -404,8 +449,10 @@ export const makeSessionModule = <
     source?: Session,
   ) {
     const evidence = yield* snapshotAuthenticationEvidence(input.evidence);
-    const authority = yield* AuthenticationAuthority;
-    const requirement = yield* authority.requirements(evidence);
+
+    const requirement = yield* Schema.decodeEffect(AuthenticationRequirement)(
+      input.requirement,
+    ).pipe(Effect.mapError(() => SessionInvalid.make({})));
 
     const assessed = yield* assessAuthentication(evidence, requirement).pipe(
       Effect.mapError(() => SessionInvalid.make({})),
@@ -431,7 +478,13 @@ export const makeSessionModule = <
       subjectId: evidence.revision.subjectId,
       securityRevision: evidence.revision.securityRevision,
       assurance,
-      issuedAt: now,
+      issuedAt: DateTime.makeUnsafe(
+        Math.max(
+          DateTime.toEpochMillis(now),
+          ...evidence.proofs.map((proof) => DateTime.toEpochMillis(proof.verifiedAt)),
+          source === undefined ? -Infinity : DateTime.toEpochMillis(source.issuedAt),
+        ),
+      ),
       expiresAt: DateTime.makeUnsafe(
         Math.min(
           DateTime.toEpochMillis(absoluteExpiresAt),
@@ -463,11 +516,16 @@ export const makeSessionModule = <
       sessionId,
       subjectId: evidence.revision.subjectId,
       securityRevision: evidence.revision.securityRevision,
-      assurance: AuthenticationAssurance.make({
-        ...assurance,
-        authenticatedAt: source.assurance.authenticatedAt,
-      }),
-      issuedAt: now,
+      // A successful step-up dates authentication from its newly satisfied profile.
+      // The source absolute expiry and each retained proof timestamp stay unchanged.
+      assurance: AuthenticationAssurance.make(assurance),
+      issuedAt: DateTime.makeUnsafe(
+        Math.max(
+          DateTime.toEpochMillis(now),
+          DateTime.toEpochMillis(source.issuedAt),
+          ...evidence.proofs.map((proof) => DateTime.toEpochMillis(proof.verifiedAt)),
+        ),
+      ),
       expiresAt: DateTime.makeUnsafe(
         Math.min(
           DateTime.toEpochMillis(source.absoluteExpiresAt),
@@ -486,13 +544,22 @@ export const makeSessionModule = <
     Layer.effectContext(
       Effect.gen(function* () {
         const policy = yield* validateSessionPolicy(configured, statefulCapabilities);
+
+        const withClockPolicy = Effect.provideService(
+          AuthenticationClock,
+          yield* AuthenticationClock,
+        );
+
         const store = yield* StatefulSessionPersistence;
         const repository = yield* SessionRepository;
         const secrets = yield* makeSessionSecrets(moduleId);
 
-        const services = yield* Effect.context<
+        const services = (yield* Effect.context<
           Claims["EncodingServices"] | Claims["DecodingServices"] | LifecycleHooks | Crypto.Crypto
-        >();
+        >()).pipe(
+          withoutObservability,
+          Context.omit(CurrentSessionInvocation, SessionVerificationCapture),
+        );
 
         const validate = (session: Session) =>
           projectSession(session).pipe(
@@ -500,11 +567,13 @@ export const makeSessionModule = <
             Effect.flatMap((value) =>
               validateSessionTimeline(value, policy).pipe(Effect.as(value)),
             ),
+            withClockPolicy,
           );
 
-        const inspectForStepUp = Effect.fn("StatefulSession.inspectForStepUp")(function* (
+        const inspect = Effect.fn("StatefulSession.inspect")(function* (
           credential: Redacted.Redacted<string>,
         ) {
+          const checkedAt = yield* DateTime.now;
           const digest = yield* secrets.digest(credential, "bearer");
           const record = yield* store.verify({ digest, now: yield* DateTime.now });
 
@@ -514,21 +583,15 @@ export const makeSessionModule = <
             record.credentialVersion,
           );
 
-          return Object.freeze({
+          const source = Object.freeze({
             inspection,
-            guard: Object.freeze({ _tag: "Stateful" as const, digest, rowVersion: record.version }),
+            guard: Object.freeze({ _tag: "Stateful" as const, digest }),
           });
+
+          yield* captureVerification(credential, source, checkedAt);
+
+          return source;
         });
-
-        const inspect = Effect.fn("StatefulSession.inspect")(
-          (credential: Redacted.Redacted<string>) =>
-            inspectForStepUp(credential).pipe(Effect.map((source) => source.inspection)),
-        );
-
-        const verify = Effect.fn("StatefulSession.verify")(
-          (credential: Redacted.Redacted<string>) =>
-            inspect(credential).pipe(Effect.map((value) => value.session)),
-        );
 
         const prepareEstablish = Effect.fn("StatefulSession.prepareEstablish")(function* (
           input: Issuance,
@@ -559,38 +622,42 @@ export const makeSessionModule = <
           yield* validateSessionTimeline(base, policy);
           const commitNow = yield* DateTime.now;
 
-          return yield* store.establish(
-            {
-              session: base,
-              evidence: planned.evidence,
-              ...(source === undefined ? {} : { handoffSourceSessionId: source.sessionId }),
-              ...(input.pending === undefined ? {} : { pending: input.pending }),
-              now: commitNow,
-            },
-            (record, journal) => {
-              journal.stage(event);
-              journal.stage(creation);
+          return yield* store
+            .establish(
+              {
+                session: base,
+                evidence: planned.evidence,
+                ...(source === undefined ? {} : { handoffSourceSessionId: source.sessionId }),
+                ...(input.pending === undefined ? {} : { pending: input.pending }),
+                now: commitNow,
+              },
+              (record, journal) => {
+                journal.stage(event);
+                journal.stage(creation);
 
-              return journal.prepare(issue(record, credential));
-            },
-          );
-        });
+                return journal.prepare(issue(record, credential));
+              },
+            )
+            .pipe(Effect.tapError(reportAuthorityFailure));
+        }, withClockPolicy);
 
         const strategy = SessionStrategy.of({
           policy,
-          capabilities: statefulCapabilities,
-          inspectForStepUp,
+          capabilities: {
+            ...statefulCapabilities,
+            positiveCacheMillis: policy.positiveCacheMillis ?? 0,
+          },
           inspect,
-          verify,
           prepareEstablish: (input) => prepareEstablish(input),
           prepareHandoff: Effect.fn("StatefulSession.prepareHandoff")(function* (input) {
             const handoff = yield* prepareHandoffIssuance(input);
 
             return yield* prepareEstablish(handoff.issuance, handoff.source);
           }),
-          prepareRenew: Effect.fn("StatefulSession.prepareRenew")(function* (
+          renew: Effect.fn("StatefulSession.renew")(function* (
             credential: Redacted.Redacted<string>,
           ) {
+            yield* checkNoAmbientCommit();
             const digest = yield* secrets.digest(credential, "bearer");
             const now = yield* DateTime.now;
             const record = yield* store.verify({ digest, now });
@@ -625,12 +692,9 @@ export const makeSessionModule = <
               ),
             );
 
-            return yield* store.rotate(
+            const receipt = yield* store.rotate(
               {
-                sessionId: session.sessionId,
-                expectedDigest: digest,
-                expectedVersion: record.version,
-                expectedSecurityRevision: session.securityRevision,
+                record,
                 nextDigest,
                 nextCredentialVersion,
                 nextExpiresAt,
@@ -642,7 +706,9 @@ export const makeSessionModule = <
                 return journal.prepare(issue(rotated, next));
               },
             );
-          }),
+
+            return yield* readCommitted(receipt);
+          }, withClockPolicy),
           signOut: Effect.fn("StatefulSession.signOut")(function* (
             credential: Redacted.Redacted<string>,
           ) {
@@ -681,7 +747,6 @@ export const makeSessionModule = <
                 {
                   subjectId: session.subjectId,
                   sessionId,
-                  expectedSecurityRevision: session.securityRevision,
                 },
                 (_, journal) => {
                   journal.stage(event);
@@ -711,7 +776,7 @@ export const makeSessionModule = <
         });
 
         const plan = Effect.fn("StatefulSession.planStepUpReplacement")(function* (
-          source: SessionStepUpSource<Claims["Type"]>,
+          source: SessionSource<Claims["Type"]>,
           evidence: AuthenticationEvidence,
           assurance: AuthenticationAssurance,
         ) {
@@ -739,11 +804,10 @@ export const makeSessionModule = <
               _tag: "Stateful" as const,
               inspection,
               expectedDigest: source.guard.digest,
-              expectedRowVersion: source.guard.rowVersion,
               nextDigest,
             }),
           };
-        });
+        }, withClockPolicy);
 
         return Context.make(SessionStrategy, strategy).pipe(Context.add(StepUpPlanner, { plan }));
       }),
@@ -751,7 +815,6 @@ export const makeSessionModule = <
 
   const signedLayer = <Mode extends "stateless" | "state-assisted">(
     configured: SessionPolicy,
-    keyring: SessionSigningKeyring,
     mode: Mode,
   ) => {
     const layer = Layer.effectContext(
@@ -761,17 +824,25 @@ export const makeSessionModule = <
             ? Option.some(yield* SignedSessionValidity)
             : Option.none<ValidityPort>();
 
-        const capabilities = Option.isSome(validity)
-          ? stateAssistedCapabilities
-          : statelessCapabilities;
+        const capabilities = {
+          ...(Option.isSome(validity) ? stateAssistedCapabilities : statelessCapabilities),
+          positiveCacheMillis: configured.positiveCacheMillis ?? 0,
+        };
 
         const policy = yield* validateSessionPolicy(configured, capabilities);
+        const clockPolicy = yield* AuthenticationClock;
+
+        const withClockPolicy = Effect.provideService(AuthenticationClock, clockPolicy);
+
         const hooks = yield* LifecycleHooks;
         const secrets = yield* makeSessionSecrets(moduleId);
 
-        const services = yield* Effect.context<
+        const services = (yield* Effect.context<
           Claims["EncodingServices"] | Claims["DecodingServices"] | LifecycleHooks | Crypto.Crypto
-        >();
+        >()).pipe(
+          withoutObservability,
+          Context.omit(CurrentSessionInvocation, SessionVerificationCapture),
+        );
 
         const Envelope = Schema.Struct({
           version: Schema.Literal(2),
@@ -784,7 +855,11 @@ export const makeSessionModule = <
           credentialVersion: SessionCredentialVersion,
         });
 
-        const signing = yield* makeSessionSigningCodec(Envelope, keyring, policy.maximumTokenBytes);
+        const signing = yield* makeSessionSigningCodec(
+          Envelope,
+          yield* SessionSigningKeys,
+          policy.maximumTokenBytes,
+        );
 
         const encode = (inspection: Inspection) =>
           signing.encode({
@@ -796,7 +871,7 @@ export const makeSessionModule = <
             ...inspection,
           });
 
-        const inspect = Effect.fn("SignedSession.inspect")(function* (
+        const inspectToken = Effect.fn("SignedSession.inspectToken")(function* (
           credential: Redacted.Redacted<string>,
         ) {
           const envelope = yield* signing.decode(credential);
@@ -808,32 +883,40 @@ export const makeSessionModule = <
           )
             return yield* SessionInvalid.make({});
           yield* validateSessionTimeline(envelope.session, policy);
-          if (Option.isSome(validity))
-            yield* validity.value.verify(envelope.session, yield* DateTime.now);
 
           return yield* inspectProvenance(
             yield* projectSession(envelope.session),
             envelope.provenance,
             envelope.credentialVersion,
           );
-        });
+        }, withClockPolicy);
 
-        const inspectForStepUp = Effect.fn("SignedSession.inspectForStepUp")(function* (
+        const inspect = Effect.fn("SignedSession.inspect")(function* (
           credential: Redacted.Redacted<string>,
         ) {
-          return Object.freeze({
-            inspection: yield* inspect(credential),
+          const checkedAt = yield* DateTime.now;
+          const inspection = yield* inspectToken(credential);
+
+          if (Option.isSome(validity))
+            yield* validity.value
+              .verify(inspection.session, yield* DateTime.now)
+              .pipe(Effect.tapError(reportAuthorityFailure));
+          // Validity reads and codec work may outlast a live token's expiry.
+          yield* validateSessionTimeline(inspection.session, policy);
+
+          const source = Object.freeze({
+            inspection,
             guard: Object.freeze(
               Option.isSome(validity)
                 ? { _tag: "StateAssistedSigned" as const }
                 : { _tag: "StatelessSigned" as const },
             ),
           });
-        });
 
-        const verify = Effect.fn("SignedSession.verify")((credential: Redacted.Redacted<string>) =>
-          inspect(credential).pipe(Effect.map((value) => value.session)),
-        );
+          yield* captureVerification(credential, source, checkedAt);
+
+          return source;
+        }, withClockPolicy);
 
         const prepareEstablish = Effect.fn("SignedSession.prepareEstablish")(function* (
           input: Issuance,
@@ -867,39 +950,41 @@ export const makeSessionModule = <
 
           yield* validateSessionTimeline(session, policy);
 
-          return yield* authority.approve(
-            {
-              evidence: planned.evidence,
-              ...(input.pending === undefined ? {} : { pending: input.pending }),
-              now: yield* DateTime.now,
-              expiresAt: session.expiresAt,
-              absoluteExpiresAt: session.absoluteExpiresAt,
-            },
-            (_, journal) => {
-              journal.stage(event);
-              journal.stage(creation);
+          return yield* authority
+            .approve(
+              {
+                evidence: planned.evidence,
+                ...(input.pending === undefined ? {} : { pending: input.pending }),
+                now: yield* DateTime.now,
+                issuedAt: session.issuedAt,
+                expiresAt: session.expiresAt,
+                absoluteExpiresAt: session.absoluteExpiresAt,
+              },
+              (_, journal) => {
+                journal.stage(event);
+                journal.stage(creation);
 
-              return journal.prepare(issue(session, credential));
-            },
-          );
-        });
+                return journal.prepare(issue(session, credential));
+              },
+            )
+            .pipe(Effect.tapError(reportAuthorityFailure));
+        }, withClockPolicy);
 
         const strategy = SessionStrategy.of({
           policy,
           capabilities,
-          inspectForStepUp,
           inspect,
-          verify,
           prepareEstablish: (input) => prepareEstablish(input),
           prepareHandoff: Effect.fn("SignedSession.prepareHandoff")(function* (input) {
             const handoff = yield* prepareHandoffIssuance(input);
 
             return yield* prepareEstablish(handoff.issuance, handoff.source);
           }),
-          prepareRenew: Effect.fn("SignedSession.prepareRenew")(function* (
+          renew: Effect.fn("SignedSession.renew")(function* (
             credential: Redacted.Redacted<string>,
           ) {
-            const source = yield* inspect(credential);
+            yield* checkNoAmbientCommit();
+            const source = (yield* inspect(credential)).inspection;
             const session = source.session;
             const now = yield* DateTime.now;
 
@@ -930,39 +1015,29 @@ export const makeSessionModule = <
 
             yield* validateSessionTimeline(session, policy);
             yield* validateSessionTimeline(renewed, policy);
-            if (Option.isSome(validity)) yield* validity.value.verify(session, yield* DateTime.now);
+            // Signing grants no new authority; preserve the original absolute bound.
+            const result = issue(renewed, next);
 
-            // Signed renewal has no write/transaction. The original absolute bound and authentication time survive replay.
-            const result = yield* coordinateCommit(
-              (journal) =>
-                Effect.sync(() => {
-                  journal.stage(event);
+            yield* hooks.after(event);
 
-                  return journal.prepare(issue(renewed, next));
-                }),
-              { mode: "interactive" },
-            ).pipe(
-              Effect.provideService(LifecycleHooks, hooks),
-              Effect.mapError(() => SessionUnavailable.make({})),
-            );
-
-            return result.value;
-          }),
+            return result;
+          }, withClockPolicy),
           signOut: Effect.fn("SignedSession.signOut")(function* (
             credential: Redacted.Redacted<string>,
           ) {
+            yield* checkNoAmbientCommit();
+
             const outcome = yield* Effect.gen(function* () {
               const event = yield* prepareHooks("sign-out").pipe(Effect.provide(services));
 
               if (Option.isSome(validity)) {
-                const session = yield* verify(credential);
+                const session = (yield* inspectToken(credential)).session;
 
                 const receipt = yield* validity.value.revoke(
                   {
                     subjectId: session.subjectId,
                     sessionId: session.sessionId,
                     absoluteExpiresAt: session.absoluteExpiresAt,
-                    expectedSecurityRevision: session.securityRevision,
                   },
                   (_, journal) => {
                     journal.stage(event);
@@ -977,23 +1052,9 @@ export const makeSessionModule = <
                 return yield* readCommitted(receipt);
               }
 
-              const result = yield* coordinateCommit(
-                (journal) =>
-                  Effect.sync(() => {
-                    journal.stage(event);
+              yield* hooks.after(event);
 
-                    return journal.prepare({
-                      clearCredential: true as const,
-                      invalidation: "client-only" as const,
-                    });
-                  }),
-                { mode: "interactive" },
-              ).pipe(
-                Effect.provideService(LifecycleHooks, hooks),
-                Effect.mapError(() => SessionUnavailable.make({})),
-              );
-
-              return yield* readCommitted(result.value);
+              return { clearCredential: true as const, invalidation: "client-only" as const };
             }).pipe(reportSignOutFailure, Effect.result);
 
             const value: SignOutResult =
@@ -1018,10 +1079,12 @@ export const makeSessionModule = <
                 {
                   subjectId: session.subjectId,
                   sessionId,
+                  // The target may have been issued by an ahead clock.
                   absoluteExpiresAt: DateTime.add(yield* DateTime.now, {
-                    milliseconds: policy.maximumIssuedAbsoluteLifetimeMillis,
+                    milliseconds:
+                      policy.maximumIssuedAbsoluteLifetimeMillis +
+                      clockPolicy.futureToleranceMillis,
                   }),
-                  expectedSecurityRevision: session.securityRevision,
                 },
                 (_, journal) => {
                   journal.stage(event);
@@ -1052,7 +1115,7 @@ export const makeSessionModule = <
         });
 
         const plan = Effect.fn("SignedSession.planStepUpReplacement")(function* (
-          source: SessionStepUpSource<Claims["Type"]>,
+          source: SessionSource<Claims["Type"]>,
           evidence: AuthenticationEvidence,
           assurance: AuthenticationAssurance,
         ) {
@@ -1086,19 +1149,21 @@ export const makeSessionModule = <
             : Object.freeze({ _tag: "StatelessSigned", inspection });
 
           return { credential, replacement };
-        });
+        }, withClockPolicy);
 
         return Context.make(SessionStrategy, strategy).pipe(Context.add(StepUpPlanner, { plan }));
       }),
     );
 
+    const provided = layer.pipe(Layer.provide(sessionSigningKeysLayer));
+
     // Mode is the literal selected by the two public constructors below.
     // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
-    return layer as Layer.Layer<
-      Layer.Success<typeof layer>,
-      Layer.Error<typeof layer>,
+    return provided as Layer.Layer<
+      Layer.Success<typeof provided>,
+      Layer.Error<typeof provided>,
       | Exclude<
-          Layer.Services<typeof layer>,
+          Layer.Services<typeof provided>,
           Context.Service.Identifier<typeof SignedSessionValidity>
         >
       | (Mode extends "state-assisted"
@@ -1107,11 +1172,9 @@ export const makeSessionModule = <
     >;
   };
 
-  const statelessLayer = (policy: SessionPolicy, keyring: SessionSigningKeyring) =>
-    signedLayer(policy, keyring, "stateless");
+  const statelessLayer = (policy: SessionPolicy) => signedLayer(policy, "stateless");
 
-  const stateAssistedLayer = (policy: SessionPolicy, keyring: SessionSigningKeyring) =>
-    signedLayer(policy, keyring, "state-assisted");
+  const stateAssistedLayer = (policy: SessionPolicy) => signedLayer(policy, "state-assisted");
 
   const AuthenticationCompletion = Context.Service<
     ModuleService<Id, "completion", Claims["Type"]>,
@@ -1119,9 +1182,9 @@ export const makeSessionModule = <
       readonly prepare: (input: Issuance) => Prepared<CompletionResult>;
       /** Internal-only lookup authenticated by the private pending bearer. No claims
        * or normal session authority; final preparePending still rechecks/consumes. */
-      readonly pendingContext: (
+      readonly inspectPending: (
         credential: Redacted.Redacted<string>,
-      ) => Effect.Effect<PendingAuthenticationContext, Failure>;
+      ) => Effect.Effect<PendingAuthenticationSnapshot<Claims["Type"]>, Failure>;
       /** Charge a rejected additional factor without caller-supplied binding data.
        * Read the returned receipt before reporting the rejection to its caller. */
       readonly rejectPendingCredential: (
@@ -1129,13 +1192,9 @@ export const makeSessionModule = <
       ) => Effect.Effect<PreparedCommit<{ readonly _tag: "Rejected" }>, Failure>;
       /** Only method implementations call this after independently verifying the next proof. */
       readonly preparePending: (input: {
-        readonly credential: Redacted.Redacted<string>;
+        readonly pending: PendingAuthenticationSnapshot<Claims["Type"]>;
         readonly additional: AuthenticationEvidence;
       }) => Prepared<CompletionResult>;
-      readonly rejectPending: (input: {
-        readonly credential: Redacted.Redacted<string>;
-        readonly bindingDigest: TokenDigest;
-      }) => Effect.Effect<PreparedCommit<{ readonly _tag: "Rejected" }>, Failure>;
     }
   >(`effect-auth/sessions/${moduleId}/Completion`);
 
@@ -1170,13 +1229,22 @@ export const makeSessionModule = <
               );
 
         const pendingPort = yield* pending;
+
+        const withClockPolicy = Effect.provideService(
+          AuthenticationClock,
+          yield* AuthenticationClock,
+        );
+
         const strategy = yield* SessionStrategy;
         const authority = yield* AuthenticationAuthority;
         const secrets = yield* makeSessionSecrets(moduleId);
 
-        const claimServices = yield* Effect.context<
+        const claimServices = (yield* Effect.context<
           Claims["DecodingServices"] | Claims["EncodingServices"]
-        >();
+        >()).pipe(
+          withoutObservability,
+          Context.omit(CurrentSessionInvocation, SessionVerificationCapture),
+        );
 
         const codec = Schema.toCodecIso(ClaimsCodec);
 
@@ -1204,18 +1272,22 @@ export const makeSessionModule = <
         )(function* (input: Issuance) {
           input = { ...input, evidence: yield* snapshotAuthenticationEvidence(input.evidence) };
           const checkedClaims = yield* projectClaims(input.claims);
-          const requirement = yield* authority.requirements(input.evidence);
+
+          const requirement = yield* Schema.decodeEffect(AuthenticationRequirement)(
+            input.requirement,
+          ).pipe(Effect.mapError(() => SessionInvalid.make({})));
 
           const assessed = yield* assessAuthentication(input.evidence, requirement).pipe(
             Effect.mapError(() => SessionInvalid.make({})),
           );
 
-          if (assessed.satisfied)
+          if (assessed.satisfied) {
             return completed(
               yield* strategy
-                .prepareEstablish({ ...input, claims: checkedClaims })
+                .prepareEstablish({ ...input, requirement, claims: checkedClaims })
                 .pipe(Effect.provideService(AuthenticationAuthority, authority)),
             );
+          }
           if (
             input.pending !== undefined ||
             configuration === undefined ||
@@ -1231,6 +1303,9 @@ export const makeSessionModule = <
               DateTime.toEpochMillis(now) + configuration.pendingLifetimeMillis,
               DateTime.toEpochMillis(assessed.assurance.authenticatedAt) +
                 requirement.maximumAgeMillis,
+              input.evidence.completionExpiresAt === undefined
+                ? Infinity
+                : DateTime.toEpochMillis(input.evidence.completionExpiresAt),
             ),
           );
 
@@ -1259,9 +1334,25 @@ export const makeSessionModule = <
                 ],
               }),
           );
-        });
+        }, withClockPolicy);
 
-        const pendingContext = Effect.fn("AuthenticationCompletion.pendingContext")(function* (
+        const pendingCodec = Schema.toCodecJson(
+          Schema.toType(
+            Schema.Struct({
+              record: Schema.Struct({
+                digest: TokenDigest,
+                version: SecurityRevision,
+                evidence: AuthenticationEvidence,
+                expiresAt: Schema.DateTimeUtcFromMillis,
+                attemptLimit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
+                claims: ClaimsCodec,
+              }),
+              requirement: AuthenticationRequirement,
+            }),
+          ),
+        );
+
+        const inspectPending = Effect.fn("AuthenticationCompletion.inspectPending")(function* (
           credential: Redacted.Redacted<string>,
         ) {
           if (Option.isNone(pendingPort))
@@ -1269,18 +1360,23 @@ export const makeSessionModule = <
               capability: "pending-authentication",
             });
           const digest = yield* secrets.digest(credential, "pending");
+          const captured = yield* pendingPort.value.read({ digest, now: yield* DateTime.now });
 
-          return yield* snapshotPendingAuthenticationContext(
-            yield* pendingPort.value.context({
-              digest,
-              now: yield* DateTime.now,
-            }),
+          const snapshot = yield* Schema.encodeEffect(pendingCodec)(captured).pipe(
+            Effect.flatMap(Schema.decodeEffect(pendingCodec)),
+            Effect.provide(claimServices),
+            Effect.map(freezeGraph),
+            Effect.mapError(() => SessionInvalid.make({})),
           );
+
+          if (snapshot.record.digest !== digest) return yield* SessionInvalid.make({});
+
+          return snapshot;
         });
 
         return AuthenticationCompletion.of({
           prepare,
-          pendingContext,
+          inspectPending,
           rejectPendingCredential: Effect.fn("AuthenticationCompletion.rejectPendingCredential")(
             function* (credential) {
               if (Option.isNone(pendingPort))
@@ -1289,12 +1385,8 @@ export const makeSessionModule = <
                 });
               const digest = yield* secrets.digest(credential, "pending");
 
-              const context = yield* snapshotPendingAuthenticationContext(
-                yield* pendingPort.value.context({ digest, now: yield* DateTime.now }),
-              );
-
               return yield* pendingPort.value.reject(
-                { digest, bindingDigest: context.bindingDigest, now: yield* DateTime.now },
+                { digest, now: yield* DateTime.now },
                 (decision, journal) => journal.prepare(decision),
               );
             },
@@ -1304,13 +1396,8 @@ export const makeSessionModule = <
               return yield* SessionCapabilityUnsupported.make({
                 capability: "pending-authentication",
               });
-            const digest = yield* secrets.digest(input.credential, "pending");
-
-            const record = yield* pendingPort.value.read({
-              digest,
-              bindingDigest: input.additional.bindingDigest,
-              now: yield* DateTime.now,
-            });
+            const { record, requirement } = input.pending;
+            const digest = record.digest;
 
             const evidence = yield* combineAuthenticationEvidence(
               record.evidence,
@@ -1320,6 +1407,7 @@ export const makeSessionModule = <
             const receipt = yield* prepare({
               evidence,
               claims: record.claims,
+              requirement,
               pending: {
                 digest,
                 bindingDigest: evidence.bindingDigest,
@@ -1340,21 +1428,6 @@ export const makeSessionModule = <
                 })),
               ),
             };
-          }),
-          rejectPending: Effect.fn("AuthenticationCompletion.rejectPending")(function* (input) {
-            if (Option.isNone(pendingPort))
-              return yield* SessionCapabilityUnsupported.make({
-                capability: "pending-authentication",
-              });
-
-            return yield* pendingPort.value.reject(
-              {
-                digest: yield* secrets.digest(input.credential, "pending"),
-                bindingDigest: input.bindingDigest,
-                now: yield* DateTime.now,
-              },
-              (decision, journal) => journal.prepare(decision),
-            );
           }),
         });
       }),
@@ -1379,18 +1452,18 @@ export const makeSessionModule = <
     ModuleService<Id, "step-up", Claims["Type"]>,
     {
       readonly prepareBegin: (input: {
-        readonly sourceCredential: Redacted.Redacted<string>;
+        readonly source: SessionSource<Claims["Type"]>;
         readonly profileId: SessionStepUpProfileId;
       }) => Prepared<StepUpPending>;
-      readonly context: (
+      readonly inspect: (
         credential: Redacted.Redacted<string>,
-      ) => Effect.Effect<PendingAuthenticationContext, Failure>;
+      ) => Effect.Effect<SessionStepUpSnapshot, Failure>;
       readonly rejectCredential: (
         credential: Redacted.Redacted<string>,
       ) => Effect.Effect<PreparedCommit<{ readonly _tag: "Rejected" }>, Failure>;
       readonly prepareComplete: (input: {
-        readonly sourceCredential: Redacted.Redacted<string>;
-        readonly stepUpCredential: Redacted.Redacted<string>;
+        readonly source: SessionSource<Claims["Type"]>;
+        readonly pending: SessionStepUpSnapshot;
         readonly additional: AuthenticationEvidence;
       }) => Prepared<Session>;
     }
@@ -1476,6 +1549,132 @@ export const makeSessionModule = <
     ),
   );
 
+  const sourceCodec = Schema.toCodecJson(
+    Schema.toType(
+      Schema.Struct({
+        inspection: Schema.Struct({
+          session: Session,
+          provenance: SessionAuthenticationProvenance,
+          credentialVersion: SessionCredentialVersion,
+        }),
+        guard: SessionGuard,
+      }),
+    ),
+  );
+
+  const invocationCodec = Schema.fromJsonString(sourceCodec);
+
+  // Keep the complete detached private source, but project only the fields each
+  // reader consumes. Public reads never need to decode the private proof graph.
+  const capturedMetadataCodec = Schema.fromJsonString(
+    Schema.toCodecJson(
+      Schema.toType(Schema.Struct({ inspection: Schema.Struct({ session: SessionMetadata }) })),
+    ),
+  );
+
+  const capturedSessionCodec = Schema.fromJsonString(
+    Schema.toCodecJson(
+      Schema.toType(Schema.Struct({ inspection: Schema.Struct({ session: Session }) })),
+    ),
+  );
+
+  const captureVerification = Effect.fnUntraced(function* (
+    credential: Redacted.Redacted<string>,
+    value: SessionSource<Claims["Type"]>,
+    checkedAt: DateTime.Utc,
+  ) {
+    const capture = yield* Effect.serviceOption(SessionVerificationCapture);
+
+    if (Option.isNone(capture)) return;
+
+    const inspection = yield* Schema.encodeEffect(invocationCodec)(value).pipe(
+      Effect.mapError(() => SessionInvalid.make({})),
+    );
+
+    const detached = yield* Schema.decodeEffect(capturedMetadataCodec)(inspection).pipe(
+      Effect.mapError(() => SessionInvalid.make({})),
+    );
+
+    const session = detached.inspection.session;
+
+    capture.value.capture({
+      moduleId,
+      credential,
+      subjectId: session.subjectId,
+      sessionId: session.sessionId,
+      assurance: freezeGraph(session.assurance),
+      checkedAtMillis: DateTime.toEpochMillis(checkedAt),
+      expiresAtMillis: DateTime.toEpochMillis(session.expiresAt),
+      absoluteExpiresAtMillis: DateTime.toEpochMillis(session.absoluteExpiresAt),
+      source: inspection,
+    });
+  });
+
+  /** Private source evidence from the verification that admitted this exact action.
+   * Outside that action, inspect the credential afresh. Explicit inspection and
+   * public verification remain fresh; persistence rechecks mutation authority at commit. */
+  const inspectInvocation = Effect.fn("Session.inspectInvocation")(function* (
+    invocation: AuthInvocation,
+    credential: Redacted.Redacted<string>,
+  ) {
+    const strategy = yield* SessionStrategy;
+    const current = yield* Effect.serviceOption(CurrentSessionInvocation);
+
+    const source =
+      Option.isSome(current) &&
+      current.value.isActive() &&
+      current.value.invocation === invocation &&
+      invocation._tag === "Authenticated"
+        ? current.value.sessions.findLast(
+            (session) =>
+              session.moduleId === moduleId &&
+              session.subjectId === invocation.subjectId &&
+              session.sessionId === invocation.sessionId &&
+              Redacted.value(session.credential) === Redacted.value(credential),
+          )
+        : undefined;
+
+    if (source === undefined) return yield* strategy.inspect(credential);
+
+    const inspection = yield* Schema.decodeEffect(invocationCodec)(source.source).pipe(
+      Effect.mapError(() => SessionInvalid.make({})),
+    );
+
+    yield* validateSessionTimeline(inspection.inspection.session, strategy.policy);
+
+    return freezeGraph(inspection);
+  });
+
+  const capturedSession = Effect.fn("Session.capturedSession")(function* (
+    credential: Redacted.Redacted<string>,
+  ) {
+    const strategy = yield* SessionStrategy;
+    const capture = yield* Effect.serviceOption(SessionVerificationCapture);
+
+    const stored =
+      Option.isSome(capture) && capture.value.isActive()
+        ? capture.value.sessions.findLast(
+            (item) =>
+              item.moduleId === moduleId &&
+              Redacted.value(item.credential) === Redacted.value(credential),
+          )
+        : undefined;
+
+    if (stored === undefined)
+      return Option.none<{ readonly session: Session; readonly checkedAt: DateTime.Utc }>();
+
+    const source = yield* Schema.decodeEffect(capturedSessionCodec)(stored.source).pipe(
+      Effect.mapError(() => SessionInvalid.make({})),
+    );
+
+    yield* validateSessionTimeline(source.inspection.session, strategy.policy);
+
+    return Option.some({
+      session: source.inspection.session,
+      checkedAt: DateTime.makeUnsafe(stored.checkedAtMillis),
+    });
+  });
+
   // Only detached schema Type values reach this helper. DateTime caches must be
   // materialized before freezing; consumer collections are detached by the codec.
   const freezeGraph = <A>(value: A): A => {
@@ -1502,6 +1701,13 @@ export const makeSessionModule = <
   const snapshotInspection = (input: Inspection) =>
     Schema.encodeEffect(inspectionCodec)(input).pipe(
       Effect.flatMap(Schema.decodeEffect(inspectionCodec)),
+      Effect.map(freezeGraph),
+      Effect.mapError(() => SessionStepUpInvalid.make({})),
+    );
+
+  const snapshotSource = (input: SessionSource<Claims["Type"]>) =>
+    Schema.encodeEffect(sourceCodec)(input).pipe(
+      Effect.flatMap(Schema.decodeEffect(sourceCodec)),
       Effect.map(freezeGraph),
       Effect.mapError(() => SessionStepUpInvalid.make({})),
     );
@@ -1550,12 +1756,20 @@ export const makeSessionModule = <
         )
           return yield* SessionConfigurationError.make({ reason: "step-up" });
         const store = yield* SessionStepUpPersistence;
+
+        const withClockPolicy = Effect.provideService(
+          AuthenticationClock,
+          yield* AuthenticationClock,
+        );
+
         const strategy = yield* SessionStrategy;
         const planner = yield* StepUpPlanner;
-        const authority = yield* AuthenticationAuthority;
         const crypto = yield* Crypto.Crypto;
         const secrets = yield* makeSessionSecrets(moduleId);
-        const hooks = yield* Effect.context<LifecycleHooks | Crypto.Crypto>();
+
+        const hooks = Context.make(LifecycleHooks, yield* LifecycleHooks).pipe(
+          Context.add(Crypto.Crypto, crypto),
+        );
 
         const registry = new Map<
           SessionStepUpProfileId,
@@ -1577,8 +1791,13 @@ export const makeSessionModule = <
           );
         }
 
-        const assess = (evidence: AuthenticationEvidence, requirement: AuthenticationRequirement) =>
-          assessAuthentication(evidence, requirement).pipe(
+        const assess = (
+          evidence: AuthenticationEvidence,
+          requirement: AuthenticationRequirement,
+          now: DateTime.Utc,
+        ) =>
+          assessAuthentication(evidence, requirement, now).pipe(
+            withClockPolicy,
             Effect.catchTag("SessionConfigurationError", () =>
               Effect.fail(SessionUnavailable.make({})),
             ),
@@ -1591,32 +1810,18 @@ export const makeSessionModule = <
               Effect.catchTag("SessionInvalid", () => Effect.fail(SessionStepUpInvalid.make({}))),
             );
 
-        const inspectSource = (credential: Redacted.Redacted<string>) =>
-          strategy.inspectForStepUp(credential).pipe(
-            Effect.flatMap((source) =>
-              snapshotInspection(source.inspection).pipe(
-                Effect.map((inspection) =>
-                  Object.freeze({ inspection, guard: Object.freeze({ ...source.guard }) }),
-                ),
-              ),
-            ),
-            Effect.catchTag("SessionInvalid", () => Effect.fail(SessionStepUpInvalid.make({}))),
-          );
-
-        const readIntent = Effect.fn("SessionStepUp.readIntent")(function* (
-          digest: TokenDigest,
-          bindingDigest: TokenDigest,
+        const inspect = Effect.fn("SessionStepUp.inspect")(function* (
+          credential: Redacted.Redacted<string>,
         ) {
-          const intent = yield* snapshotIntent(
-            yield* store.read({ digest, bindingDigest, now: yield* DateTime.now }),
-          );
-
+          const digest = yield* digestCredential(credential);
+          const captured = yield* store.read({ digest, now: yield* DateTime.now });
+          const intent = yield* snapshotIntent(captured.intent);
+          const requirement = yield* readRequirement(captured.requirement);
           const configured = registry.get(intent.profileId);
           const now = DateTime.toEpochMillis(yield* DateTime.now);
 
           if (
             intent.digest !== digest ||
-            intent.bindingDigest !== bindingDigest ||
             configured === undefined ||
             intent.profileGeneration !== configured.profile.generation ||
             intent.profileDigest !== configured.digest ||
@@ -1631,12 +1836,12 @@ export const makeSessionModule = <
           )
             return yield* SessionStepUpInvalid.make({});
 
-          return intent;
+          return Object.freeze({ intent, requirement });
         });
 
         const matchSource = (
           intent: SessionStepUpIntent,
-          source: SessionStepUpSource<Claims["Type"]>,
+          source: SessionSource<Claims["Type"]>,
         ) => {
           const { session, credentialVersion, provenance } = source.inspection;
           const revision = provenance.evidence.revision;
@@ -1672,12 +1877,8 @@ export const makeSessionModule = <
             const configured = registry.get(input.profileId);
 
             if (configured === undefined) return yield* SessionStepUpInvalid.make({});
-            const source = yield* inspectSource(input.sourceCredential);
+            const source = yield* snapshotSource(input.source);
             const evidence = source.inspection.provenance.evidence;
-
-            // requirements checks current status/revisions but does not require the
-            // old source proofs to satisfy the new profile before requesting it.
-            yield* readRequirement(yield* authority.requirements(evidence));
             const credential = yield* secrets.generate();
             const digest = yield* digestCredential(credential);
 
@@ -1735,18 +1936,8 @@ export const makeSessionModule = <
                 ],
               }),
             );
-          }),
-          context: Effect.fn("SessionStepUp.context")(function* (credential) {
-            const digest = yield* digestCredential(credential);
-
-            return yield* snapshotPendingAuthenticationContext(
-              yield* store.context({ digest, now: yield* DateTime.now }),
-            ).pipe(
-              Effect.catchTag("PendingAuthenticationInvalid", () =>
-                Effect.fail(SessionStepUpInvalid.make({})),
-              ),
-            );
-          }),
+          }, withClockPolicy),
+          inspect,
           rejectCredential: Effect.fn("SessionStepUp.rejectCredential")(function* (credential) {
             const digest = yield* digestCredential(credential);
 
@@ -1756,9 +1947,9 @@ export const makeSessionModule = <
           }),
           prepareComplete: Effect.fn("SessionStepUp.prepareComplete")(function* (input) {
             const additional = yield* snapshotAuthenticationEvidence(input.additional);
-            const digest = yield* digestCredential(input.stepUpCredential);
-            const intent = yield* readIntent(digest, additional.bindingDigest);
-            const source = yield* inspectSource(input.sourceCredential);
+            const intent = yield* snapshotIntent(input.pending.intent);
+            const requirement = yield* readRequirement(input.pending.requirement);
+            const source = yield* snapshotSource(input.source);
 
             if (!matchSource(intent, source)) return yield* SessionStepUpInvalid.make({});
             const original = source.inspection.provenance.evidence;
@@ -1778,12 +1969,20 @@ export const makeSessionModule = <
               ),
             );
 
-            const requirement = yield* readRequirement(yield* authority.requirements(evidence));
-            const base = yield* assess(evidence, requirement);
-            const profile = yield* assess(evidence, intent.requirement);
+            const now = yield* DateTime.now;
+            const base = yield* assess(evidence, requirement, now);
+            const profile = yield* assess(evidence, intent.requirement, now);
 
             if (!base.satisfied || !profile.satisfied) return yield* SessionStepUpInvalid.make({});
-            const generated = yield* planner.plan(source, evidence, base.assurance);
+
+            const generated = yield* planner.plan(
+              source,
+              evidence,
+              AuthenticationAssurance.make({
+                ...base.assurance,
+                authenticatedAt: profile.assurance.authenticatedAt,
+              }),
+            );
 
             const replacement = Object.freeze({
               ...generated.replacement,
@@ -1803,39 +2002,21 @@ export const makeSessionModule = <
               planned.replacement.inspection.session,
             ).pipe(Effect.provide(hooks));
 
-            // Hooks may suspend. Re-read source authority and assess both independent
-            // policies again; the native owner must repeat them at its commit clock.
-            const current = yield* inspectSource(input.sourceCredential);
-
-            if (
-              !matchSource(intent, current) ||
-              (source.guard._tag === "Stateful" &&
-                (current.guard._tag !== "Stateful" ||
-                  source.guard.digest !== current.guard.digest ||
-                  source.guard.rowVersion !== current.guard.rowVersion))
-            )
-              return yield* SessionStepUpInvalid.make({});
-
-            const currentRequirement = yield* readRequirement(
-              yield* authority.requirements(evidence),
-            );
-
-            if (
-              !(yield* assess(evidence, currentRequirement)).satisfied ||
-              !(yield* assess(evidence, intent.requirement)).satisfied
-            )
-              return yield* SessionStepUpInvalid.make({});
+            // The committing owner rechecks source, revisions and both policies
+            // after hooks, against its final clock. Preserve this original snapshot.
             yield* validateSessionTimeline(planned.replacement.inspection.session, strategy.policy);
-            const now = yield* DateTime.now;
 
-            if (DateTime.toEpochMillis(now) >= DateTime.toEpochMillis(intent.expiresAt))
+            if (
+              DateTime.toEpochMillis(yield* DateTime.now) >=
+              DateTime.toEpochMillis(intent.expiresAt)
+            )
               return yield* SessionStepUpInvalid.make({});
 
             const plan: SessionStepUpCompletionPlan<Claims["Type"]> = Object.freeze({
               intent,
-              source: current,
+              source,
               evidence,
-              baseRequirement: currentRequirement,
+              baseRequirement: requirement,
               profileRequirement: intent.requirement,
               now: freezeInstant(now),
               replacement: planned.replacement,
@@ -1854,7 +2035,7 @@ export const makeSessionModule = <
                 ],
               });
             });
-          }),
+          }, withClockPolicy),
         });
       }),
     );
@@ -1867,7 +2048,7 @@ export const makeSessionModule = <
       Effect.fn("SessionStepUp.Begin")(function* (input, context) {
         yield* checkNoAmbientCommit();
         const caller = yield* requireAuthenticated(context);
-        const source = yield* (yield* SessionStrategy).inspectForStepUp(input.sourceCredential);
+        const source = yield* inspectInvocation(context, input.sourceCredential);
 
         if (
           caller.subjectId !== source.inspection.session.subjectId ||
@@ -1875,14 +2056,21 @@ export const makeSessionModule = <
         )
           return yield* SessionStepUpInvalid.make({});
 
-        return yield* readCommitted(yield* (yield* SessionStepUp).prepareBegin(input));
+        return yield* readCommitted(
+          yield* (yield* SessionStepUp).prepareBegin({ source, profileId: input.profileId }),
+        );
       }),
     ),
     StepUpComplete.credentialHandlerLayer(
-      Effect.fn("SessionStepUp.Complete")(function* (input) {
+      Effect.fn("SessionStepUp.Complete")(function* (input, context) {
         yield* checkNoAmbientCommit();
+        const stepUp = yield* SessionStepUp;
+        const source = yield* inspectInvocation(context, input.sourceCredential);
+        const pending = yield* stepUp.inspect(input.stepUpCredential);
 
-        return yield* readCommitted(yield* (yield* SessionStepUp).prepareComplete(input));
+        return yield* readCommitted(
+          yield* stepUp.prepareComplete({ source, pending, additional: input.additional }),
+        );
       }),
     ),
     StepUpReject.handlerLayer(
@@ -1919,14 +2107,14 @@ export const makeSessionModule = <
   const sessionHandlersLayer = Layer.mergeAll(
     Verify.handlerLayer(
       Effect.fn("Session.Verify")(function* (input) {
-        return yield* (yield* SessionStrategy).verify(input.credential);
+        return (yield* (yield* SessionStrategy).inspect(input.credential)).inspection.session;
       }),
     ),
     Renew.credentialHandlerLayer(
       Effect.fn("Session.Renew")(function* (input) {
         yield* checkNoAmbientCommit();
 
-        return yield* readCommitted(yield* (yield* SessionStrategy).prepareRenew(input.credential));
+        return yield* (yield* SessionStrategy).renew(input.credential);
       }),
     ),
     SignOut.credentialHandlerLayer(
@@ -1959,8 +2147,11 @@ export const makeSessionModule = <
         Effect.fn("Session.CompletePending")(function* (input) {
           yield* checkNoAmbientCommit();
 
+          const completion = yield* AuthenticationCompletion;
+          const pending = yield* completion.inspectPending(input.credential);
+
           return yield* readCommitted(
-            yield* (yield* AuthenticationCompletion).preparePending(input),
+            yield* completion.preparePending({ pending, additional: input.additional }),
           );
         }),
       ),
@@ -1969,7 +2160,7 @@ export const makeSessionModule = <
           yield* checkNoAmbientCommit();
 
           return yield* readCommitted(
-            yield* (yield* AuthenticationCompletion).rejectPending(input),
+            yield* (yield* AuthenticationCompletion).rejectPendingCredential(input.credential),
           );
         }),
       ),
@@ -1978,7 +2169,7 @@ export const makeSessionModule = <
         Effect.fn("Session.List")(function* (input, context) {
           const caller = yield* requireAuthenticated(context);
           const strategy = yield* SessionStrategy;
-          const session = yield* strategy.verify(input.credential);
+          const session = (yield* inspectInvocation(context, input.credential)).inspection.session;
 
           if (session.subjectId !== caller.subjectId) return yield* SessionInvalid.make({});
 
@@ -1995,7 +2186,7 @@ export const makeSessionModule = <
           yield* checkNoAmbientCommit();
           const caller = yield* requireAssurance(context, management);
           const strategy = yield* SessionStrategy;
-          const session = yield* strategy.verify(input.credential);
+          const session = (yield* inspectInvocation(context, input.credential)).inspection.session;
 
           if (session.subjectId !== caller.subjectId) return yield* SessionInvalid.make({});
 
@@ -2007,7 +2198,7 @@ export const makeSessionModule = <
           yield* checkNoAmbientCommit();
           const caller = yield* requireAssurance(context, management);
           const strategy = yield* SessionStrategy;
-          const session = yield* strategy.verify(input.credential);
+          const session = (yield* inspectInvocation(context, input.credential)).inspection.session;
 
           if (session.subjectId !== caller.subjectId) return yield* SessionInvalid.make({});
           yield* strategy.revokeAll(session);
@@ -2025,15 +2216,14 @@ export const makeSessionModule = <
   return Object.freeze({
     moduleId,
     claims,
-    /** Stateful sessions and authentication completion with portable defaults. */
+    /** Stateful sessions and authentication completion with application crypto and default hooks. */
     layer: (policy: SessionPolicy) =>
-      completionLayer().pipe(
-        Layer.provideMerge(statefulLayer(policy)),
-        Layer.provide([cryptoLayer, hooksLayer]),
-      ),
+      completionLayer().pipe(Layer.provideMerge(statefulLayer(policy)), Layer.provide(hooksLayer)),
     Session,
     CompletionResult,
     SessionStrategy,
+    inspectInvocation,
+    capturedSession,
     SessionStepUp,
     SessionStepUpPersistence,
     stepUpLayer,
@@ -2043,6 +2233,20 @@ export const makeSessionModule = <
     AuthenticationCompletion,
     StatefulSessionPersistence,
     SessionRepository,
+    SessionCleanup,
+    cleanup: Effect.fn("Sessions.cleanup")(function* (input: { readonly limit: CleanupLimit }) {
+      yield* checkNoAmbientCommit();
+
+      const limit = yield* Schema.decodeEffect(CleanupLimit)(input.limit).pipe(
+        Effect.mapError(() => SessionUnavailable.make({})),
+      );
+
+      const maintenance = yield* Effect.serviceOption(SessionCleanup);
+
+      if (Option.isNone(maintenance)) return yield* unsupported("session-cleanup");
+
+      return yield* maintenance.value.cleanup({ limit });
+    }),
     SignedSessionValidity,
     PendingAuthentication,
     statefulLayer,

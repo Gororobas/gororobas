@@ -1,7 +1,7 @@
 import { Context, type Effect } from "effect";
 
 import type { CommitJournal, PreparedCommit } from "../hooks/commit";
-import type { ProofCompletionPlan } from "../proofs/completion";
+import type { ProofRedemptionPlan } from "../proofs/redemption";
 import type { SubjectId } from "../Schema";
 import type {
   PhoneActionAuthorization,
@@ -18,12 +18,12 @@ export interface PhoneMutation {
   readonly commandId: string;
   readonly target: PhoneLifecycleTarget;
   readonly authorization?: PhoneActionAuthorization;
-  readonly completion: ProofCompletionPlan;
+  readonly redemption: ProofRedemptionPlan;
   readonly policy: PhoneLifecyclePolicy;
 }
 
 /** Custody tombstones are permanent. Recycled numbers never create, transfer or
- * merge accounts automatically. Verification/change and continuation consumption
+ * merge accounts automatically. Verification/change and proof redemption
  * share one native owner; a failed protected write cannot consume the proof. */
 export class PhonePersistence extends Context.Service<
   PhonePersistence,

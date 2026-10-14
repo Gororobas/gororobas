@@ -27,6 +27,7 @@
     "@types/react-dom": "catalog:",
     "electron": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }

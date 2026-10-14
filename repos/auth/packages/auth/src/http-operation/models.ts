@@ -5,13 +5,11 @@ import type { OperationHttpError } from "./errors";
 
 export const credentialSlots = [
   "session",
+  "session-cache",
   "pending-proof",
-  "proof-continuation",
   "registration",
   "request-binding",
   "session-step-up",
-  "password-intent",
-  "connected-intent",
 ] as const;
 
 export type HttpCredentials = Readonly<Partial<Record<CredentialSlot, Redacted.Redacted<string>>>>;

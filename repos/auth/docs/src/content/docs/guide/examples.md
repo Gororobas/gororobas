@@ -32,6 +32,13 @@ Open the URL printed by the server. The apps use ports 4181–4184 in table orde
 and keep separate local data across restarts. Their READMEs describe environment
 variables, database migrations, and data resets.
 
+The Effect SQL app also includes an
+[OAuth account-settings journey](https://github.com/yielded-dev/auth/tree/main/examples/persistence-sql#oauth-account-settings)
+with sign-in, linked login identities, provider callbacks and unlink. Run
+`vp -C examples/persistence-sql run start:oauth` with a GitHub OAuth App configured
+as its README describes. The screen consumes the public
+`listLinkedAccounts` query through Effect Atom; provider API grants are separate.
+
 ## Authentication methods
 
 | Source                                                                                                  | Integration                                   |

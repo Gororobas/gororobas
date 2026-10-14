@@ -44,24 +44,10 @@ export class SubjectSnapshot extends Schema.Class<SubjectSnapshot>("effect-auth/
   status: Schema.Literals(["active", "disabled", "deleting"]),
 }) {}
 
-/** Consumer-owned reconciliation key; not a token that grants authentication. */
-export const RecoveryReference = Schema.NonEmptyString.pipe(
-  Schema.brand("effect-auth/RecoveryReference"),
-);
-
 export class SubjectProvisioned extends Schema.TaggedClass<SubjectProvisioned>()(
   "SubjectProvisioned",
   { subjectId: SubjectId },
 ) {}
-
-/** No session may be issued until the consumer resolves this outcome. */
-export class ProvisioningPending extends Schema.TaggedClass<ProvisioningPending>()(
-  "ProvisioningPending",
-  { recoveryReference: RecoveryReference },
-) {}
-
-export const ProvisioningResult = Schema.Union([SubjectProvisioned, ProvisioningPending]);
-export type ProvisioningResult = typeof ProvisioningResult.Type;
 
 /** Expected identity failures contain no identifier value or database diagnostics. */
 export class IdentityConflict extends Schema.TaggedError<IdentityConflict>()(

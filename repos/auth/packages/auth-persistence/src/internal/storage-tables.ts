@@ -1,16 +1,19 @@
 import { Schema } from "effect";
 
-export const StorageColumn = Schema.Struct({
-  name: Schema.NonEmptyString,
-  type: Schema.Literals(["text", "integer", "boolean"]),
-  nullable: Schema.optionalKey(Schema.Boolean),
-});
-
 export const StorageTable = Schema.Struct({
   name: Schema.NonEmptyString,
   schema: Schema.optionalKey(Schema.NonEmptyString),
-  columns: Schema.Record(Schema.String, StorageColumn),
+  columns: Schema.Record(
+    Schema.String,
+    Schema.Struct({
+      name: Schema.NonEmptyString,
+      type: Schema.Literals(["text", "integer", "boolean"]),
+      nullable: Schema.optionalKey(Schema.Boolean),
+    }),
+  ),
   unique: Schema.Array(Schema.Array(Schema.String)),
+  /** Non-unique access paths for migration tooling, not acquisition requirements. */
+  indexes: Schema.optionalKey(Schema.Array(Schema.Array(Schema.String))),
 });
 
 export type StorageTable = typeof StorageTable.Type;
@@ -21,10 +24,32 @@ const boolean = { type: "boolean" as const };
 const optionalText = { ...text, nullable: true };
 const optionalInteger = { ...integer, nullable: true };
 
-const spec = <C extends Readonly<Record<string, Omit<typeof StorageColumn.Type, "name">>>>(
+const spec = <C extends Readonly<Record<string, Omit<StorageTable["columns"][string], "name">>>>(
   columns: C,
   unique: ReadonlyArray<ReadonlyArray<Extract<keyof C, string>>>,
-) => ({ columns, unique });
+  indexes: ReadonlyArray<ReadonlyArray<Extract<keyof C, string>>> = [],
+) => ({ columns, unique, indexes });
+
+const oauthFlow = spec(
+  {
+    moduleId: text,
+    flowId: text,
+    purpose: text,
+    generation: integer,
+    provider: text,
+    callbackId: text,
+    issuer: text,
+    responseIssuerMode: text,
+    subjectId: optionalText,
+    stateDigest: text,
+    binderVerifier: text,
+    binderExpiresAt: integer,
+    snapshot: text,
+    issuedAt: integer,
+    expiresAt: integer,
+  },
+  [["moduleId", "flowId"], ["stateDigest"]],
+);
 
 /** Logical roles are independent of table names and migration ownership. */
 export const storageTables = {
@@ -33,16 +58,21 @@ export const storageTables = {
     {
       namespace: text,
       value: text,
+      moduleId: optionalText,
+      credentialId: optionalText,
       subjectId: text,
       revision: text,
       verifiedAt: optionalInteger,
       active: boolean,
     },
     [["namespace", "value"]],
+    [["subjectId", "namespace", "value"]],
   ),
-  credentials: spec({ credentialId: text, subjectId: text, revision: text, active: boolean }, [
-    ["credentialId"],
-  ]),
+  credentials: spec(
+    { credentialId: text, subjectId: text, revision: text, active: boolean },
+    [["credentialId"]],
+    [["subjectId", "active", "credentialId"]],
+  ),
   passwords: spec(
     {
       moduleId: text,
@@ -58,53 +88,6 @@ export const storageTables = {
       ["moduleId", "credentialId"],
     ],
   ),
-  passwordAttempts: spec(
-    {
-      moduleId: text,
-      action: text,
-      attemptId: text,
-      identifierNamespace: text,
-      identifierValue: text,
-      subjectId: optionalText,
-      credentialId: optionalText,
-      securityRevision: optionalText,
-      credentialRevision: optionalText,
-      verifierVersion: optionalText,
-      identifierBindingRevision: optionalText,
-      admittedAt: integer,
-      deadline: integer,
-      retentionUntil: integer,
-      state: text,
-    },
-    [["moduleId", "attemptId"]],
-  ),
-  passwordScopes: spec({ moduleId: text, action: text, scopeKind: text, scopeKey: text }, [
-    ["moduleId", "action", "scopeKind", "scopeKey"],
-  ]),
-  passwordCharges: spec(
-    {
-      moduleId: text,
-      action: text,
-      scopeKind: text,
-      scopeKey: text,
-      attemptId: text,
-      occurredAt: integer,
-      retentionUntil: integer,
-    },
-    [["moduleId", "action", "scopeKind", "scopeKey", "attemptId"]],
-  ),
-  passwordCommands: spec(
-    {
-      moduleId: text,
-      commandId: text,
-      action: text,
-      bindingDigest: text,
-      decision: text,
-      retentionUntil: integer,
-    },
-    [["moduleId", "commandId"]],
-  ),
-  passwordRegistrations: spec({ moduleId: text, requestId: text }, [["moduleId", "requestId"]]),
   emailCredentials: spec(
     {
       moduleId: text,
@@ -120,11 +103,6 @@ export const storageTables = {
       ["moduleId", "identifierNamespace", "identifierValue"],
     ],
   ),
-  emailCommands: spec(
-    { moduleId: text, commandId: text, action: text, bindingDigest: text, retentionUntil: integer },
-    [["moduleId", "commandId"]],
-  ),
-  phoneState: spec({ scope: text, state: text, version: text }, [["scope"]]),
   passkeyCredentials: spec(
     {
       credentialId: text,
@@ -132,7 +110,6 @@ export const storageTables = {
       rpId: text,
       protocolCredentialId: text,
       credentialKey: text,
-      handleKey: text,
       userHandle: text,
       publicKey: text,
       algorithm: integer,
@@ -144,224 +121,103 @@ export const storageTables = {
       backupEligible: boolean,
       backupState: boolean,
       counter: integer,
-      maximumCounter: integer,
       name: text,
       createdAt: integer,
       lastUsedAt: optionalInteger,
     },
     [["credentialId"], ["credentialKey"]],
   ),
-  passkeyOwnership: spec(
-    {
-      credentialKey: text,
-      rpId: text,
-      protocolCredentialId: text,
-      subjectId: optionalText,
-      credentialId: optionalText,
-      state: text,
-      version: text,
-      reservationId: optionalText,
-    },
-    [["credentialKey"]],
-  ),
-  passkeyHandles: spec(
-    {
-      handleKey: text,
-      rpId: text,
-      userHandle: text,
-      subjectId: optionalText,
-      state: text,
-      version: text,
-      reservationId: optionalText,
-    },
-    [["handleKey"], ["rpId", "subjectId"]],
-  ),
-  passkeyModules: spec(
-    {
-      moduleId: text,
-      active: boolean,
-      policyRevision: text,
-      policy: text,
-    },
-    [["moduleId"]],
-  ),
   passkeyFlows: spec(
     {
       moduleId: text,
       flowId: text,
-      commandId: text,
       purpose: text,
-      state: text,
-      version: text,
-      generation: integer,
       snapshot: text,
-      policySnapshot: text,
       requestBindingVerifier: text,
       requestBindingExpiresAt: integer,
       issuedAt: integer,
       expiresAt: integer,
-      retentionUntil: integer,
+    },
+    [["moduleId", "flowId"]],
+  ),
+  oauthIdentities: spec(
+    { identityKey: text, provider: text, issuer: text, externalSubject: text, subjectId: text },
+    [["identityKey"]],
+  ),
+  oauthCredentials: spec(
+    {
+      moduleId: text,
+      credentialId: text,
+      subjectId: text,
+      identityKey: text,
+      credentialRevision: text,
+      active: boolean,
+    },
+    [["credentialId"], ["identityKey"]],
+  ),
+  oauthSignInFlows: oauthFlow,
+  oauthConnectedFlows: oauthFlow,
+  oauthConnectedGrants: spec(
+    {
+      moduleId: text,
+      grantId: text,
+      subjectId: text,
+      identityKey: text,
+      profileKey: text,
+      grantVersion: text,
+      tokenVersion: text,
+      state: text,
+      snapshot: text,
+      summary: text,
+      refreshClaimId: optionalText,
+      refreshNextTokenVersion: optionalText,
+      refreshClaimedAt: optionalInteger,
+      refreshClaimExpiresAt: optionalInteger,
+      expiresAt: integer,
+    },
+    [
+      ["moduleId", "grantId"],
+      ["moduleId", "subjectId", "profileKey", "identityKey"],
+    ],
+  ),
+  oauthConnectedRevocations: spec(
+    {
+      jobId: text,
+      moduleId: text,
+      subjectId: text,
+      identityKey: text,
+      snapshot: text,
+      state: text,
       claimId: optionalText,
       claimedAt: optionalInteger,
       claimExpiresAt: optionalInteger,
-      credentialSnapshot: optionalText,
-      subjectScope: optionalText,
-      targetScope: optionalText,
-    },
-    [
-      ["moduleId", "flowId"],
-      ["moduleId", "commandId"],
-    ],
-  ),
-  passkeyAdmissions: spec(
-    {
-      authorityScope: text,
-      moduleId: text,
-      version: text,
-      ownerMarker: text,
-      admittedAt: optionalInteger,
-    },
-    [["authorityScope", "moduleId"]],
-  ),
-  passkeyCharges: spec(
-    {
-      moduleId: text,
-      flowId: text,
-      purpose: text,
-      kind: text,
-      scope: text,
-      originalWindowMillis: integer,
-      admittedAt: optionalInteger,
-      retainUntil: optionalInteger,
-      version: text,
-      ownerMarker: text,
-    },
-    [["moduleId", "flowId", "kind"]],
-  ),
-  passkeyCommands: spec(
-    {
-      moduleId: text,
-      commandId: text,
-      subjectId: text,
-      credentialId: text,
-      intent: text,
-      decision: text,
       retentionUntil: integer,
-      version: text,
     },
-    [["moduleId", "commandId"]],
+    [["jobId"]],
   ),
-  proofRequests: spec(
-    {
-      moduleId: text,
-      requestId: text,
-      fingerprint: text,
-      proofId: text,
-      purpose: text,
-      keyId: text,
-      createdAt: integer,
-      retentionUntil: integer,
-      receipt: text,
-    },
-    [["moduleId", "requestId"]],
-  ),
-  proofSeries: spec(
+  proofs: spec(
     {
       moduleId: text,
       purpose: text,
-      scopeKey: text,
-      activeProofId: optionalText,
-      lastIssueAt: optionalInteger,
-      version: text,
-    },
-    [["moduleId", "purpose", "scopeKey"]],
-  ),
-  proofGenerations: spec(
-    {
-      moduleId: text,
-      purpose: text,
-      proofId: text,
-      requestId: text,
       seriesKey: text,
-      deliveryId: text,
+      proofId: text,
       binding: text,
       verifierKeyId: text,
       verifierDigest: text,
       issuedAt: integer,
       expiresAt: integer,
-      version: text,
-      state: text,
-      sendCount: integer,
-      deliveryState: text,
-      claimVersion: optionalText,
-      claimDeadline: optionalInteger,
-      retryAt: optionalInteger,
-      deliveryRetryMillis: integer,
-      retentionUntil: integer,
-      fingerprint: text,
+      failedAttempts: integer,
     },
     [
+      ["moduleId", "purpose", "seriesKey"],
       ["moduleId", "proofId"],
-      ["moduleId", "deliveryId"],
     ],
-  ),
-  proofContinuations: spec(
-    {
-      moduleId: text,
-      purpose: text,
-      continuationId: text,
-      digest: text,
-      proofId: text,
-      seriesKey: text,
-      binding: text,
-      expiresAt: integer,
-      consumed: boolean,
-      version: text,
-      retentionUntil: integer,
-    },
-    [
-      ["moduleId", "continuationId"],
-      ["moduleId", "digest"],
-    ],
-  ),
-  proofScopes: spec(
-    { moduleId: text, purpose: text, action: text, scopeKind: text, scopeKey: text },
-    [["moduleId", "purpose", "action", "scopeKind", "scopeKey"]],
-  ),
-  proofAbuse: spec(
-    {
-      moduleId: text,
-      purpose: text,
-      action: text,
-      scopeKind: text,
-      scopeKey: text,
-      commandId: text,
-      occurredAt: integer,
-      retentionUntil: integer,
-    },
-    [["moduleId", "action", "scopeKind", "scopeKey", "commandId"]],
-  ),
-  proofFailures: spec(
-    {
-      moduleId: text,
-      purpose: text,
-      seriesKey: text,
-      commandId: text,
-      occurredAt: integer,
-      retentionUntil: integer,
-    },
-    [["moduleId", "seriesKey", "commandId"]],
-  ),
-  proofCommands: spec(
-    { moduleId: text, commandId: text, kind: text, decision: text, retentionUntil: integer },
-    [["moduleId", "commandId"]],
   ),
   sessions: spec(
     {
       sessionId: text,
       subjectId: text,
       digest: text,
-      version: text,
       securityRevision: text,
       issuedAt: integer,
       expiresAt: integer,
@@ -369,16 +225,25 @@ export const storageTables = {
       record: text,
     },
     [["sessionId"], ["digest"]],
+    [["subjectId", "securityRevision", "sessionId"]],
   ),
-  sessionFlows: spec(
+  pending: spec(
     {
+      moduleId: text,
+      kind: text,
+      digest: text,
+      version: text,
       flowId: text,
       subjectId: text,
-      state: text,
-      pendingDigest: optionalText,
-      dedupUntil: integer,
+      bindingDigest: text,
+      snapshot: text,
+      expiresAt: integer,
+      attemptLimit: integer,
+      failedAttempts: integer,
+      consumed: boolean,
     },
-    [["flowId"]],
+    [["digest"]],
+    [["moduleId", "expiresAt", "digest"]],
   ),
 } as const;
 
@@ -404,5 +269,6 @@ export const tableDefinition = (
       ]),
     ),
     unique: table.unique,
+    indexes: table.indexes,
   };
 };

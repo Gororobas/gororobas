@@ -23,10 +23,6 @@ export const PasskeyInstant = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: 8640000000000000 }),
 );
 
-export const PasskeyGeneration = Schema.Int.check(
-  Schema.isBetween({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
-);
-
 export const PasskeyCounter = Schema.Int.check(
   Schema.isBetween({ minimum: 0, maximum: 0xffffffff }),
 );
@@ -66,7 +62,6 @@ export const PasskeyRpId = Schema.String.check(
 
 export const PasskeyProfile = Schema.Struct({
   profileId: PasskeyProfileId,
-  generation: PasskeyGeneration,
   rpId: PasskeyRpId,
   rpName: PasskeyLabel,
   origins: Schema.NonEmptyArray(Schema.NonEmptyString.check(Schema.isMaxLength(2048))).check(
@@ -154,6 +149,8 @@ export const PasskeyEvidence = Schema.Struct({
 });
 
 export const PasskeyCredential = Schema.Struct({
+  /** Current policy from the same authoritative read as the revision vector. */
+  requirement: AuthenticationRequirement,
   credentialId: PasskeyCredentialId,
   rpId: PasskeyRpId,
   protocolCredentialId: PasskeyProtocolCredentialId,
@@ -168,7 +165,6 @@ export const PasskeyCredential = Schema.Struct({
   backupEligible: Schema.Boolean,
   backupState: Schema.Boolean,
   counter: PasskeyCounter,
-  maximumCounter: PasskeyCounter,
 });
 
 export type PasskeyCredential = typeof PasskeyCredential.Type;
@@ -206,7 +202,7 @@ export type PasskeyEnrollmentSnapshot = typeof PasskeyEnrollmentSnapshot.Type;
 
 export const PasskeyActionChallenge = Schema.Struct({
   moduleId: PasskeyModuleId,
-  action: Schema.Literals(["enroll-begin", "enroll-complete", "remove"]),
+  action: Schema.Literals(["enroll-begin", "remove"]),
   commandId: PasskeyCommandId,
   flowId: RequestBindingFlowId,
   revision: PasskeyRevision,
@@ -257,7 +253,6 @@ export type PasskeyPurpose = typeof PasskeyPurpose.Type;
 
 export const PasskeyCeremony = Schema.Struct({
   moduleId: PasskeyModuleId,
-  generation: PasskeyGeneration,
   flowId: RequestBindingFlowId,
   commandId: PasskeyCommandId,
   purpose: PasskeyPurpose,
@@ -267,8 +262,6 @@ export const PasskeyCeremony = Schema.Struct({
   requestBindingExpiresAtMillis: PasskeyInstant,
   issuedAtMillis: PasskeyInstant,
   expiresAtMillis: PasskeyInstant,
-  retentionUntilMillis: PasskeyInstant,
-  claimLifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 120000 })),
   allowedCredentials: Schema.Array(PasskeyDescriptor).check(Schema.isMaxLength(64)),
   context: PasskeyContext,
 });
@@ -277,24 +270,13 @@ export type PasskeyCeremony = typeof PasskeyCeremony.Type;
 
 export const PasskeyAccess = Schema.Struct({
   moduleId: PasskeyModuleId,
-  generation: PasskeyGeneration,
   purpose: PasskeyPurpose,
   flowId: RequestBindingFlowId,
   requestBindingVerifier: TokenDigest.check(Schema.isMaxLength(256)),
   requestBindingExpiresAtMillis: PasskeyInstant,
-  nowMillis: PasskeyInstant,
 });
 
 export type PasskeyAccess = typeof PasskeyAccess.Type;
-
-export const PasskeyClaim = Schema.Struct({
-  ceremony: PasskeyCeremony,
-  claimId: PasskeyChallenge,
-  claimedAtMillis: PasskeyInstant,
-  claimExpiresAtMillis: PasskeyInstant,
-});
-
-export type PasskeyClaim = typeof PasskeyClaim.Type;
 
 export const PasskeyRegistrationVerified = Schema.Struct({
   protocolCredentialId: PasskeyProtocolCredentialId,
@@ -326,14 +308,8 @@ export const PasskeyIssueDecision = Schema.Union([
 
 export type PasskeyIssueDecision = typeof PasskeyIssueDecision.Type;
 
-export const PasskeyClaimDecision = Schema.Union([
-  Schema.TaggedStruct("Claimed", { claim: PasskeyClaim }),
-  Schema.TaggedStruct("Rejected", {}),
-]);
-
-export type PasskeyClaimDecision = typeof PasskeyClaimDecision.Type;
-export const PasskeySettlement = Schema.Literals(["Verified", "Rejected", "Ambiguous"]);
-export type PasskeySettlement = typeof PasskeySettlement.Type;
+export const PasskeyConsumeDecision = Schema.Literals(["Verified", "Rejected"]);
+export type PasskeyConsumeDecision = typeof PasskeyConsumeDecision.Type;
 
 export const PasskeyBegin = Schema.Struct({
   flowId: RequestBindingFlowId,
@@ -388,27 +364,15 @@ export const PasskeyRegistrationStarted = Schema.Struct({
 
 export type PasskeyRegistrationStarted = typeof PasskeyRegistrationStarted.Type;
 
-export const PasskeyCleanupResult = Schema.Struct({
-  terminalized: Schema.Natural,
-  removed: Schema.Natural,
-  hasMore: Schema.Boolean,
-});
-
-export type PasskeyCleanupResult = typeof PasskeyCleanupResult.Type;
-
 export const PasskeyEnrolled = Schema.Struct({
   credential: PasskeyCredentialSummary,
 });
 
 export const PasskeyRemoved = Schema.Struct({
   credentialId: PasskeyCredentialId,
-  replayed: Schema.Boolean,
   invalidation: SessionInvalidationWindow,
 });
 
-export const PasskeyRegistrationResult = Schema.Union([
-  Schema.TaggedStruct("RegistrationAccepted", {}),
-  Schema.TaggedStruct("ProvisioningPending", { reference: PasskeyCommandId }),
-]);
+export const PasskeyRegistrationResult = Schema.TaggedStruct("RegistrationAccepted", {});
 
 export type PasskeyRegistrationResult = typeof PasskeyRegistrationResult.Type;

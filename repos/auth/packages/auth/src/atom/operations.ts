@@ -45,6 +45,7 @@ export const query = <Route extends AnyRoute, RuntimeError>(
     route.operation.reveals.length > 0 ||
     route.operation.replay !== "read-only"
   ) {
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous atom construction rejects incompatible route declarations.
     throw OperationHttpConfigurationError.make({ reason: "route" });
   }
 

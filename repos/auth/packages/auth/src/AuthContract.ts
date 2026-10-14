@@ -13,6 +13,12 @@ export {
 } from "./operations/actions";
 
 export { signIn as passwordSignIn } from "./password/methods/contracts";
-export { signIn as oauthSignIn, completeSignIn as oauthCompleteSignIn } from "./oauth/contracts";
+
+export {
+  signIn as oauthSignIn,
+  completeSignIn as oauthCompleteSignIn,
+  register as oauthRegister,
+  listLinkedAccounts as oauthListLinkedAccounts,
+} from "./oauth/contracts";
 
 export { httpGroup } from "./http/auth-contract";

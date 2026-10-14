@@ -22,10 +22,8 @@ export const DeliveryLive = Layer.unwrap(
       Config.withDefault("hello@effect-agent.com"),
     );
 
-    yield* Schema.decodeUnknownEffect(Schema.String.check(Schema.isPattern(/^[a-f0-9]{32}$/)))(
-      accountId,
-    );
-    const sender = yield* Schema.decodeUnknownEffect(AuthSchema.Email)(from);
+    yield* Schema.decodeEffect(Schema.String.check(Schema.isPattern(/^[a-f0-9]{32}$/)))(accountId);
+    const sender = yield* Schema.decodeEffect(AuthSchema.Email)(from);
     const client = yield* HttpClient.HttpClient;
 
     const send = Effect.fn("Customers.sendEmail")(function* (

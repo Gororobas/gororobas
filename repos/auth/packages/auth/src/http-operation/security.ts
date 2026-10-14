@@ -3,14 +3,14 @@ import { Cookies } from "effect/http";
 
 import { origin } from "../internal/origin";
 import type { CredentialSlot } from "../operations/credentials";
+import { SessionCacheGeneration } from "../sessions/cookieCache";
 import { OperationHttpError } from "./errors";
 import { credentialSlots } from "./models";
 import { OperationHttpServerConfig } from "./OperationHttpServerConfig";
+import { generationCookieConfiguration, optionalCookie } from "./session-cache-cookie";
 
 /** Browser mutation admission is independent of body encoding. */
-export const mutationSecurity = Effect.fn("OperationHttp.mutationSecurity")(function* (
-  request: Request,
-) {
+export const mutationSecurity = Effect.fnUntraced(function* (request: Request) {
   const config = yield* OperationHttpServerConfig;
   const requestOrigin = request.headers.get("origin");
 
@@ -24,7 +24,7 @@ export const mutationSecurity = Effect.fn("OperationHttp.mutationSecurity")(func
     return yield* OperationHttpError.make({ reason: "csrf" });
 });
 
-export const requestSecurity = Effect.fn("OperationHttp.requestSecurity")(function* (
+export const requestSecurity = Effect.fnUntraced(function* (
   request: Request,
   kind: "operation" | "callback" | "read" | "request",
 ) {
@@ -63,17 +63,35 @@ export const requestSecurity = Effect.fn("OperationHttp.requestSecurity")(functi
   const rawCookie = request.headers.get("cookie") ?? "";
 
   if (rawCookie.length > 65536) return yield* OperationHttpError.make({ reason: "too-large" });
-  const parsed = Cookies.parseHeader(rawCookie);
+  const parts = rawCookie.split(";");
+  const cacheName = config.cookies["session-cache"].name;
+  const generationName = generationCookieConfiguration(config.cookies["session-cache"]).name;
+
+  const cookieParts = new Map<string, string | undefined>();
+  const authoritativeParts: string[] = [];
+
+  for (const part of parts) {
+    const name = part.trim().split("=", 1)[0];
+
+    // Undefined records ambiguity without retaining duplicate credential values.
+    cookieParts.set(name, cookieParts.has(name) ? undefined : part);
+    if (name !== cacheName && name !== generationName) authoritativeParts.push(part);
+  }
+
+  const parsed = Cookies.parseHeader(authoritativeParts.join(";"));
   const credentials: Partial<Record<CredentialSlot, Redacted.Redacted<string>>> = {};
 
   for (const slot of credentialSlots) {
     const configured = config.cookies[slot];
 
-    const cookies = rawCookie
-      .split(";")
-      .filter((part) => part.trim().split("=", 1)[0] === configured.name);
+    if (slot === "session-cache") {
+      const value = native ? undefined : optionalCookie(cookieParts.get(cacheName), cacheName);
 
-    if (cookies.length > 1) return yield* OperationHttpError.make({ reason: "credentials" });
+      if (value !== undefined) credentials[slot] = Redacted.make(value);
+      continue;
+    }
+    if (cookieParts.has(configured.name) && cookieParts.get(configured.name) === undefined)
+      return yield* OperationHttpError.make({ reason: "credentials" });
 
     const header =
       config.native === undefined ? null : request.headers.get(config.native.requestHeaders[slot]);
@@ -89,5 +107,17 @@ export const requestSecurity = Effect.fn("OperationHttp.requestSecurity")(functi
     }
   }
 
-  return { native, credentials: Object.freeze(credentials), publicOrigin, requestOrigin };
+  const generation = native
+    ? undefined
+    : optionalCookie(cookieParts.get(generationName), generationName);
+
+  return {
+    native,
+    credentials: Object.freeze(credentials),
+    publicOrigin,
+    requestOrigin,
+    ...(Schema.is(SessionCacheGeneration)(generation)
+      ? { sessionCacheGeneration: Redacted.make(generation) }
+      : {}),
+  };
 });

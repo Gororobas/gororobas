@@ -2,11 +2,11 @@ import { Schema } from "effect";
 
 import { HookDenied } from "../hooks/models";
 import { makeOperation, operationGroup } from "../operations/operation";
-import { TokenDigest } from "../Schema";
 import { SessionConfigurationError, SessionError, SessionSignOutUnavailable } from "./errors";
 import { SessionInvalidationWindow } from "./invalidation";
 import {
   AuthenticationEvidence,
+  AuthenticationRequirement,
   SessionCapabilities,
   SessionId,
   SessionMetadata,
@@ -23,6 +23,7 @@ export const makeSessionContract = <
   claims: Claims,
 ) => {
   if (!Schema.is(Schema.NonEmptyString)(moduleId))
+    // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous session contract construction requires claims.
     throw SessionConfigurationError.make({ reason: "claims" });
 
   const ClaimsCodec: Schema.Codec<
@@ -87,7 +88,11 @@ export const makeSessionContract = <
   });
 
   const Complete = makeOperation(`${moduleId}/session/complete`, {
-    payload: Schema.Struct({ evidence: AuthenticationEvidence, claims: ClaimsCodec }),
+    payload: Schema.Struct({
+      evidence: AuthenticationEvidence,
+      requirement: AuthenticationRequirement,
+      claims: ClaimsCodec,
+    }),
     success: CompletionResult,
     error: Failure,
     access: "system",
@@ -105,7 +110,7 @@ export const makeSessionContract = <
   });
 
   const RejectPending = makeOperation(`${moduleId}/session/reject-pending`, {
-    payload: Schema.Struct({ credential: Credential, bindingDigest: TokenDigest }),
+    payload: Schema.Struct({ credential: Credential }),
     success: Schema.TaggedStruct("Rejected", {}),
     error: Failure,
     access: "system",
@@ -178,7 +183,7 @@ export const makeSessionContract = <
     replay: "non-idempotent",
   });
 
-  const operations = {
+  const operations = Object.freeze({
     Complete,
     CompletePending,
     RejectPending,
@@ -189,7 +194,7 @@ export const makeSessionContract = <
     List,
     Revoke,
     RevokeAll,
-  };
+  });
 
   return Object.freeze({
     moduleId,

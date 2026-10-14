@@ -11,8 +11,6 @@ export const PasswordAttemptPolicy = Schema.Struct({
   identifier: Budget,
   subject: Budget,
   action: Budget,
-  maximumPending: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 1000 })),
-  attemptLifetimeMillis: Schema.Int.check(Schema.isBetween({ minimum: 1000, maximum: 300000 })),
 });
 
 export type PasswordAttemptPolicy = typeof PasswordAttemptPolicy.Type;
@@ -32,8 +30,6 @@ export const defaultPasswordMethodPolicy: PasswordMethodPolicy = Object.freeze({
     identifier: Object.freeze({ limit: 10, windowMillis: 60_000 }),
     subject: Object.freeze({ limit: 10, windowMillis: 60_000 }),
     action: Object.freeze({ limit: 1000, windowMillis: 60_000 }),
-    maximumPending: 10,
-    attemptLifetimeMillis: 60_000,
   }),
 });
 

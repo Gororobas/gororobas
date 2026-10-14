@@ -8,7 +8,10 @@ export default defineConfig({
     target: "node24",
     outDir: "dist",
     dts: false,
-    deps: { alwaysBundle: [/^(?!electron$)/], neverBundle: ["electron"] },
+    deps: {
+      alwaysBundle: [/^(?!electron$)/],
+      neverBundle: ["electron"],
+    },
   },
   base: "./",
   build: { outDir: "dist/renderer", target: "chrome152" },

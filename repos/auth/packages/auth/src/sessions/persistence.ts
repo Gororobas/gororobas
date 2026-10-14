@@ -1,6 +1,7 @@
 import type { DateTime, Effect } from "effect";
 
 import type { PreparedCommit } from "../hooks/commit";
+import type { CleanupLimit, CleanupResult } from "../persistence/cleanup";
 import type { SubjectId, TokenDigest } from "../Schema";
 import type { PrepareSessionCommit } from "./commit";
 import type {
@@ -23,7 +24,6 @@ import type {
 export interface StatefulSessionRecord<Claims> extends SessionMetadata {
   readonly claims: Claims;
   readonly digest: TokenDigest;
-  readonly version: SecurityRevision;
   readonly provenance: SessionAuthenticationProvenance;
   readonly credentialVersion: SessionCredentialVersion;
 }
@@ -32,17 +32,21 @@ export interface StatefulSessionRecord<Claims> extends SessionMetadata {
 export interface StatefulSessionPersistence<Claims> {
   /**
    * Insert only if the subject is active and the SAME revision captured before
-   * credential verification still matches. Duplicate evidence.flowId before absoluteExpiresAt MUST fail SessionConflict.
-   * Interactive owners reject it before prepare. Ordered-batch owners may prepare
-   * a speculative value during a concurrent race, but MUST discard its receipt
-   * and events when the guarded batch loses. Never return an existing row: its digest cannot
+   * credential verification still matches. Each verified credential is consumed by
+   * its own method before issuance; session storage does not deduplicate flows.
+   * Ordered-batch owners discard speculative receipts and events if a guard loses.
+   * Never return an existing row: its digest cannot
    * recover the original bearer and does not match this attempt's new secret. Pending consumption and insertion
    * are one commit. Recheck current factor policy, proof freshness and both expiry
-   * bounds against the clock at the conditional commit. Never replace evidence with a newly read revision.
+   * bounds against the clock at the conditional commit. AuthenticationClock bounds
+   * cross-clock future lead only; accepted future proof ages are zero. Preserve
+   * proof/authentication times and choose issuedAt no earlier than the commit clock,
+   * trusted preparation, accepted proofs or handoff source. Never extend the supplied
+   * expiry bounds or replace evidence with a newly read revision.
    */
   readonly establish: <A>(
     input: {
-      readonly session: Omit<StatefulSessionRecord<Claims>, "sessionId" | "version">;
+      readonly session: Omit<StatefulSessionRecord<Claims>, "sessionId">;
       readonly evidence: AuthenticationEvidence;
       /** Trusted handoff: allocate a distinct session ID and preserve the supplied
        * session.assurance exactly, including authenticatedAt. Still assess current
@@ -62,13 +66,15 @@ export interface StatefulSessionPersistence<Claims> {
     readonly digest: TokenDigest;
     readonly now: DateTime.Utc;
   }) => Effect.Effect<StatefulSessionRecord<Claims>, SessionInvalid | SessionUnavailable>;
-  /** One CAS winner; check live digest/version/revision and both expiry bounds against a fresh clock at the actual commit. Set issuedAt to that clock; preserve authenticatedAt/absoluteExpiresAt and exact private provenance. Rotate credentialVersion from the prepared input independently of the authority-allocated row version. No upsert. */
+  /** One CAS winner: guard the captured owner/session/digest and both live expiry
+   * bounds at the committing clock. Preserve security revision, authenticatedAt,
+   * absolute expiry and private provenance; issuedAt is the latest of the commit
+   * clock, trusted preparation and source issuedAt. Bound cross-clock future lead
+   * with AuthenticationClock, but keep same-clock commit guards and renewal eligibility
+   * strict. Rotate credentialVersion; do not reread before the conditional update or upsert. */
   readonly rotate: <A>(
     input: {
-      readonly sessionId: SessionId;
-      readonly expectedDigest: TokenDigest;
-      readonly expectedVersion: SecurityRevision;
-      readonly expectedSecurityRevision: SecurityRevision;
+      readonly record: StatefulSessionRecord<Claims>;
       readonly nextDigest: TokenDigest;
       readonly nextCredentialVersion: SessionCredentialVersion;
       readonly nextExpiresAt: DateTime.Utc;
@@ -84,10 +90,9 @@ export interface StatefulSessionPersistence<Claims> {
     input: {
       readonly subjectId: SubjectId;
       readonly sessionId: SessionId;
-      readonly expectedSecurityRevision: SecurityRevision;
     },
     prepare: PrepareSessionCommit<void, A>,
-  ) => Effect.Effect<PreparedCommit<A>, StaleAuthentication | SessionUnavailable>;
+  ) => Effect.Effect<PreparedCommit<A>, SessionUnavailable>;
   /** Bump subject security revision in the SAME authority as revocation and establishment. */
   readonly revokeAll: <A>(
     input: {
@@ -121,15 +126,17 @@ export interface SignedSessionValidity {
     session: SessionMetadata,
     now: DateTime.Utc,
   ) => Effect.Effect<void, SessionInvalid | SessionUnavailable>;
+  /** Retain the owner-scoped tombstone through absoluteExpiresAt; never shorten an
+   * existing tombstone. For an uninspected target, this conservative retention bound
+   * includes permitted future lead and can exceed the token's unchanged expiry. */
   readonly revoke: <A>(
     input: {
       readonly subjectId: SubjectId;
       readonly sessionId: SessionId;
       readonly absoluteExpiresAt: DateTime.Utc;
-      readonly expectedSecurityRevision: SecurityRevision;
     },
     prepare: PrepareSessionCommit<void, A>,
-  ) => Effect.Effect<PreparedCommit<A>, StaleAuthentication | SessionUnavailable>;
+  ) => Effect.Effect<PreparedCommit<A>, SessionUnavailable>;
   readonly revokeAll: <A>(
     input: {
       readonly subjectId: SubjectId;
@@ -137,4 +144,13 @@ export interface SignedSessionValidity {
     },
     prepare: PrepareSessionCommit<void, A>,
   ) => Effect.Effect<PreparedCommit<A>, StaleAuthentication | SessionUnavailable>;
+}
+
+/** Bound to exactly one session module. Sweep expired Login/StepUp pending rows and
+ * due assisted-session tombstones with one total limit. The owner samples its own
+ * authoritative clock; hasMore means the limit was reached, not a counted remainder. */
+export interface SessionCleanup {
+  readonly cleanup: (input: {
+    readonly limit: CleanupLimit;
+  }) => Effect.Effect<CleanupResult, SessionUnavailable>;
 }

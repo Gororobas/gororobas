@@ -40,7 +40,7 @@ import type { Context } from "effect";
 import { Cause, DateTime, Effect, Layer, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
-import { captureSimpleWebAuthnProfiles } from "./configuration";
+import { captureSimpleWebAuthnProfiles, validateSimpleWebAuthnProfile } from "./configuration";
 import type { SimpleWebAuthnPasskeyProtocolOptions } from "./models";
 
 type Protocol = Context.Service.Shape<typeof PasskeyProtocol>;
@@ -355,6 +355,9 @@ const checkKey = Effect.fn("simpleWebAuthnPublicKey")(function* (
     const x = yield* decode(byteValue(32, 32), map.get(-2));
     const y = yield* decode(byteValue(32, 32), map.get(-3));
 
+    // Authentication imports the validated key in the SDK's signature check.
+    // Registration with none attestation still needs native key validation here.
+    if (expected !== undefined) return algorithmId;
     jwk = {
       kty: "EC",
       crv: "P-256",
@@ -378,6 +381,7 @@ const checkKey = Effect.fn("simpleWebAuthnPublicKey")(function* (
       exponent % 2 !== 1
     )
       return yield* rejected();
+    if (expected !== undefined) return algorithmId;
     jwk = {
       kty: "RSA",
       alg: "RS256",
@@ -511,7 +515,9 @@ export const makeSimpleWebAuthnPasskeyProtocol = Effect.fn("makeSimpleWebAuthnPa
         const fixed = yield* capture(registrationInput, input),
           ceremony = fixed.ceremony;
 
-        const profile = yield* select(ceremony.profile);
+        const profile = yield* validateSimpleWebAuthnProfile(ceremony.profile).pipe(
+          Effect.mapError(rejected),
+        );
 
         if (
           (ceremony.purpose !== "registration" || ceremony.context._tag !== "Registration") &&
@@ -610,8 +616,12 @@ export const makeSimpleWebAuthnPasskeyProtocol = Effect.fn("makeSimpleWebAuthnPa
           ceremony = fixed.ceremony,
           credential = fixed.credential;
 
-        const profile = yield* select(ceremony.profile),
-          original = yield* select(credential.profile);
+        const profile = yield* validateSimpleWebAuthnProfile(ceremony.profile).pipe(
+            Effect.mapError(rejected),
+          ),
+          original = yield* validateSimpleWebAuthnProfile(credential.profile).pipe(
+            Effect.mapError(rejected),
+          );
 
         const contexts = {
           "sign-in": "SignIn",

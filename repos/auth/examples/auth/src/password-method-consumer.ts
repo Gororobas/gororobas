@@ -9,6 +9,15 @@ import {
 } from "@yielded/auth";
 import { DateTime, Effect, Layer, Option, Redacted, Schema } from "effect";
 
+import {
+  cancelProof,
+  cleanupProofs,
+  copyProofRows,
+  issueProof,
+  redeemProof,
+  type ProofRows,
+} from "../../shared/proof-store";
+
 const Claims = Schema.Struct({ team: Schema.String });
 const budget = { limit: 30, windowMillis: 60_000 };
 
@@ -27,20 +36,13 @@ export const passwordAuth = Auth.make("example/password-auth", {
           identifier: budget,
           subject: budget,
           action: budget,
-          maximumPending: 10,
-          attemptLifetimeMillis: 60_000,
         },
       },
       reset: {
         ...Password.resetLink({ url: "https://example.invalid/reset" }),
         policy: {
           lifetimeMillis: 60_000,
-          continuationLifetimeMillis: 30_000,
           maximumFailedAttempts: 3,
-          maximumDeliveryAttempts: 1,
-          deliveryClaimMillis: 5_000,
-          deliveryRetryMillis: 10_000,
-          requestRetentionMillis: 120_000,
           abuse: {
             issues: budget,
             attempts: budget,
@@ -83,8 +85,7 @@ const requirement: Sessions.AuthenticationRequirement = {
   maximumAgeMillis: 60_000,
 };
 
-const bindingCodec = Schema.fromJsonString(Schema.toCodecJson(Schema.toType(Proofs.ProofBinding)));
-const bindingKey = Schema.encodeSync(bindingCodec);
+const credentialKey = Schema.encodeSync(Schema.fromJsonString(Password.PasswordCredentialSnapshot));
 
 interface Subject {
   id: AuthSchema.SubjectId;
@@ -94,34 +95,14 @@ interface Subject {
   password?: Password.PasswordCredentialSnapshot;
   mfa: boolean;
 }
-interface Proof {
-  record: Proofs.ProofRecord;
-  consumed: boolean;
-  claimed: boolean;
-}
-interface Continuation {
-  input: Proofs.ProofCompletionInput;
-  expires: number;
-  used: boolean;
-}
 interface State {
-  registrations: Set<string>;
   subjects: Map<string, Subject>;
-  attempts: Map<string, { captured?: Password.PasswordCredentialSnapshot; expires: number }>;
-  windows: Map<string, number[]>;
-  requests: Map<string, { fingerprint: string; receipt: Proofs.ProofRequestReceipt }>;
-  proofs: Map<string, Proof>;
-  continuations: Map<string, Continuation>;
+  proofs: ProofRows;
 }
 
 const clone = (state: State): State => ({
-  registrations: new Set(state.registrations),
   subjects: new Map([...state.subjects].map(([id, row]) => [id, { ...row }])),
-  attempts: new Map(state.attempts),
-  windows: new Map([...state.windows].map(([id, times]) => [id, [...times]])),
-  requests: new Map(state.requests),
-  proofs: new Map([...state.proofs].map(([id, row]) => [id, { ...row }])),
-  continuations: new Map([...state.continuations].map(([id, row]) => [id, { ...row }])),
+  proofs: copyProofRows(state.proofs),
 });
 
 /** Disposable sequential process model, not a database adapter or distributed limiter.
@@ -132,13 +113,8 @@ export const makePasswordConsumer = Effect.gen(function* () {
   const hooks = yield* Hooks.LifecycleHooks;
 
   let state: State = {
-    registrations: new Set(),
     subjects: new Map(),
-    attempts: new Map(),
-    windows: new Map(),
-    requests: new Map(),
     proofs: new Map(),
-    continuations: new Map(),
   };
 
   let sequence = 0;
@@ -177,6 +153,7 @@ export const makePasswordConsumer = Effect.gen(function* () {
           credentialId: `password:${row.id}`,
           revision: Sessions.SecurityRevision.make(row.security),
         },
+        { credentialId: "example-factor", revision: Sessions.SecurityRevision.make("1") },
       ],
     },
     credentialId: `password:${row.id}`,
@@ -191,65 +168,35 @@ export const makePasswordConsumer = Effect.gen(function* () {
       : { identifierVerifiedAtMillis: row.password.identifierVerifiedAtMillis }),
   });
 
-  const own = <A>(body: (next: State, journal: Hooks.CommitJournal, now: number) => A) =>
+  const own = <A, E>(
+    body: (s: State, journal: Hooks.CommitJournal, now: number) => Effect.fn.Return<A, E>,
+  ) =>
     Effect.gen(function* () {
       if (yield* Hooks.hasCommitScope) return yield* Password.PasswordUnavailable.make({});
 
-      return yield* Hooks.coordinateCommit(
-        (journal) =>
-          Effect.gen(function* () {
-            const now = DateTime.toEpochMillis(yield* DateTime.now);
+      return yield* Hooks.coordinateCommit((journal) =>
+        Effect.gen(function* () {
+          const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-            return yield* Effect.try({
-              try: () => {
-                const next = clone(state);
-                const value = body(next, journal, now);
+          const next = yield* Effect.try({
+            try: () => clone(state),
+            catch: () => Password.PasswordUnavailable.make({}),
+          });
 
-                state = next;
+          const value = yield* Effect.gen(() => body(next, journal, now)).pipe(
+            Effect.catchDefect(() => Effect.fail(Password.PasswordUnavailable.make({}))),
+          );
 
-                return value;
-              },
-              catch: () => Password.PasswordUnavailable.make({}),
-            });
-          }),
-        { mode: "synchronous" },
+          state = next;
+
+          return value;
+        }),
       ).pipe(
         Effect.map((result) => result.value),
         Effect.mapError(() => Password.PasswordUnavailable.make({})),
         Effect.provideService(Hooks.LifecycleHooks, hooks),
       );
     });
-
-  const charge = (s: State, keys: readonly string[], now: number) => {
-    const windows = keys.map((key) => {
-      const values = (s.windows.get(key) ?? []).filter((at) => at > now - budget.windowMillis);
-
-      s.windows.set(key, values);
-
-      return values;
-    });
-
-    if (windows.some((values) => values.length >= budget.limit)) return false;
-    for (const values of windows) values.push(now);
-
-    return true;
-  };
-
-  const validContinuation = (s: State, input: Proofs.ProofCompletionInput, now: number) => {
-    const row = s.continuations.get(input.continuationId);
-
-    return (
-      row !== undefined &&
-      !row.used &&
-      row.expires > now &&
-      row.input.moduleId === input.moduleId &&
-      row.input.purpose === input.purpose &&
-      row.input.continuationDigest === input.continuationDigest &&
-      bindingKey(row.input.binding) === bindingKey(input.binding) &&
-      input.binding._tag !== "Identifier" &&
-      current(s, input.binding.revision)
-    );
-  };
 
   const mutationAllowed = (s: State, input: Password.PasswordMutationInput, now: number) => {
     const row = find(s, input.expectedRevision.subjectId);
@@ -275,81 +222,51 @@ export const makePasswordConsumer = Effect.gen(function* () {
     );
   };
 
-  const replace = (s: State, input: Password.PasswordMutationInput) => {
+  const replace = Effect.fnUntraced(function* (s: State, input: Password.PasswordMutationInput) {
     const row = find(s, input.expectedRevision.subjectId);
 
-    if (!row) throw Password.PasswordUnavailable.make({});
+    if (!row) return yield* Password.PasswordUnavailable.make({});
     row.security = String(Number(row.security) + 1);
     row.password = snapshot(row, input.replacement);
-  };
+  });
 
   const store = Password.PasswordPersistence.of({
-    admitAttempt: (input, prepare) =>
-      own((s, journal, now) => {
-        const row = s.subjects.get(input.identifier.value);
+    findCredential: (input) =>
+      Effect.gen(function* () {
+        if (yield* Hooks.hasCommitScope) return yield* Password.PasswordUnavailable.make({});
+        if (input.moduleId !== "example/password")
+          return yield* Password.PasswordUnavailable.make({});
+        const row = state.subjects.get(input.identifier.value);
 
-        const allowed = charge(
-          s,
-          [
-            `attempt:action:${input.action}`,
-            `attempt:identifier:${input.identifier.value}`,
-            ...(row ? [`attempt:subject:${row.id}`] : []),
-          ],
-          now,
-        );
+        const candidate =
+          row?.identifier.namespace === input.identifier.namespace &&
+          (input.subjectId === undefined || row.id === input.subjectId)
+            ? row.password
+            : undefined;
+
+        return candidate === undefined
+          ? Option.none()
+          : Option.some(yield* Password.snapshotPasswordCredential(candidate));
+      }),
+    rehashIfCurrent: (input) =>
+      own(function* (s, journal) {
+        const row = find(s, input.credential.revision.subjectId);
 
         if (
-          !allowed ||
-          [...s.attempts.values()].filter((a) => a.expires > now).length >=
-            input.policy.maximumPending
+          row?.password !== undefined &&
+          credentialKey(row.password) === credentialKey(input.credential)
         )
-          return prepare({ _tag: "Denied" }, journal);
-        const attemptId = Password.PasswordAttemptId.make(String(++sequence));
+          row.password = {
+            ...row.password,
+            verifier: input.nextVerifier,
+            verifierVersion: Sessions.SecurityRevision.make(String(++sequence)),
+          };
 
-        const captured =
-          input.subjectId === undefined || row?.id === input.subjectId ? row?.password : undefined;
-
-        s.attempts.set(attemptId, {
-          ...(captured === undefined ? {} : { captured }),
-          expires: now + input.policy.attemptLifetimeMillis,
-        });
-
-        return prepare(
-          { _tag: "Admitted", attemptId, ...(captured ? { credential: captured } : {}) },
-          journal,
-        );
-      }),
-    settleAttempt: (input, prepare) =>
-      own((s, journal, now) => {
-        const admission = s.attempts.get(input.attemptId);
-
-        s.attempts.delete(input.attemptId);
-
-        const valid =
-          input.outcome === "verified" &&
-          admission !== undefined &&
-          admission.expires > now &&
-          input.captured !== undefined &&
-          admission.captured?.credentialId === input.captured.credentialId &&
-          current(s, input.captured.revision);
-
-        if (valid && input.rehash) {
-          const row = find(s, input.captured!.revision.subjectId);
-
-          if (
-            row?.password &&
-            row.password.verifierVersion === input.rehash.expectedVersion &&
-            Redacted.value(row.password.verifier) === Redacted.value(input.rehash.expectedVerifier)
-          )
-            row.password = {
-              ...row.password,
-              verifier: input.rehash.nextVerifier,
-              verifierVersion: Sessions.SecurityRevision.make(String(++sequence)),
-            };
-        }
-
-        return prepare(valid ? "verified" : "rejected", journal);
-      }),
+        return journal.prepare(undefined);
+      }).pipe(
+        Effect.flatMap((receipt) => receipt.read),
+        Effect.mapError(() => Password.PasswordUnavailable.make({})),
+      ),
     readForSubject: (input) =>
       Effect.sync(() => Option.fromUndefinedOr(find(state, input.subjectId)?.password)),
     recoveryTarget: (input) =>
@@ -361,18 +278,18 @@ export const makePasswordConsumer = Effect.gen(function* () {
         );
       }),
     addIfAbsent: (input, prepare) =>
-      own((s, journal, now) => {
+      own(function* (s, journal, now) {
         const valid =
           !find(s, input.expectedRevision.subjectId)?.password && mutationAllowed(s, input, now);
 
         const result = prepare(valid ? "changed" : "rejected", journal);
 
-        if (valid) replace(s, input);
+        if (valid) yield* replace(s, input);
 
         return result;
       }),
     replaceIfCurrent: (input, prepare) =>
-      own((s, journal, now) => {
+      own(function* (s, journal, now) {
         const valid =
           input.credential !== undefined &&
           find(s, input.expectedRevision.subjectId)?.password?.credentialRevision ===
@@ -381,186 +298,48 @@ export const makePasswordConsumer = Effect.gen(function* () {
 
         const result = prepare(valid ? "changed" : "rejected", journal);
 
-        if (valid) replace(s, input);
+        if (valid) yield* replace(s, input);
 
         return result;
       }),
-    checkReset: (input) =>
-      DateTime.now.pipe(
-        Effect.map((now) => validContinuation(state, input, DateTime.toEpochMillis(now))),
-      ),
     resetWithProof: (input, prepare) =>
-      own((s, journal, now) => {
+      own(function* (s, journal, now) {
         const valid =
-          validContinuation(s, input.completion.input, now) && mutationAllowed(s, input, now);
+          mutationAllowed(s, input, now) &&
+          input.redemption.input.binding._tag !== "Identifier" &&
+          current(s, input.redemption.input.binding.revision) &&
+          redeemProof(s.proofs, input.redemption.input, now) === "redeemed";
 
         // BOTH preparations occur before the same copied state is published.
-        input.completion.prepare(valid ? "completed" : "rejected", journal, (decision) => decision);
+        input.redemption.prepare(valid ? "redeemed" : "rejected", journal, (decision) => decision);
         const result = prepare(valid ? "changed" : "rejected", journal);
 
         if (valid) {
-          s.continuations.get(input.completion.input.continuationId)!.used = true;
-          replace(s, input);
+          yield* replace(s, input);
         }
 
         return result;
-      }),
-    cleanupAttempts: (input, prepare) =>
-      own((s, journal, now) => {
-        const expired = [...s.attempts].filter(([, row]) => row.expires <= now);
-
-        for (const [id] of expired.slice(0, input.limit)) s.attempts.delete(id);
-
-        return prepare(
-          { removed: Math.min(expired.length, input.limit), hasMore: expired.length > input.limit },
-          journal,
-        );
       }),
   });
 
   const proofStore = Proofs.ProofPersistence.of({
     issue: (input, prepare) =>
-      own((s, journal, now) => {
-        const r = input.record;
-        const old = s.requests.get(r.requestId);
-
-        if (old) {
-          if (old.fingerprint !== r.fingerprint) throw Proofs.ProofRequestConflict.make({});
-
-          return prepare({ _tag: "Existing", receipt: old.receipt }, journal);
-        }
-
-        const receipt = {
-          requestId: r.requestId,
-          reference: { proofId: r.proofId, purpose: r.purpose, keyId: r.verifier.keyId },
-        };
-
-        const allowed =
-          charge(s, ["proof:issue", `proof:issue:${r.binding.identifier.value}`], now) &&
-          input.eligible &&
-          r.binding._tag !== "Identifier" &&
-          current(s, r.binding.revision);
-
-        s.requests.set(r.requestId, { fingerprint: r.fingerprint, receipt });
-        if (allowed) {
-          for (const row of s.proofs.values())
-            if (row.record.binding.identifier.value === r.binding.identifier.value)
-              row.consumed = true;
-          s.proofs.set(r.proofId, { record: r, consumed: false, claimed: false });
-        }
-
-        return prepare(
-          allowed ? { _tag: "Issued", record: r } : { _tag: "Suppressed", receipt },
-          journal,
-        );
+      own(function* (s, journal, now) {
+        return prepare(issueProof(s.proofs, input, now), journal);
       }).pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({}))),
-    attempt: (input, prepare) =>
-      own((s, journal, now) => {
-        const allowed = charge(
-          s,
-          ["proof:attempt", `proof:attempt:${input.binding.identifier.value}`],
-          now,
-        );
-
-        const row = s.proofs.get(input.proofId);
-
-        const valid =
-          allowed &&
-          row &&
-          !row.consumed &&
-          row.record.expiresAtMillis > now &&
-          bindingKey(row.record.binding) === bindingKey(input.binding) &&
-          input.binding._tag !== "Identifier" &&
-          current(s, input.binding.revision) &&
-          row.record.verifier.digest === input.candidate?.digest &&
-          row.record.verifier.keyId === input.candidate?.keyId;
-
-        if (!valid) return prepare({ _tag: "Rejected" }, journal);
-
-        const expires = Math.min(
-          row.record.expiresAtMillis,
-          now + input.policy.continuationLifetimeMillis,
-        );
-
-        const result = prepare(
-          {
-            _tag: "Accepted",
-            continuation: {
-              continuationId: input.continuationId,
-              purpose: input.purpose,
-              expiresAtMillis: expires,
-            },
-          },
-          journal,
-        );
-
-        row.consumed = true;
-        s.continuations.set(input.continuationId, {
-          input: {
-            moduleId: input.moduleId,
-            purpose: input.purpose,
-            binding: input.binding,
-            continuationId: input.continuationId,
-            continuationDigest: input.continuationDigest,
-            nowMillis: now,
-          },
-          expires,
-          used: false,
-        });
-
-        return result;
-      }).pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({}))),
-    complete: () => Effect.fail(Proofs.ProofUnavailable.make({})), // Only the composite password owner may consume in this example.
-    claimDelivery: (input, prepare) =>
-      own((s, journal) => {
-        const row = s.proofs.get(input.proofId);
-
-        if (!row || row.claimed || row.consumed) return prepare({ _tag: "Declined" }, journal);
-        row.claimed = true;
-
-        return prepare({ _tag: "Claimed", claimVersion: row.record.version }, journal);
-      }).pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({}))),
-    settleDelivery: (input, prepare) =>
-      own((s, journal) => {
-        const row = s.proofs.get(input.proofId);
-
-        if (row && row.record.version === input.version && input.outcome._tag === "DefiniteFailure")
-          row.consumed = true;
-
-        return prepare(undefined, journal);
+    redeem: (input, prepare) =>
+      own(function* (s, journal, now) {
+        return prepare(redeemProof(s.proofs, input, now), journal);
       }).pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({}))),
     cancel: (input, prepare) =>
-      own((s, journal) => {
-        for (const row of s.proofs.values())
-          if (
-            row.record.moduleId === input.moduleId &&
-            bindingKey(row.record.binding) === bindingKey(input.binding)
-          )
-            row.consumed = true;
+      own(function* (s, journal) {
+        cancelProof(s.proofs, input);
 
         return prepare(undefined, journal);
       }).pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({}))),
     cleanup: (input, prepare) =>
-      own((s, journal, now) => {
-        let removed = 0;
-        let hasMore = false;
-
-        for (const [id, row] of s.proofs)
-          if (row.record.expiresAtMillis <= now) {
-            if (removed < input.limit) {
-              s.proofs.delete(id);
-              removed++;
-            } else hasMore = true;
-          }
-        for (const [id, row] of s.continuations)
-          if (row.expires <= now) {
-            if (removed < input.limit) {
-              s.continuations.delete(id);
-              removed++;
-            } else hasMore = true;
-          }
-
-        return prepare({ removed, hasMore }, journal);
+      own(function* (s, journal, now) {
+        return prepare(cleanupProofs(s.proofs, input, now), journal);
       }).pipe(Effect.mapError(() => Proofs.ProofUnavailable.make({}))),
   });
 
@@ -599,17 +378,22 @@ export const makePasswordConsumer = Effect.gen(function* () {
         const revision = {
           subjectId: id,
           securityRevision: Sessions.SecurityRevision.make(row.security),
-          credentials: ids.map((credentialId) => ({
-            credentialId,
-            revision:
-              credentialId === "example-factor"
-                ? Sessions.SecurityRevision.make("1")
-                : (row.password?.credentialRevision ?? Sessions.SecurityRevision.make("missing")),
-          })),
+          credentials: [
+            ...(row.password === undefined
+              ? []
+              : [
+                  {
+                    credentialId: row.password.credentialId,
+                    revision: row.password.credentialRevision,
+                  },
+                ]),
+            { credentialId: "example-factor", revision: Sessions.SecurityRevision.make("1") },
+          ],
         };
 
-        return current(state, revision)
-          ? Effect.succeed(revision)
+        return ids.every((id) => revision.credentials.some((item) => item.credentialId === id)) &&
+          current(state, revision)
+          ? Effect.succeed({ revision, requirement: currentRequirement(id) })
           : Effect.fail(Sessions.StaleAuthentication.make({}));
       }),
     requirements: (evidence) =>
@@ -628,12 +412,12 @@ export const makePasswordConsumer = Effect.gen(function* () {
           assessed.satisfied ? Effect.void : Effect.fail(Sessions.StaleAuthentication.make({})),
         ),
         Effect.flatMap(() =>
-          own((s, journal, now) => {
+          own(function* (s, journal, now) {
             if (
               !current(s, input.evidence.revision) ||
               now >= DateTime.toEpochMillis(input.expiresAt)
             )
-              throw Sessions.StaleAuthentication.make({});
+              return yield* Sessions.StaleAuthentication.make({});
 
             return prepare(undefined, journal);
           }),
@@ -663,15 +447,7 @@ export const makePasswordConsumer = Effect.gen(function* () {
         if (!useFactor && !input.currentPasswordEvidence && !input.recovery)
           return yield* Password.PasswordActionRequired.make({});
 
-        const revision = {
-          ...input.challenge.revision,
-          credentials: [
-            ...input.challenge.revision.credentials,
-            ...(useFactor
-              ? [{ credentialId: "example-factor", revision: Sessions.SecurityRevision.make("1") }]
-              : []),
-          ],
-        };
+        const revision = input.challenge.revision;
 
         const evidence: Sessions.AuthenticationEvidence = {
           flowId: Sessions.AuthenticationFlowId.make(input.challenge.commandId),
@@ -706,9 +482,7 @@ export const makePasswordConsumer = Effect.gen(function* () {
 
   const registration = passwords.RegistrationAuthority.of({
     register: (input, prepare) =>
-      own((s, journal) => {
-        if (s.registrations.has(input.requestId)) return prepare({ _tag: "Suppressed" }, journal);
-        s.registrations.add(input.requestId);
+      own(function* (s, journal) {
         if (s.subjects.has(input.identifier.value)) return prepare({ _tag: "Suppressed" }, journal);
 
         const row: Subject = {
@@ -747,18 +521,18 @@ export const makePasswordConsumer = Effect.gen(function* () {
       }),
     ),
     verifyEmailFixture: (email: string) =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
         const row = state.subjects.get(email);
 
-        if (!row?.password) throw new Error("fixture subject missing");
+        if (!row?.password) return yield* Password.PasswordUnavailable.make({});
         row.security = String(Number(row.security) + 1);
         row.password = { ...snapshot(row, row.password), identifierVerifiedAtMillis: 1 };
       }),
     requireMfaFixture: (email: string) =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
         const row = state.subjects.get(email);
 
-        if (!row) throw new Error("fixture subject missing");
+        if (!row) return yield* Password.PasswordUnavailable.make({});
         row.mfa = true;
         row.security = String(Number(row.security) + 1);
         if (row.password) row.password = snapshot(row, row.password);

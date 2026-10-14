@@ -1,5 +1,5 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "../crypto/src/internal/wasm.d.ts"],
   "exclude": ["test"]
 }

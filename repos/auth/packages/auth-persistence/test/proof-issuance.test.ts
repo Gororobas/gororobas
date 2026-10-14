@@ -1,16 +1,16 @@
+import { NodeCrypto } from "@effect/platform-node";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { it } from "@effect/vitest";
 import { Auth, PhoneOtp, Proofs, Sessions } from "@yielded/auth";
 import { SubjectId, TokenDigest } from "@yielded/auth/Schema";
-import { DateTime, Effect, Layer, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
-import { TestClock } from "effect/testing";
 import { expect } from "vite-plus/test";
 
 import { AuthPersistence } from "../src/index";
 
 // User-requested security regression: real persistence must protect the current
-// binding and charge delivery capacity only for accepted proof issuance.
+// binding and keep rejected issuance from changing the live proof.
 const app = Auth.make("test/proof-issuance", {
   claims: Schema.Struct({}),
   strategies: { phone: PhoneOtp.make() },
@@ -83,6 +83,7 @@ const database = Layer.effectDiscard(
 
 const live = persistence.layer.pipe(
   Layer.provide(persistence.Config.layer(storage)),
+  Layer.provide(NodeCrypto.layer),
   Layer.provideMerge(database),
 );
 
@@ -109,53 +110,35 @@ const binding = (flowId: string): Proofs.ProofBinding =>
   });
 
 const issue = Effect.fnUntraced(function* (
-  requestId: string,
+  id: string,
   bound: Proofs.ProofBinding,
-  options: { readonly eligible?: boolean; readonly supersedes?: Proofs.ProofId } = {},
+  eligible = true,
 ) {
-  const now = DateTime.toEpochMillis(yield* DateTime.now);
-
-  const record: Proofs.ProofRecord = {
+  const record: Proofs.ProofIssueRecord = {
     moduleId: "proof-regression",
     purpose: Proofs.ProofPurpose.make("sign-in"),
-    proofId: Proofs.ProofId.make(`${requestId}-proof`),
-    requestId: Proofs.ProofRequestId.make(requestId),
-    fingerprint: TokenDigest.make(
-      `${requestId}:${bound.contextDigest}:${options.supersedes ?? ""}`,
-    ),
-    deliveryId: Proofs.ProofDeliveryId.make(`${requestId}-delivery`),
+    proofId: Proofs.ProofId.make(`${id}-proof`),
     binding: bound,
-    verifier: { keyId: "test", digest: TokenDigest.make(`${requestId}-secret-digest`) },
-    issuedAtMillis: now,
-    expiresAtMillis: now + policy.lifetimeMillis,
-    version: Proofs.ProofVersion.make(requestId),
+    verifier: { keyId: "test", digest: TokenDigest.make(`${id}-secret-digest`) },
   };
 
   const prepared = yield* (yield* Proofs.ProofPersistence).issue(
-    {
-      record,
-      policy,
-      eligible: options.eligible ?? true,
-      ...(options.supersedes === undefined ? {} : { supersedes: options.supersedes }),
-    },
+    { record, lifetimeMillis: policy.lifetimeMillis, resendCooldownMillis: 30_000, eligible },
     (decision, journal) => journal.prepare(decision),
   );
 
   return { record, decision: yield* Proofs.readProofCommit(prepared) };
 });
 
-const attempt = Effect.fnUntraced(function* (record: Proofs.ProofRecord) {
-  const prepared = yield* (yield* Proofs.ProofPersistence).attempt(
+const redeem = Effect.fnUntraced(function* (record: Proofs.ProofIssueRecord) {
+  const prepared = yield* (yield* Proofs.ProofPersistence).redeem(
     {
       moduleId: record.moduleId,
       purpose: record.purpose,
       proofId: record.proofId,
       binding: record.binding,
       candidate: record.verifier,
-      continuationId: Proofs.ProofContinuationId.make(`${record.proofId}-continuation`),
-      continuationDigest: TokenDigest.make(`${record.proofId}-continuation-digest`),
-      nowMillis: DateTime.toEpochMillis(yield* DateTime.now),
-      policy,
+      maximumFailedAttempts: policy.maximumFailedAttempts,
     },
     (decision, journal) => journal.prepare(decision),
   );
@@ -163,80 +146,34 @@ const attempt = Effect.fnUntraced(function* (record: Proofs.ProofRecord) {
   return yield* Proofs.readProofCommit(prepared);
 });
 
-it.effect.each([false, true])(
-  "a different binding cannot replace a live proof (known reference: %s)",
-  (knownReference) =>
-    Effect.gen(function* () {
-      const victim = yield* issue("victim", binding("victim"));
+const advanceCooldown = Effect.gen(function* () {
+  const sql = yield* SqlClient.SqlClient;
 
-      expect(victim.decision._tag).toBe("Issued");
-      yield* TestClock.adjust(30_000);
+  yield* sql`update proof_test_proofs set issued_at = issued_at - 30000, expires_at = expires_at - 30000`;
+});
 
-      const unrelated = yield* issue(
-        "unrelated",
-        binding("attacker"),
-        knownReference ? { supersedes: victim.record.proofId } : {},
-      );
-
-      expect(unrelated.decision._tag).toBe("Suppressed");
-      expect((yield* attempt(victim.record))._tag).toBe("Accepted");
-    }).pipe(Effect.provide(live)),
-);
-
-it.effect("suppressed requests retain receipts without spending issuance capacity", () =>
+it.effect("a different binding cannot replace a live proof", () =>
   Effect.gen(function* () {
-    const original = yield* issue("first", binding("victim"));
-    const cooldown = yield* issue("cooldown", binding("victim"));
+    const victim = yield* issue("victim", binding("victim"));
 
-    expect(cooldown.decision._tag).toBe("Suppressed");
-    yield* TestClock.adjust(30_000);
-    const ineligible = yield* issue("ineligible", binding("victim"), { eligible: false });
+    expect(victim.decision._tag).toBe("Issued");
+    yield* advanceCooldown;
+    expect((yield* issue("attacker", binding("attacker"))).decision._tag).toBe("Suppressed");
+    expect(yield* redeem(victim.record)).toBe("redeemed");
+  }).pipe(Effect.provide(live)),
+);
+it.effect("cooldown and eligibility protect the row until permitted reissue or redemption", () =>
+  Effect.gen(function* () {
+    const original = yield* issue("original", binding("victim"));
 
-    const stale = yield* issue("stale", binding("victim"), {
-      supersedes: Proofs.ProofId.make("unrelated-proof"),
-    });
-
-    expect(ineligible.decision._tag).toBe("Suppressed");
-    expect(stale.decision._tag).toBe("Suppressed");
-
-    const replay = yield* issue("cooldown", binding("victim"));
-
-    expect(replay.decision).toEqual({
-      _tag: "Existing",
-      receipt: {
-        requestId: cooldown.record.requestId,
-        reference: {
-          proofId: cooldown.record.proofId,
-          purpose: cooldown.record.purpose,
-          keyId: "test",
-        },
-      },
-    });
-    const conflicting = yield* issue("cooldown", binding("attacker")).pipe(Effect.result);
-
-    expect(conflicting._tag).toBe("Failure");
-    if (conflicting._tag === "Failure")
-      expect(conflicting.failure._tag).toBe("ProofRequestConflict");
-
-    const resent = yield* issue("resend", binding("victim"), {
-      supersedes: original.record.proofId,
-    });
+    expect((yield* issue("cooldown", binding("victim"))).decision._tag).toBe("Suppressed");
+    yield* advanceCooldown;
+    expect((yield* issue("ineligible", binding("victim"), false)).decision._tag).toBe("Suppressed");
+    const resent = yield* issue("resend", binding("victim"));
 
     expect(resent.decision._tag).toBe("Issued");
-    yield* TestClock.adjust(30_000);
-    const implicitResend = yield* issue("implicit-resend", binding("victim"));
-
-    expect(implicitResend.decision._tag).toBe("Issued");
-    expect((yield* attempt(original.record))._tag).toBe("Rejected");
-    expect((yield* attempt(implicitResend.record))._tag).toBe("Accepted");
-
-    yield* TestClock.adjust(30_000);
-    const replacement = yield* issue("after-consumption", binding("new-client"));
-
-    expect(replacement.decision._tag).toBe("Issued");
-    yield* TestClock.adjust(30_000);
-    expect((yield* issue("budget-exhausted", binding("new-client"))).decision._tag).toBe(
-      "Suppressed",
-    );
+    expect(yield* redeem(original.record)).toBe("rejected");
+    expect(yield* redeem(resent.record)).toBe("redeemed");
+    expect((yield* issue("after-consumption", binding("new-client"))).decision._tag).toBe("Issued");
   }).pipe(Effect.provide(live)),
 );

@@ -4,7 +4,7 @@ import type {
   IdentityConflict,
   IdentityUnavailable,
   LoginIdentifier,
-  ProvisioningResult,
+  SubjectProvisioned,
 } from "./models";
 
 /**
@@ -22,19 +22,19 @@ export type SubjectProvisioningInput = { readonly requestId: string } & (
  *
  * Repeating a requestId with the same input must resolve the same subject;
  * repeating it with different input must fail. Identifier uniqueness and
- * provisioning commit together when they share an authority. Cross-authority
- * implementations return ProvisioningPending until reconciliation is complete,
- * never an authenticated result for a partially provisioned account.
+ * provisioning commit together when they share an authority. Provisioning must
+ * finish synchronously before this service returns. Applications whose accounts
+ * live elsewhere must provision idempotently by requestId or own a separate queue.
  *
  * This port does not create a session or bind method-specific credentials. The
- * method's registration coordinator owns that atomic boundary (or exposes its
- * pending recovery outcome) before it can issue an authenticated result.
+ * method's registration coordinator owns that atomic boundary before it can
+ * issue an authenticated result.
  */
 export class SubjectProvisioner extends Context.Service<
   SubjectProvisioner,
   {
     readonly provision: (
       input: SubjectProvisioningInput,
-    ) => Effect.Effect<ProvisioningResult, IdentityConflict | IdentityUnavailable>;
+    ) => Effect.Effect<SubjectProvisioned, IdentityConflict | IdentityUnavailable>;
   }
 >()("effect-auth/SubjectProvisioner") {}

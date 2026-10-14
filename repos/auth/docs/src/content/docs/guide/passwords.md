@@ -37,7 +37,6 @@ reset support does not automatically publish those endpoints.
 
 ## Register an account
 
-<!-- prettier-ignore -->
 ```ts
 const auth = yield* AppAuth;
 const result = yield* auth.register({
@@ -50,6 +49,8 @@ const result = yield* auth.register({
 
 Generate `requestId` once per submission and retain it for an exact retry.
 `RegistrationAccepted` does not reveal whether the account already existed.
+Provisioning completes synchronously. If accounts live in another system, provision
+idempotently by `requestId` or run an application-owned queue before registration.
 
 Password registration does not prove ownership of the email address. Offer
 [mailbox registration](./codes#register-a-mailbox-owner) with `Email.makeRegistration`
@@ -62,7 +63,6 @@ and its services explicitly.
 
 With `Effect` imported from `effect`, handle only the expected rejection:
 
-<!-- prettier-ignore -->
 ```ts
 const auth = yield* AppAuth;
 const result = yield* auth.signIn({ email, password }).pipe(
@@ -79,29 +79,41 @@ must be completed before granting access.
 
 ## Change a password
 
-<!-- prettier-ignore -->
 ```ts
 const auth = yield* AppAuth;
 const result = yield* auth.changePassword({ commandId, currentPassword, newPassword });
 ```
 
-This call requires an authenticated `Auth.AuthRequest`. Applications requiring
-another factor also supply `actionProof`. The result reports the session
-invalidation behavior of your selected strategy.
+This call requires an authenticated `Auth.AuthRequest` and approval from your
+`PasswordActionEvidence` service. Your policy can require `actionProof` or accept
+recent passkey authentication instead of `currentPassword`. Use
+`sessions.inspectInvocation` to check the private factor evidence and its age;
+public session assurance alone is not authorization. The
+[example policy](https://github.com/yielded-dev/auth/blob/main/examples/shared/account/password-authorization.ts)
+shows that check.
+
+The result reports session invalidation. When your policy accepts recent passkey
+authentication, omit `currentPassword`:
+
+```ts
+const result = yield* auth.changePassword({ commandId, newPassword });
+```
 
 ## Supply the services
 
-Supply `PasswordHashing` explicitly. The maintained Argon2id adapter lives in
-`@yielded/auth-crypto/Password`; its Layer also requires bounded KDF admission and
-Web Crypto. Storage, claims, account creation, screening, and change authorization
-remain application-owned:
+On Cloudflare Workers, provide [`WorkerdServices.layer`](../reference/crypto#use-with-auth)
+once to the application Layer. It includes password hashing and its runtime dependencies.
+Storage, claims, account creation, screening, and change authorization remain application-owned.
+
+For manual composition on other runtimes, supply `Password.PasswordHashing.layer()`
+with a crypto backend, bounded KDF admission, and Effect Crypto for entropy:
 
 ```ts title="apps/server/password-live.ts"
 import { Layer } from "effect";
-import { Password, WebCrypto } from "@yielded/auth";
-import * as PasswordCrypto from "@yielded/auth-crypto/Password";
+import { Password } from "@yielded/auth";
 
 import { AppAuth } from "./auth";
+import { CryptoLive } from "./crypto-live";
 import { AuthDependencies } from "./auth-dependencies";
 import { authorizePasswordChange, registerAccount, resolvePasswordClaims } from "./auth-accounts";
 import { PasswordPersistenceLive, ProofPersistenceLive } from "./auth-persistence";
@@ -109,10 +121,7 @@ import { checkPassword } from "./password-screening";
 import { EmailLive } from "./email";
 
 export const PasswordLive = Layer.mergeAll(
-  PasswordCrypto.layer().pipe(
-    Layer.provide(Password.PasswordKdfAdmission.layer()),
-    Layer.provide(WebCrypto.layerWebCrypto),
-  ),
+  Password.PasswordHashing.layer().pipe(Layer.provide(CryptoLive)),
   PasswordPersistenceLive,
   ProofPersistenceLive,
   Layer.succeed(AppAuth.strategies.password.SessionClaims, { resolve: resolvePasswordClaims }),
@@ -134,29 +143,59 @@ can provide persistence and registration. `AuthDependencies` supplies the shared
 For sign-in-only `Password.make()`, supply hashing, password persistence, and claims
 alongside those shared services. Keep normalization stable for stored credentials.
 
-Share one `PasswordKdfAdmission.layer()` instance across hashers in each runtime.
-By default it runs one KDF callback and accepts up to 16 waiting calls, each with a
-5000ms acquisition deadline. A full queue or expired wait fails with
-`PasswordKdfBusy`; interrupted waiters leave the queue. Once admitted to run, work
-retains its permit through completion and cleanup, even if its caller is interrupted.
-The deadline does not limit running KDF work.
+[`CryptoLive`](../reference/crypto#use-with-auth) selects your crypto backend.
+Share one `KdfAdmission.layer()` from `@yielded/crypto/KdfAdmission` across backends
+and password hashers in each runtime. Size it for the host's memory and CPU budget;
+queue exhaustion or an expired wait returns `PasswordKdfBusy`. See
+[KDF resource limits](../reference/crypto#backends-and-resource-limits) for options.
 
-Configure `concurrency`, `maxQueued`, and `maxWaitMilliseconds` on the Layer;
-`maxQueued: 0` enables fail-fast admission. Size concurrency for your host's KDF
-memory and CPU budget. These are process-local limits, without a strict FIFO
-ordering guarantee; applications still need ingress rate limits.
+`PasswordHashing.layer()` and `WorkerdServices.layer` default to Argon2id.
+Workers requires `nodejs_compat`; Wrangler includes the bundled Wasm without a
+compiler or separate asset hosting.
 
-Compromised-password screening fails closed. `PasswordPolicy.screeningTimeoutMillis`
-defaults to 10,000 ms (allowed range: 1–30,000); a timed-out check returns
-`PasswordCheckUnavailable`, so no password is registered or changed.
+To select native scrypt on Node, Bun, or Workers:
+
+```ts
+Password.PasswordHashing.layer(Password.defaultScryptPasswordHashingConfig).pipe(
+  Layer.provide(CryptoLive),
+);
+```
+
+With the Workers bundle, use
+`WorkerdServices.layerWith({ passwordHashing: Password.defaultScryptPasswordHashingConfig })` instead.
+
+The default scrypt configuration uses `N=16384`, `r=8`, `p=5`, the
+[OWASP 16 MiB profile](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt).
+Custom configurations support costs 8192, 16384, and 32768 with `r=8` and at least
+10, 5, and 3 parallelization steps respectively. Successful sign-in can rehash a
+credential to the selected policy, so keep a backend capable of verifying stored
+hashes. PBKDF2 verification requires the host to accept the stored iteration count;
+see [runtime limits](../reference/crypto#compose-a-backend).
+
+`Password.PasswordAttemptLimiter` separately limits sign-in attempts. Store
+failures deny the request, and rejected attempts still count. Compromised-password
+screening also fails closed: its default ten-second timeout returns
+`PasswordCheckUnavailable` without registering or changing a password.
+
+### Share rate limits
+
+Default limiters are process-local and reset on restart. Their stores are bounded
+to 10,000 keys; reaching capacity can reject requests for valid accounts too.
+Multiple replicas, or a runtime rebuilt per request, need a shared Effect limiter
+or store for identifier, subject, and network limits. Action, global message, and
+passkey module budgets remain per instance.
+
+See [rate limiting](./rate-limits) for overrides, an Alchemy recipe using
+Cloudflare's native binding, and the `KeyValueStore` and Redis alternatives.
 
 ## Recover a password
 
-Recovery uses `requestReset` → `verifyReset` → `completeReset` and requires an
-independently verified email address. The definition above selects reset links.
+Recovery uses `requestReset` → `completeReset` and requires an
+independently verified email address. Users who have a passkey sign in with it,
+complete step-up if required, then change their password. The definition above selects reset links.
 Auth builds the link and renders the email; your `EmailDelivery` service only
-sends the finished message. See [email delivery](./email-delivery) for REST API
-and Alchemy examples.
+sends the finished message. See [email delivery](./email-delivery) for transport
+setup and runtime ownership.
 
 The link destination must be a fixed HTTPS URL without credentials, query, or
 fragment. Auth validates it when building the Layer, before issuing any proof.
@@ -177,7 +216,6 @@ customized independently of the transport.
 
 Start recovery inside an Effect request handler:
 
-<!-- prettier-ignore -->
 ```ts
 const auth = yield* AppAuth;
 const requested = yield* auth.requestReset({ flowId, requestId, email, locale: "en" });
@@ -188,8 +226,9 @@ response such as “If this address is eligible, check your email.” The receip
 not reveal account eligibility or whether a message was sent.
 
 To resend, retain the flow ID and use a fresh request ID after the cooldown.
-A new reset attempt leaves an existing unexpired link or code usable and sends no
-new email. Ignored requests do not extend its expiry (five minutes by default).
+A request with that same complete binding replaces the previous code when the
+cooldown permits it. Another binding cannot replace an unexpired code. Suppressed
+requests do not extend its expiry (five minutes by default).
 
 Auth supplies a network rate limiter, and HTTP derives the caller from the socket
 peer automatically. Checks precede target lookup, including unknown addresses and
@@ -202,18 +241,8 @@ intentional confirmation before submitting. A landing-page GET must never consum
 the proof. See [link handling](./email-delivery#handle-links) for the private-state
 and response-header boundaries. For codes, use the saved reference and entered code.
 
-In the next request, verify the submitted secret:
+Submit the reference, secret, and replacement together:
 
-<!-- prettier-ignore -->
-```ts
-const auth = yield* AppAuth;
-const verified = yield* auth.verifyReset({ flowId, email, reference, secret });
-```
-
-Retain `verified.continuation.continuationId`. Its matching credential is issued
-through the private `proof-continuation` channel. Complete with the same flow and email:
-
-<!-- prettier-ignore -->
 ```ts
 const auth = yield* AppAuth;
 const result = yield* auth.completeReset({
@@ -221,36 +250,23 @@ const result = yield* auth.completeReset({
   email,
   commandId,
   newPassword,
-  continuationId,
-  credential,
+  reference,
+  secret,
 });
 ```
 
-These are server-side inputs. For browser endpoints, map `credential` to the
-`proof-continuation` slot through the contract's `requestFields`, so the HTTP adapter
-reads the private cookie. Never return secrets in ordinary operation results or logs,
-or make the browser copy an HttpOnly cookie into JSON. Generate `commandId` once per
-completion submission. Completion changes the password; sign in separately for a session.
+Generate `commandId` once per submission. Reset consumes the proof and replaces
+the password atomically, subject to your current action policy. It does not bypass
+required factors or issue a session; sign in separately after completion.
 
 ### Delivery and retry boundaries
 
-Auth's built-in worker admits delivery after the proof commits, so public requests
-do not wait for provider acceptance. No scheduler setup is needed; build Auth in an
-application scope that outlives requests, as shown in [email delivery](./email-delivery#compose-auth).
-Work may start before the response is sent. Application hooks and persistence can
-still vary in latency.
-
-Provider acceptance does not prove inbox delivery.
-The transport distinguishes definite rejection from uncertain acceptance. Neither
-Auth nor the transport should automatically resend an uncertain message; this email
-service makes no deduplication promise and requires `maximumDeliveryAttempts: 1`.
-
-An exact `requestReset` retry can recover a generic receipt, not guarantee another
-send. Scheduled dispatch is a process-local continuation after persistence commits, not a
-durable outbox. A crash can leave an unsent proof. Let the user check their inbox
-and, if needed, explicitly start a new flow under the configured cooldown and attempt
-limits. A consumed proof or an unknown commit outcome does not authorize repeating
-a password mutation.
+Build Auth in a scope that outlives requests so queued email can finish; see
+[email delivery](./email-delivery#compose-auth). Delivery has no automatic retry or
+durable outbox. If a message is lost, explicitly request a new proof after cooldown
+with the original flow binding. The request ID is correlation only, not a delivery
+recovery key. A consumed proof or unknown mutation outcome does not authorize
+repeating a password change.
 
 See the [complete password composition](https://github.com/yielded-dev/auth/blob/main/examples/auth/src/password-methods.ts)
 for a reset-link journey using a private local email collector.

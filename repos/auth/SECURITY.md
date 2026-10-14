@@ -6,9 +6,9 @@ handling, session authority, or authorization decisions as security relevant.
 ## Supported versions
 
 The published packages are a prerelease. `@yielded/auth` and its companions
-(`@yielded/auth-crypto`, `@yielded/auth-openid-client`, `@yielded/auth-persistence`,
+(`@yielded/crypto`, `@yielded/jose`, `@yielded/oauth`, `@yielded/auth-persistence`,
 `@yielded/auth-persistence-drizzle`, `@yielded/auth-simplewebauthn`,
-`@yielded/auth-react-native`, and `@yielded/drizzle-effect-v4-patch`) are versioned
+`@yielded/auth-react-native`, `@yielded/auth-electron`, and `@yielded/drizzle-effect-v4-patch`) are versioned
 and released together as one fixed group.
 
 | Version                                  | Supported                       |
@@ -64,12 +64,60 @@ outside them.
   recovery codes are stored as digests, and provider tokens and TOTP secrets as
   authenticated ciphertext, so a copied database without the application's keys
   yields no usable credentials.
-- The library enforces per-identifier, per-subject, and per-action budgets. It
-  cannot see client addresses, so per-network limiting and the network keys used by
-  phone admission are the host's responsibility.
+- Password sign-in and password-change verification use per-identifier,
+  per-subject, and per-action token buckets. Their default store is bounded to
+  10,000 keys per runtime, is local to one process, and resets on restart.
+  Multi-instance deployments must supply a shared Effect `RateLimiterStore` or
+  replace `PasswordAttemptLimiter`. Consumption precedes credential verification, is never
+  refunded, and store failures deny the request. The fixed cap does not grow with
+  policy budgets; at capacity, requests needing new keys fail with
+  `PasswordUnavailable`. Active buckets are never evicted. Hosts also own network admission
+  and the trusted network keys used by phone admission.
+- Password hashing holds no database transaction. Session issuance rechecks the
+  original subject and credential revisions and current factor policy under the
+  committing authority. Credential replacement must atomically update the password
+  and authority credential revisions; identifier rebinding or eligibility changes
+  must bump the subject security revision. Conditional rehashing changes only the
+  verifier and its version. Fresh password sign-ins are independent attempts;
+  pending-factor completion and handoffs retain their replay guards.
+- Passkey begin and completion requests use bounded process-local token buckets
+  for global, subject and target budgets. Multi-instance deployments must provide a
+  shared Effect `RateLimiter` or `RateLimiterStore`. Hosts own network admission
+  and limits for malformed traffic.
+- Proof issue and attempt limits use bounded token buckets and charge suppressed,
+  repeated requests, unknown targets and malformed candidate secrets. Schema-invalid
+  requests are covered by host ingress. Supply a shared store across replicas.
+  Each code has its own durable failed-attempt count and resend cooldown. One
+  confirmed issue permits one local delivery; unknown commits never dispatch, and
+  crashes can leave codes unsent. Protected mutations redeem atomically with their
+  writes; sign-in consumes before independent session issuance and restarts on failure.
+- Retired phone identifiers remain permanent tombstones. Matching a recycled number
+  never authorizes provisioning, transfer or account linking.
 - Identity selection, account provisioning, transaction authority, and
   authorization policy belong to the application. Provider claims and email
-  addresses never select a subject on their own.
+  addresses never select a subject on their own. Provisioning completes synchronously
+  and idempotently by request ID before registration succeeds.
+- Password changes may accept recent passkey step-up through application action
+  policy. The policy binds the actual factor and authentication time to the action;
+  persistence rechecks current subject and credential authority at commit. A passkey
+  user who forgets their password signs in with the passkey and then changes it.
+- OAuth linking retains one exact begin authorization, including verified private
+  session evidence when application policy accepts recent step-up. Linking preserves
+  sessions; unlinking rechecks remaining login methods and invalidates according to
+  the configured session mode. Callback consumption precedes provider exchange, and
+  unknown exchange or session-issuance outcomes require a new ceremony. Refresh
+  retains an exact versioned claim with no expired takeover. Token-use policy sees
+  the captured grant and current authority before tokens are unsealed; writes
+  check accepted action bindings, revisions, and deadlines without retiming proofs.
+- Passkey enrollment retains one begin authorization and re-assesses it at commit.
+  Challenges retain their selected RP profile through expiry during rolling deploys.
+  Verified challenges are consumed before independent session issuance; failed or
+  uncertain issuance requires a new ceremony. Enrollment preserves existing sessions;
+  removal increments the security revision and applies session invalidation.
+- Protected mutations and application writes must share the adapter's explicit
+  commit owner. Final checks run after application work; D1 requires declared
+  mutable policy inputs. Cleanup is bounded and module-scoped, preserves live
+  proofs, and never makes an uncertain external operation safe to retry.
 
 ## Security updates and compatibility
 

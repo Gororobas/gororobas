@@ -1,6 +1,7 @@
 import { Context, type Effect, Schema } from "effect";
 
 import { credentialSlots } from "../http-operation/models";
+import type { CleanupLimit, CleanupResult } from "../persistence/cleanup";
 
 export class Invalid extends Schema.TaggedError<Invalid>()("BrowserLoginInvalid", {}) {}
 export class Unavailable extends Schema.TaggedError<Unavailable>()("BrowserLoginUnavailable", {}) {}
@@ -212,6 +213,12 @@ export type Record = typeof Record.Type;
 export class Persistence extends Context.Service<
   Persistence,
   {
+    /** One bounded engine-clock sweep, including terminal attempts, within this namespace.
+     * Expiry cleanup never authorizes retrying an uncertain Exchanging attempt. */
+    readonly cleanup: (input: {
+      readonly namespace: string;
+      readonly limit: CleanupLimit;
+    }) => Effect.Effect<CleanupResult, Unavailable>;
     readonly get: (namespace: string, id: string) => Effect.Effect<Record | undefined, Unavailable>;
     readonly insert: (
       namespace: string,

@@ -2,7 +2,7 @@ import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
-import { LifecycleEventId, lifecycleEvent, lifecycleSnapshot } from "../hooks/models";
+import { LifecycleEventId, lifecycleEvent, lifecycleEventEffect } from "../hooks/models";
 import { LastSignInMethod } from "../identity/models";
 import type { AuthInvocation } from "../operations/context";
 import type { AuthOperationResult } from "../operations/credentials";
@@ -14,6 +14,7 @@ import { sessionInvalidationWindow } from "../sessions/invalidation";
 import type { makeSessionModule } from "../sessions/module";
 import {
   passkeyUnexpected,
+  passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
   readPasskeyCommit,
@@ -22,6 +23,7 @@ import type { PasskeyFailure } from "./errors";
 import {
   PasskeyActionRequired,
   PasskeyConfigurationError,
+  PasskeyMethodUnsupported,
   PasskeyRejected,
   PasskeyUnavailable,
 } from "./errors";
@@ -30,7 +32,6 @@ import {
   PasskeyActionAuthorization,
   PasskeyActionChallenge,
   PasskeyBegin,
-  PasskeyCeremony,
   PasskeyDescriptor,
   PasskeyModuleId,
   PasskeyProfile,
@@ -45,10 +46,11 @@ import {
 } from "./models";
 import { PasskeyActionEvidence } from "./PasskeyActionEvidence";
 import type { PasskeyConfig } from "./PasskeyConfig";
-import { PasskeyEnrollmentContext } from "./PasskeyEnrollmentContext";
+import { PasskeyCredentials } from "./PasskeyCredentials";
 import { PasskeyManagementPersistence } from "./PasskeyManagementPersistence";
+import { PasskeyPersistence } from "./PasskeyPersistence";
 import { PasskeyManagementPolicy, type PasskeyMethodPolicy } from "./policy";
-import { snapshotPasskey, snapshotPasskeySync } from "./snapshot";
+import { snapshotPasskey, snapshotPasskeySync, snapshotPasskeyResult } from "./snapshot";
 
 const enrollmentDecision = Schema.Union([
   Schema.TaggedStruct("Enrolled", { credential: PasskeyCredentialSummary }),
@@ -57,7 +59,6 @@ const enrollmentDecision = Schema.Union([
 
 const removeInspection = Schema.Union([
   Schema.TaggedStruct("Target", { credential: PasskeyCredential }),
-  Schema.TaggedStruct("Replay", { result: PasskeyRemoved }),
   Schema.TaggedStruct("Rejected", {}),
 ]);
 
@@ -70,7 +71,6 @@ const removeDecision = Schema.Union([
 const renameDecision = Schema.Union([
   Schema.TaggedStruct("Renamed", {
     credential: PasskeyCredentialSummary,
-    replayed: Schema.Boolean,
   }),
   Schema.TaggedStruct("Rejected", {}),
 ]);
@@ -92,13 +92,9 @@ export const makePasskeyManagement = <
   input: PasskeyManagementPolicy,
   sessions: ReturnType<typeof makeSessionModule<SessionId, Claims>>,
 ) => {
-  const captured = (() => {
-    try {
-      return Effect.succeed(snapshotPasskeySync(PasskeyManagementPolicy, input));
-    } catch {
-      return Effect.fail(PasskeyConfigurationError.make({}));
-    }
-  })();
+  const captured = Effect.fromResult(snapshotPasskeyResult(PasskeyManagementPolicy, input)).pipe(
+    Effect.mapError(() => PasskeyConfigurationError.make({})),
+  );
 
   const ceremony = makePasskeyCeremony(moduleId, source, "enrollment");
 
@@ -137,7 +133,7 @@ export const makePasskeyManagement = <
         invocation: AuthInvocation,
         input: typeof RenameInput.Type,
       ) => Effect.Effect<
-        { readonly credential: typeof PasskeyCredentialSummary.Type; readonly replayed: boolean },
+        { readonly credential: typeof PasskeyCredentialSummary.Type },
         PasskeyFailure
       >;
       readonly remove: (
@@ -153,17 +149,12 @@ export const makePasskeyManagement = <
       const policy = yield* captured,
         runtime = yield* ceremony.make,
         persistence = yield* PasskeyManagementPersistence,
-        context = yield* PasskeyEnrollmentContext,
+        context = yield* PasskeyCredentials,
+        ceremonies = yield* PasskeyPersistence,
         actions = yield* PasskeyActionEvidence,
         strategy = yield* sessions.SessionStrategy,
         crypto = yield* Crypto.Crypto,
         hooks = yield* LifecycleHooks;
-
-      if (
-        policy.requireImmediateInvalidation &&
-        strategy.capabilities.subjectInvalidation !== "immediate"
-      )
-        return yield* PasskeyConfigurationError.make({});
 
       const invalidation = sessionInvalidationWindow(
         "credential-change",
@@ -235,23 +226,27 @@ export const makePasskeyManagement = <
         return authorization;
       }, passkeyUnexpected);
 
-      const event = (
+      const eventInput = (
         operation: string,
         commandId: string,
         subjectId: typeof PasskeyCredential.Type.revision.subjectId,
         nowMillis: number,
-      ) =>
-        lifecycleEvent({
-          id: LifecycleEventId.make(`passkey/${moduleId}/${operation}/${commandId}`),
-          occurredAtMillis: nowMillis,
-          snapshot: lifecycleSnapshot({
-            action: "credential-change",
-            operation: `${moduleId}/passkey/${operation}`,
-            subjectId,
-            method: "passkey",
-            identifiers: [],
-          }),
-        });
+      ) => ({
+        id: LifecycleEventId.make(`passkey/${moduleId}/${operation}/${commandId}`),
+        occurredAtMillis: nowMillis,
+        snapshot: {
+          action: "credential-change" as const,
+          operation: `${moduleId}/passkey/${operation}`,
+          subjectId,
+          method: "passkey",
+          identifiers: [],
+        },
+      });
+
+      const event = (...args: Parameters<typeof eventInput>) => lifecycleEvent(eventInput(...args));
+
+      const eventEffect = (...args: Parameters<typeof eventInput>) =>
+        lifecycleEventEffect(eventInput(...args)).pipe(Effect.orDie);
 
       return Management.of({
         begin: Effect.fn("PasskeyManagement.begin")(
@@ -260,7 +255,11 @@ export const makePasskeyManagement = <
 
             const subjectId = yield* subject(invocation),
               selected = yield* runtime.profile(input.profileId),
-              captured = yield* context.capture({ moduleId, rpId: selected.rpId, subjectId });
+              captured = yield* context.listForSubject({
+                moduleId,
+                rpId: selected.rpId,
+                subjectId,
+              });
 
             if (
               captured === undefined ||
@@ -315,18 +314,9 @@ export const makePasskeyManagement = <
               fixedCapture.credentials,
             );
 
-            const authority = yield* PasskeyManagementPersistence;
-
             const issued = yield* readPasskeyCommit(
-              yield* authority.issueEnrollment(
-                {
-                  ceremony: draft.ceremony,
-                  policy: runtime.policy,
-                  management: policy,
-                  authorization,
-                },
-                (value, journal) =>
-                  journal.prepare(snapshotPasskeySync(PasskeyIssueDecision, value)),
+              yield* ceremonies.issue({ ceremony: draft.ceremony }, (value, journal) =>
+                journal.prepare(snapshotPasskeySync(PasskeyIssueDecision, value)),
               ),
             );
 
@@ -347,42 +337,29 @@ export const makePasskeyManagement = <
             if (original._tag !== "Enrollment" || original.revision.subjectId !== subjectId)
               return yield* PasskeyRejected.make({});
 
-            const challenge = yield* snapshotPasskey(PasskeyActionChallenge, {
-              moduleId,
-              action: "enroll-complete",
-              commandId: inspected.ceremony.commandId,
-              flowId: input.flowId,
-              revision: original.revision,
-              bindingDigest: yield* digest(PasskeyCeremony, inspected.ceremony),
-            });
+            const {
+              access,
+              ceremony: verifiedCeremony,
+              verified,
+            } = yield* runtime.verifyRegistration(input, inspected);
 
-            const authorization = yield* authorize(invocation, challenge, input.actionProof);
-
-            const assessment = yield* assessAuthentication(
-              authorization.evidence,
-              original.authorization.requirement,
-            ).pipe(Effect.mapError(() => PasskeyActionRequired.make({})));
-
-            if (!assessment.satisfied) return yield* PasskeyActionRequired.make({});
-            const { claim, verified } = yield* runtime.verifyRegistration(input, original);
             const authority = yield* PasskeyManagementPersistence;
             const timestamp = DateTime.toEpochMillis(yield* DateTime.now);
 
             const result = yield* readPasskeyCommit(
               yield* authority.completeEnrollment(
                 {
-                  claim,
+                  access,
+                  ceremony: verifiedCeremony,
                   verified,
-                  authorization,
                   management: policy,
-                  nowMillis: timestamp,
                 },
                 (value, journal) => {
                   const projected = snapshotPasskeySync(enrollmentDecision, value);
 
                   if (projected._tag === "Enrolled")
                     journal.stage(
-                      event("enrollment", claim.ceremony.commandId, subjectId, timestamp),
+                      event("enrollment", verifiedCeremony.commandId, subjectId, timestamp),
                     );
 
                   return journal.prepare(projected);
@@ -414,7 +391,9 @@ export const makePasskeyManagement = <
             request = yield* snapshotPasskey(RenameInput, input),
             timestamp = DateTime.toEpochMillis(yield* DateTime.now);
 
-          yield* hooks.before(event("rename", request.commandId, subjectId, timestamp).snapshot);
+          yield* hooks.before(
+            (yield* eventEffect("rename", request.commandId, subjectId, timestamp)).snapshot,
+          );
 
           const result = yield* readPasskeyCommit(
             yield* persistence.rename(
@@ -422,13 +401,11 @@ export const makePasskeyManagement = <
                 moduleId,
                 subjectId,
                 ...request,
-                nowMillis: timestamp,
-                retentionUntilMillis: timestamp + runtime.policy.retentionMillis,
               },
               (value, journal) => {
                 const projected = snapshotPasskeySync(renameDecision, value);
 
-                if (projected._tag === "Renamed" && !projected.replayed)
+                if (projected._tag === "Renamed")
                   journal.stage(event("rename", request.commandId, subjectId, timestamp));
 
                 return journal.prepare(projected);
@@ -439,32 +416,30 @@ export const makePasskeyManagement = <
           if (result._tag !== "Renamed" || result.credential.credentialId !== request.credentialId)
             return yield* PasskeyRejected.make({});
 
-          return { credential: result.credential, replayed: result.replayed };
+          return { credential: result.credential };
         }, passkeyUnexpected),
         remove: Effect.fn("PasskeyManagement.remove")(function* (invocation, input) {
-          const subjectId = yield* subject(invocation),
-            request = yield* snapshotPasskey(Schema.toType(RemoveInput), input);
+          const subjectId = yield* subject(invocation);
+
+          if (
+            policy.requireImmediateInvalidation &&
+            (strategy.capabilities.subjectInvalidation !== "immediate" ||
+              strategy.capabilities.positiveCacheMillis > 0)
+          )
+            return yield* PasskeyMethodUnsupported.make({});
+
+          const request = yield* snapshotPasskey(Schema.toType(RemoveInput), input);
 
           const inspected = yield* snapshotPasskey(
             removeInspection,
             yield* persistence.inspectRemove({
               moduleId,
               subjectId,
-              commandId: request.commandId,
               credentialId: request.credentialId,
             }),
           );
 
           if (inspected._tag === "Rejected") return yield* PasskeyRejected.make({});
-          if (inspected._tag === "Replay") {
-            if (
-              inspected.result.credentialId !== request.credentialId ||
-              !inspected.result.replayed
-            )
-              return yield* PasskeyUnavailable.make({});
-
-            return inspected.result;
-          }
           if (
             inspected.credential.revision.subjectId !== subjectId ||
             inspected.credential.credentialId !== request.credentialId
@@ -491,7 +466,9 @@ export const makePasskeyManagement = <
           const authorization = yield* authorize(invocation, challenge, request.actionProof),
             timestamp = DateTime.toEpochMillis(yield* DateTime.now);
 
-          yield* hooks.before(event("remove", request.commandId, subjectId, timestamp).snapshot);
+          yield* hooks.before(
+            (yield* eventEffect("remove", request.commandId, subjectId, timestamp)).snapshot,
+          );
 
           const result = yield* readPasskeyCommit(
             yield* persistence.remove(
@@ -502,13 +479,11 @@ export const makePasskeyManagement = <
                 authorization,
                 management: policy,
                 invalidation,
-                nowMillis: timestamp,
-                retentionUntilMillis: timestamp + runtime.policy.retentionMillis,
               },
               (value, journal) => {
                 const projected = snapshotPasskeySync(removeDecision, value);
 
-                if (projected._tag === "Removed" && !projected.result.replayed)
+                if (projected._tag === "Removed")
                   journal.stage(event("remove", request.commandId, subjectId, timestamp));
 
                 return journal.prepare(projected);
@@ -524,7 +499,7 @@ export const makePasskeyManagement = <
         }, passkeyUnexpected),
       });
     }),
-  );
+  ).pipe(Layer.provide(passkeyRateLimiterLayer));
 
   return Object.freeze({
     Management,

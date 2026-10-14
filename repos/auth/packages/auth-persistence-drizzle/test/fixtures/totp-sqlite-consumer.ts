@@ -1,19 +1,10 @@
-import {
-  codeAt,
-  decryptSecret,
-  digest,
-  encryptSecret,
-  generateSecret,
-  matchCode,
-  newRecoveryCodes,
-  randomId,
-} from "@yielded/auth-crypto/Totp";
+import { createHmac } from "node:crypto";
+
 import { SubjectId } from "@yielded/auth/Schema";
 import {
   AuthenticationEvidence,
   AuthenticationRequirement,
   AuthenticationFlowId,
-  SecurityRevision,
 } from "@yielded/auth/Sessions";
 import {
   base32,
@@ -22,6 +13,7 @@ import {
   type TotpRecord,
   type TotpSnapshot,
   TotpSecretKeys,
+  TotpCryptography,
   TotpPersistence,
 } from "@yielded/auth/Totp";
 import { sql } from "drizzle-orm";
@@ -131,6 +123,27 @@ export const migrate = Effect.gen(function* () {
 export const useAuthenticator = Effect.gen(function* () {
   const persistence = yield* TotpPersistence;
 
+  const {
+    decryptSecret,
+    digest,
+    encryptSecret,
+    generateSecret,
+    matchCode,
+    newRecoveryCodes,
+    randomId,
+  } = yield* TotpCryptography;
+
+  // Independent platform oracle for the authenticator's displayed code.
+  const codeAt = (secret: Uint8Array, step: number) => {
+    const counter = new Uint8Array(8);
+
+    new DataView(counter.buffer).setBigUint64(0, BigInt(step), false);
+    const mac = createHmac("sha1", secret).update(counter).digest();
+    const offset = mac[mac.length - 1]! & 15;
+
+    return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, "0");
+  };
+
   const subjectId = SubjectId.make("account-1"),
     moduleId = mapping.moduleId;
 
@@ -152,7 +165,7 @@ export const useAuthenticator = Effect.gen(function* () {
       action: kind,
       commandId,
       flowId: AuthenticationFlowId.make(commandId),
-      bindingDigest: digest(commandId),
+      bindingDigest: yield* digest(commandId),
       revision: snapshot.revision,
     });
 
@@ -162,12 +175,7 @@ export const useAuthenticator = Effect.gen(function* () {
       evidence: AuthenticationEvidence.make({
         flowId: challenge.flowId,
         bindingDigest: challenge.bindingDigest,
-        revision: {
-          ...snapshot.revision,
-          credentials: [
-            { credentialId: "verified-passkey", revision: SecurityRevision.make("passkey-1") },
-          ],
-        },
+        revision: snapshot.revision,
         proofs: [
           {
             method: "passkey",
@@ -187,7 +195,7 @@ export const useAuthenticator = Effect.gen(function* () {
     change: Parameters<TotpPersistence["Service"]["mutate"]>[0]["action"],
     management?: typeof TotpActionChallenge.Type.action,
   ) {
-    const commandId = randomId(),
+    const commandId = yield* randomId(),
       authorization =
         management === undefined ? undefined : yield* action(snapshot, management, commandId);
 
@@ -196,7 +204,6 @@ export const useAuthenticator = Effect.gen(function* () {
         snapshot,
         moduleId,
         subjectId,
-        commandId,
         policy,
         action: change,
         ...(authorization === undefined ? {} : { authorization }),
@@ -209,10 +216,10 @@ export const useAuthenticator = Effect.gen(function* () {
 
   const initial = yield* current(),
     now = DateTime.toEpochMillis(yield* DateTime.now),
-    secret = generateSecret(),
-    credentialId = randomId(),
-    revision = randomId(),
-    enrollmentId = randomId();
+    secret = yield* generateSecret(),
+    credentialId = yield* randomId(),
+    revision = yield* randomId(),
+    enrollmentId = yield* randomId();
 
   const envelope = yield* encryptSecret({ moduleId, subjectId, credentialId, revision }, secret);
 
@@ -221,7 +228,7 @@ export const useAuthenticator = Effect.gen(function* () {
     subjectId,
     credentialId,
     revision,
-    version: randomId(),
+    version: yield* randomId(),
     secret: null,
     pending: {
       revision,
@@ -249,7 +256,7 @@ export const useAuthenticator = Effect.gen(function* () {
       _tag: "Confirm",
       enrollmentId,
       matchedStep: null,
-      recoveryDigests: newRecoveryCodes(moduleId, subjectId).digests,
+      recoveryDigests: (yield* newRecoveryCodes(moduleId, subjectId)).digests,
     },
     "confirm",
   );
@@ -257,7 +264,7 @@ export const useAuthenticator = Effect.gen(function* () {
   if (wrong._tag !== "Rejected" || (yield* current()).record?.pending?.failedAttempts !== 1)
     throw new Error("Invalid confirmation did not persist its attempt");
 
-  const codes = newRecoveryCodes(moduleId, subjectId),
+  const codes = yield* newRecoveryCodes(moduleId, subjectId),
     step = Math.floor(DateTime.toEpochMillis(yield* DateTime.now) / 30000),
     displayed = codeAt(secret, step);
 
@@ -266,7 +273,7 @@ export const useAuthenticator = Effect.gen(function* () {
     {
       _tag: "Confirm",
       enrollmentId,
-      matchedStep: matchCode(secret, displayed, step * 30000, policy.clockSkewSteps),
+      matchedStep: yield* matchCode(secret, displayed, step * 30000, policy.clockSkewSteps),
       recoveryDigests: codes.digests,
     },
     "confirm",
@@ -301,7 +308,7 @@ export const useAuthenticator = Effect.gen(function* () {
 
   const regenerated = yield* mutate(
     yield* current(),
-    { _tag: "Regenerate", recoveryDigests: newRecoveryCodes(moduleId, subjectId).digests },
+    { _tag: "Regenerate", recoveryDigests: (yield* newRecoveryCodes(moduleId, subjectId)).digests },
     "regenerate",
   );
 

@@ -13,12 +13,6 @@ export const PasswordCommandId = Schema.NonEmptyString.check(Schema.isMaxLength(
 
 export type PasswordCommandId = typeof PasswordCommandId.Type;
 
-export const PasswordAttemptId = Schema.NonEmptyString.check(Schema.isMaxLength(256)).pipe(
-  Schema.brand("effect-auth/PasswordAttemptId"),
-);
-
-export type PasswordAttemptId = typeof PasswordAttemptId.Type;
-
 export const PasswordReplacement = Schema.Struct({
   verifier: Schema.RedactedFromValue(EncodedPasswordHash),
   normalization: PasswordNormalization,
@@ -26,7 +20,9 @@ export const PasswordReplacement = Schema.Struct({
 
 export type PasswordReplacement = typeof PasswordReplacement.Type;
 
-/** Storage/private value. Verifier version changes on rehash; semantic revisions do not. */
+/** Private coherent snapshot with the complete active factor revision vector.
+ * The vector does not prove those factors; proofs identify actual verifications.
+ * Verifier version changes on rehash; semantic revisions do not. */
 export const PasswordCredentialSnapshot = Schema.Struct({
   moduleId: Schema.NonEmptyString,
   revision: AuthenticationRevision,
@@ -68,13 +64,4 @@ export interface PasswordActionAuthorization {
   readonly requirement: AuthenticationRequirement;
 }
 
-export type PasswordAttemptAdmission =
-  | {
-      readonly _tag: "Admitted";
-      readonly attemptId: PasswordAttemptId;
-      readonly credential?: PasswordCredentialSnapshot;
-    }
-  | { readonly _tag: "Denied" };
-
-export type PasswordAttemptDecision = "verified" | "rejected";
 export type PasswordMutationDecision = "changed" | "rejected";

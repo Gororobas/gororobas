@@ -4,39 +4,27 @@ import type { PreparedCommit } from "../hooks/commit";
 import type { PrepareOAuthCommit } from "./OAuthSignInPersistence";
 import { OAuthRegistrationIntent } from "./registrationModels";
 import type { OAuthUnavailable } from "./signInErrors";
-import {
-  OAuthSettlementDecision,
-  type OAuthClaim,
-  type OAuthVerifiedExternalIdentity,
-} from "./signInModels";
 
-export const OAuthRegistrationSettlement = Schema.Union([
-  OAuthSettlementDecision,
+export const OAuthRegistrationIssueDecision = Schema.Union([
   Schema.TaggedStruct("RegistrationIssued", { intent: OAuthRegistrationIntent }),
+  Schema.TaggedStruct("Rejected", {}),
 ]);
 
-export type OAuthRegistrationSettlement = typeof OAuthRegistrationSettlement.Type;
+export type OAuthRegistrationIssueDecision = typeof OAuthRegistrationIssueDecision.Type;
 
-/** Optional replacement for VERIFIED sign-in settlement, under the same flow and
- * identity authority. Existing active credentials sign in. Only a globally unowned,
- * currently permitted and unreserved full tuple may create the exact supplied restricted intent.
- * Connected-only, disabled or otherwise owned identities never count as unknown.
- * Exact claim/context/deadline CAS, terminal erasure, unique intent/reference,
- * ownership check, and the prepared decision commit together. No provisioning.
- * If intent is absent/expired, unknown identity commits Rejected. Retain original
- * binder and immutable time horizons. Unknown outcomes discard every receipt.
- */
+/** Optional restricted intent issuance after a consumed sign-in flow and one
+ * verified provider exchange. Check unknown full-tuple ownership and eligibility
+ * in the inserting owner; disabled or connected-only ownership is not unknown.
+ * No unknown-identity reservation is created and no subject is provisioned here.
+ * Confirm the exact binder, identity and immutable horizons before releasing the
+ * private registration credential. An unknown commit releases none and never
+ * authorizes another exchange or automatic intent issuance. */
 export class OAuthRegistrationIntents extends Context.Service<
   OAuthRegistrationIntents,
   {
-    readonly settle: <A>(
-      input: {
-        readonly claim: OAuthClaim;
-        readonly identity: OAuthVerifiedExternalIdentity;
-        readonly intent?: OAuthRegistrationIntent;
-        readonly nowMillis: number;
-      },
-      prepare: PrepareOAuthCommit<OAuthRegistrationSettlement, A>,
+    readonly issue: <A>(
+      input: { readonly intent: OAuthRegistrationIntent },
+      prepare: PrepareOAuthCommit<OAuthRegistrationIssueDecision, A>,
     ) => Effect.Effect<PreparedCommit<A>, OAuthUnavailable>;
   }
 >()("effect-auth/OAuthRegistrationIntents") {}

@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, Scope } from "effect";
+import { Context, Effect, Layer, Schema, SchemaAST, Scope } from "effect";
 import { AsyncResult, Atom, AtomRegistry, Reactivity } from "effect/reactivity";
 
 import {
@@ -14,7 +14,9 @@ import { AuthAtomLifetime, type AuthSubjectLifetime } from "./AuthAtomLifetime";
 import type { ReactivityKeys } from "./operations";
 import { type AccountBinding, makeScopedRuntime } from "./scoped-runtime";
 
-type ActionsWithSession = AuthActions & { readonly getSession: AnyAuthAction };
+type ActionsWithSession = AuthActions & {
+  readonly getSession: AnyAuthAction;
+};
 type DecoderServices<Actions extends AuthActions> = ActionDecodeServices<Actions[keyof Actions]>;
 
 export interface AuthAtomOptions<
@@ -46,9 +48,13 @@ type QueryAtom<Action extends AnyAuthAction, E = never> = Atom.Atom<
 >;
 
 export type AuthActionAtom<Action extends AnyAuthAction, E = never> = Action["mode"] extends "query"
-  ? undefined extends RouteInput<Action["route"]>
+  ? [RouteInput<Action["route"]>] extends [void]
     ? QueryAtom<Action, E>
-    : (input: RouteInput<Action["route"]>) => QueryAtom<Action, E>
+    : (
+        ...args: undefined extends RouteInput<Action["route"]>
+          ? [input?: RouteInput<Action["route"]>]
+          : [input: RouteInput<Action["route"]>]
+      ) => QueryAtom<Action, E>
   : Atom.AtomResultFn<
       RouteInput<Action["route"]>,
       RouteSuccess<Action["route"]>,
@@ -63,10 +69,12 @@ export type AuthAtoms<
 > = {
   readonly [Name in keyof Actions]: AuthActionAtom<Actions[Name], E>;
 } & {
+  /** Default getSession query, including any initial display data. */
   readonly session: QueryAtom<Actions["getSession"], E>;
   readonly client: ClientDefinition<Id, Actions, R>;
   /** Account-scoped queries, effects, state and workflows. Named auth mutations
-   * use the host lifetime so their own successful account change can settle. */
+   * and subject-discovering queries use the host lifetime so their own account
+   * change can settle. */
   readonly runtime: Atom.AtomRuntime<
     ClientService<Id, Actions> | AuthAtomLifetime | DecoderServices<Actions>,
     E | OperationHttpError
@@ -127,6 +135,9 @@ export const make = <
 
     if (
       actions.getSession.mode !== "query" ||
+      !Schema.is(Schema.toEncoded(actions.getSession.route.operation.rpc.payloadSchema))(
+        undefined,
+      ) ||
       ["session", "runtime", "client"].some((name) => Object.hasOwn(actions, name)) ||
       Object.values(actions).some(
         ({ mode, route }) =>
@@ -152,6 +163,13 @@ export const make = <
           Effect.mapError(() => OperationHttpError.make({ reason: "response" })),
           Effect.provide(codecServices),
         )
+      : undefined;
+
+    const seedSubject = hasSeed
+      ? yield* Effect.try({
+          try: () => actions.getSession.subject?.fromSuccess(seed),
+          catch: () => OperationHttpError.make({ reason: "response" }),
+        })
       : undefined;
 
     const memoMap = Atom.isAtom(factory.memoMap) ? parent.get(factory.memoMap) : factory.memoMap;
@@ -208,7 +226,13 @@ export const make = <
           return;
         }
         if (current.generation === event.state.generation) return;
-        binding.seedAvailable = false;
+        // Initial verification may acquire the already displayed account before
+        // its query publishes the result. Explicit replacement still retires it.
+        binding.seedAvailable =
+          binding.seedAvailable &&
+          current.generation === 0 &&
+          event.action === "getSession" &&
+          event.state.subject === seedSubject;
         // Retire public views and settle pending dispatch observers before disposal.
         for (const listener of [...listeners]) listener(event);
         current.registry.dispose();
@@ -237,6 +261,7 @@ export const make = <
   });
 
   // The options tuple requires a fully provided Layer whenever the client needs services.
+  // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
   const clientLayer = (options.layer ?? client.layerFetch) as Layer.Layer<
     ClientService<Id, Actions>,
     E | OperationHttpError
@@ -321,42 +346,57 @@ export const make = <
   };
 
   const atoms = Object.fromEntries(
-    Object.entries(actions).map(([name, action]) => {
-      if (action.mode === "mutation") return [name, mutation(name)];
+    Object.entries(actions).flatMap(([name, action]) => {
+      if (action.mode === "mutation") return [[name, mutation(name)]];
 
-      const query = Atom.family((input: RouteInput<Actions[string]["route"]>) =>
-        runtime
-          .atom(call(name, input))
-          .pipe(factory.withReactivity(queryKeys), Atom.withServerValueInitial),
-      );
+      const query = Atom.family((input: RouteInput<Actions[string]["route"]>) => {
+        // A subject-discovering read must outlive the account registry it retires.
+        // Other transitions still clear its result and restart the request.
+        const source =
+          action.subject !== undefined
+            ? host.atom((get) =>
+                Effect.gen(function* () {
+                  const binding = yield* AuthAtomBinding;
+                  const instance = yield* client;
+                  const origin = {};
 
-      // Restore the encoded payload relationship while inspecting heterogeneous actions.
-      const payloadSchema = action.route.operation.rpc.payloadSchema as Schema.Top & {
-        readonly Encoded: RouteInput<Actions[string]["route"]>;
-      };
+                  get.addFinalizer(
+                    binding.subscribe((event) => {
+                      get.setSelf(AsyncResult.initial(true));
+                      if (event.origin !== origin) get.refreshSelf();
+                    }),
+                  );
 
-      const input: unknown = undefined;
+                  return yield* instance.auth[AuthClientTypeId].call(name, input, { origin });
+                }),
+              )
+            : runtime.atom(call(name, input));
 
-      if (!Schema.is(Schema.toEncoded(payloadSchema))(input)) return [name, query];
-      if (name !== "getSession" || !Object.hasOwn(options, "initialSession"))
-        return [name, query(input)];
-      const session = query(input);
+        const session = source.pipe(factory.withReactivity(queryKeys), Atom.withServerValueInitial);
 
-      return [
-        name,
-        Atom.readable((get) => {
-          const result = get(session);
-          const context = get(host);
+        if (
+          name !== "getSession" ||
+          input !== undefined ||
+          !Object.hasOwn(options, "initialSession")
+        )
+          return session;
 
-          if (!AsyncResult.isSuccess(context)) return result;
-          const binding = Context.get(context.value, AuthAtomBinding);
+        return Atom.readable(
+          (get) => {
+            const result = get(session);
+            const context = get(host);
 
-          if (!AsyncResult.isInitial(result)) binding.seedAvailable = false;
+            if (!AsyncResult.isSuccess(context)) return result;
+            const binding = Context.get(context.value, AuthAtomBinding);
 
-          return binding.seedAvailable
-            ? AsyncResult.success(binding.seed, { waiting: true })
-            : result;
-        }).pipe(
+            if (!AsyncResult.isInitial(result)) binding.seedAvailable = false;
+
+            return binding.seedAvailable
+              ? AsyncResult.success(binding.seed, { waiting: true })
+              : result;
+          },
+          (refresh) => refresh(session),
+        ).pipe(
           Atom.withServerValue((get) => {
             const context = get(host);
 
@@ -367,15 +407,43 @@ export const make = <
               ? AsyncResult.success(binding.seed, { waiting: true })
               : AsyncResult.initial(true);
           }),
-        ),
+        );
+      });
+
+      // Restore the encoded payload relationship while inspecting heterogeneous actions.
+      const payloadSchema = action.route.operation.rpc.payloadSchema as Schema.Top & {
+        readonly Encoded: RouteInput<Actions[string]["route"]>;
+      };
+
+      const payload = Schema.toEncoded(payloadSchema);
+      const input: unknown = undefined;
+      const acceptsDefault = Schema.is(payload)(input);
+
+      const entries = [
+        [
+          name,
+          acceptsDefault && (SchemaAST.isVoid(payload.ast) || SchemaAST.isUndefined(payload.ast))
+            ? query(input)
+            : query,
+        ],
       ];
+
+      if (name === "getSession")
+        entries.push([
+          "session",
+          acceptsDefault
+            ? query(input)
+            : runtime.atom(Effect.fail(OperationHttpError.make({ reason: "request" }))),
+        ]);
+
+      return entries;
     }),
   );
 
   // Action mode and encoded payload choose each named atom's exact public form.
-  return Object.freeze({ ...atoms, session: atoms.getSession, client, runtime }) as AuthAtoms<
-    Id,
-    Actions,
-    E
-  >;
+  return Object.freeze({
+    ...atoms,
+    client,
+    runtime,
+  }) as AuthAtoms<Id, Actions, E>;
 };

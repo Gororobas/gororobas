@@ -31,87 +31,84 @@ const guest = { _tag: "Guest" } as const;
 
 // Requested security regression: ingress must reject before a proof-request
 // handler can perform target lookup or persistence, using each invocation's keys.
-it.effect("authorizes email requests and resends with the current trusted network context", () =>
-  Effect.gen(function* () {
-    const { Request, Resend } = app.strategies.email.operations;
-    const seen: Array<{ action: string; network: string; device: string | undefined }> = [];
-    let entered = 0;
+it.effect(
+  "authorizes email issue and repeated requests with the current trusted network context",
+  () =>
+    Effect.gen(function* () {
+      const { Request } = app.strategies.email.operations;
+      const seen: Array<{ action: string; network: string; device: string | undefined }> = [];
+      let entered = 0;
 
-    const handler = Effect.sync(() => {
-      entered++;
-    }).pipe(Effect.andThen(Effect.fail(Email.EmailUnavailable.make({}))));
+      const handler = Effect.sync(() => {
+        entered++;
+      }).pipe(Effect.andThen(Effect.fail(Email.EmailUnavailable.make({}))));
 
-    const handlers = yield* Layer.build(
-      Layer.merge(
-        Request.handlerLayer(() => handler),
-        Resend.handlerLayer(() => handler),
-      ),
-    );
+      const handlers = yield* Layer.build(Request.handlerLayer(() => handler));
 
-    const limiter = Proofs.HostIngressLimiter.of({
-      check: (input) =>
-        Effect.gen(function* () {
-          const network = Redacted.value(input.networkKey);
+      const limiter = Proofs.HostIngressLimiter.of({
+        check: (input) =>
+          Effect.gen(function* () {
+            const network = Redacted.value(input.networkKey);
 
-          seen.push({
-            action: input.action,
-            network,
-            device: input.deviceKey === undefined ? undefined : Redacted.value(input.deviceKey),
-          });
-          if (network === "blocked") return yield* Proofs.ProofIngressDenied.make({});
-        }),
-    });
+            seen.push({
+              action: input.action,
+              network,
+              device: input.deviceKey === undefined ? undefined : Redacted.value(input.deviceKey),
+            });
+            if (network === "blocked") return yield* Proofs.ProofIngressDenied.make({});
+          }),
+      });
 
-    const denied = yield* Request.invoke(guest, request).pipe(
-      Effect.provide(handlers),
-      Effect.provideService(Proofs.HostIngressLimiter, limiter),
-      Effect.provideService(
-        Proofs.ProofRequestContext,
-        Effect.succeed({ networkKey: Redacted.make("blocked") }),
-      ),
-      Effect.result,
-    );
+      const denied = yield* Request.invoke(guest, request).pipe(
+        Effect.provide(handlers),
+        Effect.provideService(Proofs.HostIngressLimiter, limiter),
+        Effect.provideService(
+          Proofs.ProofRequestContext,
+          Effect.succeed({ networkKey: Redacted.make("blocked") }),
+        ),
+        Effect.result,
+      );
 
-    const afterDenied = entered;
+      const afterDenied = entered;
 
-    const admitted = yield* Request.invoke(guest, request).pipe(
-      Effect.provide(handlers),
-      Effect.provideService(Proofs.HostIngressLimiter, limiter),
-      Effect.provideService(
-        Proofs.ProofRequestContext,
-        Effect.succeed({
-          networkKey: Redacted.make("allowed"),
-          deviceKey: Redacted.make("trusted-device"),
-        }),
-      ),
-      Effect.result,
-    );
+      const admitted = yield* Request.invoke(guest, request).pipe(
+        Effect.provide(handlers),
+        Effect.provideService(Proofs.HostIngressLimiter, limiter),
+        Effect.provideService(
+          Proofs.ProofRequestContext,
+          Effect.succeed({
+            networkKey: Redacted.make("allowed"),
+            deviceKey: Redacted.make("trusted-device"),
+          }),
+        ),
+        Effect.result,
+      );
 
-    const resent = yield* Resend.invoke(guest, { ...request, supersedes: "previous" }).pipe(
-      Effect.provide(handlers),
-      Effect.provideService(Proofs.HostIngressLimiter, limiter),
-      Effect.provideService(
-        Proofs.ProofRequestContext,
-        Effect.succeed({ networkKey: Redacted.make("blocked") }),
-      ),
-      Effect.result,
-    );
+      const resent = yield* Request.invoke(guest, request).pipe(
+        Effect.provide(handlers),
+        Effect.provideService(Proofs.HostIngressLimiter, limiter),
+        Effect.provideService(
+          Proofs.ProofRequestContext,
+          Effect.succeed({ networkKey: Redacted.make("blocked") }),
+        ),
+        Effect.result,
+      );
 
-    expect(denied).toMatchObject({ _tag: "Failure", failure: { _tag: "EmailRejected" } });
-    expect(afterDenied).toBe(0);
-    expect(admitted).toMatchObject({ _tag: "Failure", failure: { _tag: "EmailUnavailable" } });
-    expect(resent).toMatchObject({ _tag: "Failure", failure: { _tag: "EmailRejected" } });
-    expect(entered).toBe(1);
-    expect(seen).toEqual([
-      { action: "test/proof-ingress/email/code/sign-in", network: "blocked", device: undefined },
-      {
-        action: "test/proof-ingress/email/code/sign-in",
-        network: "allowed",
-        device: "trusted-device",
-      },
-      { action: "test/proof-ingress/email/code/sign-in", network: "blocked", device: undefined },
-    ]);
-  }).pipe(Effect.scoped),
+      expect(denied).toMatchObject({ _tag: "Failure", failure: { _tag: "EmailRejected" } });
+      expect(afterDenied).toBe(0);
+      expect(admitted).toMatchObject({ _tag: "Failure", failure: { _tag: "EmailUnavailable" } });
+      expect(resent).toMatchObject({ _tag: "Failure", failure: { _tag: "EmailRejected" } });
+      expect(entered).toBe(1);
+      expect(seen).toEqual([
+        { action: "test/proof-ingress/email/code/sign-in", network: "blocked", device: undefined },
+        {
+          action: "test/proof-ingress/email/code/sign-in",
+          network: "allowed",
+          device: "trusted-device",
+        },
+        { action: "test/proof-ingress/email/code/sign-in", network: "blocked", device: undefined },
+      ]);
+    }).pipe(Effect.scoped),
 );
 
 it.effect(

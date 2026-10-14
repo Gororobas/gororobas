@@ -61,7 +61,7 @@ export const passwordCredential = (state: Readonly<State>, account: Customer) =>
     ? undefined
     : Password.PasswordCredentialSnapshot.make({
         moduleId: AppAuth.strategies.password.persistence.moduleId,
-        revision: revision(state, account, [password.credentialId]),
+        revision: revision(state, account),
         credentialId: password.credentialId,
         credentialRevision: password.revision,
         verifierVersion: password.verifierVersion,

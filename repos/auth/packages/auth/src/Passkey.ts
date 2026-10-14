@@ -10,9 +10,6 @@ export {
   PasskeyBegin,
   PasskeyCeremony,
   PasskeyChallenge,
-  PasskeyClaim,
-  PasskeyClaimDecision,
-  PasskeyCleanupResult,
   PasskeyCommandId,
   PasskeyComplete,
   PasskeyContext,
@@ -24,7 +21,6 @@ export {
   PasskeyEnrolled,
   PasskeyEnrollmentSnapshot,
   PasskeyEvidence,
-  PasskeyGeneration,
   PasskeyInstant,
   PasskeyIssueDecision,
   PasskeyLabel,
@@ -43,7 +39,7 @@ export {
   PasskeyRequirement,
   PasskeyRevision,
   PasskeyRpId,
-  PasskeySettlement,
+  PasskeyConsumeDecision,
   PasskeyTarget,
   PasskeyUserHandle,
 } from "./passkey/models";
@@ -61,7 +57,6 @@ export {
 } from "./passkey/errors";
 
 export { PasskeyCredentials } from "./passkey/PasskeyCredentials";
-export { PasskeyEnrollmentContext } from "./passkey/PasskeyEnrollmentContext";
 export { PasskeyManagementPersistence } from "./passkey/PasskeyManagementPersistence";
 export { PasskeyManagementPolicy, PasskeyMethodPolicy } from "./passkey/policy";
 export { PasskeyPersistence, type PreparePasskeyCommit } from "./passkey/PasskeyPersistence";

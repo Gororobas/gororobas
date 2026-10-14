@@ -1,3 +1,4 @@
+import type { Hmac } from "@yielded/crypto/Hmac";
 import {
   Schema,
   Context,
@@ -11,7 +12,13 @@ import {
   Redacted,
   Scope,
 } from "effect";
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import {
+  type Cookies,
+  HttpEffect,
+  HttpRouter,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/http";
 import { HttpApi, HttpApiBuilder, type HttpApiGroup, type HttpApiEndpoint } from "effect/http-api";
 
 import { AuthRequest } from "../auth/AuthRequest";
@@ -19,10 +26,7 @@ import type { SessionApi, SessionApiError } from "../auth/session";
 import { HookDenied } from "../hooks/models";
 import { OperationHttpConfigurationError, OperationHttpError } from "../http-operation/errors";
 import type { HttpCredentials, OperationHttpConfiguration } from "../http-operation/models";
-import {
-  invocationLayer,
-  OperationHttpInvocation,
-} from "../http-operation/OperationHttpInvocation";
+import { OperationHttpInvocation } from "../http-operation/OperationHttpInvocation";
 import {
   configurationLayer,
   cookieConfiguration,
@@ -30,6 +34,9 @@ import {
 } from "../http-operation/OperationHttpServerConfig";
 import { mutationSecurity, requestSecurity } from "../http-operation/security";
 import { make as makeOperationServer } from "../http-operation/server";
+import { rotationCookies, snapshotCookie } from "../http-operation/session-cache-cookie";
+import { withoutObservability } from "../internal/diagnostics";
+import { cookieDomain, httpsOrigin, origin, originWithinDomain } from "../internal/origin";
 import type { OAuthConnectedProtocol } from "../oauth/OAuthConnectedProtocol";
 import type { OAuthProtocol } from "../oauth/OAuthProtocol";
 import type { ProviderDefinition } from "../oauth/providerDefinition";
@@ -40,10 +47,17 @@ import {
   AuthCredentialCommandCollector,
   AuthRevealCommandCollectorService,
 } from "../operations/credentials";
+import { OperationOutputError } from "../operations/errors";
 import type { RequestBindingConfigurationError } from "../operations/requestBinding";
 import type { RequestBindingConfig } from "../operations/RequestBindingConfig";
 import { ProofUnavailable } from "../proofs/errors";
 import { ProofRequestContext } from "../proofs/ProofRequestContext";
+import { sessionCacheTransport } from "../sessions/cookieCache";
+import {
+  cacheSessionInvocation,
+  SessionVerificationCapture,
+  withSessionRequest,
+} from "../sessions/invocation";
 import type { SessionMetadata } from "../sessions/models";
 import { httpGroup, matchesEndpoint } from "./auth-contract";
 import { makeOAuth, type OAuthOptions } from "./oauth";
@@ -64,12 +78,20 @@ const withProofRequestContext = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     return yield* Effect.provideService(effect, ProofRequestContext, context);
   });
 
-/** Browser transport policy. Secure names retain __Host-; insecure cookies are loopback-only. */
+/** Browser transport policy. Domain cookies require Secure and trust every subdomain.
+ * Never host user- or AI-generated content there; audit dangling DNS, verify sessions
+ * server-side and retain Origin/CSRF admission on mutations. */
 export interface AuthHttpOptions<E = never, R = never, ResponseR = never> {
   readonly origin: string;
+  /** Additional exact HTTPS origins, within cookie.domain if set. Host-only HTTP
+   * loopback deployments with secure: false also admit HTTP loopback origins. */
+  readonly trustedOrigins?: ReadonlyArray<string>;
   readonly maximumBodyBytes?: number;
   readonly maximumUrlBytes?: number;
   readonly cookie?: {
+    /** Bare parent host shared by all auth cookies. Defaults to host-only cookies.
+     * With a domain, names use __Secure-; __Host- and secure: false fail startup. */
+    readonly domain?: string;
     readonly prefix?: string;
     readonly name?: string;
     readonly secure?: boolean;
@@ -130,7 +152,10 @@ export const layer = <
   const Options extends AuthHttpOptions<unknown, unknown, unknown>,
 >(
   auth: Omit<Context.Key<I, Api>, typeof Unify.unifySymbol> & {
-    readonly sessions: { readonly Session: Schema.Codec<S, unknown, unknown, RE> };
+    readonly sessions: {
+      readonly moduleId: string;
+      readonly Session: Schema.Codec<S, unknown, unknown, RE>;
+    };
     readonly contract: { readonly basePath?: string; readonly actions: Actions };
     readonly layer: Layer.Layer<I, AE, AR>;
   },
@@ -157,7 +182,10 @@ export const make = <
   const Options extends AuthHttpOptions<unknown, unknown, unknown>,
 >(
   auth: Omit<Context.Key<I, Api>, typeof Unify.unifySymbol> & {
-    readonly sessions: { readonly Session: Schema.Codec<S, unknown, unknown, RE> };
+    readonly sessions: {
+      readonly moduleId: string;
+      readonly Session: Schema.Codec<S, unknown, unknown, RE>;
+    };
     readonly contract: { readonly basePath?: string; readonly actions: Actions };
     readonly layer: Layer.Layer<I, AE, AR>;
   },
@@ -178,6 +206,8 @@ export const make = <
           auth.contract.actions,
         );
 
+  // OAuthConfigured mirrors the branch below; only configured OAuth providers contribute errors and supply OAuth services.
+  // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
   const layer = (
     oauth === undefined ? auth.layer : auth.layer.pipe(Layer.provideMerge(oauth.layer))
   ) as Layer.Layer<
@@ -188,62 +218,127 @@ export const make = <
 
   const secure = options.cookie?.secure ?? true;
 
+  const domain = options.cookie?.domain;
+  const requiredPrefix = domain === undefined ? "__Host-" : "__Secure-";
+
   const cookies = cookieConfiguration({
-    prefix: options.cookie?.prefix ?? (secure ? "__Host-effect-auth-" : "effect-auth-"),
+    ...(domain === undefined ? {} : { domain }),
+    prefix: options.cookie?.prefix ?? (secure ? `${requiredPrefix}effect-auth-` : "effect-auth-"),
     secure,
     sameSite: options.cookie?.sameSite ?? "lax",
   });
 
   const sessionCookieName = options.cookie?.name ?? cookies.session.name;
 
-  const configuration =
-    (secure &&
-      (!cookies.session.name.startsWith("__Host-") || !sessionCookieName.startsWith("__Host-"))) ||
-    (!secure && options.origin.startsWith("https:")) ||
-    (options.oauth !== undefined && options.cookie?.sameSite === "strict")
-      ? Layer.effect(
-          OperationHttpServerConfig,
-          Effect.fail(OperationHttpConfigurationError.make({ reason: "cookies" })),
-        )
-      : configurationLayer({
-          publicOrigin: options.origin,
-          trustedOrigins: [options.origin],
-          cookies: {
-            ...cookies,
-            session: { ...cookies.session, name: sessionCookieName },
-          },
-          csrfHeader: options.csrf?.header ?? "x-effect-auth-csrf",
-          csrfValue: options.csrf?.value ?? "1",
-          maximumBodyBytes: options.maximumBodyBytes ?? 65536,
-          maximumUrlBytes: options.maximumUrlBytes ?? 8192,
-        });
+  const configuration = Layer.unwrap(
+    Effect.gen(function* () {
+      if (domain !== undefined) {
+        yield* Schema.decodeEffect(cookieDomain)(domain).pipe(
+          Effect.mapError(() => OperationHttpConfigurationError.make({ reason: "cookies" })),
+        );
+      }
+      if (
+        (secure &&
+          (!cookies.session.name.startsWith(requiredPrefix) ||
+            !sessionCookieName.startsWith(requiredPrefix))) ||
+        (domain !== undefined && !secure) ||
+        (!secure && options.origin.startsWith("https:")) ||
+        (options.oauth !== undefined && options.cookie?.sameSite === "strict")
+      )
+        return yield* OperationHttpConfigurationError.make({ reason: "cookies" });
+
+      yield* Schema.decodeEffect(domain === undefined ? origin : httpsOrigin)(options.origin).pipe(
+        Effect.mapError(() => OperationHttpConfigurationError.make({ reason: "origin" })),
+      );
+
+      const additionalOrigin =
+        domain === undefined && !secure && options.origin.startsWith("http:")
+          ? Schema.Union([httpsOrigin, origin.check(Schema.isPattern(/^http:/))])
+          : httpsOrigin;
+
+      const additional = yield* Schema.decodeEffect(Schema.Array(additionalOrigin))(
+        options.trustedOrigins ?? [],
+      ).pipe(Effect.mapError(() => OperationHttpConfigurationError.make({ reason: "origin" })));
+
+      const trustedOrigins = [...new Set([options.origin, ...additional])];
+
+      if (
+        domain !== undefined &&
+        !trustedOrigins.every((value) => originWithinDomain(value, domain))
+      )
+        return yield* OperationHttpConfigurationError.make({ reason: "origin" });
+
+      return configurationLayer({
+        publicOrigin: options.origin,
+        trustedOrigins,
+        cookies: {
+          ...cookies,
+          session: { ...cookies.session, name: sessionCookieName },
+        },
+        csrfHeader: options.csrf?.header ?? "x-effect-auth-csrf",
+        csrfValue: options.csrf?.value ?? "1",
+        maximumBodyBytes: options.maximumBodyBytes ?? 65536,
+        maximumUrlBytes: options.maximumUrlBytes ?? 8192,
+      });
+    }),
+  );
 
   const resolve = (
     api: Pick<SessionApi<S>, "verifySession">,
     credential: Redacted.Redacted<string> | undefined,
   ) =>
-    credential === undefined
-      ? Effect.succeed(guest)
-      : api.verifySession(credential).pipe(
-          Effect.map((session) => ({
+    Effect.gen(function* () {
+      if (credential === undefined) return guest;
+      const capture = yield* Effect.serviceOption(SessionVerificationCapture);
+      const now = DateTime.toEpochMillis(yield* DateTime.now);
+
+      const original =
+        Option.isSome(capture) && capture.value.isActive()
+          ? capture.value.sessions.findLast(
+              (value) =>
+                value.moduleId === auth.sessions.moduleId &&
+                Redacted.value(value.credential) === Redacted.value(credential) &&
+                now < value.expiresAtMillis &&
+                now < value.absoluteExpiresAtMillis,
+            )
+          : undefined;
+
+      const session =
+        original ??
+        (yield* api
+          .verifySession(credential)
+          .pipe(Effect.catchTag("SessionInvalid", () => Effect.succeed(null))));
+
+      return session === null
+        ? guest
+        : {
             _tag: "Authenticated" as const,
             subjectId: session.subjectId,
             sessionId: session.sessionId,
             assurance: session.assurance,
-          })),
-          Effect.catchTag("SessionInvalid", () => Effect.succeed(guest)),
-        );
+          };
+    });
 
   /** Existing operation contracts retain private predecode injection and their wire format. */
   const operationLayer = Layer.merge(
     configuration,
-    invocationLayer(
-      Effect.fn("AuthHttp.invocation")(function* (_request, credentials) {
+    Layer.effect(
+      OperationHttpInvocation,
+      Effect.gen(function* () {
         const api = yield* auth;
+        const cacheTransport = api[sessionCacheTransport];
 
-        return yield* resolve(api, credentials.session).pipe(
-          Effect.mapError(() => OperationHttpError.make({ reason: "unavailable" })),
-        );
+        return {
+          ...(cacheTransport === undefined ? {} : { [sessionCacheTransport]: cacheTransport }),
+          resolve: Effect.fn("AuthHttp.invocation")(function* (
+            _request: Request,
+            credentials: HttpCredentials,
+          ) {
+            return yield* resolve(api, credentials.session).pipe(
+              Effect.mapError(() => OperationHttpError.make({ reason: "unavailable" })),
+            );
+          }),
+        };
       }),
     ),
   );
@@ -266,6 +361,7 @@ export const make = <
         const services = (yield* Effect.context<
           Exclude<Effect.Services<ReturnType<Api["requireSession"]>>, AuthRequest>
         >()).pipe(
+          withoutObservability,
           Context.omit(
             AuthRequest,
             Scope.Scope,
@@ -279,6 +375,7 @@ export const make = <
             // HttpApiBuilder treats middleware.requires as a construction dependency.
             // This exact Effect runs only inside the request security handler, so
             // expose its AuthRequest requirement through the router request marker.
+            // @effect-diagnostics-next-line anyUnknownInErrorContext:off
             const required = api
               .requireSession()
               .pipe(Effect.provide(services)) as unknown as Effect.Effect<
@@ -314,60 +411,168 @@ export const make = <
       );
 
       const commands: AuthCredentialCommand[] = [];
+      const mutationCookies: Cookies.Cookie[] = [];
+      const cacheTransport = security.native ? undefined : api[sessionCacheTransport];
       let mutationAdmitted = false;
 
-      const beforeMutation = mutationSecurity(request).pipe(
-        Effect.provideService(OperationHttpServerConfig, config),
-        Effect.mapError(() => HookDenied.make({ reason: "policy" })),
-        Effect.tap(() =>
-          Effect.sync(() => {
-            mutationAdmitted = true;
-          }),
+      const rotateCache = yield* Effect.cached(
+        Effect.gen(function* () {
+          if (cacheTransport === undefined) return;
+          const generation = yield* cacheTransport.rotate;
+
+          mutationCookies.push(
+            ...(yield* rotationCookies(
+              config.cookies["session-cache"],
+              generation,
+              cacheTransport.lifetimeMillis,
+            )),
+          );
+        }),
+      );
+
+      const beforeMutation = yield* Effect.cached(
+        mutationSecurity(request).pipe(
+          Effect.provideService(OperationHttpServerConfig, config),
+          Effect.mapError(() => HookDenied.make({ reason: "policy" })),
+          Effect.andThen(
+            Effect.gen(function* () {
+              yield* rotateCache;
+              mutationAdmitted = true;
+            }).pipe(Effect.mapError(() => HookDenied.make({ reason: "unavailable" }))),
+          ),
         ),
       );
 
-      const sink = (values: ReadonlyArray<AuthCredentialCommand>) =>
-        Effect.sync(() => {
-          if (!mutationAdmitted)
-            throw new Error("Credential delivery requires an admitted mutation");
-          commands.push(...values);
-        });
+      const sink = Effect.fnUntraced(function* (values: ReadonlyArray<AuthCredentialCommand>) {
+        if (!mutationAdmitted) return yield* Effect.die(OperationOutputError.make({}));
+        commands.push(...values);
+      });
 
-      const resolveInvocation = resolve(api, security.credentials.session);
-
-      let response = yield* effect.pipe(
-        Effect.provideService(auth, api),
-        Effect.provideService(AuthRequest, {
-          invocation: guest,
-          credentials: security.credentials,
-          resolveInvocation,
-          beforeMutation,
-          credentialCommandSink: sink,
-        }),
-        withProofRequestContext,
+      const resolveInvocation = yield* cacheSessionInvocation(
+        resolve(api, security.credentials.session),
       );
 
-      const now = DateTime.toEpochMillis(yield* DateTime.now);
+      return yield* Effect.gen(function* () {
+        let response = yield* effect.pipe(
+          Effect.provideService(auth, api),
+          Effect.provideService(AuthRequest, {
+            invocation: guest,
+            credentials: security.credentials,
+            // Only named actions grant query mode; other HTTP methods stay fresh.
+            ...(["GET", "HEAD"].includes(request.method)
+              ? {}
+              : { actionMode: "mutation" as const }),
+            ...(security.sessionCacheGeneration === undefined
+              ? {}
+              : { sessionCacheGeneration: security.sessionCacheGeneration }),
+            resolveInvocation,
+            beforeMutation,
+            credentialCommandSink: sink,
+            ...(cacheTransport === undefined
+              ? {}
+              : {
+                  initializeSessionCache: rotateCache,
+                  sessionCacheCommandSink: (command) =>
+                    Effect.sync(() => {
+                      commands.push(command);
+                    }),
+                }),
+          }),
+          withProofRequestContext,
+        );
 
-      for (const command of commands) {
-        const cookie = config.cookies[command.slot];
+        const now = DateTime.toEpochMillis(yield* DateTime.now);
 
-        response = yield* HttpServerResponse.setCookie(
-          response,
-          cookie.name,
-          command._tag === "Issue" ? Redacted.value(command.credential) : "",
-          {
-            ...cookie,
-            httpOnly: true,
-            maxAge: Duration.millis(
-              command._tag === "Issue" ? Math.max(0, command.expiresAtMillis - now) : 0,
-            ),
-          },
-        ).pipe(Effect.mapError(() => OperationHttpError.make({ reason: "response" })));
-      }
+        for (const command of commands) {
+          const cookie = config.cookies[command.slot];
 
-      return HttpServerResponse.setHeader(response, "cache-control", "no-store");
-    });
+          if (command.slot === "session-cache") {
+            if (cacheTransport === undefined) continue;
+            const snapshot = yield* snapshotCookie(cookie, command, now);
+
+            if (snapshot !== undefined)
+              response = yield* HttpServerResponse.setCookie(
+                response,
+                snapshot.name,
+                snapshot.value,
+                snapshot.options,
+              ).pipe(Effect.orDie);
+            continue;
+          }
+
+          const sameSite =
+            command._tag === "Issue" && command.sameSite === "none" ? "none" : cookie.sameSite;
+
+          if (sameSite === "none" && !cookie.secure)
+            return yield* OperationHttpError.make({ reason: "credentials" });
+
+          response = yield* HttpServerResponse.setCookie(
+            response,
+            cookie.name,
+            command._tag === "Issue" ? Redacted.value(command.credential) : "",
+            {
+              ...cookie,
+              sameSite,
+              httpOnly: true,
+              maxAge: Duration.millis(
+                command._tag === "Issue" ? Math.max(0, command.expiresAtMillis - now) : 0,
+              ),
+            },
+          ).pipe(Effect.mapError(() => OperationHttpError.make({ reason: "response" })));
+        }
+
+        for (const cookie of mutationCookies)
+          response = yield* HttpServerResponse.setCookie(
+            response,
+            cookie.name,
+            cookie.value,
+            cookie.options,
+          ).pipe(Effect.orDie);
+
+        return HttpServerResponse.setHeader(response, "cache-control", "no-store");
+      }).pipe(
+        Effect.tapCause(() => {
+          if (cacheTransport === undefined) return Effect.void;
+
+          const clearSnapshot = commands.some(
+            (command) => command.slot === "session-cache" && command._tag === "Clear",
+          );
+
+          if (mutationCookies.length === 0 && !clearSnapshot) return Effect.void;
+
+          // Errors are rendered outside this middleware, including failures during
+          // cookie delivery. Preserve invalidation only, never credential issuance.
+          return HttpEffect.appendPreResponseHandler((_request, response) =>
+            Effect.gen(function* () {
+              if (clearSnapshot && mutationCookies.length === 0) {
+                const clear = yield* snapshotCookie(
+                  config.cookies["session-cache"],
+                  { _tag: "Clear", slot: "session-cache" },
+                  0,
+                );
+
+                if (clear !== undefined)
+                  response = yield* HttpServerResponse.setCookie(
+                    response,
+                    clear.name,
+                    clear.value,
+                    clear.options,
+                  ).pipe(Effect.orDie);
+              }
+              for (const cookie of mutationCookies)
+                response = yield* HttpServerResponse.setCookie(
+                  response,
+                  cookie.name,
+                  cookie.value,
+                  cookie.options,
+                ).pipe(Effect.orDie);
+
+              return response;
+            }),
+          );
+        }),
+      );
+    }, withSessionRequest);
 
   const requestLayer = HttpRouter.middleware<{
     provides: I | AuthRequest | ProofRequestContext;
@@ -416,8 +621,7 @@ export const make = <
         Effect.provideService(AuthCredentialCommandCollector, request.credentialCommandSink),
         Effect.provideService(AuthRevealCommandCollectorService, {
           supportedKinds: [],
-          accept: () =>
-            Effect.die(new Error("Private reveals require an explicit operation route")),
+          accept: () => Effect.die(OperationOutputError.make({})),
         }),
       );
     });
@@ -487,7 +691,10 @@ export const make = <
       Effect.gen(function* () {
         const api = yield* auth;
 
+        const cacheTransport = api[sessionCacheTransport];
+
         return {
+          ...(cacheTransport === undefined ? {} : { [sessionCacheTransport]: cacheTransport }),
           resolve: () => Effect.succeed(guest),
           request: (_request: Request, credentials: HttpCredentials) =>
             resolve(api, credentials.session),
@@ -507,13 +714,14 @@ export const make = <
       };
     }).pipe(Effect.provide([configuration, requestInvocation]));
 
-    // Binding configuration is acquired only by the configured OAuth branch.
+    // Binding configuration and signing are acquired only by the configured OAuth branch.
+    // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
     return server as Effect.Effect<
       Effect.Success<typeof server>,
       | Exclude<Effect.Error<typeof server>, RequestBindingConfigurationError>
       | OAuthConfigured<Options, RequestBindingConfigurationError>,
-      | Exclude<Effect.Services<typeof server>, RequestBindingConfig>
-      | OAuthConfigured<Options, RequestBindingConfig>
+      | Exclude<Effect.Services<typeof server>, RequestBindingConfig | Hmac>
+      | OAuthConfigured<Options, RequestBindingConfig | Hmac>
     >;
   };
 
@@ -609,26 +817,32 @@ export const make = <
   };
 
   /** Mount these alongside handlers(api) when composing an existing HttpApi.
-   * routes() already includes them. Callback GETs use state/binding admission. */
+   * routes() already includes them. GET and POST both reach the operation
+   * server. POST carries a form_post body on the same path. */
   const callbackRoutes = () =>
     Layer.unwrap(
       Effect.gen(function* () {
         const server = yield* makeServer();
 
         return HttpRouter.addAll(
-          server.callbackPaths.map((path) =>
-            HttpRouter.route(
-              "GET",
-              Schema.decodeUnknownSync(Schema.TemplateLiteral(["/", Schema.String]))(path),
-              Effect.gen(function* () {
-                const request = yield* HttpServerRequest.toWeb(
-                  yield* HttpServerRequest.HttpServerRequest,
-                ).pipe(Effect.orDie);
+          server.callbackPaths.flatMap((path) => {
+            const template = Schema.decodeUnknownSync(Schema.TemplateLiteral(["/", Schema.String]))(
+              path,
+            );
 
-                return HttpServerResponse.fromWeb(yield* server.handle(request));
-              }),
-            ),
-          ),
+            const handler = Effect.gen(function* () {
+              const request = yield* HttpServerRequest.toWeb(
+                yield* HttpServerRequest.HttpServerRequest,
+              ).pipe(Effect.orDie);
+
+              return HttpServerResponse.fromWeb(yield* server.handle(request));
+            });
+
+            return [
+              HttpRouter.route("GET", template, handler),
+              HttpRouter.route("POST", template, handler),
+            ];
+          }),
         );
       }),
     );
@@ -640,7 +854,9 @@ export const make = <
     callbackRoutes,
     oauth: {
       callbackUrl: (provider: string, callbackId?: string) => {
-        if (oauth === undefined) throw OperationHttpConfigurationError.make({ reason: "callback" });
+        if (oauth === undefined)
+          // oxlint-disable-next-line effect/no-untyped-throw -- Public synchronous callback URL lookup rejects missing OAuth configuration.
+          throw OperationHttpConfigurationError.make({ reason: "callback" });
 
         return oauth.callbackUrl(provider, callbackId);
       },

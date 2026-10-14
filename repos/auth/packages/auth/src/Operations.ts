@@ -1,4 +1,10 @@
 export {
+  AuthenticationClock,
+  AuthenticationClockConfigurationError,
+  AuthenticationClockPolicy,
+} from "./operations/clock";
+
+export {
   AssuranceEvidence,
   AuthenticationAssurance,
   AuthenticationFactor,
