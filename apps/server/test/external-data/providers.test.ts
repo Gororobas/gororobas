@@ -175,6 +175,7 @@ describe("external data providers", () => {
                 : [
                     {
                       key: 123,
+                      gadm: { level3: { gid: "BRA.1.2.3" } },
                       media: [
                         {
                           type: "StillImage",
@@ -241,6 +242,69 @@ describe("external data providers", () => {
               epub: { isAvailable: false },
             },
           },
+        })),
+      ),
+    ),
+  )
+
+  it.live("suggests exact volume IDs with enough metadata to distinguish editions", () =>
+    Effect.gen(function* () {
+      const books = yield* makeGoogleBooks
+      const suggestions = yield* books.suggestIds("Futuro ancestral")
+
+      expect(suggestions).toEqual([
+        {
+          googleBooksVolumeId: "test_volume",
+          title: "Futuro ancestral",
+          authors: ["Ailton Krenak"],
+          publisher: null,
+          publicationDate: "2022",
+          language: "pt",
+          isbn: ["9786559211548"],
+          sourceUrl: "https://books.google.com/books?id=test_volume",
+        },
+      ])
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        client((url) => {
+          const query = new URL(url).searchParams
+          expect(query.get("q")).toBe("Futuro ancestral")
+          expect(query.get("maxResults")).toBe("10")
+
+          return {
+            body: {
+              kind: "books#volumes",
+              totalItems: 1,
+              items: [
+                {
+                  kind: "books#volume",
+                  id: "test_volume",
+                  volumeInfo: {
+                    title: "Futuro ancestral",
+                    authors: ["Ailton Krenak"],
+                    publishedDate: "2022",
+                    language: "pt",
+                    industryIdentifiers: [{ type: "ISBN_13", identifier: "9786559211548" }],
+                  },
+                },
+              ],
+            },
+          }
+        }),
+      ),
+    ),
+  )
+
+  it.live("accepts an empty Google Books search without an items field", () =>
+    Effect.gen(function* () {
+      const books = yield* makeGoogleBooks
+      expect(yield* books.suggestIds("unknown title")).toEqual([])
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        client(() => ({
+          body: { kind: "books#volumes", totalItems: 0 },
         })),
       ),
     ),

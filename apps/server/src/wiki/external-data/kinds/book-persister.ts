@@ -7,7 +7,7 @@ import {
 import { Effect, Result, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
-import { persist } from "../persist-utils.js"
+import { clearProviderExternalData, persist, recordProviderObservation } from "../persist-utils.js"
 
 const insertEdition = SqlSchema.void({
   Request: BookEdition.mapFields(Struct.omit(["languages"])).mapFields(
@@ -74,4 +74,20 @@ const persistEditions = Effect.fn(function* (
 })
 
 export const persistBook = (request: ExternalDataFetchRequest, data: BookExternalDataResult) =>
-  persist(request, persistEditions(request.wikiArticleId, data.attributes.googleBooks))
+  persist(
+    request,
+    Effect.gen(function* () {
+      const result = data.attributes.googleBooks
+      if (result === null) return
+
+      yield* recordProviderObservation({
+        request,
+        provider: "GOOGLE_BOOKS",
+        outcome: Result.map(result, (value) => value.observations),
+      })
+
+      if (Result.isFailure(result)) return
+      yield* clearProviderExternalData(request.wikiArticleId, "GOOGLE_BOOKS")
+      yield* persistEditions(request.wikiArticleId, result)
+    }),
+  )

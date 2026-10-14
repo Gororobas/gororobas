@@ -10,7 +10,7 @@ import {
 import { Effect, Result, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
-import { persist } from "../persist-utils.js"
+import { clearProviderExternalData, persist, recordProviderObservation } from "../persist-utils.js"
 
 const insertExternalLink = SqlSchema.void({
   Request: ExternalLink.mapFields(Struct.assign({ wikiArticleId: WikiArticleId })),
@@ -58,14 +58,35 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
       const { wikidata, gbif } = data.attributes
 
       if (wikidata !== null) {
+        yield* recordProviderObservation({
+          request,
+          provider: "WIKIDATA",
+          outcome: Result.map(wikidata, (value) => [value.observation]),
+        })
+      }
+
+      if (wikidata !== null && Result.isSuccess(wikidata)) {
+        yield* clearProviderExternalData(wikiArticleId, "WIKIDATA")
+
         yield* Effect.forEach(
-          wikidata.wikipediaLinks,
+          wikidata.success.wikipediaLinks,
           (link) => insertExternalLink({ wikiArticleId, ...link }),
           { discard: true, concurrency: 1 },
         )
       }
 
-      if (gbif === null || Result.isFailure(gbif)) return
+      if (gbif === null) return
+
+      yield* recordProviderObservation({
+        request,
+        provider: "GBIF",
+        outcome: Result.map(gbif, (value) => value.observations),
+      })
+
+      // @todo: this approach to check-if-failure, if not then clear & persist new one feels a bit brittle and error prone as we grow our external data handling... Is there a better way?
+      if (Result.isFailure(gbif)) return
+
+      yield* clearProviderExternalData(wikiArticleId, "GBIF")
 
       const taxon = gbif.success
 

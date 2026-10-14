@@ -24,6 +24,7 @@ import { defineView } from "foldkit/submodel"
 
 import { GororobasApiClient } from "./api-client"
 import { imageUrl } from "./media-urls"
+import { wikiArticleDebugRouter } from "./route"
 
 const filterFields = [
   "kind",
@@ -649,7 +650,8 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         model.articles.map((article) => {
           const names = article.commonNames.map(({ name }) => name).join(", ")
 
-          return h.li(
+          return h.keyed("li")(
+            article.id,
             [],
             [
               ...EffectArray.fromOption(
@@ -658,6 +660,11 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
                 ),
               ),
               `${names} (${article.kind})`,
+              " · ",
+              h.a(
+                [h.Href(wikiArticleDebugRouter({ wikiArticleId: article.id }))],
+                ["Debug article"],
+              ),
             ],
           )
         }),

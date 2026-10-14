@@ -68,6 +68,9 @@ export type SuggestedTagId = typeof SuggestedTagId.Type
 export const WikiArticleId = UUID.pipe(Schema.brand("WikiArticleId"))
 export type WikiArticleId = typeof WikiArticleId.Type
 
+export const ExternalDataObservationId = UUID.pipe(Schema.brand("ExternalDataObservationId"))
+export type ExternalDataObservationId = typeof ExternalDataObservationId.Type
+
 export const WikiArticleRevisionId = UUID.pipe(Schema.brand("WikiArticleRevisionId"))
 export type WikiArticleRevisionId = typeof WikiArticleRevisionId.Type
 

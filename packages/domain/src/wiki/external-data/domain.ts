@@ -1,7 +1,9 @@
 import { Schema } from "effect"
 
-import { WikiArticleId } from "../../common/ids.js"
+import { ExternalDataObservationId, WikiArticleId } from "../../common/ids.js"
 import { LoroDocFrontier } from "../../crdts/domain.js"
+import { ExternalDataProvider, Observation } from "./common.js"
+import { ExternalDataFetchError } from "./error.js"
 import { BookExternalDataInputs, BookExternalDataResult } from "./kinds/book-external-data.js"
 import { PlantExternalDataInputs, PlantExternalDataResult } from "./kinds/plant-external-data.js"
 
@@ -27,6 +29,19 @@ export const ExternalDataFetchRequest = Schema.Struct({
   wikiArticleId: WikiArticleId,
   articleCrdtFrontier: LoroDocFrontier,
   inputs: ExternalDataInputs,
+  refreshGeneration: Schema.optional(Schema.String),
 })
 
 export type ExternalDataFetchRequest = typeof ExternalDataFetchRequest.Type
+
+export const ExternalDataObservation = Schema.Struct({
+  id: ExternalDataObservationId,
+  wikiArticleId: WikiArticleId,
+  provider: ExternalDataProvider,
+  observedAt: Schema.DateTimeUtcFromString,
+  articleCrdtFrontier: LoroDocFrontier,
+  inputs: ExternalDataInputs,
+  outcome: Schema.Result(Schema.Array(Observation), ExternalDataFetchError),
+})
+
+export type ExternalDataObservation = typeof ExternalDataObservation.Type

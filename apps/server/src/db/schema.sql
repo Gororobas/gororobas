@@ -490,6 +490,18 @@ CREATE TABLE bookmarks_wiki_articles (
 -- WIKI EXTERNAL DATA
 -- External provider data is separate from contributor-owned CRDT attributes.
 -- =========
+CREATE TABLE wiki_article_external_data_observations (
+  id text PRIMARY KEY,
+  wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
+  provider text NOT NULL,
+  observed_at text NOT NULL,
+  article_crdt_frontier json NOT NULL,
+  inputs json NOT NULL,
+  outcome json NOT NULL
+) WITHOUT ROWID;
+
+CREATE INDEX idx_external_data_observations_article_provider ON wiki_article_external_data_observations (wiki_article_id, provider, observed_at, id);
+
 CREATE TABLE wiki_article_external_links (
   wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
   language text NOT NULL,

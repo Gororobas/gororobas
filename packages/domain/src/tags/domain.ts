@@ -13,7 +13,7 @@ export const TagRow = Schema.Struct({
   id: TagId,
   cluster: Schema.NullOr(Schema.String),
   createdById: Schema.NullOr(PersonId),
-  description: Schema.NullOr(TiptapDocument),
+  description: Schema.NullOr(Schema.fromJsonString(TiptapDocument)),
   handle: Handle,
   names: Schema.fromJsonString(
     Schema.Record(SupportedLanguage, Schema.Trimmed.check(Schema.isNonEmpty())),

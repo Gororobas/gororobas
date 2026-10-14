@@ -1,3 +1,4 @@
+import { GoogleBooksVolumeId } from "@gororobas/domain"
 import { Schema } from "effect"
 
 const IndustryIdentifier = Schema.Struct({
@@ -120,7 +121,7 @@ const SearchInfo = Schema.Struct({
  */
 export const GoogleBooksVolume = Schema.Struct({
   kind: Schema.Literal("books#volume"),
-  id: Schema.String,
+  id: GoogleBooksVolumeId,
   etag: Schema.optional(Schema.String),
   selfLink: Schema.optional(Schema.String),
   volumeInfo: VolumeInfo,
@@ -128,4 +129,10 @@ export const GoogleBooksVolume = Schema.Struct({
   saleInfo: Schema.optional(SaleInfo),
   accessInfo: Schema.optional(AccessInfo),
   searchInfo: Schema.optional(SearchInfo),
+})
+
+export const GoogleBooksSearch = Schema.Struct({
+  kind: Schema.Literal("books#volumes"),
+  totalItems: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  items: Schema.optional(Schema.Array(GoogleBooksVolume)),
 })

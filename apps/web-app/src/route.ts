@@ -1,9 +1,11 @@
+import { WikiArticleId } from "@gororobas/domain/common/ids"
 import { Schema, pipe } from "effect"
 import { Route } from "foldkit"
-import { defineRouteUnion, literal, slash } from "foldkit/route"
+import { defineRouteUnion, literal, schemaSegment, slash } from "foldkit/route"
 
 export const AppRoute = defineRouteUnion({
   WikiSearch: {},
+  WikiArticleDebug: { wikiArticleId: WikiArticleId },
   ProfileSearch: {},
   PublicationSearch: {},
   Login: {},
@@ -13,6 +15,13 @@ export const AppRoute = defineRouteUnion({
 export type AppRoute = typeof AppRoute.Type
 
 export const wikiSearchRouter = pipe(Route.root, Route.mapTo(AppRoute.WikiSearch))
+
+export const wikiArticleDebugRouter = pipe(
+  literal("wiki"),
+  slash(schemaSegment("wikiArticleId", WikiArticleId)),
+  slash(literal("debug")),
+  Route.mapTo(AppRoute.WikiArticleDebug),
+)
 
 export const profileSearchRouter = pipe(
   literal("search"),
@@ -27,7 +36,14 @@ export const publicationSearchRouter = pipe(
 )
 
 export const loginRouter = pipe(literal("login"), Route.mapTo(AppRoute.Login))
+
 export const urlToAppRoute = Route.parseUrlWithFallback(
-  Route.oneOf(wikiSearchRouter, profileSearchRouter, publicationSearchRouter, loginRouter),
+  Route.oneOf(
+    wikiArticleDebugRouter,
+    wikiSearchRouter,
+    profileSearchRouter,
+    publicationSearchRouter,
+    loginRouter,
+  ),
   AppRoute.NotFound,
 )

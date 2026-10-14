@@ -11,7 +11,7 @@ import {
   PlantExternalDataResult,
   PlantExternalDataInputs,
 } from "@gororobas/domain"
-import { Array as EffectArray, Effect, Option, Predicate, Schema } from "effect"
+import { Array as EffectArray, Effect, Option, Predicate, Result, Schema } from "effect"
 import { Activity } from "effect/workflow"
 
 import { Gbif } from "../services/gbif.js"
@@ -25,6 +25,7 @@ export const fetchPlantGbif = Effect.fn(function* (identifier: GbifIdentifier) {
   const images = yield* gbif.occurrences({ taxonId, limit: 20, mediaType: "StillImage" })
 
   return GbifPlantResult.make({
+    observations: [taxonomy.observation, images.observation],
     gbifTaxonId: taxonId,
     taxonomyGroup: taxonomy.value.taxonomicGroup ?? null,
     classification: taxonomy.value.classification.map((taxon) => ({
@@ -108,16 +109,16 @@ export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataI
     success: WikidataResult,
     error: ExternalDataFetchError,
     execute: fetchPlantWikidata(inputs.wikidataId.value),
-  }).pipe(Activity.retry({ times: 2, while: (error) => error.retryable }))
+  }).pipe(Activity.retry({ times: 2, while: (error) => error.retryable }), Effect.result)
 
   const gbif =
-    wikidata.gbifId === null
+    Result.isFailure(wikidata) || wikidata.success.gbifId === null
       ? null
       : yield* Activity.make({
           name: "gbif",
           success: GbifPlantResult,
           error: ExternalDataFetchError,
-          execute: fetchPlantGbif(wikidata.gbifId),
+          execute: fetchPlantGbif(wikidata.success.gbifId),
         }).pipe(Activity.retry({ times: 2, while: (error) => error.retryable }), Effect.result)
 
   return PlantExternalDataResult.make({ kind: "PLANT", attributes: { wikidata, gbif } })

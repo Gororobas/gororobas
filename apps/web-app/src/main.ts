@@ -10,12 +10,14 @@ import * as Authentication from "./authentication"
 import * as ProfileSearch from "./profile-search"
 import * as PublicationSearch from "./publication-search"
 import * as Routes from "./route"
+import * as WikiArticleDebug from "./wiki-article-debug"
 import * as WikiSearch from "./wiki-search"
 
 export const Model = Schema.Struct({
   route: Routes.AppRoute,
   authentication: Authentication.Model,
   wikiSearch: WikiSearch.Model,
+  wikiArticleDebug: WikiArticleDebug.Model,
   profileSearch: ProfileSearch.Model,
   publicationSearch: PublicationSearch.Model,
 })
@@ -28,6 +30,7 @@ export const Message = defineMessageUnion({
   CompletedNavigation: {},
   GotAuthenticationMessage: { message: Authentication.Message },
   GotWikiSearchMessage: { message: WikiSearch.Message },
+  GotWikiArticleDebugMessage: { message: WikiArticleDebug.Message },
   GotProfileSearchMessage: { message: ProfileSearch.Message },
   GotPublicationSearchMessage: { message: PublicationSearch.Message },
 })
@@ -53,6 +56,13 @@ const foldWikiSearch = Update.foldChild({
   read: (model: Model) => Option.some(model.wikiSearch),
   write: (model, wikiSearch) => ({ ...model, wikiSearch }),
   toParentMessage: (message) => Message.GotWikiSearchMessage({ message }),
+})
+
+const foldWikiArticleDebug = Update.foldChild({
+  update: WikiArticleDebug.update,
+  read: (model: Model) => Option.some(model.wikiArticleDebug),
+  write: (model, wikiArticleDebug) => ({ ...model, wikiArticleDebug }),
+  toParentMessage: (message) => Message.GotWikiArticleDebugMessage({ message }),
 })
 
 const foldProfileSearch = Update.foldChild({
@@ -86,7 +96,13 @@ export const update = (
       const route = Routes.urlToAppRoute(url)
 
       return {
-        model: { ...model, route },
+        model: {
+          ...model,
+          route,
+          wikiArticleDebug: Predicate.isTagged(route, "WikiArticleDebug")
+            ? WikiArticleDebug.init(Option.some(route.wikiArticleId))
+            : model.wikiArticleDebug,
+        },
         commands: Predicate.isTagged(route, "Login")
           ? [
               Command.mapMessage(Authentication.RestoreSession(), (message) =>
@@ -99,6 +115,7 @@ export const update = (
     CompletedNavigation: () => ({ model }),
     GotAuthenticationMessage: ({ message }) => foldAuthentication(model, message),
     GotWikiSearchMessage: ({ message }) => foldWikiSearch(model, message),
+    GotWikiArticleDebugMessage: ({ message }) => foldWikiArticleDebug(model, message),
     GotProfileSearchMessage: ({ message }) => foldProfileSearch(model, message),
     GotPublicationSearchMessage: ({ message }) => foldPublicationSearch(model, message),
   })
@@ -113,6 +130,13 @@ export const init: Runtime.RoutingApplicationInit<
     route: Routes.urlToAppRoute(url),
     authentication: Authentication.init,
     wikiSearch: WikiSearch.init().model,
+    wikiArticleDebug: WikiArticleDebug.init(
+      Option.flatMap(Option.some(Routes.urlToAppRoute(url)), (route) =>
+        Predicate.isTagged(route, "WikiArticleDebug")
+          ? Option.some(route.wikiArticleId)
+          : Option.none(),
+      ),
+    ),
     profileSearch: ProfileSearch.init().model,
     publicationSearch: PublicationSearch.init().model,
   },
@@ -126,6 +150,11 @@ export const init: Runtime.RoutingApplicationInit<
 export const resources = Layer.mergeAll(ApiClient.resources, Authentication.resources)
 
 export const subscriptions = Subscription.aggregate(
+  Subscription.lift(WikiArticleDebug.subscriptions)<Model, Message>({
+    read: (model) => Option.some(model.wikiArticleDebug),
+    when: (model) => model.route._tag === "WikiArticleDebug",
+    toParentMessage: (message) => Message.GotWikiArticleDebugMessage({ message }),
+  }),
   Subscription.lift(WikiSearch.subscriptions)<Model, Message>({
     read: (model) => Option.some(model.wikiSearch),
     when: (model) => model.route._tag === "WikiSearch",
@@ -164,6 +193,13 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         ],
       ),
       Routes.AppRoute.match(model.route, {
+        WikiArticleDebug: () =>
+          h.submodel({
+            slotId: "wiki-article-debug",
+            model: model.wikiArticleDebug,
+            view: WikiArticleDebug.submodelView,
+            toParentMessage: (message) => Message.GotWikiArticleDebugMessage({ message }),
+          }),
         WikiSearch: () =>
           h.submodel({
             slotId: "wiki-search",

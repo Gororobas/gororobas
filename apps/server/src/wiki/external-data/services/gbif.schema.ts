@@ -116,7 +116,10 @@ const GbifOccurrenceClassification = Schema.StructWithRest(
   [Schema.Record(Schema.String, Schema.Json)],
 )
 
-const GbifOccurrenceArea = Schema.Struct({ gid: Schema.String, name: Schema.String })
+const GbifOccurrenceArea = Schema.Struct({
+  gid: Schema.String,
+  name: Schema.optional(Schema.String),
+})
 
 const GbifOccurrenceMedia = Schema.StructWithRest(
   Schema.Struct({

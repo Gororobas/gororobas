@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
+import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 
 import { UnauthorizedError } from "../authorization/session.js"
 import { BookmarkState, SupportedLanguage } from "../common/enums.js"
@@ -23,9 +23,28 @@ import {
   WikiArticleRevisionNotFoundError,
   WikiArticleNotFoundError,
 } from "./errors.js"
+import { ExternalDataFetchError } from "./external-data/error.js"
+import {
+  BookIdSuggestion,
+  BookIdSuggestionsQuery,
+} from "./external-data/kinds/book-external-data.js"
 import { WikiArticleRevisionRow } from "./wiki-article.js"
 
 export class WikiApiGroup extends HttpApiGroup.make("wiki")
+  .add(
+    HttpApiEndpoint.get("suggestBookIds", "/wiki/books/id-suggestions", {
+      query: BookIdSuggestionsQuery,
+      success: Schema.Array(BookIdSuggestion),
+      error: ExternalDataFetchError.pipe(HttpApiSchema.status(502)),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("getWikiArticleDebug", "/wiki/:wikiArticleId/debug", {
+      params: Schema.Struct({ wikiArticleId: WikiArticleId }),
+      success: Schema.Record(Schema.String, Schema.Json),
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError, UnauthorizedError],
+    }),
+  )
   .add(
     HttpApiEndpoint.get("getWikiBookmarks", "/wiki/bookmarks", {
       success: Schema.Array(Schema.Struct({ wikiArticleId: WikiArticleId, state: BookmarkState })),

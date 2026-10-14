@@ -15,12 +15,12 @@ import { fetchPlant } from "./kinds/plant-fetcher.js"
 import { persistPlant } from "./kinds/plant-persister.js"
 import { type ExternalDataArticle, buildExternalDataRequest } from "./persist-utils.js"
 
-export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v1", {
+export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v2", {
   payload: ExternalDataFetchRequest.fields,
   success: Schema.Void,
   error: ExternalDataFetchError,
   idempotencyKey: (request) =>
-    `${request.wikiArticleId}:${Schema.encodeSync(Schema.fromJsonString(LoroDocFrontier))(request.articleCrdtFrontier)}`,
+    `${request.wikiArticleId}:${Schema.encodeSync(Schema.fromJsonString(LoroDocFrontier))(request.articleCrdtFrontier)}:${request.refreshGeneration ?? "initial"}`,
 })
 
 const runExternalDataFetch = Effect.fn(function* (request: ExternalDataFetchRequest) {

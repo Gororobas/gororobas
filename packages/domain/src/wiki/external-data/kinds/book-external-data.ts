@@ -1,5 +1,6 @@
 import { Schema, Struct } from "effect"
 
+import { GoogleBooksVolumeId } from "../../../common/external-identifiers.js"
 import { UrlAsString } from "../../../common/primitives.js"
 import { WikiBookArticle } from "../../kinds/book.js"
 import { Observation } from "../common.js"
@@ -37,3 +38,20 @@ export const BookExternalDataResult = Schema.Struct({
 })
 
 export type BookExternalDataResult = typeof BookExternalDataResult.Type
+
+export const BookIdSuggestion = Schema.Struct({
+  googleBooksVolumeId: GoogleBooksVolumeId,
+  title: Schema.String,
+  authors: Schema.Array(Schema.String),
+  publisher: Schema.NullOr(Schema.String),
+  publicationDate: Schema.NullOr(Schema.String),
+  language: Schema.NullOr(Schema.String),
+  isbn: Schema.Array(Schema.String),
+  sourceUrl: UrlAsString,
+})
+
+export type BookIdSuggestion = typeof BookIdSuggestion.Type
+
+export const BookIdSuggestionsQuery = Schema.Struct({
+  title: Schema.Trimmed.check(Schema.isNonEmpty(), Schema.isMaxLength(200)),
+})

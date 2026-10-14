@@ -24,6 +24,7 @@ export const GbifClassification = Schema.Struct({
 })
 
 export const GbifPlantResult = Schema.Struct({
+  observations: Schema.Array(Observation),
   gbifTaxonId: GbifTaxonId,
   taxonomyGroup: Schema.NullOr(Schema.String),
   classification: Schema.Array(GbifClassification),
@@ -38,7 +39,7 @@ export const PlantExternalDataInputs = Schema.Struct({
 export const PlantExternalDataResult = Schema.Struct({
   kind: Schema.Literal("PLANT"),
   attributes: Schema.Struct({
-    wikidata: Schema.NullOr(WikidataResult),
+    wikidata: Schema.NullOr(Schema.Result(WikidataResult, ExternalDataFetchError)),
     gbif: Schema.NullOr(Schema.Result(GbifPlantResult, ExternalDataFetchError)),
   }),
 })

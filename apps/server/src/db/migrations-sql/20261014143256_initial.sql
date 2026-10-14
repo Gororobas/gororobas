@@ -479,6 +479,20 @@ CREATE TABLE `bookmarks_wiki_articles` (
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`person_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
+-- Create "wiki_article_external_data_observations" table
+CREATE TABLE `wiki_article_external_data_observations` (
+  `id` text NOT NULL,
+  `wiki_article_id` text NOT NULL,
+  `provider` text NOT NULL,
+  `observed_at` text NOT NULL,
+  `article_crdt_frontier` json NOT NULL,
+  `inputs` json NOT NULL,
+  `outcome` json NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+) WITHOUT ROWID;
+-- Create index "idx_external_data_observations_article_provider" to table: "wiki_article_external_data_observations"
+CREATE INDEX `idx_external_data_observations_article_provider` ON `wiki_article_external_data_observations` (`wiki_article_id`, `provider`, `observed_at`, `id`);
 -- Create "wiki_article_external_links" table
 CREATE TABLE `wiki_article_external_links` (
   `wiki_article_id` text NOT NULL,

@@ -15,6 +15,7 @@ import {
   ProfileId,
   PublicationId,
   TagRow,
+  TiptapDocument,
   WikiArticleEditableData,
   WikiArticleId,
   WikiArticleRevisionId,
@@ -337,9 +338,7 @@ export const importPreview = ({
             cluster: tag.latest_source.category ?? null,
             description: tag.latest_source.description
               ? // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy descriptions may omit required rich-text document fields.
-                yield* Schema.decodeUnknownEffect(TagRow.fields.description)(
-                  tag.latest_source.description,
-                )
+                yield* Schema.decodeUnknownEffect(TiptapDocument)(tag.latest_source.description)
               : null,
             createdById: null,
             createdAt: DateTime.fromDateUnsafe(tag.latest_source.created_at),
