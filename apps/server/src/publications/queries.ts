@@ -19,16 +19,32 @@ import { SqlClient } from "effect/sql/SqlClient"
 export const searchPublicationRows = SqlSchema.findAll({
   Request: ApiPublicationSearchParams,
   Result: PublicationRow,
-  execute: (query) =>
-    SqlClient.use(
+  execute: (query) => {
+    const textPattern =
+      query.text === undefined ? undefined : `%${query.text.replace(/[\\%_]/g, "\\$&")}%`
+
+    return SqlClient.use(
       (sql) => sql`
     SELECT * FROM publications
     WHERE ${query.ownerProfileId === undefined ? sql`1 = 1` : sql`owner_profile_id = ${query.ownerProfileId}`}
       ${query.type === undefined ? sql`` : sql`AND kind = ${query.type}`}
       ${query.visibility === undefined ? sql`` : sql`AND visibility = ${query.visibility}`}
+      ${
+        textPattern === undefined
+          ? sql``
+          : sql`AND (
+        handle LIKE ${textPattern} ESCAPE '\\'
+        OR EXISTS (
+          SELECT 1 FROM publication_translations AS translation
+          WHERE translation.publication_id = publications.id
+            AND translation.content_plain_text LIKE ${textPattern} ESCAPE '\\'
+        )
+      )`
+      }
     ORDER BY published_at DESC, id
   `,
-    ),
+    )
+  },
 })
 
 export const listPublicationCommitRowsByPublicationIdAsc = SqlSchema.findAll({

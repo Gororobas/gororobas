@@ -23,6 +23,7 @@ import {
 } from "../common/ids.js"
 import {
   Handle,
+  NonEmptyTrimmedString,
   PaginationOptions,
   TimestampColumn,
   TimestampedStruct,
@@ -136,6 +137,7 @@ export type PublicationPageData = typeof PublicationPageData.Type
 
 /** API contract schemas (camelCase). */
 export const ApiPublicationSearchParams = Schema.Struct({
+  text: Schema.optional(NonEmptyTrimmedString),
   ownerProfileId: Schema.optional(ProfileId),
   type: Schema.optional(PublicationKind),
   visibility: Schema.optional(PublicationVisibility),

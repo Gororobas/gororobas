@@ -3,11 +3,6 @@
   "version": "0.0.0",
   "description": "Server-side logic, policies, and repositories for Gororobas",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://gitlab.com/hdoro/gororobas-experiments.git",
-    "directory": "apps/server"
-  },
   "type": "module",
   "publishConfig": {
     "access": "public",
@@ -33,6 +28,7 @@
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@gororobas/domain": "workspace:^",
+    "@maple-dev/effect-sdk": "catalog:",
     "@mediabunny/server": "^1.61.3",
     "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
     "@opentelemetry/sdk-logs": "^0.222.0",

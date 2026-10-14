@@ -179,6 +179,9 @@ catalogs:
     '@effect/vitest':
       specifier: 4.0.1
       version: 4.0.1
+    '@maple-dev/effect-sdk':
+      specifier: ^0.10.0
+      version: 0.10.0
     '@tiptap/core':
       specifier: ^3.31.4
       version: 3.31.4
@@ -325,6 +328,9 @@ importers:
       '@gororobas/domain':
         specifier: workspace:^
         version: link:../../packages/domain/dist
+      '@maple-dev/effect-sdk':
+        specifier: 'catalog:'
+        version: 0.10.0(effect@4.0.3)
       '@mediabunny/server':
         specifier: ^1.61.3
         version: 1.61.3(mediabunny@1.61.3)
@@ -1336,6 +1342,11 @@ packages:
   '@manypkg/tools@2.1.2':
     resolution: {integrity: sha512-6QEf6yqFbETdwGITKq57aYoPfX/3K8XFNwsAlx0C1M7o8cb79sv1M3w+tWuWvIcSbNqrLF7OD7YpZMVVz335hQ==}
     engines: {node: '>=20.0.0'}
+
+  '@maple-dev/effect-sdk@0.10.0':
+    resolution: {integrity: sha512-3MWyBqWPyiizAZItDk7Uk+vi69csziIJxCcaqW10aowVV1Tlcwao1EW6xLccAzvfkz43Y8WAiLzhf/Kr4oRkdQ==}
+    peerDependencies:
+      effect: ^4.0.0
 
   '@mediabunny/prores@1.61.3':
     resolution: {integrity: sha512-ZZK+TGzHra6mEH+qFR8OwvfUpo4beI7+FotArwZKzDSsLLCew9Lgj2zVZgsv7vmBf8H7KGxTbF5mrMkWYnMJSg==}
@@ -5250,6 +5261,11 @@ snapshots:
       jju: 1.4.0
       tinyglobby: 0.2.17
       yaml: 2.9.1
+
+  '@maple-dev/effect-sdk@0.10.0(effect@4.0.3)':
+    dependencies:
+      effect: 4.0.3
+      std-env: 4.3.0
 
   '@mediabunny/prores@1.61.3(mediabunny@1.61.3)':
     dependencies:

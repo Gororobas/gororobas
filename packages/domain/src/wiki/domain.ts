@@ -1,16 +1,25 @@
 import { Schema, Struct } from "effect"
+import * as Quantity from "effect-units/Quantity"
+import * as Temperature from "effect-units/Temperature"
 
 import {
   AgroforestryStratum,
+  AnimalRole,
+  ContentChannelType,
   EdiblePlantPart,
+  NoteworthyEntityType,
   PlantLifecycle,
   PlantUsage,
   PlantingMethod,
+  ResourceFormat,
   RevisionEvaluation,
+  SupportedLanguage,
+  ToolUsage,
   WikiArticleStatus,
 } from "../common/enums.js"
 import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
-import { Handle } from "../common/primitives.js"
+import { Centimeters, Handle, IntNonNegative, TemperatureInCelsius } from "../common/primitives.js"
+import { PartialDate } from "../common/utils/dates.js"
 import { LoroDocUpdate } from "../crdts/domain.js"
 import { WikiMediaSelection } from "../media-assets/attachments.js"
 import { WikiArticleEditableData, WikiArticleKind, WikiArticleRevisionRow } from "./wiki-article.js"
@@ -21,26 +30,157 @@ export * from "./wiki-article.js"
 export * from "./external-data/domain.js"
 
 const WikiSearchText = Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty()))
+const WikiSearchLanguage = Schema.optional(SupportedLanguage)
 
-const NonPlantWikiArticleKind = Schema.Literals(
+const WikiArticleKindWithoutSearchFilters = Schema.Literals(
   WikiArticleKind.literals.filter(
-    (kind): kind is Exclude<WikiArticleKind, "PLANT"> => kind !== "PLANT",
+    (
+      kind,
+    ): kind is Exclude<
+      WikiArticleKind,
+      | "PLANT"
+      | "BOOK"
+      | "FILM"
+      | "NOTEWORTHY_ENTITY"
+      | "NOTEWORTHY_PERSON"
+      | "ANIMAL"
+      | "TOOL"
+      | "RESOURCE"
+      | "CONTENT_PRODUCER"
+    > =>
+      ![
+        "PLANT",
+        "BOOK",
+        "FILM",
+        "NOTEWORTHY_ENTITY",
+        "NOTEWORTHY_PERSON",
+        "ANIMAL",
+        "TOOL",
+        "RESOURCE",
+        "CONTENT_PRODUCER",
+      ].includes(kind),
   ),
 )
 
 export const WikiSearchParams = Schema.Union([
-  Schema.Struct({ kind: Schema.optional(Schema.Undefined), text: WikiSearchText }),
   Schema.Struct({
-    kind: Schema.Literal("PLANT"),
+    kind: Schema.optional(Schema.Undefined),
+    language: WikiSearchLanguage,
     text: WikiSearchText,
-    plantUsage: Schema.optional(PlantUsage),
-    plantLifecycle: Schema.optional(PlantLifecycle),
-    plantingMethod: Schema.optional(PlantingMethod),
-    stratum: Schema.optional(AgroforestryStratum),
-    ediblePart: Schema.optional(EdiblePlantPart),
   }),
   Schema.Struct({
-    kind: NonPlantWikiArticleKind,
+    kind: Schema.Literal("PLANT"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    plantUsages: Schema.optional(Schema.Array(PlantUsage)),
+    plantLifecycles: Schema.optional(Schema.Array(PlantLifecycle)),
+    plantingMethods: Schema.optional(Schema.Array(PlantingMethod)),
+    strata: Schema.optional(Schema.Array(AgroforestryStratum)),
+    edibleParts: Schema.optional(Schema.Array(EdiblePlantPart)),
+    developmentCycleMin: Schema.optional(IntNonNegative),
+    developmentCycleMax: Schema.optional(IntNonNegative),
+    heightMin: Schema.optional(Centimeters),
+    heightMax: Schema.optional(Centimeters),
+    temperatureMin: Schema.optional(TemperatureInCelsius),
+    temperatureMax: Schema.optional(TemperatureInCelsius),
+  }).check(
+    Schema.makeFilter(
+      (filters) => {
+        if (
+          filters.developmentCycleMin !== undefined &&
+          filters.developmentCycleMax !== undefined &&
+          filters.developmentCycleMin > filters.developmentCycleMax
+        ) {
+          return "Development cycle minimum must not exceed maximum"
+        }
+
+        if (
+          filters.heightMin !== undefined &&
+          filters.heightMax !== undefined &&
+          !Quantity.isLessThanOrEqualTo(filters.heightMin, filters.heightMax)
+        ) {
+          return "Height minimum must not exceed maximum"
+        }
+
+        if (
+          filters.temperatureMin !== undefined &&
+          filters.temperatureMax !== undefined &&
+          !Temperature.isLessThanOrEqualTo(filters.temperatureMin, filters.temperatureMax)
+        ) {
+          return "Temperature minimum must not exceed maximum"
+        }
+
+        return true
+      },
+      {
+        identifier: "WikiPlantSearchRange",
+        title: "Valid plant search ranges",
+        description: "Each supplied minimum must not exceed its corresponding maximum.",
+      },
+    ),
+  ),
+  Schema.Struct({
+    kind: Schema.Literal("BOOK"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    publicationDateMin: Schema.optional(PartialDate),
+    publicationDateMax: Schema.optional(PartialDate),
+    pageCountMin: Schema.optional(IntNonNegative),
+    pageCountMax: Schema.optional(IntNonNegative),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("FILM"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    releaseDateMin: Schema.optional(PartialDate),
+    releaseDateMax: Schema.optional(PartialDate),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("NOTEWORTHY_ENTITY"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    entityTypes: Schema.optional(Schema.Array(NoteworthyEntityType)),
+    foundedDateMin: Schema.optional(PartialDate),
+    foundedDateMax: Schema.optional(PartialDate),
+    dissolvedDateMin: Schema.optional(PartialDate),
+    dissolvedDateMax: Schema.optional(PartialDate),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("NOTEWORTHY_PERSON"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    birthDateMin: Schema.optional(PartialDate),
+    birthDateMax: Schema.optional(PartialDate),
+    deathDateMin: Schema.optional(PartialDate),
+    deathDateMax: Schema.optional(PartialDate),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("ANIMAL"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    animalRoles: Schema.optional(Schema.Array(AnimalRole)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("TOOL"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    toolUsages: Schema.optional(Schema.Array(ToolUsage)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("RESOURCE"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    resourceFormats: Schema.optional(Schema.Array(ResourceFormat)),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("CONTENT_PRODUCER"),
+    language: WikiSearchLanguage,
+    text: WikiSearchText,
+    contentChannelTypes: Schema.optional(Schema.Array(ContentChannelType)),
+  }),
+  Schema.Struct({
+    kind: WikiArticleKindWithoutSearchFilters,
+    language: WikiSearchLanguage,
     text: WikiSearchText,
   }),
 ])

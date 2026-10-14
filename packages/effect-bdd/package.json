@@ -3,11 +3,6 @@
   "version": "0.0.0",
   "description": "BDD testing framework for Effect",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/gororobas/gororobas-experiments",
-    "directory": "packages/effect-bdd"
-  },
   "bin": {
     "effect-bdd-check": "./bin/effect-bdd-check.js"
   },

@@ -8,7 +8,15 @@ import { PublicationsService } from "./service.js"
 export const PublicationsApiLive = HttpApiBuilder.group(GororobasApi, "publications", (handlers) =>
   handlers
     .handle("searchPublications", ({ query }) =>
-      PublicationsService.use((service) => service.searchPublications(query)).pipe(
+      Effect.gen(function* () {
+        yield* Effect.annotateCurrentSpan("publications.search.has_text", query.text !== undefined)
+        yield* Effect.annotateCurrentSpan("publications.search.kind", query.type ?? "all")
+        const service = yield* PublicationsService
+        const publications = yield* service.searchPublications(query)
+        yield* Effect.annotateCurrentSpan("publications.search.result_count", publications.length)
+        return publications
+      }).pipe(
+        Effect.withSpan("publications.search"),
         withApiInfrastructureErrors({ group: "publications", endpoint: "searchPublications" }),
       ),
     )

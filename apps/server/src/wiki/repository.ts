@@ -464,7 +464,6 @@ const evaluateRevision = (
     ),
   )
 
-/** @TODO add wiki search filters. */
 export class WikiArticlesRepository extends Context.Service<WikiArticlesRepository>()(
   "WikiArticlesRepository",
   {

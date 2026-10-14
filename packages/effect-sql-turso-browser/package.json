@@ -3,11 +3,6 @@
   "version": "0.0.0",
   "description": "Effect SQL adapter for the Turso browser WASM database",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://gitlab.com/hdoro/gororobas-experiments.git",
-    "directory": "packages/effect-sql-turso-browser"
-  },
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

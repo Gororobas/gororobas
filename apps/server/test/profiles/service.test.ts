@@ -2,13 +2,32 @@ import { describe, expect, it } from "@effect/vitest"
 import { Handle, IdGen, PersonId, PlatformAccessLevel } from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
 import { Effect, Option, Result, Schema } from "effect"
+import { SqlClient } from "effect/sql"
 
+import { ProfilesRepository } from "../../src/profiles/repository.js"
 import { ProfileService } from "../../src/profiles/service.js"
 import { seedPerson, TestLayerWithServices, withSession } from "../test-helpers.js"
 
 const lookups = ["handle", "id"] as const
 
 describe("ProfileService reads", () => {
+  it.effect("searches public profiles by location and excludes community profiles", () =>
+    Effect.gen(function* () {
+      const { person: publicPerson } = yield* seedPerson("COMMUNITY")
+      const { person: communityPerson } = yield* seedPerson("COMMUNITY")
+      const sql = yield* SqlClient.SqlClient
+
+      yield* sql`UPDATE profiles SET location = 'Tropical Andes' WHERE id = ${publicPerson.id}`
+      yield* sql`UPDATE profiles SET location = 'Tropical Andes', visibility = 'COMMUNITY' WHERE id = ${communityPerson.id}`
+
+      const profiles = yield* ProfilesRepository.use((repository) =>
+        repository.searchProfiles({ text: "andes" }),
+      )
+
+      expect(profiles.map(({ id }) => id)).toEqual([publicPerson.id])
+    }).pipe(Effect.provide(TestLayerWithServices)),
+  )
+
   lookups.forEach((lookup) => {
     it.effect(`authorizes ${lookup} reads for each visibility and access level`, () =>
       Effect.gen(function* () {

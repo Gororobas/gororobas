@@ -4,9 +4,32 @@ import {
   ProfileId,
   ProfileMetadataResult,
   ProfileRow,
+  ProfileSearchParams,
+  ProfileCardData,
 } from "@gororobas/domain"
 import { Effect, Schema, SchemaGetter } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
+
+export const searchProfiles = SqlSchema.findAll({
+  Request: ProfileSearchParams,
+  Result: ProfileCardData,
+  execute: (query) =>
+    Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient
+      const text = query.text?.toLowerCase()
+
+      return yield* sql`
+        SELECT id, type, handle, name, location
+        FROM profiles
+        WHERE visibility = 'PUBLIC'
+          AND NOT EXISTS (SELECT 1 FROM auth_subjects a WHERE a.id = profiles.id AND a.active = 0)
+          ${query.type === undefined ? sql`` : sql`AND type = ${query.type}`}
+          ${text === undefined ? sql`` : sql`AND (instr(lower(name), ${text}) > 0 OR instr(handle, ${text}) > 0 OR instr(lower(coalesce(location, '')), ${text}) > 0)`}
+        ORDER BY name COLLATE NOCASE, handle, id
+        LIMIT 100
+      `
+    }),
+})
 
 export const findByHandle = SqlSchema.findOneOption({
   Request: Handle,

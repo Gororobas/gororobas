@@ -120,6 +120,44 @@ const makePostSourceData = (input: {
 })
 
 describe("PublicationsService", () => {
+  it.effect("searches publication handles and translated text", () =>
+    Effect.gen(function* () {
+      const service = yield* PublicationsService
+      const repository = yield* PublicationsRepository
+      const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
+      const profile = yield* makeProfileFixture({ id: person.id })
+      yield* insertPersonWithDependencies({ person, profile })
+      const now = yield* DateTime.now
+
+      const matchingId = yield* repository.createPublication({
+        createdById: person.id,
+        sourceData: makePostSourceData({
+          content: makeDocument("A practical agroecology guide"),
+          handle: `search-agroecology-${person.id.slice(0, 8)}`,
+          ownerProfileId: profile.id,
+          publishedAt: now,
+        }),
+      })
+
+      yield* repository.createPublication({
+        createdById: person.id,
+        sourceData: makePostSourceData({
+          content: makeDocument("A different topic"),
+          handle: `search-other-${person.id.slice(0, 8)}`,
+          ownerProfileId: profile.id,
+          publishedAt: now,
+        }),
+      })
+
+      const results = yield* withSession(
+        service.searchPublications({ text: "agroecology", pageSize: 10, currentPage: 0 }),
+        yield* resolveSessionFromAuthSubjectId(person.id),
+      )
+
+      expect(results.map(({ id }) => id)).toEqual([matchingId])
+    }).pipe(Effect.provide(TestLayerWithPublicationsService)),
+  )
+
   it.effect("updatePublication denies edits from non-owners", () =>
     Effect.gen(function* () {
       const service = yield* PublicationsService

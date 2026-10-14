@@ -298,6 +298,14 @@ export const searchCards = SqlSchema.findAll({
     SqlClient.use((sql) => {
       const { kind, text } = search
       const plantFilters = search.kind === "PLANT" ? search : undefined
+      const bookFilters = search.kind === "BOOK" ? search : undefined
+      const filmFilters = search.kind === "FILM" ? search : undefined
+      const entityFilters = search.kind === "NOTEWORTHY_ENTITY" ? search : undefined
+      const personFilters = search.kind === "NOTEWORTHY_PERSON" ? search : undefined
+      const animalFilters = search.kind === "ANIMAL" ? search : undefined
+      const toolFilters = search.kind === "TOOL" ? search : undefined
+      const resourceFilters = search.kind === "RESOURCE" ? search : undefined
+      const contentProducerFilters = search.kind === "CONTENT_PRODUCER" ? search : undefined
 
       return sql`
       SELECT a.id, a.kind, t.language, t.common_names,
@@ -321,11 +329,36 @@ export const searchCards = SqlSchema.findAll({
           OR instr(lower((SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id LIMIT 1)), lower(${text})) > 0
         )`
         }
-        ${plantFilters?.plantUsage === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.usage') WHERE value = ${plantFilters.plantUsage})`}
-        ${plantFilters?.plantLifecycle === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.lifecycles') WHERE value = ${plantFilters.plantLifecycle})`}
-        ${plantFilters?.plantingMethod === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.plantingMethods') WHERE value = ${plantFilters.plantingMethod})`}
-        ${plantFilters?.stratum === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.strata') WHERE value = ${plantFilters.stratum})`}
-        ${plantFilters?.ediblePart === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.edibleParts') WHERE value = ${plantFilters.ediblePart})`}
+        ${plantFilters?.plantUsages === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.usage') WHERE value IN ${sql.in(plantFilters.plantUsages)})`}
+        ${plantFilters?.plantLifecycles === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.lifecycles') WHERE value IN ${sql.in(plantFilters.plantLifecycles)})`}
+        ${plantFilters?.plantingMethods === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.plantingMethods') WHERE value IN ${sql.in(plantFilters.plantingMethods)})`}
+        ${plantFilters?.strata === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.strata') WHERE value IN ${sql.in(plantFilters.strata)})`}
+        ${plantFilters?.edibleParts === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.edibleParts') WHERE value IN ${sql.in(plantFilters.edibleParts)})`}
+        ${plantFilters?.developmentCycleMin === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.developmentCycleMax') >= ${plantFilters.developmentCycleMin}`}
+        ${plantFilters?.developmentCycleMax === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.developmentCycleMin') <= ${plantFilters.developmentCycleMax}`}
+        ${plantFilters?.heightMin === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.heightMax') >= ${plantFilters.heightMin}`}
+        ${plantFilters?.heightMax === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.heightMin') <= ${plantFilters.heightMax}`}
+        ${plantFilters?.temperatureMin === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.temperatureMax') >= ${plantFilters.temperatureMin}`}
+        ${plantFilters?.temperatureMax === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.temperatureMin') <= ${plantFilters.temperatureMax}`}
+        ${bookFilters?.publicationDateMin === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.publicationDate'), 1, length(substr(${bookFilters.publicationDateMin}, 1, instr(${bookFilters.publicationDateMin}, '[') - 1))) >= substr(${bookFilters.publicationDateMin}, 1, instr(${bookFilters.publicationDateMin}, '[') - 1)`}
+        ${bookFilters?.publicationDateMax === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.publicationDate'), 1, length(substr(${bookFilters.publicationDateMax}, 1, instr(${bookFilters.publicationDateMax}, '[') - 1))) <= substr(${bookFilters.publicationDateMax}, 1, instr(${bookFilters.publicationDateMax}, '[') - 1)`}
+        ${bookFilters?.pageCountMin === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.pageCount') >= ${bookFilters.pageCountMin}`}
+        ${bookFilters?.pageCountMax === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.pageCount') <= ${bookFilters.pageCountMax}`}
+        ${filmFilters?.releaseDateMin === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.releaseDate'), 1, length(substr(${filmFilters.releaseDateMin}, 1, instr(${filmFilters.releaseDateMin}, '[') - 1))) >= substr(${filmFilters.releaseDateMin}, 1, instr(${filmFilters.releaseDateMin}, '[') - 1)`}
+        ${filmFilters?.releaseDateMax === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.releaseDate'), 1, length(substr(${filmFilters.releaseDateMax}, 1, instr(${filmFilters.releaseDateMax}, '[') - 1))) <= substr(${filmFilters.releaseDateMax}, 1, instr(${filmFilters.releaseDateMax}, '[') - 1)`}
+        ${entityFilters?.foundedDateMin === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.foundedDate'), 1, length(substr(${entityFilters.foundedDateMin}, 1, instr(${entityFilters.foundedDateMin}, '[') - 1))) >= substr(${entityFilters.foundedDateMin}, 1, instr(${entityFilters.foundedDateMin}, '[') - 1)`}
+        ${entityFilters?.foundedDateMax === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.foundedDate'), 1, length(substr(${entityFilters.foundedDateMax}, 1, instr(${entityFilters.foundedDateMax}, '[') - 1))) <= substr(${entityFilters.foundedDateMax}, 1, instr(${entityFilters.foundedDateMax}, '[') - 1)`}
+        ${entityFilters?.entityTypes === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.entityType') IN ${sql.in(entityFilters.entityTypes)}`}
+        ${entityFilters?.dissolvedDateMin === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.dissolvedDate'), 1, length(substr(${entityFilters.dissolvedDateMin}, 1, instr(${entityFilters.dissolvedDateMin}, '[') - 1))) >= substr(${entityFilters.dissolvedDateMin}, 1, instr(${entityFilters.dissolvedDateMin}, '[') - 1)`}
+        ${entityFilters?.dissolvedDateMax === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.dissolvedDate'), 1, length(substr(${entityFilters.dissolvedDateMax}, 1, instr(${entityFilters.dissolvedDateMax}, '[') - 1))) <= substr(${entityFilters.dissolvedDateMax}, 1, instr(${entityFilters.dissolvedDateMax}, '[') - 1)`}
+        ${personFilters?.birthDateMin === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.birthDate'), 1, length(substr(${personFilters.birthDateMin}, 1, instr(${personFilters.birthDateMin}, '[') - 1))) >= substr(${personFilters.birthDateMin}, 1, instr(${personFilters.birthDateMin}, '[') - 1)`}
+        ${personFilters?.birthDateMax === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.birthDate'), 1, length(substr(${personFilters.birthDateMax}, 1, instr(${personFilters.birthDateMax}, '[') - 1))) <= substr(${personFilters.birthDateMax}, 1, instr(${personFilters.birthDateMax}, '[') - 1)`}
+        ${personFilters?.deathDateMin === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.deathDate'), 1, length(substr(${personFilters.deathDateMin}, 1, instr(${personFilters.deathDateMin}, '[') - 1))) >= substr(${personFilters.deathDateMin}, 1, instr(${personFilters.deathDateMin}, '[') - 1)`}
+        ${personFilters?.deathDateMax === undefined ? sql`` : sql`AND substr(json_extract(a.attributes, '$.deathDate'), 1, length(substr(${personFilters.deathDateMax}, 1, instr(${personFilters.deathDateMax}, '[') - 1))) <= substr(${personFilters.deathDateMax}, 1, instr(${personFilters.deathDateMax}, '[') - 1)`}
+        ${animalFilters?.animalRoles === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.roles') WHERE value IN ${sql.in(animalFilters.animalRoles)})`}
+        ${toolFilters?.toolUsages === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.usage') WHERE value IN ${sql.in(toolFilters.toolUsages)})`}
+        ${resourceFilters?.resourceFormats === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.format') IN ${sql.in(resourceFilters.resourceFormats)}`}
+        ${contentProducerFilters?.contentChannelTypes === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.channels') WHERE json_extract(value, '$.type') IN ${sql.in(contentProducerFilters.contentChannelTypes)})`}
       ORDER BY a.id
     `
     }),

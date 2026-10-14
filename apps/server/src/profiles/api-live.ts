@@ -7,6 +7,19 @@ import { ProfilesRepository } from "./repository.js"
 
 export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (handlers) =>
   handlers
+    .handle("searchProfiles", ({ query }) =>
+      Effect.gen(function* () {
+        yield* Effect.annotateCurrentSpan("profiles.search.has_text", query.text !== undefined)
+        yield* Effect.annotateCurrentSpan("profiles.search.type", query.type ?? "all")
+        const repo = yield* ProfilesRepository
+        const profiles = yield* repo.searchProfiles(query)
+        yield* Effect.annotateCurrentSpan("profiles.search.result_count", profiles.length)
+        return profiles
+      }).pipe(
+        Effect.withSpan("profiles.search"),
+        withApiInfrastructureErrors({ endpoint: "searchProfiles", group: "profiles" }),
+      ),
+    )
     .handle("getProfileByHandle", ({ params }) =>
       Effect.gen(function* () {
         const repo = yield* ProfilesRepository

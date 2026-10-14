@@ -295,7 +295,20 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         getPublishedArticle,
         listCards: (language: SupportedLanguage) => repository.listCards(language),
         searchWikiArticles: (params: WikiSearchParams) =>
-          repository.searchCards({ ...params, language: "pt" }),
+          Effect.gen(function* () {
+            yield* Effect.annotateCurrentSpan({
+              "wiki.article.kind": params.kind ?? "all",
+              "wiki.search.language": params.language ?? "pt",
+              "wiki.search.has_text": params.text !== undefined,
+            })
+
+            const articles = yield* repository.searchCards({
+              search: params,
+              language: params.language ?? "pt",
+            })
+            yield* Effect.annotateCurrentSpan("wiki.search.result_count", articles.length)
+            return articles
+          }).pipe(Effect.withSpan("wiki.search")),
         attachMediaToWikiArticle,
         setMainMedia,
         listCultivars: (id: WikiArticleId) =>

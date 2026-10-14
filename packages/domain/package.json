@@ -3,11 +3,6 @@
   "version": "0.0.0",
   "description": "Domain entities and schemas for Gororobas",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://gitlab.com/hdoro/gororobas-experiments.git",
-    "directory": "packages/domain"
-  },
   "type": "module",
   "publishConfig": {
     "access": "public",

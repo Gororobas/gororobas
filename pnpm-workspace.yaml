@@ -20,6 +20,7 @@ catalog:
   "@effect/platform-node": 4.0.1
   "@effect/sql-sqlite-node": "4.0.1"
   "@effect/vitest": 4.0.1
+  "@maple-dev/effect-sdk": "^0.10.0"
   "@tiptap/core": ^3.31.4
   "@tiptap/html": ^3.31.4
   "@tiptap/pm": ^3.31.4

@@ -20,6 +20,7 @@ import {
   WikiArticleQueriedPageData,
   WikiArticleProjectionRow,
   WikiArticleRevisionId,
+  WikiSearchParams,
   WikiPlantArticle,
   WikiPlantCultivarArticle,
   snapshotToLoroDoc,
@@ -36,7 +37,7 @@ import {
   When,
 } from "@gororobas/effect-bdd"
 import { VISITOR_SESSION } from "@gororobas/server/session-service"
-import { Effect, Layer, Option, Result, Schema } from "effect"
+import { Effect, Layer, Option, Record, Result, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
@@ -127,6 +128,39 @@ const plant = (title: string, content = title) =>
       },
     },
   })
+
+const plantWithSearchableAttributes = (
+  title: string,
+  attributes: {
+    strata?: ReadonlyArray<"EMERGENT" | "HIGH" | "MEDIUM" | "LOW" | "GROUND">
+    heightMin?: number
+    heightMax?: number
+  },
+) =>
+  WikiPlantArticle.EditableArticle.make({
+    ...plant(title),
+    attributes: Schema.decodeSync(WikiPlantArticle.EditableAttributes)({
+      ...attributes,
+      strata: attributes.strata
+        ? Record.fromEntries(attributes.strata.map((stratum) => [stratum, true] as const))
+        : undefined,
+    }),
+  })
+
+const bilingualPlant = (title: string) => {
+  const article = plant(title)
+
+  return WikiPlantArticle.EditableArticle.make({
+    ...article,
+    translations: {
+      pt: article.translations.pt,
+      en: {
+        ...translation(`${title} in English`),
+        origin: Option.none(),
+      },
+    },
+  })
+}
 
 const setupPeople = () =>
   provisionPeople([
@@ -1668,6 +1702,89 @@ it.effect(
           return true
         }).pipe(Effect.provide(WikiTestLayer)),
     }),
+)
+
+it.effect("plant search ORs enum selections and matches overlapping numeric ranges", () =>
+  Effect.gen(function* () {
+    let context = yield* setupPeople()
+
+    context = yield* seedArticle({
+      context,
+      title: "Tall emergent plant",
+      data: plantWithSearchableAttributes("Tall emergent plant", {
+        strata: ["EMERGENT"],
+        heightMin: 100,
+        heightMax: 200,
+      }),
+    })
+
+    context = yield* seedArticle({
+      context,
+      title: "High plant",
+      data: plantWithSearchableAttributes("High plant", { strata: ["HIGH"] }),
+    })
+
+    context = yield* seedArticle({
+      context,
+      title: "Ground plant",
+      data: plantWithSearchableAttributes("Ground plant", { strata: ["GROUND"] }),
+    })
+
+    context = yield* seedArticle({
+      context,
+      title: "Bilingual plant",
+      data: bilingualPlant("Bilingual plant"),
+    })
+
+    const service = yield* WikiArticlesService
+
+    const matchingStrata = yield* service.searchWikiArticles({
+      kind: "PLANT",
+      text: undefined,
+      strata: ["HIGH", "EMERGENT"],
+    })
+
+    const matchingHeight = yield* service.searchWikiArticles(
+      Schema.decodeSync(WikiSearchParams)({
+        kind: "PLANT",
+        heightMin: 150,
+        heightMax: 250,
+      }),
+    )
+
+    const englishCards = yield* service.searchWikiArticles({
+      kind: "PLANT",
+      language: "en",
+      text: "Bilingual plant in English",
+    })
+
+    expect(matchingStrata.map((article) => article.id)).toEqual(
+      expect.arrayContaining([
+        articleId(context, "Tall emergent plant"),
+        articleId(context, "High plant"),
+      ]),
+    )
+
+    expect(matchingStrata).toHaveLength(2)
+    expect(matchingHeight.map((article) => article.id)).toEqual([
+      articleId(context, "Tall emergent plant"),
+    ])
+
+    expect(englishCards).toEqual([
+      expect.objectContaining({
+        id: articleId(context, "Bilingual plant"),
+        language: "en",
+      }),
+    ])
+
+    expect(() =>
+      Schema.decodeSync(WikiSearchParams)({
+        kind: "PLANT",
+        temperatureMin: 25,
+        temperatureMax: 10,
+      }),
+    ).toThrow("Temperature minimum must not exceed maximum")
+  }).pipe(Effect.provide(WikiTestLayer)),
 )
 
 it.effect("pending and rejected creation remain unavailable; only evaluators can publish", () =>

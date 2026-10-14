@@ -4,10 +4,26 @@
 import { Schema, Struct } from "effect"
 
 import { ProfileType, ProfileVisibility } from "../common/enums.js"
-import { MediaAssetId, OrganizationId, PersonId } from "../common/ids.js"
+import { MediaAssetId, OrganizationId, PersonId, ProfileId } from "../common/ids.js"
 import { Handle, TimestampedStruct } from "../common/primitives.js"
 import { OrganizationRow } from "../organizations/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
+
+export const ProfileSearchParams = Schema.Struct({
+  text: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
+  type: Schema.optional(ProfileType),
+})
+export type ProfileSearchParams = typeof ProfileSearchParams.Type
+
+export const ProfileCardData = Schema.Struct({
+  id: ProfileId,
+  type: ProfileType,
+  handle: Handle,
+  name: Schema.String,
+  location: Schema.NullOr(Schema.String),
+})
+
+export type ProfileCardData = typeof ProfileCardData.Type
 
 const CoreProfileRow = Schema.Struct({
   ...TimestampedStruct.fields,

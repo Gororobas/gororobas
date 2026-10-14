@@ -7,6 +7,7 @@ import {
   findByHandle,
   findById,
   isHandleInUse,
+  searchProfiles,
 } from "./queries.js"
 
 export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
@@ -30,6 +31,7 @@ export class ProfilesRepository extends Context.Service<ProfilesRepository>()(
       findById,
       insertProfile,
       isHandleInUse,
+      searchProfiles,
       updateProfileRow,
     } as const),
   },
