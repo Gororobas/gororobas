@@ -1,4 +1,4 @@
-import { Match as M, Option } from 'effect'
+import { Match, Option } from 'effect'
 import type { Attribute, Html, HtmlBuilder } from 'foldkit/html'
 
 // VIEW
@@ -46,6 +46,7 @@ export type ViewConfig<Message> = Readonly<{
   toView: (attributes: SwitchAttributes<Message>) => Html
   isDisabled?: boolean
   isReadOnly?: boolean
+  hasDescription?: boolean
   name?: string
   value?: string
 }>
@@ -73,10 +74,9 @@ export const descriptionId = (id: string): string => `${id}-description`
  *  )
  *
  *  // In update:
- *  ToggledNotifications: ({ isChecked }) => [
- *    evo(model, { notificationsEnabled: () => isChecked }),
- *    [],
- *  ],
+ *  ToggledNotifications: ({ isChecked }) => ({
+ *    model: modifyFields(model, { notificationsEnabled: () => isChecked }),
+ *  }),
  *  ``` */
 export const view = <Message>(
   config: ViewConfig<Message>,
@@ -89,6 +89,7 @@ export const view = <Message>(
     toView,
     isDisabled = false,
     isReadOnly = false,
+    hasDescription = false,
     name,
     value: formValue = 'on',
   } = config
@@ -96,9 +97,9 @@ export const view = <Message>(
   const nextChecked = !isChecked
 
   const handleKeyUp = (key: string): Option.Option<Message> =>
-    M.value(key).pipe(
-      M.when(' ', () => Option.some(onToggle(nextChecked))),
-      M.orElse(() => Option.none()),
+    Match.value(key).pipe(
+      Match.when(' ', () => Option.some(onToggle(nextChecked))),
+      Match.orElse(() => Option.none()),
     )
 
   const checkedAttributes = isChecked ? [h.DataAttribute('checked', '')] : []
@@ -113,12 +114,16 @@ export const view = <Message>(
 
   const isInteractive = !isDisabled && !isReadOnly
 
+  const describedByAttributes = hasDescription
+    ? [h.AriaDescribedBy(descriptionId(id))]
+    : []
+
   const buttonAttributes = [
     h.Type('button'),
     h.Role('switch'),
     h.AriaChecked(isChecked),
     h.AriaLabelledBy(labelId(id)),
-    h.AriaDescribedBy(descriptionId(id)),
+    ...describedByAttributes,
     h.Tabindex(0),
     ...checkedAttributes,
     ...disabledAttributes,

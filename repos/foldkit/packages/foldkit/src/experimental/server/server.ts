@@ -1,16 +1,31 @@
 import {
-  Array as Array_,
+  Array,
   Context,
   Data,
   Effect,
   Option,
   Predicate,
   Schema,
+  String,
   pipe,
 } from 'effect'
 import type { DefaultTreeAdapterMap } from 'parse5'
-import { parseFragment } from 'parse5'
+import {
+  html as Parse5Html,
+  defaultTreeAdapter,
+  parse,
+  parseFragment,
+} from 'parse5'
 
+import {
+  HYDRATION_BUILD_ATTRIBUTE,
+  buildIdOrInjected,
+} from '../../buildToken.js'
+import {
+  MATHML_NAMESPACE,
+  SVG_NAMESPACE,
+  parsedAttributeName,
+} from '../../domReflection.js'
 import { beginRender, createBoundaryRegistry } from '../../html/boundary.js'
 import {
   type Document,
@@ -27,9 +42,16 @@ import {
   FOLDKIT_APP_ATTRIBUTE,
   FOLDKIT_FLAGS_ATTRIBUTE,
 } from '../../hydrationMarker.js'
+import {
+  HYDRATION_IDENTITY_ATTRIBUTE,
+  HYDRATION_KEY_ATTRIBUTE,
+} from '../../hydrationMarkers.js'
+import { hasTrustedInnerHtml } from '../../propertyProvenance.js'
 import type { VNode } from '../../snabbdom/vnode.js'
 import { tagNameFromSelector } from '../../tagName.js'
+import type { Return as UpdateReturn } from '../../update/index.js'
 import { Url, fromString } from '../../url/index.js'
+import { type ParsedFragmentModes, parseFragmentModes } from './fragment.js'
 import {
   controlledValueContent,
   escapeAttributeValue,
@@ -75,7 +97,7 @@ const normalizeVnodeChildren = (vnode: VNode): ReadonlyArray<VnodeChild> => {
   if (children === undefined) {
     return []
   }
-  const items: Array<VnodeChild> = []
+  const items: globalThis.Array<VnodeChild> = []
   let text = ''
   const flush = (): void => {
     if (text !== '') {
@@ -104,9 +126,9 @@ const normalizeVnodeChildren = (vnode: VNode): ReadonlyArray<VnodeChild> => {
 }
 
 const normalizeParsedChildren = (
-  node: Parse5Element,
+  node: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
 ): ReadonlyArray<ParsedChild> => {
-  const items: Array<ParsedChild> = []
+  const items: globalThis.Array<ParsedChild> = []
   let text = ''
   const flush = (): void => {
     if (text !== '') {
@@ -180,6 +202,22 @@ const structureMismatch = (parsed: Parse5Element): Error => {
   )
 }
 
+const expectedParsedTagName = (vnode: VNode): string => {
+  const tagName = tagNameFromSelector(vnode.sel ?? '')
+  return vnode.data?.ns === undefined ? tagName.toLowerCase() : tagName
+}
+
+const foreignTagNameMismatch = (
+  parsedTagName: string,
+  authoredTagName: string,
+): Error =>
+  new Error(
+    `[foldkit] HTML parsing changed the foreign-content tag ` +
+      `<${authoredTagName}> to <${parsedTagName}>. SVG and MathML tag names ` +
+      'are case-sensitive when the client creates them. Use the canonical ' +
+      'tag spelling so the served and fresh client DOM agree.',
+  )
+
 // Compare the child structure the browser parsed against the structure the
 // view declared, recursively. The top-level check rejects a root that splits
 // into siblings; this rejects a parser correction inside the root, whether an
@@ -187,9 +225,12 @@ const structureMismatch = (parsed: Parse5Element): Error => {
 // foster-parented text, which hydration would otherwise see as a whole-subtree
 // mismatch.
 const assertStructureMatches = (parsed: Parse5Element, vnode: VNode): void => {
-  // InnerHTML owns an opaque, parser-produced subtree that the vnode does not
-  // model as children, so it is left unwalked.
-  if (vnode.data?.props?.['innerHTML'] !== undefined) {
+  // `h.InnerHTML` owns an opaque, parser-produced subtree that the vnode does
+  // not model as children, so it is left unwalked. A property that merely
+  // carries the name is not that: the serializer emits the vnode's own children
+  // for it, so they are walked like any others.
+  if (hasTrustedInnerHtml(vnode.data?.props)) {
+    assertInnerHtmlContextMatches(parsed, vnode)
     return
   }
   const parsedChildren = normalizeParsedChildren(parsed)
@@ -201,7 +242,7 @@ const assertStructureMatches = (parsed: Parse5Element, vnode: VNode): void => {
   if (parsedChildren.length !== vnodeChildren.length) {
     throw structureMismatch(parsed)
   }
-  for (const [parsedChild, vnodeChild] of Array_.zip(
+  for (const [parsedChild, vnodeChild] of Array.zip(
     parsedChildren,
     vnodeChildren,
   )) {
@@ -209,15 +250,20 @@ const assertStructureMatches = (parsed: Parse5Element, vnode: VNode): void => {
       throw structureMismatch(parsed)
     }
     if (parsedChild.kind === 'Element' && vnodeChild.kind === 'Element') {
-      const expectedTag = tagNameFromSelector(
-        vnodeChild.vnode.sel ?? '',
-      ).toLowerCase()
+      const expectedTag = expectedParsedTagName(vnodeChild.vnode)
       const expectedNamespace =
         typeof vnodeChild.vnode.data?.ns === 'string'
           ? vnodeChild.vnode.data.ns
           : HTML_NAMESPACE
       if (
-        parsedChild.element.tagName.toLowerCase() !== expectedTag ||
+        expectedNamespace !== HTML_NAMESPACE &&
+        parsedChild.element.namespaceURI === expectedNamespace &&
+        parsedChild.element.tagName !== expectedTag
+      ) {
+        throw foreignTagNameMismatch(parsedChild.element.tagName, expectedTag)
+      }
+      if (
+        parsedChild.element.tagName !== expectedTag ||
         parsedChild.element.namespaceURI !== expectedNamespace
       ) {
         throw new Error(
@@ -262,6 +308,592 @@ const buildDivFragmentContext = (): Parse5Element => {
 }
 const DIV_FRAGMENT_CONTEXT = buildDivFragmentContext()
 
+// After serialization, confirm the root closes cleanly. An unterminated element
+// inside the root (an unclosed `<textarea>`, `<script>`, `<style>`, comment, or
+// `<plaintext>`, typically from an incomplete `InnerHTML` fragment) does not end
+// at the root's own close tag, so it would swallow the Flags payload, the client
+// entry, and everything after the root when the served document is parsed. The
+// per-element structure walk skips `InnerHTML` subtrees, so this parses the root
+// markup with a trailing sentinel comment and requires the sentinel to survive
+// as a top-level sibling: if the root consumed it, so would the rest of the page.
+//
+// NOTE: the parse runs twice, because `<noscript>` has two parser modes and the
+// document has to survive both. With scripting enabled, the state a hydrating
+// visitor's browser is in, noscript content is raw text. With scripting
+// disabled, the state noscript exists to serve, the same content parses as HTML,
+// so an unterminated element inside a noscript fallback swallows the rest of the
+// page for exactly the visitors the fallback was written for. Both modes are
+// checked, so a fallback that frames cleanly for one visitor cannot break the
+// document for the other.
+const TRAILING_SENTINEL_DATA = 'foldkit-trailing-boundary'
+const TRAILING_SENTINEL = `<!--${TRAILING_SENTINEL_DATA}-->`
+
+const closesCleanly = (html: string, isScriptingEnabled: boolean): boolean => {
+  const fragment = parseFragment(
+    DIV_FRAGMENT_CONTEXT,
+    html + TRAILING_SENTINEL,
+    {
+      scriptingEnabled: isScriptingEnabled,
+    },
+  )
+  const significant = fragment.childNodes.filter(node => !isIgnorableText(node))
+  const last = significant[significant.length - 1]
+  return (
+    last !== undefined &&
+    last.nodeName === '#comment' &&
+    'data' in last &&
+    last.data === TRAILING_SENTINEL_DATA
+  )
+}
+
+// Framing is not the only thing `<noscript>` can break. An element the fallback
+// leaves open does not have to reach the end of the document to do damage: with
+// scripting disabled an unclosed `<form>` or `<table>` stops at the root's close
+// tag, so the document still frames cleanly, while everything between it and
+// that close tag is pulled inside the fallback and disappears from the page a
+// visitor without JavaScript sees.
+//
+// The check is a comparison rather than a scan, because the two parser modes
+// have to agree on everything except the one place they are meant to differ.
+// The serialized root is parsed both ways and the trees compared, descending
+// into every element except `<noscript>`, whose content is raw text in one mode
+// and markup in the other by design. What must match is where each `<noscript>`
+// sits and what follows it. Comparing the parsed output rather than the declared
+// vnodes also covers a `<noscript>` that arrives inside an `h.InnerHTML`
+// fragment, which no walk over the view's own children can see.
+// `<noscript>` means something to the parser only in the HTML namespace. Inside
+// SVG or MathML an element of that name is an ordinary foreign element whose
+// content parses the same way in both modes, so skipping it there would leave a
+// real HTML `<noscript>` nested below it unchecked. `<template>` holds its
+// children in a separate content fragment rather than in `childNodes`, so its
+// content is traversed explicitly; a fallback inside one is invisible otherwise,
+// and declarative shadow DOM makes that content live in the page.
+const isHtmlNoscript = (element: Parse5Element): boolean =>
+  element.tagName.toLowerCase() === 'noscript' &&
+  element.namespaceURI === HTML_NAMESPACE
+
+const traversableContent = (
+  element: Parse5Element,
+): Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }> => {
+  if (
+    element.tagName.toLowerCase() === 'template' &&
+    element.namespaceURI === HTML_NAMESPACE &&
+    'content' in element
+  ) {
+    const content = element.content
+    if (
+      Predicate.isObject(content) &&
+      Predicate.hasProperty(content, 'childNodes')
+    ) {
+      /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+      return content as Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>
+    }
+  }
+  return element
+}
+
+const parsedChildrenAgree = (
+  scripted: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+  unscripted: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+): boolean => {
+  const scriptedChildren = normalizeParsedChildren(scripted)
+  const unscriptedChildren = normalizeParsedChildren(unscripted)
+  if (scriptedChildren.length !== unscriptedChildren.length) {
+    return false
+  }
+  for (const [scriptedChild, unscriptedChild] of Array.zip(
+    scriptedChildren,
+    unscriptedChildren,
+  )) {
+    if (scriptedChild.kind !== unscriptedChild.kind) {
+      return false
+    }
+    if (
+      scriptedChild.kind === 'Element' &&
+      unscriptedChild.kind === 'Element'
+    ) {
+      const tagName = scriptedChild.element.tagName.toLowerCase()
+      if (
+        tagName !== unscriptedChild.element.tagName.toLowerCase() ||
+        scriptedChild.element.namespaceURI !==
+          unscriptedChild.element.namespaceURI ||
+        !parsedAttributesAgree(scriptedChild.element, unscriptedChild.element)
+      ) {
+        return false
+      }
+      if (isHtmlNoscript(scriptedChild.element)) {
+        continue
+      }
+      if (
+        !parsedChildrenAgree(
+          traversableContent(scriptedChild.element),
+          traversableContent(unscriptedChild.element),
+        )
+      ) {
+        return false
+      }
+    } else if (
+      scriptedChild.kind === 'Text' &&
+      unscriptedChild.kind === 'Text'
+    ) {
+      if (scriptedChild.text !== unscriptedChild.text) {
+        return false
+      }
+    } else if (
+      scriptedChild.kind === 'Comment' &&
+      unscriptedChild.kind === 'Comment'
+    ) {
+      if (scriptedChild.text !== unscriptedChild.text) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
+const parsedAttributesAgree = (
+  left: Parse5Element,
+  right: Parse5Element,
+): boolean => {
+  const signature = (element: Parse5Element): ReadonlyArray<string> =>
+    element.attrs
+      .map(attribute =>
+        JSON.stringify([
+          attribute.namespace ?? '',
+          attribute.prefix ?? '',
+          attribute.name,
+          attribute.value,
+        ]),
+      )
+      .sort()
+  const leftAttributes = signature(left)
+  const rightAttributes = signature(right)
+  return (
+    leftAttributes.length === rightAttributes.length &&
+    leftAttributes.every(
+      (attribute, index) => attribute === rightAttributes[index],
+    )
+  )
+}
+
+const assertInnerHtmlContextMatches = (
+  parsed: Parse5Element,
+  vnode: VNode,
+): void => {
+  const innerHtml = vnode.data?.props?.['innerHTML']
+  if (typeof innerHtml !== 'string') {
+    return
+  }
+  const context = defaultTreeAdapter.createElement(
+    parsed.tagName,
+    parsed.namespaceURI,
+    parsed.attrs.map(attribute => ({ ...attribute })),
+  )
+  const freshChildren = parseFragment(context, innerHtml, {
+    scriptingEnabled: true,
+  })
+  if (parsedChildrenAgree(traversableContent(parsed), freshChildren)) {
+    return
+  }
+  throw new Error(
+    `[foldkit] h.InnerHTML on <${parsed.tagName}> parses differently when ` +
+      'assigned to a fresh element than when the serialized page is parsed ' +
+      'under its ancestors. Ancestor parser state can insert, move, or drop ' +
+      'nodes from the server DOM (for example, a nested <form> is dropped ' +
+      'under an existing form), so the server and client cannot describe one ' +
+      'tree. Move the fragment outside that context or build the content with ' +
+      'ordinary view children.',
+  )
+}
+
+const assertNoscriptModesAgree = (fragments: ParsedFragmentModes): void => {
+  if (parsedChildrenAgree(fragments.scripted, fragments.unscripted)) {
+    return
+  }
+  throw new Error(
+    '[foldkit] <noscript> content changes the rest of the page when a browser ' +
+      'parses it with scripting disabled. Its content is raw text while ' +
+      'scripting is enabled and ordinary HTML when it is not, so fallback ' +
+      'markup that leaves an element open (a <form>, <table>, <textarea>, ' +
+      '<style>, or comment) pulls the markup that follows the <noscript> ' +
+      'inside it, and the visitors the fallback was written for never see it. ' +
+      'Ensure the fallback is complete and balanced.',
+  )
+}
+
+// Declarative shadow DOM is refused rather than modeled. A browser turns a
+// `<template shadowrootmode>` into a shadow root as it parses, moving its
+// content out of the light DOM entirely, which neither the parser these checks
+// use nor hydration's own probe reproduces. The served page and the tree
+// hydration reconciles would stop describing the same ownership structure.
+//
+// The scan runs on the rendered markup, so it covers a fragment that arrived
+// through `h.InnerHTML` as well as elements the view declared. It descends into
+// template content, where a nested declaration would otherwise sit unseen, and
+// it parses both scripting modes, because a `<noscript>` holds raw text in one
+// and live markup in the other.
+const DECLARATIVE_SHADOW_ROOT_ATTRIBUTES: ReadonlyArray<string> = [
+  'shadowrootmode',
+  'shadowroot',
+]
+
+const declaresShadowRoot = (element: Parse5Element): boolean =>
+  element.tagName.toLowerCase() === 'template' &&
+  element.namespaceURI === HTML_NAMESPACE &&
+  DECLARATIVE_SHADOW_ROOT_ATTRIBUTES.some(name =>
+    element.attrs.some(attribute => attribute.name === name),
+  )
+
+// NOTE: one recursion per element. `traversableContent` returns a template's
+// content fragment and the element itself for everything else, so descending
+// into both it and the element visits an ordinary subtree twice, which doubles
+// the work at every level. A tree the serializer accepts (depth up to 1000) took
+// most of a second at depth 24 and would have blocked the event loop well before
+// the depth limit.
+const hasDeclarativeShadowRoot = (
+  node: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+): boolean =>
+  node.childNodes.some(
+    child =>
+      isParse5Element(child) &&
+      (declaresShadowRoot(child) ||
+        hasDeclarativeShadowRoot(traversableContent(child))),
+  )
+
+export const __assertNoDeclarativeShadowRoot = (
+  fragments: ParsedFragmentModes,
+): void => {
+  const declaresInEitherMode =
+    hasDeclarativeShadowRoot(fragments.scripted) ||
+    hasDeclarativeShadowRoot(fragments.unscripted)
+
+  if (!declaresInEitherMode) {
+    return
+  }
+  throw new Error(
+    '[foldkit] A rendered <template> declares a shadow root, which server ' +
+      'rendering does not support. A browser turns it into a shadow root ' +
+      'while parsing, moving its content out of the light DOM, so the served ' +
+      'page and the tree hydration reconciles no longer describe the same ' +
+      'thing. Attach shadow roots from a custom element instead.',
+  )
+}
+
+// A <base> parsed anywhere in the live HTML tree changes how every relative URL
+// after it resolves, including the client entry a host writes after the rendered
+// application. The browser applies a base element in body before hydration can
+// remove it, so a view could redirect its own bootstrap module to another
+// origin. Template content is inert and does not participate in URL resolution;
+// declarative shadow templates are refused separately.
+const hasLiveBaseElement = (
+  node: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+): boolean => {
+  for (const child of node.childNodes) {
+    if (!isParse5Element(child)) {
+      continue
+    }
+    const tagName = child.tagName.toLowerCase()
+    if (child.namespaceURI === HTML_NAMESPACE && tagName === 'base') {
+      return true
+    }
+    if (child.namespaceURI === HTML_NAMESPACE && tagName === 'template') {
+      continue
+    }
+    if (hasLiveBaseElement(child)) {
+      return true
+    }
+  }
+  return false
+}
+
+export const __assertNoLiveBaseElement = (
+  fragments: ParsedFragmentModes,
+): void => {
+  const hasBaseInEitherMode =
+    hasLiveBaseElement(fragments.scripted) ||
+    hasLiveBaseElement(fragments.unscripted)
+
+  if (!hasBaseInEitherMode) {
+    return
+  }
+  throw new Error(
+    '[foldkit] Rendered application markup contains a live HTML <base> ' +
+      'element. A browser applies it before hydration, so it changes every ' +
+      'relative URL that follows the application, including the client entry ' +
+      'module, and can redirect startup to another origin. Put <base> in the ' +
+      'HTML template head under host control instead.',
+  )
+}
+
+// A page the rendered markup is placed into, with a probe element standing
+// where the application root goes. Parsing the whole document is what makes a
+// structural escape visible: `<html>` and `<body>` start tags inside the markup
+// are dropped by a fragment parse, so a check that only ever sees a fragment
+// reads them as harmless. A browser instead merges their attributes onto the
+// document's own elements and hoists their content, which puts them outside the
+// application's ownership entirely.
+const DOCUMENT_PROBE_ID = 'foldkit-document-probe'
+const DOCUMENT_PROBE_PREFIX =
+  '<!doctype html><html><head><title>probe</title></head><body><div id="' +
+  DOCUMENT_PROBE_ID +
+  '">'
+const DOCUMENT_PROBE_SUFFIX = '</div></body></html>'
+
+const childElementsOf = (
+  node: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+): ReadonlyArray<Parse5Element> => node.childNodes.filter(isParse5Element)
+
+const findByTag = (
+  node: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+  tagName: string,
+): Parse5Element | undefined =>
+  childElementsOf(node).find(
+    element => element.tagName.toLowerCase() === tagName,
+  )
+
+const escapesDocumentStructure = (
+  html: string,
+  scriptingEnabled: boolean,
+): boolean => {
+  const document = parse(
+    `${DOCUMENT_PROBE_PREFIX}${html}${DOCUMENT_PROBE_SUFFIX}`,
+    { scriptingEnabled },
+  )
+  const documentElement = findByTag(document, 'html')
+  if (documentElement === undefined) {
+    return true
+  }
+  const head = findByTag(documentElement, 'head')
+  const body = findByTag(documentElement, 'body')
+  if (head === undefined || body === undefined) {
+    return true
+  }
+  const probe = childElementsOf(body)[0]
+  return (
+    documentElement.attrs.length > 0 ||
+    body.attrs.length > 0 ||
+    head.attrs.length > 0 ||
+    childElementsOf(head).length !== 1 ||
+    childElementsOf(body).length !== 1 ||
+    probe === undefined ||
+    probe.attrs.find(attribute => attribute.name === 'id')?.value !==
+      DOCUMENT_PROBE_ID
+  )
+}
+
+export const __assertNoDocumentStructureEscape = (html: string): void => {
+  if (![true, false].some(mode => escapesDocumentStructure(html, mode))) {
+    return
+  }
+  throw new Error(
+    '[foldkit] The rendered markup changes the document it is placed into. ' +
+      'An <html>, <head>, <body>, or <frameset> tag inside it, typically from ' +
+      'an InnerHTML fragment, is not rendered where it is written: a browser ' +
+      "merges its attributes onto the page's own elements and hoists its " +
+      'content out of the application root, so the result is neither the ' +
+      'markup the view wrote nor anything the application owns. Remove those ' +
+      'tags from the fragment.',
+  )
+}
+
+const assertRootClosesCleanly = (html: string): void => {
+  if (closesCleanly(html, true) && closesCleanly(html, false)) {
+    return
+  }
+  throw new Error(
+    '[foldkit] The rendered root does not close cleanly. An unterminated ' +
+      'element (an unclosed <textarea>, <script>, <style>, comment, or ' +
+      '<plaintext>, typically inside an InnerHTML fragment) would swallow the ' +
+      'Flags payload, the client entry, and the rest of the document when the ' +
+      'page is parsed. The check covers <noscript> fallback markup with ' +
+      'scripting disabled too, where the content parses as HTML rather than as ' +
+      'raw text. Ensure InnerHTML fragments are complete and balanced.',
+  )
+}
+
+// The tags that name a document's own structure. A browser builds these from
+// the served document, not from markup spliced into it: a `<body>` or `<head>`
+// start tag encountered inside the document body is dropped and its children
+// are hoisted, an `<html>` start tag only merges its attributes onto the
+// document element, and `<frameset>` replaces the body outright. A view rooted
+// at one of them therefore serializes to markup no template can hold, so it is
+// refused by name rather than surfacing later as a parser-rearranged root.
+const DOCUMENT_STRUCTURE_TAGS: ReadonlySet<string> = new Set([
+  'body',
+  'frameset',
+  'head',
+  'html',
+])
+
+const assertRootIsNotDocumentStructure = (
+  root: NonNullable<Document['body']>,
+): void => {
+  const tagName = tagNameFromSelector(root.sel ?? '').toLowerCase()
+  if (!DOCUMENT_STRUCTURE_TAGS.has(tagName)) {
+    return
+  }
+  throw new Error(
+    `[foldkit] The view root is <${tagName}>, which names the structure of a ` +
+      'document rather than content placed into one. A browser builds those ' +
+      'elements from the document it parses, so the tag is dropped, merged, ' +
+      'or replaces the body when the rendered markup is spliced into a ' +
+      'template, and the served root is not the element the view wrote. This ' +
+      'holds for static output too. Root the view at an ordinary element ' +
+      'such as a <div> or <main>, and set the document title, lang, and dir ' +
+      'through the Document the view returns.',
+  )
+}
+
+const RESERVED_HANDOFF_ATTRIBUTES: ReadonlySet<string> = new Set([
+  FOLDKIT_APP_ATTRIBUTE,
+  HYDRATION_BUILD_ATTRIBUTE,
+  FOLDKIT_FLAGS_ATTRIBUTE,
+  HYDRATION_KEY_ATTRIBUTE,
+  HYDRATION_IDENTITY_ATTRIBUTE,
+])
+
+const reservedHandoffAttributeIn = (
+  node: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+): string | undefined => {
+  for (const child of node.childNodes) {
+    if (!isParse5Element(child)) {
+      continue
+    }
+    const marker = child.attrs.find(attribute =>
+      RESERVED_HANDOFF_ATTRIBUTES.has(attribute.name),
+    )
+    if (marker !== undefined) {
+      return marker.name
+    }
+    const nested = reservedHandoffAttributeIn(traversableContent(child))
+    if (nested !== undefined) {
+      return nested
+    }
+  }
+  return undefined
+}
+
+const hasScriptElement = (
+  node: Readonly<{ childNodes: ReadonlyArray<Parse5ChildNode> }>,
+): boolean =>
+  node.childNodes.some(
+    child =>
+      isParse5Element(child) &&
+      (child.tagName.toLowerCase() === 'script' ||
+        hasScriptElement(traversableContent(child))),
+  )
+
+const assertNodeDoesNotAuthorReservedContent = (node: VNode): void => {
+  const attrs = node.data?.attrs
+  if (attrs !== undefined) {
+    for (const name of Object.keys(attrs)) {
+      const parsedName = parsedAttributeName(node.data?.ns, name)
+      if (RESERVED_HANDOFF_ATTRIBUTES.has(parsedName)) {
+        throw new Error(
+          `[foldkit] The view authored ${parsedName}, which is reserved for ` +
+            'Foldkit\u2019s server-to-client hydration handoff. Application ' +
+            'markup cannot own root, build, Flags, key, or identity markers. ' +
+            'Remove the attribute.',
+        )
+      }
+    }
+  }
+  const innerHtml = node.data?.props?.['innerHTML']
+  if (typeof innerHtml === 'string' && hasTrustedInnerHtml(node.data?.props)) {
+    const tagName = expectedParsedTagName(node)
+    const namespace =
+      node.data?.ns === SVG_NAMESPACE
+        ? Parse5Html.NS.SVG
+        : node.data?.ns === MATHML_NAMESPACE
+          ? Parse5Html.NS.MATHML
+          : Parse5Html.NS.HTML
+    const context = defaultTreeAdapter.createElement(tagName, namespace, [])
+    const parsedFragments = [true, false].map(scriptingEnabled =>
+      parseFragment(context, innerHtml, { scriptingEnabled }),
+    )
+    const marker = parsedFragments
+      .map(reservedHandoffAttributeIn)
+      .find(candidate => candidate !== undefined)
+    if (marker !== undefined) {
+      throw new Error(
+        `[foldkit] h.InnerHTML on <${tagName}> authored ${marker}, which is ` +
+          'reserved for Foldkit\u2019s server-to-client hydration handoff. ' +
+          'Application markup cannot own root, build, Flags, key, or identity ' +
+          'markers. Remove the attribute.',
+      )
+    }
+    if (parsedFragments.some(hasScriptElement)) {
+      throw new Error(
+        `[foldkit] h.InnerHTML on <${tagName}> contains a <script> element. ` +
+          'A script element created while parsing served HTML is not ' +
+          'equivalent to one created by assigning innerHTML. Executable forms ' +
+          'can run only on the server path, and other script types have ' +
+          'type-specific processing that Foldkit does not model. Foldkit ' +
+          'therefore refuses classic, module, import-map, speculation-rules, ' +
+          'and data-block scripts at this boundary. Build the script as an ' +
+          'ordinary view element or move it to the HTML template instead.',
+      )
+    }
+  }
+}
+
+const assertViewDoesNotAuthorReservedContent = (root: VNode): void => {
+  const pendingNodes: globalThis.Array<VNode> = [root]
+  for (
+    let node = pendingNodes.pop();
+    node !== undefined;
+    node = pendingNodes.pop()
+  ) {
+    assertNodeDoesNotAuthorReservedContent(node)
+
+    const { children } = node
+
+    if (children !== undefined) {
+      for (let index = children.length - 1; index >= 0; index--) {
+        const child = Array.getUnsafe(children, index)
+        if (typeof child !== 'string') {
+          pendingNodes.push(child)
+        }
+      }
+    }
+  }
+}
+
+const elementsAtAndBelow = (
+  element: Parse5Element,
+): ReadonlyArray<Parse5Element> => {
+  const elements: globalThis.Array<Parse5Element> = [element]
+  for (const child of traversableContent(element).childNodes) {
+    if (isParse5Element(child)) {
+      elements.push(...elementsAtAndBelow(child))
+    }
+  }
+  return elements
+}
+
+const elementsCarrying = (
+  root: Parse5Element,
+  attributeName: string,
+): ReadonlyArray<Parse5Element> =>
+  elementsAtAndBelow(root).filter(element =>
+    element.attrs.some(attribute => attribute.name === attributeName),
+  )
+
+const assertNoReservedHandoffMarkers = (root: Parse5Element): void => {
+  const maybeMarker = Array.findFirst(
+    Array.fromIterable(RESERVED_HANDOFF_ATTRIBUTES),
+    attributeName => elementsCarrying(root, attributeName).length > 0,
+  )
+  if (Option.isNone(maybeMarker)) {
+    return
+  }
+  throw new Error(
+    `[foldkit] Static output contains ${maybeMarker.value}, which is reserved for ` +
+      'Foldkit\u2019s server-to-client hydration handoff. A render that no ' +
+      'client will hydrate must not carry hydration markers.',
+  )
+}
+
 // After serialization, parse the stamped root markup with the same HTML parser
 // a browser uses and require it to describe exactly one element: the stamped
 // root, with the tag and namespace the view produced. A view can serialize a
@@ -270,12 +902,12 @@ const DIV_FRAGMENT_CONTEXT = buildDivFragmentContext()
 // moving nodes outside the element the client hydrates. Hydration owns only
 // that root, so it cannot remove escaped siblings; rejecting here keeps the
 // invariant that the served root parses back to the single intended element.
-const assertSingleStampedRoot = (
-  html: string,
-  runtimeId: string,
+// The single element the served markup parses back to, or a refusal naming what
+// the parser did to it instead.
+const parsedRootOf = (
+  fragment: DefaultTreeAdapterMap['documentFragment'],
   root: NonNullable<Document['body']>,
-): void => {
-  const fragment = parseFragment(DIV_FRAGMENT_CONTEXT, html, {})
+): Parse5Element => {
   const significant = fragment.childNodes.filter(node => !isIgnorableText(node))
   const only = significant[0]
   if (
@@ -288,31 +920,80 @@ const assertSingleStampedRoot = (
         'splits into more than one top-level node. An element the parser ' +
         'moves out of its parent (a block element inside a <p>, a stray ' +
         'element inside a <table>, or an HTML element inside an <svg>) ' +
-        'leaves content outside the application root that hydration cannot ' +
-        'own. Keep the view root a single, structurally valid element tree.',
+        'leaves content outside the application root. Keep the view root a ' +
+        'single, structurally valid element tree.',
     )
   }
-  const stamp = only.attrs.find(
-    attribute => attribute.name === FOLDKIT_APP_ATTRIBUTE,
-  )
-  if (stamp?.value !== runtimeId) {
-    throw new Error(
-      '[foldkit] HTML parsing moved the hydration marker off the rendered ' +
-        'root, so the served DOM would not carry the stamp the client ' +
-        'adopts. Keep the view root a single, structurally valid element.',
-    )
-  }
-  const expectedTag = tagNameFromSelector(root.sel ?? '').toLowerCase()
+  const expectedTag = expectedParsedTagName(root)
   const expectedNamespace =
     typeof root.data?.ns === 'string' ? root.data.ns : HTML_NAMESPACE
   if (
-    only.tagName.toLowerCase() !== expectedTag ||
-    only.namespaceURI !== expectedNamespace
+    expectedNamespace !== HTML_NAMESPACE &&
+    only.namespaceURI === expectedNamespace &&
+    only.tagName !== expectedTag
   ) {
+    throw foreignTagNameMismatch(only.tagName, expectedTag)
+  }
+  if (only.tagName !== expectedTag || only.namespaceURI !== expectedNamespace) {
     throw new Error(
       '[foldkit] HTML parsing reinterpreted the rendered root as a ' +
         `<${only.tagName}>, not the view's <${expectedTag}>. Keep the view ` +
         'root a single, structurally valid element.',
+    )
+  }
+  return only
+}
+
+// After serialization, parse the root markup with the same HTML parser a browser
+// uses and require it to describe the tree the view wrote. A view can serialize
+// a structurally invalid shape the parser rearranges (a block element inside a
+// `<p>`, a bare `<tr>` in a `<table>`, text foster-parented out of a table),
+// moving or dropping nodes the view declared.
+//
+// This runs for a static render too. Hydration is what would otherwise rebuild a
+// reshaped subtree, so without it a dropped subtree is simply lost, with nothing
+// left to notice. What stays conditional is the marker check below: only a
+// hydratable render emits a stamp for the parser to move.
+const assertParsedRootMatchesView = (
+  fragment: DefaultTreeAdapterMap['documentFragment'],
+  root: NonNullable<Document['body']>,
+): void => {
+  const parsed = parsedRootOf(fragment, root)
+  assertNoReservedHandoffMarkers(parsed)
+  assertStructureMatches(parsed, root)
+}
+
+const assertSingleStampedRoot = (
+  fragment: DefaultTreeAdapterMap['documentFragment'],
+  runtimeId: string,
+  buildId: string,
+  root: NonNullable<Document['body']>,
+): void => {
+  const only = parsedRootOf(fragment, root)
+  const applicationMarkers = elementsCarrying(only, FOLDKIT_APP_ATTRIBUTE)
+  const buildMarkers = elementsCarrying(only, HYDRATION_BUILD_ATTRIBUTE)
+  const flagsMarkers = elementsCarrying(only, FOLDKIT_FLAGS_ATTRIBUTE)
+  const stamp = only.attrs.find(
+    attribute => attribute.name === FOLDKIT_APP_ATTRIBUTE,
+  )
+  const buildStamp = only.attrs.find(
+    attribute => attribute.name === HYDRATION_BUILD_ATTRIBUTE,
+  )
+  if (
+    applicationMarkers.length !== 1 ||
+    applicationMarkers[0] !== only ||
+    stamp?.value !== runtimeId ||
+    buildMarkers.length !== 1 ||
+    buildMarkers[0] !== only ||
+    buildStamp?.value !== buildId ||
+    flagsMarkers.length !== 0
+  ) {
+    throw new Error(
+      '[foldkit] The rendered root does not carry exactly one Foldkit root ' +
+        'and build marker on the root itself, or application markup contains ' +
+        'a reserved root, build, or Flags marker below it. The client could ' +
+        'resolve an ambiguous root or payload and refuse the page. Remove ' +
+        'application-authored data-foldkit handoff markers.',
     )
   }
   assertStructureMatches(only, root)
@@ -322,9 +1003,10 @@ export { FOLDKIT_APP_ATTRIBUTE, FOLDKIT_FLAGS_ATTRIBUTE }
 
 const DEFAULT_RUNTIME_ID = 'app'
 
-/** The server render of one request: the stamped root markup (plus the Flags
- *  payload script when the application declares Flags) and the `Document`
- *  head fields for the host to place into its HTML template.
+/** The server render of one request: the body markup and the `Document` head
+ *  fields for the document renderer or a custom host's template. Hydratable output
+ *  contains a stamped root and, when the application declares Flags, its
+ *  payload script. Static output carries no handoff markers.
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
@@ -384,18 +1066,31 @@ export class InvalidHydrationRoot extends Data.TaggedError(
   rootKind: 'Empty' | 'Text' | 'Comment'
 }> {}
 
+/** Failure of a hydratable render that has no build id. Hydration
+ * compares the id on the served root with the client's own to refuse a page
+ * from another deployment, so a render that carries none has no such
+ * protection. Build both artifacts together with `@foldkit/vite-plugin`, or
+ * supply the same nonempty `buildId` explicitly when client and server builds
+ * are orchestrated separately. A render that nothing will hydrate
+ * (`isHydratable: false`) needs none.
+ *
+ * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
+ */
+export class MissingBuildId extends Data.TaggedError('MissingBuildId')<{}> {}
+
 /** Union of the failures {@link renderToString} can produce.
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
 export type RenderError =
+  | MissingBuildId
   | InvalidUrl
   | FlagsEncodeError
   | SerializationError
   | InvalidRuntimeId
   | InvalidHydrationRoot
 
-type InitReturn<Model> = readonly [Model, ReadonlyArray<unknown>]
+type InitReturn<Model, Message> = UpdateReturn<Model, Message, any>
 
 /** Server-side subset of a routing `makeApplication` config with Flags. The
  *  full application config is structurally assignable; `container`, `update`,
@@ -407,7 +1102,7 @@ export type RoutingApplicationConfigWithFlags<Model, Message, Flags> =
   Readonly<{
     Flags: Schema.Codec<Flags, any, never, never>
     routing: unknown
-    init: (flags: Flags, url: Url) => InitReturn<Model>
+    init: (flags: Flags, url: Url) => InitReturn<Model, Message>
     view: (model: Model, h: HtmlBuilder<Message>) => Document
   }>
 
@@ -417,7 +1112,7 @@ export type RoutingApplicationConfigWithFlags<Model, Message, Flags> =
  */
 export type RoutingApplicationConfig<Model, Message> = Readonly<{
   routing: unknown
-  init: (url: Url) => InitReturn<Model>
+  init: (url: Url) => InitReturn<Model, Message>
   view: (model: Model, h: HtmlBuilder<Message>) => Document
 }>
 
@@ -427,7 +1122,7 @@ export type RoutingApplicationConfig<Model, Message> = Readonly<{
  */
 export type ApplicationConfigWithFlags<Model, Message, Flags> = Readonly<{
   Flags: Schema.Codec<Flags, any, never, never>
-  init: (flags: Flags) => InitReturn<Model>
+  init: (flags: Flags) => InitReturn<Model, Message>
   view: (model: Model, h: HtmlBuilder<Message>) => Document
 }>
 
@@ -436,28 +1131,67 @@ export type ApplicationConfigWithFlags<Model, Message, Flags> = Readonly<{
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
 export type ApplicationConfig<Model, Message> = Readonly<{
-  init: () => InitReturn<Model>
+  init: () => InitReturn<Model, Message>
   view: (model: Model, h: HtmlBuilder<Message>) => Document
 }>
 
-/** Options common to every render. `runtimeId` names the application in the
- *  root stamp and Flags payload; it defaults to `'app'` and must be non-empty.
+// Shared by both render shapes. `runtimeId` names the application in the root
+// stamp and Flags payload; it defaults to `'app'` and must be non-empty. It
+// also keys the preserved Model and scroll position. A document
+// may contain one hydratable root. Template injection and hydration refuse a
+// second root whether it carries the same id or a distinct one because runtime
+// ids do not divide ownership of document metadata and navigation listeners.
+
+type CommonRenderOptions = Readonly<{
+  runtimeId?: string
+}>
+
+/** Render options for output a client will hydrate, which is the default.
+ *  Hydration compares the render's build id against the client's own before
+ *  adopting any DOM, and a page carrying none has no such protection.
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
-export type RenderOptions = Readonly<{
-  runtimeId?: string
-  /**
-   * Whether the output carries the hydration contract: the
-   * `data-foldkit-app` root stamp and, for Flags applications, the Flags
-   * payload script. Defaults to `true` for both request-time rendering and
-   * build-time static generation. A hydratable static page must use universal,
-   * build-stable Flags; resolve visitor-specific browser facts after hydration
-   * through Commands or Subscriptions. Pass `false` only when producing static
-   * markup that the client will not hydrate.
-   */
-  isHydratable?: boolean
-}>
+export type HydratableRenderOptions = CommonRenderOptions &
+  Readonly<{
+    isHydratable?: true
+    /**
+     * The deployment this render belongs to, stamped on the root so hydration
+     * can refuse a page from a different one before adopting its DOM. Foldkit
+     * normally reads the identity compiled into the server artifact by
+     * `@foldkit/vite-plugin`. This explicit option is for integrations that
+     * cannot compile the shared identity into the artifact. Give the client
+     * the same public value.
+     */
+    buildId?: string
+  }>
+
+/** Render options for static markup nothing will hydrate. No build id applies,
+ *  because no client will compare one.
+ *
+ * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
+ */
+export type StaticRenderOptions = CommonRenderOptions &
+  Readonly<{
+    isHydratable: false
+    buildId?: undefined
+  }>
+
+/** Options for {@link renderToString}. `runtimeId` names the application in the
+ *  root stamp and Flags payload; it defaults to `'app'` and must be non-empty.
+ *  A nondefault `runtimeId` changes the root stamp and the keys used for Flags,
+ *  Model, and scroll preservation. It does not permit a second hydratable
+ *  application in one document.
+ *
+ *  A hydratable render (the default) uses the build identity compiled by
+ *  `@foldkit/vite-plugin`. Pass `isHydratable: false` for static markup that
+ *  nothing will hydrate, which takes no build id. The explicit `buildId`
+ *  option supports integrations that cannot compile the shared identity into
+ *  their artifacts.
+ *
+ * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
+ */
+export type RenderOptions = HydratableRenderOptions | StaticRenderOptions
 
 /** Render options for a routing application, adding the request URL.
  *
@@ -574,25 +1308,6 @@ const parseUrl = (url: string): Effect.Effect<Url, InvalidUrl> =>
     onSome: Effect.succeed,
   })
 
-// The client defaults canonical to `origin + pathname + search` of the current
-// location, which drops the fragment and normalizes host case and default
-// ports. Building the server default with the WHATWG URL parser reproduces that
-// exact string, so the metadata a crawler reads before hydration matches what
-// the hydrated page computes.
-const normalizedRequestUrl = (
-  rawUrl: string | undefined,
-): string | undefined => {
-  if (rawUrl === undefined) {
-    return undefined
-  }
-  try {
-    const parsed = new URL(rawUrl)
-    return `${parsed.origin}${parsed.pathname}${parsed.search}`
-  } catch {
-    return undefined
-  }
-}
-
 const validateHydrationRoot = (
   body: Document['body'],
 ): Effect.Effect<void, InvalidHydrationRoot> => {
@@ -616,10 +1331,10 @@ const validateHydrationRoot = (
  *
  * Resolves `init` for the request (with the given Flags and URL when the
  * config declares them), runs the pure `view` under a no-op dispatch frame,
- * and serializes the resulting `Document` body. The root element is stamped
- * with {@link FOLDKIT_APP_ATTRIBUTE} and, when the config declares `Flags`,
- * the Schema-encoded Flags ride along in a JSON script tag so a hydrating
- * client boots from the same Model.
+ * and serializes the resulting `Document` body. For hydratable output, the
+ * root element is stamped with {@link FOLDKIT_APP_ATTRIBUTE} and, when the
+ * config declares `Flags`, the Schema-encoded Flags ride along in a JSON script
+ * tag so a hydrating client boots from the same Model.
  *
  * Commands returned by `init` are not run: the rendered HTML is the
  * post-`init` state, and the client runs those Commands after hydration.
@@ -629,12 +1344,15 @@ const validateHydrationRoot = (
  * reconstruct, so the served DOM and the client's first render agree by
  * construction even for codecs whose round trip is not the identity.
  *
- * When a routing view omits `Document.canonical`, the render defaults it (and
- * `ogUrl`) to the request URL, normalized the way the client computes the
- * current location but with the query string kept. Set `Document.canonical`
- * explicitly when the query string is not part of the page's identity, such as
- * tracking parameters or a session token, so a crawler does not index every
- * variant as its own canonical page.
+ * Canonical metadata has no request URL default. The result includes
+ * `canonical` only when the view supplies it. It includes `ogUrl` when the view
+ * supplies it, or uses an explicit canonical when `ogUrl` is omitted. When a
+ * field is absent from the result, `injectIntoTemplate` leaves the
+ * corresponding tag in the template unchanged.
+ *
+ * Derive the canonical URL from the typed route in the Model. `Request.url`
+ * gives routing applications the request to parse, but only the application
+ * knows which route and query values identify the page.
  *
  * @example
  * ```typescript
@@ -666,7 +1384,7 @@ export function renderToString(
   config: Readonly<{
     Flags?: Schema.Codec<unknown, any, never, never>
     routing?: unknown
-    init: (...initArguments: ReadonlyArray<any>) => InitReturn<unknown>
+    init: (...initArguments: ReadonlyArray<any>) => InitReturn<unknown, any>
     view: (model: any, h: HtmlBuilder<any>) => Document
   }>,
   options?: RenderOptions &
@@ -688,6 +1406,22 @@ export function renderToString(
     const FlagsCodec = config.Flags
     const isHydratable = options?.isHydratable ?? true
 
+    // A hydratable render must say which deployment it came from. The Vite
+    // plugin compiles that identity into Foldkit when it coordinates the client
+    // and server artifacts. Separately built artifacts must receive the same
+    // explicit value. With neither source, refusing keeps an unstamped page
+    // from being mistaken for this deployment.
+    const configuredBuildId = buildIdOrInjected(options?.buildId)
+    const isConfiguredBuildId =
+      Predicate.isString(configuredBuildId) &&
+      !String.isEmpty(configuredBuildId)
+
+    if (isHydratable && !isConfiguredBuildId) {
+      return yield* Effect.fail(new MissingBuildId())
+    }
+
+    const buildId = isConfiguredBuildId ? configuredBuildId : ''
+
     const url = hasRouting ? yield* parseUrl(options?.url ?? '') : undefined
 
     const flagsHandoff =
@@ -697,7 +1431,7 @@ export function renderToString(
     const flagsForInit =
       flagsHandoff !== undefined ? flagsHandoff.hydrationFlags : options?.flags
 
-    const initReturn = ((): InitReturn<unknown> => {
+    const initReturn = ((): InitReturn<unknown, any> => {
       if (FlagsCodec !== undefined) {
         return hasRouting
           ? config.init(flagsForInit, url)
@@ -705,9 +1439,7 @@ export function renderToString(
       }
       return hasRouting ? config.init(url) : config.init()
     })()
-    const [model] = initReturn
-
-    const nextDocument = runView(config.view, model)
+    const nextDocument = runView(config.view, initReturn.model)
 
     if (isHydratable) {
       yield* validateHydrationRoot(nextDocument.body)
@@ -715,14 +1447,47 @@ export function renderToString(
 
     const rootHtml = yield* Effect.try({
       try: () => {
+        // Checked for every render, hydratable or not: static markup is placed
+        // into a document the same way, so a document-structure root is
+        // rearranged by the parser either way.
+        if (nextDocument.body !== null) {
+          assertRootIsNotDocumentStructure(nextDocument.body)
+          assertViewDoesNotAuthorReservedContent(nextDocument.body)
+        }
+        // The build id rides on the root so hydration can refuse a page from
+        // another deployment before it adopts any of its DOM.
         const html = serializeHtml(
           nextDocument.body,
           isHydratable
-            ? { rootAttributes: { [FOLDKIT_APP_ATTRIBUTE]: runtimeId } }
+            ? {
+                rootAttributes: {
+                  [FOLDKIT_APP_ATTRIBUTE]: runtimeId,
+                  [HYDRATION_BUILD_ATTRIBUTE]: buildId,
+                },
+                emitHydrationMarkers: true,
+              }
             : {},
         )
-        if (isHydratable && nextDocument.body !== null) {
-          assertSingleStampedRoot(html, runtimeId, nextDocument.body)
+        // Framing is checked for every render, hydratable or not. Static markup
+        // is placed into a document the same way, so a root that does not close
+        // cleanly swallows whatever the host writes after it either way.
+        assertRootClosesCleanly(html)
+        const fragments = parseFragmentModes(DIV_FRAGMENT_CONTEXT, html)
+        assertNoscriptModesAgree(fragments)
+        __assertNoDeclarativeShadowRoot(fragments)
+        __assertNoDocumentStructureEscape(html)
+        __assertNoLiveBaseElement(fragments)
+        if (nextDocument.body !== null) {
+          if (isHydratable) {
+            assertSingleStampedRoot(
+              fragments.scripted,
+              runtimeId,
+              buildId,
+              nextDocument.body,
+            )
+          } else {
+            assertParsedRootMatchesView(fragments.scripted, nextDocument.body)
+          }
         }
         return html
       },
@@ -732,16 +1497,7 @@ export function renderToString(
     const flagsPayload =
       flagsHandoff !== undefined ? flagsHandoff.payloadScript : ''
 
-    // Mirror the client's document-metadata defaults so the served HTML a
-    // crawler reads carries the same canonical and Open Graph URL the hydrated
-    // page computes: canonical falls back to the request URL, and ogUrl to the
-    // resolved canonical, the chain the runtime applies on the client. A
-    // non-routing render has no request URL, so it inherits only an explicitly
-    // set canonical.
-    const resolvedCanonical =
-      nextDocument.canonical ??
-      (hasRouting ? normalizedRequestUrl(options?.url) : undefined)
-    const resolvedOgUrl = nextDocument.ogUrl ?? resolvedCanonical
+    const resolvedOgUrl = nextDocument.ogUrl ?? nextDocument.canonical
 
     return {
       html: `${rootHtml}${flagsPayload}`,
@@ -750,8 +1506,8 @@ export function renderToString(
       ...(nextDocument.dir !== undefined
         ? { dir: textDirectionToAttribute(nextDocument.dir) }
         : {}),
-      ...(resolvedCanonical !== undefined
-        ? { canonical: resolvedCanonical }
+      ...(nextDocument.canonical !== undefined
+        ? { canonical: nextDocument.canonical }
         : {}),
       ...(resolvedOgUrl !== undefined ? { ogUrl: resolvedOgUrl } : {}),
     }

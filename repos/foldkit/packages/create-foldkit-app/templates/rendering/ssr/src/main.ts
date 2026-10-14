@@ -1,8 +1,8 @@
-import { Effect, Match as M, Schema as S } from 'effect'
-import { Command, Runtime } from 'foldkit'
+import { Effect, Schema } from 'effect'
+import { Command, Runtime, type Update } from 'foldkit'
 import { type Document, type HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
+import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
 
 import { Button } from '@foldkit/ui'
 
@@ -10,90 +10,78 @@ import { COUNT_COOKIE } from './cookie'
 
 // MODEL
 
-export const Model = S.Struct({
-  count: S.Number,
-  renderedAt: S.String,
-  renderedOn: S.Literals(['Server', 'Client']),
+export const Model = Schema.Struct({
+  count: Schema.Number,
+  renderedAt: Schema.String,
+  renderedOn: Schema.Literals(['Server', 'Client']),
 })
 export type Model = typeof Model.Type
 
 // FLAGS
 
-export const Flags = S.Struct({
-  initialCount: S.Number,
-  renderedAt: S.String,
-  renderedOn: S.Literals(['Server', 'Client']),
+export const Flags = Schema.Struct({
+  initialCount: Schema.Number,
+  renderedAt: Schema.String,
+  renderedOn: Schema.Literals(['Server', 'Client']),
 })
 export type Flags = typeof Flags.Type
 
 // MESSAGE
 
-export const ClickedDecrement = m('ClickedDecrement')
-export const ClickedIncrement = m('ClickedIncrement')
-export const CompletedPersistCount = m('CompletedPersistCount')
+export const Message = defineMessageUnion({
+  ClickedDecrement: {},
+  ClickedIncrement: {},
+  CompletedPersistCount: {},
+})
 
-export const Message = S.Union([
-  ClickedDecrement,
-  ClickedIncrement,
-  CompletedPersistCount,
-])
 export type Message = typeof Message.Type
 
 // UPDATE
 
-export const update = (
-  model: Model,
-  message: Message,
-): readonly [Model, ReadonlyArray<Command.Command<Message>>] =>
-  M.value(message).pipe(
-    M.withReturnType<
-      readonly [Model, ReadonlyArray<Command.Command<Message>>]
-    >(),
-    M.tagsExhaustive({
-      ClickedDecrement: () => {
-        const nextCount = model.count - 1
-        return [
-          evo(model, { count: () => nextCount }),
-          [PersistCount({ count: nextCount })],
-        ]
-      },
-      ClickedIncrement: () => {
-        const nextCount = model.count + 1
-        return [
-          evo(model, { count: () => nextCount }),
-          [PersistCount({ count: nextCount })],
-        ]
-      },
-      CompletedPersistCount: () => [model, []],
-    }),
-  )
+export const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message>>(message, {
+    ClickedDecrement: () => {
+      const nextCount = model.count - 1
+      return {
+        model: modifyFields(model, { count: () => nextCount }),
+        commands: [PersistCount({ count: nextCount })],
+      }
+    },
+    ClickedIncrement: () => {
+      const nextCount = model.count + 1
+      return {
+        model: modifyFields(model, { count: () => nextCount }),
+        commands: [PersistCount({ count: nextCount })],
+      }
+    },
+    CompletedPersistCount: () => ({ model }),
+  })
 
 // COMMAND
 
 const COUNT_COOKIE_MAX_AGE_SECONDS = 31536000
 
 export const PersistCount = Command.define('PersistCount', {
-  args: { count: S.Number },
-  messages: [CompletedPersistCount],
+  args: { count: Schema.Number },
+  messages: [Message.CompletedPersistCount],
   execute: ({ count }) =>
     Effect.try(() => {
       document.cookie = `${COUNT_COOKIE}=${count}; path=/; max-age=${COUNT_COOKIE_MAX_AGE_SECONDS}`
     }).pipe(
-      Effect.map(() => CompletedPersistCount()),
-      Effect.catch(() => Effect.succeed(CompletedPersistCount())),
+      Effect.map(() => Message.CompletedPersistCount()),
+      Effect.catch(() => Effect.succeed(Message.CompletedPersistCount())),
     ),
 })
 
 // INIT
 
-export const init: Runtime.ApplicationInit<Model, Message, Flags> = flags => [
-  {
+export const init: Runtime.ApplicationInit<Model, Message, Flags> = flags => ({
+  model: {
     count: flags.initialCount,
     renderedAt: flags.renderedAt,
     renderedOn: flags.renderedOn,
   },
-  [],
-]
+})
 
 // VIEW
 
@@ -119,7 +107,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         [
           Button.view(
             {
-              onClick: ClickedDecrement(),
+              onClick: Message.ClickedDecrement(),
               toView: attributes =>
                 h.button([...attributes.button, h.Class(buttonStyle)], ['-']),
             },
@@ -127,7 +115,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
           ),
           Button.view(
             {
-              onClick: ClickedIncrement(),
+              onClick: Message.ClickedIncrement(),
               toView: attributes =>
                 h.button([...attributes.button, h.Class(buttonStyle)], ['+']),
             },

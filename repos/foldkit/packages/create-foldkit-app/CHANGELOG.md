@@ -1,5 +1,1007 @@
 # create-foldkit-app
 
+## 0.39.1
+
+### Patch Changes
+
+- [#1644](https://github.com/foldkit/foldkit/pull/1644) [`0cc0d50`](https://github.com/foldkit/foldkit/commit/0cc0d50dab9fc7757f495bd05ae70c4a10fd865c) Thanks [@devinjameson](https://github.com/devinjameson)! - Fresh SSR projects pin `@effect/platform-node-shared` to the same version as `effect` and `@effect/platform-node`, so npm can install their dependencies when newer Effect versions are available.
+
+## 0.39.0
+
+### Minor Changes
+
+- [#1584](https://github.com/foldkit/foldkit/pull/1584) [`fe2701c`](https://github.com/foldkit/foldkit/commit/fe2701c2fa4bb4370f59548006bcee5cc009575e) Thanks [@devinjameson](https://github.com/devinjameson)! - Render SSR and SSG documents from server-entry code. An `ssr.build` browser build now starts from a script and never emits an unrendered HTML template. The server entry's `renderDocument` receives the rendered application and the browser build's script, stylesheet, and module-preload URLs. Request-time rendering and prerendering use the same document renderer. `Server.renderDocument` supplies a complete document with application metadata, hydration markers, and unambiguous handoff structure.
+
+  **Migration:** add `ssr.clientEntry: '/src/entry.ts'`, import stylesheets from that client entry, and export `renderDocument = Server.renderDocument` from the server entry. Remove the source `index.html` and move additional document tags into a wrapper around `Server.renderDocument(application, assets, { head })`. `head` accepts trusted author-owned HTML, so escape any request-derived values before interpolating them. Remove `containerId` from SSR build and prerender options. Standalone `foldkitBuild` calls must pass `clientEntry` in their options. Build-time `transformIndexHtml` hooks no longer run; dev hooks still transform the rendered document. Use an absolute-path or full-URL Vite `base`; relative bases and relative or runtime `renderBuiltUrl` results are rejected. Upgrade Foldkit to 0.167.0 or newer alongside @foldkit/vite-plugin 0.27.0. The plugin requires the document-rendering APIs introduced in Foldkit 0.167.0.
+
+  An SSR build refuses an `index.html` already in the browser output before prerendering, including files copied from `publicDir`, emitted by another plugin, or left by an earlier build with `emptyOutDir` disabled. Remove those root documents so only a generated page can occupy `/`.
+
+  Custom template-based hosts can use `injectIntoTemplate`, `toResponse`, and `handleRequest` with a template. The template-based Vite dev host is available when `clientEntry` and `ssr.build` are omitted. Separate client-only builds and previews support Vite's relative-base behavior. SSR and SSG scaffolds use code-rendered documents and CSS imports.
+
+### Patch Changes
+
+- [#1586](https://github.com/foldkit/foldkit/pull/1586) [`2eb97fb`](https://github.com/foldkit/foldkit/commit/2eb97fb142a16b7a2ede2c49d50c49aa474c7d3a) Thanks [@devinjameson](https://github.com/devinjameson)! - Add a Node host adapter that serves Foldkit SSR builds from their manifest. New server-rendered projects use the adapter. Applications can use custom hosts for delivery policies outside its scope.
+
+## 0.38.0
+
+### Minor Changes
+
+- [#1425](https://github.com/foldkit/foldkit/pull/1425) [`9d701af`](https://github.com/foldkit/foldkit/commit/9d701af6a75161962a9600422743d7531c0e4828) Thanks [@rodygosset](https://github.com/rodygosset)! - Add experimental `Query` and `KeyedQuery` Submodels for fetched data that belongs in an application Model. Define the data and error Schemas together with the Effect that fetches the value, then embed the generated Model and Message in the parent. A Query holds one `AsyncData` value. A KeyedQuery holds one retained entry for each argument key, so revisiting data already loaded into the owning Model is a cache hit.
+
+  The parent still decides when work starts. `loadIfMissing` fetches only when no data is available, `revalidate` refreshes existing data, and `revalidateOrLoad` handles either state. Query tracks request generations, and `reset` preserves that history, so a late completion cannot settle work started after the reset. KeyedQuery's default key encoding canonicalizes object property order recursively. `read` returns the current `AsyncData`, `run` fetches data outside a Foldkit application, and `lift({ parentField, toParentMessage })` connects the Query to its parent.
+
+  Import Query from `foldkit/experimental` or `foldkit/experimental/query`. Create Foldkit App also includes `api-cache-query`, a complete example of list, detail, and interval-refreshed Queries.
+
+### Patch Changes
+
+- [#1534](https://github.com/foldkit/foldkit/pull/1534) [`0ec94a1`](https://github.com/foldkit/foldkit/commit/0ec94a178c504827060a5e475200599193b0387e) Thanks [@devinjameson](https://github.com/devinjameson)! - Protect Effect `Redacted` values across DevTools Model, Message, Command, Mount, init, and diff responses, including the Vite prebundle needed by consumers. Document the DevTools MCP trust boundary, the controls that disable dispatch or relay access, and why `excludeFromHistory` does not hide sensitive Model data.
+
+## 0.37.0
+
+### Minor Changes
+
+- [#1525](https://github.com/foldkit/foldkit/pull/1525) [`9f851d7`](https://github.com/foldkit/foldkit/commit/9f851d747bdde8fab1e9b7e8c63568f65594cff8) Thanks [@devinjameson](https://github.com/devinjameson)! - Require Effect 4.0.0 stable across Foldkit packages and applications generated by `create-foldkit-app`, including the SPA, SSR, and SSG starters.
+
+  Upgrade Foldkit to `0.165.0` or newer alongside its companion packages. Their Foldkit peer minimum is now `0.165.0`, the first release using Effect 4 stable. DevTools also requires `@foldkit/ui` `0.165.0` or newer.
+
+  Upgrade `effect` and any installed `@effect/platform-browser`, `@effect/platform-node`, `@effect/platform-node-shared`, or `@effect/vitest` packages to `4.0.0` together. These versions replace the previous `4.0.0-rc.117` pins. Update imports from `effect/unstable/http`, `effect/unstable/persistence`, `effect/unstable/rpc`, and `effect/unstable/reactivity` to `effect/http`, `effect/persistence`, `effect/rpc`, and `effect/reactivity`. CLI imports now use `effect/cli`.
+
+## 0.36.0
+
+### Minor Changes
+
+- [#1438](https://github.com/foldkit/foldkit/pull/1438) [`607f5a4`](https://github.com/foldkit/foldkit/commit/607f5a4aeb427c634de6e580f45adae93ea0c118) Thanks [@devinjameson](https://github.com/devinjameson)! - Generate one hydration build identity for coordinated client and server builds and compile it into Foldkit, so server-rendered applications no longer need to pass the identity through their entries.
+
+  `@foldkit/vite-plugin` now requires Foldkit 0.164.0 or newer because the automatic path compiles an identity placeholder added in that release.
+
+- [#1442](https://github.com/foldkit/foldkit/pull/1442) [`5401108`](https://github.com/foldkit/foldkit/commit/5401108272c32b9b06f0175b46eef79bb7f23b43) Thanks [@devinjameson](https://github.com/devinjameson)! - Bump bundled Effect dependencies to `4.0.0-rc.117`. Newly scaffolded apps will get the updated pins from the example sources.
+
+  The CLI now pins `effect`, `@effect/platform-node`, and `@effect/platform-node-shared` to exactly `4.0.0-rc.117` to match this release. Use exact pins rather than ranges while Effect v4 is in prerelease.
+
+### Patch Changes
+
+- [#1368](https://github.com/foldkit/foldkit/pull/1368) [`63949f4`](https://github.com/foldkit/foldkit/commit/63949f4e96600f03818b076cad6a50f1162ffdb4) Thanks [@filipfalcon](https://github.com/filipfalcon)! - The DevTools MCP relay now starts without a configured port. In development, the Vite server serves it at `/__foldkit/devtools-mcp` and publishes its address to a per-user registry. The MCP server finds the most recently started relay for its project and finds it again after a dev server restart. Projects no longer need matching port settings, and two projects can run without competing for a relay port. The relay follows Vite's `server.host` setting.
+
+  Each published address includes a random token. The relay requires that token before allowing Model inspection or Message dispatch, including when the dev server is exposed with `--host`. The plugin will not publish a token into a registry directory owned by another user or readable by other users. It reports the problem in the console; the relay can still be reached through a configured port.
+
+  Middleware mode and HTTPS dev servers use a free loopback port instead of the Vite server's listener. Middleware mode has no HTTP server for the relay to share, and the MCP server cannot verify a dev server's self-signed HTTPS certificate.
+
+  Existing port settings still work. `devToolsMcpPort` opens a separate socket on the specified port and every interface, without a token; set `FOLDKIT_DEVTOOLS_MCP_PORT` to the same value for the MCP server. `devToolsMcpPort: false` disables the relay. When discovery finds no relay and no port is configured, the MCP server tries port 9988 for older plugin versions. `FOLDKIT_DEVTOOLS_MCP_HOST` overrides the hostname of either a discovered address or a configured port.
+
+  The plugin no longer starts a relay during Vitest runs. Previously, a test run using a fixed relay port could conflict with the project's dev server and wait through the four-second bind retry before continuing.
+
+  `foldkit/devtools-protocol` now exports `RelayRecord`, `RELAY_RECORD_VERSION`, and the registry directory and environment variable names alongside the `Request` and `Response` frames. The plugin and MCP server use the same record definition. Because the plugin imports these exports at runtime, `@foldkit/vite-plugin` requires `foldkit` 0.164.0 or later. The plugin also depends on `@effect/platform-node` to read and write the registry.
+
+  The registry lives under `XDG_RUNTIME_DIR` when set and under the operating system's temporary directory otherwise. `FOLDKIT_DEVTOOLS_RELAY_DIRECTORY` selects another directory. On platforms where the plugin cannot verify directory ownership, including Windows, automatic discovery is unavailable. Use `devToolsMcpPort` with the matching `FOLDKIT_DEVTOOLS_MCP_PORT` there.
+
+  `create-foldkit-app` no longer adds `devToolsMcpPort` to generated Vite configs.
+
+- [#1467](https://github.com/foldkit/foldkit/pull/1467) [`1a3dd68`](https://github.com/foldkit/foldkit/commit/1a3dd68616dcc00e8070f817f84510e69eeca24a) Thanks [@devinjameson](https://github.com/devinjameson)! - Upgrade compatible runtime, build, and test dependencies across the workspace.
+
+## 0.35.2
+
+### Patch Changes
+
+- [#1388](https://github.com/foldkit/foldkit/pull/1388) [`01d0205`](https://github.com/foldkit/foldkit/commit/01d0205a4e2b3b0000c1e9f94c6d87d92be909dd) Thanks [@filipfalcon](https://github.com/filipfalcon)! - The SSR scaffold's Node host now explains why directory page requests reach the server's `fetch` handler. An `ssr.build` build no longer publishes the unrendered `index.html` template beside the browser assets.
+
+- [#1410](https://github.com/foldkit/foldkit/pull/1410) [`591649e`](https://github.com/foldkit/foldkit/commit/591649ea58a648ff777bfc4fce3952dc004f202c) Thanks [@devinjameson](https://github.com/devinjameson)! - Rename `evo` to `modifyFields`
+
+  Replace `evo` imports and calls with `modifyFields` from `foldkit/struct`. Replace `makeConstrainedEvo` with `makeModifyFieldsFor`. The same names are available through the `Struct` namespace from `foldkit`. Both helpers keep their existing behavior and type checking. The old names are removed.
+
+  Use `makeModifyFieldsFor<Base>()` to create a field modifier for generic helpers whose Model extends `Base`. It checks transformers against the base shape while preserving the full Model type.
+
+  `@foldkit/ui` and `@foldkit/devtools` use the renamed helpers and require Foldkit 0.163.0 or newer.
+
+  Rename the lint rule `foldkit/no-spread-in-evo` to `foldkit/no-spread-in-modify-fields`. Update explicit rule settings to the new name. The generated presets and the Submodel boundary rules recognize `modifyFields` calls.
+
+  New app templates, documentation, examples, and the shipped Foldkit app skills use `modifyFields`.
+
+- [#1413](https://github.com/foldkit/foldkit/pull/1413) [`3b1d5ba`](https://github.com/foldkit/foldkit/commit/3b1d5ba8f2c5e9ee6ab4cb57ad5ce49744334314) Thanks [@devinjameson](https://github.com/devinjameson)! - Upgrade Effect and its platform and test packages to `4.0.0-rc.116`. Foldkit packages with exact Effect peer dependencies now require rc.116. Pin your application's `effect` and `@effect/platform-browser` dependencies to `4.0.0-rc.116` when upgrading Foldkit. New applications generated by `create-foldkit-app` also use rc.116. The Oxlint plugin recognizes the renamed `Stream.mapBoth` callbacks, `onElement` and `onError`.
+
+## 0.35.1
+
+### Patch Changes
+
+- [#1401](https://github.com/foldkit/foldkit/pull/1401) [`9a32438`](https://github.com/foldkit/foldkit/commit/9a324382d74c0f5f398c6427944e8baf2672e765) Thanks [@devinjameson](https://github.com/devinjameson)! - Add `Update.foldChildInit` and `Update.foldChildInits` to construct a parent Model from child init or boot results, map their Commands, and handle their OutMessages. Both APIs take the child results first. Existing initialization code remains valid; adopting these helpers is optional.
+
+  ### One child
+
+  For example, a Workspace Submodel contains a Search Submodel. Previously, the Workspace Submodel constructed its Model and mapped the Search Submodel's Commands separately:
+
+  ```ts
+  const searchInit = Search.init()
+
+  return {
+    model: Model.make({ search: searchInit.model }),
+    commands: Command.mapMessages(searchInit.commands, message =>
+      Message.GotSearchMessage({ message }),
+    ),
+  }
+  ```
+
+  Now, `foldChildInit` does both:
+
+  ```ts
+  return Update.foldChildInit(Search.init(), {
+    toParentModel: search => Model.make({ search }),
+    toParentMessage: message => Message.GotSearchMessage({ message }),
+  })
+  ```
+
+  If the Search Submodel emits an OutMessage, the Workspace Submodel must handle it. Supply `foldOutMessage` to update the Workspace Submodel's Model or return Commands in response. Supply `toParentOutMessage` to translate it into the Workspace Submodel's OutMessage type for its own parent. Both can be supplied when the event should be handled locally and reported upward.
+
+  ### Several children
+
+  For a Workspace Submodel containing Search and Editor Submodels, the previous initialization code assembled both Models and mapped both sets of Commands:
+
+  ```ts
+  const searchInit = Search.init()
+  const editorInit = Editor.init()
+
+  return {
+    model: Model.make({ search: searchInit.model, editor: editorInit.model }),
+    commands: [
+      ...Command.mapMessages(searchInit.commands, message =>
+        Message.GotSearchMessage({ message }),
+      ),
+      ...Command.mapMessages(editorInit.commands, message =>
+        Message.GotEditorMessage({ message }),
+      ),
+    ],
+  }
+  ```
+
+  Now, `foldChildInits` keeps the same wiring together:
+
+  ```ts
+  return Update.foldChildInits(
+    { search: Search.init(), editor: Editor.init() },
+    {
+      toParentModel: ({ search, editor }) => Model.make({ search, editor }),
+      folds: {
+        search: {
+          toParentMessage: message => Message.GotSearchMessage({ message }),
+        },
+        editor: {
+          toParentMessage: message => Message.GotEditorMessage({ message }),
+        },
+      },
+    },
+  )
+  ```
+
+  ### Handling child OutMessages locally
+
+  Each entry also accepts `foldOutMessage`. For example, a Workspace Submodel contains Search and Editor Submodels whose boot results can report `PreparedResults` and `OpenedDocument`. The Workspace Submodel handles both locally to record the selected and opened document IDs:
+
+  ```ts
+  const foldSearchOutMessage = Search.OutMessage.match<
+    Update.Step<Model, Message>
+  >({
+    PreparedResults:
+      ({ documentId }) =>
+      model => ({
+        model: evo(model, {
+          maybeSelectedDocumentId: () => Option.some(documentId),
+        }),
+      }),
+  })
+
+  const foldEditorOutMessage = Editor.OutMessage.match<
+    Update.Step<Model, Message>
+  >({
+    OpenedDocument:
+      ({ documentId }) =>
+      model => ({
+        model: evo(model, {
+          maybeOpenedDocumentId: () => Option.some(documentId),
+        }),
+      }),
+  })
+
+  return Update.foldChildInits(
+    {
+      search: Search.boot(),
+      editor: Editor.boot(),
+    },
+    {
+      toParentModel: ({ search, editor }) =>
+        Model.make({
+          search,
+          editor,
+          maybeSelectedDocumentId: Option.none(),
+          maybeOpenedDocumentId: Option.none(),
+        }),
+      folds: {
+        search: {
+          toParentMessage: message => Message.GotSearchMessage({ message }),
+          foldOutMessage: foldSearchOutMessage,
+        },
+        editor: {
+          toParentMessage: message => Message.GotEditorMessage({ message }),
+          foldOutMessage: foldEditorOutMessage,
+        },
+      },
+    },
+  )
+  ```
+
+  Foldkit constructs the complete parent Model once, then runs the handlers in the order of the named fields in `folds`. The Editor fold receives the Model produced by the Search fold, so it keeps `maybeSelectedDocumentId` when setting `maybeOpenedDocumentId`. A child that emits no OutMessage skips its handler. These folds handle the OutMessages locally, so no `resolveOutMessage` is needed. Commands run independently; a later child's Commands do not wait for an earlier child's Commands to finish.
+
+  ### Combining child OutMessages
+
+  For example, App contains a Workspace Submodel, which contains Search and Editor Submodels. The Search and Editor Submodels' boot functions can report that they restored a saved query or draft. App should receive one restoration notice containing both results.
+
+  The Workspace Submodel translates its children's OutMessages with `toParentOutMessage`. The same adapters can report an individual restoration during a later update. During boot, `resolveOutMessage` combines them into a single `RestoredWorkspace` OutMessage for App:
+
+  ```ts
+  const OutMessage = defineMessageUnion({
+    RestoredSearch: { query: Schema.String },
+    RestoredEditor: { documentId: Schema.String },
+    RestoredWorkspace: {
+      maybeQuery: Schema.Option(Schema.String),
+      maybeDocumentId: Schema.Option(Schema.String),
+    },
+  })
+
+  const toParentSearchOutMessage = Search.OutMessage.match({
+    RestoredQuery: ({ query }) => OutMessage.RestoredSearch({ query }),
+  })
+
+  const toParentEditorOutMessage = Editor.OutMessage.match({
+    RestoredDraft: ({ documentId }) =>
+      OutMessage.RestoredEditor({ documentId }),
+  })
+
+  return Update.foldChildInits(
+    {
+      search: Search.boot(),
+      editor: Editor.boot(),
+    },
+    {
+      toParentModel: ({ search, editor }) => Model.make({ search, editor }),
+      folds: {
+        search: {
+          toParentMessage: message => Message.GotSearchMessage({ message }),
+          toParentOutMessage: toParentSearchOutMessage,
+        },
+        editor: {
+          toParentMessage: message => Message.GotEditorMessage({ message }),
+          toParentOutMessage: toParentEditorOutMessage,
+        },
+      },
+      resolveOutMessage: ({ search, editor }) =>
+        OutMessage.RestoredWorkspace({
+          maybeQuery: pipe(
+            Option.fromNullishOr(search),
+            Option.map(outMessage =>
+              Match.value(outMessage).pipe(
+                Match.tagsExhaustive({
+                  RestoredSearch: ({ query }) => query,
+                }),
+              ),
+            ),
+          ),
+          maybeDocumentId: pipe(
+            Option.fromNullishOr(editor),
+            Option.map(outMessage =>
+              Match.value(outMessage).pipe(
+                Match.tagsExhaustive({
+                  RestoredEditor: ({ documentId }) => documentId,
+                }),
+              ),
+            ),
+          ),
+        }),
+    },
+  )
+  ```
+
+  When both children report a restoration, the OutMessage preserves both values. When only one does, the other field is `None`. When neither does, the resolver is skipped and the result has no `outMessage`.
+
+  The resolver receives the emitted OutMessages under their child keys and the final parent Model as a second argument. This preserves boot-time information that the current Model may not retain, such as whether an existing query was restored. If the Model already contains everything needed for the parent's OutMessage, handle the children locally and attach that OutMessage afterward with `Update.withOutMessage`.
+
+  Newly generated apps also include guidance for both initialization helpers in `FOLDKIT.md`.
+
+## 0.35.0
+
+### Minor Changes
+
+- [#1383](https://github.com/foldkit/foldkit/pull/1383) [`b6d0a9b`](https://github.com/foldkit/foldkit/commit/b6d0a9bb32979c08c2ddfee9ffbf5c19d9f5594c) Thanks [@devinjameson](https://github.com/devinjameson)! - Bump bundled Effect dependencies to `4.0.0-rc.115`. Newly scaffolded apps will get the updated pins from the example sources and use Vitest 5, which is required by `foldkit/test/vitest` and `@effect/vitest@4.0.0-rc.115`.
+
+  The CLI now pins `effect`, `@effect/platform-node`, and `@effect/platform-node-shared` to exactly `4.0.0-rc.115` to match this release (exact versions, not ranges, while Effect v4 is in prerelease).
+
+## 0.34.0
+
+### Minor Changes
+
+- [#1377](https://github.com/foldkit/foldkit/pull/1377) [`2ff8b86`](https://github.com/foldkit/foldkit/commit/2ff8b867fde5914b4ad4729127efef15f3dec786) Thanks [@devinjameson](https://github.com/devinjameson)! - Make the Foldkit server a Web `fetch` handler.
+
+  `ssr.build` no longer takes `entry` pointing at a Node HTTP process or a custom Worker. One `vite build` emits `dist/server/fetch.js` whose default export is `{ fetch }`. Node and Workers both run that module. `handleRequest` in `foldkit/experimental/server` is the shared implementation.
+
+  When another plugin owns the `ssr` environment (workerd), Foldkit still stands down in dev. With `ssr.build` set it stays quiet, because production still needs `ssr.serverEntry`.
+
+  **Migration:** drop `ssr.build.entry` and keep `ssr.serverEntry`. Your Node host is no longer built by `vite build`. Replace it with a script that serves `dist/client` and falls through to `dist/server/fetch.js`, using the SSR example's `scripts/serve.ts` as the reference, and start with `node scripts/serve.ts` instead of `node dist/server/main.js`. A host that imported `dist/server/entry.server.js` now imports `dist/server/fetch.js`, which still exports `renderPage`. A Cloudflare Worker can default-export `fetch.js` directly. `foldkit.build.json` records `fetch.js` as `serverEntry`. The handler trusts `Request.url` as the platform constructed it; a Node adapter resolves the raw request target against its configured origin before calling `fetch`, as `scripts/serve.ts` does.
+
+### Patch Changes
+
+- [#1377](https://github.com/foldkit/foldkit/pull/1377) [`2ff8b86`](https://github.com/foldkit/foldkit/commit/2ff8b867fde5914b4ad4729127efef15f3dec786) Thanks [@devinjameson](https://github.com/devinjameson)! - The published `foldkit-devtools-mcp` bin and the oxlint plugin's `dist/index.js` are bundled with Rolldown instead of esbuild. Vite 8 already bundles every Foldkit application with Rolldown, and these two were the only package builds still going through esbuild. Each package keeps its bundle recipe in a `rolldown.config.ts` beside the source, and the output is the same shape as before: one ESM file with the same externals and the shebang kept on its first line. The MCP bin no longer carries a `createRequire` banner, since Rolldown's Node platform emits its own shim wherever a CommonJS dependency needs one, and the oxlint plugin's integration tests bundle the plugin and check autofixed sources with Rolldown too, so esbuild leaves both packages' dev dependencies.
+
+  Both bundles come out smaller: the MCP bin goes from 1444 kB to 1132 kB (283 kB to 251 kB gzipped) and the oxlint plugin from 499 kB to 455 kB, with build times within noise of esbuild's (median of five clean runs on Apple silicon: 285 ms against 304 ms for the bin, 146 ms against 229 ms for the plugin).
+
+  `create-foldkit-app` no longer allows esbuild's install script in the pnpm workspace file it scaffolds, since nothing in a new project installs esbuild.
+
+- [#1377](https://github.com/foldkit/foldkit/pull/1377) [`2ff8b86`](https://github.com/foldkit/foldkit/commit/2ff8b867fde5914b4ad4729127efef15f3dec786) Thanks [@devinjameson](https://github.com/devinjameson)! - Describe the bundled Vite plugin as state-preserving live reload rather than hot reloading in the README.
+
+- [#1377](https://github.com/foldkit/foldkit/pull/1377) [`2ff8b86`](https://github.com/foldkit/foldkit/commit/2ff8b867fde5914b4ad4729127efef15f3dec786) Thanks [@devinjameson](https://github.com/devinjameson)! - Pin `@effect/platform-node-shared` in generated SSR projects to the Effect version they use so fresh installs do not resolve an incompatible newer prerelease.
+
+## 0.33.0
+
+### Minor Changes
+
+- [#1343](https://github.com/foldkit/foldkit/pull/1343) [`7a173a7`](https://github.com/foldkit/foldkit/commit/7a173a785b323ccb94c3831af7339c982718fb72) Thanks [@devinjameson](https://github.com/devinjameson)! - Scaffold new projects with Oxfmt instead of Prettier. The generated project ships `.oxfmtrc.json` with the same formatting options and import grouping the Prettier setup had, its `format` script runs `oxfmt`, and its `.oxlintrc.json` enables the `sort-imports` rule so named import specifiers stay sorted, which Oxfmt does not do on its own. The `prettier` and `@trivago/prettier-plugin-sort-imports` devDependencies are no longer installed.
+
+### Patch Changes
+
+- [#1347](https://github.com/foldkit/foldkit/pull/1347) [`9099339`](https://github.com/foldkit/foldkit/commit/90993394590df06ee4413cbbc766b740138f09f2) Thanks [@devinjameson](https://github.com/devinjameson)! - Point the foldkit README, the create-foldkit-app homepage, and the @foldkit/devtools-mcp README at /get-started and /introduction/why-foldkit.
+
+## 0.32.1
+
+### Patch Changes
+
+- [#1213](https://github.com/foldkit/foldkit/pull/1213) [`57e2436`](https://github.com/foldkit/foldkit/commit/57e24366c8997cd235002f58c9dc38477a6cb1a3) Thanks [@devinjameson](https://github.com/devinjameson)! - Use full Effect module names in published source, examples, templates, and documentation. JavaScript and TypeScript globals that share an Effect module name are now qualified through `globalThis`.
+
+- [#1234](https://github.com/foldkit/foldkit/pull/1234) [`c9f9c65`](https://github.com/foldkit/foldkit/commit/c9f9c65ffa49f50e838be794e369a7513f8d0d8a) Thanks [@devinjameson](https://github.com/devinjameson)! - Add `foldkit/no-impure-call-at-decision-time`, which flags direct time and randomness calls unless they appear inside a recognized deferred Effect or lifecycle execution callback. The rule reports a call whether it appears directly in Command args or is assigned to a local variable first. It respects shadowed globals, stays off in tests, runtime entry files, and host server files, and is enabled by the recommended preset used in newly scaffolded apps.
+
+  This can introduce lint failures in existing applications that use the recommended or all preset. Move reported calls into an Effect or lifecycle execution callback, then return generated values through Messages. Consumers can temporarily disable the rule while migrating.
+
+- [#1279](https://github.com/foldkit/foldkit/pull/1279) [`0f787f3`](https://github.com/foldkit/foldkit/commit/0f787f3ff84b849c9ff90675c477026f4f011aba) Thanks [@devinjameson](https://github.com/devinjameson)! - Pin the recommended Foldkit subtree to the installed release instead of `main`, which can be ahead of the installed packages. The scaffolder's success message vendors `repos/foldkit` at the exact release it installs: the `foldkit@<version>` git tag for a stable release, the source commit for a canary. The `FOLDKIT.md` template derives the tag from the version in `node_modules/foldkit/package.json` at run time and points canary installs at the source commit their version names.
+
+## 0.32.0
+
+### Minor Changes
+
+- [#1174](https://github.com/foldkit/foldkit/pull/1174) [`e129fce`](https://github.com/foldkit/foldkit/commit/e129fce14dd9cb85a22231cfa32df901e066e331) Thanks [@filipfalcon](https://github.com/filipfalcon)! - Let the plugin own the whole build. `ssr.build` declares the server environment and orchestrates it, so one `vite build` produces the browser bundle, the server bundle, and — with `ssr.build.prerender` — a page for every path the entry lists. The generated projects lose `scripts/build.mjs` and `scripts/prerender.ts`; their build command is `vite build` again.
+
+  A Foldkit application that rendered on the server could not be deployed by anything that runs `vite build`. Its build was three commands a script chained together, and a host that injects its own Vite plugin — a Cloudflare adapter, an infrastructure tool, a platform's build step — can only join the first of them. Such a host built the browser half of the application and deployed it without the server bundle it needed. The build id had the same shape of problem: the client build and the server build were separate processes, so one script had to mint an id and pass it through the environment of each, and a project that built its halves any other way produced pages hydration then refused.
+
+  A host plugin composes with every environment of one build, which is what makes the deployment possible at all. The id needs one thing more: Vite reads a config file once per environment, so a config that answers with a fresh value each time hands the two bundles different ids. The generated projects store their fallback back into the environment, and every later read resolves the same id.
+
+  ```ts
+  foldkit({
+    buildId,
+    ssr: {
+      serverEntry: '/src/entry.server.ts',
+      build: { prerender: true },
+    },
+  })
+  ```
+
+  `build.entry` names the module the server build starts from when requests reach a host that wraps the entry, such as an HTTP server or a Worker; it defaults to the entry itself, which is what a generated site wants. `build.prerender` takes the paths from the entry's `prerenderPaths` export, or from `paths` when the build names them, and `origin` sets what the entry sees as `Request.url` while generating.
+
+  The build also writes `foldkit.build.json` beside the server bundle, naming the output directories, the server entry, and every path it generated. What a host should do with a request that matches no file follows from the build rather than from taste, and until now the build knew it and threw it away, leaving a deployment to ask its user for settings whose wrong values serve an empty page at 200.
+
+  Generated pages take their template from the browser build that produced it rather than from `index.html` on disk. The generated `/` replaces that file, so a build that re-read it would parse a generated page as its template on any second pass over one client build.
+
+  `ssr.serverEntry` is also safe now under a host plugin that runs the server itself. Dev-time rendering loads the entry through the `ssr` environment's module runner, which a workerd-backed environment does not have, so the plugin stands down and lets that host answer page requests through the same entry rather than failing them. It reports why once, at startup.
+
+  Nothing changes for an application that does not set `ssr.build`: `vite build` builds the browser bundle alone, as before.
+
+### Patch Changes
+
+- [#1218](https://github.com/foldkit/foldkit/pull/1218) [`76cb5e1`](https://github.com/foldkit/foldkit/commit/76cb5e1f3fb1193139ee3da50340797a84717f25) Thanks [@devinjameson](https://github.com/devinjameson)! - Upgrade the create-foldkit-app CLI to Chalk 6.
+
+- [#1205](https://github.com/foldkit/foldkit/pull/1205) [`9601382`](https://github.com/foldkit/foldkit/commit/960138253f09310ff1dca45d2cf84d25fb86d12d) Thanks [@devinjameson](https://github.com/devinjameson)! - Upgrade the development dependencies used to test the package.
+
+- [#1231](https://github.com/foldkit/foldkit/pull/1231) [`aaff2e5`](https://github.com/foldkit/foldkit/commit/aaff2e53f5bf5742ae0428c5fda89a5d6974ac43) Thanks [@devinjameson](https://github.com/devinjameson)! - Match `defineTaggedUnion` and `defineRouteUnion` values through the union's own `match` instead of `Match.value` pipes with `Match.tagsExhaustive`. Internal call sites, the ssg template, and the generated FOLDKIT.md guidance now use the union method; behavior is unchanged.
+
+- [#1210](https://github.com/foldkit/foldkit/pull/1210) [`b02ce0a`](https://github.com/foldkit/foldkit/commit/b02ce0ab32a082bd40774127b8f4f6bfd6e1043e) Thanks [@devinjameson](https://github.com/devinjameson)! - Upgrade development dependencies to Node 26 type definitions and Happy DOM 20.11.8.
+
+- [#1210](https://github.com/foldkit/foldkit/pull/1210) [`b02ce0a`](https://github.com/foldkit/foldkit/commit/b02ce0ab32a082bd40774127b8f4f6bfd6e1043e) Thanks [@devinjameson](https://github.com/devinjameson)! - Upgrade the TypeScript compiler used to build and test packages to 7.0.2 while keeping compiler API tools on the official TypeScript 6 compatibility package.
+
+## 0.31.1
+
+### Patch Changes
+
+- 6716de6: Clarify the generated Foldkit guidance for update returns and child OutMessage forwarding. The revised copy describes the runtime behavior before the supporting TypeScript rules.
+- f59da51: Point each package's npm metadata at its Foldkit documentation page so developers and automated tools can identify the official setup guide.
+
+## 0.31.0
+
+### Minor Changes
+
+- 64387ef: Routes and other tagged unions now use the same one-object declaration as Messages. The old `r` and `ts` helpers are gone:
+
+  - Use `defineRouteUnion` for `AppRoute`.
+  - Use `defineTaggedUnion` for Model states and other domain unions.
+  - Use `taggedStruct` when a tagged struct must be declared on its own.
+
+  Both union helpers return a Schema that also holds the variant constructors. For example, `AppRoute.Person` is the `Person` Schema, and `AppRoute.Person({ personId: 42 })` constructs a value. They also provide `match`, `guards`, `isAnyOf`, `subset`, and `members`. A `defineTaggedUnion` result can be passed directly to `Machine.define`. Message unions still expose only their constructors and exhaustive `match`.
+
+  ## Migrate Routes
+
+  Declare every route in one `AppRoute` object, then use variants through that namespace. Do not name the union `Route`; Foldkit already uses that name for the route module.
+
+  Before:
+
+  ```typescript
+  import { int, literal, mapTo, r, root, slash } from 'foldkit/route'
+
+  export const HomeRoute = r('Home')
+  export const PersonRoute = r('Person', { personId: S.Number })
+  export const NotFoundRoute = r('NotFound', { path: S.String })
+
+  export const AppRoute = S.Union([HomeRoute, PersonRoute, NotFoundRoute])
+
+  export type HomeRoute = typeof HomeRoute.Type
+  export type PersonRoute = typeof PersonRoute.Type
+  export type NotFoundRoute = typeof NotFoundRoute.Type
+  export type AppRoute = typeof AppRoute.Type
+
+  export const homeRouter = pipe(root, mapTo(HomeRoute))
+  export const personRouter = pipe(
+    literal('people'),
+    slash(int('personId')),
+    mapTo(PersonRoute),
+  )
+
+  export const urlToAppRoute = parseUrlWithFallback(routeParser, NotFoundRoute)
+  ```
+
+  After:
+
+  ```typescript
+  import {
+    defineRouteUnion,
+    int,
+    literal,
+    mapTo,
+    root,
+    slash,
+  } from 'foldkit/route'
+
+  export const AppRoute = defineRouteUnion({
+    Home: {},
+    Person: { personId: S.Number },
+    NotFound: { path: S.String },
+  })
+  export type AppRoute = typeof AppRoute.Type
+
+  export const homeRouter = pipe(root, mapTo(AppRoute.Home))
+  export const personRouter = pipe(
+    literal('people'),
+    slash(int('personId')),
+    mapTo(AppRoute.Person),
+  )
+
+  export const urlToAppRoute = parseUrlWithFallback(
+    routeParser,
+    AppRoute.NotFound,
+  )
+  ```
+
+  The old `XxxRoute` suffix kept separate exports from colliding. `AppRoute` now provides that context, so write `AppRoute.Person({ personId: 42 })` instead of `PersonRoute({ personId: 42 })`.
+
+  ## Migrate Route subsets
+
+  Use `subset` when a Model or Schema accepts only some application Routes. This keeps the allowed Routes tied to `AppRoute` without declaring another union.
+
+  Before:
+
+  ```typescript
+  export const LoggedOutRoute = S.Union([HomeRoute, LoginRoute, NotFoundRoute])
+  export const LoggedInRoute = S.Union([
+    DashboardRoute,
+    SettingsRoute,
+    NotFoundRoute,
+  ])
+  ```
+
+  After:
+
+  ```typescript
+  export const LoggedOutRoute = AppRoute.subset(['Home', 'Login', 'NotFound'])
+  export const LoggedInRoute = AppRoute.subset([
+    'Dashboard',
+    'Settings',
+    'NotFound',
+  ])
+  ```
+
+  `subset` includes only the tags you name. If you add a Route to `AppRoute` later, neither Schema above will accept it until you add its tag. There is no `omit`: an exclusion list would silently accept every Route added later.
+
+  If a module needs to name one variant's type, export an alias beside `AppRoute` instead of repeating `typeof AppRoute.Person.Type`:
+
+  ```typescript
+  export type PersonRoute = typeof AppRoute.Person.Type
+  ```
+
+  ## Replace hand-written route guards
+
+  Use `isAnyOf` when one guard accepts several tags.
+
+  Before:
+
+  ```typescript
+  export const isBlogRoute = (
+    route: AppRoute,
+  ): route is BlogRoute | BlogPostRoute =>
+    route._tag === 'Blog' || route._tag === 'BlogPost'
+  ```
+
+  After:
+
+  ```typescript
+  export const isBlogRoute = AppRoute.isAnyOf(['Blog', 'BlogPost'])
+  ```
+
+  ## Migrate domain unions
+
+  Use `defineTaggedUnion` when the variants of a domain union can be declared together.
+
+  Before:
+
+  ```typescript
+  import { ts } from 'foldkit/schema'
+
+  export const NotSubmitted = ts('NotSubmitted')
+  export const Submitting = ts('Submitting')
+  export const SubmitSuccess = ts('SubmitSuccess')
+  export const SubmitError = ts('SubmitError', { error: S.String })
+
+  export const Submission = S.Union([
+    NotSubmitted,
+    Submitting,
+    SubmitSuccess,
+    SubmitError,
+  ])
+  export type Submission = typeof Submission.Type
+  ```
+
+  After:
+
+  ```typescript
+  import { defineTaggedUnion } from 'foldkit/schema'
+
+  export const Submission = defineTaggedUnion({
+    NotSubmitted: {},
+    Submitting: {},
+    SubmitSuccess: {},
+    SubmitError: { error: S.String },
+  })
+  export type Submission = typeof Submission.Type
+  ```
+
+  Use the union's `match` method when every tag must be handled:
+
+  ```typescript
+  // Before
+  M.value(submission).pipe(
+    M.withReturnType<Html>(),
+    M.tagsExhaustive({ ... }),
+  )
+
+  // After
+  Submission.match<Html>(submission, { ... })
+  ```
+
+  Because `match` runs at runtime, a file that calls it must import the union as a value. Keep using Effect `Match` for partial matching, fallbacks, or one handler shared by several tags.
+
+  ## Remove repeated union names from tags
+
+  The union name now provides the context a tag needs. Prefer `ConnectionState.Connected` to `ConnectionState.ConnectionConnected`.
+
+  Renaming a tag also changes its `_tag` value. Do not shorten tags stored in a Model, URL, or wire protocol unless that external value is meant to change.
+
+  ## Rename `ts` to `taggedStruct`
+
+  `taggedStruct` is the new name for `ts`. Most unions should move to `defineTaggedUnion`; `taggedStruct` remains for variants that must be declared separately.
+
+  ```typescript
+  // Before
+  import { ts } from 'foldkit/schema'
+  const TableRow = ts('TableRow', { cells: S.Array(TableCell) })
+
+  // After
+  import { taggedStruct } from 'foldkit/schema'
+  const TableRow = taggedStruct('TableRow', { cells: S.Array(TableCell) })
+  ```
+
+  Use `taggedStruct` in these cases:
+
+  - A recursive union, such as `Canvas.Shape` or the markdown AST.
+  - A union assembled from variants owned by different modules, such as a parent Model built from two Submodel Models.
+  - A tagged child struct that is not one variant of a choice, such as `TableRow`.
+  - A variant created inside a generic Schema factory, such as `AsyncData`.
+
+  If recursion forces one union in a module to use `taggedStruct`, use `taggedStruct` for the module's sibling unions too.
+
+  ## Variants are no longer separate exports
+
+  `Navigation` and `Interruptible` no longer export their variants as separate top-level names. Access each variant through its union instead.
+
+  ```typescript
+  // Before
+  Navigation.Internal({ url })
+  Interruptible.Interrupted()
+
+  // After
+  Navigation.UrlRequest.Internal({ url })
+  Interruptible.Outcome.Interrupted()
+  ```
+
+  The DevTools protocol now follows the same rule. Its variants live under `Request`, `Response`, `Event`, `DiffValue`, and `MessageSchemaResult`. The `_tag` strings did not change, so old and new DevTools clients still speak the same wire protocol.
+
+  `@foldkit/ui`, `@foldkit/devtools`, `@foldkit/devtools-mcp`, `@foldkit/markdown`, and `@foldkit/vite-plugin` now require Foldkit `>=0.153.0` because their published code calls these new APIs. Each gets a minor release so consumers on older pre-1.0 ranges do not receive an incompatible update.
+
+  ## Lint
+
+  `foldkit/no-empty-object-tagged-call` now catches no-field Route and domain constructors as well as Messages. It recognizes namespaces whose names end in Message, Route, or State, plus unions declared in the same file with Foldkit's union helpers. It does not assume every PascalCase namespace is a Foldkit union.
+
+  The [Routing & Navigation guide](https://foldkit.dev/core/routing-and-navigation) covers the route union in depth, and the [Model guide](https://foldkit.dev/core/model) covers state modeling with `defineTaggedUnion`.
+
+## 0.30.1
+
+### Patch Changes
+
+- df045a8: Give the SSG scaffold's `injectIntoTemplate` call the container id the rest of its prerender script already uses. `scripts/prerender.ts` names the container in one `CONTAINER_ID` constant and tests the built `index.html` for that placeholder, but the injection call fell back to its own `root` default. Renaming the container left the guard looking for the new placeholder while injection still demanded `<div id="root"></div>`, so the first prerender failed with an error naming a container id the project no longer used. The constant now drives both.
+
+## 0.30.0
+
+### Minor Changes
+
+- da9e505: Bump bundled Effect dependencies to `4.0.0-rc.112`. No user-facing changes. Newly scaffolded apps will get the updated pins from the example sources.
+
+  The CLI now pins `effect`, `@effect/platform-node`, and `@effect/platform-node-shared` to exactly `4.0.0-rc.112` to match this release (exact versions, not ranges, while Effect v4 is in prerelease).
+
+### Patch Changes
+
+- c170eb6: Make the SSG scaffold's prerender step repeatable. `scripts/prerender.ts` read its template from `dist/client/index.html` and then wrote the generated `/` over that same file, so a second run against one client build parsed a generated page as its template and stopped with `injectIntoTemplate found no exact <div id="root"></div> placeholder in the template`. That error names the application's `index.html`, which was never the problem, so the reported fault and the actual one were in different files.
+
+  The script now takes the built `index.html` as its template only while that file still holds the `<div id="root"></div>` placeholder, and keeps a copy under `node_modules/.cache/foldkit/` that later runs against the same client build read instead. The placeholder is the condition `injectIntoTemplate` enforces, so the test covers a static render (`isHydratable: false`) as well as a hydratable one, where a test for the hydration stamp would have read a generated page as the template and cached it over the good copy. A client build always writes the template back to `index.html`, so the copy can never outlive the assets it names. Running the prerender step twice against one build now generates the same pages both times, and running it with no client build present fails with a message that names the missing build.
+
+## 0.29.1
+
+### Patch Changes
+
+- cb55188: Split the scaffolded agent instructions into two files. `FOLDKIT.md` carries Foldkit's conventions and is replaced whole when a project upgrades its Foldkit packages. `AGENTS.md` is a short stub that points at it and holds whatever the project wants to tell its own agents.
+
+  Before this, both lived in one file, so refreshing the conventions meant merging Foldkit's paragraphs into a file the project had also edited, with nothing to mark which paragraphs were whose. Refreshing is now a file copy. The `subtree_prompted` marker moves to `AGENTS.md`, since it is per-project state that an upgrade must not reset.
+
+- 11e0b0e: Update, init, boot, and component helpers now return records instead of tuples. Every producer and consumer of those results must migrate. The Runtime no longer accepts the tuple form. The `Update.Return<Model, Message>` and `Update.ReturnWithOutMessage<Model, Message, OutMessage>` names stay the same; the values assigned to them change shape.
+
+  ## Upgrade order
+
+  If your application uses Foldkit 0.148.x or earlier, upgrade to 0.149.0 and complete the Message union migration first. The examples below assume Messages use `defineMessageUnion` and updates use `Message.match`.
+
+  ## Migrate producers
+
+  Change every two-element tuple returned by update, init, boot, or a component helper from `[model, commands]` to `{ model, commands }`. Apply the change to every branch of an update. Omit `commands` wherever the producer statically creates none.
+
+  Before:
+
+  ```typescript
+  type UpdateReturn = Update.Return<Model, Message>
+
+  export const update = (model: Model, message: Message) =>
+    Message.match<UpdateReturn>(message, {
+      ClickedSave: () => [model, [SaveNote()]],
+      SucceededSave: ({ note }) => [evo(model, { note: () => note }), []],
+    })
+  ```
+
+  After:
+
+  ```typescript
+  export const update = (model: Model, message: Message) =>
+    Message.match<Update.Return<Model, Message>>(message, {
+      ClickedSave: () => ({ model, commands: [SaveNote()] }),
+      SucceededSave: ({ note }) => ({
+        model: evo(model, { note: () => note }),
+      }),
+    })
+  ```
+
+  An `UpdateReturn` alias still works. Foldkit's authoring convention is to inline the return type when `Message.match` is its only use. Keep the alias when another matcher, helper, or exported signature reuses it. The match generic constrains the whole update, so do not repeat `: UpdateReturn` on the function.
+
+  When a producer computes a Commands collection, return it directly even if the collection may be empty:
+
+  ```typescript
+  return { model: nextModel, commands: buildCommands(model) }
+  ```
+
+  Do not inspect a computed collection only to omit the property when it is empty. Use `commands ?? []` only where another operation requires an array for spreading, concatenating, execution, or an assertion. The new `foldkit/no-empty-commands-array` rule rejects a literal `commands: []` property.
+
+  ## Migrate consumers
+
+  Keep the whole result attached to the operation that produced it. For example, a test should keep the result of submitting a form together:
+
+  Before:
+
+  ```typescript
+  const [nextModel, commands] = update(model, Message.SubmittedForm())
+
+  expect(nextModel.status).toBe('Submitting')
+  expect(commands).toHaveLength(1)
+  ```
+
+  After:
+
+  ```typescript
+  const formSubmit = update(model, Message.SubmittedForm())
+
+  expect(formSubmit.model.status).toBe('Submitting')
+  expect(formSubmit.commands ?? []).toHaveLength(1)
+  ```
+
+  Do not replace tuple destructuring with record destructuring such as `const { model: nextModel, commands } = update(...)`. Dot access does not force a caller to read `outMessage`, but it keeps the operation and every returned field visibly connected. When the operation name collides with the function, use a trailing underscore such as `init_`.
+
+  The same convention applies when assembling independent init results.
+
+  Before:
+
+  ```typescript
+  const [homeModel, homeCommands] = Home.init()
+
+  return [
+    { home: homeModel },
+    Command.mapMessages(homeCommands, message =>
+      Message.GotHomeMessage({ message }),
+    ),
+  ]
+  ```
+
+  After:
+
+  ```typescript
+  const homeInit = Home.init()
+
+  return {
+    model: { home: homeInit.model },
+    commands: Command.mapMessages(homeInit.commands, message =>
+      Message.GotHomeMessage({ message }),
+    ),
+  }
+  ```
+
+  `Command.mapMessages` accepts an optional Commands field in both call forms and returns an empty array when the field is absent. Pass `homeInit.commands` directly instead of writing `homeInit.commands ?? []`.
+
+  TypeScript rejects this manual composition when the enclosing update returns `Update.Return<Model, Message>`:
+
+  ```typescript
+  const dialogOpen = openDialog(model)
+
+  return {
+    model: evo(dialogOpen.model, { isSubmitting: () => false }),
+    // Type error: with exactOptionalPropertyTypes, this property must be
+    // omitted when dialogOpen.commands is undefined.
+    commands: dialogOpen.commands,
+  }
+  ```
+
+  Every Foldkit template enables `exactOptionalPropertyTypes`. With that setting, the optional `commands` property may be absent. When the property is present, it must contain Commands. `dialogOpen.commands` has the type `Update.Commands<Message> | undefined`, so TypeScript rejects `commands: dialogOpen.commands`.
+
+  This error often points to update results being composed by hand. When a later operation needs the Model produced by an earlier operation, express both as Steps and compose them with `Update.combine`:
+
+  ```typescript
+  return Update.combine(model, [
+    openDialog,
+    stepModel => ({
+      model: evo(stepModel, { isSubmitting: () => false }),
+    }),
+  ])
+  ```
+
+  ## Migrate OutMessages
+
+  `Update.ReturnWithOutMessage<Model, Message, OutMessage>` now carries an optional `outMessage` field instead of an `Option<OutMessage>` tuple element. Include `outMessage` when the update emits one and omit the field otherwise.
+
+  Before:
+
+  ```typescript
+  SucceededAuthenticate: ({ session }) => [
+    model,
+    [],
+    Option.some(OutMessage.SucceededLogin({ session })),
+  ],
+  FailedAuthenticate: () => [model, [], Option.none()],
+  ```
+
+  After:
+
+  ```typescript
+  SucceededAuthenticate: ({ session }) => ({
+    model,
+    outMessage: OutMessage.SucceededLogin({ session }),
+  }),
+  FailedAuthenticate: () => ({ model }),
+  ```
+
+  Use `Update.Return<Model, Message>` when an update cannot emit an OutMessage. TypeScript rejects assigning a result that may contain an OutMessage to that type, so a caller cannot keep the Model and Commands while losing the OutMessage:
+
+  ```typescript
+  const childUpdate: Update.ReturnWithOutMessage<
+    Child.Model,
+    Child.Message,
+    Child.OutMessage
+  > = Child.update(model.child, message)
+
+  // Type error: childUpdate may contain an OutMessage.
+  const plainChildUpdate: Update.Return<Child.Model, Child.Message> =
+    childUpdate
+  ```
+
+  An OutMessage-aware API can still accept a plain result. A missing `outMessage` field means that update emitted nothing:
+
+  ```typescript
+  const plainUpdate: Update.Return<Model, Message> = { model }
+
+  const submodelUpdate: Update.ReturnWithOutMessage<
+    Model,
+    Message,
+    OutMessage
+  > = plainUpdate
+  ```
+
+  When an update definitely emits an OutMessage, include it directly:
+
+  ```typescript
+  return { model, outMessage: OutMessage.ClearedDate() }
+  ```
+
+  When the OutMessage may be `undefined`, use `Update.withOutMessage`. It omits the property when the update emitted nothing and preserves the Model and Commands of an existing result:
+
+  ```typescript
+  return pipe(dialogClose, Update.withOutMessage(outMessage))
+  ```
+
+  A child fold's `toParentOutMessage` mapper now returns the parent OutMessage directly. Return `undefined` for each named child variant that stops at the current Submodel.
+
+  Before:
+
+  ```typescript
+  const toParentOutMessage = M.type<Child.OutMessage>().pipe(
+    M.withReturnType<Option.Option<OutMessage>>(),
+    M.tagsExhaustive({
+      Submitted: ({ id }) => Option.some(OutMessage.Submitted({ id })),
+      Cancelled: () => Option.none(),
+    }),
+  )
+  ```
+
+  After:
+
+  ```typescript
+  const toParentOutMessage = M.type<Child.OutMessage>().pipe(
+    M.withReturnType<OutMessage | undefined>(),
+    M.tagsExhaustive({
+      Submitted: ({ id }) => OutMessage.Submitted({ id }),
+      Cancelled: () => undefined,
+    }),
+  )
+  ```
+
+  Add `toParentOutMessage` only when at least one child OutMessage is forwarded from the current Submodel to its parent. Omit it when no variant is forwarded. A forwarded variant may still be handled locally by `foldOutMessage`. `Update.foldChildStep` supports the same forwarding for child entry points that take only the child Model.
+
+  ## Migrate composed operations
+
+  Do not translate manual child tuple unpacking into separate reads of `result.model`, `result.commands`, and `result.outMessage`. Use `Update.foldChild` for child Messages and `Update.foldChildStep` for child entry points that take only the child Model.
+
+  The old code below writes the next Dialog Model and maps its Commands. The two-slot destructure silently drops the Dialog OutMessage:
+
+  Before:
+
+  ```typescript
+  const [nextDialog, dialogCommands] = Dialog.close(model.dialog)
+
+  return [
+    evo(model, {
+      dialog: () => nextDialog,
+      isSubmitting: () => false,
+    }),
+    Command.mapMessages(dialogCommands, toGotDialogMessage),
+  ]
+  ```
+
+  The replacement intentionally does more than translate the return shape. It handles the Dialog OutMessage that the old code discarded.
+
+  After:
+
+  ```typescript
+  const foldDialogClose = Update.foldChildStep({
+    update: Dialog.close,
+    read: model => Option.some(model.dialog),
+    write: (model, nextDialog) => evo(model, { dialog: () => nextDialog }),
+    toParentMessage: toGotDialogMessage,
+    foldOutMessage: foldDialogOutMessage,
+  })
+
+  return Update.combine(model, [
+    foldDialogClose,
+    stepModel => ({
+      model: evo(stepModel, { isSubmitting: () => false }),
+    }),
+  ])
+  ```
+
+  Use `Update.combine` for two or more Steps when a later Step needs the Model produced by an earlier Step. It collects Commands in Step order, but the Runtime forks them independently after update returns. Name an inline Step parameter `stepModel`; it contains the Model produced by the preceding Step. Call a single operation directly. Independent child inits do not form a sequence, so initialize them separately and assemble their Models into the parent.
+
+  Foldkit UI component helpers, the DevTools overlay, the SSR fixtures, and generated `create-foldkit-app` templates now use the same record shape. The [Update guide](https://foldkit.dev/core/update) and [Submodels guide](https://foldkit.dev/core/submodel) cover the permanent authoring conventions in more depth.
+
+## 0.29.0
+
+### Minor Changes
+
+- 9869cf7: Bump bundled Effect dependencies to `4.0.0-rc.111`. No user-facing changes. Newly scaffolded apps will get the updated pins from the example sources.
+
+  The CLI now pins `effect`, `@effect/platform-node`, and `@effect/platform-node-shared` to exactly `4.0.0-rc.111` to match this release (exact versions, not ranges, while Effect v4 is in prerelease).
+
+## 0.28.0
+
+### Minor Changes
+
+- 504344b: Replace `m` with `defineMessageUnion` in `foldkit/message`. `defineMessageUnion` declares a whole Message union from one record of fields per variant instead of naming each variant once as a constructor and again in the union list.
+
+  The result is a Schema, so it decodes and nests in a Model. Its focused Message surface is exhaustive `match` plus one callable constructor per variant. Each constructor is itself a schema, which is what `Command.define` needs for its `messages` list. Use `Message.match` for exhaustive dispatch. Effect `Match` remains available for partial matching, fallbacks, and one handler shared across several tags.
+
+  This removes the `m` export. Declare Message and OutMessage as separate `defineMessageUnion()` unions, even when two variants happen to carry the same fields. Constructors stay on their owning union namespace rather than being exported as sibling bindings.
+
+  Update `@foldkit/oxlint-plugin` to recognize `defineMessageUnion()` declarations in the Message naming rules. Remove `message-binding-matches-tag`, since variants no longer have separate constructor bindings whose names can drift from their tags.
+
+  Update `create-foldkit-app` templates to declare and match Messages with the new API.
+
+  ```typescript
+  import { Schema as S } from 'effect'
+  import { Update } from 'foldkit'
+  import { defineMessageUnion } from 'foldkit/message'
+  import { evo } from 'foldkit/struct'
+
+  const Model = S.Struct({ count: S.Number })
+  type Model = typeof Model.Type
+
+  export const Message = defineMessageUnion({
+    ClickedReset: {},
+    ChangedCount: { count: S.Number },
+  })
+  export type Message = typeof Message.Type
+
+  type UpdateReturn = Update.Return<Model, Message>
+
+  export const update = (model: Model, message: Message) =>
+    Message.match<UpdateReturn>(message, {
+      ClickedReset: () => [evo(model, { count: () => 0 }), []],
+      ChangedCount: ({ count }) => [evo(model, { count: () => count }), []],
+    })
+  ```
+
+### Patch Changes
+
+- 67ea77c: Bundle every scaffold source and the exact Foldkit package versions for the CLI's release instead of fetching examples from GitHub `main` and package versions from npm `latest`.
+
+## 0.27.3
+
+### Patch Changes
+
+- f9f2b22: Align the published READMEs with Foldkit's current positioning, terminology, and documentation links. Clarify the Vite plugin's Model-preserving hot reload and hydration build-id guidance.
+- fca9dc3: Accept an absolute `CREATE_FOLDKIT_APP_DEPENDENCY_MANIFESTS_DIRECTORY` for repository verification. The SSR and SSG scaffold gate now generates from the example manifests in the checkout under test instead of the moving `main` branch.
+
+## 0.27.2
+
+### Patch Changes
+
+- 2921c99: Keep the generated SSR and SSG build scripts concise while preserving the one-build-id invariant beside the code.
+
+## 0.27.1
+
+### Patch Changes
+
+- 7dc94b6: Allow `esbuild` install scripts in pnpm scaffolds while continuing to deny `msgpackr-extract` install scripts.
+- 7dc94b6: The scaffolded SSR host takes the origin it serves from configuration rather than from the request, refuses a request target that resolves to another origin, answers a missing static asset with 404 rather than the application shell, and declares `Sec-Fetch-Dest` on any response whose selection inspected it.
+
+  The scaffolded SSR and SSG projects build through `scripts/build.mjs`, which produces one build id per build and gives it to every command that build runs, so a generated project reaches a working hydratable build through its own documented build command. `FOLDKIT_BUILD_ID` names builds from a value the deployment already has, such as a commit or a release tag. The generated README states the contract: the id is published in the page and must never contain a secret, and two deployments must never share one.
+
+  An empty `FOLDKIT_BUILD_ID` is treated as unset by the generated build script, matching the plugin, so `FOLDKIT_BUILD_ID= npm run build` takes a generated id rather than suppressing one and failing later at the render.
+
 ## 0.27.0
 
 ### Minor Changes

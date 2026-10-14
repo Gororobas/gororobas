@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { SITE_URL } from '../src/route'
 import {
   type LlmsFullEntry,
   type LlmsIndexEntry,
@@ -9,8 +10,6 @@ import {
   shouldExportMarkdown,
   urlPathToMarkdownPath,
 } from './markdown'
-
-const SITE_URL = 'https://foldkit.dev'
 
 const setBody = (html: string): void => {
   document.body.innerHTML = `<div data-pagefind-body>${html}</div>`
@@ -85,6 +84,43 @@ const y = 2</code></pre>
     `)
     expect(extractMarkdownFromRenderedDocument(document, SITE_URL)).toBe(
       '**pnpm**\n\n```bash\npnpm dev\n```',
+    )
+  })
+
+  it('extracts captioned code from a collapsed snippet disclosure', () => {
+    setBody(`
+      <figure data-llm-label="HTTP Command">
+        <figcaption>HTTP Command</figcaption>
+        <div>
+          <div aria-hidden="true">
+            <div>
+              <pre data-language="typescript"><code>const FetchCount = Command.define()</code></pre>
+            </div>
+          </div>
+        </div>
+        <button>Show code</button>
+      </figure>
+    `)
+
+    expect(extractMarkdownFromRenderedDocument(document, SITE_URL)).toBe(
+      '**HTTP Command**\n\n```typescript\nconst FetchCount = Command.define()\n```',
+    )
+  })
+
+  it('rejects a captioned code block omitted from the Markdown export', () => {
+    setBody(`
+      <figure>
+        <figcaption>HTTP Command</figcaption>
+        <div aria-hidden="true">
+          <pre data-language="typescript"><code>const FetchCount = Command.define()</code></pre>
+        </div>
+      </figure>
+    `)
+
+    expect(() =>
+      extractMarkdownFromRenderedDocument(document, SITE_URL),
+    ).toThrow(
+      'Captioned code block "HTTP Command" was not followed by a fenced source block in exported Markdown.',
     )
   })
 
@@ -172,7 +208,7 @@ describe('shouldExportMarkdown', () => {
   })
 
   it('exports docs and api routes', () => {
-    expect(shouldExportMarkdown({ _tag: 'GettingStarted' })).toBe(true)
+    expect(shouldExportMarkdown({ _tag: 'GetStarted' })).toBe(true)
     expect(shouldExportMarkdown({ _tag: 'CoreModel' })).toBe(true)
     expect(
       shouldExportMarkdown({ _tag: 'ApiModule', moduleSlug: 'html' }),
@@ -203,7 +239,7 @@ describe('buildLlmsIndex', () => {
     ])
 
     expect(output).toContain('# Foldkit')
-    expect(output).toContain('> Foldkit is a TypeScript frontend framework')
+    expect(output).toMatch(/^# Foldkit\n\n> .+/)
     expect(output).toContain('## Docs')
     expect(output).toContain(
       '- [Getting Started](https://foldkit.dev/getting-started): Set up your first app.',
@@ -215,12 +251,12 @@ describe('buildLlmsIndex', () => {
     const output = buildLlmsIndex([
       indexEntry('/ui/dialog', 'Dialog', 'Modal dialog.', 'Foldkit UI'),
       indexEntry('/ui/tabs', 'Tabs', 'Tab interface.', 'Foldkit UI'),
-      indexEntry('/core/model', 'Model', 'Single state tree.', 'Core Concepts'),
+      indexEntry('/core/model', 'Model', 'Single state tree.', 'Core'),
       indexEntry('/manifesto', 'Manifesto', 'Why Foldkit exists.', 'Docs'),
     ])
 
     const docsIndex = output.indexOf('## Docs')
-    const coreIndex = output.indexOf('## Core Concepts')
+    const coreIndex = output.indexOf('## Core')
     const uiIndex = output.indexOf('## Foldkit UI')
     expect(docsIndex).toBeGreaterThan(-1)
     expect(coreIndex).toBeGreaterThan(docsIndex)
@@ -229,6 +265,34 @@ describe('buildLlmsIndex', () => {
     const dialogIndex = output.indexOf('[Dialog]')
     const tabsIndex = output.indexOf('[Tabs]')
     expect(dialogIndex).toBeLessThan(tabsIndex)
+  })
+
+  it('tells agents when to use Foldkit and how to work with the site', () => {
+    const output = buildLlmsIndex([
+      indexEntry('/manifesto', 'Manifesto', 'Why Foldkit exists.', 'Docs'),
+    ])
+
+    expect(output).toContain('When to use Foldkit:')
+    expect(output).toContain('Not a fit for:')
+    expect(output).toContain('npm create foldkit-app@latest')
+    expect(output).toContain('Accept: text/markdown')
+  })
+
+  it('lists the developer resources before the page sections', () => {
+    const output = buildLlmsIndex([
+      indexEntry('/manifesto', 'Manifesto', 'Why Foldkit exists.', 'Docs'),
+    ])
+
+    const resourcesIndex = output.indexOf('## Developer Resources')
+    const docsIndex = output.indexOf('## Docs')
+    expect(resourcesIndex).toBeGreaterThan(-1)
+    expect(resourcesIndex).toBeLessThan(docsIndex)
+
+    expect(output).toContain('https://foldkit.dev/openapi.json')
+    expect(output).toContain('https://foldkit.dev/llms-full.txt')
+    expect(output).toContain('https://foldkit.dev/sitemap.xml')
+    expect(output).toContain('@foldkit/devtools-mcp')
+    expect(output).toContain('https://github.com/foldkit/foldkit')
   })
 })
 
@@ -262,7 +326,7 @@ describe('buildLlmsFull', () => {
           '/core/model',
           'Model',
           'Single state tree.',
-          'Core Concepts',
+          'Core',
           '# Model\n\nOne tree.',
           1,
         ),
@@ -275,7 +339,7 @@ describe('buildLlmsFull', () => {
     expect(output).toContain('Source: https://foldkit.dev/getting-started')
     expect(output).toContain('Source: https://foldkit.dev/core/model')
     expect(output).toContain('Section: Docs')
-    expect(output).toContain('Section: Core Concepts')
+    expect(output).toContain('Section: Core')
     expect(output).toContain('# Getting Started')
     expect(output).toContain('# Model')
     expect(output.split('\n---\n').length).toBeGreaterThan(1)
@@ -288,7 +352,7 @@ describe('buildLlmsFull', () => {
           '/core/update',
           'Update',
           'Pure transitions.',
-          'Core Concepts',
+          'Core',
           '# Update\n\nUpdate body.',
           2,
         ),
@@ -296,7 +360,7 @@ describe('buildLlmsFull', () => {
           '/core/architecture',
           'Architecture',
           'The shape of a Foldkit app.',
-          'Core Concepts',
+          'Core',
           '# Architecture\n\nArchitecture body.',
           0,
         ),
@@ -304,7 +368,7 @@ describe('buildLlmsFull', () => {
           '/core/model',
           'Model',
           'Single state tree.',
-          'Core Concepts',
+          'Core',
           '# Model\n\nModel body.',
           1,
         ),

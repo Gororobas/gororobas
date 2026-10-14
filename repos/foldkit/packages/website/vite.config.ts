@@ -1,4 +1,5 @@
-import { Array, Match as M, Option, Schema as S, pipe } from 'effect'
+import { Array, Match, Option, Schema, pipe } from 'effect'
+import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { basename, extname, join, relative, resolve } from 'node:path'
 import { codeToHtml } from 'shiki'
@@ -11,22 +12,22 @@ import tailwindcss from '@tailwindcss/vite'
 import {
   counterDemoCodePlugin,
   notePlayerDemoCodePlugin,
-} from './scripts/demoCodePlugin'
-import { monacoWorkersPlugin } from './scripts/monacoWorkersPlugin'
-import { playgroundFilesPlugin } from './scripts/playgroundFilesPlugin'
-import { playgroundTypesPlugin } from './scripts/playgroundTypesPlugin'
-import { islandAttributes } from './src/markdown/islandAttributes'
+} from './scripts/demoCodePlugin.ts'
+import { monacoWorkersPlugin } from './scripts/monacoWorkersPlugin.ts'
+import { playgroundFilesPlugin } from './scripts/playgroundFilesPlugin.ts'
+import { playgroundTypesPlugin } from './scripts/playgroundTypesPlugin.ts'
+import { islandAttributes } from './src/markdown/islandAttributes.ts'
 import {
   ParsedApiReference,
   collectNamedSchemas,
   moduleNameToSlug,
   parseTypedocJson,
-} from './src/page/apiReference/domain'
+} from './src/page/apiReference/domain.ts'
 import {
   type NamedSchemas,
   typeDefFromChildren,
   typeToString,
-} from './src/page/apiReference/typeToString'
+} from './src/page/apiReference/typeToString.ts'
 import {
   Kind,
   type TypeDocCommentPart,
@@ -35,10 +36,10 @@ import {
   type TypeDocParam,
   type TypeDocSignature,
   type TypeDocTypeParam,
-} from './src/page/apiReference/typedoc'
-import { PostFrontmatter } from './src/page/blog/frontmatter'
-import { exampleSlugs } from './src/page/example/meta'
-import { shikiDarkTheme, shikiLightTheme } from './src/shikiTheme'
+} from './src/page/apiReference/typedoc.ts'
+import { PostFrontmatter } from './src/page/blog/frontmatter.ts'
+import { exampleSlugs, runnableExampleSlugs } from './src/page/example/meta.ts'
+import { shikiDarkTheme, shikiLightTheme } from './src/shikiTheme.ts'
 
 const shikiThemes = {
   light: shikiLightTheme,
@@ -49,6 +50,9 @@ const highlightLanguage = (filePath: string): string => {
   if (filePath.endsWith('.tsx')) {
     return 'tsx'
   }
+  if (filePath.endsWith('.sh')) {
+    return 'bash'
+  }
   if (filePath.endsWith('.elm')) {
     return 'elm'
   }
@@ -58,11 +62,15 @@ const highlightLanguage = (filePath: string): string => {
   if (filePath.endsWith('.html')) {
     return 'html'
   }
+  if (filePath.endsWith('.txt')) {
+    return 'text'
+  }
   return 'typescript'
 }
 
 const highlightCodePlugin = (): Plugin => ({
   name: 'highlight-code',
+  enforce: 'pre',
   async transform(_code, id) {
     if (!id.includes('?highlighted')) {
       return undefined
@@ -72,33 +80,30 @@ const highlightCodePlugin = (): Plugin => ({
     const rawCode = await readFile(filePath, 'utf-8')
     const code = rawCode.trimEnd()
 
-    const lines = code.split('\n')
-    const lineCount = lines.length
-    const lineDigits = String(lineCount).length
-
     const lang = highlightLanguage(filePath)
 
-    const html = await codeToHtml(code, {
-      lang,
-      themes: shikiThemes,
-      decorations: lines.map((line, i) => ({
-        start: { line: i, character: 0 },
-        end: { line: i, character: line.length },
-        properties: { 'data-line': i + 1 },
-      })),
-    })
+    const html = await codeToHtml(code, { lang, themes: shikiThemes })
 
-    const htmlWithDigits = html.replace(
-      '<pre ',
-      `<pre data-line-digits="${lineDigits}" `,
-    )
-
-    return `export default ${JSON.stringify(htmlWithDigits)}`
+    return `export default ${JSON.stringify(html)}`
   },
 })
 
 const CSS_SNIPPETS_ID = 'virtual:css-snippets'
 const RESOLVED_CSS_SNIPPETS_ID = '\0' + CSS_SNIPPETS_ID
+
+type CssSnippetEntry = readonly [
+  string,
+  Readonly<{ raw: string; highlighted: string; language: string }>,
+]
+
+const cssSnippetEntry = (
+  fileName: string,
+  raw: string,
+  highlighted: string,
+): CssSnippetEntry => [
+  fileName.replace(/\.css$/, ''),
+  { raw, highlighted, language: 'css' },
+]
 
 /**
  * Highlights `src/snippet/*.css` and serves the results as one virtual module.
@@ -115,7 +120,7 @@ const RESOLVED_CSS_SNIPPETS_ID = '\0' + CSS_SNIPPETS_ID
  * invisible until restart while every `.ts` snippet hot-updates.
  */
 const cssSnippetsPlugin = (): Plugin => {
-  const snippetDirectory = resolve(__dirname, 'src/snippet')
+  const snippetDirectory = resolve(import.meta.dirname, 'src/snippet')
   const isCssSnippet = (filePath: string): boolean =>
     filePath.startsWith(snippetDirectory) && filePath.endsWith('.css')
 
@@ -138,24 +143,13 @@ const cssSnippetsPlugin = (): Plugin => {
           const filePath = join(snippetDirectory, fileName)
           this.addWatchFile(filePath)
           const raw = (await readFile(filePath, 'utf-8')).trimEnd()
-          const lines = raw.split('\n')
 
-          const html = await codeToHtml(raw, {
+          const highlighted = await codeToHtml(raw, {
             lang: 'css',
             themes: shikiThemes,
-            decorations: lines.map((line, index) => ({
-              start: { line: index, character: 0 },
-              end: { line: index, character: line.length },
-              properties: { 'data-line': index + 1 },
-            })),
           })
 
-          const highlighted = html.replace(
-            '<pre ',
-            `<pre data-line-digits="${String(lines.length).length}" `,
-          )
-
-          return [fileName.replace(/\.css$/, ''), { raw, highlighted }] as const
+          return cssSnippetEntry(fileName, raw, highlighted)
         }),
       )
 
@@ -197,7 +191,7 @@ const RESOLVED_PARSED_API_ID = '\0' + PARSED_API_ID
 // reference renders `Calendar` alongside `Ui/Calendar`. Type references render by name,
 // so the two projects' independent numeric ids never collide.
 const loadApiTypeDocJson = async (): Promise<TypeDocJson> => {
-  const generatedDir = resolve(__dirname, 'src/generated')
+  const generatedDir = resolve(import.meta.dirname, 'src/generated')
   const [coreRaw, uiRaw] = await Promise.all([
     readFile(join(generatedDir, 'api.json'), 'utf-8'),
     readFile(join(generatedDir, 'api-ui.json'), 'utf-8'),
@@ -208,7 +202,7 @@ const loadApiTypeDocJson = async (): Promise<TypeDocJson> => {
     ...core,
     children: [...(core.children ?? []), ...(ui.children ?? [])],
   }
-  return S.decodeUnknownSync(TypeDocJson)(merged)
+  return Schema.decodeUnknownSync(TypeDocJson)(merged)
 }
 
 const formatTypeParam =
@@ -421,12 +415,12 @@ const itemToEntries = (namedSchemas: NamedSchemas) => {
     prefix: string,
     item: TypeDocItem,
   ): ReadonlyArray<readonly [string, string]> =>
-    M.value(item.kind).pipe(
-      M.when(Kind.Function, () => fnEntries(prefix, item)),
-      M.when(Kind.TypeAlias, () => typeEntries(prefix, item)),
-      M.when(Kind.Interface, () => ifaceEntries(prefix, item)),
-      M.when(Kind.Variable, () => varEntries(prefix, item)),
-      M.orElse(() => []),
+    Match.value(item.kind).pipe(
+      Match.when(Kind.Function, () => fnEntries(prefix, item)),
+      Match.when(Kind.TypeAlias, () => typeEntries(prefix, item)),
+      Match.when(Kind.Interface, () => ifaceEntries(prefix, item)),
+      Match.when(Kind.Variable, () => varEntries(prefix, item)),
+      Match.orElse(() => []),
     )
 }
 
@@ -568,7 +562,7 @@ const parsedApiPlugin = (): Plugin => ({
 
     const json = await loadApiTypeDocJson()
     const parsed = parseTypedocJson(json)
-    const encoded = S.encodeSync(ParsedApiReference)(parsed)
+    const encoded = Schema.encodeSync(ParsedApiReference)(parsed)
 
     return `export default ${JSON.stringify(encoded)}`
   },
@@ -601,7 +595,10 @@ const landingDataPlugin = (): Plugin => ({
     }
 
     const packageJson = JSON.parse(
-      await readFile(resolve(__dirname, '../foldkit/package.json'), 'utf-8'),
+      await readFile(
+        resolve(import.meta.dirname, '../foldkit/package.json'),
+        'utf-8',
+      ),
     )
 
     const githubStarCount = readBakedStarCount()
@@ -655,7 +652,13 @@ const RESOLVED_EXAMPLE_SOURCES_PREFIX = '\0' + EXAMPLE_SOURCES_PREFIX
 
 const EXAMPLE_SLUG_SET: Set<string> = new Set(exampleSlugs)
 
-const EXAMPLE_FILE_EXTENSIONS = new Set(['.ts', '.tsx', '.css', '.md'])
+export const EXAMPLE_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.ts',
+  '.tsx',
+  '.css',
+  '.md',
+  '.mjs',
+])
 
 const langFromExtension = (filePath: string): string => {
   const extension = extname(filePath)
@@ -668,10 +671,21 @@ const langFromExtension = (filePath: string): string => {
   if (extension === '.md') {
     return 'markdown'
   }
+  if (extension === '.mjs') {
+    return 'javascript'
+  }
   return 'typescript'
 }
 
-const EXAMPLE_SOURCE_ROOTS = ['src', 'server', 'scripts']
+export const EXAMPLE_SOURCE_ROOTS: ReadonlyArray<string> = [
+  'src',
+  'server',
+  'scripts',
+]
+
+// The build command reads the config, which is where a generated project
+// computes its build id, so a reader of an example's source has to be shown it.
+export const EXAMPLE_ROOT_FILES: ReadonlyArray<string> = ['vite.config.ts']
 
 const collectSourceFiles = async (
   directory: string,
@@ -725,29 +739,13 @@ const highlightExampleFile = async (
 ) => {
   const rawCode = await readFile(filePath, 'utf-8')
   const code = rawCode.trimEnd()
-  const lines = code.split('\n')
-  const lineCount = lines.length
-  const lineDigits = String(lineCount).length
   const lang = langFromExtension(filePath)
 
-  const html = await codeToHtml(code, {
-    lang,
-    themes: shikiThemes,
-    decorations: lines.map((line, i) => ({
-      start: { line: i, character: 0 },
-      end: { line: i, character: line.length },
-      properties: { 'data-line': i + 1 },
-    })),
-  })
-
-  const htmlWithDigits = html.replace(
-    '<pre ',
-    `<pre data-line-digits="${lineDigits}" `,
-  )
+  const html = await codeToHtml(code, { lang, themes: shikiThemes })
 
   return {
     path: relative(baseDirectory, filePath),
-    highlightedHtml: htmlWithDigits,
+    highlightedHtml: html,
     rawCode: code,
   }
 }
@@ -771,13 +769,22 @@ const highlightExampleSourcesPlugin = (): Plugin => ({
       return undefined
     }
 
-    const exampleDirectory = resolve(__dirname, `../../examples/${slug}`)
+    const exampleDirectory = resolve(
+      import.meta.dirname,
+      `../../examples/${slug}`,
+    )
     const collected = await Promise.all(
       EXAMPLE_SOURCE_ROOTS.map(root =>
         collectSourceFiles(join(exampleDirectory, root)),
       ),
     )
-    const sortedFiles = sortExampleFiles(collected.flat(), exampleDirectory)
+    const rootFiles = EXAMPLE_ROOT_FILES.map(fileName =>
+      join(exampleDirectory, fileName),
+    ).filter(filePath => existsSync(filePath))
+    const sortedFiles = sortExampleFiles(
+      [...collected.flat(), ...rootFiles],
+      exampleDirectory,
+    )
 
     const files = await Promise.all(
       sortedFiles.map(filePath =>
@@ -818,18 +825,20 @@ const embeddedExampleRedirectPlugin = (): Plugin => ({
 // boots in `pnpm dev` and `pnpm preview`. The deployed Vercel config is
 // the source of truth; this is the dev-mode equivalent.
 //
-// CORP same-origin goes on every response (not just /playground/*) so
-// that Monaco's editor and worker scripts loaded by the credentialless
-// /playground/* page satisfy COEP. Workers in credentialless contexts
-// require their script URLs to return a CORP-compatible response, and
-// Vite serves those from non-/playground paths.
+// CORP same-origin goes on every response so Monaco's scripts satisfy
+// the playground page's embedder policy. Monaco worker responses also
+// carry COEP credentialless so their WorkerGlobalScope stays isolated.
 const setIsolationHeaders = (
   url: string | undefined,
   res: { setHeader: (name: string, value: string) => void },
 ) => {
+  const isPlaygroundRequest = url?.startsWith('/playground/') ?? false
+  const isMonacoWorkerRequest = url?.startsWith('/monacoworkers/') ?? false
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin')
-  if (url?.startsWith('/playground/')) {
+  if (isPlaygroundRequest || isMonacoWorkerRequest) {
     res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless')
+  }
+  if (isPlaygroundRequest) {
     res.setHeader('Cross-Origin-Opener-Policy', 'same-origin')
   }
 }
@@ -852,17 +861,34 @@ const playgroundIsolationHeadersPlugin = (): Plugin => ({
 
 // NOTE: Mirrors the `/playground/(.*)` rewrite in
 // .github/workflows/deploy-website.yml so the prerendered build can be
-// verified with `pnpm preview`. Playground routes aren't prerendered, so the
-// SPA fallback would otherwise serve the home page and flash the landing view
-// before the app boots. `pnpm dev` needs nothing: there's no prerender, so
-// `#root` is empty and there's no landing markup to flash.
+// verified with `pnpm preview`. A prerender writes metadata shells for known
+// Playground slugs; builds without those files and unknown slugs still need
+// the shared shell so the SPA fallback doesn't flash the landing view before
+// the app boots. `pnpm dev` needs nothing: there's no prerender, so `#root` is
+// empty and there's no landing markup to flash.
 const playgroundShellFallbackPlugin = (): Plugin => ({
   name: 'playground-shell-fallback',
   configurePreviewServer(server) {
     server.middlewares.use((req, _res, next) => {
       if (req.url) {
         const { pathname, search } = new URL(req.url, 'http://localhost')
-        if (
+        const isPrerenderedPlaygroundRoute = Array.some(
+          runnableExampleSlugs,
+          exampleSlug =>
+            pathname === `/playground/${exampleSlug}` &&
+            existsSync(
+              resolve(
+                import.meta.dirname,
+                'dist',
+                'playground',
+                exampleSlug,
+                'index.html',
+              ),
+            ),
+        )
+        if (isPrerenderedPlaygroundRoute) {
+          req.url = `${pathname}/index.html${search}`
+        } else if (
           pathname.startsWith('/playground/') &&
           pathname !== '/playground/index.html'
         ) {

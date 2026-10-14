@@ -1,12 +1,13 @@
-import { Effect, Option, Queue, Schema as S, Stream } from 'effect'
-import { Subscription } from 'foldkit'
+import { Effect, Option, Schema, Stream } from 'effect'
+import { Dom, Subscription } from 'foldkit'
 
-import { type Model } from '../main'
-import { ChangedSystemTheme, type Message } from '../message'
+import { DARK_COLOR_SCHEME_QUERY } from '../colorScheme'
+import { Message } from '../message'
+import { type Model } from '../model'
 
 export const subscriptions = Subscription.make<Model, Message>()(entry => ({
   systemTheme: entry(
-    { isSystemPreference: S.Boolean },
+    { isSystemPreference: Schema.Boolean },
     {
       modelToDependencies: model => ({
         isSystemPreference: Option.exists(
@@ -16,29 +17,11 @@ export const subscriptions = Subscription.make<Model, Message>()(entry => ({
       }),
       dependenciesToStream: ({ isSystemPreference }) =>
         Stream.when(
-          Stream.callback<typeof ChangedSystemTheme.Type>(queue =>
-            Effect.acquireRelease(
-              Effect.sync(() => {
-                const mediaQuery = window.matchMedia(
-                  '(prefers-color-scheme: dark)',
-                )
-                const handler = (event: MediaQueryListEvent) => {
-                  Queue.offerUnsafe(
-                    queue,
-                    ChangedSystemTheme({
-                      theme: event.matches ? 'Dark' : 'Light',
-                    }),
-                  )
-                }
-                mediaQuery.addEventListener('change', handler)
-                return { mediaQuery, handler }
-              }),
-              ({ mediaQuery, handler }) =>
-                Effect.sync(() =>
-                  mediaQuery.removeEventListener('change', handler),
-                ),
-            ).pipe(Effect.flatMap(() => Effect.never)),
-          ),
+          Dom.streamFromMediaQuery({
+            query: DARK_COLOR_SCHEME_QUERY,
+            mapMatches: isDark =>
+              Message.ChangedSystemTheme({ theme: isDark ? 'Dark' : 'Light' }),
+          }),
           Effect.sync(() => isSystemPreference),
         ),
     },

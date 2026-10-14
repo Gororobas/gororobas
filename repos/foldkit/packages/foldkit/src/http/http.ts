@@ -1,5 +1,5 @@
 import { Layer } from 'effect'
-import { FetchHttpClient, HttpClient } from 'effect/unstable/http'
+import { FetchHttpClient, HttpClient } from 'effect/http'
 
 /**
  * A Fetch-backed `HttpClient` Layer with trace header propagation disabled by
@@ -30,7 +30,7 @@ import { FetchHttpClient, HttpClient } from 'effect/unstable/http'
  *   execute: Effect.gen(function* () {
  *     const client = yield* HttpClient.HttpClient
  *     const response = yield* client.get('/api/count')
- *     const { count } = yield* S.decodeUnknownEffect(CountResponse)(
+ *     const { count } = yield* Schema.decodeUnknownEffect(CountResponse)(
  *       yield* response.json,
  *     )
  *     return SucceededFetchCount({ count })

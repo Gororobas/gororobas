@@ -3,7 +3,7 @@ import type { Html } from 'foldkit/html'
 
 import { Textarea } from '@foldkit/ui'
 
-import { type UiMessage, UpdatedTextareaDemoValue } from '../message'
+import { Message as UiMessage } from '../message'
 import type { UiModel } from '../model'
 
 const textareaClassName =
@@ -15,6 +15,36 @@ const descriptionClassName = 'text-sm text-gray-500'
 
 export const view = Submodel.defineView<UiModel, UiMessage>(
   (model, h): Html => {
+    const basicTextareaView = (
+      attributes: Textarea.TextareaAttributes<UiMessage>,
+    ): Html =>
+      h.div(
+        [h.Class('flex flex-col gap-1.5 w-full')],
+        [
+          h.label([...attributes.label, h.Class(labelClassName)], ['Bio']),
+          h.textarea([...attributes.textarea, h.Class(textareaClassName)]),
+          h.span(
+            [...attributes.description, h.Class(descriptionClassName)],
+            ['A brief introduction about yourself.'],
+          ),
+        ],
+      )
+
+    const disabledTextareaView = (
+      attributes: Textarea.TextareaAttributes<UiMessage>,
+    ): Html =>
+      h.div(
+        [h.Class('flex flex-col gap-1.5 max-w-sm')],
+        [
+          h.label([...attributes.label, h.Class(labelClassName)], ['Bio']),
+          h.textarea([...attributes.textarea, h.Class(textareaClassName)]),
+          h.span(
+            [...attributes.description, h.Class(descriptionClassName)],
+            ['This textarea is disabled.'],
+          ),
+        ],
+      )
+
     return h.div(
       [],
       [
@@ -31,30 +61,11 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
               {
                 id: 'textarea-basic-demo',
                 value: model.textareaDemoValue,
-                onInput: value => UpdatedTextareaDemoValue({ value }),
+                hasDescription: true,
+                onInput: value => UiMessage.UpdatedTextareaDemoValue({ value }),
                 placeholder: 'Tell us about yourself...',
                 rows: 4,
-                toView: attributes =>
-                  h.div(
-                    [h.Class('flex flex-col gap-1.5 w-full')],
-                    [
-                      h.label(
-                        [...attributes.label, h.Class(labelClassName)],
-                        ['Bio'],
-                      ),
-                      h.textarea([
-                        ...attributes.textarea,
-                        h.Class(textareaClassName),
-                      ]),
-                      h.span(
-                        [
-                          ...attributes.description,
-                          h.Class(descriptionClassName),
-                        ],
-                        ['A brief introduction about yourself.'],
-                      ),
-                    ],
-                  ),
+                toView: basicTextareaView,
               },
               h,
             ),
@@ -69,27 +80,11 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
           {
             id: 'textarea-disabled-demo',
             isDisabled: true,
+            hasDescription: true,
             value:
               "Mathematician and writer, known for work on Charles Babbage's Analytical Engine.",
             rows: 3,
-            toView: attributes =>
-              h.div(
-                [h.Class('flex flex-col gap-1.5 max-w-sm')],
-                [
-                  h.label(
-                    [...attributes.label, h.Class(labelClassName)],
-                    ['Bio'],
-                  ),
-                  h.textarea([
-                    ...attributes.textarea,
-                    h.Class(textareaClassName),
-                  ]),
-                  h.span(
-                    [...attributes.description, h.Class(descriptionClassName)],
-                    ['This textarea is disabled.'],
-                  ),
-                ],
-              ),
+            toView: disabledTextareaView,
           },
           h,
         ),

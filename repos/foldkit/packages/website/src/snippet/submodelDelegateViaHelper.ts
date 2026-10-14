@@ -1,12 +1,19 @@
-// ✅ page/settings.ts — setTheme wraps update; ChangedTheme stays internal
-export const setTheme = (model: Model, theme: Theme) =>
-  update(model, ChangedTheme({ theme }))
+// ✅ Reset the child through its own update.
+// CHILD
 
-// main.ts — the parent calls the verb and maps the child's Commands
-ClickedResetSettings: () => {
-  const [nextSettings, commands] = Settings.setTheme(model.settings, 'Light')
-  return [
-    evo(model, { settings: () => nextSettings }),
-    Command.mapMessages(commands, message => GotSettingsMessage({ message })),
-  ]
-}
+import { Message as ChildMessage } from './message'
+
+export const setTheme = (model: Model, theme: Theme) =>
+  update(model, ChildMessage.ChangedTheme({ theme }))
+
+// PARENT UPDATE
+
+const foldSettingsTheme = Update.foldChild({
+  update: Settings.setTheme,
+  read: (model: Model) => Option.some(model.settings),
+  write: (model, nextSettings) =>
+    modifyFields(model, { settings: () => nextSettings }),
+  toParentMessage: message => Message.GotSettingsMessage({ message }),
+})
+
+ClickedResetSettings: () => foldSettingsTheme(model, 'Light')

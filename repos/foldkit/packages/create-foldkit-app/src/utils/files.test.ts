@@ -63,78 +63,70 @@ describe('applyPackageManager', () => {
 })
 
 describe('rendering templates', () => {
-  it('ssg overlays the base with a server entry, prerender script, and static build pipeline', () => {
+  it('ssg overlays the base with a server entry and a generating build', () => {
     expect(listTemplateFiles('rendering/ssg')).toEqual([
+      'README.md',
       'package.json',
-      'scripts/prerender.ts',
       'src/entry.server.ts',
       'src/entry.ts',
       'src/main.ts',
       'src/route.ts',
       'src/scene.test.ts',
+      'src/vite-env.d.ts',
       'tsconfig.json',
       'vite.config.ts',
     ])
 
     const packageJson = readTemplatePackageJson('rendering/ssg/package.json')
-    expect(packageJson.scripts['build']).toBe(
-      'vite build --outDir dist/client && vite build --ssr src/entry.server.ts --outDir dist/server && tsx scripts/prerender.ts',
-    )
+    expect(packageJson.scripts['build']).toBe('vite build')
     expect(packageJson.scripts['preview']).toBe(
       'vite preview --outDir dist/client',
     )
 
-    expect(readTemplateFile('rendering/ssg/vite.config.ts')).toContain(
-      "ssr: { serverEntry: '/src/entry.server.ts' }",
-    )
+    const ssgViteConfig = readTemplateFile('rendering/ssg/vite.config.ts')
+    expect(ssgViteConfig).toContain("serverEntry: '/src/entry.server.ts'")
+    expect(ssgViteConfig).toContain('build: { prerender: true }')
     expect(readTemplateFile('rendering/ssg/src/entry.server.ts')).toContain(
       'export const prerenderPaths',
     )
     expect(readTemplateFile('rendering/ssg/src/entry.ts')).toContain(
       'Runtime.hydrate(application)',
     )
-    expect(readTemplateFile('rendering/ssg/scripts/prerender.ts')).toContain(
-      'Server.injectIntoTemplate',
-    )
   })
 
-  it('ssr overlays the base with a server entry, HTTP host, and start script', () => {
+  it('ssr overlays the base with a server entry, fetch handler, and start script', () => {
     expect(listTemplateFiles('rendering/ssr')).toEqual([
+      'README.md',
       'package.json',
-      'server/main.ts',
+      'scripts/serve.ts',
       'src/cookie.ts',
       'src/entry.server.ts',
       'src/entry.ts',
       'src/main.ts',
       'src/scene.test.ts',
+      'src/vite-env.d.ts',
       'tsconfig.json',
       'vite.config.ts',
     ])
 
     const packageJson = readTemplatePackageJson('rendering/ssr/package.json')
-    expect(packageJson.scripts['build']).toBe(
-      'vite build --outDir dist/client && vite build --ssr server/main.ts --outDir dist/server',
-    )
-    expect(packageJson.scripts['start']).toBe('node dist/server/main.js')
+    expect(packageJson.scripts['build']).toBe('vite build')
+    expect(packageJson.scripts['start']).toBe('node scripts/serve.ts')
 
-    expect(readTemplateFile('rendering/ssr/vite.config.ts')).toContain(
-      "ssr: { serverEntry: '/src/entry.server.ts' }",
-    )
+    const ssrViteConfig = readTemplateFile('rendering/ssr/vite.config.ts')
+    expect(ssrViteConfig).toContain("serverEntry: '/src/entry.server.ts'")
+    expect(ssrViteConfig).toContain('build: true')
     expect(readTemplateFile('rendering/ssr/src/entry.server.ts')).toContain(
       'flags: flagsForRequest(',
     )
     expect(readTemplateFile('rendering/ssr/src/entry.ts')).toContain(
       'Runtime.hydrate(application)',
     )
-    expect(readTemplateFile('rendering/ssr/server/main.ts')).toContain(
-      'HttpServer.serve(handler)',
-    )
   })
 
   it('rendering overlays keep the base name placeholder, shared scripts, and compiler options', () => {
     const basePackageJson = readTemplatePackageJson('base/package.json')
     const baseTsconfig = readTemplateTsconfig('base/tsconfig.json')
-    const baseViteConfig = readTemplateFile('base/vite.config.ts')
 
     for (const rendering of ['ssg', 'ssr']) {
       const packageJson = readTemplatePackageJson(
@@ -154,19 +146,27 @@ describe('rendering templates', () => {
         `rendering/${rendering}/tsconfig.json`,
       )
       expect(tsconfig.compilerOptions).toEqual(baseTsconfig.compilerOptions)
-
-      const viteConfig = readTemplateFile(
-        `rendering/${rendering}/vite.config.ts`,
-      )
-      expect(viteConfig).toContain('devToolsMcpPort: 9988')
-      expect(baseViteConfig).toContain('devToolsMcpPort: 9988')
     }
 
     expect(readTemplateTsconfig('rendering/ssg/tsconfig.json').include).toEqual(
-      ['src/**/*', 'scripts/**/*'],
+      ['src/**/*'],
     )
     expect(readTemplateTsconfig('rendering/ssr/tsconfig.json').include).toEqual(
-      ['src/**/*', 'server/**/*'],
+      ['src/**/*', 'scripts/**/*.ts'],
     )
+  })
+
+  it('documents the build id contract in the generated README', () => {
+    for (const rendering of ['ssg', 'ssr']) {
+      const readme = applyPackageManager(
+        readTemplateFile(`rendering/${rendering}/README.md`),
+        'pnpm',
+      )
+      expect(readme).not.toContain('{{')
+      expect(readme).toContain('pnpm build')
+      expect(readme).toContain('FOLDKIT_BUILD_ID')
+      expect(readme).toMatch(/never contain\s+a secret/)
+      expect(readme).toMatch(/[Tt]wo\s+deployments\s+must/)
+    }
   })
 })

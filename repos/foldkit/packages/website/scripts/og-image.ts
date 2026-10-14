@@ -1,13 +1,5 @@
 import { FileSystem } from 'effect'
-import {
-  Array,
-  Console,
-  Effect,
-  Match as M,
-  Option,
-  String as String_,
-  pipe,
-} from 'effect'
+import { Array, Console, Effect, Match, Option, String, pipe } from 'effect'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { type Browser } from 'playwright'
@@ -16,8 +8,8 @@ import satori, { type Font } from 'satori'
 import { Resvg } from '@resvg/resvg-js'
 
 import { type PostCover, maybePostCover } from '../src/page/blog/frontmatter'
-import { BLOG_AUTHOR } from '../src/page/blog/meta'
-import { type AppRoute } from '../src/route'
+import { BLOG_AUTHOR, BLOG_SECTION } from '../src/page/blog/meta'
+import { type AppRoute, SITE_URL } from '../src/route'
 import {
   type BlogPostEntry,
   PUBLIC_DIR,
@@ -140,7 +132,7 @@ const ogTemplate = (metadata: PageMetadata): SatoriNode =>
                 lineHeight: '1.1',
                 letterSpacing: '-0.025em',
               },
-              escapeHtml(metadata.title),
+              metadata.title,
             ),
             el(
               'div',
@@ -150,7 +142,7 @@ const ogTemplate = (metadata: PageMetadata): SatoriNode =>
                 color: '#a1a1aa',
                 lineHeight: '1.4',
               },
-              escapeHtml(metadata.description),
+              metadata.description,
             ),
           ]),
 
@@ -182,7 +174,7 @@ const ogTemplate = (metadata: PageMetadata): SatoriNode =>
                         textTransform: 'uppercase',
                         letterSpacing: '0.12em',
                       },
-                      escapeHtml(metadata.section),
+                      metadata.section,
                     ),
                   ]
                 : []),
@@ -206,11 +198,11 @@ const urlPathToSlug = (urlPath: string): string => {
 // COVER IMAGES
 
 const maybeRoutePostEntry = (route: AppRoute): Option.Option<BlogPostEntry> =>
-  M.value(route).pipe(
-    M.tag('BlogPost', ({ postSlug }) =>
+  Match.value(route).pipe(
+    Match.tag('BlogPost', ({ postSlug }) =>
       Array.findFirst(blogPosts, ({ slug }) => slug === postSlug),
     ),
-    M.orElse(() => Option.none()),
+    Match.orElse(() => Option.none()),
   )
 
 const maybeRouteCover = (route: AppRoute): Option.Option<PostCover> =>
@@ -230,9 +222,7 @@ const coverMimeType = (src: string): Effect.Effect<string, Error> =>
 // NOTE: Chromium decodes the cover and re-encodes it as PNG because resvg
 // cannot embed webp sources, and PNG is the one format every OG consumer
 // renders. The cover is center-cropped onto the standard 1200x630 card so
-// every platform shows the same crop instead of choosing its own. The
-// string-form evaluate polyfills the `__name` helper tsx injects into
-// compiled callbacks; see the note on PAGE_INIT_SCRIPT in prerender.ts.
+// every platform shows the same crop instead of choosing its own.
 const renderCoverOgImage = (browser: Browser, cover: PostCover) =>
   Effect.gen(function* () {
     const mimeType = yield* coverMimeType(cover.src)
@@ -244,9 +234,6 @@ const renderCoverOgImage = (browser: Browser, cover: PostCover) =>
       Effect.tryPromise(() => browser.newPage()),
       page =>
         Effect.gen(function* () {
-          yield* Effect.tryPromise(() =>
-            page.evaluate('window.__name = (target) => target'),
-          )
           return yield* Effect.tryPromise(() =>
             page.evaluate(
               async ({ source, targetHeight, targetWidth }) => {
@@ -346,7 +333,10 @@ const renderOgImage =
         yield* Console.log(`  ✓ og/${slug}.png`)
       }),
       Effect.mapError(
-        error => new Error(`og/${slug}.png failed to render: ${String(error)}`),
+        error =>
+          new Error(
+            `og/${slug}.png failed to render: ${globalThis.String(error)}`,
+          ),
       ),
     )
   }
@@ -383,7 +373,56 @@ export const generateOgImages = (
 
 // STRUCTURED DATA
 
-const SITE_URL = 'https://foldkit.dev'
+const SITE_NAME = 'Foldkit'
+
+const HOMEPAGE_FULL_TITLE =
+  'Foldkit | TypeScript Frontend Framework Built on Effect'
+
+const generatedOgImageAlt = (metadata: PageMetadata): string => {
+  if (metadata.title === SITE_NAME) {
+    return HOMEPAGE_FULL_TITLE
+  } else if (
+    metadata.section.length > 0 &&
+    metadata.section !== metadata.title
+  ) {
+    return `Foldkit social card for ${metadata.title} in ${metadata.section}.`
+  } else {
+    return `Foldkit social card for ${metadata.title}.`
+  }
+}
+
+const ORGANIZATION_ID = `${SITE_URL}/#organization`
+
+export const ORGANIZATION_SCHEMA = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  '@id': ORGANIZATION_ID,
+  name: 'Foldkit',
+  url: SITE_URL,
+  logo: `${SITE_URL}/logo.svg`,
+  description:
+    'Foldkit is an open source TypeScript frontend framework built on Effect, developed in the open on GitHub.',
+  sameAs: [
+    'https://github.com/foldkit/foldkit',
+    'https://www.npmjs.com/package/foldkit',
+    'https://discord.gg/kav8VNxqGm',
+    'https://x.com/devinjameson',
+  ],
+  contactPoint: [
+    {
+      '@type': 'ContactPoint',
+      contactType: 'technical support',
+      url: 'https://github.com/foldkit/foldkit/issues',
+      availableLanguage: 'English',
+    },
+    {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      url: `${SITE_URL}/contact`,
+      availableLanguage: 'English',
+    },
+  ],
+}
 
 const SOFTWARE_APPLICATION_SCHEMA = {
   '@context': 'https://schema.org',
@@ -392,30 +431,59 @@ const SOFTWARE_APPLICATION_SCHEMA = {
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'Web',
   description:
-    'A TypeScript frontend framework built on Effect-TS, using The Elm Architecture. Predictable state, explicit effects, type-safe routing.',
+    'Foldkit is a TypeScript frontend framework built on Effect. One Schema-defined Model, explicit effects, typed routing, server rendering, and accessible UI components.',
   url: SITE_URL,
-  author: { '@type': 'Organization', name: 'Foldkit' },
+  author: { '@id': ORGANIZATION_ID },
   programmingLanguage: 'TypeScript',
   offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
   license: 'https://opensource.org/licenses/MIT',
 }
 
+const WEBSITE_ID = `${SITE_URL}/#website`
+
 const WEBSITE_SCHEMA = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
+  '@id': WEBSITE_ID,
   name: 'Foldkit',
   url: SITE_URL,
+  publisher: { '@id': ORGANIZATION_ID },
   description:
-    'A TypeScript frontend framework built on Effect-TS using The Elm Architecture',
+    'Foldkit is a TypeScript frontend framework built on Effect. One Schema-defined Model, explicit effects, typed routing, server rendering, and accessible UI components.',
 }
 
 const jsonLdTag = (schema: Record<string, unknown>): string =>
   `<script type="application/ld+json">${JSON.stringify(schema)}</script>`
 
 const HOMEPAGE_JSON_LD = [
+  jsonLdTag(ORGANIZATION_SCHEMA),
   jsonLdTag(SOFTWARE_APPLICATION_SCHEMA),
   jsonLdTag(WEBSITE_SCHEMA),
 ].join('\n    ')
+
+const sitePageJsonLd = (
+  schemaType: string,
+  pageUrl: string,
+  metadata: PageMetadata,
+): string =>
+  jsonLdTag({
+    '@context': 'https://schema.org',
+    '@type': schemaType,
+    name: metadata.title,
+    description: metadata.description,
+    url: pageUrl,
+    isPartOf: { '@id': WEBSITE_ID },
+    publisher: { '@id': ORGANIZATION_ID },
+  })
+
+const maybeSitePageSchemaType = (route: AppRoute): Option.Option<string> =>
+  Match.value(route).pipe(
+    Match.withReturnType<Option.Option<string>>(),
+    Match.tag('About', () => Option.some('AboutPage')),
+    Match.tag('Contact', () => Option.some('ContactPage')),
+    Match.tag('Privacy', () => Option.some('WebPage')),
+    Match.orElse(() => Option.none()),
+  )
 
 const blogPostingJsonLd = (
   entry: BlogPostEntry,
@@ -462,15 +530,15 @@ export const injectMetaTags = (
   const ogImageUrl = `${SITE_URL}/og/${slug}.png`
   const pageUrl = `${SITE_URL}${urlPath}`
   const fullTitle =
-    metadata.title === 'Foldkit'
-      ? 'Foldkit - TypeScript Frontend Framework Built on Effect-TS | Elm Architecture'
-      : `${metadata.title} - Foldkit | Effect-TS Frontend Framework`
+    metadata.title === SITE_NAME
+      ? HOMEPAGE_FULL_TITLE
+      : `${metadata.title} | ${SITE_NAME}`
 
   const ogImageAlt = pipe(
     maybeRouteCover(route),
     Option.map(cover => cover.alt),
-    Option.filter(String_.isNonEmpty),
-    Option.getOrElse(() => fullTitle),
+    Option.filter(String.isNonEmpty),
+    Option.getOrElse(() => generatedOgImageAlt(metadata)),
   )
 
   const escapedTitle = escapeHtml(fullTitle)
@@ -486,10 +554,15 @@ export const injectMetaTags = (
 
   const headAppends = [
     ...(metadata.title === 'Foldkit' ? [HOMEPAGE_JSON_LD] : []),
+    ...Option.match(maybeSitePageSchemaType(route), {
+      onNone: () => [],
+      onSome: schemaType => [sitePageJsonLd(schemaType, pageUrl, metadata)],
+    }),
     ...Option.match(maybePostEntry, {
       onNone: () => [],
       onSome: entry => [
         `<meta property="article:published_time" content="${entry.frontmatter.date}" />`,
+        `<meta property="article:section" content="${BLOG_SECTION}" />`,
         blogPostingJsonLd(entry, pageUrl, ogImageUrl),
       ],
     }),
@@ -537,6 +610,10 @@ export const injectMetaTags = (
     [
       /name="twitter:image"\s+content="[^"]*"/,
       `name="twitter:image" content="${ogImageUrl}"`,
+    ],
+    [
+      /name="twitter:image:alt"\s+content="[^"]*"/,
+      `name="twitter:image:alt" content="${escapedOgImageAlt}"`,
     ],
   ]
 

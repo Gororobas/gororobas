@@ -1,20 +1,21 @@
-import { Array, Match as M, Option, Result, String as String_ } from 'effect'
+import { Array, Match, Option, Result, String } from 'effect'
 import { inertHtml as ih } from 'foldkit/html'
 import { describe, expect, test } from 'vitest'
 
+import * as Markdown from '@foldkit/markdown'
 import { parseMarkdown } from '@foldkit/markdown/vite'
 
+import { type CodeBlock } from '../component'
 import { PostFrontmatter } from '../page/blog/frontmatter'
 import comingFromReactSource from '../page/comingFromReact/comingFromReact.md?raw'
 import { FAQ_IDS } from '../page/comingFromReact/faq'
-import commandsSource from '../page/core/commands.md?raw'
-import submodelSource from '../page/core/submodel.md?raw'
-import manifestoSource from '../page/manifesto.md?raw'
 import comboboxPageSource from '../page/ui/comboboxPage.md?raw'
 import { collectDemoLabels } from './demoLabel'
 import { islandAttributes } from './islandAttributes'
+import { docIslands } from './islands'
 import { parseHeadingId, slugify, stripHeadingIdMarker } from './slug'
 import { collectHeadings } from './tableOfContents'
+import { docViews } from './views'
 
 // NOTE: mirrors the options the website's markdown plugin runs with, so a check
 // over every page's source reads the same documents the site builds.
@@ -22,9 +23,6 @@ const markdownOptions = {
   islands: islandAttributes,
   frontmatter: PostFrontmatter,
 }
-
-const tocOf = (source: string) =>
-  collectHeadings(parseMarkdown(source, markdownOptions)).tableOfContents
 
 describe('slugify', () => {
   test('lowercases and dashes non-alphanumeric runs', () => {
@@ -102,10 +100,12 @@ describe('collectHeadings', () => {
   })
 
   test('honors a trailing {#id} override that follows inline formatting', () => {
-    const document = parseMarkdown('## Use **evo** {#use-evo}')
+    const document = parseMarkdown(
+      '## Use **modifyFields** {#use-modifyFields}',
+    )
 
     expect(collectHeadings(document).tableOfContents).toEqual([
-      { level: 'h2', id: 'use-evo', text: 'Use evo' },
+      { level: 'h2', id: 'use-modifyFields', text: 'Use modifyFields' },
     ])
   })
 })
@@ -146,183 +146,44 @@ describe('Demo island', () => {
   })
 })
 
-describe('proof pages', () => {
-  test('manifesto table of contents', () => {
-    expect(tocOf(manifestoSource)).toEqual([
-      {
-        level: 'h2',
-        id: 'the-architecture-problem',
-        text: 'The Architecture Problem',
-      },
-      {
-        level: 'h2',
-        id: 'power-through-constraints',
-        text: 'Power Through Constraints',
-      },
-      { level: 'h2', id: 'readable-by-design', text: 'Readable by Design' },
-      {
-        level: 'h2',
-        id: 'build-your-product-not-your-architecture',
-        text: 'Build Your Product, Not Your Architecture',
-      },
-    ])
-  })
+describe('copy control identity', () => {
+  test('uses structural occurrence indices for code blocks and snippets', () => {
+    const document = parseMarkdown(
+      '```ts\nconst first = 1\n```\n\n::Snippet{name="sceneLocators" label="Scene locators"}\n\n```ts\nconst second = 2\n```\n\n::Snippet{name="sceneLocators" label="Scene locators"}',
+      { islands: islandAttributes },
+    )
+    const { idByHeading } = collectHeadings(document)
+    const demoLabels = collectDemoLabels(document, idByHeading)
+    const ids: Array<string> = []
+    const renderCopyButton: CodeBlock.RenderCopyButton = config => {
+      ids.push(config.id)
+      return ih.empty
+    }
+    const renderSnippet: CodeBlock.RenderSnippet = config => {
+      ids.push(config.id)
+      return ih.empty
+    }
+    const renderHeadingLink = () => ih.empty
 
-  test('commands table of contents', () => {
-    expect(tocOf(commandsSource)).toEqual([
-      { level: 'h2', id: 'overview', text: 'Overview' },
-      { level: 'h2', id: 'anatomy-of-a-command', text: 'Anatomy of a Command' },
-      { level: 'h2', id: 'testable-by-design', text: 'Testable by Design' },
-      { level: 'h2', id: 'http-requests', text: 'HTTP Requests' },
-      { level: 'h2', id: 'commands-with-args', text: 'Commands with Args' },
-      {
-        level: 'h2',
-        id: 'interrupting-commands',
-        text: 'Interrupting Commands',
-      },
-      { level: 'h3', id: 'choosing-a-key', text: 'Choosing a Key' },
-      {
-        level: 'h3',
-        id: 'the-interrupt-constructor',
-        text: 'The Interrupt Constructor',
-      },
-      {
-        level: 'h3',
-        id: 'replacing-cancelled-work',
-        text: 'Replacing Cancelled Work',
-      },
-      {
-        level: 'h3',
-        id: 'cancellations-with-multiple-meanings',
-        text: 'Cancellations with Multiple Meanings',
-      },
-    ])
-  })
+    Markdown.view(document, {
+      views: docViews({
+        pageId: 'copy-identities',
+        idByHeading,
+        renderCopyButton,
+        renderHeadingLink,
+      }),
+      islands: docIslands(
+        { demos: {}, renderCopyButton, renderSnippet, renderHeadingLink },
+        demoLabels,
+        'copy-identities',
+      ),
+    })
 
-  test('submodel table of contents', () => {
-    expect(tocOf(submodelSource)).toEqual([
-      { level: 'h2', id: 'overview', text: 'Overview' },
-      { level: 'h2', id: 'child-submodel', text: 'The Child Submodel' },
-      { level: 'h2', id: 'embedding', text: 'Embedding the Submodel' },
-      { level: 'h3', id: 'embedding-the-model', text: 'Embedding the Model' },
-      {
-        level: 'h3',
-        id: 'never-bypass-the-update',
-        text: 'Never Bypass the Child’s Update',
-      },
-      { level: 'h3', id: 'wrapping-messages', text: 'Wrapping Messages' },
-      { level: 'h3', id: 'delegating-in-update', text: 'Delegating in update' },
-      {
-        level: 'h3',
-        id: 'fold-child',
-        text: 'Folding with Update.foldChild',
-      },
-      {
-        level: 'h3',
-        id: 'wiring-the-view',
-        text: 'Wiring the View with h.submodel',
-      },
-      {
-        level: 'h3',
-        id: 'per-render-view-inputs',
-        text: 'Per-render View Inputs',
-      },
-      {
-        level: 'h2',
-        id: 'boundary-id-and-model-identity',
-        text: 'Boundary Id and Model Identity',
-      },
-      { level: 'h2', id: 'multiple-instances', text: 'Multiple Instances' },
-      {
-        level: 'h2',
-        id: 'memoization',
-        text: 'Memoization Across Submodel Boundaries',
-      },
-      { level: 'h2', id: 'reading-parent-state', text: 'Reading Parent State' },
-      {
-        level: 'h3',
-        id: 'parent-state-in-view',
-        text: 'Passing Parent State to a Child Submodel’s view',
-      },
-      {
-        level: 'h3',
-        id: 'parent-state-in-update',
-        text: 'Providing Parent State to a Child Submodel’s update',
-      },
-      {
-        level: 'h2',
-        id: 'surfacing-facts',
-        text: 'Surfacing Facts to the Parent',
-      },
-      {
-        level: 'h3',
-        id: 'defining-out-messages',
-        text: 'Defining OutMessages',
-      },
-      {
-        level: 'h3',
-        id: 'emitting-from-the-child',
-        text: 'Emitting from the Child',
-      },
-      {
-        level: 'h3',
-        id: 'handling-in-the-parent',
-        text: 'Handling in the Parent',
-      },
-      {
-        level: 'h2',
-        id: 'reflecting-external-state',
-        text: 'Reflecting External State',
-      },
-      {
-        level: 'h2',
-        id: 'which-boundary',
-        text: 'Which Boundary a Handler Dispatches Through',
-      },
-      { level: 'h2', id: 'child-attributes', text: 'childAttributes' },
-      {
-        level: 'h3',
-        id: 'child-attributes-the-problem',
-        text: 'The Problem',
-      },
-      {
-        level: 'h3',
-        id: 'child-attributes-how-it-works',
-        text: 'How It Works',
-      },
-      {
-        level: 'h3',
-        id: 'child-attributes-when-to-reach',
-        text: 'When to Reach For It',
-      },
-      { level: 'h2', id: 'testing-submodels', text: 'Testing Submodels' },
-      {
-        level: 'h2',
-        id: 'debugging-in-devtools',
-        text: 'Debugging Submodels in DevTools',
-      },
-      { level: 'h2', id: 'common-pitfalls', text: 'Common Pitfalls' },
-      { level: 'h2', id: 'api-reference', text: 'API Reference' },
-      { level: 'h3', id: 'api-h-submodel', text: 'h.submodel' },
-      { level: 'h3', id: 'api-submodel-config', text: 'SubmodelConfig' },
-      { level: 'h3', id: 'api-define-view', text: 'Submodel.defineView' },
-      { level: 'h3', id: 'api-submodel-view', text: 'Submodel.View' },
-      { level: 'h3', id: 'api-child-attributes', text: 'childAttributes' },
-      { level: 'h3', id: 'api-child-attribute', text: 'ChildAttribute' },
-    ])
-  })
-
-  test('coming from react table of contents', () => {
-    expect(tocOf(comingFromReactSource)).toEqual([
-      { level: 'h2', id: 'a-simple-counter', text: 'A Simple Counter' },
-      { level: 'h2', id: 'adding-auto-count', text: 'Adding Auto-Count' },
-      { level: 'h2', id: 'adding-a-step-size', text: 'Adding a Step Size' },
-      {
-        level: 'h2',
-        id: 'translating-react-concepts',
-        text: 'Translating React Concepts',
-      },
-      { level: 'h2', id: 'faq', text: 'FAQ' },
+    expect(ids).toEqual([
+      'copy-identities-code-0',
+      'copy-identities-snippet-sceneLocators-0',
+      'copy-identities-code-1',
+      'copy-identities-snippet-sceneLocators-1',
     ])
   })
 })
@@ -369,7 +230,7 @@ describe('faq island registration', () => {
       Object.entries(markdownSources),
       ([markdownPath, source]) =>
         markdownPath !== COMING_FROM_REACT_PATH &&
-        String(source).includes(':::Faq')
+        globalThis.String(source).includes(':::Faq')
           ? Result.succeed(markdownPath)
           : Result.failVoid,
     )
@@ -388,7 +249,10 @@ describe('demo island registration', () => {
   const demoUsages = Array.filterMap(
     Object.entries(markdownSources),
     ([markdownPath, source]) => {
-      const names = capturedNames(String(source), DEMO_ISLAND_PATTERN)
+      const names = capturedNames(
+        globalThis.String(source),
+        DEMO_ISLAND_PATTERN,
+      )
 
       return Array.match(names, {
         onEmpty: () => Result.failVoid,
@@ -411,7 +275,7 @@ describe('demo island registration', () => {
       expect(pageSource, `no page module at ${pagePath}`).toBeDefined()
 
       for (const name of names) {
-        expect(String(pageSource)).toContain(`'${name}'`)
+        expect(globalThis.String(pageSource)).toContain(`'${name}'`)
       }
     },
   )
@@ -424,17 +288,59 @@ describe('demo island registration', () => {
 // only the file paths, which keeps the `?highlighted` modules out of the test's
 // import graph.
 const SNIPPET_ISLAND_PATTERN = /::Snippet\{[^}]*name="([^"]+)"/g
+const SNIPPET_TITLE_PATTERN = /::Snippet\{[^}]*label="([^"]+)"/g
 
-const SNIPPET_EXTENSION_PATTERN = /\.(?:ts|tsx|elm|json|css|html)$/
+const SNIPPET_EXTENSION_PATTERN = /\.(?:ts|tsx|elm|json|css|html|sh|txt)$/
+const REDUNDANT_SNIPPET_TITLE_SUFFIX_PATTERN =
+  /\s(?:example|examples|code|snippet)$/i
+const SNIPPET_TITLE_START_PATTERN = /^(?:[A-Z]|[❌✅] [A-Z])/u
+const SNIPPET_TITLE_ENDING_PUNCTUATION_PATTERN = /[.!?:;]$/
+const LOWERCASE_ARCHITECTURE_TYPE_PATTERN =
+  /\b(?:model|models|message|messages|command|commands|subscription|subscriptions|mount|mounts|submodel|submodels|outmessage|outmessages)\b/
+const UNSPECIFIC_SNIPPET_TITLES = [
+  'Bad',
+  'Code',
+  'Example',
+  'Good',
+  'Snippet',
+  'Test',
+]
+
+const snippetTitlePages = Array.map(
+  Object.entries(markdownSources),
+  ([markdownPath, source]) => ({
+    markdownPath,
+    titles: capturedNames(globalThis.String(source), SNIPPET_TITLE_PATTERN),
+  }),
+)
+
+describe('snippet title conventions', () => {
+  test.each(
+    Array.flatMap(snippetTitlePages, ({ markdownPath, titles }) =>
+      Array.map(titles, title => ({ markdownPath, title })),
+    ),
+  )('$markdownPath: $title follows the title rules', ({ title }) => {
+    expect(title).toMatch(SNIPPET_TITLE_START_PATTERN)
+    expect(title).not.toMatch(REDUNDANT_SNIPPET_TITLE_SUFFIX_PATTERN)
+    expect(title).not.toMatch(SNIPPET_TITLE_ENDING_PUNCTUATION_PATTERN)
+    expect(Array.contains(UNSPECIFIC_SNIPPET_TITLES, title)).toBe(false)
+
+    if (!title.startsWith('Rule: foldkit/')) {
+      expect(title).not.toMatch(LOWERCASE_ARCHITECTURE_TYPE_PATTERN)
+    }
+  })
+})
 
 describe('snippet island registration', () => {
   const snippetFileNames = new Set(
     Array.filterMap(
-      Object.keys(import.meta.glob('../snippet/*.{ts,tsx,elm,json,css,html}')),
+      Object.keys(
+        import.meta.glob('../snippet/*.{ts,tsx,elm,json,css,html,sh,txt}'),
+      ),
       path =>
         Result.fromOption(
-          Option.map(Array.last(String_.split(path, '/')), fileName =>
-            String_.replace(SNIPPET_EXTENSION_PATTERN, '')(fileName),
+          Option.map(Array.last(String.split(path, '/')), fileName =>
+            String.replace(SNIPPET_EXTENSION_PATTERN, '')(fileName),
           ),
           () => undefined,
         ),
@@ -444,7 +350,10 @@ describe('snippet island registration', () => {
   const snippetUsages = Array.filterMap(
     Object.entries(markdownSources),
     ([markdownPath, source]) => {
-      const names = capturedNames(String(source), SNIPPET_ISLAND_PATTERN)
+      const names = capturedNames(
+        globalThis.String(source),
+        SNIPPET_ISLAND_PATTERN,
+      )
 
       return Array.match(names, {
         onEmpty: () => Result.failVoid,
@@ -469,13 +378,58 @@ describe('snippet island registration', () => {
   )
 })
 
+const SOURCE_CODE_FENCE_LANGUAGES = new Set([
+  'bash',
+  'css',
+  'elm',
+  'html',
+  'js',
+  'jsx',
+  'sh',
+  'ts',
+  'tsx',
+])
+
+const fencedSourceCodeLanguages = (source: string): ReadonlyArray<string> =>
+  Array.filterMap(parseMarkdown(source, markdownOptions).blocks, block =>
+    Match.value(block).pipe(
+      Match.withReturnType<Result.Result<string, void>>(),
+      Match.tag('CodeBlock', ({ maybeLanguage }) =>
+        Option.match(maybeLanguage, {
+          onNone: () => Result.failVoid,
+          onSome: language =>
+            SOURCE_CODE_FENCE_LANGUAGES.has(language)
+              ? Result.succeed(language)
+              : Result.failVoid,
+        }),
+      ),
+      Match.orElse(() => Result.failVoid),
+    ),
+  )
+
+describe('documentation code fences', () => {
+  test('identifies fenced source while allowing literal output', () => {
+    expect(fencedSourceCodeLanguages('```ts\nconst count = 0\n```')).toEqual([
+      'ts',
+    ])
+    expect(fencedSourceCodeLanguages('```text\ncount: 0\n```')).toEqual([])
+  })
+
+  test.each(Object.entries(markdownSources))(
+    '%s routes fenced source examples through ::Snippet',
+    (_markdownPath, source) => {
+      expect(fencedSourceCodeLanguages(globalThis.String(source))).toEqual([])
+    },
+  )
+})
+
 type HeadingOverride = Readonly<{ id: string; text: string }>
 
 const explicitHeadingIds = (source: string): ReadonlyArray<HeadingOverride> =>
   Array.filterMap(parseMarkdown(source, markdownOptions).blocks, block =>
-    M.value(block).pipe(
-      M.withReturnType<Result.Result<HeadingOverride, void>>(),
-      M.tag('Heading', heading => {
+    Match.value(block).pipe(
+      Match.withReturnType<Result.Result<HeadingOverride, void>>(),
+      Match.tag('Heading', heading => {
         const { maybeId, text } = parseHeadingId(heading.content)
 
         return Result.fromOption(
@@ -483,7 +437,7 @@ const explicitHeadingIds = (source: string): ReadonlyArray<HeadingOverride> =>
           () => undefined,
         )
       }),
-      M.orElse(() => Result.failVoid),
+      Match.orElse(() => Result.failVoid),
     ),
   )
 
@@ -496,7 +450,7 @@ describe('heading id overrides', () => {
   const overrideUsages = Array.filterMap(
     Object.entries(markdownSources),
     ([markdownPath, source]) =>
-      Array.match(explicitHeadingIds(String(source)), {
+      Array.match(explicitHeadingIds(globalThis.String(source)), {
         onEmpty: () => Result.failVoid,
         onNonEmpty: overrides => Result.succeed({ markdownPath, overrides }),
       }),
@@ -527,7 +481,10 @@ describe('demo section labels', () => {
   const labelUsages = Array.filterMap(
     Object.entries(markdownSources),
     ([markdownPath, source]) => {
-      const names = capturedNames(String(source), DEMO_ISLAND_PATTERN)
+      const names = capturedNames(
+        globalThis.String(source),
+        DEMO_ISLAND_PATTERN,
+      )
 
       return Array.match(names, {
         onEmpty: () => Result.failVoid,
@@ -544,7 +501,7 @@ describe('demo section labels', () => {
   test.each(labelUsages)(
     '$markdownPath labels every demo with the heading above it',
     ({ markdownPath, names, source }) => {
-      const document = parseMarkdown(String(source), markdownOptions)
+      const document = parseMarkdown(globalThis.String(source), markdownOptions)
       const demoLabels = collectDemoLabels(
         document,
         collectHeadings(document).idByHeading,

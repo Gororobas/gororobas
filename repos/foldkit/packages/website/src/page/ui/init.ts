@@ -1,5 +1,5 @@
-import { Option } from 'effect'
-import { Calendar, Command } from 'foldkit'
+import { Array, Option } from 'effect'
+import { Calendar, type Update } from 'foldkit'
 
 import {
   Animation,
@@ -8,6 +8,7 @@ import {
   Dialog,
   DragAndDrop,
   FileDrop,
+  HoverIntent,
   Listbox,
   Menu,
   Popover,
@@ -19,14 +20,37 @@ import {
   VirtualList,
 } from '@foldkit/ui'
 
+import { Toast } from './demo/toastModule'
 import type { Message } from './message'
-import type { Model } from './model'
-import { Toast } from './toastModule'
+import {
+  type Model,
+  type VirtualListChatMessage,
+  VirtualListChatStartProximity,
+} from './model'
 
-export type InitReturn = [Model, ReadonlyArray<Command.Command<Message>>]
+export type InitReturn = Update.Return<Model, Message>
 
-export const init = (today: Calendar.CalendarDate): InitReturn => [
-  {
+const chatBodies = [
+  'Can you review the latest build?',
+  'Yep — the navigation fix looks good.',
+  'I also checked the keyboard flow and the focus order is stable.',
+  'Perfect. I’ll queue the release once CI finishes.',
+]
+
+const INITIAL_VIRTUAL_LIST_CHAT_MESSAGE_COUNT = 24
+
+const initialVirtualListChatMessages: ReadonlyArray<VirtualListChatMessage> =
+  Array.makeBy(INITIAL_VIRTUAL_LIST_CHAT_MESSAGE_COUNT, index => ({
+    id: index,
+    body: Option.getOrElse(
+      Array.get(chatBodies, index % chatBodies.length),
+      () => 'Message',
+    ),
+    isExpanded: index % 7 === 0,
+  }))
+
+export const init = (today: Calendar.CalendarDate): InitReturn => ({
+  model: {
     buttonClickCount: 0,
     inputDemoValue: '',
     textareaDemoValue: '',
@@ -83,6 +107,7 @@ export const init = (today: Calendar.CalendarDate): InitReturn => [
     }),
     nestedDialogChildDemo: Dialog.init({ id: 'nested-dialog-child-demo' }),
     isDisclosureDemoOpen: false,
+    isDisclosureCollapsedPreviewDemoOpen: false,
     listboxDemo: Listbox.init({ id: 'listbox-demo' }),
     maybeListboxDemoSelectedItem: Option.none(),
     listboxMultiDemo: Listbox.Multi.init({
@@ -103,6 +128,7 @@ export const init = (today: Calendar.CalendarDate): InitReturn => [
       id: 'popover-animated-demo',
       isAnimated: true,
     }),
+    popoverArrowDemo: Popover.init({ id: 'popover-arrow-demo' }),
     popoverNestedParentDemo: Popover.init({
       id: 'popover-nested-parent-demo',
       contentFocus: true,
@@ -143,11 +169,17 @@ export const init = (today: Calendar.CalendarDate): InitReturn => [
     dragAndDropDemo: DragAndDrop.init({
       id: 'drag-and-drop-demo',
     }),
+    dragAndDropDemoAnnouncement: '',
     fileDropBasicDemo: FileDrop.init({ id: 'file-drop-basic-demo' }),
     fileDropBasicDemoFiles: [],
-    toastDemo: Toast.init({ id: 'toast-demo' }),
+    toastDemo: Toast.init({
+      id: 'toast-demo',
+      swipeToDismiss: {},
+    }),
     maybeLastDismissedToastTitle: Option.none(),
     tooltipDemo: Tooltip.init({ id: 'tooltip-demo' }),
+    hoverIntentCardDemo: HoverIntent.init(),
+    hoverIntentMenuDemo: HoverIntent.init(),
     animationDemo: Animation.init({ id: 'animation-demo' }),
     virtualListDemo: VirtualList.init({
       id: 'virtual-list-demo',
@@ -157,6 +189,15 @@ export const init = (today: Calendar.CalendarDate): InitReturn => [
       id: 'virtual-list-variable-demo',
       rowHeightPx: 56,
     }),
+    virtualListChatDemo: VirtualList.init({
+      id: 'virtual-list-chat-demo',
+      rowHeightPx: 64,
+      initialScroll: { target: VirtualList.ScrollTarget.End() },
+      followEnd: { thresholdPx: 8 },
+    }),
+    virtualListChatMessages: initialVirtualListChatMessages,
+    virtualListChatNextId: initialVirtualListChatMessages.length,
+    virtualListChatStartProximity: VirtualListChatStartProximity.Away(),
     dragAndDropDemoColumns: [
       {
         id: 'backlog',
@@ -177,5 +218,4 @@ export const init = (today: Calendar.CalendarDate): InitReturn => [
       },
     ],
   },
-  [],
-]
+})

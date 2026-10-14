@@ -4,7 +4,7 @@ export const sectionLabel = (label: string): Html =>
   ih.p(
     [
       ih.Class(
-        'text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2',
+        'text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-2',
       ),
     ],
     [label],
@@ -15,14 +15,14 @@ export const modelStateField = (name: string, value: string): Html =>
     [],
     [
       ih.span([ih.Class('text-accent-700 dark:text-accent-400')], [name]),
-      ih.span([ih.Class('text-gray-400 dark:text-gray-500')], [': ']),
+      ih.span([ih.Class('text-gray-500 dark:text-gray-500')], [': ']),
       ih.span([ih.Class('text-amber-800 dark:text-amber-300')], [value]),
     ],
   )
 
-export const modelStateView = (fields: ReadonlyArray<Html>): Html =>
+export const modelState = (fields: ReadonlyArray<Html>): Html =>
   ih.div(
-    [ih.Class('pt-3 border-t border-gray-300 dark:border-gray-800')],
+    [ih.Class('pt-3 border-t border-gray-200 dark:border-gray-800')],
     [
       sectionLabel('Model State'),
       ih.div(
@@ -43,7 +43,7 @@ const messageLogEntryView = (entry: string, index: number): Html =>
     [ih.span([], [entry])],
   )
 
-export const eventLogView = (messageLog: ReadonlyArray<string>): Html =>
+export const eventLog = (messageLog: ReadonlyArray<string>): Html =>
   ih.div(
     [ih.Class('flex-1 flex flex-col min-h-0')],
     [
@@ -59,7 +59,7 @@ export const eventLogView = (messageLog: ReadonlyArray<string>): Html =>
     ],
   )
 
-export const phaseIndicatorView = (
+export const phaseIndicator = (
   label: string,
   colorClass: string,
   extraChildren: ReadonlyArray<Html>,
@@ -83,7 +83,7 @@ export const phaseIndicatorView = (
     ],
   )
 
-export const codePanelView = (
+export const codePanel = (
   panelClassName: string,
   dataAttributeName: string,
   phase: string,
@@ -93,7 +93,7 @@ export const codePanelView = (
     [
       ih.Class(
         panelClassName +
-          ' rounded-xl order-last lg:order-none bg-gray-100 dark:bg-[#1c1a20] min-w-0',
+          ' code-surface rounded-xl order-last lg:order-none min-w-0',
       ),
       ih.DataAttribute(dataAttributeName, phase),
     ],
@@ -105,7 +105,7 @@ export const codePanelView = (
     ],
   )
 
-export const demoViewShell = (codePanel: Html, appPanel: Html): Html =>
+export const shell = (codePanel: Html, appPanel: Html): Html =>
   ih.div(
     [
       ih.Class(
@@ -116,7 +116,7 @@ export const demoViewShell = (codePanel: Html, appPanel: Html): Html =>
       ih.p(
         [
           ih.Class(
-            'text-sm text-gray-500 dark:text-gray-500 text-center text-balance lg:hidden',
+            'text-sm text-gray-600 dark:text-gray-500 text-center text-balance lg:hidden',
           ),
           ih.AriaHidden(true),
         ],

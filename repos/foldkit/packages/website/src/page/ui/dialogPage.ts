@@ -1,10 +1,10 @@
 import { Submodel } from 'foldkit'
 import type { Html } from 'foldkit/html'
 
+import { type CodeBlock } from '../../component'
 import { slotDocPage } from '../../markdown'
 import { type RenderHeadingLink, demoContainer } from '../../prose'
-import type { RenderCopyButton } from '../../view/codeBlock'
-import * as Dialog from './dialog'
+import * as Dialog from './demo/dialog'
 import raw from './dialogPage.md'
 import type { Message } from './message'
 import type { Model } from './model'
@@ -16,15 +16,16 @@ const { tableOfContents, view: renderPage } = slotDocPage<
 export { tableOfContents }
 
 type ViewInputs = Readonly<{
-  renderCopyButton: RenderCopyButton
+  renderCopyButton: CodeBlock.RenderCopyButton
+  renderSnippet: CodeBlock.RenderSnippet
   renderHeadingLink: RenderHeadingLink
 }>
 
 export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, { renderCopyButton, renderHeadingLink }, h): Html =>
+  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h): Html =>
     renderPage({
       demos: {
-        dialog: demoContainer(...Dialog.dialogDemo(model.dialogDemo, h)),
+        dialog: demoContainer(...Dialog.view(model.dialogDemo, h)),
         animated: demoContainer(
           ...Dialog.dialogAnimatedDemo(model.dialogAnimatedDemo, h),
         ),
@@ -45,6 +46,7 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>(
         ),
       },
       renderCopyButton,
+      renderSnippet,
       renderHeadingLink,
     }),
 )

@@ -1,77 +1,125 @@
 # DevTools MCP Server
 
-## Overview
+## Runtime Access for Agents
 
-Foldkit ships `@foldkit/devtools-mcp`, an MCP server that exposes a running Foldkit app to AI agents. Agents can read the current Model, list and inspect Message history, rewind the UI to any past Model, and dispatch Messages into the runtime.
+`@foldkit/devtools-mcp` gives an AI agent typed access to a running Foldkit application. The agent can inspect Models and Message history, compare past states, replay the UI, and dispatch Messages that pass the application's Message Schema.
 
-It complements [agent skills](/ai/overview). Skills generate code; the MCP server lets agents observe and interact with code that’s already running.
+The server complements [Foldkit skills](/ai/skills) and the vendored source. Those references explain how the code should be structured. The MCP server shows what the code is doing now.
 
-The MCP server pairs with [DevTools](/core/devtools). DevTools shows Message history and Model snapshots in a panel for humans; the MCP server exposes the same data and controls to AI agents.
+The same Runtime data also powers [DevTools](/core/devtools). DevTools presents it in a panel for people, while the MCP server exposes it as tools for agents.
+
+## Sensitive Runtime Data
+
+Treat DevTools MCP as privileged access to the running application. A connected agent can read the current, initial, and retained historical Models; every retained Message payload; and the arguments passed to recorded Commands and Mounts. Anything returned by one of those tools enters the agent's context.
+
+### Keep Credentials Out of Runtime Data
+
+Keep API keys, passwords, access and refresh tokens, authorization headers, session material, and private personal data out of the Runtime data DevTools MCP can inspect. A credential used by browser code is already available to someone controlling that browser, so long-lived secrets belong behind a server boundary even when DevTools MCP is disabled. This includes local demos: use fake, scoped, or disposable credentials instead of a production secret.
+
+### Redaction and History Controls
+
+When the browser must temporarily carry a sensitive value, represent it with Effect's `Redacted` type. Use a `Schema.Redacted` field with `disallowJsonEncode: true`, construct its value with `Redacted.make`, and recover it only where the application must use it. `Redacted` prevents normal string, JSON, and inspection output from revealing the value. It does not encrypt the value or make a browser-side credential secret from the person running the browser.
+
+`excludeFromHistory` is not a redaction control. It removes the named Message from history, but the resulting Model remains available through current and historical Model inspection. Omitting `DevToolsConfig.Message` disables agent dispatch only; every inspection and replay tool remains available.
+
+### Disable MCP Connections
+
+To keep the in-browser DevTools while preventing MCP connections, set `devToolsMcpPort: false` in the Foldkit Vite plugin options. Set `devTools: false` in the application config to disable DevTools recording and its browser bridge too.
 
 ## Setup
 
-Projects scaffolded with [create-foldkit-app](/get-started/getting-started) already ship with the MCP server pre-wired. Open the project in your AI agent and the tools appear under the `foldkit-devtools` server. Skip the rest of this section.
+### Projects Created with create-foldkit-app
 
-For existing projects, run the init command in your project root. It writes a `.mcp.json` that any MCP-aware AI agent (Claude Code, Codex, Cursor, Windsurf) will pick up:
+New projects already include `@foldkit/devtools-mcp` and a `.mcp.json` entry named `foldkit-devtools`. Start the development server, open the application in a browser tab, and open the project in your AI agent.
 
-```sh
-npx @foldkit/devtools-mcp init
-```
+### Existing Projects
 
-For faster startup, install the MCP server as a devDependency. Otherwise `npx` fetches it on each AI agent restart:
+#### Initialize the Project
 
-```sh
-npm install -D @foldkit/devtools-mcp
-```
+Run the init command in the project root:
 
-In `vite.config.ts`, pass `devToolsMcpPort` to the Foldkit plugin so it opens the WebSocket relay:
+::Snippet{name="aiMcpInit" label="Initialize the DevTools MCP server"}
 
-::Snippet{name="aiMcpViteConfig" label="Vite config snippet"}
+The command creates `.mcp.json`, or updates only the `foldkit-devtools` entry when the file already exists. Other configured MCP servers remain unchanged.
 
-In your `Runtime.makeApplication` call, pass your `Message` Schema. The runtime decodes every dispatched Message against it before reaching your update function:
+#### Install the Server Locally
 
-::Snippet{name="aiMcpApplicationConfig" label="application config snippet"}
+Install the server as a development dependency when you want to avoid an `npx` lookup each time the agent starts:
 
-Restart your dev server, then restart your AI agent. The `foldkit_*` tools are now available under the `foldkit-devtools` server.
+::Snippet{name="aiMcpInstall" label="Install the DevTools MCP server"}
 
-The browser bridge runs inside your app, so the MCP server only sees a runtime while the app is open in a browser tab. Close the tab and the runtime disappears from `foldkit_list_runtimes`.
+No Vite config change is needed. The Foldkit plugin serves the relay at `/__foldkit/devtools-mcp` on the dev server, and the MCP server finds it by project.
+
+#### Configure a Fixed Port
+
+If automatic discovery is unavailable, set a fixed `devToolsMcpPort` in `vite.config.ts` and give the MCP server the same value in `FOLDKIT_DEVTOOLS_MCP_PORT`. This is required on Windows:
+
+::Snippet{name="aiMcpViteConfig" label="Vite configuration for a fixed port"}
+
+#### Enable Message Dispatch
+
+To let an agent dispatch Messages, pass the application's `Message` Schema to `Runtime.makeApplication`:
+
+::Snippet{name="aiMcpApplicationConfig" label="Application configuration"}
+
+Inspection and replay tools work without the Schema. Dispatch tools reject every request until it is configured.
+
+#### Connect the Agent and Browser
+
+Restart the AI agent so it reads `.mcp.json`. The tools appear under the `foldkit-devtools` server.
+
+The application must be open in a browser tab. Its browser bridge connects the running Foldkit Runtime to the Vite relay. Closing the tab removes that Runtime from `foldkit_list_runtimes`.
 
 ## Tools
 
-Each tool accepts an optional `runtime_id`. When omitted, the most recently connected runtime is used.
+Every tool except `foldkit_list_runtimes` accepts an optional `runtime_id`. Without one, the tool targets the most recently connected Runtime.
 
-| Tool                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `foldkit_list_runtimes`         | Returns metadata for every connected browser tab. Agents call this first to discover which runtime to target.                                                                                                                                                                                                                                                                                                                                    |
-| `foldkit_get_model`             | Snapshots the current Model. Accepts an optional `path` to narrow to a subtree and `expand` to control summarization.                                                                                                                                                                                                                                                                                                                            |
-| `foldkit_get_model_at`          | Snapshots a historical Model after a given history entry. Pass `index: N - 1` to read the Model before message `N`. Same `path`/`expand` semantics as `foldkit_get_model`. Indices outside the readable range are rejected with the valid bounds. For the initial Model, use `foldkit_get_init`.                                                                                                                                                 |
-| `foldkit_get_init`              | Reads the recorded initial Model and the names of Commands returned from the application's `init` function. Equivalent to selecting the synthetic `init` row in the DevTools panel.                                                                                                                                                                                                                                                              |
-| `foldkit_get_runtime_state`     | Snapshots the runtime's DevTools state: history bounds, current paused/live status, and whether init is recorded. Useful for understanding what `foldkit_list_messages` and `foldkit_get_message` will see.                                                                                                                                                                                                                                      |
-| `foldkit_list_messages`         | Lists Message history entries. Each entry carries the Message body, Command names triggered, timestamp, an `isModelChanged` flag, the diff path lists, and any extracted Submodel chain. Filter server-side with `changed_paths_match` (dot-string patterns against each entry’s changed Model paths, `*` matches one segment), read the latest entries with `from_end`, and paginate forward with `since_index`.                                |
-| `foldkit_count_messages_by_tag` | Counts retained history entries by Message tag, without payloads, sorted by count descending. A cheap reconnaissance call before paging through history: it surfaces the high-frequency Messages worth filtering out, and with `changed_paths_match` it answers which Message tags touch a Model subtree.                                                                                                                                        |
-| `foldkit_diff_models`           | Diffs the Models at two history indices server-side, returning path-level changes with summarized before and after values. Each side is `Present` with the value, or `Absent` when the path does not exist on that side. Pass `changed_paths_match` to narrow the diff to a subtree.                                                                                                                                                             |
-| `foldkit_get_message`           | Reads one entry at a given index. To inspect the Model around the entry, call `foldkit_get_model_at` with `index - 1` (before) and `index` (after). Use `foldkit_get_init` for the synthetic init entry at index `-1`.                                                                                                                                                                                                                           |
-| `foldkit_list_keyframes`        | Returns the indices Foldkit can replay back to. Index `-1` is the initial Model.                                                                                                                                                                                                                                                                                                                                                                 |
-| `foldkit_replay_to_keyframe`    | Time-travels the runtime to a previous state. The runtime is paused at that snapshot until `foldkit_resume` is called.                                                                                                                                                                                                                                                                                                                           |
-| `foldkit_resume`                | Resumes normal execution after a replay.                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `foldkit_get_message_schema`    | Describes the runtime's Message Schema so agents can construct valid Messages without reading the application source. With no arguments, returns a small variant index. With `variant_tag` set to a dot-separated path of variant tags (e.g. `GotChildMessage.Opened`), narrows the JSON Schema along the chain and collapses deeper unions to summary placeholders. Returns `None` when the runtime hasn't configured `DevToolsConfig.Message`. |
-| `foldkit_dispatch_message`      | Dispatches a Message into the runtime as if your application produced it. The runtime decodes the payload against your Schema and returns a clean error if it does not match.                                                                                                                                                                                                                                                                    |
-| `foldkit_dispatch_messages`     | Dispatches an ordered batch of 1 to 100 Messages in one call, first to last. The runtime validates every payload before dispatching any of them, so one invalid entry rejects the whole batch with its zero-based position and nothing is dispatched. Successful responses report the predicted history index for each Message.                                                                                                                  |
+| Tool                            | Description                                                                                                                                                                                                                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `foldkit_list_runtimes`         | Lists every connected browser tab and the metadata needed to select a Runtime.                                                                                                                                                                                                  |
+| `foldkit_get_model`             | Reads the current Model. Use `path` to select a subtree and `expand` to control summarization.                                                                                                                                                                                  |
+| `foldkit_get_model_at`          | Reads the Model after a retained history entry. Use `index: N - 1` for the Model before Message `N`, and `foldkit_get_init` for the initial Model.                                                                                                                              |
+| `foldkit_get_init`              | Reads the initial Model, the Commands returned by init, and the Mounts that started during the first render.                                                                                                                                                                    |
+| `foldkit_get_runtime_state`     | Reports retained history bounds, the current index, pause state, and whether init has been recorded.                                                                                                                                                                            |
+| `foldkit_list_messages`         | Lists retained Messages with Command and Mount activity, timestamps, changed Model paths, and Submodel chains. Supports forward pagination, tail reads, and filtering with `changed_paths_match`.                                                                               |
+| `foldkit_count_messages_by_tag` | Counts retained Messages by tag. It accepts the same `since_index` and `changed_paths_match` filters as `foldkit_list_messages`.                                                                                                                                                |
+| `foldkit_diff_models`           | Diffs two historical Models by path. Each side records whether the value is present or absent, and `changed_paths_match` can narrow the result.                                                                                                                                 |
+| `foldkit_get_message`           | Reads one history entry, including its Message, Commands, Mount starts and ends, changed paths, and Submodel chain. Use `foldkit_get_model_at` to inspect the Model before and after it.                                                                                        |
+| `foldkit_list_keyframes`        | Lists the retained states that can be replayed. Index `-1` is the initial Model.                                                                                                                                                                                                |
+| `foldkit_replay_to_keyframe`    | Replays the application to a retained state and pauses normal execution there.                                                                                                                                                                                                  |
+| `foldkit_resume`                | Returns a replayed Runtime to live execution.                                                                                                                                                                                                                                   |
+| `foldkit_get_message_schema`    | Describes the Message Schema as JSON Schema. Call it without arguments for a variant index, then pass a dot-separated `variant_tag` to inspect one variant or Submodel chain.                                                                                                   |
+| `foldkit_dispatch_message`      | Dispatches one Message after decoding it against the configured Message Schema.                                                                                                                                                                                                 |
+| `foldkit_dispatch_messages`     | Validates and dispatches an ordered batch of 1 to 100 Messages. Validation is all-or-nothing, so one invalid payload rejects the batch before any Message is dispatched. The response returns predicted history indices, but other Messages can land between the batch entries. |
 
-## How It Works
+## Connection Flow
 
-The browser bridge runs alongside DevTools in your app and subscribes to the DevTools store. The Vite plugin opens a WebSocket server on `devToolsMcpPort` and relays traffic between browsers and MCP clients. The MCP server runs as a Node child process spawned by your AI agent, connects to the relay, and exposes the typed tools.
+The browser bridge runs alongside DevTools and subscribes to the DevTools store. The Vite plugin relays requests between browser tabs and MCP clients through a WebSocket endpoint on the dev server. The MCP server runs under your AI agent and finds the relay for the project it runs in. `FOLDKIT_PROJECT_ROOT` selects another project.
 
-Multiple browser tabs can be connected at once and each is addressable by its connection id. When a tab closes (gracefully or not) the plugin prunes it from the live runtime list, so the agent’s default to most recently connected always points at a live tab.
+### Relay Discovery and Access
 
-Messages flow as Effect Schema values end to end. Foldkit defines the wire protocol and every layer validates at its boundary. To dispatch, agents call `foldkit_get_message_schema` to discover the runtime’s `Message` Schema (variant index first, then a dot-path through the Submodel chain for one variant’s payload shape), construct the matching payload, and pass it to `foldkit_dispatch_message`; the runtime decodes it and returns a clean error if the shape does not match. To stage state that takes several Messages, `foldkit_dispatch_messages` dispatches an ordered batch in one call, validating the whole batch before dispatching any of it.
+The plugin publishes the relay's address to a registry private to your user. The address includes a random token that every client must present before inspecting a Model or dispatching a Message. The plugin refuses to publish into a directory owned by another user or readable by other users. The registry lives under `XDG_RUNTIME_DIR` when set, or under the operating system's temporary directory. `FOLDKIT_DEVTOOLS_RELAY_DIRECTORY` selects another directory.
 
-When the dev server restarts, the MCP server’s WebSocket client reconnects automatically with exponential backoff. No agent restart required.
+The token keeps an unapproved relay client from connecting. It does not hide runtime data from the agent that was given the MCP server.
 
-## Notes
+### Fixed-Port Connections on Windows
 
-The MCP bridge shares its lifecycle with DevTools. The default enables both in dev. Setting `devTools: false` in your program config disables the bridge along with DevTools. The runtime becomes invisible to MCP.
+On Windows, the plugin cannot verify registry directory ownership, so it cannot publish an address. Set `devToolsMcpPort` in the Vite config and pass the same port in `FOLDKIT_DEVTOOLS_MCP_PORT`. This opens a separate socket on every interface without a token. Do not use a fixed port on a shared or untrusted network. `FOLDKIT_DEVTOOLS_MCP_PORT` also skips discovery on other platforms.
 
-Without `Message` in your DevToolsConfig, dispatch is rejected. The other tools (read-only) work without it.
+### Reconnection and Runtime Selection
 
-The relay only runs at dev time. Production builds never include the relay or the bridge, regardless of any `show` setting.
+When several relays match the project, the MCP server chooses the most recently started one. If the dev server restarts, the MCP server looks it up again and reconnects with exponential backoff. The agent can also start before the dev server.
+
+More than one browser tab can connect at once. `foldkit_list_runtimes` returns each connection ID, and `runtime_id` selects one explicitly. When a tab closes, the relay removes it from the live Runtime list.
+
+### Message Decoding
+
+Messages stay as Effect Schema values across the connection. Before dispatching, an agent can call `foldkit_get_message_schema` for the top-level variants and then inspect the payload shape of the variant it needs. The Runtime decodes the constructed value before it reaches update. A batch is fully decoded before its first Message is dispatched.
+
+## Development and Production
+
+The MCP bridge follows the DevTools lifecycle. DevTools and the bridge are enabled by default during development. Setting `devTools: false` disables both, so no Runtime is visible to MCP.
+
+The Message Schema controls dispatch only. Without it, inspection and replay tools remain available.
+
+The relay and browser bridge run only in development. Production builds omit both, including builds that configure the DevTools panel with `show: 'Always'`.

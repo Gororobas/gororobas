@@ -1,7 +1,7 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, Message, update,
 // and view definitions.
-import { Match as M } from 'effect'
+import { Match } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
 
 import { Nav } from '@foldkit/ui'
@@ -9,7 +9,7 @@ import { Nav } from '@foldkit/ui'
 // Nav is stateless: the current destination comes from the URL, so there is
 // no Nav.Model to store and no Nav.update to delegate to. Your app already
 // holds the active route in its Model:
-const Model = S.Struct({
+const Model = Schema.Struct({
   route: AppRoute,
   // ...your other fields
 })
@@ -29,12 +29,12 @@ const sections: ReadonlyArray<Section> = [
 // current from the active route. A section can own a whole family of routes,
 // so this is a predicate rather than an equality check:
 const sectionToHref = (section: Section): string =>
-  M.value(section).pipe(
-    M.when('Home', () => homeRouter()),
-    M.when('Search', () => searchRouter()),
-    M.when('Library', () => libraryRouter()),
-    M.when('Profile', () => profileRouter()),
-    M.exhaustive,
+  Match.value(section).pipe(
+    Match.when('Home', () => homeRouter()),
+    Match.when('Search', () => searchRouter()),
+    Match.when('Library', () => libraryRouter()),
+    Match.when('Profile', () => profileRouter()),
+    Match.exhaustive,
   )
 
 const isSectionCurrent =
@@ -47,25 +47,28 @@ const isSectionCurrent =
 // carries aria-current="page" and a data-current attribute for styling.
 // Browser-native Tab and Enter handle keyboard navigation; Foldkit's runtime
 // turns the link clicks into route changes:
-const view = (model: Model, h: HtmlBuilder<Message>) =>
-  Nav.view<Section>({
+const view = (model: Model, h: HtmlBuilder<Message>) => {
+  const navView = ({ nav, items }: Nav.RenderInfo<Section>) =>
+    h.nav(
+      [...nav, h.Class('flex gap-2')],
+      items.map(item =>
+        h.a(
+          [
+            ...item.link,
+            h.Class(
+              'px-4 py-2 rounded-lg text-gray-500 data-[current]:bg-gray-100 data-[current]:text-gray-900',
+            ),
+          ],
+          [h.span([], [item.value])],
+        ),
+      ),
+    )
+
+  return Nav.view<Section>({
     items: sections,
     ariaLabel: 'Primary',
     toHref: sectionToHref,
     isItemCurrent: isSectionCurrent(model.route),
-    toView: ({ nav, items }) =>
-      h.nav(
-        [...nav, h.Class('flex gap-2')],
-        items.map(item =>
-          h.a(
-            [
-              ...item.link,
-              h.Class(
-                'px-4 py-2 rounded-lg text-gray-500 data-[current]:bg-gray-100 data-[current]:text-gray-900',
-              ),
-            ],
-            [h.span([], [item.value])],
-          ),
-        ),
-      ),
+    toView: navView,
   })
+}

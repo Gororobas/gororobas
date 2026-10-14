@@ -1,22 +1,17 @@
-import { Match as M, Option, Schema as S } from 'effect'
-import * as Command from 'foldkit/command'
+import { Option } from 'effect'
 import type { HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
+import { defineMessageUnion } from 'foldkit/message'
 import * as Scene from 'foldkit/scene'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 import * as Update from 'foldkit/update'
 
 import { describe, it } from '@effect/vitest'
 
-import type {
-  Model as RadioGroupModel,
-  OutMessage as RadioGroupOutMessage,
-  ViewInputs,
-} from './index.js'
+import type { Model as RadioGroupModel, ViewInputs } from './index.js'
 import {
-  CompletedFocusOption,
   FocusOption,
   Message as RadioGroupMessage,
+  OutMessage as RadioGroupOutMessage,
   create,
   init,
 } from './index.js'
@@ -26,11 +21,9 @@ const options: ReadonlyArray<string> = ['Brush', 'Fill', 'Eraser']
 
 const TestRadioGroup = create()
 
-const GotRadioGroupMessage = m('GotRadioGroupMessage', {
-  message: RadioGroupMessage,
+const Message = defineMessageUnion({
+  GotRadioGroupMessage: { message: RadioGroupMessage },
 })
-
-const Message = S.Union([GotRadioGroupMessage])
 type Message = typeof Message.Type
 
 type Model = Readonly<{
@@ -45,36 +38,31 @@ const modelWith = (maybeSelectedValue: Option.Option<string>): Model => ({
 
 const nothingSelected = modelWith(Option.none())
 
-type UpdateReturn = readonly [Model, ReadonlyArray<Command.Command<Message>>]
-
-const foldRadioGroupOutMessage = M.type<RadioGroupOutMessage>().pipe(
-  M.withReturnType<Update.Step<Model, Message>>(),
-  M.tagsExhaustive({
-    Selected:
-      ({ value }) =>
-      model => [
-        evo(model, { maybeSelectedValue: () => Option.some(value) }),
-        [],
-      ],
-  }),
-)
+const foldRadioGroupOutMessage = RadioGroupOutMessage.match<
+  Update.Step<Model, Message>
+>({
+  Selected:
+    ({ value }) =>
+    model => ({
+      model: modifyFields(model, {
+        maybeSelectedValue: () => Option.some(value),
+      }),
+    }),
+})
 
 const foldRadioGroup = Update.foldChild({
   update: TestRadioGroup.update,
   read: (model: Model) => Option.some(model.radioGroup),
   write: (model, nextRadioGroup) =>
-    evo(model, { radioGroup: () => nextRadioGroup }),
-  toParentMessage: message => GotRadioGroupMessage({ message }),
+    modifyFields(model, { radioGroup: () => nextRadioGroup }),
+  toParentMessage: message => Message.GotRadioGroupMessage({ message }),
   foldOutMessage: foldRadioGroupOutMessage,
 })
 
-const update = (model: Model, message: Message): UpdateReturn =>
-  M.value(message).pipe(
-    M.withReturnType<UpdateReturn>(),
-    M.tagsExhaustive({
-      GotRadioGroupMessage: ({ message }) => foldRadioGroup(model, message),
-    }),
-  )
+const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message>>(message, {
+    GotRadioGroupMessage: ({ message }) => foldRadioGroup(model, message),
+  })
 
 type Overrides = Omit<
   Partial<ViewInputs>,
@@ -97,25 +85,54 @@ const testView =
           h.div(
             [...group],
             optionInfos.map(option =>
-              h.div(
+              h.button(
                 [...option.option],
                 [h.span([...option.label], [option.value])],
               ),
             ),
           ),
       },
-      toParentMessage: message => GotRadioGroupMessage({ message }),
+      toParentMessage: message => Message.GotRadioGroupMessage({ message }),
     })
 
 const resolveFocusOption = Scene.Command.resolve(
   FocusOption,
-  CompletedFocusOption(),
+  RadioGroupMessage.CompletedFocusOption(),
 )
 
 const group = Scene.role('radiogroup')
 const option = (index: number) => Scene.selector(`#${RADIO_ID}-option-${index}`)
 
 describe('RadioGroup', () => {
+  describe('descriptions', () => {
+    it('omits aria-describedby by default', () => {
+      Scene.scene(
+        { update, view: testView() },
+        Scene.given(nothingSelected),
+        Scene.expect(option(0)).not.toHaveAttr('aria-describedby'),
+        Scene.expect(option(1)).not.toHaveAttr('aria-describedby'),
+      )
+    })
+
+    it('references descriptions only for matching options', () => {
+      Scene.scene(
+        {
+          update,
+          view: testView({
+            hasOptionDescription: (_value, index) => index === 1,
+          }),
+        },
+        Scene.given(nothingSelected),
+        Scene.expect(option(0)).not.toHaveAttr('aria-describedby'),
+        Scene.expect(option(1)).toHaveAttr(
+          'aria-describedby',
+          `${RADIO_ID}-option-1-description`,
+        ),
+        Scene.expect(option(2)).not.toHaveAttr('aria-describedby'),
+      )
+    })
+  })
+
   describe('selection', () => {
     it('gives the first option a roving tabindex when nothing is selected', () => {
       Scene.scene(

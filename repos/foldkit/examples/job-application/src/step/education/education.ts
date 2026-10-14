@@ -1,8 +1,8 @@
-import { Array, Crypto, Effect, Match as M, Schema as S } from 'effect'
+import { Array, Crypto, Effect, Schema } from 'effect'
 import { Calendar, Command, Update } from 'foldkit'
 import { type CalendarDate } from 'foldkit/calendar'
-import { m } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
+import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
 
 import { BrowserCrypto } from '@effect/platform-browser'
 
@@ -10,32 +10,25 @@ import * as Entry from './entry'
 
 // MODEL
 
-export const Model = S.Struct({
-  entries: S.Array(Entry.Model),
+export const Model = Schema.Struct({
+  entries: Schema.Array(Entry.Model),
   today: Calendar.CalendarDate,
 })
 export type Model = typeof Model.Type
 
 // MESSAGE
 
-export const ClickedAddEntry = m('ClickedAddEntry')
-export const SucceededGenerateEntryId = m('SucceededGenerateEntryId', {
-  entryId: S.String,
-})
-export const FailedGenerateEntryId = m('FailedGenerateEntryId')
-export const RemovedEntry = m('RemovedEntry', { entryId: S.String })
-export const GotEntryMessage = m('GotEntryMessage', {
-  entryId: S.String,
-  message: Entry.Message,
+export const Message = defineMessageUnion({
+  ClickedAddEntry: {},
+  SucceededGenerateEntryId: { entryId: Schema.String },
+  FailedGenerateEntryId: {},
+  RemovedEntry: { entryId: Schema.String },
+  GotEntryMessage: {
+    entryId: Schema.String,
+    message: Entry.Message,
+  },
 })
 
-export const Message = S.Union([
-  ClickedAddEntry,
-  SucceededGenerateEntryId,
-  FailedGenerateEntryId,
-  RemovedEntry,
-  GotEntryMessage,
-])
 export type Message = typeof Message.Type
 
 // INIT
@@ -48,75 +41,62 @@ export const init = (today: CalendarDate, initialEntryId: string): Model => ({
 // COMMAND
 
 export const GenerateEntryId = Command.define('GenerateEntryId', {
-  messages: [SucceededGenerateEntryId, FailedGenerateEntryId],
+  messages: [Message.SucceededGenerateEntryId, Message.FailedGenerateEntryId],
   execute: Effect.gen(function* () {
     const crypto = yield* Crypto.Crypto
     const entryId = yield* crypto.randomUUIDv4
-    return SucceededGenerateEntryId({ entryId })
+    return Message.SucceededGenerateEntryId({ entryId })
   }).pipe(
     Effect.provide(BrowserCrypto.layer),
-    Effect.catch(() => Effect.succeed(FailedGenerateEntryId())),
+    Effect.catch(() => Effect.succeed(Message.FailedGenerateEntryId())),
   ),
 })
 
 // UPDATE
 
-type UpdateReturn = readonly [Model, ReadonlyArray<Command.Command<Message>>]
-
-const foldEntryOutMessage: (
-  entryId: string,
-) => (outMessage: Entry.OutMessage) => Update.Step<Model, Message> = entryId =>
-  M.type<Entry.OutMessage>().pipe(
-    M.withReturnType<Update.Step<Model, Message>>(),
-    M.tagsExhaustive({
-      Removed: () => model => [
-        evo(model, {
-          entries: Array.filter(entry => entry.id !== entryId),
-        }),
-        [],
-      ],
-    }),
-  )
-
-const foldEntry = (entryId: string) =>
-  Update.foldChild({
-    update: Entry.update,
-    read: (model: Model) =>
-      Array.findFirst(model.entries, entry => entry.id === entryId),
-    write: (model, nextEntry) =>
-      evo(model, {
-        entries: Array.map(entry => (entry.id === entryId ? nextEntry : entry)),
+const foldEntryOutMessage = (entryId: string) =>
+  Entry.OutMessage.match<Update.Step<Model, Message>>({
+    Removed: () => model => ({
+      model: modifyFields(model, {
+        entries: Array.filter(entry => entry.id !== entryId),
       }),
-    toParentMessage: message => GotEntryMessage({ entryId, message }),
-    foldOutMessage: foldEntryOutMessage(entryId),
+    }),
   })
 
-export const update = (model: Model, message: Message): UpdateReturn =>
-  M.value(message).pipe(
-    M.withReturnType<UpdateReturn>(),
-    M.tagsExhaustive({
-      ClickedAddEntry: () => [model, [GenerateEntryId()]],
-
-      SucceededGenerateEntryId: ({ entryId }) => [
-        evo(model, {
-          entries: Array.append(Entry.init(entryId)),
-        }),
-        [],
-      ],
-
-      FailedGenerateEntryId: () => [model, []],
-
-      RemovedEntry: ({ entryId }) => [
-        evo(model, {
-          entries: Array.filter(entry => entry.id !== entryId),
-        }),
-        [],
-      ],
-
-      GotEntryMessage: ({ entryId, message }) =>
-        foldEntry(entryId)(model, message),
+const foldEntry = Update.foldChildAt({
+  update: Entry.update,
+  readAt: (model: Model, entryId: string) =>
+    Array.findFirst(model.entries, entry => entry.id === entryId),
+  writeAt: (model, entryId, nextEntry) =>
+    modifyFields(model, {
+      entries: Array.map(entry => (entry.id === entryId ? nextEntry : entry)),
     }),
-  )
+  toParentMessage: (entryId, message) =>
+    Message.GotEntryMessage({ entryId, message }),
+  foldOutMessage: foldEntryOutMessage,
+})
+
+export const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message>>(message, {
+    ClickedAddEntry: () => ({ model, commands: [GenerateEntryId()] }),
+
+    SucceededGenerateEntryId: ({ entryId }) => ({
+      model: modifyFields(model, {
+        entries: Array.append(Entry.init(entryId)),
+      }),
+    }),
+
+    FailedGenerateEntryId: () => ({ model }),
+
+    RemovedEntry: ({ entryId }) => ({
+      model: modifyFields(model, {
+        entries: Array.filter(entry => entry.id !== entryId),
+      }),
+    }),
+
+    GotEntryMessage: ({ entryId, message }) =>
+      foldEntry(model, entryId, message),
+  })
 
 // VALIDATION SUMMARY
 
@@ -128,4 +108,4 @@ export const isComplete = (model: Model): boolean =>
   Array.every(model.entries, Entry.isComplete)
 
 export const revealErrors = (model: Model): Model =>
-  evo(model, { entries: Array.map(Entry.revealErrors) })
+  modifyFields(model, { entries: Array.map(Entry.revealErrors) })

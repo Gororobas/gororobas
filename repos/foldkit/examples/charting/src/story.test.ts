@@ -1,4 +1,5 @@
 import { Command, given, message, model, story } from 'foldkit/story'
+import { modifyFields } from 'foldkit/struct'
 import { expect, test } from 'vitest'
 
 import { RadioGroup } from '@foldkit/ui'
@@ -10,31 +11,22 @@ import {
   chartModes,
   packageIds,
 } from './domain'
-import { loadingModel, readyModel, sampleTelemetry } from './main.fixtures'
-import {
-  ClickedChartDatum,
-  ClickedRefresh,
-  FailedFetchTelemetry,
-  GotChartModeRadioGroupMessage,
-  GotPackageRadioGroupMessage,
-  SucceededFetchTelemetry,
-  SucceededMountChart,
-  SucceededSyncChart,
-} from './message'
+import { loadingModel, readyModel, sampleTelemetry } from './main.fixture'
+import { Message } from './message'
 import { TelemetryAsyncData } from './model'
 import { update } from './update'
 
 const selectedChartMode = (chartMode: ChartMode) =>
-  GotChartModeRadioGroupMessage({
-    message: RadioGroup.SelectedOption({
+  Message.GotChartModeRadioGroupMessage({
+    message: RadioGroup.Message.SelectedOption({
       index: chartModes.indexOf(chartMode),
       value: chartMode,
     }),
   })
 
 const selectedPackage = (packageId: PackageId) =>
-  GotPackageRadioGroupMessage({
-    message: RadioGroup.SelectedOption({
+  Message.GotPackageRadioGroupMessage({
+    message: RadioGroup.Message.SelectedOption({
       index: packageIds.indexOf(packageId),
       value: packageId,
     }),
@@ -42,16 +34,16 @@ const selectedPackage = (packageId: PackageId) =>
 
 const resolveChartModeFocus = Command.resolve(
   RadioGroup.FocusOption,
-  RadioGroup.CompletedFocusOption(),
+  RadioGroup.Message.CompletedFocusOption(),
 )
 
 test('mounting the chart syncs current telemetry into ECharts', () => {
   story(
     update,
     given(readyModel),
-    message(SucceededMountChart({ hostId: 'chart-host' })),
+    message(Message.SucceededMountChart({ hostId: 'chart-host' })),
     Command.expectHas(SyncChart),
-    Command.resolve(SyncChart, SucceededSyncChart()),
+    Command.resolve(SyncChart, Message.SucceededSyncChart()),
   )
 })
 
@@ -59,8 +51,10 @@ test('selecting a chart mode clears selected datum and syncs the chart', () => {
   story(
     update,
     given(readyModel),
-    message(ClickedChartDatum({ datumId: 'Velocity:Commits:2026-06-15' })),
-    Command.resolve(SyncChart, SucceededSyncChart()),
+    message(
+      Message.ClickedChartDatum({ datumId: 'Velocity:Commits:2026-06-15' }),
+    ),
+    Command.resolve(SyncChart, Message.SucceededSyncChart()),
     message(selectedChartMode('Velocity')),
     resolveChartModeFocus,
     model(model => {
@@ -68,7 +62,7 @@ test('selecting a chart mode clears selected datum and syncs the chart', () => {
       expect(model.maybeSelectedDatumId._tag).toBe('None')
     }),
     Command.expectHas(SyncChart),
-    Command.resolve(SyncChart, SucceededSyncChart()),
+    Command.resolve(SyncChart, Message.SucceededSyncChart()),
   )
 })
 
@@ -82,7 +76,7 @@ test('selecting a package syncs the selected package into the chart', () => {
       expect(model.selectedPackageId).toBe('Ui')
     }),
     Command.expectHas(SyncChart),
-    Command.resolve(SyncChart, SucceededSyncChart()),
+    Command.resolve(SyncChart, Message.SucceededSyncChart()),
   )
 })
 
@@ -90,7 +84,7 @@ test('refreshing with data keeps the old dashboard while fetching', () => {
   story(
     update,
     given(readyModel),
-    message(ClickedRefresh()),
+    message(Message.ClickedRefresh()),
     model(model => {
       expect(model.telemetry._tag).toBe('Refreshing')
       if (model.telemetry._tag === 'Refreshing') {
@@ -100,7 +94,7 @@ test('refreshing with data keeps the old dashboard while fetching', () => {
     Command.expectHas(FetchTelemetry),
     Command.resolve(
       FetchTelemetry,
-      FailedFetchTelemetry({ error: 'Test cleanup' }),
+      Message.FailedFetchTelemetry({ error: 'Test cleanup' }),
     ),
   )
 })
@@ -108,11 +102,13 @@ test('refreshing with data keeps the old dashboard while fetching', () => {
 test('a failed refresh preserves stale data in the stale state', () => {
   story(
     update,
-    given({
-      ...readyModel,
-      telemetry: TelemetryAsyncData.Refreshing({ data: sampleTelemetry }),
-    }),
-    message(FailedFetchTelemetry({ error: 'rate limited' })),
+    given(
+      modifyFields(readyModel, {
+        telemetry: () =>
+          TelemetryAsyncData.Refreshing({ data: sampleTelemetry }),
+      }),
+    ),
+    message(Message.FailedFetchTelemetry({ error: 'rate limited' })),
     model(model => {
       expect(model.telemetry._tag).toBe('Stale')
       if (model.telemetry._tag === 'Stale') {
@@ -127,7 +123,7 @@ test('failed fetch transitions to failure without stale data when loading', () =
   story(
     update,
     given(loadingModel),
-    message(FailedFetchTelemetry({ error: 'offline' })),
+    message(Message.FailedFetchTelemetry({ error: 'offline' })),
     model(model => {
       expect(model.telemetry._tag).toBe('Failure')
       if (model.telemetry._tag === 'Failure') {
@@ -141,11 +137,11 @@ test('successful fetch stores data and syncs when mounted', () => {
   story(
     update,
     given(readyModel),
-    message(SucceededFetchTelemetry({ telemetry: sampleTelemetry })),
+    message(Message.SucceededFetchTelemetry({ telemetry: sampleTelemetry })),
     model(model => {
       expect(model.telemetry._tag).toBe('Success')
     }),
     Command.expectHas(SyncChart),
-    Command.resolve(SyncChart, SucceededSyncChart()),
+    Command.resolve(SyncChart, Message.SucceededSyncChart()),
   )
 })

@@ -3,24 +3,18 @@ import {
   Effect,
   Exit,
   Function,
-  Match,
   Number,
   Option,
+  Redacted,
   Schema,
   Scope,
   SubscriptionRef,
 } from 'effect'
 import { describe, expect, it } from 'vitest'
 
-import { m } from '../message/index.js'
-import { evo } from '../struct/index.js'
-import {
-  EventFrame,
-  MAX_DISPATCH_BATCH_SIZE,
-  type Request,
-  RequestDispatchMessage,
-  RequestDispatchMessages,
-} from './protocol.js'
+import { defineMessageUnion } from '../message/index.js'
+import { modifyFields } from '../struct/index.js'
+import { EventFrame, MAX_DISPATCH_BATCH_SIZE, Request } from './protocol.js'
 import {
   type Bridge,
   type CreateDevToolsStoreOptions,
@@ -37,23 +31,20 @@ type CounterModel = typeof CounterModel.Type
 
 const initialModel = CounterModel.make({ count: 0 })
 
-const ClickedIncrement = m('ClickedIncrement')
-const ClickedDecrement = m('ClickedDecrement')
-
-const CounterMessage = Schema.Union([ClickedIncrement, ClickedDecrement])
+const CounterMessage = defineMessageUnion({
+  ClickedIncrement: {},
+  ClickedDecrement: {},
+})
 type CounterMessage = typeof CounterMessage.Type
 
-const clickedIncrement = ClickedIncrement()
-const clickedDecrement = ClickedDecrement()
+const clickedIncrement = CounterMessage.ClickedIncrement()
+const clickedDecrement = CounterMessage.ClickedDecrement()
 
 const update = (model: CounterModel, message: CounterMessage): CounterModel =>
-  Match.value(message).pipe(
-    Match.withReturnType<CounterModel>(),
-    Match.tagsExhaustive({
-      ClickedIncrement: () => evo(model, { count: Number.increment }),
-      ClickedDecrement: () => evo(model, { count: Number.decrement }),
-    }),
-  )
+  CounterMessage.match<CounterModel>(message, {
+    ClickedIncrement: () => modifyFields(model, { count: Number.increment }),
+    ClickedDecrement: () => modifyFields(model, { count: Number.decrement }),
+  })
 
 const decodeCounterMessage = Schema.decodeUnknownSync(CounterMessage)
 
@@ -132,11 +123,15 @@ describe('dispatchRequest', () => {
       const { dispatched, callBridge, tagAt } = makeHarness()
 
       const response = callBridge(
-        RequestDispatchMessage({ message: { _tag: 'ClickedIncrement' } }),
+        Request.RequestDispatchMessage({
+          message: { _tag: 'ClickedIncrement' },
+        }),
       )
 
       if (response._tag !== 'ResponseDispatched') {
-        throw new Error(`Expected ResponseDispatched, got ${response._tag}`)
+        throw new Error(
+          `Expected Response.ResponseDispatched, got ${response._tag}`,
+        )
       }
       expect(response.acceptedAtIndex).toBe(2)
       expect(dispatched).toEqual([clickedIncrement])
@@ -147,7 +142,7 @@ describe('dispatchRequest', () => {
       const { dispatched, callBridge, recordedTags } = makeHarness()
 
       const response = callBridge(
-        RequestDispatchMessage({ message: { _tag: 'Nonsense' } }),
+        Request.RequestDispatchMessage({ message: { _tag: 'Nonsense' } }),
       )
 
       expect(response._tag).toBe('ResponseError')
@@ -161,7 +156,7 @@ describe('dispatchRequest', () => {
       const { dispatched, callBridge, tagAt } = makeHarness()
 
       const response = callBridge(
-        RequestDispatchMessages({
+        Request.RequestDispatchMessages({
           messages: [
             { _tag: 'ClickedIncrement' },
             { _tag: 'ClickedDecrement' },
@@ -172,7 +167,7 @@ describe('dispatchRequest', () => {
 
       if (response._tag !== 'ResponseDispatchedBatch') {
         throw new Error(
-          `Expected ResponseDispatchedBatch, got ${response._tag}`,
+          `Expected Response.ResponseDispatchedBatch, got ${response._tag}`,
         )
       }
       expect(response.acceptedAtIndices).toEqual([2, 3, 4])
@@ -195,7 +190,7 @@ describe('dispatchRequest', () => {
       })
 
       const response = callBridge(
-        RequestDispatchMessages({
+        Request.RequestDispatchMessages({
           messages: [
             { _tag: 'ClickedIncrement' },
             { _tag: 'ClickedDecrement' },
@@ -205,7 +200,7 @@ describe('dispatchRequest', () => {
 
       if (response._tag !== 'ResponseDispatchedBatch') {
         throw new Error(
-          `Expected ResponseDispatchedBatch, got ${response._tag}`,
+          `Expected Response.ResponseDispatchedBatch, got ${response._tag}`,
         )
       }
       expect(response.acceptedAtIndices).toEqual([2, 3])
@@ -219,7 +214,7 @@ describe('dispatchRequest', () => {
       const { dispatched, callBridge, recordedTags } = makeHarness()
 
       const response = callBridge(
-        RequestDispatchMessages({
+        Request.RequestDispatchMessages({
           messages: [
             { _tag: 'ClickedIncrement' },
             { _tag: 'Nonsense' },
@@ -229,7 +224,7 @@ describe('dispatchRequest', () => {
       )
 
       if (response._tag !== 'ResponseError') {
-        throw new Error(`Expected ResponseError, got ${response._tag}`)
+        throw new Error(`Expected Response.ResponseError, got ${response._tag}`)
       }
       expect(response.reason).toContain('zero-based batch position 1')
       expect(response.reason).toContain(
@@ -242,11 +237,13 @@ describe('dispatchRequest', () => {
     it('accepts an empty batch and dispatches nothing', () => {
       const { dispatched, callBridge, recordedTags } = makeHarness()
 
-      const response = callBridge(RequestDispatchMessages({ messages: [] }))
+      const response = callBridge(
+        Request.RequestDispatchMessages({ messages: [] }),
+      )
 
       if (response._tag !== 'ResponseDispatchedBatch') {
         throw new Error(
-          `Expected ResponseDispatchedBatch, got ${response._tag}`,
+          `Expected Response.ResponseDispatchedBatch, got ${response._tag}`,
         )
       }
       expect(response.acceptedAtIndices).toEqual([])
@@ -258,7 +255,7 @@ describe('dispatchRequest', () => {
       const { dispatched, callBridge, recordedTags } = makeHarness()
 
       const response = callBridge(
-        RequestDispatchMessages({
+        Request.RequestDispatchMessages({
           messages: Array.makeBy(MAX_DISPATCH_BATCH_SIZE + 1, () => ({
             _tag: 'ClickedIncrement',
           })),
@@ -266,7 +263,7 @@ describe('dispatchRequest', () => {
       )
 
       if (response._tag !== 'ResponseError') {
-        throw new Error(`Expected ResponseError, got ${response._tag}`)
+        throw new Error(`Expected Response.ResponseError, got ${response._tag}`)
       }
       expect(response.reason).toContain('Batch too large')
       expect(dispatched).toEqual([])
@@ -279,16 +276,197 @@ describe('dispatchRequest', () => {
       )
 
       const response = callBridge(
-        RequestDispatchMessages({ messages: [{ _tag: 'ClickedIncrement' }] }),
+        Request.RequestDispatchMessages({
+          messages: [{ _tag: 'ClickedIncrement' }],
+        }),
       )
 
       if (response._tag !== 'ResponseError') {
-        throw new Error(`Expected ResponseError, got ${response._tag}`)
+        throw new Error(`Expected Response.ResponseError, got ${response._tag}`)
       }
       expect(response.reason).toContain('DevToolsConfig.Message not configured')
       expect(dispatched).toEqual([])
       expect(recordedTags()).toEqual(['ClickedIncrement', 'ClickedIncrement'])
     })
+  })
+
+  it('replaces Redacted values in Models, Messages, diffs, Command args, and Mount args', () => {
+    const initialApiKey = 'sk-live-initial-not-for-devtools'
+    const currentApiKey = 'sk-live-current-not-for-devtools'
+    const messageApiKey = 'sk-live-message-not-for-devtools'
+    const commandApiKey = 'sk-live-command-not-for-devtools'
+    const mountApiKey = 'sk-live-mount-not-for-devtools'
+    const initialModel = {
+      connection: {
+        apiKey: Redacted.make(initialApiKey, { label: 'initial-api-key' }),
+      },
+    }
+    const currentModel = {
+      connection: {
+        apiKey: Redacted.make(currentApiKey, { label: 'current-api-key' }),
+      },
+    }
+    const submittedConnection = {
+      _tag: 'SubmittedConnection',
+      apiKey: Redacted.make(messageApiKey, { label: 'message-api-key' }),
+    }
+    const store = run(createDevToolsStore(makeBridge()))
+
+    run(
+      store.recordInit(
+        initialModel,
+        [
+          {
+            id: 0,
+            name: 'Connect',
+            args: {
+              apiKey: Redacted.make(commandApiKey, {
+                label: 'command-api-key',
+              }),
+            },
+            maybeSubmodelPath: Option.none(),
+          },
+        ],
+        [
+          {
+            name: 'ConnectForm',
+            args: {
+              apiKey: Redacted.make(mountApiKey, { label: 'mount-api-key' }),
+            },
+          },
+        ],
+      ),
+    )
+    run(
+      store.recordMessage(
+        submittedConnection,
+        initialModel,
+        currentModel,
+        [
+          {
+            id: 1,
+            name: 'Reconnect',
+            args: {
+              apiKey: Redacted.make(commandApiKey, {
+                label: 'command-api-key',
+              }),
+            },
+            maybeSubmodelPath: Option.none(),
+          },
+        ],
+        true,
+      ),
+    )
+    run(
+      store.attachRenderedMounts(
+        [
+          {
+            name: 'ConnectionStatus',
+            args: {
+              apiKey: Redacted.make(mountApiKey, {
+                label: 'mount-api-key',
+              }),
+            },
+          },
+        ],
+        [],
+      ),
+    )
+
+    const callBridge = (request: Request) =>
+      run(
+        dispatchRequest(
+          store,
+          () => Effect.void,
+          Option.none(),
+          Option.none(),
+          request,
+        ),
+      )
+    const model = callBridge(
+      Request.RequestGetModel({ maybePath: Option.none(), expand: true }),
+    )
+    const message = callBridge(Request.RequestGetMessage({ index: 0 }))
+    const init = callBridge(Request.RequestGetInit())
+    const diff = callBridge(
+      Request.RequestDiffModels({
+        fromIndex: -1,
+        toIndex: 0,
+        maybeChangedPathsMatch: Option.none(),
+      }),
+    )
+
+    if (model._tag !== 'ResponseModel') {
+      throw new Error(`Expected Response.ResponseModel, got ${model._tag}`)
+    }
+    if (message._tag !== 'ResponseMessage') {
+      throw new Error(`Expected Response.ResponseMessage, got ${message._tag}`)
+    }
+    if (init._tag !== 'ResponseInit') {
+      throw new Error(`Expected Response.ResponseInit, got ${init._tag}`)
+    }
+    if (diff._tag !== 'ResponseModelDiff') {
+      throw new Error(`Expected Response.ResponseModelDiff, got ${diff._tag}`)
+    }
+
+    expect(model.value).toEqual({
+      connection: { apiKey: '<redacted:current-api-key>' },
+    })
+    expect(message.entry.message).toEqual({
+      _tag: 'SubmittedConnection',
+      apiKey: '<redacted:message-api-key>',
+    })
+    expect(message.entry.commands).toEqual([
+      {
+        name: 'Reconnect',
+        args: Option.some({ apiKey: '<redacted:command-api-key>' }),
+        maybeSubmodelPath: Option.none(),
+      },
+    ])
+    expect(message.entry.mountStarts).toEqual([
+      {
+        name: 'ConnectionStatus',
+        args: Option.some({ apiKey: '<redacted:mount-api-key>' }),
+      },
+    ])
+    expect(init.maybeModel).toEqual(
+      Option.some({
+        connection: { apiKey: '<redacted:initial-api-key>' },
+      }),
+    )
+    expect(init.commands).toEqual([
+      {
+        name: 'Connect',
+        args: Option.some({ apiKey: '<redacted:command-api-key>' }),
+        maybeSubmodelPath: Option.none(),
+      },
+    ])
+    expect(init.mountStarts).toEqual([
+      {
+        name: 'ConnectForm',
+        args: Option.some({ apiKey: '<redacted:mount-api-key>' }),
+      },
+    ])
+    expect(diff.changes).toEqual([
+      {
+        path: 'root.connection.apiKey',
+        before: {
+          _tag: 'Present',
+          value: '<redacted:initial-api-key>',
+        },
+        after: {
+          _tag: 'Present',
+          value: '<redacted:current-api-key>',
+        },
+      },
+    ])
+
+    const serializedResponses = JSON.stringify({ model, message, init, diff })
+    expect(serializedResponses).not.toContain(initialApiKey)
+    expect(serializedResponses).not.toContain(currentApiKey)
+    expect(serializedResponses).not.toContain(messageApiKey)
+    expect(serializedResponses).not.toContain(commandApiKey)
+    expect(serializedResponses).not.toContain(mountApiKey)
   })
 })
 

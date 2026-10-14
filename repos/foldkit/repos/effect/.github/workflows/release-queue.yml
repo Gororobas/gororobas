@@ -27,7 +27,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           token: ${{ secrets.EFFECT_BOT_GH }}
@@ -35,7 +35,7 @@ jobs:
         if: github.event.pull_request
         env:
           GITHUB_TOKEN: ${{ secrets.EFFECT_BOT_GH }}
-      - uses: Effect-TS/next-release-action@0901387026995718742a42e0f6bf7743d0d83c2f
+      - uses: Effect-TS/next-release-action@63daaa626282bc42fad44dcb89c7f7db9c53b786
         with:
           github_token: ${{ secrets.EFFECT_BOT_GH }}
           base_branch: main

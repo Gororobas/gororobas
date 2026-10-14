@@ -3,8 +3,8 @@ import { Html, inertHtml as ih } from 'foldkit/html'
 
 import * as Markdown from '@foldkit/markdown'
 
+import { CodeBlock } from '../component'
 import { ctaLinks, infoCalloutBlocks, warningCalloutBlocks } from '../prose'
-import { highlightedCodeBlock } from '../view/codeBlock'
 import type { DemoLabels } from './demoLabel'
 import { islandAttributes } from './islandAttributes'
 import { type Slots, renderFaqSection, resolveDemo } from './slots'
@@ -32,7 +32,7 @@ const demoRegion = (demoLabels: DemoLabels, name: string, demo: Html): Html =>
  * `Demo` drops in a live, interactive demo the page has pre-built and keyed by
  * name; `Faq` hands its rendered children to the page's collapsible shell. The
  * page's slots live in the app Model, so the views close over `slots`; the copy
- * state rides inside the slots' `renderCopyButton`.
+ * state rides inside the slots' renderers.
  *
  * A `::Snippet` name with no matching file under `src/snippet` renders nothing,
  * which the snippet registration test is there to catch. The views stay pure, so
@@ -41,20 +41,25 @@ const demoRegion = (demoLabels: DemoLabels, name: string, demo: Html): Html =>
 export const docIslands = (
   slots: Slots<string>,
   demoLabels: DemoLabels,
-): Markdown.Islands => {
-  return Markdown.islandsFor(islandAttributes, {
-    Snippet: ({ name, label, class: className }) =>
+  pageId: string,
+): Markdown.Islands =>
+  Markdown.islandsFor(islandAttributes, {
+    Snippet: ({ name, label, class: className }, _content, occurrenceIndex) =>
       Option.match(lookupSnippet(name), {
         onNone: () => ih.empty,
         onSome: snippet =>
-          highlightedCodeBlock(
-            ih.div([ih.Class('text-sm'), ih.InnerHTML(snippet.highlighted)]),
+          CodeBlock.highlightedView(
+            `${pageId}-snippet-${name}-${occurrenceIndex}`,
+            ih.div([
+              ih.Class('text-sm'),
+              ih.DataAttribute('language', snippet.language),
+              ih.InnerHTML(snippet.highlighted),
+            ]),
             snippet.raw,
-            label === undefined
-              ? 'Copy snippet to clipboard'
-              : `Copy ${label} to clipboard`,
-            slots.renderCopyButton,
-            className ?? 'mb-8',
+            `Copy ${label} to clipboard`,
+            slots.renderSnippet,
+            className ?? 'mb-6',
+            label,
           ),
       }),
 
@@ -69,4 +74,3 @@ export const docIslands = (
     Faq: ({ id, question }, content) =>
       renderFaqSection(slots, id, question, content),
   })
-}

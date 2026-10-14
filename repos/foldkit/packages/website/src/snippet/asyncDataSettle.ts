@@ -7,11 +7,10 @@ const LoadAllNotes = Command.define('LoadAllNotes', {
   ),
 })
 
-M.tagsExhaustive({
-  SettledLoadAllNotes: ({ result }) => [
-    evo(model, {
+Match.tagsExhaustive({
+  SettledLoadAllNotes: ({ result }) => ({
+    model: modifyFields(model, {
       allNotes: previous => AsyncData.settle(previous, result),
     }),
-    [],
-  ],
+  }),
 })

@@ -3,11 +3,7 @@ import type { Html, HtmlBuilder } from 'foldkit/html'
 
 import { RadioGroup } from '@foldkit/ui'
 
-import {
-  GotHorizontalRadioGroupDemoMessage,
-  GotVerticalRadioGroupDemoMessage,
-  type UiMessage,
-} from '../message'
+import { Message as UiMessage } from '../message'
 import { type Plan, type UiModel } from '../model'
 
 export const PlanRadioGroup = RadioGroup.create<Plan>()
@@ -63,6 +59,83 @@ const checkPlaceholder = (h: HtmlBuilder<UiMessage>): Html => {
 
 export const view = Submodel.defineView<UiModel, UiMessage>(
   (model, h): Html => {
+    const verticalPlanOptionsView = ({
+      group,
+      options,
+    }: RadioGroup.RenderInfo<Plan>): Html =>
+      h.div(
+        [...group, h.Class(verticalGroupClassName)],
+        options.map(option => {
+          const plan = option.value
+          return h.div(
+            [...option.option, h.Class(verticalOptionClassName)],
+            [
+              h.div(
+                [h.Class('flex w-full items-center justify-between')],
+                [
+                  h.div(
+                    [],
+                    [
+                      h.span(
+                        [...option.label, h.Class(labelClassName)],
+                        [plan],
+                      ),
+                      h.p(
+                        [...option.description, h.Class(descriptionClassName)],
+                        [planDescriptions[plan]],
+                      ),
+                    ],
+                  ),
+                  h.div(
+                    [h.Class('flex items-center gap-3')],
+                    [
+                      h.span([h.Class(priceClassName)], [planPrices[plan]]),
+                      option.isSelected ? checkIcon(h) : checkPlaceholder(h),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          )
+        }),
+      )
+
+    const horizontalPlanOptionsView = ({
+      group,
+      options,
+    }: RadioGroup.RenderInfo<Plan>): Html =>
+      h.div(
+        [...group, h.Class(horizontalGroupClassName)],
+        options.map(option => {
+          const plan = option.value
+          return h.div(
+            [...option.option, h.Class(horizontalOptionClassName)],
+            [
+              h.div(
+                [h.Class('flex w-full items-center justify-between')],
+                [
+                  h.div(
+                    [],
+                    [
+                      h.span(
+                        [...option.label, h.Class(labelClassName)],
+                        [plan],
+                      ),
+                      h.p(
+                        [...option.description, h.Class(descriptionClassName)],
+                        [planDescriptions[plan]],
+                      ),
+                    ],
+                  ),
+                  option.isSelected ? checkIcon(h) : checkPlaceholder(h),
+                ],
+              ),
+              h.span([h.Class(priceClassName + ' mt-2')], [planPrices[plan]]),
+            ],
+          )
+        }),
+      )
+
     return h.div(
       [],
       [
@@ -83,54 +156,11 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
             selectedValue: model.verticalRadioGroupDemoValue,
             options: plans,
             ariaLabel: 'Server plan',
-            toView: ({ group, options }) =>
-              h.div(
-                [...group, h.Class(verticalGroupClassName)],
-                options.map(option => {
-                  const plan = option.value
-                  return h.div(
-                    [...option.option, h.Class(verticalOptionClassName)],
-                    [
-                      h.div(
-                        [h.Class('flex w-full items-center justify-between')],
-                        [
-                          h.div(
-                            [],
-                            [
-                              h.span(
-                                [...option.label, h.Class(labelClassName)],
-                                [plan],
-                              ),
-                              h.p(
-                                [
-                                  ...option.description,
-                                  h.Class(descriptionClassName),
-                                ],
-                                [planDescriptions[plan]],
-                              ),
-                            ],
-                          ),
-                          h.div(
-                            [h.Class('flex items-center gap-3')],
-                            [
-                              h.span(
-                                [h.Class(priceClassName)],
-                                [planPrices[plan]],
-                              ),
-                              option.isSelected
-                                ? checkIcon(h)
-                                : checkPlaceholder(h),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  )
-                }),
-              ),
+            hasOptionDescription: () => true,
+            toView: verticalPlanOptionsView,
           },
           toParentMessage: message =>
-            GotVerticalRadioGroupDemoMessage({ message }),
+            UiMessage.GotVerticalRadioGroupDemoMessage({ message }),
         }),
 
         h.h3(
@@ -146,49 +176,11 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
             options: plans,
             ariaLabel: 'Server plan',
             orientation: 'Horizontal',
-            toView: ({ group, options }) =>
-              h.div(
-                [...group, h.Class(horizontalGroupClassName)],
-                options.map(option => {
-                  const plan = option.value
-                  return h.div(
-                    [...option.option, h.Class(horizontalOptionClassName)],
-                    [
-                      h.div(
-                        [h.Class('flex w-full items-center justify-between')],
-                        [
-                          h.div(
-                            [],
-                            [
-                              h.span(
-                                [...option.label, h.Class(labelClassName)],
-                                [plan],
-                              ),
-                              h.p(
-                                [
-                                  ...option.description,
-                                  h.Class(descriptionClassName),
-                                ],
-                                [planDescriptions[plan]],
-                              ),
-                            ],
-                          ),
-                          option.isSelected
-                            ? checkIcon(h)
-                            : checkPlaceholder(h),
-                        ],
-                      ),
-                      h.span(
-                        [h.Class(priceClassName + ' mt-2')],
-                        [planPrices[plan]],
-                      ),
-                    ],
-                  )
-                }),
-              ),
+            hasOptionDescription: () => true,
+            toView: horizontalPlanOptionsView,
           },
           toParentMessage: message =>
-            GotHorizontalRadioGroupDemoMessage({ message }),
+            UiMessage.GotHorizontalRadioGroupDemoMessage({ message }),
         }),
       ],
     )

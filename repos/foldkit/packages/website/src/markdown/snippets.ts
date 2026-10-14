@@ -1,4 +1,4 @@
-import { Array, Option, Record as Record_, Result, String, pipe } from 'effect'
+import { Array, Match, Option, Record, Result, String, pipe } from 'effect'
 import cssSnippets from 'virtual:css-snippets'
 
 // SNIPPETS
@@ -7,12 +7,16 @@ import cssSnippets from 'virtual:css-snippets'
  * One compiled snippet: `raw` is the verbatim source for the copy button,
  * `highlighted` is the build-time Shiki HTML rendered through `h.InnerHTML`.
  */
-export type Snippet = Readonly<{ raw: string; highlighted: string }>
+export type Snippet = Readonly<{
+  raw: string
+  highlighted: string
+  language: string
+}>
 
 type SnippetEntry = readonly [string, Snippet]
 
 const rawByPath = import.meta.glob<string>(
-  '../snippet/*.{ts,tsx,elm,json,html}',
+  '../snippet/*.{ts,tsx,elm,json,html,sh,txt}',
   {
     query: '?raw',
     import: 'default',
@@ -21,14 +25,26 @@ const rawByPath = import.meta.glob<string>(
 )
 
 const highlightedByPath = import.meta.glob<string>(
-  '../snippet/*.{ts,tsx,elm,json,html}',
+  '../snippet/*.{ts,tsx,elm,json,html,sh,txt}',
   { query: '?highlighted', import: 'default', eager: true },
 )
 
 const snippetName = (path: string): Option.Option<string> =>
   pipe(
     Array.last(String.split(path, '/')),
-    Option.map(String.replace(/\.(?:ts|tsx|elm|json|html)$/, '')),
+    Option.map(String.replace(/\.(?:ts|tsx|elm|json|html|sh|txt)$/, '')),
+  )
+
+const snippetLanguage = (path: string): string =>
+  Match.value(path).pipe(
+    Match.when(String.endsWith('.tsx'), () => 'tsx'),
+    Match.when(String.endsWith('.ts'), () => 'typescript'),
+    Match.when(String.endsWith('.elm'), () => 'elm'),
+    Match.when(String.endsWith('.json'), () => 'json'),
+    Match.when(String.endsWith('.html'), () => 'html'),
+    Match.when(String.endsWith('.sh'), () => 'bash'),
+    Match.when(String.endsWith('.txt'), () => 'text'),
+    Match.orElse(() => 'text'),
   )
 
 // NOTE: CSS snippets arrive through a virtual module rather than the glob
@@ -36,18 +52,19 @@ const snippetName = (path: string): Option.Option<string> =>
 // query, so a `?highlighted` CSS file gets parsed as stylesheet source and
 // breaks the bundle. Highlighting them at config time and handing over a plain
 // record sidesteps the pipeline entirely.
-const registry: Record<string, Snippet> = pipe(
-  Record_.toEntries(rawByPath),
+const registry: globalThis.Record<string, Snippet> = pipe(
+  Record.toEntries(rawByPath),
   Array.filterMap(([path, raw]) =>
     pipe(
-      Option.all([snippetName(path), Record_.get(highlightedByPath, path)]),
-      Option.map(
-        ([name, highlighted]): SnippetEntry => [name, { raw, highlighted }],
-      ),
+      Option.all([snippetName(path), Record.get(highlightedByPath, path)]),
+      Option.map(([name, highlighted]): SnippetEntry => [
+        name,
+        { raw, highlighted, language: snippetLanguage(path) },
+      ]),
       Result.fromOption(() => undefined),
     ),
   ),
-  Record_.fromEntries,
+  Record.fromEntries,
   existing => ({ ...existing, ...cssSnippets }),
 )
 
@@ -56,4 +73,4 @@ const registry: Record<string, Snippet> = pipe(
  * `"counterCommands"` for `src/snippet/counterCommands.ts`.
  */
 export const lookupSnippet = (name: string): Option.Option<Snippet> =>
-  Record_.get(registry, name)
+  Record.get(registry, name)

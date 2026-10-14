@@ -51,8 +51,31 @@ declare module '*.html?highlighted' {
   export default html
 }
 
+declare module '*.sh?raw' {
+  const content: string
+  export default content
+}
+
+declare module '*.sh?highlighted' {
+  const html: string
+  export default html
+}
+
+declare module '*.txt?raw' {
+  const content: string
+  export default content
+}
+
+declare module '*.txt?highlighted' {
+  const html: string
+  export default html
+}
+
 declare module 'virtual:css-snippets' {
-  const snippets: Record<string, { raw: string; highlighted: string }>
+  const snippets: Record<
+    string,
+    { raw: string; highlighted: string; language: string }
+  >
   export default snippets
 }
 
@@ -116,8 +139,10 @@ declare module 'virtual:playground-types' {
   export default data
 }
 
-interface Navigator {
-  readonly userAgentData?: Readonly<{
-    brands?: ReadonlyArray<Readonly<{ brand: string }>>
-  }>
+interface ImportMetaEnv {
+  readonly VITE_FOLDKIT_CANARY_COMMIT?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
 }

@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { Array, Effect, Match as M, Option, Schema as S, pipe } from 'effect'
+import { Array, Effect, Match, Option, Schema, pipe } from 'effect'
 import {
   Calendar,
   Command,
@@ -10,125 +10,109 @@ import {
   Update,
 } from 'foldkit'
 import { Document, Html, HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
+import { defineMessageUnion } from 'foldkit/message'
 import { UrlRequest, load, pushUrl } from 'foldkit/navigation'
-import { literal, r } from 'foldkit/route'
-import { evo } from 'foldkit/struct'
+import { defineRouteUnion, literal } from 'foldkit/route'
+import { modifyFields } from 'foldkit/struct'
 import { Url, toString as urlToString } from 'foldkit/url'
 
 import { Dialog, Nav } from '@foldkit/ui'
 
 import * as Icon from './icon'
 import { uiInit } from './ui/init'
-import {
-  ClickedOpenMobileMenu,
-  GotMobileMenuDialogMessage,
-  UiMessage,
-} from './ui/message'
+import { Message as UiMessage } from './ui/message'
 import { UiModel } from './ui/model'
 import * as UiSubscriptions from './ui/subscriptions'
-import { uiUpdate } from './ui/update'
+import { closeMobileMenu, openMobileMenu, uiUpdate } from './ui/update'
 import * as View from './ui/view'
 
 // ROUTE
 
-export const HomeRoute = r('Home')
-export const ButtonRoute = r('Button')
-export const CalendarRoute = r('Calendar')
-export const CheckboxRoute = r('Checkbox')
-export const ComboboxRoute = r('Combobox')
-export const DatePickerRoute = r('DatePicker')
-export const DialogRoute = r('Dialog')
-export const DisclosureRoute = r('Disclosure')
-export const DragAndDropRoute = r('DragAndDrop')
-export const FieldsetRoute = r('Fieldset')
-export const FileDropRoute = r('FileDrop')
-export const InputRoute = r('Input')
-export const ListboxRoute = r('Listbox')
-export const MenuRoute = r('Menu')
-export const PopoverRoute = r('Popover')
-export const RadioGroupRoute = r('RadioGroup')
-export const SelectRoute = r('Select')
-export const SliderRoute = r('Slider')
-export const SwitchRoute = r('Switch')
-export const TabsRoute = r('Tabs')
-export const TextareaRoute = r('Textarea')
-export const ToastRoute = r('Toast')
-export const TooltipRoute = r('Tooltip')
-export const AnimationRoute = r('Animation')
-export const VirtualListRoute = r('VirtualList')
-export const NotFoundRoute = r('NotFound', { path: S.String })
+export const AppRoute = defineRouteUnion({
+  Home: {},
+  Button: {},
+  Calendar: {},
+  Checkbox: {},
+  Combobox: {},
+  DatePicker: {},
+  Dialog: {},
+  Disclosure: {},
+  DragAndDrop: {},
+  Fieldset: {},
+  FileDrop: {},
+  HoverIntent: {},
+  Input: {},
+  Listbox: {},
+  Menu: {},
+  Meter: {},
+  Popover: {},
+  Progress: {},
+  RadioGroup: {},
+  Select: {},
+  Slider: {},
+  Switch: {},
+  Tabs: {},
+  Textarea: {},
+  Toast: {},
+  Tooltip: {},
+  Animation: {},
+  VirtualList: {},
+  NotFound: { path: Schema.String },
+})
 
-const AppRoute = S.Union([
-  HomeRoute,
-  ButtonRoute,
-  CalendarRoute,
-  CheckboxRoute,
-  ComboboxRoute,
-  DatePickerRoute,
-  DialogRoute,
-  DisclosureRoute,
-  DragAndDropRoute,
-  FieldsetRoute,
-  FileDropRoute,
-  InputRoute,
-  ListboxRoute,
-  MenuRoute,
-  PopoverRoute,
-  RadioGroupRoute,
-  SelectRoute,
-  SliderRoute,
-  SwitchRoute,
-  TabsRoute,
-  TextareaRoute,
-  ToastRoute,
-  TooltipRoute,
-  AnimationRoute,
-  VirtualListRoute,
-  NotFoundRoute,
-])
+export type AppRoute = typeof AppRoute.Type
 
-type AppRoute = typeof AppRoute.Type
-
-const homeRouter = pipe(Route.root, Route.mapTo(HomeRoute))
-const buttonRouter = pipe(literal('button'), Route.mapTo(ButtonRoute))
-const calendarRouter = pipe(literal('calendar'), Route.mapTo(CalendarRoute))
-const checkboxRouter = pipe(literal('checkbox'), Route.mapTo(CheckboxRoute))
-const comboboxRouter = pipe(literal('combobox'), Route.mapTo(ComboboxRoute))
+const homeRouter = pipe(Route.root, Route.mapTo(AppRoute.Home))
+const buttonRouter = pipe(literal('button'), Route.mapTo(AppRoute.Button))
+const calendarRouter = pipe(literal('calendar'), Route.mapTo(AppRoute.Calendar))
+const checkboxRouter = pipe(literal('checkbox'), Route.mapTo(AppRoute.Checkbox))
+const comboboxRouter = pipe(literal('combobox'), Route.mapTo(AppRoute.Combobox))
 const datePickerRouter = pipe(
   literal('date-picker'),
-  Route.mapTo(DatePickerRoute),
+  Route.mapTo(AppRoute.DatePicker),
 )
-const dialogRouter = pipe(literal('dialog'), Route.mapTo(DialogRoute))
+const dialogRouter = pipe(literal('dialog'), Route.mapTo(AppRoute.Dialog))
 const disclosureRouter = pipe(
   literal('disclosure'),
-  Route.mapTo(DisclosureRoute),
+  Route.mapTo(AppRoute.Disclosure),
 )
 const dragAndDropRouter = pipe(
   literal('drag-and-drop'),
-  Route.mapTo(DragAndDropRoute),
+  Route.mapTo(AppRoute.DragAndDrop),
 )
-const fieldsetRouter = pipe(literal('fieldset'), Route.mapTo(FieldsetRoute))
-const fileDropRouter = pipe(literal('file-drop'), Route.mapTo(FileDropRoute))
-const inputRouter = pipe(literal('input'), Route.mapTo(InputRoute))
-const listboxRouter = pipe(literal('listbox'), Route.mapTo(ListboxRoute))
-const menuRouter = pipe(literal('menu'), Route.mapTo(MenuRoute))
-const popoverRouter = pipe(literal('popover'), Route.mapTo(PopoverRoute))
+const fieldsetRouter = pipe(literal('fieldset'), Route.mapTo(AppRoute.Fieldset))
+const fileDropRouter = pipe(
+  literal('file-drop'),
+  Route.mapTo(AppRoute.FileDrop),
+)
+const hoverIntentRouter = pipe(
+  literal('hover-intent'),
+  Route.mapTo(AppRoute.HoverIntent),
+)
+const inputRouter = pipe(literal('input'), Route.mapTo(AppRoute.Input))
+const listboxRouter = pipe(literal('listbox'), Route.mapTo(AppRoute.Listbox))
+const menuRouter = pipe(literal('menu'), Route.mapTo(AppRoute.Menu))
+const meterRouter = pipe(literal('meter'), Route.mapTo(AppRoute.Meter))
+const popoverRouter = pipe(literal('popover'), Route.mapTo(AppRoute.Popover))
+const progressRouter = pipe(literal('progress'), Route.mapTo(AppRoute.Progress))
 const radioGroupRouter = pipe(
   literal('radio-group'),
-  Route.mapTo(RadioGroupRoute),
+  Route.mapTo(AppRoute.RadioGroup),
 )
-const selectRouter = pipe(literal('select'), Route.mapTo(SelectRoute))
-const sliderRouter = pipe(literal('slider'), Route.mapTo(SliderRoute))
-const switchRouter = pipe(literal('switch'), Route.mapTo(SwitchRoute))
-const tabsRouter = pipe(literal('tabs'), Route.mapTo(TabsRoute))
-const textareaRouter = pipe(literal('textarea'), Route.mapTo(TextareaRoute))
-const toastRouter = pipe(literal('toast'), Route.mapTo(ToastRoute))
-const tooltipRouter = pipe(literal('tooltip'), Route.mapTo(TooltipRoute))
-const animationRouter = pipe(literal('animation'), Route.mapTo(AnimationRoute))
+const selectRouter = pipe(literal('select'), Route.mapTo(AppRoute.Select))
+const sliderRouter = pipe(literal('slider'), Route.mapTo(AppRoute.Slider))
+const switchRouter = pipe(literal('switch'), Route.mapTo(AppRoute.Switch))
+const tabsRouter = pipe(literal('tabs'), Route.mapTo(AppRoute.Tabs))
+const textareaRouter = pipe(literal('textarea'), Route.mapTo(AppRoute.Textarea))
+const toastRouter = pipe(literal('toast'), Route.mapTo(AppRoute.Toast))
+const tooltipRouter = pipe(literal('tooltip'), Route.mapTo(AppRoute.Tooltip))
+const animationRouter = pipe(
+  literal('animation'),
+  Route.mapTo(AppRoute.Animation),
+)
 const virtualListRouter = pipe(
   literal('virtual-list'),
-  Route.mapTo(VirtualListRoute),
+  Route.mapTo(AppRoute.VirtualList),
 )
 
 const routeParser = Route.oneOf(
@@ -142,10 +126,13 @@ const routeParser = Route.oneOf(
   dragAndDropRouter,
   fieldsetRouter,
   fileDropRouter,
+  hoverIntentRouter,
   inputRouter,
   listboxRouter,
   menuRouter,
+  meterRouter,
   popoverRouter,
+  progressRouter,
   radioGroupRouter,
   selectRouter,
   sliderRouter,
@@ -159,11 +146,11 @@ const routeParser = Route.oneOf(
   homeRouter,
 )
 
-const urlToAppRoute = Route.parseUrlWithFallback(routeParser, NotFoundRoute)
+const urlToAppRoute = Route.parseUrlWithFallback(routeParser, AppRoute.NotFound)
 
 // MODEL
 
-export const Model = S.Struct({
+export const Model = Schema.Struct({
   route: AppRoute,
   uiModel: UiModel,
 })
@@ -172,43 +159,36 @@ export type Model = typeof Model.Type
 
 // MESSAGE
 
-export const CompletedNavigateInternal = m('CompletedNavigateInternal')
-export const CompletedLoadExternal = m('CompletedLoadExternal')
-export const ClickedLink = m('ClickedLink', {
-  request: UrlRequest,
-})
-export const ChangedUrl = m('ChangedUrl', { url: Url })
-export const GotUiMessage = m('GotUiMessage', {
-  message: UiMessage,
+export const Message = defineMessageUnion({
+  CompletedNavigateInternal: {},
+  CompletedLoadExternal: {},
+  ClickedLink: { request: UrlRequest },
+  ChangedUrl: { url: Url },
+  ClickedOpenMobileMenu: {},
+  GotUiMessage: { message: UiMessage },
 })
 
-export const Message = S.Union([
-  CompletedNavigateInternal,
-  CompletedLoadExternal,
-  ClickedLink,
-  ChangedUrl,
-  GotUiMessage,
-])
 export type Message = typeof Message.Type
 
 // COMMAND
 
 const NavigateInternal = Command.define('NavigateInternal', {
-  args: { url: S.String },
-  messages: [CompletedNavigateInternal],
+  args: { url: Schema.String },
+  messages: [Message.CompletedNavigateInternal],
   execute: ({ url }) =>
-    pushUrl(url).pipe(Effect.as(CompletedNavigateInternal())),
+    pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal())),
 })
 
 const LoadExternal = Command.define('LoadExternal', {
-  args: { href: S.String },
-  messages: [CompletedLoadExternal],
-  execute: ({ href }) => load(href).pipe(Effect.as(CompletedLoadExternal())),
+  args: { href: Schema.String },
+  messages: [Message.CompletedLoadExternal],
+  execute: ({ href }) =>
+    load(href).pipe(Effect.as(Message.CompletedLoadExternal())),
 })
 
 // INIT
 
-export const Flags = S.Struct({
+export const Flags = Schema.Struct({
   today: Calendar.CalendarDate,
 })
 
@@ -223,85 +203,72 @@ export const init: Runtime.RoutingApplicationInit<Model, Message, Flags> = (
   flags: Flags,
   url: Url,
 ) => {
-  const [initialUiModel, uiCommands] = uiInit(flags.today)
-
-  return [
-    {
-      route: urlToAppRoute(url),
-      uiModel: initialUiModel,
-    },
-    Command.mapMessages(uiCommands, message => GotUiMessage({ message })),
-  ]
+  return Update.foldChildInit(uiInit(flags.today), {
+    toParentModel: uiModel => ({ route: urlToAppRoute(url), uiModel }),
+    toParentMessage: message => Message.GotUiMessage({ message }),
+  })
 }
 
 // UPDATE
 
-const toUiMessage = (message: typeof UiMessage.Type): Message =>
-  GotUiMessage({ message })
-
-const toMobileMenuDialogMessage = (message: Dialog.Message): Message =>
-  GotUiMessage({ message: GotMobileMenuDialogMessage({ message }) })
+const toUiMessage = (message: UiMessage): Message =>
+  Message.GotUiMessage({ message })
 
 const foldUi = Update.foldChild({
   update: uiUpdate,
   read: (model: Model) => Option.some(model.uiModel),
-  write: (model, nextUiModel) => evo(model, { uiModel: () => nextUiModel }),
+  write: (model, nextUiModel) =>
+    modifyFields(model, { uiModel: () => nextUiModel }),
   toParentMessage: toUiMessage,
 })
 
-export const update = (
-  model: Model,
-  message: Message,
-): readonly [Model, ReadonlyArray<Command.Command<Message>>] =>
-  M.value(message).pipe(
-    M.withReturnType<
-      readonly [Model, ReadonlyArray<Command.Command<Message>>]
-    >(),
-    M.tagsExhaustive({
-      CompletedNavigateInternal: () => [model, []],
-      CompletedLoadExternal: () => [model, []],
+const foldUiOpenMobileMenu = Update.foldChildStep({
+  update: openMobileMenu,
+  read: (model: Model) => Option.some(model.uiModel),
+  write: (model, nextUiModel) =>
+    modifyFields(model, { uiModel: () => nextUiModel }),
+  toParentMessage: toUiMessage,
+})
 
-      ClickedLink: ({ request }) =>
-        M.value(request).pipe(
-          M.tagsExhaustive({
-            Internal: ({
-              url,
-            }): [
-              Model,
-              ReadonlyArray<Command.Command<typeof CompletedNavigateInternal>>,
-            ] => [model, [NavigateInternal({ url: urlToString(url) })]],
-            External: ({
-              href,
-            }): [
-              Model,
-              ReadonlyArray<Command.Command<typeof CompletedLoadExternal>>,
-            ] => [model, [LoadExternal({ href })]],
-          }),
-        ),
+const foldUiCloseMobileMenu = Update.foldChildStep({
+  update: closeMobileMenu,
+  read: (model: Model) => Option.some(model.uiModel),
+  write: (model, nextUiModel) =>
+    modifyFields(model, { uiModel: () => nextUiModel }),
+  toParentMessage: toUiMessage,
+})
 
-      ChangedUrl: ({ url }) => {
-        const [nextMobileMenuDialog, mobileMenuDialogCommands] = Dialog.close(
-          model.uiModel.mobileMenuDialog,
-        )
+type UpdateReturn = Update.Return<Model, Message>
 
-        return [
-          evo(model, {
-            route: () => urlToAppRoute(url),
-            uiModel: uiModel =>
-              evo(uiModel, {
-                mobileMenuDialog: () => nextMobileMenuDialog,
-              }),
-          }),
-          Command.mapMessages(
-            mobileMenuDialogCommands,
-            toMobileMenuDialogMessage,
-          ),
-        ]
-      },
+export const update = (model: Model, message: Message) =>
+  Message.match<UpdateReturn>(message, {
+    CompletedNavigateInternal: () => ({ model }),
+    CompletedLoadExternal: () => ({ model }),
 
-      GotUiMessage: ({ message }) => foldUi(model, message),
-    }),
-  )
+    ClickedLink: ({ request }) =>
+      UrlRequest.match<UpdateReturn>(request, {
+        Internal: ({ url }) => ({
+          model,
+          commands: [NavigateInternal({ url: urlToString(url) })],
+        }),
+        External: ({ href }) => ({
+          model,
+          commands: [LoadExternal({ href })],
+        }),
+      }),
+
+    ChangedUrl: ({ url }) =>
+      Update.combine(model, [
+        stepModel => ({
+          model: modifyFields(stepModel, { route: () => urlToAppRoute(url) }),
+        }),
+        foldUiCloseMobileMenu,
+      ]),
+
+    ClickedOpenMobileMenu: () => foldUiOpenMobileMenu(model),
+
+    GotUiMessage: ({ message }) => foldUi(model, message),
+  })
 
 // VIEW
 
@@ -327,10 +294,17 @@ const NAV_ITEMS: ReadonlyArray<NavItem> = [
   },
   { label: 'Fieldset', routeTag: 'Fieldset', href: fieldsetRouter() },
   { label: 'File Drop', routeTag: 'FileDrop', href: fileDropRouter() },
+  {
+    label: 'Hover Intent',
+    routeTag: 'HoverIntent',
+    href: hoverIntentRouter(),
+  },
   { label: 'Input', routeTag: 'Input', href: inputRouter() },
   { label: 'Listbox', routeTag: 'Listbox', href: listboxRouter() },
   { label: 'Menu', routeTag: 'Menu', href: menuRouter() },
+  { label: 'Meter', routeTag: 'Meter', href: meterRouter() },
   { label: 'Popover', routeTag: 'Popover', href: popoverRouter() },
+  { label: 'Progress', routeTag: 'Progress', href: progressRouter() },
   { label: 'Radio Group', routeTag: 'RadioGroup', href: radioGroupRouter() },
   { label: 'Select', routeTag: 'Select', href: selectRouter() },
   { label: 'Slider', routeTag: 'Slider', href: sliderRouter() },
@@ -371,7 +345,7 @@ const componentNav = (
     toView,
   })
 
-const navListView = (
+const navListView = <Message>(
   items: ReadonlyArray<Nav.ItemInfo>,
   linkClassName: (isActive: boolean) => string,
   h: HtmlBuilder<Message>,
@@ -411,8 +385,8 @@ const mobileNavLinkClassName = (isActive: boolean): string =>
       : 'text-gray-700 hover:bg-gray-200',
   )
 
-const sidebarView = (currentRoute: AppRoute, h: HtmlBuilder<Message>): Html =>
-  componentNav(currentRoute, ({ nav, items }) =>
+const sidebarView = (currentRoute: AppRoute, h: HtmlBuilder<Message>): Html => {
+  const sidebarNavView = ({ nav, items }: Nav.RenderInfo): Html =>
     h.nav(
       [
         ...nav,
@@ -438,15 +412,28 @@ const sidebarView = (currentRoute: AppRoute, h: HtmlBuilder<Message>): Html =>
         ),
         navListView(items, navLinkClassName, h),
       ],
-    ),
-  )
+    )
+
+  return componentNav(currentRoute, sidebarNavView)
+}
 
 const mobileMenuContent = (
   currentRoute: AppRoute,
   closeButton: Dialog.RenderInfo['closeButton'],
-  h: HtmlBuilder<Message>,
-): Html =>
-  h.div(
+  h: HtmlBuilder<UiMessage>,
+): Html => {
+  const mobileNavView = ({ nav, items }: Nav.RenderInfo): Html =>
+    h.nav(
+      [
+        ...nav,
+        h.Class('flex-1 overflow-y-auto min-h-0 p-4'),
+        h.Tabindex(-1),
+        h.Autofocus(true),
+      ],
+      [navListView(items, mobileNavLinkClassName, h)],
+    )
+
+  return h.div(
     [h.Class('flex flex-col h-full')],
     [
       h.div(
@@ -486,19 +473,10 @@ const mobileMenuContent = (
           ),
         ],
       ),
-      componentNav(currentRoute, ({ nav, items }) =>
-        h.nav(
-          [
-            ...nav,
-            h.Class('flex-1 overflow-y-auto min-h-0 p-4'),
-            h.Tabindex(-1),
-            h.Autofocus(true),
-          ],
-          [navListView(items, mobileNavLinkClassName, h)],
-        ),
-      ),
+      componentNav(currentRoute, mobileNavView),
     ],
   )
+}
 
 const mobileHeaderView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.header(
@@ -533,37 +511,64 @@ const mobileHeaderView = (model: Model, h: HtmlBuilder<Message>): Html =>
           ),
           h.AriaExpanded(model.uiModel.mobileMenuDialog.isOpen),
           h.AriaLabel('Toggle menu'),
-          h.OnClick(toUiMessage(ClickedOpenMobileMenu())),
+          h.OnClick(Message.ClickedOpenMobileMenu()),
         ],
         [Icon.menu('w-6 h-6')],
       ),
     ],
   )
 
-const mobileMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.submodel({
-    slotId: model.uiModel.mobileMenuDialog.id,
-    model: model.uiModel.mobileMenuDialog,
+type MobileMenuViewInputs = Readonly<{
+  currentRoute: AppRoute
+}>
+
+const mobileMenuDialogView = Submodel.defineView<
+  UiModel,
+  UiMessage,
+  MobileMenuViewInputs
+>((model, { currentRoute }, h): Html => {
+  const mobileMenuDialogContent = ({
+    dialog,
+    backdrop,
+    panel,
+    closeButton,
+    isVisible,
+  }: Dialog.RenderInfo): Html =>
+    h.dialog(
+      [...dialog, h.Class('md:hidden')],
+      isVisible
+        ? [
+            h.div([...backdrop, h.Class('fixed inset-0 z-[59]')]),
+            h.div(
+              [
+                ...panel,
+                h.Class('fixed inset-0 z-[60] bg-white flex flex-col'),
+              ],
+              [mobileMenuContent(currentRoute, closeButton, h)],
+            ),
+          ]
+        : [],
+    )
+
+  return h.submodel({
+    slotId: model.mobileMenuDialog.id,
+    model: model.mobileMenuDialog,
     view: Dialog.view,
     viewInputs: {
-      toView: ({ dialog, backdrop, panel, closeButton, isVisible }) =>
-        h.dialog(
-          [...dialog, h.Class('md:hidden')],
-          isVisible
-            ? [
-                h.div([...backdrop, h.Class('fixed inset-0 z-[59]')]),
-                h.div(
-                  [
-                    ...panel,
-                    h.Class('fixed inset-0 z-[60] bg-white flex flex-col'),
-                  ],
-                  [mobileMenuContent(model.route, closeButton, h)],
-                ),
-              ]
-            : [],
-        ),
+      toView: mobileMenuDialogContent,
     },
-    toParentMessage: message => toMobileMenuDialogMessage(message),
+    toParentMessage: message =>
+      UiMessage.GotMobileMenuDialogMessage({ message }),
+  })
+})
+
+const mobileMenuView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  h.submodel({
+    slotId: 'mobile-menu',
+    model: model.uiModel,
+    view: mobileMenuDialogView,
+    viewInputs: { currentRoute: model.route },
+    toParentMessage: toUiMessage,
   })
 
 const homeView = (h: HtmlBuilder<Message>): Html =>
@@ -617,42 +622,43 @@ const contentView = (model: Model, h: HtmlBuilder<Message>): Html => {
       toParentMessage: toUiMessage,
     })
 
-  return M.value(model.route).pipe(
-    M.tagsExhaustive({
-      Home: () => homeView(h),
-      Button: () => embedUi('ui-button', View.button),
-      Calendar: () => embedUi('ui-calendar', View.calendar),
-      Checkbox: () => embedUi('ui-checkbox', View.checkbox),
-      Combobox: () => embedUi('ui-combobox', View.combobox),
-      DatePicker: () => embedUi('ui-date-picker', View.datePicker),
-      Dialog: () => embedUi('ui-dialog', View.dialog),
-      Disclosure: () => embedUi('ui-disclosure', View.disclosure),
-      DragAndDrop: () => embedUi('ui-drag-and-drop', View.dragAndDrop),
-      Fieldset: () => embedUi('ui-fieldset', View.fieldset),
-      FileDrop: () => embedUi('ui-file-drop', View.fileDrop),
-      Input: () => embedUi('ui-input', View.input),
-      Listbox: () => embedUi('ui-listbox', View.listbox),
-      Menu: () => embedUi('ui-menu', View.menu),
-      Popover: () => embedUi('ui-popover', View.popover),
-      RadioGroup: () => embedUi('ui-radio-group', View.radioGroup),
-      Select: () => embedUi('ui-select', View.select),
-      Slider: () => embedUi('ui-slider', View.slider),
-      Switch: () => embedUi('ui-switch', View.switch_),
-      Tabs: () => embedUi('ui-tabs', View.tabs),
-      Textarea: () => embedUi('ui-textarea', View.textarea),
-      Toast: () => embedUi('ui-toast', View.toast),
-      Tooltip: () => embedUi('ui-tooltip', View.tooltip),
-      Animation: () => embedUi('ui-animation', View.animation),
-      VirtualList: () => embedUi('ui-virtual-list', View.virtualList),
-      NotFound: ({ path }) => notFoundView(path, h),
-    }),
-  )
+  return AppRoute.match(model.route, {
+    Home: () => homeView(h),
+    Button: () => embedUi('ui-button', View.button),
+    Calendar: () => embedUi('ui-calendar', View.calendar),
+    Checkbox: () => embedUi('ui-checkbox', View.checkbox),
+    Combobox: () => embedUi('ui-combobox', View.combobox),
+    DatePicker: () => embedUi('ui-date-picker', View.datePicker),
+    Dialog: () => embedUi('ui-dialog', View.dialog),
+    Disclosure: () => embedUi('ui-disclosure', View.disclosure),
+    DragAndDrop: () => embedUi('ui-drag-and-drop', View.dragAndDrop),
+    Fieldset: () => embedUi('ui-fieldset', View.fieldset),
+    FileDrop: () => embedUi('ui-file-drop', View.fileDrop),
+    HoverIntent: () => embedUi('ui-hover-intent', View.hoverIntent),
+    Input: () => embedUi('ui-input', View.input),
+    Listbox: () => embedUi('ui-listbox', View.listbox),
+    Menu: () => embedUi('ui-menu', View.menu),
+    Meter: () => embedUi('ui-meter', View.meter),
+    Popover: () => embedUi('ui-popover', View.popover),
+    Progress: () => embedUi('ui-progress', View.progress),
+    RadioGroup: () => embedUi('ui-radio-group', View.radioGroup),
+    Select: () => embedUi('ui-select', View.select),
+    Slider: () => embedUi('ui-slider', View.slider),
+    Switch: () => embedUi('ui-switch', View.switch_),
+    Tabs: () => embedUi('ui-tabs', View.tabs),
+    Textarea: () => embedUi('ui-textarea', View.textarea),
+    Toast: () => embedUi('ui-toast', View.toast),
+    Tooltip: () => embedUi('ui-tooltip', View.tooltip),
+    Animation: () => embedUi('ui-animation', View.animation),
+    VirtualList: () => embedUi('ui-virtual-list', View.virtualList),
+    NotFound: ({ path }) => notFoundView(path, h),
+  })
 }
 
 const routeTitle = (route: Model['route']): string =>
-  M.value(route).pipe(
-    M.tag('Home', () => 'Foldkit UI Showcase'),
-    M.orElse(({ _tag }) => `${_tag} | Foldkit UI Showcase`),
+  Match.value(route).pipe(
+    Match.tag('Home', () => 'Foldkit UI Showcase'),
+    Match.orElse(({ _tag }) => `${_tag} | Foldkit UI Showcase`),
   )
 
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
@@ -677,6 +683,6 @@ export const subscriptions = Subscription.lift(UiSubscriptions.subscriptions)<
   Model,
   Message
 >({
-  toChildModel: model => model.uiModel,
-  toParentMessage: message => GotUiMessage({ message }),
+  read: model => Option.some(model.uiModel),
+  toParentMessage: message => Message.GotUiMessage({ message }),
 })

@@ -1,25 +1,25 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Effect, Match as M, Option } from 'effect'
+import { Effect, Match, Option, Schema } from 'effect'
 import { Calendar, Update } from 'foldkit'
 import type { ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
-import { m } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
+import { defineMessageUnion } from 'foldkit/message'
+import { modifyFields } from 'foldkit/struct'
 
 import { DatePicker, Calendar as UiCalendar } from '@foldkit/ui'
 
 // Add a field to your Model for the DatePicker Submodel, plus a field the
 // parent owns for the selected date. The picker no longer stores the
 // selection; the parent holds it and passes it back in as `maybeSelectedDate`.
-const Model = S.Struct({
+const Model = Schema.Struct({
   datePickerDemo: DatePicker.Model,
-  maybeSelectedDate: S.Option(Calendar.CalendarDate),
+  maybeSelectedDate: Schema.Option(Calendar.CalendarDate),
   // ...your other fields
 })
 
 // Fetch `today` once at the app boundary via flags so init stays pure:
-const Flags = S.Struct({
+const Flags = Schema.Struct({
   today: Calendar.CalendarDate,
   // ...your other flags
 })
@@ -31,8 +31,8 @@ const flags = Effect.gen(function* () {
 
 // In your init function, pass the flags-resolved today into DatePicker.init.
 // Optional: constrain the selectable range with minDate / maxDate.
-const init = (flags: Flags) => [
-  {
+const init = (flags: Flags) => ({
+  model: {
     datePickerDemo: DatePicker.init({
       id: 'date-picker-demo',
       today: flags.today,
@@ -42,13 +42,12 @@ const init = (flags: Flags) => [
     maybeSelectedDate: Option.none(),
     // ...your other fields
   },
-  [],
-]
+})
 
 // Embed the DatePicker Message in your parent Message. DatePicker handles
 // Calendar + Popover routing internally. You only need one wrapper:
-const GotDatePickerMessage = m('GotDatePickerMessage', {
-  message: DatePicker.Message,
+const Message = defineMessageUnion({
+  GotDatePickerMessage: { message: DatePicker.Message },
 })
 
 // At module scope, fold the OutMessage into your own Model. `SelectedDate`
@@ -58,27 +57,29 @@ const GotDatePickerMessage = m('GotDatePickerMessage', {
 // `ChangedViewMonth` fires when calendar navigation shifts the visible month
 // without selecting a date. Each arm returns an Update.Step over the parent
 // Model, which already has the next DatePicker Model written back:
-const foldDatePickerOutMessage = M.type<DatePicker.OutMessage>().pipe(
-  M.withReturnType<Update.Step<Model, Message>>(),
-  M.tagsExhaustive({
-    // The child has emitted `SelectedDate`. This is where the parent lifts
-    // the committed date into its own field, which is then passed back to
-    // the picker as `maybeSelectedDate`, so the parent stays the single
-    // source of truth for the selection.
-    SelectedDate:
-      ({ date }) =>
-      model => [evo(model, { maybeSelectedDate: () => Option.some(date) }), []],
-    // The user cleared the selection. Reset the parent's field.
-    ClearedDate: () => model => [
-      evo(model, { maybeSelectedDate: () => Option.none() }),
-      [],
-    ],
-    // The child has emitted `ChangedViewMonth`. In this arm the parent can
-    // update its own state or dispatch its own Commands, for example
-    // prefetch month data, fire analytics, or trigger a downstream Command.
-    ChangedViewMonth: () => model => [model, []],
+const foldDatePickerOutMessage = DatePicker.OutMessage.match<
+  Update.Step<Model, Message>
+>({
+  // The child has emitted `SelectedDate`. This is where the parent lifts
+  // the committed date into its own field, which is then passed back to
+  // the picker as `maybeSelectedDate`, so the parent stays the single
+  // source of truth for the selection.
+  SelectedDate:
+    ({ date }) =>
+    model => ({
+      model: modifyFields(model, {
+        maybeSelectedDate: () => Option.some(date),
+      }),
+    }),
+  // The user cleared the selection. Reset the parent's field.
+  ClearedDate: () => model => ({
+    model: modifyFields(model, { maybeSelectedDate: () => Option.none() }),
   }),
-)
+  // The child has emitted `ChangedViewMonth`. In this arm the parent can
+  // update its own state or dispatch its own Commands, for example
+  // prefetch month data, fire analytics, or trigger a downstream Command.
+  ChangedViewMonth: () => model => ({ model }),
+})
 
 // Update.foldChild wires the child into the parent: it delegates navigation,
 // focus, and popover messages to DatePicker.update, writes the next DatePicker
@@ -88,12 +89,12 @@ const foldDatePicker = Update.foldChild({
   update: DatePicker.update,
   read: (model: Model) => Option.some(model.datePickerDemo),
   write: (model, nextDatePickerDemo) =>
-    evo(model, { datePickerDemo: () => nextDatePickerDemo }),
-  toParentMessage: message => GotDatePickerMessage({ message }),
+    modifyFields(model, { datePickerDemo: () => nextDatePickerDemo }),
+  toParentMessage: message => Message.GotDatePickerMessage({ message }),
   foldOutMessage: foldDatePickerOutMessage,
 })
 
-// Inside your update function's M.tagsExhaustive({...}), call the fold:
+// In the corresponding Message.match handler, call the fold:
 GotDatePickerMessage: ({ message }) => foldDatePicker(model, message)
 
 // Class names live at module scope, and each view mode gets its own view
@@ -120,7 +121,7 @@ const columnHeaderClassName = 'text-center text-xs uppercase'
 const cellClassName = 'group flex items-center justify-center'
 
 const dayButtonClassName =
-  'h-9 w-9 rounded-full text-sm group-data-[today]:ring-1 group-data-[selected]:bg-accent-600 group-data-[selected]:text-white group-data-[outside-month]:text-gray-400 group-data-[disabled]:opacity-40'
+  'h-9 w-9 rounded-full text-sm group-data-[today]:ring-1 group-data-[selected]:bg-accent-600 group-data-[selected]:text-white group-data-[outside-month]:text-gray-600 group-data-[disabled]:opacity-40'
 
 const monthYearGridClassName = 'grid grid-cols-3 gap-1 outline-none'
 
@@ -306,8 +307,8 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
               onSome: date =>
                 h.span([], [`${date.year}-${date.month}-${date.day}`]),
             }),
-          toCalendarView: M.type<UiCalendar.CalendarAttributes>().pipe(
-            M.tagsExhaustive({
+          toCalendarView: Match.type<UiCalendar.CalendarAttributes>().pipe(
+            Match.tagsExhaustive({
               Days: days => daysView(days, h),
               Months: months => monthsView(months, h),
               Years: years => yearsView(years, h),
@@ -316,7 +317,7 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
           // Optional: enable hidden form input for native <form> submission:
           name: 'appointment-date',
         },
-        toParentMessage: message => GotDatePickerMessage({ message }),
+        toParentMessage: message => Message.GotDatePickerMessage({ message }),
       }),
     ],
   )

@@ -1,15 +1,10 @@
+import { Option } from 'effect'
 import { Subscription } from 'foldkit'
 
-import { DragAndDrop, Slider, VirtualList } from '@foldkit/ui'
+import { DragAndDrop, Slider } from '@foldkit/ui'
 
-import {
-  GotDragAndDropDemoMessage,
-  GotSliderRatingDemoMessage,
-  GotSliderVolumeDemoMessage,
-  GotVirtualListDemoMessage,
-  GotVirtualListVariableDemoMessage,
-  type Message,
-} from './message'
+import { Toast } from './demo/toastModule'
+import { Message } from './message'
 import type { Model } from './model'
 
 const dragAndDropSubscriptions = Subscription.lift({
@@ -18,44 +13,37 @@ const dragAndDropSubscriptions = Subscription.lift({
   dragKeyboard: DragAndDrop.subscriptions.documentKeyboard,
   autoScroll: DragAndDrop.subscriptions.autoScroll,
 })<Model, Message>({
-  toChildModel: model => model.dragAndDropDemo,
-  toParentMessage: message => GotDragAndDropDemoMessage({ message }),
+  read: model => Option.some(model.dragAndDropDemo),
+  toParentMessage: message => Message.GotDragAndDropDemoMessage({ message }),
 })
 
 const sliderRatingSubscriptions = Subscription.lift({
   sliderRatingPointer: Slider.subscriptions.dragPointer,
   sliderRatingEscape: Slider.subscriptions.dragEscape,
 })<Model, Message>({
-  toChildModel: model => model.sliderRatingDemo,
-  toParentMessage: message => GotSliderRatingDemoMessage({ message }),
+  read: model => Option.some(model.sliderRatingDemo),
+  toParentMessage: message => Message.GotSliderRatingDemoMessage({ message }),
 })
 
 const sliderVolumeSubscriptions = Subscription.lift({
   sliderVolumePointer: Slider.subscriptions.dragPointer,
   sliderVolumeEscape: Slider.subscriptions.dragEscape,
 })<Model, Message>({
-  toChildModel: model => model.sliderVolumeDemo,
-  toParentMessage: message => GotSliderVolumeDemoMessage({ message }),
+  read: model => Option.some(model.sliderVolumeDemo),
+  toParentMessage: message => Message.GotSliderVolumeDemoMessage({ message }),
 })
 
-const virtualListDemoSubscriptions = Subscription.lift({
-  virtualListContainerEvents: VirtualList.subscriptions.containerEvents,
-})<Model, Message>({
-  toChildModel: model => model.virtualListDemo,
-  toParentMessage: message => GotVirtualListDemoMessage({ message }),
+const toastDemoSubscriptions = Subscription.lift(Toast.subscriptions)<
+  Model,
+  Message
+>({
+  read: model => Option.some(model.toastDemo),
+  toParentMessage: message => Message.GotToastDemoMessage({ message }),
 })
 
-const virtualListVariableDemoSubscriptions = Subscription.lift({
-  virtualListVariableContainerEvents: VirtualList.subscriptions.containerEvents,
-})<Model, Message>({
-  toChildModel: model => model.virtualListVariableDemo,
-  toParentMessage: message => GotVirtualListVariableDemoMessage({ message }),
-})
-
-export const subscriptions = Subscription.aggregate<Model, Message>()(
+export const subscriptions = Subscription.aggregate(
   dragAndDropSubscriptions,
   sliderRatingSubscriptions,
   sliderVolumeSubscriptions,
-  virtualListDemoSubscriptions,
-  virtualListVariableDemoSubscriptions,
+  toastDemoSubscriptions,
 )

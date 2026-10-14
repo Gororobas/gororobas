@@ -1,6 +1,12 @@
-import { Array, type Schema, String, pipe } from 'effect'
+import { Array, Cause, Exit, Option, Schema, String, pipe } from 'effect'
 
-import type { Attribute, Child, Html, HtmlBuilder } from '../html/index.js'
+import type {
+  Attribute,
+  Child,
+  ChildAttribute,
+  Html,
+  HtmlBuilder,
+} from '../html/index.js'
 import {
   OnCustomEvent,
   Prop,
@@ -21,6 +27,12 @@ type EventFactory<Message, DetailType> = (
   toMessage: (detail: DetailType) => Message,
 ) => Attribute<Message>
 
+/** Constraint on a declared event's `detail` Schema. The runtime decodes
+ * `detail` synchronously inside the DOM event handler, where there is no
+ * Effect context to draw from, so a Schema requiring decoding services
+ * cannot describe an event payload. */
+export type EventSchema = Schema.Codec<unknown, unknown, never, unknown>
+
 /** @internal */
 type PropertyFactories<
   Message,
@@ -33,22 +45,24 @@ type PropertyFactories<
 }
 
 /** @internal */
-type EventFactories<Message, Events extends Record<string, Schema.Top>> = {
-  readonly [K in keyof Events as `On${KebabToPascal<string & K>}`]: EventFactory<
-    Message,
-    Schema.Schema.Type<Events[K]>
-  >
+type EventFactories<Message, Events extends Record<string, EventSchema>> = {
+  readonly [
+    K in keyof Events as `On${KebabToPascal<string & K>}`
+  ]: EventFactory<Message, Schema.Schema.Type<Events[K]>>
 }
 
 /** Typed call site for a defined custom element. The element constructor
  *  itself is callable; each declared property gets a PascalCase factory
- *  method, and each declared event gets an `On{PascalCase}` factory method. */
+ *  method, and each declared event gets an `On{PascalCase}` factory method.
+ *  The attribute array accepts {@link ChildAttribute} alongside
+ *  `Attribute<Message>`, like every html element builder, so a Submodel's
+ *  published attribute groups can be spread into a custom element. */
 export type ElementBuilder<
   Message,
   Properties extends Record<string, Schema.Top>,
-  Events extends Record<string, Schema.Top>,
+  Events extends Record<string, EventSchema>,
 > = ((
-  attributes?: ReadonlyArray<Attribute<Message>>,
+  attributes?: ReadonlyArray<Attribute<Message> | ChildAttribute>,
   children?: ReadonlyArray<Child>,
 ) => Html) &
   PropertyFactories<Message, Properties> &
@@ -58,7 +72,7 @@ export type ElementBuilder<
 export interface CustomElementConfig<
   Tag extends string,
   Properties extends Record<string, Schema.Top>,
-  Events extends Record<string, Schema.Top>,
+  Events extends Record<string, EventSchema>,
 > {
   readonly tag: Tag
   readonly properties: Properties
@@ -74,7 +88,7 @@ export interface CustomElementConfig<
 export interface CustomElementSpec<
   Tag extends string,
   Properties extends Record<string, Schema.Top>,
-  Events extends Record<string, Schema.Top>,
+  Events extends Record<string, EventSchema>,
 > {
   readonly tag: Tag
   readonly properties: Properties
@@ -145,8 +159,10 @@ const eventFactoryName = (eventName: string): string =>
  * `.withMessage<Message>()` factory that yields a typed `ElementBuilder` for
  * the consumer's Message universe.
  *
- * Property changes diff across renders; declared `CustomEvent`s are
- * converted to Messages by the runtime.
+ * Property changes diff across renders; declared `CustomEvent` details are
+ * decoded against their Schema before the runtime converts them to Messages.
+ * A detail the Schema rejects is reported to the console and dispatches no
+ * Message.
  *
  * @example
  * ```ts
@@ -157,10 +173,10 @@ const eventFactoryName = (eventName: string): string =>
  * const hexColorPicker = CustomElement.define({
  *   tag: 'hex-color-picker',
  *   properties: {
- *     color: S.String,
+ *     color: Schema.String,
  *   },
  *   events: {
- *     'color-changed': S.Struct({ value: S.String }),
+ *     'color-changed': Schema.Struct({ value: Schema.String }),
  *   },
  * })
  *
@@ -179,7 +195,7 @@ const eventFactoryName = (eventName: string): string =>
 export const define = <
   Tag extends string,
   Properties extends Record<string, Schema.Top>,
-  Events extends Record<string, Schema.Top>,
+  Events extends Record<string, EventSchema>,
 >(
   config: CustomElementConfig<Tag, Properties, Events>,
 ): CustomElementSpec<Tag, Properties, Events> => {
@@ -196,7 +212,7 @@ export const define = <
     const createVNode = customElementVNode<unknown>()(config.tag)
 
     const elementFn = (
-      attributes: ReadonlyArray<Attribute<unknown>> = [],
+      attributes: ReadonlyArray<Attribute<unknown> | ChildAttribute> = [],
       children: ReadonlyArray<Child> = [],
     ): Html => createVNode(attributes, children)
 
@@ -209,13 +225,41 @@ export const define = <
       ): Attribute<unknown> => Prop({ key: propertyName, value })
     }
 
-    for (const eventName of eventNames) {
+    for (const [eventName, detailSchema] of Object.entries(config.events)) {
+      const decodeDetail = Schema.decodeUnknownExit(detailSchema)
+      const decodeEventDetail = (detail: unknown) => {
+        const decodedDetail = decodeDetail(detail)
+
+        // NOTE: `new CustomEvent(name)` leaves `detail` as `null`, while
+        // `Schema.Struct({})` is the natural declaration for an event with no
+        // payload. Decode the raw detail first so Schemas that accept nullish
+        // values keep their declared meaning, then fall back to an empty object.
+        if (
+          (detail === null || detail === undefined) &&
+          Exit.isFailure(decodedDetail)
+        ) {
+          return decodeDetail({})
+        } else {
+          return decodedDetail
+        }
+      }
+
       builder[eventFactoryName(eventName)] = (
         toMessage: (detail: unknown) => unknown,
       ): Attribute<unknown> =>
         OnCustomEvent({
           name: eventName,
-          f: event => toMessage(event.detail),
+          f: event =>
+            Exit.match(decodeEventDetail(event.detail), {
+              onFailure: cause => {
+                console.error(
+                  `[foldkit] CustomElement '${config.tag}' rejected the detail of a "${eventName}" event:`,
+                  Cause.squash(cause),
+                )
+                return Option.none()
+              },
+              onSuccess: detail => Option.some(toMessage(detail)),
+            }),
         })
     }
 

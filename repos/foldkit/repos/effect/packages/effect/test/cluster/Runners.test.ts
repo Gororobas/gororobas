@@ -1,6 +1,5 @@
 import { assert, describe, it } from "@effect/vitest"
-import { Cause, Context, Effect, Exit, Layer, Option, Queue, Schema, Stream } from "effect"
-import { TestClock } from "effect/testing"
+import { Cause, Context, Deferred, Effect, Exit, Layer, Option, Queue, Schema, Stream } from "effect"
 import {
   ClusterError,
   ClusterSchema,
@@ -9,6 +8,7 @@ import {
   EntityId,
   EntityType,
   Envelope,
+  HttpRunner,
   Message,
   MessageStorage,
   type Reply,
@@ -21,12 +21,13 @@ import {
   Sharding,
   ShardingConfig,
   Snowflake
-} from "effect/unstable/cluster"
-import { Headers } from "effect/unstable/http"
-import { Rpc, RpcClient, RpcTest } from "effect/unstable/rpc"
-import { RpcClientError } from "effect/unstable/rpc/RpcClientError"
-import type { FromClientEncoded, FromServerEncoded } from "effect/unstable/rpc/RpcMessage"
-import { Socket } from "effect/unstable/socket"
+} from "effect/cluster"
+import { Headers, HttpClient, HttpClientResponse } from "effect/http"
+import { Rpc, RpcClient, RpcGroup, RpcMessage, RpcSerialization, RpcServer, RpcTest } from "effect/rpc"
+import { RpcClientError } from "effect/rpc/RpcClientError"
+import type { FromClientEncoded, FromServerEncoded } from "effect/rpc/RpcMessage"
+import { Socket } from "effect/socket"
+import { TestClock } from "effect/testing"
 
 // An entity whose replies cannot be serialized: the handlers return
 // non-integers for a `Schema.Int` success schema, so `Reply.serialize` fails
@@ -56,7 +57,26 @@ const TestShardingConfig = ShardingConfig.layer({
   refreshAssignmentsInterval: 0
 })
 
+const layerServerProtocol = (codecFor: RpcSerialization.CodecFor) =>
+  Layer.effect(RpcServer.Protocol)(
+    Effect.map(Queue.unbounded<number>(), (disconnects) =>
+      RpcServer.Protocol.of({
+        run: () => Effect.never,
+        disconnects,
+        send: () => Effect.void,
+        end: () => Effect.void,
+        clientIds: Effect.succeed(new Set()),
+        initialMessage: Effect.succeedNone,
+        supportsAck: false,
+        supportsTransferables: false,
+        supportsSpanPropagation: false,
+        supportsNotifications: false,
+        codecFor
+      }))
+  )
+
 const RunnerServerHandlers = RunnerServer.layerHandlers.pipe(
+  Layer.provide(layerServerProtocol(Schema.toCodecJson as RpcSerialization.CodecFor)),
   Layer.provideMerge(BadReplyEntityLayer),
   Layer.provideMerge(Sharding.layer),
   Layer.provideMerge(Snowflake.layerGenerator),
@@ -66,6 +86,71 @@ const RunnerServerHandlers = RunnerServer.layerHandlers.pipe(
   Layer.provideMerge(MessageStorage.layerMemory),
   Layer.provide(TestShardingConfig)
 )
+
+describe.concurrent("HttpRunner", () => {
+  const address = RunnerAddress.make("localhost", 8080)
+  const Rpcs = RpcGroup.make(Rpc.make("Ping", { success: Schema.String }))
+
+  it.effect("preserves a leading slash in HTTP client paths", () => {
+    let requestUrl: string | undefined
+    const httpClient = HttpClient.make((request) => {
+      requestUrl = request.url
+      return Effect.succeed(HttpClientResponse.fromWeb(
+        request,
+        new Response("[{\"_tag\":\"Exit\",\"requestId\":\"0\",\"exit\":{\"_tag\":\"Success\",\"value\":\"pong\"}}]")
+      ))
+    })
+    return Effect.gen(function*() {
+      const runnerProtocol = yield* Runners.RpcClientProtocol
+      const protocol = yield* runnerProtocol.make(address)
+      const client = yield* RpcClient.make(Rpcs, {
+        generateRequestId: () => RpcMessage.RequestId("0")
+      }).pipe(Effect.provideService(RpcClient.Protocol, protocol))
+
+      yield* client.Ping()
+
+      assert.strictEqual(requestUrl, "http://localhost:8080/runner/")
+    }).pipe(
+      Effect.provide(HttpRunner.layerClientProtocolHttp({ path: "/runner" })),
+      Effect.provide(RpcSerialization.layerJson),
+      Effect.provideService(HttpClient.HttpClient, httpClient)
+    )
+  })
+
+  it.effect("preserves a leading slash in WebSocket client paths", () =>
+    Effect.gen(function*() {
+      const connected = yield* Deferred.make<void>()
+      let socketUrl: string | undefined
+      const constructor: Socket.WebSocketConstructor["Service"] = (url) => {
+        socketUrl = url
+        return {
+          readyState: 1,
+          addEventListener() {},
+          removeEventListener() {},
+          close() {},
+          send() {}
+        }
+      }
+
+      yield* Effect.gen(function*() {
+        const runnerProtocol = yield* Runners.RpcClientProtocol
+        const protocol = yield* runnerProtocol.make(address)
+        yield* protocol.run(0, () => Effect.void).pipe(Effect.forkScoped)
+        yield* Deferred.await(connected)
+
+        assert.strictEqual(socketUrl, "ws://localhost:8080/runner")
+      }).pipe(
+        Effect.provide(HttpRunner.layerClientProtocolWebsocket({ path: "/runner" })),
+        Effect.provide(RpcSerialization.layerJson),
+        Effect.provideService(Socket.WebSocketConstructor, constructor),
+        Effect.provideService(RpcClient.ConnectionHooks, {
+          onConnect: Deferred.succeed(connected, undefined).pipe(Effect.asVoid),
+          onDisconnect: Effect.void
+        }),
+        Effect.scoped
+      )
+    }))
+})
 
 describe.concurrent("RunnerServer", () => {
   const makeRequest = (options: {
@@ -186,28 +271,38 @@ describe.concurrent("Runners.makeRpc", () => {
       annotations: Context.empty()
     })
 
+  // A hole codec that is observably different from `Schema.toCodecJson`: the
+  // entity payload becomes a JSON string inside the runner envelope.
+  const codecForJsonString =
+    (<S extends Schema.Top>(schema: S) =>
+      Schema.fromJsonString(Schema.toCodecJson(schema as any))) as RpcSerialization.CodecFor
+
   const layerFakeProtocol = (
     onRequest: (
       request: FromClientEncoded,
       write: (data: FromServerEncoded) => Effect.Effect<void>
-    ) => Effect.Effect<void, RpcClientError>
+    ) => Effect.Effect<void, RpcClientError>,
+    codecFor: RpcSerialization.CodecFor = Schema.toCodecJson as RpcSerialization.CodecFor
   ) =>
-    Layer.succeed(Runners.RpcClientProtocol)(() =>
-      Effect.sync(() => {
-        let write!: (data: FromServerEncoded) => Effect.Effect<void>
-        return RpcClient.Protocol.of({
-          run(_clientId, f) {
-            write = f
-            return Effect.never
-          },
-          send(_clientId, request) {
-            return onRequest(request, write)
-          },
-          supportsAck: true,
-          supportsTransferables: false
+    Layer.succeed(Runners.RpcClientProtocol)({
+      codecFor,
+      make: () =>
+        Effect.sync(() => {
+          let write!: (data: FromServerEncoded) => Effect.Effect<void>
+          return RpcClient.Protocol.of({
+            run(_clientId, f) {
+              write = f
+              return Effect.never
+            },
+            send(_clientId, request) {
+              return onRequest(request, write)
+            },
+            supportsAck: true,
+            supportsTransferables: false,
+            codecFor
+          })
         })
-      })
-    )
+    })
 
   const layerRunners = (protocol: Layer.Layer<Runners.RpcClientProtocol>) =>
     Runners.layerRpc.pipe(
@@ -216,6 +311,43 @@ describe.concurrent("Runners.makeRpc", () => {
       Layer.provideMerge(MessageStorage.layerNoop),
       Layer.provide(TestShardingConfig)
     )
+
+  it.effect("uses the client protocol codec for simulated remote serialization", () => {
+    let codecCalls = 0
+    const codecFor = (<S extends Schema.Top>(schema: S) => {
+      codecCalls++
+      return Schema.fromJsonString(Schema.toCodecJson(schema as any))
+    }) as RpcSerialization.CodecFor
+    const codecForJson = Schema.toCodecJson as RpcSerialization.CodecFor
+    return Effect.gen(function*() {
+      const runners = yield* Runners.Runners
+      const snowflake = yield* Snowflake.Generator
+      const message = makeOutgoingRequest(TestRpc, snowflake.nextUnsafe(), () => Effect.void)
+
+      yield* runners.sendLocal({
+        message,
+        simulateRemoteSerialization: true,
+        send: (incoming) =>
+          Effect.sync(() => {
+            assert.strictEqual(incoming._tag, "IncomingRequestLocal")
+            if (incoming._tag === "IncomingRequestLocal") {
+              assert.strictEqual((incoming.envelope.payload as { readonly id: number }).id, 1)
+            }
+          })
+      })
+
+      assert.strictEqual(codecCalls, 2)
+      assert.strictEqual(message.encodedCache?.codecFor, codecFor)
+      const encodedJson = yield* Message.serialize(message, codecForJson)
+      assert.strictEqual(encodedJson._tag, "Request")
+      if (encodedJson._tag === "Request") {
+        assert.deepStrictEqual(encodedJson.payload, { id: 1 })
+      }
+      assert.strictEqual(message.encodedCache?.codecFor, codecForJson)
+    }).pipe(
+      Effect.provide(layerRunners(layerFakeProtocol(() => Effect.void, codecFor)))
+    )
+  })
 
   const respondWithDefect = (request: FromClientEncoded, write: (data: FromServerEncoded) => Effect.Effect<void>) =>
     request._tag === "Request" ? write({ _tag: "Defect", defect: "boom" }) : Effect.void
@@ -306,4 +438,37 @@ describe.concurrent("Runners.makeRpc", () => {
       }
       assert.instanceOf(Cause.squash(exit.cause), ClusterError.RunnerUnavailable)
     }).pipe(Effect.provide(layerRunners(layerFakeProtocol(respondWithDefect)))))
+
+  it.effect("encodes the entity payload with the protocol codec and leaves the hole untouched", () => {
+    const sent: Array<FromClientEncoded> = []
+    const protocol = layerFakeProtocol(
+      (request, write) => {
+        sent.push(request)
+        // the defect hole is filled by the same codec
+        return request._tag === "Request"
+          ? write({ _tag: "Defect", defect: JSON.stringify("boom") })
+          : Effect.void
+      },
+      codecForJsonString
+    )
+    return Effect.gen(function*() {
+      const runners = yield* Runners.Runners
+      const snowflakeGen = yield* Snowflake.Generator
+      const message = makeOutgoingRequest(TestRpc, snowflakeGen.nextUnsafe(), () => Effect.void)
+
+      yield* runners.send({ address: runnerAddress, message })
+
+      assert.strictEqual(sent.length, 1)
+      const request = sent[0]
+      if (request._tag !== "Request") {
+        return assert.fail("expected a runner Request")
+      }
+      // the outer runner payload is filled by the protocol codec
+      assert.strictEqual(typeof request.payload, "string")
+      const outer = JSON.parse(request.payload as string)
+      // the entity payload was encoded with the same codec and carried through
+      // the opaque hole without being re-encoded
+      assert.strictEqual(outer.request.payload, JSON.stringify({ id: 1 }))
+    }).pipe(Effect.provide(layerRunners(protocol)))
+  })
 })

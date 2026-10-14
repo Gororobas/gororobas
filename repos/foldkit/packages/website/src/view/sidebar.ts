@@ -5,34 +5,32 @@ import apiModuleIndex from 'virtual:api-module-index'
 
 import { Dialog, Disclosure } from '@foldkit/ui'
 
+import { Shared } from '../component'
 import {
   DOCS_SIDEBAR_NAV_ID,
   MOBILE_MENU_NAV_ID,
   type NavPage,
   docsSections,
   findActiveSectionKey,
+  getStartedPage,
   isNavPageActive,
 } from '../docsNav'
 import { Icon } from '../icon'
 import { Link } from '../link'
-import { type Model } from '../main'
+import { Message } from '../message'
+import { type Model } from '../model'
 import {
-  GotMobileMenuDialogMessage,
-  type Message,
-  ToggledSidebarGroup,
-} from '../message'
-import {
-  ExampleDetailRoute,
+  AppRoute,
   apiModuleRouter,
   blogRouter,
   homeRouter,
   isBlogRoute,
 } from '../route'
 import { type GroupKey, type SidebarGroups } from '../sidebarStorage'
-import { betaTag, iconLink } from './shared'
 
 const GROUP_ID: Record<GroupKey, string> = {
-  getStarted: 'get-started-group',
+  blog: 'blog-group',
+  introduction: 'introduction-group',
   coreConcepts: 'core-concepts-group',
   comparisons: 'comparisons-group',
   faq: 'faq-group',
@@ -47,31 +45,30 @@ const GROUP_ID: Record<GroupKey, string> = {
 }
 
 const sidebarGroup = (
-  config: {
-    readonly id: string
-    readonly label: string
-    readonly isOpen: boolean
-    readonly onToggle: (isOpen: boolean) => Message
-    readonly children: Html
-    readonly isLocked: boolean
-  },
+  config: Readonly<{
+    id: string
+    label: string
+    isOpen: boolean
+    onToggle: (isOpen: boolean) => Message
+    children: Html
+    isLocked: boolean
+  }>,
   h: HtmlBuilder<Message>,
 ): Html => {
   const buttonClassName = clsx(
     'w-full flex items-center justify-between transition',
     'px-4 py-2.5 md:py-2',
-    'text-xs font-semibold uppercase tracking-wider',
-    'text-gray-600 dark:text-gray-400',
-    'bg-gray-200 dark:bg-gray-800',
+    'text-sm font-medium',
+    'text-gray-800 dark:text-gray-200',
     {
       'cursor-default': config.isLocked,
-      'cursor-pointer hover:bg-gray-300/60 dark:hover:bg-gray-700/60 hover:text-gray-700 dark:hover:text-gray-300':
+      'cursor-pointer hover:text-gray-900 dark:hover:text-white':
         !config.isLocked,
     },
   )
 
   return h.li(
-    [],
+    [h.Class('mb-2.5 last:mb-0')],
     [
       Disclosure.view(
         {
@@ -152,6 +149,43 @@ const navLink = (
     ],
   )
 
+const getStartedClass = (isActive: boolean) =>
+  clsx('block px-4 py-2.5 md:py-0 transition text-sm font-medium', {
+    'text-accent-700 dark:text-accent-400 underline underline-offset-2':
+      isActive,
+    'text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white':
+      !isActive,
+  })
+
+const getStartedNavItem = (
+  route: Model['route'],
+  maybeExampleSlug: Option.Option<string>,
+  h: HtmlBuilder<Message>,
+): Html => {
+  const isActive = isNavPageActive(
+    route._tag,
+    maybeExampleSlug,
+    getStartedPage._tag,
+  )
+
+  return h.li(
+    [h.Class('mb-2.5')],
+    [
+      h.a(
+        [
+          h.Href(getStartedPage.href),
+          h.Class(getStartedClass(isActive)),
+          ...(isActive ? [h.AriaCurrent('page')] : []),
+        ],
+        [getStartedPage.label],
+      ),
+    ],
+  )
+}
+
+const DESKTOP_ID_PREFIX = 'desktop'
+const MOBILE_ID_PREFIX = 'mobile'
+
 const computeNavLinks = (
   idPrefix: string,
   route: Model['route'],
@@ -162,7 +196,7 @@ const computeNavLinks = (
   const maybeExampleSlug = pipe(
     route,
     Option.liftPredicate(
-      (route): route is typeof ExampleDetailRoute.Type =>
+      (route): route is typeof AppRoute.ExampleDetail.Type =>
         route._tag === 'ExampleDetail',
     ),
     Option.map(route => route.exampleSlug),
@@ -176,7 +210,7 @@ const computeNavLinks = (
 
   const pageGroupList = (pages: ReadonlyArray<NavPage>): Html =>
     h.ul(
-      [h.Class('space-y-0.5')],
+      [h.Class('space-y-1')],
       Array.map(pages, page =>
         navLink(
           page.href,
@@ -190,6 +224,26 @@ const computeNavLinks = (
   return h.ul(
     [h.Class('space-y-0.5')],
     [
+      getStartedNavItem(route, maybeExampleSlug, h),
+      ...(idPrefix === MOBILE_ID_PREFIX
+        ? [
+            sidebarGroup(
+              {
+                id: `${idPrefix}-${GROUP_ID.blog}`,
+                label: 'Blog',
+                isOpen: sidebarGroups.blog,
+                onToggle: isOpen =>
+                  Message.ToggledSidebarGroup({ key: 'blog', isOpen }),
+                isLocked: isLocked('blog'),
+                children: h.ul(
+                  [h.Class('space-y-0.5')],
+                  [navLink(blogRouter(), isBlogRoute(route), 'Posts', h)],
+                ),
+              },
+              h,
+            ),
+          ]
+        : []),
       ...Array.map(docsSections, section => {
         return sidebarGroup(
           {
@@ -197,13 +251,13 @@ const computeNavLinks = (
             label: section.label,
             isOpen: sidebarGroups[section.key],
             onToggle: isOpen =>
-              ToggledSidebarGroup({ key: section.key, isOpen }),
+              Message.ToggledSidebarGroup({ key: section.key, isOpen }),
             isLocked: isLocked(section.key),
             children: h.div(
               [h.Class('divide-y divide-gray-200 dark:divide-gray-800')],
               Array.map(section.pageGroups, group =>
                 h.div(
-                  [h.Class('py-2 first:pt-0 last:pb-0')],
+                  [h.Class('py-3 first:pt-0 last:pb-0')],
                   [pageGroupList(group)],
                 ),
               ),
@@ -218,10 +272,10 @@ const computeNavLinks = (
           label: 'API Reference',
           isOpen: sidebarGroups.apiReference,
           onToggle: isOpen =>
-            ToggledSidebarGroup({ key: 'apiReference', isOpen }),
+            Message.ToggledSidebarGroup({ key: 'apiReference', isOpen }),
           isLocked: isLocked('apiReference'),
           children: h.ul(
-            [h.Class('space-y-0.5')],
+            [h.Class('space-y-1')],
             Array.map(apiModuleIndex, ({ slug, name }) =>
               navLink(
                 apiModuleRouter({
@@ -240,37 +294,9 @@ const computeNavLinks = (
   )
 }
 
-const blogSectionHeaderClassName = clsx(
-  'w-full flex items-center justify-between transition cursor-default',
-  'px-4 py-2.5 md:py-2',
-  'text-xs font-semibold uppercase tracking-wider',
-  'text-gray-600 dark:text-gray-400',
-  'bg-gray-200 dark:bg-gray-800',
-)
-
-const blogSection = (route: Model['route'], h: HtmlBuilder<Message>): Html =>
-  h.div(
-    [],
-    [
-      h.div([h.Class(blogSectionHeaderClassName)], ['Blog']),
-      h.div(
-        [h.Class('px-4 py-2')],
-        [
-          h.ul(
-            [h.Class('space-y-0.5')],
-            [navLink(blogRouter(), isBlogRoute(route), 'Posts', h)],
-          ),
-        ],
-      ),
-    ],
-  )
-
-const DESKTOP_ID_PREFIX = 'desktop'
-const MOBILE_ID_PREFIX = 'mobile'
-
 const lazyNavLinks = createKeyedLazy()
 
-export const sidebarView = (model: Model, h: HtmlBuilder<Message>): Html => {
+export const view = (model: Model, h: HtmlBuilder<Message>): Html => {
   const desktopNavLinks = lazyNavLinks(DESKTOP_ID_PREFIX, computeNavLinks, [
     DESKTOP_ID_PREFIX,
     model.route,
@@ -282,7 +308,7 @@ export const sidebarView = (model: Model, h: HtmlBuilder<Message>): Html => {
     [
       h.AriaLabel('Documentation sidebar'),
       h.Class(
-        'hidden md:flex fixed top-[var(--header-height)] bottom-0 left-0 z-40 w-64 bg-cream dark:bg-gray-900 border-r border-gray-300 dark:border-gray-800 flex-col',
+        'docs-sidebar hidden md:flex fixed top-[var(--header-height)] bottom-0 z-40 w-64 bg-cream dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex-col',
       ),
     ],
     [
@@ -290,7 +316,7 @@ export const sidebarView = (model: Model, h: HtmlBuilder<Message>): Html => {
         [
           h.AriaLabel('Documentation'),
           h.Id(DOCS_SIDEBAR_NAV_ID),
-          h.Class('flex-1 overflow-y-auto pb-4'),
+          h.Class('flex-1 overflow-y-auto py-5'),
         ],
         [desktopNavLinks],
       ),
@@ -298,7 +324,7 @@ export const sidebarView = (model: Model, h: HtmlBuilder<Message>): Html => {
   )
 }
 
-export const mobileMenuView = (model: Model, h: HtmlBuilder<Message>): Html => {
+export const mobileView = (model: Model, h: HtmlBuilder<Message>): Html => {
   const mobileNavLinks = lazyNavLinks(MOBILE_ID_PREFIX, computeNavLinks, [
     MOBILE_ID_PREFIX,
     model.route,
@@ -306,16 +332,24 @@ export const mobileMenuView = (model: Model, h: HtmlBuilder<Message>): Html => {
     h,
   ])
 
-  const mobileMenuContent = (
-    closeButton: Dialog.RenderInfo['closeButton'],
-  ): Html =>
+  const mobileMenuContent = ({
+    closeButton,
+    description,
+    initialFocus,
+    title,
+  }: Dialog.RenderInfo): Html =>
     h.div(
       [h.Class('flex flex-col h-full')],
       [
+        h.span([...title, h.Class('sr-only')], ['Navigation menu']),
+        h.span(
+          [...description, h.Class('sr-only')],
+          ['Browse Foldkit documentation'],
+        ),
         h.div(
           [
             h.Class(
-              'flex justify-between items-center h-[var(--header-height)] pt-[env(safe-area-inset-top,0px)] px-4 border-b border-gray-300 dark:border-gray-800 shrink-0',
+              'flex justify-between items-center h-[var(--header-height)] pt-[env(safe-area-inset-top,0px)] px-4 md:px-6 border-b border-gray-200 dark:border-gray-800 shrink-0',
             ),
           ],
           [
@@ -330,14 +364,14 @@ export const mobileMenuView = (model: Model, h: HtmlBuilder<Message>): Html => {
                   h.Decoding('sync'),
                   h.Class('h-6 w-auto dark:invert'),
                 ]),
-                betaTag,
+                Shared.betaTag,
               ],
             ),
             h.button(
               [
                 ...closeButton,
                 h.Class(
-                  'p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-700 dark:text-gray-300 cursor-pointer',
+                  '-mr-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-700 dark:text-gray-300 cursor-pointer',
                 ),
                 h.AriaLabel('Close menu'),
               ],
@@ -349,26 +383,30 @@ export const mobileMenuView = (model: Model, h: HtmlBuilder<Message>): Html => {
           [
             h.AriaLabel('Documentation'),
             h.Id(MOBILE_MENU_NAV_ID),
-            h.Class('flex-1 overflow-y-auto'),
+            h.Class('flex-1 overflow-y-auto py-2'),
             h.Tabindex(-1),
-            h.Autofocus(true),
+            ...initialFocus,
           ],
-          [blogSection(model.route, h), mobileNavLinks],
+          [mobileNavLinks],
         ),
         h.div(
           [
             h.Class(
-              'p-4 border-t border-gray-300 dark:border-gray-800 shrink-0',
+              'p-4 border-t border-gray-200 dark:border-gray-800 shrink-0',
             ),
           ],
           [
             h.div(
               [h.Class('flex items-center justify-center gap-8')],
               [
-                iconLink(Link.github, 'GitHub', Icon.github('w-6 h-6')),
-                iconLink(Link.discord, 'Discord', Icon.discord('w-6 h-6')),
-                iconLink(Link.xSocial, 'X', Icon.xSocial('w-6 h-6')),
-                iconLink(Link.npm, 'npm', Icon.npm('w-8 h-8')),
+                Shared.iconLink(Link.github, 'GitHub', Icon.github('w-6 h-6')),
+                Shared.iconLink(
+                  Link.discord,
+                  'Discord',
+                  Icon.discord('w-6 h-6'),
+                ),
+                Shared.iconLink(Link.xSocial, 'X', Icon.xSocial('w-6 h-6')),
+                Shared.iconLink(Link.npm, 'npm', Icon.npm('w-8 h-8')),
               ],
             ),
           ],
@@ -381,25 +419,29 @@ export const mobileMenuView = (model: Model, h: HtmlBuilder<Message>): Html => {
     model: model.mobileMenuDialog,
     view: Dialog.view,
     viewInputs: {
-      toView: ({ dialog, backdrop, panel, closeButton, isVisible }) =>
+      hasDescription: true,
+      toView: renderInfo =>
         h.dialog(
-          [...dialog, h.Class('md:hidden')],
-          isVisible
+          [...renderInfo.dialog, h.Class('md:hidden')],
+          renderInfo.isVisible
             ? [
-                h.div([...backdrop, h.Class('fixed inset-0 z-[59]')]),
+                h.div([
+                  ...renderInfo.backdrop,
+                  h.Class('fixed inset-0 z-[59]'),
+                ]),
                 h.div(
                   [
-                    ...panel,
+                    ...renderInfo.panel,
                     h.Class(
                       'fixed inset-0 z-[60] bg-cream dark:bg-gray-900 flex flex-col',
                     ),
                   ],
-                  [mobileMenuContent(closeButton)],
+                  [mobileMenuContent(renderInfo)],
                 ),
               ]
             : [],
         ),
     },
-    toParentMessage: message => GotMobileMenuDialogMessage({ message }),
+    toParentMessage: message => Message.GotMobileMenuDialogMessage({ message }),
   })
 }

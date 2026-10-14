@@ -1,80 +1,31 @@
-import {
-  Array,
-  Effect,
-  Match as M,
-  Option,
-  Queue,
-  Schema as S,
-  Stream,
-  pipe,
-} from 'effect'
-import { AsyncData, Command, Mount, Submodel } from 'foldkit'
+import { Array, Effect, Option, Queue, Schema, Stream, pipe } from 'effect'
+import { AsyncData, Command, Mount, Submodel, Update } from 'foldkit'
 import { Html, type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
-import { m } from 'foldkit/message'
-import { evo } from 'foldkit/struct'
+import { modifyFields } from 'foldkit/struct'
 
 import { Disclosure, Tabs } from '@foldkit/ui'
 
+import { CodeBlock } from '../../component'
 import { Icon } from '../../icon'
 import { exampleSourceHref } from '../../link'
-import type { TableOfContentsEntry } from '../../main'
 import { pageTitle, para } from '../../prose'
-import { examplesRouter, playgroundRouter } from '../../route'
 import {
-  type RenderCopyButton,
-  highlightedCodeBlockFor,
-} from '../../view/codeBlock'
+  exampleDetailRouter,
+  examplesRouter,
+  playgroundRouter,
+} from '../../route'
+import type { TableOfContentsEntry } from '../../tableOfContentsEntry'
+import { Message } from './message'
 import { type ExampleMeta, findBySlug } from './meta'
+import { CurrentSourcesAsyncData, type Model } from './model'
 import {
   type ExampleSourceFile,
   ExampleSources,
   loadSourcesForSlug,
 } from './sources'
 
-// MODEL
-
-export const CurrentSourcesAsyncData = AsyncData.Schema(
-  ExampleSources,
-  S.String,
-)
-
-export const Model = S.Struct({
-  sourceFileTabs: Tabs.Model,
-  maybeActiveSourceFilePath: S.Option(S.String),
-  maybeExampleUrl: S.Option(S.String),
-  isLivePreviewOpen: S.Boolean,
-  currentSources: CurrentSourcesAsyncData.schema,
-})
-export type Model = typeof Model.Type
-
-// MESSAGE
-
-const GotSourceFileTabsMessage = m('GotSourceFileTabsMessage', {
-  message: Tabs.Message,
-})
-export const ChangedExampleUrl = m('ChangedExampleUrl', { url: S.String })
-const ToggledLivePreview = m('ToggledLivePreview', {
-  isOpen: S.Boolean,
-})
-const RequestedExampleSources = m('RequestedExampleSources', {
-  slug: S.String,
-})
-export const SucceededLoadExampleSources = m('SucceededLoadExampleSources', {
-  sources: ExampleSources,
-})
-export const FailedLoadExampleSources = m('FailedLoadExampleSources', {
-  error: S.String,
-})
-
-export const Message = S.Union([
-  GotSourceFileTabsMessage,
-  ChangedExampleUrl,
-  ToggledLivePreview,
-  RequestedExampleSources,
-  SucceededLoadExampleSources,
-  FailedLoadExampleSources,
-])
-export type Message = typeof Message.Type
+export { Message } from './message'
+export { CurrentSourcesAsyncData, Model } from './model'
 
 // COMMAND
 
@@ -82,17 +33,20 @@ export type Message = typeof Message.Type
  *  loaded sources on success or a failure Message when the fetch does not
  *  complete. */
 export const LoadExampleSources = Command.define('LoadExampleSources', {
-  args: { slug: S.String },
-  messages: [SucceededLoadExampleSources, FailedLoadExampleSources],
+  args: { slug: Schema.String },
+  messages: [
+    Message.SucceededLoadExampleSources,
+    Message.FailedLoadExampleSources,
+  ],
   execute: ({ slug }) =>
     Effect.tryPromise({
       try: () => loadSourcesForSlug(slug),
       catch: error =>
         error instanceof Error ? error.message : `Unknown example: ${slug}`,
     }).pipe(
-      Effect.map(sources => SucceededLoadExampleSources({ sources })),
+      Effect.map(sources => Message.SucceededLoadExampleSources({ sources })),
       Effect.catch(error =>
-        Effect.succeed(FailedLoadExampleSources({ error })),
+        Effect.succeed(Message.FailedLoadExampleSources({ error })),
       ),
     ),
 })
@@ -117,22 +71,25 @@ const isExampleUrlMessageFromIframe = (
   event.data.type === BRIDGE_MESSAGE_TYPE &&
   typeof event.data.url === 'string'
 
-const ObserveExampleUrlMessages = Mount.defineStream(
-  'ObserveExampleUrlMessages',
-  ChangedExampleUrl,
-)(element => {
+const observeExampleUrlMessages = (element: Element) => {
   if (!(element instanceof HTMLIFrameElement)) {
     return Stream.empty
   }
-  return Stream.callback<typeof ChangedExampleUrl.Type>(queue =>
+
+  return Stream.callback<typeof Message.ChangedExampleUrl.Type>(queue =>
     Effect.acquireRelease(
       Effect.sync(() => {
         const handler = (event: MessageEvent) => {
           if (!isExampleUrlMessageFromIframe(event, element)) {
             return
           }
-          Queue.offerUnsafe(queue, ChangedExampleUrl({ url: event.data.url }))
+
+          Queue.offerUnsafe(
+            queue,
+            Message.ChangedExampleUrl({ url: event.data.url }),
+          )
         }
+
         window.addEventListener('message', handler)
         return handler
       }),
@@ -140,120 +97,111 @@ const ObserveExampleUrlMessages = Mount.defineStream(
         Effect.sync(() => window.removeEventListener('message', handler)),
     ).pipe(Effect.flatMap(() => Effect.never)),
   )
-})
+}
+
+const ObserveExampleUrlMessages = Mount.defineStream(
+  'ObserveExampleUrlMessages',
+  {
+    messages: [Message.ChangedExampleUrl],
+    execute: ({ element }) => observeExampleUrlMessages(element),
+  },
+)
 
 // INIT
 
-export const init = (): readonly [
-  Model,
-  ReadonlyArray<Command.Command<Message>>,
-] => [
-  {
+type UpdateReturn = Update.Return<Model, Message>
+
+export const init = (): UpdateReturn => ({
+  model: {
     sourceFileTabs: Tabs.init({ id: 'source-file-tabs' }),
     maybeActiveSourceFilePath: Option.none(),
     maybeExampleUrl: Option.none(),
     isLivePreviewOpen: true,
     currentSources: CurrentSourcesAsyncData.Idle(),
   },
-  [],
-]
+})
+
+const isSourceAvailable = (slug: string): boolean =>
+  Option.match(findBySlug(slug), {
+    onNone: () => true,
+    onSome: meta => meta.livePreview !== 'Unavailable',
+  })
 
 export const boot = (
   maybeInitialSlug: Option.Option<string>,
-): readonly [Model, ReadonlyArray<Command.Command<Message>>] => {
-  const [model, initCommands] = init()
-  return Option.match(maybeInitialSlug, {
-    onNone: () => [model, initCommands],
-    onSome: slug => {
-      const [bootedModel, bootCommands] = update(
-        model,
-        RequestedExampleSources({ slug }),
-      )
-      return [bootedModel, [...initCommands, ...bootCommands]]
-    },
+  maybeExampleSources: Option.Option<
+    typeof ExampleSources.Type
+  > = Option.none(),
+): UpdateReturn => {
+  const init_ = init()
+  return Option.match(maybeExampleSources, {
+    onNone: () =>
+      Option.match(maybeInitialSlug, {
+        onNone: () => init_,
+        onSome: slug =>
+          isSourceAvailable(slug)
+            ? update(init_.model, Message.RequestedExampleSources({ slug }))
+            : init_,
+      }),
+    onSome: sources =>
+      update(init_.model, Message.SucceededLoadExampleSources({ sources })),
   })
 }
 
 // UPDATE
 
-export const update = (
-  model: Model,
-  message: Message,
-): readonly [Model, ReadonlyArray<Command.Command<Message>>] =>
-  M.value(message).pipe(
-    M.withReturnType<
-      readonly [Model, ReadonlyArray<Command.Command<Message>>]
-    >(),
-    M.tagsExhaustive({
-      GotSourceFileTabsMessage: ({ message }) => {
-        const [nextTabs, tabsCommands, maybeOutMessage] = SourceFileTabs.update(
-          model.sourceFileTabs,
-          message,
-        )
+export const update = (model: Model, message: Message) =>
+  Message.match<UpdateReturn>(message, {
+    GotSourceFileTabsMessage: ({ message }) =>
+      foldSourceFileTabs(model, message),
+    ChangedExampleUrl: ({ url }) => ({
+      model: modifyFields(model, { maybeExampleUrl: () => Option.some(url) }),
+    }),
+    ToggledLivePreview: ({ isOpen }) => ({
+      model: modifyFields(model, { isLivePreviewOpen: () => isOpen }),
+    }),
 
-        const nextMaybeActiveSourceFilePath = Option.match(maybeOutMessage, {
-          onNone: () => model.maybeActiveSourceFilePath,
-          onSome: M.type<Tabs.OutMessage>().pipe(
-            M.tagsExhaustive({
-              Selected: ({ value }) => Option.some(value),
-            }),
+    RequestedExampleSources: ({ slug }) => ({
+      model: modifyFields(model, {
+        sourceFileTabs: () => Tabs.init({ id: 'source-file-tabs' }),
+        maybeActiveSourceFilePath: () => Option.none(),
+        maybeExampleUrl: () => Option.none(),
+        currentSources: () => CurrentSourcesAsyncData.Loading(),
+      }),
+      commands: [LoadExampleSources({ slug })],
+    }),
+
+    SucceededLoadExampleSources: ({ sources }) => ({
+      model: modifyFields(model, {
+        maybeActiveSourceFilePath: () =>
+          pipe(
+            sources.files,
+            Array.head,
+            Option.map(file => file.path),
           ),
-        })
+        currentSources: () =>
+          CurrentSourcesAsyncData.Success({ data: sources }),
+      }),
+    }),
 
-        return [
-          evo(model, {
-            sourceFileTabs: () => nextTabs,
-            maybeActiveSourceFilePath: () => nextMaybeActiveSourceFilePath,
-          }),
-          Command.mapMessages(tabsCommands, message =>
-            GotSourceFileTabsMessage({ message }),
-          ),
-        ]
-      },
-      ChangedExampleUrl: ({ url }) => [
-        evo(model, { maybeExampleUrl: () => Option.some(url) }),
-        [],
-      ],
-      ToggledLivePreview: ({ isOpen }) => [
-        evo(model, { isLivePreviewOpen: () => isOpen }),
-        [],
-      ],
+    FailedLoadExampleSources: ({ error }) => ({
+      model: modifyFields(model, {
+        currentSources: () => CurrentSourcesAsyncData.Failure({ error }),
+      }),
+    }),
+  })
 
-      RequestedExampleSources: ({ slug }) => [
-        evo(model, {
+export const informRouteChanged = (model: Model, slug: string) =>
+  isSourceAvailable(slug)
+    ? update(model, Message.RequestedExampleSources({ slug }))
+    : {
+        model: modifyFields(model, {
           sourceFileTabs: () => Tabs.init({ id: 'source-file-tabs' }),
           maybeActiveSourceFilePath: () => Option.none(),
           maybeExampleUrl: () => Option.none(),
-          currentSources: () => CurrentSourcesAsyncData.Loading(),
+          currentSources: () => CurrentSourcesAsyncData.Idle(),
         }),
-        [LoadExampleSources({ slug })],
-      ],
-
-      SucceededLoadExampleSources: ({ sources }) => [
-        evo(model, {
-          maybeActiveSourceFilePath: () =>
-            pipe(
-              sources.files,
-              Array.head,
-              Option.map(file => file.path),
-            ),
-          currentSources: () =>
-            CurrentSourcesAsyncData.Success({ data: sources }),
-        }),
-        [],
-      ],
-
-      FailedLoadExampleSources: ({ error }) => [
-        evo(model, {
-          currentSources: () => CurrentSourcesAsyncData.Failure({ error }),
-        }),
-        [],
-      ],
-    }),
-  )
-
-export const informRouteChanged = (model: Model, slug: string) =>
-  update(model, RequestedExampleSources({ slug }))
+      }
 
 // VIEW
 
@@ -261,37 +209,37 @@ const featureTag = (text: string): Html =>
   ih.div(
     [
       ih.Class(
-        'text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
+        'text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300',
       ),
     ],
     [text],
   )
 
-const chromeRecommendedHint = (): Html =>
-  ih.p(
-    [ih.Class('text-xs text-gray-500 dark:text-gray-400')],
-    ['Requires a Chromium browser'],
+const launchPlaygroundLink = (meta: ExampleMeta): Html =>
+  ih.a(
+    [
+      ih.Href(playgroundRouter({ exampleSlug: meta.slug })),
+      ih.Class('cta-amber-sm'),
+    ],
+    [Icon.bolt('w-4 h-4'), 'Launch Playground'],
   )
 
-const launchPlaygroundSection = (
-  meta: ExampleMeta,
-  isShowingChromeHint: boolean,
-): Html =>
+const exampleActions = (meta: ExampleMeta): Html =>
   ih.div(
-    [ih.Class('flex flex-col items-start gap-1')],
+    [ih.Class('flex flex-col items-start gap-3 mt-3')],
     [
+      launchPlaygroundLink(meta),
       ih.a(
         [
-          ih.Href(playgroundRouter({ exampleSlug: meta.slug })),
-          ih.Class('cta-amber-sm'),
+          ih.Href(exampleSourceHref(meta.slug)),
+          ih.Class('link-accent text-sm'),
         ],
-        [Icon.bolt('w-4 h-4'), 'Launch Playground'],
+        ['View source on GitHub'],
       ),
-      ...(isShowingChromeHint ? [chromeRecommendedHint()] : []),
     ],
   )
 
-const headerView = (meta: ExampleMeta, isShowingChromeHint: boolean): Html =>
+const headerView = (meta: ExampleMeta): Html =>
   ih.div(
     [ih.Class('mb-6')],
     [
@@ -299,32 +247,57 @@ const headerView = (meta: ExampleMeta, isShowingChromeHint: boolean): Html =>
         [
           ih.Href(examplesRouter()),
           ih.Class(
-            'inline-flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4',
+            'inline-flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-4',
           ),
         ],
         [Icon.chevronLeft('w-4 h-4'), 'All Examples'],
       ),
       pageTitle('example-detail', meta.title),
       para(meta.description),
-      ih.div(
-        [ih.Class('flex flex-wrap items-center gap-2 mt-3')],
-        Array.map(meta.tags, text => featureTag(text)),
+      ...(meta.livePreview === 'Unavailable'
+        ? []
+        : [
+            ih.div(
+              [ih.Class('flex flex-wrap items-center gap-2 mt-3')],
+              Array.map(meta.tags, text => featureTag(text)),
+            ),
+          ]),
+      ...(meta.livePreview === 'Unavailable' ? [] : [exampleActions(meta)]),
+    ],
+  )
+
+const pausedExampleNotice = (meta: ExampleMeta): Html =>
+  ih.div(
+    [
+      ih.Class(
+        'rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100',
       ),
-      ih.div(
-        [ih.Class('flex flex-col items-start gap-3 mt-3')],
-        [
-          launchPlaygroundSection(meta, isShowingChromeHint),
-          ih.a(
-            [
-              ih.Href(exampleSourceHref(meta.slug)),
-              ih.Class(
-                'text-sm text-accent-600 dark:text-accent-500 underline decoration-accent-600/30 dark:decoration-accent-500/30 hover:decoration-accent-600 dark:hover:decoration-accent-500',
-              ),
-            ],
-            ['View source on GitHub'],
-          ),
-        ],
+    ],
+    [
+      ih.h2(
+        [ih.Class('text-base font-semibold mb-2')],
+        [`${meta.title} is paused`],
       ),
+      ...(meta.slug === 'livestore'
+        ? [
+            ih.p(
+              [ih.Class('leading-relaxed mt-3')],
+              [
+                'For a current example of a third-party integration with a live connection, see ',
+                ih.a(
+                  [
+                    ih.Href(
+                      exampleDetailRouter({ exampleSlug: 'websocket-chat' }),
+                    ),
+                    ih.Class('link-accent font-medium'),
+                  ],
+                  ['WebSocket Chat'],
+                ),
+                '.',
+              ],
+            ),
+          ]
+        : []),
     ],
   )
 
@@ -358,7 +331,7 @@ const disclosureChevron = (isOpen: boolean): Html =>
   ih.span(
     [
       ih.Class(
-        `transition-transform text-gray-400 dark:text-gray-500 ${isOpen ? 'rotate-180' : ''}`,
+        `transition-transform text-gray-500 dark:text-gray-500 ${isOpen ? 'rotate-180' : ''}`,
       ),
     ],
     [Icon.chevronDown('w-4 h-4')],
@@ -389,7 +362,7 @@ const livePreviewDisclosureView = (
     {
       id: 'live-preview',
       isOpen: isLivePreviewOpen,
-      onToggle: isOpen => ToggledLivePreview({ isOpen }),
+      onToggle: isOpen => Message.ToggledLivePreview({ isOpen }),
       toView: attributes =>
         h.div(
           [],
@@ -428,7 +401,7 @@ const livePreviewDisclosureView = (
                         h.div(
                           [
                             h.Class(
-                              'flex-1 text-xs font-mono text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 rounded px-3 py-1 text-center truncate',
+                              'flex-1 text-xs font-mono text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 rounded px-3 py-1 text-center truncate',
                             ),
                           ],
                           [urlBarContent(meta, maybeExampleUrl)],
@@ -453,6 +426,27 @@ const livePreviewDisclosureView = (
 
 const SourceFileTabs = Tabs.create()
 
+const foldSourceFileTabsOutMessage = Tabs.OutMessage.match<
+  Update.Step<Model, Message>
+>({
+  Selected:
+    ({ value }) =>
+    model => ({
+      model: modifyFields(model, {
+        maybeActiveSourceFilePath: () => Option.some(value),
+      }),
+    }),
+})
+
+const foldSourceFileTabs = Update.foldChild({
+  update: SourceFileTabs.update,
+  read: (model: Model) => Option.some(model.sourceFileTabs),
+  write: (model, nextSourceFileTabs) =>
+    modifyFields(model, { sourceFileTabs: () => nextSourceFileTabs }),
+  toParentMessage: message => Message.GotSourceFileTabsMessage({ message }),
+  foldOutMessage: foldSourceFileTabsOutMessage,
+})
+
 const TAB_BUTTON_BASE =
   'px-3 py-2 lg:py-1.5 whitespace-nowrap lg:whitespace-normal lg:w-full lg:text-left text-xs font-mono transition cursor-pointer'
 
@@ -462,18 +456,17 @@ const TAB_BUTTON_ACTIVE =
 
 const TAB_BUTTON_INACTIVE =
   TAB_BUTTON_BASE +
-  ' text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+  ' text-gray-700 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
 
 const sourceCodeView = (
+  exampleSlug: string,
   files: ReadonlyArray<ExampleSourceFile>,
   tabsModel: Tabs.Model,
   activeSourceFilePath: string,
   isNarrowViewport: boolean,
-  renderCopyButton: RenderCopyButton,
+  renderSnippet: CodeBlock.RenderSnippet,
   h: HtmlBuilder<Message>,
 ): Html => {
-  const highlightedCodeBlock = highlightedCodeBlockFor(renderCopyButton)
-
   const filePaths = Array.map(files, file => file.path)
 
   return h.submodel({
@@ -528,15 +521,17 @@ const sourceCodeView = (
                         h.div(
                           [h.Class('code-embed-scroll')],
                           [
-                            highlightedCodeBlock(
-                              h.div([
+                            renderSnippet({
+                              id: `example-${exampleSlug}-source-${file.path}`,
+                              disclosureGroupId: `example-${exampleSlug}-source`,
+                              content: h.div([
                                 h.Class('code-embed'),
                                 h.InnerHTML(file.highlightedHtml),
                               ]),
-                              file.rawCode,
-                              `Copy ${file.path} to clipboard`,
-                              '!mt-0',
-                            ),
+                              rawCode: file.rawCode,
+                              copyAriaLabel: `Copy ${file.path} to clipboard`,
+                              className: 'mt-0',
+                            }),
                           ],
                         ),
                     }),
@@ -546,7 +541,7 @@ const sourceCodeView = (
           ],
         ),
     },
-    toParentMessage: message => GotSourceFileTabsMessage({ message }),
+    toParentMessage: message => Message.GotSourceFileTabsMessage({ message }),
   })
 }
 
@@ -615,33 +610,76 @@ const sourcesFailureView = (error: string): Html =>
         ],
         ['Failed to load example sources'],
       ),
-      ih.div([ih.Class('text-sm text-gray-600 dark:text-gray-400')], [error]),
+      ih.div([ih.Class('text-sm text-gray-700 dark:text-gray-400')], [error]),
     ],
   )
+
+const availableExampleContentView = (
+  model: Model,
+  meta: ExampleMeta,
+  slug: string,
+  isNarrowViewport: boolean,
+  renderSnippet: CodeBlock.RenderSnippet,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> => [
+  meta.livePreview === 'PlaygroundOnly'
+    ? playgroundOnlyNotice(meta)
+    : livePreviewDisclosureView(
+        model.isLivePreviewOpen,
+        meta,
+        slug,
+        model.maybeExampleUrl,
+        h,
+      ),
+  h.div(
+    [h.Class('mt-6')],
+    [
+      AsyncData.matchData(model.currentSources, {
+        onEmpty: () => sourcesSkeletonView(),
+        onFailure: error => sourcesFailureView(error),
+        onData: sources =>
+          h.div(
+            [],
+            Array.match(sources.files, {
+              onEmpty: () => [],
+              onNonEmpty: files => [
+                sourceCodeView(
+                  slug,
+                  files,
+                  model.sourceFileTabs,
+                  Option.getOrElse(
+                    model.maybeActiveSourceFilePath,
+                    () => Array.headNonEmpty(files).path,
+                  ),
+                  isNarrowViewport,
+                  renderSnippet,
+                  h,
+                ),
+              ],
+            }),
+          ),
+      }),
+    ],
+  ),
+]
 
 type ViewInputs = Readonly<{
   slug: string
   isNarrowViewport: boolean
-  isShowingChromeHint: boolean
-  renderCopyButton: RenderCopyButton
+  renderSnippet: CodeBlock.RenderSnippet
 }>
 
 /**
  * Renders one example app: its header, the live preview, and the source files
  * behind a Tabs Submodel.
  *
- * The page is dispatched through `h.submodel`, so it takes `renderCopyButton`
- * from its parent rather than building the copy control itself. The control
- * carries an app-level Message, and a handler's dispatcher comes from the frame
- * the element is built in, so one built here would be rejected by this
- * Submodel's `toParentMessage`.
+ * The page is dispatched through `h.submodel`, so it takes the snippet renderer
+ * from its parent rather than building the interactive boundaries itself. The
+ * renderer runs in the parent's boundary, so its Messages are wrapped for the
+ * parent instead of being rejected by this page's `toParentMessage`.
  */
 export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (
-    model,
-    { slug, isNarrowViewport, isShowingChromeHint, renderCopyButton },
-    h,
-  ): Html =>
+  (model, { slug, isNarrowViewport, renderSnippet }, h): Html =>
     Option.match(findBySlug(slug), {
       onNone: () => h.div([], ['Example not found']),
       onSome: meta =>
@@ -649,45 +687,17 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>(
           slug,
           [],
           [
-            headerView(meta, isShowingChromeHint),
-            meta.livePreview === 'PlaygroundOnly'
-              ? playgroundOnlyNotice(meta)
-              : livePreviewDisclosureView(
-                  model.isLivePreviewOpen,
+            headerView(meta),
+            ...(meta.livePreview === 'Unavailable'
+              ? [pausedExampleNotice(meta)]
+              : availableExampleContentView(
+                  model,
                   meta,
                   slug,
-                  model.maybeExampleUrl,
+                  isNarrowViewport,
+                  renderSnippet,
                   h,
-                ),
-            h.div(
-              [h.Class('mt-6')],
-              [
-                AsyncData.matchData(model.currentSources, {
-                  onEmpty: () => sourcesSkeletonView(),
-                  onFailure: error => sourcesFailureView(error),
-                  onData: sources =>
-                    h.div(
-                      [],
-                      Array.match(sources.files, {
-                        onEmpty: () => [],
-                        onNonEmpty: files => [
-                          sourceCodeView(
-                            files,
-                            model.sourceFileTabs,
-                            Option.getOrElse(
-                              model.maybeActiveSourceFilePath,
-                              () => Array.headNonEmpty(files).path,
-                            ),
-                            isNarrowViewport,
-                            renderCopyButton,
-                            h,
-                          ),
-                        ],
-                      }),
-                    ),
-                }),
-              ],
-            ),
+                )),
           ],
         ),
     }),

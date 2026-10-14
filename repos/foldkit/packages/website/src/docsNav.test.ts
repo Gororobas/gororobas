@@ -5,7 +5,10 @@ import { findActiveSectionKey } from './docsNav'
 
 describe('findActiveSectionKey', () => {
   test.each([
-    ['Manifesto', 'getStarted'],
+    ['Blog', 'blog'],
+    ['BlogPost', 'blog'],
+    ['WhyFoldkit', 'introduction'],
+    ['Roadmap', 'introduction'],
     ['CoreModel', 'coreConcepts'],
     ['ComingFromReact', 'comparisons'],
     ['ReactComparison', 'comparisons'],
@@ -13,8 +16,9 @@ describe('findActiveSectionKey', () => {
     ['ComingFromTanStackQuery', 'comparisons'],
     ['ElmComparison', 'comparisons'],
     ['ProjectOrganization', 'patterns'],
+    ['PatternsAntiPatterns', 'patterns'],
     ['ToolingLinting', 'tooling'],
-    ['WhyNoJsx', 'faq'],
+    ['Performance', 'faq'],
     ['UiButton', 'foldkitUi'],
     ['AiOverview', 'ai'],
     ['Testing', 'testing'],

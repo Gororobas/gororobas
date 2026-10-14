@@ -1,5 +1,5 @@
 // page/call/managedResource.ts
-import { Effect, Option, Schema as S } from 'effect'
+import { Effect, Option, Schema } from 'effect'
 import { ManagedResource } from 'foldkit'
 
 import {
@@ -19,12 +19,12 @@ const SignalingSocket = ManagedResource.tag<WebSocket>()('SignalingSocket')
 const videoCallManagedResources = ManagedResource.lift(
   VideoCall.managedResources,
 )<Model, Message>({
-  toChildModel: model => model.videoCall,
+  read: model => model.videoCall,
   toParentMessage: message => GotVideoCallMessage({ message }),
 })
 
 const localManagedResources = ManagedResource.make<Model, Message>()(entry => ({
-  signalingSocket: entry(S.Option(S.Null), {
+  signalingSocket: entry(Schema.Option(Schema.Null), {
     resource: SignalingSocket,
     modelToMaybeRequirements: model => Option.as(model.videoCall, null),
     acquire: () => Effect.try(() => new WebSocket(SIGNALING_URL)),
@@ -35,7 +35,7 @@ const localManagedResources = ManagedResource.make<Model, Message>()(entry => ({
   }),
 }))
 
-export const managedResources = ManagedResource.aggregate<Model, Message>()(
+export const managedResources = ManagedResource.aggregate(
   videoCallManagedResources,
   localManagedResources,
 )

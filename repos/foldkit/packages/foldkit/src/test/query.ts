@@ -2,18 +2,19 @@ import {
   Array,
   Equal,
   Match,
-  Number as Number_,
+  Number,
   Option,
   Predicate,
   Record,
   Result,
-  String as String_,
+  String,
   flow,
   pipe,
 } from 'effect'
 import { dual } from 'effect/Function'
 
-import { evo } from '../struct/index.js'
+import { StringExt } from '../effectExtensions/index.js'
+import { modifyFields } from '../struct/index.js'
 import type { VNode } from '../vdom.js'
 
 // SELECTOR PARSING
@@ -31,34 +32,125 @@ type SimpleSelector = Readonly<{
   id: Option.Option<string>
   classes: ReadonlyArray<string>
   attributes: ReadonlyArray<AttributeMatcher>
+  negatedSelectors: ReadonlyArray<SimpleSelector>
 }>
 
 type Selector = ReadonlyArray<SimpleSelector>
 
 type MatchResult = Readonly<{ consumed: string; group: string }>
 
+type SelectorScanState = Readonly<{
+  maybeQuote: Option.Option<string>
+  parenthesisDepth: number
+}>
+
 const ID_PATTERN = /^#([a-zA-Z0-9_-]+)/
 const CLASS_PATTERN = /^\.([a-zA-Z0-9_-]+)/
-const ATTRIBUTE_PATTERN = /^\[([a-zA-Z][a-zA-Z0-9_-]*)(?:(\^)?="([^"]*)")?\]/
+const ATTRIBUTE_PATTERN =
+  /^\[([a-zA-Z][a-zA-Z0-9_-]*)(?:(\^)?=(?:"([^"]*)"|'([^']*)'))?\]/
 const TAG_PATTERN = /^([a-zA-Z][a-zA-Z0-9-]*)/
-const WHITESPACE_PATTERN = /\s+/
+const WHITESPACE_CHARACTER_PATTERN = /\s/
+const WHITESPACE_RUN_PATTERN = /\s+/
+const NOT_PREFIX = ':not('
+
+const SUPPORTED_SELECTORS =
+  'Supported selectors: tag name, #id, .class, [attr], [attr="value"], ' +
+  '[attr^="prefix"] (values in double or single quotes, whitespace allowed), ' +
+  ':not(<compound selector>), and descendant combinators (whitespace).'
+
+const throwParseError = (input: string): never => {
+  throw new Error(
+    `I could not parse the selector at "${input}".\n\n${SUPPORTED_SELECTORS}`,
+  )
+}
+
+const initialTopLevelScanState: SelectorScanState = {
+  maybeQuote: Option.none(),
+  parenthesisDepth: 0,
+}
+const initialNotArgumentScanState: SelectorScanState = {
+  maybeQuote: Option.none(),
+  parenthesisDepth: 1,
+}
+
+const isWhitespace = (character: string): boolean =>
+  WHITESPACE_CHARACTER_PATTERN.test(character)
+
+const isQuote = (character: string): boolean =>
+  character === '"' || character === "'"
+
+const isTopLevel = (state: SelectorScanState): boolean =>
+  Option.isNone(state.maybeQuote) && state.parenthesisDepth === 0
+
+const advanceScanState = (
+  state: SelectorScanState,
+  character: string,
+): SelectorScanState =>
+  Option.match(state.maybeQuote, {
+    onSome: quote =>
+      character === quote
+        ? modifyFields(state, { maybeQuote: () => Option.none() })
+        : state,
+    onNone: () =>
+      Match.value(character).pipe(
+        Match.when(isQuote, quote =>
+          modifyFields(state, { maybeQuote: () => Option.some(quote) }),
+        ),
+        Match.when('(', () =>
+          modifyFields(state, { parenthesisDepth: Number.increment }),
+        ),
+        Match.when(')', () =>
+          modifyFields(state, { parenthesisDepth: Number.decrement }),
+        ),
+        Match.orElse(() => state),
+      ),
+  })
+
+const splitAtTopLevelWhitespace = (input: string): ReadonlyArray<string> =>
+  pipe(
+    String.split(input, ''),
+    Array.reduce(
+      { segments: Array.of(''), scanState: initialTopLevelScanState },
+      ({ segments, scanState }, character) => ({
+        segments:
+          isTopLevel(scanState) && isWhitespace(character)
+            ? Array.append(segments, '')
+            : Array.modifyLastNonEmpty(
+                segments,
+                segment => segment + character,
+              ),
+        scanState: advanceScanState(scanState, character),
+      }),
+    ),
+    ({ segments }) => Array.filter(segments, String.isNonEmpty),
+  )
+
+const findClosingParenthesisIndex = (input: string): Option.Option<number> =>
+  pipe(
+    String.split(input, ''),
+    Array.scan(initialNotArgumentScanState, advanceScanState),
+    Array.drop(1),
+    Array.findFirstIndex(isTopLevel),
+  )
 
 const matchGroup =
   (regex: RegExp) =>
   (input: string): Option.Option<MatchResult> =>
     pipe(
       input,
-      String_.match(regex),
-      Option.flatMap(match =>
-        pipe(
+      String.match(regex),
+      Option.flatMap(match => {
+        const [consumed] = match
+
+        return pipe(
           match,
           Array.get(1),
           Option.map(group => ({
-            consumed: match[0],
+            consumed,
             group,
           })),
-        ),
-      ),
+        )
+      }),
     )
 
 const emptySelector: SimpleSelector = {
@@ -66,6 +158,7 @@ const emptySelector: SimpleSelector = {
   id: Option.none(),
   classes: [],
   attributes: [],
+  negatedSelectors: [],
 }
 
 const tryParseId = (
@@ -78,7 +171,7 @@ const tryParseId = (
     Option.map(({ consumed, group }) =>
       parseModifiers(
         input.slice(consumed.length),
-        evo(accumulator, {
+        modifyFields(accumulator, {
           id: () => Option.some(group),
         }),
       ),
@@ -95,7 +188,7 @@ const tryParseClass = (
     Option.map(({ consumed, group }) =>
       parseModifiers(
         input.slice(consumed.length),
-        evo(accumulator, {
+        modifyFields(accumulator, {
           classes: Array.append(group),
         }),
       ),
@@ -108,65 +201,118 @@ const tryParseAttribute = (
 ): Option.Option<SimpleSelector> =>
   pipe(
     input,
-    String_.match(ATTRIBUTE_PATTERN),
-    Option.flatMap(match =>
-      pipe(
-        match,
-        Array.get(1),
-        Option.map(name => {
-          const mode: MatchMode = match[2] === '^' ? 'StartsWith' : 'Exact'
-          return parseModifiers(
-            input.slice(match[0].length),
-            evo(accumulator, {
-              attributes: Array.append({
-                name,
-                value: Option.fromNullishOr(match[3]),
-                mode,
-              }),
+    String.match(ATTRIBUTE_PATTERN),
+    Option.flatMap(match => {
+      const [
+        consumed,
+        name,
+        startsWithOperator,
+        doubleQuotedValue,
+        singleQuotedValue,
+      ] = match
+      if (Predicate.isUndefined(name)) {
+        return Option.none()
+      }
+
+      const mode: MatchMode =
+        startsWithOperator === '^' ? 'StartsWith' : 'Exact'
+
+      return Option.some(
+        parseModifiers(
+          input.slice(consumed.length),
+          modifyFields(accumulator, {
+            attributes: Array.append({
+              name,
+              value: Option.fromNullishOr(
+                doubleQuotedValue ?? singleQuotedValue,
+              ),
+              mode,
             }),
-          )
-        }),
+          }),
+        ),
+      )
+    }),
+  )
+
+const parseNotArgument = (input: string, argument: string): SimpleSelector => {
+  if (String.isEmpty(argument)) {
+    return throwParseError(input)
+  }
+
+  return parseCompoundSelector(argument)
+}
+
+const splitNotArgument = (
+  argumentAndRest: string,
+): Option.Option<Readonly<{ argument: string; remainingInput: string }>> =>
+  pipe(
+    argumentAndRest,
+    findClosingParenthesisIndex,
+    Option.map(closingIndex => ({
+      argument: pipe(
+        argumentAndRest,
+        String.slice(0, closingIndex),
+        String.trim,
       ),
-    ),
+      remainingInput: pipe(argumentAndRest, String.slice(closingIndex + 1)),
+    })),
+  )
+
+const tryParseNot = (
+  input: string,
+  accumulator: SimpleSelector,
+): Option.Option<SimpleSelector> =>
+  pipe(
+    input,
+    StringExt.stripPrefix(NOT_PREFIX),
+    Option.flatMap(splitNotArgument),
+    Option.map(({ argument, remainingInput }) => {
+      const negatedSelector = parseNotArgument(input, argument)
+      const nextAccumulator = modifyFields(accumulator, {
+        negatedSelectors: Array.append(negatedSelector),
+      })
+
+      return parseModifiers(remainingInput, nextAccumulator)
+    }),
   )
 
 const parseModifiers = (
   input: string,
   accumulator: SimpleSelector,
 ): SimpleSelector => {
-  if (String_.isEmpty(input)) return accumulator
+  if (String.isEmpty(input)) {
+    return accumulator
+  }
 
   return pipe(
     tryParseId(input, accumulator),
     Option.orElse(() => tryParseClass(input, accumulator)),
     Option.orElse(() => tryParseAttribute(input, accumulator)),
-    Option.getOrElse(() => {
-      throw new Error(
-        `I could not parse the selector at "${input}".\n\n` +
-          'Supported selectors: tag, #id, .class, [attr], [attr="value"], [attr^="prefix"], ' +
-          'and descendant combinators (space).',
-      )
-    }),
+    Option.orElse(() => tryParseNot(input, accumulator)),
+    Option.getOrElse(() => throwParseError(input)),
   )
 }
 
 const parseCompoundSelector = (segment: string): SimpleSelector =>
   pipe(
     segment,
-    String_.match(TAG_PATTERN),
+    String.match(TAG_PATTERN),
     Option.match({
       onNone: () => parseModifiers(segment, emptySelector),
-      onSome: match =>
-        parseModifiers(
-          segment.slice(match[0].length),
-          evo(emptySelector, { tag: () => Array.get(match, 1) }),
-        ),
+      onSome: match => {
+        const [consumed] = match
+
+        return parseModifiers(
+          segment.slice(consumed.length),
+          modifyFields(emptySelector, { tag: () => Array.get(match, 1) }),
+        )
+      },
     }),
   )
 
 export const parseSelector = (input: string): Selector => {
-  const trimmed = String_.trim(input)
-  if (String_.isEmpty(trimmed)) {
+  const trimmed = String.trim(input)
+  if (String.isEmpty(trimmed)) {
     throw new Error(
       'I received an empty selector.\n\n' +
         'Provide a CSS selector like "button", "#email", or \'[role="tab"]\'.',
@@ -175,7 +321,7 @@ export const parseSelector = (input: string): Selector => {
 
   return pipe(
     trimmed,
-    String_.split(WHITESPACE_PATTERN),
+    splitAtTopLevelWhitespace,
     Array.map(parseCompoundSelector),
   )
 }
@@ -194,7 +340,7 @@ const lookupAttribute =
 const lookupStringAttribute =
   (name: string) =>
   (vnode: VNode): Option.Option<string> =>
-    pipe(vnode, lookupAttribute(name), Option.map(String))
+    pipe(vnode, lookupAttribute(name), Option.map(globalThis.String))
 
 /** Returns whether an element is hidden from the accessibility tree. */
 export const isHidden = (vnode: VNode): boolean => {
@@ -327,7 +473,7 @@ const matchesAttribute =
         vnode.key,
         Option.fromNullishOr,
         Option.map(key =>
-          typeof key === 'symbol' ? key.toString() : String(key),
+          typeof key === 'symbol' ? key.toString() : globalThis.String(key),
         ),
         matchesValue(value, mode),
       )
@@ -337,7 +483,7 @@ const matchesAttribute =
       vnode,
       lookupAttribute(name),
       Option.filter(actual => actual !== false),
-      Option.map(String),
+      Option.map(globalThis.String),
       matchesValue(value, mode),
     )
   }
@@ -363,16 +509,29 @@ const matchesSimpleSelector =
       selector.classes,
       className => vnode.data?.class?.[className] === true,
     ) &&
-    Array.every(selector.attributes, matchesAttribute(vnode))
+    Array.every(selector.attributes, matchesAttribute(vnode)) &&
+    !Array.some(selector.negatedSelectors, negatedSelector =>
+      matchesSimpleSelector(negatedSelector)(vnode),
+    )
 
 // IMPLICIT ROLES
 
+// NOTE: This map follows the 11 August 2026 ARIA in HTML Recommendation.
+// It intentionally excludes mappings proposed only in working drafts:
+// https://www.w3.org/TR/2026/REC-html-aria-20260811/#docconformance
 const IMPLICIT_ROLE_MAP: Record<string, string> = {
+  address: 'group',
   article: 'article',
   aside: 'complementary',
+  blockquote: 'blockquote',
   button: 'button',
+  caption: 'caption',
+  code: 'code',
+  del: 'deletion',
   details: 'group',
+  dfn: 'term',
   dialog: 'dialog',
+  em: 'emphasis',
   fieldset: 'group',
   figure: 'figure',
   form: 'form',
@@ -382,21 +541,34 @@ const IMPLICIT_ROLE_MAP: Record<string, string> = {
   h4: 'heading',
   h5: 'heading',
   h6: 'heading',
+  hgroup: 'group',
   hr: 'separator',
+  ins: 'insertion',
   li: 'listitem',
   main: 'main',
+  menu: 'list',
   meter: 'meter',
   nav: 'navigation',
   ol: 'list',
+  optgroup: 'group',
   option: 'option',
   output: 'status',
   p: 'paragraph',
   progress: 'progressbar',
+  s: 'deletion',
+  search: 'search',
   select: 'combobox',
+  strong: 'strong',
+  sub: 'subscript',
   summary: 'button',
+  sup: 'superscript',
   table: 'table',
+  tbody: 'rowgroup',
   td: 'cell',
   textarea: 'textbox',
+  tfoot: 'rowgroup',
+  thead: 'rowgroup',
+  time: 'time',
   tr: 'row',
   ul: 'list',
 }
@@ -434,7 +606,8 @@ const imgRole = (vnode: VNode): string =>
     lookupAttribute('alt'),
     Option.match({
       onNone: () => 'img',
-      onSome: value => (String(value) === '' ? 'presentation' : 'img'),
+      onSome: value =>
+        globalThis.String(value) === '' ? 'presentation' : 'img',
     }),
   )
 
@@ -532,8 +705,8 @@ const resolveRoles =
       lookupStringAttribute('role'),
       Option.map(
         flow(
-          String_.split(WHITESPACE_PATTERN),
-          Array.filter(String_.isNonEmpty),
+          String.split(WHITESPACE_RUN_PATTERN),
+          Array.filter(String.isNonEmpty),
         ),
       ),
       Option.getOrElse(() => Option.toArray(implicitRole(root)(vnode))),
@@ -542,7 +715,7 @@ const resolveRoles =
 // ACCESSIBLE NAME
 
 const nonEmptyString = (value: unknown): Option.Option<string> =>
-  Option.filter(Option.some(String(value)), String_.isNonEmpty)
+  Option.filter(Option.some(globalThis.String(value)), String.isNonEmpty)
 
 const accessibleTextContent = (vnode: VNode): string => {
   if (Predicate.isString(vnode.text)) {
@@ -574,7 +747,7 @@ const nameFromLabelledBy =
       Option.map(labelledBy =>
         pipe(
           labelledBy,
-          String_.split(WHITESPACE_PATTERN),
+          String.split(WHITESPACE_RUN_PATTERN),
           Array.filterMap(
             flow(
               findById(root),
@@ -585,7 +758,7 @@ const nameFromLabelledBy =
           Array.join(' '),
         ),
       ),
-      Option.filter(String_.isNonEmpty),
+      Option.filter(String.isNonEmpty),
     )
 
 const nameFromAriaLabel = (vnode: VNode): Option.Option<string> =>
@@ -615,7 +788,7 @@ const nameFromLabelFor =
     )
 
 const nameFromTextContent = (vnode: VNode): Option.Option<string> =>
-  Option.filter(Option.some(accessibleTextContent(vnode)), String_.isNonEmpty)
+  Option.filter(Option.some(accessibleTextContent(vnode)), String.isNonEmpty)
 
 const nameFromTitle = (vnode: VNode): Option.Option<string> =>
   pipe(vnode, lookupAttribute('title'), Option.flatMap(nonEmptyString))
@@ -696,7 +869,7 @@ export const accessibleDescription =
       Option.match({
         onNone: () => '',
         onSome: flow(
-          String_.split(WHITESPACE_PATTERN),
+          String.split(WHITESPACE_RUN_PATTERN),
           Array.filterMap(
             flow(
               findById(root),
@@ -740,10 +913,8 @@ const findAllImpl =
 export const find: {
   (html: VNode, selectorString: string): Option.Option<VNode>
   (selectorString: string): (html: VNode) => Option.Option<VNode>
-} = dual(
-  2,
-  (html: VNode, selectorString: string): Option.Option<VNode> =>
-    pipe(html, findAllImpl(selectorString), Array.head),
+} = dual(2, (html: VNode, selectorString: string): Option.Option<VNode> =>
+  pipe(html, findAllImpl(selectorString), Array.head),
 )
 
 /** Finds all VNodes matching the CSS selector. */
@@ -787,7 +958,7 @@ const attrImpl = (vnode: VNode, name: string): Option.Option<string> => {
           Array.join(' '),
         ),
       ),
-      Option.filter(String_.isNonEmpty),
+      Option.filter(String.isNonEmpty),
     )
   }
 
@@ -808,16 +979,16 @@ const headingLevelFromTag = (vnode: VNode): Option.Option<number> =>
   pipe(
     vnode.sel,
     Option.fromNullishOr,
-    Option.flatMap(String_.match(HEADING_LEVEL_PATTERN)),
-    Option.map(match => Number(match[1])),
+    Option.flatMap(String.match(HEADING_LEVEL_PATTERN)),
+    Option.map(match => globalThis.Number(match[1])),
   )
 
 const ariaLevel = (vnode: VNode): Option.Option<number> =>
   pipe(
     vnode,
     lookupStringAttribute('aria-level'),
-    Option.flatMap(Number_.parse),
-    Option.filter(value => !Number.isNaN(value)),
+    Option.flatMap(Number.parse),
+    Option.filter(value => !globalThis.Number.isNaN(value)),
   )
 
 const resolveLevel = (vnode: VNode): Option.Option<number> =>
@@ -829,7 +1000,7 @@ const ariaTriStateMatches =
     pipe(
       vnode,
       lookupStringAttribute(attribute),
-      Option.exists(value => value === String(expected)),
+      Option.exists(value => value === globalThis.String(expected)),
     )
 
 const checkedMatches =
@@ -862,7 +1033,7 @@ const disabledMatches =
   (vnode: VNode): boolean => {
     const ariaValue = lookupStringAttribute('aria-disabled')(vnode)
     if (Option.isSome(ariaValue)) {
-      return ariaValue.value === String(expected)
+      return ariaValue.value === globalThis.String(expected)
     }
     const disabled = pipe(
       vnode,
@@ -870,6 +1041,21 @@ const disabledMatches =
       Option.exists(Boolean),
     )
     return disabled === expected
+  }
+
+const currentMatches =
+  (expected: boolean | 'page' | 'step' | 'location' | 'date' | 'time') =>
+  (vnode: VNode): boolean => {
+    const maybeCurrent = lookupStringAttribute('aria-current')(vnode)
+
+    if (expected === false) {
+      return Option.isNone(maybeCurrent) || maybeCurrent.value === 'false'
+    } else {
+      return Option.exists(
+        maybeCurrent,
+        value => value === globalThis.String(expected),
+      )
+    }
   }
 
 type RoleOptions = Readonly<{
@@ -880,6 +1066,7 @@ type RoleOptions = Readonly<{
   pressed?: boolean | 'mixed'
   expanded?: boolean
   disabled?: boolean
+  current?: boolean | 'page' | 'step' | 'location' | 'date' | 'time'
 }>
 
 const roleOptionsMatch =
@@ -933,12 +1120,18 @@ const roleOptionsMatch =
     ) {
       return false
     }
+    if (
+      options.current !== undefined &&
+      !currentMatches(options.current)(node)
+    ) {
+      return false
+    }
     return true
   }
 
 /** Finds the first element with the given ARIA role and optional matching options.
  *  Supports `name` (accessible name), `level` (heading level), `checked`,
- *  `selected`, `pressed`, `expanded`, and `disabled` state filters. */
+ *  `selected`, `pressed`, `expanded`, `disabled`, and `current` state filters. */
 export const getByRole =
   (role: string, options?: RoleOptions) =>
   (html: VNode): Option.Option<VNode> => {
@@ -966,19 +1159,41 @@ export const getAllByRole =
     )
   }
 
-/** Finds the most specific element matching the given text content.
- *  Skips text VNodes (sel undefined) — only returns actual DOM elements. */
-export const getByText =
-  (target: string, options?: Readonly<{ exact?: boolean }>) =>
-  (html: VNode): Option.Option<VNode> => {
-    const exact = options?.exact !== false
+const matchesText = (
+  target: string | RegExp,
+  options?: Readonly<{ exact?: boolean }>,
+): ((node: VNode) => boolean) => {
+  if (target instanceof RegExp) {
+    const pattern = new RegExp(target.source, target.flags)
 
-    const textMatches = (node: VNode): boolean => {
-      const nodeText = textContent(node)
-      return exact
-        ? nodeText === target || hasDirectTextNodeMatch(node, target)
-        : String_.includes(target)(nodeText)
+    return node => {
+      pattern.lastIndex = 0
+
+      return pattern.test(textContent(node))
     }
+  } else {
+    const isExact = options?.exact !== false
+
+    return node => {
+      const nodeText = textContent(node)
+
+      return isExact
+        ? nodeText === target || hasDirectTextNodeMatch(node, target)
+        : String.includes(target)(nodeText)
+    }
+  }
+}
+
+/** Finds the first element whose text matches `target`.
+ *  A string matches the element's full text or one direct text node. When
+ *  `exact` is false, it instead matches a substring of the full text. A `RegExp`
+ *  tests the full text from index zero without changing its `lastIndex`, and
+ *  `exact` has no effect. When an ancestor and descendant both match, the query
+ *  returns the descendant. Never returns text VNodes. */
+export const getByText =
+  (target: string | RegExp, options?: Readonly<{ exact?: boolean }>) =>
+  (html: VNode): Option.Option<VNode> => {
+    const textMatches = matchesText(target, options)
 
     return pipe(
       allNodesIn(html),
@@ -1110,19 +1325,18 @@ export const getByTestId =
       attributeEquals('data-testid', testIdValue),
     )
 
-/** Finds all elements matching the given text content.
- *  Includes nested ancestors — a `<div><p>hi</p></div>` with text "hi" yields both. */
+/** Finds every element whose text matches `target`.
+ *  Uses the same string and `RegExp` rules as `getByText`, but returns matching
+ *  ancestors and descendants in traversal order. Never returns text VNodes. */
 export const getAllByText =
-  (target: string, options?: Readonly<{ exact?: boolean }>) =>
+  (target: string | RegExp, options?: Readonly<{ exact?: boolean }>) =>
   (html: VNode): ReadonlyArray<VNode> => {
-    const exact = options?.exact !== false
-    return Array.filter(allNodesIn(html), node => {
-      if (!isElement(node)) return false
-      const nodeText = textContent(node)
-      return exact
-        ? nodeText === target || hasDirectTextNodeMatch(node, target)
-        : String_.includes(target)(nodeText)
-    })
+    const textMatches = matchesText(target, options)
+
+    return Array.filter(
+      allNodesIn(html),
+      node => isElement(node) && textMatches(node),
+    )
   }
 
 /** Finds all elements with the given placeholder attribute. */
@@ -1212,14 +1426,18 @@ const describeRoleOptions = (options: RoleOptions): string => {
   if (options.pressed !== undefined) parts.push(`pressed=${options.pressed}`)
   if (options.expanded !== undefined) parts.push(`expanded=${options.expanded}`)
   if (options.disabled !== undefined) parts.push(`disabled=${options.disabled}`)
+  if (options.current !== undefined) parts.push(`current=${options.current}`)
   return Array.join(parts, ' ')
 }
 
 /** Creates a Locator that finds an element by ARIA role. Supports matching on
- *  `name`, `level`, `checked`, `selected`, `pressed`, `expanded`, and `disabled`. */
+ *  `name`, `level`, `checked`, `selected`, `pressed`, `expanded`, `disabled`, and
+ *  `current`. For `current`, `true` matches `aria-current="true"` only, `false`
+ *  matches a missing attribute or `aria-current="false"`, and a token such as
+ *  `'page'` matches itself. */
 export const role = (roleValue: string, options?: RoleOptions): Locator => {
   const optionsDescription = options ? describeRoleOptions(options) : ''
-  const description = String_.isEmpty(optionsDescription)
+  const description = String.isEmpty(optionsDescription)
     ? roleValue
     : `${roleValue} ${optionsDescription}`
   return makeLocator(getByRole(roleValue, options), description)
@@ -1252,14 +1470,22 @@ export const testId = (testIdValue: string): Locator =>
 export const displayValue = (valueString: string): Locator =>
   makeLocator(getByDisplayValue(valueString), `display value "${valueString}"`)
 
-/** Creates a Locator that finds the most specific element matching the given text content. */
-export const text = (
-  target: string,
-  options?: Readonly<{ exact?: boolean }>,
-): Locator => makeLocator(getByText(target, options), `text "${target}"`)
+const describeText = (target: string | RegExp): string =>
+  target instanceof RegExp ? `${target}` : `"${target}"`
 
-/** Creates a Locator that wraps a CSS selector. Escape hatch for cases
- *  where no accessible attribute is available. */
+/** Creates a Locator that finds the same element as `getByText`. */
+export const text = (
+  target: string | RegExp,
+  options?: Readonly<{ exact?: boolean }>,
+): Locator =>
+  makeLocator(getByText(target, options), `text ${describeText(target)}`)
+
+/** Creates a Locator from the supported CSS selector subset. Use this escape
+ *  hatch when no accessible Locator is available. Supports tag names, `#id`,
+ *  `.class`, `[attr]`, `[attr="value"]`, `[attr^="prefix"]`,
+ *  `:not(<compound selector>)`, and descendant combinators. Attribute values
+ *  may use double or single quotes and may contain whitespace. Any other
+ *  syntax throws. */
 export const selector = (css: string): Locator =>
   makeLocator(flow(findAllImpl(css), Array.head), `"${css}"`)
 
@@ -1269,13 +1495,11 @@ export const selector = (css: string): Locator =>
 export const within: {
   (parent: Locator, child: Locator): Locator
   (child: Locator): (parent: Locator) => Locator
-} = dual(
-  2,
-  (parent: Locator, child: Locator): Locator =>
-    makeLocator(
-      flow(parent, Option.flatMap(child)),
-      `${child.description} within ${parent.description}`,
-    ),
+} = dual(2, (parent: Locator, child: Locator): Locator =>
+  makeLocator(
+    flow(parent, Option.flatMap(child)),
+    `${child.description} within ${parent.description}`,
+  ),
 )
 
 // LOCATOR-ALL FACTORIES
@@ -1286,18 +1510,21 @@ export const allRole = (
   options?: RoleOptions,
 ): LocatorAll => {
   const optionsDescription = options ? describeRoleOptions(options) : ''
-  const description = String_.isEmpty(optionsDescription)
+  const description = String.isEmpty(optionsDescription)
     ? roleValue
     : `${roleValue} ${optionsDescription}`
   return makeLocatorAll(getAllByRole(roleValue, options), `all ${description}`)
 }
 
-/** Creates a LocatorAll that finds every element matching the text. */
+/** Creates a LocatorAll that finds the same elements as `getAllByText`. */
 export const allText = (
-  target: string,
+  target: string | RegExp,
   options?: Readonly<{ exact?: boolean }>,
 ): LocatorAll =>
-  makeLocatorAll(getAllByText(target, options), `all text "${target}"`)
+  makeLocatorAll(
+    getAllByText(target, options),
+    `all text ${describeText(target)}`,
+  )
 
 /** Creates a LocatorAll that finds every element with the given label. */
 export const allLabel = (labelValue: string): LocatorAll =>
@@ -1329,7 +1556,8 @@ export const allDisplayValue = (valueString: string): LocatorAll =>
     `all display value "${valueString}"`,
   )
 
-/** Creates a LocatorAll from a CSS selector — returns every match. */
+/** Creates a LocatorAll that returns every element matching a CSS
+ *  selector. Accepts the same syntax as `selector`. */
 export const allSelector = (css: string): LocatorAll =>
   makeLocatorAll(findAllImpl(css), `all "${css}"`)
 
@@ -1350,13 +1578,11 @@ export const last = (locatorAll: LocatorAll): Locator =>
 export const nth: {
   (locatorAll: LocatorAll, index: number): Locator
   (index: number): (locatorAll: LocatorAll) => Locator
-} = dual(
-  2,
-  (locatorAll: LocatorAll, index: number): Locator =>
-    makeLocator(
-      flow(locatorAll, Array.get(index)),
-      `nth(${index}) of ${locatorAll.description}`,
-    ),
+} = dual(2, (locatorAll: LocatorAll, index: number): Locator =>
+  makeLocator(
+    flow(locatorAll, Array.get(index)),
+    `nth(${index}) of ${locatorAll.description}`,
+  ),
 )
 
 type FilterOptions = Readonly<{
@@ -1383,30 +1609,28 @@ const describeFilterOptions = (options: FilterOptions): string => {
 export const filter: {
   (locatorAll: LocatorAll, options: FilterOptions): LocatorAll
   (options: FilterOptions): (locatorAll: LocatorAll) => LocatorAll
-} = dual(
-  2,
-  (locatorAll: LocatorAll, options: FilterOptions): LocatorAll =>
-    makeLocatorAll(
-      html =>
-        Array.filter(locatorAll(html), match => {
-          if (options.has && Option.isNone(options.has(match))) return false
-          if (options.hasNot && Option.isSome(options.hasNot(match))) {
+} = dual(2, (locatorAll: LocatorAll, options: FilterOptions): LocatorAll =>
+  makeLocatorAll(
+    html =>
+      Array.filter(locatorAll(html), match => {
+        if (options.has && Option.isNone(options.has(match))) return false
+        if (options.hasNot && Option.isSome(options.hasNot(match))) {
+          return false
+        }
+        if (options.hasText !== undefined) {
+          if (!String.includes(options.hasText)(textContent(match))) {
             return false
           }
-          if (options.hasText !== undefined) {
-            if (!String_.includes(options.hasText)(textContent(match))) {
-              return false
-            }
+        }
+        if (options.hasNotText !== undefined) {
+          if (String.includes(options.hasNotText)(textContent(match))) {
+            return false
           }
-          if (options.hasNotText !== undefined) {
-            if (String_.includes(options.hasNotText)(textContent(match))) {
-              return false
-            }
-          }
-          return true
-        }),
-      `${locatorAll.description} filtered by (${describeFilterOptions(options)})`,
-    ),
+        }
+        return true
+      }),
+    `${locatorAll.description} filtered by (${describeFilterOptions(options)})`,
+  ),
 )
 
 /** Resolves a target (CSS selector string or Locator) against a VNode tree. */

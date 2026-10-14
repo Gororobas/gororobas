@@ -1,5 +1,5 @@
 import * as echarts from 'echarts/core'
-import { Effect, Option, Schema as S } from 'effect'
+import { Effect, Option, Queue, Schema, Stream, pipe } from 'effect'
 import { Mount } from 'foldkit'
 import type { Html } from 'foldkit/html'
 import { HtmlBuilder } from 'foldkit/html'
@@ -7,60 +7,122 @@ import { HtmlBuilder } from 'foldkit/html'
 import { removeChart, setChart } from '../chartHost'
 import type { Telemetry } from '../domain'
 import { selectedDatumLabel } from '../echarts'
-import type { Message } from '../message'
-import { FailedMountChart, SucceededMountChart } from '../message'
+import { Message } from '../message'
 import type { Model } from '../model'
 import { formatInteger } from './format'
 
 export const CHART_HOST_ID = 'charting-chart'
 
-export const MountChart = Mount.define(
-  'MountChart',
-  { hostId: S.String },
-  SucceededMountChart,
-  FailedMountChart,
-)(
-  ({ hostId }) =>
-    element =>
-      Effect.gen(function* () {
-        if (!(element instanceof HTMLElement)) {
-          return FailedMountChart({
-            reason: 'Chart host is not an HTMLElement.',
-          })
+type MountChartMessage =
+  | typeof Message.SucceededMountChart.Type
+  | typeof Message.FailedMountChart.Type
+  | typeof Message.ClickedChartDatum.Type
+
+const toChartMountError = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(`Failed to mount chart: ${error}`)
+
+const ChartClickEvent = Schema.Struct({
+  data: Schema.OptionFromOptional(Schema.Struct({ id: Schema.String })),
+})
+
+const datumIdFromChartClickEvent = (event: unknown): Option.Option<string> =>
+  pipe(
+    event,
+    Schema.decodeUnknownOption(ChartClickEvent),
+    Option.flatMap(({ data }) => data),
+    Option.map(({ id }) => id),
+  )
+
+const observeChartResizeAndClickEvents = (
+  element: HTMLElement,
+  chart: ReturnType<typeof echarts.init>,
+  queue: Queue.Enqueue<MountChartMessage>,
+) =>
+  Effect.acquireRelease(
+    Effect.try({
+      try: () => {
+        const resizeObserver = new ResizeObserver(() => chart.resize())
+        const onWindowResize = () => chart.resize()
+        const onClick = (event: unknown) => {
+          const maybeDatumId = datumIdFromChartClickEvent(event)
+
+          if (Option.isSome(maybeDatumId)) {
+            Queue.offerUnsafe(
+              queue,
+              Message.ClickedChartDatum({ datumId: maybeDatumId.value }),
+            )
+          }
         }
 
-        return yield* Effect.acquireRelease(
-          Effect.try({
-            try: () => {
-              const chart = echarts.init(element, undefined, {
-                renderer: 'canvas',
-              })
-              const resizeObserver = new ResizeObserver(() => chart.resize())
-              resizeObserver.observe(element)
-              const onWindowResize = () => chart.resize()
-              window.addEventListener('resize', onWindowResize)
-              setChart(hostId, chart)
-              return { resizeObserver, onWindowResize }
-            },
-            catch: error =>
-              error instanceof Error
-                ? error
-                : new Error(`Failed to mount chart: ${error}`),
-          }),
-          ({ resizeObserver, onWindowResize }) =>
-            Effect.sync(() => {
-              resizeObserver.disconnect()
-              window.removeEventListener('resize', onWindowResize)
-              removeChart(hostId)
-            }),
-        ).pipe(
-          Effect.map(() => SucceededMountChart({ hostId })),
-          Effect.catch(error =>
-            Effect.succeed(FailedMountChart({ reason: error.message })),
-          ),
-        )
+        try {
+          resizeObserver.observe(element)
+          window.addEventListener('resize', onWindowResize)
+          chart.on('click', onClick)
+          return { resizeObserver, onWindowResize, onClick }
+        } catch (error) {
+          chart.off('click', onClick)
+          window.removeEventListener('resize', onWindowResize)
+          resizeObserver.disconnect()
+          throw error
+        }
+      },
+      catch: toChartMountError,
+    }),
+    ({ resizeObserver, onWindowResize, onClick }) =>
+      Effect.sync(() => {
+        chart.off('click', onClick)
+        window.removeEventListener('resize', onWindowResize)
+        resizeObserver.disconnect()
       }),
-)
+  )
+
+const mountChart = (element: Element, hostId: string) =>
+  Stream.callback<MountChartMessage>(queue =>
+    Effect.gen(function* () {
+      if (!(element instanceof HTMLElement)) {
+        Queue.offerUnsafe(
+          queue,
+          Message.FailedMountChart({
+            reason: 'Chart host is not an HTMLElement.',
+          }),
+        )
+        return yield* Effect.never
+      }
+
+      const chart = yield* Effect.acquireRelease(
+        Effect.try({
+          try: () => echarts.init(element, undefined, { renderer: 'canvas' }),
+          catch: toChartMountError,
+        }),
+        chart => Effect.sync(() => removeChart(hostId, chart)),
+      )
+      setChart(hostId, chart)
+
+      yield* observeChartResizeAndClickEvents(element, chart, queue)
+
+      Queue.offerUnsafe(queue, Message.SucceededMountChart({ hostId }))
+      return yield* Effect.never
+    }).pipe(
+      Effect.catch(error =>
+        Effect.sync(() =>
+          Queue.offerUnsafe(
+            queue,
+            Message.FailedMountChart({ reason: error.message }),
+          ),
+        ),
+      ),
+    ),
+  )
+
+export const MountChart = Mount.defineStream('MountChart', {
+  args: { hostId: Schema.String },
+  messages: [
+    Message.SucceededMountChart,
+    Message.FailedMountChart,
+    Message.ClickedChartDatum,
+  ],
+  execute: ({ element, hostId }) => mountChart(element, hostId),
+})
 
 export const chartPanelView = (
   model: Model,

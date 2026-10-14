@@ -1,14 +1,14 @@
-import { Array, Match as M, Option, Schema as S, pipe } from 'effect'
-import { evo } from 'foldkit/struct'
+import { Array, Match, Option, Schema, pipe } from 'effect'
+import { modifyFields } from 'foldkit/struct'
 import { generateKeyBetween } from 'fractional-indexing'
 
 import type { Card } from './card'
 import { Card as CardSchema } from './card'
 
-export const Column = S.Struct({
-  id: S.String,
-  name: S.String,
-  cards: S.Array(CardSchema),
+export const Column = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  cards: Schema.Array(CardSchema),
 })
 
 export type Column = typeof Column.Type
@@ -37,7 +37,7 @@ export const removeCard = (
 ): { readonly column: Column; readonly maybeCard: Option.Option<Card> } => {
   const maybeCard = Array.findFirst(column.cards, ({ id }) => id === cardId)
   return {
-    column: evo(column, {
+    column: modifyFields(column, {
       cards: () => Array.filter(column.cards, ({ id }) => id !== cardId),
     }),
     maybeCard,
@@ -50,8 +50,8 @@ export const insertCard = (
   targetIndex: number,
 ): Column => {
   const sortKey = generateSortKeyAtIndex(column.cards, targetIndex)
-  const updatedCard = evo(card, { sortKey: () => sortKey })
-  return evo(column, {
+  const updatedCard = modifyFields(card, { sortKey: () => sortKey })
+  return modifyFields(column, {
     cards: () =>
       pipe(
         column.cards,
@@ -63,8 +63,11 @@ export const insertCard = (
 
 export const appendCard = (column: Column, card: Card): Column => {
   const sortKey = generateSortKeyAtIndex(column.cards, column.cards.length)
-  return evo(column, {
-    cards: () => [...column.cards, evo(card, { sortKey: () => sortKey })],
+  return modifyFields(column, {
+    cards: () => [
+      ...column.cards,
+      modifyFields(card, { sortKey: () => sortKey }),
+    ],
   })
 }
 
@@ -105,10 +108,10 @@ export const reorder = (
     onNone: () => columns,
     onSome: card =>
       Array.map(columns, column =>
-        M.value(column.id).pipe(
-          M.when(fromContainerId, () => removeCard(column, itemId).column),
-          M.when(toContainerId, () => insertCard(column, card, toIndex)),
-          M.orElse(() => column),
+        Match.value(column.id).pipe(
+          Match.when(fromContainerId, () => removeCard(column, itemId).column),
+          Match.when(toContainerId, () => insertCard(column, card, toIndex)),
+          Match.orElse(() => column),
         ),
       ),
   })

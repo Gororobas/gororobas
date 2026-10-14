@@ -1,16 +1,15 @@
-import { Array, Match as M, Option, String, pipe } from 'effect'
-import { Command, Update } from 'foldkit'
-import { evo } from 'foldkit/struct'
+import { Array, Match, Option, String, pipe } from 'effect'
+import { Update } from 'foldkit'
+import { modifyFields } from 'foldkit/struct'
 
 import { DragAndDrop } from '@foldkit/ui'
 
 import { FocusAddCardInput, GenerateCardId, SaveBoard } from './command'
 import { Column } from './domain'
-import { GotDragAndDropMessage, type Message } from './message'
+import { Message } from './message'
 import type { Model } from './model'
 
-type UpdateReturn = readonly [Model, ReadonlyArray<Command.Command<Message>>]
-const withUpdateReturn = M.withReturnType<UpdateReturn>()
+type UpdateReturn = Update.Return<Model, Message>
 
 const findCardTitle = (
   columns: ReadonlyArray<Column.Column>,
@@ -43,9 +42,9 @@ const announceKeyboardDrag = (
   model: Model,
   nextDragAndDrop: DragAndDrop.Model,
 ): string =>
-  M.value(nextDragAndDrop.dragState).pipe(
-    M.withReturnType<string>(),
-    M.tag('KeyboardDragging', nextState => {
+  Match.value(nextDragAndDrop.dragState).pipe(
+    Match.withReturnType<string>(),
+    Match.tag('KeyboardDragging', nextState => {
       const wasIdle = model.dragAndDrop.dragState._tag === 'Idle'
       if (wasIdle) {
         const title = findCardTitle(model.columns, nextState.itemId)
@@ -71,148 +70,136 @@ const announceKeyboardDrag = (
 
       return model.announcement
     }),
-    M.orElse(() => model.announcement),
+    Match.orElse(() => model.announcement),
   )
 
 const screenReaderTextForDrop = (
   model: Model,
   outMessage: DragAndDrop.OutMessage,
 ): string =>
-  M.value(outMessage).pipe(
-    M.withReturnType<string>(),
-    M.tagsExhaustive({
-      Reordered: ({ itemId, toContainerId, toIndex }) => {
-        const title = findCardTitle(model.columns, itemId)
-        const columnName = findColumnName(model.columns, toContainerId)
-        return `Dropped ${title} in position ${toIndex + 1} of ${columnName}.`
-      },
-      Cancelled: () =>
-        Option.match(DragAndDrop.maybeDraggedItemId(model.dragAndDrop), {
-          onNone: () => 'Drag cancelled.',
-          onSome: id => {
-            const title = findCardTitle(model.columns, id)
-            return `Drag cancelled, ${title} returned to original position.`
-          },
-        }),
-    }),
-  )
+  DragAndDrop.OutMessage.match<string>(outMessage, {
+    Reordered: ({ itemId, toContainerId, toIndex }) => {
+      const title = findCardTitle(model.columns, itemId)
+      const columnName = findColumnName(model.columns, toContainerId)
+      return `Dropped ${title} in position ${toIndex + 1} of ${columnName}.`
+    },
+    Cancelled: () =>
+      Option.match(DragAndDrop.maybeDraggedItemId(model.dragAndDrop), {
+        onNone: () => 'Drag cancelled.',
+        onSome: id => {
+          const title = findCardTitle(model.columns, id)
+          return `Drag cancelled, ${title} returned to original position.`
+        },
+      }),
+  })
 
 const foldDragAndDropOutMessage: (
   previousModel: Model,
 ) => (outMessage: DragAndDrop.OutMessage) => Update.Step<Model, Message> =
   previousModel => outMessage => model =>
-    M.value(outMessage).pipe(
-      withUpdateReturn,
-      M.tagsExhaustive({
-        Reordered: ({ itemId, fromContainerId, toContainerId, toIndex }) => {
-          const nextColumns = Column.reorder(
-            model.columns,
-            itemId,
-            fromContainerId,
-            toContainerId,
-            toIndex,
-          )
-          return [
-            evo(model, {
-              columns: () => nextColumns,
-              announcement: () =>
-                screenReaderTextForDrop(previousModel, outMessage),
-            }),
-            [SaveBoard({ columns: nextColumns })],
-          ]
-        },
-        Cancelled: () => [
-          evo(model, {
+    DragAndDrop.OutMessage.match<UpdateReturn>(outMessage, {
+      Reordered: ({ itemId, fromContainerId, toContainerId, toIndex }) => {
+        const nextColumns = Column.reorder(
+          model.columns,
+          itemId,
+          fromContainerId,
+          toContainerId,
+          toIndex,
+        )
+        return {
+          model: modifyFields(model, {
+            columns: () => nextColumns,
             announcement: () =>
               screenReaderTextForDrop(previousModel, outMessage),
           }),
-          [],
-        ],
+          commands: [SaveBoard({ columns: nextColumns })],
+        }
+      },
+      Cancelled: () => ({
+        model: modifyFields(model, {
+          announcement: () =>
+            screenReaderTextForDrop(previousModel, outMessage),
+        }),
       }),
-    )
+    })
 
 const foldDragAndDrop = (previousModel: Model) =>
   Update.foldChild({
     update: DragAndDrop.update,
     read: (model: Model) => Option.some(model.dragAndDrop),
     write: (model, nextDragAndDrop) =>
-      evo(model, {
+      modifyFields(model, {
         dragAndDrop: () => nextDragAndDrop,
         announcement: () => announceKeyboardDrag(model, nextDragAndDrop),
       }),
-    toParentMessage: message => GotDragAndDropMessage({ message }),
+    toParentMessage: message => Message.GotDragAndDropMessage({ message }),
     foldOutMessage: foldDragAndDropOutMessage(previousModel),
   })
 
-export const update = (model: Model, message: Message): UpdateReturn =>
-  M.value(message).pipe(
-    withUpdateReturn,
-    M.tagsExhaustive({
-      GotDragAndDropMessage: ({ message }) =>
-        foldDragAndDrop(model)(model, message),
+export const update = (model: Model, message: Message) =>
+  Message.match<UpdateReturn>(message, {
+    GotDragAndDropMessage: ({ message }) =>
+      foldDragAndDrop(model)(model, message),
 
-      ClickedAddCard: ({ columnId }) => [
-        evo(model, {
-          maybeNewCardColumnId: () => Option.some(columnId),
-          newCardTitle: () => '',
-        }),
-        [FocusAddCardInput()],
-      ],
+    ClickedAddCard: ({ columnId }) => ({
+      model: modifyFields(model, {
+        maybeNewCardColumnId: () => Option.some(columnId),
+        newCardTitle: () => '',
+      }),
+      commands: [FocusAddCardInput()],
+    }),
 
-      ChangedNewCardTitle: ({ value }) => [
-        evo(model, { newCardTitle: () => value }),
-        [],
-      ],
+    ChangedNewCardTitle: ({ value }) => ({
+      model: modifyFields(model, { newCardTitle: () => value }),
+    }),
 
-      SubmittedNewCard: () =>
-        Option.match(model.maybeNewCardColumnId, {
-          onNone: () => [model, []],
-          onSome: columnId => {
-            const title = String.trim(model.newCardTitle)
-            if (String.isEmpty(title)) {
-              return [model, []]
-            }
-
-            return [
-              model,
-              [GenerateCardId({ columnId: columnId, title: title })],
-            ]
-          },
-        }),
-
-      CompletedGenerateCardId: ({ cardId, columnId, title }) => {
-        const nextColumns = Array.map(model.columns, column => {
-          if (column.id !== columnId) {
-            return column
+    SubmittedNewCard: () =>
+      Option.match(model.maybeNewCardColumnId, {
+        onNone: () => ({ model }),
+        onSome: columnId => {
+          const title = String.trim(model.newCardTitle)
+          if (String.isEmpty(title)) {
+            return { model }
           }
-          return Column.appendCard(column, {
-            id: cardId,
-            title,
-            description: '',
-            sortKey: '',
-          })
+
+          return {
+            model,
+            commands: [GenerateCardId({ columnId, title })],
+          }
+        },
+      }),
+
+    CompletedGenerateCardId: ({ cardId, columnId, title }) => {
+      const nextColumns = Array.map(model.columns, column => {
+        if (column.id !== columnId) {
+          return column
+        }
+        return Column.appendCard(column, {
+          id: cardId,
+          title,
+          description: '',
+          sortKey: '',
         })
+      })
 
-        return [
-          evo(model, {
-            columns: () => nextColumns,
-            maybeNewCardColumnId: () => Option.none(),
-            newCardTitle: () => '',
-          }),
-          [SaveBoard({ columns: nextColumns })],
-        ]
-      },
-
-      CancelledNewCard: () => [
-        evo(model, {
+      return {
+        model: modifyFields(model, {
+          columns: () => nextColumns,
           maybeNewCardColumnId: () => Option.none(),
           newCardTitle: () => '',
         }),
-        [],
-      ],
+        commands: [SaveBoard({ columns: nextColumns })],
+      }
+    },
 
-      CompletedSaveBoard: () => [model, []],
-
-      CompletedFocusAddCardInput: () => [model, []],
+    CancelledNewCard: () => ({
+      model: modifyFields(model, {
+        maybeNewCardColumnId: () => Option.none(),
+        newCardTitle: () => '',
+      }),
     }),
-  )
+
+    CompletedSaveBoard: () => ({ model }),
+
+    CompletedFocusAddCardInput: () => ({ model }),
+  })

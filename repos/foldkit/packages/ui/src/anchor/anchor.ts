@@ -1,7 +1,8 @@
-import { Array, Function, Schema as S, String, pipe } from 'effect'
+import { Array, Function, Option, Schema, String, pipe } from 'effect'
 
 import {
   type Placement as FloatingPlacement,
+  arrow,
   autoUpdate,
   computePosition,
   flip,
@@ -12,7 +13,7 @@ import {
 
 /** Schema mirroring `@floating-ui/dom`'s `Placement` literal union: a side
  *  (`top`/`right`/`bottom`/`left`) optionally suffixed with `-start` or `-end`. */
-export const Placement = S.Literals([
+export const Placement = Schema.Literals([
   'top',
   'right',
   'bottom',
@@ -31,33 +32,34 @@ export type Placement = typeof Placement.Type
 
 /** Schema mirroring `@floating-ui/dom`'s `Padding` type: a uniform number or a
  *  partial per-side object (`top`/`right`/`bottom`/`left`). */
-export const Padding = S.Union([
-  S.Number,
-  S.Struct({
-    top: S.optionalKey(S.Number),
-    right: S.optionalKey(S.Number),
-    bottom: S.optionalKey(S.Number),
-    left: S.optionalKey(S.Number),
+export const Padding = Schema.Union([
+  Schema.Number,
+  Schema.Struct({
+    top: Schema.optionalKey(Schema.Number),
+    right: Schema.optionalKey(Schema.Number),
+    bottom: Schema.optionalKey(Schema.Number),
+    left: Schema.optionalKey(Schema.Number),
   }),
 ])
 
 export type Padding = typeof Padding.Type
 
 /** Static configuration for anchor-based positioning of a floating element relative to a button. */
-export const AnchorConfig = S.Struct({
-  placement: S.optional(Placement),
-  gap: S.optional(S.Number),
-  offset: S.optional(S.Number),
-  padding: S.optional(Padding),
-  portal: S.optional(S.Boolean),
-  isPlacementLocked: S.optional(S.Boolean),
+export const AnchorConfig = Schema.Struct({
+  placement: Schema.optional(Placement),
+  gap: Schema.optional(Schema.Number),
+  offset: Schema.optional(Schema.Number),
+  padding: Schema.optional(Padding),
+  portal: Schema.optional(Schema.Boolean),
+  isPlacementLocked: Schema.optional(Schema.Boolean),
 })
 
 export type AnchorConfig = typeof AnchorConfig.Type
 
 const PORTAL_ROOT_ID = 'foldkit-portal-root'
+const DIALOG_PORTAL_ROOT_ATTRIBUTE = 'data-foldkit-portal-root'
 
-const getOrCreatePortalRoot = (element: Element): HTMLElement => {
+const getOrCreateContainingRootPortalRoot = (element: Element): HTMLElement => {
   // NOTE: portal into the element's containing root, the shadow root when the
   // app is mounted inside one (e.g. the DevTools overlay) or `document.body`
   // otherwise, so the panel keeps that root's scoped styles while still
@@ -87,15 +89,59 @@ const getOrCreatePortalRoot = (element: Element): HTMLElement => {
   return portalRoot
 }
 
-/** Relocates an element into the shared `foldkit-portal-root` div within its
- *  containing root: the shadow root when mounted inside one, otherwise
- *  `document.body`. Escapes any ancestor stacking context while keeping the
- *  element under that root's scoped styles. Returns a cleanup function that
- *  removes the element from the portal root. Designed to be called from inside
- *  an `OnMount` action: the consumer wraps the call in `Effect.sync` and
- *  stashes the returned cleanup in the `Mount` result. */
+const getOrCreateDialogPortalRoot = (
+  dialog: HTMLDialogElement,
+): HTMLElement => {
+  const existing = dialog.querySelector(
+    `:scope > [${DIALOG_PORTAL_ROOT_ATTRIBUTE}]`,
+  )
+
+  if (existing instanceof HTMLElement) {
+    return existing
+  }
+
+  const portalRoot = document.createElement('div')
+  portalRoot.setAttribute(DIALOG_PORTAL_ROOT_ATTRIBUTE, '')
+
+  // NOTE: appended, unlike the containing root's portal root. A dialog's
+  // content is usually one positioned panel, and an element prepended before
+  // it paints under that panel unless it has its own z-index. Backdrops do not
+  // come here: `portalBackdrop` places them next to their wrapper instead.
+  dialog.append(portalRoot)
+  return portalRoot
+}
+
+const isDialogPortalRoot = (element: Element): boolean =>
+  element.hasAttribute(DIALOG_PORTAL_ROOT_ATTRIBUTE)
+
+// NOTE: a dialog is its own stacking level (`Dom.showDialog` gives it a
+// near-maximal z-index, `showModal()` puts it in the top layer) and the only
+// subtree a modal dialog leaves interactive. An element portaled out of it is
+// painted behind the dialog and made inert, so an element inside a dialog is
+// portaled into that dialog instead. `closest` must be read here, before the
+// element is relocated out of the mounting tree.
+const getOrCreatePortalRoot = (element: Element): HTMLElement =>
+  Option.match(Option.fromNullishOr(element.closest('dialog')), {
+    onNone: () => getOrCreateContainingRootPortalRoot(element),
+    onSome: getOrCreateDialogPortalRoot,
+  })
+
+/** Relocates an element into a portal root and returns a cleanup function
+ *  that removes it again. Inside a `<dialog>`, the portal root is a div
+ *  appended to that dialog, so the element stays above the dialog's content
+ *  and interactive while a modal dialog makes everything outside it inert.
+ *  The cleanup removes that div once it is empty. Otherwise the portal root
+ *  is the shared `foldkit-portal-root` div within the element's containing
+ *  root: the shadow root when mounted inside one, otherwise `document.body`.
+ *  Either way the element escapes the clipping and stacking contexts of the
+ *  ancestors it leaves, and keeps its root's scoped styles. Use
+ *  `portalBackdrop` for a click-outside backdrop. Designed to be called from
+ *  inside an `OnMount` action: the consumer wraps the call in `Effect.sync`
+ *  and stashes the returned cleanup in the `Mount` result. */
 export const portalToContainingRoot = (element: Element): (() => void) => {
-  getOrCreatePortalRoot(element).appendChild(element)
+  const portalRoot = getOrCreatePortalRoot(element)
+  portalRoot.appendChild(element)
+
   return () => {
     try {
       element.remove()
@@ -104,8 +150,67 @@ export const portalToContainingRoot = (element: Element): (() => void) => {
       // so the remove() call can throw on a node that's already been removed.
       // Swallow the error.
     }
+
+    // NOTE: a dialog's children are usually rendered only while it is open,
+    // so after a close an empty portal root would be the dialog's only child,
+    // and on the next open the dialog's content would be inserted after it.
+    // Removing it lets the next element portaled into this dialog append a
+    // fresh root after the content.
+    if (isDialogPortalRoot(portalRoot) && !portalRoot.hasChildNodes()) {
+      portalRoot.remove()
+    }
   }
 }
+
+const findWrapperInsideDialog = (element: Element): Option.Option<Element> => {
+  const dialog = element.closest('dialog')
+
+  return pipe(
+    Option.fromNullishOr(element.parentElement),
+    Option.filter(parent => dialog !== null && parent !== dialog),
+  )
+}
+
+/** Relocates a click-outside backdrop and returns a cleanup function that
+ *  removes it again. Outside a `<dialog>`, it does what
+ *  `portalToContainingRoot` does. Inside a `<dialog>`, the backdrop moves to
+ *  directly before the element it was rendered in, which is the component
+ *  wrapper that holds the trigger. The backdrop then covers the dialog's
+ *  content, and the wrapper stays above it, so a click on a Combobox input
+ *  reaches the input while a click anywhere else in the dialog reaches the
+ *  backdrop. The wrapper must be positioned, for example `position:
+ *  relative`, which is also what keeps it above a backdrop in the containing
+ *  root. While the backdrop is there, it is a sibling of the wrapper, so
+ *  sibling-based selectors such as `:first-child` or Tailwind's `divide-y`
+ *  count it. Some CSS on an ancestor between the wrapper and the dialog
+ *  confines the backdrop to that ancestor: anything that makes the ancestor
+ *  the containing block for fixed-position elements, for example
+ *  `transform`, `scale`, `filter`, `backdrop-filter`, or `container-type`.
+ *  A click outside that ancestor then leaves the overlay open, and if it
+ *  also lands outside the dialog panel, it closes the whole dialog. A
+ *  backdrop rendered directly in the dialog goes into the dialog's portal
+ *  root instead. Designed to be called from inside an `OnMount` action,
+ *  like `portalToContainingRoot`. */
+export const portalBackdrop = (element: Element): (() => void) =>
+  Option.match(findWrapperInsideDialog(element), {
+    onNone: () => portalToContainingRoot(element),
+    onSome: wrapper => {
+      // NOTE: positioned elements without a z-index paint in tree order, and
+      // every non-positioned element paints before them. Placed directly
+      // before the positioned wrapper, the backdrop paints over the dialog
+      // panel and its content but under the wrapper and the trigger inside it.
+      // The dialog portal root cannot give both: appended, the backdrop would
+      // cover the trigger too, and prepended, the dialog panel would cover the
+      // backdrop. `closest` and `parentElement` must be read before the move.
+      wrapper.before(element)
+      return () => element.remove()
+    },
+  })
+
+const isInsideFixedContainer = (element: Element | null): boolean =>
+  element !== null &&
+  (getComputedStyle(element).position === 'fixed' ||
+    isInsideFixedContainer(element.parentElement))
 
 const toSide = (placement: FloatingPlacement): string =>
   pipe(placement, String.split('-'), Array.headNonEmpty)
@@ -120,14 +225,47 @@ const toSide = (placement: FloatingPlacement): string =>
  *  - `focusAfterPosition`: focuses the element once the first position
  *    resolves. Defaults to `false`.
  *  - `focusSelector`: focuses this descendant instead of the element itself.
- *    Read only when `focusAfterPosition` is true. */
+ *    Read only when `focusAfterPosition` is true.
+ *  - `arrowId`: id of an arrow element inside the panel, resolved through the
+ *    element's own root. An id that resolves to an element outside the panel is
+ *    ignored, and any element type is accepted, so an `<svg>` arrow works. When
+ *    it resolves, the arrow's offset along the panel edge is published as
+ *    `--arrow-x` and `--arrow-y`, with the axis the placement does not use
+ *    reset to `initial`, and the panel is no longer made a scroll container,
+ *    since scrolling clips on both axes and an arrow sits half outside the
+ *    panel's box.
+ *  - `arrowPadding`: distance in pixels the arrow keeps from the panel's
+ *    corners. Defaults to `0`. Separate from `anchor.padding`, which is the
+ *    viewport padding. */
 export type SetupConfig = Readonly<{
   buttonId: string
   anchor: AnchorConfig
   interceptTab?: boolean
   focusAfterPosition?: boolean
   focusSelector?: string
+  arrowId?: string
+  arrowPadding?: number
 }>
+
+// NOTE: the unused axis is reset to `initial` rather than removed. Custom
+// properties inherit, so removing it lets an ancestor's `--arrow-x` reach the
+// arrow, and a `left` that resolves beats the side rule's `right` under
+// over-constrained absolute positioning. An ancestor is not far-fetched: a
+// `portal: false` popover nested inside another popover's panel sits under one.
+// `initial` gives the property its guaranteed-invalid initial value, so
+// `var(--arrow-x)` is invalid at computed-value time and `left` falls back to
+// `auto`.
+const setOrResetLength = (
+  element: HTMLElement,
+  property: string,
+  value: number | undefined,
+): void => {
+  if (value === undefined) {
+    element.style.setProperty(property, 'initial')
+  } else {
+    element.style.setProperty(property, `${value}px`)
+  }
+}
 
 /** Positions a floating element relative to its button using Floating UI, then
  *  returns a cleanup function. Designed to be called inside an `OnMount`
@@ -137,9 +275,17 @@ export type SetupConfig = Readonly<{
  *  components like Popover where Tab should navigate naturally within the
  *  panel. When `focusAfterPosition` is true, the element is focused after the
  *  first position computation clears visibility, deferred via
- *  requestAnimationFrame so the element is painted before focus fires.
+ *  requestAnimationFrame so the element is painted before focus fires. That
+ *  focus passes `preventScroll`. Floating UI has already placed the element
+ *  in view, so a scroll-on-focus can only move the page under it, which
+ *  happens when the element's top edge lands within the document's
+ *  `scroll-padding-top`.
  *  `focusSelector` optionally targets a descendant (e.g. a calendar grid
  *  inside a popover panel) instead of the panel itself.
+ *  A portaled element whose button sits inside a `position: fixed` ancestor
+ *  is positioned with Floating UI's fixed strategy, so it stays under the
+ *  button while the page scrolls instead of moving with the document until
+ *  `autoUpdate` repositions it.
  *  The side the element currently sits on is written to `data-placement`, so
  *  CSS can react to it. When `isPlacementLocked` is true, the element keeps the
  *  side that the first positioning picks, `flip` is removed from every later
@@ -157,9 +303,27 @@ export const anchorSetup = (
   const root = element.getRootNode()
   const inShadow = root instanceof ShadowRoot
   const owner = inShadow ? root : document
+
+  if (!(element instanceof HTMLElement)) {
+    console.error(
+      '[@foldkit/ui] anchorSetup requires an HTML panel. The panel will not be positioned.',
+    )
+    return Function.constVoid
+  }
+
   const button = owner.getElementById(config.buttonId)
 
-  if (!(button instanceof HTMLElement) || !(element instanceof HTMLElement)) {
+  if (button === null) {
+    console.error(
+      `[@foldkit/ui] anchorSetup could not find a trigger with id "${config.buttonId}". The panel will not be positioned.`,
+    )
+    return Function.constVoid
+  }
+
+  if (!(button instanceof HTMLElement)) {
+    console.error(
+      `[@foldkit/ui] anchorSetup requires an HTML trigger with id "${config.buttonId}". The panel will not be positioned.`,
+    )
     return Function.constVoid
   }
 
@@ -169,11 +333,37 @@ export const anchorSetup = (
   // NOTE: inside a shadow root the panel's offsetParent resolves to the
   // light-DOM host element, so Floating UI's absolute strategy mis-measures
   // its position. The fixed strategy is viewport-relative and sidesteps the
-  // offsetParent entirely. Light-DOM apps keep the absolute strategy.
-  const strategy = inShadow ? 'fixed' : 'absolute'
-  if (inShadow) {
+  // offsetParent entirely. A portaled panel whose button sits inside a
+  // `position: fixed` ancestor needs the fixed strategy too: absolute
+  // coordinates move with the document on every scroll while the button
+  // stays put, so the panel visibly lags until `autoUpdate` catches up. A
+  // `sticky` ancestor is left alone, since it is viewport-anchored only past
+  // its threshold and neither strategy is right across the whole scroll
+  // range. Other light-DOM apps keep the absolute strategy.
+  const isAnchoredToFixedContainer = isPortal && isInsideFixedContainer(button)
+  const strategy = inShadow || isAnchoredToFixedContainer ? 'fixed' : 'absolute'
+  if (strategy === 'fixed') {
     element.style.position = 'fixed'
   }
+
+  // NOTE: an id lookup searches the whole root, so an unrelated element that
+  // happens to carry the arrow id would be positioned as the arrow. The
+  // containment check holds the lookup to what `arrowId` documents, an arrow
+  // inside the panel. The candidate is not narrowed to `HTMLElement`, since
+  // Floating UI's `arrow` takes any `Element` and a triangle arrow is usually
+  // an `<svg>`.
+  const maybeArrowElement = pipe(
+    Option.fromNullishOr(config.arrowId),
+    Option.flatMapNullishOr(arrowId => owner.getElementById(arrowId)),
+    Option.filter(candidate => element.contains(candidate)),
+  )
+
+  const arrowMiddleware = Option.match(maybeArrowElement, {
+    onNone: () => [],
+    onSome: arrowElement => [
+      arrow({ element: arrowElement, padding: config.arrowPadding ?? 0 }),
+    ],
+  })
 
   const {
     placement,
@@ -235,10 +425,26 @@ export const anchorSetup = (
               `${rects.reference.width}px`,
             )
             element.style.maxHeight = `${Math.max(0, availableHeight)}px`
-            element.style.overflowY = 'auto'
-            element.style.overscrollBehavior = 'none'
+
+            // NOTE: `overflow-y: auto` makes `overflow-x` compute to `auto`
+            // too, so a scrolling panel clips on every side. An arrow sits
+            // half outside the panel's padding box, so it would be clipped
+            // away entirely. A panel with an arrow keeps its scroll container
+            // inside itself instead.
+            if (Option.isNone(maybeArrowElement)) {
+              element.style.overflowY = 'auto'
+              element.style.overscrollBehavior = 'none'
+            }
           },
         }),
+        // NOTE: `arrow` runs last. Sitting after `shift` is the constraint: an
+        // offset computed before `shift` would ignore the displacement `shift`
+        // applied, which is the case this hook exists to handle. Running after
+        // `size` is safe for a different reason: when `size.apply` changes the
+        // panel's dimensions, `size` returns `reset: { rects: true }` and
+        // Floating UI reruns the whole chain, so `arrow` always resolves
+        // against the final rects rather than the ones `size` invalidated.
+        ...arrowMiddleware,
       ],
     })
 
@@ -246,7 +452,7 @@ export const anchorSetup = (
 
     tick
       .then(
-        ({ x, y, placement: resolvedPlacement }) => {
+        ({ x, y, placement: resolvedPlacement, middlewareData }) => {
           hasWarnedFailure = false
 
           if (!isActive) {
@@ -265,6 +471,12 @@ export const anchorSetup = (
             toSide(lockedPlacement ?? resolvedPlacement),
           )
 
+          if (Option.isSome(maybeArrowElement)) {
+            const { x: arrowX, y: arrowY } = middlewareData.arrow ?? {}
+            setOrResetLength(element, '--arrow-x', arrowX)
+            setOrResetLength(element, '--arrow-y', arrowY)
+          }
+
           if (isFirstUpdate) {
             isFirstUpdate = false
             element.style.visibility = ''
@@ -279,7 +491,7 @@ export const anchorSetup = (
                   ? owner.querySelector(config.focusSelector)
                   : element
                 if (target instanceof HTMLElement) {
-                  target.focus()
+                  target.focus({ preventScroll: true })
                 }
               })
             }
@@ -333,6 +545,10 @@ export const anchorSetup = (
     }
 
     element.removeAttribute('data-placement')
+    element.style.removeProperty('overflow-y')
+    element.style.removeProperty('overscroll-behavior')
+    element.style.removeProperty('--arrow-x')
+    element.style.removeProperty('--arrow-y')
 
     portalCleanup?.()
   }

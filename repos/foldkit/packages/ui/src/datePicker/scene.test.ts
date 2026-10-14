@@ -1,4 +1,4 @@
-import { Match as M, Option } from 'effect'
+import { Match, Option } from 'effect'
 import * as Calendar from 'foldkit/calendar'
 import { type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
@@ -8,23 +8,38 @@ import { describe, it } from '@effect/vitest'
 
 import * as UiCalendar from '../calendar/index.js'
 import * as Popover from '../popover/public.js'
-import type { Message, Model, ViewInputs } from './index.js'
-import { Opened, init, triggerId, update, view } from './index.js'
+import type { Model, ViewInputs } from './index.js'
+import { Message, init, triggerId, update, view } from './index.js'
 
 const acknowledgeAnchorPopover = Scene.Mount.resolve(
   Popover.AnchorPopover,
-  Popover.CompletedAnchorPopover(),
+  Popover.Message.CompletedAnchorPopover(),
 )
 const acknowledgePopoverBackdrop = Scene.Mount.resolve(
   Popover.PortalPopoverBackdrop,
-  Popover.CompletedPortalPopoverBackdrop(),
+  Popover.Message.CompletedPortalPopoverBackdrop(),
 )
 
 const today = Calendar.make(2026, 4, 13)
 
+const germanCalendarViewLabels: UiCalendar.ViewLabels = {
+  previousMonthLabel: 'Vorheriger Monat',
+  nextMonthLabel: 'Nächster Monat',
+  previousYearsPageLabel: 'Vorherige 12 Jahre',
+  nextYearsPageLabel: 'Nächste 12 Jahre',
+  daysHeadingButtonLabel: 'Zur Monatsauswahl',
+  monthsHeadingButtonLabel: 'Zur Jahresauswahl',
+  toDaysGridLabel: monthYear => `Kalender, ${monthYear}`,
+  toWeekLabel: weekStart =>
+    `Woche ab ${Calendar.formatLong(weekStart, Calendar.defaultEnglishLocale)}`,
+  toMonthsGridLabel: year => `Monatsauswahl, ${year}`,
+  toYearsGridLabel: (startYear, endYear) =>
+    `Jahresauswahl, ${startYear}–${endYear}`,
+}
+
 const testToCalendarView = (attrs: UiCalendar.CalendarAttributes) =>
-  M.value(attrs).pipe(
-    M.tagsExhaustive({
+  Match.value(attrs).pipe(
+    Match.tagsExhaustive({
       Days: days =>
         ih.div(days.root, [
           ih.div(
@@ -136,7 +151,7 @@ const grid = Scene.role('grid')
 const hiddenInput = Scene.selector('input[type="hidden"]')
 
 const closedModel = init({ id: 'picker', today })
-const [openModel] = update(closedModel, Opened())
+const pickerOpen = update(closedModel, Message.Opened())
 
 describe('DatePicker', () => {
   describe('rendering', () => {
@@ -147,6 +162,7 @@ describe('DatePicker', () => {
         Scene.expect(trigger).toExist(),
         Scene.expect(trigger).toHaveAttr('type', 'button'),
         Scene.expect(trigger).toHaveAttr('aria-expanded', 'false'),
+        Scene.expect(trigger).not.toHaveAttr('aria-controls'),
       )
     })
 
@@ -181,9 +197,65 @@ describe('DatePicker', () => {
     it('renders the calendar grid inside the popover panel when open', () => {
       Scene.scene(
         { update, view: sceneView() },
-        Scene.given(openModel),
+        Scene.given(pickerOpen.model),
         Scene.expect(panel).toExist(),
         Scene.expect(grid).toExist(),
+        Scene.expect(trigger).toHaveAttr(
+          'aria-controls',
+          'picker-popover-panel',
+        ),
+        acknowledgeAnchorPopover,
+        acknowledgePopoverBackdrop,
+      )
+    })
+  })
+
+  describe('Calendar view labels', () => {
+    const pickerMonths = update(
+      pickerOpen.model,
+      Message.GotCalendarMessage({
+        message: UiCalendar.Message.ClickedHeading(),
+      }),
+    )
+    const pickerYears = update(
+      pickerMonths.model,
+      Message.GotCalendarMessage({
+        message: UiCalendar.Message.ClickedHeading(),
+      }),
+    )
+
+    it('forwards Days-mode labels to the embedded Calendar', () => {
+      Scene.scene(
+        { update, view: sceneView(germanCalendarViewLabels) },
+        Scene.given(pickerOpen.model),
+        Scene.expect(Scene.label('Vorheriger Monat')).toExist(),
+        Scene.expect(Scene.label('Nächster Monat')).toExist(),
+        Scene.expect(Scene.label('Zur Monatsauswahl')).toExist(),
+        Scene.expect(Scene.label('Kalender, April 2026')).toExist(),
+        Scene.expect(Scene.label('Woche ab March 29, 2026')).toExist(),
+        acknowledgeAnchorPopover,
+        acknowledgePopoverBackdrop,
+      )
+    })
+
+    it('forwards Months-mode labels to the embedded Calendar', () => {
+      Scene.scene(
+        { update, view: sceneView(germanCalendarViewLabels) },
+        Scene.given(pickerMonths.model),
+        Scene.expect(Scene.label('Zur Jahresauswahl')).toExist(),
+        Scene.expect(Scene.label('Monatsauswahl, 2026')).toExist(),
+        acknowledgeAnchorPopover,
+        acknowledgePopoverBackdrop,
+      )
+    })
+
+    it('forwards Years-mode labels to the embedded Calendar', () => {
+      Scene.scene(
+        { update, view: sceneView(germanCalendarViewLabels) },
+        Scene.given(pickerYears.model),
+        Scene.expect(Scene.label('Vorherige 12 Jahre')).toExist(),
+        Scene.expect(Scene.label('Nächste 12 Jahre')).toExist(),
+        Scene.expect(Scene.label('Jahresauswahl, 2016–2027')).toExist(),
         acknowledgeAnchorPopover,
         acknowledgePopoverBackdrop,
       )
@@ -194,7 +266,7 @@ describe('DatePicker', () => {
     it('does not put tabindex on the popover panel when open', () => {
       Scene.scene(
         { update, view: sceneView() },
-        Scene.given(openModel),
+        Scene.given(pickerOpen.model),
         Scene.expect(panel).not.toHaveAttr('tabIndex'),
         acknowledgeAnchorPopover,
         acknowledgePopoverBackdrop,
@@ -204,7 +276,7 @@ describe('DatePicker', () => {
     it('does not attach a blur handler to the popover panel when open', () => {
       Scene.scene(
         { update, view: sceneView() },
-        Scene.given(openModel),
+        Scene.given(pickerOpen.model),
         Scene.expect(panel).not.toHaveHandler('blur'),
         acknowledgeAnchorPopover,
         acknowledgePopoverBackdrop,
@@ -217,7 +289,7 @@ describe('DatePicker', () => {
       // Removing this while retaining contentFocus would break Escape-to-close.
       Scene.scene(
         { update, view: sceneView() },
-        Scene.given(openModel),
+        Scene.given(pickerOpen.model),
         Scene.expect(panel).toHaveHandler('keydown'),
         acknowledgeAnchorPopover,
         acknowledgePopoverBackdrop,

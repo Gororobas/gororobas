@@ -1,42 +1,35 @@
-import { Effect, Fiber, Match as M, Number, Schema as S } from 'effect'
+import { Effect, Fiber, Number, Schema } from 'effect'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Command } from '../command/index.js'
 import { TextDirection, __htmlBuilder } from '../html/index.js'
-import { m } from '../message/index.js'
-import { evo } from '../struct/index.js'
-import {
-  __setDevToolsOverlay,
-  makeApplication,
-  makeElement,
-} from './runtime.js'
+import { defineMessageUnion } from '../message/index.js'
+import { modifyFields } from '../struct/index.js'
+import type * as Update from '../update/index.js'
+import { __setDevToolsOverlay } from './devToolsConfig.js'
+import { makeApplication } from './makeApplication.js'
+import { makeElement } from './makeElement.js'
 
-const Rendered = m('Rendered')
-const ClickedBump = m('ClickedBump')
-const Message = S.Union([Rendered, ClickedBump])
+const Message = defineMessageUnion({
+  Rendered: {},
+  ClickedBump: {},
+})
 type Message = typeof Message.Type
 
-const Model = S.Struct({ label: S.String })
+const Model = Schema.Struct({ label: Schema.String })
 type Model = typeof Model.Type
 
 const h = __htmlBuilder<Message>()
 
-const update = (
-  model: Model,
-  message: Message,
-): readonly [Model, ReadonlyArray<Command<Message>>] =>
-  M.value(message).pipe(
-    M.withReturnType<readonly [Model, ReadonlyArray<Command<Message>>]>(),
-    M.tagsExhaustive({
-      Rendered: () => [model, []],
-      ClickedBump: () => [{ label: 'world' }, []],
-    }),
-  )
+const update = (model: Model, message: Message) =>
+  Message.match<Update.Return<Model, Message>>(message, {
+    Rendered: () => ({ model }),
+    ClickedBump: () => ({ model: { label: 'world' } }),
+  })
 
-const LocaleModel = S.Struct({
-  lang: S.String,
+const LocaleModel = Schema.Struct({
+  lang: Schema.String,
   dir: TextDirection,
-  revision: S.Number,
+  revision: Schema.Number,
 })
 type LocaleModel = typeof LocaleModel.Type
 
@@ -47,29 +40,23 @@ const FRENCH_AUTO = LocaleModel.make({
   revision: 0,
 })
 
-const ClickedArabic = m('ClickedArabic')
-const ClickedRerender = m('ClickedRerender')
-const LocaleMessage = S.Union([ClickedArabic, ClickedRerender])
+const LocaleMessage = defineMessageUnion({
+  ClickedArabic: {},
+  ClickedRerender: {},
+})
 type LocaleMessage = typeof LocaleMessage.Type
 
 const localeH = __htmlBuilder<LocaleMessage>()
 
-const localeUpdate = (
-  model: LocaleModel,
-  message: LocaleMessage,
-): readonly [LocaleModel, ReadonlyArray<Command<LocaleMessage>>] =>
-  M.value(message).pipe(
-    M.withReturnType<
-      readonly [LocaleModel, ReadonlyArray<Command<LocaleMessage>>]
-    >(),
-    M.tagsExhaustive({
-      ClickedArabic: () => [
-        evo(model, { lang: () => 'ar', dir: () => 'Rtl' }),
-        [],
-      ],
-      ClickedRerender: () => [evo(model, { revision: Number.increment }), []],
+const localeUpdate = (model: LocaleModel, message: LocaleMessage) =>
+  LocaleMessage.match<Update.Return<LocaleModel, LocaleMessage>>(message, {
+    ClickedArabic: () => ({
+      model: modifyFields(model, { lang: () => 'ar', dir: () => 'Rtl' }),
     }),
-  )
+    ClickedRerender: () => ({
+      model: modifyFields(model, { revision: Number.increment }),
+    }),
+  })
 
 const HOST_TITLE = 'Host Page Title'
 const HOST_LANG = 'en'
@@ -130,7 +117,7 @@ describe('makeElement', () => {
 
     const element = makeElement({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: model => h.div([], [model.label]),
       container,
@@ -151,7 +138,7 @@ describe('makeElement', () => {
   it('renders into its container without touching the document head', async () => {
     const element = makeElement({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: model => h.div([], [model.label]),
       container,
@@ -170,12 +157,12 @@ describe('makeElement', () => {
   it('leaves the document head untouched across re-renders', async () => {
     const element = makeElement({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: model =>
         h.div(
           [],
-          [h.button([h.OnClick(ClickedBump())], ['bump']), model.label],
+          [h.button([h.OnClick(Message.ClickedBump())], ['bump']), model.label],
         ),
       container,
     })
@@ -197,13 +184,13 @@ describe('makeElement', () => {
   })
 
   it('seeds the initial model from flags', async () => {
-    const Flags = S.Struct({ initialLabel: S.String })
+    const Flags = Schema.Struct({ initialLabel: Schema.String })
 
     const element = makeElement({
       Model,
       Flags,
       flags: Effect.succeed({ initialLabel: 'from-flags' }),
-      init: flags => [{ label: flags.initialLabel }, []],
+      init: flags => ({ model: { label: flags.initialLabel } }),
       update,
       view: model => h.div([], [model.label]),
       container,
@@ -222,7 +209,7 @@ describe('makeElement', () => {
   it('renders a scoped crash view without touching the document head', async () => {
     const element = makeElement({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: () => {
         throw new Error('boom from view')
@@ -245,10 +232,10 @@ describe('makeElement', () => {
 })
 
 describe('makeApplication', () => {
-  it('owns the document head, applying title and canonical metadata', async () => {
+  it('sets the title without creating omitted canonical metadata', async () => {
     const application = makeApplication({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: model => ({ title: model.label, body: h.div([], [model.label]) }),
       container,
@@ -260,12 +247,296 @@ describe('makeApplication', () => {
       await awaitBodyText('hello')
 
       expect(document.title).toBe('hello')
+      expect(document.head.querySelector('link[rel="canonical"]')).toBeNull()
+      expect(document.head.querySelector('meta[property="og:url"]')).toBeNull()
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('preserves served canonical metadata when omitted after a location change', async () => {
+    const servedUrl = 'https://example.com/served'
+    const canonical = document.createElement('link')
+    canonical.setAttribute('rel', 'canonical')
+    canonical.setAttribute('href', servedUrl)
+    const ogUrl = document.createElement('meta')
+    ogUrl.setAttribute('property', 'og:url')
+    ogUrl.setAttribute('content', servedUrl)
+    document.head.append(canonical, ogUrl)
+    const originalHref = window.location.href
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: model.label,
+        body: h.button([h.OnClick(Message.ClickedBump())], [model.label]),
+      }),
+      container,
+    })
+
+    const fiber = Effect.runFork(application.start())
+
+    try {
+      await awaitBodyText('hello')
+      const button = document.body.querySelector('button')
+      if (button === null) {
+        throw new Error('expected application button')
+      }
+
+      history.pushState(null, '', new URL('/next?utm_source=x', originalHref))
+      button.click()
+      await awaitBodyText('world')
+
+      expect(canonical.getAttribute('href')).toBe(servedUrl)
+      expect(ogUrl.getAttribute('content')).toBe(servedUrl)
       expect(
-        document.head.querySelector('link[rel="canonical"]'),
-      ).not.toBeNull()
+        document.head.querySelectorAll('link[rel="canonical"]'),
+      ).toHaveLength(1)
       expect(
-        document.head.querySelector('meta[property="og:url"]'),
-      ).not.toBeNull()
+        document.head.querySelectorAll('meta[property="og:url"]'),
+      ).toHaveLength(1)
+    } finally {
+      history.replaceState(null, '', originalHref)
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('uses canonical as og:url when ogUrl is omitted', async () => {
+    const canonicalUrl = 'https://example.com/todos'
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: model.label,
+        canonical: canonicalUrl,
+        body: h.div([], [model.label]),
+      }),
+      container,
+    })
+
+    const fiber = Effect.runFork(application.start())
+
+    try {
+      await awaitBodyText('hello')
+
+      expect(
+        document.head
+          .querySelector('link[rel="canonical"]')
+          ?.getAttribute('href'),
+      ).toBe(canonicalUrl)
+      expect(
+        document.head
+          .querySelector('meta[property="og:url"]')
+          ?.getAttribute('content'),
+      ).toBe(canonicalUrl)
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('sets og:url independently without changing an omitted canonical', async () => {
+    const servedUrl = 'https://example.com/served'
+    const canonical = document.createElement('link')
+    canonical.setAttribute('rel', 'canonical')
+    canonical.setAttribute('href', servedUrl)
+    document.head.append(canonical)
+    const shareUrl = 'https://example.com/share/todos'
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: model.label,
+        ogUrl: shareUrl,
+        body: h.div([], [model.label]),
+      }),
+      container,
+    })
+
+    const fiber = Effect.runFork(application.start())
+
+    try {
+      await awaitBodyText('hello')
+
+      expect(
+        document.head
+          .querySelector('meta[property="og:url"]')
+          ?.getAttribute('content'),
+      ).toBe(shareUrl)
+      expect(canonical.getAttribute('href')).toBe(servedUrl)
+      expect(
+        document.head.querySelectorAll('link[rel="canonical"]'),
+      ).toHaveLength(1)
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('restores served canonical metadata after a later omission', async () => {
+    const servedUrl = 'https://example.com/served'
+    const canonical = document.createElement('link')
+    canonical.setAttribute('rel', 'canonical')
+    canonical.setAttribute('href', servedUrl)
+    const ogUrl = document.createElement('meta')
+    ogUrl.setAttribute('property', 'og:url')
+    ogUrl.setAttribute('content', servedUrl)
+    document.head.append(canonical, ogUrl)
+    const projectUrl = 'https://example.com/projects/hello'
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: model.label,
+        ...(model.label === 'hello' ? { canonical: projectUrl } : {}),
+        body: h.button([h.OnClick(Message.ClickedBump())], [model.label]),
+      }),
+      container,
+    })
+
+    const fiber = Effect.runFork(application.start())
+
+    try {
+      await awaitBodyText('hello')
+      expect(canonical.getAttribute('href')).toBe(projectUrl)
+      expect(ogUrl.getAttribute('content')).toBe(projectUrl)
+
+      const button = document.body.querySelector('button')
+      if (button === null) {
+        throw new Error('expected application button')
+      }
+      button.click()
+      await awaitBodyText('world')
+
+      expect(canonical.getAttribute('href')).toBe(servedUrl)
+      expect(ogUrl.getAttribute('content')).toBe(servedUrl)
+      expect(
+        document.head.querySelectorAll('link[rel="canonical"]'),
+      ).toHaveLength(1)
+      expect(
+        document.head.querySelectorAll('meta[property="og:url"]'),
+      ).toHaveLength(1)
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('removes runtime-created canonical metadata after a later omission', async () => {
+    const projectUrl = 'https://example.com/projects/hello'
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: model.label,
+        ...(model.label === 'hello' ? { canonical: projectUrl } : {}),
+        body: h.button([h.OnClick(Message.ClickedBump())], [model.label]),
+      }),
+      container,
+    })
+
+    const fiber = Effect.runFork(application.start())
+
+    try {
+      await awaitBodyText('hello')
+      expect(
+        document.head
+          .querySelector('link[rel="canonical"]')
+          ?.getAttribute('href'),
+      ).toBe(projectUrl)
+      expect(
+        document.head
+          .querySelector('meta[property="og:url"]')
+          ?.getAttribute('content'),
+      ).toBe(projectUrl)
+
+      const button = document.body.querySelector('button')
+      if (button === null) {
+        throw new Error('expected application button')
+      }
+      button.click()
+      await awaitBodyText('world')
+
+      expect(document.head.querySelector('link[rel="canonical"]')).toBeNull()
+      expect(document.head.querySelector('meta[property="og:url"]')).toBeNull()
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('removes a runtime-written href that was absent from the served canonical', async () => {
+    const canonical = document.createElement('link')
+    canonical.setAttribute('rel', 'canonical')
+    document.head.append(canonical)
+    const projectUrl = 'https://example.com/projects/hello'
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: model.label,
+        ...(model.label === 'hello' ? { canonical: projectUrl } : {}),
+        body: h.button([h.OnClick(Message.ClickedBump())], [model.label]),
+      }),
+      container,
+    })
+
+    const fiber = Effect.runFork(application.start())
+
+    try {
+      await awaitBodyText('hello')
+      expect(canonical.getAttribute('href')).toBe(projectUrl)
+
+      const button = document.body.querySelector('button')
+      if (button === null) {
+        throw new Error('expected application button')
+      }
+      button.click()
+      await awaitBodyText('world')
+
+      expect(canonical.hasAttribute('href')).toBe(false)
+      expect(
+        document.head.querySelectorAll('link[rel="canonical"]'),
+      ).toHaveLength(1)
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('does not recreate an externally removed canonical after omission', async () => {
+    const projectUrl = 'https://example.com/projects/hello'
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: model.label,
+        ...(model.label === 'hello' ? { canonical: projectUrl } : {}),
+        body: h.button([h.OnClick(Message.ClickedBump())], [model.label]),
+      }),
+      container,
+    })
+
+    const fiber = Effect.runFork(application.start())
+
+    try {
+      await awaitBodyText('hello')
+      const canonical = document.head.querySelector('link[rel="canonical"]')
+      if (canonical === null) {
+        throw new Error('expected the canonical the runtime created')
+      }
+      canonical.remove()
+
+      const button = document.body.querySelector('button')
+      if (button === null) {
+        throw new Error('expected application button')
+      }
+      button.click()
+      await awaitBodyText('world')
+
+      expect(document.head.querySelector('link[rel="canonical"]')).toBeNull()
     } finally {
       await Effect.runPromise(Fiber.interrupt(fiber))
     }
@@ -275,15 +546,15 @@ describe('makeApplication', () => {
     const canonicalUrl = 'https://example.com/todos'
     const application = makeApplication({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: model => ({
-        title: model.label,
+        title: 'Metadata test',
         canonical: canonicalUrl,
         ogUrl: canonicalUrl,
         body: h.div(
           [],
-          [h.button([h.OnClick(ClickedBump())], ['bump']), model.label],
+          [h.button([h.OnClick(Message.ClickedBump())], ['bump']), model.label],
         ),
       }),
       container,
@@ -308,6 +579,8 @@ describe('makeApplication', () => {
       }
 
       const querySelectorSpy = vi.spyOn(document.head, 'querySelector')
+      const canonicalGetAttributeSpy = vi.spyOn(canonical, 'getAttribute')
+      const ogUrlGetAttributeSpy = vi.spyOn(ogUrl, 'getAttribute')
       const canonicalSetAttributeSpy = vi.spyOn(canonical, 'setAttribute')
       const ogUrlSetAttributeSpy = vi.spyOn(ogUrl, 'setAttribute')
       try {
@@ -315,6 +588,8 @@ describe('makeApplication', () => {
         await awaitBodyText('world')
 
         expect(querySelectorSpy).not.toHaveBeenCalled()
+        expect(canonicalGetAttributeSpy).not.toHaveBeenCalled()
+        expect(ogUrlGetAttributeSpy).not.toHaveBeenCalled()
         expect(canonicalSetAttributeSpy).not.toHaveBeenCalled()
         expect(ogUrlSetAttributeSpy).not.toHaveBeenCalled()
 
@@ -340,6 +615,8 @@ describe('makeApplication', () => {
         )
       } finally {
         querySelectorSpy.mockRestore()
+        canonicalGetAttributeSpy.mockRestore()
+        ogUrlGetAttributeSpy.mockRestore()
         canonicalSetAttributeSpy.mockRestore()
         ogUrlSetAttributeSpy.mockRestore()
       }
@@ -348,10 +625,58 @@ describe('makeApplication', () => {
     }
   })
 
+  it('rebuilds document metadata after the head is replaced', async () => {
+    const canonicalUrl = 'https://example.com/replaced-head'
+    const application = makeApplication({
+      Model,
+      init: () => ({ model: { label: 'hello' } }),
+      update,
+      view: model => ({
+        title: 'Metadata test',
+        canonical: canonicalUrl,
+        ogUrl: canonicalUrl,
+        body: h.button([h.OnClick(Message.ClickedBump())], [model.label]),
+      }),
+      container,
+    })
+    const fiber = Effect.runFork(application.start())
+    const originalHead = document.head
+
+    try {
+      await awaitBodyText('hello')
+      const button = document.body.querySelector('button')
+      if (button === null) {
+        throw new Error('expected application button')
+      }
+
+      originalHead.replaceWith(document.createElement('head'))
+      button.click()
+
+      await vi.waitFor(() => {
+        expect(document.title).toBe('Metadata test')
+        expect(
+          document.head
+            .querySelector('link[rel="canonical"]')
+            ?.getAttribute('href'),
+        ).toBe(canonicalUrl)
+        expect(
+          document.head
+            .querySelector('meta[property="og:url"]')
+            ?.getAttribute('content'),
+        ).toBe(canonicalUrl)
+      })
+    } finally {
+      if (document.head !== originalHead) {
+        document.head.replaceWith(originalHead)
+      }
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
   it('applies lang and dir to the html element', async () => {
     const application = makeApplication({
       Model: LocaleModel,
-      init: () => [FRENCH_AUTO, []],
+      init: () => ({ model: FRENCH_AUTO }),
       update: localeUpdate,
       view: model => ({
         title: 'Localized',
@@ -377,7 +702,7 @@ describe('makeApplication', () => {
   it('leaves lang and dir alone when the view omits them', async () => {
     const application = makeApplication({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: model => ({ title: model.label, body: h.div([], [model.label]) }),
       container,
@@ -398,7 +723,7 @@ describe('makeApplication', () => {
   it('applies lang without touching dir when the view sets only one', async () => {
     const application = makeApplication({
       Model,
-      init: () => [{ label: 'hello' }, []],
+      init: () => ({ model: { label: 'hello' } }),
       update,
       view: model => ({
         title: model.label,
@@ -423,7 +748,7 @@ describe('makeApplication', () => {
   it('tracks lang and dir across renders, and reasserts them on a later render that leaves both unchanged', async () => {
     const application = makeApplication({
       Model: LocaleModel,
-      init: () => [ENGLISH_LTR, []],
+      init: () => ({ model: ENGLISH_LTR }),
       update: localeUpdate,
       view: model => ({
         title: 'Localized',
@@ -432,8 +757,14 @@ describe('makeApplication', () => {
         body: localeH.div(
           [],
           [
-            localeH.button([localeH.OnClick(ClickedArabic())], ['arabic']),
-            localeH.button([localeH.OnClick(ClickedRerender())], ['rerender']),
+            localeH.button(
+              [localeH.OnClick(LocaleMessage.ClickedArabic())],
+              ['arabic'],
+            ),
+            localeH.button(
+              [localeH.OnClick(LocaleMessage.ClickedRerender())],
+              ['rerender'],
+            ),
             `${model.lang}-${model.revision}`,
           ],
         ),

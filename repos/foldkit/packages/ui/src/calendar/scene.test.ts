@@ -1,4 +1,4 @@
-import { Match as M, Option } from 'effect'
+import { Match, Option } from 'effect'
 import * as Calendar from 'foldkit/calendar'
 import { inertHtml as ih } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
@@ -6,9 +6,12 @@ import * as Scene from 'foldkit/scene'
 import { describe, it } from '@effect/vitest'
 
 import type { CalendarAttributes } from './index.js'
-import { CompletedFocusGrid, FocusGrid, init, update, view } from './index.js'
+import { FocusGrid, Message, init, update, view } from './index.js'
 
-const resolveFocusGrid = Scene.Command.resolve(FocusGrid, CompletedFocusGrid())
+const resolveFocusGrid = Scene.Command.resolve(
+  FocusGrid,
+  Message.CompletedFocusGrid(),
+)
 
 const today = Calendar.make(2026, 4, 13)
 
@@ -16,8 +19,8 @@ const today = Calendar.make(2026, 4, 13)
  * can query them. Pattern-matches on `_tag` so each viewMode renders the
  * appropriate grid (days, months, years). */
 const testToView = (attrs: CalendarAttributes) =>
-  M.value(attrs).pipe(
-    M.tagsExhaustive({
+  Match.value(attrs).pipe(
+    Match.tagsExhaustive({
       Days: days =>
         ih.div(days.root, [
           ih.div(
@@ -96,6 +99,61 @@ const sceneView = Scene.withViewInputs(view, {
   maybeSelectedDate: Option.none(),
   toView: testToView,
 })
+
+const germanLocale: Calendar.LocaleConfig = {
+  ...Calendar.defaultEnglishLocale,
+  firstDayOfWeek: 'Monday',
+  monthNames: [
+    'Januar',
+    'Februar',
+    'März',
+    'April',
+    'Mai',
+    'Juni',
+    'Juli',
+    'August',
+    'September',
+    'Oktober',
+    'November',
+    'Dezember',
+  ],
+  dayNames: [
+    'Sonntag',
+    'Montag',
+    'Dienstag',
+    'Mittwoch',
+    'Donnerstag',
+    'Freitag',
+    'Samstag',
+  ],
+  shortDayNames: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
+  longFormat: [
+    Calendar.DatePart.DayNumber(),
+    Calendar.DatePart.LiteralText({ text: '. ' }),
+    Calendar.DatePart.MonthName(),
+    Calendar.DatePart.LiteralText({ text: ' ' }),
+    Calendar.DatePart.YearNumber(),
+  ],
+  ariaLabelFormat: [
+    Calendar.DatePart.DayName(),
+    Calendar.DatePart.LiteralText({ text: ', ' }),
+    Calendar.DatePart.DayNumber(),
+    Calendar.DatePart.LiteralText({ text: '. ' }),
+    Calendar.DatePart.MonthName(),
+    Calendar.DatePart.LiteralText({ text: ' ' }),
+    Calendar.DatePart.YearNumber(),
+  ],
+}
+
+const yearFirstLocale: Calendar.LocaleConfig = {
+  ...Calendar.defaultEnglishLocale,
+  monthYearFormat: [
+    Calendar.DatePart.YearNumber(),
+    Calendar.DatePart.LiteralText({ text: '年' }),
+    Calendar.DatePart.MonthNumber(),
+    Calendar.DatePart.LiteralText({ text: '月' }),
+  ],
+}
 
 const grid = Scene.role('grid')
 const previousMonthButton = Scene.label('Previous month')
@@ -293,6 +351,72 @@ describe('Calendar', () => {
         // First column header should be Monday's short name
         Scene.expectAll(Scene.all.role('columnheader')).toHaveCount(7),
         Scene.expect(Scene.label('Monday')).toExist(),
+      )
+    })
+  })
+
+  describe('localization', () => {
+    it('draws column header names from the locale rather than English', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(init({ id: 'test', today, locale: germanLocale })),
+        Scene.expect(Scene.label('Montag')).toExist(),
+        Scene.expect(Scene.label('Sonntag')).toExist(),
+      )
+    })
+
+    it('orders day cell labels the way the locale orders them', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(init({ id: 'test', today, locale: germanLocale })),
+        Scene.expect(dayButton('Montag, 13. April 2026')).toExist(),
+      )
+    })
+
+    it('builds the heading and month cells from monthYearFormat', () => {
+      Scene.scene(
+        { update, view: sceneView() },
+        Scene.given(init({ id: 'test', today, locale: yearFirstLocale })),
+        Scene.expect(daysHeadingFor('2026年4月')).toExist(),
+        Scene.click(monthsHeadingButton),
+        resolveFocusGrid,
+        Scene.expect(Scene.label('2026年1月')).toExist(),
+      )
+    })
+
+    it('takes the day grid and week row labels from view inputs', () => {
+      Scene.scene(
+        {
+          update,
+          view: sceneView({
+            toDaysGridLabel: monthYear => `Kalender, ${monthYear}`,
+            toWeekLabel: weekStart =>
+              `Woche ab ${Calendar.formatLong(weekStart, germanLocale)}`,
+          }),
+        },
+        Scene.given(init({ id: 'test', today, locale: germanLocale })),
+        Scene.expect(Scene.label('Kalender, April 2026')).toExist(),
+        Scene.expect(Scene.label('Woche ab 30. März 2026')).toExist(),
+      )
+    })
+
+    it('takes the month and year grid labels from view inputs', () => {
+      Scene.scene(
+        {
+          update,
+          view: sceneView({
+            toMonthsGridLabel: year => `Monatsauswahl, ${year}`,
+            toYearsGridLabel: (startYear, endYear) =>
+              `Jahresauswahl, ${startYear}–${endYear}`,
+          }),
+        },
+        Scene.given(init({ id: 'test', today, locale: germanLocale })),
+        Scene.click(monthsHeadingButton),
+        resolveFocusGrid,
+        Scene.expect(Scene.label('Monatsauswahl, 2026')).toExist(),
+        Scene.click(yearsHeadingButton),
+        resolveFocusGrid,
+        Scene.expect(Scene.label('Jahresauswahl, 2016–2027')).toExist(),
       )
     })
   })

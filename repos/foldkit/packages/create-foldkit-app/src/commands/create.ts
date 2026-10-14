@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 import { Console, Effect, FileSystem, Match, Option, Path, pipe } from 'effect'
-import { Prompt } from 'effect/unstable/cli'
+import { Prompt } from 'effect/cli'
 import { spawnSync } from 'node:child_process'
 
 import { type Example, examples } from '../examples.js'
@@ -10,6 +10,7 @@ import {
   type PackageManager,
   devCommand,
   installDependencies,
+  readFoldkitSubtreeRef,
 } from '../utils/packages.js'
 import { validateProjectName } from '../validateName.js'
 
@@ -18,11 +19,12 @@ type CreateInput = Readonly<{
   rendering: Option.Option<Rendering>
   example: Option.Option<Example>
   packageManager: Option.Option<PackageManager>
+  maybeDependencyManifestsDirectory: Option.Option<string>
 }>
 
 const isWindows = process.platform === 'win32'
 
-const promptForName = Prompt.text({
+const promptForName = Prompt.String({
   message: 'Give your project a name',
   validate: value =>
     Option.match(validateProjectName(value), {
@@ -31,7 +33,7 @@ const promptForName = Prompt.text({
     }),
 })
 
-const promptForRendering = Prompt.select<Rendering>({
+const promptForRendering = Prompt.Select<Rendering>({
   message: 'Pick a rendering mode',
   choices: renderings.map(({ value, title, description }) => ({
     value,
@@ -40,7 +42,7 @@ const promptForRendering = Prompt.select<Rendering>({
   })),
 })
 
-const promptForExample = Prompt.autoComplete({
+const promptForExample = Prompt.AutoComplete({
   message: 'Pick a starting example',
   choices: examples.map(({ value, title, description }) => ({
     value,
@@ -49,7 +51,7 @@ const promptForExample = Prompt.autoComplete({
   })),
 })
 
-const promptForPackageManager = Prompt.select<PackageManager>({
+const promptForPackageManager = Prompt.Select<PackageManager>({
   message: 'Pick a package manager',
   choices: [
     { value: 'pnpm', title: 'pnpm' },
@@ -90,7 +92,9 @@ const resolveInput = (input: CreateInput) =>
       onSome: Effect.succeed,
     })
     if (rendering !== 'spa' && Option.isSome(input.example)) {
-      yield* Effect.fail('The --example flag only applies to spa rendering.')
+      return yield* Effect.fail(
+        'The --example flag only applies to spa rendering.',
+      )
     }
     const scaffold = yield* resolveScaffold(rendering, input.example)
     const packageManager = yield* Option.match(input.packageManager, {
@@ -149,19 +153,29 @@ const installProjectDependencies = (
   projectPath: string,
   packageManager: PackageManager,
   scaffold: Scaffold,
+  maybeDependencyManifestsDirectory: Option.Option<string>,
 ) =>
   Effect.gen(function* () {
     yield* Console.log(
       chalk.blue(`📦 Installing dependencies with ${packageManager}...`),
     )
 
-    yield* installDependencies(projectPath, packageManager, scaffold)
+    yield* installDependencies(
+      projectPath,
+      packageManager,
+      scaffold,
+      maybeDependencyManifestsDirectory,
+    )
 
     yield* Console.log(chalk.green('✅ Dependencies installed'))
     yield* Console.log('')
   })
 
-const displaySuccessMessage = (name: string, packageManager: PackageManager) =>
+const displaySuccessMessage = (
+  name: string,
+  packageManager: PackageManager,
+  subtreeRef: string,
+) =>
   Effect.gen(function* () {
     yield* Console.log(chalk.bold('All systems nominal.'))
     yield* Console.log('')
@@ -171,9 +185,10 @@ const displaySuccessMessage = (name: string, packageManager: PackageManager) =>
     yield* Console.log(chalk.bold('AI-Assisted Development'))
     yield* Console.log('')
     yield* Console.log(
-      '  Vendor Foldkit in as a git subtree so your AI assistant can\n' +
-        '  reference the source, examples, and documentation. Commit\n' +
-        '  the scaffold first so subtree has a base commit to merge into:',
+      '  Vendor Foldkit in as a git subtree, pinned to the release this\n' +
+        '  project installs, so your AI assistant can reference the matching\n' +
+        '  source, examples, and documentation. Commit the scaffold first so\n' +
+        '  subtree has a base commit to merge into:',
     )
     yield* Console.log('')
     yield* Console.log(`  > ${chalk.cyan('cd')} ${name}`)
@@ -183,7 +198,7 @@ const displaySuccessMessage = (name: string, packageManager: PackageManager) =>
       `  > ${chalk.cyan('git commit -m "chore: initial commit"')}`,
     )
     yield* Console.log(
-      `  > ${chalk.cyan('git subtree add --prefix=repos/foldkit https://github.com/foldkit/foldkit.git main --squash')}`,
+      `  > ${chalk.cyan(`git subtree add --prefix=repos/foldkit https://github.com/foldkit/foldkit.git ${subtreeRef} --squash`)}`,
     )
     yield* Console.log('')
     yield* Console.log(`  Details: ${chalk.cyan('foldkit.dev/ai/overview')}`)
@@ -220,12 +235,28 @@ export const create = (input: CreateInput) =>
   Effect.gen(function* () {
     const { name, scaffold, packageManager } = yield* resolveInput(input)
     const path = yield* Path.Path
+    if (
+      Option.isSome(input.maybeDependencyManifestsDirectory) &&
+      !path.isAbsolute(input.maybeDependencyManifestsDirectory.value)
+    ) {
+      return yield* Effect.fail(
+        'CREATE_FOLDKIT_APP_DEPENDENCY_MANIFESTS_DIRECTORY must be an absolute path.',
+      )
+    }
     const projectPath = path.resolve(name)
 
     yield* validateProject(name, projectPath, packageManager)
+
+    const subtreeRef = yield* readFoldkitSubtreeRef
+
     yield* setupProject(name, projectPath, scaffold, packageManager)
-    yield* installProjectDependencies(projectPath, packageManager, scaffold)
-    yield* displaySuccessMessage(name, packageManager)
+    yield* installProjectDependencies(
+      projectPath,
+      packageManager,
+      scaffold,
+      input.maybeDependencyManifestsDirectory,
+    )
+    yield* displaySuccessMessage(name, packageManager, subtreeRef)
 
     return name
   })

@@ -1,15 +1,18 @@
-import { Command } from 'foldkit'
-import { evo } from 'foldkit/struct'
+import { Command, Update } from 'foldkit'
+import { Option } from 'effect'
+import { modifyFields } from 'foldkit/struct'
 import { Child } from './child'
-import { GotChildMessage } from './message'
+import { GotChildMessage as wrap } from './message'
 import { Model } from './model'
 
 // UPDATE
 
-export const update = (model: Model, message: Child.Message) => {
-  const [childModel, childCommands] = Child.update(model.child, message)
-  const commands = Command.mapMessages(childCommands, (childMessage) =>
-    GotChildMessage({ message: childMessage }),
-  )
-  return [evo(model, { child: () => childModel }), commands]
-}
+export const update = Update.foldChild({
+  update: Child.update,
+  read: (model: Model) => Option.some(model.child),
+  write: (model, nextChild) => modifyFields(model, { child: () => nextChild }),
+  toParentMessage: message => wrap({ message }),
+})
+
+export const mapMessages = (messages: ReadonlyArray<Child.Message>) =>
+  Command.mapMessages(messages, message => wrap({ message }))

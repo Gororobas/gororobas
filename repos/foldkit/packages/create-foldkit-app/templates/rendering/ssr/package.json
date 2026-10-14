@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --outDir dist/client && vite build --ssr server/main.ts --outDir dist/server",
-    "start": "node dist/server/main.js",
+    "build": "vite build",
+    "start": "node scripts/serve.ts",
     "typecheck": "tsc --noEmit",
-    "format": "prettier -w .",
+    "format": "oxfmt",
     "test": "vitest run",
-    "lint": "oxlint src server"
+    "lint": "oxlint src scripts && effect-tsgo patch --no-typescript --oxlint && oxlint --config .oxlintrc.effect.json --deny-warnings src scripts"
   }
 }

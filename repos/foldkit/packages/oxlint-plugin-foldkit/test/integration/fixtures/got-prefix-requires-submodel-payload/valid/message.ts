@@ -1,13 +1,21 @@
-import { Schema as S } from 'effect'
-import { m } from 'foldkit/message'
+import { Effect, Schema } from 'effect'
+import { Query } from 'foldkit/experimental'
+import { defineMessageUnion } from 'foldkit/message'
 
 import * as Child from './child'
 
-export const ReceivedWeather = m('ReceivedWeather', {
-  temperature: S.Number,
+const postsQuery = Query.define({
+  name: 'Posts',
+  data: Schema.Array(Schema.String),
+  error: Schema.String,
+  execute: Effect.succeed([]),
 })
 
-export const GotChildMessage = m('GotChildMessage', {
-  id: S.String,
+const Message = defineMessageUnion({
+  ReceivedWeather: { temperature: Schema.Number, },
+  GotChildMessage: {
+  id: Schema.String,
   message: Child.Message,
+  },
+  GotPostsMessage: { message: postsQuery.Message },
 })

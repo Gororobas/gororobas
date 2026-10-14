@@ -1,14 +1,14 @@
-import { Schema as S } from 'effect'
+import { Schema } from 'effect'
 
-export const ExampleSourceFile = S.Struct({
-  path: S.String,
-  highlightedHtml: S.String,
-  rawCode: S.String,
+export const ExampleSourceFile = Schema.Struct({
+  path: Schema.String,
+  highlightedHtml: Schema.String,
+  rawCode: Schema.String,
 })
 export type ExampleSourceFile = typeof ExampleSourceFile.Type
 
-export const ExampleSources = S.Struct({
-  files: S.Array(ExampleSourceFile),
+export const ExampleSources = Schema.Struct({
+  files: Schema.Array(ExampleSourceFile),
 })
 export type ExampleSources = typeof ExampleSources.Type
 
@@ -24,6 +24,7 @@ const loadersBySlug: Readonly<Record<string, SourceLoader | undefined>> = {
   kanban: () => import('virtual:example-sources/kanban'),
   weather: () => import('virtual:example-sources/weather'),
   'api-cache': () => import('virtual:example-sources/api-cache'),
+  'api-cache-query': () => import('virtual:example-sources/api-cache-query'),
   charting: () => import('virtual:example-sources/charting'),
   routing: () => import('virtual:example-sources/routing'),
   'route-transitions': () =>
