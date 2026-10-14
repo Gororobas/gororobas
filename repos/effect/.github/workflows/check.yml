@@ -25,6 +25,8 @@ jobs:
         uses: ./.github/actions/setup
       - name: Lint
         run: pnpm lint
+      - name: Check JSDoc
+        run: pnpm jsdocs --check
       - name: Check circular dependencies
         run: pnpm circular
       - name: Generate AI documentation
@@ -48,7 +50,7 @@ jobs:
       - name: Install dependencies
         uses: ./.github/actions/setup
         with:
-          deno-version: v2.9.4
+          deno-version: v2.9.7
       - run: pnpm check
         env:
           # Leave memory headroom for the runner by collecting the Go heap earlier.
@@ -128,7 +130,7 @@ jobs:
             bun: ""
             command: pnpm test --max-concurrency=10
           - runtime: Deno
-            deno: v2.9.4
+            deno: v2.9.7
             bun: ""
             command: deno task test --max-concurrency=10
           - runtime: Bun
@@ -146,6 +148,7 @@ jobs:
           docker pull mcr.microsoft.com/mssql/server:2022-latest &
           docker pull vitess/vttestserver:mysql80 &
           docker pull redis:alpine &
+          docker pull coredns/coredns:1.14.7 &
           wait
 
       - name: Install dependencies
