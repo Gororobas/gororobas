@@ -56,6 +56,7 @@ type WikiContext = typeof WikiBackground.Type & {
   revisionId?: WikiArticleRevisionId
   error?: unknown
   history?: readonly WikiArticleRevisionRow[]
+  historyEvaluation?: WikiArticleRevisionRow["evaluation"] | undefined
   expectedHistory?: readonly {
     id: WikiArticleRevisionId
     editor: string
@@ -221,6 +222,7 @@ const propose = ({
 }) =>
   Effect.gen(function* () {
     const id = articleId(context, title)
+    const stored = yield* findCrdtRowById(id)
     const crdtUpdate = yield* contentUpdate({ id, language, content })
 
     const revisionId = yield* act({
@@ -228,6 +230,12 @@ const propose = ({
       name,
       action: (yield* WikiArticlesService).createRevision(id, { crdtUpdate }),
     })
+
+    expect(yield* findCrdtRowById(id)).toEqual(stored)
+    const revision = Option.getOrThrow(yield* findRevisionById(revisionId))
+    expect(revision.evaluation).toBe("PENDING")
+    expect(revision.evaluatedById).toEqual(Option.none())
+    expect(revision.evaluatedAt).toEqual(Option.none())
 
     return { ...context, revisionId }
   })
@@ -342,15 +350,16 @@ const deniedEdit = (visitor = false) =>
     {
       params: Schema.Struct({ ...titleParams.fields, name: Schema.optional(Schema.String) }),
       handler: (context: WikiContext, { name, title }) =>
-        propose({ context, name, title }).pipe(
-          Effect.flip,
-          Effect.map((error) => ({ ...context, error })),
-          Effect.tap(() =>
-            listPendingRevisionsByWikiArticleId(articleId(context, title)).pipe(
-              Effect.tap((rows) => Effect.sync(() => expect(rows).toHaveLength(0))),
-            ),
-          ),
-        ),
+        Effect.gen(function* () {
+          const id = articleId(context, title)
+          const service = yield* WikiArticlesService
+          const stored = yield* findCrdtRowById(id)
+          const history = yield* service.listRevisionHistory({ wikiArticleId: id })
+          const error = yield* propose({ context, name, title }).pipe(Effect.flip)
+          expect(yield* findCrdtRowById(id)).toEqual(stored)
+          expect(yield* service.listRevisionHistory({ wikiArticleId: id })).toEqual(history)
+          return { ...context, error }
+        }),
     },
   )
 
@@ -544,7 +553,13 @@ const history = ({
           wikiArticleId: articleId(context, title),
           evaluation: filtered ? evaluation : undefined,
         }),
-      ).pipe(Effect.map((history) => ({ ...context, history }))),
+      ).pipe(
+        Effect.map((history): WikiContext => ({
+          ...context,
+          history,
+          historyEvaluation: filtered ? evaluation : undefined,
+        })),
+      ),
   })
 
 const rejectedVisible = (keyword: typeof Given, pattern: string) =>
@@ -825,7 +840,9 @@ const historyCount = (pattern: string) =>
         expect(history.map((row) => row.id)).toEqual(
           expected
             .filter(
-              (entry) => history.length === expected.length || entry.evaluation === "APPROVED",
+              (entry) =>
+                context.historyEvaluation === undefined ||
+                entry.evaluation === context.historyEvaluation,
             )
             .map((entry) => entry.id),
         )
@@ -1261,6 +1278,28 @@ await Effect.runPromise(
             translationProposal(
               "{string:name} has submitted a {word:language} translation for {string:title} with content {string:content}",
             ),
+            And("{string:title} has no published {word:language} translation", {
+              params: Schema.Struct({ ...titleParams.fields, language: SupportedLanguage }),
+              handler: (context: WikiContext, { title, language }) =>
+                Effect.gen(function* () {
+                  const page = yield* withSession(
+                    (yield* WikiArticlesService).getPage({
+                      handle: Handle.make(title.toLowerCase()),
+                      kind: "PLANT",
+                      language,
+                    }),
+                    VISITOR_SESSION,
+                  )
+
+                  expect(page.translationUnavailable).toBe(true)
+                  expect(page.language).toBe("pt")
+                  return context
+                }),
+            }),
+            translationContent(
+              And,
+              "{string:title} still has {word:language} content {string:content}",
+            ),
             approval({ keyword: When, pattern: "{string:name} approves the revision" }),
             translationContent(Then, "{string:title} has {word:language} content {string:content}"),
             translationContent(
@@ -1295,6 +1334,10 @@ await Effect.runPromise(
             }),
             translationProposal(
               "{string:name} has submitted an edit to {string:title} {word:language} content {string:content}",
+            ),
+            translationContent(
+              And,
+              "{string:title} still has {word:language} content {string:content}",
             ),
             approval({ keyword: When, pattern: "{string:name} approves the revision" }),
             translationContent(

@@ -26,11 +26,6 @@
     "target": "ES2022",
     "module": "NodeNext",
     "removeComments": false,
-    "plugins": [
-      {
-        "name": "@effect/language-service"
-      }
-    ],
     "paths": {
       "@gororobas/domain": ["./packages/domain/src/index.js"],
       "@gororobas/domain/*": ["./packages/domain/src/*.js"],

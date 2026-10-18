@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { ContentLanguage } from "@gororobas/domain"
+import { ContentLanguage, Handle, ModerationStatus } from "@gororobas/domain"
 import {
   PublicationCrdt,
   WikiArticleCrdt,
@@ -57,6 +57,7 @@ import { PublicationsRepository } from "../src/publications/repository.js"
 import { PublicationsService } from "../src/publications/service.js"
 import { findCrdtRowById, findRevisionById, listRevisionMediaAssets } from "../src/wiki/queries.js"
 import { WikiArticlesRepository } from "../src/wiki/repository.js"
+import { WikiArticlesService } from "../src/wiki/service.js"
 import {
   createPost,
   PeopleBackground,
@@ -85,7 +86,7 @@ const storage = Layer.effect(
   }),
 ).pipe(Layer.provide(NodeServices.layer))
 
-const MediaFeatureTestLayer = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
+const MediaServicesLayer = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
   Layer.provideMerge(
     Layer.mergeAll(storage, Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
   ),
@@ -97,6 +98,10 @@ const MediaFeatureTestLayer = Layer.effect(MediaAssetsService, MediaAssetsServic
   ),
   Layer.provideMerge(PeopleFeatureTestLayer),
   Layer.provideMerge(NodeServices.layer),
+)
+
+const MediaFeatureTestLayer = Layer.effect(WikiArticlesService, WikiArticlesService.make).pipe(
+  Layer.provideMerge(MediaServicesLayer),
 )
 
 const MediaBackground = Schema.Struct({
@@ -380,6 +385,85 @@ const createWikiArticles = (context: MediaContext, names: readonly string[]) =>
     return { ...context, articles: Record.fromEntries(entries) }
   })
 
+const uploadWikiMedia = (context: MediaContext, names: readonly string[]) =>
+  Effect.gen(function* () {
+    const media = yield* upload(context)
+    const wiki = yield* WikiArticlesService
+
+    yield* Effect.forEach(
+      names,
+      (name) =>
+        asViewer(
+          context,
+          wiki.attachMediaToWikiArticle({
+            wikiArticleId: articleIn(context, name),
+            mediaAssetId: media.id,
+          }),
+        ),
+      { concurrency: 1 },
+    )
+
+    return { ...context, media }
+  })
+
+const uploadedWikiMedia = (keyword: typeof Given, pattern: string) =>
+  keyword(pattern, {
+    params: Schema.Struct({ first: Schema.String, second: Schema.optional(Schema.String) }),
+    handler: (context: MediaContext, { first, second }) =>
+      uploadWikiMedia(context, second === undefined ? [first] : [first, second]),
+  })
+
+const wikiMediaVisible = ({
+  keyword,
+  pattern,
+  visible = true,
+}: {
+  keyword: typeof Then
+  pattern: string
+  visible?: boolean
+}) =>
+  keyword(pattern, {
+    params: Schema.Struct({ title: Schema.String }),
+    handler: (context: MediaContext, { title }) =>
+      Effect.gen(function* () {
+        const page = yield* withSession(
+          (yield* WikiArticlesService).getPage({
+            kind: "UNCATEGORIZED",
+            handle: Handle.make(title.toLowerCase()),
+            language: "pt",
+          }),
+          VISITOR_SESSION,
+        )
+
+        expect(page.id).toBe(articleIn(context, title))
+        expect(page.mediaAssets.some((asset) => asset.id === mediaIn(context).id)).toBe(visible)
+        return context
+      }),
+  })
+
+const visitorMediaAccess = (visible = true) =>
+  And(visible ? "visitors can access the media" : "visitors cannot access the media", {
+    handler: (context: MediaContext) =>
+      checkVisibility({ ...context, actorId: undefined }, visible),
+  })
+
+const censorMedia = (denied = false) =>
+  When(denied ? "{string:name} tries to censor the media" : "{string:name} censors the media", {
+    params: Schema.Struct({ name: Schema.String }),
+    handler: (context: MediaContext, { name }) =>
+      Effect.gen(function* () {
+        const action = withPerson(
+          (yield* MediaAssetsService).moderate({
+            id: mediaIn(context).id,
+            moderationStatus: "CENSORED",
+          }),
+          personNamed(context.actors, name),
+        )
+
+        return denied ? yield* deny(context, action) : yield* action.pipe(Effect.as(context))
+      }),
+  })
+
 await Effect.runPromise(
   describeFeature("./media-assets.feature", ({ Rule }) => {
     Rule(
@@ -428,6 +512,203 @@ await Effect.runPromise(
         })
       },
     )
+
+    Rule(
+      "Uncensored wiki article media is public and can be moderated",
+      ({ Background, Scenario }) => {
+        Background({
+          layer: MediaFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              givenPeople(),
+              And("the wiki articles {string:first} and {string:second} exist", {
+                params: Schema.Struct({ first: Schema.String, second: Schema.String }),
+                handler: (context: MediaContext, { first, second }) =>
+                  createWikiArticles(context, [first, second]),
+              }),
+            ),
+        })
+
+        Scenario("Member with community access attaches media to a wiki article", {
+          layer: MediaFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              loggedIn(),
+              uploadedWikiMedia(When, "they upload media attached to wiki article {string:first}"),
+              wikiMediaVisible({
+                keyword: Then,
+                pattern: "the media is visible on wiki article {string:title}",
+              }),
+              visitorMediaAccess(),
+            ),
+        })
+
+        Scenario(
+          "Member with community access can attach the same media to multiple wiki articles",
+          {
+            layer: MediaFeatureTestLayer,
+            steps: () =>
+              runSteps(
+                loggedIn(),
+                uploadedWikiMedia(
+                  When,
+                  "they upload media attached to wiki articles {string:first} and {string:second}",
+                ),
+                wikiMediaVisible({
+                  keyword: Then,
+                  pattern: "the media is visible on wiki article {string:title}",
+                }),
+                wikiMediaVisible({
+                  keyword: And,
+                  pattern: "the media is visible on wiki article {string:title}",
+                }),
+              ),
+          },
+        )
+
+        Scenario("Wiki article media is approved by default", {
+          layer: MediaFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              loggedIn(),
+              uploadedWikiMedia(When, "they upload media attached to wiki article {string:first}"),
+              Then("the media is visible to everyone", {
+                handler: (context: MediaContext) =>
+                  Effect.gen(function* () {
+                    const stored = Option.getOrThrow(
+                      yield* (yield* MediaAssetsRepository).findMediaAssetById(mediaIn(context).id),
+                    )
+                    expect(stored.moderationStatus).toBe("APPROVED_BY_DEFAULT")
+
+                    yield* Effect.forEach(
+                      [undefined, context.administratorId, ...Record.values(context.actors)],
+                      (actorId) => checkVisibility({ ...context, actorId }, true),
+                      { concurrency: 1 },
+                    )
+
+                    return context
+                  }),
+              }),
+            ),
+        })
+
+        Scenario("Moderator can censor wiki article media", {
+          layer: MediaFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              loggedIn(),
+              uploadedWikiMedia(
+                And,
+                "they have uploaded media attached to wiki article {string:first}",
+              ),
+              censorMedia(),
+              Then("the media has moderation_status {string:status}", {
+                params: Schema.Struct({ status: ModerationStatus }),
+                handler: (context: MediaContext, { status }) =>
+                  Effect.gen(function* () {
+                    const stored = Option.getOrThrow(
+                      yield* (yield* MediaAssetsRepository).findMediaAssetById(mediaIn(context).id),
+                    )
+                    expect(stored.moderationStatus).toBe(status)
+                    return context
+                  }),
+              }),
+              visitorMediaAccess(false),
+              wikiMediaVisible({
+                keyword: And,
+                pattern: "the media is hidden on wiki article {string:title}",
+                visible: false,
+              }),
+            ),
+        })
+
+        Scenario("Community member cannot censor wiki article media", {
+          layer: MediaFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              Given("{string:name} has uploaded media attached to wiki article {string:title}", {
+                params: Schema.Struct({ name: Schema.String, title: Schema.String }),
+                handler: (context: MediaContext, { name, title }) =>
+                  uploadWikiMedia({ ...context, actorId: personNamed(context.actors, name) }, [
+                    title,
+                  ]),
+              }),
+              censorMedia(true),
+              accessDenied(),
+              visitorMediaAccess(),
+              wikiMediaVisible({
+                keyword: And,
+                pattern: "the media is visible on wiki article {string:title}",
+              }),
+            ),
+        })
+
+        Scenario("Censoring hides media everywhere it is attached", {
+          layer: MediaFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              loggedIn(),
+              uploadedWikiMedia(
+                And,
+                "they have uploaded media attached to wiki articles {string:first} and {string:second}",
+              ),
+              censorMedia(),
+              wikiMediaVisible({
+                keyword: Then,
+                pattern: "the media is hidden on wiki article {string:title}",
+                visible: false,
+              }),
+              wikiMediaVisible({
+                keyword: And,
+                pattern: "the media is hidden on wiki article {string:title}",
+                visible: false,
+              }),
+            ),
+        })
+
+        const deniedWikiScenarios = [
+          ["Person awaiting access cannot attach media to wiki articles", loggedIn],
+          ["Blocked person cannot attach media to wiki articles", loggedIn],
+          ["Visitors cannot attach media to wiki articles", visitor],
+        ] as const
+
+        deniedWikiScenarios.forEach(([title, actor]) => {
+          Scenario(title, {
+            layer: MediaFeatureTestLayer,
+            steps: () =>
+              runSteps(
+                actor(),
+                When("they try to upload media attached to wiki article {string:title}", {
+                  params: Schema.Struct({ title: Schema.String }),
+                  handler: (context: MediaContext, { title }) =>
+                    Effect.gen(function* () {
+                      // Upload authorization is independent of attachment authorization.
+                      const media = yield* upload(context).pipe(
+                        Effect.catchTag("UnauthorizedError", () =>
+                          upload({ ...context, actorId: context.administratorId }),
+                        ),
+                      )
+
+                      return yield* deny(
+                        context,
+                        asViewer(
+                          context,
+                          WikiArticlesService.use((wiki) =>
+                            wiki.attachMediaToWikiArticle({
+                              wikiArticleId: articleIn(context, title),
+                              mediaAssetId: media.id,
+                            }),
+                          ),
+                        ),
+                      )
+                    }),
+                }),
+                accessDenied(),
+              ),
+          })
+        })
+      },
+    )
   }).pipe(Effect.provide(NodeServices.layer)),
 )
 
@@ -460,14 +741,42 @@ it.effect("only the uploader can attach media, even when another person owns the
   }).pipe(Effect.provide(MediaFeatureTestLayer)),
 )
 
-// oxlint-disable vitest/warn-todo -- Pending the wiki attachment service.
-it.todo("Wiki article media is approved by default")
-it.todo("Person awaiting access cannot attach media to wiki articles")
-it.todo("Blocked person cannot attach media to wiki articles")
-it.todo("Visitors cannot attach media to wiki articles")
-it.todo("a failed second wiki attachment rolls back attachments and retains the independent upload")
+it.effect(
+  "a failed second wiki attachment rolls back attachments and retains the independent upload",
+  () =>
+    Effect.gen(function* () {
+      const people = yield* provisionPeople([{ name: "Maria", accessLevel: "COMMUNITY" }])
+      const context = yield* createWikiArticles(
+        { ...people, actorId: personNamed(people.actors, "Maria") },
+        ["Mandioca", "Banana"],
+      )
+      const media = yield* upload(context)
+      const sql = yield* SqlClient.SqlClient
+      const wiki = yield* WikiArticlesService
+      const before = yield* readState
+      yield* sql`CREATE TRIGGER reject_second_attachment BEFORE INSERT ON wiki_article_media_assets
+      WHEN (SELECT count(*) FROM wiki_article_media_assets WHERE media_asset_id = NEW.media_asset_id) = 1
+      BEGIN SELECT RAISE(FAIL, 'Rejected for test'); END`
 
-// oxlint-enable vitest/warn-todo
+      const result = yield* asViewer(
+        context,
+        Effect.forEach(
+          ["Mandioca", "Banana"],
+          (title) =>
+            wiki.attachMediaToWikiArticle({
+              wikiArticleId: articleIn(context, title),
+              mediaAssetId: media.id,
+            }),
+          { concurrency: 1 },
+        ).pipe(sql.withTransaction),
+      ).pipe(Effect.flip)
+
+      expect(result).toMatchObject({ _tag: "SqlError" })
+      expect(yield* readState).toEqual(before)
+      yield* checkVisibility({ ...context, media }, true)
+      yield* checkVisibility({ ...context, media, actorId: undefined }, false)
+    }).pipe(Effect.provide(MediaFeatureTestLayer)),
+)
 
 it.effect(
   "one upload can be attached to several publications and follows their current audiences",

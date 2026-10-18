@@ -89,12 +89,6 @@ export default defineConfig({
       },
     },
     {
-      files: ["apps/server/src/durable-streams/router.ts", "apps/server/test/durable-streams/**"],
-      rules: {
-        "custom-lint-rules/no-direct-fetch": "off",
-      },
-    },
-    {
       files: ["packages/effect-bdd/**/*", "**/*.test.ts", "apps/server/test/**/*"],
       rules: {},
     },

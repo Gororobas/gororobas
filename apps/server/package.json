@@ -24,13 +24,12 @@
     "migrate": "npx tsx scripts/migrate.ts"
   },
   "dependencies": {
-    "@durable-streams/server": "^0.3.9",
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
     "@gororobas/domain": "workspace:^",
     "@maple-dev/effect-sdk": "catalog:",
-    "@mediabunny/server": "^1.61.3",
+    "@mediabunny/server": "^1.61.6",
     "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
     "@opentelemetry/sdk-logs": "^0.222.0",
     "@opentelemetry/sdk-metrics": "^2.12.0",
@@ -45,14 +44,13 @@
     "effect": "catalog:",
     "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
-    "mediabunny": "^1.61.3",
+    "mediabunny": "^1.61.6",
     "ollama": "^0.6.4",
     "sharp": "^0.35.5",
     "uuid": "catalog:"
   },
   "devDependencies": {
     "@ariga/atlas": "latest",
-    "@durable-streams/client": "catalog:",
     "@effect/vitest": "catalog:",
     "@gororobas/effect-bdd": "workspace:^",
     "sql-formatter": "latest"

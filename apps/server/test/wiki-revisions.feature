@@ -243,6 +243,8 @@ Feature: Wiki article revisions
 
     Scenario: Add translation to another language
       Given "Maria" has submitted a es translation for "Mandioca" with content "Raíz rica en almidón"
+      And "Mandioca" has no published es translation
+      And "Mandioca" still has pt content "Raiz tuberosa"
       When "Ana" approves the revision
       Then "Mandioca" has es content "Raíz rica en almidón"
       And "Mandioca" still has pt content "Raiz tuberosa"
@@ -250,6 +252,7 @@ Feature: Wiki article revisions
     Scenario: Edit existing translation
       Given "Mandioca" has es content "Raíz"
       And "Maria" has submitted an edit to "Mandioca" es content "Raíz tuberosa"
+      And "Mandioca" still has es content "Raíz"
       When "Ana" approves the revision
       Then "Mandioca" es content becomes "Raíz tuberosa"
       And "Mandioca" still has pt content "Raiz tuberosa"
