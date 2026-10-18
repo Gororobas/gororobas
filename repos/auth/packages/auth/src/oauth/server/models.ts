@@ -1,6 +1,7 @@
 import { Jwk, Jwks } from "@yielded/jose";
 import { Context, type Effect, Schema } from "effect";
 
+import * as OAuthScope from "../../OAuthScope";
 import { SubjectId } from "../../Schema";
 
 export class Unavailable extends Schema.TaggedError<Unavailable>()("OAuthServerUnavailable", {}) {}
@@ -17,8 +18,17 @@ export class ConfigurationError extends Schema.TaggedError<ConfigurationError>()
 
 export const Text = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2048));
 export const Random = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
-export const Scope = Schema.String.check(Schema.isPattern(/^[\x21\x23-\x5B\x5D-\x7E]{1,128}$/));
+export const Scope = OAuthScope.OAuthScope;
 export const Scopes = Schema.NonEmptyArray(Scope).check(Schema.isMaxLength(32));
+
+export const makeScopesSchema = <Scope extends OAuthScope.OAuthScope>(
+  scope: Schema.Codec<Scope, string>,
+) => Schema.NonEmptyArray(scope).check(Schema.makeFilter(Schema.is(Scopes)));
+
+/** Application claims stay nested so they cannot replace protocol claims. */
+export const AccessClaims = Schema.Record(Schema.String, Schema.Json);
+export const BearerToken = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(16384));
+export const maximumClientAssertionLength = 8192;
 
 export class Rejected extends Schema.TaggedError<Rejected>()("OAuthServerRejected", {
   error: Schema.Literals([
@@ -96,7 +106,7 @@ export type Client = typeof Client.Type;
 
 /** Private transport payloads: never expose tokens as public workflow results. */
 export const TokenResponse = Schema.Struct({
-  access_token: Text,
+  access_token: BearerToken,
   token_type: Schema.Literal("Bearer"),
   expires_in: Schema.Natural,
   refresh_token: Schema.optionalKey(Text),
@@ -173,12 +183,12 @@ export const OpenIdMetadata = Schema.Struct({
   issuer: Text,
   authorization_endpoint: Text,
   token_endpoint: Text,
-  userinfo_endpoint: Text,
+  userinfo_endpoint: Schema.optionalKey(Text),
   jwks_uri: Text,
   revocation_endpoint: Text,
   response_types_supported: Schema.Array(Schema.Literal("code")),
   response_modes_supported: Schema.Array(Schema.Literal("query")),
-  grant_types_supported: Schema.Array(Schema.Literal("authorization_code")),
+  grant_types_supported: Schema.Array(Schema.Literals(["authorization_code", "refresh_token"])),
   subject_types_supported: Schema.Array(Schema.Literal("public")),
   id_token_signing_alg_values_supported: Schema.Array(Schema.Literal("RS256")),
   token_endpoint_auth_methods_supported: Schema.Array(Schema.String),
@@ -204,20 +214,29 @@ export const Record = Schema.Struct({
   authorization: Authorization,
   subjectId: Schema.optionalKey(SubjectId),
   authentication: Schema.optionalKey(Authentication),
+  claims: Schema.optionalKey(AccessClaims),
   expiresAtMillis: Schema.Natural,
 });
 
 export type Record = typeof Record.Type;
 
-export const Access = Schema.Struct({
-  subjectId: SubjectId,
-  grantId: Random,
-  clientId: Text,
-  resource: Text,
-  scopes: Scopes,
-});
+export const makeAccessSchema = <Scope extends OAuthScope.OAuthScope>(
+  scope: Schema.Codec<Scope, string>,
+) =>
+  Schema.Struct({
+    subjectId: SubjectId,
+    grantId: Random,
+    clientId: Text,
+    resource: Text,
+    scopes: makeScopesSchema(scope),
+    claims: Schema.optionalKey(AccessClaims),
+  });
 
-export type Access = typeof Access.Type;
+export const Access = makeAccessSchema(Scope);
+
+export type Access<Scope extends OAuthScope.OAuthScope = OAuthScope.OAuthScope> = ReturnType<
+  typeof makeAccessSchema<Scope>
+>["Type"];
 
 /** Request-local authenticated authority. Absent outside protected requests;
  * callers must reject undefined. Never provide a principal at server startup.

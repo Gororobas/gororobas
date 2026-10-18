@@ -9,7 +9,7 @@ import {
   type TotpDecision,
   type TotpPersistence,
 } from "@yielded/auth/Totp";
-import { Crypto, DateTime, Effect, Option, Schema } from "effect";
+import { Cause, Crypto, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -683,7 +683,13 @@ export const makeNativeTotpServices = Effect.fnUntraced(function* (
           }
         }).pipe(
           Effect.provideService(Crypto.Crypto, crypto),
-          Effect.mapError((cause) => PersistenceMappingError.make({ operation: "decode", cause })),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                PersistenceMappingError.make({ operation: "decode", cause: error }),
+              ),
+            ),
+          ),
         ),
       });
 

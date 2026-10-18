@@ -1,4 +1,14 @@
-import { Context, Crypto, DateTime, Effect, Layer, Option, Schema, type Types } from "effect";
+import {
+  Cause,
+  Context,
+  Crypto,
+  DateTime,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+  type Types,
+} from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
@@ -81,7 +91,11 @@ const noAmbient = Effect.fn("Email.noAmbient")(function* () {
 });
 
 const read = <A>(receipt: PreparedCommit<A>) =>
-  receipt.read.pipe(Effect.mapError(() => EmailUnavailable.make({})));
+  receipt.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+    ),
+  );
 
 const tupleCodec = Schema.fromJsonString(Schema.Array(Schema.String));
 
@@ -148,10 +162,14 @@ export const makeEmailSignInModule = <
       return yield* (yield* binding.RequestBinding)
         .issue(request.flowId)
         .pipe(
-          Effect.mapError((error) =>
-            error._tag === "RequestBindingInvalid"
-              ? EmailRejected.make({})
-              : EmailUnavailable.make({}),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                error._tag === "RequestBindingInvalid"
+                  ? EmailRejected.make({})
+                  : EmailUnavailable.make({}),
+              ),
+            ),
           ),
         );
     }),
@@ -205,10 +223,14 @@ export const makeEmailSignInModule = <
           const verified = yield* binder
             .verify(request.flowId, request.requestBinding)
             .pipe(
-              Effect.mapError((error) =>
-                error._tag === "RequestBindingInvalid"
-                  ? EmailRejected.make({})
-                  : EmailUnavailable.make({}),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error._tag === "RequestBindingInvalid"
+                      ? EmailRejected.make({})
+                      : EmailUnavailable.make({}),
+                  ),
+                ),
               ),
             );
 
@@ -245,7 +267,11 @@ export const makeEmailSignInModule = <
 
           const bytes = yield* crypto
             .digest("SHA-256", new TextEncoder().encode(message))
-            .pipe(Effect.mapError(() => EmailUnavailable.make({})));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+              ),
+            );
 
           const base = {
             flowId: request.flowId,
@@ -274,10 +300,16 @@ export const makeEmailSignInModule = <
               })
               .pipe(
                 Effect.flatMap(readProofCommit),
-                Effect.mapError(() => EmailUnavailable.make({})),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+                ),
               );
 
-            yield* dispatch.schedule.pipe(Effect.mapError(() => EmailUnavailable.make({})));
+            yield* dispatch.schedule.pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+              ),
+            );
 
             return dispatch.receipt;
           }),
@@ -295,7 +327,12 @@ export const makeEmailSignInModule = <
                 reference: request.reference,
                 credential: request.secret,
               })
-              .pipe(Effect.flatMap(readProofCommit), Effect.mapError(emailCompletionFailure));
+              .pipe(
+                Effect.flatMap(readProofCommit),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(Cause.map(cause, emailCompletionFailure)),
+                ),
+              );
 
             if (consumed !== "redeemed" || Option.isNone(current.target))
               return yield* EmailRejected.make({});
@@ -331,7 +368,12 @@ export const makeEmailSignInModule = <
                 requirement: current.target.value.requirement,
                 claims: applicationClaims,
               })
-              .pipe(Effect.flatMap(read), Effect.mapError(emailCompletionFailure));
+              .pipe(
+                Effect.flatMap(read),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(Cause.map(cause, emailCompletionFailure)),
+                ),
+              );
 
             return {
               value: { completion: established.value, returnTarget: current.returnTarget },
@@ -346,7 +388,7 @@ export const makeEmailSignInModule = <
     );
 
     const admitRequest = proofRequestAdmission(`${moduleId}/${mode}/sign-in`).pipe(
-      Effect.mapError(emailCompletionFailure),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, emailCompletionFailure))),
     );
 
     const Request = makeOperation(`${moduleId}/${mode}/sign-in/request`, {

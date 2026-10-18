@@ -2,7 +2,8 @@ import * as BrowserLogin from "@yielded/auth/BrowserLogin";
 import { OperationHttpError } from "@yielded/auth/OperationHttp";
 import type { NativeCredentials } from "@yielded/auth/OperationHttpClient";
 import type { CredentialSlot } from "@yielded/auth/Operations";
-import { DateTime, Effect, Layer, type Redacted, Schema, Semaphore } from "effect";
+import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
+import { Cause, DateTime, Effect, Layer, type Redacted, Schema, Semaphore } from "effect";
 import * as SecureStore from "expo-secure-store";
 import * as WebBrowser from "expo-web-browser";
 import { Platform } from "react-native";
@@ -10,12 +11,66 @@ import { Platform } from "react-native";
 const failure = (reason: BrowserLogin.PlatformError["reason"]) =>
   BrowserLogin.PlatformError.make({ reason });
 
-const environment = Effect.try({
-  try: () => Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 16,
-  catch: () => failure("unavailable"),
-}).pipe(
+const environment = Effect.sync(
+  () => Platform.OS === "ios" && Number.parseInt(String(Platform.Version), 10) >= 16,
+).pipe(
   Effect.flatMap((supported) => (supported ? Effect.void : Effect.fail(failure("unavailable")))),
 );
+
+const browserBoundary = <A, R>(effect: Effect.Effect<A, BrowserLogin.PlatformError, R>) =>
+  Effect.uninterruptibleMask((restore) =>
+    restore(effect).pipe(
+      Effect.catchCause((cause) => {
+        const defects = cause.reasons.filter(Cause.isDieReason);
+
+        if (defects.length === 0) return Effect.failCause(cause);
+
+        return reportAuthFailure("browser-login", Cause.fromReasons(defects)).pipe(
+          Effect.andThen(
+            Effect.failCause(
+              markAuthFailureReported(
+                Cause.fromReasons(
+                  cause.reasons.map((reason) =>
+                    Cause.isDieReason(reason)
+                      ? Cause.makeFailReason(failure("unavailable"))
+                      : reason,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    ),
+  );
+
+const storageBoundary =
+  <Failure>(project: () => Failure) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, Failure, R> =>
+    Effect.uninterruptibleMask((restore) =>
+      restore(effect).pipe(
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause))
+            return Effect.failCause(
+              Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+            );
+
+          return reportAuthFailure("browser-login", cause).pipe(
+            Effect.andThen(
+              Effect.failCause(
+                markAuthFailureReported(
+                  Cause.fromReasons(
+                    cause.reasons.map((reason) =>
+                      Cause.isInterruptReason(reason) ? reason : Cause.makeFailReason(project()),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
 
 const openInput = Schema.Struct({
   url: Schema.String.check(
@@ -85,12 +140,8 @@ const releaseBrowser = (lease: Lease) =>
     lease.listening = false;
     if (!lease.started) settle(lease);
     if (lease.settled) return;
-    try {
-      WebBrowser.dismissAuthSession();
-    } catch {
-      // Dismissal is best-effort. Keep admission held until native settlement even
-      // if dismissal fails; never deliver a late callback to another attempt.
-    }
+    // A failed dismissal is observable, but only native settlement releases admission.
+    WebBrowser.dismissAuthSession();
   });
 
 const prompt = (lease: Lease, input: typeof openInput.Type) =>
@@ -108,14 +159,14 @@ const prompt = (lease: Lease, input: typeof openInput.Type) =>
           settle(lease);
           if (lease.listening && !signal.aborted) resume(Effect.succeed(value));
         },
-        () => {
+        (error) => {
           settle(lease);
-          if (lease.listening && !signal.aborted) resume(Effect.fail(failure("unavailable")));
+          if (lease.listening && !signal.aborted) resume(Effect.die(error));
         },
       );
-    } catch {
+    } catch (error) {
       settle(lease);
-      resume(Effect.fail(failure("unavailable")));
+      resume(Effect.die(error));
     }
   });
 
@@ -134,13 +185,10 @@ export const layerBrowser = Layer.succeed(
 
       if (request.returnUrl.startsWith("https:")) {
         // Reject before invoking Expo's fallback to callbackURLScheme on older iOS.
-        const supported = yield* Effect.try({
-          try: () => {
-            const [major = 0, minor = 0] = String(Platform.Version).split(".").map(Number);
+        const supported = yield* Effect.sync(() => {
+          const [major = 0, minor = 0] = String(Platform.Version).split(".").map(Number);
 
-            return major > 17 || (major === 17 && minor >= 4);
-          },
-          catch: () => failure("unavailable"),
+          return major > 17 || (major === 17 && minor >= 4);
         });
 
         if (!supported) return yield* failure("unavailable");
@@ -176,7 +224,7 @@ export const layerBrowser = Layer.succeed(
           )(result.url).pipe(Effect.mapError(() => failure("callback")));
         }),
       );
-    }),
+    }, browserBoundary),
   }),
 );
 
@@ -211,34 +259,24 @@ export const layerVault = (options: { readonly service: string }) =>
 
       const gate = yield* Semaphore.make(1);
 
-      const readRecord: Effect.Effect<typeof vaultRecord.Type, BrowserLogin.PlatformError> =
-        Effect.gen(function* () {
-          const result = yield* Effect.tryPromise({
-            try: () => SecureStore.getItemAsync(vaultKey, storageOptions),
-            catch: () => failure("storage"),
-          }).pipe(
-            Effect.flatMap(Schema.decodeUnknownEffect(storedValue)),
-            Effect.mapError(() => failure("storage")),
-          );
+      const readRecord = Effect.gen(function* () {
+        const result = yield* Effect.promise(() =>
+          SecureStore.getItemAsync(vaultKey, storageOptions),
+        ).pipe(Effect.flatMap(Schema.decodeUnknownEffect(storedValue)));
 
-          if (result === null) return { credentials: {} } satisfies typeof vaultRecord.Type;
+        if (result === null) return { credentials: {} } satisfies typeof vaultRecord.Type;
 
-          return yield* Schema.decodeEffect(vaultJson)(result, {
-            onExcessProperty: "error",
-          }).pipe(Effect.mapError(() => failure("storage")));
+        return yield* Schema.decodeEffect(vaultJson)(result, {
+          onExcessProperty: "error",
         });
+      });
 
       const writeRecord = Effect.fnUntraced(function* (record: typeof vaultRecord.Type) {
-        const encoded = yield* Schema.encodeEffect(vaultJson)(record).pipe(
-          Effect.mapError(() => failure("storage")),
-        );
+        const encoded = yield* Schema.encodeEffect(vaultJson)(record);
 
         // SecureStore updates existing iOS items with SecItemUpdate. Always replace
         // the whole record, including clears; never delete the item before writing.
-        yield* Effect.tryPromise({
-          try: () => SecureStore.setItemAsync(vaultKey, encoded, storageOptions),
-          catch: () => failure("storage"),
-        });
+        yield* Effect.promise(() => SecureStore.setItemAsync(vaultKey, encoded, storageOptions));
       });
 
       // SecureStore promises are not cancellable. Admitted operations must settle
@@ -261,7 +299,7 @@ export const layerVault = (options: { readonly service: string }) =>
 
           return credentials;
         }),
-      ).pipe(Effect.mapError(() => OperationHttpError.make({ reason: "credentials" })));
+      ).pipe(storageBoundary(() => OperationHttpError.make({ reason: "credentials" })));
 
       const accept: NativeCredentials["accept"] = (commands) =>
         locked(
@@ -279,12 +317,14 @@ export const layerVault = (options: { readonly service: string }) =>
             }
             yield* writeRecord({ ...record, credentials });
           }),
-        ).pipe(Effect.mapError(() => OperationHttpError.make({ reason: "credentials" })));
+        ).pipe(storageBoundary(() => OperationHttpError.make({ reason: "credentials" })));
 
       return BrowserLogin.Vault.of({
         read,
         accept,
-        loadAttempt: locked(readRecord.pipe(Effect.map((record) => record.attempt))),
+        loadAttempt: locked(readRecord.pipe(Effect.map((record) => record.attempt))).pipe(
+          storageBoundary(() => failure("storage")),
+        ),
         saveAttempt: (attempt) =>
           locked(
             Effect.gen(function* () {
@@ -296,7 +336,7 @@ export const layerVault = (options: { readonly service: string }) =>
                   : { ...record, attempt },
               );
             }),
-          ),
+          ).pipe(storageBoundary(() => failure("storage"))),
       });
-    }),
+    }).pipe(browserBoundary),
   );

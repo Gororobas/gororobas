@@ -1,7 +1,7 @@
 /* oxlint-disable no-explicit-any -- physical mapping generics are erased only at this shared adapter boundary. */
 import { AuthenticationClock } from "@yielded/auth/Operations";
 import * as M from "@yielded/auth/Passkey";
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -236,7 +236,11 @@ export const makePasskeyNativeReadState = Effect.fnUntraced(function* (
     subject.unencodedTextColumn?.(read.subject.id),
     credential.unencodedTextColumn?.(read.credential.subjectId),
     factor.unencodedTextColumn?.(read.authority.subjectId),
-  ]).pipe(Effect.mapError(() => M.PasskeyUnavailable.make({})));
+  ]).pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => M.PasskeyUnavailable.make({}))),
+    ),
+  );
 
   const lookup = Effect.fnUntraced(function* (rpId: string, protocolCredentialId: string) {
     const key = yield* passkeyCredentialKey(rpId, protocolCredentialId);

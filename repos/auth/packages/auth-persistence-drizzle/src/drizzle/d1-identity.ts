@@ -43,7 +43,7 @@ const unavailable = () => IdentityUnavailable.make();
 const isIdentityFailure = Schema.is(Schema.Union([IdentityConflict, IdentityUnavailable]));
 
 const mapUnavailable = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  reportPersistenceFailure(effect, isIdentityFailure).pipe(
+  reportPersistenceFailure(effect, isIdentityFailure, { markReported: true }).pipe(
     Effect.catchCause((cause) =>
       Effect.failCause(
         Cause.map(cause, (error) => (isIdentityFailure(error) ? error : unavailable())),
@@ -105,7 +105,9 @@ export const makeD1SubjectProvisioningServices = Effect.fnUntraced(function* <
 
   yield* validateDrizzleStorage(mapping).pipe(
     Effect.provideServiceEffect(NativeDatabase, nativeDatabase(DatabaseService)),
-    Effect.mapError(() => IdentityUnavailable.make()),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => IdentityUnavailable.make())),
+    ),
   );
 
   const db = database as RuntimeDatabase;
@@ -272,7 +274,9 @@ export const makeD1ExternalIdentityServices = Effect.fnUntraced(function* <
 
   yield* validateDrizzleStorage(mapping).pipe(
     Effect.provideServiceEffect(NativeDatabase, nativeDatabase(DatabaseService)),
-    Effect.mapError(() => IdentityUnavailable.make()),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => IdentityUnavailable.make())),
+    ),
   );
 
   const db = database as RuntimeDatabase;

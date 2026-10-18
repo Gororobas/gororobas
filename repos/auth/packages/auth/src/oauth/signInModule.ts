@@ -4,7 +4,6 @@ import {
   Crypto,
   DateTime,
   Effect,
-  Fiber,
   Layer,
   Redacted,
   Result,
@@ -18,7 +17,8 @@ import { defaultLayer, hooksLayer } from "../auth/defaults";
 import { prepareCommit, hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { HookDenied } from "../hooks/models";
 import { IdentityConflict } from "../identity/models";
-import { reportAuthDiagnostic, reportAuthFailure } from "../internal/diagnostics";
+import { reportAuthDiagnostic } from "../internal/diagnostics";
+import { timeoutWithCause } from "../internal/timeout";
 import type { AuthInvocation } from "../operations/context";
 import { formPostBinding, type AuthOperationResult } from "../operations/credentials";
 import { InvalidOperationInput } from "../operations/errors";
@@ -96,7 +96,11 @@ const noAmbient = Effect.fn("OAuth.noAmbient")(function* () {
 });
 
 const read = <A>(receipt: PreparedCommit<A>) =>
-  receipt.read.pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+  receipt.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+    ),
+  );
 
 const encoder = new TextEncoder();
 
@@ -104,14 +108,7 @@ const encoder = new TextEncoder();
 // before returning. A timed-out owner may still have committed: its receipt is
 // abandoned, never recovered.
 const bounded = <A, E, R>(effect: Effect.Effect<A, E, R>, millis: number) =>
-  Effect.gen(function* () {
-    const fiber = yield* effect.pipe(Effect.interruptible, Effect.forkChild);
-
-    return yield* Fiber.join(fiber).pipe(
-      Effect.timeout(millis),
-      Effect.ensuring(Fiber.interrupt(fiber)),
-    );
-  });
+  effect.pipe(Effect.interruptible, timeoutWithCause(millis));
 
 const flowJson = Schema.fromJsonString(OAuthSignInFlow);
 const contextJson = Schema.fromJsonString(OAuthSignInTransactionContext);
@@ -210,13 +207,17 @@ export const makeOAuthMethod = <
       yield* noAmbient();
 
       const encoded = yield* Schema.encodeEffect(contextJson)(context).pipe(
-        Effect.mapError(() => OAuthUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+        ),
       );
 
       const bindingDigest = TokenDigest.make(
         Base64Url.encode(
           yield* digest("SHA-256", encoder.encode(encoded)).pipe(
-            Effect.mapError(() => OAuthUnavailable.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+            ),
           ),
         ),
       );
@@ -225,7 +226,11 @@ export const makeOAuthMethod = <
       const claimsIdentity = yield* Schema.decodeEffect(ClaimsIdentity)({
         provider: identity.identity.provider,
         identity: yield* snapshotOAuthVerifiedExternalIdentity.effect(identity),
-      }).pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+        ),
+      );
 
       freezeOAuth(claimsIdentity);
 
@@ -267,12 +272,16 @@ export const makeOAuthMethod = <
                 : "rejected",
           ),
         ),
-        Effect.mapError((error) =>
-          error._tag === "HookDenied"
-            ? error
-            : error._tag === "SessionUnavailable"
-              ? OAuthUnavailable.make({})
-              : OAuthRejected.make({}),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              error._tag === "HookDenied"
+                ? error
+                : error._tag === "SessionUnavailable"
+                  ? OAuthUnavailable.make({})
+                  : OAuthRejected.make({}),
+            ),
+          ),
         ),
         Effect.flatMap(read),
       );
@@ -386,7 +395,9 @@ export const makeOAuthMethod = <
 
         const hash = Effect.fn("OAuth.hash")(function* (message: string) {
           const result = yield* digest("SHA-256", encoder.encode(message)).pipe(
-            Effect.mapError(() => OAuthUnavailable.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+            ),
           );
 
           return TokenDigest.make(Base64Url.encode(result));
@@ -427,149 +438,151 @@ export const makeOAuthMethod = <
             ? OAuthRejected.make({})
             : OAuthUnavailable.make({});
 
-        const begin = Effect.fn("OAuth.SignIn.begin")(
-          function* (raw: typeof OAuthSignInBegin.Type) {
-            yield* noAmbient();
-            const request = yield* snapshotOAuthSignInBegin.effect(raw);
-            const target = yield* returnTarget(request.returnTarget);
+        const begin = Effect.fn("OAuth.SignIn.begin")(function* (
+          raw: typeof OAuthSignInBegin.Type,
+        ) {
+          yield* noAmbient();
+          const request = yield* snapshotOAuthSignInBegin.effect(raw);
+          const target = yield* returnTarget(request.returnTarget);
 
-            const canonicalTarget = yield* Schema.decodeEffect(OAuthReturnTarget)(target).pipe(
-              Effect.mapError(() => OAuthUnavailable.make({})),
-            );
+          const canonicalTarget = yield* Schema.decodeEffect(OAuthReturnTarget)(target).pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+            ),
+          );
 
-            const issuedBinding = yield* issueBinding(request.flowId).pipe(
-              Effect.mapError(binderError),
-            );
+          const issuedBinding = yield* issueBinding(request.flowId).pipe(
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, binderError))),
+          );
 
-            const original = issuedBinding.credentialCommands[0];
+          const original = issuedBinding.credentialCommands[0];
 
-            if (
-              issuedBinding.credentialCommands.length !== 1 ||
-              original?._tag !== "Issue" ||
-              original.slot !== "request-binding" ||
-              issuedBinding.value.flowId !== request.flowId ||
-              original.expiresAtMillis !== issuedBinding.value.expiresAtMillis
-            )
-              return yield* OAuthUnavailable.make({});
+          if (
+            issuedBinding.credentialCommands.length !== 1 ||
+            original?._tag !== "Issue" ||
+            original.slot !== "request-binding" ||
+            issuedBinding.value.flowId !== request.flowId ||
+            original.expiresAtMillis !== issuedBinding.value.expiresAtMillis
+          )
+            return yield* OAuthUnavailable.make({});
 
-            const command = Object.freeze({
-              _tag: "Issue" as const,
-              slot: "request-binding" as const,
-              credential: Redacted.make(Redacted.value(original.credential)),
-              expiresAtMillis: original.expiresAtMillis,
-            });
+          const command = Object.freeze({
+            _tag: "Issue" as const,
+            slot: "request-binding" as const,
+            credential: Redacted.make(Redacted.value(original.credential)),
+            expiresAtMillis: original.expiresAtMillis,
+          });
 
-            const binder = Object.freeze({
-              ...(yield* verifyBinding(
-                request.flowId,
-                Redacted.make(Redacted.value(command.credential)),
-              ).pipe(Effect.mapError(binderError))),
-            });
+          const binder = Object.freeze({
+            ...(yield* verifyBinding(
+              request.flowId,
+              Redacted.make(Redacted.value(command.credential)),
+            ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, binderError))))),
+          });
 
-            if (binder.expiresAtMillis !== command.expiresAtMillis)
-              return yield* OAuthUnavailable.make({});
+          if (binder.expiresAtMillis !== command.expiresAtMillis)
+            return yield* OAuthUnavailable.make({});
 
-            const prepared = yield* (access?.prepare ?? prepareAuthorization)(
-              Object.freeze({
-                provider: request.provider,
-                ...(request.callbackId === undefined ? {} : { callbackId: request.callbackId }),
-                flowId: request.flowId,
-                ...(request.prompt === undefined ? {} : { prompt: request.prompt }),
-                ...(request.loginHint === undefined ? {} : { loginHint: request.loginHint }),
-              }),
-            ).pipe(Effect.flatMap((value) => snapshotOAuthProtocolPreparation.effect(value)));
-
-            if (
-              prepared.configuration.provider !== request.provider ||
-              (request.callbackId !== undefined &&
-                prepared.configuration.callbackId !== request.callbackId) ||
-              (prepared.configuration.protocol === "oidc") !==
-                (prepared.secrets.oidcNonce !== undefined)
-            )
-              return yield* OAuthUnavailable.make({});
-            const now = DateTime.toEpochMillis(yield* DateTime.now);
-            const expiresAtMillis = Math.min(now + policy.lifetimeMillis, binder.expiresAtMillis);
-
-            if (expiresAtMillis <= now) return yield* OAuthRejected.make({});
-
-            const context = yield* snapshotOAuthSignInTransactionContext.effect({
-              namespace: "effect-auth/oauth-sign-in-context/v1",
-              moduleId: id,
-              generation: policy.generation,
+          const prepared = yield* (access?.prepare ?? prepareAuthorization)(
+            Object.freeze({
+              provider: request.provider,
+              ...(request.callbackId === undefined ? {} : { callbackId: request.callbackId }),
               flowId: request.flowId,
-              ...prepared.configuration,
-              ...(access === undefined ? {} : { access: access.profile }),
-              returnTarget: canonicalTarget,
-              stateDigest: yield* stateDigest(
-                request.flowId,
-                request.provider,
-                prepared.secrets.state,
-              ).pipe(Effect.mapError(() => OAuthUnavailable.make({}))),
-              requestBindingVerifier: binder.verifier,
-              requestBindingExpiresAtMillis: binder.expiresAtMillis,
-              issuedAtMillis: now,
-              expiresAtMillis,
-              exchangeTimeoutMillis: policy.exchangeTimeoutMillis,
-            });
+              ...(request.prompt === undefined ? {} : { prompt: request.prompt }),
+              ...(request.loginHint === undefined ? {} : { loginHint: request.loginHint }),
+            }),
+          ).pipe(Effect.flatMap((value) => snapshotOAuthProtocolPreparation.effect(value)));
 
-            const sealed = yield* seal({
-              context: yield* snapshotOAuthSignInTransactionContext.effect(context),
-              secrets: yield* snapshotOAuthTransactionSecrets.effect(prepared.secrets),
-            }).pipe(Effect.flatMap((value) => snapshotOAuthSealedTransaction.effect(value)));
+          if (
+            prepared.configuration.provider !== request.provider ||
+            (request.callbackId !== undefined &&
+              prepared.configuration.callbackId !== request.callbackId) ||
+            (prepared.configuration.protocol === "oidc") !==
+              (prepared.secrets.oidcNonce !== undefined)
+          )
+            return yield* OAuthUnavailable.make({});
+          const now = DateTime.toEpochMillis(yield* DateTime.now);
+          const expiresAtMillis = Math.min(now + policy.lifetimeMillis, binder.expiresAtMillis);
 
-            const flow = yield* snapshotOAuthSignInFlow.effect({
-              context,
-              sealed,
-            });
+          if (expiresAtMillis <= now) return yield* OAuthRejected.make({});
 
-            const expected = Schema.encodeSync(flowJson)(flow);
-
-            type Issuance =
-              | { readonly _tag: "Rejected" }
-              | {
-                  readonly _tag: "Issued";
-                  readonly result: AuthOperationResult<typeof OAuthSignInAuthorization.Type>;
-                };
-
-            const receipt = yield* issue<Issuance>(
-              yield* snapshotOAuthSignInFlow.effect(flow),
-              prepareCommit<OAuthIssueDecision, Issuance, OAuthUnavailable>((decision, journal) =>
-                Result.gen(function* () {
-                  const checked = snapshotOAuthIssueDecision.sync(decision);
-
-                  if (checked._tag === "Rejected")
-                    return journal.prepare({ _tag: "Rejected" as const });
-                  if (Schema.encodeSync(flowJson)(checked.flow) !== expected)
-                    return yield* Result.fail(OAuthUnavailable.make({}));
-
-                  return journal.prepare({
-                    _tag: "Issued" as const,
-                    result: Object.freeze({
-                      value: Object.freeze({
-                        flowId: request.flowId,
-                        authorizationUrl: prepared.authorizationUrl,
-                        expiresAtMillis,
-                      }),
-                      credentialCommands: Object.freeze([
-                        formPostBinding(command, prepared.responseMode),
-                      ]),
-                    }),
-                  });
-                }),
+          const context = yield* snapshotOAuthSignInTransactionContext.effect({
+            namespace: "effect-auth/oauth-sign-in-context/v1",
+            moduleId: id,
+            generation: policy.generation,
+            flowId: request.flowId,
+            ...prepared.configuration,
+            ...(access === undefined ? {} : { access: access.profile }),
+            returnTarget: canonicalTarget,
+            stateDigest: yield* stateDigest(
+              request.flowId,
+              request.provider,
+              prepared.secrets.state,
+            ).pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
               ),
-            );
+            ),
+            requestBindingVerifier: binder.verifier,
+            requestBindingExpiresAtMillis: binder.expiresAtMillis,
+            issuedAtMillis: now,
+            expiresAtMillis,
+            exchangeTimeoutMillis: policy.exchangeTimeoutMillis,
+          });
 
-            const committed = yield* read(receipt);
+          const sealed = yield* seal({
+            context: yield* snapshotOAuthSignInTransactionContext.effect(context),
+            secrets: yield* snapshotOAuthTransactionSecrets.effect(prepared.secrets),
+          }).pipe(Effect.flatMap((value) => snapshotOAuthSealedTransaction.effect(value)));
 
-            if (committed._tag === "Rejected") return yield* OAuthRejected.make({});
+          const flow = yield* snapshotOAuthSignInFlow.effect({
+            context,
+            sealed,
+          });
 
-            return committed.result;
-          },
-          Effect.tapCause((cause) =>
-            Cause.hasDies(cause) ? reportAuthFailure("oauth-sign-in", cause) : Effect.void,
-          ),
-          Effect.catchDefect(() => Effect.fail(OAuthUnavailable.make({}))),
-        );
+          const expected = Schema.encodeSync(flowJson)(flow);
+
+          type Issuance =
+            | { readonly _tag: "Rejected" }
+            | {
+                readonly _tag: "Issued";
+                readonly result: AuthOperationResult<typeof OAuthSignInAuthorization.Type>;
+              };
+
+          const receipt = yield* issue<Issuance>(
+            yield* snapshotOAuthSignInFlow.effect(flow),
+            prepareCommit<OAuthIssueDecision, Issuance, OAuthUnavailable>((decision, journal) =>
+              Result.gen(function* () {
+                const checked = snapshotOAuthIssueDecision.sync(decision);
+
+                if (checked._tag === "Rejected")
+                  return journal.prepare({ _tag: "Rejected" as const });
+                if (Schema.encodeSync(flowJson)(checked.flow) !== expected)
+                  return yield* Result.fail(OAuthUnavailable.make({}));
+
+                return journal.prepare({
+                  _tag: "Issued" as const,
+                  result: Object.freeze({
+                    value: Object.freeze({
+                      flowId: request.flowId,
+                      authorizationUrl: prepared.authorizationUrl,
+                      expiresAtMillis,
+                    }),
+                    credentialCommands: Object.freeze([
+                      formPostBinding(command, prepared.responseMode),
+                    ]),
+                  }),
+                });
+              }),
+            ),
+          );
+
+          const committed = yield* read(receipt);
+
+          if (committed._tag === "Rejected") return yield* OAuthRejected.make({});
+
+          return committed.result;
+        });
 
         const complete = Effect.fn("OAuth.SignIn.complete")(
           function* (raw: typeof OAuthSignInComplete.Type) {
@@ -593,7 +606,7 @@ export const makeOAuthMethod = <
 
             const binder = Object.freeze({
               ...(yield* verifyBinding(request.flowId, request.requestBinding).pipe(
-                Effect.mapError(binderError),
+                Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, binderError))),
               )),
             });
 
@@ -690,8 +703,20 @@ export const makeOAuthMethod = <
                       : "unavailable",
                 ),
               ),
-              Effect.catchTag("TimeoutError", () => Effect.fail(OAuthUnavailable.make({}))),
-              Effect.catchTag("OAuthProtocolRejected", () => Effect.fail(OAuthRejected.make({}))),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error._tag === "TimeoutError" ? OAuthUnavailable.make({}) : error,
+                  ),
+                ),
+              ),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error._tag === "OAuthProtocolRejected" ? OAuthRejected.make({}) : error,
+                  ),
+                ),
+              ),
             );
 
             if (
@@ -791,10 +816,6 @@ export const makeOAuthMethod = <
               error._tag === "OAuthUnavailable" ? "unavailable" : "rejected",
             ),
           ),
-          Effect.tapCause((cause) =>
-            Cause.hasDies(cause) ? reportAuthFailure("oauth-sign-in", cause) : Effect.void,
-          ),
-          Effect.catchDefect(() => Effect.fail(OAuthUnavailable.make({}))),
         );
 
         return SignIn.of({ begin, complete });
@@ -857,10 +878,6 @@ export const makeOAuthMethod = <
             error._tag === "OAuthUnavailable" ? "unavailable" : "rejected",
           ),
         ),
-        Effect.tapCause((cause) =>
-          Cause.hasDies(cause) ? reportAuthFailure("oauth-registration", cause) : Effect.void,
-        ),
-        Effect.catchDefect(() => Effect.fail(OAuthUnavailable.make({}))),
       ) as Parameters<typeof capability.operations.Complete.credentialHandlerLayer<Services>>[0],
     );
 
@@ -933,7 +950,11 @@ export const makeOAuthMethod = <
 
     const flowId = yield* crypto
       .randomUUIDv4()
-      .pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+        ),
+      );
 
     return yield* Begin.invoke(invocation, { ...input, flowId });
   });

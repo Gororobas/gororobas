@@ -132,7 +132,7 @@ export const makeTargetPasskeyCredentials = <M, R>(
         ),
       )
       .pipe(Effect.provideService(LifecycleHooks, emptyHooks));
-  }).pipe(Effect.catchDefect(() => Effect.fail(PasskeyConfigurationError.make({}))));
+  });
 
 export const makeTargetPasskeyPersistence = <M, R>(
   source: PasskeyMappingSource<M, R>,

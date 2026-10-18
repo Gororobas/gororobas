@@ -1,7 +1,10 @@
 import { EmailDelivery } from "@yielded/auth";
 import { Config, Crypto, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
-import { DeliveryLive as CloudflareDeliveryLive } from "../../shared/account/delivery";
+import {
+  DeliveryLive as CloudflareDeliveryLive,
+  deliveryBoundary,
+} from "../../shared/account/delivery";
 import { AppData, DataLive } from "./data";
 
 // This private local mailbox is a delivery destination, never an HTTP response or log.
@@ -24,18 +27,15 @@ const LocalDeliveryLive = Layer.unwrap(
     yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
 
     return Layer.succeed(EmailDelivery.EmailDelivery, {
-      send: Effect.fn("Starter.deliverLocalEmail")(
-        function* (message) {
-          const body = yield* Schema.encodeEffect(LocalMessage)(message);
-          const id = yield* crypto.randomUUIDv4();
+      send: Effect.fn("Starter.deliverLocalEmail")(function* (message) {
+        const body = yield* Schema.encodeEffect(LocalMessage)(message);
+        const id = yield* crypto.randomUUIDv4();
 
-          yield* fs.writeFileString(path.join(directory, `${id}.json`), body, {
-            flag: "wx",
-            mode: 0o600,
-          });
-        },
-        Effect.mapError(() => EmailDelivery.EmailAcceptanceUnknown.make({})),
-      ),
+        yield* fs.writeFileString(path.join(directory, `${id}.json`), body, {
+          flag: "wx",
+          mode: 0o600,
+        });
+      }, deliveryBoundary),
     });
   }),
 ).pipe(Layer.provide(DataLive));

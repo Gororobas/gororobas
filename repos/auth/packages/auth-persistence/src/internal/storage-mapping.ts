@@ -15,7 +15,7 @@ import {
   SessionCredentialVersion,
   type StatefulSessionRecord,
 } from "@yielded/auth/Sessions";
-import { Crypto, DateTime, Effect, Redacted, Schema, Struct } from "effect";
+import { Cause, Crypto, DateTime, Effect, Redacted, Schema, Struct } from "effect";
 import { SqlClient } from "effect/sql";
 
 import type { MappingInput } from "./configuration";
@@ -37,7 +37,9 @@ import type { TableModel, SqlExpression } from "./table-model";
 const failure = (cause: unknown) => PersistenceMappingError.make({ operation: "decode", cause });
 
 const decode = <S extends Schema.Codec<unknown, unknown>>(schema: S, value: unknown) =>
-  Schema.decodeUnknownEffect(schema)(value).pipe(Effect.mapError(failure));
+  Schema.decodeUnknownEffect(schema)(value).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
+  );
 
 const string = (value: unknown) => Schema.decodeUnknownSync(Schema.String)(value);
 
@@ -57,7 +59,7 @@ export const makeMappings = Effect.fnUntraced(function* (
 
   const allocate = randomId.pipe(
     Effect.provideService(Crypto.Crypto, crypto),
-    Effect.mapError(failure),
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
   );
 
   const table = Effect.fnUntraced(function* (role: StorageRole) {
@@ -404,7 +406,7 @@ export const makeMappings = Effect.fnUntraced(function* (
         encode: (value) =>
           Schema.encodeEffect(claims)(value.claims).pipe(
             Effect.flatMap((saved) => Schema.encodeEffect(record)({ ...value, claims: saved })),
-            Effect.mapError(failure),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
           ),
         decode: (value) =>
           decode(record, value).pipe(

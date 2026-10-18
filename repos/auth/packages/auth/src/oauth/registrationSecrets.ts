@@ -1,4 +1,4 @@
-import { Crypto, DateTime, Effect, Redacted, Result, Schema } from "effect";
+import { Cause, Crypto, DateTime, Effect, Redacted, Result, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { TokenDigest } from "../Schema";
@@ -55,7 +55,9 @@ export const credentialDigest = Effect.fn("OAuthRegistration.credentialDigest")(
   ]).pipe(Effect.mapError(() => OAuthRejected.make({})));
 
   const value = yield* digest("SHA-256", new TextEncoder().encode(encoded)).pipe(
-    Effect.mapError(() => OAuthUnavailable.make({})),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+    ),
   );
 
   return TokenDigest.make(Base64Url.encode(value));
@@ -79,7 +81,9 @@ export const prepare = Effect.fn("OAuthRegistration.prepareIntent")(function* (
   if (expiresAtMillis <= now) return undefined;
 
   const referenceBytes = yield* randomBytes(32).pipe(
-    Effect.mapError(() => OAuthUnavailable.make({})),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+    ),
   );
 
   const reference = OAuthRegistrationReference.make(Base64Url.encode(referenceBytes));
@@ -87,7 +91,9 @@ export const prepare = Effect.fn("OAuthRegistration.prepareIntent")(function* (
   referenceBytes.fill(0);
 
   const credentialBytes = yield* randomBytes(32).pipe(
-    Effect.mapError(() => OAuthUnavailable.make({})),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+    ),
   );
 
   const credential = Redacted.make(Base64Url.encode(credentialBytes));

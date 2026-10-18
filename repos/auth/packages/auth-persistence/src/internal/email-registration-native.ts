@@ -10,10 +10,11 @@ import {
   type PreparedCommit,
 } from "@yielded/auth/Hooks";
 import type { LoginIdentifier } from "@yielded/auth/Identity";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { ProofRedemptionInput, type ProofRedemptionPlan } from "@yielded/auth/Proofs";
 import type { TokenDigest } from "@yielded/auth/Schema";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Crypto, Effect, Schema } from "effect";
+import { Cause, Crypto, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -380,8 +381,12 @@ export const makeNativeEmailRegistrationServices = Effect.fnUntraced(function* <
                   )
                     return yield* invalidState();
                 }).pipe(
-                  Effect.mapError((cause) =>
-                    PersistenceMappingError.make({ operation: "decode", cause }),
+                  Effect.catchCause((cause) =>
+                    Effect.failCause(
+                      Cause.map(cause, (error) =>
+                        PersistenceMappingError.make({ operation: "decode", cause: error }),
+                      ),
+                    ),
                   ),
                 ),
               });
@@ -391,7 +396,13 @@ export const makeNativeEmailRegistrationServices = Effect.fnUntraced(function* <
             return yield* prepare({ _tag: "Registered" }, project);
           }),
         );
-      }).pipe(Effect.mapError(unavailable)),
+      }).pipe(
+        (effect) =>
+          reportPersistenceFailure(effect, (error) => error._tag === "EmailUnavailable", {
+            markReported: true,
+          }),
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+      ),
   };
 
   return { registrationAuthority };

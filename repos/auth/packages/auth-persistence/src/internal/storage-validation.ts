@@ -1,4 +1,5 @@
-import { Context, Effect, Schema } from "effect";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
+import { Cause, Context, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import { PersistenceConfigurationError } from "./configuration";
@@ -280,10 +281,18 @@ const readStorageMetadata = Effect.fnUntraced(
 
     return byRelation;
   },
-  Effect.mapError((error) =>
-    Schema.is(PersistenceConfigurationError)(error)
-      ? error
-      : PersistenceConfigurationError.make({ reason: "Cannot validate SQL storage metadata" }),
+  (effect) =>
+    reportPersistenceFailure(effect, Schema.is(PersistenceConfigurationError), {
+      markReported: true,
+    }),
+  Effect.catchCause((cause) =>
+    Effect.failCause(
+      Cause.map(cause, (error) =>
+        Schema.is(PersistenceConfigurationError)(error)
+          ? error
+          : PersistenceConfigurationError.make({ reason: "Cannot validate SQL storage metadata" }),
+      ),
+    ),
   ),
 );
 

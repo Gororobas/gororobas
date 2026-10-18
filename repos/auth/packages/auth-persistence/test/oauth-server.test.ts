@@ -1,6 +1,6 @@
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { it } from "@effect/vitest";
-import * as OAuthServer from "@yielded/auth/OAuthServer";
+import { OAuthScope, OAuthServer } from "@yielded/auth";
 import { SubjectId } from "@yielded/auth/Schema";
 import * as WebCrypto from "@yielded/auth/WebCrypto";
 import * as KdfAdmission from "@yielded/crypto/KdfAdmission";
@@ -22,7 +22,9 @@ import { expect } from "vite-plus/test";
 
 import { OAuthServerPersistence } from "../src/internal/oauth-server";
 
-const server = OAuthServer.make("mcp", { scopes: ["read", "write"] });
+const Read = OAuthScope.make("read");
+const Write = OAuthScope.make("write");
+const server = OAuthServer.make("mcp", { scopes: [Read, Write] });
 const origin = "https://app.example.com";
 const resource = `${origin}/mcp`;
 const redirectUri = "https://client.example.com/callback";
@@ -332,7 +334,7 @@ it.effect(
             protocols: [McpProtocol.v2026_07_28],
           }),
         ),
-        Layer.provide(server.middleware(["read"]).layer),
+        Layer.provide(server.middleware([Read]).layer),
       );
 
       const routes = Layer.mergeAll(tools, server.routes).pipe(

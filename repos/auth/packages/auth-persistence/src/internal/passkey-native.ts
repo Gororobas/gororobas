@@ -5,7 +5,7 @@ import { Crypto, Effect, Option, Schema } from "effect";
 import { SqlError } from "effect/sql/SqlError";
 
 import { sqlBatchAssertion } from "./d1-planning";
-import { PersistenceMappingError } from "./mapping-error";
+import { PersistenceMappingError, isMappedConstraintConflict } from "./mapping-error";
 import type { NativeSqlTables } from "./native-sql-table";
 import { passkeyOperationInputs } from "./passkey-inputs";
 import {
@@ -96,8 +96,12 @@ const services = Effect.fnUntraced(function* (
           changed = 1;
         } else {
           changed = yield* flow.change(statement).pipe(
-            Effect.catchIf(
-              (error) => Schema.is(SqlError)(error) && error.reason._tag === "UniqueViolation",
+            Effect.catchCauseIf(
+              (cause) =>
+                isMappedConstraintConflict(
+                  (error) => Schema.is(SqlError)(error) && error.reason._tag === "UniqueViolation",
+                  cause,
+                ),
               () => Effect.succeed(0),
             ),
           );

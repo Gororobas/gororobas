@@ -1,11 +1,9 @@
 import * as Pkce from "@yielded/oauth/Pkce";
-import { Cause, Crypto, DateTime, Effect, Fiber, Redacted, Schema, type Scope } from "effect";
+import { Cause, Crypto, DateTime, Effect, Redacted, Schema, type Scope } from "effect";
 
-import {
-  reportAuthDiagnostic,
-  reportAuthFailure,
-  withoutObservability,
-} from "../../../internal/diagnostics";
+import { reportAuthDiagnostic, withoutObservability } from "../../../internal/diagnostics";
+import { makeScopedOperation } from "../../../internal/scoped-operation";
+import { timeoutOrElseWithCause } from "../../../internal/timeout";
 import { RequestBindingFlowId } from "../../../operations/requestBindingModels";
 import { selectCallback } from "../../callback";
 import { OAuthProtocol } from "../../OAuthProtocol";
@@ -65,21 +63,6 @@ const plainIdentitySchema = Schema.Struct({
 const unavailable = () => OAuthUnavailable.make({});
 const rejected = () => OAuthProtocolRejected.make({});
 
-// Final containment for application callbacks and supplied platform services.
-// Expected validation failures are typed; defects never establish non-issuance.
-const unavailableOnDefect = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.tapCause((cause) =>
-      Cause.hasDies(cause) ? reportAuthFailure("oauth-protocol", cause) : Effect.void,
-    ),
-    Effect.catchCause((cause): Effect.Effect<never, E | OAuthUnavailable> => {
-      if (Cause.hasInterrupts(cause)) return Effect.interrupt;
-      if (Cause.hasDies(cause)) return Effect.fail(unavailable());
-
-      return Effect.failCause(cause);
-    }),
-  );
-
 export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthProtocol")(
   // Capture one provider table; each generation retains its own receipt rules.
   function* <R, Setup>(
@@ -96,29 +79,16 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
     const context = (yield* Effect.context<R>()).pipe(withoutObservability);
     const crypto = yield* Crypto.Crypto;
     const clientSecrets = yield* PrivateKeyClientSecret;
-    const scope = yield* Effect.scope;
+    // Own application decoding as well as the native client's individual requests.
+    const run = yield* makeScopedOperation(unavailable);
 
     const requestSecret = (authentication: OpenIdConnectAuthentication) =>
-      clientSecrets.mint(authentication).pipe(Effect.mapError(unavailable));
+      clientSecrets
+        .mint(authentication)
+        .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     // Setup shares the protocol's containment for supplied platform services.
     const { installed, timeoutSeconds } = yield* installation;
-
-    // Own application decoding as well as the native client's individual requests.
-    const run = <A, E>(work: Effect.Effect<A, E>): Effect.Effect<A, E | OAuthUnavailable> =>
-      Effect.acquireUseRelease(
-        Effect.suspend(() =>
-          scope.state._tag === "Closed" ? Effect.fail(unavailable()) : Effect.forkIn(work, scope),
-        ),
-        Effect.fnUntraced(function* (fiber) {
-          const exit = yield* Fiber.await(fiber);
-
-          if (scope.state._tag === "Closed") return yield* unavailable();
-
-          return yield* exit;
-        }),
-        Fiber.interrupt,
-      );
 
     const prepareAuthorization: OAuthProtocol["Service"]["prepareAuthorization"] = Effect.fn(
       "OpenIdConnect.prepareAuthorization",
@@ -143,13 +113,13 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
 
       const state = yield* Pkce.random().pipe(
         Effect.provideService(Crypto.Crypto, crypto),
-        Effect.mapError(unavailable),
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
       );
 
       const pkce = provider.pkceS256
         ? yield* Pkce.make().pipe(
             Effect.provideService(Crypto.Crypto, crypto),
-            Effect.mapError(unavailable),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
           )
         : undefined;
 
@@ -157,7 +127,7 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
         provider.protocol === "oidc"
           ? yield* Pkce.random().pipe(
               Effect.provideService(Crypto.Crypto, crypto),
-              Effect.mapError(unavailable),
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
             )
           : undefined;
 
@@ -178,7 +148,7 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
           ...(request.loginHint === undefined ? {} : { loginHint: request.loginHint }),
           ...(provider.responseMode === undefined ? {} : { responseMode: provider.responseMode }),
         })
-        .pipe(Effect.mapError(unavailable));
+        .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
       const responseIssuerMode = persistedResponseIssuerMode(
         provider.responseIssuerMode,
@@ -267,7 +237,7 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
             ...(clientSecret === undefined ? {} : { clientSecret }),
           })
           .pipe(
-            Effect.mapError(unavailable),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
             Effect.ensuring(
               Effect.sync(() => {
                 if (clientSecret !== undefined) Redacted.wipeUnsafe(clientSecret);
@@ -300,8 +270,12 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
               code: request.response.code,
             })
             .pipe(
-              Effect.mapError((error) =>
-                error._tag === "OAuthRejected" ? rejected() : unavailable(),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error._tag === "OAuthRejected" ? rejected() : unavailable(),
+                  ),
+                ),
               ),
             );
 
@@ -310,7 +284,9 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
               ? yield* Effect.gen(function* () {
                   const userInfo = yield* entry.client
                     .fetchProfile(grant.accessToken)
-                    .pipe(Effect.mapError(unavailable));
+                    .pipe(
+                      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+                    );
 
                   const subject = yield* Schema.decodeUnknownEffect(userInfoSubject)(userInfo).pipe(
                     Effect.mapError(rejected),
@@ -360,29 +336,20 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
             ? Redacted.value(receipt.body)
             : yield* entry.client
                 .fetchProfile(grant.accessToken)
-                .pipe(Effect.mapError(unavailable));
+                .pipe(
+                  Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+                );
 
         const decoded = yield* Effect.suspend(() =>
           provider.identitySource.decodeIdentity(body),
         ).pipe(
           Effect.provideContext(context),
-          Effect.catchCause(
-            (cause): Effect.Effect<never, OAuthProtocolRejected | OAuthUnavailable> => {
-              if (Cause.hasInterrupts(cause))
-                return reportAuthFailure("oauth-identity", cause).pipe(
-                  Effect.andThen(Effect.interrupt),
-                );
-              if (
-                cause.reasons.length === 1 &&
-                cause.reasons[0]?._tag === "Fail" &&
-                Schema.is(OAuthProtocolRejected)(cause.reasons[0].error)
-              )
-                return Effect.fail(rejected());
-
-              return reportAuthFailure("oauth-identity", cause).pipe(
-                Effect.andThen(Effect.fail(unavailable())),
-              );
-            },
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                Schema.is(OAuthProtocolRejected)(error) ? rejected() : unavailable(),
+              ),
+            ),
           ),
         );
 
@@ -406,11 +373,11 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
       });
 
     return OAuthProtocol.of({
-      prepareAuthorization: (input) => run(unavailableOnDefect(prepareAuthorization(input))),
+      prepareAuthorization: (input) => run(prepareAuthorization(input)),
       exchangeVerifiedIdentity: (input) =>
         run(
-          unavailableOnDefect(exchangeVerifiedIdentity(input)).pipe(
-            Effect.timeoutOrElse({
+          exchangeVerifiedIdentity(input).pipe(
+            timeoutOrElseWithCause({
               duration: timeoutSeconds * 1000,
               orElse: () => Effect.fail(unavailable()),
             }),
@@ -425,7 +392,6 @@ export const makeOpenIdConnectOAuthProtocol = Effect.fn("makeOpenIdConnectOAuthP
         ),
     });
   },
-  unavailableOnDefect,
 );
 
 const snapshotOAuthProtocolPreparation = makeOAuthSnapshot(OAuthProtocolPreparation);

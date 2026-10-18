@@ -1,11 +1,10 @@
-import { Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
+import { Cause, Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
 
 import type { AuthInvocation } from "../operations/context";
 import type { AuthOperationResult } from "../operations/credentials";
 import { makeOperation, operationGroup } from "../operations/operation";
 import type { makeSessionModule } from "../sessions/module";
 import {
-  passkeyUnexpected,
   passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
@@ -84,14 +83,18 @@ export const makePasskeyStepUp = <
         const pending = yield* stepUp
           .inspect(token)
           .pipe(
-            Effect.mapError((error) =>
-              error._tag === "HookDenied"
-                ? error
-                : error._tag === "SessionUnavailable"
-                  ? PasskeyUnavailable.make({})
-                  : error._tag === "SessionCapabilityUnsupported"
-                    ? PasskeyMethodUnsupported.make({})
-                    : PasskeyRejected.make({}),
+            Effect.catchCause((cause) =>
+              Effect.failCause(
+                Cause.map(cause, (error) =>
+                  error._tag === "HookDenied"
+                    ? error
+                    : error._tag === "SessionUnavailable"
+                      ? PasskeyUnavailable.make({})
+                      : error._tag === "SessionCapabilityUnsupported"
+                        ? PasskeyMethodUnsupported.make({})
+                        : PasskeyRejected.make({}),
+                ),
+              ),
             ),
           );
 
@@ -111,7 +114,7 @@ export const makePasskeyStepUp = <
         });
 
         return { pending, fixed };
-      }, passkeyUnexpected);
+      });
 
       return StepUp.of({
         begin: Effect.fn("PasskeyStepUp.begin")(function* (invocation, input) {
@@ -128,7 +131,7 @@ export const makePasskeyStepUp = <
             { _tag: "StepUp", target: fixed },
             captured.credentials,
           );
-        }, passkeyUnexpected),
+        }),
         complete: Effect.fn("PasskeyStepUp.complete")(function* (invocation, input) {
           input = yield* snapshotPasskey(Schema.toType(CompleteInput), input);
           yield* passkeyNoAmbient();
@@ -136,12 +139,16 @@ export const makePasskeyStepUp = <
 
           const source = yield* sessions.inspectInvocation(invocation, input.sourceCredential).pipe(
             Effect.provideService(sessions.SessionStrategy, strategy),
-            Effect.mapError((error) =>
-              error._tag === "HookDenied"
-                ? error
-                : error._tag === "SessionUnavailable"
-                  ? PasskeyUnavailable.make({})
-                  : PasskeyRejected.make({}),
+            Effect.catchCause((cause) =>
+              Effect.failCause(
+                Cause.map(cause, (error) =>
+                  error._tag === "HookDenied"
+                    ? error
+                    : error._tag === "SessionUnavailable"
+                      ? PasskeyUnavailable.make({})
+                      : PasskeyRejected.make({}),
+                ),
+              ),
             ),
           );
 
@@ -149,12 +156,23 @@ export const makePasskeyStepUp = <
             .authentication(input, { _tag: "StepUp", target: fixed })
             .pipe(
               Effect.provide(services),
-              Effect.catchTag("PasskeyRejected", () =>
+              Effect.catchCause((cause) =>
                 Effect.gen(function* () {
+                  if (
+                    !cause.reasons.every(
+                      (reason) =>
+                        Cause.isFailReason(reason) && reason.error._tag === "PasskeyRejected",
+                    )
+                  )
+                    return yield* Effect.failCause(cause);
                   yield* readPasskeyCommit(
                     yield* stepUp
                       .rejectCredential(input.stepUpCredential)
-                      .pipe(Effect.mapError(() => PasskeyUnavailable.make({}))),
+                      .pipe(
+                        Effect.catchCause((cause) =>
+                          Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+                        ),
+                      ),
                   );
 
                   return yield* PasskeyRejected.make({});
@@ -170,14 +188,18 @@ export const makePasskeyStepUp = <
                 additional: verified.evidence,
               })
               .pipe(
-                Effect.mapError((error) =>
-                  error._tag === "HookDenied"
-                    ? error
-                    : error._tag === "SessionUnavailable"
-                      ? PasskeyUnavailable.make({})
-                      : error._tag === "SessionCapabilityUnsupported"
-                        ? PasskeyMethodUnsupported.make({})
-                        : PasskeyRejected.make({}),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error._tag === "HookDenied"
+                        ? error
+                        : error._tag === "SessionUnavailable"
+                          ? PasskeyUnavailable.make({})
+                          : error._tag === "SessionCapabilityUnsupported"
+                            ? PasskeyMethodUnsupported.make({})
+                            : PasskeyRejected.make({}),
+                    ),
+                  ),
                 ),
               ),
           );
@@ -186,7 +208,7 @@ export const makePasskeyStepUp = <
             value: result.value,
             credentialCommands: [...verified.credentialCommands, ...result.credentialCommands],
           };
-        }, passkeyUnexpected),
+        }),
       });
     }),
   ).pipe(Layer.provide(passkeyRateLimiterLayer));

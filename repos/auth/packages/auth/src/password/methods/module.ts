@@ -1,4 +1,14 @@
-import { Context, Crypto, Effect, Layer, Option, Redacted, Schema, type Types } from "effect";
+import {
+  Cause,
+  Context,
+  Crypto,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  Schema,
+  type Types,
+} from "effect";
 
 import { makeAuthStrategy } from "../../auth/AuthStrategy";
 import { defaultLayer, hooksLayer } from "../../auth/defaults";
@@ -99,7 +109,11 @@ const noAmbient = Effect.fn("Passwords.noAmbient")(function* () {
 });
 
 const read = <A>(receipt: PreparedCommit<A>) =>
-  receipt.read.pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+  receipt.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+    ),
+  );
 
 /** Public email/password method. Trusted claims/provisioning/action capabilities
  * are explicit; no product account model, implicit login or MFA bypass is supplied.
@@ -427,7 +441,9 @@ const makePasswordWithManagement = <
         });
 
         const evidenceValue = yield* snapshotAuthenticationEvidence(granted.evidence).pipe(
-          Effect.mapError(() => PasswordActionRequired.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasswordActionRequired.make({}))),
+          ),
         );
 
         const evidence = {
@@ -461,7 +477,9 @@ const makePasswordWithManagement = <
 
         if (
           !(yield* assessAuthentication(evidence, requirement).pipe(
-            Effect.mapError(() => PasswordActionRequired.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasswordActionRequired.make({}))),
+            ),
           )).satisfied
         )
           return yield* PasswordActionRequired.make({});
@@ -569,7 +587,12 @@ const makePasswordWithManagement = <
               requirement: verified.requirement,
               claims: values,
             })
-            .pipe(Effect.flatMap(read), Effect.mapError(passwordCompletionFailure));
+            .pipe(
+              Effect.flatMap(read),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, passwordCompletionFailure)),
+              ),
+            );
         }),
         planAdd: Effect.fn("Passwords.planAdd")(function* (invocation, request) {
           yield* noAmbient();
@@ -582,7 +605,9 @@ const makePasswordWithManagement = <
           const revision = snapshotPasswordRevision(
             yield* authority.capture(caller.subjectId, []).pipe(
               Effect.map((capture) => capture.revision),
-              Effect.mapError(passwordCompletionFailure),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, passwordCompletionFailure)),
+              ),
             ),
           );
 
@@ -652,10 +677,16 @@ const makePasswordWithManagement = <
             })
             .pipe(
               Effect.flatMap(readProofCommit),
-              Effect.mapError(() => PasswordUnavailable.make({})),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+              ),
             );
 
-          yield* dispatch.schedule.pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+          yield* dispatch.schedule.pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+            ),
+          );
 
           return dispatch.receipt;
         }),
@@ -669,7 +700,11 @@ const makePasswordWithManagement = <
               binding: bound.binding,
               credential: request.secret,
             })
-            .pipe(Effect.mapError(passwordCompletionFailure));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, passwordCompletionFailure)),
+              ),
+            );
 
           if (Option.isNone(bound.target)) return yield* PasswordRejected.make({});
 
@@ -746,7 +781,9 @@ const makePasswordWithManagement = <
 
   const RequestReset = makeOperation(`${moduleId}/request-reset`, {
     authorize: () =>
-      proofRequestAdmission(`${moduleId}/reset`).pipe(Effect.mapError(passwordCompletionFailure)),
+      proofRequestAdmission(`${moduleId}/reset`).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, passwordCompletionFailure))),
+      ),
     payload: RequestResetInput,
     success: ProofRequestReceipt,
     error: Failure,
@@ -847,7 +884,11 @@ const makePasswordWithManagement = <
 
           const flowId = yield* crypto
             .randomUUIDv4()
-            .pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+              ),
+            );
 
           return yield* SignIn.invoke(invocation, { ...request, flowId });
         }),

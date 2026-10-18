@@ -2,6 +2,7 @@
 import {
   coordinateCommit,
   hasCommitScope,
+  HookConfigurationError,
   LifecycleHooks,
   type CommitJournal,
   type PreparedCommit,
@@ -16,7 +17,7 @@ import {
   snapshotPasswordRequirement,
   snapshotPasswordRevision,
 } from "@yielded/auth/Password";
-import { hooksLayer } from "@yielded/auth/Persistence";
+import { hooksLayer, reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { Email, SubjectId, TokenDigest } from "@yielded/auth/Schema";
 import {
   type AuthenticationRequirement,
@@ -41,6 +42,7 @@ import * as KdfAdmission from "@yielded/crypto/KdfAdmission";
 import * as Portable from "@yielded/crypto/Portable";
 import { layerCryptoWeb } from "@yielded/crypto/WebCrypto";
 import {
+  Cause,
   Clock,
   Context,
   Crypto,
@@ -78,6 +80,9 @@ export interface Options {
 
 const configurationError = (reason: string) => PersistenceConfigurationError.make({ reason });
 const unavailable = () => SessionUnavailable.make({});
+
+const isHookConfigurationError = (error: unknown): error is HookConfigurationError =>
+  Schema.is(HookConfigurationError)(error);
 
 export interface ServicesOptions {
   /** Reproducible test entropy. Omit to use the host's secure randomness. */
@@ -207,9 +212,15 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
         ids.add(seed.subjectId);
         emails.add(seed.email);
 
-        const verifier = yield* hasher
-          .hash(seed.password)
-          .pipe(Effect.mapError(() => configurationError("Cannot hash in-memory password seed")));
+        const verifier = yield* reportPersistenceFailure(hasher.hash(seed.password), () => false, {
+          markReported: true,
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, () => configurationError("Cannot hash in-memory password seed")),
+            ),
+          ),
+        );
 
         const credentialId = `password:${seed.subjectId}`;
 
@@ -243,10 +254,17 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
         }),
       );
 
+      // State and session codecs include application claims. Observe their complete
+      // failure before translating Schema errors into the finite persistence port.
+      const snapshot = <A>(effect: Effect.Effect<A, Schema.SchemaError>) =>
+        reportPersistenceFailure(effect, () => false, { markReported: true }).pipe(
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+        );
+
       const load = Effect.suspend(() =>
         stored === undefined
           ? Effect.fail(unavailable())
-          : Schema.decodeEffect(codec)(stored).pipe(Effect.mapError(unavailable)),
+          : Schema.decodeEffect(codec)(stored).pipe(snapshot),
       );
 
       const now = () => clock.currentTimeMillisUnsafe();
@@ -307,14 +325,19 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
                         const time = now();
                         const { receipt, deadline = Infinity } = yield* body(state, journal, time);
 
-                        const encoded = yield* Schema.encodeEffect(codec)(state).pipe(
-                          Effect.mapError(unavailable),
-                        );
+                        const encoded = yield* Schema.encodeEffect(codec)(state).pipe(snapshot);
 
-                        const status = yield* Effect.result(receipt.read);
+                        const status = yield* Effect.exit(receipt.read);
 
-                        if (status._tag !== "Failure" || status.failure._tag !== "CommitPending")
-                          return yield* unavailable();
+                        if (status._tag === "Success") return yield* unavailable();
+                        if (
+                          status.cause.reasons.length === 0 ||
+                          !status.cause.reasons.every(
+                            (reason) =>
+                              Cause.isFailReason(reason) && reason.error._tag === "CommitPending",
+                          )
+                        )
+                          return yield* Effect.failCause(Cause.map(status.cause, unavailable));
 
                         return { receipt, deadline, time, encoded };
                       }),
@@ -334,7 +357,15 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
             ),
           ),
           Effect.map((result) => result.value),
-          Effect.catchTag("HookConfigurationError", unavailable),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(
+                cause,
+                (error: E | HookConfigurationError | SessionUnavailable): E | SessionUnavailable =>
+                  isHookConfigurationError(error) ? unavailable() : error,
+              ),
+            ),
+          ),
           Effect.provideService(LifecycleHooks, hooks),
         );
 
@@ -412,13 +443,9 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
                 provenance: yield* snapshotSessionAuthenticationProvenance({ evidence }),
               };
 
-              const encoded = yield* Schema.encodeEffect(sessionCodec)(row).pipe(
-                Effect.mapError(unavailable),
-              );
+              const encoded = yield* Schema.encodeEffect(sessionCodec)(row).pipe(snapshot);
 
-              const saved = yield* Schema.decodeEffect(sessionCodec)(encoded).pipe(
-                Effect.mapError(unavailable),
-              );
+              const saved = yield* Schema.decodeEffect(sessionCodec)(encoded).pipe(snapshot);
 
               state.sessions = [...state.sessions, saved];
 
@@ -450,12 +477,10 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
                 return yield* SessionConflict.make({});
 
               const expected = yield* Schema.encodeEffect(sessionCodec)(input.record).pipe(
-                Effect.mapError(unavailable),
+                snapshot,
               );
 
-              const actual = yield* Schema.encodeEffect(sessionCodec)(row).pipe(
-                Effect.mapError(unavailable),
-              );
+              const actual = yield* Schema.encodeEffect(sessionCodec)(row).pipe(snapshot);
 
               if (expected !== actual) return yield* SessionConflict.make({});
 
@@ -467,13 +492,9 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
                 expiresAt: input.nextExpiresAt,
               };
 
-              const encoded = yield* Schema.encodeEffect(sessionCodec)(next).pipe(
-                Effect.mapError(unavailable),
-              );
+              const encoded = yield* Schema.encodeEffect(sessionCodec)(next).pipe(snapshot);
 
-              const saved = yield* Schema.decodeEffect(sessionCodec)(encoded).pipe(
-                Effect.mapError(unavailable),
-              );
+              const saved = yield* Schema.decodeEffect(sessionCodec)(encoded).pipe(snapshot);
 
               state.sessions = state.sessions.map((session) =>
                 session.digest === row.digest ? saved : session,
@@ -555,7 +576,11 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
                 ? Option.none()
                 : Option.some(yield* snapshotPasswordCredential(found.credential));
             }),
-          ).pipe(Effect.mapError(() => PasswordUnavailable.make({}))),
+          ).pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+            ),
+          ),
         rehashIfCurrent: (input) =>
           transaction((state, journal) =>
             Effect.gen(function* () {
@@ -588,7 +613,9 @@ export const layer = <C extends ClaimsCodec, const Id extends string>(
             }),
           ).pipe(
             Effect.flatMap((receipt) => receipt.read),
-            Effect.mapError(() => PasswordUnavailable.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+            ),
           ),
         readForSubject: unsupported,
         recoveryTarget: unsupported,

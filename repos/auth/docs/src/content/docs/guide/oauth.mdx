@@ -231,7 +231,10 @@ access to your application. Your app session identifies the user, the MCP grant
 authorizes the client, and any upstream provider grant stays on your server.
 
 ```ts
-const oauth = OAuthServer.make("mcp", { scopes: ["athlete:read"] });
+import { OAuthScope, OAuthServer } from "@yielded/auth";
+
+const ReadAthlete = OAuthScope.make("athlete:read");
+const oauth = OAuthServer.make("mcp", { scopes: [ReadAthlete] });
 
 const protectedMcp = McpServer.toolkit(toolkit).pipe(
   Layer.provide(handlers),
@@ -243,13 +246,13 @@ const protectedMcp = McpServer.toolkit(toolkit).pipe(
       protocols: [McpProtocol.v2026_07_28],
     }),
   ),
-  Layer.provide(oauth.middleware(["athlete:read"]).layer),
+  Layer.provide(oauth.middleware([ReadAthlete]).layer),
 );
 ```
 
 Mount the authorization routes beside the protected MCP routes. Supply a service
 that verifies your existing session, grant storage, signing keys, and an HTTP client.
-Inside handlers, require `OAuthServer.CurrentAccess` and apply your application
+Inside handlers, require `oauth.CurrentAccess` and apply your application
 permissions. Resolve provider connections from trusted storage when tools need
 upstream API access.
 

@@ -1,4 +1,4 @@
-import { Context, Crypto, DateTime, Effect, Layer, Schema, type Types } from "effect";
+import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema, type Types } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
@@ -162,7 +162,9 @@ export const makeEmailRegistration = <
         Schema.encodeEffect(dataCodec)(data).pipe(
           Effect.flatMap(Schema.decodeEffect(dataCodec)),
           Effect.provide(services),
-          Effect.mapError(() => EmailRejected.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => EmailRejected.make({}))),
+          ),
         );
 
       const bound = Effect.fn("EmailRegistration.binding")(function* (
@@ -171,10 +173,14 @@ export const makeEmailRegistration = <
         const verified = yield* bindings
           .verify(input.flowId, input.requestBinding)
           .pipe(
-            Effect.mapError((error) =>
-              error._tag === "RequestBindingInvalid"
-                ? EmailRejected.make({})
-                : EmailUnavailable.make({}),
+            Effect.catchCause((cause) =>
+              Effect.failCause(
+                Cause.map(cause, (error) =>
+                  error._tag === "RequestBindingInvalid"
+                    ? EmailRejected.make({})
+                    : EmailUnavailable.make({}),
+                ),
+              ),
             ),
           );
 
@@ -204,7 +210,11 @@ export const makeEmailRegistration = <
 
         const digest = yield* crypto
           .digest("SHA-256", new TextEncoder().encode(encoded))
-          .pipe(Effect.mapError(() => EmailUnavailable.make({})));
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+            ),
+          );
 
         const binding: ProofBinding = {
           _tag: "Identifier",
@@ -230,10 +240,16 @@ export const makeEmailRegistration = <
             })
             .pipe(
               Effect.flatMap(readProofCommit),
-              Effect.mapError(() => EmailUnavailable.make({})),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+              ),
             );
 
-          yield* dispatch.schedule.pipe(Effect.mapError(() => EmailUnavailable.make({})));
+          yield* dispatch.schedule.pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+            ),
+          );
 
           return dispatch.receipt;
         }),
@@ -247,7 +263,11 @@ export const makeEmailRegistration = <
               credential: input.secret,
               binding: current.binding,
             })
-            .pipe(Effect.mapError(emailCompletionFailure));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, emailCompletionFailure)),
+              ),
+            );
 
           const snapshot = yield* lifecycleSnapshotEffect({
             action: "registration",
@@ -260,7 +280,11 @@ export const makeEmailRegistration = <
 
           const bytes = yield* crypto
             .randomBytes(32)
-            .pipe(Effect.mapError(() => EmailUnavailable.make({})));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+              ),
+            );
 
           const event = yield* lifecycleEventEffect({
             id: LifecycleEventId.make(Base64Url.encode(bytes)),
@@ -305,7 +329,7 @@ export const makeEmailRegistration = <
   );
 
   const admitRequest = proofRequestAdmission(`${moduleId}/registration`).pipe(
-    Effect.mapError(emailCompletionFailure),
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, emailCompletionFailure))),
   );
 
   const Request = makeOperation(`${moduleId}/registration/request`, {
@@ -338,7 +362,12 @@ export const makeEmailRegistration = <
       Effect.fn("EmailRegistration.Complete")(function* (input) {
         const plan = yield* (yield* Registrations).planComplete(input);
         const receipt = yield* plan.commit;
-        const result = yield* receipt.read.pipe(Effect.mapError(() => EmailUnavailable.make({})));
+
+        const result = yield* receipt.read.pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+          ),
+        );
 
         if (result.value._tag === "Rejected") return yield* EmailRejected.make({});
 

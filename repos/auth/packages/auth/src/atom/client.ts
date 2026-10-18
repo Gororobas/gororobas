@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, SchemaAST, Scope } from "effect";
+import { Cause, Context, Effect, Layer, Schema, SchemaAST } from "effect";
 import { AsyncResult, Atom, AtomRegistry, Reactivity } from "effect/reactivity";
 
 import {
@@ -9,8 +9,14 @@ import {
 } from "../http-operation/auth-client";
 import type { RouteFailure, RouteInput, RouteSuccess } from "../http-operation/contract";
 import { OperationHttpError } from "../http-operation/errors";
+import {
+  markAuthFailureReported,
+  reportAuthFailure,
+  ReportedOperationDefect,
+} from "../internal/diagnostics";
 import type { AnyAuthAction, AuthActions } from "../operations/actions";
 import { AuthAtomLifetime, type AuthSubjectLifetime } from "./AuthAtomLifetime";
+import { reportAtomDefects } from "./failures";
 import type { ReactivityKeys } from "./operations";
 import { type AccountBinding, makeScopedRuntime } from "./scoped-runtime";
 
@@ -130,7 +136,6 @@ export const make = <
     const controller = (yield* client).auth[AuthClientTypeId];
     const reactivity = yield* Reactivity.Reactivity;
     const parent = yield* AtomRegistry.AtomRegistry;
-    const scope = yield* Effect.scope;
     const codecServices = yield* Effect.context<DecoderServices<Actions>>();
 
     if (
@@ -159,17 +164,39 @@ export const make = <
       actions.getSession.route.operation.rpc.successSchema;
 
     const seed = hasSeed
-      ? yield* Schema.decodeUnknownEffect(sessionSchema)(options.initialSession).pipe(
-          Effect.mapError(() => OperationHttpError.make({ reason: "response" })),
-          Effect.provide(codecServices),
+      ? yield* Effect.uninterruptibleMask((restore) =>
+          restore(
+            Schema.decodeUnknownEffect(sessionSchema)(options.initialSession).pipe(
+              Effect.provide(codecServices),
+            ),
+          ).pipe(
+            Effect.catchCause((cause) =>
+              reportAuthFailure("client-workflow", cause).pipe(
+                Effect.andThen(
+                  Effect.failCause(
+                    markAuthFailureReported(
+                      Cause.fromReasons(
+                        cause.reasons.map((reason) =>
+                          Cause.isInterruptReason(reason)
+                            ? reason
+                            : Cause.isDieReason(reason)
+                              ? Cause.makeDieReason(ReportedOperationDefect.make({}))
+                              : Cause.makeFailReason(
+                                  OperationHttpError.make({ reason: "response" }),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         )
       : undefined;
 
     const seedSubject = hasSeed
-      ? yield* Effect.try({
-          try: () => actions.getSession.subject?.fromSuccess(seed),
-          catch: () => OperationHttpError.make({ reason: "response" }),
-        })
+      ? yield* Effect.sync(() => actions.getSession.subject?.fromSuccess(seed))
       : undefined;
 
     const memoMap = Atom.isAtom(factory.memoMap) ? parent.get(factory.memoMap) : factory.memoMap;
@@ -245,20 +272,24 @@ export const make = <
       }),
     );
 
-    yield* Scope.addFinalizer(
-      scope,
+    yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         closed = true;
         binding.seedAvailable = false;
-        for (const listener of [...listeners]) listener({});
-        listeners.clear();
-        current.registry.dispose();
-        controlRegistry.dispose();
-      }),
+        try {
+          for (const listener of [...listeners]) listener({});
+        } finally {
+          listeners.clear();
+        }
+      }).pipe(
+        Effect.ensuring(Effect.sync(() => current.registry.dispose())),
+        Effect.ensuring(Effect.sync(() => controlRegistry.dispose())),
+        reportAtomDefects,
+      ),
     );
 
     return Context.make(AuthAtomBinding, binding).pipe(Context.add(AuthAtomLifetime, lifetime));
-  });
+  }).pipe(reportAtomDefects);
 
   // The options tuple requires a fully provided Layer whenever the client needs services.
   // @effect-diagnostics-next-line unsafeEffectTypeAssertion:off
@@ -283,7 +314,7 @@ export const make = <
     const instance = yield* client;
 
     return yield* instance.auth[AuthClientTypeId].call(name, input);
-  });
+  }, reportAtomDefects);
 
   const mutation = <Name extends keyof Actions>(name: Name) => {
     const active = Atom.make((): { origin?: object | undefined } => ({}));
@@ -316,7 +347,7 @@ export const make = <
               unsubscribe();
             }),
         );
-      }),
+      }).pipe(reportAtomDefects),
     );
 
     return Atom.writable(
@@ -368,7 +399,7 @@ export const make = <
                   );
 
                   return yield* instance.auth[AuthClientTypeId].call(name, input, { origin });
-                }),
+                }).pipe(reportAtomDefects),
               )
             : runtime.atom(call(name, input));
 

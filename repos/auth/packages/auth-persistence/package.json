@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-persistence",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "Direct Effect SQL persistence and shared storage contracts for Yielded Auth.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {

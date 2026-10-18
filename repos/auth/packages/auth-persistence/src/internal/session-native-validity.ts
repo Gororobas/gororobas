@@ -5,7 +5,7 @@ import {
   StaleAuthentication,
   type SignedSessionValidity,
 } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Option } from "effect";
+import { Cause, DateTime, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -102,7 +102,13 @@ export const makeNativeSignedSessionValidityServices = Effect.fnUntraced(functio
           if (!((yield* sql`select 1 where ${condition}`).length === 1))
             return yield* invalidSessionState();
         }).pipe(
-          Effect.mapError((cause) => PersistenceMappingError.make({ operation: "decode", cause })),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                PersistenceMappingError.make({ operation: "decode", cause: error }),
+              ),
+            ),
+          ),
         ),
       });
   });

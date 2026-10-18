@@ -1,5 +1,5 @@
 import { Jwk } from "@yielded/jose";
-import { Effect, Redacted, Result, Schema } from "effect";
+import { Cause, Effect, Redacted, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 
 import type { ProviderDefinition } from "../../providerDefinition";
@@ -58,7 +58,11 @@ const importSigningKey = Effect.fnUntraced(function* (
     return yield* OpenIdConnectConfigurationError.make({ reason: "authentication" });
 
   return yield* Jwk.importPkcs8(Redacted.make(der), "ES256", { kid: keyId }).pipe(
-    Effect.mapError(() => OpenIdConnectConfigurationError.make({ reason: "authentication" })),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, () => OpenIdConnectConfigurationError.make({ reason: "authentication" })),
+      ),
+    ),
   );
 });
 
@@ -96,7 +100,11 @@ export const mintClientSecret = Effect.fn("Apple.mintClientSecret")(function* (o
     },
     key,
   ).pipe(
-    Effect.mapError(() => OpenIdConnectConfigurationError.make({ reason: "authentication" })),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, () => OpenIdConnectConfigurationError.make({ reason: "authentication" })),
+      ),
+    ),
     Effect.ensuring(Effect.sync(() => Redacted.wipeUnsafe(key.material))),
   );
 });

@@ -260,7 +260,14 @@ export const makeProofModule = <
             })
             .pipe(
               Effect.as(true),
-              Effect.catchTag("ProofIngressDenied", () => Effect.succeed(false)),
+              Effect.catchCause((cause) =>
+                cause.reasons.every(
+                  (reason) =>
+                    Cause.isFailReason(reason) && reason.error._tag === "ProofIngressDenied",
+                )
+                  ? Effect.succeed(false)
+                  : Effect.failCause(cause),
+              ),
             );
 
           const proofId = ProofId.make(Redacted.value(yield* crypto.generateOpaque()));
@@ -271,13 +278,20 @@ export const makeProofModule = <
             keyId: crypto.activeKeyId,
           });
 
-          const before = yield* eventFor("proof-request", binding).pipe(Effect.result);
+          const before = yield* eventFor("proof-request", binding).pipe(Effect.exit);
 
           if (
             before._tag === "Failure" &&
-            (before.failure._tag !== "HookDenied" || before.failure.reason === "unavailable")
+            !before.cause.reasons.every(
+              (reason) =>
+                Cause.isFailReason(reason) &&
+                reason.error._tag === "HookDenied" &&
+                reason.error.reason !== "unavailable",
+            )
           )
-            return yield* ProofUnavailable.make({});
+            return yield* Effect.failCause(
+              Cause.map(before.cause, () => ProofUnavailable.make({})),
+            );
           const secret = yield* crypto.generate();
           const verifier = yield* crypto.digest(proofId, binding, secret, crypto.activeKeyId);
 
@@ -303,7 +317,13 @@ export const makeProofModule = <
               Effect.asVoid,
               Effect.catchCause((cause) =>
                 reportAuthFailure("proof-delivery", cause).pipe(
-                  Effect.andThen(Cause.hasInterrupts(cause) ? Effect.interrupt : Effect.void),
+                  Effect.andThen(
+                    Cause.hasInterrupts(cause)
+                      ? Effect.failCause(
+                          Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+                        )
+                      : Effect.void,
+                  ),
                 ),
               ),
               Effect.withTracerEnabled(false),
@@ -337,7 +357,7 @@ export const makeProofModule = <
                       JSON.stringify(decision.record.binding) !== JSON.stringify(binding)
                     )
                       return yield* Result.fail(ProofUnavailable.make({}));
-                    journal.stage(before.success);
+                    journal.stage(before.value);
                     message = Object.freeze({
                       deliveryId: ProofDeliveryId.make(proofId),
                       purpose: options.purpose,

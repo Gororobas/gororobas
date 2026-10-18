@@ -35,7 +35,7 @@ import {
   samePasskey,
   snapshotPasskey,
 } from "@yielded/auth/Passkey";
-import { reportAuthFailure } from "@yielded/auth/Persistence";
+import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
 import type { Context } from "effect";
 import { Cause, DateTime, Effect, Layer, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
@@ -49,13 +49,25 @@ const rejected = () => PasskeyProtocolRejected.make({});
 const unavailable = () => PasskeyUnavailable.make({});
 
 const unexpected = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.catchCause((cause): Effect.Effect<never, E | PasskeyUnavailable> =>
-      Cause.hasDies(cause)
-        ? reportAuthFailure("passkey-protocol", cause).pipe(
-            Effect.andThen(Effect.fail(unavailable())),
-          )
-        : Effect.failCause(cause),
+  Effect.uninterruptibleMask((restore) =>
+    restore(effect).pipe(
+      Effect.catchCause((cause): Effect.Effect<never, E | PasskeyUnavailable> =>
+        Cause.hasDies(cause)
+          ? reportAuthFailure("passkey-protocol", cause).pipe(
+              Effect.andThen(
+                Effect.failCause(
+                  markAuthFailureReported(
+                    Cause.fromReasons<E | PasskeyUnavailable>(
+                      cause.reasons.map((reason) =>
+                        Cause.isDieReason(reason) ? Cause.makeFailReason(unavailable()) : reason,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : Effect.failCause(cause),
+      ),
     ),
   );
 

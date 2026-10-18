@@ -16,7 +16,7 @@ import {
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { OAuthUnavailable } from "@yielded/auth/OAuth";
 import { reportAuthDiagnostic } from "@yielded/auth/Persistence";
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 
 import type { D1BatchStatements } from "./D1BatchStatements";
 import type { NativeDatabaseHandle } from "./native-database";
@@ -47,7 +47,9 @@ const mapped = Effect.fnUntraced(function* (
 ) {
   const mapping = captureOAuthMapping(original);
 
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
   if (
     configuration.mode === "batch" &&
     !(

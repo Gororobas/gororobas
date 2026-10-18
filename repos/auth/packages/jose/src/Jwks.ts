@@ -1,10 +1,11 @@
 import { Signature } from "@yielded/crypto/Signature";
 import {
+  Cause,
   Clock,
   Context,
-  Deferred,
   Effect,
   Exit,
+  Fiber,
   Layer,
   Option,
   Schema,
@@ -180,21 +181,31 @@ interface Snapshot {
   readonly expiresAt: number;
 }
 
+interface Pending {
+  readonly result: Promise<Exit.Exit<Snapshot, JwksUnavailable>>;
+  readonly complete: (exit: Exit.Exit<Snapshot, JwksUnavailable>) => void;
+  // Waiter ownership changes under the remote state lock. The starting waiter
+  // cannot release its ownership until the scoped fiber has been registered.
+  waiters: number;
+  stopping: boolean;
+  fiber: Fiber.Fiber<Snapshot, JwksUnavailable> | undefined;
+}
+
 type RemoteState =
   | { readonly _tag: "Closed" }
   | {
       readonly _tag: "Open";
       readonly cache: Snapshot | undefined;
-      readonly pending: Deferred.Deferred<Snapshot, JwksUnavailable> | undefined;
+      readonly pending: Pending | undefined;
       readonly lastAttempt: number;
     };
 
 type Admission =
-  | { readonly _tag: "Rejected"; readonly reason: "closed" | "cooldown" }
+  | { readonly _tag: "Rejected"; readonly reason: "closed" | "cooldown" | "busy" }
   | { readonly _tag: "Cached"; readonly snapshot: Snapshot }
   | {
       readonly _tag: "Join" | "Start";
-      readonly result: Deferred.Deferred<Snapshot, JwksUnavailable>;
+      readonly pending: Pending;
     };
 
 /**
@@ -202,6 +213,12 @@ type Admission =
  * and must not follow redirects; FetchHttpClient is configured to reject them.
  * Responses from another URL are rejected with every client. No stale-on-error
  * fallback, global cache, background polling, or token-supplied key URLs.
+ * The last departing waiter cancels and joins its refresh. New refresh lookups
+ * receive busy until that cleanup finishes; cancellation never starts a retry.
+ * Owner closure releases lookups as unavailable; unexpected refresh cleanup
+ * failures propagate through the owning Scope with their complete Cause.
+ * The host must retain the initiating request's I/O lifetime during shared work;
+ * on Workers, use waitUntil with bounded verification at the request boundary.
  */
 export const layerRemote = (
   input: RemoteOptions,
@@ -234,6 +251,7 @@ export const layerRemote = (
       });
 
       const permits = yield* Semaphore.make(options.maxWaiters);
+      let closingFailure: Cause.Cause<JwksUnavailable> | undefined;
 
       const scope = yield* Effect.acquireRelease(Scope.make(), (scope) =>
         Effect.gen(function* () {
@@ -242,8 +260,11 @@ export const layerRemote = (
           // A scoped fiber can be interrupted before its first instruction, so
           // its onExit handler alone cannot release pending lookup waiters.
           if (previous._tag === "Open" && previous.pending !== undefined)
-            yield* Deferred.fail(previous.pending, JwksUnavailable.make({ reason: "closed" }));
+            previous.pending.complete(Exit.fail(JwksUnavailable.make({ reason: "closed" })));
           yield* Scope.close(scope, Exit.void);
+          // Scope finalizers cannot fail in E. Preserve the whole unexpected
+          // cleanup Cause as a defect, including when all waiters cancelled.
+          if (closingFailure !== undefined) return yield* Effect.die(closingFailure);
         }),
       );
 
@@ -285,74 +306,180 @@ export const layerRemote = (
           redirect: "manual",
           credentials: "omit",
         }),
-        Effect.catchTag("HttpClientError", () => JwksUnavailable.make({ reason: "transport" })),
-        Effect.catchTag(["JoseInvalidToken", "JoseInvalidKey"], () =>
-          JwksUnavailable.make({ reason: "response" }),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              error._tag === "HttpClientError"
+                ? JwksUnavailable.make({ reason: "transport" })
+                : error._tag === "JoseInvalidToken" || error._tag === "JoseInvalidKey"
+                  ? JwksUnavailable.make({ reason: "response" })
+                  : error,
+            ),
+          ),
         ),
-        Effect.timeoutOrElse({
-          duration: options.timeoutMs,
-          orElse: () => JwksUnavailable.make({ reason: "transport" }),
-        }),
+        (effect) =>
+          Effect.suspend(() => {
+            let failure: Cause.Cause<JwksUnavailable> | undefined;
+
+            return effect.pipe(
+              // Retain the joined request's cleanup failure across the timeout race.
+              Effect.onExit((exit) =>
+                Effect.sync(() => {
+                  if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+                    failure = exit.cause;
+                }),
+              ),
+              Effect.timeoutOrElse({
+                duration: options.timeoutMs,
+                orElse: () =>
+                  Effect.failCause(
+                    failure === undefined
+                      ? Cause.fail(JwksUnavailable.make({ reason: "transport" }))
+                      : Cause.combine(
+                          Cause.fail(JwksUnavailable.make({ reason: "transport" })),
+                          failure,
+                        ),
+                  ),
+              }),
+              Effect.onInterrupt(() =>
+                failure === undefined ? Effect.void : Effect.failCause(failure),
+              ),
+            );
+          }),
       );
 
       const refresh = (missingFrom?: Snapshot) =>
         Effect.uninterruptibleMask((restore) =>
           Effect.gen(function* () {
             const now = yield* restore(Clock.currentTimeMillis);
-            const result = yield* Deferred.make<Snapshot, JwksUnavailable>();
+            let delivered = false;
 
-            // Recheck cache and ownership together after the caller's snapshot.
-            // A missing key bypasses only the snapshot that failed selection.
-            const admission = yield* SynchronizedRef.modify(
-              state,
-              (current): readonly [Admission, RemoteState] => {
-                if (current._tag === "Closed")
-                  return [{ _tag: "Rejected", reason: "closed" }, current];
-                if (
-                  current.cache !== undefined &&
-                  current.cache !== missingFrom &&
-                  current.cache.expiresAt > now
-                )
-                  return [{ _tag: "Cached", snapshot: current.cache }, current];
-                if (current.pending !== undefined)
-                  return [{ _tag: "Join", result: current.pending }, current];
-                if (now - current.lastAttempt < options.cooldownMs)
-                  return [{ _tag: "Rejected", reason: "cooldown" }, current];
+            return yield* Effect.acquireUseRelease(
+              Effect.gen(function* () {
+                // A native shared promise lets request-isolated runtimes track
+                // the dependency and resume each waiter in its own I/O context.
+                let complete!: Pending["complete"];
 
-                return [
-                  { _tag: "Start", result },
-                  { ...current, pending: result, lastAttempt: now },
-                ];
+                const result = new Promise<Exit.Exit<Snapshot, JwksUnavailable>>((resolve) => {
+                  complete = resolve;
+                });
+
+                // Recheck cache, ownership and waiter admission together. A missing
+                // key bypasses only the snapshot that failed selection.
+                const admission = yield* SynchronizedRef.modify(
+                  state,
+                  (current): readonly [Admission, RemoteState] => {
+                    if (current._tag === "Closed")
+                      return [{ _tag: "Rejected", reason: "closed" }, current];
+                    if (current.pending?.stopping)
+                      return [{ _tag: "Rejected", reason: "busy" }, current];
+                    if (
+                      current.cache !== undefined &&
+                      current.cache !== missingFrom &&
+                      current.cache.expiresAt > now
+                    )
+                      return [{ _tag: "Cached", snapshot: current.cache }, current];
+                    if (current.pending !== undefined) {
+                      current.pending.waiters++;
+
+                      return [{ _tag: "Join", pending: current.pending }, current];
+                    }
+                    if (now - current.lastAttempt < options.cooldownMs)
+                      return [{ _tag: "Rejected", reason: "cooldown" }, current];
+
+                    const pending: Pending = {
+                      result,
+                      complete,
+                      waiters: 1,
+                      stopping: false,
+                      fiber: undefined,
+                    };
+
+                    return [
+                      { _tag: "Start", pending },
+                      { ...current, pending, lastAttempt: now },
+                    ];
+                  },
+                );
+
+                if (admission._tag === "Start") {
+                  const pending = admission.pending;
+
+                  // Admission through fork registration is uninterruptible.
+                  // Network work and waiter suspension never hold the state lock.
+                  pending.fiber = yield* fetch.pipe(
+                    Effect.onExit((exit) =>
+                      SynchronizedRef.updateEffect(state, (current) =>
+                        current._tag === "Closed"
+                          ? Effect.sync(() => {
+                              if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+                                closingFailure = exit.cause;
+
+                              return current;
+                            })
+                          : Effect.sync(() => pending.complete(exit)).pipe(
+                              // A stopping generation remains registered until
+                              // its last waiter has joined the complete child Exit.
+                              Effect.as({
+                                ...current,
+                                cache:
+                                  !pending.stopping && Exit.isSuccess(exit)
+                                    ? exit.value
+                                    : current.cache,
+                                pending: pending.stopping ? pending : undefined,
+                              }),
+                            ),
+                      ),
+                    ),
+                    Effect.forkIn(scope, { uninterruptible: false }),
+                  );
+                }
+
+                return admission;
+              }),
+              (admission) => {
+                if (admission._tag === "Rejected")
+                  return Effect.fail(JwksUnavailable.make({ reason: admission.reason }));
+                if (admission._tag === "Cached") return Effect.succeed(admission.snapshot);
+
+                return Effect.gen(function* () {
+                  const exit = yield* restore(Effect.promise(() => admission.pending.result));
+
+                  delivered = true;
+
+                  return yield* exit;
+                });
+              },
+              (admission) => {
+                if (admission._tag !== "Start" && admission._tag !== "Join") return Effect.void;
+                const pending = admission.pending;
+
+                return Effect.gen(function* () {
+                  const last = yield* SynchronizedRef.modify(state, (current) => {
+                    pending.waiters--;
+                    if (pending.waiters !== 0) return [false, current] as const;
+                    pending.stopping = true;
+
+                    return [true, current] as const;
+                  });
+
+                  const fiber = pending.fiber;
+
+                  if (!last || fiber === undefined) return;
+                  // Joining outside the lock lets the child publish its full Exit.
+                  yield* Fiber.interrupt(fiber);
+                  const exit = yield* Fiber.await(fiber);
+
+                  yield* SynchronizedRef.update(state, (current) =>
+                    current._tag === "Open" && current.pending === pending
+                      ? { ...current, pending: undefined }
+                      : current,
+                  );
+                  if (!delivered && Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+                    return yield* Effect.failCause(exit.cause);
+                });
               },
             );
-
-            if (admission._tag === "Rejected")
-              return yield* JwksUnavailable.make({ reason: admission.reason });
-            if (admission._tag === "Cached") return admission.snapshot;
-            if (admission._tag === "Join") return yield* restore(Deferred.await(admission.result));
-
-            // Admission through fork registration is uninterruptible. Network
-            // work and waiter suspension never run under the state lock.
-            yield* fetch.pipe(
-              Effect.onExit((exit) =>
-                SynchronizedRef.updateEffect(state, (current) =>
-                  current._tag === "Closed"
-                    ? Effect.succeed(current)
-                    : Deferred.done(result, exit).pipe(
-                        // Keep pending ownership until publication, serialized
-                        // with shutdown so a closed owner cannot publish success.
-                        Effect.as({
-                          ...current,
-                          cache: Exit.isSuccess(exit) ? exit.value : current.cache,
-                          pending: undefined,
-                        }),
-                      ),
-                ),
-              ),
-              Effect.forkIn(scope, { uninterruptible: false }),
-            );
-
-            return yield* restore(Deferred.await(result));
           }),
         );
 
@@ -373,8 +500,12 @@ export const layerRemote = (
         const candidate = yield* select(current.keys, selection).pipe(
           Effect.catchTag("JoseKeyNotFound", () =>
             refresh(current).pipe(
-              Effect.mapError((error) =>
-                error.reason === "cooldown" ? KeyNotFound.make({}) : error,
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error.reason === "cooldown" ? KeyNotFound.make({}) : error,
+                  ),
+                ),
               ),
               Effect.flatMap((snapshot) => select(snapshot.keys, selection)),
             ),

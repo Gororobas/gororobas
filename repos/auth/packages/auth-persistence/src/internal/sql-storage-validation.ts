@@ -1,5 +1,5 @@
 import { reportAuthDiagnostic } from "@yielded/auth/Persistence";
-import { Effect, Result } from "effect";
+import { Cause, Effect, Result } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { PersistenceMappingError } from "./mapping-error";
@@ -63,11 +63,12 @@ export const validateSqlStorage = Effect.fnUntraced(
     }
     yield* validateStorageBatch(dialect, validations).pipe(
       Effect.provideService(SqlClient.SqlClient, client),
-      Effect.mapError(() =>
-        PersistenceMappingError.make({
-          operation: "mapping",
-          cause: "Required SQL storage key is unavailable",
-        }),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            PersistenceMappingError.make({ operation: "mapping", cause: error }),
+          ),
+        ),
       ),
     );
   },

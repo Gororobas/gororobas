@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 
 import type { PreparedCommit } from "../hooks/commit";
 import { ProofUnavailable, type ProofCapabilityUnsupported } from "./errors";
@@ -17,4 +17,8 @@ export interface ProofIssuePlan {
 }
 
 export const readProofCommit = <A>(receipt: PreparedCommit<A>) =>
-  receipt.read.pipe(Effect.mapError(() => ProofUnavailable.make({})));
+  receipt.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => ProofUnavailable.make({}))),
+    ),
+  );

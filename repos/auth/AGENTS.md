@@ -51,7 +51,7 @@ Before editing code:
 4. Read the relevant guide, API comments, and neighboring tests for the modules in scope.
 5. Read `node_modules/effect/AGENTS.md` before writing Effect code (the canonical Effect
    guidance; `.agents/skills` carries the focused task skills).
-6. Read `.agents/skills/effect-development/references/cli/index.md` before creating or
+6. Read `.agents/skills/effect/references/cli/index.md` before creating or
    changing repository scripts.
 7. Inspect neighboring package tests before introducing a new pattern.
 
@@ -146,12 +146,8 @@ framework package only for a new concern agreed with the repository owner.
 - The root catalog is the single source for the exact Effect version. Do not pin Effect
   independently in a package.
 - After changing an Effect-family version, run `vp install` and `vp run check`.
-- Contributor skills under `.agents/skills` are repo-owned. Dev Kit copies track their source
-  in a `.dev-kit-origin.json` receipt. Check for upstream updates with
-  `bunx @danieljvdm/dev-kit@latest skills status`, and fast-forward an unmodified skill with
-  `bunx @danieljvdm/dev-kit@latest skills update <name>`; a skill with local edits is left for an
-  agent merge instead of being overwritten. Add a new skill from the approved catalog with
-  `bunx @danieljvdm/dev-kit@latest skills add <name>`.
+- Shared contributor skills are authored in [danieljvdm/skills](https://github.com/danieljvdm/skills); Dev Kit distributes them. Keep committed copies identical to their pinned source, with provenance in each `.dev-kit-origin.json` receipt. Use `bunx @danieljvdm/dev-kit@latest skills status` before an explicit update; move repository policy into this file and upstream reusable improvements before refreshing a locally modified copy.
+- Load the exact repository skill paths linked here, including [Effect](.agents/skills/effect/SKILL.md) and [Cloudflare](.agents/skills/cloudflare/SKILL.md). User and project skill catalogs may expose the same names; do not assume either scope overrides the other.
 - Contributor agent skills are repository tooling. They are not runtime Skill definitions and
   must not be imported by `@yielded/auth`.
 - Before handoff, run `vp run ready`.
@@ -159,9 +155,7 @@ framework package only for a new concern agreed with the repository owner.
 ## Change discipline
 
 - Add or update Effect Schema definitions before implementing new wire or persisted values.
-- Use the [simplify skill](.agents/skills/simplify/SKILL.md) to consider removing unnecessary
-  mechanisms within the affected workflow. Preserve required public contracts, authority,
-  validation, and retry guarantees; complexity alone does not justify unrelated cleanup.
+- Implement the minimum behavior the current request requires. Preserve required public contracts, authority, validation, and retry guarantees; avoid unrelated cleanup and machinery for hypothetical uses. Load [simplify](.agents/skills/simplify/SKILL.md) only when explicitly requested; ordinary changes do not require a separate simplification pass.
 - Update existing guides or API comments when a change affects their documented behavior.
 - Explain rejected alternatives in the pull request when a future agent could reasonably
   re-propose them.
@@ -195,6 +189,8 @@ isolation, artifacts, evidence reuse and placement. Keep useful public-contract,
 credential, recovery and authority checks at their strongest boundary; remove
 redundant matrices and implementation mirrors. The final `vp run ready` gate still applies.
 
+For a new regression, cite its pre-existing public issue or offending commit beside the test. For an explicit human test request, record the requested seam before implementation. A current PR, invented incident, or private customer identifier is not evidence; provenance does not waive necessity or failure-first order. Keep tests under the owning package's `test/` directory and reuse its runner and the actual runtime boundary. Every E2E run, including a failed or interrupted run, must leave sanitized, inspectable evidence and concise replay instructions with the tested revision, environment, setup/cleanup, and expected and observed results. Keep evidence in the task artifacts or approved store, link it from the handoff, and keep credentials, cookies, private payloads, and capability URLs out of it.
+
 ## Parallel work
 
 Parallel agents must own disjoint packages or documents. Shared domain schemas, error unions,
@@ -214,11 +210,9 @@ API does not imply a new test file.
 
 ## Repository boundaries
 
-`main` requires a pull request and the `ready` check. Use
-[open-pull-request](.agents/skills/open-pull-request/SKILL.md) for concise PR descriptions.
-Include diagrams only for meaningful architecture changes and code examples only
-when they clarify the change. When green and approved for landing, squash and delete the branch without
-bypassing checks. Bring main into a branch only to resolve a real conflict.
+`main` requires a pull request and the `ready` check. Use [pull-requests](.agents/skills/pull-requests/SKILL.md) for concise PR descriptions. Include diagrams only for meaningful architecture changes and code examples only when they clarify the change. When green and approved for landing, squash and delete the branch without bypassing checks. Bring main into a branch only to resolve a real conflict.
+
+This is a public library. Keep PR descriptions self-contained and follow any required PR template. Omit private tracker links and issue IDs, including Linear references; link to public code or guides when useful. Keep company/customer names, account identifiers, and private workspace links out of PR text and linked evidence unless the user explicitly requests them.
 
 Keep package READMEs to purpose, ownership, and non-obvious constraints. Code, schemas,
 configuration, and command help own implementation details; investigations belong in issues or

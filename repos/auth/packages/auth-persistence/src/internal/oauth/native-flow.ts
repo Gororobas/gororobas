@@ -9,7 +9,7 @@ import { SqlClient } from "effect/sql";
 import { SqlError } from "effect/sql/SqlError";
 
 import { sqlBatchAssertion } from "../d1-planning";
-import { PersistenceMappingError } from "../mapping-error";
+import { PersistenceMappingError, isMappedConstraintConflict } from "../mapping-error";
 import type { SubjectIdCodec } from "../models/common";
 import type { OAuthClock, OAuthFlowTable } from "../models/oauth-model";
 import type { NativeSqlTables } from "../native-sql-table";
@@ -155,8 +155,12 @@ export const makeOAuthNativeFlow = Effect.fnUntraced(function* <Flow extends OAu
 
       return context.issuedAtMillis <= engineNow && context.expiresAtMillis > engineNow;
     }).pipe(
-      Effect.catchIf(
-        (error) => Schema.is(SqlError)(error) && error.reason._tag === "UniqueViolation",
+      Effect.catchCauseIf(
+        (cause) =>
+          isMappedConstraintConflict(
+            (error) => Schema.is(SqlError)(error) && error.reason._tag === "UniqueViolation",
+            cause,
+          ),
         () => Effect.succeed(false),
       ),
     );

@@ -1,7 +1,8 @@
 import { Aead } from "@yielded/crypto/Aead";
-import { Crypto, Effect, Fiber, Redacted, Result, Schema, type Scope } from "effect";
+import { Cause, Crypto, Effect, Redacted, Result, Schema, type Scope } from "effect";
 import { Base64Url } from "effect/encoding";
 
+import { makeScopedOperation } from "../../internal/scoped-operation";
 import { OAuthConfigurationError, OAuthUnavailable } from "../signInErrors";
 import { OAuthEncryptionKeyId } from "../signInModels";
 import { makeOAuthSnapshot } from "../signInSnapshot";
@@ -105,7 +106,7 @@ export const payloadEncryption = <C, P, S extends Envelope>(
     const configuration = yield* Effect.fromResult(captured);
     const crypto = yield* Crypto.Crypto;
     const aead = yield* Aead;
-    const scope = yield* Effect.scope;
+    const runOwned = yield* makeScopedOperation(fail);
 
     if (!aead.supports("XChaCha20-Poly1305"))
       return yield* OAuthConfigurationError.make({ reason: "crypto" });
@@ -136,22 +137,7 @@ export const payloadEncryption = <C, P, S extends Envelope>(
     // Teardown interrupts and joins active operations before retained keys are
     // wiped. Each operation also owns a copy, never a mutable keyring alias.
     const run = <A>(work: Effect.Effect<A, OAuthUnavailable, Scope.Scope>) =>
-      Effect.suspend(() =>
-        scope.state._tag === "Closed"
-          ? Effect.fail(fail())
-          : Effect.acquireUseRelease(
-              Effect.forkIn(Effect.scoped(work), scope),
-              Fiber.join,
-              Fiber.interrupt,
-            ).pipe(
-              Effect.catchCause((cause) =>
-                scope.state._tag === "Closed" ? Effect.fail(fail()) : Effect.failCause(cause),
-              ),
-              Effect.flatMap((value) =>
-                scope.state._tag === "Closed" ? Effect.fail(fail()) : Effect.succeed(value),
-              ),
-            ),
-      );
+      runOwned(Effect.scoped(work));
 
     return {
       seal: (context: C, value: P) =>
@@ -164,11 +150,19 @@ export const payloadEncryption = <C, P, S extends Envelope>(
               yield* snapshotPlaintext.effect(value),
             );
 
-            const json = yield* Schema.encodeEffect(codec)(plaintext).pipe(Effect.mapError(fail));
+            const json = yield* Schema.encodeEffect(codec)(plaintext).pipe(
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))),
+            );
+
             const bytes = yield* encodeUtf8(json, options.maximumPlaintextBytes);
             const additionalData = yield* options.aad(detached, configuration.activeKeyId);
             const key = yield* copyKey(configuration.activeKeyId);
-            const nonce = yield* ownBytes(crypto.randomBytes(24).pipe(Effect.mapError(fail)));
+
+            const nonce = yield* ownBytes(
+              crypto
+                .randomBytes(24)
+                .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail)))),
+            );
 
             const ciphertext = yield* ownBytes(
               aead
@@ -179,7 +173,7 @@ export const payloadEncryption = <C, P, S extends Envelope>(
                   additionalData,
                   plaintext: Redacted.make(bytes),
                 })
-                .pipe(Effect.mapError(fail)),
+                .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail)))),
             );
 
             // The generic envelope is an external Schema boundary, not an assertion.
@@ -188,7 +182,7 @@ export const payloadEncryption = <C, P, S extends Envelope>(
               keyId: configuration.activeKeyId,
               nonce: Base64Url.encode(nonce),
               ciphertext: Redacted.make(Base64Url.encode(ciphertext)),
-            }).pipe(Effect.mapError(fail));
+            }).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))));
 
             return yield* snapshotEnvelope.effect(sealed);
           }),
@@ -217,7 +211,10 @@ export const payloadEncryption = <C, P, S extends Envelope>(
                   ciphertext,
                   additionalData,
                 })
-                .pipe(Effect.mapError(fail), Effect.flatMap(unwrap)),
+                .pipe(
+                  Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))),
+                  Effect.flatMap(unwrap),
+                ),
             );
 
             if (plaintext.length > options.maximumPlaintextBytes) return yield* fail();
@@ -227,8 +224,13 @@ export const payloadEncryption = <C, P, S extends Envelope>(
               catch: fail,
             });
 
-            const value = yield* Schema.decodeEffect(codec)(json).pipe(Effect.mapError(fail));
-            const canonical = yield* Schema.encodeEffect(codec)(value).pipe(Effect.mapError(fail));
+            const value = yield* Schema.decodeEffect(codec)(json).pipe(
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))),
+            );
+
+            const canonical = yield* Schema.encodeEffect(codec)(value).pipe(
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, fail))),
+            );
 
             if (canonical !== json) return yield* fail();
 

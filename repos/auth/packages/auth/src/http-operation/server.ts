@@ -14,7 +14,7 @@ import { Cookies } from "effect/http";
 
 import { AuthRequest } from "../auth/AuthRequest";
 import { HookDenied } from "../hooks/models";
-import { reportAuthFailure } from "../internal/diagnostics";
+import { reportAuthFailure, ReportedOperationDefect } from "../internal/diagnostics";
 import type { AuthInvocation } from "../operations/context";
 import {
   AuthCredentialCommandCollector,
@@ -106,51 +106,55 @@ export const oauthCallback = <R extends AnyRoute, ResponseR = never>(
 };
 
 const boundedText = Effect.fnUntraced(function* (request: Request, maximum: number) {
-  const result = yield* Effect.tryPromise({
-    try: async (signal) => {
-      if (request.body === null) return { _tag: "Text" as const, text: "" };
-      const reader = request.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let bytes = 0;
+  if (request.body === null) return "";
+  const body = request.body;
+  let readFailed = false;
 
-      const abort = () => {
-        void reader.cancel();
-      };
+  const result = yield* Effect.acquireUseRelease(
+    Effect.sync(() => body.getReader()),
+    (reader) =>
+      Effect.tryPromise({
+        try: async () => {
+          const chunks: Uint8Array[] = [];
+          let bytes = 0;
 
-      signal.addEventListener("abort", abort, { once: true });
-      try {
-        while (true) {
-          const next = await reader.read();
+          while (true) {
+            const next = await reader.read();
 
-          if (next.done) break;
-          bytes += next.value.byteLength;
-          if (bytes > maximum) {
-            await reader.cancel();
-
-            return { _tag: "TooLarge" as const };
+            if (next.done) break;
+            bytes += next.value.byteLength;
+            if (bytes > maximum) return { _tag: "TooLarge" as const };
+            chunks.push(next.value);
           }
-          chunks.push(next.value);
-        }
-        const output = new Uint8Array(bytes);
-        let offset = 0;
+          const output = new Uint8Array(bytes);
+          let offset = 0;
 
-        for (const chunk of chunks) {
-          output.set(chunk, offset);
-          offset += chunk.byteLength;
-        }
+          for (const chunk of chunks) {
+            output.set(chunk, offset);
+            offset += chunk.byteLength;
+          }
 
-        return {
-          _tag: "Text" as const,
-          text: new TextDecoder("utf-8", { fatal: true }).decode(output),
-        };
-      } finally {
-        signal.removeEventListener("abort", abort);
-        reader.releaseLock();
-      }
-    },
-    catch: (error) =>
-      Schema.is(OperationHttpError)(error) ? error : OperationHttpError.make({ reason: "request" }),
-  });
+          return {
+            _tag: "Text" as const,
+            text: new TextDecoder("utf-8", { fatal: true }).decode(output),
+          };
+        },
+        catch: () => {
+          readFailed = true;
+
+          return OperationHttpError.make({ reason: "request" });
+        },
+      }),
+    (reader) =>
+      Effect.promise(async () => {
+        try {
+          // Errored streams reject cancel with the already-handled read failure.
+          if (!readFailed) await reader.cancel();
+        } finally {
+          reader.releaseLock();
+        }
+      }),
+  );
 
   if (result._tag === "TooLarge") return yield* OperationHttpError.make({ reason: "too-large" });
 
@@ -591,7 +595,7 @@ export const make = <
           Context.add(AuthRevealCommandCollectorService, collector),
         );
 
-        const resolved = yield* Effect.result(
+        const resolved = yield* Effect.exit(
           withSessionInvocation(Effect.succeed(trusted), () =>
             call.pipe(Effect.provide(requestServices)),
           ),
@@ -607,6 +611,12 @@ export const make = <
           headers.set("access-control-allow-credentials", "true");
         }
         if (resolved._tag === "Failure") {
+          // A typed response cannot represent a concurrent defect or cancellation.
+          if (Cause.hasDies(resolved.cause) || Cause.hasInterrupts(resolved.cause))
+            return yield* Effect.failCause(resolved.cause);
+          const failure = resolved.cause.reasons.find(Cause.isFailReason);
+
+          if (failure === undefined) return yield* Effect.failCause(resolved.cause);
           yield* applyCommands(
             headers,
             commands.filter(
@@ -617,7 +627,7 @@ export const make = <
             cacheTransport !== undefined,
           );
 
-          const encoded = yield* Schema.encodeEffect(errorSchema)(resolved.failure).pipe(
+          const encoded = yield* Schema.encodeEffect(errorSchema)(failure.error).pipe(
             Effect.provide(requestServices),
             Effect.mapError(() => OperationHttpError.make({ reason: "response" })),
           );
@@ -636,7 +646,7 @@ export const make = <
           );
         }
 
-        const encoded = yield* Schema.encodeEffect(successSchema)(resolved.success).pipe(
+        const encoded = yield* Schema.encodeEffect(successSchema)(resolved.value).pipe(
           Effect.provide(requestServices),
           Effect.mapError(() => OperationHttpError.make({ reason: "response" })),
         );
@@ -739,20 +749,32 @@ export const make = <
 
       return yield* handleRequest(request, mutationCookies).pipe(
         withSessionRequest,
-        Effect.catch((error) =>
-          failResponse(
-            Schema.is(OperationHttpError)(error)
-              ? error
+        Effect.catchCause((cause) => {
+          if (Cause.hasDies(cause))
+            return reportAuthFailure("http", cause).pipe(
+              Effect.andThen(
+                Cause.hasInterrupts(cause)
+                  ? Effect.failCause(
+                      Cause.fromReasons<never>([
+                        Cause.makeDieReason(ReportedOperationDefect.make({})),
+                        ...cause.reasons.filter(Cause.isInterruptReason),
+                      ]),
+                    )
+                  : failResponse(OperationHttpError.make({ reason: "unavailable" })),
+              ),
+            );
+          if (Cause.hasInterrupts(cause))
+            return Effect.failCause(
+              Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+            );
+          const failure = cause.reasons.find(Cause.isFailReason);
+
+          return failResponse(
+            failure !== undefined && Schema.is(OperationHttpError)(failure.error)
+              ? failure.error
               : OperationHttpError.make({ reason: "unavailable" }),
-          ),
-        ),
-        Effect.catchCause((cause) =>
-          Cause.hasDies(cause)
-            ? reportAuthFailure("http", cause).pipe(
-                Effect.andThen(failResponse(OperationHttpError.make({ reason: "unavailable" }))),
-              )
-            : Effect.failCause(cause),
-        ),
+          );
+        }),
         Effect.map((response) => {
           if (mutationCookies.length === 0) return response;
           const headers = new Headers(response.headers);

@@ -8,7 +8,7 @@ import {
   type PendingAuthenticationRecord,
   type SessionUnavailable,
 } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Option } from "effect";
+import { Cause, DateTime, Effect, Option } from "effect";
 import type { SqlClient } from "effect/sql/SqlClient";
 
 import { sqlBatchAssertion } from "./d1-planning";
@@ -160,10 +160,12 @@ export const makeNativePendingAuthenticationServices = Effect.fnUntraced(functio
               condition,
             )
             .pipe(
-              Effect.mapError((error) =>
-                isMappedConstraintConflict(mapping.isConstraintConflict, error)
-                  ? SessionConflict.make({})
-                  : error,
+              Effect.catchCause((cause) =>
+                Effect.failCause<SessionConflict | Cause.Cause.Error<typeof cause>>(
+                  isMappedConstraintConflict(mapping.isConstraintConflict, cause)
+                    ? Cause.map(cause, () => SessionConflict.make({}))
+                    : cause,
+                ),
               ),
             );
           const final = sql`${condition} and exists(select 1 from ${table.name} where ${pending.predicate(table, "Login", record.digest)} and ${state.exact(table, p.version, version)} and ${state.exact(table, p.snapshot, snapshot)})`;
@@ -181,8 +183,12 @@ export const makeNativePendingAuthenticationServices = Effect.fnUntraced(functio
 
                 if (!(rows.length === 1)) return yield* invalidSessionState();
               }).pipe(
-                Effect.mapError((cause) =>
-                  PersistenceMappingError.make({ operation: "decode", cause }),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      PersistenceMappingError.make({ operation: "decode", cause: error }),
+                    ),
+                  ),
                 ),
               ),
             });

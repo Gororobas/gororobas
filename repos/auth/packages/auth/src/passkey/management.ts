@@ -1,4 +1,4 @@
-import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
+import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
@@ -13,7 +13,6 @@ import { assessAuthentication } from "../sessions/assurance";
 import { sessionInvalidationWindow } from "../sessions/invalidation";
 import type { makeSessionModule } from "../sessions/module";
 import {
-  passkeyUnexpected,
   passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
@@ -80,7 +79,7 @@ const subject = Effect.fn("PasskeyManagement.subject")(function* (invocation: Au
   if (invocation._tag !== "Authenticated") return yield* PasskeyRejected.make({});
 
   return invocation.subjectId;
-}, passkeyUnexpected);
+});
 
 export const makePasskeyManagement = <
   const Id extends string,
@@ -171,7 +170,9 @@ export const makePasskeyManagement = <
         ).pipe(
           Effect.flatMap((encoded) => crypto.digest("SHA-256", new TextEncoder().encode(encoded))),
           Effect.map((bytes) => TokenDigest.make(Base64Url.encode(bytes))),
-          Effect.mapError(() => PasskeyUnavailable.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+          ),
         );
 
       const authorize = Effect.fn("PasskeyManagement.authorize")(function* (
@@ -210,7 +211,9 @@ export const makePasskeyManagement = <
           return yield* PasskeyActionRequired.make({});
 
         const assessment = yield* assessAuthentication(evidence, authorization.requirement).pipe(
-          Effect.mapError(() => PasskeyActionRequired.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasskeyActionRequired.make({}))),
+          ),
         );
 
         if (
@@ -224,7 +227,7 @@ export const makePasskeyManagement = <
           return yield* PasskeyActionRequired.make({});
 
         return authorization;
-      }, passkeyUnexpected);
+      });
 
       const eventInput = (
         operation: string,
@@ -322,7 +325,6 @@ export const makePasskeyManagement = <
 
             return yield* runtime.acceptRegistrationIssue(draft, issued);
           },
-          passkeyUnexpected,
           Effect.provideService(PasskeyManagementPersistence, persistence),
         ),
         complete: Effect.fn("PasskeyManagement.complete")(
@@ -374,7 +376,6 @@ export const makePasskeyManagement = <
               credentialCommands: [runtime.clear],
             };
           },
-          passkeyUnexpected,
           Effect.provideService(PasskeyManagementPersistence, persistence),
         ),
         list: Effect.fn("PasskeyManagement.list")(function* (invocation, input) {
@@ -385,7 +386,7 @@ export const makePasskeyManagement = <
             listResult,
             yield* persistence.list({ moduleId, subjectId, ...request }),
           );
-        }, passkeyUnexpected),
+        }),
         rename: Effect.fn("PasskeyManagement.rename")(function* (invocation, input) {
           const subjectId = yield* subject(invocation),
             request = yield* snapshotPasskey(RenameInput, input),
@@ -417,7 +418,7 @@ export const makePasskeyManagement = <
             return yield* PasskeyRejected.make({});
 
           return { credential: result.credential };
-        }, passkeyUnexpected),
+        }),
         remove: Effect.fn("PasskeyManagement.remove")(function* (invocation, input) {
           const subjectId = yield* subject(invocation);
 
@@ -496,7 +497,7 @@ export const makePasskeyManagement = <
             return yield* PasskeyRejected.make({});
 
           return result.result;
-        }, passkeyUnexpected),
+        }),
       });
     }),
   ).pipe(Layer.provide(passkeyRateLimiterLayer));

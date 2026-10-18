@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
 
       - name: Review the pull request
-        uses: yielded-dev/agent/action@9b953c3cd0a94c4e47ebb280501f26bfdecd22a6 # action-v1
+        uses: yielded-dev/agent/action@26694296673517e97835af7b03543e0da1503a21 # action-v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           github-token: ${{ github.token }}

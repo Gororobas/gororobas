@@ -1,13 +1,11 @@
 import type * as OAuth from "@yielded/oauth/OAuth";
 import type * as Oidc from "@yielded/oauth/Oidc";
 import * as Pkce from "@yielded/oauth/Pkce";
-import { Cause, Crypto, DateTime, Effect, Fiber, Redacted, Schema, type Scope } from "effect";
+import { Cause, Crypto, DateTime, Effect, Redacted, Schema, type Scope } from "effect";
 
-import {
-  reportAuthDiagnostic,
-  reportAuthFailure,
-  withoutObservability,
-} from "../../../../internal/diagnostics";
+import { reportAuthDiagnostic, withoutObservability } from "../../../../internal/diagnostics";
+import { makeScopedOperation } from "../../../../internal/scoped-operation";
+import { timeoutOrElseWithCause } from "../../../../internal/timeout";
 import { RequestBindingFlowId } from "../../../../operations/requestBindingModels";
 import * as M from "../../../connectedModels";
 import { OAuthConnectedProtocol } from "../../../OAuthConnectedProtocol";
@@ -43,20 +41,6 @@ import {
 
 const unavailable = () => OAuthUnavailable.make({});
 const rejected = () => OAuthProtocolRejected.make({});
-
-// Final containment for application callbacks and supplied platform services.
-// Expected validation failures are typed; defects never establish non-issuance.
-const safe = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.tapCause((cause) =>
-      Cause.hasDies(cause) ? reportAuthFailure("oauth-protocol", cause) : Effect.void,
-    ),
-    Effect.catchCause((cause): Effect.Effect<never, E | OAuthUnavailable> => {
-      if (Cause.hasInterrupts(cause)) return Effect.interrupt;
-
-      return Cause.hasDies(cause) ? Effect.fail(unavailable()) : Effect.failCause(cause);
-    }),
-  );
 
 const prepareInput = Schema.Struct({
   profile: M.OAuthConnectedProfile,
@@ -166,26 +150,14 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
   const crypto = yield* Crypto.Crypto;
   const clientSecrets = yield* PrivateKeyClientSecret;
   const providerRevocation = yield* ProviderRevocation;
-  const scope = yield* Effect.scope;
-
-  const requestSecret = (authentication: OpenIdConnectAuthentication) =>
-    clientSecrets.mint(authentication).pipe(Effect.mapError(unavailable));
-
   // Provider-owned revocation bypasses the generic OAuth client's transport.
   // Own the entire operation, including provider callbacks, in this lifetime.
-  const run = <A, E>(work: Effect.Effect<A, E>): Effect.Effect<A, E | OAuthUnavailable> =>
-    Effect.suspend(() =>
-      scope.state._tag === "Closed"
-        ? Effect.fail(unavailable())
-        : Effect.acquireUseRelease(Effect.forkIn(work, scope), Fiber.join, Fiber.interrupt).pipe(
-            Effect.catchCause((cause): Effect.Effect<never, E | OAuthUnavailable> =>
-              scope.state._tag === "Closed" ? Effect.fail(unavailable()) : Effect.failCause(cause),
-            ),
-            Effect.flatMap((value) =>
-              scope.state._tag === "Closed" ? Effect.fail(unavailable()) : Effect.succeed(value),
-            ),
-          ),
-    );
+  const run = yield* makeScopedOperation(unavailable);
+
+  const requestSecret = (authentication: OpenIdConnectAuthentication) =>
+    clientSecrets
+      .mint(authentication)
+      .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
   // Setup shares the protocol's containment for supplied platform services.
   const { installed, timeoutSeconds } = yield* installation;
@@ -247,7 +219,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         : metadata.scope === undefined
           ? profile.scopes
           : yield* Schema.decodeEffect(M.OAuthConnectedScopes)(metadata.scope.split(" ")).pipe(
-              Effect.mapError(unavailable),
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
             );
 
     if (new Set(scopes).size !== scopes.length || !sameStrings(scopes, profile.scopes))
@@ -258,14 +230,14 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         ? undefined
         : yield* Schema.decodeEffect(OAuthInstant)(
             Math.floor(start + metadata.expiresIn * 1000),
-          ).pipe(Effect.mapError(unavailable));
+          ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     const refreshExpiresAtMillis =
       !refreshRetained || metadata.refreshExpiresIn === undefined
         ? undefined
         : yield* Schema.decodeEffect(OAuthInstant)(
             Math.floor(start + metadata.refreshExpiresIn * 1000),
-          ).pipe(Effect.mapError(unavailable));
+          ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     const now = DateTime.toEpochMillis(yield* DateTime.now);
 
@@ -307,25 +279,25 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         ? yield* decodeOidcProfile(
             claims ?? Redacted.value(verified.claims),
             provider.profileSchema,
-          ).pipe(Effect.mapError(unavailable))
+          ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))))
         : undefined;
 
     const issued = yield* Schema.decodeUnknownEffect(tokenIssuer)(
       Redacted.value(verified.claims),
-    ).pipe(Effect.mapError(unavailable));
+    ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     const decodedSubject =
       provider.decodeSubject === undefined
         ? verified.subject
         : yield* provider
             .decodeSubject(Redacted.value(verified.claims))
-            .pipe(Effect.mapError(unavailable));
+            .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     const namespaced = yield* subjectInTenant(
       provider.issuer,
       Redacted.value(verified.claims),
       decodedSubject,
-    ).pipe(Effect.mapError(unavailable));
+    ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     if (
       previous !== undefined &&
@@ -359,26 +331,15 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
 
     const result = yield* Effect.suspend(() => decoder(body)).pipe(
       Effect.provideContext(decoderContext),
-      Effect.catchCause((cause) => {
-        const recovered = Cause.hasInterrupts(cause)
-          ? Effect.interrupt
-          : Effect.fail(unavailable());
-
-        if (
-          cause.reasons.length === 1 &&
-          cause.reasons[0]?._tag === "Fail" &&
-          Schema.is(OAuthProtocolRejected)(cause.reasons[0].error)
-        )
-          return recovered;
-
-        return reportAuthFailure("oauth-identity", cause).pipe(Effect.andThen(recovered));
-      }),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
     );
 
     const enriched =
       accessToken === undefined || entry.enrichIdentity === undefined
         ? result
-        : yield* entry.enrichIdentity(result, accessToken).pipe(Effect.mapError(unavailable));
+        : yield* entry
+            .enrichIdentity(result, accessToken)
+            .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     const value = yield* Schema.decodeEffect(identitySchema)(enriched).pipe(
       Effect.mapError(unavailable),
@@ -418,13 +379,13 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
 
     const state = yield* Pkce.random().pipe(
       Effect.provideService(Crypto.Crypto, crypto),
-      Effect.mapError(unavailable),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
     );
 
     const pkce = entry.provider.pkceS256
       ? yield* Pkce.make().pipe(
           Effect.provideService(Crypto.Crypto, crypto),
-          Effect.mapError(unavailable),
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
         )
       : undefined;
 
@@ -432,7 +393,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
       entry.provider.protocol === "oidc"
         ? yield* Pkce.random().pipe(
             Effect.provideService(Crypto.Crypto, crypto),
-            Effect.mapError(unavailable),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
           )
         : undefined;
 
@@ -460,7 +421,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
           ? {}
           : { responseMode: entry.provider.responseMode }),
       })
-      .pipe(Effect.mapError(unavailable));
+      .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
     const responseIssuerMode = persistedResponseIssuerMode(
       entry.provider.responseIssuerMode,
@@ -532,7 +493,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         ...(clientSecret === undefined ? {} : { clientSecret }),
       })
       .pipe(
-        Effect.mapError(unavailable),
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
         Effect.ensuring(
           Effect.sync(() => {
             if (clientSecret !== undefined) Redacted.wipeUnsafe(clientSecret);
@@ -563,14 +524,16 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
               accessToken: grant.accessToken,
               code: request.response.code,
             })
-            .pipe(Effect.mapError(unavailable));
+            .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
           const claims =
             provider.userInfo === "merge"
               ? yield* Effect.gen(function* () {
                   const userInfo = yield* entry.client
                     .fetchProfile(grant.accessToken)
-                    .pipe(Effect.mapError(unavailable));
+                    .pipe(
+                      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+                    );
 
                   const subject = yield* Schema.decodeUnknownEffect(userInfoSubject)(userInfo).pipe(
                     Effect.mapError(unavailable),
@@ -593,7 +556,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
       : provider.identitySource.from === "token"
         ? decodeIdentity(entry, Redacted.value(receipt.body), grant.accessToken)
         : entry.client.fetchProfile(grant.accessToken).pipe(
-            Effect.mapError(unavailable),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
             Effect.flatMap((body) => decodeIdentity(entry, body, grant.accessToken)),
           );
 
@@ -667,7 +630,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         ...(clientSecret === undefined ? {} : { clientSecret }),
       })
       .pipe(
-        Effect.mapError(unavailable),
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
         Effect.ensuring(
           Effect.sync(() => {
             if (clientSecret !== undefined) Redacted.wipeUnsafe(clientSecret);
@@ -704,7 +667,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
               ...(previous.authTime === undefined ? {} : { authTime: previous.authTime }),
             },
           })
-          .pipe(Effect.mapError(unavailable));
+          .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
         yield* oidcIdentity(entry, verified, previous.nonce, {
           identity: request.context.identity,
@@ -723,7 +686,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
     } else {
       const body = yield* entry.client
         .fetchProfile(grant.accessToken)
-        .pipe(Effect.mapError(unavailable));
+        .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
       const identity = yield* decodeIdentity(entry, body);
 
@@ -800,7 +763,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
           ...(clientSecret === undefined ? {} : { clientSecret }),
         })
         .pipe(
-          Effect.mapError(unavailable),
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
           Effect.ensuring(
             Effect.sync(() => {
               if (clientSecret !== undefined) Redacted.wipeUnsafe(clientSecret);
@@ -817,7 +780,7 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         ...(accessSecret === undefined ? {} : { clientSecret: accessSecret }),
       })
       .pipe(
-        Effect.mapError(unavailable),
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
         Effect.ensuring(
           Effect.sync(() => {
             if (accessSecret !== undefined) Redacted.wipeUnsafe(accessSecret);
@@ -829,10 +792,10 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
   });
 
   return OAuthConnectedProtocol.of({
-    prepareAuthorization: (input) => run(safe(prepareAuthorization(input))),
+    prepareAuthorization: (input) => run(prepareAuthorization(input)),
     exchangeGrant: (input) =>
-      run(safe(exchangeGrant(input))).pipe(
-        Effect.timeoutOrElse({
+      run(exchangeGrant(input)).pipe(
+        timeoutOrElseWithCause({
           duration: timeoutSeconds * 1000,
           orElse: () => Effect.fail(unavailable()),
         }),
@@ -844,8 +807,8 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         ),
       ),
     refreshGrant: (input) =>
-      run(safe(refreshGrant(input))).pipe(
-        Effect.timeoutOrElse({
+      run(refreshGrant(input)).pipe(
+        timeoutOrElseWithCause({
           duration: timeoutSeconds * 1000,
           orElse: () => Effect.fail(unavailable()),
         }),
@@ -857,14 +820,14 @@ export const makeConnectedProtocolWithCompatibility = Effect.fn(
         ),
       ),
     revokeGrant: (input) =>
-      run(safe(revokeGrant(input))).pipe(
-        Effect.timeoutOrElse({
+      run(revokeGrant(input)).pipe(
+        timeoutOrElseWithCause({
           duration: timeoutSeconds * 1000,
           orElse: () => Effect.fail(unavailable()),
         }),
       ),
   });
-}, safe);
+});
 
 export const makeOpenIdConnectConnectedProtocol = <R, Setup>(
   installation: Effect.Effect<

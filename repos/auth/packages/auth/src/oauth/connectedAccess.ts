@@ -6,7 +6,6 @@ import {
   DateTime,
   Effect,
   Exit,
-  Fiber,
   Layer,
   Redacted,
   Schema,
@@ -14,7 +13,8 @@ import {
 import { Base64Url } from "effect/encoding";
 
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
-import { reportAuthFailure } from "../internal/diagnostics";
+import { markAuthFailureReported, reportAuthFailure } from "../internal/diagnostics";
+import { timeoutWithCause } from "../internal/timeout";
 import { requireAuthenticated, type AuthInvocation } from "../operations/context";
 import { AuthenticationRequired } from "../operations/errors";
 import { SecurityRevision } from "../sessions/models";
@@ -45,6 +45,21 @@ export const OAuthConnectedAccessFailure = Schema.Union([
 
 export type OAuthConnectedAccessFailure = typeof OAuthConnectedAccessFailure.Type;
 
+/** Application services may run without an operation transport. Observe their
+ * owned defects once while retaining the complete private Cause for callers. */
+export const reportConnectedFailure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.uninterruptibleMask((restore) =>
+    restore(effect).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasDies(cause)
+          ? reportAuthFailure("oauth-connected", cause).pipe(
+              Effect.andThen(Effect.failCause(markAuthFailureReported(cause))),
+            )
+          : Effect.failCause(cause),
+      ),
+    ),
+  );
+
 const invocationSchema = M.OAuthConnectedCaller;
 
 export const connectedCaller = Effect.fn("OAuthConnected.caller")(function* (
@@ -56,33 +71,16 @@ export const connectedCaller = Effect.fn("OAuthConnected.caller")(function* (
 });
 
 export const connectedRead = <A>(receipt: PreparedCommit<A>) =>
-  receipt.read.pipe(Effect.mapError(() => OAuthUnavailable.make({})));
-
-export const connectedSafe = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.tapCause((cause) =>
-      Cause.hasDies(cause) ? reportAuthFailure("oauth-connected", cause) : Effect.void,
-    ),
-    Effect.catchCause((cause): Effect.Effect<never, E | OAuthUnavailable> =>
-      Cause.hasInterrupts(cause)
-        ? Effect.interrupt
-        : Cause.hasDies(cause)
-          ? Effect.fail(OAuthUnavailable.make({}))
-          : Effect.failCause(cause),
+  receipt.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
     ),
   );
 
 /** Cooperative deadline: cancellation waits for scoped driver/resource cleanup,
  * including uninterruptible commit finalizers. It is not a hard wall-clock bound. */
 export const connectedBounded = <A, E, R>(effect: Effect.Effect<A, E, R>, millis: number) =>
-  Effect.gen(function* () {
-    const fiber = yield* effect.pipe(Effect.interruptible, Effect.forkChild);
-
-    return yield* Fiber.join(fiber).pipe(
-      Effect.timeout(millis),
-      Effect.ensuring(Fiber.interrupt(fiber)),
-    );
-  });
+  effect.pipe(Effect.interruptible, timeoutWithCause(millis));
 
 export const connectedSame = <A>(schema: Schema.Codec<A, unknown, never, never>, a: A, b: A) =>
   Schema.encodeSync(Schema.fromJsonString(schema))(a) ===
@@ -288,7 +286,12 @@ export const makeOAuthConnectedAccess = <const Id extends string>(
       const { randomBytes } = yield* Crypto.Crypto;
 
       const random = Effect.fn("OAuthConnectedAccess.random")(function* () {
-        const bytes = yield* randomBytes(32).pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+        const bytes = yield* randomBytes(32).pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+          ),
+        );
+
         const result = OAuthClaimId.make(Base64Url.encode(bytes));
 
         bytes.fill(0);
@@ -406,9 +409,6 @@ export const makeOAuthConnectedAccess = <const Id extends string>(
 
             const exchanged = yield* Effect.exit(restore(connectedBounded(exchange, remaining)));
 
-            if (Exit.isFailure(exchanged) && Cause.hasDies(exchanged.cause))
-              yield* reportAuthFailure("oauth-connected", exchanged.cause);
-
             const outcome: M.OAuthConnectedRefreshOutcome = Exit.isSuccess(exchanged)
               ? exchanged.value
               : { _tag: "ReauthorizationRequired" };
@@ -424,9 +424,27 @@ export const makeOAuthConnectedAccess = <const Id extends string>(
               ),
             );
 
-            if (Exit.isFailure(exchanged) && Cause.hasInterrupts(exchanged.cause))
-              return yield* Effect.interrupt;
-            if (Exit.isFailure(finished)) return yield* OAuthUnavailable.make({});
+            if (Exit.isFailure(exchanged)) {
+              const cause = Cause.map(exchanged.cause, (error) =>
+                error._tag === "OAuthProtocolRejected" ||
+                error._tag === "OAuthConnectedReauthorizationRequired"
+                  ? M.OAuthConnectedReauthorizationRequired.make({})
+                  : OAuthUnavailable.make({}),
+              );
+
+              return yield* Effect.failCause(
+                Exit.isFailure(finished)
+                  ? Cause.combine(
+                      cause,
+                      Cause.map(finished.cause, () => OAuthUnavailable.make({})),
+                    )
+                  : cause,
+              );
+            }
+            if (Exit.isFailure(finished))
+              return yield* Effect.failCause(
+                Cause.map(finished.cause, () => OAuthUnavailable.make({})),
+              );
             const settled = finished.value;
 
             if (settled._tag !== "Refreshed")
@@ -541,7 +559,7 @@ export const makeOAuthConnectedAccess = <const Id extends string>(
             ),
           };
         }).pipe(Effect.ensuring(Effect.sync(() => wipeConnectedMaterial(material))));
-      }, connectedSafe);
+      });
 
       const withAccessToken = <A, E, R>(
         invocation: AuthInvocation,
@@ -549,6 +567,7 @@ export const makeOAuthConnectedAccess = <const Id extends string>(
         use: (token: Redacted.Redacted<string>) => Effect.Effect<A, E, R>,
       ): Effect.Effect<A, E | OAuthConnectedAccessFailure, R> =>
         prepare(invocation, input).pipe(
+          reportConnectedFailure,
           Effect.flatMap(({ token, expiresAtMillis }) =>
             Effect.gen(function* () {
               if (DateTime.toEpochMillis(yield* DateTime.now) >= expiresAtMillis)

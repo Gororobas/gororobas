@@ -1,5 +1,6 @@
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import { PasswordUnavailable } from "@yielded/auth/Password";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { SecurityRevision } from "@yielded/auth/Sessions";
 import { type Context, Crypto, Effect, Schema, Option, Cause } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
@@ -60,9 +61,20 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
         ? executor.run(work)
         : executor
             .operation(
-              work.pipe(
-                Effect.mapError((error) =>
-                  error instanceof PasswordIdentifierTaken ? error : PasswordUnavailable.make({}),
+              reportPersistenceFailure(
+                work,
+                (error) =>
+                  error instanceof PasswordIdentifierTaken || Schema.is(PasswordUnavailable)(error),
+                { markReported: true },
+              ).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error instanceof PasswordIdentifierTaken
+                        ? error
+                        : PasswordUnavailable.make({}),
+                    ),
+                  ),
                 ),
               ),
             )
@@ -76,7 +88,9 @@ export const makeRegistrationAuthority = Effect.fnUntraced(function* <R>(
                   ? executor.run(suppressed, "statement")
                   : Effect.failCause(cause),
               ),
-              Effect.mapError(() => PasswordUnavailable.make({})),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+              ),
             );
 
   return {

@@ -4,7 +4,7 @@ import {
   type AnyProofPersistenceMapping as SharedMapping,
 } from "@yielded/auth-persistence/Adapter";
 import { ProofUnavailable, ProofPersistence } from "@yielded/auth/Proofs";
-import { Effect, Layer } from "effect";
+import { Cause, Effect, Layer } from "effect";
 
 import { nativeClock } from "./native-clock";
 import type { NativeDatabaseHandle } from "./native-database";
@@ -30,7 +30,9 @@ export const makeTargetProofPersistenceServices = Effect.fnUntraced(function* (
   source: AnyProofPersistenceMapping,
   configuration: NativeTargetConfiguration,
 ) {
-  yield* validateDrizzleStorage(source).pipe(Effect.mapError(unavailable));
+  yield* validateDrizzleStorage(source).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
   if (configuration.mode === "batch" && source.d1?.primary !== true) return yield* unavailable();
   const target = yield* nativeTarget(configuration);
 

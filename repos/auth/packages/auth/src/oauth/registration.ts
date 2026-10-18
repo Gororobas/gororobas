@@ -20,11 +20,7 @@ import {
   lifecycleSnapshotEffect,
 } from "../hooks/models";
 import { IdentityConflict } from "../identity/models";
-import {
-  reportAuthDiagnostic,
-  reportAuthFailure,
-  withoutObservability,
-} from "../internal/diagnostics";
+import { reportAuthDiagnostic, withoutObservability } from "../internal/diagnostics";
 import type { AuthOperationResult } from "../operations/credentials";
 import { makeOperation, operationGroup } from "../operations/operation";
 import type { makeRequestBinding } from "../operations/requestBinding";
@@ -68,10 +64,6 @@ const registrationBoundary = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         Schema.is(OAuthUnavailable)(error) ? "unavailable" : "rejected",
       ),
     ),
-    Effect.tapCause((cause) =>
-      Cause.hasDies(cause) ? reportAuthFailure("oauth-registration", cause) : Effect.void,
-    ),
-    Effect.catchDefect(() => Effect.fail(OAuthUnavailable.make({}))),
   );
 
 export interface RegistrationModule<Id extends string, Kind extends string, Codec> {
@@ -189,7 +181,9 @@ export const makeOAuthRegistration = <
     Registrations,
     Effect.gen(function* () {
       const id = yield* Schema.decodeEffect(OAuthModuleId)(moduleId).pipe(
-        Effect.mapError(() => OAuthUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+        ),
       );
 
       const { verify } = yield* binding.RequestBinding;
@@ -233,10 +227,14 @@ export const makeOAuthRegistration = <
             const data = yield* snapshotData(raw.registration);
 
             const verified = yield* verify(input.flowId, input.requestBinding).pipe(
-              Effect.mapError((error) =>
-                error._tag === "RequestBindingInvalid"
-                  ? OAuthRejected.make({})
-                  : OAuthUnavailable.make({}),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error._tag === "RequestBindingInvalid"
+                      ? OAuthRejected.make({})
+                      : OAuthUnavailable.make({}),
+                  ),
+                ),
               ),
             );
 
@@ -293,7 +291,9 @@ export const makeOAuthRegistration = <
               data,
             ).pipe(
               Effect.provide(services),
-              Effect.mapError(() => OAuthRejected.make({})),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => OAuthRejected.make({}))),
+              ),
             );
 
             const requestId = "oauth-registration:" + intent.reference;
@@ -322,7 +322,9 @@ export const makeOAuthRegistration = <
                     yield* before(yield* lifecycleSnapshotEffect(snapshot).pipe(Effect.orDie));
 
                     const bytes = yield* randomBytes(32).pipe(
-                      Effect.mapError(() => OAuthUnavailable.make({})),
+                      Effect.catchCause((cause) =>
+                        Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+                      ),
                     );
 
                     const value = yield* lifecycleEventEffect({
@@ -421,7 +423,11 @@ export const makeOAuthRegistration = <
             journal.prepare(snapshotCleanupResult.sync(value)),
           );
 
-          return yield* receipt.read.pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+          return yield* receipt.read.pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+            ),
+          );
         }, registrationBoundary),
       });
     }),

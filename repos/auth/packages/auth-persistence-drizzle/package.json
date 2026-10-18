@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-persistence-drizzle",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "Drizzle persistence, table mappings, and migration adapters for Yielded Auth.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {

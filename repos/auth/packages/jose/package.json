@@ -1,6 +1,6 @@
 {
   "name": "@yielded/jose",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "Schema-typed Effect JOSE with explicit keys, cryptography, and remote JWKS trust.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {

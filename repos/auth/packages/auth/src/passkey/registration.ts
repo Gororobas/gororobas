@@ -1,4 +1,4 @@
-import { Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
+import { Cause, Context, DateTime, Effect, Layer, Schema, type Types } from "effect";
 
 import type { PreparedCommit } from "../hooks/commit";
 import { LifecycleEventId, lifecycleEvent, lifecycleSnapshot } from "../hooks/models";
@@ -8,7 +8,6 @@ import { operationGroup } from "../operations/operation";
 import { makeRegistration as makePasskeyRegistrationContract } from "../PasskeyContract";
 import { TokenDigest } from "../Schema";
 import {
-  passkeyUnexpected,
   passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
@@ -135,9 +134,10 @@ export const makePasskeyRegistration = <
 
           return decoded;
         },
-        Effect.mapError(() => PasskeyUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+        ),
         Effect.provide(services),
-        passkeyUnexpected,
       );
 
       return Registrations.of({
@@ -184,7 +184,6 @@ export const makePasskeyRegistration = <
 
             return yield* runtime.acceptRegistrationIssue(draft, issued);
           },
-          passkeyUnexpected,
           Effect.provideService(RegistrationAuthority, authority),
         ),
         complete: Effect.fn("PasskeyRegistration.complete")(
@@ -234,7 +233,6 @@ export const makePasskeyRegistration = <
 
             return { value: result, credentialCommands: [runtime.clear] };
           },
-          passkeyUnexpected,
           Effect.provideService(RegistrationAuthority, authority),
         ),
       });

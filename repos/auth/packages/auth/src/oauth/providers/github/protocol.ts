@@ -1,7 +1,8 @@
-import { Effect, Layer, Predicate, Redacted, Result, Schema, Stream, Tracer } from "effect";
+import { Cause, Effect, Layer, Predicate, Redacted, Result, Schema, Stream, Tracer } from "effect";
 import { Base64 } from "effect/encoding";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
+import { timeoutOrElseWithCause } from "../../../internal/timeout";
 import { OAuthConnectedProfile } from "../../permissionProfile";
 import { OAuthGeneration } from "../../schema";
 import { OAuthProtocolRejected, OAuthUnavailable } from "../../signInErrors";
@@ -250,7 +251,7 @@ const revocationLayer = (options: Pick<GitHubOAuthAppConnectedProtocolOptions, "
 
           const body = yield* encodeRevocation({
             access_token: Redacted.value(input.material.accessToken),
-          }).pipe(Effect.mapError(unavailable));
+          }).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))));
 
           const request = HttpClientRequest.delete(url).pipe(
             HttpClientRequest.setHeaders({
@@ -272,7 +273,16 @@ const revocationLayer = (options: Pick<GitHubOAuthAppConnectedProtocolOptions, "
                   ? Effect.fail(unavailable())
                   : Effect.succeed(length + chunk.byteLength),
             ).pipe(
-              Effect.catchReason("HttpClientError", "EmptyBodyError", () => Effect.succeed(0)),
+              Effect.catchCause((cause) =>
+                cause.reasons.every(
+                  (reason) =>
+                    Cause.isFailReason(reason) &&
+                    reason.error._tag === "HttpClientError" &&
+                    reason.error.reason._tag === "EmptyBodyError",
+                )
+                  ? Effect.succeed(0)
+                  : Effect.failCause(cause),
+              ),
             );
           }).pipe(
             Effect.scoped,
@@ -283,9 +293,9 @@ const revocationLayer = (options: Pick<GitHubOAuthAppConnectedProtocolOptions, "
               cache: "no-store",
             }),
             Effect.provideService(Tracer.DisablePropagation, true),
-            Effect.mapError(unavailable),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
             // The connected protocol contains and reports unexpected transport defects.
-            Effect.timeoutOrElse({
+            timeoutOrElseWithCause({
               duration: timeoutSeconds * 1000,
               orElse: () => Effect.fail(unavailable()),
             }),

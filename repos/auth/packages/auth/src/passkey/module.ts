@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, type Types } from "effect";
+import { Cause, Context, Effect, Layer, Schema, type Types } from "effect";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
 import { defaultLayer, hooksLayer } from "../auth/defaults";
@@ -12,7 +12,6 @@ import type { makeSessionModule } from "../sessions/module";
 import {
   makePasskeyActions,
   capturePasskeyPolicy,
-  passkeyUnexpected,
   passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
@@ -143,7 +142,7 @@ export const makePasskeyMethod = <
           if (invocation._tag !== "Guest") return yield* PasskeyRejected.make({});
 
           return yield* runtime.beginAuthentication(input, { _tag: "SignIn" });
-        }, passkeyUnexpected),
+        }),
         complete: Effect.fn("Passkeys.complete")(function* (invocation, input) {
           input = yield* snapshotPasskey(Schema.toType(PasskeyComplete), input);
           yield* passkeyNoAmbient();
@@ -160,12 +159,16 @@ export const makePasskeyMethod = <
 
           const encoded = yield* Schema.encodeEffect(claimsCodec)(resolved).pipe(
             Effect.provide(services),
-            Effect.mapError(() => PasskeyUnavailable.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+            ),
           );
 
           const captured = yield* Schema.decodeEffect(claimsCodec)(encoded).pipe(
             Effect.provide(services),
-            Effect.mapError(() => PasskeyUnavailable.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+            ),
           );
 
           const result = yield* readPasskeyCommit(
@@ -176,14 +179,18 @@ export const makePasskeyMethod = <
                 claims: captured,
               })
               .pipe(
-                Effect.mapError((error) =>
-                  error._tag === "HookDenied"
-                    ? error
-                    : error._tag === "SessionUnavailable"
-                      ? PasskeyUnavailable.make({})
-                      : error._tag === "SessionCapabilityUnsupported"
-                        ? PasskeyMethodUnsupported.make({})
-                        : PasskeyRejected.make({}),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error._tag === "HookDenied"
+                        ? error
+                        : error._tag === "SessionUnavailable"
+                          ? PasskeyUnavailable.make({})
+                          : error._tag === "SessionCapabilityUnsupported"
+                            ? PasskeyMethodUnsupported.make({})
+                            : PasskeyRejected.make({}),
+                    ),
+                  ),
                 ),
               ),
           );
@@ -192,7 +199,7 @@ export const makePasskeyMethod = <
             value: result.value,
             credentialCommands: [...verified.credentialCommands, ...result.credentialCommands],
           };
-        }, passkeyUnexpected),
+        }),
         cleanup: Effect.fn("Passkeys.cleanup")(function* (invocation, limit) {
           yield* passkeyNoAmbient();
           if (invocation._tag !== "System") return yield* PasskeyMethodUnsupported.make({});
@@ -205,7 +212,7 @@ export const makePasskeyMethod = <
               journal.prepare(value),
             ),
           );
-        }, passkeyUnexpected),
+        }),
       });
     }),
   ).pipe(Layer.provide(passkeyRateLimiterLayer));

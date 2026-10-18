@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Path, Schema } from "effect";
+import { Cause, Effect, FileSystem, Path, Schema } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 const drizzleVersion = "1.0.0-rc.4";
@@ -152,12 +152,17 @@ export const configure = Effect.fn("drizzlePatch.configure")(
       : "Removed the temporary Drizzle patch. Commit package.json, the Bun lockfile, and the patch deletion.";
   },
   Effect.scoped,
-  Effect.mapError((cause) =>
-    cause._tag === "PatchError"
-      ? cause
-      : PatchError.make({
-          message: cause.message,
-          cause,
-        }),
+  Effect.catchCause((cause) =>
+    Effect.failCause(
+      Cause.map(cause, (error) =>
+        error._tag === "PatchError"
+          ? error
+          : PatchError.make({
+              message:
+                "Could not configure the Drizzle patch; check project files and permissions.",
+              cause: error,
+            }),
+      ),
+    ),
   ),
 );

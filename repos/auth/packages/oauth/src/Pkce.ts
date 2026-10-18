@@ -1,4 +1,4 @@
-import { Crypto, Effect, Redacted } from "effect";
+import { Cause, Crypto, Effect, Redacted } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { Unavailable } from "./Errors";
@@ -14,7 +14,7 @@ export const random = Effect.fnUntraced(
 
     return Redacted.make(Base64Url.encode(bytes));
   },
-  Effect.mapError(() => Unavailable.make({})),
+  Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
 );
 
 export const challenge = Effect.fnUntraced(
@@ -27,7 +27,7 @@ export const challenge = Effect.fnUntraced(
 
     return Base64Url.encode(digest);
   },
-  Effect.mapError(() => Unavailable.make({})),
+  Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
 );
 
 export const make = Effect.fnUntraced(function* () {

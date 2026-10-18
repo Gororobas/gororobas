@@ -8,13 +8,13 @@ import { reportAuthDiagnostic } from "@yielded/auth/Persistence";
 import { getTableColumns, getTableName, is, Table } from "drizzle-orm";
 import { getTableConfig as getMysqlTableConfig, MySqlTable } from "drizzle-orm/mysql-core";
 import { getTableConfig as getPgTableConfig, PgTable } from "drizzle-orm/pg-core";
-import { Effect, Result } from "effect";
+import { Cause, Effect, Result } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 
 import { NativeDatabase } from "./native-database";
 
-const invalidMapping = () =>
-  PersistenceMappingError.make({ operation: "mapping", cause: "Invalid storage key mapping" });
+const invalidMapping = (cause: unknown) =>
+  PersistenceMappingError.make({ operation: "mapping", cause });
 
 /** Validate at acquisition using the root database supplied by the adapter. */
 export const validateDrizzleStorage = Effect.fnUntraced(
@@ -72,22 +72,9 @@ export const validateDrizzleStorage = Effect.fnUntraced(
     for (const [dialect, requirements] of batches) {
       yield* validateStorageBatch(dialect, requirements).pipe(
         Effect.provideService(SqlClient, client),
-        Effect.mapError(() =>
-          PersistenceMappingError.make({
-            operation: "mapping",
-            cause: "Required SQL storage key is unavailable",
-          }),
-        ),
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, invalidMapping))),
       );
     }
   },
-  Effect.catchDefect(() =>
-    Effect.fail(
-      PersistenceMappingError.make({
-        operation: "mapping",
-        cause: "Cannot inspect SQL storage metadata",
-      }),
-    ),
-  ),
   Effect.tapError(() => reportAuthDiagnostic("persistence-validation", "mapping")),
 );

@@ -15,11 +15,15 @@ import {
   PasskeyUnavailable,
 } from "@yielded/auth/Passkey";
 import { PasswordPersistence, PasswordUnavailable } from "@yielded/auth/Password";
-import { hooksLayer, reportAuthDiagnostic } from "@yielded/auth/Persistence";
+import {
+  hooksLayer,
+  reportAuthDiagnostic,
+  reportPersistenceFailure,
+} from "@yielded/auth/Persistence";
 import { PhoneSignInTargets, PhoneOtpUnavailable } from "@yielded/auth/PhoneOtp";
 import { ProofPersistence, ProofUnavailable } from "@yielded/auth/Proofs";
 import { AuthenticationAuthority, SessionUnavailable } from "@yielded/auth/Sessions";
-import { Context, type Crypto, Effect, Layer, Ref, Schema } from "effect";
+import { Cause, Context, type Crypto, Effect, Layer, Ref, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import {
@@ -268,9 +272,13 @@ export const createPersistence = <T extends object, R, Database extends object =
         requirements: subject.requirements,
         actionRequirements: subject.actionRequirements ?? subject.requirements,
         toSubject: (id) =>
-          Schema.decodeUnknownEffect(subject.idCodec)(id).pipe(Effect.mapError(mappingError)),
+          Schema.decodeUnknownEffect(subject.idCodec)(id).pipe(
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mappingError))),
+          ),
         toNative: (id) =>
-          Schema.encodeEffect(subject.idCodec)(id).pipe(Effect.mapError(mappingError)),
+          Schema.encodeEffect(subject.idCodec)(id).pipe(
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mappingError))),
+          ),
         toSubjectSync: Schema.decodeUnknownSync(subject.idCodec),
         toNativeSync: Schema.encodeSync(subject.idCodec),
       };
@@ -282,7 +290,10 @@ export const createPersistence = <T extends object, R, Database extends object =
         subjects,
         encodeInstant:
           instantCodec === undefined ? (millis: number) => millis : Schema.encodeSync(instantCodec),
-        decodeInstant: (value: unknown) => decodeInstant(value).pipe(Effect.mapError(mappingError)),
+        decodeInstant: (value: unknown) =>
+          decodeInstant(value).pipe(
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mappingError))),
+          ),
         decodeInstantSync,
       });
 
@@ -575,7 +586,9 @@ export const createPersistence = <T extends object, R, Database extends object =
           }
 
           // Observe the cached failure in this invocation, not the captured setup context.
-          const acquired = yield* initialize.pipe(
+          const acquired = yield* reportPersistenceFailure(initialize, () => false, {
+            markReported: true,
+          }).pipe(
             Effect.tapError((error) =>
               reportAuthDiagnostic(
                 "persistence-initialization",
@@ -586,7 +599,7 @@ export const createPersistence = <T extends object, R, Database extends object =
                     : "unavailable",
               ),
             ),
-            Effect.mapError(unavailable),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
           );
 
           if (acquired === undefined) {

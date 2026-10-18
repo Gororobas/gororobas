@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-react-native",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "iOS passkey and browser login adapters for Yielded Auth and React Native.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {

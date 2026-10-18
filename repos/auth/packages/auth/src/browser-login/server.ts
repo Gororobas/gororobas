@@ -1,4 +1,4 @@
-import { DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import { Cause, DateTime, Effect, Layer, Redacted, Schema } from "effect";
 
 import { hasCommitScope } from "../hooks/commit";
 import { credentialSlots } from "../http-operation/models";
@@ -77,7 +77,9 @@ export const make = <
         if (record === undefined) return yield* Invalid.make({});
 
         return yield* Schema.decodeEffect(Record)(record).pipe(
-          Effect.mapError(() => Unavailable.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+          ),
         );
       });
 
@@ -247,7 +249,11 @@ export const make = <
             // Claim before issuance. A crash can sacrifice availability but never licenses a second issuance.
             const claimed = yield* update(input.attemptId, record, {
               status: "Exchanging",
-            }).pipe(Effect.mapError(() => Indeterminate.make({})));
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => Indeterminate.make({}))),
+              ),
+            );
 
             return yield* Effect.gen(function* () {
               const receipt = yield* strategy.prepareHandoff({
@@ -257,7 +263,9 @@ export const make = <
               });
 
               const result = yield* receipt.read.pipe(
-                Effect.mapError(() => Indeterminate.make({})),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(Cause.map(cause, () => Indeterminate.make({}))),
+                ),
               );
 
               yield* update(input.attemptId, claimed, {
@@ -274,7 +282,11 @@ export const make = <
                     .map((slot) => ({ _tag: "Clear" as const, slot })),
                 ],
               };
-            }).pipe(Effect.mapError(() => Indeterminate.make({})));
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => Indeterminate.make({}))),
+              ),
+            );
           }),
         ),
         status.handlerLayer(
@@ -343,14 +355,14 @@ export const make = <
     if (yield* hasCommitScope) return yield* Unavailable.make({});
 
     const limit = yield* Schema.decodeEffect(CleanupLimit)(input).pipe(
-      Effect.mapError(() => Unavailable.make({})),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
     );
 
     const store = yield* Persistence;
     const result = yield* store.cleanup({ namespace: `${sessions.moduleId}/browser-login`, limit });
 
     return yield* Schema.decodeEffect(CleanupResult)(result).pipe(
-      Effect.mapError(() => Unavailable.make({})),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
     );
   });
 

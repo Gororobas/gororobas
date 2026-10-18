@@ -3,12 +3,13 @@ import { pathToFileURL } from "node:url";
 import { NodeHttpClient, NodeServices } from "@effect/platform-node";
 import { BrowserLogin } from "@yielded/auth";
 import { BrowserLogin as ElectronLogin } from "@yielded/auth-electron";
-import { Crypto, Effect, Exit, Fiber, Layer, Path, Schema, Scope } from "effect";
+import { reportAuthFailure } from "@yielded/auth/Persistence";
+import { Cause, Crypto, Effect, Exit, Fiber, Layer, Path, Schema, Scope } from "effect";
 import { Hex } from "effect/encoding";
 import { app, BrowserWindow, dialog, ipcMain, net, protocol } from "electron";
 
 import { makeHost } from "./host";
-import { channel, DesktopError } from "./public";
+import { channel } from "./public";
 
 const uiOrigin = "yielded-ui://app";
 const uiUrl = `${uiOrigin}/index.html`;
@@ -49,10 +50,7 @@ const launch = (config: Effect.Success<typeof startup>) =>
       ),
     );
 
-    yield* Effect.tryPromise({
-      try: () => app.whenReady(),
-      catch: () => DesktopError.make({ reason: "unavailable" }),
-    });
+    yield* Effect.promise(() => app.whenReady());
 
     const services = yield* Layer.buildWithScope(
       Layer.mergeAll(
@@ -137,16 +135,22 @@ const launch = (config: Effect.Success<typeof startup>) =>
               const fiber = yield* invoke(input).pipe(Effect.forkIn(scope));
 
               return yield* Fiber.join(fiber);
-            }),
+            }).pipe(
+              Effect.catchCause((cause) =>
+                reportAuthFailure("desktop", cause).pipe(
+                  Effect.as({
+                    _tag: "Failure" as const,
+                    error: { _tag: "DesktopError" as const, reason: "unavailable" as const },
+                  }),
+                ),
+              ),
+            ),
           );
         }),
       ),
       () => Effect.sync(() => ipcMain.removeHandler(channel)),
     );
-    yield* Effect.tryPromise({
-      try: () => window.loadURL(uiUrl),
-      catch: () => DesktopError.make({ reason: "unavailable" }),
-    });
+    yield* Effect.promise(() => window.loadURL(uiUrl));
   });
 
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -154,29 +158,43 @@ else {
   const stop = (event: Electron.Event) => {
     event.preventDefault();
     app.removeListener("before-quit", stop);
-    void Effect.runPromise(Scope.close(scope, Exit.void)).then(() => app.quit());
+    void Effect.runPromise(
+      Scope.close(scope, Exit.void).pipe(
+        Effect.ensuring(Effect.sync(() => app.quit())),
+        Effect.catchCause((cause) => reportAuthFailure("desktop", cause)),
+      ),
+    );
   };
 
   app.on("before-quit", stop);
   app.on("window-all-closed", () => app.quit());
   const config = Effect.runSyncExit(startup.pipe(Effect.provideService(Scope.Scope, scope)));
 
-  const program = Exit.isSuccess(config)
-    ? launch(config.value)
-    : Effect.fail(DesktopError.make({ reason: "unavailable" }));
+  const program = Effect.gen(function* () {
+    return yield* launch(yield* config);
+  });
 
   void Effect.runPromise(
     program.pipe(
       Effect.provide(NodeServices.layer),
       Effect.provideService(Scope.Scope, scope),
-      Effect.catchCause(() =>
-        Effect.sync(() => {
-          dialog.showErrorBox(
-            "Unable to start",
-            "Secure storage or desktop setup is unavailable. See this example's README for supported launch and keychain requirements.",
-          );
-          app.quit();
-        }),
+      Effect.catchCause((cause) =>
+        (Cause.hasInterruptsOnly(cause)
+          ? Effect.void
+          : reportAuthFailure("desktop", cause).pipe(
+              Effect.andThen(
+                Effect.sync(() => {
+                  dialog.showErrorBox(
+                    "Unable to start",
+                    "Secure storage or desktop setup is unavailable. See this example's README for supported launch and keychain requirements.",
+                  );
+                }),
+              ),
+            )
+        ).pipe(
+          Effect.ensuring(Effect.sync(() => app.quit())),
+          Effect.catchCause((failure) => reportAuthFailure("desktop", failure)),
+        ),
       ),
     ),
   );

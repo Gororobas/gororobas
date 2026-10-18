@@ -1,6 +1,6 @@
 {
   "name": "@yielded/oauth",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "Native Effect OAuth and signed OpenID Connect protocols.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {

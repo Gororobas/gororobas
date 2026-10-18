@@ -3,7 +3,7 @@ import {
   PasskeyRegistrationStarted,
   snapshotPasskey,
 } from "@yielded/auth/Passkey";
-import { reportAuthFailure } from "@yielded/auth/Persistence";
+import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
 import { Cause, DateTime, Effect, Layer, Predicate, Redacted, Schema } from "effect";
 import { Platform } from "react-native";
 import { Passkey, type PasskeyCreateRequest, type PasskeyGetRequest } from "react-native-passkey";
@@ -36,13 +36,25 @@ const timedOut = () => PasskeyReactNativeNotCompleted.make({ reason: "timed-out"
 const redactDefects =
   <Failure>(failure: () => Failure) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    effect.pipe(
-      Effect.catchCause((cause): Effect.Effect<never, E | Failure> =>
-        Cause.hasDies(cause)
-          ? reportAuthFailure("passkey-react-native", cause).pipe(
-              Effect.andThen(Effect.fail(failure())),
-            )
-          : Effect.failCause(cause),
+    Effect.uninterruptibleMask((restore) =>
+      restore(effect).pipe(
+        Effect.catchCause((cause): Effect.Effect<never, E | Failure> =>
+          Cause.hasDies(cause)
+            ? reportAuthFailure("passkey-react-native", cause).pipe(
+                Effect.andThen(
+                  Effect.failCause(
+                    markAuthFailureReported(
+                      Cause.fromReasons<E | Failure>(
+                        cause.reasons.map((reason) =>
+                          Cause.isDieReason(reason) ? Cause.makeFailReason(failure()) : reason,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : Effect.failCause(cause),
+        ),
       ),
     );
 

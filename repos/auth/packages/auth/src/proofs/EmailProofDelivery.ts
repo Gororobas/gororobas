@@ -1,8 +1,9 @@
-import { Context, Effect, Layer, Schema } from "effect";
+import { Cause, Context, Effect, Layer, Schema } from "effect";
 
 import { makeEmailLink } from "../email-delivery/link";
 import { EmailRenderer } from "../email-delivery/render";
 import { EmailDelivery, EmailMessage } from "../email-delivery/service";
+import { reportAuthFailure } from "../internal/diagnostics";
 import type { ProofSecretPolicy } from "./crypto";
 import { type ProofDelivery, proofDeliveryLayer } from "./delivery";
 import { ProofConfigurationError } from "./errors";
@@ -53,10 +54,20 @@ export const emailProofDeliveryLayer = (options: {
             // Provider exceptions can contain cleartext bodies and capability URLs.
             Effect.withTracerEnabled(false),
             Effect.as({ _tag: "Accepted" } as const),
-            Effect.catchTags({
-              EmailNotAccepted: () =>
-                Effect.succeed({ _tag: "DefiniteFailure", reason: "unavailable" } as const),
-              EmailAcceptanceUnknown: () => Effect.succeed({ _tag: "Ambiguous" } as const),
+            Effect.catchCause((cause) => {
+              if (Cause.hasDies(cause) || Cause.hasInterrupts(cause))
+                return Effect.failCause(cause);
+
+              return reportAuthFailure("proof-delivery", cause).pipe(
+                Effect.as(
+                  cause.reasons.every(
+                    (reason) =>
+                      Cause.isFailReason(reason) && reason.error._tag === "EmailNotAccepted",
+                  )
+                    ? ({ _tag: "DefiniteFailure", reason: "unavailable" } as const)
+                    : ({ _tag: "Ambiguous" } as const),
+                ),
+              );
             }),
           );
         }),

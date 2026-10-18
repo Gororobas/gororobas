@@ -1,10 +1,11 @@
 import { Hmac } from "@yielded/crypto/Hmac";
 import { Signature } from "@yielded/crypto/Signature";
 import { Jwk, Jwks, Jwt } from "@yielded/jose";
-import { Clock, Crypto, Effect, Option, Redacted, Schema, Semaphore, Stream } from "effect";
+import { Cause, Clock, Crypto, Effect, Option, Redacted, Schema, Semaphore, Stream } from "effect";
 import { Base64, Base64Url } from "effect/encoding";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
+import { timeoutOrElseWithCause } from "../../internal/timeout";
 import {
   AssertionAlgorithms,
   Client,
@@ -13,6 +14,7 @@ import {
   Persistence,
   RedirectUri,
   Text,
+  maximumClientAssertionLength,
   Unavailable,
   Url,
   reject,
@@ -201,10 +203,20 @@ export const makeClients = Effect.fnUntraced(function* (
     .importKey({
       algorithm: "SHA-256",
       key: Redacted.make(
-        yield* crypto.randomBytes(32).pipe(Effect.mapError(() => ConfigurationError.make({}))),
+        yield* crypto
+          .randomBytes(32)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => ConfigurationError.make({}))),
+            ),
+          ),
       ),
     })
-    .pipe(Effect.mapError(() => ConfigurationError.make({})));
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => ConfigurationError.make({}))),
+      ),
+    );
 
   const secrets = new Map<string, Uint8Array>();
 
@@ -217,7 +229,11 @@ export const makeClients = Effect.fnUntraced(function* (
 
     const tag = yield* key
       .sign(new TextEncoder().encode(Redacted.value(client.clientSecret)))
-      .pipe(Effect.mapError(() => ConfigurationError.make({})));
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => ConfigurationError.make({}))),
+        ),
+      );
 
     secrets.set(client.clientId, tag);
   }
@@ -259,8 +275,14 @@ export const makeClients = Effect.fnUntraced(function* (
     Effect.scoped,
     // Workerd supports manual redirects; the status check above rejects them.
     Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual", credentials: "omit" }),
-    Effect.catchTag("HttpClientError", () => Unavailable.make({})),
-    Effect.timeoutOrElse({ duration: "5 seconds", orElse: () => Unavailable.make({}) }),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) =>
+          error._tag === "HttpClientError" ? Unavailable.make({}) : error,
+        ),
+      ),
+    ),
+    timeoutOrElseWithCause({ duration: "5 seconds", orElse: () => Unavailable.make({}) }),
     permits.withPermitsIfAvailable(1),
     Effect.flatMap(Option.match({ onNone: () => Unavailable.make({}), onSome: Effect.succeed })),
   );
@@ -385,7 +407,17 @@ export const makeClients = Effect.fnUntraced(function* (
     }).pipe(
       Effect.provideService(Jwks.Jwks, resolver),
       Effect.provideService(Signature, signatures),
-      Effect.mapError(() => reject("invalid_client")),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            error._tag === "CryptoUnavailable" ||
+            error._tag === "CryptoUnsupportedAlgorithm" ||
+            error._tag === "JoseJwksUnavailable"
+              ? Unavailable.make({})
+              : reject("invalid_client"),
+          ),
+        ),
+      ),
     );
 
     const now = (yield* Clock.currentTimeMillis) / 1000;
@@ -401,7 +433,9 @@ export const makeClients = Effect.fnUntraced(function* (
       .digest("SHA-256", new TextEncoder().encode(JSON.stringify([client.clientId, claims.jti])))
       .pipe(
         Effect.map(Base64Url.encode),
-        Effect.mapError(() => Unavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+        ),
       );
 
     if (
@@ -427,7 +461,7 @@ export const makeClients = Effect.fnUntraced(function* (
       if (secret !== undefined || header !== null) return yield* reject();
       if (
         assertion === undefined ||
-        assertion.length > 8192 ||
+        assertion.length > maximumClientAssertionLength ||
         body.client_assertion_type !== "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
       )
         return yield* reject("invalid_client");
@@ -489,7 +523,11 @@ export const makeClients = Effect.fnUntraced(function* (
         expected === undefined ||
         !(yield* key
           .verify(new TextEncoder().encode(secret), expected)
-          .pipe(Effect.mapError(() => Unavailable.make({}))))
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+            ),
+          ))
       )
         return yield* reject("invalid_client");
     }

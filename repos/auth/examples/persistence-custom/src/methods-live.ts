@@ -1,5 +1,6 @@
 import { Hooks, Identity, Password, Schema as AuthSchema, Sessions } from "@yielded/auth";
-import { Crypto, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { reportAuthFailure } from "@yielded/auth/Persistence";
+import { Cause, Crypto, DateTime, Effect, Layer, Option, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { AppAuth } from "./auth";
@@ -88,10 +89,33 @@ export const AccountMethodsLive = Layer.effect(
             });
 
           return candidate;
-        }).pipe(Effect.catchTag("PasswordRejected", () => Effect.succeed(undefined)));
+        }).pipe(
+          Effect.catchCause((cause) =>
+            cause.reasons.every(
+              (reason) =>
+                Cause.isFailReason(reason) && Schema.is(Password.PasswordRejected)(reason.error),
+            )
+              ? Effect.succeed(undefined)
+              : Effect.failCause(cause),
+          ),
+        );
 
         if (admission === undefined) {
-          yield* hasher.dummy(input.password).pipe(Effect.ignore);
+          yield* Effect.uninterruptibleMask((restore) =>
+            restore(hasher.dummy(input.password)).pipe(
+              Effect.catchCause((cause) =>
+                reportAuthFailure("password-hashing", cause).pipe(
+                  Effect.andThen(
+                    Cause.hasInterrupts(cause)
+                      ? Effect.failCause(
+                          Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+                        )
+                      : Effect.void,
+                  ),
+                ),
+              ),
+            ),
+          );
 
           return yield* Password.PasswordRejected.make({});
         }
@@ -193,19 +217,17 @@ export const AccountMethodsLive = Layer.effect(
           };
 
           return { evidence, credential: captured, requirement };
-        }).pipe(Effect.result);
-
-        if (checked._tag === "Failure") return yield* checked.failure;
+        });
 
         const values = yield* claims.resolve({
-          subjectId: checked.success.credential.revision.subjectId,
-          credential: checked.success.credential,
+          subjectId: checked.credential.revision.subjectId,
+          credential: checked.credential,
         });
 
         return yield* completion
           .prepare({
-            evidence: checked.success.evidence,
-            requirement: checked.success.requirement,
+            evidence: checked.evidence,
+            requirement: checked.requirement,
             claims: values,
           })
           .pipe(

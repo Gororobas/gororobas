@@ -1,6 +1,7 @@
 import type { Operations } from "@yielded/auth";
 import { BrowserLogin, OperationHttpClient } from "@yielded/auth";
-import { Effect, Fiber, Schema, Semaphore } from "effect";
+import { reportAuthFailure } from "@yielded/auth/Persistence";
+import { Cause, Effect, Fiber, Schema, Semaphore } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 
 import { handoff, nativeSession } from "../../shared/account/browser-login-contract";
@@ -49,7 +50,15 @@ export const makeHost = Effect.fnUntraced(function* (hostedUrl: string) {
 
     return yield* transport
       .call(nativeSession.routes.session, {})
-      .pipe(Effect.catchTag("SessionInvalid", () => Effect.succeed(null)));
+      .pipe(
+        Effect.catchCause((cause) =>
+          cause.reasons.every(
+            (reason) => Cause.isFailReason(reason) && reason.error._tag === "SessionInvalid",
+          )
+            ? Effect.succeed(null)
+            : Effect.failCause(cause),
+        ),
+      );
   });
 
   const snapshot = Effect.gen(function* (): Effect.fn.Return<
@@ -149,20 +158,39 @@ export const makeHost = Effect.fnUntraced(function* (hostedUrl: string) {
       Effect.mapError(() => DesktopError.make({ reason: "request" })),
       Effect.flatMap(dispatch),
       Effect.map((value) => ({ _tag: "Success" as const, value })),
-      Effect.catchTag("BrowserLoginPlatformError", (error) =>
-        Effect.fail(DesktopError.make({ reason: error.reason })),
-      ),
-      Effect.catchTag("BrowserLoginIndeterminate", () =>
-        Effect.fail(DesktopError.make({ reason: "indeterminate" })),
-      ),
-      Effect.catchTag("DesktopError", (error) =>
-        Effect.succeed({ _tag: "Failure" as const, error }),
-      ),
       // No error causes, transport details, URLs or credentials cross IPC.
-      Effect.catchCause(() =>
-        Effect.succeed({
-          _tag: "Failure" as const,
-          error: DesktopError.make({ reason: "unavailable" }),
+      Effect.catchCause((cause) =>
+        Effect.gen(function* () {
+          let error = DesktopError.make({ reason: "unavailable" });
+
+          const unexpected = cause.reasons.filter((reason) => {
+            if (Cause.isInterruptReason(reason)) return false;
+            if (Cause.isDieReason(reason)) return true;
+            if (Schema.is(BrowserLogin.PlatformError)(reason.error)) {
+              error = DesktopError.make({ reason: reason.error.reason });
+
+              return !["busy", "cancelled", "callback"].includes(reason.error.reason);
+            }
+            if (Schema.is(BrowserLogin.Indeterminate)(reason.error)) {
+              error = DesktopError.make({ reason: "indeterminate" });
+
+              return false;
+            }
+            if (Schema.is(DesktopError)(reason.error)) {
+              error = reason.error;
+
+              return reason.error.reason === "unavailable";
+            }
+
+            return true;
+          });
+
+          if (unexpected.length > 0) {
+            yield* reportAuthFailure("desktop", Cause.fromReasons(unexpected));
+            error = DesktopError.make({ reason: "unavailable" });
+          }
+
+          return { _tag: "Failure" as const, error };
         }),
       ),
     );

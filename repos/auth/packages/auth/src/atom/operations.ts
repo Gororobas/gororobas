@@ -8,6 +8,7 @@ import type { AnyRoute, RouteInput, RouteSuccess } from "../http-operation/contr
 import { OperationHttpConfigurationError, OperationHttpError } from "../http-operation/errors";
 import { AuthAtomLifetime } from "./AuthAtomLifetime";
 import { AuthAtomWorkflow } from "./AuthAtomWorkflow";
+import { reportAtomDefects } from "./failures";
 
 type DecodeServices<Route extends AnyRoute> =
   | Route["operation"]["rpc"]["successSchema"]["DecodingServices"]
@@ -24,7 +25,7 @@ const inLifetime = Effect.fn("AuthAtom.inLifetime")(function* <A, E, R>(
     return yield* OperationHttpError.make({ reason: "stale-response" });
 
   return yield* effect;
-});
+}, reportAtomDefects);
 
 export type ReactivityKeys =
   | ReadonlyArray<unknown>

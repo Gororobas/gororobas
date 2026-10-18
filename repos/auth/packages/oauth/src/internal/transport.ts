@@ -1,4 +1,4 @@
-import { Effect, Redacted, Schema, Stream, Tracer } from "effect";
+import { Cause, Effect, Exit, Redacted, Schema, Stream, Tracer } from "effect";
 import { FetchHttpClient, HttpClient, type HttpClientRequest } from "effect/http";
 
 import { Unavailable } from "../Errors";
@@ -39,7 +39,19 @@ export const request = Effect.fnUntraced(
 
         return Effect.succeed(length + chunk.byteLength);
       },
-    ).pipe(Effect.catchReason("HttpClientError", "EmptyBodyError", () => Effect.succeed(0)));
+    ).pipe(
+      Effect.catchCauseIf(
+        (cause) =>
+          cause.reasons.length > 0 &&
+          cause.reasons.every(
+            (reason) =>
+              Cause.isFailReason(reason) &&
+              reason.error._tag === "HttpClientError" &&
+              reason.error.reason._tag === "EmptyBodyError",
+          ),
+        () => Effect.succeed(0),
+      ),
+    );
 
     return {
       status: response.status,
@@ -48,18 +60,40 @@ export const request = Effect.fnUntraced(
     };
   },
   (effect, _client, _request, options) =>
-    effect.pipe(
-      Effect.scoped,
-      Effect.provideService(FetchHttpClient.RequestInit, {
-        // Workers supports manual redirects; the status check above rejects them.
-        redirect: "manual",
-        credentials: "omit",
-        cache: "no-store",
-      }),
-      Effect.provideService(Tracer.DisablePropagation, true),
-      Effect.mapError(() => Unavailable.make({})),
-      Effect.timeoutOrElse({ duration: options.timeoutMs, orElse: () => Unavailable.make({}) }),
-    ),
+    Effect.suspend(() => {
+      let failure: Cause.Cause<Unavailable> | undefined;
+
+      return effect.pipe(
+        Effect.scoped,
+        Effect.provideService(FetchHttpClient.RequestInit, {
+          // Workers supports manual redirects; the status check above rejects them.
+          redirect: "manual",
+          credentials: "omit",
+          cache: "no-store",
+        }),
+        Effect.provideService(Tracer.DisablePropagation, true),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+        ),
+        // timeoutOrElse joins its loser but discards that Exit. Retain cleanup
+        // failures before the race, including when the caller cancels the race.
+        Effect.onExit((exit) =>
+          Effect.sync(() => {
+            if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)) failure = exit.cause;
+          }),
+        ),
+        Effect.timeoutOrElse({
+          duration: options.timeoutMs,
+          orElse: () =>
+            Effect.failCause(
+              failure === undefined
+                ? Cause.fail(Unavailable.make({}))
+                : Cause.combine(Cause.fail(Unavailable.make({})), failure),
+            ),
+        }),
+        Effect.onInterrupt(() => (failure === undefined ? Effect.void : Effect.failCause(failure))),
+      );
+    }),
 );
 
 export const isJson = (contentType: string | null) =>

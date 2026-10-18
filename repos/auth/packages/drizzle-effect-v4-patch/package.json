@@ -1,6 +1,6 @@
 {
   "name": "@yielded/drizzle-effect-v4-patch",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "Temporary Bun patch CLI for Drizzle's Effect integration.",
   "homepage": "https://yielded.dev/auth/",
   "bugs": {

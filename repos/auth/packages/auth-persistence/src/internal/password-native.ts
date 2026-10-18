@@ -5,7 +5,7 @@ import * as P from "@yielded/auth/Password";
 import { ProofRedemptionInput } from "@yielded/auth/Proofs";
 import type { SubjectId } from "@yielded/auth/Schema";
 import { SecurityRevision, type AuthenticationRequirement } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Option, Redacted, Schema, Crypto } from "effect";
+import { Cause, DateTime, Effect, Option, Redacted, Schema, Crypto } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import { fragment, parameter, type Fragment } from "effect/sql/Statement";
 
@@ -568,8 +568,12 @@ export const makeNativePasswordServices = Effect.fnUntraced(function* (
                   return yield* invalidState();
               }
             }).pipe(
-              Effect.mapError((cause) =>
-                PersistenceMappingError.make({ operation: "decode", cause }),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    PersistenceMappingError.make({ operation: "decode", cause: error }),
+                  ),
+                ),
               ),
             ),
           });

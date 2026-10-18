@@ -1,6 +1,10 @@
 import { Cause, Context, Effect, Layer } from "effect";
 
-import { reportAuthFailure } from "../internal/diagnostics";
+import {
+  reportAuthFailure,
+  ReportedOperationDefect,
+  withoutObservability,
+} from "../internal/diagnostics";
 import {
   HookConfigurationError,
   HookDeliveryFailed,
@@ -24,6 +28,19 @@ export type HookContributionId<Tag extends string> = Tag extends string
     }
   : never;
 
+/** Same finite public error; its original Cause was reported at contribution exit. */
+class ReportedHookDeliveryFailed extends HookDeliveryFailed.extend<ReportedHookDeliveryFailed>(
+  "ReportedHookDeliveryFailed",
+)({}) {}
+
+const isReportedHookFailure = (error: unknown): boolean => {
+  try {
+    return error instanceof ReportedHookDeliveryFailed;
+  } catch {
+    return false;
+  }
+};
+
 /** Each contribution owns a distinct service key; only composeHooks creates LifecycleHooks. */
 export const hookContribution = <const Tag extends string>(id: Tag) => {
   const service = Context.Service<HookContributionId<Tag>, HookHandlers>(`effect-auth/hooks/${id}`);
@@ -34,7 +51,7 @@ export const hookContribution = <const Tag extends string>(id: Tag) => {
     return Layer.effect(
       service,
       Effect.gen(function* () {
-        const services = yield* Effect.context<R>();
+        const services = (yield* Effect.context<R>()).pipe(withoutObservability);
 
         return {
           ...(before === undefined
@@ -47,9 +64,27 @@ export const hookContribution = <const Tag extends string>(id: Tag) => {
             ? {}
             : {
                 after: (event: LifecycleEvent) =>
-                  after(event).pipe(
+                  Effect.suspend(() => after(event)).pipe(
                     Effect.catchCause((cause) =>
-                      Effect.failCause(Cause.map(cause, () => HookDeliveryFailed.make({}))),
+                      reportAuthFailure("after-hook", cause).pipe(
+                        Effect.andThen(
+                          Effect.failCause(
+                            Cause.fromReasons<HookDeliveryFailed>(
+                              cause.reasons.map((reason) =>
+                                Cause.isFailReason(reason)
+                                  ? Cause.makeFailReason(
+                                      ReportedHookDeliveryFailed.make({}),
+                                    ).annotate(Cause.reasonAnnotations(reason))
+                                  : Cause.isDieReason(reason)
+                                    ? Cause.makeDieReason(
+                                        ReportedOperationDefect.make({}),
+                                      ).annotate(Cause.reasonAnnotations(reason))
+                                    : reason,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                     Effect.provide(services),
                   ),
@@ -73,7 +108,7 @@ export class LifecycleHooks extends Context.Service<
   LifecycleHooks,
   {
     readonly before: (snapshot: LifecycleSnapshot) => Effect.Effect<void, HookDenied>;
-    /** Runs in declaration order, collecting failures and continuing with later hooks. */
+    /** Collects delivery failures in declaration order; interruption stops delivery. */
     readonly after: (event: LifecycleEvent) => Effect.Effect<ReadonlyArray<HookDelivery>>;
   }
 >()("effect-auth/LifecycleHooks") {
@@ -122,7 +157,31 @@ export const composeHooks = <const Tag extends string>(
             if (handler.after === undefined) continue;
             const exit = yield* Effect.exit(Effect.suspend(() => handler.after!(event)));
 
-            if (exit._tag === "Failure") yield* reportAuthFailure("after-hook", exit.cause);
+            if (exit._tag === "Failure") {
+              yield* reportAuthFailure(
+                "after-hook",
+                Cause.fromReasons(
+                  exit.cause.reasons.filter(
+                    (reason) =>
+                      !(Cause.isFailReason(reason) && isReportedHookFailure(reason.error)),
+                  ),
+                ),
+              );
+              if (Cause.hasInterrupts(exit.cause))
+                return yield* Effect.failCause(
+                  Cause.fromReasons<never>(
+                    exit.cause.reasons
+                      .filter((reason) => !Cause.isFailReason(reason))
+                      .map((reason) =>
+                        Cause.isDieReason(reason)
+                          ? Cause.makeDieReason(ReportedOperationDefect.make({})).annotate(
+                              Cause.reasonAnnotations(reason),
+                            )
+                          : reason,
+                      ),
+                  ),
+                );
+            }
 
             reports.push({
               eventId: event.id,

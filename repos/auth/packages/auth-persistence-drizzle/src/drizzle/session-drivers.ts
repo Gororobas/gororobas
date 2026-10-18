@@ -23,7 +23,7 @@ import {
   type SessionStepUpPersistence,
 } from "@yielded/auth/Sessions";
 import type { Table } from "drizzle-orm";
-import { Effect, type Context } from "effect";
+import { Cause, Effect, type Context } from "effect";
 
 import type { NativeDriverDatabase, NativeDriverTransaction } from "./driver-types";
 import { nativeClock, type MappedClock } from "./native-clock";
@@ -59,7 +59,9 @@ export const makeSessionTarget = <DatabaseId, D extends NativeDriverDatabase>(
 ) => {
   const authenticationAuthority = <Claims>(mapping: NativeAuthenticationAuthorityMapping<Claims>) =>
     Effect.gen(function* () {
-      yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+      yield* validateDrizzleStorage(mapping).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+      );
       if (
         configuration.mode === "batch" &&
         (mapping.d1?.primary !== true || mapping.subject.requirementColumns === undefined)
@@ -172,7 +174,9 @@ export const makeSessionTarget = <DatabaseId, D extends NativeDriverDatabase>(
 
   const pendingAuthentication = <Claims>(mapping: NativePendingAuthenticationMapping<Claims>) =>
     Effect.gen(function* () {
-      yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+      yield* validateDrizzleStorage(mapping).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+      );
       if (
         configuration.mode === "batch" &&
         (mapping.d1?.primary !== true || mapping.subject.requirementColumns === undefined)
@@ -281,7 +285,9 @@ export const makeSessionTarget = <DatabaseId, D extends NativeDriverDatabase>(
 
   const statefulSessionPersistence = <Claims>(mapping: NativeStatefulSessionMapping<Claims>) =>
     Effect.gen(function* () {
-      yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+      yield* validateDrizzleStorage(mapping).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+      );
       if (
         configuration.mode === "batch" &&
         (mapping.d1?.primary !== true || mapping.subject.requirementColumns === undefined)
@@ -411,7 +417,9 @@ export const makeSessionTarget = <DatabaseId, D extends NativeDriverDatabase>(
 
   const signedSessionValidity = (mapping: NativeSignedSessionValidityMapping) =>
     Effect.gen(function* () {
-      yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+      yield* validateDrizzleStorage(mapping).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+      );
       if (configuration.mode === "batch" && mapping.d1?.primary !== true)
         return yield* reportAuthDiagnostic("persistence-validation", "configuration").pipe(
           Effect.andThen(unavailable()),
@@ -514,7 +522,9 @@ export const makeSessionTarget = <DatabaseId, D extends NativeDriverDatabase>(
 
   const sessionStepUpPersistence = <Claims>(mapping: NativeSessionStepUpMapping<Claims>) =>
     Effect.gen(function* () {
-      yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+      yield* validateDrizzleStorage(mapping).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+      );
       if (
         configuration.mode === "batch" &&
         (mapping.d1?.primary !== true || mapping.subject.requirementColumns === undefined)

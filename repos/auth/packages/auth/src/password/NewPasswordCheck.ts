@@ -1,6 +1,6 @@
 import { Cause, Context, Effect, Layer, Redacted, Schema } from "effect";
 
-import { reportAuthFailure } from "../internal/diagnostics";
+import { timeoutWithCause } from "../internal/timeout";
 import {
   CompromisedPasswords,
   PasswordScreening,
@@ -71,18 +71,10 @@ export class NewPasswordCheck extends Context.Service<
             const normalized = Redacted.make(value);
 
             const result = yield* Effect.suspend(() => screening(normalized, checkedContext)).pipe(
-              Effect.timeout(policy.screeningTimeoutMillis ?? 10_000),
+              timeoutWithCause(policy.screeningTimeoutMillis ?? 10_000),
               Effect.flatMap(Schema.decodeEffect(PasswordScreening)),
               Effect.catchCause((cause) =>
-                reportAuthFailure("password-screening", cause).pipe(
-                  Effect.andThen(
-                    Cause.hasInterrupts(cause)
-                      ? Effect.failCause(
-                          Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
-                        )
-                      : Effect.fail(PasswordCheckUnavailable.make({})),
-                  ),
-                ),
+                Effect.failCause(Cause.map(cause, () => PasswordCheckUnavailable.make({}))),
               ),
             );
 

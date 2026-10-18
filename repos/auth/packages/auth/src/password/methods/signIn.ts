@@ -1,4 +1,4 @@
-import { Context, Crypto, Effect, Layer, Schema, type Types } from "effect";
+import { Cause, Context, Crypto, Effect, Layer, Schema, type Types } from "effect";
 
 import { makeAuthStrategy } from "../../auth/AuthStrategy";
 import { HookDenied } from "../../hooks/models";
@@ -111,7 +111,12 @@ export const makePasswordSignIn = <
               requirement: verified.requirement,
               claims,
             })
-            .pipe(Effect.flatMap(readPasswordCommit), Effect.mapError(passwordCompletionFailure));
+            .pipe(
+              Effect.flatMap(readPasswordCommit),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, passwordCompletionFailure)),
+              ),
+            );
         }),
       );
     }),
@@ -132,7 +137,11 @@ export const makePasswordSignIn = <
         ) {
           const flowId = yield* (yield* Crypto.Crypto)
             .randomUUIDv4()
-            .pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+              ),
+            );
 
           return yield* SignIn.invoke(invocation, { ...request, flowId });
         }),

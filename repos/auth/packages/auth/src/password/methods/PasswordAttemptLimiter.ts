@@ -3,7 +3,6 @@ import * as RateLimiter from "effect/persistence/RateLimiter";
 
 import { defaultLayer } from "../../auth/defaults";
 import { boundedMemoryRateLimiter, localRateLimiter } from "../../auth/rateLimiter";
-import { reportAuthFailure } from "../../internal/diagnostics";
 import { PasswordRejected, PasswordUnavailable } from "./errors";
 import { PasswordAttemptPolicy } from "./policy";
 
@@ -60,22 +59,14 @@ export class PasswordAttemptLimiter extends Context.Service<
               onExceeded: "fail",
             })
             .pipe(
-              Effect.tapCause((cause) =>
-                reportAuthFailure(
-                  "password-limiting",
-                  Cause.fromReasons(
-                    cause.reasons.filter(
-                      (reason) =>
-                        Cause.isFailReason(reason) &&
-                        reason.error.reason._tag === "RateLimitStoreError",
-                    ),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error.reason._tag === "RateLimitExceeded"
+                      ? PasswordRejected.make({})
+                      : PasswordUnavailable.make({}),
                   ),
                 ),
-              ),
-              Effect.mapError((error) =>
-                error.reason._tag === "RateLimitExceeded"
-                  ? PasswordRejected.make({})
-                  : PasswordUnavailable.make({}),
               ),
             );
         }),
