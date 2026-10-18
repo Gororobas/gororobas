@@ -1,7 +1,11 @@
-import { Context, DateTime, Effect, Layer, Option, Redacted, Schema, Scope } from "effect";
+import { Cause, Context, DateTime, Effect, Layer, Option, Redacted, Schema, Scope } from "effect";
 
 import type { HookDenied } from "../hooks/models";
-import { reportAuthDiagnostic, withoutObservability } from "../internal/diagnostics";
+import {
+  reportAuthDiagnostic,
+  reportAuthFailure,
+  withoutObservability,
+} from "../internal/diagnostics";
 import { AuthenticationClock } from "../operations/clock";
 import { guest } from "../operations/context";
 import {
@@ -17,6 +21,7 @@ import {
 } from "../sessions/cookieCache";
 import {
   SessionInvalid,
+  type SessionUnavailable,
   type SessionError,
   type SessionSignOutUnavailable,
 } from "../sessions/errors";
@@ -26,6 +31,24 @@ import type { makeSessionModule } from "../sessions/module";
 import { AuthRequest } from "./AuthRequest";
 
 export type SessionApiError = SessionError | HookDenied | OperationBoundaryError;
+
+const cacheFallback =
+  <A>(fallback: A) =>
+  <B, R>(effect: Effect.Effect<B, SessionInvalid | SessionUnavailable, R>) =>
+    effect.pipe(
+      Effect.catchCause((cause) => {
+        if (Cause.hasDies(cause) || Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+
+        return reportAuthFailure(
+          "session-cache",
+          Cause.fromReasons(
+            cause.reasons.filter(
+              (reason) => Cause.isFailReason(reason) && reason.error._tag === "SessionUnavailable",
+            ),
+          ),
+        ).pipe(Effect.as(fallback));
+      }),
+    );
 
 /** Session actions share implementations across HTTP, native and local callers. */
 export type SessionApi<Session, R = never> = SessionCacheOwner & {
@@ -100,7 +123,13 @@ export const makeSessionApi = <
         credential: Redacted.value(credential),
       }).pipe(
         Effect.provide(services),
-        Effect.catchTag("InvalidOperationInput", () => SessionInvalid.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              error._tag === "InvalidOperationInput" ? SessionInvalid.make({}) : error,
+            ),
+          ),
+        ),
         Effect.tapError((error) =>
           reportAuthDiagnostic(
             "session-verification",
@@ -129,7 +158,13 @@ export const makeSessionApi = <
           ? yield* sessions.capturedSession(credential).pipe(
               Effect.provide(services),
               Effect.provideService(sessions.SessionStrategy, strategy),
-              Effect.catchTag("SessionInvalid", () => Effect.succeed(Option.none())),
+              Effect.catchCause((cause) =>
+                cause.reasons.every(
+                  (reason) => Cause.isFailReason(reason) && reason.error._tag === "SessionInvalid",
+                )
+                  ? Effect.succeedNone
+                  : Effect.failCause(cause),
+              ),
             )
           : Option.none();
 
@@ -142,9 +177,7 @@ export const makeSessionApi = <
       ) {
         const snapshot = yield* cache.value
           .read(credential, cached, generation)
-          .pipe(
-            Effect.catchTag(["SessionInvalid", "SessionUnavailable"], () => Effect.succeed(null)),
-          );
+          .pipe(cacheFallback(null));
 
         if (snapshot !== null) return snapshot;
       }
@@ -158,18 +191,20 @@ export const makeSessionApi = <
         : credential === undefined
           ? null
           : yield* verifySession(credential).pipe(
-              Effect.catchTag("SessionInvalid", () => Effect.succeed(null)),
+              Effect.catchCause((cause) =>
+                cause.reasons.every(
+                  (reason) => Cause.isFailReason(reason) && reason.error._tag === "SessionInvalid",
+                )
+                  ? Effect.succeed(null)
+                  : Effect.failCause(cause),
+              ),
             );
 
       if (cacheEnabled && request.sessionCacheCommandSink !== undefined) {
         if (cacheable && session !== null && credential !== undefined) {
           const command = yield* cache.value
             .write(credential, session, checkedAt, generation)
-            .pipe(
-              Effect.catchTag("SessionUnavailable", () =>
-                Effect.succeed({ _tag: "Clear" as const, slot: "session-cache" as const }),
-              ),
-            );
+            .pipe(cacheFallback({ _tag: "Clear" as const, slot: "session-cache" as const }));
 
           yield* request.sessionCacheCommandSink(command);
         } else {
@@ -182,9 +217,7 @@ export const makeSessionApi = <
           ) {
             // Bootstrap only the binding. A delayed read may replace a generation,
             // but must never deliver a matching pre-mutation snapshot with it.
-            yield* request.initializeSessionCache.pipe(
-              Effect.catchTag("SessionUnavailable", () => Effect.void),
-            );
+            yield* request.initializeSessionCache.pipe(cacheFallback(undefined));
           }
         }
       }

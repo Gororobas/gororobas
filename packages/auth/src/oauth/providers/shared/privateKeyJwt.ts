@@ -4,11 +4,11 @@ import { Jwk, Jwt } from "@yielded/jose";
 import type { PrivateKey } from "@yielded/jose/Jwk";
 import { Unavailable } from "@yielded/oauth/Errors";
 import {
+  Cause,
   Clock,
   Context,
   Effect,
   Exit,
-  Fiber,
   Layer,
   Redacted,
   Result,
@@ -18,6 +18,7 @@ import {
 } from "effect";
 import { Base64 } from "effect/encoding";
 
+import { makeScopedOperation } from "../../../internal/scoped-operation";
 import {
   isPrivateKeyAuthentication,
   type OpenIdConnectAuthentication,
@@ -50,7 +51,9 @@ export const signPrivateKeyJwt = Effect.fn("OpenIdConnect.signPrivateKeyJwt")(fu
     },
     key,
     { alg: "ES256", kid: policy.keyId },
-  ).pipe(Effect.mapError(() => Unavailable.make({})));
+  ).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
+  );
 });
 
 /** Import detached PKCS8 bytes. The acquiring Scope owns the returned key. */
@@ -62,7 +65,7 @@ const importPrivateKeyJwt = Effect.fnUntraced(function* (policy: PrivateKeyJwt) 
   return yield* Jwk.importPkcs8(Redacted.make(der), policy.algorithm, {
     kid: policy.keyId,
   }).pipe(
-    Effect.mapError(() => Unavailable.make({})),
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
     Effect.ensuring(Effect.sync(() => der.fill(0))),
   );
 });
@@ -106,6 +109,10 @@ export class PrivateKeyClientSecret extends Context.Service<
         ),
     );
 
+    const run = yield* makeScopedOperation(() => Unavailable.make({})).pipe(
+      Effect.provideService(Scope.Scope, scope),
+    );
+
     const imports = yield* Semaphore.make(1);
 
     const mint = Effect.fnUntraced(
@@ -140,28 +147,7 @@ export class PrivateKeyClientSecret extends Context.Service<
       mint: (authentication) =>
         !isPrivateKeyAuthentication(authentication)
           ? Effect.succeed(undefined)
-          : Effect.acquireUseRelease(
-              Effect.suspend(() =>
-                scope.state._tag === "Closed"
-                  ? Effect.fail(Unavailable.make({}))
-                  : Effect.forkIn(mint(authentication.privateKeyJwt), scope, {
-                      uninterruptible: false,
-                    }),
-              ),
-              Fiber.join,
-              Fiber.interrupt,
-            ).pipe(
-              Effect.catchCause((cause) =>
-                scope.state._tag === "Closed"
-                  ? Effect.fail(Unavailable.make({}))
-                  : Effect.failCause(cause),
-              ),
-              Effect.flatMap((value) =>
-                scope.state._tag === "Closed"
-                  ? Effect.fail(Unavailable.make({}))
-                  : Effect.succeed(value),
-              ),
-            ),
+          : run(mint(authentication.privateKeyJwt)),
     });
   });
 

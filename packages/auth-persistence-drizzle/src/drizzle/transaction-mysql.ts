@@ -2,7 +2,7 @@
 import type { SqlNativeCommit } from "@yielded/auth-persistence/Adapter";
 import { PersistenceMappingError } from "@yielded/auth-persistence/Adapter";
 import { EffectMysql2Transaction } from "drizzle-orm/effect-mysql2/session";
-import { Context, Effect, Option } from "effect";
+import { Cause, Context, Effect, Option } from "effect";
 import { makeWithTransaction, type SqlClient } from "effect/sql/SqlClient";
 import type { SqlError } from "effect/sql/SqlError";
 
@@ -130,7 +130,17 @@ const withMysqlTransaction = <A, E, R, Failure>(
       const cleanup = statement("ROLLBACK").pipe(
         Effect.andThen(statement(`SET TRANSACTION ISOLATION LEVEL ${isolation}`)),
         Effect.onExit((exit) => (exit._tag === "Failure" ? Effect.sync(destroy) : Effect.void)),
-        Effect.orDie,
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.fromReasons<never>(
+              cause.reasons.map((reason) =>
+                Cause.isFailReason(reason)
+                  ? Cause.makeDieReason(reason.error).annotate(Cause.reasonAnnotations(reason))
+                  : reason,
+              ),
+            ),
+          ),
+        ),
       );
 
       const scope: MysqlTransactionScope = { client, transaction, active: true };

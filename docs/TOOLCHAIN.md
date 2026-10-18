@@ -24,8 +24,7 @@ When changing the workerd Argon2 compression routine, regenerate the checked-in
 Wasm with `vp run @yielded/crypto#build:wasm`. This requires LLVM Clang with the
 wasm32 target and `wasm-ld`; ordinary builds do not require a C toolchain.
 
-Repository skills live under `.agents/skills`. Use the `dev-kit` skill to update
-catalog copies without overwriting local changes.
+Shared contributor skills are authored in [danieljvdm/skills](https://github.com/danieljvdm/skills) and distributed by Dev Kit into `.agents/skills`. Each committed copy records its pinned source in `.dev-kit-origin.json`. Keep shared copies identical to that source, put repository policy in `AGENTS.md`, and upstream reusable improvements before refreshing local edits. Use the transient Dev Kit CLI for explicit updates; it is not a repository dependency.
 
 ## Package verification
 

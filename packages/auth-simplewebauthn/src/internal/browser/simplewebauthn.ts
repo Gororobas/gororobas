@@ -11,8 +11,9 @@ import {
   PasskeyRegistrationStarted,
   snapshotPasskey,
 } from "@yielded/auth/Passkey";
+import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
 import type { Context } from "effect";
-import { DateTime, Effect, Layer, Predicate, Redacted, Schema } from "effect";
+import { Cause, DateTime, Effect, Layer, Predicate, Redacted, Schema } from "effect";
 
 import {
   PasskeyBrowserAuthentication,
@@ -33,7 +34,33 @@ const rejected = () => PasskeyBrowserInputRejected.make({});
 const incomplete = () => PasskeyBrowserNotCompleted.make({});
 
 const unexpected = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(Effect.catchDefect(() => Effect.fail(unavailable())));
+  Effect.uninterruptibleMask((restore) =>
+    restore(effect).pipe(
+      Effect.catchCause((cause) => {
+        const reasons = cause.reasons.filter(
+          (reason) =>
+            Cause.isDieReason(reason) ||
+            (Cause.isFailReason(reason) && Schema.is(PasskeyBrowserUnavailable)(reason.error)),
+        );
+
+        if (reasons.length === 0) return Effect.failCause(cause);
+
+        return reportAuthFailure("passkey-browser", Cause.fromReasons(reasons)).pipe(
+          Effect.andThen(
+            Effect.failCause(
+              markAuthFailureReported(
+                Cause.fromReasons<E | PasskeyBrowserUnavailable>(
+                  cause.reasons.map((reason) =>
+                    Cause.isDieReason(reason) ? Cause.makeFailReason(unavailable()) : reason,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    ),
+  );
 
 const decode = <S extends Schema.Codec<unknown, unknown, never, never>>(
   schema: S,
@@ -48,8 +75,7 @@ const capture = <S extends Schema.Codec<unknown, unknown, never, never>>(
   value: S["Type"],
 ) => snapshotPasskey(schema, value).pipe(Effect.mapError(rejected));
 
-const maintained = <A>(call: () => PromiseLike<A>) =>
-  Effect.tryPromise({ try: call, catch: unavailable });
+const maintained = <A>(call: () => PromiseLike<A>) => Effect.promise(call);
 
 const timeout = Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 300000 }));
 
@@ -100,8 +126,8 @@ const readCapabilities = Effect.gen(function* () {
         hybridTransport: raw.hybridTransport,
         passkeyPlatformAuthenticator: raw.passkeyPlatformAuthenticator,
       });
-    } catch {
-      return Effect.fail(unavailable());
+    } catch (error) {
+      return Effect.die(error);
     }
   });
 
@@ -116,22 +142,19 @@ const booleanCapability = Effect.fn("passkeyBrowserBooleanCapability")(function*
   return value ? ("supported" as const) : ("unsupported" as const);
 });
 
-const environment = Effect.try({
-  try: () => {
-    const secureContext = globalThis.isSecureContext === true;
-    const container = globalThis.navigator?.credentials;
+const environment = Effect.sync(() => {
+  const secureContext = globalThis.isSecureContext === true;
+  const container = globalThis.navigator?.credentials;
 
-    const webAuthn =
-      secureContext &&
-      browserSupportsWebAuthn() &&
-      container !== undefined &&
-      typeof container.get === "function" &&
-      typeof container.create === "function" &&
-      typeof globalThis.AbortController === "function";
+  const webAuthn =
+    secureContext &&
+    browserSupportsWebAuthn() &&
+    container !== undefined &&
+    typeof container.get === "function" &&
+    typeof container.create === "function" &&
+    typeof globalThis.AbortController === "function";
 
-    return { secureContext, webAuthn, container };
-  },
-  catch: unavailable,
+  return { secureContext, webAuthn, container };
 });
 
 const capabilities = Effect.gen(function* () {
@@ -218,15 +241,14 @@ const release = (lease: Lease) =>
     // Abort requests cancellation; only raw native settlement releases a started call.
     try {
       lease.controller.abort();
-    } catch {
-      /* Cleanup cannot replace interruption with a defect. */
+    } finally {
+      if (lease.phase === "pre-native") settle(lease);
     }
-    if (lease.phase === "pre-native") settle(lease);
   });
 
-const nativeFailure = (value: unknown): PasskeyBrowserNotCompleted | PasskeyBrowserUnavailable => {
+const nativeFailure = (value: unknown): Effect.Effect<never, PasskeyBrowserNotCompleted> => {
   try {
-    if (!Predicate.isObject(value)) return unavailable();
+    if (!Predicate.isObject(value)) return Effect.die(value);
     // Only the native error's standardized name is inspected; no message or cause.
     // eslint-disable-next-line no-restricted-properties
     const parsed = Schema.decodeUnknownOption(Schema.String)(value.name);
@@ -242,12 +264,14 @@ const nativeFailure = (value: unknown): PasskeyBrowserNotCompleted | PasskeyBrow
         "AbortError",
       ].includes(parsed.value)
     )
-      return incomplete();
-  } catch {
-    /* Throwing extension error properties are unavailable. */
+      return Effect.fail(incomplete());
+  } catch (error) {
+    return Effect.failCause(
+      Cause.fromReasons([Cause.makeDieReason(value), Cause.makeDieReason(error)]),
+    );
   }
 
-  return unavailable();
+  return Effect.die(value);
 };
 
 type NativeRequest =
@@ -302,8 +326,7 @@ const native = (lease: Lease, request: NativeRequest) =>
           (error) => {
             try {
               settle(lease);
-              if (!signal.aborted && !lease.controller.signal.aborted)
-                resume(Effect.fail(nativeFailure(error)));
+              if (!signal.aborted && !lease.controller.signal.aborted) resume(nativeFailure(error));
             } catch {
               /* Detached handlers cannot reject. */
             }
@@ -311,7 +334,7 @@ const native = (lease: Lease, request: NativeRequest) =>
         );
       } catch (error) {
         settle(lease);
-        resume(Effect.fail(nativeFailure(error)));
+        resume(nativeFailure(error));
       }
     },
   );
@@ -377,14 +400,11 @@ const buffer = Effect.fn("passkeyBrowserBuffer")(function* (
   maximum: number,
 ) {
   // Slice with an upper bound before conversion, ignoring instance overrides.
-  const copied = yield* Effect.try({
-    try: () => ArrayBuffer.prototype.slice.call(value, 0, maximum + 1),
-    catch: unavailable,
-  });
+  const copied = yield* Effect.sync(() => ArrayBuffer.prototype.slice.call(value, 0, maximum + 1));
 
   if (copied.byteLength < minimum || copied.byteLength > maximum) return yield* unavailable();
 
-  return yield* Effect.try({ try: () => bufferToBase64URLString(copied), catch: unavailable });
+  return yield* Effect.sync(() => bufferToBase64URLString(copied));
 });
 
 const registrationWire = Schema.fromJsonString(
@@ -433,8 +453,8 @@ const registrationResponse = Effect.fn("passkeyBrowserRegistrationResponse")(fun
           clientDataJSON: response.clientDataJSON,
         },
       });
-    } catch {
-      return Effect.fail(unavailable());
+    } catch (error) {
+      return Effect.die(error);
     }
   });
 
@@ -479,8 +499,8 @@ const authenticationResponse = Effect.fn("passkeyBrowserAuthenticationResponse")
           ...(userHandle === undefined ? {} : { userHandle }),
         },
       });
-    } catch {
-      return Effect.fail(unavailable());
+    } catch (error) {
+      return Effect.die(error);
     }
   });
 
@@ -512,19 +532,17 @@ const conditional = Effect.gen(function* () {
   if ((yield* booleanCapability(browserSupportsWebAuthnAutofill)) !== "supported")
     return yield* PasskeyBrowserUnsupported.make({});
 
-  const present = yield* Effect.try({
-    try: () =>
-      Array.from(globalThis.document.querySelectorAll("input[autocomplete]")).some(
-        (input) =>
-          input
-            .getAttribute("autocomplete")
-            ?.split(/[\t\n\f\r ]+/)
-            .filter((token) => token.length > 0)
-            .at(-1)
-            ?.toLowerCase() === "webauthn",
-      ),
-    catch: unavailable,
-  });
+  const present = yield* Effect.sync(() =>
+    Array.from(globalThis.document.querySelectorAll("input[autocomplete]")).some(
+      (input) =>
+        input
+          .getAttribute("autocomplete")
+          ?.split(/[\t\n\f\r ]+/)
+          .filter((token) => token.length > 0)
+          .at(-1)
+          ?.toLowerCase() === "webauthn",
+    ),
+  );
 
   if (!present) return yield* rejected();
 }).pipe(Effect.timeoutOrElse({ duration: 5000, orElse: () => Effect.fail(unavailable()) }));

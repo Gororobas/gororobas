@@ -180,6 +180,10 @@ be application-configured HTTPS without credentials or a fragment. The supplied
 client owns egress policy and must not follow redirects; the fetch client is
 configured to reject them, and responses from a different URL are rejected.
 
+On Workers, retain bounded verification with `ctx.waitUntil` at the request
+boundary. Native shared completion preserves waiting request contexts; it does
+not keep the initiating request's I/O alive after a client disconnect.
+
 | Remote option      | Default               | Range        |
 | ------------------ | --------------------- | ------------ |
 | `cacheTimeMs`      | 600,000               | 1–86,400,000 |
@@ -190,7 +194,9 @@ configured to reject them, and responses from a different URL are rejected.
 | `maxWaiters`       | 64 concurrent lookups | 1–1,024      |
 
 Unknown keys refresh at most once per cooldown. Concurrent lookups share a
-refresh; overflow fails immediately. Failed refreshes also consume the cooldown,
+refresh; overflow fails immediately. Cancelling the last waiting lookup aborts
+and joins its refresh; new refresh lookups receive `busy` until cleanup finishes.
+Cancellation does not retry the request. Failed refreshes also consume the cooldown,
 and expired keys are never served after a refresh failure. Scope closure aborts
 requests, releases waiting callers and discards the cache. Cache lifetime is local
 policy; server cache headers do not override it. There is no background polling.

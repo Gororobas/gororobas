@@ -1,6 +1,6 @@
 import * as OAuth from "@yielded/oauth/OAuth";
 import type * as Oidc from "@yielded/oauth/Oidc";
-import { type Crypto, Effect, type Redacted, type Scope } from "effect";
+import { Cause, type Crypto, Effect, type Redacted, type Scope } from "effect";
 import type { HttpClient } from "effect/http";
 
 import { OAuthUnavailable } from "../../signInErrors";
@@ -26,10 +26,14 @@ export const install = Effect.fn("OpenIdConnect.installNative")(function* (
   githubVerifiedPrimaryEmail = false,
 ) {
   const client = yield* OAuth.make(options).pipe(
-    Effect.mapError((error) =>
-      error._tag === "OAuthConfigurationError"
-        ? OpenIdConnectConfigurationError.make({ reason: "metadata" })
-        : OAuthUnavailable.make({}),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) =>
+          error._tag === "OAuthConfigurationError"
+            ? OpenIdConnectConfigurationError.make({ reason: "metadata" })
+            : OAuthUnavailable.make({}),
+        ),
+      ),
     ),
   );
 

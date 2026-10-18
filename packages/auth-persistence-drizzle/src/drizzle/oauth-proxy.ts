@@ -7,7 +7,7 @@ import { ConfigurationError, Persistence } from "@yielded/auth/OAuthProxy";
 import { getTableColumns, is, type Table } from "drizzle-orm";
 import { getTableConfig as pgConfig, PgTable } from "drizzle-orm/pg-core";
 import { getTableConfig as sqliteConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
-import { Effect, Layer, Result } from "effect";
+import { Cause, Effect, Layer, Result } from "effect";
 import { SqlClient } from "effect/sql";
 
 /** Override logical column keys when using an application-owned table. */
@@ -97,7 +97,9 @@ export const oauthProxyLayer = <T extends Table>(
         [["namespace", "flowId"]],
       ).pipe(
         Effect.provideService(SqlClient.SqlClient, client),
-        Effect.mapError(() => ConfigurationError.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => ConfigurationError.make({}))),
+        ),
       );
 
       return yield* makeOAuthProxyPersistence(mapping);

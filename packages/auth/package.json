@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "Composable authentication, sessions, and identity workflows for Effect.",
   "keywords": [
     "authentication",
@@ -67,6 +67,7 @@
     "./Roblox": "./src/Roblox.ts",
     "./Operations": "./src/Operations.ts",
     "./Schema": "./src/Schema.ts",
+    "./OAuthScope": "./src/OAuthScope.ts",
     "./WebCrypto": "./src/WebCrypto.ts",
     "./WorkerdServices": "./src/WorkerdServices.ts",
     "./WorkerdPasswordlessServices": "./src/WorkerdPasswordlessServices.ts",

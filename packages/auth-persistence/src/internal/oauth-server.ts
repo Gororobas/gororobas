@@ -1,5 +1,6 @@
 import { AssertionReceipt, Persistence, Record, Unavailable } from "@yielded/auth/OAuthServer";
-import { Effect, Layer, Schema } from "effect";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
+import { Cause, Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { requireStandalone } from "./standalone";
@@ -44,7 +45,11 @@ const layer = Layer.effect(
     const standalone = requireStandalone(() => Unavailable.make({}), sql.transactionService);
 
     const failure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-      effect.pipe(Effect.mapError(() => Unavailable.make({})));
+      reportPersistenceFailure(effect, Schema.is(Unavailable), { markReported: true }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+        ),
+      );
 
     return Persistence.of({
       consumeAssertion: Effect.fn("OAuthServerPersistence.consumeAssertion")(function* (

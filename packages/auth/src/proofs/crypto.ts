@@ -1,5 +1,5 @@
 import { Hmac, type Key } from "@yielded/crypto/Hmac";
-import { Context, Crypto, Effect, Layer, Redacted, Result, Schema } from "effect";
+import { Cause, Context, Crypto, Effect, Layer, Redacted, Result, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { TokenDigest } from "../Schema";
@@ -174,7 +174,11 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
       const key = yield* hmac
         .importKey({ algorithm: "SHA-256", key: Redacted.make(material) })
         .pipe(
-          Effect.mapError(() => ProofConfigurationError.make({ reason: "keyring" })),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, () => ProofConfigurationError.make({ reason: "keyring" })),
+            ),
+          ),
           Effect.ensuring(Effect.sync(() => material.fill(0))),
         );
 
@@ -187,7 +191,13 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
   const generateOpaque = Effect.fn("ProofCrypto.generateOpaque")(function* () {
     return Redacted.make(
       Base64Url.encode(
-        yield* crypto.randomBytes(32).pipe(Effect.mapError(() => ProofUnavailable.make({}))),
+        yield* crypto
+          .randomBytes(32)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => ProofUnavailable.make({}))),
+            ),
+          ),
       ),
     );
   });
@@ -200,7 +210,11 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
     for (let batch = 0; batch < 8 && code.length < policy.digits; batch++)
       for (const byte of yield* crypto
         .randomBytes(policy.digits * 2)
-        .pipe(Effect.mapError(() => ProofUnavailable.make({}))))
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => ProofUnavailable.make({}))),
+          ),
+        ))
         if (byte < 250 && code.length < policy.digits) code += String(byte % 10);
     if (code.length !== policy.digits) return yield* ProofUnavailable.make({});
 
@@ -244,10 +258,18 @@ const makeCrypto = Effect.fn("makeProofCrypto")(function* (
       key === undefined
         ? yield* crypto
             .digest("SHA-256", encoder.encode(message))
-            .pipe(Effect.mapError(() => ProofUnavailable.make({})))
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => ProofUnavailable.make({}))),
+              ),
+            )
         : yield* key
             .sign(encoder.encode(message))
-            .pipe(Effect.mapError(() => ProofUnavailable.make({})));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => ProofUnavailable.make({}))),
+              ),
+            );
 
     return { keyId, digest: TokenDigest.make(Base64Url.encode(bytes)) };
   });

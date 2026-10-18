@@ -1,4 +1,4 @@
-import { Crypto, DateTime, Effect, Redacted, Schema, Stream } from "effect";
+import { Cause, Crypto, DateTime, Effect, Redacted, Schema, Stream } from "effect";
 import { Base64Url } from "effect/encoding";
 import {
   FetchHttpClient,
@@ -146,8 +146,12 @@ export const makeConnectedProtocol = Effect.fn("Strava.configure")(function* (
     Effect.scoped,
     (effect) =>
       effect.pipe(
-        Effect.catch((error) =>
-          Effect.fail(error._tag === "OAuthProtocolRejected" ? error : OAuthUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              error._tag === "OAuthProtocolRejected" ? error : OAuthUnavailable.make({}),
+            ),
+          ),
         ),
       ),
   );
@@ -175,7 +179,11 @@ export const makeConnectedProtocol = Effect.fn("Strava.configure")(function* (
 
       const bytes = yield* crypto
         .randomBytes(32)
-        .pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+          ),
+        );
 
       const state = Base64Url.encode(bytes);
 
@@ -255,13 +263,19 @@ export const makeConnectedProtocol = Effect.fn("Strava.configure")(function* (
             HttpClientRequest.bearerToken(Redacted.make(token.access_token)),
           ),
         )
-        .pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+          ),
+        );
 
       if (response.status !== 200) return yield* OAuthUnavailable.make({});
 
       const athlete = yield* readBody(response).pipe(
         Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Athlete))),
-        Effect.mapError(() => OAuthUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+        ),
       );
 
       if (

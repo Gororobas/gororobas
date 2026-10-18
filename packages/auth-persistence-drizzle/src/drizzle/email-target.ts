@@ -7,7 +7,7 @@ import {
   type EmailRegistrationAuthority,
 } from "@yielded/auth-persistence/Adapter";
 import { EmailAddressPersistence, EmailSignInTargets, EmailUnavailable } from "@yielded/auth/Email";
-import { type Context, Effect, Layer } from "effect";
+import { Cause, type Context, Effect, Layer } from "effect";
 
 import type {
   AnyEmailAddressMapping,
@@ -40,9 +40,13 @@ export const makeTargetEmailAddressServices = Effect.fnUntraced(function* (
   configuration: NativeTargetConfiguration,
   proofs?: AnyProofPersistenceMapping,
 ) {
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
   if (proofs !== undefined)
-    yield* validateDrizzleStorage(proofs).pipe(Effect.mapError(unavailable));
+    yield* validateDrizzleStorage(proofs).pipe(
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+    );
   if (
     configuration.mode === "batch" &&
     (mapping.d1?.primary !== true || (proofs !== undefined && proofs.d1?.primary !== true))
@@ -64,8 +68,12 @@ export const makeTargetEmailRegistrationServices = Effect.fnUntraced(function* <
   configuration: NativeTargetConfiguration,
   proofs: AnyProofPersistenceMapping,
 ) {
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
-  yield* validateDrizzleStorage(proofs).pipe(Effect.mapError(unavailable));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
+  yield* validateDrizzleStorage(proofs).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
   if (
     configuration.mode === "batch" &&
     (mapping.d1?.primary !== true || proofs.d1?.primary !== true)
@@ -151,7 +159,9 @@ export const makeTargetEmailSignInServices = Effect.fnUntraced(function* (
   mapping: AnyEmailSignInMapping,
   configuration: NativeTargetConfiguration,
 ) {
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
   const target = yield* nativeTarget(configuration);
 
   return yield* target.provide(makeNativeEmailSignInServices(target.tables, mapping));

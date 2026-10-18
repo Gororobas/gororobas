@@ -40,7 +40,7 @@ const unavailable = () => IdentityUnavailable.make();
 const isIdentityFailure = Schema.is(Schema.Union([IdentityConflict, IdentityUnavailable]));
 
 const mapUnavailable = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  reportPersistenceFailure(effect, isIdentityFailure).pipe(
+  reportPersistenceFailure(effect, isIdentityFailure, { markReported: true }).pipe(
     Effect.catchCause((cause) =>
       Effect.failCause(
         Cause.map(cause, (error) => (isIdentityFailure(error) ? error : unavailable())),
@@ -59,7 +59,11 @@ export const makeSqliteSubjectProvisioningServices = Effect.fnUntraced(function*
 ) {
   const database = yield* NativeDatabase;
 
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(() => IdentityUnavailable.make()));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => IdentityUnavailable.make())),
+    ),
+  );
 
   const db = database as unknown as RuntimeDatabase;
   const requestTable = mapping.provisioningRequest.table;
@@ -192,7 +196,11 @@ export const makeSqliteExternalIdentityServices = Effect.fnUntraced(function* <
 >(mapping: ExternalIdentityTables<Subject, External, NativeId>) {
   const database = yield* NativeDatabase;
 
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(() => IdentityUnavailable.make()));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => IdentityUnavailable.make())),
+    ),
+  );
 
   const db = database as unknown as RuntimeDatabase;
   const externalTable = mapping.externalIdentity.table;

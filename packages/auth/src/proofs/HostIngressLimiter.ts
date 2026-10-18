@@ -1,4 +1,4 @@
-import { Context, Duration, Effect, Layer, Redacted, Schema } from "effect";
+import { Cause, Context, Duration, Effect, Layer, Redacted, Schema } from "effect";
 import * as RateLimiter from "effect/persistence/RateLimiter";
 
 import { defaultLayer } from "../auth/defaults";
@@ -55,10 +55,14 @@ export class HostIngressLimiter extends Context.Service<
               })
               .pipe(
                 Effect.asVoid,
-                Effect.mapError((error) =>
-                  error.reason._tag === "RateLimitExceeded"
-                    ? ProofIngressDenied.make({})
-                    : ProofUnavailable.make({}),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error.reason._tag === "RateLimitExceeded"
+                        ? ProofIngressDenied.make({})
+                        : ProofUnavailable.make({}),
+                    ),
+                  ),
                 ),
               ),
         });

@@ -1,5 +1,5 @@
 import { AuthenticationClock } from "@yielded/auth/Operations";
-import { reportAuthFailure } from "@yielded/auth/Persistence";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import type { SubjectId } from "@yielded/auth/Schema";
 import {
   type AuthenticationRequirement,
@@ -53,13 +53,8 @@ export const sessionFailure = <E>(
   isDomainFailure(error) ? (error as Extract<E, SessionDomainFailure>) : sessionUnavailable();
 
 export const normalizeSessionOperation = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(
-    Effect.tapError((error) =>
-      isDomainFailure(error)
-        ? Effect.void
-        : reportAuthFailure("auth-persistence", Cause.fail(error)),
-    ),
-    Effect.mapError(sessionFailure),
+  reportPersistenceFailure(effect, isDomainFailure, { markReported: true }).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, sessionFailure))),
   );
 
 export type NativeSessionAuthorityMapping = SessionAuthorityTables<

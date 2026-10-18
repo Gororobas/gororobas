@@ -1,6 +1,6 @@
 import type { SubjectId, TokenDigest } from "@yielded/auth/Schema";
 import type { PendingAuthenticationKind } from "@yielded/auth/Sessions";
-import { Effect } from "effect";
+import { Cause, Effect } from "effect";
 
 import type { NativeSqlTables } from "./native-sql-table";
 import { makeNativeSessionPending } from "./session-native-pending";
@@ -27,7 +27,7 @@ export const makeNativeSessionPendingReader = Effect.fnUntraced(function* (
     pending.table.unencodedTextColumn?.(pending.p.subjectId),
     state.subject.unencodedTextColumn?.(mapping.subject.id),
     state.credential.unencodedTextColumn?.(mapping.credential.subjectId),
-  ]).pipe(Effect.mapError(sessionUnavailable));
+  ]).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, sessionUnavailable))));
 
   const read = Effect.fnUntraced(function* (kind: PendingAuthenticationKind, digest: TokenDigest) {
     const { sql, now } = state,

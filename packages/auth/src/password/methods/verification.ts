@@ -4,7 +4,7 @@ import { Base64Url } from "effect/encoding";
 import { hasCommitScope, type PreparedCommit } from "../../hooks/commit";
 import { HookDenied } from "../../hooks/models";
 import { LoginIdentifier } from "../../identity/models";
-import { reportAuthFailure } from "../../internal/diagnostics";
+import { markAuthFailureReported, reportAuthFailure } from "../../internal/diagnostics";
 import { ProofInvalid, ProofIngressDenied, ProofCapabilityUnsupported } from "../../proofs/errors";
 import type { Email, SubjectId } from "../../Schema";
 import { TokenDigest } from "../../Schema";
@@ -35,7 +35,11 @@ export const passwordNoAmbient = Effect.fn("Passwords.noAmbient")(function* () {
 });
 
 export const readPasswordCommit = <A>(receipt: PreparedCommit<A>) =>
-  receipt.read.pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+  receipt.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+    ),
+  );
 
 /** A commit acknowledgment can be lost after the session is durable. Only
  * definite policy/credential rejection may become PasswordRejected. */
@@ -65,7 +69,11 @@ export const passwordCompletionFailure = (
 const noAmbient = passwordNoAmbient;
 
 export const passwordUnexpected = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  effect.pipe(Effect.mapError(() => PasswordUnavailable.make({})));
+  effect.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({}))),
+    ),
+  );
 
 const unexpected = passwordUnexpected;
 
@@ -73,18 +81,28 @@ const hashingInfrastructureFailure = Schema.is(
   Schema.Union([PasswordHashingUnavailable, PasswordKdfBusy]),
 );
 
-/** Report infrastructure recovery without recording passwords or verifier data. */
+/** Report infrastructure failures before the password port projects their typed errors. */
 export const passwordHashingDiagnostics = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
-    Effect.tapCause((cause) =>
+    Effect.catchCause((cause) =>
       reportAuthFailure(
         "password-hashing",
         Cause.fromReasons(
           cause.reasons.filter(
-            (reason) => Cause.isFailReason(reason) && hashingInfrastructureFailure(reason.error),
+            (reason) => !Cause.isFailReason(reason) || hashingInfrastructureFailure(reason.error),
           ),
         ),
-      ),
+      ).pipe(Effect.andThen(Effect.failCause(markAuthFailureReported(cause)))),
+    ),
+  );
+
+/** Denied attempts may consume ordinary dummy-work failures, never defects or cancellation. */
+const recoverDummy = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  effect.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasDies(cause) || Cause.hasInterrupts(cause)
+        ? Effect.failCause(Cause.map(cause, () => PasswordUnavailable.make({})))
+        : Effect.void,
     ),
   );
 
@@ -197,12 +215,20 @@ export const makePasswordVerification = ({
         });
 
       return candidate;
-    }).pipe(Effect.catchTag("PasswordRejected", () => Effect.succeed(undefined)));
+    }).pipe(
+      Effect.catchCause((cause) =>
+        cause.reasons.every(
+          (reason) => Cause.isFailReason(reason) && reason.error._tag === "PasswordRejected",
+        )
+          ? Effect.succeed(undefined)
+          : Effect.failCause(cause),
+      ),
+    );
 
     // All denied branches do one bounded dummy attempt too. Local admission can
     // reject it; no claim of exact network timing is made.
     if (admitted === undefined) {
-      yield* hasher.dummy(request.password).pipe(passwordHashingDiagnostics, Effect.ignore);
+      yield* hasher.dummy(request.password).pipe(passwordHashingDiagnostics, recoverDummy);
 
       return yield* PasswordRejected.make({});
     }
@@ -240,7 +266,7 @@ export const makePasswordVerification = ({
       const normalized = yield* checkedPassword(request.password, candidate).pipe(Effect.result);
 
       if (normalized._tag === "Failure") {
-        yield* hasher.dummy(request.password).pipe(passwordHashingDiagnostics, Effect.ignore);
+        yield* hasher.dummy(request.password).pipe(passwordHashingDiagnostics, recoverDummy);
 
         return yield* PasswordRejected.make({});
       }
@@ -248,13 +274,22 @@ export const makePasswordVerification = ({
 
       const verified = yield* hasher.verify(password, candidate.verifier).pipe(
         passwordHashingDiagnostics,
-        Effect.catchTag("PasswordVerifierInvalid", () =>
-          hasher
-            .dummy(password)
-            .pipe(
-              passwordHashingDiagnostics,
-              Effect.andThen(Effect.fail(PasswordRejected.make({}))),
-            ),
+        Effect.catchCause((cause) =>
+          cause.reasons.every(
+            (reason) =>
+              Cause.isFailReason(reason) && reason.error._tag === "PasswordVerifierInvalid",
+          )
+            ? hasher
+                .dummy(password)
+                .pipe(
+                  passwordHashingDiagnostics,
+                  Effect.andThen(Effect.fail(PasswordRejected.make({}))),
+                )
+            : Effect.failCause(
+                Cause.map(cause, (error) =>
+                  error._tag === "PasswordVerifierInvalid" ? PasswordRejected.make({}) : error,
+                ),
+              ),
         ),
       );
 
@@ -290,12 +325,16 @@ export const makePasswordVerification = ({
 
       return { credential: candidate, evidence, requirement };
     }).pipe(
-      Effect.mapError((error) =>
-        error._tag === "PasswordRejected" ||
-        error._tag === "PasswordInputInvalid" ||
-        error._tag === "StaleAuthentication"
-          ? PasswordRejected.make({})
-          : PasswordUnavailable.make({}),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            error._tag === "PasswordRejected" ||
+            error._tag === "PasswordInputInvalid" ||
+            error._tag === "StaleAuthentication"
+              ? PasswordRejected.make({})
+              : PasswordUnavailable.make({}),
+          ),
+        ),
       ),
     );
   });

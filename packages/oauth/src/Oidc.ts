@@ -3,6 +3,7 @@ import * as Jwks from "@yielded/jose/Jwks";
 import type * as Jws from "@yielded/jose/Jws";
 import * as Jwt from "@yielded/jose/Jwt";
 import {
+  Cause,
   Clock,
   Context,
   Crypto,
@@ -349,7 +350,8 @@ const claimFailure = () => Rejected.make({ reason: "claims" });
  * caller's Scope. HS256 uses the supplied client secret as the HMAC key and
  * does not install JWKS. Owner closure cancels and joins active verification,
  * returning Unavailable; caller interruption joins its operation without
- * closing the verifier. No process cache or automatic exchange retry is created. */
+ * closing the verifier. Unexpected cleanup failures remain observable in the
+ * Cause. No process cache or automatic exchange retry is created. */
 export const makeVerifier = Effect.fnUntraced(function* (
   input: VerifierOptions,
 ): Effect.fn.Return<
@@ -447,7 +449,7 @@ export const makeVerifier = Effect.fnUntraced(function* (
       hmacKey !== undefined
         ? {
             verified: yield* Jwt.verify(JsonObject, token, hmacKey, jwtPolicy).pipe(
-              Effect.mapError(mapJwtError),
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapJwtError))),
             ),
             signingKey: undefined,
           }
@@ -456,7 +458,7 @@ export const makeVerifier = Effect.fnUntraced(function* (
           : yield* Jwt.verifyWithKeySet(JsonObject, token, jwtPolicy).pipe(
               Effect.provideService(Jwks.Jwks, keys),
               Effect.map((verified) => ({ verified, signingKey: verified.key })),
-              Effect.mapError(mapJwtError),
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapJwtError))),
             );
 
     const verified = opened.verified;
@@ -541,7 +543,11 @@ export const makeVerifier = Effect.fnUntraced(function* (
 
       const digest = yield* crypto
         .digest(hashProfile.digest, new TextEncoder().encode(secret))
-        .pipe(Effect.mapError(() => Unavailable.make({})));
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+          ),
+        );
 
       if (digest.length !== hashProfile.octets * 2) return yield* Unavailable.make({});
       if (hash !== Base64Url.encode(digest.subarray(0, hashProfile.octets)))

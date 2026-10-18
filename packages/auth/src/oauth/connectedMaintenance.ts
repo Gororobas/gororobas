@@ -13,6 +13,7 @@ import {
 import { Base64Url } from "effect/encoding";
 
 import { prepareCommit, hasCommitScope } from "../hooks/commit";
+import { reportAuthFailure } from "../internal/diagnostics";
 import type { AuthInvocation } from "../operations/context";
 import { OperationForbidden } from "../operations/errors";
 import { makeOperation, operationGroup } from "../operations/operation";
@@ -21,7 +22,7 @@ import {
   captureConnectedPolicy,
   connectedBounded,
   connectedRead,
-  connectedSafe,
+  reportConnectedFailure,
   validateConnectedPolicy,
 } from "./connectedAccess";
 import * as M from "./connectedModels";
@@ -110,7 +111,7 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
         );
 
         return yield* connectedRead(receipt);
-      }, connectedSafe);
+      }, reportConnectedFailure);
 
       const runRevocation = Effect.fn("OAuthConnectedMaintenance.runRevocation")(function* (
         invocation: AuthInvocation,
@@ -118,7 +119,13 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
         yield* authorize(invocation);
         if (Option.isNone(revocations)) return yield* OAuthMethodUnsupported.make({});
         const { claim, settle } = revocations.value;
-        const bytes = yield* randomBytes(32).pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+
+        const bytes = yield* randomBytes(32).pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+          ),
+        );
+
         const claimId = OAuthClaimId.make(Base64Url.encode(bytes));
 
         bytes.fill(0);
@@ -193,27 +200,46 @@ export const makeOAuthConnectedMaintenance = <const Id extends string>(
 
             // Request settlement cancellation after five seconds. Scoped driver
             // cleanup may take longer; an unknown outcome permits no retry.
-            const final = yield* connectedBounded(
-              settle({ claim: owned, outcome }, (value, journal) =>
-                journal.prepare(snapshotSettlement.sync(value)),
-              ).pipe(Effect.flatMap(connectedRead)),
-              5_000,
-            ).pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+            const final = yield* Effect.exit(
+              connectedBounded(
+                settle({ claim: owned, outcome }, (value, journal) =>
+                  journal.prepare(snapshotSettlement.sync(value)),
+                ).pipe(Effect.flatMap(connectedRead)),
+                5_000,
+              ),
+            );
 
-            if (Exit.isFailure(result)) {
-              if (Cause.hasInterrupts(result.cause)) return yield* Effect.interrupt;
-              if (Cause.hasDies(result.cause))
-                return yield* Effect.failCause(
-                  Cause.fromReasons<never>(result.cause.reasons.filter(Cause.isDieReason)),
-                );
+            if (Exit.isFailure(final)) {
+              const cause = Cause.map(final.cause, () => OAuthUnavailable.make({}));
+
+              return yield* Effect.failCause(
+                Exit.isFailure(result)
+                  ? Cause.combine(
+                      Cause.map(result.cause, () => OAuthUnavailable.make({})),
+                      cause,
+                    )
+                  : cause,
+              );
             }
 
-            return { outcome: final.settled ? outcome : ("Unknown" as const) };
+            if (Exit.isFailure(result)) {
+              if (Cause.hasInterrupts(result.cause) || Cause.hasDies(result.cause))
+                return yield* Effect.failCause(
+                  Cause.map(result.cause, () => OAuthUnavailable.make({})),
+                );
+
+              yield* reportAuthFailure("oauth-connected", result.cause);
+            }
+
+            return { outcome: final.value.settled ? outcome : ("Unknown" as const) };
           }),
         );
-      }, connectedSafe);
+      });
 
-      return ConnectedMaintenance.of({ cleanup, runRevocation });
+      return ConnectedMaintenance.of({
+        cleanup,
+        runRevocation: (invocation) => runRevocation(invocation).pipe(reportConnectedFailure),
+      });
     }),
   );
 

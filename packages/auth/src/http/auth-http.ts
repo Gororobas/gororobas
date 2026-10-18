@@ -1,5 +1,6 @@
 import type { Hmac } from "@yielded/crypto/Hmac";
 import {
+  Cause,
   Schema,
   Context,
   type Types,
@@ -307,7 +308,15 @@ export const make = <
         original ??
         (yield* api
           .verifySession(credential)
-          .pipe(Effect.catchTag("SessionInvalid", () => Effect.succeed(null))));
+          .pipe(
+            Effect.catchCause((cause) =>
+              cause.reasons.every(
+                (reason) => Cause.isFailReason(reason) && reason.error._tag === "SessionInvalid",
+              )
+                ? Effect.succeed(null)
+                : Effect.failCause(cause),
+            ),
+          ));
 
       return session === null
         ? guest
@@ -335,7 +344,11 @@ export const make = <
             credentials: HttpCredentials,
           ) {
             return yield* resolve(api, credentials.session).pipe(
-              Effect.mapError(() => OperationHttpError.make({ reason: "unavailable" })),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, () => OperationHttpError.make({ reason: "unavailable" })),
+                ),
+              ),
             );
           }),
         };
@@ -438,7 +451,13 @@ export const make = <
             Effect.gen(function* () {
               yield* rotateCache;
               mutationAdmitted = true;
-            }).pipe(Effect.mapError(() => HookDenied.make({ reason: "unavailable" }))),
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, () => HookDenied.make({ reason: "unavailable" })),
+                ),
+              ),
+            ),
           ),
         ),
       );
@@ -592,8 +611,20 @@ export const make = <
           api,
           config,
         )(effect).pipe(
-          Effect.catchTag("OperationHttpError", (error) =>
-            HttpServerResponse.schemaJson(OperationHttpError)(error, {
+          Effect.catchCause((cause) => {
+            const unhandled = cause.reasons.filter(
+              (reason): reason is Cause.Reason<Types.unhandled> =>
+                !Cause.isFailReason(reason) || !Schema.is(OperationHttpError)(reason.error),
+            );
+
+            if (unhandled.length > 0) return Effect.failCause(Cause.fromReasons(unhandled));
+            const failure = cause.reasons.find(Cause.isFailReason);
+
+            if (failure === undefined || !Schema.is(OperationHttpError)(failure.error))
+              return Effect.failCause(Cause.empty);
+            const error = failure.error;
+
+            return HttpServerResponse.schemaJson(OperationHttpError)(error, {
               status:
                 error.reason === "origin" || error.reason === "csrf"
                   ? 403
@@ -601,8 +632,8 @@ export const make = <
                     ? 413
                     : 400,
               headers: { "cache-control": "no-store" },
-            }).pipe(Effect.orDie),
-          ),
+            }).pipe(Effect.orDie);
+          }),
         );
     }),
   ).layer.pipe(Layer.provide(configuration));

@@ -1,7 +1,9 @@
-import { Context, DateTime, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
+import { Cause, Context, DateTime, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
+import { reportAuthFailure, ReportedOperationDefect } from "../../internal/diagnostics";
 import { httpsOrigin as Origin } from "../../internal/origin";
+import { timeoutWithCause } from "../../internal/timeout";
 import type { ProviderDefinition } from "../providerDefinition";
 import { OAuthProviderKey } from "../schema";
 import {
@@ -228,7 +230,9 @@ export const layer = <E, R>(options: Options<E, R>) => {
           })
           .pipe(
             Effect.flatMap((value) => snapshotOAuthProtocolPreparation.effect(value)),
-            Effect.mapError(() => Unavailable.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+            ),
           );
 
         if (
@@ -417,10 +421,14 @@ export const layer = <E, R>(options: Options<E, R>) => {
               verificationStartedAt: started,
             })
             .pipe(
-              Effect.timeout(30_000),
-              Effect.mapError(() => Unavailable.make({})),
+              timeoutWithCause(30_000),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+              ),
               Effect.flatMap((value) => snapshotOAuthVerifiedExternalIdentity.effect(value)),
-              Effect.mapError(() => Unavailable.make({})),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+              ),
             );
 
           if (
@@ -491,23 +499,40 @@ export const layer = <E, R>(options: Options<E, R>) => {
 
           return Response.json(result, { headers: noStore });
         },
-        Effect.timeout(40_000),
-        Effect.catch((error) =>
-          Effect.succeed(
-            Response.json(
+        timeoutWithCause(40_000),
+        Effect.catchCause((cause) =>
+          Effect.gen(function* () {
+            const unexpected = Cause.fromReasons(
+              cause.reasons.filter(
+                (reason) =>
+                  Cause.isDieReason(reason) ||
+                  (Cause.isFailReason(reason) &&
+                    reason.error._tag !== "OAuthProxyRejected" &&
+                    reason.error._tag !== "SchemaError"),
+              ),
+            );
+
+            yield* reportAuthFailure("http", unexpected);
+            if (Cause.hasInterrupts(cause))
+              return yield* Effect.failCause(
+                Cause.fromReasons<never>([
+                  ...cause.reasons.filter(Cause.isInterruptReason),
+                  ...(unexpected.reasons.length === 0
+                    ? []
+                    : [Cause.makeDieReason(ReportedOperationDefect.make({}))]),
+                ]),
+              );
+
+            const rejected = unexpected.reasons.length === 0;
+
+            return Response.json(
+              { error: rejected ? "rejected" : "unavailable" },
               {
-                error:
-                  error._tag === "OAuthProxyRejected" || error._tag === "SchemaError"
-                    ? "rejected"
-                    : "unavailable",
-              },
-              {
-                status:
-                  error._tag === "OAuthProxyRejected" || error._tag === "SchemaError" ? 400 : 503,
+                status: rejected ? 400 : 503,
                 headers: noStore,
               },
-            ),
-          ),
+            );
+          }),
         ),
       );
 

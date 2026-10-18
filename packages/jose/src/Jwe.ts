@@ -1,6 +1,6 @@
 import { Aead } from "@yielded/crypto/Aead";
 import { CryptoUnavailable, type OperationError } from "@yielded/crypto/Errors";
-import { Crypto, Effect, Redacted, Schema } from "effect";
+import { Cause, Crypto, Effect, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { DecryptionFailed, InvalidKey, InvalidToken } from "./Errors";
@@ -62,7 +62,11 @@ export const encrypt = Effect.fnUntraced(function* (
 
   const nonce = yield* random
     .randomBytes(12)
-    .pipe(Effect.mapError(() => CryptoUnavailable.make({})));
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => CryptoUnavailable.make({}))),
+      ),
+    );
 
   const aead = yield* Aead;
 
@@ -111,7 +115,15 @@ export const decrypt = Effect.fnUntraced(function* (
       ciphertext: sealed,
       additionalData: utf8(protectedPart),
     })
-    .pipe(Effect.catchTag("CryptoAuthenticationFailed", () => DecryptionFailed.make({})));
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            error._tag === "CryptoAuthenticationFailed" ? DecryptionFailed.make({}) : error,
+          ),
+        ),
+      ),
+    );
 
   return { protectedHeader, plaintext };
 });

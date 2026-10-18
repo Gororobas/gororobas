@@ -1,5 +1,19 @@
 # @yielded/crypto
 
+## 0.1.0-beta.42
+
+### Patch Changes
+
+- [#243](https://github.com/yielded-dev/auth/pull/243) [`0a0ff7d`](https://github.com/yielded-dev/auth/commit/0a0ff7d6d81d8b9e0aacd39ec81991b1f259e956) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve complete failure causes across authentication, persistence, provider, and native client boundaries, and report unexpected background and cleanup failures without exposing private data.
+
+## 0.1.0-beta.41
+
+No changes in this release.
+
+## 0.1.0-beta.40
+
+No changes in this release.
+
 ## 0.1.0-beta.39
 
 No changes in this release.

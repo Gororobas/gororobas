@@ -5,6 +5,7 @@ export {
   AuthDiagnostic,
   reportAuthDiagnostic,
   reportAuthFailure,
+  markAuthFailureReported,
   reportPersistenceFailure,
 } from "./internal/diagnostics";
 

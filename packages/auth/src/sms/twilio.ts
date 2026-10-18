@@ -1,6 +1,8 @@
-import { Effect, Layer, Redacted, Schema } from "effect";
+import { Cause, Effect, Layer, Redacted, Schema } from "effect";
 import { HttpClient, HttpClientRequest } from "effect/http";
 
+import { reportAuthFailure, ReportedOperationDefect } from "../internal/diagnostics";
+import { timeoutWithCause } from "../internal/timeout";
 import type { ProofDeliveryOutcome } from "../proofs/models";
 import { SmsDelivery, type SmsMessage } from "./SmsDelivery";
 import { TwilioConfig, TwilioConfiguration, TwilioConfigurationError } from "./TwilioConfig";
@@ -31,18 +33,44 @@ export const layer = Layer.effect(
         }),
       );
 
-      return yield* client.execute(request).pipe(
-        Effect.map((response): ProofDeliveryOutcome =>
-          response.status === 201
-            ? { _tag: "Accepted" }
-            : response.status >= 400 && response.status < 500 && response.status !== 408
-              ? { _tag: "DefiniteFailure", reason: "unavailable" }
-              : { _tag: "Ambiguous" },
+      return yield* Effect.uninterruptibleMask((restore) =>
+        restore(
+          client.execute(request).pipe(
+            Effect.map((response): ProofDeliveryOutcome =>
+              response.status === 201
+                ? { _tag: "Accepted" }
+                : response.status >= 400 && response.status < 500 && response.status !== 408
+                  ? { _tag: "DefiniteFailure", reason: "unavailable" }
+                  : { _tag: "Ambiguous" },
+            ),
+            Effect.scoped,
+            timeoutWithCause("10 seconds"),
+          ),
+        ).pipe(
+          Effect.catchCause((cause) => {
+            if (Cause.hasInterruptsOnly(cause))
+              return Effect.failCause(
+                Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+              );
+
+            return reportAuthFailure("proof-delivery", cause).pipe(
+              Effect.andThen(
+                Cause.hasDies(cause) || Cause.hasInterrupts(cause)
+                  ? Effect.failCause(
+                      Cause.fromReasons<never>(
+                        cause.reasons.map((reason) =>
+                          Cause.isInterruptReason(reason)
+                            ? Cause.makeInterruptReason(reason.fiberId)
+                            : Cause.makeDieReason(ReportedOperationDefect.make({})),
+                        ),
+                      ),
+                    )
+                  : Effect.succeed<ProofDeliveryOutcome>({ _tag: "Ambiguous" }),
+              ),
+            );
+          }),
+          Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
         ),
-        Effect.scoped,
-        Effect.timeout("10 seconds"),
-        Effect.catch(() => Effect.succeed<ProofDeliveryOutcome>({ _tag: "Ambiguous" })),
-        Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
       );
     });
 

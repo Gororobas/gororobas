@@ -6,6 +6,7 @@ import {
   type PreparePasswordCommit,
   type PasswordRegistrationDecision,
 } from "@yielded/auth/Password";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import type { SubjectId } from "@yielded/auth/Schema";
 import type { SecurityRevision } from "@yielded/auth/Sessions";
 import { Effect, Redacted, Schema, Option, Cause, type Crypto } from "effect";
@@ -99,7 +100,7 @@ export const makeNativePasswordRegistrationStore = Effect.fnUntraced(function* (
       yield* sql.onDialectOrElse({
         mysql: () =>
           stage(initial).pipe(
-            Effect.catchIf(
+            Effect.catchCauseIf(
               (cause) =>
                 mapping.isIdentifierConflict !== undefined &&
                 isMappedConstraintConflict(mapping.isIdentifierConflict, cause),
@@ -163,7 +164,13 @@ export const makeNativePasswordRegistrationStore = Effect.fnUntraced(function* (
           )
             return yield* invalidState();
         }).pipe(
-          Effect.mapError((cause) => PersistenceMappingError.make({ operation: "decode", cause })),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                PersistenceMappingError.make({ operation: "decode", cause: error }),
+              ),
+            ),
+          ),
         ),
       });
   });
@@ -210,9 +217,18 @@ export const makeNativePasswordRegistrationServices = Effect.fnUntraced(function
         ? executor.run(work)
         : executor
             .operation(
-              work.pipe(
-                Effect.mapError((error) =>
-                  error instanceof PasswordIdentifierTaken ? error : unavailable(),
+              reportPersistenceFailure(
+                work,
+                (error) =>
+                  error instanceof PasswordIdentifierTaken || Schema.is(PasswordUnavailable)(error),
+                { markReported: true },
+              ).pipe(
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error instanceof PasswordIdentifierTaken ? error : unavailable(),
+                    ),
+                  ),
                 ),
               ),
             )
@@ -226,7 +242,7 @@ export const makeNativePasswordRegistrationServices = Effect.fnUntraced(function
                   ? executor.run(suppressed, "statement")
                   : Effect.failCause(cause),
               ),
-              Effect.mapError(unavailable),
+              Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
             );
 
   const registrationAuthority: PasswordRegistrationAuthority<Registration> = {

@@ -1,6 +1,8 @@
 # @yielded/drizzle-effect-v4-patch
 
-Patch Drizzle's Effect integration for use with Yielded Auth in a Bun project.
+Adapt Drizzle's Effect integration to the supported Effect APIs for use with
+Yielded Auth in a Bun project. The patch preserves Drizzle's query and
+error-handling behavior.
 The CLI saves a native Bun patch and installs it; subsequent installs apply it
 from your lockfile. Your application's Effect package stays unchanged.
 

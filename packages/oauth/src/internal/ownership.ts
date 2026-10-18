@@ -1,4 +1,4 @@
-import { Effect, Fiber } from "effect";
+import { Cause, Effect, Exit, Fiber } from "effect";
 
 import { Unavailable } from "../Errors";
 
@@ -10,21 +10,40 @@ export const make = Effect.gen(function* () {
     scope.state._tag === "Closed" ? Effect.fail(Unavailable.make({})) : Effect.void,
   );
 
-  // Inspect the exit only after checking the owner: closure must stay unavailable,
-  // even when an interrupted operation was about to return a definite rejection.
+  // Closure cannot publish success or a definite rejection. Keep failures from
+  // joined work observable even when closure or caller interruption wins.
   const use = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    Effect.acquireUseRelease(
-      available.pipe(Effect.andThen(Effect.forkIn(effect, scope, { uninterruptible: false }))),
-      (fiber) =>
-        Effect.gen(function* () {
-          const exit = yield* Fiber.await(fiber);
+    Effect.suspend(() => {
+      let delivered = false;
 
-          yield* available;
+      return Effect.acquireUseRelease(
+        available.pipe(Effect.andThen(Effect.forkIn(effect, scope, { uninterruptible: false }))),
+        (fiber) =>
+          Effect.uninterruptibleMask((restore) =>
+            Effect.gen(function* () {
+              const exit = yield* restore(Fiber.await(fiber));
 
-          return yield* exit;
-        }),
-      Fiber.interrupt,
-    );
+              delivered = true;
+              if (scope.state._tag === "Closed") {
+                if (Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+                  return yield* Effect.failCause(Cause.map(exit.cause, () => Unavailable.make({})));
+
+                return yield* Unavailable.make({});
+              }
+
+              return yield* exit;
+            }),
+          ),
+        (fiber) =>
+          Effect.gen(function* () {
+            yield* Fiber.interrupt(fiber);
+            const exit = yield* Fiber.await(fiber);
+
+            if (!delivered && Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause))
+              return yield* Effect.failCause(exit.cause);
+          }),
+      );
+    });
 
   return { available, use };
 });

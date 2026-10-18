@@ -1,7 +1,8 @@
 import type { LifecycleHooks } from "@yielded/auth/Hooks";
 import * as M from "@yielded/auth/OAuth";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { AuthenticationFlowId } from "@yielded/auth/Sessions";
-import { Context, type Crypto, DateTime, Effect, Schema } from "effect";
+import { Cause, Context, type Crypto, DateTime, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -219,7 +220,12 @@ export const makeManagedOAuth = Effect.fnUntraced(function* (
     } satisfies OAuthNativeReadMapping;
 
     const services = yield* makeNativeOAuthSignInServices(tables, mapping, batch).pipe(
-      Effect.mapError(() => configurationError("Cannot configure OAuth sign-in persistence")),
+      (effect) => reportPersistenceFailure(effect, () => false, { markReported: true }),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, () => configurationError("Cannot configure OAuth sign-in persistence")),
+        ),
+      ),
     );
 
     context = Context.add(context, M.OAuthSignInPersistence, services.oauthSignInPersistence);
@@ -227,7 +233,12 @@ export const makeManagedOAuth = Effect.fnUntraced(function* (
       context,
       IdentityImports,
       yield* makeNativeOAuthIdentityImports(tables, mapping).pipe(
-        Effect.mapError(() => configurationError("Cannot configure OAuth identity imports")),
+        (effect) => reportPersistenceFailure(effect, () => false, { markReported: true }),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, () => configurationError("Cannot configure OAuth identity imports")),
+          ),
+        ),
       ),
     );
   }
@@ -252,7 +263,14 @@ export const makeManagedOAuth = Effect.fnUntraced(function* (
     };
 
     const connected = yield* makeNativeOAuthConnectedServices(tables, mapping, batch).pipe(
-      Effect.mapError(() => configurationError("Cannot configure OAuth connected persistence")),
+      (effect) => reportPersistenceFailure(effect, () => false, { markReported: true }),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, () =>
+            configurationError("Cannot configure OAuth connected persistence"),
+          ),
+        ),
+      ),
     );
 
     const revocations = yield* makeNativeOAuthRevocationServices(
@@ -264,7 +282,14 @@ export const makeManagedOAuth = Effect.fnUntraced(function* (
       },
       batch,
     ).pipe(
-      Effect.mapError(() => configurationError("Cannot configure OAuth revocation persistence")),
+      (effect) => reportPersistenceFailure(effect, () => false, { markReported: true }),
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, () =>
+            configurationError("Cannot configure OAuth revocation persistence"),
+          ),
+        ),
+      ),
     );
 
     context = context.pipe(

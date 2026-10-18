@@ -1,4 +1,4 @@
-import { Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
+import { Cause, Context, Crypto, DateTime, Effect, Layer, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
@@ -173,7 +173,9 @@ export const makeEmailAddresses = <
             Base64Url.encode(yield* crypto.digest("SHA-256", new TextEncoder().encode(message))),
           );
         },
-        Effect.mapError(() => EmailUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+        ),
       );
 
       const bound = Effect.fn("EmailAddresses.binding")(function* (
@@ -188,10 +190,14 @@ export const makeEmailAddresses = <
         const privateBinding = yield* binder
           .verify(request.flowId, request.requestBinding)
           .pipe(
-            Effect.mapError((error) =>
-              error._tag === "RequestBindingInvalid"
-                ? EmailRejected.make({})
-                : EmailUnavailable.make({}),
+            Effect.catchCause((cause) =>
+              Effect.failCause(
+                Cause.map(cause, (error) =>
+                  error._tag === "RequestBindingInvalid"
+                    ? EmailRejected.make({})
+                    : EmailUnavailable.make({}),
+                ),
+              ),
             ),
           );
 
@@ -300,7 +306,9 @@ export const makeEmailAddresses = <
         });
 
         const raw = yield* snapshotAuthenticationEvidence(grant.evidence).pipe(
-          Effect.mapError(() => EmailActionRequired.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => EmailActionRequired.make({}))),
+          ),
         );
 
         const evidence = { ...raw, revision: snapshotEmailRevision(raw.revision) };
@@ -332,7 +340,9 @@ export const makeEmailAddresses = <
 
         if (
           !(yield* assessAuthentication(evidence, requirement).pipe(
-            Effect.mapError(() => EmailActionRequired.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => EmailActionRequired.make({}))),
+            ),
           )).satisfied
         )
           return yield* EmailActionRequired.make({});
@@ -360,10 +370,16 @@ export const makeEmailAddresses = <
             })
             .pipe(
               Effect.flatMap(readProofCommit),
-              Effect.mapError(() => EmailUnavailable.make({})),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+              ),
             );
 
-          yield* dispatch.schedule.pipe(Effect.mapError(() => EmailUnavailable.make({})));
+          yield* dispatch.schedule.pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+            ),
+          );
 
           return dispatch.receipt;
         }),
@@ -379,7 +395,11 @@ export const makeEmailAddresses = <
                 credential: input.secret,
                 binding: current.binding,
               })
-              .pipe(Effect.mapError(emailCompletionFailure));
+              .pipe(
+                Effect.catchCause((cause) =>
+                  Effect.failCause(Cause.map(cause, emailCompletionFailure)),
+                ),
+              );
 
             const authorization = yield* authorize(invocation, input, current.challenge);
 
@@ -409,7 +429,11 @@ export const makeEmailAddresses = <
 
             const bytes = yield* crypto
               .randomBytes(32)
-              .pipe(Effect.mapError(() => EmailUnavailable.make({})));
+              .pipe(
+                Effect.catchCause((cause) =>
+                  Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+                ),
+              );
 
             const event = yield* lifecycleEventEffect({
               id: LifecycleEventId.make(Base64Url.encode(bytes)),
@@ -483,7 +507,7 @@ export const makeEmailAddresses = <
     const action = mode === "verify" ? "verify-address" : "change-address";
 
     const admitRequest = proofRequestAdmission(`${moduleId}/address/${mode}`).pipe(
-      Effect.mapError(emailCompletionFailure),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, emailCompletionFailure))),
     );
 
     const Request = makeOperation(`${moduleId}/address/${mode}/request`, {
@@ -516,7 +540,12 @@ export const makeEmailAddresses = <
         Effect.fn("EmailAddresses.Complete")(function* (input, invocation) {
           const plan = yield* (yield* Addresses).planComplete(action, invocation, input);
           const receipt = yield* plan.commit;
-          const result = yield* receipt.read.pipe(Effect.mapError(() => EmailUnavailable.make({})));
+
+          const result = yield* receipt.read.pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => EmailUnavailable.make({}))),
+            ),
+          );
 
           if ("_tag" in result.value) return yield* EmailRejected.make({});
 

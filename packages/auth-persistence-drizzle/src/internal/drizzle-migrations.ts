@@ -1,5 +1,9 @@
-import { PersistenceConfigurationError } from "@yielded/auth-persistence/Adapter";
-import { Effect, Layer } from "effect";
+import {
+  PersistenceConfigurationError,
+  PersistenceMappingError,
+} from "@yielded/auth-persistence/Adapter";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
+import { Cause, Effect, Layer, Schema } from "effect";
 
 /** Run Drizzle Kit output through the matching Drizzle driver. Loading files and
  * acquiring the database are deferred until the Layer is built. Drizzle owns the
@@ -18,12 +22,26 @@ export const drizzleMigrationsLayer =
 
         const migration = yield* Effect.try({
           try: () => migrate(database, options),
-          catch: () =>
-            PersistenceConfigurationError.make({
-              reason: "Could not read Drizzle migrations; check the migration source and format",
-            }),
+          catch: (cause) => PersistenceMappingError.make({ operation: "migration", cause }),
         });
 
         yield* migration;
-      }),
+      }).pipe(
+        (effect) =>
+          reportPersistenceFailure(effect, Schema.is(PersistenceConfigurationError), {
+            markReported: true,
+          }),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              Schema.is(PersistenceMappingError)(error)
+                ? PersistenceConfigurationError.make({
+                    reason:
+                      "Could not read Drizzle migrations; check the migration source and format",
+                  })
+                : error,
+            ),
+          ),
+        ),
+      ),
     );

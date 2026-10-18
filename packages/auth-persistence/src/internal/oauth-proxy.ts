@@ -1,5 +1,6 @@
 import { FlowContext, Persistence, Record, Unavailable } from "@yielded/auth/OAuthProxy";
-import { Effect, Layer, Schema } from "effect";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
+import { Cause, Effect, Layer, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { identifier } from "./sql-table";
@@ -77,7 +78,9 @@ export const makeOAuthProxyPersistence = Effect.fnUntraced(function* (table: OAu
   const standalone = requireStandalone(() => Unavailable.make({}), sql.transactionService);
 
   const failure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-    effect.pipe(Effect.mapError(() => Unavailable.make({})));
+    reportPersistenceFailure(effect, Schema.is(Unavailable), { markReported: true }).pipe(
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => Unavailable.make({})))),
+    );
 
   const clock = sql.onDialectOrElse({
     sqlite: () => sql.literal("CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)"),

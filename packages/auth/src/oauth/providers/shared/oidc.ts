@@ -2,7 +2,7 @@ import { Hmac } from "@yielded/crypto/Hmac";
 import { Signature } from "@yielded/crypto/Signature";
 import type * as OAuth from "@yielded/oauth/OAuth";
 import * as Oidc from "@yielded/oauth/Oidc";
-import { Context, Crypto, Effect, type Redacted } from "effect";
+import { Cause, Context, Crypto, Effect, type Redacted } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
 import { OAuthUnavailable } from "../../signInErrors";
@@ -72,7 +72,9 @@ export class ProviderDiscovery extends Context.Service<
         const metadata = yield* Oidc.discover(issuer, {
           timeoutMs: timeoutSeconds * 1000,
           ...(metadataUrl === undefined ? {} : { metadataUrl }),
-        }).pipe(Effect.mapError(configurationError));
+        }).pipe(
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, configurationError))),
+        );
 
         cache.set(key, { client, fetch, metadata });
 
@@ -104,7 +106,7 @@ const makeVerifier = Effect.fn("OpenIdConnect.makeVerifier")(function* (
     algorithms: options.algorithms,
     pkceS256: options.pkceS256,
     ...(options.clientSecret === undefined ? {} : { clientSecret: options.clientSecret }),
-  }).pipe(Effect.mapError(configurationError));
+  }).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, configurationError))));
 
   return {
     verify: (token: Redacted.Redacted<string>, input: Oidc.VerificationInput) =>

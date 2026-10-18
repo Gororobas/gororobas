@@ -1,4 +1,4 @@
-import { Context, Crypto, DateTime, Effect, Layer, Redacted, Result, Schema } from "effect";
+import { Cause, Context, Crypto, DateTime, Effect, Layer, Redacted, Result, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { prepareCommit } from "../hooks/commit";
@@ -31,7 +31,6 @@ import {
   connectedGrantResponse,
   connectedProfile,
   connectedRead,
-  connectedSafe,
   connectedSame,
   connectedUseAuthorization,
   makeOAuthConnectedAccess,
@@ -162,7 +161,12 @@ export const makeOAuthConnected = <const Id extends string>(
       const { randomBytes, digest } = yield* Crypto.Crypto;
 
       const random = Effect.fn("OAuthConnected.random")(function* () {
-        const bytes = yield* randomBytes(32).pipe(Effect.mapError(() => OAuthUnavailable.make({})));
+        const bytes = yield* randomBytes(32).pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+          ),
+        );
+
         const value = OAuthClaimId.make(Base64Url.encode(bytes));
 
         bytes.fill(0);
@@ -172,7 +176,9 @@ export const makeOAuthConnected = <const Id extends string>(
 
       const hash = Effect.fn("OAuthConnected.hash")(function* (value: string) {
         const bytes = yield* digest("SHA-256", encoder.encode(value)).pipe(
-          Effect.mapError(() => OAuthUnavailable.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+          ),
         );
 
         return TokenDigest.make(Base64Url.encode(bytes));
@@ -252,7 +258,9 @@ export const makeOAuthConnected = <const Id extends string>(
           Math.min(maximumAge, policy.maximumEvidenceAgeMillis),
         ).pipe(
           Effect.provideService(AuthenticationClock, clockPolicy),
-          Effect.mapError(() => M.OAuthConnectedActionRequired.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => M.OAuthConnectedActionRequired.make({}))),
+          ),
         );
 
         const authorization = yield* snapshotOAuthConnectedActionAuthorization.effect({
@@ -334,7 +342,10 @@ export const makeOAuthConnected = <const Id extends string>(
           Effect.flatMap((value) => snapshotOAuthReturnTarget.effect(value)),
         );
 
-        const issued = yield* issueBinding(request.flowId).pipe(Effect.mapError(binderError));
+        const issued = yield* issueBinding(request.flowId).pipe(
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, binderError))),
+        );
+
         const original = issued.credentialCommands[0];
 
         if (
@@ -357,7 +368,7 @@ export const makeOAuthConnected = <const Id extends string>(
           ...(yield* verifyBinding(
             request.flowId,
             Redacted.make(Redacted.value(command.credential)),
-          ).pipe(Effect.mapError(binderError))),
+          ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, binderError))))),
         };
 
         if (binder.expiresAtMillis !== command.expiresAtMillis)
@@ -368,8 +379,12 @@ export const makeOAuthConnected = <const Id extends string>(
           callbackId: request.callbackId,
           flowId: request.flowId,
         }).pipe(
-          Effect.mapError((error) =>
-            error._tag === "OAuthProtocolRejected" ? OAuthRejected.make({}) : error,
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                error._tag === "OAuthProtocolRejected" ? OAuthRejected.make({}) : error,
+              ),
+            ),
           ),
           Effect.flatMap((value) => snapshotPreparationSchema.effect(value)),
         );
@@ -468,7 +483,7 @@ export const makeOAuthConnected = <const Id extends string>(
           },
           credentialCommands: [formPostBinding(command, prepared.responseMode)],
         };
-      }, connectedSafe);
+      });
 
       const consumeCallback = Effect.fn("OAuthConnected.consumeCallback")(function* (
         invocation: AuthInvocation,
@@ -489,7 +504,7 @@ export const makeOAuthConnected = <const Id extends string>(
 
         const binder = {
           ...(yield* verifyBinding(request.flowId, request.requestBinding).pipe(
-            Effect.mapError(binderError),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, binderError))),
           )),
         };
 
@@ -549,7 +564,7 @@ export const makeOAuthConnected = <const Id extends string>(
           return yield* OAuthUnavailable.make({});
 
         return { caller, request, flow, context, access };
-      }, connectedSafe);
+      });
 
       const completeChallenge = (context: M.OAuthConnectedTransactionContext) =>
         challenge(
@@ -642,10 +657,17 @@ export const makeOAuthConnected = <const Id extends string>(
           }),
           context.exchangeTimeoutMillis,
         ).pipe(
-          Effect.catchTags({
-            TimeoutError: () => Effect.fail(OAuthUnavailable.make({})),
-            OAuthProtocolRejected: () => Effect.fail(OAuthRejected.make({})),
-          }),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                error._tag === "TimeoutError"
+                  ? OAuthUnavailable.make({})
+                  : error._tag === "OAuthProtocolRejected"
+                    ? OAuthRejected.make({})
+                    : error,
+              ),
+            ),
+          ),
         );
 
         const event = yield* eventFor("connect", caller.subjectId);
@@ -680,7 +702,7 @@ export const makeOAuthConnected = <const Id extends string>(
           },
           credentialCommands: clearBinding,
         };
-      }, connectedSafe);
+      });
 
       const list = Effect.fn("OAuthConnected.list")(function* (
         invocation: AuthInvocation,
@@ -707,7 +729,7 @@ export const makeOAuthConnected = <const Id extends string>(
           return yield* OAuthUnavailable.make({});
 
         return result;
-      }, connectedSafe);
+      });
 
       const disconnect = Effect.fn("OAuthConnected.disconnect")(function* (
         invocation: AuthInvocation,
@@ -779,7 +801,7 @@ export const makeOAuthConnected = <const Id extends string>(
         if (result._tag === "Rejected") return yield* OAuthRejected.make({});
 
         return result;
-      }, connectedSafe);
+      });
 
       return Connected.of({
         begin,

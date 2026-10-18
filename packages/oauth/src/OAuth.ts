@@ -379,7 +379,8 @@ const authenticated = Effect.fnUntraced(function* (
  * Supply an HttpClient without retry/redirect/cookie middleware. Fetch injection
  * active at construction is captured. Owner closure cancels and joins active
  * operations, then rejects their results as unavailable; caller interruption
- * cancels and joins its operation without closing the client. */
+ * cancels and joins its operation without closing the client. Unexpected
+ * cleanup failures remain observable in the operation's Cause. */
 export const make = Effect.fnUntraced(function* (
   input: ClientOptions,
 ): Effect.fn.Return<Client, ConfigurationError | Unavailable, HttpClient.HttpClient | Scope.Scope> {

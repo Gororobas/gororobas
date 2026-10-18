@@ -210,4 +210,4 @@ export const resolveProvider = Effect.fnUntraced(function* <
 /** Capture caller-owned objects, including throwing getters or erased secrets.
  * Owned validation stays typed; unexpected input defects never retain credentials. */
 export const resolveOptions = <A, E, R>(resolve: () => Effect.Effect<A, E, R>) =>
-  Effect.suspend(resolve).pipe(Effect.catchDefect(() => Effect.fail(invalid())));
+  Effect.suspend(resolve);

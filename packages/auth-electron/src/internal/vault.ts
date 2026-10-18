@@ -4,7 +4,9 @@ import * as BrowserLogin from "@yielded/auth/BrowserLogin";
 import { OperationHttpError } from "@yielded/auth/OperationHttp";
 import type { NativeCredentials } from "@yielded/auth/OperationHttpClient";
 import type { CredentialSlot } from "@yielded/auth/Operations";
+import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
 import {
+  Cause,
   DateTime,
   Effect,
   FileSystem,
@@ -22,6 +24,35 @@ const slots = recordSchema.fields.credentials.key.literals;
 const recordJson = Schema.fromJsonString(recordSchema);
 const failure = () => BrowserLogin.PlatformError.make({ reason: "storage" });
 
+// Only exported vault operations project errors, after all file finalizers settle.
+const storageBoundary =
+  <Failure>(project: () => Failure) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, Failure, R> =>
+    Effect.uninterruptibleMask((restore) =>
+      restore(effect).pipe(
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause))
+            return Effect.failCause(
+              Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+            );
+
+          return reportAuthFailure("browser-login", cause).pipe(
+            Effect.andThen(
+              Effect.failCause(
+                markAuthFailureReported(
+                  Cause.fromReasons(
+                    cause.reasons.map((reason) =>
+                      Cause.isInterruptReason(reason) ? reason : Cause.makeFailReason(project()),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+
 /** One writer per private application/environment path, protected by the host's
  * single-instance lock. Never reset an unreadable store: it may contain the
  * Exchanging fence. Writes fsync ciphertext, close, rename on the same filesystem,
@@ -34,8 +65,8 @@ export const layerVault = (options: { readonly path: string }) =>
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
 
-      const checkEncryption = Effect.try({
-        try: () =>
+      const checkEncryption = Effect.sync(
+        () =>
           process.type === "browser" &&
           app.isReady() &&
           app.hasSingleInstanceLock() &&
@@ -44,20 +75,17 @@ export const layerVault = (options: { readonly path: string }) =>
             ["gnome_libsecret", "kwallet", "kwallet5", "kwallet6"].includes(
               safeStorage.getSelectedStorageBackend(),
             )),
-        catch: failure,
-      }).pipe(Effect.flatMap((available) => (available ? Effect.void : Effect.fail(failure()))));
+      ).pipe(Effect.flatMap((available) => (available ? Effect.void : Effect.fail(failure()))));
 
       yield* checkEncryption;
 
       const destination = yield* Schema.decodeEffect(
         Schema.NonEmptyString.check(Schema.makeFilter((value) => path.isAbsolute(value))),
-      )(options.path).pipe(Effect.mapError(failure));
+      )(options.path);
 
       const directory = path.dirname(destination);
 
-      yield* fs
-        .makeDirectory(directory, { recursive: true, mode: 0o700 })
-        .pipe(Effect.mapError(failure));
+      yield* fs.makeDirectory(directory, { recursive: true, mode: 0o700 });
       const gate = yield* Semaphore.make(1);
 
       const readRecord = Effect.gen(function* () {
@@ -66,8 +94,12 @@ export const layerVault = (options: { readonly path: string }) =>
         const stat = yield* fs
           .stat(destination)
           .pipe(
-            Effect.catchTag("PlatformError", (error) =>
-              error.reason._tag === "NotFound" ? Effect.void : Effect.fail(error),
+            Effect.catchCause((cause) =>
+              cause.reasons.every(
+                (reason) => Cause.isFailReason(reason) && reason.error.reason._tag === "NotFound",
+              )
+                ? Effect.void
+                : Effect.failCause(cause),
             ),
           );
 
@@ -75,22 +107,16 @@ export const layerVault = (options: { readonly path: string }) =>
         if (stat.type !== "File" || stat.size > 1048576) return yield* failure();
         const bytes = yield* fs.readFile(destination);
 
-        const json = yield* Effect.try({
-          try: () => safeStorage.decryptString(Buffer.from(bytes)),
-          catch: failure,
-        });
+        const json = yield* Effect.sync(() => safeStorage.decryptString(Buffer.from(bytes)));
 
         return yield* Schema.decodeEffect(recordJson)(json, { onExcessProperty: "error" });
-      }).pipe(Effect.mapError(failure));
+      });
 
       const writeRecord = Effect.fnUntraced(function* (record: typeof recordSchema.Type) {
         yield* checkEncryption;
         const json = yield* Schema.encodeEffect(recordJson)(record);
 
-        const bytes = yield* Effect.try({
-          try: () => safeStorage.encryptString(json),
-          catch: failure,
-        });
+        const bytes = yield* Effect.sync(() => safeStorage.encryptString(json));
 
         yield* Effect.scoped(
           Effect.gen(function* () {
@@ -115,7 +141,7 @@ export const layerVault = (options: { readonly path: string }) =>
             yield* committed.sync;
           }),
         );
-      }, Effect.mapError(failure));
+      });
 
       const locked = <A, E>(effect: Effect.Effect<A, E>) =>
         gate.withPermits(1)(Effect.uninterruptible(effect));
@@ -135,7 +161,7 @@ export const layerVault = (options: { readonly path: string }) =>
 
           return credentials;
         }),
-      ).pipe(Effect.mapError(() => OperationHttpError.make({ reason: "credentials" })));
+      ).pipe(storageBoundary(() => OperationHttpError.make({ reason: "credentials" })));
 
       const accept: NativeCredentials["accept"] = (commands) =>
         locked(
@@ -153,12 +179,14 @@ export const layerVault = (options: { readonly path: string }) =>
             }
             yield* writeRecord({ ...record, credentials });
           }),
-        ).pipe(Effect.mapError(() => OperationHttpError.make({ reason: "credentials" })));
+        ).pipe(storageBoundary(() => OperationHttpError.make({ reason: "credentials" })));
 
       return BrowserLogin.Vault.of({
         read,
         accept,
-        loadAttempt: locked(readRecord.pipe(Effect.map((record) => record.attempt))),
+        loadAttempt: locked(readRecord.pipe(Effect.map((record) => record.attempt))).pipe(
+          storageBoundary(failure),
+        ),
         saveAttempt: (attempt) =>
           locked(
             Effect.gen(function* () {
@@ -170,7 +198,7 @@ export const layerVault = (options: { readonly path: string }) =>
                   : { ...record, attempt },
               );
             }),
-          ),
+          ).pipe(storageBoundary(failure)),
       });
-    }),
+    }).pipe(storageBoundary(failure)),
   );

@@ -1,8 +1,35 @@
 import * as BrowserLogin from "@yielded/auth/BrowserLogin";
-import { Effect, Layer, Schema } from "effect";
+import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
+import { Cause, Effect, Layer, Schema } from "effect";
 import { app, shell, type Event } from "electron";
 
 const unavailable = () => BrowserLogin.PlatformError.make({ reason: "unavailable" });
+
+const redactDefects =
+  <Failure>(project: () => Cause.Reason<Failure>) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+    Effect.uninterruptibleMask((restore) =>
+      restore(effect).pipe(
+        Effect.catchCause((cause) => {
+          if (!Cause.hasDies(cause)) return Effect.failCause(cause);
+
+          return reportAuthFailure("browser-login", cause).pipe(
+            Effect.andThen(
+              Effect.failCause(
+                markAuthFailureReported(
+                  Cause.fromReasons<E | Failure>(
+                    cause.reasons.map((reason) => (Cause.isDieReason(reason) ? project() : reason)),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+
+const browserBoundary = redactDefects(() => Cause.makeFailReason(unavailable()));
+const cleanupBoundary = redactDefects<never>(() => Cause.makeDieReason(unavailable()));
 
 const optionsSchema = Schema.Struct({
   hostedUrl: BrowserLogin.HostedUrl,
@@ -115,51 +142,56 @@ export const makeBrowser = Effect.fnUntraced(function* (options: typeof optionsS
     capture(details.webpageURL);
   };
 
-  yield* Effect.acquireRelease(
+  // Register cleanup before installing listeners so partial acquisition is owned.
+  // Each release is attempted even when an earlier platform removal throws.
+  yield* Effect.addFinalizer(() =>
     Effect.sync(() => {
-      if (universalLink) app.on("continue-activity", continueActivity);
-      else {
-        app.on("open-url", openUrl);
-        app.on("second-instance", secondInstance);
-        for (const arg of process.argv) capture(arg);
-      }
-    }),
-    () =>
-      Effect.sync(() => {
-        disposed = true;
-        if (universalLink) app.removeListener("continue-activity", continueActivity);
-        else {
-          app.removeListener("open-url", openUrl);
-          app.removeListener("second-instance", secondInstance);
-        }
-        queued.length = 0;
-        close?.();
-      }),
+      disposed = true;
+      queued.length = 0;
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (universalLink) app.removeListener("continue-activity", continueActivity);
+          else app.removeListener("open-url", openUrl);
+        }),
+      ),
+      Effect.ensuring(
+        Effect.sync(() => {
+          if (!universalLink) app.removeListener("second-instance", secondInstance);
+        }),
+      ),
+      Effect.ensuring(Effect.sync(() => close?.())),
+      cleanupBoundary,
+    ),
   );
+  yield* Effect.sync(() => {
+    if (universalLink) app.on("continue-activity", continueActivity);
+    else {
+      app.on("open-url", openUrl);
+      app.on("second-instance", secondInstance);
+      for (const arg of process.argv) capture(arg);
+    }
+  });
 
-  const prepare = Effect.try({
-    try: () => {
-      if (!app.isReady() || disposed) return false;
-      // Associated domains are verified by macOS when routing the callback.
-      // Registering as the default HTTPS handler would not establish ownership.
-      if (universalLink) return process.platform === "darwin" && app.isPackaged;
-      if (process.platform === "linux")
-        return app.isPackaged && app.isDefaultProtocolClient(scheme);
-      if (process.platform === "darwin")
-        return (
-          app.isPackaged &&
-          app.setAsDefaultProtocolClient(scheme) &&
-          app.isDefaultProtocolClient(scheme)
-        );
-      if (process.platform !== "win32") return false;
-      const args = process.defaultApp ? [app.getAppPath()] : [];
-
+  const prepare = Effect.sync(() => {
+    if (!app.isReady() || disposed) return false;
+    // Associated domains are verified by macOS when routing the callback.
+    // Registering as the default HTTPS handler would not establish ownership.
+    if (universalLink) return process.platform === "darwin" && app.isPackaged;
+    if (process.platform === "linux") return app.isPackaged && app.isDefaultProtocolClient(scheme);
+    if (process.platform === "darwin")
       return (
-        app.setAsDefaultProtocolClient(scheme, process.execPath, args) &&
-        app.isDefaultProtocolClient(scheme, process.execPath, args)
+        app.isPackaged &&
+        app.setAsDefaultProtocolClient(scheme) &&
+        app.isDefaultProtocolClient(scheme)
       );
-    },
-    catch: unavailable,
+    if (process.platform !== "win32") return false;
+    const args = process.defaultApp ? [app.getAppPath()] : [];
+
+    return (
+      app.setAsDefaultProtocolClient(scheme, process.execPath, args) &&
+      app.isDefaultProtocolClient(scheme, process.execPath, args)
+    );
   }).pipe(Effect.flatMap((available) => (available ? Effect.void : Effect.fail(unavailable()))));
 
   return BrowserLogin.Browser.of({
@@ -199,22 +231,22 @@ export const makeBrowser = Effect.fnUntraced(function* (options: typeof optionsS
         if (pending !== undefined) receive(pending);
         else {
           try {
-            void shell.openExternal(request.url).catch(() => finish(Effect.fail(unavailable())));
-          } catch {
-            finish(Effect.fail(unavailable()));
+            void shell.openExternal(request.url).catch((error) => finish(Effect.die(error)));
+          } catch (error) {
+            finish(Effect.die(error));
           }
         }
 
         return Effect.sync(cleanup);
       }).pipe(
-        Effect.timeout("10 minutes"),
-        Effect.catchTag("TimeoutError", () =>
-          Effect.fail(BrowserLogin.PlatformError.make({ reason: "expired" })),
-        ),
+        Effect.timeoutOrElse({
+          duration: "10 minutes",
+          orElse: () => Effect.fail(BrowserLogin.PlatformError.make({ reason: "expired" })),
+        }),
       );
-    }),
+    }, browserBoundary),
   });
-});
+}, browserBoundary);
 
 /** Build before app readiness, or use makeBrowser for synchronous startup capture. */
 export const layerBrowser = (options: typeof optionsSchema.Type) =>

@@ -1,5 +1,6 @@
 import { EmailDelivery, Schema as AuthSchema } from "@yielded/auth";
-import { Config, Effect, Layer, Redacted, Schema } from "effect";
+import { markAuthFailureReported, reportAuthFailure } from "@yielded/auth/Persistence";
+import { Cause, Config, Effect, Layer, Redacted, Schema } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 const SendResponse = Schema.Struct({
@@ -11,6 +12,46 @@ const SendResponse = Schema.Struct({
     suppressed_recipients: Schema.optionalKey(Schema.Array(Schema.String)),
   }),
 });
+
+/** Keep provider and cleanup failures private until the delivery outcome boundary. */
+export const deliveryBoundary = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.uninterruptibleMask((restore) =>
+    restore(effect).pipe(
+      Effect.catchCause((cause) => {
+        const unexpected = cause.reasons.filter(
+          (reason) =>
+            Cause.isDieReason(reason) ||
+            (Cause.isFailReason(reason) &&
+              !Schema.is(EmailDelivery.EmailNotAccepted)(reason.error)),
+        );
+
+        const projected = Cause.fromReasons(
+          cause.reasons.map((reason) =>
+            Cause.isInterruptReason(reason)
+              ? reason
+              : Cause.makeFailReason(
+                  Cause.isFailReason(reason) &&
+                    Schema.is(EmailDelivery.EmailNotAccepted)(reason.error)
+                    ? reason.error
+                    : EmailDelivery.EmailAcceptanceUnknown.make({}),
+                ),
+          ),
+        );
+
+        return (
+          unexpected.length === 0
+            ? Effect.void
+            : reportAuthFailure("proof-delivery", Cause.fromReasons(unexpected))
+        ).pipe(
+          Effect.andThen(
+            Effect.failCause(
+              unexpected.length === 0 ? projected : markAuthFailureReported(projected),
+            ),
+          ),
+        );
+      }),
+    ),
+  );
 
 // Cloudflare REST sending works with the local Bun server; no Worker binding is needed.
 export const DeliveryLive = Layer.unwrap(
@@ -24,7 +65,7 @@ export const DeliveryLive = Layer.unwrap(
 
     yield* Schema.decodeEffect(Schema.String.check(Schema.isPattern(/^[a-f0-9]{32}$/)))(accountId);
     const sender = yield* Schema.decodeEffect(AuthSchema.Email)(from);
-    const client = yield* HttpClient.HttpClient;
+    const client = (yield* HttpClient.HttpClient).pipe(HttpClient.withScope);
 
     const send = Effect.fn("Customers.sendEmail")(function* (
       message: EmailDelivery.EmailMessage,
@@ -48,10 +89,6 @@ export const DeliveryLive = Layer.unwrap(
         Effect.flatMap((response) =>
           Effect.gen(function* () {
             if (response.status >= 400 && response.status < 500) {
-              yield* Effect.logError("Cloudflare Email Sending rejected a message", {
-                status: response.status,
-              });
-
               return yield* EmailDelivery.EmailNotAccepted.make({});
             }
             if (response.status < 200 || response.status >= 300)
@@ -73,10 +110,9 @@ export const DeliveryLive = Layer.unwrap(
           }),
         ),
         Effect.timeout("8 seconds"),
+        Effect.scoped,
         Effect.provideService(HttpClient.TracerDisabledWhen, () => true),
-        Effect.mapError((error) =>
-          error._tag === "EmailNotAccepted" ? error : EmailDelivery.EmailAcceptanceUnknown.make({}),
-        ),
+        deliveryBoundary,
       );
 
       return result;

@@ -1,5 +1,27 @@
 # @yielded/auth-react-native
 
+## 0.1.0-beta.42
+
+### Patch Changes
+
+- [#243](https://github.com/yielded-dev/auth/pull/243) [`0a0ff7d`](https://github.com/yielded-dev/auth/commit/0a0ff7d6d81d8b9e0aacd39ec81991b1f259e956) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve complete failure causes across authentication, persistence, provider, and native client boundaries, and report unexpected background and cleanup failures without exposing private data.
+- Updated dependencies [[`0a0ff7d`](https://github.com/yielded-dev/auth/commit/0a0ff7d6d81d8b9e0aacd39ec81991b1f259e956)]:
+  - @yielded/auth@0.1.0-beta.42
+
+## 0.1.0-beta.41
+
+### Patch Changes
+
+- Updated dependencies [[`ba7ccf2`](https://github.com/yielded-dev/auth/commit/ba7ccf23307cea88dcc20ee4b13f21561996a62c)]:
+  - @yielded/auth@0.1.0-beta.41
+
+## 0.1.0-beta.40
+
+### Patch Changes
+
+- Updated dependencies [[`4ea887e`](https://github.com/yielded-dev/auth/commit/4ea887e2f77cd6e13defe1d445b892b45216b3ef)]:
+  - @yielded/auth@0.1.0-beta.40
+
 ## 0.1.0-beta.39
 
 ### Patch Changes

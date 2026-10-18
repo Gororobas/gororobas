@@ -12,7 +12,7 @@ import {
   SecurityRevision,
   snapshotAuthenticationEvidence,
 } from "@yielded/auth/Sessions";
-import { Crypto, DateTime, Effect, Option, Schema } from "effect";
+import { Cause, Crypto, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -633,8 +633,12 @@ export const makeNativePhoneServices = Effect.fnUntraced(function* (
 
                 if (!(rows.length === 1)) return yield* invalidState();
               }).pipe(
-                Effect.mapError((cause) =>
-                  PersistenceMappingError.make({ operation: "decode", cause }),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      PersistenceMappingError.make({ operation: "decode", cause: error }),
+                    ),
+                  ),
                 ),
               ),
             });

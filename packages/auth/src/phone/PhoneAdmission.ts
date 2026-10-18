@@ -1,4 +1,4 @@
-import { Context, Duration, Effect, Layer, Schema } from "effect";
+import { Cause, Context, Duration, Effect, Layer, Schema } from "effect";
 import * as RateLimiter from "effect/persistence/RateLimiter";
 
 import { defaultLayer } from "../auth/defaults";
@@ -65,10 +65,13 @@ export class PhoneAdmission extends Context.Service<
 
               return true;
             }).pipe(
-              Effect.catch((error) =>
-                error.reason._tag === "RateLimitExceeded"
+              Effect.catchCause((cause) =>
+                cause.reasons.every(
+                  (reason) =>
+                    Cause.isFailReason(reason) && reason.error.reason._tag === "RateLimitExceeded",
+                )
                   ? Effect.succeed(false)
-                  : Effect.fail(PhoneOtpUnavailable.make({})),
+                  : Effect.failCause(Cause.map(cause, () => PhoneOtpUnavailable.make({}))),
               ),
             ),
         });

@@ -13,7 +13,7 @@ import {
   type SessionRepository,
   type SessionUnavailable,
 } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Option, Schema } from "effect";
+import { Cause, DateTime, Effect, Option, Schema } from "effect";
 import type { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -126,7 +126,13 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
           if (!(rows.length === 1)) return yield* invalidSessionState();
         }).pipe(
           Effect.provideService(AuthenticationClock, state.clockPolicy),
-          Effect.mapError((cause) => PersistenceMappingError.make({ operation: "decode", cause })),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                PersistenceMappingError.make({ operation: "decode", cause: error }),
+              ),
+            ),
+          ),
         ),
       });
   });
@@ -140,10 +146,12 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
 
   const classify = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     effect.pipe(
-      Effect.mapError((error) =>
-        isMappedConstraintConflict(mapping.isConstraintConflict, error)
-          ? SessionConflict.make({})
-          : error,
+      Effect.catchCause((cause) =>
+        Effect.failCause<E | SessionConflict>(
+          isMappedConstraintConflict(mapping.isConstraintConflict, cause)
+            ? Cause.map(cause, () => SessionConflict.make({}))
+            : cause,
+        ),
       ),
     );
 
@@ -159,7 +167,10 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
       ],
     ],
     canJoinTextColumns,
-  ).pipe(withStorageValidation, Effect.mapError(sessionUnavailable));
+  ).pipe(
+    withStorageValidation,
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, sessionUnavailable))),
+  );
 
   const subject = state.subject.as("verified_subject"),
     session = table.as("verified_session"),
@@ -348,8 +359,12 @@ export const makeNativeStatefulSessionServices = Effect.fnUntraced(function* <Cl
                   );
                 }).pipe(
                   Effect.provideService(AuthenticationClock, state.clockPolicy),
-                  Effect.mapError((cause) =>
-                    PersistenceMappingError.make({ operation: "decode", cause }),
+                  Effect.catchCause((cause) =>
+                    Effect.failCause(
+                      Cause.map(cause, (error) =>
+                        PersistenceMappingError.make({ operation: "decode", cause: error }),
+                      ),
+                    ),
                   ),
                 ),
               });

@@ -1,5 +1,5 @@
 import * as OAuth from "@yielded/oauth/OAuth";
-import { Effect, Redacted } from "effect";
+import { Cause, Effect, Redacted } from "effect";
 
 import { OAuthProtocolRejected, OAuthUnavailable } from "../../signInErrors";
 import { type TokenCompatibility } from "./compatibility";
@@ -14,8 +14,14 @@ export const tokens = Effect.fn("OpenIdConnect.tokens")(function* (
     yield* compatibility.inspectReceipt({ ...receipt, body: Redacted.value(receipt.body) }, input);
 
   return yield* OAuth.tokens(receipt).pipe(
-    Effect.mapError((error) =>
-      error._tag === "OAuthRejected" ? OAuthProtocolRejected.make({}) : OAuthUnavailable.make({}),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) =>
+          error._tag === "OAuthRejected"
+            ? OAuthProtocolRejected.make({})
+            : OAuthUnavailable.make({}),
+        ),
+      ),
     ),
   );
 });

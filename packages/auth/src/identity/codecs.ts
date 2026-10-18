@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 
 import { SubjectId } from "../Schema";
 
@@ -22,8 +22,13 @@ export const subjectIdCodec = <A>(schema: Schema.Codec<A, string>) => {
 
   return {
     toNative: Effect.fn("subjectIdCodec.toNative")(function* (subjectId: SubjectId) {
-      const native = yield* decode(subjectId).pipe(Effect.mapError(invalid));
-      const roundTrip = yield* encode(native).pipe(Effect.mapError(invalid));
+      const native = yield* decode(subjectId).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, invalid))),
+      );
+
+      const roundTrip = yield* encode(native).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, invalid))),
+      );
 
       if (roundTrip !== subjectId) {
         return yield* IdentityCodecError.make({ reason: "lossy-key" });
@@ -32,8 +37,13 @@ export const subjectIdCodec = <A>(schema: Schema.Codec<A, string>) => {
       return native;
     }),
     toSubject: Effect.fn("subjectIdCodec.toSubject")(function* (native: A) {
-      const wire = yield* encode(native).pipe(Effect.mapError(invalid));
-      const roundTrip = yield* decode(wire).pipe(Effect.mapError(invalid));
+      const wire = yield* encode(native).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, invalid))),
+      );
+
+      const roundTrip = yield* decode(wire).pipe(
+        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, invalid))),
+      );
 
       if (!equivalent(native, roundTrip)) {
         return yield* IdentityCodecError.make({ reason: "lossy-key" });

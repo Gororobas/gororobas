@@ -3,7 +3,7 @@ import { CurrentCommitJournal, type LifecycleHooks } from "@yielded/auth/Hooks";
 import { ProofRedemptionInput } from "@yielded/auth/Proofs";
 import type { AuthenticationRevision } from "@yielded/auth/Sessions";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Crypto, DateTime, Effect, Schema } from "effect";
+import { Cause, Crypto, DateTime, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -516,8 +516,12 @@ export const makeNativeEmailAddressServices = Effect.fnUntraced(function* (
                   return yield* invalidState();
               }
             }).pipe(
-              Effect.mapError((cause) =>
-                PersistenceMappingError.make({ operation: "decode", cause }),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    PersistenceMappingError.make({ operation: "decode", cause: error }),
+                  ),
+                ),
               ),
             ),
           });

@@ -9,7 +9,7 @@ import {
 } from "@yielded/auth/Password";
 import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { SecurityRevision } from "@yielded/auth/Sessions";
-import { Effect, Option, Redacted, Schema } from "effect";
+import { Cause, Effect, Option, Redacted, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { PersistenceMappingError } from "./mapping-error";
@@ -21,8 +21,8 @@ type Row = Readonly<Record<string, unknown>>;
 const unavailable = () => PasswordUnavailable.make({});
 
 const failure = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  reportPersistenceFailure(effect, Schema.is(PasswordUnavailable)).pipe(
-    Effect.mapError(unavailable),
+  reportPersistenceFailure(effect, Schema.is(PasswordUnavailable), { markReported: true }).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
   );
 
 export const samePasswordCredentialSnapshot = (

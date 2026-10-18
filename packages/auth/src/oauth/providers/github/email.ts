@@ -1,7 +1,8 @@
 import type { Redacted } from "effect";
-import { Effect, Schema, Stream, Tracer } from "effect";
+import { Cause, Effect, Schema, Stream, Tracer } from "effect";
 import { FetchHttpClient, HttpClient, HttpClientRequest } from "effect/http";
 
+import { timeoutOrElseWithCause } from "../../../internal/timeout";
 import { OAuthProtocolRejected, OAuthUnavailable } from "../../signInErrors";
 import type { PlainOAuthIdentity } from "../shared/models";
 
@@ -76,8 +77,12 @@ export const makeEmailEnrichment = Effect.fnUntraced(function* (timeoutMs: numbe
       cache: "no-store",
     }),
     Effect.provideService(Tracer.DisablePropagation, true),
-    Effect.catchTag("HttpClientError", unavailable),
-    Effect.timeoutOrElse({ duration: timeoutMs, orElse: unavailable }),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) => (error._tag === "HttpClientError" ? unavailable() : error)),
+      ),
+    ),
+    timeoutOrElseWithCause({ duration: timeoutMs, orElse: unavailable }),
   );
 
   const primaryEmail = Effect.fnUntraced(function* (accessToken: Redacted.Redacted<string>) {

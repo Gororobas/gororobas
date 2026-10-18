@@ -1,6 +1,7 @@
+import type { KdfBusy } from "@yielded/crypto/Errors";
 import { Kdf } from "@yielded/crypto/Kdf";
 import { KdfAdmission } from "@yielded/crypto/KdfAdmission";
-import { Crypto, Effect, Redacted, Schema, type Scope } from "effect";
+import { Cause, Crypto, Effect, Redacted, Schema, type Scope } from "effect";
 
 import { equalBytes } from "../internal/equalBytes";
 import {
@@ -18,6 +19,16 @@ import { EncodedPasswordHash } from "./models";
 import { parsePasswordHash, phcBase64 } from "./password-encoding";
 
 const encoder = new TextEncoder();
+
+const isPasswordFailure = <
+  E extends
+    | PasswordHashingUnavailable
+    | PasswordInputInvalid
+    | PasswordKdfBusy
+    | PasswordVerifierInvalid,
+>(
+  error: E | KdfBusy,
+): error is E => error._tag !== "CryptoKdfBusy";
 
 const ownBytes = <E, R>(acquire: Effect.Effect<Uint8Array, E, R>) =>
   Effect.acquireRelease(acquire, (bytes) => Effect.sync(() => bytes.fill(0)), {
@@ -82,7 +93,10 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
           parallelism,
           length,
         })
-        .pipe(Effect.map(Redacted.value), Effect.mapError(failure));
+        .pipe(
+          Effect.map(Redacted.value),
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
+        );
 
     const deriveScrypt = (
       password: Uint8Array,
@@ -94,7 +108,10 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
     ) =>
       kdf
         .scrypt({ password: Redacted.make(password), salt, cost, blockSize, parallelism, length })
-        .pipe(Effect.map(Redacted.value), Effect.mapError(failure));
+        .pipe(
+          Effect.map(Redacted.value),
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
+        );
 
     const deriveCurrent = (password: Uint8Array, salt: Uint8Array) =>
       config.scrypt === undefined
@@ -108,7 +125,20 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
             32,
           );
 
-    const withPassword = <A, E, P, E2>(
+    const withPassword = <
+      A,
+      E extends
+        | PasswordHashingUnavailable
+        | PasswordInputInvalid
+        | PasswordKdfBusy
+        | PasswordVerifierInvalid,
+      P,
+      E2 extends
+        | PasswordHashingUnavailable
+        | PasswordInputInvalid
+        | PasswordKdfBusy
+        | PasswordVerifierInvalid,
+    >(
       password: Redacted.Redacted<string>,
       prepare: Effect.Effect<P, E2, Scope.Scope>,
       body: (bytes: Uint8Array, prepared: P) => Effect.Effect<A, E, Scope.Scope>,
@@ -124,7 +154,17 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
             }),
           ),
         )
-        .pipe(Effect.catchTag("CryptoKdfBusy", () => Effect.fail(PasswordKdfBusy.make({}))));
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                isPasswordFailure<E | E2 | PasswordHashingUnavailable | PasswordInputInvalid>(error)
+                  ? error
+                  : PasswordKdfBusy.make({}),
+              ),
+            ),
+          ),
+        );
 
     return {
       hash: (password: Redacted.Redacted<string>) =>
@@ -135,7 +175,11 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
             const salt = yield* ownBytes(
               crypto
                 .randomBytes(16)
-                .pipe(Effect.mapError(() => PasswordHashingUnavailable.make({}))),
+                .pipe(
+                  Effect.catchCause((cause) =>
+                    Effect.failCause(Cause.map(cause, () => PasswordHashingUnavailable.make({}))),
+                  ),
+                ),
             );
 
             const output = yield* ownBytes(deriveCurrent(bytes, salt));
@@ -187,7 +231,10 @@ export const make = (input: PasswordHashingConfig = defaultPasswordHashingConfig
                         iterations: parsed.iterations,
                         length: 32,
                       })
-                      .pipe(Effect.map(Redacted.value), Effect.mapError(failure)),
+                      .pipe(
+                        Effect.map(Redacted.value),
+                        Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, failure))),
+                      ),
             );
 
             // Fixed-length byte comparison; JavaScript/JIT gives no hard timing guarantee.

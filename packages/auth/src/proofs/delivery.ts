@@ -1,4 +1,4 @@
-import { Effect, Layer, type Context, type Redacted, Schema } from "effect";
+import { Cause, Effect, Layer, type Context, type Redacted, Schema } from "effect";
 
 import type { LoginIdentifier } from "../identity/models";
 import { reportAuthFailure } from "../internal/diagnostics";
@@ -45,8 +45,23 @@ export const proofDeliveryLayer = <Id, E, R>(
           Effect.suspend(() => callback(message)).pipe(
             Effect.provide(services),
             Effect.flatMap(Schema.decodeEffect(ProofDeliveryOutcome)),
-            Effect.tapCause((cause) => reportAuthFailure("proof-delivery", cause)),
-            Effect.catch(() => Effect.succeed({ _tag: "Ambiguous" as const })),
+            Effect.catchCause((cause) =>
+              Cause.hasDies(cause) || Cause.hasInterrupts(cause)
+                ? Effect.failCause(
+                    Cause.fromReasons<never>(
+                      cause.reasons.map((reason) =>
+                        Cause.isFailReason(reason)
+                          ? Cause.makeDieReason(reason.error).annotate(
+                              Cause.reasonAnnotations(reason),
+                            )
+                          : reason,
+                      ),
+                    ),
+                  )
+                : reportAuthFailure("proof-delivery", cause).pipe(
+                    Effect.as({ _tag: "Ambiguous" as const }),
+                  ),
+            ),
           ),
       };
     }),

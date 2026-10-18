@@ -208,12 +208,8 @@ export const makeSqlCommitExecutor = Effect.fnUntraced(function* <Failure>(
           typeof failure._tag === "string" &&
           Predicate.hasProperty(error, "_tag") &&
           error._tag === failure._tag),
-    ).pipe(
-      Effect.mapError(() => failure),
-      Effect.catchCause((cause) =>
-        Cause.hasInterrupts(cause) ? Effect.failCause(cause) : Effect.fail(failure),
-      ),
-    );
+      { markReported: true },
+    ).pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, () => failure))));
 
   const admit = Effect.gen(function* () {
     if (Option.isSome(captured)) {
@@ -271,10 +267,19 @@ export const makeSqlCommitExecutor = Effect.fnUntraced(function* <Failure>(
       else yield* condition.check;
     }
     for (const receipt of scope.receipts) {
-      const status = yield* Effect.result(receipt);
+      const status = yield* Effect.exit(receipt);
 
-      if (status._tag !== "Failure" || status.failure._tag !== "CommitPending")
+      if (status._tag === "Success")
         return yield* SqlCommitOwnerError.make({ reason: "invalid-receipt" });
+      if (
+        status.cause.reasons.length === 0 ||
+        !status.cause.reasons.every(
+          (reason) => Cause.isFailReason(reason) && reason.error._tag === "CommitPending",
+        )
+      )
+        return yield* Effect.failCause(
+          Cause.map(status.cause, () => SqlCommitOwnerError.make({ reason: "invalid-receipt" })),
+        );
     }
   });
 
@@ -366,21 +371,29 @@ export const makeSqlCommitExecutor = Effect.fnUntraced(function* <Failure>(
     class ApplicationFailure extends Data.TaggedError("SqlCommitApplicationFailure")<{
       readonly error: E;
     }> {}
-    const wrapped = effect.pipe(Effect.mapError((error) => new ApplicationFailure({ error })));
+
+    const wrapped = effect.pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, (error) => new ApplicationFailure({ error }))),
+      ),
+    );
 
     return reportPersistenceFailure(
       owned(wrapped, mode, origin, batch),
       (error) => error instanceof ApplicationFailure || Schema.is(SqlCommitOwnerError)(error),
+      { markReported: true },
     ).pipe(
       Effect.catchCause((cause) =>
         Effect.failCause(
           Cause.fromReasons(
             cause.reasons.map((reason): Cause.Reason<E | Failure> => {
-              if (Cause.isInterruptReason(reason)) return reason;
+              if (!Cause.isFailReason(reason)) return reason;
               if (Cause.isFailReason(reason) && reason.error instanceof ApplicationFailure)
-                return Cause.makeFailReason(reason.error.error);
+                return Cause.makeFailReason(reason.error.error).annotate(
+                  Cause.reasonAnnotations(reason),
+                );
 
-              return Cause.makeFailReason(failure);
+              return Cause.makeFailReason(failure).annotate(Cause.reasonAnnotations(reason));
             }),
           ),
         ),

@@ -6,7 +6,7 @@ import {
   type PasswordRegistrationAuthority,
 } from "@yielded/auth-persistence/Adapter";
 import { PasswordPersistence, PasswordUnavailable } from "@yielded/auth/Password";
-import { type Context, Effect, Layer } from "effect";
+import { Cause, type Context, Effect, Layer } from "effect";
 
 import { nativeClock } from "./native-clock";
 import type { NativeDatabaseHandle } from "./native-database";
@@ -38,9 +38,13 @@ export const makeTargetPasswordPersistenceServices = Effect.fnUntraced(function*
   configuration: NativeTargetConfiguration,
   proofs?: AnyProofPersistenceMapping,
 ) {
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
   if (proofs !== undefined)
-    yield* validateDrizzleStorage(proofs).pipe(Effect.mapError(unavailable));
+    yield* validateDrizzleStorage(proofs).pipe(
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+    );
   if (
     configuration.mode === "batch" &&
     (mapping.d1?.primary !== true || (proofs !== undefined && proofs.d1?.primary !== true))
@@ -61,7 +65,9 @@ export const makeTargetPasswordRegistrationServices = Effect.fnUntraced(function
   mapping: AnyPasswordRegistrationMapping<Registration>,
   configuration: NativeTargetConfiguration,
 ) {
-  yield* validateDrizzleStorage(mapping).pipe(Effect.mapError(unavailable));
+  yield* validateDrizzleStorage(mapping).pipe(
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
   const target = yield* nativeTarget(configuration);
 
   return yield* target.provide(

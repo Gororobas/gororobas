@@ -128,17 +128,23 @@ const reportSignOutFailure = <A, E extends { readonly _tag: string }, R>(
 ) =>
   effect.pipe(
     Effect.tapCause((cause) =>
-      reportAuthFailure(
-        "session-sign-out",
-        Cause.fromReasons(
-          cause.reasons.filter(
-            (reason) =>
-              Cause.isFailReason(reason) &&
-              reason.error._tag !== "SessionInvalid" &&
-              reason.error._tag !== "HookDenied",
+      Cause.hasInterrupts(cause)
+        ? Effect.void
+        : reportAuthFailure(
+            "session-sign-out",
+            Cause.fromReasons(
+              cause.reasons.filter(
+                (reason) =>
+                  Cause.isDieReason(reason) ||
+                  (Cause.isFailReason(reason) &&
+                    reason.error._tag !== "SessionInvalid" &&
+                    (reason.error._tag !== "HookDenied" ||
+                      Schema.is(Schema.Struct({ reason: Schema.Literal("unavailable") }))(
+                        reason.error,
+                      ))),
+              ),
+            ),
           ),
-        ),
-      ),
     ),
   );
 
@@ -301,7 +307,11 @@ export const makeSessionModule = <
   };
 
   const readCommitted = <A>(receipt: PreparedCommit<A>) =>
-    receipt.read.pipe(Effect.mapError(() => SessionUnavailable.make({})));
+    receipt.read.pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => SessionUnavailable.make({}))),
+      ),
+    );
 
   const prepareHooks = Effect.fn("Session.prepareHooks")(function* (
     action: "sign-in" | "session-creation" | "sign-out",
@@ -726,15 +736,21 @@ export const makeSessionModule = <
               });
 
               return yield* readCommitted(receipt);
-            }).pipe(reportSignOutFailure, Effect.result);
+            }).pipe(reportSignOutFailure, Effect.exit);
+
+            if (result._tag === "Failure" && Cause.hasInterrupts(result.cause))
+              return yield* Effect.failCause(result.cause);
 
             return {
               value:
                 result._tag === "Failure"
-                  ? result.failure._tag === "SessionInvalid"
+                  ? result.cause.reasons.every(
+                      (reason) =>
+                        Cause.isFailReason(reason) && reason.error._tag === "SessionInvalid",
+                    )
                     ? { clearCredential: true as const, invalidation: "already-invalid" as const }
                     : SessionSignOutUnavailable.make({ clearCredential: true })
-                  : result.success,
+                  : result.value,
               credentialCommands: [{ _tag: "Clear" as const, slot: "session" as const }],
             };
           }),
@@ -1055,14 +1071,20 @@ export const makeSessionModule = <
               yield* hooks.after(event);
 
               return { clearCredential: true as const, invalidation: "client-only" as const };
-            }).pipe(reportSignOutFailure, Effect.result);
+            }).pipe(reportSignOutFailure, Effect.exit);
+
+            if (outcome._tag === "Failure" && Cause.hasInterrupts(outcome.cause))
+              return yield* Effect.failCause(outcome.cause);
 
             const value: SignOutResult =
               outcome._tag === "Failure"
-                ? outcome.failure._tag === "SessionInvalid"
+                ? outcome.cause.reasons.every(
+                    (reason) =>
+                      Cause.isFailReason(reason) && reason.error._tag === "SessionInvalid",
+                  )
                   ? { clearCredential: true, invalidation: "already-invalid" }
                   : SessionSignOutUnavailable.make({ clearCredential: true })
-                : outcome.success;
+                : outcome.value;
 
             return {
               value,
@@ -1222,8 +1244,12 @@ export const makeSessionModule = <
                     attemptLimit: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 })),
                   }),
                 )(inputConfiguration).pipe(
-                  Effect.mapError(() =>
-                    SessionConfigurationError.make({ reason: "pending-authentication" }),
+                  Effect.catchCause((cause) =>
+                    Effect.failCause(
+                      Cause.map(cause, () =>
+                        SessionConfigurationError.make({ reason: "pending-authentication" }),
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -1252,7 +1278,9 @@ export const makeSessionModule = <
           Schema.encodeEffect(codec)(value).pipe(
             Effect.flatMap(Schema.decodeEffect(codec)),
             Effect.provide(claimServices),
-            Effect.mapError(() => SessionInvalid.make({})),
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => SessionInvalid.make({}))),
+            ),
           );
 
         const completed = (
@@ -1502,7 +1530,9 @@ export const makeSessionModule = <
     boundedRequirement(input)
       ? Schema.decodeEffect(SessionStepUpRequirement)(input).pipe(
           Effect.map(snapshotRequirement),
-          Effect.mapError(() => SessionUnavailable.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => SessionUnavailable.make({}))),
+          ),
         )
       : Effect.fail(SessionUnavailable.make({}));
 
@@ -1783,7 +1813,11 @@ export const makeSessionModule = <
 
           const digest = yield* crypto
             .digest("SHA-256", bytes)
-            .pipe(Effect.mapError(() => SessionUnavailable.make({})));
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => SessionUnavailable.make({}))),
+              ),
+            );
 
           registry.set(
             profile.profileId,
@@ -1807,7 +1841,13 @@ export const makeSessionModule = <
           secrets
             .digest(credential, "step-up")
             .pipe(
-              Effect.catchTag("SessionInvalid", () => Effect.fail(SessionStepUpInvalid.make({}))),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    error._tag === "SessionInvalid" ? SessionStepUpInvalid.make({}) : error,
+                  ),
+                ),
+              ),
             );
 
         const inspect = Effect.fn("SessionStepUp.inspect")(function* (
@@ -2238,7 +2278,9 @@ export const makeSessionModule = <
       yield* checkNoAmbientCommit();
 
       const limit = yield* Schema.decodeEffect(CleanupLimit)(input.limit).pipe(
-        Effect.mapError(() => SessionUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => SessionUnavailable.make({}))),
+        ),
       );
 
       const maintenance = yield* Effect.serviceOption(SessionCleanup);

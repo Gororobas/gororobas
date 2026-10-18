@@ -1,5 +1,41 @@
 # @yielded/auth
 
+## 0.1.0-beta.42
+
+### Patch Changes
+
+- [#243](https://github.com/yielded-dev/auth/pull/243) [`0a0ff7d`](https://github.com/yielded-dev/auth/commit/0a0ff7d6d81d8b9e0aacd39ec81991b1f259e956) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Preserve complete failure causes across authentication, persistence, provider, and native client boundaries, and report unexpected background and cleanup failures without exposing private data.
+- Updated dependencies [[`0a0ff7d`](https://github.com/yielded-dev/auth/commit/0a0ff7d6d81d8b9e0aacd39ec81991b1f259e956)]:
+  - @yielded/crypto@0.1.0-beta.42
+  - @yielded/jose@0.1.0-beta.42
+  - @yielded/oauth@0.1.0-beta.42
+
+## 0.1.0-beta.41
+
+### Minor Changes
+
+- [#245](https://github.com/yielded-dev/auth/pull/245) [`ba7ccf2`](https://github.com/yielded-dev/auth/commit/ba7ccf23307cea88dcc20ee4b13f21561996a62c) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Add opt-in OpenID application scopes, resource audiences, signed access tokens, and rotating refresh grants that recheck application authorization while preserving the original authentication time; existing defaults retain opaque UserInfo access without refresh grants.
+  Expose public-key access verification and infer middleware, authorization, and verified access scopes from branded literal scopes.
+
+  BEHAVIOR CHANGE: Declare scope values with `OAuthScope.make("documents:read")` from `@yielded/auth` and pass them in `scopes` arrays. Plain strings are no longer accepted as scope declarations.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @yielded/crypto@0.1.0-beta.41
+  - @yielded/jose@0.1.0-beta.41
+  - @yielded/oauth@0.1.0-beta.41
+
+## 0.1.0-beta.40
+
+### Patch Changes
+
+- [#241](https://github.com/yielded-dev/auth/pull/241) [`4ea887e`](https://github.com/yielded-dev/auth/commit/4ea887e2f77cd6e13defe1d445b892b45216b3ef) Thanks [@danieljvdm](https://github.com/danieljvdm)! - Retain content-safe SQL failure categories and recognized driver codes in auth diagnostics without exposing provider messages or changing the original failure cause.
+- Updated dependencies []:
+  - @yielded/crypto@0.1.0-beta.40
+  - @yielded/jose@0.1.0-beta.40
+  - @yielded/oauth@0.1.0-beta.40
+
 ## 0.1.0-beta.39
 
 ### Patch Changes

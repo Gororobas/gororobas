@@ -1,7 +1,6 @@
-import { Context, Crypto, DateTime, Effect, Redacted, Schema, type Types } from "effect";
+import { Cause, Context, Crypto, DateTime, Effect, Redacted, Schema, type Types } from "effect";
 import { Base64Url } from "effect/encoding";
 
-import { reportAuthFailure } from "../internal/diagnostics";
 import { AuthenticationClock } from "../operations/clock";
 import type { AuthCredentialCommand } from "../operations/credentials";
 import { makeSessionSigningCodec, SessionSigningKeys } from "./crypto";
@@ -89,18 +88,20 @@ export const makeSessionCookieCache = Effect.fnUntraced(function* <
 
   const digest = (credential: Redacted.Redacted<string>) =>
     crypto.digest("SHA-256", encoder.encode(Redacted.value(credential))).pipe(
-      Effect.tapCause((cause) => reportAuthFailure("session-crypto", cause)),
       Effect.map(Base64Url.encode),
-      Effect.mapError(() => SessionUnavailable.make({})),
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => SessionUnavailable.make({}))),
+      ),
     );
 
   return {
     transport: {
       lifetimeMillis: policy.maximumIssuedAbsoluteLifetimeMillis,
       rotate: crypto.randomBytes(32).pipe(
-        Effect.tapCause((cause) => reportAuthFailure("session-crypto", cause)),
         Effect.map((bytes) => Redacted.make(Base64Url.encode(bytes))),
-        Effect.mapError(() => SessionUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => SessionUnavailable.make({}))),
+        ),
       ),
     },
     read: Effect.fnUntraced(function* (

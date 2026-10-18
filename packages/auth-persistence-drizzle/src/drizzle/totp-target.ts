@@ -7,7 +7,7 @@ import {
   TotpPersistence,
 } from "@yielded/auth/Totp";
 import type { Table } from "drizzle-orm";
-import { Effect, Schema, type Context, type Crypto } from "effect";
+import { Cause, Effect, Schema, type Context, type Crypto } from "effect";
 
 import type { D1BatchStatements } from "./D1BatchStatements";
 import type { NativeDriverDatabase, NativeDriverTransaction } from "./driver-types";
@@ -41,7 +41,9 @@ export const makeTotpTarget = <DatabaseId, D extends NativeDriverDatabase>(
       )
         return yield* TotpConfigurationError.make({});
     },
-    Effect.mapError(() => TotpConfigurationError.make({})),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => TotpConfigurationError.make({}))),
+    ),
   );
 
   const services = Effect.fnUntraced(function* (mapping: NativeTotpMapping) {

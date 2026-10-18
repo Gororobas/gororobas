@@ -1,4 +1,4 @@
-import { Clock, Crypto, Duration, Effect, Layer, Schema } from "effect";
+import { Cause, Clock, Crypto, Duration, Effect, Layer, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 import * as KeyValueStore from "effect/persistence/KeyValueStore";
 import * as RateLimiter from "effect/persistence/RateLimiter";
@@ -155,11 +155,22 @@ export const keyValueRateLimiterStore: Layer.Layer<
 
           return [remaining, Math.max(0, now - bucket.lastRefill)] as const;
         }).pipe(
-          Effect.catchTags({
-            KeyValueStoreError: () => storeFailure("Auth rate limit key-value store failed"),
-            PlatformError: () => storeFailure("Auth rate limit key digest failed"),
-            SchemaError: () => storeFailure("Auth rate limit entry is malformed"),
-          }),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                RateLimiter.RateLimiterError.make({
+                  reason: RateLimiter.RateLimitStoreError.make({
+                    message:
+                      error._tag === "KeyValueStoreError"
+                        ? "Auth rate limit key-value store failed"
+                        : error._tag === "PlatformError"
+                          ? "Auth rate limit key digest failed"
+                          : "Auth rate limit entry is malformed",
+                  }),
+                }),
+              ),
+            ),
+          ),
         ),
     });
   }),

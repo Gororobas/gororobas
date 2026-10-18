@@ -1,12 +1,13 @@
 import type { Hmac } from "@yielded/crypto/Hmac";
 import type { Signature } from "@yielded/crypto/Signature";
 import { Jwk, Jwt } from "@yielded/jose";
-import { Effect, Redacted, Schema } from "effect";
+import { Cause, Effect, Redacted, Schema } from "effect";
 
+import { AccessTokenClaims } from "./access-token";
 import type { Authentication } from "./models";
 import { ConfigurationError, OpenIdProfile, Text, Unavailable } from "./models";
 
-/** Keep retired public keys available while their ID tokens can still be accepted. */
+/** Keep retired public keys available while their ID and access tokens can still be accepted. */
 export interface IdentitySigningKeys {
   readonly activeKeyId: string;
   readonly privateKey: Redacted.Redacted<unknown>;
@@ -58,7 +59,9 @@ export const makeIdentityTokens = Effect.fnUntraced(function* (options: Identity
   )(options, { reportInput: false }).pipe(Effect.mapError(() => ConfigurationError.make({})));
 
   const signingKey = yield* Jwk.importPrivate(keys.privateKey, "RS256").pipe(
-    Effect.mapError(() => ConfigurationError.make({})),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => ConfigurationError.make({}))),
+    ),
   );
 
   const privateJwk = Redacted.value(signingKey.jwk);
@@ -75,11 +78,26 @@ export const makeIdentityTokens = Effect.fnUntraced(function* (options: Identity
     return yield* ConfigurationError.make({});
 
   for (const key of keys.publicKeys) {
-    yield* Jwk.importPublic(key, "RS256").pipe(Effect.mapError(() => ConfigurationError.make({})));
+    yield* Jwk.importPublic(key, "RS256").pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => ConfigurationError.make({}))),
+      ),
+    );
   }
 
   return {
     jwks: { keys: keys.publicKeys },
+    issueAccess: (claims: AccessTokenClaims) =>
+      Jwt.sign(AccessTokenClaims, claims, signingKey, {
+        alg: "RS256",
+        kid: keys.activeKeyId,
+        typ: "at+jwt",
+      }).pipe(
+        Effect.provideContext(services),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+        ),
+      ),
     issue: Effect.fnUntraced(function* (input: {
       readonly issuer: string;
       readonly clientId: string;
@@ -108,7 +126,9 @@ export const makeIdentityTokens = Effect.fnUntraced(function* (options: Identity
         { alg: "RS256", kid: keys.activeKeyId, typ: "JWT" },
       ).pipe(
         Effect.provideContext(services),
-        Effect.mapError(() => Unavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => Unavailable.make({}))),
+        ),
       );
     }),
   };

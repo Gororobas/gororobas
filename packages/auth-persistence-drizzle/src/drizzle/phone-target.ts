@@ -7,7 +7,7 @@ import {
   PhoneLifecyclePolicy,
   PhoneConfigurationError,
 } from "@yielded/auth/PhoneOtp";
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 
 import { NativeDatabase, type NativeDatabaseHandle } from "./native-database";
 import {
@@ -29,7 +29,9 @@ const validate = Effect.fnUntraced(
     if (configuration.mode === "batch" && source.proofs.d1?.primary !== true)
       return yield* PhoneConfigurationError.make({});
   },
-  Effect.mapError(() => PhoneConfigurationError.make({})),
+  Effect.catchCause((cause) =>
+    Effect.failCause(Cause.map(cause, () => PhoneConfigurationError.make({}))),
+  ),
 );
 
 const services = Effect.fnUntraced(function* (

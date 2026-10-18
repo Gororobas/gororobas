@@ -1,5 +1,6 @@
 import * as M from "@yielded/auth/Passkey";
-import { Context, Effect, Schema } from "effect";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
+import { Cause, Context, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -247,8 +248,12 @@ const mappings = Effect.fnUntraced(function* (
 
               return anySqlCondition(alternatives);
             }).pipe(
-              Effect.mapError((cause) =>
-                PersistenceMappingError.make({ operation: "mapping", cause }),
+              Effect.catchCause((cause) =>
+                Effect.failCause(
+                  Cause.map(cause, (error) =>
+                    PersistenceMappingError.make({ operation: "mapping", cause: error }),
+                  ),
+                ),
               ),
             ),
         },
@@ -377,9 +382,14 @@ export const makeManagedPasskeys = Effect.fnUntraced(
 
     return context;
   },
-  Effect.mapError((error) =>
-    Schema.is(PersistenceConfigurationError)(error)
-      ? error
-      : configurationError("Unable to configure passkey persistence"),
+  (effect) => reportPersistenceFailure(effect, () => false, { markReported: true }),
+  Effect.catchCause((cause) =>
+    Effect.failCause(
+      Cause.map(cause, (error) =>
+        Schema.is(PersistenceConfigurationError)(error)
+          ? error
+          : configurationError("Unable to configure passkey persistence"),
+      ),
+    ),
   ),
 );

@@ -1,6 +1,6 @@
 {
   "name": "@yielded/auth-electron",
-  "version": "0.1.0-beta.39",
+  "version": "0.1.0-beta.42",
   "description": "Main-process Electron browser login and encrypted credential custody for Yielded Auth.",
   "homepage": "https://yielded.dev/auth/",
   "license": "MIT",

@@ -9,7 +9,7 @@ import {
   type StatefulSessionRecord,
   type SessionUnavailable,
 } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Option } from "effect";
+import { Cause, DateTime, Effect, Option } from "effect";
 import type { SqlClient } from "effect/sql/SqlClient";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -184,7 +184,13 @@ export const makeNativeSessionStepUpServices = Effect.fnUntraced(function* <Clai
             return yield* invalidSessionState();
         }).pipe(
           Effect.provideService(AuthenticationClock, state.clockPolicy),
-          Effect.mapError((cause) => PersistenceMappingError.make({ operation: "decode", cause })),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                PersistenceMappingError.make({ operation: "decode", cause: error }),
+              ),
+            ),
+          ),
         ),
       });
   });
@@ -237,10 +243,12 @@ export const makeNativeSessionStepUpServices = Effect.fnUntraced(function* <Clai
               condition,
             )
             .pipe(
-              Effect.mapError((error) =>
-                isMappedConstraintConflict(mapping.isConstraintConflict, error)
-                  ? SessionConflict.make({})
-                  : error,
+              Effect.catchCause((cause) =>
+                Effect.failCause<SessionConflict | Cause.Cause.Error<typeof cause>>(
+                  isMappedConstraintConflict(mapping.isConstraintConflict, cause)
+                    ? Cause.map(cause, () => SessionConflict.make({}))
+                    : cause,
+                ),
               ),
             );
           yield* final(
@@ -451,8 +459,12 @@ export const makeNativeSessionStepUpServices = Effect.fnUntraced(function* <Clai
                 }
               }).pipe(
                 Effect.provideService(AuthenticationClock, state.clockPolicy),
-                Effect.mapError((cause) =>
-                  PersistenceMappingError.make({ operation: "decode", cause }),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      PersistenceMappingError.make({ operation: "decode", cause: error }),
+                    ),
+                  ),
                 ),
               ),
             });

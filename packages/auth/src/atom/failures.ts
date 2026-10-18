@@ -1,0 +1,36 @@
+import { Cause, Effect } from "effect";
+
+import {
+  markAuthFailureReported,
+  reportAuthFailure,
+  ReportedOperationDefect,
+} from "../internal/diagnostics";
+
+/** Atom owns the public result. Typed failures retain their contract; unexpected
+ * defects are reported before a finite marker reaches AsyncResult. */
+export const reportAtomDefects = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+  Effect.uninterruptibleMask((restore) =>
+    restore(effect).pipe(
+      Effect.catchCause((cause) => {
+        const defects = cause.reasons.filter(Cause.isDieReason);
+
+        if (defects.length === 0) return Effect.failCause(cause);
+
+        return reportAuthFailure("client-workflow", Cause.fromReasons<never>(defects)).pipe(
+          Effect.andThen(
+            Effect.failCause(
+              markAuthFailureReported(
+                Cause.fromReasons<E>(
+                  cause.reasons.map((reason) =>
+                    Cause.isDieReason(reason)
+                      ? Cause.makeDieReason(ReportedOperationDefect.make({}))
+                      : reason,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    ),
+  );

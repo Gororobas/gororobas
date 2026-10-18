@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 
 import { OAuthProtocolRejected } from "../../signInErrors";
 import { type OAuthDisplayProfile } from "../../signInModels";
@@ -133,7 +133,9 @@ export const decodeOidcProfile = Effect.fn("OpenIdConnect.decodeProfile")(functi
 ): Effect.fn.Return<OAuthDisplayProfile | undefined, OAuthProtocolRejected> {
   // oxlint-disable-next-line no-restricted-properties -- Project claims from an ID token already verified against this issuer.
   const profile = yield* Schema.decodeUnknownEffect(schema)(claims).pipe(
-    Effect.mapError(() => OAuthProtocolRejected.make({})),
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => OAuthProtocolRejected.make({}))),
+    ),
   );
 
   // A host codec may turn Apple's "true"/"false" into a boolean and drop every

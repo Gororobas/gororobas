@@ -13,7 +13,11 @@ import {
 } from "effect";
 import { Rpc, RpcGroup } from "effect/rpc";
 
-import { reportAuthFailure, withoutObservability } from "../internal/diagnostics";
+import {
+  reportAuthFailure,
+  ReportedOperationDefect,
+  withoutObservability,
+} from "../internal/diagnostics";
 import type { AuthInvocation } from "./context";
 import {
   AuthCredentialCommandCollector,
@@ -46,16 +50,6 @@ const operationDefect = Schema.Json.pipe(
   }),
 );
 
-/** Identifies an already reported defect without retaining its private cause. */
-class ReportedOperationDefect extends Schema.TaggedError<ReportedOperationDefect>()(
-  "ReportedOperationDefect",
-  {},
-) {
-  override get message() {
-    return "Auth operation failed";
-  }
-}
-
 const operationFailure = Effect.fn("AuthOperation.failure")(function* <E>(
   stage: "local" | "rpc" | "success-projection" | "error-projection" | "private-output",
   cause: Cause.Cause<E>,
@@ -66,15 +60,14 @@ const operationFailure = Effect.fn("AuthOperation.failure")(function* <E>(
     );
   }
 
-  const unreported = Cause.fromReasons(
-    cause.reasons.filter(
-      (reason) => !(Cause.isDieReason(reason) && reason.defect instanceof ReportedOperationDefect),
-    ),
+  yield* reportAuthFailure(stage, cause);
+
+  return yield* Effect.failCause(
+    Cause.fromReasons<never>([
+      Cause.makeDieReason(ReportedOperationDefect.make({})),
+      ...cause.reasons.filter(Cause.isInterruptReason),
+    ]),
   );
-
-  yield* reportAuthFailure(stage, unreported);
-
-  return yield* Effect.die(ReportedOperationDefect.make({}));
 });
 
 const sanitizeOperationDefects =
@@ -297,7 +290,36 @@ const buildOperation = <
   const validate = Schema.decodeEffect(Schema.toType(options.payload));
   const projectSuccess = projectType(options.success, "success-projection");
   const projectFailure = projectType(rpc.errorSchema, "error-projection");
-  const fail = (error: Failure) => projectFailure(error).pipe(Effect.flatMap(Effect.fail));
+
+  const fail = Effect.fnUntraced(function* (
+    cause: Cause.Cause<Failure>,
+  ): Effect.fn.Return<never, Failure> {
+    // Leave defects intact until the public boundary reports and sanitizes them.
+    if (Cause.hasDies(cause)) return yield* Effect.failCause(cause);
+
+    const reasons = yield* Effect.forEach(
+      cause.reasons,
+      (reason): Effect.Effect<Cause.Reason<Failure>> =>
+        Cause.isFailReason(reason)
+          ? projectFailure(reason.error).pipe(
+              Effect.map((error) =>
+                Cause.makeFailReason(error).annotate(Cause.reasonAnnotations(reason)),
+              ),
+            )
+          : Effect.succeed(reason),
+    ).pipe(
+      Effect.catchCause((projection) =>
+        Effect.failCause(
+          Cause.combine(
+            projection,
+            Cause.fromReasons<never>(cause.reasons.filter(Cause.isInterruptReason)),
+          ),
+        ),
+      ),
+    );
+
+    return yield* Effect.failCause(Cause.fromReasons(reasons));
+  });
 
   const execute = Effect.fn(`AuthOperation.${tag}`)(
     function* (context: AuthInvocation, payload: Payload["Type"]) {
@@ -413,7 +435,7 @@ const buildOperation = <
 
       return value;
     },
-    Effect.catch(fail),
+    Effect.catchCause(fail),
     (effect) => (hasReveals ? effect.pipe(sanitizeOperationDefects("private-output")) : effect),
   );
 
@@ -422,7 +444,9 @@ const buildOperation = <
     input: Payload["Encoded"],
   ) {
     const payload = yield* decode(input).pipe(
-      Effect.mapError(() => InvalidOperationInput.make({})),
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => InvalidOperationInput.make({}))),
+      ),
     );
 
     return yield* execute(context, payload);
@@ -433,7 +457,9 @@ const buildOperation = <
     input: unknown,
   ) {
     const payload = yield* decodeUnknown(input).pipe(
-      Effect.mapError(() => InvalidOperationInput.make({})),
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => InvalidOperationInput.make({}))),
+      ),
     );
 
     return yield* execute(context, payload);
@@ -445,7 +471,9 @@ const buildOperation = <
     input: Payload["Type"],
   ) {
     const payload = yield* validate(input).pipe(
-      Effect.mapError(() => InvalidOperationInput.make({})),
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => InvalidOperationInput.make({}))),
+      ),
     );
 
     return yield* execute(context, payload);
@@ -556,7 +584,7 @@ const buildOperation = <
   ) =>
     Effect.fn(`AuthOperation.${tag}.rpc`)(
       function* (input: Payload["Type"], transport: RpcOptions) {
-        const resolved = yield* resolveContext(transport).pipe(Effect.catch(fail));
+        const resolved = yield* resolveContext(transport).pipe(Effect.catchCause(fail));
 
         const call =
           "invocation" in resolved

@@ -189,8 +189,10 @@ example and [TOTP](../guide/totp#expose-private-reveals-over-http) for private r
 ## Diagnostics
 
 Auth emits fixed `stage` and `reason` fields at Effect's `Debug` level for session,
-persistence, and OAuth failures. Unexpected failures retain sanitized `Error` logs;
-public errors stay redacted. Enable diagnostics in your server's request context:
+persistence, and OAuth failures. Unexpected failures produce sanitized `Error` logs;
+public errors stay redacted. A concurrent defect or interruption is preserved
+even when another part of the operation has an expected failure. Pure cancellation
+and expected denials stay quiet. Enable diagnostics in your server's request context:
 
 ```ts
 import { Layer, Logger, References } from "effect";
@@ -210,6 +212,8 @@ stays cached until its owning Layer is reacquired.
 Auth's diagnostic payloads exclude credentials and raw causes. Your application
 owns redaction of its annotations, span names, and logger output. Keep HTTP headers,
 bodies, OAuth URL queries, and SQL parameters out of logs and traces.
+If a logger throws, Auth attempts the same sanitized report through Effect's
+`Console`. A failed logging sink never changes the authentication result.
 
 ## Lower-level transports
 

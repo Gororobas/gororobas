@@ -1,4 +1,4 @@
-import { Crypto, DateTime, Effect, Layer, Option, Schema } from "effect";
+import { Cause, Crypto, DateTime, Effect, Layer, Option, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
@@ -89,7 +89,7 @@ export const makePhoneOtp = <
   }) {
     const verified = yield* (yield* binding.RequestBinding)
       .verify(request.flowId, request.requestBinding)
-      .pipe(Effect.mapError(phoneFailure));
+      .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))));
 
     const candidate = yield* (yield* PhoneSignInTargets).lookup({
       moduleId,
@@ -130,7 +130,7 @@ export const makePhoneOtp = <
 
     const digest = yield* (yield* Crypto.Crypto)
       .digest("SHA-256", new TextEncoder().encode(encoded))
-      .pipe(Effect.mapError(phoneFailure));
+      .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))));
 
     const base = {
       flowId: request.flowId,
@@ -181,7 +181,9 @@ export const makePhoneOtp = <
           input.requestBinding === undefined
             ? yield* (yield* binding.RequestBinding)
                 .issue(input.flowId)
-                .pipe(Effect.mapError(phoneFailure))
+                .pipe(
+                  Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))),
+                )
             : undefined;
 
         const command = issued?.credentialCommands.find(
@@ -202,9 +204,14 @@ export const makePhoneOtp = <
             locale: input.locale,
             eligible: Option.isSome(current.target) && eligible,
           })
-          .pipe(Effect.flatMap(readProofCommit), Effect.mapError(phoneFailure));
+          .pipe(
+            Effect.flatMap(readProofCommit),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))),
+          );
 
-        yield* dispatch.schedule.pipe(Effect.mapError(phoneFailure));
+        yield* dispatch.schedule.pipe(
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))),
+        );
 
         return {
           value: { ...dispatch.receipt, flowId: input.flowId },
@@ -226,7 +233,10 @@ export const makePhoneOtp = <
             reference: input.reference,
             credential: input.code,
           })
-          .pipe(Effect.flatMap(readProofCommit), Effect.mapError(phoneFailure));
+          .pipe(
+            Effect.flatMap(readProofCommit),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))),
+          );
 
         if (consumed !== "redeemed" || Option.isNone(current.target))
           return yield* PhoneOtpRejected.make({});
@@ -263,7 +273,7 @@ export const makePhoneOtp = <
           .prepare({ evidence, requirement: current.target.value.requirement, claims })
           .pipe(
             Effect.flatMap((receipt) => receipt.read),
-            Effect.mapError(phoneFailure),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))),
           );
 
         return {
@@ -299,8 +309,14 @@ export const makePhoneOtp = <
           input: { readonly phoneNumber: string; readonly locale?: string },
         ) {
           const crypto = yield* Crypto.Crypto;
-          const flowId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(phoneFailure));
-          const requestId = yield* crypto.randomUUIDv4().pipe(Effect.mapError(phoneFailure));
+
+          const flowId = yield* crypto
+            .randomUUIDv4()
+            .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))));
+
+          const requestId = yield* crypto
+            .randomUUIDv4()
+            .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, phoneFailure))));
 
           return yield* SignIn.invoke(invocation, {
             ...input,

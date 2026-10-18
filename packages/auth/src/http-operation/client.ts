@@ -1,4 +1,5 @@
 import {
+  Cause,
   Context,
   DateTime,
   Duration,
@@ -13,6 +14,12 @@ import {
 } from "effect";
 import { HttpClient, HttpClientRequest, type HttpClientResponse } from "effect/http";
 
+import {
+  markAuthFailureReported,
+  reportAuthFailure,
+  ReportedOperationDefect,
+} from "../internal/diagnostics";
+import { timeoutOrElseWithCause } from "../internal/timeout";
 import type { AuthCredentialCommand, CredentialSlot } from "../operations/credentials";
 import { snapshotRevealCommands, type AuthRevealCommandCollector } from "../operations/reveals";
 import { headerName } from "./configuration-schema";
@@ -206,7 +213,6 @@ const readBody = Effect.fnUntraced(function* (
       }),
     ),
     Stream.runCollect,
-    Effect.mapError(() => OperationHttpError.make({ reason: "response" })),
   );
 
   return yield* Effect.try({
@@ -289,6 +295,8 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
     | R["operation"]["rpc"]["errorSchema"]["DecodingServices"]
   > {
     const started = generation;
+    let failureReason: OperationHttpError["reason"] = "request";
+    let domainFailure: { readonly value: RouteFailure<R> } | undefined;
 
     const services = yield* Effect.context<
       | R["operation"]["rpc"]["successSchema"]["DecodingServices"]
@@ -350,6 +358,7 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
       }
 
       if (native !== undefined) {
+        failureReason = "credentials";
         request = HttpClientRequest.setHeader(request, native.config.modeHeader, "native");
         const credentials = yield* native.store.read;
 
@@ -374,15 +383,10 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
       );
 
       const { response, envelope } = yield* Effect.gen(function* () {
-        const response = yield* guarded
-          .execute(request)
-          .pipe(
-            Effect.mapError((error) =>
-              Schema.is(OperationHttpError)(error)
-                ? error
-                : OperationHttpError.make({ reason: "network" }),
-            ),
-          );
+        failureReason = "network";
+        const response = yield* guarded.execute(request);
+
+        failureReason = "response";
 
         if (
           response.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() !==
@@ -405,7 +409,7 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
         // Only the deadline's child may interrupt the exchange. The admitted
         // caller still waits for settlement before releasing the credential gate.
         Effect.interruptible,
-        Effect.timeoutOrElse({
+        timeoutOrElseWithCause({
           duration: timeout.value,
           orElse: () => Effect.fail(OperationHttpError.make({ reason: "timeout" })),
         }),
@@ -426,17 +430,17 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
       if (envelope._tag === "Failure") {
         const failure = yield* Schema.decodeEffect(errorSchema)(envelope.error).pipe(
           Effect.provide(services),
-          Effect.mapError(() => OperationHttpError.make({ reason: "response" })),
         );
 
-        return yield* Effect.fail(failure as RouteFailure<R>);
+        domainFailure = { value: failure };
+
+        return yield* Effect.fail(failure);
       }
       if (response.status < 200 || response.status >= 300)
         return yield* OperationHttpError.make({ reason: "response" });
 
       const value = yield* Schema.decodeEffect(successSchema)(envelope.value).pipe(
         Effect.provide(services),
-        Effect.mapError(() => OperationHttpError.make({ reason: "response" })),
       );
 
       if (started !== generation)
@@ -462,6 +466,7 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
       if (privateCommands.length > 0 && privateOutput === undefined)
         return yield* OperationHttpError.make({ reason: "private-output" });
       if (native !== undefined) {
+        failureReason = "credentials";
         const commands: AuthCredentialCommand[] = [];
 
         for (const slot of credentialSlots) {
@@ -489,16 +494,14 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
 
       const replaceSubject =
         typeof projectSubject === "function"
-          ? yield* Effect.try({
-              try: () => projectSubject(value as RouteSuccess<R>),
-              catch: () => OperationHttpError.make({ reason: "response" }),
-            })
+          ? yield* Effect.sync(() => projectSubject(value as RouteSuccess<R>))
           : projectSubject === true;
 
       if (replaceSubject) {
         yield* advance;
         if (callOptions?.onTransition !== undefined) yield* callOptions.onTransition;
       }
+      failureReason = "private-output";
       if (privateCommands.length > 0 && privateOutput !== undefined)
         yield* privateOutput.accept(privateCommands);
 
@@ -508,12 +511,59 @@ export const make = Effect.fn("OperationHttpClient.make")(function* <R = never, 
     // Hold admission for every write, including middleware that delays dispatch.
     // It cannot switch accounts while waiting to send with browser cookies.
     // Credential responses also settle before the lifetime advances.
-    return yield* route.operation.replay !== "read-only" ||
-    route.operation.credentials ||
-    route.operation.reveals.length > 0 ||
-    (callOptions?.replaceSubject !== undefined && callOptions.replaceSubject !== false)
-      ? gate.withPermits(1)(Effect.uninterruptible(work))
-      : work;
+    const admitted =
+      route.operation.replay !== "read-only" ||
+      route.operation.credentials ||
+      route.operation.reveals.length > 0 ||
+      (callOptions?.replaceSubject !== undefined && callOptions.replaceSubject !== false)
+        ? gate.withPermits(1)(Effect.uninterruptible(work))
+        : work;
+
+    // The complete request Scope (including body cleanup) settles before the
+    // public projection. Never select one failure from a mixed Cause.
+    return yield* Effect.uninterruptibleMask((restore) =>
+      restore(admitted).pipe(
+        Effect.catchCause((cause) => {
+          const unexpected = cause.reasons.filter(
+            (reason) =>
+              Cause.isDieReason(reason) ||
+              (Cause.isFailReason(reason) &&
+                !(domainFailure !== undefined && reason.error === domainFailure.value) &&
+                !(
+                  Schema.is(OperationHttpError)(reason.error) &&
+                  ["request", "stale-response", "origin", "csrf", "credentials"].includes(
+                    reason.error.reason,
+                  )
+                )),
+          );
+
+          const projected = Cause.fromReasons<RouteFailure<R> | OperationHttpError>(
+            cause.reasons.map((reason) => {
+              if (Cause.isInterruptReason(reason)) return Cause.makeInterruptReason(reason.fiberId);
+              if (Cause.isDieReason(reason))
+                return Cause.makeDieReason(ReportedOperationDefect.make({}));
+
+              return Cause.makeFailReason(
+                domainFailure !== undefined && reason.error === domainFailure.value
+                  ? domainFailure.value
+                  : Schema.is(OperationHttpError)(reason.error)
+                    ? reason.error
+                    : OperationHttpError.make({ reason: failureReason }),
+              );
+            }),
+          );
+
+          return (
+            unexpected.length === 0
+              ? Effect.void
+              : reportAuthFailure("http-client", Cause.fromReasons(unexpected))
+          ).pipe(
+            // Every projected reason is expected or already reported at its owner.
+            Effect.andThen(Effect.failCause(markAuthFailureReported(projected))),
+          );
+        }),
+      ),
+    );
   });
 
   return {

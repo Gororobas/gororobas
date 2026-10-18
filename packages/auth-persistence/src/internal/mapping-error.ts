@@ -5,32 +5,42 @@ export class PersistenceMappingError extends Schema.TaggedError<PersistenceMappi
   { operation: Schema.NonEmptyString, cause: Schema.Defect() },
 ) {}
 
+/** Conflict recovery requires every nested Cause reason to be a recognized failure. */
 export const isMappedConstraintConflict = (
   classify: (cause: unknown) => boolean,
   failure: unknown,
 ): boolean => {
-  const seen = new Set<unknown>();
-  const pending: Array<unknown> = [failure];
+  const seen = new Map<unknown, boolean>();
+  let inspected = 0;
 
-  for (let inspected = 0; inspected < 24 && pending.length > 0; inspected++) {
-    const current = pending.shift();
+  const inspect = (current: unknown): boolean => {
+    if (current === undefined || current === null) return false;
+    const known = seen.get(current);
 
-    if (current === undefined || current === null || seen.has(current)) continue;
-    seen.add(current);
-    if (classify(current)) return true;
-    if (Cause.isCause(current)) {
-      for (const reason of current.reasons) {
-        if (Cause.isFailReason(reason)) pending.push(reason.error);
-        else if (Cause.isDieReason(reason)) pending.push(reason.defect);
-      }
-      continue;
-    }
-    if (typeof current !== "object") continue;
-    const wrapped = current as { readonly cause?: unknown; readonly reason?: unknown };
+    if (known !== undefined) return known;
+    if (inspected++ >= 24) return false;
+    // Cyclic or unclassified wrappers never authorize conflict recovery.
+    seen.set(current, false);
+    let conflict: boolean;
 
-    if (wrapped.cause !== undefined) pending.push(wrapped.cause);
-    if (wrapped.reason !== undefined) pending.push(wrapped.reason);
-  }
+    if (Cause.isCause(current))
+      conflict =
+        current.reasons.length > 0 &&
+        current.reasons.every((reason) => Cause.isFailReason(reason) && inspect(reason.error));
+    else if (classify(current)) conflict = true;
+    else if (typeof current === "object") {
+      const wrapped = current as { readonly cause?: unknown; readonly reason?: unknown };
 
-  return false;
+      const nested = [...new Set([wrapped.cause, wrapped.reason])].filter(
+        (value) => value !== undefined,
+      );
+
+      conflict = nested.length > 0 && nested.every(inspect);
+    } else conflict = false;
+    seen.set(current, conflict);
+
+    return conflict;
+  };
+
+  return inspect(failure);
 };

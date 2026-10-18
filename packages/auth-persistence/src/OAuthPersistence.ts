@@ -10,8 +10,8 @@ import {
   OAuthConnectedRevocations,
   OAuthUnavailable,
 } from "@yielded/auth/OAuth";
-import { reportAuthDiagnostic } from "@yielded/auth/Persistence";
-import { Context, type Crypto, Effect, Predicate, Schema } from "effect";
+import { reportAuthDiagnostic, reportPersistenceFailure } from "@yielded/auth/Persistence";
+import { Cause, Context, type Crypto, Effect, Predicate, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { PersistenceConfigurationError } from "./internal/configuration";
@@ -124,7 +124,9 @@ const makeLazyServices = Effect.fnUntraced(function* <M, A>(
   // Cache only validation and service construction; operations acquire their own connection.
   const initialize = yield* Effect.cached(
     validateSqlStorage(mapping).pipe(
-      Effect.mapError(() => OAuthUnavailable.make({})),
+      Effect.catchCause((cause) =>
+        Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+      ),
       Effect.andThen(make(tables, mapping)),
       withStorageValidation,
       Effect.updateContext((current: Context.Context<never>) =>
@@ -151,7 +153,14 @@ const coordinate = Effect.fnUntraced(function* <S, A, E, R, ES, RS>(
   const executor = yield* makeSqlCommitExecutor(() => OAuthUnavailable.make({}));
 
   return yield* executor.coordinate(
-    Effect.flatMap(make.pipe(Effect.mapError(() => OAuthUnavailable.make({}))), body),
+    Effect.flatMap(
+      reportPersistenceFailure(make, () => false, { markReported: true }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => OAuthUnavailable.make({}))),
+        ),
+      ),
+      body,
+    ),
   );
 });
 

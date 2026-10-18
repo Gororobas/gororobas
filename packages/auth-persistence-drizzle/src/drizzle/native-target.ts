@@ -6,7 +6,8 @@ import {
   SqlNativeCommit,
 } from "@yielded/auth-persistence/Adapter";
 import { hasCommitScope, type LifecycleHooks } from "@yielded/auth/Hooks";
-import { Effect } from "effect";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
+import { Cause, Effect } from "effect";
 import { SqlClient } from "effect/sql";
 
 import { D1BatchStatements } from "./D1BatchStatements";
@@ -80,7 +81,8 @@ export const coordinateNativeTarget = <Failure, Services, Transaction, A, E, R, 
 
       const work = Effect.gen(function* () {
         const services = yield* make.pipe(
-          Effect.mapError(unavailable),
+          (effect) => reportPersistenceFailure(effect, () => false, { markReported: true }),
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
           Effect.provideService(NativeDatabase, database),
         );
 
@@ -93,7 +95,10 @@ export const coordinateNativeTarget = <Failure, Services, Transaction, A, E, R, 
             handle ??
             (yield* makeDrizzleTransactionHandle(database, configuration.transactionConstructor))
           );
-        }).pipe(Effect.mapError(unavailable));
+        }).pipe(
+          (effect) => reportPersistenceFailure(effect, () => false, { markReported: true }),
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+        );
 
         const collector = yield* captureSqlBatchStatements;
 

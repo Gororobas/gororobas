@@ -6,7 +6,7 @@ import {
 } from "@yielded/auth/OAuth";
 import type { SubjectId } from "@yielded/auth/Schema";
 import type { AuthenticationRequirement } from "@yielded/auth/Sessions";
-import { Effect, Schema } from "effect";
+import { Cause, Effect, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import type { Fragment } from "effect/sql/Statement";
 
@@ -227,7 +227,10 @@ export const makeOAuthNativeState = Effect.fnUntraced(function* (
       ],
     ],
     canJoinTextColumns,
-  ).pipe(withStorageValidation, Effect.mapError(unavailable));
+  ).pipe(
+    withStorageValidation,
+    Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, unavailable))),
+  );
 
   const decodeSnapshot = Effect.fnUntraced(function* (
     rows: ReadonlyArray<Row>,

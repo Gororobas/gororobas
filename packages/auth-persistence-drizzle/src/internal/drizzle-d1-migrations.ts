@@ -1,9 +1,13 @@
 import { D1Client } from "@effect/sql-d1/D1Client";
-import { PersistenceConfigurationError } from "@yielded/auth-persistence/Adapter";
+import {
+  PersistenceConfigurationError,
+  PersistenceMappingError,
+} from "@yielded/auth-persistence/Adapter";
+import { reportPersistenceFailure } from "@yielded/auth/Persistence";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { formatToMillis, getMigrationsToRun } from "drizzle-orm/migrator.utils";
-import { Crypto, DateTime, Effect, Layer, Schema } from "effect";
+import { Cause, Crypto, DateTime, Effect, Layer, Schema } from "effect";
 
 const MigrationFiles = Schema.Record(Schema.String, Schema.NonEmptyString);
 const MigrationName = Schema.String.check(Schema.isPattern(/^\d{14}_.+$/));
@@ -13,6 +17,9 @@ const configurationError = () =>
   PersistenceConfigurationError.make({
     reason: "Could not apply D1 migrations; check the bundled SQL and database binding",
   });
+
+const migrationFailure = (cause: unknown) =>
+  PersistenceMappingError.make({ operation: "migration", cause });
 
 const JournalRows = Schema.Array(
   Schema.Struct({
@@ -67,7 +74,7 @@ export const d1MigrationsLayer = (options: {
         const columns = (yield* Schema.decodeUnknownEffect(JournalColumns)(
           yield* Effect.tryPromise({
             try: () => db.all(sql`select name from pragma_table_info(${name})`),
-            catch: configurationError,
+            catch: migrationFailure,
           }),
         )).map((column) => column.name);
 
@@ -90,7 +97,7 @@ export const d1MigrationsLayer = (options: {
                 try: () =>
                   db.all(sql`select rowid as id, hash, cast(created_at as text) as created_at,
               ${legacy ? sql`null` : sql`name`} as name from ${table} order by rowid`),
-                catch: configurationError,
+                catch: migrationFailure,
               }),
             )).map((entry) => ({ ...entry }));
 
@@ -149,8 +156,14 @@ export const d1MigrationsLayer = (options: {
         if (first !== undefined)
           yield* Effect.tryPromise({
             try: () => db.batch([first, ...rest]),
-            catch: configurationError,
+            catch: migrationFailure,
           });
-      }).pipe(Effect.catchDefect(() => Effect.fail(configurationError())));
-    }).pipe(Effect.mapError(configurationError)),
+      });
+    }).pipe(
+      (effect) =>
+        reportPersistenceFailure(effect, Schema.is(PersistenceConfigurationError), {
+          markReported: true,
+        }),
+      Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, configurationError))),
+    ),
   );

@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Schema, type Types } from "effect";
+import { Cause, Context, Effect, Layer, Schema, type Types } from "effect";
 
 import type { AuthInvocation } from "../operations/context";
 import type { AuthOperationResult } from "../operations/credentials";
@@ -6,7 +6,6 @@ import { makeOperation, operationGroup } from "../operations/operation";
 import type { makeSessionModule } from "../sessions/module";
 import { pendingAuthenticationContext } from "../sessions/PendingAuthentication";
 import {
-  passkeyUnexpected,
   passkeyRateLimiterLayer,
   makePasskeyCeremony,
   passkeyNoAmbient,
@@ -77,19 +76,25 @@ export const makePasskeyPending = <
         const pending = yield* completion
           .inspectPending(token)
           .pipe(
-            Effect.mapError((error) =>
-              error._tag === "HookDenied"
-                ? error
-                : error._tag === "SessionUnavailable"
-                  ? PasskeyUnavailable.make({})
-                  : error._tag === "SessionCapabilityUnsupported"
-                    ? PasskeyMethodUnsupported.make({})
-                    : PasskeyRejected.make({}),
+            Effect.catchCause((cause) =>
+              Effect.failCause(
+                Cause.map(cause, (error) =>
+                  error._tag === "HookDenied"
+                    ? error
+                    : error._tag === "SessionUnavailable"
+                      ? PasskeyUnavailable.make({})
+                      : error._tag === "SessionCapabilityUnsupported"
+                        ? PasskeyMethodUnsupported.make({})
+                        : PasskeyRejected.make({}),
+                ),
+              ),
             ),
           );
 
         const context = yield* pendingAuthenticationContext(pending.record).pipe(
-          Effect.mapError(() => PasskeyRejected.make({})),
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasskeyRejected.make({}))),
+          ),
         );
 
         const fixed = yield* snapshotPasskey(PasskeyTarget, {
@@ -100,7 +105,7 @@ export const makePasskeyPending = <
         });
 
         return { pending, fixed };
-      }, passkeyUnexpected);
+      });
 
       return Pending.of({
         begin: Effect.fn("PasskeyPending.begin")(function* (invocation, input) {
@@ -118,7 +123,7 @@ export const makePasskeyPending = <
             { _tag: "Pending", target: fixed },
             captured.credentials,
           );
-        }, passkeyUnexpected),
+        }),
         complete: Effect.fn("PasskeyPending.complete")(function* (invocation, input) {
           input = yield* snapshotPasskey(Schema.toType(CompleteInput), input);
           yield* passkeyNoAmbient();
@@ -129,12 +134,23 @@ export const makePasskeyPending = <
             .authentication(input, { _tag: "Pending", target: fixed })
             .pipe(
               Effect.provide(services),
-              Effect.catchTag("PasskeyRejected", () =>
+              Effect.catchCause((cause) =>
                 Effect.gen(function* () {
+                  if (
+                    !cause.reasons.every(
+                      (reason) =>
+                        Cause.isFailReason(reason) && reason.error._tag === "PasskeyRejected",
+                    )
+                  )
+                    return yield* Effect.failCause(cause);
                   yield* readPasskeyCommit(
                     yield* completion
                       .rejectPendingCredential(input.pendingCredential)
-                      .pipe(Effect.mapError(() => PasskeyUnavailable.make({}))),
+                      .pipe(
+                        Effect.catchCause((cause) =>
+                          Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+                        ),
+                      ),
                   );
 
                   return yield* PasskeyRejected.make({});
@@ -149,14 +165,18 @@ export const makePasskeyPending = <
                 additional: verified.evidence,
               })
               .pipe(
-                Effect.mapError((error) =>
-                  error._tag === "HookDenied"
-                    ? error
-                    : error._tag === "SessionUnavailable"
-                      ? PasskeyUnavailable.make({})
-                      : error._tag === "SessionCapabilityUnsupported"
-                        ? PasskeyMethodUnsupported.make({})
-                        : PasskeyRejected.make({}),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      error._tag === "HookDenied"
+                        ? error
+                        : error._tag === "SessionUnavailable"
+                          ? PasskeyUnavailable.make({})
+                          : error._tag === "SessionCapabilityUnsupported"
+                            ? PasskeyMethodUnsupported.make({})
+                            : PasskeyRejected.make({}),
+                    ),
+                  ),
                 ),
               ),
           );
@@ -165,7 +185,7 @@ export const makePasskeyPending = <
             value: result.value,
             credentialCommands: [...verified.credentialCommands, ...result.credentialCommands],
           };
-        }, passkeyUnexpected),
+        }),
       });
     }),
   ).pipe(Layer.provide(passkeyRateLimiterLayer));

@@ -9,7 +9,7 @@ import {
   type AuthenticationRequirement,
   type SessionUnavailable,
 } from "@yielded/auth/Sessions";
-import { DateTime, Effect, Option } from "effect";
+import { Cause, DateTime, Effect, Option } from "effect";
 import type { SqlClient } from "effect/sql/SqlClient";
 
 import { sqlBatchAssertion } from "./d1-planning";
@@ -246,8 +246,12 @@ export const makeNativeAuthenticationAuthorityServices = Effect.fnUntraced(funct
                 }
               }).pipe(
                 Effect.provideService(AuthenticationClock, state.clockPolicy),
-                Effect.mapError((cause) =>
-                  PersistenceMappingError.make({ operation: "decode", cause }),
+                Effect.catchCause((cause) =>
+                  Effect.failCause(
+                    Cause.map(cause, (error) =>
+                      PersistenceMappingError.make({ operation: "decode", cause: error }),
+                    ),
+                  ),
                 ),
               ),
             });

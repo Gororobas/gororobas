@@ -1,4 +1,4 @@
-import { Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
+import { Cause, Context, DateTime, Effect, Layer, Redacted, Schema } from "effect";
 
 import { makeAuthStrategy } from "../auth/AuthStrategy";
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
@@ -56,7 +56,11 @@ const mapFailure = (error: { _tag: string }) =>
       : TotpRejected.make({});
 
 const read = <A>(commit: PreparedCommit<A>) =>
-  commit.read.pipe(Effect.mapError(() => TotpUnavailable.make({})));
+  commit.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => TotpUnavailable.make({}))),
+    ),
+  );
 
 const decode = <S extends Schema.Codec<unknown, unknown, never, never>>(
   schema: S,
@@ -216,14 +220,20 @@ export const makeTotpModule = <
       const central = yield* assessAuthentication(evidence, {
         ...requirement,
         maximumAgeMillis: Math.min(requirement.maximumAgeMillis, policy.maximumEvidenceAgeMillis),
-      }).pipe(Effect.mapError(() => TotpActionRequired.make({})));
+      }).pipe(
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => TotpActionRequired.make({}))),
+        ),
+      );
 
       const freshStrong =
         (captured.record === null || captured.record.secret === null) &&
         (action === "enroll" || action === "confirm")
           ? central
           : yield* assessAuthentication(evidence, strong(policy.maximumEvidenceAgeMillis)).pipe(
-              Effect.mapError(() => TotpActionRequired.make({})),
+              Effect.catchCause((cause) =>
+                Effect.failCause(Cause.map(cause, () => TotpActionRequired.make({}))),
+              ),
             );
 
       if (!central.satisfied || !freshStrong.satisfied) return yield* TotpActionRequired.make({});
@@ -523,10 +533,10 @@ export const makeTotpModule = <
 
         const pending = yield* completion
           .inspectPending(input.pendingCredential)
-          .pipe(Effect.mapError(mapFailure));
+          .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))));
 
         const target = yield* pendingAuthenticationContext(pending.record).pipe(
-            Effect.mapError(mapFailure),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))),
           ),
           captured = yield* snapshot(target.revision.subjectId),
           evidence = yield* evidenceFor(captured, target, "totp");
@@ -536,9 +546,10 @@ export const makeTotpModule = <
           matchedStep: yield* matched(captured, Redacted.value(input.code)),
         });
 
-        return yield* completion
-          .preparePending({ pending, additional: evidence })
-          .pipe(Effect.mapError(mapFailure), Effect.flatMap(read));
+        return yield* completion.preparePending({ pending, additional: evidence }).pipe(
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))),
+          Effect.flatMap(read),
+        );
       }),
       verifyStepUp: Effect.fn("Totp.verifyStepUp")(function* (
         invocation: AuthInvocation,
@@ -551,16 +562,14 @@ export const makeTotpModule = <
 
         const pending = yield* stepUp
           .inspect(input.stepUpCredential)
-          .pipe(Effect.mapError(mapFailure));
+          .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))));
 
         const target = pending.intent;
 
-        const source = yield* sessions
-          .inspectInvocation(invocation, input.sourceCredential)
-          .pipe(
-            Effect.provideService(sessions.SessionStrategy, strategy),
-            Effect.mapError(mapFailure),
-          );
+        const source = yield* sessions.inspectInvocation(invocation, input.sourceCredential).pipe(
+          Effect.provideService(sessions.SessionStrategy, strategy),
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))),
+        );
 
         if (target.revision.subjectId !== invocation.subjectId) return yield* TotpRejected.make({});
 
@@ -578,7 +587,10 @@ export const makeTotpModule = <
             pending,
             additional: evidence,
           })
-          .pipe(Effect.mapError(mapFailure), Effect.flatMap(read));
+          .pipe(
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))),
+            Effect.flatMap(read),
+          );
       }),
       recoverPending: Effect.fn("Totp.recoverPending")(function* (
         invocation: AuthInvocation,
@@ -592,10 +604,10 @@ export const makeTotpModule = <
 
         const pending = yield* completion
           .inspectPending(input.pendingCredential)
-          .pipe(Effect.mapError(mapFailure));
+          .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))));
 
         const target = yield* pendingAuthenticationContext(pending.record).pipe(
-            Effect.mapError(mapFailure),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))),
           ),
           captured = yield* snapshot(target.revision.subjectId),
           evidence = yield* evidenceFor(captured, target, "recovery-code");
@@ -610,9 +622,10 @@ export const makeTotpModule = <
           reset: false,
         });
 
-        return yield* completion
-          .preparePending({ pending, additional: evidence })
-          .pipe(Effect.mapError(mapFailure), Effect.flatMap(read));
+        return yield* completion.preparePending({ pending, additional: evidence }).pipe(
+          Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))),
+          Effect.flatMap(read),
+        );
       }),
       recoverLostFactor: Effect.fn("Totp.recoverLostFactor")(function* (
         invocation: AuthInvocation,
@@ -626,10 +639,10 @@ export const makeTotpModule = <
 
         const pending = yield* completion
           .inspectPending(input.pendingCredential)
-          .pipe(Effect.mapError(mapFailure));
+          .pipe(Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))));
 
         const target = yield* pendingAuthenticationContext(pending.record).pipe(
-            Effect.mapError(mapFailure),
+            Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, mapFailure))),
           ),
           captured = yield* snapshot(target.revision.subjectId);
 

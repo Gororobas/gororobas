@@ -5,7 +5,6 @@ import {
   DateTime,
   Duration,
   Effect,
-  Fiber,
   Layer,
   Redacted,
   Schema,
@@ -17,7 +16,7 @@ import { boundedMemoryRateLimiter, localRateLimiter } from "../auth/rateLimiter"
 import { hasCommitScope, type PreparedCommit } from "../hooks/commit";
 import { LifecycleHooks } from "../hooks/LifecycleHooks";
 import { lifecycleSnapshotEffect } from "../hooks/models";
-import { reportAuthFailure } from "../internal/diagnostics";
+import { timeoutWithCause } from "../internal/timeout";
 import type { AuthOperationResult } from "../operations/credentials";
 import { makeRequestBinding } from "../operations/requestBinding";
 import { AuthenticationFlowId, type AuthenticationEvidence } from "../sessions/models";
@@ -80,7 +79,11 @@ export const passkeyNoAmbient = Effect.fn("Passkey.noAmbient")(function* () {
 });
 
 export const readPasskeyCommit = <A>(receipt: PreparedCommit<A>) =>
-  receipt.read.pipe(Effect.mapError(() => PasskeyUnavailable.make({})));
+  receipt.read.pipe(
+    Effect.catchCause((cause) =>
+      Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+    ),
+  );
 
 export const passkeyFailure = (error: { readonly _tag: string }) =>
   error._tag === "HookDenied"
@@ -103,25 +106,7 @@ const prepare = <A>(value: A, journal: Parameters<PreparePasskeyCommit<A, A>>[1]
 const now = DateTime.now.pipe(Effect.map(DateTime.toEpochMillis));
 
 const bounded = <A, E, R>(operation: Effect.Effect<A, E, R>, millis: number) =>
-  Effect.gen(function* () {
-    const fiber = yield* operation.pipe(Effect.interruptible, Effect.forkChild);
-
-    return yield* Fiber.join(fiber).pipe(
-      Effect.timeout(Math.max(1, millis)),
-      Effect.ensuring(Fiber.interrupt(fiber)),
-    );
-  });
-
-export const passkeyUnexpected = <A, E, R>(operation: Effect.Effect<A, E, R>) =>
-  operation.pipe(
-    Effect.catchCause((cause): Effect.Effect<never, E | PasskeyUnavailable> =>
-      Cause.hasDies(cause)
-        ? reportAuthFailure("passkey-core", cause).pipe(
-            Effect.andThen(Effect.fail(PasskeyUnavailable.make({}))),
-          )
-        : Effect.failCause(cause),
-    ),
-  );
+  operation.pipe(Effect.interruptible, timeoutWithCause(Math.max(1, millis)));
 
 interface RegistrationDraft {
   readonly ceremony: PasskeyCeremony;
@@ -181,10 +166,14 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
         })
         .pipe(
           Effect.asVoid,
-          Effect.mapError((error) =>
-            error.reason._tag === "RateLimitExceeded"
-              ? PasskeyRejected.make({})
-              : PasskeyUnavailable.make({}),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                error.reason._tag === "RateLimitExceeded"
+                  ? PasskeyRejected.make({})
+                  : PasskeyUnavailable.make({}),
+              ),
+            ),
           ),
         );
 
@@ -202,7 +191,9 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
     const random = () =>
       crypto.randomBytes(32).pipe(
         Effect.map(Base64Url.encode),
-        Effect.mapError(() => PasskeyUnavailable.make({})),
+        Effect.catchCause((cause) =>
+          Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+        ),
       );
 
     const profile = (profileId: string) =>
@@ -216,10 +207,14 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
       const verified = yield* binder
         .verify(input.flowId, input.bindingCredential)
         .pipe(
-          Effect.mapError((error) =>
-            error._tag === "RequestBindingUnavailable"
-              ? PasskeyUnavailable.make({})
-              : PasskeyRejected.make({}),
+          Effect.catchCause((cause) =>
+            Effect.failCause(
+              Cause.map(cause, (error) =>
+                error._tag === "RequestBindingUnavailable"
+                  ? PasskeyUnavailable.make({})
+                  : PasskeyRejected.make({}),
+              ),
+            ),
           ),
         );
 
@@ -339,7 +334,11 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
 
       const issued = yield* binder
         .issue(input.flowId)
-        .pipe(Effect.mapError(() => PasskeyUnavailable.make({})));
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+          ),
+        );
 
       const command = issued.credentialCommands[0];
 
@@ -347,7 +346,11 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
 
       const verified = yield* binder
         .verify(input.flowId, command.credential)
-        .pipe(Effect.mapError(() => PasskeyUnavailable.make({})));
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+          ),
+        );
 
       const timestamp = yield* now;
 
@@ -405,7 +408,11 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
             timeoutMillis: ceremony.expiresAtMillis - ceremony.issuedAtMillis,
             allowedCredentials: ceremony.allowedCredentials,
           })
-          .pipe(Effect.mapError(() => PasskeyUnavailable.make({}))),
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+            ),
+          ),
       );
 
       if (
@@ -437,7 +444,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
         value: { flowId: input.flowId, expiresAtMillis: ceremony.expiresAtMillis, options },
         credentialCommands: commands,
       } satisfies AuthOperationResult<PasskeyAuthenticationStarted>;
-    }, passkeyUnexpected);
+    });
 
     const prepareRegistration = Effect.fn("Passkey.prepareRegistration")(function* (
       input: PasskeyBegin,
@@ -463,7 +470,11 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
             displayName: context._tag === "Registration" ? context.displayName : context.name,
             excludedCredentials: excluded,
           })
-          .pipe(Effect.mapError(() => PasskeyUnavailable.make({}))),
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.failCause(Cause.map(cause, () => PasskeyUnavailable.make({}))),
+            ),
+          ),
       );
 
       if (
@@ -497,7 +508,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
       freezePasskey(draft);
 
       return draft;
-    }, passkeyUnexpected);
+    });
 
     const acceptRegistrationIssue = Effect.fn("Passkey.acceptRegistrationIssue")(function* (
       draft: RegistrationDraft,
@@ -516,15 +527,27 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
         value: draft.started,
         credentialCommands: draft.credentialCommands,
       } satisfies AuthOperationResult<PasskeyRegistrationStarted>;
-    }, passkeyUnexpected);
+    });
 
     const verify = <A, R>(
       ceremony: PasskeyCeremony,
       operation: Effect.Effect<A, PasskeyFailure | PasskeyProtocolRejected, R>,
     ) =>
       bounded(operation, ceremony.expiresAtMillis - ceremony.issuedAtMillis).pipe(
-        Effect.catchTag("TimeoutError", () => Effect.fail(PasskeyUnavailable.make({}))),
-        Effect.catchTag("PasskeyProtocolRejected", () => Effect.fail(PasskeyRejected.make({}))),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              error._tag === "TimeoutError" ? PasskeyUnavailable.make({}) : error,
+            ),
+          ),
+        ),
+        Effect.catchCause((cause) =>
+          Effect.failCause(
+            Cause.map(cause, (error) =>
+              error._tag === "PasskeyProtocolRejected" ? PasskeyRejected.make({}) : error,
+            ),
+          ),
+        ),
       );
 
     const authentication = Effect.fn("Passkey.authentication")(function* (
@@ -679,7 +702,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
       if (consumed !== "Verified") return yield* PasskeyRejected.make({});
 
       return { ...verified, credentialCommands: [clear] as const };
-    }, passkeyUnexpected);
+    });
 
     const verifyRegistration = Effect.fn("Passkey.verifyRegistration")(function* (
       input: PasskeyRegistrationComplete,
@@ -723,7 +746,7 @@ export const makePasskeyCeremony = <const Id extends string, const Purpose exten
       );
 
       return Object.freeze({ access: inspected.key, ceremony: inspected.ceremony, verified });
-    }, passkeyUnexpected);
+    });
 
     const exclusions = Effect.fn("Passkey.exclusions")(function* (
       profileId: string,
@@ -820,7 +843,6 @@ export const makePasskeyActions = <const Id extends string>(
               captured.credentials,
             );
           },
-          passkeyUnexpected,
           Effect.provideService(PasskeyCredentials, credentials),
         ),
         complete: Effect.fn("PasskeyActionAssertions.complete")(
@@ -829,7 +851,6 @@ export const makePasskeyActions = <const Id extends string>(
 
             return yield* runtime.authentication(input, { _tag: "Action", target: fixed });
           },
-          passkeyUnexpected,
           Effect.provideService(PasskeyCredentials, credentials),
         ),
       });

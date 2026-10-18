@@ -1,5 +1,7 @@
-import { Context, Effect, Fiber, Layer, Queue } from "effect";
+import { Context, Effect, Exit, Fiber, Layer, Queue } from "effect";
 
+import { reportAuthFailure } from "../internal/diagnostics";
+import { timeoutWithCause } from "../internal/timeout";
 import { ProofUnavailable } from "./errors";
 
 /** Admission for private, process-local proof delivery.
@@ -40,10 +42,12 @@ export class ProofDispatchScheduler extends Context.Service<
         while (true) {
           const work = yield* Queue.take(queue);
 
-          // Isolate task interruption while keeping it inside the worker's lifetime.
+          // Task-owned observation survives interruption of the worker's wait.
           const task = yield* work.pipe(
-            Effect.timeout("10 seconds"),
-            Effect.catchTag("TimeoutError", () => Effect.void),
+            timeoutWithCause("10 seconds"),
+            Effect.onExit((exit) =>
+              Exit.isFailure(exit) ? reportAuthFailure("proof-delivery", exit.cause) : Effect.void,
+            ),
             Effect.forkChild,
           );
 

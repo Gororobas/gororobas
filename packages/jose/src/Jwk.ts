@@ -1,5 +1,5 @@
 import * as Signature from "@yielded/crypto/Signature";
-import { Effect, Redacted, Schema } from "effect";
+import { Cause, Effect, Redacted, Schema } from "effect";
 import { Base64Url } from "effect/encoding";
 
 import { InvalidKey } from "./Errors";
@@ -264,7 +264,15 @@ export const importPublic = Effect.fnUntraced(function* (
 
   const material = yield* signatures
     .encodePublicKey(parameters)
-    .pipe(Effect.catchTag("CryptoInvalidInput", () => InvalidKey.make({})));
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            error._tag === "CryptoInvalidInput" ? InvalidKey.make({}) : error,
+          ),
+        ),
+      ),
+    );
 
   return Object.freeze({
     _tag: "PublicKey",
@@ -305,7 +313,13 @@ export const importPrivate = Effect.fnUntraced(function* (
   const signatures = yield* Signature.Signature;
 
   const material = yield* signatures.encodePrivateKey(Redacted.make(parameters)).pipe(
-    Effect.catchTag("CryptoInvalidInput", () => InvalidKey.make({})),
+    Effect.catchCause((cause) =>
+      Effect.failCause(
+        Cause.map(cause, (error) =>
+          error._tag === "CryptoInvalidInput" ? InvalidKey.make({}) : error,
+        ),
+      ),
+    ),
     Effect.ensuring(
       Effect.sync(() => {
         parameters.d.fill(0);
@@ -330,7 +344,8 @@ export const importPrivate = Effect.fnUntraced(function* (
   }) satisfies PrivateKey;
 });
 
-/** Import PKCS8 DER through the crypto backend, then bind the resulting JWK. */
+/** Import PKCS8 DER through the crypto backend, then bind the resulting JWK.
+ * Invalid material becomes InvalidKey; backend availability failures propagate. */
 export const importPkcs8 = Effect.fnUntraced(function* (
   input: Redacted.Redacted<Uint8Array>,
   selected: AsymmetricAlgorithm,
@@ -341,7 +356,15 @@ export const importPkcs8 = Effect.fnUntraced(function* (
 
   const pair = yield* signatures
     .decodePrivateKey({ algorithm: algorithms[algorithm], privateKey: input })
-    .pipe(Effect.mapError(() => InvalidKey.make({})));
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.failCause(
+          Cause.map(cause, (error) =>
+            error._tag === "CryptoInvalidInput" ? InvalidKey.make({}) : error,
+          ),
+        ),
+      ),
+    );
 
   const parameters = Redacted.value(pair.privateKey);
 
