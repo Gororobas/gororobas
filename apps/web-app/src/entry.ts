@@ -1,4 +1,4 @@
-import { Option } from "effect"
+import { Effect, Option } from "effect"
 import { Runtime } from "foldkit"
 
 import { Message, Model, init, resources, subscriptions, update, view } from "./main"
@@ -20,3 +20,12 @@ const application = Runtime.makeApplication({
 })
 
 Runtime.run(application)
+
+// Development modules are intentionally never cached.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  Effect.runFork(
+    Effect.tryPromise(() => navigator.serviceWorker.register("/service-worker.js")).pipe(
+      Effect.catch(() => Effect.logWarning("Offline app shell could not be installed")),
+    ),
+  )
+}

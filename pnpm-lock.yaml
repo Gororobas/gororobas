@@ -195,11 +195,11 @@ catalogs:
       specifier: ^26.6.5
       version: 26.6.5
     '@yielded/auth':
-      specifier: 0.1.0-beta.39
-      version: 0.1.0-beta.39
+      specifier: 0.1.0-beta.42
+      version: 0.1.0-beta.42
     '@yielded/auth-persistence':
-      specifier: 0.1.0-beta.39
-      version: 0.1.0-beta.39
+      specifier: 0.1.0-beta.42
+      version: 0.1.0-beta.42
     effect:
       specifier: ^4.0.5
       version: 4.0.5
@@ -235,7 +235,7 @@ overrides:
   '@mpsuesser/oxlint-plugin-effect>effect': ^4.0.5
 
 patchedDependencies:
-  '@yielded/auth@0.1.0-beta.39': 4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7
+  '@yielded/auth@0.1.0-beta.42': 4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7
   loro-crdt@1.16.4: 14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd
 
 importers:
@@ -355,10 +355,10 @@ importers:
         version: 3.32.0
       '@yielded/auth':
         specifier: 'catalog:'
-        version: 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
+        version: 0.1.0-beta.42(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
       '@yielded/auth-persistence':
         specifier: 'catalog:'
-        version: 0.1.0-beta.39(effect@4.0.5)
+        version: 0.1.0-beta.42(effect@4.0.5)
       effect:
         specifier: 'catalog:'
         version: 4.0.5
@@ -414,7 +414,7 @@ importers:
         version: link:../../repos/pleat/packages/foldkit
       '@yielded/auth':
         specifier: 'catalog:'
-        version: 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
+        version: 0.1.0-beta.42(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
       effect:
         specifier: 'catalog:'
         version: 4.0.5
@@ -460,7 +460,7 @@ importers:
         version: 3.32.0
       '@yielded/auth':
         specifier: 'catalog:'
-        version: 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
+        version: 0.1.0-beta.42(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
       effect:
         specifier: 'catalog:'
         version: 4.0.5
@@ -2431,28 +2431,28 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@yielded/auth-persistence@0.1.0-beta.39':
-    resolution: {integrity: sha512-50OV1SnSAC/3jWRCmFtnYTLlFX4exIhY6a9XIBkqd2tCxDgB7MAbc9DjwWLcDpXHP9baLJuHHk5VeSjjI99Cvw==}
+  '@yielded/auth-persistence@0.1.0-beta.42':
+    resolution: {integrity: sha512-+qZRu+hSO7C9hzX50HWstNYThMQysx+1WBEOtTg4Djioeas0yfWpNTWV68I/wM02b/Ok7/lYzATscKmsihFpaA==}
     peerDependencies:
       effect: ^4.0.3
 
-  '@yielded/auth@0.1.0-beta.39':
-    resolution: {integrity: sha512-OD3cYiJScQS4oeXX0Q5do+sdxHWG0y3VCPWUAlsiR0U50FThHD1rDP2fdW2CN6Hr2rh975IeyH7K1hAiED0pjw==}
+  '@yielded/auth@0.1.0-beta.42':
+    resolution: {integrity: sha512-eYcK1bVHL+H6U6xvF8oxzHYmfl7oFFS+xMe5l8qaz35jyA81EXpOpAAfjqUHuM6GObg97FKlViKG9LS5vHbPjg==}
     peerDependencies:
       effect: ^4.0.3
 
-  '@yielded/crypto@0.1.0-beta.39':
-    resolution: {integrity: sha512-P2BucAhhjcR2ZkWzlH7OrNUS3nBRP/SOSaAS3ZsclS0AQEit3c+fT4sg+G+phZuh6Od0AvgksGrAnFryp6yZ1A==}
+  '@yielded/crypto@0.1.0-beta.42':
+    resolution: {integrity: sha512-FcerWq+9gyYiya6QsFyqHSLL3u/8KURhJxAVzW4FQkDm6slAepP0izIcmHQHtoKaQClttbI69iDqC8CPIkQd0g==}
     peerDependencies:
       effect: ^4.0.3
 
-  '@yielded/jose@0.1.0-beta.39':
-    resolution: {integrity: sha512-qST0VCqZxzLNOkUSsSLXh0VVVm+jp6diz/um+0Fojt3R0D2zAye0XSoFnzdobCU7Hh87QMpDMDygd49F16vFDQ==}
+  '@yielded/jose@0.1.0-beta.42':
+    resolution: {integrity: sha512-YD0UOFEeTK2Mh0hpE24X3pAFISwhxNUvMPfkzI3WfTniJLOcWfdC1RygKtJ4vU5h6HOI73GbP3MX1/KO2wfqrg==}
     peerDependencies:
       effect: ^4.0.3
 
-  '@yielded/oauth@0.1.0-beta.39':
-    resolution: {integrity: sha512-x1Y9GGBox6PngFIfo9WbnI650WjWL1B7S3n2O1dgrKcgLp5sV8qoubpw7kMF+tIo99ilCXiGwQlpWZF9CM5VXA==}
+  '@yielded/oauth@0.1.0-beta.42':
+    resolution: {integrity: sha512-m6qTxnN+NzYwZj+QcW373nC0JIsVAlm3fGFydARO1e2VH8fdyLh1rwzLqQoS3/yps76v4RZILFWif2+eMpETiQ==}
     peerDependencies:
       effect: ^4.0.3
 
@@ -5589,31 +5589,31 @@ snapshots:
   '@voidzero-dev/vite-plus-win32-x64-msvc@1.1.0':
     optional: true
 
-  '@yielded/auth-persistence@0.1.0-beta.39(effect@4.0.5)':
+  '@yielded/auth-persistence@0.1.0-beta.42(effect@4.0.5)':
     dependencies:
-      '@yielded/auth': 0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
-      '@yielded/crypto': 0.1.0-beta.39(effect@4.0.5)
+      '@yielded/auth': 0.1.0-beta.42(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
+      '@yielded/crypto': 0.1.0-beta.42(effect@4.0.5)
       effect: 4.0.5
 
-  '@yielded/auth@0.1.0-beta.39(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)':
+  '@yielded/auth@0.1.0-beta.42(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)':
     dependencies:
-      '@yielded/crypto': 0.1.0-beta.39(effect@4.0.5)
-      '@yielded/jose': 0.1.0-beta.39(effect@4.0.5)
-      '@yielded/oauth': 0.1.0-beta.39(effect@4.0.5)
+      '@yielded/crypto': 0.1.0-beta.42(effect@4.0.5)
+      '@yielded/jose': 0.1.0-beta.42(effect@4.0.5)
+      '@yielded/oauth': 0.1.0-beta.42(effect@4.0.5)
       effect: 4.0.5
 
-  '@yielded/crypto@0.1.0-beta.39(effect@4.0.5)':
+  '@yielded/crypto@0.1.0-beta.42(effect@4.0.5)':
     dependencies:
       effect: 4.0.5
 
-  '@yielded/jose@0.1.0-beta.39(effect@4.0.5)':
+  '@yielded/jose@0.1.0-beta.42(effect@4.0.5)':
     dependencies:
-      '@yielded/crypto': 0.1.0-beta.39(effect@4.0.5)
+      '@yielded/crypto': 0.1.0-beta.42(effect@4.0.5)
       effect: 4.0.5
 
-  '@yielded/oauth@0.1.0-beta.39(effect@4.0.5)':
+  '@yielded/oauth@0.1.0-beta.42(effect@4.0.5)':
     dependencies:
-      '@yielded/jose': 0.1.0-beta.39(effect@4.0.5)
+      '@yielded/jose': 0.1.0-beta.42(effect@4.0.5)
       effect: 4.0.5
 
   '@yuku-codegen/binding-android-arm64@0.9.5':

@@ -25,8 +25,8 @@ catalog:
   "@tiptap/pm": ^3.31.4
   "@tiptap/starter-kit": ^3.31.4
   "@types/node": ^26.6.5
-  "@yielded/auth": "0.1.0-beta.39"
-  "@yielded/auth-persistence": "0.1.0-beta.39"
+  "@yielded/auth": "0.1.0-beta.42"
+  "@yielded/auth-persistence": "0.1.0-beta.42"
   effect: ^4.0.5
   effect-units: ^1.0.1
   glob: ^13.0.6
@@ -40,11 +40,11 @@ catalog:
   vite-plus: 1.1.0
 
 minimumReleaseAgeExclude:
-  - "@yielded/crypto@0.1.0-beta.39"
-  - "@yielded/auth-persistence@0.1.0-beta.39"
-  - "@yielded/auth@0.1.0-beta.39"
-  - "@yielded/jose@0.1.0-beta.39"
-  - "@yielded/oauth@0.1.0-beta.39"
+  - "@yielded/crypto@0.1.0-beta.42"
+  - "@yielded/auth-persistence@0.1.0-beta.42"
+  - "@yielded/auth@0.1.0-beta.42"
+  - "@yielded/jose@0.1.0-beta.42"
+  - "@yielded/oauth@0.1.0-beta.42"
 
 nodeLinker: hoisted
 
@@ -53,5 +53,5 @@ overrides:
   "@mpsuesser/oxlint-plugin-effect>effect": "catalog:"
 
 patchedDependencies:
-  "@yielded/auth@0.1.0-beta.39": patches/@yielded__auth@0.1.0-beta.39.patch
+  "@yielded/auth@0.1.0-beta.42": patches/@yielded__auth@0.1.0-beta.42.patch
   loro-crdt@1.16.4: patches/loro-crdt@1.16.4.patch

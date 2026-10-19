@@ -150,6 +150,10 @@ export const init: Runtime.RoutingApplicationInit<
 export const resources = Layer.mergeAll(ApiClient.resources, Authentication.resources)
 
 export const subscriptions = Subscription.aggregate(
+  Subscription.lift(Authentication.subscriptions)<Model, Message>({
+    read: (model) => Option.some(model.authentication),
+    toParentMessage: (message) => Message.GotAuthenticationMessage({ message }),
+  }),
   Subscription.lift(WikiArticleDebug.subscriptions)<Model, Message>({
     read: (model) => Option.some(model.wikiArticleDebug),
     when: (model) => model.route._tag === "WikiArticleDebug",

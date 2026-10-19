@@ -1,24 +1,30 @@
 import {
-  AuthenticationApi,
   EmailCodeRequest,
   DEFAULT_AUTHENTICATION_RETURN_TARGET,
 } from "@gororobas/domain/authentication/auth-contract"
 import { OnboardingInput } from "@gororobas/domain/people/domain"
-import { Client, Operations, Proofs } from "@yielded/auth"
-import { Clock, Duration, Effect, Layer, Option, Predicate, Schema } from "effect"
-import { Command, Update } from "foldkit"
+import { Operations, Proofs } from "@yielded/auth"
+import { Clock, Duration, Effect, Layer, Option, Predicate, Schema, Stream } from "effect"
+import { Command, Subscription, Update } from "foldkit"
 import { HtmlBuilder } from "foldkit/html"
 import { defineMessageUnion } from "foldkit/message"
 import { defineTaggedUnion } from "foldkit/schema"
 import { defineView } from "foldkit/submodel"
 
 import { GororobasApiClient } from "./api-client"
+import {
+  AuthenticationClient,
+  SessionAccess,
+  SessionState,
+  sessionAccessLayer,
+  sessionChangedEvent,
+  sessionStorageKey,
+} from "./session-access"
 
-export const AuthenticationClient = Client.make(AuthenticationApi, {
-  baseUrl: window.location.origin,
-})
-
-export const resources = AuthenticationClient.layerFetch.pipe(Layer.orDie)
+export const resources = Layer.merge(
+  AuthenticationClient.layerFetch.pipe(Layer.orDie),
+  sessionAccessLayer,
+)
 
 // MODEL
 
@@ -52,7 +58,11 @@ export const Stage = defineTaggedUnion({
     isSaving: Schema.Boolean,
     error: Schema.NullOr(Schema.String),
   },
-  SignedIn: { name: Schema.String, isSigningOut: Schema.Boolean },
+  SignedIn: {
+    name: Schema.String,
+    isSigningOut: Schema.Boolean,
+    connection: SessionState.fields.status,
+  },
 })
 
 export type Stage = typeof Stage.Type
@@ -83,17 +93,17 @@ const awaitingCode = (input: {
   })
 
 /** `null` until onboarding gives the account a profile. */
-const signedIn = (name: string | null) =>
+const signedIn = (name: string | null, connection: SessionState["status"] = "Ready") =>
   name === null
     ? Stage.Onboarding({ name: "", isSaving: false, error: null })
-    : Stage.SignedIn({ name, isSigningOut: false })
+    : Stage.SignedIn({ name, isSigningOut: false, connection })
 
 // MESSAGE
 
 export const RestoredSession = defineTaggedUnion({
   SignedOut: {},
   AwaitingCode: { pending: PendingCode, canResend: Schema.Boolean },
-  SignedIn: { name: Schema.NullOr(Schema.String) },
+  SignedIn: { name: Schema.NullOr(Schema.String), connection: SessionState.fields.status },
   /** The emailed link couldn't sign in: expired, already used, or opened in another browser. */
   FailedLink: {},
 })
@@ -110,6 +120,8 @@ export const Message = defineMessageUnion({
   SubmittedName: {},
   ClickedSignOut: {},
   CompletedRestoreSession: { session: RestoredSession },
+  ChangedSessionAccess: { state: SessionState },
+  ChangedConnection: {},
   SucceededSendCode: { pending: PendingCode },
   FailedSendCode: { error: Schema.String },
   SucceededResendCode: { pending: PendingCode },
@@ -172,7 +184,9 @@ const isResendAllowed = (pending: PendingCode) =>
 const fetchProfileName = Effect.gen(function* () {
   const client = yield* GororobasApiClient
   const profile = yield* client.people.getMyProfile()
-  return profile === null ? null : profile.name
+  const name = profile === null ? null : profile.name
+  yield* (yield* SessionAccess).setName(name)
+  return name
 })
 
 const requestCode = Effect.fn(function* (flowId: Operations.RequestBindingFlowId, email: string) {
@@ -199,6 +213,7 @@ const requestCode = Effect.fn(function* (flowId: Operations.RequestBindingFlowId
 
 const startFlow = Effect.fn(function* (email: string) {
   const { auth } = yield* AuthenticationClient
+  yield* (yield* SessionAccess).flushSignOut
   const flowId = Operations.RequestBindingFlowId.make(crypto.randomUUID())
   yield* auth.beginEmailSignIn({ flowId })
   return yield* requestCode(flowId, email)
@@ -217,7 +232,11 @@ const signInWithCode = Effect.fn(function* (pending: PendingCode, code: string) 
 
   if (result.completion._tag !== "Authenticated") return yield* Effect.fail("incomplete")
   yield* clearPendingCode
-  return yield* fetchProfileName
+  yield* (yield* SessionAccess).remember({
+    subjectId: result.completion.session.subjectId,
+    name: null,
+  })
+  return yield* fetchProfileName.pipe(Effect.orElseSucceed(() => null))
 })
 
 const genericError = "Something went wrong. Please try again."
@@ -231,14 +250,26 @@ export const RestoreSession = Command.define("RestoreSession", {
     if (Option.isSome(linkCode)) {
       if (Option.isNone(pending)) return RestoredSession.FailedLink()
       return yield* signInWithCode(pending.value, linkCode.value).pipe(
-        Effect.map((name) => RestoredSession.SignedIn({ name })),
+        Effect.map((name) => RestoredSession.SignedIn({ name, connection: "Ready" })),
         Effect.orElseSucceed(() => RestoredSession.FailedLink()),
       )
     }
 
-    const { auth } = yield* AuthenticationClient
-    if ((yield* auth.getSession()) !== null) {
-      return RestoredSession.SignedIn({ name: yield* fetchProfileName })
+    const access = yield* SessionAccess
+    const cached = access.read().identity
+    if (cached !== null) {
+      return RestoredSession.SignedIn({ name: cached.name, connection: "Checking" })
+    }
+    yield* access.ensureReady(undefined, true).pipe(Effect.ignore)
+    const { identity, status } = access.read()
+
+    if (identity !== null) {
+      const name =
+        status === "Ready"
+          ? yield* fetchProfileName.pipe(Effect.orElseSucceed(() => identity.name))
+          : identity.name
+      if (access.read().identity === null) return RestoredSession.SignedOut()
+      return RestoredSession.SignedIn({ name, connection: access.read().status })
     }
 
     return yield* Option.match(pending, {
@@ -311,17 +342,65 @@ const CompleteOnboarding = Command.define("CompleteOnboarding", {
       const payload = yield* Schema.decodeEffect(OnboardingInput)({ name })
       const client = yield* GororobasApiClient
       const profile = yield* client.people.completeOnboarding({ payload })
+      yield* (yield* SessionAccess).setName(profile.name)
       return Message.SucceededCompleteOnboarding({ name: profile.name })
     }).pipe(Effect.orElseSucceed(() => Message.FailedCompleteOnboarding({ error: genericError }))),
 })
 
 const SignOut = Command.define("SignOut", {
   messages: [Message.SucceededSignOut, Message.FailedSignOut],
-  execute: Effect.flatMap(AuthenticationClient, ({ auth }) => auth.signOut()).pipe(
+  execute: Effect.flatMap(SessionAccess, (access) => access.signOut).pipe(
     Effect.as(Message.SucceededSignOut()),
     Effect.orElseSucceed(() => Message.FailedSignOut()),
   ),
 })
+
+const CheckConnection = Command.define("CheckConnection", {
+  messages: [Message.ChangedSessionAccess],
+  execute: Effect.gen(function* () {
+    const access = yield* SessionAccess
+    yield* access.connectionChanged
+    yield* access.ensureReady(undefined, true).pipe(Effect.ignore)
+    if (access.read().status === "Ready") yield* fetchProfileName.pipe(Effect.ignore)
+    return Message.ChangedSessionAccess({ state: access.read() })
+  }),
+})
+
+export const subscriptions = Subscription.make<Model, Message, SessionAccess>()((entry) => ({
+  session: entry(
+    {},
+    {
+      modelToDependencies: () => ({}),
+      dependenciesToStream: () =>
+        Stream.fromEventListener(window, sessionChangedEvent).pipe(
+          Stream.mapEffect(() =>
+            Effect.map(SessionAccess, (access) =>
+              Message.ChangedSessionAccess({ state: access.read() }),
+            ),
+          ),
+        ),
+    },
+  ),
+  connection: entry(
+    {},
+    {
+      modelToDependencies: () => ({}),
+      dependenciesToStream: () =>
+        Stream.merge(
+          Stream.fromEventListener(window, "online"),
+          Stream.fromEventListener(window, "offline"),
+        ).pipe(
+          Stream.merge(
+            Stream.fromEventListener<StorageEvent>(window, "storage").pipe(
+              Stream.filter((event) => event.key === sessionStorageKey || event.key === null),
+            ),
+          ),
+          Stream.merge(Stream.fromEventListener(window, "focus")),
+          Stream.map(() => Message.ChangedConnection()),
+        ),
+    },
+  ),
+}))
 
 // UPDATE
 
@@ -339,6 +418,24 @@ export const update = (
   const { stage } = model
 
   return Message.match(message, {
+    ChangedSessionAccess: ({ state }) => {
+      if (
+        state.status === "SignedOut" &&
+        (isSignedIn(model) || Predicate.isTagged(stage, "Restoring"))
+      ) {
+        return { model: { stage: enteringEmail() } }
+      }
+
+      if (
+        state.identity !== null &&
+        (Predicate.isTagged(stage, "SignedIn") || Predicate.isTagged(stage, "Restoring"))
+      ) {
+        return { model: { stage: signedIn(state.identity.name, state.status) } }
+      }
+
+      return { model }
+    },
+    ChangedConnection: () => ({ model, commands: [CheckConnection()] }),
     UpdatedEmail: ({ value }) =>
       Predicate.isTagged(stage, "EnteringEmail")
         ? { model: { stage: { ...stage, email: value } } }
@@ -398,7 +495,10 @@ export const update = (
           canResend
             ? { model: { stage: awaitingCode({ pending, canResend }) } }
             : sentCode(pending),
-        SignedIn: ({ name }) => ({ model: { stage: signedIn(name) } }),
+        SignedIn: ({ name, connection }) => ({
+          model: { stage: signedIn(name, connection) },
+          commands: connection === "Checking" ? [CheckConnection()] : [],
+        }),
         FailedLink: () => ({
           model: {
             stage: enteringEmail(
@@ -552,7 +652,14 @@ export const view = defineView<Model, Message>((model: Model, h: HtmlBuilder<Mes
         ),
         ...status(error),
       ],
-      SignedIn: ({ name, isSigningOut }) => [
+      SignedIn: ({ name, isSigningOut, connection }) => [
+        ...status(
+          connection === "Offline"
+            ? "You’re offline or the server is unavailable. Your account is available on this device; online actions will wait for a session check."
+            : connection === "Checking"
+              ? "Checking your session before online actions…"
+              : null,
+        ),
         h.p([], ["Signed in as ", h.strong([], [name])]),
         h.button([h.Disabled(isSigningOut), h.OnClick(Message.ClickedSignOut())], ["Sign out"]),
       ],

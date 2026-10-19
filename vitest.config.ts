@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     projects: [
       "packages/*",
+      "apps/web-app",
       "linting",
       "!repos/**",
       {
