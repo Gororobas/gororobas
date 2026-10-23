@@ -35,6 +35,7 @@ function performCheck(
       patterns: args.patterns,
       testPattern: args.testPattern,
       quiet: false,
+      paired: false,
     }),
     {
       onFailure: () =>

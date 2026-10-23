@@ -2,7 +2,6 @@ import { Context, Effect } from "effect"
 
 import {
   updateMediaAssetDescriptions,
-  moderateMediaAsset,
   insertMediaAsset,
   insertMediaAssetCredit,
 } from "./mutations.js"
@@ -24,7 +23,6 @@ export class MediaAssetsRepository extends Context.Service<MediaAssetsRepository
       listMediaAssetProfiles,
       insertMediaAssetCredit,
       findMediaAssetById,
-      moderateMediaAsset,
     }),
   },
 ) {}

@@ -8,9 +8,12 @@ import {
   SourcePublicationCommentData,
   type ApiUpdatePublicationCommentData,
   UpdatePublicationCommentInput,
+  isCensored,
+  type ModerationDecision,
 } from "@gororobas/domain"
-import { DateTime, Effect, Option, Context } from "effect"
+import { Effect, Option, Context } from "effect"
 
+import { moderateContent } from "../moderation/moderate-content.js"
 import { PublicationsRepository } from "../publications/repository.js"
 import { assertCanViewPublication } from "../publications/service.js"
 import { PublicationCommentsRepository } from "./repository.js"
@@ -110,14 +113,15 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
           yield* publicationCommentsRepository.deletePublicationComment(publicationCommentId)
         })
 
-      const censorPublicationComment = (publicationCommentId: PublicationCommentId) =>
-        Effect.gen(function* () {
-          yield* getPublicationCommentById(publicationCommentId)
-          yield* Policies.publicationComments.canCensor
-          yield* publicationCommentsRepository.censorPublicationComment({
-            id: publicationCommentId,
-            updatedAt: yield* DateTime.now,
-          })
+      const moderate = (input: {
+        id: PublicationCommentId
+        moderationStatus: ModerationDecision
+      }) =>
+        moderateContent({
+          contentType: "PUBLICATION_COMMENT",
+          id: input.id,
+          decision: input.moderationStatus,
+          notFound: () => new PublicationCommentNotFoundError({ id: input.id }),
         })
 
       const getPublicationCommentData = (publicationCommentId: PublicationCommentId) =>
@@ -127,7 +131,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
             yield* getPublicationById(publicationComment.publicationId),
           )
 
-          if (publicationComment.moderationStatus === "CENSORED") {
+          if (isCensored(publicationComment.moderationStatus)) {
             return yield* new PublicationCommentNotFoundError({ id: publicationCommentId })
           }
 
@@ -140,11 +144,11 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
 
           return (yield* publicationCommentsRepository.listPublicationCommentRowsByPublicationId(
             publicationId,
-          )).filter((publicationComment) => publicationComment.moderationStatus !== "CENSORED")
+          )).filter((publicationComment) => !isCensored(publicationComment.moderationStatus))
         })
 
       return {
-        censorPublicationComment,
+        moderate,
         createPublicationComment,
         createReplyPublicationComment,
         deletePublicationComment,

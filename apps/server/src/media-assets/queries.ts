@@ -1,8 +1,8 @@
 import {
   MediaAssetId,
   MediaAssetRow,
+  ModeratedPublicationRow,
   ProfileRow,
-  PublicationRow,
   WikiArticleMediaAssetRow,
 } from "@gororobas/domain"
 import { SqlClient, SqlSchema } from "effect/sql"
@@ -16,11 +16,13 @@ export const findMediaAssetById = SqlSchema.findOneOption({
 
 export const listMediaAssetPublications = SqlSchema.findAll({
   Request: MediaAssetId,
-  Result: PublicationRow,
+  Result: ModeratedPublicationRow,
   execute: (id) =>
     SqlClient.SqlClient.use(
       (sql) => sql`
-    SELECT p.* FROM publications p JOIN publication_media_assets a ON a.publication_id = p.id
+    SELECT p.*, c.moderation_status FROM publications p
+    JOIN publication_crdts c ON c.id = p.id
+    JOIN publication_media_assets a ON a.publication_id = p.id
     WHERE a.media_asset_id = ${id} ORDER BY p.id`,
     ),
 })

@@ -3,6 +3,8 @@
   "include": ["src", "test"],
   "compilerOptions": {
     "types": ["node"],
-    "noEmit": true
+    "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo/type-check.tsbuildinfo"
   }
 }

@@ -1,18 +1,16 @@
 import { hashString, TiptapDocument, tiptapToHtml } from "@gororobas/domain"
-import type { TagRow } from "@gororobas/domain"
 import { type PublicationClassification } from "@gororobas/domain"
-import { Config, DateTime, Effect, Context, Record } from "effect"
+import { Config, DateTime, Effect, Context } from "effect"
 
-import { TagsRepository } from "../tags/repository.js"
 import { LangExtractService } from "./langextract-service.js"
 import { langExtractExamples } from "./langextract.examples.js"
-import { resolveTagExtraction, resolveWikiArticleExtraction } from "./resolve-extractions.js"
+import { resolveWikiArticleExtraction } from "./resolve-extractions.js"
 
 /**
  * Bump this when prompts, examples, or extraction logic changes.
  * Format: ISO date + revision number within that day.
  */
-export const CLASSIFICATION_VERSION = "2026-02-19.1" as const
+export const CLASSIFICATION_VERSION = "2026-10-19.1" as const
 
 /**
  * Builds the idempotency key for a classification workflow run.
@@ -26,7 +24,7 @@ export function publicationClassificationIdempotencyKey(
 }
 
 const WIKI_ARTICLE_EXTRACTION_PROMPT =
-  "Extract wiki articles, including plants, animals, tools, concepts, and other knowledge entities. Map regional names to canonical names and return lowercase, slugified names in PT (wiki_article_pt), ES (wiki_article_es), and EN (wiki_article_en)."
+  "Extract wiki articles, including plants, animals, tools, practices, concepts and themes (such as permaculture, harvesting or land access), and other knowledge entities. Map regional names to canonical names and return lowercase, slugified names in PT (wiki_article_pt), ES (wiki_article_es), and EN (wiki_article_en)."
 
 const extractWikiArticles = Effect.fn("extractWikiArticles")(function* (html: string) {
   const langextract = yield* LangExtractService
@@ -44,39 +42,6 @@ const extractWikiArticles = Effect.fn("extractWikiArticles")(function* (html: st
   })
 })
 
-function buildTagExtractionPrompt(existingTags: ReadonlyArray<TagRow>): string {
-  const tagsForPrompt = existingTags.map((t) => {
-    const names = Record.toEntries(t.names).flatMap(([language, name]) =>
-      name ? `${name} (${language})` : [],
-    )
-    return `- ${t.handle} (handle) - ${names.join("; ")}`
-  })
-
-  return `Extract tags related to agroecology and permaculture contexts. Tags can be extracted from actions, concepts, or inferred from context. For existing tags, return their \`handle\` with \`status: 'existing'\`. For suggested tags that aren't yet in the database, return \`status: 'suggested'\`, a \`tag: suggested_handle\` and \`name_pt: string\`, \`name_es: string\`, \`name_en: string\`.
-
-The following tags exist:
-  ${tagsForPrompt.join("\n  ")}`
-}
-
-const extractTags = Effect.fn("extractTags")(function* (html: string) {
-  const langextract = yield* LangExtractService
-  const tags = yield* TagsRepository
-  const resolutionConcurrency = yield* Config.Number("CLASSIFICATION_RESOLUTION_CONCURRENCY").pipe(
-    Config.withDefault(5),
-  )
-  const allTags = yield* tags.findAll()
-  const prompt = buildTagExtractionPrompt(allTags)
-
-  const result = yield* langextract.extract(html, {
-    promptDescription: prompt,
-    examples: langExtractExamples.tags,
-  })
-
-  return yield* Effect.forEach(result.extractions ?? [], resolveTagExtraction, {
-    concurrency: resolutionConcurrency,
-  })
-})
-
 export class ExtractPublicationTaxonomiesService extends Context.Service<ExtractPublicationTaxonomiesService>()(
   "ExtractPublicationTaxonomiesService",
   {
@@ -90,13 +55,10 @@ export class ExtractPublicationTaxonomiesService extends Context.Service<Extract
           const hash = yield* hashString(html)
 
           yield* Effect.logDebug("Extracting with LangExtract", html)
-          const [wikiArticles, tags] = yield* Effect.all(
-            [extractWikiArticles(html), extractTags(html)],
-            { concurrency: "unbounded" },
-          )
+          const wikiArticles = yield* extractWikiArticles(html)
 
           yield* Effect.logDebug(
-            `Finished extracting with LangExtract. Found ${wikiArticles.length} wikiArticles and ${tags.length} tags`,
+            `Finished extracting with LangExtract. Found ${wikiArticles.length} wikiArticles`,
           )
 
           const finished_at = yield* DateTime.now
@@ -112,7 +74,6 @@ export class ExtractPublicationTaxonomiesService extends Context.Service<Extract
             startedAt: started_at,
             finishedAt: finished_at,
             wikiArticles,
-            tags,
           } satisfies PublicationClassification
         }),
     }),

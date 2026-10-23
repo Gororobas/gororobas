@@ -595,7 +595,7 @@ describe("Policies", () => {
             const org = OrganizationRow.make({
               id: orgId,
               membersVisibility: "PUBLIC",
-              type: "COMMERCIAL",
+              type: "BUSINESS",
             })
 
             return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
@@ -614,7 +614,7 @@ describe("Policies", () => {
             const org = OrganizationRow.make({
               id: orgId,
               membersVisibility: "COMMUNITY",
-              type: "COMMERCIAL",
+              type: "BUSINESS",
             })
 
             return yield* runPolicySuccess(Policies.organizations.canViewMembers(org), session)
@@ -968,20 +968,6 @@ describe("Policies", () => {
           ),
       }),
     )
-
-    it.effect("only moderators and admins can censor publication comments", () =>
-      assertPropertyEffect({
-        arbitrary: accountSessionArbitrary,
-        predicate: (session) =>
-          Effect.gen(function* () {
-            const canModerate = yield* runPolicySuccess(
-              Policies.publicationComments.canCensor,
-              session,
-            )
-            return canModerate === isModeratorOrAdmin(session)
-          }),
-      }),
-    )
   })
 
   describe("media", () => {
@@ -1074,16 +1060,23 @@ describe("Policies", () => {
           Effect.map(runPolicySuccess(Policies.media.canCreate, session), (allowed) => !allowed),
       }),
     )
+  })
 
-    it.effect("only moderators and admins can moderate media", () =>
-      assertPropertyEffect({
-        arbitrary: accountSessionArbitrary,
-        predicate: (session) =>
-          Effect.gen(function* () {
-            const canModerate = yield* runPolicySuccess(Policies.media.canModerate, session)
-            return canModerate === isModeratorOrAdmin(session)
-          }),
-      }),
+  describe("moderation", () => {
+    it.effect(
+      "only moderators and admins can censor or reapprove publications, comments and media",
+      () =>
+        assertPropertyEffect({
+          arbitrary: accountSessionArbitrary,
+          predicate: (session) =>
+            Effect.gen(function* () {
+              const canModerate = yield* runPolicySuccess(
+                Policies.moderation.canModerateContent,
+                session,
+              )
+              return canModerate === isModeratorOrAdmin(session)
+            }),
+        }),
     )
   })
 

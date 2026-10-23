@@ -454,11 +454,11 @@ const FIXTURES: Record<string, TranslationFixture> = {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe(
-  "ollama translation quality (skipped as it's costly, must be ran manually)",
+  "ollama translation quality (external: run with `pnpm --filter @gororobas/server test:external`)",
   { timeout: 180_000, concurrent: false },
   () => {
     Record.toEntries(FIXTURES).forEach(([name, fixture]) => {
-      it.effect.skip(name, () =>
+      it.effect(name, () =>
         Effect.gen(function* () {
           const result = yield* translateTiptapContent({
             content: fixture.document,

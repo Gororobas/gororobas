@@ -2,6 +2,7 @@ import {
   ApiPublicationData,
   ApiPublicationSearchParams,
   MediaAssetRow,
+  ModeratedPublicationRow,
   PublicationMediaAssetRow,
   Handle,
   ProfileId,
@@ -16,24 +17,27 @@ import { Schema, Struct } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
 
+/** Censored publications are hidden from every reader, so search never returns them. */
 export const searchPublicationRows = SqlSchema.findAll({
   Request: ApiPublicationSearchParams,
-  Result: PublicationRow,
+  Result: ModeratedPublicationRow,
   execute: (query) => {
     const textPattern =
       query.text === undefined ? undefined : `%${query.text.replace(/[\\%_]/g, "\\$&")}%`
 
     return SqlClient.use(
       (sql) => sql`
-    SELECT * FROM publications
-    WHERE ${query.ownerProfileId === undefined ? sql`1 = 1` : sql`owner_profile_id = ${query.ownerProfileId}`}
-      ${query.type === undefined ? sql`` : sql`AND kind = ${query.type}`}
-      ${query.visibility === undefined ? sql`` : sql`AND visibility = ${query.visibility}`}
+    SELECT publications.*, publication_crdts.moderation_status FROM publications
+    JOIN publication_crdts ON publication_crdts.id = publications.id
+    WHERE publication_crdts.moderation_status <> 'CENSORED'
+      ${query.ownerProfileId === undefined ? sql`` : sql`AND publications.owner_profile_id = ${query.ownerProfileId}`}
+      ${query.kind === undefined ? sql`` : sql`AND publications.kind = ${query.kind}`}
+      ${query.visibility === undefined ? sql`` : sql`AND publications.visibility = ${query.visibility}`}
       ${
         textPattern === undefined
           ? sql``
           : sql`AND (
-        handle LIKE ${textPattern} ESCAPE '\\'
+        publications.handle LIKE ${textPattern} ESCAPE '\\'
         OR EXISTS (
           SELECT 1 FROM publication_translations AS translation
           WHERE translation.publication_id = publications.id
@@ -41,7 +45,7 @@ export const searchPublicationRows = SqlSchema.findAll({
         )
       )`
       }
-    ORDER BY published_at DESC, id
+    ORDER BY publications.published_at DESC, publications.id
   `,
     )
   },
@@ -122,18 +126,10 @@ export const findPublicationPageData = SqlSchema.findOneOption({
         FROM publication_translations pt
         INNER JOIN target_publication ON target_publication.id = pt.publication_id
       ),
-      aggregated_tags AS (
-        SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
-          'tag_id', pt.tag_id,
-          'extraction_text', pt.extraction_text
-        )) AS tags
-        FROM publication_tags pt
-        INNER JOIN target_publication ON target_publication.id = pt.publication_id
-      ),
       aggregated_wiki_articles AS (
         SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
-          'wiki_article_id', pv.wiki_article_id,
-          'extraction_text', pv.extraction_text
+          'wikiArticleId', pv.wiki_article_id,
+          'extractionText', pv.extraction_text
         )) AS wiki_articles
         FROM publication_wiki_articles pv
         INNER JOIN target_publication ON target_publication.id = pv.publication_id
@@ -154,12 +150,10 @@ export const findPublicationPageData = SqlSchema.findOneOption({
         t.language,
         t.original_language,
         t.content,
-        tags.tags,
-        vegs.wiki_articles
+        linked.wiki_articles
       FROM target_publication p
       LEFT JOIN best_translation t ON t.priority_rank = 1
-      LEFT JOIN aggregated_tags tags ON TRUE
-      LEFT JOIN aggregated_wiki_articles vegs ON TRUE
+      LEFT JOIN aggregated_wiki_articles linked ON TRUE
     `,
     ),
   Request: GetPublicationPageParams,
@@ -168,15 +162,26 @@ export const findPublicationPageData = SqlSchema.findOneOption({
 
 export const findPublicationRowById = SqlSchema.findOneOption({
   Request: PublicationId,
-  Result: PublicationRow,
-  execute: (id) => SqlClient.use((sql) => sql`SELECT * FROM publications WHERE id = ${id}`),
+  Result: ModeratedPublicationRow,
+  execute: (id) =>
+    SqlClient.use(
+      (sql) => sql`
+      SELECT p.*, c.moderation_status FROM publications p
+      JOIN publication_crdts c ON c.id = p.id
+      WHERE p.id = ${id}`,
+    ),
 })
 
 export const findPublicationRowByHandle = SqlSchema.findOneOption({
   Request: Handle,
-  Result: PublicationRow,
+  Result: ModeratedPublicationRow,
   execute: (handle) =>
-    SqlClient.use((sql) => sql`SELECT * FROM publications WHERE handle = ${handle}`),
+    SqlClient.use(
+      (sql) => sql`
+      SELECT p.*, c.moderation_status FROM publications p
+      JOIN publication_crdts c ON c.id = p.id
+      WHERE p.handle = ${handle}`,
+    ),
 })
 
 export const findPublicationCrdtSnapshotById = SqlSchema.findOneOption({

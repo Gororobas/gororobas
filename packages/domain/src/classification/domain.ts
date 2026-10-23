@@ -3,14 +3,13 @@
  *
  * Defines the shape of the classification JSON stored on `publication_crdts.classification`.
  * This data is derived (not user-authored) and stored outside the LoroDoc to avoid
- * CRDT merge complications. It is projected into `publication_tags`.
+ * CRDT merge complications. It is projected into `publication_wiki_articles`.
  */
 import { Schema } from "effect"
 
-import { TagId, WikiArticleId } from "../common/ids.js"
+import { WikiArticleId } from "../common/ids.js"
 import { Handle, TimestampColumn } from "../common/primitives.js"
 import { LoroDocFrontier } from "../crdts/domain.js"
-import { TagRow } from "../tags/domain.js"
 
 export const ModelInfo = Schema.Struct({
   modelId: Schema.String,
@@ -77,24 +76,6 @@ export const ResolvedWikiArticleExtraction = Schema.Union([
 ])
 export type ResolvedWikiArticleExtraction = typeof ResolvedWikiArticleExtraction.Type
 
-export const ResolvedExistingTagExtraction = Schema.TaggedStruct("ResolvedExistingTagExtraction", {
-  ...CommonExtractionData.fields,
-  tagId: TagId,
-})
-export type ResolvedExistingTagExtraction = typeof ResolvedExistingTagExtraction.Type
-
-export const SuggestedTagExtraction = Schema.TaggedStruct("SuggestedTagExtraction", {
-  ...CommonExtractionData.fields,
-  names: TagRow.fields.names,
-})
-export type SuggestedTagExtraction = typeof SuggestedTagExtraction.Type
-
-export const ResolvedTagExtraction = Schema.Union([
-  ResolvedExistingTagExtraction,
-  SuggestedTagExtraction,
-])
-export type ResolvedTagExtraction = typeof ResolvedTagExtraction.Type
-
 /**
  * The full classification stored as JSON on `publication_crdts.classification`.
  * Pinned to a specific content snapshot via `content_hash` and `crdt_frontier`.
@@ -107,7 +88,6 @@ export const PublicationClassification = Schema.Struct({
   startedAt: TimestampColumn,
   finishedAt: TimestampColumn,
   wikiArticles: Schema.Array(ResolvedWikiArticleExtraction),
-  tags: Schema.Array(ResolvedTagExtraction),
 })
 
 export type PublicationClassification = typeof PublicationClassification.Type

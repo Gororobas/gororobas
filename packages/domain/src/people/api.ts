@@ -4,10 +4,12 @@ import { Schema } from "effect"
  */
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
+import { UnauthorizedError } from "../authorization/session.js"
 import { PlatformAccessLevel } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { PersonId } from "../common/ids.js"
 import { PersonProfileRow, ProfileRowUpdate } from "../profiles/domain.js"
+import { ProfileNotFoundError } from "../profiles/errors.js"
 import { AccountDeletionConfirmation, AccountDeletionResult, OnboardingInput } from "./domain.js"
 import {
   AccountDeletionError,
@@ -20,7 +22,7 @@ export class PeopleApiGroup extends HttpApiGroup.make("people")
   .add(
     HttpApiEndpoint.post("setAccessLevel", "/people/:id/access-level", {
       success: Schema.Void,
-      error: PersonNotFoundError,
+      error: [PersonNotFoundError, UnauthorizedError],
       params: Schema.Struct({ id: PersonId }),
       payload: Schema.Struct({ accessLevel: PlatformAccessLevel }),
     }),
@@ -28,7 +30,7 @@ export class PeopleApiGroup extends HttpApiGroup.make("people")
   .add(
     HttpApiEndpoint.delete("deletePerson", "/people/me", {
       success: AccountDeletionResult,
-      error: AccountDeletionError,
+      error: [AccountDeletionError, UnauthorizedError],
       payload: Schema.Struct({ confirm: Schema.optional(AccountDeletionConfirmation) }),
     }),
   )
@@ -49,7 +51,7 @@ export class PeopleApiGroup extends HttpApiGroup.make("people")
   .add(
     HttpApiEndpoint.patch("updateProfile", "/people/me/profile", {
       success: Schema.Void,
-      error: [PersonNotFoundError, HandleTakenError],
+      error: [ProfileNotFoundError, HandleTakenError, UnauthorizedError],
       payload: ProfileRowUpdate,
     }),
   ) {}

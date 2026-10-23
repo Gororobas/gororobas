@@ -17,7 +17,6 @@ import { SqlClient } from "effect/sql"
 
 import {
   deletePublicationComment,
-  censorPublicationComment,
   insertPublicationCommentContentRevisionRow,
   insertPublicationCommentRow,
   updatePublicationCommentRow,
@@ -172,7 +171,6 @@ export class PublicationCommentsRepository extends Context.Service<PublicationCo
         )
 
       return {
-        censorPublicationComment,
         createPublicationComment,
         deletePublicationComment,
         findPublicationCommentContentByIdAndLanguage,

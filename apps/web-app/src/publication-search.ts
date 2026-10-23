@@ -14,7 +14,7 @@ import { GororobasApiClient } from "./api-client"
 
 export const Model = Schema.Struct({
   text: Schema.String,
-  type: Schema.String,
+  kind: Schema.String,
   publications: Schema.Array(ApiPublicationCardData),
   searchStatus: Schema.String,
 })
@@ -23,7 +23,7 @@ export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ChangedText: { value: Schema.String },
-  ChangedType: { value: Schema.String },
+  ChangedKind: { value: Schema.String },
   CompletedSearch: { publications: Schema.Array(ApiPublicationCardData) },
   FailedSearch: { error: Schema.String },
 })
@@ -33,7 +33,7 @@ export type Message = typeof Message.Type
 export const update = (model: Model, message: Message): Update.Return<Model, Message> =>
   Message.match(message, {
     ChangedText: ({ value }) => ({ model: modifyFields(model, { text: () => value }) }),
-    ChangedType: ({ value }) => ({ model: modifyFields(model, { type: () => value }) }),
+    ChangedKind: ({ value }) => ({ model: modifyFields(model, { kind: () => value }) }),
     CompletedSearch: ({ publications }) => ({
       model: modifyFields(model, {
         publications: () => publications,
@@ -46,7 +46,7 @@ export const update = (model: Model, message: Message): Update.Return<Model, Mes
   })
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
-  model: { text: "", type: "", publications: [], searchStatus: "Searching..." },
+  model: { text: "", kind: "", publications: [], searchStatus: "Searching..." },
 })
 
 export const subscriptions = Subscription.make<Model, Message, GororobasApiClient>()((entry) => ({
@@ -54,12 +54,12 @@ export const subscriptions = Subscription.make<Model, Message, GororobasApiClien
     { query: ApiPublicationSearchParams },
     {
       modelToDependencies: (model) => {
-        const type = PublicationKind.literals.find((candidate) => candidate === model.type)
+        const kind = PublicationKind.literals.find((candidate) => candidate === model.kind)
 
         return {
           query: Schema.decodeSync(ApiPublicationSearchParams)({
             text: model.text.trim() || undefined,
-            ...(type === undefined ? {} : { type }),
+            ...(kind === undefined ? {} : { kind }),
             pageSize: "20",
             currentPage: "0",
           }),
@@ -105,7 +105,7 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
         [
           "Kind ",
           h.select(
-            [h.Value(model.type), h.OnChange((value) => Message.ChangedType({ value }))],
+            [h.Value(model.kind), h.OnChange((value) => Message.ChangedKind({ value }))],
             [
               h.option([h.Value("")], ["Any"]),
               ...PublicationKind.literals.map((kind) => h.option([h.Value(kind)], [kind])),

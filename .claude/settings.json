@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm run check)",
+      "Bash(pnpm run check-bdd)",
+      "Bash(pnpm run check-test-inventory)",
+      "Bash(pnpm run type-check)",
+      "Bash(pnpm run lint:check)",
+      "Bash(pnpm run format:check)",
+      "Bash(pnpm run test)",
+      "Bash(pnpm run test *)",
+      "Bash(pnpm exec vitest *)",
+      "Bash(pnpm --filter * type-check)",
+      "Bash(pnpm --filter * test *)",
+      "Bash(pnpm --filter @gororobas/server dev:sign-in *)"
+    ]
+  },
+  "sandbox": {
+    "network": {
+      "allowLocalBinding": true
+    }
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/format-edited-file.sh 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/type-check-on-stop.sh",
+            "timeout": 120,
+            "statusMessage": "Type-checking changed TypeScript"
+          }
+        ]
+      }
+    ]
+  }
+}

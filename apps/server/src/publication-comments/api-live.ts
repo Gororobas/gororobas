@@ -111,16 +111,13 @@ export const PublicationCommentsApiLive = HttpApiBuilder.group(
           }),
         ),
       )
-      .handle("censorPublicationComment", ({ params }) =>
+      .handle("moderatePublicationComment", ({ params, payload }) =>
         PublicationCommentsService.use((service) =>
-          Effect.gen(function* () {
-            yield* service.censorPublicationComment(params.id)
-            return yield* service.getPublicationCommentById(params.id)
-          }),
+          service.moderate({ ...params, ...payload }),
         ).pipe(
           withApiInfrastructureErrors({
             group: "publicationComments",
-            endpoint: "censorPublicationComment",
+            endpoint: "moderatePublicationComment",
           }),
         ),
       ),

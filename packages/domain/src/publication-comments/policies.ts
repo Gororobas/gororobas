@@ -10,7 +10,6 @@ const isPublicationCommentOwner = (ownerProfileId: ProfileId) =>
 
 export const publicationCommentsPolicies = {
   canCreate: platformPermission("publication-comments:create"),
-  canCensor: platformPermission("publication-comments:censor"),
   canEdit: isPublicationCommentOwner,
   canDelete: isPublicationCommentOwner,
 }

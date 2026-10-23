@@ -8,6 +8,8 @@ import {
   type CreatePublicationCommentData,
   type ApiUpdatePublicationCommentData,
   PublicationCommentData,
+  ModerationResult,
+  type ModerateContentPayload,
   type Session,
 } from "@gororobas/domain"
 import { Effect, Layer, Option, Schema } from "effect"
@@ -90,7 +92,10 @@ it.live(
       }: {
         path: string
         method?: string
-        body?: CreatePublicationCommentData | ApiUpdatePublicationCommentData | { reason?: string }
+        body?:
+          | CreatePublicationCommentData
+          | ApiUpdatePublicationCommentData
+          | ModerateContentPayload
       }) =>
         Effect.tryPromise(() =>
           app.handler(
@@ -184,9 +189,9 @@ it.live(
 
       expect(
         (yield* request({
-          path: `/publication-comments/${created.id}/censor`,
+          path: `/publication-comments/${created.id}/moderate`,
           method: "POST",
-          body: {},
+          body: { moderationStatus: "CENSORED" },
         })).status,
       ).toBe(403)
 
@@ -197,15 +202,19 @@ it.live(
       })
       session = yield* resolveSessionFromAuthSubjectId(moderator.id)
 
-      const censored = yield* decodePublicationComment(
-        yield* request({
-          path: `/publication-comments/${created.id}/censor`,
-          method: "POST",
-          body: {},
-        }),
-      )
+      const censored = yield* request({
+        path: `/publication-comments/${created.id}/moderate`,
+        method: "POST",
+        body: { moderationStatus: "CENSORED" },
+      })
 
-      expect(censored.moderationStatus).toBe("CENSORED")
+      expect(
+        yield* Effect.tryPromise(() => censored.json()).pipe(
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The HTTP response JSON is an untrusted boundary.
+          Effect.flatMap(Schema.decodeUnknownEffect(ModerationResult)),
+        ),
+      ).toEqual({ moderationStatus: "CENSORED" })
+
       session = VISITOR_SESSION
       expect((yield* request({ path: `/publication-comments/${created.id}` })).status).toBe(404)
       const sql = yield* SqlClient.SqlClient

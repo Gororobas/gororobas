@@ -1,20 +1,16 @@
 import {
   BookExternalDataResult,
   BookmarkState,
-  IdGen,
   LoroDocUpdate,
   PlantExternalDataResult,
   RevisionEvaluation,
   SupportedLanguage,
-  TagId,
-  TagRow,
   TiptapDocument,
   WikiArticleCrdt,
   WikiArticleEditableData,
   WikiArticleEditableTranslation,
   WikiArticleStatus,
   snapshotToLoroDoc,
-  stringToHandle,
   type PersonId,
   type WikiArticleKind,
   type WikiArticleRevisionId,
@@ -33,12 +29,11 @@ import {
 } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 
-import { TagsRepository } from "../tags/repository.js"
 import { persistBook } from "../wiki/external-data/kinds/book-persister.js"
 import { persistPlant } from "../wiki/external-data/kinds/plant-persister.js"
 import { buildExternalDataRequest } from "../wiki/external-data/persist-utils.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
-import { richTextDocument, shortText, type Mention } from "./rich-text.js"
+import { richTextDocument, type Mention } from "./rich-text.js"
 import {
   activePeople,
   mentionsFor,
@@ -55,7 +50,7 @@ import {
   legibleAttributes,
   legibleTranslations,
 } from "./seed-wiki-content.js"
-import { MEDIA_CATEGORIES, PUBLISHERS, REJECTION_REASONS, TAGS } from "./vocabulary.js"
+import { MEDIA_CATEGORIES, PUBLISHERS, REJECTION_REASONS } from "./vocabulary.js"
 
 const ArticleJson = Schema.toCodecJson(WikiArticleEditableData)
 const TranslationJson = Schema.toCodecJson(WikiArticleEditableTranslation)
@@ -70,48 +65,6 @@ type ArticleSchema = (typeof WikiArticleEditableData.members)[number]
 const KIND_WEIGHTS: Partial<Record<WikiArticleKind, number>> = { PLANT: 8, PLANT_CULTIVAR: 3 }
 
 const sum = (counts: ReadonlyArray<number>) => counts.reduce(EffectNumber.sum, 0)
-
-export const seedTags = (
-  context: Pick<SeedContext, "timeline" | "people">,
-  input: { count: number },
-) =>
-  Effect.gen(function* () {
-    const tags = yield* TagsRepository
-    const curators = reviewers(context)
-
-    return yield* Effect.forEach(
-      TAGS.slice(0, input.count),
-      (entry) =>
-        Effect.gen(function* () {
-          const createdAt = yield* context.timeline.between(context.timeline.daysBeforeAnchor(700))
-
-          const id = yield* context.timeline.at(createdAt)(
-            Effect.gen(function* () {
-              const id = yield* IdGen.make(TagId)
-              const now = yield* DateTime.now
-
-              yield* tags.insertRow(
-                TagRow.make({
-                  id,
-                  handle: yield* stringToHandle(entry.names.pt),
-                  names: entry.names,
-                  cluster: entry.cluster,
-                  description: (yield* chance(0.5)) ? yield* shortText("pt") : null,
-                  createdById: (yield* pickOption(curators))?.id ?? null,
-                  createdAt: now,
-                  updatedAt: now,
-                }),
-              )
-
-              return id
-            }),
-          )
-
-          return { id, names: entry.names }
-        }),
-      { concurrency: 1 },
-    )
-  })
 
 const mediaSelection = (
   context: Pick<SeedContext, "media">,
@@ -137,18 +90,22 @@ const mediaSelection = (
   })
 
 const seedArticle = (
-  context: Pick<SeedContext, "timeline" | "media" | "people" | "organizations" | "tags">,
+  context: Pick<SeedContext, "timeline" | "media" | "people" | "organizations">,
   input: {
     kind: WikiArticleKind
     index: number
     structure: WikiArticleEditableData
     parent: SeededArticle | undefined
+    concepts: ReadonlyArray<SeededArticle>
   },
 ) =>
   Effect.gen(function* () {
     const { timeline } = context
     const wiki = yield* WikiArticlesRepository
     const { kind, parent } = input
+    // A published first article per kind, with external identifiers, lets even `tiny` seeds
+    // cover every table instead of depending on random draws.
+    const isRepresentative = input.index === 0
 
     const { names, subject } = articleNames({
       kind,
@@ -162,17 +119,20 @@ const seedArticle = (
       kind,
       attributes: yield* legibleAttributes(encodedAttributes(encoded), {
         subject,
-        tagIds: context.tags.map((tag) => tag.id),
+        conceptIds: input.concepts.map((concept) => concept.id),
         parentPlantId: parent?.id,
+        isRepresentative,
       }),
       translations: yield* legibleTranslations({ names, subject, mentions: mentionsFor(context) }),
     }).pipe(Effect.orDie)
 
-    const status = yield* pickWeighted(WikiArticleStatus.literals, {
-      PUBLISHED: 85,
-      PENDING_APPROVAL: 10,
-      ARCHIVED: 5,
-    })
+    const status = isRepresentative
+      ? "PUBLISHED"
+      : yield* pickWeighted(WikiArticleStatus.literals, {
+          PUBLISHED: 85,
+          PENDING_APPROVAL: 10,
+          ARCHIVED: 5,
+        })
 
     // Newcomers' articles await approval; trusted people publish directly.
     const isPendingApproval = status === "PENDING_APPROVAL"
@@ -214,7 +174,7 @@ const seedArticle = (
   })
 
 const seedKind = (
-  context: Pick<SeedContext, "timeline" | "media" | "people" | "organizations" | "tags">,
+  context: Pick<SeedContext, "timeline" | "media" | "people" | "organizations">,
   input: { member: ArticleSchema; count: number; earlier: ReadonlyArray<SeededArticle> },
 ) =>
   Effect.gen(function* () {
@@ -228,34 +188,39 @@ const seedKind = (
       size: 4,
     }).pipe(Effect.orDie)
 
-    const created = yield* Effect.forEach(
-      structures,
-      (structure, index) =>
+    const isConcept = (article: SeededArticle) =>
+      article.kind === "CONCEPT" && article.status === "PUBLISHED"
+
+    // Concepts created earlier in this kind are referenceable too, so concepts can relate to each other.
+    return yield* Effect.reduce(
+      structures.map((structure, index) => ({ structure, index })),
+      (): ReadonlyArray<SeededArticle> => [],
+      (created, { structure, index }) =>
         Effect.gen(function* () {
           const parent = kind === "PLANT_CULTIVAR" ? yield* pickOption(plants) : undefined
-          if (kind === "PLANT_CULTIVAR" && !parent) return []
-          return yield* seedArticle(context, { kind, index, structure, parent })
+          if (kind === "PLANT_CULTIVAR" && !parent) return created
+          const concepts = [...input.earlier, ...created].filter(isConcept)
+          const article = yield* seedArticle(context, { kind, index, structure, parent, concepts })
+          return [...created, ...article]
         }),
-      { concurrency: 1 },
     )
-
-    return created.flat()
   })
 
 export const seedWikiArticles = (
-  context: Pick<SeedContext, "timeline" | "media" | "people" | "organizations" | "tags">,
+  context: Pick<SeedContext, "timeline" | "media" | "people" | "organizations">,
   input: { count: number },
 ) => {
   const weight = (member: ArticleSchema) => KIND_WEIGHTS[member.fields.kind.literal] ?? 1
   const totalWeight = sum(WikiArticleEditableData.members.map(weight))
 
-  // Cultivars reference existing plants, so their kind goes last.
+  // Other kinds reference concepts, so concepts go first; cultivars reference plants, so they go last.
+  const seedingOrder = (member: ArticleSchema) => {
+    const kind = member.fields.kind.literal
+    return kind === "CONCEPT" ? 0 : kind === "PLANT_CULTIVAR" ? 2 : 1
+  }
   const members = EffectArray.sort(
     WikiArticleEditableData.members,
-    Order.mapInput(
-      Order.Boolean,
-      (member: ArticleSchema) => member.fields.kind.literal === "PLANT_CULTIVAR",
-    ),
+    Order.mapInput(Order.Number, seedingOrder),
   )
 
   return Effect.reduce(

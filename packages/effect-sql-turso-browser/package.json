@@ -10,15 +10,7 @@
     "./turso-browser-database": "./src/turso-browser-database.ts",
     "./turso-migrator": "./src/turso-migrator.ts"
   },
-  "publishConfig": {
-    "access": "public",
-    "directory": "dist"
-  },
   "scripts": {
-    "codegen": "build-utils prepare-v2",
-    "build": "pnpm build-annotate && pnpm build-cjs && build-utils pack-v2",
-    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
-    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest",
     "coverage": "vitest --coverage"
@@ -28,20 +20,9 @@
     "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/build-utils": "^0.8.9",
     "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
-  },
-  "effect": {
-    "generateExports": {
-      "include": [
-        "**/*.ts"
-      ]
-    },
-    "generateIndex": {
-      "include": []
-    }
   }
 }

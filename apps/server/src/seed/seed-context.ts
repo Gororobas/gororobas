@@ -7,7 +7,6 @@ import type {
   ProfileId,
   PublicationId,
   PublicationVisibility,
-  TagId,
   WikiArticleId,
   WikiArticleKind,
   WikiArticleStatus,
@@ -38,11 +37,6 @@ export interface SeededOrganization {
   }>
 }
 
-export interface SeededTag {
-  readonly id: TagId
-  readonly names: Localized
-}
-
 export interface SeededArticle {
   readonly id: WikiArticleId
   readonly kind: WikiArticleKind
@@ -66,7 +60,6 @@ export interface SeedContext {
   readonly media: SeedMedia
   readonly people: ReadonlyArray<SeededPerson>
   readonly organizations: ReadonlyArray<SeededOrganization>
-  readonly tags: ReadonlyArray<SeededTag>
   readonly articles: ReadonlyArray<SeededArticle>
   readonly publications: ReadonlyArray<SeededPublication>
 }
@@ -88,7 +81,7 @@ export const reviewers = (context: Pick<SeedContext, "people">) =>
     (person) => person.accessLevel === "MODERATOR" || person.accessLevel === "ADMIN",
   )
 
-/** Entities rich text can reference: people, organizations, articles, tags and publications. */
+/** Entities rich text can reference: people, organizations, articles and publications. */
 export const mentionsFor = (context: Partial<SeedContext>): ReadonlyArray<Mention> => [
   ...(context.people ?? []).slice(0, 50).map((person): Mention => ({
     referenceType: "PROFILE",
@@ -108,11 +101,6 @@ export const mentionsFor = (context: Partial<SeedContext>): ReadonlyArray<Mentio
       referenceId: article.id,
       label: article.names.pt,
     })),
-  ...(context.tags ?? []).map((tag): Mention => ({
-    referenceType: "TAG",
-    referenceId: tag.id,
-    label: tag.names.pt,
-  })),
   ...(context.publications ?? []).slice(0, 40).map((publication): Mention => ({
     referenceType: "PUBLICATION",
     referenceId: publication.id,

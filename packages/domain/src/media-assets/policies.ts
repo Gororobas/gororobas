@@ -12,7 +12,6 @@ import type { MediaAssetRow } from "./domain.js"
 
 export const mediaPolicies = {
   canAttachToWikiArticle: platformPermission("wiki-article:revise"),
-  canModerate: platformPermission("media:moderate"),
   canCreate: platformPermission("media:create"),
   canAttach: (
     media: Pick<MediaAssetRow, "ownerProfileId">,
@@ -47,7 +46,7 @@ export const mediaPolicies = {
                 authenticatedPolicy((session) =>
                   session.personId === media.ownerProfileId ? allow(session) : deny(),
                 ),
-                platformPermission("media:moderate"),
+                platformPermission("content:moderate"),
               ).pipe(Effect.map(allow)),
     ),
 }

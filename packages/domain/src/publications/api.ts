@@ -9,6 +9,7 @@ import { PublicationId, ProfileId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import { InvalidMediaAssetError, MediaNotFoundError } from "../media-assets/errors.js"
+import { ModerateContentPayload, ModerationResult } from "../moderation/domain.js"
 import {
   ApiCreatePublicationData,
   ApiGetPublicationPageParams,
@@ -78,6 +79,14 @@ export class PublicationsApiGroup extends HttpApiGroup.make("publications")
       success: Schema.Void,
       error: [PublicationNotFoundError, UnauthorizedError],
       params: Schema.Struct({ id: PublicationId }),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.post("moderatePublication", "/publications/:id/moderate", {
+      success: ModerationResult,
+      error: [PublicationNotFoundError, UnauthorizedError],
+      params: Schema.Struct({ id: PublicationId }),
+      payload: ModerateContentPayload,
     }),
   )
   .add(

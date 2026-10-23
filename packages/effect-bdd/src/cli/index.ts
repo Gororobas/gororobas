@@ -35,6 +35,13 @@ const quietOption = Flag.Boolean("quiet").pipe(
   Flag.withDefault(false),
 )
 
+const pairedOption = Flag.Boolean("paired").pipe(
+  Flag.withDescription(
+    "Match each <name>.feature only against steps defined in its <name>-feature.test.ts",
+  ),
+  Flag.withDefault(false),
+)
+
 const debounceOption = Flag.Int("debounce").pipe(
   Flag.withAlias("d"),
   Flag.withDescription("Debounce time in milliseconds (watch only)"),
@@ -47,6 +54,7 @@ const checkOptions = {
   format: formatOption,
   ignore: ignoreOption,
   quiet: quietOption,
+  paired: pairedOption,
 }
 
 const watchOptions = {
@@ -63,6 +71,7 @@ function runCheckHandler(config: {
   format: OutputFormat
   ignore: Option.Option<string>
   quiet: boolean
+  paired: boolean
 }) {
   return runCheck({
     format: config.format,
@@ -70,6 +79,7 @@ function runCheckHandler(config: {
     patterns: config.patterns,
     testPattern: config.testPattern,
     quiet: config.quiet,
+    paired: config.paired,
   })
 }
 
@@ -80,6 +90,7 @@ const checkCommand = Command.make("check", checkOptions, (config) =>
     patterns: config.patterns,
     testPattern: config.testPattern,
     quiet: config.quiet,
+    paired: config.paired,
   }),
 )
 

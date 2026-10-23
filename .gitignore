@@ -48,3 +48,4 @@ maple-store-open
 maple-store-version.json
 .maple-perf-data
 experiments/jev-classification
+experiments/vps-deployment

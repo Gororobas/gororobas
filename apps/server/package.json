@@ -4,22 +4,16 @@
   "description": "Server-side logic, policies, and repositories for Gororobas",
   "license": "MIT",
   "type": "module",
-  "publishConfig": {
-    "access": "public",
-    "directory": "dist"
-  },
   "scripts": {
     "dev": "tsx --env-file-if-exists=.env src/main.ts",
     "start": "tsx --env-file-if-exists=.env src/main.ts",
     "seed": "tsx --env-file-if-exists=.env src/seed/seed-cli.ts",
     "setup:env": "tsx src/development/setup-environment.ts",
-    "codegen": "build-utils prepare-v2",
-    "build": "pnpm build-annotate && pnpm build-cjs && build-utils pack-v2",
-    "build-cjs": "babel build/esm --plugins @babel/transform-export-namespace-from --plugins @babel/transform-modules-commonjs --out-dir build/cjs --source-maps",
-    "build-annotate": "babel build/esm --plugins annotate-pure-calls --out-dir build/esm --source-maps",
+    "dev:sign-in": "tsx --env-file-if-exists=.env src/development/sign-in.ts",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "type-check:watch": "tsc --noEmit -p tsconfig.json -w",
     "test": "vitest",
+    "test:external": "vitest run --config vitest.external.config.ts",
     "coverage": "vitest --coverage",
     "migrate": "npx tsx scripts/migrate.ts"
   },
@@ -54,17 +48,5 @@
     "@effect/vitest": "catalog:",
     "@gororobas/effect-bdd": "workspace:^",
     "sql-formatter": "latest"
-  },
-  "effect": {
-    "generateExports": {
-      "include": [
-        "**/*.ts"
-      ]
-    },
-    "generateIndex": {
-      "include": [
-        "**/*.ts"
-      ]
-    }
   }
 }

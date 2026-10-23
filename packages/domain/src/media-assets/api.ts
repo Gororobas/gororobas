@@ -5,6 +5,7 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiSchema } from "effect/http-api"
 import { UnauthorizedError } from "../authorization/session.js"
 import { ModerationStatus } from "../common/enums.js"
 import { MediaAssetId } from "../common/ids.js"
+import { ModerateContentPayload, ModerationResult } from "../moderation/domain.js"
 import { MediaAssetRequest } from "./domain.js"
 import { MediaAssetStorageError, InvalidMediaAssetError, MediaNotFoundError } from "./errors.js"
 
@@ -43,11 +44,9 @@ export class MediaAssetsApi extends HttpApiGroup.make("mediaAssets")
   )
   .add(
     HttpApiEndpoint.post("moderateMedia", "/media/:id/moderate", {
-      success: Schema.Struct({ moderationStatus: ModerationStatus }),
+      success: ModerationResult,
       error: [MediaNotFoundError.pipe(HttpApiSchema.status(404)), UnauthorizedError],
       params: Schema.Struct({ id: MediaAssetId }),
-      payload: Schema.Struct({
-        moderationStatus: Schema.Literals(["CENSORED", "REAPPROVED_AFTER_CENSORING"]),
-      }),
+      payload: ModerateContentPayload,
     }),
   ) {}

@@ -22,7 +22,7 @@ The Gel migration writes to `apps/server/gororobas.db` by default. See the [inge
 
 ## Fake data
 
-`pnpm --filter @gororobas/server seed` fills an empty database with legible fake data covering every table: people at every access level, organizations with memberships and invitations, tags, every wiki article kind with revisions, bookmarks and provider data, posts and events with translations, edits, media and comment threads. Writes go through the application's repositories, so CRDT documents and projections are real.
+`pnpm --filter @gororobas/server seed` fills an empty database with legible fake data covering every table: people at every access level, organizations with memberships and invitations, every wiki article kind (concepts first, so other kinds can reference them) with revisions, bookmarks and provider data, posts and events with translations, edits, media, comment threads and a few censored or reapproved publications. Writes go through the application's repositories, so CRDT documents and projections are real.
 
 ```sh
 pnpm --filter @gororobas/server seed --scale medium --replace
@@ -39,7 +39,7 @@ The target is `APP_DB_FILENAME`; `--replace` deletes it first, and seeding refus
 
 To start the server with a fresh, seeded in-memory database instead, set `APP_DB_FILENAME=:memory:`, `WORKFLOWS_DB_FILENAME=:memory:` and `SEED_SCALE`. Seeding then runs at startup whenever the database has no profiles. The `api-seeded` and `web-seeded` configurations in `.claude/launch.json` do this on ports 4100/4543, so they run beside the normal stack.
 
-- **Accounts**: `admin@`, `moderator@`, `community@`, `newcomer@` and `blocked@gororobas.test` have the matching access level, handle and a profile, identical for every seed. Sign in through the normal email flow; the code arrives in Mailpit (`GET http://localhost:8025/api/v1/search?query=to:community@gororobas.test`). Generated people use `<handle>@gororobas.test`.
+- **Accounts**: `admin@`, `moderator@`, `community@`, `newcomer@` and `blocked@gororobas.test` have the matching access level, handle and a profile, identical for every seed. Sign in through the normal email flow; the code arrives in Mailpit (`GET http://localhost:8025/api/v1/search?query=to:community@gororobas.test`). `pnpm --filter @gororobas/server dev:sign-in <email> [--api <origin>] [--origin <web origin>]` does the flow for you and prints the session cookie. Generated people use `<handle>@gororobas.test`.
 - **Determinism**: the same `--seed` (default `gororobas`, or `SEED` at startup), scale and `--anchor` (default: the start of today, UTC) produce identical identifiers, handles, timestamps and text. CRDT snapshots and frontiers differ between runs because Loro assigns random peer IDs.
 - **Shape and legibility**: schema arbitraries choose each record's structure (kinds, enums, optional attributes), so new kinds and enum values are seeded automatically; `src/seed/vocabulary.ts` supplies the Portuguese, Spanish and English text. A new wiki kind needs names there.
 - **Media**: a small pool of generated images goes through the real media pipeline once and is cached under `MEDIA_ASSETS_DIRECTORY/.seed-pool`; every seeded media asset is a symlink to a pool entry.
@@ -91,7 +91,7 @@ Yielded never emails addresses without an account, so requesting a code for an u
 
 A signed-in account without a profile is a visitor until onboarding: `POST /people/me/profile` with `{ name }` creates its profile and NEWCOMER person. `GET /people/me/profile` returns `null` until then.
 
-`patches/@yielded__auth@0.1.0-beta.39.patch` keeps Yielded's HTTP middleware from draining request bodies of signed-in API mutations. Drop it once the upstream fix ships.
+`patches/@yielded__auth@0.1.0-beta.42.patch` keeps Yielded's HTTP middleware from draining request bodies of signed-in API mutations. Drop it once the upstream fix ships.
 
 ## Auth HTTP API
 
@@ -109,8 +109,8 @@ The Foldkit app serves sign-in and onboarding at `/login`, keeping the pending f
 From the workspace root:
 
 ```sh
-pnpm --filter @gororobas/server exec vitest run src/authentication/authentication.test.ts
-pnpm run quality-gates
+pnpm exec vitest run apps/server/test/auth-feature.test.ts apps/server/src/authentication
+pnpm run check
 ```
 
-The vertical slice uses the real HTTP adapter and database migrations, with captured email delivery. Mailpit is not required for the automated test.
+`test/auth.feature` specifies sign-up, sign-in, wrong codes, browser binding and sign-out through the real HTTP stack with captured email delivery; `src/authentication/authentication.test.ts` covers transport details (origins, CSRF, cookie flags). Mailpit is not required for the automated tests.

@@ -25,7 +25,16 @@ export interface CheckConfig {
   format: OutputFormat
   ignore: Option.Option<string>
   quiet: boolean
+  /**
+   * Only count steps defined in each feature's paired test file, `<name>-feature.test.ts` next to
+   * `<name>.feature`. Generic steps such as "access is denied" exist in several suites, so global
+   * matching lets another feature's bindings hide a missing implementation.
+   */
+  paired: boolean
 }
+
+export const pairedTestFile = (featurePath: string) =>
+  featurePath.replace(/\.feature$/, "-feature.test.ts")
 
 export function splitPatterns(patterns: string): Array<string> {
   return patterns
@@ -140,6 +149,14 @@ export function runCheck(
     const allFeatureFiles = yield* globFiles(featurePatterns, ignorePatterns)
     const stepMatcher = yield* StepMatcher
 
+    const path = yield* Path.Path
+
+    const stepsFor = (featurePath: string) => {
+      if (!config.paired) return discoveredSteps
+      const testFile = path.resolve(pairedTestFile(featurePath))
+      return discoveredSteps.filter((step) => path.resolve(step.file) === testFile)
+    }
+
     const featureResults = yield* Effect.all(
       allFeatureFiles.map((featurePath) =>
         Effect.gen(function* () {
@@ -147,7 +164,7 @@ export function runCheck(
 
           return yield* stepMatcher.checkFeature({
             feature: feature,
-            discoveredSteps: discoveredSteps,
+            discoveredSteps: stepsFor(featurePath),
             featurePath: featurePath,
           })
         }),

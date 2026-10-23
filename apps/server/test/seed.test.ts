@@ -12,7 +12,6 @@ import {
   PublicationCommitRow,
   PublicationRow,
   PublicationTranslationRow,
-  TagRow,
   WikiArticleProjectionRow,
   WikiArticleRevisionRow,
   WikiArticleTranslationProjectionRow,
@@ -47,8 +46,6 @@ const TABLES_WITHOUT_SEED_DATA = {
   auth_pending: "Pending sign-in flows are transient",
   auth_proofs: "Emailed codes are transient",
   auth_sessions: "Sessions start when an account signs in",
-  suggested_tags: "No application code writes suggested tags yet",
-  suggested_tag_sources: "No application code writes suggested tags yet",
   wiki_article_external_media:
     "Synthetic provider data omits external images, which would not load",
 } satisfies Record<string, string>
@@ -66,7 +63,6 @@ const ROW_SCHEMAS = {
   publication_commits: PublicationCommitRow,
   publication_translations: PublicationTranslationRow,
   publications: PublicationRow,
-  tags: TagRow,
   wiki_article_revisions: WikiArticleRevisionRow,
   wiki_article_translations: WikiArticleTranslationProjectionRow,
   wiki_articles: WikiArticleProjectionRow,

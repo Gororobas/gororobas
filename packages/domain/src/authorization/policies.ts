@@ -1,4 +1,5 @@
 import { mediaPolicies } from "../media-assets/policies.js"
+import { moderationPolicies } from "../moderation/policies.js"
 import { organizationsPolicies } from "../organizations/policies.js"
 import { peoplePolicies } from "../people/policies.js"
 import { profilePolicies } from "../profiles/policies.js"
@@ -18,6 +19,7 @@ const Policies = {
   common: { assertTrustedPerson, assertAuthenticated, assertNonBlockedPerson },
 
   // Cross-cutting
+  moderation: moderationPolicies,
   revisions: {
     canEvaluate: platformPermission("revisions:evaluate"),
   },

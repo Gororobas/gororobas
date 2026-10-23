@@ -19,6 +19,3 @@ export const WorkflowsLive = Layer.mergeAll(
   FetchArticleExternalDataLive.pipe(Layer.provide(ExternalDataProvidersLive)),
   ExternalDataRefreshLive,
 )
-
-// @TODO: how does WorkflowsTest need to be different from WorkflowsLive?
-export const WorkflowsTest = WorkflowsLive

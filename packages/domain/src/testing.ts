@@ -12,7 +12,6 @@ import {
   Layer,
   Predicate,
   Record,
-  Schema,
 } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 
@@ -21,23 +20,24 @@ import { SessionContext } from "./authorization/session.js"
 export class PropertyTestFailure extends Error {
   readonly _tag = "PropertyTestFailure"
   readonly counterexample: unknown
-  readonly seed: number
-  readonly path: string
-  constructor({
-    counterexample,
-    seed,
-    path,
-  }: {
-    counterexample: unknown
-    seed: number
-    path: string
-  }) {
+  /** Opaque token reproducing the falsification and its shrink path: pass it as `options.replay`. */
+  readonly replay: string | undefined
+
+  constructor(result: Exclude<Arbitrary.CheckResult<unknown, unknown>, { _tag: "Passed" }>) {
+    const replay = Predicate.isTagged(result, "Falsified") ? result.replay : undefined
+    const reproduction =
+      replay === undefined
+        ? undefined
+        : `Reproduce deterministically with \`options: { replay: "${replay}" }\`.`
+
     super(
-      `Property failed with counterexample: ${Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(counterexample)}`,
+      [Arbitrary.formatCheckFailure(result), reproduction]
+        .filter(Predicate.isNotUndefined)
+        .join("\n"),
     )
-    this.counterexample = counterexample
-    this.seed = seed
-    this.path = path
+
+    this.counterexample = Predicate.isTagged(result, "Falsified") ? result.shrunkInput : result
+    this.replay = replay
   }
 }
 
@@ -78,24 +78,7 @@ export const assertPropertyEffect = <A, E, R>({
     })
 
     if (Predicate.isTagged(result, "Passed")) return
-
-    if (Predicate.isTagged(result, "Falsified")) {
-      return yield* Effect.fail(
-        new PropertyTestFailure({
-          counterexample: result.shrunkInput,
-          seed: 0,
-          path: result.replay,
-        }),
-      )
-    }
-
-    return yield* Effect.fail(
-      new PropertyTestFailure({
-        counterexample: result,
-        seed: 0,
-        path: "",
-      }),
-    )
+    return yield* Effect.fail(new PropertyTestFailure(result))
   })
 
 /**
@@ -126,13 +109,28 @@ export const assertProperty = <A>({
 }): void => {
   const result = Effect.runSync(Arbitrary.checkEffect(arbitrary, predicate, options))
 
-  if (!Predicate.isTagged(result, "Passed")) {
-    throw new PropertyTestFailure({
-      counterexample: Predicate.isTagged(result, "Falsified") ? result.shrunkInput : result,
-      seed: 0,
-      path: Predicate.isTagged(result, "Falsified") ? result.replay : "",
-    })
+  if (!Predicate.isTagged(result, "Passed")) throw new PropertyTestFailure(result)
+}
+
+/** One-character keys that JSON must escape: control characters, quotes, backslashes and lone surrogates. */
+// oxlint-disable-next-line no-control-regex -- Control characters are exactly the keys JSON escapes.
+const ESCAPED_CHARACTER = /[\u0000-\u001f"\\\ud800-\udfff]/
+
+/**
+ * Whether a generated value avoids the Node v24.19.0 `JSON.parse` bug that corrupts
+ * single-character escaped object keys. See `test/platform/json-parse-escaped-keys.test.ts`.
+ */
+// oxlint-disable-next-line effect/no-unknown-parameters -- Inspects arbitrary generated schema values.
+export const avoidsJsonParseKeyCorruption = (value: unknown): boolean => {
+  if (Array.isArray(value)) return value.every(avoidsJsonParseKeyCorruption)
+  if (!Predicate.isObject(value) || DateTime.isDateTime(value) || value instanceof Uint8Array) {
+    return true
   }
+
+  return Record.toEntries(value).every(
+    ([key, child]) =>
+      !(key.length === 1 && ESCAPED_CHARACTER.test(key)) && avoidsJsonParseKeyCorruption(child),
+  )
 }
 
 /**

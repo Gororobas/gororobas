@@ -9,7 +9,6 @@
 import {
   SupportedLanguage,
   TiptapDocument,
-  type TagId,
   type WikiArticleId,
   type WikiArticleKind,
 } from "@gororobas/domain"
@@ -71,8 +70,11 @@ interface ArticleSubject {
 
 interface AttributeContext {
   readonly subject: ArticleSubject
-  readonly tagIds: ReadonlyArray<TagId>
+  /** CONCEPT articles available as `concepts`/`relatedConcepts` references. */
+  readonly conceptIds: ReadonlyArray<WikiArticleId>
   readonly parentPlantId: WikiArticleId | undefined
+  /** The first article of each kind always carries external identifiers; see `seedArticle`. */
+  readonly isRepresentative: boolean
 }
 
 const isKeyOf = <T extends object>(table: T, key: PropertyKey): key is keyof T => key in table
@@ -109,6 +111,12 @@ const realisticRange = (measurement: keyof typeof RANGES) =>
     return { min, max: min + (yield* Random.nextIntBetween(0, spread)) }
   })
 
+const conceptSet = (context: AttributeContext) =>
+  Effect.map(
+    Effect.flatMap(Random.nextIntBetween(0, 3), (count) => sample(context.conceptIds, count)),
+    (conceptIds): Json => Record.fromEntries(conceptIds.map((id) => [id, true] as const)),
+  )
+
 /** Attributes rewritten whenever present, regardless of their generated value. */
 const scalarAttribute = (
   key: string,
@@ -116,10 +124,8 @@ const scalarAttribute = (
 ): Option.Option<Effect.Effect<Json>> =>
   lookup(
     {
-      tags: Effect.map(
-        Effect.flatMap(Random.nextIntBetween(0, 3), (count) => sample(context.tagIds, count)),
-        (tagIds): Json => Record.fromEntries(tagIds.map((tagId) => [tagId, true] as const)),
-      ),
+      concepts: conceptSet(context),
+      relatedConcepts: conceptSet(context),
       parentPlantId: Effect.succeed<Json>(context.parentPlantId ?? null),
       url: Effect.map(nanoId, (id): Json => `https://example.org/gororobas/${id}`),
       publisher: pick(PUBLISHERS),
@@ -152,9 +158,14 @@ const legibleAttribute = (input: {
 
     // External identifiers are forced on most articles, so seeded data exercises enrichment.
     if (key === "wikidataId") {
-      return (yield* chance(0.75)) ? `Q${yield* Random.nextIntBetween(1000, 9_999_999)}` : null
+      return context.isRepresentative || (yield* chance(0.75))
+        ? `Q${yield* Random.nextIntBetween(1000, 9_999_999)}`
+        : null
     }
-    if (key === "googleBooksVolumeId") return (yield* chance(0.7)) ? yield* nanoId : null
+
+    if (key === "googleBooksVolumeId") {
+      return context.isRepresentative || (yield* chance(0.7)) ? yield* nanoId : null
+    }
     if (value === null) return null
 
     const scalar = scalarAttribute(key, context)

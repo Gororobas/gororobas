@@ -13,6 +13,7 @@ import {
   PublicationConcurrentUpdateError,
   PublicationId,
   PublicationNotFoundError,
+  StalePublicationTranslationError,
   SystemCommit,
   TimestampColumn,
   TiptapDocument,
@@ -32,7 +33,21 @@ import { TranslationError } from "./translation-service.js"
  * Bump this when internals change.
  * Format: ISO date + revision number within that day.
  */
-const WORKFLOW_VERSION = "2026-10-08.1" as const
+const WORKFLOW_VERSION = "2026-10-19.1" as const
+
+class PublicationTranslationPersistenceError extends Schema.TaggedError<PublicationTranslationPersistenceError>()(
+  "PublicationTranslationPersistenceError",
+  { message: Schema.String, retryable: Schema.Boolean, cause: Schema.Defect() },
+) {}
+
+/** Activity results are stored as JSON, so persistence failures must be serializable errors. */
+const PersistenceError = Schema.Union([
+  InvalidCrdtUpdateError,
+  StalePublicationTranslationError,
+  PublicationConcurrentUpdateError,
+  PublicationNotFoundError,
+  PublicationTranslationPersistenceError,
+])
 
 export const PublicationTranslationWorkflow = Workflow.make("PublicationTranslationWorkflow", {
   payload: {
@@ -44,7 +59,7 @@ export const PublicationTranslationWorkflow = Workflow.make("PublicationTranslat
     sourceContent: TiptapDocument,
   },
   success: Schema.Null,
-  error: Schema.Unknown, // @TODO: How to type TranslationError | SqlError | ParseError as schemas?
+  error: Schema.Union([TranslationError, PersistenceError]),
   idempotencyKey: ({ publicationId, targetLanguage, sourceCrdtFrontier }) =>
     `${publicationId}:${targetLanguage}:${Schema.encodeSync(Schema.fromJsonString(LoroDocFrontier))(sourceCrdtFrontier)}`,
 })
@@ -70,10 +85,11 @@ export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflo
 
     const repository = yield* PublicationsRepository
 
+    // A translation of an outdated revision is discarded: the newer revision gets its own run.
     yield* Activity.make({
       name: "persist",
       success: Schema.Void,
-      error: Schema.Unknown,
+      error: PersistenceError,
       execute: Effect.gen(function* () {
         const translatedContent = tiptapFromHtml(translationResult.html)
 
@@ -84,6 +100,7 @@ export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflo
           | InvalidCrdtUpdateError
           | PublicationConcurrentUpdateError
           | PublicationNotFoundError
+          | StalePublicationTranslationError
           | SchemaError
           | SqlError.SqlError,
           IdGen | SqlClient.SqlClient
@@ -124,9 +141,32 @@ export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflo
               )
           })
 
-        yield* persistWithRetry(3)
+        yield* persistWithRetry(3).pipe(
+          Effect.catchTags({
+            SqlError: (cause) =>
+              Effect.fail(
+                new PublicationTranslationPersistenceError({
+                  message: "Publication translation persistence failed",
+                  retryable: true,
+                  cause,
+                }),
+              ),
+            SchemaError: (cause) =>
+              Effect.fail(
+                new PublicationTranslationPersistenceError({
+                  message: "Invalid publication translation data",
+                  retryable: false,
+                  cause,
+                }),
+              ),
+          }),
+        )
       }),
-    })
+    }).pipe(
+      Effect.catchTag("StalePublicationTranslationError", () =>
+        Effect.logInfo("Discarded a translation of an outdated publication revision"),
+      ),
+    )
 
     return null
   }),

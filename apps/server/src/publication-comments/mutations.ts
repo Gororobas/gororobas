@@ -13,15 +13,6 @@ export const deletePublicationComment = SqlSchema.void({
   execute: (id) => SqlClient.use((sql) => sql`DELETE FROM publication_comments WHERE id = ${id}`),
 })
 
-export const censorPublicationComment = SqlSchema.void({
-  Request: PublicationCommentRow.mapFields(Struct.pick(["id", "updatedAt"])),
-  execute: ({ id, updatedAt }) =>
-    SqlClient.use(
-      (sql) =>
-        sql`UPDATE publication_comments SET moderation_status = 'CENSORED', updated_at = ${updatedAt} WHERE id = ${id}`,
-    ),
-})
-
 export const insertPublicationCommentRow = SqlSchema.void({
   Request: PublicationCommentRow,
   execute: (row) =>

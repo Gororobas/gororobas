@@ -14,14 +14,13 @@ import {
   PublicationCrdtRow,
   PublicationCrdt,
   PublicationConcurrentUpdateError,
+  StalePublicationTranslationError,
   PublicationId,
   PublicationNotFoundError,
-  PublicationTagRow,
   PublicationTranslationRow,
   PublicationWikiArticleRow,
   type PublicationSourceData,
   tiptapToText,
-  ResolvedExistingTagExtraction,
 } from "@gororobas/domain"
 import {
   Array as EffectArray,
@@ -46,7 +45,6 @@ import {
   deletePublication,
   insertPublicationCommitRow,
   insertPublicationCrdtRow,
-  insertPublicationTagRows,
   insertPublicationTranslationRows,
   insertPublicationWikiArticleRows,
   updatePublicationCrdtRow,
@@ -140,28 +138,6 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
       }
 
-      const persistTagProjections = (input: {
-        classification?: PublicationClassification
-        publicationId: PublicationId
-      }) => {
-        const rows = (input.classification?.tags ?? []).flatMap((tag) => {
-          if (!Schema.is(ResolvedExistingTagExtraction)(tag)) return []
-
-          return PublicationTagRow.make({
-            extractionText: tag.extractionText,
-            publicationId: input.publicationId,
-            tagId: tag.tagId,
-          })
-        })
-
-        return persistProjectionJunctionTables({
-          deleteRows: sql`DELETE FROM publication_tags WHERE publication_id = ${input.publicationId}`,
-          insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
-            ? insertPublicationTagRows(rows)
-            : Effect.void,
-        })
-      }
-
       const persistWikiArticleProjections = (input: {
         classification?: PublicationClassification
         publicationId: PublicationId
@@ -202,15 +178,6 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             publicationId: input.publicationId,
           })
 
-          yield* persistTagProjections({
-            ...(input.classification
-              ? {
-                  classification: input.classification,
-                }
-              : {}),
-            publicationId: input.publicationId,
-          })
-
           yield* persistWikiArticleProjections({
             ...(input.classification
               ? {
@@ -247,6 +214,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
                 createdAt: now,
                 crdtSnapshot: created.crdtSnapshot,
                 id: publicationId,
+                moderationStatus: "APPROVED_BY_DEFAULT",
                 ownerProfileId: input.sourceData.metadata.ownerProfileId,
                 updatedAt: now,
               }),
@@ -323,7 +291,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
               latest.sourceLanguage !== source.sourceLanguage ||
               !Equal.equals(latest.sourceContent, source.sourceContent)
             ) {
-              return yield* new PublicationConcurrentUpdateError({ id: input.publicationId })
+              return yield* new StalePublicationTranslationError({ id: input.publicationId })
             }
           }
 

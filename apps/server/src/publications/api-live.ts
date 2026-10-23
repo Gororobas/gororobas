@@ -10,7 +10,7 @@ export const PublicationsApiLive = HttpApiBuilder.group(GororobasApi, "publicati
     .handle("searchPublications", ({ query }) =>
       Effect.gen(function* () {
         yield* Effect.annotateCurrentSpan("publications.search.has_text", query.text !== undefined)
-        yield* Effect.annotateCurrentSpan("publications.search.kind", query.type ?? "all")
+        yield* Effect.annotateCurrentSpan("publications.search.kind", query.kind ?? "all")
         const service = yield* PublicationsService
         const publications = yield* service.searchPublications(query)
         yield* Effect.annotateCurrentSpan("publications.search.result_count", publications.length)
@@ -59,6 +59,11 @@ export const PublicationsApiLive = HttpApiBuilder.group(GororobasApi, "publicati
     .handle("deletePublication", ({ params }) =>
       PublicationsService.use((service) => service.delete(params.id)).pipe(
         withApiInfrastructureErrors({ group: "publications", endpoint: "deletePublication" }),
+      ),
+    )
+    .handle("moderatePublication", ({ params, payload }) =>
+      PublicationsService.use((service) => service.moderate({ ...params, ...payload })).pipe(
+        withApiInfrastructureErrors({ group: "publications", endpoint: "moderatePublication" }),
       ),
     )
     .handle("getPublicationHistory", ({ params }) =>

@@ -4,6 +4,8 @@
   "compilerOptions": {
     "types": ["node"],
     "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo/type-check.tsbuildinfo",
     "paths": {
       "@gororobas/domain": ["../../packages/domain/src/index.ts"],
       "@gororobas/domain/*": ["../../packages/domain/src/*.ts"],

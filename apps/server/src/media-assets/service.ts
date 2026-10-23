@@ -9,10 +9,13 @@ import {
   Policies,
   ProfileId,
   assertAuthenticated,
+  isCensored,
+  type ModerationDecision,
 } from "@gororobas/domain"
 import { Record, Context, DateTime, Effect, Option, Schema, Array as EffectArray } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { moderateContent } from "../moderation/moderate-content.js"
 import { assertCanViewPublication } from "../publications/service.js"
 import { processMediaAsset, readMediaAssetMetadata } from "./processing.js"
 import { MediaAssetsRepository } from "./repository.js"
@@ -70,7 +73,11 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
             (publication) =>
               assertCanViewPublication(publication).pipe(
                 Effect.as(true),
-                Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
+                // Censored publications grant no access to their media.
+                Effect.catchTags({
+                  UnauthorizedError: () => Effect.succeed(false),
+                  PublicationNotFoundError: () => Effect.succeed(false),
+                }),
               ),
             { concurrency: 1 },
           )
@@ -208,38 +215,19 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
           if (Option.isNone(media)) return yield* new MediaNotFoundError({ id })
           yield* Policies.media.canAttach(media.value, options)
 
-          if (media.value.moderationStatus === "CENSORED") {
+          if (isCensored(media.value.moderationStatus)) {
             return yield* new MediaNotFoundError({ id })
           }
           return media.value
         })
 
-      const moderate = (input: {
-        id: MediaAssetId
-        moderationStatus: "CENSORED" | "REAPPROVED_AFTER_CENSORING"
-      }) =>
-        SqlClient.SqlClient.use((sql) =>
-          Effect.gen(function* () {
-            yield* Policies.media.canModerate
-            const media = yield* repository.findMediaAssetById(input.id)
-            if (Option.isNone(media)) return yield* new MediaNotFoundError({ id: input.id })
-
-            if (
-              input.moderationStatus === "CENSORED" ||
-              media.value.moderationStatus === "CENSORED"
-            ) {
-              yield* repository.moderateMediaAsset({
-                id: input.id,
-                moderationStatus: input.moderationStatus,
-                updatedAt: yield* DateTime.now,
-              })
-            }
-
-            const updated = yield* repository.findMediaAssetById(input.id)
-            if (Option.isNone(updated)) return yield* new MediaNotFoundError({ id: input.id })
-            return { moderationStatus: updated.value.moderationStatus }
-          }).pipe(sql.withTransaction),
-        )
+      const moderate = (input: { id: MediaAssetId; moderationStatus: ModerationDecision }) =>
+        moderateContent({
+          contentType: "MEDIA_ASSET",
+          id: input.id,
+          decision: input.moderationStatus,
+          notFound: () => new MediaNotFoundError({ id: input.id }),
+        })
 
       return {
         upload,

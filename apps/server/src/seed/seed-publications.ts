@@ -27,10 +27,10 @@ import {
   Schema,
 } from "effect"
 
+import { updateModerationStatus } from "../moderation/moderate-content.js"
 import { PublicationCommentsRepository } from "../publication-comments/repository.js"
 import {
   attachMediaToPublication,
-  insertPublicationTagRows,
   insertPublicationWikiArticleRows,
 } from "../publications/mutations.js"
 import {
@@ -218,26 +218,18 @@ const editPublication = (input: {
   })
 
 /** Classification persistence is still a workflow @TODO; link rows directly, like the migration. */
-const linkClassification = (
-  context: Pick<SeedContext, "tags" | "articles">,
-  publicationId: PublicationId,
-) =>
+const linkClassification = (context: Pick<SeedContext, "articles">, publicationId: PublicationId) =>
   Effect.gen(function* () {
-    const tags = yield* sampleUpTo(context.tags, [1, 4])
-    const articles = yield* sampleUpTo(
-      context.articles.filter((article) => article.status === "PUBLISHED"),
+    const published = context.articles.filter((article) => article.status === "PUBLISHED")
+    const concepts = yield* sampleUpTo(
+      published.filter((article) => article.kind === "CONCEPT"),
+      [1, 3],
+    )
+    const others = yield* sampleUpTo(
+      published.filter((article) => article.kind !== "CONCEPT"),
       [0, 3],
     )
-
-    if (EffectArray.isReadonlyArrayNonEmpty(tags)) {
-      yield* insertPublicationTagRows(
-        tags.map((tag) => ({
-          publicationId,
-          tagId: tag.id,
-          extractionText: tag.names.pt.toLowerCase(),
-        })),
-      )
-    }
+    const articles = [...concepts, ...others]
 
     if (EffectArray.isReadonlyArrayNonEmpty(articles)) {
       yield* insertPublicationWikiArticleRows(
@@ -257,7 +249,7 @@ const handleBase = (content: TiptapDocument) =>
 const seedPublication = (
   context: Pick<
     SeedContext,
-    "timeline" | "media" | "people" | "organizations" | "tags" | "articles" | "publications"
+    "timeline" | "media" | "people" | "organizations" | "articles" | "publications"
   >,
   handles: HandleRegistry,
 ) =>
@@ -337,6 +329,23 @@ const seedPublication = (
       yield* timeline.at(editedAt)(editPublication({ publicationId, author, content: edited }))
     }
 
+    // A few publications are censored, some of them later reapproved.
+    if (yield* chance(0.03)) {
+      const censoredAt = yield* timeline.between(createdAt + minutes(30))
+      const moderationStatus = (yield* chance(0.3)) ? "REAPPROVED_AFTER_CENSORING" : "CENSORED"
+
+      yield* timeline.at(censoredAt)(
+        Effect.flatMap(DateTime.now, (updatedAt) =>
+          updateModerationStatus({
+            contentType: "PUBLICATION",
+            id: publicationId,
+            moderationStatus,
+            updatedAt,
+          }),
+        ),
+      )
+    }
+
     return [
       {
         id: publicationId,
@@ -349,10 +358,7 @@ const seedPublication = (
   })
 
 export const seedPublications = (
-  context: Pick<
-    SeedContext,
-    "timeline" | "media" | "people" | "organizations" | "tags" | "articles"
-  >,
+  context: Pick<SeedContext, "timeline" | "media" | "people" | "organizations" | "articles">,
   input: { count: number },
 ) => {
   const handles = makeHandleRegistry()
@@ -453,7 +459,12 @@ const seedComment = (
     if (yield* chance(0.04)) {
       yield* timeline.at(yield* timeline.between(createdAt))(
         Effect.flatMap(DateTime.now, (updatedAt) =>
-          comments.censorPublicationComment({ id, updatedAt }),
+          updateModerationStatus({
+            contentType: "PUBLICATION_COMMENT",
+            id,
+            moderationStatus: "CENSORED",
+            updatedAt,
+          }),
         ),
       )
     }

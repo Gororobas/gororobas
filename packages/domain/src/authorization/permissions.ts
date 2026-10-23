@@ -7,6 +7,7 @@ import type { OrganizationAccessLevel, PlatformAccessLevelOrVisitor } from "../c
 
 export const PlatformPermission = Schema.Literals([
   "people:manage-community-access", // trusting newcomers or blocking members with community access
+  "content:moderate", // censoring or reapproving publications, publication comments and media
   "people:manage-moderators",
   "people:manage-admins",
   "revisions:evaluate",
@@ -15,12 +16,10 @@ export const PlatformPermission = Schema.Literals([
   "profiles:read:community",
   "profiles:read:all",
   "media:create",
-  "media:moderate",
   "wiki-article:create",
   "wiki-article:revise",
   "organizations:create",
   "publication-comments:create",
-  "publication-comments:censor",
   "bookmarks:create",
 ])
 
@@ -33,8 +32,7 @@ const PLATFORM_PERMISSIONS_BY_ACCESS_LEVEL: Record<
   ADMIN: HashSet.fromIterable(PlatformPermission.literals),
   BLOCKED: HashSet.empty(),
   MODERATOR: HashSet.fromIterable([
-    "publication-comments:censor",
-    "media:moderate",
+    "content:moderate",
     "people:manage-community-access",
     "revisions:evaluate",
     "publications:create:personal",

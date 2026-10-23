@@ -122,6 +122,8 @@ test.live.each([
           Layer.provide(
             configuration({
               AUTH_BINDING_KEY: Base64Url.encode(new Uint8Array(32).fill(42)),
+              AUTH_PROOF_KEY: Base64Url.encode(new Uint8Array(32).fill(43)),
+              AUTH_ORIGIN: "https://gororobas.test",
               ...values,
             }),
           ),

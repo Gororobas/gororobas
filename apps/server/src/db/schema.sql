@@ -164,44 +164,6 @@ CREATE TABLE organization_invitations (
   FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE CASCADE
 );
 
--- ====
--- TAGS
--- ====
---
-CREATE TABLE tags (
-  id text PRIMARY KEY,
-  handle text NOT NULL UNIQUE,
-  names json NOT NULL,
-  description json,
-  cluster text,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  created_by_id text
-);
-
-CREATE INDEX idx_tags_handle ON tags (handle);
-
--- Suggested tags (moderation queue, independent of publications)
-CREATE TABLE suggested_tags (
-  id text PRIMARY KEY,
-  handle text NOT NULL UNIQUE,
-  names json NOT NULL,
-  status text NOT NULL, -- SuggestedTagStatus
-  approved_tag_id text,
-  created_at text NOT NULL,
-  updated_at text NOT NULL,
-  FOREIGN KEY (approved_tag_id) REFERENCES tags (id) ON DELETE SET NULL
-);
-
--- Link suggested tags back to source publications.
-CREATE TABLE suggested_tag_sources (
-  suggested_tag_id text NOT NULL,
-  publication_id text NOT NULL,
-  PRIMARY KEY (suggested_tag_id, publication_id),
-  FOREIGN KEY (suggested_tag_id) REFERENCES suggested_tags (id) ON DELETE CASCADE,
-  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
 -- ======
 -- MEDIA ASSETS
 -- ======
@@ -352,6 +314,7 @@ CREATE TABLE publication_crdts (
   id text PRIMARY KEY,
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
   classification json,
+  moderation_status text NOT NULL, -- ModerationStatus
   owner_profile_id text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
@@ -404,15 +367,6 @@ CREATE TABLE publication_translations (
   original_language text NOT NULL,
   PRIMARY KEY (publication_id, language),
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
-
-CREATE TABLE publication_tags (
-  publication_id text NOT NULL,
-  tag_id text NOT NULL,
-  extraction_text text,
-  PRIMARY KEY (publication_id, tag_id),
-  FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
-  FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
 CREATE TABLE publication_media_assets (

@@ -9,7 +9,7 @@ export type SupportedLanguage = typeof SupportedLanguage.Type
 
 export const TrustedAccessLevel = Schema.Literals([
   "COMMUNITY", // Has been approved and has access to public & community content
-  "MODERATOR", // Can trust or block newcomers, flag media and publications, and approve revisions
+  "MODERATOR", // Can trust or block newcomers, censor or reapprove content, and evaluate revisions
   "ADMIN", // Moderator access + manage other moderators and admins
 ])
 
@@ -47,11 +47,25 @@ export const OrganizationAccessLevel = Schema.Literals(["MANAGER", "EDITOR", "VI
 export type OrganizationAccessLevel = typeof OrganizationAccessLevel.Type
 
 // @TODO review organization types
+/**
+ * What kind of collective an organization is. Shared by organization profiles (groups using the
+ * app) and NOTEWORTHY_ENTITY wiki articles (groups documented in the wiki), so an article and the
+ * profile its members create classify the group the same way.
+ */
 export const OrganizationType = Schema.Literals([
-  "TERRITORY",
-  "SOCIAL_MOVEMENT",
-  "COMMERCIAL",
-  "NGO",
+  "COLLECTIVE", // Informal groups: community gardens, mutirões, seed guardians
+  "COOPERATIVE", // Producer, consumer and credit cooperatives and associations
+  "FARM", // Sítios, roças, agroforests and other productive units
+  "TERRITORY", // Assentamentos, quilombos, indigenous lands and traditional communities
+  "SOCIAL_MOVEMENT", // Organized movements such as the MST or La Via Campesina
+  "NETWORK", // Networks and coalitions of groups, such as the ANA
+  "NONPROFIT", // NGOs and civil-society institutes
+  "EDUCATIONAL_INSTITUTION", // Schools, universities and training centers
+  "RESEARCH_ORGANIZATION", // Research groups and centers
+  "PUBLIC_AGENCY", // Government agencies and programs, such as extension services
+  "MEDIA_ORGANIZATION", // Independent media and publishers
+  "BUSINESS", // Shops, restaurants and other companies
+  "OTHER",
 ])
 
 export type OrganizationType = typeof OrganizationType.Type
@@ -173,9 +187,6 @@ export type GrammaticalGender = typeof GrammaticalGender.Type
 export const TranslationSource = Schema.Literals(["ORIGINAL", "AUTOMATIC", "MANUAL"])
 export type TranslationSource = typeof TranslationSource.Type
 
-export const SuggestedTagStatus = Schema.Literals(["PENDING", "APPROVED", "REJECTED"])
-export type SuggestedTagStatus = typeof SuggestedTagStatus.Type
-
 export const ContentChannelType = Schema.Literals([
   "YOUTUBE",
   "PODCAST",
@@ -185,18 +196,8 @@ export const ContentChannelType = Schema.Literals([
   "OTHER",
 ])
 
-export const NoteworthyEntityType = Schema.Literals([
-  "MOVEMENT",
-  "INSTITUTION",
-  "MEDIA_ORGANIZATION",
-  "NONPROFIT",
-  "RESEARCH_ORGANIZATION",
-  "PUBLIC_AGENCY",
-  "COOPERATIVE",
-  "NETWORK",
-  "COMPANY",
-  "OTHER",
-])
+/** Wiki entities use the same taxonomy as organization profiles; see `OrganizationType`. */
+export const NoteworthyEntityType = OrganizationType
 
 export const ResourceFormat = Schema.Literals([
   "SOCIAL_MEDIA",

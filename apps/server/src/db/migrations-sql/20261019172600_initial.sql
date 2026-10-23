@@ -173,44 +173,6 @@ CREATE TABLE `organization_invitations` (
 );
 -- Create index "organization_invitations_organization_id_email" to table: "organization_invitations"
 CREATE UNIQUE INDEX `organization_invitations_organization_id_email` ON `organization_invitations` (`organization_id`, `email`);
--- Create "tags" table
-CREATE TABLE `tags` (
-  `id` text NULL,
-  `handle` text NOT NULL,
-  `names` json NOT NULL,
-  `description` json NULL,
-  `cluster` text NULL,
-  `created_at` text NOT NULL,
-  `updated_at` text NOT NULL,
-  `created_by_id` text NULL,
-  PRIMARY KEY (`id`)
-);
--- Create index "tags_handle" to table: "tags"
-CREATE UNIQUE INDEX `tags_handle` ON `tags` (`handle`);
--- Create index "idx_tags_handle" to table: "tags"
-CREATE INDEX `idx_tags_handle` ON `tags` (`handle`);
--- Create "suggested_tags" table
-CREATE TABLE `suggested_tags` (
-  `id` text NULL,
-  `handle` text NOT NULL,
-  `names` json NOT NULL,
-  `status` text NOT NULL,
-  `approved_tag_id` text NULL,
-  `created_at` text NOT NULL,
-  `updated_at` text NOT NULL,
-  PRIMARY KEY (`id`),
-  CONSTRAINT `0` FOREIGN KEY (`approved_tag_id`) REFERENCES `tags` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL
-);
--- Create index "suggested_tags_handle" to table: "suggested_tags"
-CREATE UNIQUE INDEX `suggested_tags_handle` ON `suggested_tags` (`handle`);
--- Create "suggested_tag_sources" table
-CREATE TABLE `suggested_tag_sources` (
-  `suggested_tag_id` text NOT NULL,
-  `publication_id` text NOT NULL,
-  PRIMARY KEY (`suggested_tag_id`, `publication_id`),
-  CONSTRAINT `0` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`suggested_tag_id`) REFERENCES `suggested_tags` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
-) WITHOUT ROWID;
 -- Create "media_assets" table
 CREATE TABLE `media_assets` (
   `id` text NULL,
@@ -347,6 +309,7 @@ CREATE TABLE `publication_crdts` (
   `id` text NOT NULL,
   `crdt_snapshot` blob NOT NULL,
   `classification` json NULL,
+  `moderation_status` text NOT NULL,
   `owner_profile_id` text NOT NULL,
   `created_at` text NOT NULL,
   `updated_at` text NOT NULL,
@@ -402,15 +365,6 @@ CREATE TABLE `publication_translations` (
   `original_language` text NOT NULL,
   PRIMARY KEY (`publication_id`, `language`),
   CONSTRAINT `0` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
-) WITHOUT ROWID;
--- Create "publication_tags" table
-CREATE TABLE `publication_tags` (
-  `publication_id` text NOT NULL,
-  `tag_id` text NOT NULL,
-  `extraction_text` text NULL,
-  PRIMARY KEY (`publication_id`, `tag_id`),
-  CONSTRAINT `0` FOREIGN KEY (`tag_id`) REFERENCES `tags` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 ) WITHOUT ROWID;
 -- Create "publication_media_assets" table
 CREATE TABLE `publication_media_assets` (

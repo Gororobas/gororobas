@@ -8,11 +8,6 @@
  *   1. Exact handle match → existing
  *   2. Exact or substring match via searchable_names → existing
  *   3. No match → suggested (with names from extraction attributes)
- *
- * Resolution for tags:
- *   1. Exact handle match → existing
- *   2. Name match in tag names JSON → existing
- *   3. No match → suggested (with names from extraction attributes)
  */
 import {
   stringToHandle,
@@ -22,15 +17,12 @@ import {
 } from "@gororobas/domain"
 import {
   CommonExtractionData,
-  ResolvedExistingTagExtraction,
   ResolvedExistingWikiArticleExtraction,
-  SuggestedTagExtraction,
   SuggestedWikiArticleExtraction,
 } from "@gororobas/domain"
-import { Array as EffectArray, Effect, Option, Predicate, Struct } from "effect"
+import { Array as EffectArray, Effect, Option, Predicate, Record, Struct } from "effect"
 import type { Extraction } from "langextract"
 
-import { TagsRepository } from "../tags/repository.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
 
 function toCommonExtractionFields(extraction: Extraction) {
@@ -49,17 +41,34 @@ function toCommonExtractionFields(extraction: Extraction) {
   })
 }
 
-function collectWikiArticleCandidates(extraction: Extraction): string[] {
-  const attributes = extraction.attributes ?? {}
-  const candidates = ["wikiArticle_pt", "wikiArticle_es", "wikiArticle_en"].flatMap((key) => {
-    const value = attributes[key]
-    return Predicate.isString(value) ? [value] : Array.isArray(value) ? value : []
-  })
+/** Attribute keys requested by the extraction prompt and examples. */
+const NAME_ATTRIBUTE_BY_LANGUAGE = {
+  pt: "wiki_article_pt",
+  es: "wiki_article_es",
+  en: "wiki_article_en",
+} as const
+
+const attributeValues = (
+  attributes: Extraction["attributes"],
+  key: string,
+): ReadonlyArray<string> => {
+  const value = attributes?.[key]
+  return Predicate.isString(value) ? [value] : Array.isArray(value) ? value : []
+}
+
+export function collectWikiArticleCandidates(extraction: Extraction): string[] {
+  const candidates = Record.values(NAME_ATTRIBUTE_BY_LANGUAGE).flatMap((key) =>
+    attributeValues(extraction.attributes, key),
+  )
   if (EffectArray.isReadonlyArrayEmpty(candidates) && extraction.extractionText) {
     return [extraction.extractionText]
   }
   return candidates
 }
+
+const suggestedName = (extraction: Extraction, language: keyof typeof NAME_ATTRIBUTE_BY_LANGUAGE) =>
+  attributeValues(extraction.attributes, NAME_ATTRIBUTE_BY_LANGUAGE[language])[0] ??
+  extraction.extractionText
 
 export const resolveWikiArticleExtraction = Effect.fn("resolveWikiArticleExtraction")(function* (
   extraction: Extraction,
@@ -136,76 +145,9 @@ export const resolveWikiArticleExtraction = Effect.fn("resolveWikiArticleExtract
     ...common,
     handle: yield* stringToHandle(extraction.extractionText),
     names: {
-      pt: Predicate.isString(common.attributes.wikiArticle_pt)
-        ? common.attributes.wikiArticle_pt
-        : extraction.extractionText,
-      es: Predicate.isString(common.attributes.wikiArticle_es)
-        ? common.attributes.wikiArticle_es
-        : extraction.extractionText,
-      en: Predicate.isString(common.attributes.wikiArticle_en)
-        ? common.attributes.wikiArticle_en
-        : extraction.extractionText,
-    },
-  })
-})
-
-export const resolveTagExtraction = Effect.fn("resolveTagExtraction")(function* (
-  extraction: Extraction,
-) {
-  const tagsRepository = yield* TagsRepository
-  const common = toCommonExtractionFields(extraction)
-  const { attributes } = common
-  const status = attributes.status
-  const tagHandle = yield* stringToHandle(
-    Predicate.isString(attributes.tag) ? attributes.tag : extraction.extractionText,
-  )
-
-  yield* Effect.logDebug(
-    `Resolving tag extraction: "${extraction.extractionText}" -> handle "${tagHandle}", status: ${String(status ?? "undefined")}`,
-  )
-
-  if (status === "existing" || !status) {
-    yield* Effect.logDebug(`Trying handle match for tag "${tagHandle}"`)
-    const handleMatch = yield* tagsRepository.findByHandle(tagHandle)
-
-    if (Option.isSome(handleMatch)) {
-      yield* Effect.logDebug(
-        `Found existing tag by handle: "${tagHandle}" -> ${handleMatch.value.id}`,
-      )
-
-      return ResolvedExistingTagExtraction.make({
-        ...common,
-        tagId: handleMatch.value.id,
-        handle: yield* stringToHandle(handleMatch.value.handle),
-      })
-    }
-
-    const namePattern = `%${tagHandle}%`
-    yield* Effect.logDebug(`Trying name match for tag with pattern "${namePattern}"`)
-    const nameMatch = yield* tagsRepository.findByName(namePattern)
-
-    if (Option.isSome(nameMatch)) {
-      yield* Effect.logDebug(`Found existing tag by name: "${tagHandle}" -> ${nameMatch.value.id}`)
-
-      return ResolvedExistingTagExtraction.make({
-        ...common,
-        tagId: nameMatch.value.id,
-        handle: yield* stringToHandle(nameMatch.value.handle),
-      })
-    }
-  }
-
-  yield* Effect.logDebug(
-    `No match found for tag "${extraction.extractionText}" -> creating suggested`,
-  )
-
-  return SuggestedTagExtraction.make({
-    ...common,
-    handle: tagHandle,
-    names: {
-      pt: Predicate.isString(attributes.name_pt) ? attributes.name_pt : extraction.extractionText,
-      es: Predicate.isString(attributes.name_es) ? attributes.name_es : extraction.extractionText,
-      en: Predicate.isString(attributes.name_en) ? attributes.name_en : extraction.extractionText,
+      pt: suggestedName(extraction, "pt"),
+      es: suggestedName(extraction, "es"),
+      en: suggestedName(extraction, "en"),
     },
   })
 })

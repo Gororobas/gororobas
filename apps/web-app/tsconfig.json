@@ -11,6 +11,8 @@
     "exactOptionalPropertyTypes": true,
     "isolatedModules": true,
     "noEmit": true,
+    "incremental": true,
+    "tsBuildInfoFile": ".tsbuildinfo/type-check.tsbuildinfo",
     "paths": {
       "@gororobas/domain/*": ["../../packages/domain/src/*"]
     }

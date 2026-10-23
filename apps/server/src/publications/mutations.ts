@@ -4,7 +4,6 @@ import {
   PublicationCrdtRow,
   PublicationId,
   PublicationRow,
-  PublicationTagRow,
   PublicationTranslationRow,
   PublicationWikiArticleRow,
 } from "@gororobas/domain"
@@ -34,11 +33,6 @@ export const insertPublicationTranslationRows = SqlSchema.void({
     SqlClient.use((sql) => sql`INSERT INTO publication_translations ${sql.insert(rows)}`),
 })
 
-export const insertPublicationTagRows = SqlSchema.void({
-  Request: Schema.Array(PublicationTagRow),
-  execute: (rows) => SqlClient.use((sql) => sql`INSERT INTO publication_tags ${sql.insert(rows)}`),
-})
-
 export const insertPublicationWikiArticleRows = SqlSchema.void({
   Request: Schema.Array(PublicationWikiArticleRow),
   execute: (rows) =>
@@ -47,7 +41,7 @@ export const insertPublicationWikiArticleRows = SqlSchema.void({
 
 export const updatePublicationCrdtRow = SqlSchema.void({
   Request: PublicationCrdtRow.mapFields(
-    Struct.omit(["classification", "createdAt", "ownerProfileId"]),
+    Struct.omit(["classification", "createdAt", "moderationStatus", "ownerProfileId"]),
   ),
   execute: ({ id, ...update }) =>
     SqlClient.use(

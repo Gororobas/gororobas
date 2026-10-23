@@ -2,7 +2,7 @@
 import { Schema } from "effect"
 
 import { MediaAssetFormat } from "../common/enums.js"
-import { MediaAssetId, ProfileId, PublicationId, TagId, WikiArticleId } from "../common/ids.js"
+import { MediaAssetId, ProfileId, PublicationId, WikiArticleId } from "../common/ids.js"
 import { ExternalEmbed } from "./external-embed.js"
 
 export * from "./external-embed.js"
@@ -12,7 +12,6 @@ const JsonAttributes = Schema.Record(Schema.NonEmptyString, Schema.Json)
 export const EntityReferenceTarget = Schema.Union([
   Schema.Struct({ referenceType: Schema.Literal("WIKI_ARTICLE"), referenceId: WikiArticleId }),
   Schema.Struct({ referenceType: Schema.Literal("PROFILE"), referenceId: ProfileId }),
-  Schema.Struct({ referenceType: Schema.Literal("TAG"), referenceId: TagId }),
   Schema.Struct({ referenceType: Schema.Literal("PUBLICATION"), referenceId: PublicationId }),
 ])
 

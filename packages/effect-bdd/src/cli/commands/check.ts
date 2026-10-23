@@ -9,6 +9,7 @@ export interface CheckArgs {
   format: OutputFormat
   ignore?: string
   quiet?: boolean
+  paired?: boolean
 }
 
 export function runCheckCommand(args: CheckArgs) {
@@ -18,5 +19,6 @@ export function runCheckCommand(args: CheckArgs) {
     patterns: args.patterns,
     testPattern: args.testPattern,
     quiet: args.quiet ?? false,
+    paired: args.paired ?? false,
   })
 }

@@ -9,7 +9,6 @@ import {
   PublicationId,
   PublicationVisibility,
   MediaAssetId,
-  TagRow,
   WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
   WikiArticleRevisionRow,
@@ -87,20 +86,6 @@ export const verifyReadApis = Effect.gen(function* () {
       }),
     { concurrency: 4 },
   )
-
-  const tags = yield* response("/tags").pipe(
-    Effect.flatMap(HttpClientResponse.schemaBodyJson(Schema.Array(TagRow))),
-  )
-
-  const tagCount = yield* SqlSchema.findOne({
-    Request: Schema.Void,
-    Result: Schema.Struct({ count: Schema.Int }),
-    execute: () => sql`SELECT COUNT(*) AS count FROM tags`,
-  })()
-
-  if (tags.length !== tagCount.count) {
-    return yield* new IngestionError({ message: "Tag listing differs from imported data" })
-  }
 
   const profiles = yield* SqlSchema.findAll({
     Request: Schema.Void,
@@ -215,7 +200,6 @@ export const verifyReadApis = Effect.gen(function* () {
 
   const report = {
     wikiArticles: cards.length,
-    tags: tags.length,
     profiles: profiles.length,
     publicPublications: listing.length,
     communityPublications: publications.length - listing.length,

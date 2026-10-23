@@ -292,6 +292,25 @@ export const CONCEPTS: NonEmpty<Localized> = [
   localized(["Policultivo", "Polyculture", "Policultivo"]),
   localized(["Biofertilizante", "Biofertilizer", "Biofertilizante"]),
   localized(["Estratificação", "Stratification", "Estratificación"]),
+  localized(["Irrigação", "Irrigation", "Riego"]),
+  localized(["Poda", "Pruning", "Poda"]),
+  localized(["Viveiro", "Plant nursery", "Vivero"]),
+  localized(["Bioconstrução", "Natural building", "Bioconstrucción"]),
+  localized(["Sementes", "Seeds", "Semillas"]),
+  localized(["Mutirão", "Collective work", "Minga"]),
+  localized(["Feira", "Market", "Feria"]),
+  localized(["Reforma agrária", "Land reform", "Reforma agraria"]),
+  localized(["Educação", "Education", "Educación"]),
+  localized(["Cerrado", "Cerrado", "Cerrado"]),
+  localized(["Mata Atlântica", "Atlantic Forest", "Mata Atlántica"]),
+  localized(["Amazônia", "Amazon", "Amazonía"]),
+  localized(["Caatinga", "Caatinga", "Caatinga"]),
+  localized(["Água", "Water", "Agua"]),
+  localized(["Polinizadores", "Pollinators", "Polinizadores"]),
+  localized(["Receitas", "Recipes", "Recetas"]),
+  localized(["PANC", "Wild edibles", "Plantas silvestres comestibles"]),
+  localized(["Conservas", "Preserves", "Conservas"]),
+  localized(["Plantas medicinais", "Medicinal plants", "Plantas medicinales"]),
 ]
 
 /** Names for wiki kinds other than plants and cultivars, keyed by kind. */
@@ -362,40 +381,6 @@ export const WIKI_NAMES: Readonly<
     localized(["Mutirão de plantio", "Planting work party", "Minga de siembra"]),
   ],
 }
-
-export const TAGS: NonEmpty<{ readonly names: Localized; readonly cluster: string }> = [
-  { names: localized(["Agrofloresta", "Agroforestry", "Agroforestería"]), cluster: "practices" },
-  { names: localized(["Compostagem", "Composting", "Compostaje"]), cluster: "practices" },
-  { names: localized(["Adubação verde", "Green manure", "Abono verde"]), cluster: "practices" },
-  { names: localized(["Irrigação", "Irrigation", "Riego"]), cluster: "practices" },
-  { names: localized(["Poda", "Pruning", "Poda"]), cluster: "practices" },
-  { names: localized(["Viveiro", "Plant nursery", "Vivero"]), cluster: "practices" },
-  {
-    names: localized(["Bioconstrução", "Natural building", "Bioconstrucción"]),
-    cluster: "practices",
-  },
-  { names: localized(["Sementes", "Seeds", "Semillas"]), cluster: "commons" },
-  { names: localized(["Mutirão", "Collective work", "Minga"]), cluster: "commons" },
-  { names: localized(["Feira", "Market", "Feria"]), cluster: "commons" },
-  { names: localized(["Reforma agrária", "Land reform", "Reforma agraria"]), cluster: "commons" },
-  { names: localized(["Educação", "Education", "Educación"]), cluster: "commons" },
-  { names: localized(["Cerrado", "Cerrado", "Cerrado"]), cluster: "ecosystems" },
-  {
-    names: localized(["Mata Atlântica", "Atlantic Forest", "Mata Atlántica"]),
-    cluster: "ecosystems",
-  },
-  { names: localized(["Amazônia", "Amazon", "Amazonía"]), cluster: "ecosystems" },
-  { names: localized(["Caatinga", "Caatinga", "Caatinga"]), cluster: "ecosystems" },
-  { names: localized(["Água", "Water", "Agua"]), cluster: "ecosystems" },
-  { names: localized(["Polinizadores", "Pollinators", "Polinizadores"]), cluster: "ecosystems" },
-  { names: localized(["Receitas", "Recipes", "Recetas"]), cluster: "food" },
-  { names: localized(["PANC", "Wild edibles", "Plantas silvestres comestibles"]), cluster: "food" },
-  { names: localized(["Conservas", "Preserves", "Conservas"]), cluster: "food" },
-  {
-    names: localized(["Plantas medicinais", "Medicinal plants", "Plantas medicinales"]),
-    cluster: "food",
-  },
-]
 
 export const FIRST_NAMES: NonEmpty<string> = [
   "Ana",

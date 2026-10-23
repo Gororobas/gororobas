@@ -1000,8 +1000,10 @@ it.effect("revision media references preserve selections and roll back invalid a
     ).toBe(media.id)
   }).pipe(Effect.provide(MediaFeatureTestLayer)),
 )
-;
-[false, true].forEach((hasRevisions) => {
+
+const REVISION_CASES = [false, true] as const
+
+REVISION_CASES.forEach((hasRevisions) => {
   it.effect(`account deletion removes wiki media and files with revisions=${hasRevisions}`, () =>
     Effect.gen(function* () {
       const people = yield* provisionPeople([{ name: "Uploader", accessLevel: "COMMUNITY" }])

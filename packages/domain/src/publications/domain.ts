@@ -7,6 +7,7 @@ import { PublicationClassification } from "../classification/domain.js"
 import { ContentLanguage } from "../common/content-language.js"
 import {
   EventAttendanceMode,
+  ModerationStatus,
   SupportedLanguage,
   PublicationKind,
   PublicationVisibility,
@@ -18,7 +19,6 @@ import {
   PublicationCommitId,
   PublicationId,
   ProfileId,
-  TagId,
   WikiArticleId,
 } from "../common/ids.js"
 import {
@@ -97,17 +97,11 @@ export type EventSourceData = typeof EventSourceData.Type
 export const PublicationSourceData = Schema.Union([PostSourceData, EventSourceData])
 export type PublicationSourceData = typeof PublicationSourceData.Type
 
-const MatchedTag = Schema.Struct({
-  tag_id: Schema.String,
-  extraction_text: Schema.NullOr(Schema.String),
-})
-
 const MatchedWikiArticle = Schema.Struct({
-  wiki_article_id: WikiArticleId,
-  extraction_text: Schema.NullOr(Schema.String),
+  wikiArticleId: WikiArticleId,
+  extractionText: Schema.NullOr(Schema.String),
 })
 
-const MatchedTagsAsJson = Schema.fromJsonString(Schema.Array(MatchedTag))
 const MatchedWikiArticlesAsJson = Schema.fromJsonString(Schema.Array(MatchedWikiArticle))
 
 const PublicationPageDataCommonFields = {
@@ -117,7 +111,6 @@ const PublicationPageDataCommonFields = {
   id: PublicationId,
   language: Schema.NullOr(ContentLanguage),
   originalLanguage: Schema.NullOr(ContentLanguage),
-  tags: MatchedTagsAsJson,
   updatedAt: TimestampColumn,
   wikiArticles: MatchedWikiArticlesAsJson,
 }
@@ -139,7 +132,7 @@ export type PublicationPageData = typeof PublicationPageData.Type
 export const ApiPublicationSearchParams = Schema.Struct({
   text: Schema.optional(NonEmptyTrimmedString),
   ownerProfileId: Schema.optional(ProfileId),
-  type: Schema.optional(PublicationKind),
+  kind: Schema.optional(PublicationKind),
   visibility: Schema.optional(PublicationVisibility),
   ...PaginationOptions.fields,
 })
@@ -282,6 +275,7 @@ export const PublicationCrdtRow = Schema.Struct({
   classification: Schema.NullOr(Schema.fromJsonString(PublicationClassification)),
   id: PublicationId,
   crdtSnapshot: LoroDocSnapshot,
+  moderationStatus: ModerationStatus,
   ownerProfileId: ProfileId,
 })
 
@@ -317,6 +311,13 @@ export const PublicationRow = Schema.Struct({
 
 export type PublicationRow = typeof PublicationRow.Type
 
+/** A publication's projection with the moderation status kept on its aggregate row. */
+export const ModeratedPublicationRow = Schema.Struct({
+  ...PublicationRow.fields,
+  moderationStatus: ModerationStatus,
+})
+export type ModeratedPublicationRow = typeof ModeratedPublicationRow.Type
+
 export const PublicationTranslationRow = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   contentPlainText: Schema.String,
@@ -328,14 +329,6 @@ export const PublicationTranslationRow = Schema.Struct({
 })
 
 export type PublicationTranslationRow = typeof PublicationTranslationRow.Type
-
-export const PublicationTagRow = Schema.Struct({
-  extractionText: Schema.NullOr(Schema.String),
-  publicationId: PublicationId,
-  tagId: TagId,
-})
-
-export type PublicationTagRow = typeof PublicationTagRow.Type
 
 export const PublicationWikiArticleRow = Schema.Struct({
   extractionText: Schema.NullOr(Schema.String),

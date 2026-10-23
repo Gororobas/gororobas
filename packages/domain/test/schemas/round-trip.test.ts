@@ -24,11 +24,13 @@ import {
   PublicationCommitRow,
   PublicationCrdtRow,
   PublicationRow,
-  PublicationTagRow,
   PublicationTranslationRow,
 } from "../../src/publications/domain.js"
-import { SuggestedTagRow, SuggestedTagSourceRow, TagRow } from "../../src/tags/domain.js"
-import { assertPropertyEffect, deepEquals } from "../../src/testing.js"
+import {
+  assertPropertyEffect,
+  avoidsJsonParseKeyCorruption,
+  deepEquals,
+} from "../../src/testing.js"
 import {
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
@@ -45,12 +47,8 @@ const rowSchemas = [
   { name: "PublicationCommitRow", schema: PublicationCommitRow },
   { name: "PublicationCrdtRow", schema: PublicationCrdtRow },
   { name: "PublicationRow", schema: PublicationRow },
-  { name: "PublicationTagRow", schema: PublicationTagRow },
   { name: "PublicationTranslationRow", schema: PublicationTranslationRow },
   { name: "AuthenticationSession", schema: AuthenticationSession },
-  { name: "SuggestedTagRow", schema: SuggestedTagRow },
-  { name: "SuggestedTagSourceRow", schema: SuggestedTagSourceRow },
-  { name: "TagRow", schema: TagRow },
   { name: "WikiArticleCrdtRow", schema: WikiArticleCrdtRow },
   { name: "WikiArticleHandleRow", schema: WikiArticleHandleProjectionRow },
   { name: "WikiArticleProjectionRow", schema: WikiArticleProjectionRow },
@@ -65,7 +63,7 @@ describe("Schema Round-Trip Properties", () => {
     rowSchemas.forEach(({ name, schema }) => {
       it.effect(`${name} round-trip preserves data`, () =>
         assertPropertyEffect({
-          arbitrary: Arbitrary.schema(schema),
+          arbitrary: Arbitrary.filter(avoidsJsonParseKeyCorruption)(Arbitrary.schema(schema)),
           predicate: (original) =>
             Effect.gen(function* () {
               const encoded = yield* Schema.encodeEffect(schema)(original)

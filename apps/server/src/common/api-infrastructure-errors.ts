@@ -2,7 +2,11 @@ import { Cause, Effect, ErrorReporter, Schema } from "effect"
 import { HttpServerResponse } from "effect/http"
 import { SqlError } from "effect/sql"
 
-type InfrastructureError = Schema.SchemaError | SqlError.SqlError
+/**
+ * `NoSuchElementError` comes from `SqlSchema.findOne` queries that must return a row (counts,
+ * existence checks); reaching it means the database broke an invariant, not that a resource is missing.
+ */
+type InfrastructureError = Schema.SchemaError | SqlError.SqlError | Cause.NoSuchElementError
 
 interface ApiOperation {
   readonly endpoint: string
@@ -12,7 +16,9 @@ interface ApiOperation {
 const internalServerErrorResponse = HttpServerResponse.empty({ status: 500 })
 
 const isInfrastructureError = (error: unknown): error is InfrastructureError =>
-  Schema.isSchemaError(error) || Schema.is(SqlError.SqlError)(error)
+  Schema.isSchemaError(error) ||
+  Schema.is(SqlError.SqlError)(error) ||
+  Cause.isNoSuchElementError(error)
 
 const annotateOperationSpan = (
   operation: ApiOperation,
@@ -53,7 +59,8 @@ const protectApiOperation = <A, E, R>(
   )
 
 /**
- * Boundary for API handlers that should hide `SqlError` / `SchemaError` from the public contract.
+ * Boundary for API handlers that should hide `SqlError` / `SchemaError` / `NoSuchElementError`
+ * from the public contract.
  */
 export const withApiInfrastructureErrors =
   (operation: ApiOperation) =>

@@ -22,3 +22,11 @@ export class PublicationConcurrentUpdateError extends Schema.TaggedError<Publica
   },
   { httpApiStatus: 409 },
 ) {}
+
+/** The publication's source changed after a translation of an earlier revision started. */
+export class StalePublicationTranslationError extends Schema.TaggedError<StalePublicationTranslationError>()(
+  "StalePublicationTranslationError",
+  {
+    id: PublicationId,
+  },
+) {}

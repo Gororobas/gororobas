@@ -24,7 +24,6 @@ import { PeopleRepository } from "../people/repository.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PublicationCommentsRepository } from "../publication-comments/repository.js"
 import { PublicationsRepository } from "../publications/repository.js"
-import { TagsRepository } from "../tags/repository.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
 import type { SeedContext } from "./seed-context.js"
 import { makeSeedMedia, type SeedMedia } from "./seed-media.js"
@@ -40,7 +39,6 @@ import { makeSeedTimeline } from "./seed-timeline.js"
 import {
   seedBookmarks,
   seedExternalData,
-  seedTags,
   seedWikiArticles,
   seedWikiRevisions,
 } from "./seed-wiki.js"
@@ -51,7 +49,6 @@ export type SeedScale = typeof SeedScale.Type
 export interface SeedCounts {
   readonly people: number
   readonly organizations: number
-  readonly tags: number
   readonly wikiArticles: number
   readonly publications: number
   /** Distinct image files; media rows beyond this reuse pool files. */
@@ -63,7 +60,6 @@ export const SEED_SCALES: Readonly<Record<SeedScale, SeedCounts>> = {
   tiny: {
     people: 12,
     organizations: 3,
-    tags: 12,
     wikiArticles: 40,
     publications: 30,
     mediaPool: 2,
@@ -71,7 +67,6 @@ export const SEED_SCALES: Readonly<Record<SeedScale, SeedCounts>> = {
   small: {
     people: 60,
     organizations: 10,
-    tags: 22,
     wikiArticles: 150,
     publications: 200,
     mediaPool: 12,
@@ -79,7 +74,6 @@ export const SEED_SCALES: Readonly<Record<SeedScale, SeedCounts>> = {
   medium: {
     people: 600,
     organizations: 60,
-    tags: 22,
     wikiArticles: 1500,
     publications: 2500,
     mediaPool: 24,
@@ -87,7 +81,6 @@ export const SEED_SCALES: Readonly<Record<SeedScale, SeedCounts>> = {
   large: {
     people: 5000,
     organizations: 400,
-    tags: 22,
     wikiArticles: 12000,
     publications: 25000,
     mediaPool: 24,
@@ -170,7 +163,6 @@ const SeedRepositoriesLive = Layer.mergeAll(
   Layer.effect(ProfilesRepository, ProfilesRepository.make),
   Layer.effect(PublicationCommentsRepository, PublicationCommentsRepository.make),
   Layer.effect(PublicationsRepository, PublicationsRepository.make),
-  Layer.effect(TagsRepository, TagsRepository.make),
   Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make),
   // Seeding skips enrichment, but wiki writes still type-check against a workflow engine.
   WorkflowEngine.layerMemory,
@@ -224,21 +216,17 @@ const seedDatabaseWithFreshRandom = (options: SeedOptions) =>
         { count: counts.organizations, handles },
       ).pipe(logPhase("organizations", length))
 
-      const tags = yield* seedTags({ ...base, people }, { count: counts.tags }).pipe(
-        logPhase("tags", length),
-      )
-
       const articles = yield* seedWikiArticles(
-        { ...base, people, organizations, tags },
+        { ...base, people, organizations },
         { count: counts.wikiArticles },
       ).pipe(logPhase("wiki articles", length))
 
       const publications = yield* seedPublications(
-        { ...base, people, organizations, tags, articles },
+        { ...base, people, organizations, articles },
         { count: counts.publications },
       ).pipe(logPhase("publications", length))
 
-      const context: SeedContext = { ...base, people, organizations, tags, articles, publications }
+      const context: SeedContext = { ...base, people, organizations, articles, publications }
 
       yield* seedWikiRevisions(context).pipe(logPhase("wiki revisions", total))
       yield* seedBookmarks(context).pipe(logPhase("bookmarks", total))

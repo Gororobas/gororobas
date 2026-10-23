@@ -60,49 +60,22 @@ const wikiArticleExamples: ExampleData[] = [
           wiki_article_es: ["yuca", "cassava"],
         },
       },
-    ],
-  },
-]
-
-// Tag-specific examples for LangExtract
-const tagExamples: ExampleData[] = [
-  {
-    text: "Hoje colhi alface e tomate da horta para vender na feira.",
-    extractions: [
       {
-        extractionClass: "tag",
-        extractionText: "colhi",
-        attributes: { tag: "colheita", status: "existing" },
-      },
-      {
-        extractionClass: "tag",
-        extractionText: "vender",
-        attributes: { tag: "comercializacao", status: "existing" },
-      },
-    ],
-  },
-  {
-    text: "Plantamos moranga e aipim usando técnicas de permacultura no sistema agroflorestal.",
-    extractions: [
-      {
-        extractionClass: "tag",
-        extractionText: "plantamos",
-        attributes: { tag: "plantio", status: "existing" },
-      },
-      {
-        extractionClass: "tag",
+        extractionClass: "wiki_article",
         extractionText: "permacultura",
-        attributes: { tag: "permacultura", status: "existing" },
+        attributes: {
+          wiki_article_pt: ["permacultura"],
+          wiki_article_en: ["permaculture"],
+          wiki_article_es: ["permacultura"],
+        },
       },
       {
-        extractionClass: "tag",
+        extractionClass: "wiki_article",
         extractionText: "sistema agroflorestal",
         attributes: {
-          tag: "agrofloresta",
-          name_pt: "Agrofloresta",
-          name_en: "Forest Gardens",
-          name_es: "Agroforestería",
-          status: "suggested",
+          wiki_article_pt: ["agrofloresta", "sistema agroflorestal"],
+          wiki_article_en: ["agroforestry"],
+          wiki_article_es: ["agroforesteria"],
         },
       },
     ],
@@ -111,19 +84,21 @@ const tagExamples: ExampleData[] = [
     text: "En una reunión comunitaria se discutió la propuesta de convertir el terreno abandonado en una granja urbana. Necesitamos abordar la tenencia de la tierra, negociar con el municipio y organizar jornadas de siembra voluntaria para demostrar su uso productivo.",
     extractions: [
       {
-        extractionClass: "tag",
+        extractionClass: "wiki_article",
         extractionText: "granja urbana",
-        attributes: { tag: "agricultura-urbana", status: "existing" },
+        attributes: {
+          wiki_article_pt: ["agricultura urbana"],
+          wiki_article_en: ["urban agriculture"],
+          wiki_article_es: ["agricultura urbana"],
+        },
       },
       {
-        extractionClass: "tag",
-        extractionText: "convertir el terreno abandonado en una granja urbana",
+        extractionClass: "wiki_article",
+        extractionText: "tenencia de la tierra",
         attributes: {
-          tag: "soberania-alimentar",
-          name_pt: "Soberania Alimentar",
-          name_en: "Food Sovereignty",
-          name_es: "Soberanía Alimentaria",
-          status: "suggested",
+          wiki_article_pt: ["acesso a terra"],
+          wiki_article_en: ["land access"],
+          wiki_article_es: ["acceso a la tierra", "tenencia de la tierra"],
         },
       },
     ],
@@ -132,5 +107,4 @@ const tagExamples: ExampleData[] = [
 
 export const langExtractExamples = {
   wikiArticles: wikiArticleExamples,
-  tags: tagExamples,
 }

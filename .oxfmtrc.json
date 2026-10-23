@@ -12,7 +12,10 @@
     "**/coverage/**",
     "**/.git/**",
     "**/.beads/**",
-    "**/repos/**"
+    "**/repos/**",
+    "**/.agents/**",
+    "experiments/**",
+    "scratchpad/**"
   ],
   "experimentalTailwindcss": {
     "attributes": ["class", "className"],

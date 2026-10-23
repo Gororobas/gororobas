@@ -3,6 +3,7 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { UnauthorizedError } from "../authorization/session.js"
 import { PublicationCommentId, PublicationId } from "../common/ids.js"
+import { ModerateContentPayload, ModerationResult } from "../moderation/domain.js"
 import { PublicationNotFoundError } from "../publications/errors.js"
 import {
   ApiUpdatePublicationCommentData,
@@ -66,12 +67,10 @@ export class PublicationCommentsApiGroup extends HttpApiGroup.make("publicationC
     }),
   )
   .add(
-    HttpApiEndpoint.post("censorPublicationComment", "/publication-comments/:id/censor", {
-      success: PublicationCommentData,
-      error: [PublicationCommentNotFoundError, PublicationNotFoundError, UnauthorizedError],
+    HttpApiEndpoint.post("moderatePublicationComment", "/publication-comments/:id/moderate", {
+      success: ModerationResult,
+      error: [PublicationCommentNotFoundError, UnauthorizedError],
       params: Schema.Struct({ id: PublicationCommentId }),
-      payload: Schema.Struct({
-        reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
-      }),
+      payload: ModerateContentPayload,
     }),
   ) {}
