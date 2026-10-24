@@ -289,6 +289,18 @@ CREATE TABLE `wiki_article_handles` (
 ) WITHOUT ROWID;
 -- Create index "wiki_article_handles_kind_handle" to table: "wiki_article_handles"
 CREATE UNIQUE INDEX `wiki_article_handles_kind_handle` ON `wiki_article_handles` (`kind`, `handle`);
+-- Create "wiki_article_relations" table
+CREATE TABLE `wiki_article_relations` (
+  `wiki_article_id` text NOT NULL,
+  `related_wiki_article_id` text NOT NULL,
+  `source` text NOT NULL,
+  `extraction_text` text NULL,
+  PRIMARY KEY (`wiki_article_id`, `related_wiki_article_id`, `source`),
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CHECK (wiki_article_id <> related_wiki_article_id)
+) WITHOUT ROWID;
+-- Create index "idx_wiki_article_relations_related" to table: "wiki_article_relations"
+CREATE INDEX `idx_wiki_article_relations_related` ON `wiki_article_relations` (`related_wiki_article_id`);
 -- Create "wiki_article_media_assets" table
 CREATE TABLE `wiki_article_media_assets` (
   `wiki_article_id` text NOT NULL,

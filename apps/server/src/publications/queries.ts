@@ -17,7 +17,7 @@ import { Schema, Struct } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
 
-/** Censored publications are hidden from every reader, so search never returns them. */
+/** Includes censored publications: `assertCanViewPublication` decides who can still see them. */
 export const searchPublicationRows = SqlSchema.findAll({
   Request: ApiPublicationSearchParams,
   Result: ModeratedPublicationRow,
@@ -29,22 +29,27 @@ export const searchPublicationRows = SqlSchema.findAll({
       (sql) => sql`
     SELECT publications.*, publication_crdts.moderation_status FROM publications
     JOIN publication_crdts ON publication_crdts.id = publications.id
-    WHERE publication_crdts.moderation_status <> 'CENSORED'
-      ${query.ownerProfileId === undefined ? sql`` : sql`AND publications.owner_profile_id = ${query.ownerProfileId}`}
-      ${query.kind === undefined ? sql`` : sql`AND publications.kind = ${query.kind}`}
-      ${query.visibility === undefined ? sql`` : sql`AND publications.visibility = ${query.visibility}`}
-      ${
-        textPattern === undefined
-          ? sql``
-          : sql`AND (
+    WHERE ${sql.and([
+      ...(query.ownerProfileId === undefined
+        ? []
+        : [sql`publications.owner_profile_id = ${query.ownerProfileId}`]),
+      ...(query.kind === undefined ? [] : [sql`publications.kind = ${query.kind}`]),
+      ...(query.visibility === undefined
+        ? []
+        : [sql`publications.visibility = ${query.visibility}`]),
+      ...(textPattern === undefined
+        ? []
+        : [
+            sql`(
         publications.handle LIKE ${textPattern} ESCAPE '\\'
         OR EXISTS (
           SELECT 1 FROM publication_translations AS translation
           WHERE translation.publication_id = publications.id
             AND translation.content_plain_text LIKE ${textPattern} ESCAPE '\\'
         )
-      )`
-      }
+      )`,
+          ]),
+    ])}
     ORDER BY publications.published_at DESC, publications.id
   `,
     )

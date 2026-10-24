@@ -1,10 +1,19 @@
-import { IdGen, TagId } from "@gororobas/domain"
-import { Array as EffectArray, Effect, FileSystem, Option, Path, Schema } from "effect"
+import {
+  IdGen,
+  WikiArticleCommonNameInCrdtList,
+  WikiArticleEditableTranslations,
+  WikiArticleId,
+  WikiConceptArticle,
+} from "@gororobas/domain"
+import { Array as EffectArray, Effect, FileSystem, Option, Path, Record, Schema } from "effect"
 
 import { GelClient } from "../gel-client.js"
+import { migrateRichText } from "../migrate-rich-text.js"
 import { archiveGelResult } from "../preview-exports.js"
-import { GelTag, TagDataForMigration } from "../schemas/gel/entities.js"
+import { GelTag } from "../schemas/gel/entities.js"
+import { GelTiptapDocument } from "../schemas/gel/rich-text.js"
 import { MigrationContext } from "../services/migration-context.js"
+import { gelVegetableNamesToCrdtList } from "../vegetables/gel-vegetable-to-wiki-plant-article.js"
 
 const tagsQuery = `
   select Tag {
@@ -12,6 +21,21 @@ const tagsQuery = `
   }
 `
 
+/**
+ * Gel's note types were tags too. As CONCEPT articles, notes keep pointing at them through
+ * `publication_wiki_articles`.
+ */
+const NOTE_TYPE_NAMES = {
+  EXPERIMENTO: "Experimento",
+  ENSINAMENTO: "Ensinamento",
+  DESCOBERTA: "Descoberta",
+  PERGUNTA: "Pergunta",
+  INSPIRACAO: "Inspiração",
+} as const
+
+export const noteTypeGelId = (type: string) => `note-type:${type}`
+
+/** Gel tags become CONCEPT wiki articles that keep the tag's mapped ID. */
 export const sourceGelTags = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem
   const path = yield* Path.Path
@@ -37,17 +61,17 @@ export const sourceGelTags = Effect.gen(function* () {
     onSome: (failure) => Effect.logError("Failed parsing a tag: ", failure.message),
   })
 
-  const tagsDirectory = path.join(import.meta.dirname, "..", "..", "debug", "tags")
-  yield* fs.makeDirectory(tagsDirectory, { recursive: true })
+  const conceptsDirectory = path.join(import.meta.dirname, "..", "..", "debug", "concepts")
+  yield* fs.makeDirectory(conceptsDirectory, { recursive: true })
 
   yield* Effect.forEach(
     [
       ...EffectArray.getSuccesses(tagResults),
-      ...["EXPERIMENTO", "ENSINAMENTO", "DESCOBERTA", "PERGUNTA", "INSPIRACAO"].map((type) =>
+      ...Record.toEntries(NOTE_TYPE_NAMES).map(([type, name]) =>
         Schema.decodeSync(GelTag)({
-          id: `note-type:${type}`,
+          id: noteTypeGelId(type),
           handle: `tipo-de-nota-${type.toLowerCase()}`,
-          names: [type],
+          names: [name],
         }),
       ),
     ],
@@ -60,14 +84,35 @@ export const sourceGelTags = Effect.gen(function* () {
         if (operation.op === "update") yield* operation.execute(() => Effect.void)
         const id = yield* context
           .resolveId(tag.id, "Tag")
-          .pipe(Effect.flatMap(Schema.decodeEffect(TagId)))
+          .pipe(Effect.flatMap(Schema.decodeEffect(WikiArticleId)))
 
-        yield* Schema.encodeEffect(Schema.fromJsonString(TagDataForMigration, { space: 2 }))({
-          latest_source: tag,
+        const translations = yield* Schema.decodeEffect(WikiArticleEditableTranslations)({
+          pt: {
+            commonNames: Schema.encodeSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(
+              gelVegetableNamesToCrdtList(tag.names),
+            ),
+            content: tag.description
+              ? yield* migrateRichText(
+                  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy tag descriptions are untyped JSON.
+                  yield* Schema.decodeUnknownEffect(GelTiptapDocument)(tag.description),
+                )
+              : undefined,
+          },
+        })
+
+        const article = WikiConceptArticle.EditableArticle.make({
+          kind: "CONCEPT",
+          attributes: WikiConceptArticle.EditableAttributes.make({}),
+          translations,
+        })
+
+        yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))({
           id,
+          latest_source: tag,
+          article: yield* Schema.encodeEffect(WikiConceptArticle.EditableArticle)(article),
         }).pipe(
           Effect.flatMap((encoded) =>
-            fs.writeFileString(path.join(tagsDirectory, `${tag.handle}.json`), encoded),
+            fs.writeFileString(path.join(conceptsDirectory, `${tag.handle}.json`), encoded),
           ),
         )
       }),

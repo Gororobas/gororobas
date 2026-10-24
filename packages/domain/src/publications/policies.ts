@@ -29,6 +29,15 @@ const isPersonalPublicationPublic = (publication: Pick<CorePublicationMetadata, 
     ),
   )
 
+const canEdit = (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
+  or(
+    isPublicationOwner(publication),
+    organizationPermission(
+      "publications:edit",
+      Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
+    ),
+  )
+
 const canViewAttribution = (organization: OrganizationRow | undefined) =>
   organization ? organizationsPolicies.canViewMembers(organization) : policy(allow)
 
@@ -46,14 +55,10 @@ export const publicationsPolicies = {
       ),
     ),
 
-  canEdit: (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
-    or(
-      isPublicationOwner(publication),
-      organizationPermission(
-        "publications:edit",
-        Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
-      ),
-    ),
+  canEdit,
+
+  /** Authors keep seeing their publications while censored; every other reader loses access. */
+  canViewCensored: canEdit,
 
   canDelete: (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
     or(

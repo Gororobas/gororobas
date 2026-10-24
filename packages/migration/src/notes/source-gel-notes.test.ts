@@ -94,8 +94,8 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
 
         expect(Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(content)).toMatchObject({
           id: mappedId,
-          tagIds: [mappedId],
-          wikiArticleIds: [mappedId],
+          // The DESCOBERTA note-type concept, then the related plant.
+          wikiArticleIds: [mappedId, mappedId],
           publication: {
             metadata: {
               kind: "POST",

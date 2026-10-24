@@ -96,7 +96,8 @@ const seedArticle = (
     index: number
     structure: WikiArticleEditableData
     parent: SeededArticle | undefined
-    concepts: ReadonlyArray<SeededArticle>
+    /** Published articles created earlier, which this one's content can reference. */
+    earlier: ReadonlyArray<SeededArticle>
   },
 ) =>
   Effect.gen(function* () {
@@ -119,11 +120,14 @@ const seedArticle = (
       kind,
       attributes: yield* legibleAttributes(encodedAttributes(encoded), {
         subject,
-        conceptIds: input.concepts.map((concept) => concept.id),
         parentPlantId: parent?.id,
         isRepresentative,
       }),
-      translations: yield* legibleTranslations({ names, subject, mentions: mentionsFor(context) }),
+      translations: yield* legibleTranslations({
+        names,
+        subject,
+        mentions: mentionsFor({ ...context, articles: input.earlier }),
+      }),
     }).pipe(Effect.orDie)
 
     const status = isRepresentative
@@ -170,6 +174,20 @@ const seedArticle = (
       )
     }
 
+    // Stands in for the classification workflow, which the seed skips.
+    if (status === "PUBLISHED" && (yield* chance(0.5))) {
+      const classified = yield* sample(input.earlier, yield* Random.nextIntBetween(1, 3))
+
+      yield* wiki.replaceRelations({
+        wikiArticleId: id,
+        source: "CLASSIFICATION",
+        related: classified.map((article) => ({
+          wikiArticleId: article.id,
+          extractionText: article.names.pt,
+        })),
+      })
+    }
+
     return [{ id, kind, names, plant: subject.plant, status, createdAt } satisfies SeededArticle]
   })
 
@@ -188,10 +206,7 @@ const seedKind = (
       size: 4,
     }).pipe(Effect.orDie)
 
-    const isConcept = (article: SeededArticle) =>
-      article.kind === "CONCEPT" && article.status === "PUBLISHED"
-
-    // Concepts created earlier in this kind are referenceable too, so concepts can relate to each other.
+    // Articles created earlier in this kind are referenceable too, so articles of a kind can relate to each other.
     return yield* Effect.reduce(
       structures.map((structure, index) => ({ structure, index })),
       (): ReadonlyArray<SeededArticle> => [],
@@ -199,8 +214,10 @@ const seedKind = (
         Effect.gen(function* () {
           const parent = kind === "PLANT_CULTIVAR" ? yield* pickOption(plants) : undefined
           if (kind === "PLANT_CULTIVAR" && !parent) return created
-          const concepts = [...input.earlier, ...created].filter(isConcept)
-          const article = yield* seedArticle(context, { kind, index, structure, parent, concepts })
+          const earlier = [...input.earlier, ...created].filter(
+            (article) => article.status === "PUBLISHED",
+          )
+          const article = yield* seedArticle(context, { kind, index, structure, parent, earlier })
           return [...created, ...article]
         }),
     )
@@ -213,7 +230,8 @@ export const seedWikiArticles = (
   const weight = (member: ArticleSchema) => KIND_WEIGHTS[member.fields.kind.literal] ?? 1
   const totalWeight = sum(WikiArticleEditableData.members.map(weight))
 
-  // Other kinds reference concepts, so concepts go first; cultivars reference plants, so they go last.
+  // Concepts go first, so other kinds' content can reference the topics they're about; cultivars
+  // reference plants, so they go last.
   const seedingOrder = (member: ArticleSchema) => {
     const kind = member.fields.kind.literal
     return kind === "CONCEPT" ? 0 : kind === "PLANT_CULTIVAR" ? 2 : 1

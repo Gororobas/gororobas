@@ -37,7 +37,10 @@ export const mediaPolicies = {
   ) =>
     policy((session) =>
       media.moderationStatus === "CENSORED"
-        ? deny("Media is censored")
+        ? // Uploaders keep seeing their censored media; galleries hide it from everyone.
+          authenticatedPolicy((session) =>
+            session.personId === media.ownerProfileId ? allow(session) : deny("Media is censored"),
+          ).pipe(Effect.map(allow))
         : audience.hasWikiAttachment || audience.canViewPublication || audience.canViewProfile
           ? allow(session)
           : audience.isAttached

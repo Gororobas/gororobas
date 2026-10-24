@@ -7,6 +7,7 @@ import { GelResourceWithRelations } from "../schemas/gel/entities.js"
 import { MigrationContext } from "../services/migration-context.js"
 import { buildWikiMigrationHistory, type WikiMigrationVersion } from "../wiki-migration-history.js"
 import {
+  gelResourceRelatedWikiArticleIds,
   gelResourceToWikiArticle,
   ResourceAuditLog,
   ResourceDataForMigration,
@@ -176,6 +177,7 @@ export const sourceGelResources = Effect.gen(function* () {
           auditLogs: source.audit_logs,
           article,
           latest_source: source,
+          relatedWikiArticleIds: yield* gelResourceRelatedWikiArticleIds(source),
         })
 
         yield* fs.writeFileString(path.join(resourcesDirectory, `${source.handle}.json`), encoded)

@@ -73,6 +73,14 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
     }),
   )
   .add(
+    HttpApiEndpoint.get("listRelatedWikiArticles", "/wiki/:kind/:handle/related", {
+      success: Schema.Array(WikiArticleQueriedCardData),
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
+      params: WikiArticleLookup,
+      query: Schema.Struct({ language: Schema.optional(SupportedLanguage) }),
+    }),
+  )
+  .add(
     HttpApiEndpoint.post("createWikiArticle", "/wiki", {
       success: Schema.Struct({ id: WikiArticleId }),
       error: [

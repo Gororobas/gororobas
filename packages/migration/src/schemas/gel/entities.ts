@@ -8,7 +8,6 @@ import {
   PostSourceData,
   ProfileId,
   PublicationId,
-  TagId,
   TiptapDocument,
   WikiArticleId,
 } from "@gororobas/domain"
@@ -163,12 +162,6 @@ export const GelTag = Schema.Struct({
 
 export type GelTag = typeof GelTag.Type
 
-export const TagDataForMigration = Schema.Struct({
-  latest_source: GelTag,
-  id: TagId,
-})
-export type TagDataForMigration = typeof TagDataForMigration.Type
-
 export const GelImage = Schema.Struct({
   ...gelEmbeddedAuditableFields,
   id: Schema.String,
@@ -280,7 +273,7 @@ export type GelNoteWithRelations = typeof GelNoteWithRelations.Type
 
 export const NoteDataForMigration = Schema.Struct({
   id: PublicationId,
-  tagIds: Schema.Array(TagId),
+  /** Plants the note mentions and the CONCEPT articles for its Gel note types. */
   wikiArticleIds: Schema.Array(WikiArticleId),
   latest_source: GelNoteWithRelations,
   publication: Schema.NullOr(PostSourceData),

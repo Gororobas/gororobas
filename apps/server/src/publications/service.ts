@@ -32,12 +32,16 @@ import {
   PersonId,
   OrganizationId,
   MediaAssetId,
+  isCensored,
+  type ModeratedPublicationRow,
+  type ModerationDecision,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 import { LoroDoc } from "loro-crdt"
 
 import { MediaAssetsService } from "../media-assets/service.js"
+import { moderateContent } from "../moderation/moderate-content.js"
 import { findById as findOrganizationById } from "../organizations/queries.js"
 import { findById as findPersonById } from "../people/queries.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
@@ -80,14 +84,27 @@ export const UpdatePublicationInput = Schema.Struct({
 export type UpdatePublicationInput = typeof UpdatePublicationInput.Type
 
 /**
- * Fetches the owner of the publication.
- * If it's a person and they're a NEWCOMMER, Policies.publications.canView will ensure
- * publications aren't truly public.
+ * Censored publications are hidden from every reader but their authors, as if they didn't exist.
+ *
+ * Otherwise fetches the owner of the publication. If it's a person and they're a NEWCOMER,
+ * Policies.publications.canView will ensure publications aren't truly public.
  **/
 export const assertCanViewPublication = (
-  publication: Pick<CorePublicationMetadata, "ownerProfileId" | "visibility">,
+  publication: Pick<
+    ModeratedPublicationRow,
+    "id" | "moderationStatus" | "ownerProfileId" | "visibility"
+  >,
 ) =>
   Effect.gen(function* () {
+    if (isCensored(publication.moderationStatus)) {
+      return yield* Policies.publications.canViewCensored(publication).pipe(
+        Effect.catchTag("UnauthorizedError", () =>
+          Effect.fail(new PublicationNotFoundError({ id: publication.id })),
+        ),
+        Effect.asVoid,
+      )
+    }
+
     const owner = yield* findPersonById(Schema.decodeSync(PersonId)(publication.ownerProfileId))
     yield* Policies.publications.canView(publication, Option.getOrUndefined(owner)?.accessLevel)
   })
@@ -224,14 +241,19 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           const session = yield* assertAuthenticated
           yield* Policies.publications.canEdit(yield* getPublicationById(input.publicationId))
 
-          yield* repo.updatePublication(
-            HumanCrdtUpdate.make({
-              authorId: session.personId,
-              crdtUpdate: input.crdtUpdate,
-              expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
-              publicationId: input.publicationId,
-            }),
-          )
+          yield* repo
+            .updatePublication(
+              HumanCrdtUpdate.make({
+                authorId: session.personId,
+                crdtUpdate: input.crdtUpdate,
+                expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
+                publicationId: input.publicationId,
+              }),
+            )
+            .pipe(
+              // Only system translations can be stale; a human edit never produces this error.
+              Effect.catchTag("StalePublicationTranslationError", Effect.die),
+            )
 
           if (input.mediaIds !== undefined) {
             yield* attachMediaToPublication({
@@ -327,7 +349,10 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           const visible = yield* Effect.filter(rows, (row) =>
             assertCanViewPublication(row).pipe(
               Effect.as(true),
-              Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
+              Effect.catchTags({
+                UnauthorizedError: () => Effect.succeed(false),
+                PublicationNotFoundError: () => Effect.succeed(false),
+              }),
             ),
           )
 
@@ -336,7 +361,16 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
             .map((row) => ApiPublicationCardData.make(row))
         })
 
+      const moderate = (input: { id: PublicationId; moderationStatus: ModerationDecision }) =>
+        moderateContent({
+          contentType: "PUBLICATION",
+          id: input.id,
+          decision: input.moderationStatus,
+          notFound: () => new PublicationNotFoundError({ id: input.id }),
+        })
+
       return {
+        moderate,
         searchPublications,
         attachMediaToPublication,
         getPublicationData,

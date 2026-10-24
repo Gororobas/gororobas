@@ -109,6 +109,19 @@ export const listPendingRevisionsByWikiArticleId = SqlSchema.findAll({
     ),
 })
 
+export const listTranslationContents = SqlSchema.findAll({
+  Request: WikiArticleId,
+  Result: Schema.Struct({ content: Schema.fromJsonString(TiptapDocument) }),
+  execute: (id) =>
+    SqlClient.use(
+      (sql) => sql`
+      SELECT content FROM wiki_article_translations
+      WHERE wiki_article_id = ${id} AND content IS NOT NULL
+      ORDER BY language
+    `,
+    ),
+})
+
 export const listRevisionHistory = SqlSchema.findAll({
   Request: Schema.Struct({
     wikiArticleId: WikiArticleId,
@@ -261,27 +274,46 @@ export const findMainMedia = SqlSchema.findOneOption({
     ),
 })
 
+const QueriedCardRow = Schema.Struct({
+  ...WikiArticleQueriedCardData.fields,
+  commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
+  thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
+})
+
+/** Cards of published articles, each in its translation that best matches `language`. */
+const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql`
+  SELECT a.id, a.kind, t.language, t.common_names,
+    (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
+      ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
+    (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
+      WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
+  FROM wiki_articles a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
+  WHERE a.status = 'PUBLISHED' AND t.language = (
+    SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
+    ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
+      WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+`
+
 export const listCards = SqlSchema.findAll({
   Request: SupportedLanguage,
-  Result: Schema.Struct({
-    ...WikiArticleQueriedCardData.fields,
-    commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
-    thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
-  }),
+  Result: QueriedCardRow,
   execute: (language) =>
+    SqlClient.use((sql) => sql`${publishedCardsQuery(sql, language)} ORDER BY a.id`),
+})
+
+/** Relations are symmetric for readers: an article lists both the articles it relates to and those relating to it. */
+export const listRelatedCards = SqlSchema.findAll({
+  Request: Schema.Struct({ wikiArticleId: WikiArticleId, language: SupportedLanguage }),
+  Result: QueriedCardRow,
+  execute: ({ wikiArticleId, language }) =>
     SqlClient.use(
       (sql) => sql`
-    SELECT a.id, a.kind, t.language, t.common_names,
-      (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
-        ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
-      (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
-        WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
-    FROM wiki_articles a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
-    WHERE a.status = 'PUBLISHED'
-      AND t.language = (
-      SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
-      ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
-        WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+    ${publishedCardsQuery(sql, language)}
+      AND a.id IN (
+        SELECT related_wiki_article_id FROM wiki_article_relations WHERE wiki_article_id = ${wikiArticleId}
+        UNION
+        SELECT wiki_article_id FROM wiki_article_relations WHERE related_wiki_article_id = ${wikiArticleId}
+      )
     ORDER BY a.id
   `,
     ),
@@ -289,11 +321,7 @@ export const listCards = SqlSchema.findAll({
 
 export const searchCards = SqlSchema.findAll({
   Request: Schema.Struct({ search: WikiSearchParams, language: SupportedLanguage }),
-  Result: Schema.Struct({
-    ...WikiArticleQueriedCardData.fields,
-    commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
-    thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
-  }),
+  Result: QueriedCardRow,
   execute: ({ search, language }) =>
     SqlClient.use((sql) => {
       const { kind, text } = search
@@ -308,16 +336,7 @@ export const searchCards = SqlSchema.findAll({
       const contentProducerFilters = search.kind === "CONTENT_PRODUCER" ? search : undefined
 
       return sql`
-      SELECT a.id, a.kind, t.language, t.common_names,
-        (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
-          ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
-        (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
-          WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
-      FROM wiki_articles a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
-      WHERE a.status = 'PUBLISHED' AND t.language = (
-        SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
-        ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
-          WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+      ${publishedCardsQuery(sql, language)}
         ${kind === undefined ? sql`` : sql`AND a.kind = ${kind}`}
         ${
           text === undefined

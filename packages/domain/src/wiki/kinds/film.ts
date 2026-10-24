@@ -1,13 +1,11 @@
 import { Option, Schema } from "effect"
 
-import { TagId } from "../../common/ids.js"
 import {
   ItemInCrdtList,
   NameInCrdtList,
   OptionalColumn,
   UrlAsString,
   ValidName,
-  CrdtBrandedStringSet,
 } from "../../common/primitives.js"
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
@@ -19,7 +17,6 @@ const ProjectedAttributes = Schema.Struct({
   releaseDate: OptionalColumn(PartialDate),
   languages: OptionalColumn(Schema.Array(Schema.String)),
   genres: OptionalColumn(Schema.Array(ValidName)),
-  tags: OptionalColumn(Schema.Array(TagId)),
 })
 
 export const WikiFilmArticle = defineKind({
@@ -37,7 +34,6 @@ export const WikiFilmArticle = defineKind({
       ),
     ),
     genres: OptionalColumn(Schema.Array(NameInCrdtList)),
-    tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
   ProjectedAttributes,
   projectAttributes: (editableAttributes) =>
@@ -50,7 +46,6 @@ export const WikiFilmArticle = defineKind({
         languages.map((language) => language.value),
       ),
       genres: Option.map(editableAttributes.genres, (genres) => genres.map((genre) => genre.value)),
-      tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
 })
 

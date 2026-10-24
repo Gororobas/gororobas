@@ -5,7 +5,7 @@ export const previewCollections = {
   resources: "resources",
   notes: "notes",
   cultivars: "cultivars",
-  tags: "tags",
+  concepts: "concepts",
   users: "users",
   images: "images",
 } as const

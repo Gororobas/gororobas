@@ -1,12 +1,10 @@
 import { Effect, Schema } from "effect"
 
 import { GoogleBooksVolumeId } from "../../common/external-identifiers.js"
-import { TagId } from "../../common/ids.js"
 import { IntNonNegative, NameInCrdtList } from "../../common/primitives.js"
 import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeMovableListEditOperations } from "../../crdts/movable-list-edit-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
-import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import type { BookEditableAttributes } from "./book.js"
 
 const authorsOperations = makeMovableListEditOperations("Author")({
@@ -29,12 +27,6 @@ const urlOperations = makeOptionalScalarEditOperations("PublisherUrl")({
   ValueSchema: Schema.URLFromString,
   getParentContainer: (document) => Effect.succeed(document.getMap("attributes")),
   keyInParentContainer: "url" satisfies keyof BookEditableAttributes,
-})
-
-const bookTagOperations = makeStringSetEditOperations("BookTag")({
-  ValueSchema: TagId,
-  getContainer: (document) =>
-    Effect.succeed(document.getMap("attributes").ensureMergeableMap("tags")),
 })
 
 const publicationDateOperations = makeOptionalScalarEditOperations("PublicationDate")({
@@ -81,7 +73,6 @@ const googleBooksVolumeIdOperations = makeOptionalScalarEditOperations("GoogleBo
 
 export const WikiBookArticleCrdtOperations = defineCrdtOperations([
   ...authorsOperations,
-  ...bookTagOperations,
   ...editionOperations,
   ...googleBooksVolumeIdOperations,
   ...isbn10Operations,

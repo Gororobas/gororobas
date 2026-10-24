@@ -1,13 +1,11 @@
 import { Option, Schema } from "effect"
 
 import { GoogleBooksVolumeId } from "../../common/external-identifiers.js"
-import { TagId } from "../../common/ids.js"
 import {
   IntNonNegative,
   NameInCrdtList,
   OptionalColumn,
   ValidName,
-  CrdtBrandedStringSet,
 } from "../../common/primitives.js"
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
@@ -15,7 +13,6 @@ import { defineKind } from "./define-kind.js"
 const ProjectedAttributes = Schema.Struct({
   googleBooksVolumeId: OptionalColumn(GoogleBooksVolumeId),
   authors: OptionalColumn(Schema.Array(ValidName)),
-  tags: OptionalColumn(Schema.Array(TagId)),
   publisher: OptionalColumn(Schema.String),
   url: OptionalColumn(Schema.URLFromString),
   publicationDate: OptionalColumn(PartialDate),
@@ -32,7 +29,6 @@ export const WikiBookArticle = defineKind({
   EditableAttributes: Schema.Struct({
     ...ProjectedAttributes.fields,
     authors: OptionalColumn(Schema.Array(NameInCrdtList)),
-    tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
   }),
   ProjectedAttributes,
   projectAttributes: (editableAttributes) =>
@@ -41,7 +37,6 @@ export const WikiBookArticle = defineKind({
       authors: Option.map(editableAttributes.authors, (authors) =>
         authors.map((author) => author.value),
       ),
-      tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
     }),
 })
 

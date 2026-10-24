@@ -287,6 +287,21 @@ CREATE TABLE wiki_article_handles (
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
+-- Derived relations between articles, one row per source that found them (WikiArticleRelationSource).
+-- `related_wiki_article_id` has no foreign key: content may reference articles that are created
+-- later, and reads only surface relations to published articles.
+CREATE TABLE wiki_article_relations (
+  wiki_article_id text NOT NULL,
+  related_wiki_article_id text NOT NULL,
+  source text NOT NULL, -- WikiArticleRelationSource
+  extraction_text text,
+  CHECK (wiki_article_id <> related_wiki_article_id),
+  PRIMARY KEY (wiki_article_id, related_wiki_article_id, source),
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
+) WITHOUT ROWID;
+
+CREATE INDEX idx_wiki_article_relations_related ON wiki_article_relations (related_wiki_article_id);
+
 -- ================
 -- WIKI ARTICLE MEDIA UPLOADED IN THE APP
 -- ================

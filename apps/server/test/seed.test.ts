@@ -13,6 +13,7 @@ import {
   PublicationRow,
   PublicationTranslationRow,
   WikiArticleProjectionRow,
+  WikiArticleRelationRow,
   WikiArticleRevisionRow,
   WikiArticleTranslationProjectionRow,
 } from "@gororobas/domain"
@@ -63,6 +64,7 @@ const ROW_SCHEMAS = {
   publication_commits: PublicationCommitRow,
   publication_translations: PublicationTranslationRow,
   publications: PublicationRow,
+  wiki_article_relations: WikiArticleRelationRow,
   wiki_article_revisions: WikiArticleRevisionRow,
   wiki_article_translations: WikiArticleTranslationProjectionRow,
   wiki_articles: WikiArticleProjectionRow,

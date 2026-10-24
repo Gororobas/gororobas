@@ -72,6 +72,18 @@ Feature: Organizations
       When "Teresa" accepts the invitation to join "Sítio Semente"
       Then "Teresa" is a "VIEWER" of "Sítio Semente"
 
+    Scenario: Accepting an invitation confirms the invitee's new role
+      Given "Maria" has invited "Teresa" to join "Sítio Semente" as a "EDITOR"
+      When "Teresa" accepts the invitation to join "Sítio Semente"
+      Then "Teresa" is told they joined "Sítio Semente" as an "EDITOR"
+      And "Teresa" is a "EDITOR" of "Sítio Semente"
+
+    Scenario: Only the invitee can accept an invitation
+      Given "Maria" has invited "Teresa" to join "Sítio Semente" as a "VIEWER"
+      When "Irene" tries to accept the invitation to join "Sítio Semente"
+      Then "Irene" is told there is no invitation to accept
+      And "Irene" is not a member of "Sítio Semente"
+
     Scenario Outline: Invitations expire two weeks after creation
       Given "Maria" has invited "Teresa" to join "Sítio Semente" as a "VIEWER"
       When "Teresa" tries to accept the invitation to join "Sítio Semente" after <elapsedMilliseconds> milliseconds

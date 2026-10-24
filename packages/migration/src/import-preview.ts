@@ -14,8 +14,6 @@ import {
   PostSourceData,
   ProfileId,
   PublicationId,
-  TagRow,
-  TiptapDocument,
   WikiArticleEditableData,
   WikiArticleId,
   WikiArticleRevisionId,
@@ -53,11 +51,7 @@ import { prepareIngestion, archiveExcludedAccounts } from "./ingestion-policy.js
 import { migrateMediaDescriptions } from "./migrate-media-descriptions.js"
 import { PreviewRecord, readPreviewExports } from "./preview-exports.js"
 import { richTextMediaIds } from "./rich-text-media.js"
-import {
-  NoteDataForMigration,
-  TagDataForMigration,
-  UserDataForMigration,
-} from "./schemas/gel/entities.js"
+import { NoteDataForMigration, UserDataForMigration } from "./schemas/gel/entities.js"
 import { MigratedBookmark } from "./source-gel-bookmarks.js"
 import { WikiMigrationVersion } from "./wiki-migration-history.js"
 
@@ -70,6 +64,7 @@ const ArticleExport = Schema.Struct({
   photoIds: Schema.optional(Schema.Array(MediaAssetId)),
   thumbnailId: Schema.optional(Schema.NullOr(MediaAssetId)),
   creatorId: Schema.optional(PersonId),
+  relatedWikiArticleIds: Schema.optional(Schema.Array(WikiArticleId)),
 })
 
 const ImageExport = Schema.Struct({
@@ -324,36 +319,7 @@ export const importPreview = ({
           }
         }
 
-        for (const { data } of exports.tags) {
-          const tag = yield* Schema.decodeEffect(Schema.toCodecJson(TagDataForMigration))(data)
-
-          const row = TagRow.make({
-            id: tag.id,
-            handle: yield* Schema.decodeEffect(TagRow.fields.handle)(tag.latest_source.handle),
-            names: {
-              pt: tag.latest_source.names.join(" / "),
-              en: tag.latest_source.names.join(" / "),
-              es: tag.latest_source.names.join(" / "),
-            },
-            cluster: tag.latest_source.category ?? null,
-            description: tag.latest_source.description
-              ? // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy descriptions may omit required rich-text document fields.
-                yield* Schema.decodeUnknownEffect(TiptapDocument)(tag.latest_source.description)
-              : null,
-            createdById: null,
-            createdAt: DateTime.fromDateUnsafe(tag.latest_source.created_at),
-            updatedAt: DateTime.fromDateUnsafe(
-              tag.latest_source.updated_at ?? tag.latest_source.created_at,
-            ),
-          })
-
-          yield* SqlSchema.void({
-            Request: TagRow,
-            execute: (row) => sql`INSERT INTO tags ${sql.insert(row)}`,
-          })(row)
-        }
-
-        for (const category of ["plants", "cultivars", "resources"] as const) {
+        for (const category of ["concepts", "plants", "cultivars", "resources"] as const) {
           for (const { file, data } of exports[category]) {
             // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy article records are unvalidated JSON dictionaries.
             const article = yield* Schema.decodeUnknownEffect(ArticleExport)(data)
@@ -476,6 +442,14 @@ export const importPreview = ({
             if (photoIds[0]) {
               yield* sql`INSERT INTO wiki_article_main_media ${sql.insert({ wikiArticleId: article.id, mediaAssetId: photoIds[0] })}`
             }
+
+            yield* wiki.replaceRelations({
+              wikiArticleId: article.id,
+              source: "LEGACY_TAG",
+              related: (article.relatedWikiArticleIds ?? []).map((wikiArticleId) => ({
+                wikiArticleId,
+              })),
+            })
           }
         }
 
@@ -499,9 +473,6 @@ export const importPreview = ({
           )
           for (const mediaAssetId of richTextMediaIds(sourceData.sourceContent.content)) {
             yield* sql`INSERT INTO publication_media_assets ${sql.insert({ publicationId: note.id, mediaAssetId })}`
-          }
-          for (const tagId of note.tagIds) {
-            yield* sql`INSERT INTO publication_tags ${sql.insert({ publicationId: note.id, tagId, extractionText: null })}`
           }
           for (const wikiArticleId of note.wikiArticleIds) {
             yield* sql`INSERT INTO publication_wiki_articles ${sql.insert({ publicationId: note.id, wikiArticleId, extractionText: null })}`

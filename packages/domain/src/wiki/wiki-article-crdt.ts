@@ -8,7 +8,6 @@ import { createLoroDocFromData } from "../crdts/lib.js"
 import { loroRichTextToTiptap } from "../rich-text/loro-prosemirror.js"
 import { WikiAnimalArticleCrdtOperations } from "./kinds/animal.crdt.js"
 import { WikiBookArticleCrdtOperations } from "./kinds/book.crdt.js"
-import { WikiConceptArticleCrdtOperations } from "./kinds/concept.crdt.js"
 import { WikiFilmArticleCrdtOperations } from "./kinds/film.crdt.js"
 import { WikiNoteworthyEntityArticleCrdtOperations } from "./kinds/noteworthy-entity.crdt.js"
 import { WikiPlantCultivarArticleCrdtOperations } from "./kinds/plant-cultivar.crdt.js"
@@ -23,7 +22,6 @@ import { WikiArticleEditableData } from "./wiki-article.js"
 export const WikiArticleEdit = Schema.Union([
   WikiAnimalArticleCrdtOperations.AttributeEdit,
   WikiBookArticleCrdtOperations.AttributeEdit,
-  WikiConceptArticleCrdtOperations.AttributeEdit,
   WikiFilmArticleCrdtOperations.AttributeEdit,
   WikiNoteworthyEntityArticleCrdtOperations.AttributeEdit,
   WikiPlantArticleCrdtOperations.AttributeEdit,
@@ -46,9 +44,6 @@ const applyWikiArticleEdit = (document: LoroDoc, edit: WikiArticleEdit) => {
   }
   if (Schema.is(WikiBookArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiBookArticleCrdtOperations.applyAttributeEdit(document, edit)
-  }
-  if (Schema.is(WikiConceptArticleCrdtOperations.AttributeEdit)(edit)) {
-    return WikiConceptArticleCrdtOperations.applyAttributeEdit(document, edit)
   }
   if (Schema.is(WikiFilmArticleCrdtOperations.AttributeEdit)(edit)) {
     return WikiFilmArticleCrdtOperations.applyAttributeEdit(document, edit)

@@ -51,6 +51,11 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
           withApiInfrastructureErrors({ group: "wiki", endpoint: "getWikiArticleByHandleAndKind" }),
         ),
       )
+      .handle("listRelatedWikiArticles", ({ params, query }) =>
+        WikiArticlesService.use((service) =>
+          service.listRelatedWikiArticles({ ...params, language: query.language ?? "pt" }),
+        ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "listRelatedWikiArticles" })),
+      )
       .handle("createWikiArticle", ({ payload }) =>
         WikiArticlesService.use((service) => service.createWikiArticle(payload)).pipe(
           Effect.map((id) => ({ id })),

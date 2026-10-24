@@ -206,6 +206,7 @@ Feature: Publications
 
   Rule: Posts have publication comments
     Moderators and admins can censor publication comments; ordinary community members cannot.
+    Censored publication comments stay visible to their authors only.
 
     Background:
       Given the following people exist:
@@ -230,7 +231,12 @@ Feature: Publications
       Given "Maria" is logged in
       And they have commented on the post publication with "Comentário polêmico"
       When "Ana" censors the publication comment
-      Then the publication comment becomes hidden on the post publication
+      Then the publication comment should have the following visibility on the post publication:
+        | viewer   | visible |
+        | Maria    | yes     |
+        | Pedro    | no      |
+        | Ana      | no      |
+        | visitors | no      |
       And the publication comment has moderation_status "CENSORED"
 
     Scenario: Community member cannot censor a publication comment
@@ -239,6 +245,45 @@ Feature: Publications
       Then access is denied
       And the publication comment remains visible on the post publication
       And the publication comment has moderation_status "APPROVED_BY_DEFAULT"
+
+  Rule: Moderators can censor and reapprove publications
+    Censored publications are hidden from every reader but their authors, moderators included,
+    and leave everyone else's search results. Reapproving restores them. Ordinary community members
+    cannot moderate.
+
+    Background:
+      Given the following people exist:
+        | name   | accessLevel |
+        | Ailton | ADMIN       |
+        | Ana    | MODERATOR   |
+        | Maria  | COMMUNITY   |
+        | Irene  | COMMUNITY   |
+      And "Maria" has created a "PUBLIC" post with content "Canteiro novo"
+
+    Scenario: Moderator censors a publication
+      When "Ana" censors the post publication
+      Then the post publication has moderation_status "CENSORED"
+      And the post publication is hidden from:
+        | viewer   |
+        | Irene    |
+        | Ana      |
+        | visitors |
+      And "Maria" still finds the post publication, as its author
+
+    Scenario: Admin reapproves a censored publication
+      Given "Ana" has censored the post publication
+      When "Ailton" reapproves the post publication
+      Then the post publication has moderation_status "REAPPROVED_AFTER_CENSORING"
+      And the post publication should have the following visibility:
+        | viewer   | visible |
+        | Maria    | yes     |
+        | Irene    | yes     |
+        | visitors | yes     |
+
+    Scenario: Community member cannot censor a publication
+      When "Irene" tries to censor the post publication
+      Then access is denied
+      And the post publication has moderation_status "APPROVED_BY_DEFAULT"
 
   Rule: Member visibility affects public attribution
     Organization members visibility controls both the contributors list and author identities

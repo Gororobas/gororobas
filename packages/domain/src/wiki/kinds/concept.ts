@@ -1,24 +1,15 @@
-import { Option, Schema } from "effect"
+import { Schema } from "effect"
 
-import { TagId } from "../../common/ids.js"
-import { CrdtBrandedStringSet, OptionalColumn } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
-const ProjectedAttributes = Schema.Struct({
-  tags: OptionalColumn(Schema.Array(TagId)),
-})
+const ProjectedAttributes = Schema.Struct({})
 
 export const WikiConceptArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("CONCEPT"),
-  EditableAttributes: Schema.Struct({
-    tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
-  }),
+  EditableAttributes: ProjectedAttributes,
   ProjectedAttributes,
-  projectAttributes: (editableAttributes) =>
-    ProjectedAttributes.make({
-      tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
-    }),
+  projectAttributes: (editableAttributes) => editableAttributes,
 })
 
 export type ConceptArticleKind = typeof WikiConceptArticle.Kind.Type

@@ -73,7 +73,7 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
             (publication) =>
               assertCanViewPublication(publication).pipe(
                 Effect.as(true),
-                // Censored publications grant no access to their media.
+                // Censored publications grant access to their media only to their authors.
                 Effect.catchTags({
                   UnauthorizedError: () => Effect.succeed(false),
                   PublicationNotFoundError: () => Effect.succeed(false),

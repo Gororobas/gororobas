@@ -73,6 +73,7 @@ Feature: Media
 
   Rule: Uncensored wiki article media is public and can be moderated
     Moderators and admins can censor wiki article media; ordinary community members cannot.
+    Censored media leaves every gallery, and only its uploader can still access it.
 
     Background:
       Given the following people exist:
@@ -106,6 +107,7 @@ Feature: Media
       When "Ana" censors the media
       Then the media has moderation_status "CENSORED"
       And visitors cannot access the media
+      And "Maria" can still access the media, as its uploader
       And the media is hidden on wiki article "Mandioca"
 
     Scenario: Community member cannot censor wiki article media

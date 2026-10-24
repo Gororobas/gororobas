@@ -96,8 +96,8 @@ When you add a table, column or wiki kind, extend the seed in `apps/server/src/s
 
 ## Domain notes
 
-- Topics are CONCEPT wiki articles; there are no tags. Other kinds reference them through `concepts` (`relatedConcepts` on concepts), and publications through `publication_wiki_articles`.
-- Publications, publication comments and media assets share one moderation lifecycle (`packages/domain/src/moderation/`): approved by default, censored or reapproved by people with `content:moderate`, hidden from every reader while censored.
+- Topics are CONCEPT wiki articles; there are no tags. Wiki articles relate to each other through `wiki_article_relations`, which is derived and never edited by hand: references in an article's rich-text content are projected with the article, and the classification workflow adds the articles its content is about. Publications reference wiki articles through `publication_wiki_articles`.
+- Publications, publication comments and media assets share one moderation lifecycle (`packages/domain/src/moderation/`): approved by default, censored or reapproved by people with `content:moderate`. While censored, content is hidden from every reader except its authors, and media leaves the galleries it's attached to.
 - `GET /moderation/queue` lists pending reviews (newcomers awaiting approval, wiki revisions awaiting evaluation), oldest first and unassigned.
 
 ## Ensuring quality

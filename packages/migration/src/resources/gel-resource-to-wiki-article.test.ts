@@ -8,7 +8,10 @@ import { KeyValueStore } from "effect/persistence"
 
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
 import { MigrationContext, MigrationContextLive } from "../services/migration-context.js"
-import { gelResourceToWikiArticle } from "./gel-resource-to-wiki-article.js"
+import {
+  gelResourceRelatedWikiArticleIds,
+  gelResourceToWikiArticle,
+} from "./gel-resource-to-wiki-article.js"
 
 const timestamp = Schema.decodeSync(Schema.DateFromString)("2025-04-01T12:00:00Z")
 
@@ -27,63 +30,65 @@ const source = Schema.decodeSync(GelResourceWithRelations)({
 
 const tagId = "019a0dce-1fc0-7abc-8abc-123456789abc"
 
-it.effect("carries credits, book authors, URLs and mapped tag IDs into converted resources", () =>
-  assertPropertyEffect({
-    arbitrary: Arbitrary.schema(ValidName),
-    predicate: (creditLine) =>
-      Effect.gen(function* () {
-        const context = yield* MigrationContext
+it.effect(
+  "carries credits, book authors and URLs into converted resources, and maps tag IDs to related concepts",
+  () =>
+    assertPropertyEffect({
+      arbitrary: Arbitrary.schema(ValidName),
+      predicate: (creditLine) =>
+        Effect.gen(function* () {
+          const context = yield* MigrationContext
 
-        yield* context.registerMapping({
-          gelId: "gel-tag",
-          sqliteId: tagId,
-          entityType: "Tag",
-          contentHash: "tag",
-          lastSyncedAt: timestamp.toISOString(),
-        })
+          yield* context.registerMapping({
+            gelId: "gel-tag",
+            sqliteId: tagId,
+            entityType: "Tag",
+            contentHash: "tag",
+            lastSyncedAt: timestamp.toISOString(),
+          })
 
-        const book = yield* gelResourceToWikiArticle({ ...source, credit_line: creditLine })
+          const book = yield* gelResourceToWikiArticle({ ...source, credit_line: creditLine })
 
-        const resource = yield* gelResourceToWikiArticle({
-          ...source,
-          format: "PODCAST",
-          credit_line: creditLine,
-        })
+          const resource = yield* gelResourceToWikiArticle({
+            ...source,
+            format: "PODCAST",
+            credit_line: creditLine,
+          })
 
-        const organization = yield* gelResourceToWikiArticle({
-          ...source,
-          format: "ORGANIZATION",
-          credit_line: creditLine,
-        })
+          const organization = yield* gelResourceToWikiArticle({
+            ...source,
+            format: "ORGANIZATION",
+            credit_line: creditLine,
+          })
 
-        if (
-          book.kind !== "BOOK" ||
-          resource.kind !== "RESOURCE" ||
-          organization.kind !== "NOTEWORTHY_ENTITY"
-        ) {
-          return false
-        }
+          if (
+            book.kind !== "BOOK" ||
+            resource.kind !== "RESOURCE" ||
+            organization.kind !== "NOTEWORTHY_ENTITY"
+          ) {
+            return false
+          }
 
-        expect(Option.getOrThrow(book.attributes.authors).map((author) => author.value)).toEqual([
-          creditLine,
-        ])
-        expect(Option.getOrThrow(book.attributes.url).href).toBe(source.url)
-        expect(Option.getOrThrow(resource.attributes.creditLine)).toBe(creditLine)
-        expect(resource.attributes.url.href).toBe(source.url)
-        expect(Array.from(Option.getOrThrow(resource.attributes.tags))).toEqual([tagId])
+          expect(Option.getOrThrow(book.attributes.authors).map((author) => author.value)).toEqual([
+            creditLine,
+          ])
+          expect(Option.getOrThrow(book.attributes.url).href).toBe(source.url)
+          expect(Option.getOrThrow(resource.attributes.creditLine)).toBe(creditLine)
+          expect(resource.attributes.url.href).toBe(source.url)
+          expect(yield* gelResourceRelatedWikiArticleIds(source)).toEqual([tagId])
 
-        expect(
-          Option.getOrThrow(organization.translations.pt?.content ?? Option.none()).content,
-        ).toEqual([
-          { type: "paragraph", content: [{ type: "text", text: `Créditos: ${creditLine}` }] },
-        ])
+          expect(
+            Option.getOrThrow(organization.translations.pt?.content ?? Option.none()).content,
+          ).toEqual([
+            { type: "paragraph", content: [{ type: "text", text: `Créditos: ${creditLine}` }] },
+          ])
 
-        return true
-      }).pipe(
-        Effect.provide(MigrationContextLive),
-        Effect.provide(KeyValueStore.layerMemory),
-        Effect.provide(NodeServices.layer),
-        Effect.provideService(IdGen, { generate: () => tagId }),
-      ),
-  }),
+          return true
+        }).pipe(
+          Effect.provide(MigrationContextLive),
+          Effect.provide(KeyValueStore.layerMemory),
+          Effect.provide(NodeServices.layer),
+          Effect.provideService(IdGen, { generate: () => tagId }),
+        ),
+    }),
 )

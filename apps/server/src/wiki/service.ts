@@ -186,6 +186,17 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           }
         })
 
+      const listRelatedWikiArticles = (
+        lookup: WikiArticleLookup & { language: SupportedLanguage },
+      ) =>
+        Effect.gen(function* () {
+          const page = yield* getPage(lookup)
+          return yield* repository.listRelatedCards({
+            wikiArticleId: page.id,
+            language: lookup.language,
+          })
+        })
+
       const resolveCultivar = (attributes: PlantCultivarProjectedAttributes) =>
         Effect.gen(function* () {
           const parent = yield* getPublishedArticle(attributes.parentPlantId)
@@ -291,6 +302,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         evaluateRevision,
         listRevisionHistory: repository.listRevisionHistory,
         getPage,
+        listRelatedWikiArticles,
         resolveCultivar,
         getPublishedArticle,
         listCards: (language: SupportedLanguage) => repository.listCards(language),

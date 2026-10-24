@@ -6,6 +6,7 @@ import {
   InformationVisibility,
   OrganizationAccessLevel,
   OrganizationId,
+  type OrganizationMembershipData,
   OrganizationType,
   PersonId,
   TrustedAccessLevel,
@@ -30,6 +31,7 @@ import { OrganizationsService } from "../src/organizations/service.js"
 import { PeopleService } from "../src/people/service.js"
 import { ProfilesRepository } from "../src/profiles/repository.js"
 import { ProfileService } from "../src/profiles/service.js"
+import { ApiTestClient, startTestClockAtRealTime } from "./api-test-client.js"
 import {
   PeopleBackground,
   PeopleTestDataTable,
@@ -39,10 +41,10 @@ import {
 } from "./feature-test-helpers.js"
 import { TestLayerWithServices, withSession } from "./test-helpers.js"
 
-const OrganizationsFeatureTestLayer = Layer.effect(
-  OrganizationsService,
-  OrganizationsService.make,
-).pipe(Layer.provideMerge(TestLayerWithServices))
+const OrganizationsFeatureTestLayer = Layer.mergeAll(
+  Layer.effect(OrganizationsService, OrganizationsService.make),
+  ApiTestClient.layer,
+).pipe(Layer.provideMerge(TestLayerWithServices), Layer.provideMerge(NodeServices.layer))
 const OrganizationsBackground = Schema.Struct({
   ...PeopleBackground.fields,
   organizations: Schema.Record(Schema.String, OrganizationId),
@@ -159,6 +161,17 @@ const givenPeople = () =>
     params: PeopleTestDataTable,
     handler: (_, { table }) =>
       provisionPeople(table).pipe(Effect.map((context) => ({ ...context, organizations: {} }))),
+  })
+
+/** Invitations are accepted through the API, whose sign-in checks the real clock. */
+const givenPeopleAtRealTime = () =>
+  Given("the following people exist:", {
+    params: PeopleTestDataTable,
+    handler: (_, { table }) =>
+      startTestClockAtRealTime.pipe(
+        Effect.andThen(provisionPeople(table)),
+        Effect.map((context) => ({ ...context, organizations: {} })),
+      ),
   })
 
 const givenOrganization = () =>
@@ -328,6 +341,87 @@ const givenInvitation = () =>
         }),
     },
   )
+
+type AcceptanceContext = OrganizationContext & {
+  accepted?: OrganizationMembershipData
+  error?: unknown
+}
+
+/** Acceptance goes through the HTTP API, so the response the invitee receives is checked too. */
+const acceptInvitation = ({
+  context,
+  name,
+  organization,
+}: {
+  context: OrganizationContext
+  name: string
+  organization: string
+}) =>
+  Effect.gen(function* () {
+    const api = yield* ApiTestClient
+    const client = yield* api.signInAs(personNamed(context.actors, name))
+    return yield* client.organizations.acceptInvitation({
+      params: { id: organizationNamed(context, organization) },
+    })
+  })
+
+const acceptsInvitation = () =>
+  When("{string:name} accepts the invitation to join {string:organization}", {
+    params: ActorOrganization,
+    handler: (context: AcceptanceContext, { name, organization }) =>
+      acceptInvitation({ context, name, organization }).pipe(
+        Effect.map((accepted) => ({ ...context, accepted })),
+      ),
+  })
+
+const triesToAcceptInvitation = () =>
+  When("{string:name} tries to accept the invitation to join {string:organization}", {
+    params: ActorOrganization,
+    handler: (context: AcceptanceContext, { name, organization }) =>
+      acceptInvitation({ context, name, organization }).pipe(
+        Effect.flip,
+        Effect.map((error) => ({ ...context, error })),
+      ),
+  })
+
+const toldOfMembership = () =>
+  Then("{string:name} is told they joined {string:organization} as an {string:role}", {
+    params: MemberOrganization,
+    handler: (context: AcceptanceContext, { name, role, organization }) =>
+      Effect.sync(() => {
+        expect(context.accepted).toEqual({
+          organizationId: organizationNamed(context, organization),
+          personId: personNamed(context.actors, name),
+          accessLevel: role,
+        })
+
+        return context
+      }),
+  })
+
+const toldOfNoInvitation = () =>
+  Then("{string:name} is told there is no invitation to accept", {
+    params: Schema.Struct({ name: Schema.String }),
+    handler: (context: AcceptanceContext) =>
+      Effect.sync(() => {
+        expect(context.error).toMatchObject({ _tag: "OrganizationInvitationNotFoundError" })
+        return context
+      }),
+  })
+
+const notAMember = () =>
+  And("{string:name} is not a member of {string:organization}", {
+    params: ActorOrganization,
+    handler: (context: AcceptanceContext, { name, organization }) =>
+      Effect.gen(function* () {
+        const membership = yield* (yield* OrganizationsRepository).findMembership({
+          organizationId: organizationNamed(context, organization),
+          personId: personNamed(context.actors, name),
+        })
+        expect(Option.isNone(membership)).toBe(true)
+        return context
+      }),
+  })
 
 await Effect.runPromise(
   describeFeature("./organizations.feature", ({ Rule }) => {
@@ -581,7 +675,7 @@ await Effect.runPromise(
       ({ Background, Scenario, ScenarioOutline }) => {
         Background({
           layer: OrganizationsFeatureTestLayer,
-          steps: () => runSteps(givenPeople(), givenOrganization(), givenMemberships()),
+          steps: () => runSteps(givenPeopleAtRealTime(), givenOrganization(), givenMemberships()),
         })
 
         Scenario("Invitee accepts an invitation and becomes a member", {
@@ -613,6 +707,23 @@ await Effect.runPromise(
                   }),
               }),
               membershipIs(),
+            ),
+        })
+
+        Scenario("Accepting an invitation confirms the invitee's new role", {
+          layer: OrganizationsFeatureTestLayer,
+          steps: () =>
+            runSteps(givenInvitation(), acceptsInvitation(), toldOfMembership(), membershipIs()),
+        })
+
+        Scenario("Only the invitee can accept an invitation", {
+          layer: OrganizationsFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              givenInvitation(),
+              triesToAcceptInvitation(),
+              toldOfNoInvitation(),
+              notAMember(),
             ),
         })
 

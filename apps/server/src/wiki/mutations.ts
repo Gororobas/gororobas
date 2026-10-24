@@ -6,14 +6,18 @@ import {
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
   WikiArticleProjectionRow,
+  WikiArticleRelationRow,
+  type WikiArticleRelationSource,
   WikiArticleRevisionInsertRow,
   WikiArticleRevisionMediaAssetRow,
   WikiArticleRevisionUpdateRow,
   WikiArticleTranslationProjectionRow,
 } from "@gororobas/domain"
-import { Effect, Array as EffectArray, Schema } from "effect"
+import { Effect, Array as EffectArray, Option, Schema } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
+
+import { persistProjectionJunctionTables } from "../common/table-projection.js"
 
 export const insertCrdtRow = SqlSchema.void({
   Request: WikiArticleCrdtRow,
@@ -34,6 +38,15 @@ export const insertRevisionMediaAssetRows = SqlSchema.void({
       SqlClient.use(
         (sql) => sql`INSERT INTO wiki_article_revision_media_assets ${sql.insert(rows)}`,
       ),
+  }),
+})
+
+export const insertRelationRows = SqlSchema.void({
+  Request: Schema.Array(WikiArticleRelationRow),
+  execute: EffectArray.match({
+    onEmpty: () => Effect.void,
+    onNonEmpty: (rows) =>
+      SqlClient.use((sql) => sql`INSERT INTO wiki_article_relations ${sql.insert(rows)}`),
   }),
 })
 
@@ -124,4 +137,31 @@ export const setMainMedia = SqlSchema.void({
     ON CONFLICT(wiki_article_id) DO UPDATE SET media_asset_id = excluded.media_asset_id
   `,
     ),
+})
+
+/** Replaces the relations a single source found, leaving other sources' relations untouched. */
+export const replaceRelations = Effect.fn("replaceRelations")(function* (input: {
+  wikiArticleId: WikiArticleId
+  source: WikiArticleRelationSource
+  related: ReadonlyArray<{ wikiArticleId: WikiArticleId; extractionText?: string | undefined }>
+}) {
+  const sql = yield* SqlClient
+
+  return yield* persistProjectionJunctionTables({
+    deleteRows: sql`
+      DELETE FROM wiki_article_relations
+      WHERE wiki_article_id = ${input.wikiArticleId} AND source = ${input.source}
+    `,
+    insertRows: insertRelationRows(
+      EffectArray.dedupeWith(
+        input.related.filter((related) => related.wikiArticleId !== input.wikiArticleId),
+        (left, right) => left.wikiArticleId === right.wikiArticleId,
+      ).map((related) => ({
+        wikiArticleId: input.wikiArticleId,
+        relatedWikiArticleId: related.wikiArticleId,
+        source: input.source,
+        extractionText: Option.fromUndefinedOr(related.extractionText),
+      })),
+    ),
+  })
 })

@@ -971,45 +971,50 @@ describe("Policies", () => {
   })
 
   describe("media", () => {
-    it.effect("media audiences and censorship control access across all session roles", () =>
-      assertPropertyEffect({
-        arbitrary: Arbitrary.all([
-          sessionArbitrary,
-          personIdArbitrary,
-          Arbitrary.schema(
-            Schema.Struct({
-              moderationStatus: ModerationStatus,
-              isOwner: Schema.Boolean,
-              hasWikiAttachment: Schema.Boolean,
-              canViewPublication: Schema.Boolean,
-              isAttached: Schema.Boolean,
+    it.effect(
+      "media audiences and censorship control access across all session roles, and uploaders keep access to censored media",
+      () =>
+        assertPropertyEffect({
+          arbitrary: Arbitrary.all([
+            sessionArbitrary,
+            personIdArbitrary,
+            Arbitrary.schema(
+              Schema.Struct({
+                moderationStatus: ModerationStatus,
+                isOwner: Schema.Boolean,
+                hasWikiAttachment: Schema.Boolean,
+                canViewPublication: Schema.Boolean,
+                isAttached: Schema.Boolean,
+              }),
+            ),
+          ]),
+          predicate: ([session, ownerId, input]) =>
+            Effect.gen(function* () {
+              const ownerProfileId =
+                input.isOwner && session.type === "ACCOUNT" ? session.personId : ownerId
+
+              const allowed = yield* runPolicySuccess(
+                Policies.media.canView(
+                  { ownerProfileId, moderationStatus: input.moderationStatus },
+                  input,
+                ),
+                session,
+              )
+
+              const isUploader = session.type === "ACCOUNT" && session.personId === ownerProfileId
+
+              const expected =
+                input.moderationStatus === "CENSORED"
+                  ? isUploader
+                  : input.hasWikiAttachment ||
+                    input.canViewPublication ||
+                    (!input.isAttached &&
+                      session.type === "ACCOUNT" &&
+                      (isUploader || isModeratorOrAdmin(session)))
+
+              return allowed === expected
             }),
-          ),
-        ]),
-        predicate: ([session, ownerId, input]) =>
-          Effect.gen(function* () {
-            const ownerProfileId =
-              input.isOwner && session.type === "ACCOUNT" ? session.personId : ownerId
-
-            const allowed = yield* runPolicySuccess(
-              Policies.media.canView(
-                { ownerProfileId, moderationStatus: input.moderationStatus },
-                input,
-              ),
-              session,
-            )
-
-            const expected =
-              input.moderationStatus !== "CENSORED" &&
-              (input.hasWikiAttachment ||
-                input.canViewPublication ||
-                (!input.isAttached &&
-                  session.type === "ACCOUNT" &&
-                  (session.personId === ownerProfileId || isModeratorOrAdmin(session))))
-
-            return allowed === expected
-          }),
-      }),
+        }),
     )
 
     it.effect(

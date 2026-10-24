@@ -2,8 +2,9 @@
  * Moderation of community content.
  *
  * Publications, publication comments and media assets share one lifecycle: content is approved by
- * default, moderators can censor it, and can later reapprove it. Censored content is hidden from
- * every reader; its rows are kept so the decision can be reversed.
+ * default, moderators can censor it, and can later reapprove it. Censored publications and
+ * publication comments are hidden from every reader except their authors; censored media leaves the
+ * galleries it is attached to. Rows are kept so the decision can be reversed.
  */
 import { Schema } from "effect"
 

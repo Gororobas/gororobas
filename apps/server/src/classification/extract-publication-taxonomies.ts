@@ -1,16 +1,10 @@
 import { hashString, TiptapDocument, tiptapToHtml } from "@gororobas/domain"
 import { type PublicationClassification } from "@gororobas/domain"
-import { Config, DateTime, Effect, Context } from "effect"
+import { DateTime, Effect, Context } from "effect"
 
+import { CLASSIFICATION_VERSION } from "./classification-version.js"
+import { extractWikiArticles } from "./extract-wiki-articles.js"
 import { LangExtractService } from "./langextract-service.js"
-import { langExtractExamples } from "./langextract.examples.js"
-import { resolveWikiArticleExtraction } from "./resolve-extractions.js"
-
-/**
- * Bump this when prompts, examples, or extraction logic changes.
- * Format: ISO date + revision number within that day.
- */
-export const CLASSIFICATION_VERSION = "2026-10-19.1" as const
 
 /**
  * Builds the idempotency key for a classification workflow run.
@@ -22,25 +16,6 @@ export function publicationClassificationIdempotencyKey(
 ): string {
   return `publication-classification:${publication_id}:${content_hash}:${CLASSIFICATION_VERSION}`
 }
-
-const WIKI_ARTICLE_EXTRACTION_PROMPT =
-  "Extract wiki articles, including plants, animals, tools, practices, concepts and themes (such as permaculture, harvesting or land access), and other knowledge entities. Map regional names to canonical names and return lowercase, slugified names in PT (wiki_article_pt), ES (wiki_article_es), and EN (wiki_article_en)."
-
-const extractWikiArticles = Effect.fn("extractWikiArticles")(function* (html: string) {
-  const langextract = yield* LangExtractService
-  const resolutionConcurrency = yield* Config.Number("CLASSIFICATION_RESOLUTION_CONCURRENCY").pipe(
-    Config.withDefault(5),
-  )
-
-  const result = yield* langextract.extract(html, {
-    promptDescription: WIKI_ARTICLE_EXTRACTION_PROMPT,
-    examples: langExtractExamples.wikiArticles,
-  })
-
-  return yield* Effect.forEach(result.extractions ?? [], resolveWikiArticleExtraction, {
-    concurrency: resolutionConcurrency,
-  })
-})
 
 export class ExtractPublicationTaxonomiesService extends Context.Service<ExtractPublicationTaxonomiesService>()(
   "ExtractPublicationTaxonomiesService",

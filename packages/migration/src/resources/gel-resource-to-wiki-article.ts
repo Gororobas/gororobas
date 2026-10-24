@@ -8,7 +8,7 @@ import {
   WikiNoteworthyEntityArticle,
   WikiResourceArticle,
 } from "@gororobas/domain"
-import { Effect, Match, Record, Schema } from "effect"
+import { Effect, Match, Schema } from "effect"
 
 import { migrateRichText } from "../migrate-rich-text.js"
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
@@ -44,6 +44,8 @@ export const ResourceDataForMigration = Schema.Struct({
   auditLogs: Schema.Array(ResourceAuditLog),
   latest_source: GelResourceWithRelations,
   article: ResourceWikiArticle,
+  /** Imported as LEGACY_TAG relations, since wiki articles have no tag attributes. */
+  relatedWikiArticleIds: Schema.Array(WikiArticleId),
 })
 
 export type ResourceDataForMigration = typeof ResourceDataForMigration.Type
@@ -59,16 +61,19 @@ const genericResourceFormatMap = {
   VIDEO: "VIDEO",
 } as const
 
-const organizationEntityTypesByHandle: Record<
-  string,
-  | "MOVEMENT"
-  | "NETWORK"
-  | "NONPROFIT"
-  | "MEDIA_ORGANIZATION"
-  | "RESEARCH_ORGANIZATION"
-  | "PUBLIC_AGENCY"
-> = {
-  mcp: "MOVEMENT",
+/** Entity types of the legacy organisations, by Gel resource handle; unlisted ones are OTHER. */
+interface OrganizationEntityTypesByHandle {
+  readonly [handle: string]:
+    | "SOCIAL_MOVEMENT"
+    | "NETWORK"
+    | "NONPROFIT"
+    | "MEDIA_ORGANIZATION"
+    | "RESEARCH_ORGANIZATION"
+    | "PUBLIC_AGENCY"
+}
+
+const organizationEntityTypesByHandle: OrganizationEntityTypesByHandle = {
+  mcp: "SOCIAL_MOVEMENT",
   "instituto-mapinguari-e5efced9": "NONPROFIT",
   serta: "NONPROFIT",
   "em-pratos-limpos": "MEDIA_ORGANIZATION",
@@ -76,15 +81,15 @@ const organizationEntityTypesByHandle: Record<
   "teia-dos-povos": "NETWORK",
   fpsan: "NETWORK",
   "grupo-aue": "RESEARCH_ORGANIZATION",
-  mst: "MOVEMENT",
+  mst: "SOCIAL_MOVEMENT",
   conaq: "NETWORK",
   "campesena-93aa3ca3": "PUBLIC_AGENCY",
   "la-via-campesina": "NETWORK",
   "centro-sabia": "NONPROFIT",
   "combate-racismo-ambiental-95da2209": "MEDIA_ORGANIZATION",
   "ctazm-mg": "NONPROFIT",
-  mpa: "MOVEMENT",
-  mmc: "MOVEMENT",
+  mpa: "SOCIAL_MOVEMENT",
+  mmc: "SOCIAL_MOVEMENT",
   rama: "NETWORK",
   cepeas: "RESEARCH_ORGANIZATION",
   "de-olho-nos-ruralistas": "MEDIA_ORGANIZATION",
@@ -94,15 +99,23 @@ const organizationEntityTypesByHandle: Record<
   ana: "NETWORK",
 }
 
+/** Gel tags were migrated into CONCEPT wiki articles that keep the tag's mapped ID. */
+export const gelResourceRelatedWikiArticleIds = Effect.fn("gelResourceRelatedWikiArticleIds")(
+  function* (source: GelResourceWithRelations) {
+    const context = yield* MigrationContext
+
+    return yield* Effect.forEach(
+      source.tags,
+      ({ id }) =>
+        context.resolveId(id, "Tag").pipe(Effect.flatMap(Schema.decodeEffect(WikiArticleId))),
+      { concurrency: 1 },
+    )
+  },
+)
+
 export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(function* (
   source: GelResourceWithRelations,
 ) {
-  const context = yield* MigrationContext
-  const tagIds = yield* Effect.forEach(source.tags, ({ id }) => context.resolveId(id, "Tag"), {
-    concurrency: 1,
-  })
-  const tags = Record.fromEntries(tagIds.map((id) => [id, true] as const))
-
   // Organisations have no creditLine attribute; retain attribution in their content.
   const description =
     source.format === "ORGANIZATION" && source.credit_line
@@ -138,7 +151,6 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
         attributes: {
           authors: source.credit_line ? stringsToCrdtList([source.credit_line]) : undefined,
           url: source.url,
-          tags,
         },
       }),
     ),
@@ -146,9 +158,7 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
       Schema.decodeEffect(WikiFilmArticle.EditableArticle)({
         kind: "FILM",
         translations: translationsEncoded,
-        attributes: {
-          tags,
-        },
+        attributes: {},
       }),
     ),
     Match.when({ format: "ORGANIZATION" }, () =>
@@ -158,7 +168,6 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
         attributes: {
           entityType: organizationEntityTypesByHandle[source.handle] ?? "OTHER",
           url: source.url,
-          tags,
         },
       }),
     ),
@@ -178,7 +187,6 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
             format: genericResourceFormatMap[s.format],
             url: s.url,
             creditLine: s.credit_line ?? undefined,
-            tags,
           },
           translations: translationsEncoded,
         }),

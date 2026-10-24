@@ -11,7 +11,7 @@ class CultivarParentError extends Schema.TaggedError<CultivarParentError>()("Cul
   message: Schema.String,
 }) {}
 
-const Variety = Schema.Struct({
+const GelCultivar = Schema.Struct({
   ...GelVegetableVariety.fields,
   parents: Schema.ArrayEnsure(Schema.Struct({ id: Schema.String, handle: Schema.String })),
 })
@@ -31,7 +31,7 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
     .pipe(
       Effect.tap(archiveGelResult("cultivars")),
       // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
-      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(Variety))),
+      Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(GelCultivar))),
     )
 
   const directory = path.join(import.meta.dirname, "..", "..", "debug", "cultivars")
@@ -44,7 +44,7 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
         if (source.parents.length !== 1) {
           return yield* Effect.fail(
             new CultivarParentError({
-              message: `Variety ${source.handle} has ${source.parents.length} parents; needs manual resolution`,
+              message: `Cultivar ${source.handle} has ${source.parents.length} parents; needs manual resolution`,
             }),
           )
         }

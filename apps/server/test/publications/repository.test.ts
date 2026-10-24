@@ -8,6 +8,7 @@ import {
   LoroDocSnapshot,
   LoroDocUpdate,
   PublicationConcurrentUpdateError,
+  StalePublicationTranslationError,
   PublicationCrdtRow,
   SystemCommit,
   PublicationSourceData,
@@ -502,7 +503,7 @@ describe("PublicationsRepository", () => {
           )
           .pipe(Effect.flip)
 
-        expect(staleError).toBeInstanceOf(PublicationConcurrentUpdateError)
+        expect(staleError).toBeInstanceOf(StalePublicationTranslationError)
       }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
   )
 

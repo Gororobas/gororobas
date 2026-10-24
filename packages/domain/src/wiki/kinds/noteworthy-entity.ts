@@ -1,8 +1,7 @@
-import { Option, Schema } from "effect"
+import { Schema } from "effect"
 
 import { NoteworthyEntityType } from "../../common/enums.js"
-import { TagId } from "../../common/ids.js"
-import { CrdtBrandedStringSet, OptionalColumn } from "../../common/primitives.js"
+import { OptionalColumn } from "../../common/primitives.js"
 import { PartialDate } from "../../common/utils/dates.js"
 import { defineKind } from "./define-kind.js"
 
@@ -11,22 +10,14 @@ const ProjectedAttributes = Schema.Struct({
   foundedDate: OptionalColumn(PartialDate),
   dissolvedDate: OptionalColumn(PartialDate),
   url: OptionalColumn(Schema.URLFromString),
-  tags: OptionalColumn(Schema.Array(TagId)),
 })
 
 export const WikiNoteworthyEntityArticle = defineKind({
   EditableTranslationFields: {},
   Kind: Schema.Literal("NOTEWORTHY_ENTITY"),
-  EditableAttributes: Schema.Struct({
-    ...ProjectedAttributes.fields,
-    tags: OptionalColumn(CrdtBrandedStringSet(TagId)),
-  }),
+  EditableAttributes: ProjectedAttributes,
   ProjectedAttributes,
-  projectAttributes: (editableAttributes) =>
-    ProjectedAttributes.make({
-      ...editableAttributes,
-      tags: Option.map(editableAttributes.tags, (tags) => Array.from(tags)),
-    }),
+  projectAttributes: (editableAttributes) => editableAttributes,
 })
 
 export type NoteworthyEntityArticleKind = typeof WikiNoteworthyEntityArticle.Kind.Type

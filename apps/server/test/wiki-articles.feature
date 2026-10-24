@@ -136,3 +136,46 @@ Feature: Wiki articles
       Given "Maria" has bookmarked "Mandioca" with state "INDIFFERENT"
       When "Maria" removes the bookmark
       Then "Mandioca" no longer appears in "Maria"'s bookmarked wiki articles
+
+  Rule: Wiki articles relate to the articles their content mentions or is about
+    Relations are found automatically, never edited by hand: mentions of other articles in the content,
+    and the articles that classifying the content recognizes. Readers see relations from both ends.
+
+    Background:
+      Given "Maria" has COMMUNITY access
+      And "Ana" is a MODERATOR
+      And the wiki article "Agrofloresta" exists
+      And the wiki article "Feijão" exists
+      And the wiki article "Mandioca" exists
+
+    Scenario: Mentioning an article relates both articles
+      When an approved revision makes "Mandioca"'s content mention "Agrofloresta"
+      Then "Mandioca"'s related articles are:
+        | title        |
+        | Agrofloresta |
+      And "Agrofloresta"'s related articles are:
+        | title    |
+        | Mandioca |
+
+    Scenario: Removing a mention removes its relation
+      Given an approved revision makes "Mandioca"'s content mention "Agrofloresta"
+      When an approved revision makes "Mandioca"'s content mention "Feijão"
+      Then "Mandioca"'s related articles are:
+        | title  |
+        | Feijão |
+
+    Scenario: Classifying the content relates the article to what it is about
+      Given classification recognizes "Agrofloresta" in "Mandioca"'s content
+      When "Mandioca"'s content is classified
+      Then "Mandioca"'s related articles are:
+        | title        |
+        | Agrofloresta |
+
+    Scenario: Classification keeps the relations from mentions
+      Given classification recognizes "Agrofloresta" in "Mandioca"'s content
+      And an approved revision makes "Mandioca"'s content mention "Feijão"
+      When "Mandioca"'s content is classified
+      Then "Mandioca"'s related articles are:
+        | title        |
+        | Agrofloresta |
+        | Feijão       |

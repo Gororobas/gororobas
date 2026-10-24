@@ -1,10 +1,11 @@
 import { ContentLanguage } from "@gororobas/domain"
-import { PostSourceData, PublicationId, TagId, WikiArticleId } from "@gororobas/domain"
+import { PostSourceData, PublicationId, WikiArticleId } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 
 import { migrateRichText } from "../migrate-rich-text.js"
 import { GelNoteWithRelations } from "../schemas/gel/entities.js"
 import { ensureMappedId, MigrationContext } from "../services/migration-context.js"
+import { noteTypeGelId } from "../tags/source-gel-tags.js"
 import { gelNoteToPublication } from "./gel-note-to-publication.js"
 
 class MissingNoteOwner extends Schema.TaggedError<MissingNoteOwner>()("MissingNoteOwner", {
@@ -46,16 +47,16 @@ export const noteMigrationReferences = Effect.fn("noteMigrationReferences")(func
     .resolveId(note.id, "Publication")
     .pipe(Effect.flatMap(Schema.decodeEffect(PublicationId)))
 
-  const tagIds = yield* Effect.forEach(
+  const noteTypeConceptIds = yield* Effect.forEach(
     note.types,
     (type) =>
-      ensureMappedId({ id: `note-type:${type}` }, "Tag").pipe(
-        Effect.flatMap(Schema.decodeEffect(TagId)),
+      ensureMappedId({ id: noteTypeGelId(type) }, "Tag").pipe(
+        Effect.flatMap(Schema.decodeEffect(WikiArticleId)),
       ),
     { concurrency: 1 },
   )
 
-  const wikiArticleIds = yield* Effect.forEach(
+  const plantIds = yield* Effect.forEach(
     note.related_to_vegetables,
     (plant) =>
       context
@@ -64,5 +65,5 @@ export const noteMigrationReferences = Effect.fn("noteMigrationReferences")(func
     { concurrency: 1 },
   )
 
-  return { id, tagIds, wikiArticleIds }
+  return { id, wikiArticleIds: [...noteTypeConceptIds, ...plantIds] }
 })

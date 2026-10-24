@@ -1,6 +1,7 @@
 import { Layer } from "effect"
 
 import { PublicationClassificationWorkflowLayer } from "./classification/publication-classification-workflow.js"
+import { WikiArticleClassificationWorkflowLayer } from "./classification/wiki-article-classification-workflow.js"
 import { MediaDeletionWorkflowLayer } from "./media-assets/media-deletion-workflow.js"
 import { MediaAssetsStorage } from "./media-assets/storage.js"
 import { PublicationCommentTranslationWorkflowLayer } from "./translation/publication-comment-translation-workflow.js"
@@ -16,6 +17,7 @@ export const WorkflowsLive = Layer.mergeAll(
   PublicationTranslationWorkflowLayer,
   PublicationCommentTranslationWorkflowLayer,
   PublicationClassificationWorkflowLayer,
+  WikiArticleClassificationWorkflowLayer,
   FetchArticleExternalDataLive.pipe(Layer.provide(ExternalDataProvidersLive)),
   ExternalDataRefreshLive,
 )

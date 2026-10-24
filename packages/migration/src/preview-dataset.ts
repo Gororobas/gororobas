@@ -144,12 +144,6 @@ export const readPreviewDataset = (directory: string) =>
           const row = yield* findPublicationRowById(id).pipe(Effect.map(Option.getOrThrow))
           const publication = yield* PublicationCrdt.read(snapshotToLoroDoc(crdt.crdtSnapshot))
 
-          const tags = yield* SqlSchema.findAll({
-            Request: PublicationId,
-            Result: Schema.Struct({ tagId: Schema.String }),
-            execute: (id) => sql`SELECT tag_id FROM publication_tags WHERE publication_id = ${id}`,
-          })(id)
-
           const articles = yield* SqlSchema.findAll({
             Request: PublicationId,
             Result: Schema.Struct({ wikiArticleId: Schema.String }),
@@ -161,7 +155,6 @@ export const readPreviewDataset = (directory: string) =>
             ...data,
             file,
             publication: yield* Schema.encodeEffect(PublicationSourceData)(publication),
-            tagIds: tags.map((tag) => tag.tagId),
             wikiArticleIds: articles.map((article) => article.wikiArticleId),
             persisted: row,
           }
@@ -169,12 +162,12 @@ export const readPreviewDataset = (directory: string) =>
       { concurrency: 1 },
     )
 
-    const tags = yield* sql`SELECT * FROM tags`
+    const concepts = yield* sql`SELECT * FROM wiki_articles WHERE kind = 'CONCEPT'`
 
-    dataset.tags = exports.tags.map(({ file, data }) => ({
+    dataset.concepts = exports.concepts.map(({ file, data }) => ({
       ...data,
       file,
-      persisted: tags.find((tag) => tag.id === data.id),
+      persisted: concepts.find((concept) => concept.id === data.id),
     }))
 
     const localMediaAssets = yield* SqlSchema.findAll({
@@ -188,7 +181,7 @@ export const readPreviewDataset = (directory: string) =>
       resources: dataset.resources,
       cultivars: dataset.cultivars,
       notes: dataset.notes,
-      tags: dataset.tags,
+      concepts: dataset.concepts,
       references,
       rejected: [],
       missing: [],

@@ -263,7 +263,6 @@ const fixture = Effect.gen(function* () {
           path.join(directory, "notes", `${handle}.json`),
           json({
             id,
-            tagIds: [],
             wikiArticleIds: [articleId],
             latest_source: {
               id: `source-note-${index}`,

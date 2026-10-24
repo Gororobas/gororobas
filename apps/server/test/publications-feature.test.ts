@@ -6,6 +6,7 @@ import {
   Handle,
   LoroDocUpdate,
   ModerationStatus,
+  type ModerationDecision,
   InformationVisibility,
   InvalidCrdtUpdateError,
   OrganizationAccessLevel,
@@ -748,7 +749,7 @@ const censor = () =>
     handler: (context: PublicationContext, { name }) =>
       withPerson(
         PublicationCommentsService.use((service) =>
-          service.censorPublicationComment(commentIn(context)),
+          service.moderate({ id: commentIn(context), moderationStatus: "CENSORED" }),
         ),
         personNamed(context.actors, name),
       ).pipe(Effect.as(context)),
@@ -765,7 +766,10 @@ const deniedCensor = () =>
         const result = yield* denied(
           context,
           withPerson(
-            (yield* PublicationCommentsService).censorPublicationComment(commentIn(context)),
+            (yield* PublicationCommentsService).moderate({
+              id: commentIn(context),
+              moderationStatus: "CENSORED",
+            }),
             personNamed(context.actors, name),
           ),
         )
@@ -796,15 +800,35 @@ const commentRemains = () =>
     visiblePublicationCommentStep,
   )
 
-const commentHidden = () =>
-  Then("the publication comment becomes hidden on the post publication", {
-    handler: (context: PublicationContext) =>
+const commentVisibility = () =>
+  Then("the publication comment should have the following visibility on the post publication:", {
+    params: VisibilityTable,
+    handler: (context: PublicationContext, { table }) =>
       Effect.gen(function* () {
-        const publicationComments = yield* asViewer(
-          context,
-          (yield* PublicationCommentsService).listByPublicationId(publicationIn(context).id),
+        const service = yield* PublicationCommentsService
+
+        yield* Effect.forEach(
+          table,
+          ({ viewer, visible }) =>
+            Effect.gen(function* () {
+              const reader = viewerNamed(context, viewer)
+              const listed = yield* asViewer(
+                reader,
+                service.listByPublicationId(publicationIn(context).id),
+              )
+              const byId = yield* asViewer(
+                reader,
+                service.getPublicationCommentData(commentIn(context)),
+              ).pipe(Effect.result)
+
+              expect(listed.map((row) => row.id).includes(commentIn(context))).toBe(
+                visible === "yes",
+              )
+              expect(Result.isSuccess(byId)).toBe(visible === "yes")
+            }),
+          { concurrency: 1 },
         )
-        expect(publicationComments.map((row) => row.id)).not.toContain(commentIn(context))
+
         return context
       }),
   })
@@ -822,6 +846,138 @@ const commentStatus = () =>
 
         expect(row.moderationStatus).toBe(status)
         expect(row.ownerProfileId).toBe(context.actorId)
+        return context
+      }),
+  })
+
+const moderatePublication = ({
+  context,
+  name,
+  moderationStatus,
+}: {
+  context: PublicationContext
+  name: string
+  moderationStatus: ModerationDecision
+}) =>
+  withPerson(
+    PublicationsService.use((service) =>
+      service.moderate({ id: publicationIn(context).id, moderationStatus }),
+    ),
+    personNamed(context.actors, name),
+  )
+
+const censorPublication = () =>
+  When("{string:name} censors the post publication", {
+    params: NamedPerson,
+    handler: (context: PublicationContext, { name }) =>
+      moderatePublication({ context, name, moderationStatus: "CENSORED" }).pipe(Effect.as(context)),
+  })
+
+const censoredPublication = () =>
+  Given("{string:name} has censored the post publication", {
+    params: NamedPerson,
+    handler: (context: PublicationContext, { name }) =>
+      moderatePublication({ context, name, moderationStatus: "CENSORED" }).pipe(Effect.as(context)),
+  })
+
+const reapprovePublication = () =>
+  When("{string:name} reapproves the post publication", {
+    params: NamedPerson,
+    handler: (context: PublicationContext, { name }) =>
+      moderatePublication({ context, name, moderationStatus: "REAPPROVED_AFTER_CENSORING" }).pipe(
+        Effect.as(context),
+      ),
+  })
+
+const deniedPublicationCensor = () =>
+  When("{string:name} tries to censor the post publication", {
+    params: NamedPerson,
+    handler: (context: PublicationContext, { name }) =>
+      Effect.gen(function* () {
+        const repo = yield* PublicationsRepository
+        const before = yield* repo.findPublicationRowById(publicationIn(context).id)
+        const result = yield* denied(
+          context,
+          moderatePublication({ context, name, moderationStatus: "CENSORED" }),
+        )
+        expect(yield* repo.findPublicationRowById(publicationIn(context).id)).toEqual(before)
+        return result
+      }),
+  })
+
+const publicationStatus = () =>
+  Then("the post publication has moderation_status {string:status}", {
+    params: Schema.Struct({ status: ModerationStatus }),
+    handler: (context: PublicationContext, { status }) =>
+      Effect.gen(function* () {
+        const row = Option.getOrThrow(
+          yield* (yield* PublicationsRepository).findPublicationRowById(publicationIn(context).id),
+        )
+        expect(row.moderationStatus).toBe(status)
+        return context
+      }),
+  })
+
+const ViewerTable = Schema.Struct({ table: Schema.Array(Schema.Struct({ viewer: Schema.String })) })
+
+const publicationHidden = () =>
+  And("the post publication is hidden from:", {
+    params: ViewerTable,
+    handler: (context: PublicationContext, { table }) =>
+      Effect.gen(function* () {
+        const service = yield* PublicationsService
+        const publication = publicationIn(context)
+
+        yield* Effect.forEach(
+          table,
+          ({ viewer }) =>
+            Effect.gen(function* () {
+              const reader = viewerNamed(context, viewer)
+              const page = yield* asViewer(
+                reader,
+                service.getPublicationPageData(publication.handle),
+              ).pipe(Effect.flip)
+              expect(page).toMatchObject({ _tag: "PublicationNotFoundError" })
+
+              const byId = yield* asViewer(reader, service.getPublicationData(publication.id)).pipe(
+                Effect.flip,
+              )
+              expect(byId).toMatchObject({ _tag: "PublicationNotFoundError" })
+
+              const found = yield* asViewer(
+                reader,
+                service.searchPublications({ currentPage: 0, pageSize: 100 }),
+              )
+              expect(found.map((card) => card.id)).not.toContain(publication.id)
+            }),
+          { concurrency: 1 },
+        )
+
+        return context
+      }),
+  })
+
+const publicationVisibleToAuthor = () =>
+  And("{string:name} still finds the post publication, as its author", {
+    params: NamedPerson,
+    handler: (context: PublicationContext, { name }) =>
+      Effect.gen(function* () {
+        const service = yield* PublicationsService
+        const publication = publicationIn(context)
+        const author = viewerNamed(context, name)
+
+        expect(
+          (yield* asViewer(author, service.getPublicationPageData(publication.handle))).id,
+        ).toBe(publication.id)
+        expect((yield* asViewer(author, service.getPublicationData(publication.id))).id).toBe(
+          publication.id,
+        )
+        const found = yield* asViewer(
+          author,
+          service.searchPublications({ currentPage: 0, pageSize: 100 }),
+        )
+        expect(found.map((card) => card.id)).toContain(publication.id)
+
         return context
       }),
   })
@@ -1097,9 +1253,11 @@ await Effect.runPromise(
         layer: PublicationsFeatureTestLayer,
         steps: () => runSteps(deniedPublicationComment(), accessDenied()),
       })
+
       Scenario("Moderator can censor a publication comment", {
         layer: PublicationsFeatureTestLayer,
-        steps: () => runSteps(loggedIn(), commented(), censor(), commentHidden(), commentStatus()),
+        steps: () =>
+          runSteps(loggedIn(), commented(), censor(), commentVisibility(), commentStatus()),
       })
 
       Scenario("Community member cannot censor a publication comment", {
@@ -1112,6 +1270,40 @@ await Effect.runPromise(
             commentRemains(),
             commentStatus(),
           ),
+      })
+    })
+
+    Rule("Moderators can censor and reapprove publications", ({ Background, Scenario }) => {
+      Background({
+        layer: PublicationsFeatureTestLayer,
+        steps: () => runSteps(givenPeople(), personalPostSetup()),
+      })
+
+      Scenario("Moderator censors a publication", {
+        layer: PublicationsFeatureTestLayer,
+        steps: () =>
+          runSteps(
+            censorPublication(),
+            publicationStatus(),
+            publicationHidden(),
+            publicationVisibleToAuthor(),
+          ),
+      })
+
+      Scenario("Admin reapproves a censored publication", {
+        layer: PublicationsFeatureTestLayer,
+        steps: () =>
+          runSteps(
+            censoredPublication(),
+            reapprovePublication(),
+            publicationStatus(),
+            postVisibility(),
+          ),
+      })
+
+      Scenario("Community member cannot censor a publication", {
+        layer: PublicationsFeatureTestLayer,
+        steps: () => runSteps(deniedPublicationCensor(), accessDenied(), publicationStatus()),
       })
     })
 
@@ -1274,7 +1466,7 @@ it.effect("censorship survives subsequent author edits", () =>
     const service = yield* PublicationCommentsService
     const repo = yield* PublicationCommentsRepository
     yield* withPerson(
-      service.censorPublicationComment(publicationCommentId),
+      service.moderate({ id: publicationCommentId, moderationStatus: "CENSORED" }),
       personNamed(context.actors, "Ana"),
     )
 
@@ -1313,7 +1505,7 @@ it.effect("censorship survives subsequent author edits", () =>
     ).toBe("CENSORED")
     expect((yield* readAggregateStatus(publicationCommentId)).moderationStatus).toBe("CENSORED")
     yield* withPerson(
-      service.censorPublicationComment(publicationCommentId),
+      service.moderate({ id: publicationCommentId, moderationStatus: "CENSORED" }),
       personNamed(context.actors, "Ailton"),
     )
 

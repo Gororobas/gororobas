@@ -13,7 +13,7 @@ import { makeAppSql } from "../src/sql.js"
 const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
 it.live(
-  "publishes processed files before rows, cleans up failures, and hides censored files",
+  "publishes processed files before rows, cleans up failures, and hides censored files from everyone but their uploader",
   Effect.fn(function* () {
     const filesystem = yield* Effect.provide(FileSystem.FileSystem, NodeServices.layer)
     const directory = yield* filesystem.makeTempDirectoryScoped({
@@ -147,15 +147,22 @@ it.live(
 
         expect(visitorUpload).toSatisfy(Exit.isFailure)
         yield* service.moderate({ id: mediaAsset.id, moderationStatus: "CENSORED" })
-        expect(yield* Effect.exit(service.getRow(mediaAsset.id))).toSatisfy(Exit.isFailure)
+        expect(yield* Effect.exit(service.getRow(mediaAsset.id))).toSatisfy(Exit.isSuccess)
+
+        const asVisitor = Effect.provideService(SessionContext, { type: "VISITOR" })
+        expect(yield* Effect.exit(service.getRow(mediaAsset.id).pipe(asVisitor))).toSatisfy(
+          Exit.isFailure,
+        )
 
         expect(
           yield* Effect.exit(
-            service.getFile({
-              id: mediaAsset.id,
-              format: "original",
-              variant: "original",
-            }),
+            service
+              .getFile({
+                id: mediaAsset.id,
+                format: "original",
+                variant: "original",
+              })
+              .pipe(asVisitor),
           ),
         ).toSatisfy(Exit.isFailure)
 

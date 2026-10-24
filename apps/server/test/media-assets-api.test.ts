@@ -467,7 +467,7 @@ it.live(
     expect((yield* request(privateMedia.url, { method: "HEAD" })).status).toBe(404)
     expect((yield* request(privateMedia.url, { headers: { range: "bytes=0-1" } })).status).toBe(404)
 
-    authentication = {
+    const otherAuthentication = {
       ...ownerAuthentication,
       session: {
         ...ownerAuthentication.session,
@@ -476,6 +476,8 @@ it.live(
         ),
       },
     }
+
+    authentication = otherAuthentication
 
     expect((yield* request(playlistUrl)).status).toBe(200)
     expect((yield* request(privateMedia.url)).status).toBe(404)
@@ -493,8 +495,12 @@ it.live(
       })).status,
     ).toBe(200)
 
+    // Uploaders keep seeing their censored media; nobody else does.
+    expect((yield* request(playlistUrl)).status).toBe(200)
+    authentication = otherAuthentication
     expect((yield* request(playlistUrl)).status).toBe(404)
     expect((yield* request(`/media/${media.id}/original/original`)).status).toBe(404)
+    authentication = ownerAuthentication
 
     const reapproved = yield* request(`/media/${media.id}/moderate`, {
       method: "POST",

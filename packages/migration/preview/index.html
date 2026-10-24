@@ -340,13 +340,13 @@
         referenceById.set(reference.id, reference)
         referenceById.set(reference.gelId, reference)
       }
-      for (const tag of dataset.tags ?? [])
-        referenceById.set(tag.id, {
-          id: tag.id,
-          gelId: tag.latest_source.id,
-          collection: "tags",
-          label: tag.latest_source.names.join(" / "),
-          handle: tag.latest_source.handle,
+      for (const concept of dataset.concepts ?? [])
+        referenceById.set(concept.id, {
+          id: concept.id,
+          gelId: concept.latest_source.id,
+          collection: "concepts",
+          label: concept.latest_source.names.join(" / "),
+          handle: concept.latest_source.handle,
         })
       for (const key of ["plants", "resources", "notes", "cultivars"])
         dataset[key].sort((a, b) =>
@@ -572,14 +572,20 @@
                     source.credit_line,
                     article?.attributes?.creditLine ?? article?.attributes?.authors,
                   ],
-                  ["Tags (IDs Gel)", source.tags?.map((tag) => tag.id), article?.attributes?.tags],
+                  [
+                    "Tags → conceitos",
+                    source.tags?.map((tag) => tag.id),
+                    article?.attributes?.concepts,
+                  ],
                 ]
               : [
                   ["Título", contentText(source.title), "Integrado ao conteúdo"],
                   [
-                    "Tipos → tags",
+                    "Tipos → conceitos",
                     source.types,
-                    plant.tagIds?.map((id) => referenceById.get(id)?.label ?? id),
+                    plant.wikiArticleIds
+                      ?.filter((id) => referenceById.get(id)?.collection === "concepts")
+                      .map((id) => referenceById.get(id)?.label ?? id),
                   ],
                   [
                     "Visibilidade",

@@ -12,6 +12,7 @@ import {
   LoroDocUpdate,
   MediaAssetRow,
   WikiArticleCommonNameInCrdtList,
+  type TiptapDocument,
   WikiArticleCommonName,
   SupportedLanguage,
   WikiArticleCrdt,
@@ -37,7 +38,18 @@ import {
   When,
 } from "@gororobas/effect-bdd"
 import { VISITOR_SESSION } from "@gororobas/server/session-service"
-import { Effect, Layer, Option, Record, Result, Schema } from "effect"
+import {
+  Context,
+  Effect,
+  Array as EffectArray,
+  Layer,
+  Option,
+  Order,
+  Record,
+  Ref,
+  Result,
+  Schema,
+} from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
@@ -45,6 +57,14 @@ import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 import sharp from "sharp"
 
+import {
+  WikiArticleClassificationWorkflow,
+  WikiArticleClassificationWorkflowLayer,
+} from "../src/classification/wiki-article-classification-workflow.js"
+import {
+  type ClassifiedWikiArticle,
+  WikiArticleClassifier,
+} from "../src/classification/wiki-article-classifier.js"
 import { MediaAssetsService } from "../src/media-assets/service.js"
 import { resolveSessionFromAuthSubjectId } from "../src/session-service.js"
 import { WikiApiLive } from "../src/wiki/api-live.js"
@@ -69,6 +89,27 @@ const WikiTestLayer = Layer.effect(WikiArticlesService, WikiArticlesService.make
   Layer.provideMerge(PeopleFeatureTestLayer),
   Layer.provideMerge(WorkflowEngine.layerMemory),
 )
+/** What the classifier recognizes in any content, as set by the scenario. */
+const RecognizedWikiArticles = Context.Service<Ref.Ref<ReadonlyArray<ClassifiedWikiArticle>>>(
+  "test/RecognizedWikiArticles",
+)
+
+const RelationsTestLayer = WikiArticleClassificationWorkflowLayer.pipe(
+  Layer.provideMerge(
+    Layer.effect(
+      WikiArticleClassifier,
+      Effect.gen(function* () {
+        const recognized = yield* RecognizedWikiArticles
+        return { classify: () => Ref.get(recognized) }
+      }),
+    ),
+  ),
+  Layer.provideMerge(
+    Layer.effect(RecognizedWikiArticles, Ref.make<ReadonlyArray<ClassifiedWikiArticle>>([])),
+  ),
+  Layer.provideMerge(WikiTestLayer),
+)
+
 const WikiBackground = Schema.Struct({
   ...PeopleBackground.fields,
   articles: Schema.Record(Schema.String, WikiArticleId),
@@ -274,9 +315,18 @@ const range = (min: number, max: number) => ({
   max: IntNonNegative.make(max),
 })
 
-const editParent = (context: WikiContext, edit: Parameters<typeof WikiArticleCrdt.applyEdit>[1]) =>
+/** Maria proposes the edit and Ana approves it. */
+const approvedEdit = ({
+  context,
+  title,
+  edit,
+}: {
+  context: WikiContext
+  title: string
+  edit: Parameters<typeof WikiArticleCrdt.applyEdit>[1]
+}) =>
   Effect.gen(function* () {
-    const id = articleId(context, "Banana")
+    const id = articleId(context, title)
     const stored = Option.getOrThrow(yield* findCrdtRowById(id))
     const current = snapshotToLoroDoc(stored.crdtSnapshot)
     const changed = current.fork()
@@ -304,6 +354,9 @@ const editParent = (context: WikiContext, edit: Parameters<typeof WikiArticleCrd
 
     return context
   })
+
+const editParent = (context: WikiContext, edit: Parameters<typeof WikiArticleCrdt.applyEdit>[1]) =>
+  approvedEdit({ context, title: "Banana", edit })
 
 const setParentRange = ({
   context,
@@ -592,6 +645,116 @@ const bookmarked = () =>
           }),
         ),
       ),
+  })
+
+const mentioning = (title: string, id: WikiArticleId): TiptapDocument => ({
+  type: "doc",
+  version: 1,
+  content: [
+    {
+      type: "paragraph",
+      content: [
+        { type: "text", text: "Veja também " },
+        {
+          type: "entityReference",
+          attrs: {
+            referenceType: "WIKI_ARTICLE",
+            referenceId: id,
+            version: 1,
+            labelAtInsertion: title,
+          },
+        },
+      ],
+    },
+  ],
+})
+
+const MentionParams = Schema.Struct({ title: Schema.String, mentioned: Schema.String })
+
+const approveMention = (context: WikiContext, { title, mentioned }: typeof MentionParams.Type) =>
+  approvedEdit({
+    context,
+    title,
+    edit: {
+      _tag: "SetWikiArticleTranslationContent",
+      language: "pt",
+      content: mentioning(mentioned, articleId(context, mentioned)),
+    },
+  })
+
+const mentionedInRevision = () =>
+  Given("an approved revision makes {string:title}'s content mention {string:mentioned}", {
+    params: MentionParams,
+    handler: (_, params) =>
+      background().pipe(Effect.flatMap((context) => approveMention(context, params))),
+  })
+
+const recognizedByClassification = () =>
+  Given("classification recognizes {string:recognized} in {string:title}'s content", {
+    params: Schema.Struct({ recognized: Schema.String, title: Schema.String }),
+    handler: (_, { recognized }) =>
+      Effect.gen(function* () {
+        const context = yield* background()
+        yield* Ref.set(yield* RecognizedWikiArticles, [
+          { wikiArticleId: articleId(context, recognized), extractionText: recognized },
+        ])
+        return context
+      }),
+  })
+
+const classified = () =>
+  When("{string:title}'s content is classified", {
+    params: titleParams,
+    handler: (context: WikiContext, { title }) =>
+      Effect.gen(function* () {
+        const article = Option.getOrThrow(yield* findDatabaseRowById(articleId(context, title)))
+        yield* WikiArticleClassificationWorkflow.execute({
+          wikiArticleId: article.id,
+          crdtFrontier: article.currentCrdtFrontier,
+        })
+        return context
+      }),
+  })
+
+const RelatedArticlesParams = Schema.Struct({
+  title: Schema.String,
+  table: Schema.Array(Schema.Struct({ title: Schema.String })),
+})
+
+const expectRelatedArticles = (
+  context: WikiContext,
+  { title, table }: typeof RelatedArticlesParams.Type,
+) =>
+  Effect.gen(function* () {
+    const { handle } = Option.getOrThrow(
+      yield* (yield* WikiArticlesRepository).findBySearchableName(title.toLowerCase()),
+    )
+
+    const related = yield* (yield* WikiArticlesService).listRelatedWikiArticles({
+      handle,
+      kind: "PLANT",
+      language: "pt",
+    })
+
+    expect(
+      EffectArray.sort(
+        related.map((card) => card.id),
+        Order.String,
+      ),
+    ).toEqual(
+      EffectArray.sort(
+        table.map((row) => articleId(context, row.title)),
+        Order.String,
+      ),
+    )
+
+    return context
+  })
+
+const relatedArticles = () =>
+  Then("{string:title}'s related articles are:", {
+    params: RelatedArticlesParams,
+    handler: expectRelatedArticles,
   })
 
 await Effect.runPromise(
@@ -1512,6 +1675,74 @@ await Effect.runPromise(
           ),
       })
     })
+
+    Rule(
+      "Wiki articles relate to the articles their content mentions or is about",
+      ({ Background, Scenario }) => {
+        Background({
+          layer: RelationsTestLayer,
+          steps: () =>
+            runSteps(community(), moderator(), articleExists(), articleExists(), articleExists()),
+        })
+
+        Scenario("Mentioning an article relates both articles", {
+          layer: RelationsTestLayer,
+          steps: () =>
+            runSteps(
+              When(
+                "an approved revision makes {string:title}'s content mention {string:mentioned}",
+                {
+                  params: MentionParams,
+                  handler: approveMention,
+                },
+              ),
+              relatedArticles(),
+              And("{string:title}'s related articles are:", {
+                params: RelatedArticlesParams,
+                handler: expectRelatedArticles,
+              }),
+            ),
+        })
+
+        Scenario("Removing a mention removes its relation", {
+          layer: RelationsTestLayer,
+          steps: () =>
+            runSteps(
+              mentionedInRevision(),
+              When(
+                "an approved revision makes {string:title}'s content mention {string:mentioned}",
+                {
+                  params: MentionParams,
+                  handler: approveMention,
+                },
+              ),
+              relatedArticles(),
+            ),
+        })
+
+        Scenario("Classifying the content relates the article to what it is about", {
+          layer: RelationsTestLayer,
+          steps: () => runSteps(recognizedByClassification(), classified(), relatedArticles()),
+        })
+
+        Scenario("Classification keeps the relations from mentions", {
+          layer: RelationsTestLayer,
+          steps: () =>
+            runSteps(
+              recognizedByClassification(),
+              And(
+                "an approved revision makes {string:title}'s content mention {string:mentioned}",
+                {
+                  params: MentionParams,
+                  handler: approveMention,
+                },
+              ),
+              classified(),
+              relatedArticles(),
+            ),
+        })
+      },
+    )
   }).pipe(Effect.provide(NodeServices.layer)),
 )
 

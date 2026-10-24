@@ -1,17 +1,9 @@
 import { NoteworthyEntityType } from "@gororobas/domain/common/enums"
 import { Effect, Schema } from "effect"
 
-import { TagId } from "../../common/ids.js"
 import { defineCrdtOperations } from "../../crdts/define-crdt-operations.js"
 import { makeOptionalScalarEditOperations } from "../../crdts/optional-scalar-edit-operations.js"
-import { makeStringSetEditOperations } from "../../crdts/string-set-edit-operations.js"
 import { type NoteworthyEntityEditableAttributes } from "./noteworthy-entity.js"
-
-const noteworthyEntityTagOperations = makeStringSetEditOperations("NoteworthyEntityTag")({
-  ValueSchema: TagId,
-  getContainer: (document) =>
-    Effect.succeed(document.getMap("attributes").ensureMergeableMap("tags")),
-})
 
 const entityTypeOperations = makeOptionalScalarEditOperations("EntityType")({
   ValueSchema: NoteworthyEntityType,
@@ -38,7 +30,6 @@ const urlOperations = makeOptionalScalarEditOperations("Url")({
 })
 
 export const WikiNoteworthyEntityArticleCrdtOperations = defineCrdtOperations([
-  ...noteworthyEntityTagOperations,
   ...entityTypeOperations,
   ...foundedDateOperations,
   ...dissolvedDateOperations,

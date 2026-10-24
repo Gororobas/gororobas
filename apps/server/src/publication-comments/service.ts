@@ -10,6 +10,7 @@ import {
   UpdatePublicationCommentInput,
   isCensored,
   type ModerationDecision,
+  type PublicationCommentRow,
 } from "@gororobas/domain"
 import { Effect, Option, Context } from "effect"
 
@@ -124,6 +125,15 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
           notFound: () => new PublicationCommentNotFoundError({ id: input.id }),
         })
 
+      /** Censored publication comments are hidden from every reader but their authors. */
+      const canSee = (publicationComment: PublicationCommentRow) =>
+        isCensored(publicationComment.moderationStatus)
+          ? Policies.publicationComments.canViewCensored(publicationComment.ownerProfileId).pipe(
+              Effect.as(true),
+              Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
+            )
+          : Effect.succeed(true)
+
       const getPublicationCommentData = (publicationCommentId: PublicationCommentId) =>
         Effect.gen(function* () {
           const publicationComment = yield* getPublicationCommentById(publicationCommentId)
@@ -131,7 +141,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
             yield* getPublicationById(publicationComment.publicationId),
           )
 
-          if (isCensored(publicationComment.moderationStatus)) {
+          if (!(yield* canSee(publicationComment))) {
             return yield* new PublicationCommentNotFoundError({ id: publicationCommentId })
           }
 
@@ -142,9 +152,12 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
         Effect.gen(function* () {
           yield* assertCanViewPublication(yield* getPublicationById(publicationId))
 
-          return (yield* publicationCommentsRepository.listPublicationCommentRowsByPublicationId(
-            publicationId,
-          )).filter((publicationComment) => !isCensored(publicationComment.moderationStatus))
+          return yield* Effect.filter(
+            yield* publicationCommentsRepository.listPublicationCommentRowsByPublicationId(
+              publicationId,
+            ),
+            canSee,
+          )
         })
 
       return {

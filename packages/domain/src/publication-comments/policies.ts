@@ -12,4 +12,6 @@ export const publicationCommentsPolicies = {
   canCreate: platformPermission("publication-comments:create"),
   canEdit: isPublicationCommentOwner,
   canDelete: isPublicationCommentOwner,
+  /** Authors keep seeing their publication comments while censored; every other reader loses access. */
+  canViewCensored: isPublicationCommentOwner,
 }

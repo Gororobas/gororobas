@@ -15,7 +15,7 @@ import {
 import { Array as EffectArray, Effect, Option, Predicate, Random, Record, Schema } from "effect"
 
 import { richTextDocument, type Mention } from "./rich-text.js"
-import { chance, digits, nanoId, pick, sample } from "./seed-random.js"
+import { chance, digits, nanoId, pick } from "./seed-random.js"
 import {
   AREAS_OF_WORK,
   BIOMES,
@@ -70,8 +70,6 @@ interface ArticleSubject {
 
 interface AttributeContext {
   readonly subject: ArticleSubject
-  /** CONCEPT articles available as `concepts`/`relatedConcepts` references. */
-  readonly conceptIds: ReadonlyArray<WikiArticleId>
   readonly parentPlantId: WikiArticleId | undefined
   /** The first article of each kind always carries external identifiers; see `seedArticle`. */
   readonly isRepresentative: boolean
@@ -111,12 +109,6 @@ const realisticRange = (measurement: keyof typeof RANGES) =>
     return { min, max: min + (yield* Random.nextIntBetween(0, spread)) }
   })
 
-const conceptSet = (context: AttributeContext) =>
-  Effect.map(
-    Effect.flatMap(Random.nextIntBetween(0, 3), (count) => sample(context.conceptIds, count)),
-    (conceptIds): Json => Record.fromEntries(conceptIds.map((id) => [id, true] as const)),
-  )
-
 /** Attributes rewritten whenever present, regardless of their generated value. */
 const scalarAttribute = (
   key: string,
@@ -124,8 +116,6 @@ const scalarAttribute = (
 ): Option.Option<Effect.Effect<Json>> =>
   lookup(
     {
-      concepts: conceptSet(context),
-      relatedConcepts: conceptSet(context),
       parentPlantId: Effect.succeed<Json>(context.parentPlantId ?? null),
       url: Effect.map(nanoId, (id): Json => `https://example.org/gororobas/${id}`),
       publisher: pick(PUBLISHERS),

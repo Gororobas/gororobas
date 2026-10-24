@@ -614,6 +614,11 @@ await Effect.runPromise(
                   }),
               }),
               visitorMediaAccess(false),
+              And("{string:name} can still access the media, as its uploader", {
+                params: Schema.Struct({ name: Schema.String }),
+                handler: (context: MediaContext, { name }) =>
+                  checkVisibility({ ...context, actorId: personNamed(context.actors, name) }, true),
+              }),
               wikiMediaVisible({
                 keyword: And,
                 pattern: "the media is hidden on wiki article {string:title}",

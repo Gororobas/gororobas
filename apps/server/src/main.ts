@@ -9,6 +9,7 @@ import { AppRuntimeLive } from "./app-runtime.js"
 import { makeAuthentication } from "./authentication/app-auth.js"
 import { AuthenticationLive } from "./authentication/authentication-live.js"
 import { authenticationOrigin } from "./authentication/authentication-origin.js"
+import { WikiArticleClassifierLangExtract } from "./classification/wiki-article-classifier-langextract.js"
 import { environmentConfig } from "./environment-config.js"
 import { ProfilesRepository } from "./profiles/repository.js"
 import { runMainWithCustomRuntime } from "./run-main-with-custom-runtime.js"
@@ -19,6 +20,7 @@ import { TranslationServiceDeepl } from "./translation/translation-service-deepl
 import { WorkflowsLive } from "./workflows-live.js"
 
 const Services = Layer.mergeAll(WorkflowsLive, SeedOnStartupLive).pipe(
+  Layer.provide(WikiArticleClassifierLangExtract),
   Layer.provideMerge(
     Layer.unwrap(
       Effect.gen(function* () {

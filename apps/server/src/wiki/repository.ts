@@ -2,6 +2,7 @@ import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   CreateWikiArticleInput,
   CreateWikiArticleRevisionInput,
+  contentReferencedWikiArticleIds,
   projectArticle,
   projectTranslation,
   EMPTY_LORO_DOC_FRONTIER,
@@ -23,15 +24,18 @@ import {
   WikiArticleRevisionNotFoundError,
   WikiArticleRevisionRow,
   WikiArticleStatus,
+  type WikiArticleProjectionRow,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Array as EffectArray, Option, Result } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { requestWikiArticleClassification } from "../classification/wiki-article-classification-workflow.js"
 import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
+import { type ExternalDataArticle } from "./external-data/persist-utils.js"
 import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
   setBookmark,
@@ -40,6 +44,7 @@ import {
   attachMediaToWikiArticle,
   insertCrdtRow,
   insertHandleRows,
+  replaceRelations,
   insertRevisionRow,
   insertRevisionMediaAssetRows,
   insertTranslationRows,
@@ -49,6 +54,7 @@ import {
 } from "./mutations.js"
 import {
   listCards,
+  listRelatedCards,
   searchCards,
   listRevisionHistory,
   listPublishedCultivars,
@@ -249,7 +255,32 @@ const persistArticleProjection = (input: {
 
     yield* persistHandleProjections(input)
     yield* persistTranslationProjections(input)
+
+    yield* replaceRelations({
+      wikiArticleId: input.wikiArticleId,
+      source: "CONTENT_REFERENCE",
+      related: contentReferencedWikiArticleIds(input.sourceData, input.wikiArticleId).map(
+        (wikiArticleId) => ({ wikiArticleId }),
+      ),
+    })
   })
+
+/**
+ * Derived work on newly approved content: external provider data and classified relations.
+ * Best-effort, submitted after the article transaction commits.
+ */
+const requestEnrichment = (article: ExternalDataArticle, previous?: WikiArticleProjectionRow) =>
+  Effect.all(
+    [
+      requestExternalDataFetch(article, previous).pipe(
+        Effect.catchCause((cause) => Effect.logError("External data submission failed", cause)),
+      ),
+      requestWikiArticleClassification(article, previous).pipe(
+        Effect.catchCause((cause) => Effect.logError("Classification submission failed", cause)),
+      ),
+    ],
+    { concurrency: "unbounded", discard: true },
+  )
 
 const createWikiArticle = (
   input: CreateWikiArticleInput,
@@ -314,11 +345,7 @@ const createWikiArticle = (
       Effect.tap((article) =>
         options.isPendingApproval || options.enrichment === "skip"
           ? Effect.void
-          : requestExternalDataFetch(article).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logError("External data submission failed", cause),
-              ),
-            ),
+          : requestEnrichment(article),
       ),
       Effect.map((article) => article.id),
     ),
@@ -453,11 +480,7 @@ const evaluateRevision = (
       sql.withTransaction,
       Effect.tap((updated) =>
         updated && options.enrichment !== "skip"
-          ? requestExternalDataFetch(updated.article, updated.previous).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logError("External data submission failed", cause),
-              ),
-            )
+          ? requestEnrichment(updated.article, updated.previous)
           : Effect.void,
       ),
       Effect.asVoid,
@@ -474,6 +497,8 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         removeBookmark,
         setMainMedia,
         listCards,
+        listRelatedCards,
+        replaceRelations,
         searchCards,
         listRevisionHistory,
         listPublishedCultivars,
