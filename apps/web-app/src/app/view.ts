@@ -23,10 +23,13 @@ import { ApplicationRoute, type SearchType, loginRouter, searchUrl } from "./rou
 // SHARED STYLES
 
 // The document scrolls, so the app bar leaves with the content and pages can pin their own headers.
+// `clip` keeps a stray wide element from scrolling the whole page sideways on phones, and,
+// unlike `hidden`, doesn't create a scroll container, so sticky headers keep working.
 const shellStyle = Style.make({
   display: "flex",
   minBlockSize: "100dvh",
   flexDirection: "column",
+  overflowX: "clip",
 })
 
 const mainStyle = Style.make({ display: "flex", flex: 1, flexDirection: "column" })

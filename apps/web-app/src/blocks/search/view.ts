@@ -38,6 +38,7 @@ import {
   borderWidth,
   breakpoint,
   duration,
+  easing,
   fontSize,
   fontWeight,
   layer,
@@ -242,16 +243,17 @@ const drawerGroupStyle = Style.make({ display: "grid", rowGap: space[2] })
 
 const tileGridStyle = Style.make({
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fill, minmax(min(10rem, 100%), 1fr))",
+  gridTemplateColumns: "repeat(auto-fill, minmax(min(11rem, 100%), 1fr))",
   gap: space[3],
 }).pipe(Style.when(breakpoint.md, { gap: space[4] }))
 
+const tileMarker = When.marker("browse-tile")
+
 const tileStyle = Style.make({
-  display: "flex",
-  minBlockSize: "8rem",
-  flexDirection: "column",
-  justifyContent: "space-between",
-  gap: space[2],
+  position: "relative",
+  display: "block",
+  minBlockSize: "7.5rem",
+  containerType: "inline-size",
   overflow: "hidden",
   padding: space[4],
   borderRadius: radius.lg,
@@ -260,7 +262,17 @@ const tileStyle = Style.make({
 }).pipe(
   Style.when(When.hover, { transform: "translateY(-0.125rem)" }),
   Style.when(When.focusVisible, focusRingDeclarations),
+  Style.merge(Style.mark(tileMarker)),
 )
+
+/** Shrinks with narrow tiles so long names such as "Organizações" stay whole. */
+const tileTitleStyle = Style.make({
+  position: "relative",
+  zIndex: 1,
+  display: "block",
+  fontSize: `clamp(${fontSize.regular}, 11cqi, ${fontSize.large})`,
+  hyphens: "manual",
+})
 
 /** Tiles take turns through the palette, like a seed catalog's covers. */
 const tileTones: ReadonlyArray<Exclude<Tone, "destructive">> = [
@@ -273,13 +285,15 @@ const tileTones: ReadonlyArray<Exclude<Tone, "destructive">> = [
 const tileToneStyle = (tone: Exclude<Tone, "destructive">) =>
   Style.make({ backgroundColor: tones[tone].ramp[300], color: tones[tone].ramp[950] })
 
+/** Sits in the corner below the name, partly cropped by the tile, and tilts on hover. */
 const tileIconStyle = Style.make({
-  alignSelf: "flex-end",
-  marginBlockEnd: `calc(-1 * ${space[3]})`,
-  marginInlineEnd: `calc(-1 * ${space[2]})`,
+  position: "absolute",
+  insetBlockEnd: `calc(-1 * ${space[4]})`,
+  insetInlineEnd: `calc(-1 * ${space[3]})`,
   transform: "rotate(-12deg)",
-  [iconSizeProperty]: "3.5rem",
-})
+  transition: `transform ${duration.slow} ${easing.emphasized}`,
+  [iconSizeProperty]: "5.5rem",
+}).pipe(Style.when(When.within(tileMarker, When.hover), { transform: "rotate(-2deg) scale(1.06)" }))
 
 const browseListStyle = Style.make({
   display: "grid",
@@ -734,9 +748,9 @@ const tile = (
     AppText.view(
       {
         element: "span",
-        appearance: "large",
         weight: "semibold",
         lineHeight: "tight",
+        styles: [tileTitleStyle],
         children: [label],
       },
       h,
