@@ -290,6 +290,15 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           Effect.flatMap((page) => repository.listBookmarkers(page.id)),
         )
 
+      const listCultivarCards = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
+        getPage(lookup).pipe(
+          Effect.flatMap((page) =>
+            page.kind === "PLANT"
+              ? repository.listCultivarCards({ parentPlantId: page.id, language: lookup.language })
+              : Effect.succeed([]),
+          ),
+        )
+
       const listContributors = (lookup: WikiArticleLookup) =>
         getPage({ ...lookup, language: "pt" }).pipe(
           Effect.flatMap((page) => repository.listContributors(page.id)),
@@ -335,6 +344,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         listBookmarks,
         listBookmarkers,
         listContributors,
+        listCultivarCards,
       }
     }),
   },

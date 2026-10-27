@@ -155,6 +155,14 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
     }),
   )
   .add(
+    HttpApiEndpoint.get("listWikiArticleCultivars", "/wiki/:kind/:handle/cultivars", {
+      success: Schema.Array(WikiArticleQueriedCardData),
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
+      params: WikiArticleLookup,
+      query: Schema.Struct({ language: SupportedLanguage }),
+    }),
+  )
+  .add(
     HttpApiEndpoint.put("setMainMedia", "/wiki/:wikiArticleId/main-media", {
       params: Schema.Struct({ wikiArticleId: WikiArticleId }),
       payload: Schema.Struct({ mediaAssetId: MediaAssetId }),

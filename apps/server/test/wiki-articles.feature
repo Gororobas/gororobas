@@ -70,6 +70,7 @@ Feature: Wiki articles
       Given "Banana" has published cultivars "Banana Prata" and "Banana Nanica"
       When viewing "Banana"
       Then the cultivars section lists "Banana Prata" and "Banana Nanica"
+      And their cards name "Banana" as the plant they belong to
 
   Rule: Wiki articles can have categorized photos
 

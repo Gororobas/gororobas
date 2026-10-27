@@ -256,6 +256,11 @@ const requests = ({
       client.wiki.listWikiArticleContributors({
         params: { kind: targets.article.kind, handle: targets.article.handle },
       }),
+    "wiki.listWikiArticleCultivars": () =>
+      client.wiki.listWikiArticleCultivars({
+        params: { kind: targets.article.kind, handle: targets.article.handle },
+        query: { language: "pt" },
+      }),
     "moderation.getModerationQueue": () => client.moderation.getModerationQueue(),
 
     // Creation

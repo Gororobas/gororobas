@@ -368,6 +368,18 @@ export const listCardsByIds = SqlSchema.findAll({
     ),
 })
 
+/** Cards of a plant's published cultivars, so its page can show them with their photos. */
+export const listCultivarCards = SqlSchema.findAll({
+  Request: Schema.Struct({ parentPlantId: WikiArticleId, language: SupportedLanguage }),
+  Result: QueriedCardRow,
+  execute: ({ parentPlantId, language }) =>
+    SqlClient.use(
+      (sql) => sql`${publishedCardsQuery(sql, language)}
+        AND a.kind = 'PLANT_CULTIVAR' AND json_extract(a.attributes, '$.parentPlantId') = ${parentPlantId}
+        ORDER BY a.id`,
+    ),
+})
+
 const RelatedCardRow = Schema.Struct({
   ...QueriedCardRow.fields,
   links: Schema.fromJsonString(RelatedWikiArticle.fields.links),

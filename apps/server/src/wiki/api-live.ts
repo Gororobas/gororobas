@@ -110,6 +110,13 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
           withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleContributors" }),
         ),
       )
+      .handle("listWikiArticleCultivars", ({ params, query }) =>
+        WikiArticlesService.use((service) =>
+          service.listCultivarCards({ ...params, language: query.language }),
+        ).pipe(
+          withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleCultivars" }),
+        ),
+      )
       .handle("setMainMedia", ({ params, payload }) =>
         WikiArticlesService.use((service) => service.setMainMedia({ ...params, ...payload })).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "setMainMedia" }),

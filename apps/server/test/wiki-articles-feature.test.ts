@@ -1626,6 +1626,27 @@ await Effect.runPromise(
                     return context
                   }),
               }),
+              And("their cards name {string:parent} as the plant they belong to", {
+                params: Schema.Struct({ parent: Schema.String }),
+                handler: (context: WikiContext, { parent }) =>
+                  Effect.gen(function* () {
+                    const cards = yield* (yield* WikiArticlesService).listCultivarCards({
+                      handle: pageIn(context).handle,
+                      kind: "PLANT",
+                      language: "pt",
+                    })
+
+                    expect(cards.map((card) => card.id)).toEqual(
+                      expect.arrayContaining(pageIn(context).cultivars.map((row) => row.id)),
+                    )
+                    expect(cards).toHaveLength(pageIn(context).cultivars.length)
+                    expect(
+                      cards.map((card) => Option.map(card.parentPlantName, (name) => name.name)),
+                    ).toEqual(cards.map(() => Option.some(parent)))
+
+                    return context
+                  }),
+              }),
             ),
         })
       },
