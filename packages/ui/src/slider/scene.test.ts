@@ -4,8 +4,8 @@ import * as Scene from 'foldkit/scene'
 
 import { describe, it } from '@effect/vitest'
 
-import type { SliderAttributes } from './index.js'
-import { Message, init, update, view } from './index.js'
+import type { SliderAttributes } from './slider.js'
+import { Message, init, update, view } from './slider.js'
 
 const testToView = (attributes: SliderAttributes) =>
   ih.div(
@@ -30,7 +30,7 @@ const defaultModel = init({
   min: 0,
   max: 10,
   step: 1,
-})
+}).model
 
 const root = Scene.selector('[data-slider-id="test"]')
 const track = Scene.selector('[data-slider-track-id="test"]')

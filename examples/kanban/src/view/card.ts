@@ -1,16 +1,16 @@
 import clsx from 'clsx'
 import { Option, String } from 'effect'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
-import { DragAndDrop } from '@foldkit/ui'
+import { type RenderInfo, maybeDraggedItemId } from '@foldkit/ui/dragAndDrop'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { Card } from '../domain'
-import type { Message } from '../message'
 import type { Model } from '../model'
 
 const cardContent = (
-  card: Card.Card,
-  h: HtmlBuilder<Message>,
+  card: typeof Card.Card.Type,
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => [
   h.span([h.Class('text-sm font-medium text-gray-900')], [card.title]),
   ...(String.isNonEmpty(card.description)
@@ -24,15 +24,15 @@ const cardContent = (
 ]
 
 export const cardView = (
-  model: Model,
-  card: Card.Card,
+  model: typeof Model.Type,
+  card: typeof Card.Card.Type,
   columnId: string,
   index: number,
-  toParentMessage: (message: DragAndDrop.Message) => Message,
-  h: HtmlBuilder<Message>,
+  draggable: RenderInfo['draggable'],
+  h: ApplicationViewBuilder,
 ): Html => {
   const isThisCardBeingDragged = Option.exists(
-    DragAndDrop.maybeDraggedItemId(model.dragAndDrop),
+    maybeDraggedItemId(model.dragAndDrop),
     id => id === card.id,
   )
   const isPointerDragged =
@@ -53,22 +53,16 @@ export const cardView = (
             !isPointerDragged && !isKeyboardDragged,
         }),
       ),
-      ...DragAndDrop.draggable(
-        {
-          model: model.dragAndDrop,
-          toParentMessage,
-          itemId: card.id,
-          containerId: columnId,
-          index,
-        },
-        h,
-      ),
+      ...draggable({ itemId: card.id, containerId: columnId, index }),
     ],
     cardContent(card, h),
   )
 }
 
-export const ghostCardView = (card: Card.Card, h: HtmlBuilder<Message>): Html =>
+export const ghostCardView = (
+  card: typeof Card.Card.Type,
+  h: ApplicationViewBuilder,
+): Html =>
   h.div(
     [
       h.Class(

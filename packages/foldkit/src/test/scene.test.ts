@@ -1,18 +1,28 @@
-import { Array, Option, Schema, pipe } from 'effect'
-import { describe, expect, expectTypeOf, test } from 'vitest'
+import {
+  Array,
+  Equivalence,
+  Function,
+  Number,
+  Option,
+  Schema,
+  pipe,
+} from 'effect'
+import { describe, expect, expectTypeOf, test, vi } from 'vitest'
 
 import * as CustomElement from '../customElement/index.js'
+import { defineView } from '../html/block.js'
 import {
   type HtmlBuilder,
   __htmlBuilder as attributeHtml,
   inertHtml,
 } from '../html/index.js'
 import { defineMessageUnion } from '../message/index.js'
+import * as Mount from '../mount/index.js'
 import * as PublicScene from '../scene/public.js'
 import { h } from '../snabbdom/index.js'
 import type { VNode } from '../snabbdom/index.js'
 import { modifyFields } from '../struct/index.js'
-import { defineView } from '../submodel/public.js'
+import * as SubscriptionDefinition from '../subscription/subscription.js'
 import type * as Update from '../update/index.js'
 import {
   testId as attributeTestId,
@@ -47,6 +57,7 @@ import {
 } from './apps/contextMenu.js'
 import {
   Message as CounterMessage,
+  type Model as CounterModel,
   FetchCount,
   FetchCountById,
   initialModel as counterInitialModel,
@@ -61,6 +72,7 @@ import {
   initialModel as initialDraftsModel,
 } from './apps/drafts.js'
 import {
+  Message as FeedSocketMessage,
   feedResources,
   initialModel as feedSocketInitialModel,
   update as feedSocketUpdate,
@@ -113,6 +125,7 @@ import {
   type Model as MountPanelModel,
   ScrollList,
   initialModel as mountInitialModel,
+  Mounts as mountPanelMounts,
   scrollListView as mountScrollListView,
   twoPanelView as mountTwoPanelView,
   update as mountUpdate,
@@ -3213,35 +3226,708 @@ describe('scene with outMessage', () => {
   })
 })
 
+const counterSubscriptions = SubscriptionDefinition.make<
+  CounterModel,
+  CounterMessage
+>()(entry => ({
+  clock: entry('SceneCounterClock', {
+    messages: [CounterMessage.Ticked, CounterMessage.PolledCount],
+  }),
+}))
+
+const keepAliveCounterSubscriptions = SubscriptionDefinition.make<
+  CounterModel,
+  CounterMessage
+>()(entry => ({
+  clock: entry(
+    'SceneKeepAliveCounterClock',
+    { count: Schema.Number },
+    {
+      messages: [CounterMessage.Ticked],
+      modelToDependencies: model => ({ count: model.count }),
+      keepAliveEquivalence: Equivalence.make(
+        (left, right) => left.count === right.count,
+      ),
+    },
+  ),
+}))
+
+const inactiveCounterSubscriptions = SubscriptionDefinition.make<
+  CounterModel,
+  CounterMessage
+>()(entry => ({
+  clock: entry(
+    'SceneInactiveCounterClock',
+    {},
+    {
+      messages: [CounterMessage.Ticked],
+      modelToDependencies: () => {
+        throw new Error('Scene evaluated Subscription dependencies')
+      },
+    },
+  ),
+}))
+
+const widenedCounterSubscriptions: SubscriptionDefinition.Subscriptions<
+  CounterModel,
+  CounterMessage,
+  SubscriptionDefinition.HandlerOf<typeof keepAliveCounterSubscriptions.clock>
+> = keepAliveCounterSubscriptions
+
+const mountSubscriptions = SubscriptionDefinition.make<
+  MountPanelModel,
+  MountPanelMessage
+>()(entry => ({
+  ticks: entry('SceneMountPanelTicks', {
+    messages: [MountPanelMessage.Ticked],
+  }),
+}))
+
+const logoutSubscriptions = SubscriptionDefinition.make<
+  LogoutModel,
+  LogoutMessage
+>()(entry => ({
+  action: entry('SceneLogoutAction', {
+    messages: [LogoutButtonMessage.ObservedBackgroundActivity],
+  }),
+}))
+
+const silentCounterSubscriptions = SubscriptionDefinition.make<
+  CounterModel,
+  CounterMessage
+>()(entry => ({
+  clock: entry('SceneSilentCounterClock', { messages: [] }),
+}))
+
+const silentFeedSubscriptions = SubscriptionDefinition.make<
+  typeof feedSocketInitialModel,
+  FeedSocketMessage
+>()(entry => ({
+  feed: entry('SceneSilentFeed', { messages: [] }),
+}))
+
+const PositiveCount = Schema.Int.check(
+  Schema.isBetween({ minimum: 1, maximum: 10 }),
+)
+
+const PayloadMessage = defineMessageUnion({
+  ReceivedCount: { count: PositiveCount },
+})
+type PayloadMessage = typeof PayloadMessage.Type
+
+const payloadSubscriptions = SubscriptionDefinition.make<
+  CounterModel,
+  PayloadMessage
+>()(entry => ({
+  count: entry(
+    'ScenePayloadCount',
+    {},
+    {
+      messages: [PayloadMessage.ReceivedCount],
+      modelToDependencies: () => ({}),
+    },
+  ),
+}))
+
+const SmallPositiveReceivedCount = Schema.Struct({
+  _tag: Schema.Literal('ReceivedCount'),
+  count: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 5 })),
+})
+
+const overlappingPayloadSubscriptions = SubscriptionDefinition.make<
+  CounterModel,
+  PayloadMessage
+>()(entry => ({
+  count: entry(
+    'SceneOverlappingPayloadCount',
+    {},
+    {
+      messages: [PayloadMessage.ReceivedCount, SmallPositiveReceivedCount],
+      modelToDependencies: () => ({}),
+    },
+  ),
+}))
+
+const payloadUpdate = (model: CounterModel, message: PayloadMessage) =>
+  PayloadMessage.match<Update.Return<CounterModel, PayloadMessage>>(message, {
+    ReceivedCount: ({ count }) => ({
+      model: modifyFields(model, { count: () => count }),
+    }),
+  })
+
+const payloadView = (model: CounterModel, h: HtmlBuilder<PayloadMessage>) =>
+  h.div([h.Role('status')], [globalThis.String(model.count)])
+
+const SubscriptionParentMessage = defineMessageUnion({
+  GotLeftCounterMessage: { message: CounterMessage },
+  GotRightCounterMessage: { message: CounterMessage },
+})
+type SubscriptionParentMessage = typeof SubscriptionParentMessage.Type
+
+type SubscriptionParentModel = Readonly<{ counter: CounterModel }>
+
+const leftCounterSubscriptions = SubscriptionDefinition.lift({
+  leftClock: counterSubscriptions.clock,
+})<SubscriptionParentModel, SubscriptionParentMessage>({
+  read: model => Option.some(model.counter),
+  toParentMessage: message =>
+    SubscriptionParentMessage.GotLeftCounterMessage({ message }),
+})
+
+const rightCounterSubscriptions = SubscriptionDefinition.lift({
+  rightClock: counterSubscriptions.clock,
+})<SubscriptionParentModel, SubscriptionParentMessage>({
+  read: model => Option.some(model.counter),
+  toParentMessage: message =>
+    SubscriptionParentMessage.GotRightCounterMessage({ message }),
+})
+
+const keepAliveLeftCounterSubscriptions = SubscriptionDefinition.lift({
+  leftClock: keepAliveCounterSubscriptions.clock,
+})<SubscriptionParentModel, SubscriptionParentMessage>({
+  read: model => Option.some(model.counter),
+  toParentMessage: message =>
+    SubscriptionParentMessage.GotLeftCounterMessage({ message }),
+})
+
+const inactiveLeftCounterSubscriptions = SubscriptionDefinition.lift({
+  leftClock: inactiveCounterSubscriptions.clock,
+})<SubscriptionParentModel, SubscriptionParentMessage>({
+  read: () => Option.none(),
+  toParentMessage: message =>
+    SubscriptionParentMessage.GotLeftCounterMessage({ message }),
+})
+
+const parentCounterSubscriptions = SubscriptionDefinition.aggregate(
+  leftCounterSubscriptions,
+  rightCounterSubscriptions,
+)
+
+const SubscriptionRootMessage = defineMessageUnion({
+  GotParentMessage: { message: SubscriptionParentMessage },
+})
+type SubscriptionRootMessage = typeof SubscriptionRootMessage.Type
+
+type SubscriptionRootModel = Readonly<{ parent: SubscriptionParentModel }>
+
+const rootCounterSubscriptions = SubscriptionDefinition.lift(
+  leftCounterSubscriptions,
+)<SubscriptionRootModel, SubscriptionRootMessage>({
+  read: model => Option.some(model.parent),
+  toParentMessage: message =>
+    SubscriptionRootMessage.GotParentMessage({ message }),
+})
+
+const subscriptionParentUpdate = (
+  model: SubscriptionParentModel,
+  message: SubscriptionParentMessage,
+) =>
+  SubscriptionParentMessage.match<
+    Update.Return<SubscriptionParentModel, SubscriptionParentMessage>
+  >(message, {
+    GotLeftCounterMessage: () => ({
+      model: {
+        counter: modifyFields(model.counter, { count: Number.increment }),
+      },
+    }),
+    GotRightCounterMessage: () => ({
+      model: {
+        counter: modifyFields(model.counter, { count: Number.sum(10) }),
+      },
+    }),
+  })
+
+const subscriptionParentView = (
+  model: SubscriptionParentModel,
+  h: HtmlBuilder<SubscriptionParentMessage>,
+) => h.div([h.Role('status')], ['count: ' + model.counter.count])
+
+const subscriptionRootUpdate = (
+  model: SubscriptionRootModel,
+  message: SubscriptionRootMessage,
+) =>
+  SubscriptionRootMessage.match<
+    Update.Return<SubscriptionRootModel, SubscriptionRootMessage>
+  >(message, {
+    GotParentMessage: ({ message: parentMessage }) => ({
+      model: {
+        parent: subscriptionParentUpdate(model.parent, parentMessage).model,
+      },
+    }),
+  })
+
+const subscriptionRootView = (
+  model: SubscriptionRootModel,
+  h: HtmlBuilder<SubscriptionRootMessage>,
+) => h.div([h.Role('status')], ['count: ' + model.parent.counter.count])
+
 describe('Scene.Subscription.emit', () => {
   test('drives a Message into a running scene and re-renders', () => {
     Scene.scene(
-      { update: counterUpdate, view: counterView },
+      {
+        update: counterUpdate,
+        view: counterView,
+        subscriptions: counterSubscriptions,
+      },
       Scene.given(counterInitialModel),
       Scene.expect(Scene.role('status')).toHaveText('count: 0'),
-      Scene.Subscription.emit(CounterMessage.Ticked()),
+      Scene.Subscription.emit(
+        counterSubscriptions.clock,
+        CounterMessage.Ticked(),
+      ),
       Scene.expect(Scene.role('status')).toHaveText('count: 1'),
-      Scene.Subscription.emit(CounterMessage.Ticked()),
+      Scene.Subscription.emit(
+        counterSubscriptions.clock,
+        CounterMessage.Ticked(),
+      ),
       Scene.expect(Scene.role('status')).toHaveText('count: 2'),
     )
   })
 
-  test('requires the Message to belong to the tested update', () => {
+  test('accepts only Messages declared by the registered Subscriptions', () => {
     expectTypeOf(() =>
       Scene.scene(
-        { update: counterUpdate, view: counterView },
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: counterSubscriptions,
+        },
         Scene.given(counterInitialModel),
-        // @ts-expect-error CompletedAction is not a Counter Message
-        Scene.Subscription.emit(LogoutButtonMessage.CompletedAction()),
+        Scene.Subscription.emit(
+          counterSubscriptions.clock,
+          // @ts-expect-error ClickedIncrement is a DOM Message, not a declared Subscription Message.
+          CounterMessage.ClickedIncrement(),
+        ),
+      ),
+    ).toBeFunction()
+
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: counterSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.Subscription.emit(
+          counterSubscriptions.clock,
+          // @ts-expect-error SucceededFetchCount belongs to a Command, not a declared Subscription.
+          CounterMessage.SucceededFetchCount({ count: 1 }),
+        ),
+      ),
+    ).toBeFunction()
+
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          update: mountUpdate,
+          view: mountView,
+          subscriptions: mountSubscriptions,
+        },
+        Scene.given(mountInitialModel),
+        Scene.Subscription.emit(
+          mountSubscriptions.ticks,
+          // @ts-expect-error MeasuredPanel belongs to a Mount, not a declared Subscription.
+          MountPanelMessage.MeasuredPanel({ width: 100 }),
+        ),
+      ),
+    ).toBeFunction()
+
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          update: feedSocketUpdate,
+          view: feedSocketView,
+          subscriptions: silentFeedSubscriptions,
+        },
+        Scene.given(feedSocketInitialModel),
+        Scene.Subscription.emit(
+          silentFeedSubscriptions.feed,
+          // @ts-expect-error AcquiredFeedSocket belongs to a ManagedResource.
+          FeedSocketMessage.AcquiredFeedSocket({ socketId: 'socket' }),
+        ),
       ),
     ).toBeFunction()
   })
 
+  test('silent Subscriptions declare no Messages', () => {
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: silentCounterSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.Subscription.emit(
+          silentCounterSubscriptions.clock,
+          // @ts-expect-error An empty messages declaration is silent.
+          CounterMessage.Ticked(),
+        ),
+      ),
+    ).toBeFunction()
+  })
+
+  test('rejects a Message from a silent Subscription at runtime', () => {
+    expect(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: silentCounterSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.Subscription.emit(
+          silentCounterSubscriptions.clock,
+          // @ts-expect-error A silent Subscription has no declared Messages.
+          CounterMessage.Ticked(),
+        ),
+      ),
+    ).toThrow('is not declared by the selected Subscription')
+  })
+
+  test('a widened Subscriptions record has no statically known declarations', () => {
+    const clock = widenedCounterSubscriptions['clock']!
+    const ticked = CounterMessage.Ticked()
+
+    expectTypeOf(() =>
+      // @ts-expect-error The broad record type erases per-entry Message schemas.
+      Scene.Subscription.emit(clock, ticked),
+    ).toBeFunction()
+
+    const unknownSubscriptions: unknown = counterSubscriptions
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          // @ts-expect-error An unknown value is not a registered Subscriptions record.
+          subscriptions: unknownSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+      ),
+    ).toBeFunction()
+  })
+
+  test('runtime declarations constrain an unchecked Subscriptions record', () => {
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    const uncheckedSubscriptions: any = silentCounterSubscriptions
+
+    expect(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: uncheckedSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.Subscription.emit(
+          uncheckedSubscriptions.clock,
+          CounterMessage.ClickedIncrement(),
+        ),
+      ),
+    ).toThrow('is not declared by the selected Subscription')
+  })
+
+  test('rejects an undeclared Message at runtime', () => {
+    expect(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: counterSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.Subscription.emit(
+          counterSubscriptions.clock,
+          // @ts-expect-error ClickedIncrement is not a declared Subscription Message.
+          CounterMessage.ClickedIncrement(),
+        ),
+      ),
+    ).toThrow('is not declared by the selected Subscription')
+  })
+
+  test('accepts a payload that satisfies its declared Schema', () => {
+    Scene.scene(
+      {
+        update: payloadUpdate,
+        view: payloadView,
+        subscriptions: payloadSubscriptions,
+      },
+      Scene.given(counterInitialModel),
+      Scene.Subscription.emit(
+        payloadSubscriptions.count,
+        PayloadMessage.ReceivedCount({ count: 4 }),
+      ),
+      Scene.expect(Scene.role('status')).toHaveText('4'),
+    )
+  })
+
+  test('overlapping schemas in one entry dispatch the Message once', () => {
+    const update = vi.fn(payloadUpdate)
+
+    Scene.scene(
+      {
+        update,
+        view: payloadView,
+        subscriptions: overlappingPayloadSubscriptions,
+      },
+      Scene.given(counterInitialModel),
+      Scene.Subscription.emit(
+        overlappingPayloadSubscriptions.count,
+        PayloadMessage.ReceivedCount({ count: 4 }),
+      ),
+    )
+
+    expect(update).toHaveBeenCalledOnce()
+  })
+
+  test('validates a declared Message payload refinement before update', () => {
+    const update = vi.fn(payloadUpdate)
+    const invalidMessage: PayloadMessage = {
+      _tag: 'ReceivedCount',
+      count: 0,
+    }
+
+    expect(() =>
+      Scene.scene(
+        {
+          update,
+          view: payloadView,
+          subscriptions: payloadSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.Subscription.emit(payloadSubscriptions.count, invalidMessage),
+      ),
+    ).toThrow('is not declared by the selected Subscription')
+
+    expect(update).not.toHaveBeenCalled()
+  })
+
+  test('applies a lifted Subscription Message wrapper', () => {
+    Scene.scene(
+      {
+        update: subscriptionParentUpdate,
+        view: subscriptionParentView,
+        subscriptions: leftCounterSubscriptions,
+      },
+      Scene.given({ counter: counterInitialModel }),
+      Scene.Subscription.emit(
+        leftCounterSubscriptions.leftClock,
+        CounterMessage.Ticked(),
+      ),
+      Scene.expect(Scene.role('status')).toHaveText('count: 1'),
+    )
+  })
+
+  test('applies every wrapper in a nested lift chain', () => {
+    Scene.scene(
+      {
+        update: subscriptionRootUpdate,
+        view: subscriptionRootView,
+        subscriptions: rootCounterSubscriptions,
+      },
+      Scene.given({ parent: { counter: counterInitialModel } }),
+      Scene.Subscription.emit(
+        rootCounterSubscriptions.leftClock,
+        CounterMessage.Ticked(),
+      ),
+      Scene.expect(Scene.role('status')).toHaveText('count: 1'),
+    )
+  })
+
+  test('replays a lifted inline keep-alive declaration', () => {
+    Scene.scene(
+      {
+        update: subscriptionParentUpdate,
+        view: subscriptionParentView,
+        subscriptions: keepAliveLeftCounterSubscriptions,
+      },
+      Scene.given({ counter: counterInitialModel }),
+      Scene.Subscription.emit(
+        keepAliveLeftCounterSubscriptions.leftClock,
+        CounterMessage.Ticked(),
+      ),
+      Scene.expect(Scene.role('status')).toHaveText('count: 1'),
+    )
+  })
+
+  test('replays a queued Message without evaluating current activity', () => {
+    Scene.scene(
+      {
+        update: subscriptionParentUpdate,
+        view: subscriptionParentView,
+        subscriptions: inactiveLeftCounterSubscriptions,
+      },
+      Scene.given({ counter: counterInitialModel }),
+      Scene.Subscription.emit(
+        inactiveLeftCounterSubscriptions.leftClock,
+        CounterMessage.Ticked(),
+      ),
+      Scene.expect(Scene.role('status')).toHaveText('count: 1'),
+    )
+  })
+
+  test('rejects a lifted parent wrapper at the raw Subscription boundary', () => {
+    const wrapper = SubscriptionParentMessage.GotLeftCounterMessage({
+      message: CounterMessage.Ticked(),
+    })
+
+    expect(() =>
+      Scene.scene(
+        {
+          update: subscriptionParentUpdate,
+          view: subscriptionParentView,
+          subscriptions: leftCounterSubscriptions,
+        },
+        Scene.given({ counter: counterInitialModel }),
+        // @ts-expect-error Lifted entries accept their raw child Message.
+        Scene.Subscription.emit(leftCounterSubscriptions.leftClock, wrapper),
+      ),
+    ).toThrow('is not declared by the selected Subscription')
+  })
+
+  test('applies a lifted Subscription Message inside a scoped step group', () => {
+    const scopedTick = Scene.inside(
+      Scene.role('status'),
+      Scene.Subscription.emit(
+        leftCounterSubscriptions.leftClock,
+        CounterMessage.Ticked(),
+      ),
+    )
+
+    Scene.scene(
+      {
+        update: subscriptionParentUpdate,
+        view: subscriptionParentView,
+        subscriptions: leftCounterSubscriptions,
+      },
+      Scene.given({ counter: counterInitialModel }),
+      scopedTick,
+      Scene.expect(Scene.role('status')).toHaveText('count: 1'),
+    )
+  })
+
+  test('scoped step groups preserve the registered Message contract', () => {
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: counterSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.inside(
+          Scene.role('status'),
+          Scene.inside(
+            Scene.role('status'),
+            Scene.Subscription.emit(
+              counterSubscriptions.clock,
+              // @ts-expect-error Scoped steps accept only declared Subscription Messages too.
+              CounterMessage.ClickedIncrement(),
+            ),
+          ),
+        ),
+      ),
+    ).toBeFunction()
+
+    expect(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: counterSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.inside(
+          Scene.role('status'),
+          Scene.inside(
+            Scene.role('status'),
+            Scene.Subscription.emit(
+              counterSubscriptions.clock,
+              // @ts-expect-error The runtime boundary rejects untyped scoped steps.
+              CounterMessage.ClickedIncrement(),
+            ),
+          ),
+        ),
+      ),
+    ).toThrow('is not declared by the selected Subscription')
+  })
+
+  test('reports when a selected entry is registered under multiple keys', () => {
+    const aliasedSubscriptions = {
+      firstClock: counterSubscriptions.clock,
+      secondClock: counterSubscriptions.clock,
+    }
+
+    expect(() =>
+      Scene.scene(
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: aliasedSubscriptions,
+        },
+        Scene.given(counterInitialModel),
+        Scene.Subscription.emit(
+          aliasedSubscriptions.firstClock,
+          CounterMessage.Ticked(),
+        ),
+      ),
+    ).toThrow(
+      'selected a Subscription entry registered under multiple keys: firstClock, secondClock',
+    )
+  })
+
+  test('selects distinct lifted mapper paths by entry identity', () => {
+    Scene.scene(
+      {
+        update: subscriptionParentUpdate,
+        view: subscriptionParentView,
+        subscriptions: parentCounterSubscriptions,
+      },
+      Scene.given({ counter: counterInitialModel }),
+      Scene.Subscription.emit(
+        parentCounterSubscriptions.leftClock,
+        CounterMessage.Ticked(),
+      ),
+      Scene.expect(Scene.role('status')).toHaveText('count: 1'),
+      Scene.Subscription.emit(
+        parentCounterSubscriptions.rightClock,
+        CounterMessage.Ticked(),
+      ),
+      Scene.expect(Scene.role('status')).toHaveText('count: 11'),
+    )
+  })
+
+  test('rejects an entry that is not registered with the scene', () => {
+    expect(() =>
+      Scene.scene(
+        {
+          update: subscriptionParentUpdate,
+          view: subscriptionParentView,
+          subscriptions: leftCounterSubscriptions,
+        },
+        Scene.given({ counter: counterInitialModel }),
+        Scene.Subscription.emit(
+          rightCounterSubscriptions.rightClock,
+          CounterMessage.Ticked(),
+        ),
+      ),
+    ).toThrow('is not declared by the selected Subscription')
+  })
+
   test('Commands produced by an emitted Message become pending', () => {
     Scene.scene(
-      { update: counterUpdate, view: counterView },
+      {
+        update: counterUpdate,
+        view: counterView,
+        subscriptions: counterSubscriptions,
+      },
       Scene.given(counterInitialModel),
-      Scene.Subscription.emit(CounterMessage.PolledCount()),
+      Scene.Subscription.emit(
+        counterSubscriptions.clock,
+        CounterMessage.PolledCount(),
+      ),
       Scene.Command.expectExact(FetchCount),
       Scene.Command.resolve(
         FetchCount,
@@ -3254,10 +3940,17 @@ describe('Scene.Subscription.emit', () => {
   test('throws when unresolved Commands are pending', () => {
     expect(() =>
       Scene.scene(
-        { update: counterUpdate, view: counterView },
+        {
+          update: counterUpdate,
+          view: counterView,
+          subscriptions: counterSubscriptions,
+        },
         Scene.given(counterInitialModel),
         Scene.click(Scene.role('button', { name: 'Start three fetches' })),
-        Scene.Subscription.emit(CounterMessage.Ticked()),
+        Scene.Subscription.emit(
+          counterSubscriptions.clock,
+          CounterMessage.Ticked(),
+        ),
       ),
     ).toThrow(
       'I found unresolved Commands when a Subscription emitted a new Message',
@@ -3268,9 +3961,16 @@ describe('Scene.Subscription.emit', () => {
     const openModel = modifyFields(mountInitialModel, { isOpen: () => true })
     expect(() =>
       Scene.scene(
-        { update: mountUpdate, view: mountView },
+        {
+          update: mountUpdate,
+          view: mountView,
+          subscriptions: mountSubscriptions,
+        },
         Scene.given(openModel),
-        Scene.Subscription.emit(MountPanelMessage.CompletedFocusButton()),
+        Scene.Subscription.emit(
+          mountSubscriptions.ticks,
+          MountPanelMessage.Ticked(),
+        ),
       ),
     ).toThrow(
       'I found unresolved Mounts when a Subscription emitted a new Message',
@@ -3281,7 +3981,11 @@ describe('Scene.Subscription.emit', () => {
     const openModel = modifyFields(mountInitialModel, { isOpen: () => true })
     expect(() =>
       Scene.scene(
-        { update: mountUpdate, view: mountView },
+        {
+          update: mountUpdate,
+          view: mountView,
+          subscriptions: mountSubscriptions,
+        },
         Scene.given(openModel),
         Scene.Mount.resolve(
           MeasurePanel,
@@ -3292,7 +3996,10 @@ describe('Scene.Subscription.emit', () => {
           MountPanelMessage.CompletedFocusButton(),
         ),
         Scene.click(Scene.role('button')),
-        Scene.Subscription.emit(MountPanelMessage.CompletedFocusButton()),
+        Scene.Subscription.emit(
+          mountSubscriptions.ticks,
+          MountPanelMessage.Ticked(),
+        ),
       ),
     ).toThrow(
       'I found unacknowledged unmounts when a Subscription emitted a new Message',
@@ -3531,6 +4238,7 @@ const mixedArityUpdate = (model: LogoutModel, message: LogoutMessage) =>
   >(message, {
     ClickedLogout: () => ({ model, outMessage: OutMessage.RequestedLogout() }),
     CompletedAction: () => ({ model }),
+    ObservedBackgroundActivity: () => ({ model }),
   })
 
 const outMessageBubblingView = (
@@ -3546,7 +4254,9 @@ const InteractionMessage = defineMessageUnion({
   ClickedExpand: {},
   ClickedRow: {},
   SubmittedForm: {},
-  CompletedAction: {},
+  ReceivedExpandSignal: {},
+  ReceivedRowSignal: {},
+  ObservedBackgroundActivity: {},
 })
 
 type InteractionMessage = typeof InteractionMessage.Type
@@ -3584,8 +4294,34 @@ const multipleOutMessagesUpdate = (
       model,
       outMessage: InteractionOutMessage.RequestedSubmission(),
     }),
-    CompletedAction: () => ({ model }),
+    ReceivedExpandSignal: () => ({
+      model,
+      outMessage: InteractionOutMessage.RequestedExpand(),
+    }),
+    ReceivedRowSignal: () => ({
+      model,
+      outMessage: InteractionOutMessage.RequestedSelection(),
+    }),
+    ObservedBackgroundActivity: () => ({ model }),
   })
+
+const dualMultipleOutMessagesUpdate = Function.dual(
+  2,
+  multipleOutMessagesUpdate,
+)
+
+const interactionSubscriptions = SubscriptionDefinition.make<
+  LogoutModel,
+  InteractionMessage
+>()(entry => ({
+  interaction: entry('SceneOutMessageInteraction', {
+    messages: [
+      InteractionMessage.ReceivedExpandSignal,
+      InteractionMessage.ReceivedRowSignal,
+      InteractionMessage.ObservedBackgroundActivity,
+    ],
+  }),
+}))
 
 const multipleOutMessagesView = (
   model: LogoutModel,
@@ -3643,18 +4379,124 @@ const multipleMountOutMessagesUpdate = (
     FailedMountSidebar: () => mountPanelUpdate,
     ClickedIncrement: () => mountPanelUpdate,
     ScrolledTo: () => mountPanelUpdate,
+    Ticked: () => mountPanelUpdate,
   })
 }
 
 describe('Scene OutMessage assertions', () => {
+  test('retains the explicit generic call shape', () => {
+    Scene.scene<CounterModel, typeof CounterMessage.Type>(
+      { update: counterUpdate, view: counterView },
+      Scene.given(counterInitialModel),
+    )
+  })
+
+  test('dual updates preserve their complete OutMessage union', () => {
+    Scene.scene(
+      {
+        update: dualMultipleOutMessagesUpdate,
+        view: multipleOutMessagesView,
+      },
+      Scene.given(interactionInitialModel),
+      Scene.click(Scene.selector('div')),
+      Scene.expectOutMessage(InteractionOutMessage.RequestedSelection()),
+    )
+
+    const selected = dualMultipleOutMessagesUpdate(
+      InteractionMessage.ClickedRow(),
+    )(interactionInitialModel)
+
+    expect(selected.outMessage).toEqual(
+      InteractionOutMessage.RequestedSelection(),
+    )
+  })
+
+  test('dual updates reject unrelated OutMessages', () => {
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          update: dualMultipleOutMessagesUpdate,
+          view: multipleOutMessagesView,
+        },
+        Scene.given(interactionInitialModel),
+        // @ts-expect-error CompletedAction is not an Interaction OutMessage
+        Scene.expectOutMessage(LogoutButtonMessage.CompletedAction()),
+      ),
+    ).toBeFunction()
+  })
+
+  test('validates the data-first update contract', () => {
+    const missingModel = (
+      _model: CounterModel,
+      _message: typeof CounterMessage.Type,
+    ) => ({ status: 'Done' })
+    const wrongModel = (
+      _model: CounterModel,
+      _message: typeof CounterMessage.Type,
+    ) => ({ model: { status: 'Done' } })
+    const requiredContext = (
+      model: CounterModel,
+      _message: typeof CounterMessage.Type,
+      _context: string,
+    ) => ({ model })
+    const optionalContext = (
+      model: CounterModel,
+      _message: typeof CounterMessage.Type,
+      _context?: string,
+    ) => ({ model })
+
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          // @ts-expect-error an update must return its Model
+          update: missingModel,
+          view: counterView,
+        },
+        Scene.given(counterInitialModel),
+      ),
+    ).toBeFunction()
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          // @ts-expect-error an update must return the same Model type it accepts
+          update: wrongModel,
+          view: counterView,
+        },
+        Scene.given(counterInitialModel),
+      ),
+    ).toBeFunction()
+    expectTypeOf(() =>
+      Scene.scene(
+        {
+          // @ts-expect-error Scene cannot supply required update context
+          update: requiredContext,
+          view: counterView,
+        },
+        Scene.given(counterInitialModel),
+      ),
+    ).toBeFunction()
+
+    Scene.scene(
+      { update: optionalContext, view: counterView },
+      Scene.given(counterInitialModel),
+    )
+  })
+
   test('assert the OutMessage across steps', () => {
     Scene.scene(
-      { update: logoutUpdate, view: logoutView },
+      {
+        update: logoutUpdate,
+        view: logoutView,
+        subscriptions: logoutSubscriptions,
+      },
       Scene.given(logoutInitialModel),
       Scene.expectNoOutMessage(),
       Scene.click(Scene.role('button', { name: 'Log out' })),
       Scene.expectOutMessage(OutMessage.RequestedLogout()),
-      Scene.Subscription.emit(LogoutButtonMessage.CompletedAction()),
+      Scene.Subscription.emit(
+        logoutSubscriptions.action,
+        LogoutButtonMessage.ObservedBackgroundActivity(),
+      ),
       Scene.expectNoOutMessage(),
     )
   })
@@ -3672,9 +4514,16 @@ describe('Scene OutMessage assertions', () => {
   test('expectOutMessage fails with expected and actual values when the OutMessage is wrong', () => {
     expect(() =>
       Scene.scene(
-        { update: multipleOutMessagesUpdate, view: multipleOutMessagesView },
+        {
+          update: multipleOutMessagesUpdate,
+          view: multipleOutMessagesView,
+          subscriptions: interactionSubscriptions,
+        },
         Scene.given(interactionInitialModel),
-        Scene.Subscription.emit(InteractionMessage.ClickedExpand()),
+        Scene.Subscription.emit(
+          interactionSubscriptions.interaction,
+          InteractionMessage.ReceivedExpandSignal(),
+        ),
         Scene.expectOutMessage(InteractionOutMessage.RequestedSelection()),
       ),
     ).toThrow(
@@ -3729,11 +4578,18 @@ describe('Scene OutMessage assertions', () => {
 
   test('an omitted OutMessage clears the previous OutMessage', () => {
     Scene.scene(
-      { update: mixedArityUpdate, view: logoutView },
+      {
+        update: mixedArityUpdate,
+        view: logoutView,
+        subscriptions: logoutSubscriptions,
+      },
       Scene.given(logoutInitialModel),
       Scene.click(Scene.role('button', { name: 'Log out' })),
       Scene.expectOutMessage(OutMessage.RequestedLogout()),
-      Scene.Subscription.emit(LogoutButtonMessage.CompletedAction()),
+      Scene.Subscription.emit(
+        logoutSubscriptions.action,
+        LogoutButtonMessage.ObservedBackgroundActivity(),
+      ),
       Scene.expectNoOutMessage(),
     )
   })
@@ -3797,14 +4653,21 @@ describe('Scene OutMessage assertions', () => {
 
   test('a later update replaces every OutMessage from the previous step', () => {
     Scene.scene(
-      { update: multipleOutMessagesUpdate, view: multipleOutMessagesView },
+      {
+        update: multipleOutMessagesUpdate,
+        view: multipleOutMessagesView,
+        subscriptions: interactionSubscriptions,
+      },
       Scene.given(interactionInitialModel),
       Scene.click(Scene.role('button', { name: 'Expand' })),
       Scene.expectOutMessages(
         InteractionOutMessage.RequestedExpand(),
         InteractionOutMessage.RequestedSelection(),
       ),
-      Scene.Subscription.emit(InteractionMessage.CompletedAction()),
+      Scene.Subscription.emit(
+        interactionSubscriptions.interaction,
+        InteractionMessage.ObservedBackgroundActivity(),
+      ),
       Scene.expectNoOutMessage(),
     )
   })
@@ -3815,8 +4678,8 @@ describe('Scene OutMessage assertions', () => {
       Scene.given(interactionInitialModel),
       Scene.inside(
         Scene.selector('div'),
-        Scene.Subscription.emit(InteractionMessage.ClickedExpand()),
-        Scene.Subscription.emit(InteractionMessage.ClickedRow()),
+        Scene.click(Scene.role('button', { name: 'Expand' })),
+        Scene.click(Scene.selector('div')),
       ),
       Scene.expectOutMessage(InteractionOutMessage.RequestedSelection()),
     )
@@ -4852,8 +5715,10 @@ describe('scene mounts', () => {
       Scene.given(mountInitialModel),
       Scene.tap(({ mounts }) => {
         expect(mounts).toHaveLength(2)
-        expect(mounts[0]).toEqual({ name: 'MeasurePanel', occurrence: 0 })
-        expect(mounts[1]).toEqual({ name: 'MeasurePanel', occurrence: 1 })
+        expect(mounts).toMatchObject([
+          { name: 'MeasurePanel', occurrence: 0 },
+          { name: 'MeasurePanel', occurrence: 1 },
+        ])
       }),
       Scene.Mount.resolve(
         MeasurePanel,
@@ -4866,8 +5731,8 @@ describe('scene mounts', () => {
     )
   })
 
-  test('resolveMount replays a Submodel-embedded mount boundary lift', () => {
-    // A mount that lives inside an h.submodel boundary has its result lifted
+  test('resolveMount replays a Block-embedded mount boundary lift', () => {
+    // A mount that lives inside an h.block boundary has its result lifted
     // into the parent's Message space by the boundary at dispatch time (via
     // ctx.dispatch) in production. resolveMount replays that lift from the
     // chain snapshotted onto the mount marker, so the test resolves the mount
@@ -4880,10 +5745,14 @@ describe('scene mounts', () => {
     }>
     type ParentModel = { readonly child: ChildModel }
 
-    const childView = defineView<ChildModel, ChildMessage>(() => {
-      const h = attributeHtml<ChildMessage>()
-      return h.button([h.OnMount(FocusButton())])
-    })
+    type ChildMountRequirements = Mount.RequirementsOf<typeof FocusButton>
+
+    const childView = defineView<
+      ChildModel,
+      ChildMessage,
+      void,
+      ChildMountRequirements
+    >((_model, h) => h.button([h.OnMount(FocusButton())]))
 
     const seen: Array<ParentMessage> = []
     const parentUpdate = (
@@ -4895,11 +5764,11 @@ describe('scene mounts', () => {
     }
 
     const parentView = (model: ParentModel) => {
-      const h = attributeHtml<ParentMessage>()
+      const h = attributeHtml<ParentMessage, ChildMountRequirements>()
       return h.div(
         [],
         [
-          h.submodel({
+          h.block({
             slotId: 'child',
             model: model.child,
             view: childView,
@@ -4923,7 +5792,7 @@ describe('scene mounts', () => {
     )
 
     // The child's raw CompletedFocusButton arrived at parent update wrapped as
-    // GotChildMessage by the recovered Submodel-boundary lift.
+    // GotChildMessage by the recovered Block-boundary lift.
     expect(seen).toEqual([
       { _tag: 'GotChildMessage', message: { _tag: 'CompletedFocusButton' } },
     ])
@@ -4932,7 +5801,10 @@ describe('scene mounts', () => {
   test('mounts on view returning Document are tracked', () => {
     const documentView = (
       model: typeof mountInitialModel,
-      h: HtmlBuilder<MountPanelMessage>,
+      h: HtmlBuilder<
+        MountPanelMessage,
+        Mount.RequirementsOf<typeof mountPanelMounts>
+      >,
     ) => ({
       title: 'Mount panel',
       body: mountView(model, h),

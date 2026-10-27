@@ -1,15 +1,6 @@
-import { type Update } from 'foldkit'
+import { LoggedInComposition, makeOutMessageStep } from './composition'
+import { OutMessage } from './message'
 
-import { Message, OutMessage } from './message'
-import { Model } from './model'
-
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.ReturnWithOutMessage<Model, Message, OutMessage>>(
-    message,
-    {
-      ClickedLogout: () => ({
-        model,
-        outMessage: OutMessage.RequestedLogout(),
-      }),
-    },
-  )
+export const update = LoggedInComposition.makeUpdate({
+  ClickedLogout: makeOutMessageStep(() => OutMessage.RequestedLogout()),
+})

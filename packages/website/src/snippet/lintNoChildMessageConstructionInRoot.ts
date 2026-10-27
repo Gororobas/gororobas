@@ -1,21 +1,17 @@
-import * as Child from './child'
+import { ChildBlock } from './child'
+import { ApplicationDefinition, makeStep } from './definition'
 
-// ❌ Bad
-// The root reaches into the child Message namespace to build a child Message.
-const badRouting = () =>
-  GotChildMessage({ message: Child.Message.ClickedSave() })
-
-const clickedSave = Child.Message.ClickedSave
-const badAliasRouting = () => GotChildMessage({ message: clickedSave() })
-
-// ✅ Good
-// The child exports an update capability. The parent folds the complete child
-// result without importing or constructing its internal Message.
-const foldChildSave = Update.foldChildStep({
-  update: Child.save,
-  read: model => Option.some(model.child),
-  write: (model, nextChild) => modifyFields(model, { child: () => nextChild }),
-  toParentMessage: message => GotChildMessage({ message }),
+const ChildBinding = ApplicationDefinition.makeBinding(ChildBlock, {
+  field: 'child',
 })
 
-const goodRouting = model => foldChildSave(model)
+// ❌ Bad
+// The parent constructs a local child Message instead of invoking its operation.
+const badRouting = () => ChildBlock.Message.RequestedSave()
+
+const requestSave = ChildBlock.Message.RequestedSave
+const badAliasRouting = () => requestSave()
+
+// ✅ Good
+// The parent invokes the operation projected by its child Binding.
+const goodRoutingStep = makeStep(() => ChildBinding.requestSave())

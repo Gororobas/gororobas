@@ -4,17 +4,17 @@ import { expect } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import { Message, OutMessage, init, update } from './index.js'
+import { Message, OutMessage, init, update } from './block.js'
 
 const makeFile = (name: string, type = 'application/pdf'): File =>
   new globalThis.File(['content'], name, { type })
 
-const givenInitial = Story.given(init({ id: 'test' }))
+const givenInitial = Story.given(init({ id: 'test' }).model)
 
 describe('FileDrop', () => {
   describe('init', () => {
     it('starts with drag-over false', () => {
-      const model = init({ id: 'test' })
+      const model = init({ id: 'test' }).model
       expect(model.id).toBe('test')
       expect(model.isDragOver).toBe(false)
     })

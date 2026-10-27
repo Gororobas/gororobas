@@ -6,18 +6,21 @@ import {
   given,
   role,
   scene,
+  subscriptions as sceneSubscriptions,
   text,
 } from 'foldkit/scene'
 import { describe, test } from 'vitest'
 
 import {
+  ApplicationComposition,
   DetermineStartTime,
   DetermineTickTime,
   Message,
   Model,
+  subscriptions,
   update,
   view,
-} from './main'
+} from './application'
 
 const initialModel = Model.make({
   elapsedMs: 0,
@@ -95,10 +98,17 @@ describe('view', () => {
     })
 
     scene(
-      { update, view },
+      {
+        update,
+        view,
+        subscriptions: sceneSubscriptions(
+          ApplicationComposition,
+          subscriptions,
+        ),
+      },
       given(runningModel),
       expect(text('00:00.00')).toExist(),
-      Subscription.emit(Message.Ticked()),
+      Subscription.emit(subscriptions.stopwatchTicks, Message.Ticked()),
       Command.expectExact(DetermineTickTime({ startTime })),
       Command.resolve(
         DetermineTickTime,

@@ -11,12 +11,6 @@ export const Playing = Schema.TaggedStruct('Playing', {
 })
 export const Finished = Schema.TaggedStruct('Finished', {})
 
-export type Waiting = typeof Waiting.Type
-export type GetReady = typeof GetReady.Type
-export type Countdown = typeof Countdown.Type
-export type Playing = typeof Playing.Type
-export type Finished = typeof Finished.Type
-
 export const GameStatus = Schema.Union([
   Waiting,
   GetReady,
@@ -24,25 +18,21 @@ export const GameStatus = Schema.Union([
   Playing,
   Finished,
 ])
-export type GameStatus = typeof GameStatus.Type
 
 export const Player = Schema.Struct({
   id: Schema.String,
   username: Schema.String,
 })
-export type Player = typeof Player.Type
 
 export const Game = Schema.Struct({
   id: Schema.String,
   text: Schema.String,
 })
-export type Game = typeof Game.Type
 
 export const GamePlayer = Schema.Struct({
   gameId: Schema.String,
   playerId: Schema.String,
 })
-export type GamePlayer = typeof GamePlayer.Type
 
 export const PlayerProgress = Schema.Struct({
   playerId: Schema.String,
@@ -51,7 +41,6 @@ export const PlayerProgress = Schema.Struct({
   updatedAt: Schema.Number,
   charsTyped: Schema.Number,
 })
-export type PlayerProgress = typeof PlayerProgress.Type
 
 export const PlayerScore = Schema.Struct({
   playerId: Schema.String,
@@ -61,10 +50,8 @@ export const PlayerScore = Schema.Struct({
   charsTyped: Schema.Number,
   correctChars: Schema.Number,
 })
-export type PlayerScore = typeof PlayerScore.Type
 
 export const Scoreboard = Schema.Array(PlayerScore)
-export type Scoreboard = typeof Scoreboard.Type
 
 export const Room = Schema.Struct({
   id: Schema.String,
@@ -76,10 +63,8 @@ export const Room = Schema.Struct({
   createdAt: Schema.Number,
   usedGameTexts: Schema.Array(Schema.String),
 })
-export type Room = typeof Room.Type
 
 export const RoomById = Schema.HashMap(Schema.String, Room)
-export type RoomById = typeof RoomById.Type
 
 export class RoomNotFoundError extends Schema.TaggedError<RoomNotFoundError>()(
   'RoomNotFoundError',
@@ -96,13 +81,11 @@ export class UnauthorizedError extends Schema.TaggedError<UnauthorizedError>()(
 ) {}
 
 export const RoomAndPlayer = Schema.Struct({ player: Player, room: Room })
-export type RoomAndPlayer = typeof RoomAndPlayer.Type
 
 export const RoomWithPlayerProgress = Schema.Struct({
   room: Room,
   maybePlayerProgress: Schema.Option(PlayerProgress),
 })
-export type RoomWithPlayerProgress = typeof RoomWithPlayerProgress.Type
 
 export const createRoomRpc = Rpc.make('createRoom', {
   payload: Schema.Struct({ username: Schema.String }),

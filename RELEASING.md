@@ -94,12 +94,71 @@ Actions. The command prompts once for an OTP or accepts `NPM_CONFIG_OTP`, keeps
 the OTP out of command arguments, and removes it from non-npm subprocesses.
 After local promotion, use the manual finalization recovery run above.
 
+## Preparing a replacement integration preview
+
+Prepare a replacement locally before updating the integration branch. A request
+to prepare release material does not authorize pushing, merging, publishing, or
+changing the public preview status. Keep the previous verified snapshot available
+while the candidate is under review.
+
+1. Review the candidate code and finish the agreed security review of changes
+   since the last reviewed snapshot. Resolve required CI checks on the actual
+   integration candidate. Do not merge the preview into `main` as part of this
+   process.
+2. Prepare both migration entry points from the candidate source:
+   - `/preview-migration`: a direct stable-to-candidate migration to the final API.
+   - `/preview-upgrade`: the required changes from earlier preview snapshots,
+     with optional improvements listed separately.
+3. State each guide's tested starting package versions and source commits. Use
+   the installed package and lockfile to identify the consumer's starting point;
+   a branch name or a remembered preview date is insufficient. Check all active
+   After examples against the target APIs and organization conventions.
+4. Rehearse both paths in independent real consumer checkouts. Give each agent
+   only the relevant guide, exact target manifest, and existing project
+   instructions. Verify the installed package declarations rather than workspace
+   source aliases. Record typecheck coverage of test files, lint, tests, build,
+   and the consumer's browser, SSR/SSG, or embedding behavior. Packed candidate
+   artifacts can support local rehearsal; the final acceptance must use the
+   published exact packages.
+5. After review approval, merge into `codex/layers-and-submodels`. Its existing
+   workflow publishes and verifies the complete package snapshot and deploys
+   matching documentation. Use the resulting full source commit and immutable
+   website URL, not the pre-merge candidate's hash, in installation instructions.
+6. Use the generated ready summary's migration links and two agent prompts for
+   the public handoff. They derive the package map, documentation URLs, and
+   target source commit from the verified release. Confirm the live `.md` guides
+   include their rendered source examples and `/preview-release.json` matches
+   the registry-verified input.
+7. Update the public latest-ready pointer only after workflow verification and
+   published-package migration acceptance. Preserve prior immutable URLs and
+   manifests so users can read guidance matching an older installed preview.
+
+For an existing project, update every installed Foldkit package to its entry in
+the target manifest, preserving dependency and devDependency placement. Do not
+install the whole package set merely because it appears in the workflow report.
+Numeric package prefixes can differ; the shared commit identifies the snapshot.
+For projects that already maintain vendored source or copied skills, repin them
+to the full target commit. Refresh an existing managed `FOLDKIT.md` snapshot
+and preserve the consumer's own `AGENTS.md` instructions. Other projects can
+use the immutable deployment's documentation and source links directly.
+
 ## Package canaries
 
-The Release workflow also builds a canary for every package-affecting push to
-`main`. Every public package receives a prerelease version containing the
-commit SHA, for example `0.148.2-canary.0123456789ab`. Internal package
-references are rewritten to those exact versions before packing.
+The Release workflow builds a canary for every package-affecting push to `main`
+or `codex/layers-and-submodels`. Every public package receives a prerelease
+version containing the commit SHA, for example
+`0.148.2-canary.0123456789ab`. Internal package references are rewritten to
+those exact versions before packing. This does not use Changesets prerelease
+mode and does not create a moving npm `canary` tag.
+
+Merge reviewed and approved candidate changes into
+`codex/layers-and-submodels` for integration testing. A push to that branch runs
+the package canary job. It does not create or update the Version Packages pull
+request, publish or promote a stable release, finalize release metadata, or
+deploy the production or main canary website. After npm verifies the complete
+package snapshot, the workflow preserves that verified manifest and deploys the
+website, documentation, and embedded examples from the same source commit to a
+dedicated Vercel preview project.
 
 Canaries use a commit-specific non-consumer tag such as
 `foldkit-canary-upload-0123456789ab` only for upload. The workflow does not
@@ -107,6 +166,28 @@ advertise a moving npm `canary` tag. After the complete registry check passes,
 the workflow summary prints every exact package version and the exact
 `create-foldkit-app` command. Rerunning a commit uses the same versions and
 skips artifacts that already match.
+
+The preview build accepts only the manifest produced after that registry check.
+It checks that the manifest's full source commit, upload tag, complete package
+set, and commit-addressed versions match the checked-out workspace. The build
+embeds the manifest in the banner, publishes the same bytes at
+`/preview-release.json`, and checks the rendered assets for the commit and every
+version before upload. The live smoke checks fetch that manifest back from the
+immutable Vercel deployment URL and compare it byte-for-byte with the verified
+input.
+
+In-browser playground projects also pin their Foldkit dependencies to that
+verified manifest. The preview build rejects missing
+packages, versions from another commit, and mixed main-canary/preview inputs.
+The main production and main-canary version selection remains unchanged.
+
+Only after the deployed SSR and SSG playgrounds, Monaco worker isolation, and
+live manifest checks succeed does the workflow print **Integration preview
+ready**. That report is the source of truth for review. It includes the exact
+source commit, immutable website URL, linked package versions, scaffold command,
+and complete exact-version install command. A package upload by itself is not a
+ready preview, and this document does not identify any current preview as
+published or ready.
 
 For a new project, run the exact `create-foldkit-app` command from the workflow
 summary. For an existing project, install every Foldkit package the project
@@ -192,3 +273,17 @@ before the deployment completes.
 Website-only pushes still use the normal production deployment workflow. Its
 package-source authorization prevents unreleased package work from reaching
 the site.
+
+The integration preview uses `VERCEL_WEBSITE_PREVIEW_PROJECT_ID`, which must
+identify a Vercel project separate from both `VERCEL_WEBSITE_PROJECT_ID` and
+`VERCEL_WEBSITE_CANARY_PROJECT_ID`. Configure that repository secret before the
+first approved merge to `codex/layers-and-submodels`. The preview deploy uses
+Vercel's returned deployment URL and does not promote a shared hostname or
+invent a repository-owned preview domain. Missing Vercel credentials or the
+separate project ID stop deployment, so the workflow cannot emit a ready report.
+
+`main` keeps both existing paths: stable finalization can deploy
+`foldkit.dev`, and its verified package canary can promote `canary.foldkit.dev`.
+Integration previews cannot promote either hostname because the promotion step
+runs only for the `canary` channel and the preview calls the shared builder with
+the `preview` channel and its own project ID.

@@ -1,50 +1,19 @@
-export { init, create, Model } from './single.js'
-
-export { buttonId } from './shared.js'
-
+export { create } from './single.js'
 export {
-  Message,
-  OutMessage,
-  type Selected,
+  buttonId,
   Orientation,
-  type SelectedItem,
-  AnchorListbox,
-  PortalListboxBackdrop,
-  type CompletedDelayClearSearch,
-  LockScroll,
-  UnlockScroll,
-  InertOthers,
-  RestoreInert,
-  FocusButton,
-  FocusItems,
-  ScrollIntoView,
-  ClickItem,
-  DelayClearSearch,
-  DetectMovementOrAnimationEnd,
-  type Opened,
-  type Closed,
-  type BlurredItems,
-  type ActivatedItem,
-  type DeactivatedItem,
-  type MovedPointerOverItem,
-  type RequestedItemClick,
-  type Searched,
-  type PressedPointerOnButton,
-  type IgnoredMouseClick,
-  type SuppressedSpaceScroll,
-  type SuppressedItemCommit,
-} from './shared.js'
-
-export type {
   ActivationTrigger,
+  resolveTypeaheadMatch,
+} from './shared.js'
+export type { Completed, InitConfig, ViewInputs } from './single.js'
+export type {
   ItemConfig,
   GroupHeading,
   BaseViewInputsCommon,
   ItemToValueInput,
 } from './shared.js'
-
-export type { Bundle, InitConfig, ViewInputs } from './single.js'
-
 export type { AnchorConfig } from '../anchor/index.js'
-
 export * as Multi from './multiPublic.js'
+
+/** Original Listbox Command and Mount Definitions for Story and Scene test resolution. */
+export * as test from './test.js'

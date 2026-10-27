@@ -246,13 +246,15 @@ const callbackReturnExpression = (
 const isKeyedWrapped = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): boolean =>
   isCallExpression(node.callee) &&
-  isFoldkitHtmlBuilderMember(node.callee.callee, 'keyed', references)
+  isFoldkitHtmlBuilderMember(node.callee.callee, 'keyed', references, filename)
 
 const hasKeyAttribute = (
   rowElementCall: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): boolean => {
   const [attributesArgument] = rowElementCall.arguments
   if (!isArrayExpression(attributesArgument)) {
@@ -261,7 +263,7 @@ const hasKeyAttribute = (
   return attributesArgument.elements.some(
     element =>
       isCallExpression(element) &&
-      isFoldkitHtmlBuilderMember(element.callee, 'Key', references),
+      isFoldkitHtmlBuilderMember(element.callee, 'Key', references, filename),
   )
 }
 
@@ -273,13 +275,14 @@ type UnkeyedRow = Readonly<{
 const unkeyedRowElement = (
   returnExpression: unknown,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<UnkeyedRow> => {
   if (!isCallExpression(returnExpression)) {
     return Option.none()
   }
   if (
-    isKeyedWrapped(returnExpression, references) ||
-    hasKeyAttribute(returnExpression, references)
+    isKeyedWrapped(returnExpression, references, filename) ||
+    hasKeyAttribute(returnExpression, references, filename)
   ) {
     return Option.none()
   }
@@ -287,7 +290,12 @@ const unkeyedRowElement = (
     helperCalleeName(returnExpression.callee),
     Option.filter(tagName => rowElementTagNames.includes(tagName)),
     Option.filter(tagName =>
-      isFoldkitHtmlBuilderMember(returnExpression.callee, tagName, references),
+      isFoldkitHtmlBuilderMember(
+        returnExpression.callee,
+        tagName,
+        references,
+        filename,
+      ),
     ),
     Option.map(tagName => ({ rowElementCall: returnExpression, tagName })),
   )
@@ -334,7 +342,7 @@ export const keyedRequiredForMappedRows = Rule.define({
           ),
           Option.flatMap(callbackReturnExpression),
           Option.flatMap(returnExpression =>
-            unkeyedRowElement(returnExpression, references),
+            unkeyedRowElement(returnExpression, references, ctx.filename),
           ),
           Option.match({
             onNone: () => Effect.void,

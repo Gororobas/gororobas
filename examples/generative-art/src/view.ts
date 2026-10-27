@@ -1,9 +1,16 @@
 import { Array, Option, pipe } from 'effect'
 import { Canvas } from 'foldkit'
-import { Document, Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
-import { Button, Slider } from '@foldkit/ui'
+import { Button } from '@foldkit/ui'
+import type { ViewInputs as SliderViewInputs } from '@foldkit/ui/slider'
 
+import {
+  ApplicationComposition,
+  type ApplicationViewBuilder,
+  FlowStrengthSliderBinding,
+  NoiseScaleSliderBinding,
+} from './composition'
 import {
   BACKGROUND_COLOR_TOP,
   CANVAS_HEIGHT,
@@ -28,14 +35,17 @@ import {
 import { Message } from './message'
 import type { Model, Particle, Point } from './model'
 
-const fadeAlpha = (particle: Particle): number => {
+const fadeAlpha = (particle: typeof Particle.Type): number => {
   const remainingMs = particle.lifespanMs - particle.ageMs
   const fadeIn = Math.min(1, particle.ageMs / FADE_IN_MS)
   const fadeOut = Math.min(1, remainingMs / FADE_OUT_MS)
   return Math.max(0, Math.min(fadeIn, fadeOut))
 }
 
-const currentHue = (particle: Particle, elapsedSeconds: number): number => {
+const currentHue = (
+  particle: typeof Particle.Type,
+  elapsedSeconds: number,
+): number => {
   const drift =
     particle.hueDriftPerSecond * (elapsedSeconds - particle.bornAtSeconds)
   const raw = particle.baseHue + drift
@@ -43,7 +53,7 @@ const currentHue = (particle: Particle, elapsedSeconds: number): number => {
 }
 
 const trailToInstructions = (
-  trail: ReadonlyArray<Point>,
+  trail: ReadonlyArray<typeof Point.Type>,
 ): ReadonlyArray<Canvas.PathInstruction> =>
   Array.matchLeft(trail, {
     onEmpty: () => [],
@@ -58,7 +68,7 @@ const trailToInstructions = (
 const ALPHA_VISIBILITY_EPSILON = 0.01
 
 const particleShapes = (
-  particle: Particle,
+  particle: typeof Particle.Type,
   elapsedSeconds: number,
 ): ReadonlyArray<Canvas.Shape> => {
   if (particle.trail.length < 2) {
@@ -212,7 +222,7 @@ const vignetteStrips: ReadonlyArray<Canvas.Shape> = Array.flatMap(
 )
 
 const particleHeadShape = (
-  particle: Particle,
+  particle: typeof Particle.Type,
   elapsedSeconds: number,
 ): Option.Option<Canvas.Shape> =>
   Option.map(Array.last(particle.trail), head => {
@@ -229,7 +239,7 @@ const particleHeadShape = (
   })
 
 const mouseIndicator = (
-  maybeMousePosition: Option.Option<Point>,
+  maybeMousePosition: Option.Option<typeof Point.Type>,
 ): ReadonlyArray<Canvas.Shape> =>
   Option.match(maybeMousePosition, {
     onNone: () => [],
@@ -243,7 +253,7 @@ const mouseIndicator = (
     ],
   })
 
-const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
+const sceneShapes = (model: typeof Model.Type): ReadonlyArray<Canvas.Shape> => [
   backgroundShape,
   ...nebulaShapes(model.elapsedSeconds),
   ...Array.flatMap(model.particles, particle =>
@@ -287,57 +297,50 @@ const playPauseLabel = (isRunning: boolean): string =>
 
 const slider = (
   label: string,
-  sliderModel: Slider.Model,
   value: number,
-  toParentMessage: (message: Slider.Message) => Message,
-  h: HtmlBuilder<Message>,
+  render: (viewInputs: SliderViewInputs) => Html,
+  h: ApplicationViewBuilder,
 ): Html =>
-  h.submodel({
-    slotId: sliderModel.id,
-    model: sliderModel,
-    view: Slider.view,
-    viewInputs: {
-      value,
-      formatValue: value => value.toFixed(2),
-      toView: attributes =>
-        h.div(
-          [h.Class(sliderRowClass)],
-          [
-            h.div(
-              [h.Class(sliderHeaderClass)],
-              [
-                h.label(
-                  [...attributes.label, h.Class(sliderLabelClass)],
-                  [label],
-                ),
-                h.span([h.Class(sliderValueClass)], [value.toFixed(2)]),
-              ],
-            ),
-            h.div(
-              [...attributes.root, h.Class(sliderRootClass)],
-              [
-                h.div(
-                  [...attributes.track, h.Class(sliderTrackClass)],
-                  [
-                    h.div([
-                      ...attributes.filledTrack,
-                      h.Class(sliderFilledTrackClass),
-                    ]),
-                  ],
-                ),
-                h.div([...attributes.thumb, h.Class(sliderThumbClass)]),
-              ],
-            ),
-          ],
-        ),
-    },
-    toParentMessage,
+  render({
+    value,
+    formatValue: value => value.toFixed(2),
+    toView: attributes =>
+      h.div(
+        [h.Class(sliderRowClass)],
+        [
+          h.div(
+            [h.Class(sliderHeaderClass)],
+            [
+              h.label(
+                [...attributes.label, h.Class(sliderLabelClass)],
+                [label],
+              ),
+              h.span([h.Class(sliderValueClass)], [value.toFixed(2)]),
+            ],
+          ),
+          h.div(
+            [...attributes.root, h.Class(sliderRootClass)],
+            [
+              h.div(
+                [...attributes.track, h.Class(sliderTrackClass)],
+                [
+                  h.div([
+                    ...attributes.filledTrack,
+                    h.Class(sliderFilledTrackClass),
+                  ]),
+                ],
+              ),
+              h.div([...attributes.thumb, h.Class(sliderThumbClass)]),
+            ],
+          ),
+        ],
+      ),
   })
 
 const controlButton = (
   label: string,
-  onClick: Message,
-  h: HtmlBuilder<Message>,
+  onClick: typeof Message.Type,
+  h: ApplicationViewBuilder,
 ): Html =>
   Button.view(
     {
@@ -348,7 +351,10 @@ const controlButton = (
     h,
   )
 
-const controlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const controlsView = (
+  model: typeof Model.Type,
+  h: ApplicationViewBuilder,
+): Html =>
   h.div(
     [
       h.Class(
@@ -384,22 +390,34 @@ const controlsView = (model: Model, h: HtmlBuilder<Message>): Html =>
       ),
       slider(
         'Turbulence',
-        model.flowStrengthSlider,
         model.flowStrength,
-        message => Message.GotFlowStrengthSliderMessage({ message }),
+        viewInputs =>
+          h.block(
+            FlowStrengthSliderBinding.embedView({
+              slotId: model.flowStrengthSlider.id,
+              model: model.flowStrengthSlider,
+              viewInputs,
+            }),
+          ),
         h,
       ),
       slider(
         'Noise scale',
-        model.noiseScaleSlider,
         model.noiseScale,
-        message => Message.GotNoiseScaleSliderMessage({ message }),
+        viewInputs =>
+          h.block(
+            NoiseScaleSliderBinding.embedView({
+              slotId: model.noiseScaleSlider.id,
+              model: model.noiseScaleSlider,
+              viewInputs,
+            }),
+          ),
         h,
       ),
     ],
   )
 
-const headerView = (h: HtmlBuilder<Message>): Html =>
+const headerView = (h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('flex flex-col items-center mb-6 text-center')],
     [
@@ -420,7 +438,7 @@ const headerView = (h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
+export const view = ApplicationComposition.makeView((model, h) => ({
   title: `Prism Field · ${model.particles.length} particles`,
   body: h.div(
     [
@@ -448,4 +466,4 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       controlsView(model, h),
     ],
   ),
-})
+}))

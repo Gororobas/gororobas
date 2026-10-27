@@ -8,15 +8,15 @@ import {
   Message,
   type Model,
   update,
-} from './main'
+} from './application'
 
-const idleModel: Model = {
+const idleModel: typeof Model.Type = {
   elapsedMs: 0,
   isRunning: false,
   startTime: 0,
 }
 
-const runningModel: Model = {
+const runningModel: typeof Model.Type = {
   elapsedMs: 5000,
   isRunning: true,
   startTime: 1000,

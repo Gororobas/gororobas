@@ -1,12 +1,10 @@
 import { HashMap, HashSet } from 'effect'
-import { type Update } from 'foldkit'
 
-import { type Message } from './message'
-import { type Model } from './model'
+import { SnippetDisclosureComposition } from './composition'
 
-export const init = (): Update.Return<Model, Message> => ({
+export const init = SnippetDisclosureComposition.makeInit(() => ({
   model: {
     openDisclosureIds: HashSet.empty(),
     snippetSizes: HashMap.empty(),
   },
-})
+}))

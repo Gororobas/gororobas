@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 
 const foldApplicant = Update.foldChildAt({
   update: Applicant.update,
-  readAt: (model: Model, entryId: string) =>
+  readAt: (model: typeof Model.Type, entryId: string) =>
     Option.map(
       Array.findFirst(model.applicants, applicant => applicant.id === entryId),
       applicant => applicant.entry,
@@ -21,8 +21,8 @@ const foldApplicant = Update.foldChildAt({
     Message.GotApplicantMessage({ entryId, message }),
 })
 
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
+const update = (model: typeof Model.Type, message: Message) =>
+  Message.match<Update.Return<typeof Model.Type, Message>>(message, {
     GotApplicantMessage: ({ entryId, message }) =>
       foldApplicant(model, entryId, message),
   })

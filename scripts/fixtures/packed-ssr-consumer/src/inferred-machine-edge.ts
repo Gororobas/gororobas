@@ -7,25 +7,22 @@ const MachineState = defineTaggedUnion({
   Idle: {},
   Running: { label: Schema.String },
 })
-type MachineState = typeof MachineState.Type
-type IdleState = typeof MachineState.Idle.Type
 
 const MachineMessage = defineMessageUnion({ Started: {} })
-type MachineMessage = typeof MachineMessage.Type
 
 export const startEdge = to<
-  MachineState,
-  MachineMessage,
-  IdleState,
-  MachineMessage,
+  typeof MachineState.Type,
+  typeof MachineMessage.Type,
+  typeof MachineState.Idle.Type,
+  typeof MachineMessage.Type,
   'Running'
 >('Running', () => ({ model: MachineState.Running({ label: 'direct' }) }))
 
 export const guardedStartEdge = when<
-  MachineState,
-  MachineMessage,
-  IdleState,
-  MachineMessage,
+  typeof MachineState.Type,
+  typeof MachineMessage.Type,
+  typeof MachineState.Idle.Type,
+  typeof MachineMessage.Type,
   Option.Option<number>,
   'Running'
 >(

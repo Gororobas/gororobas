@@ -1,37 +1,51 @@
 // ✅ Good: Model state controls the WebSocket's lifetime.
 
-import { Effect, Schema } from 'effect'
-import { Command, ManagedResource } from 'foldkit'
+import { Effect, Layer, Schema } from 'effect'
+import { Block } from 'foldkit'
 
-const ChatSocket = ManagedResource.tag<WebSocket>()('ChatSocket')
+import { Message } from './message'
+import { Model } from './model'
+
+const ChatDefinition = Block.makeDefinition('Chat', { Model, Message })
+const ChatSocket = ChatDefinition.makeResource<WebSocket>()('ChatSocket')
+
 const RoomRequirements = Schema.Struct({ roomId: Schema.String })
 
-const managedResources = ManagedResource.make<Model, Message>()(entry => ({
-  chatSocket: entry(Schema.Option(RoomRequirements), {
+const managedResources = ChatDefinition.makeManagedResources(entry => ({
+  chatSocket: entry('ManageChatSocket', Schema.Option(RoomRequirements), {
     resource: ChatSocket,
     modelToMaybeRequirements: model => model.maybeRoomRequirements,
-    acquire: ({ roomId }) =>
-      Effect.try(() => new WebSocket(`/rooms/${roomId}`)),
-    release: socket => Effect.sync(() => socket.close()),
     onAcquired: () => Message.AcquiredChatSocket(),
     onReleased: () => Message.ReleasedChatSocket(),
     onAcquireError: error =>
       Message.FailedAcquireChatSocket({ error: globalThis.String(error) }),
+    handler: function* () {
+      return {
+        acquire: ({ roomId }) =>
+          Effect.try(() => new WebSocket(`/rooms/${roomId}`)),
+        release: socket => Effect.sync(() => socket.close()),
+      }
+    },
   }),
 }))
 
-const SendChatMessage = Command.define('SendChatMessage', {
+const SendChatMessage = ChatDefinition.makeCommand('SendChatMessage', {
   args: { text: Schema.String },
-  messages: [Message.CompletedSendChatMessage, Message.FailedSendChatMessage],
-  execute: ({ text }) =>
-    ChatSocket.get.pipe(
-      Effect.flatMap(socket => Effect.try(() => socket.send(text))),
-      Effect.match({
-        onFailure: error =>
-          Message.FailedSendChatMessage({
-            error: globalThis.String(error),
-          }),
-        onSuccess: () => Message.CompletedSendChatMessage(),
-      }),
-    ),
+  messages: [Message.SucceededSendChatMessage, Message.FailedSendChatMessage],
+  handler: function* () {
+    return ({ text }) =>
+      ChatSocket.get.pipe(
+        Effect.flatMap(socket => Effect.try(() => socket.send(text))),
+        Effect.match({
+          onFailure: error =>
+            Message.FailedSendChatMessage({ error: globalThis.String(error) }),
+          onSuccess: () => Message.SucceededSendChatMessage(),
+        }),
+      )
+  },
 })
+
+export const EffectsLayer = Layer.mergeAll(
+  managedResources.chatSocket.layer,
+  SendChatMessage.layer,
+)

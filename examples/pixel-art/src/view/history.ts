@@ -1,15 +1,16 @@
 import clsx from 'clsx'
 import { Array, Option } from 'effect'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { THUMBNAIL_CELL_SIZE, VISIBLE_HISTORY_COUNT } from '../constant'
 import { Message } from '../message'
 import type { Grid } from '../model'
 import { type PaletteTheme, resolveColor } from '../palette'
 
-const sectionLabel = (text: string, h: HtmlBuilder<Message>): Html =>
+const sectionLabel = (text: string, h: ApplicationViewBuilder): Html =>
   h.div(
     [
       h.Class(
@@ -20,12 +21,12 @@ const sectionLabel = (text: string, h: HtmlBuilder<Message>): Html =>
   )
 
 export const historyPanelView = (
-  undoStack: ReadonlyArray<Grid>,
-  redoStack: ReadonlyArray<Grid>,
-  grid: Grid,
+  undoStack: ReadonlyArray<typeof Grid.Type>,
+  redoStack: ReadonlyArray<typeof Grid.Type>,
+  grid: typeof Grid.Type,
   gridSize: number,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const undoCount = undoStack.length
   const redoCount = redoStack.length
@@ -150,13 +151,13 @@ export const historyPanelView = (
 }
 
 const thumbnailEntry = (
-  grid: Grid,
+  grid: typeof Grid.Type,
   gridSize: number,
   isActive: boolean,
   label: string,
-  maybeOnClick: Option.Option<Message>,
+  maybeOnClick: Option.Option<typeof Message.Type>,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [

@@ -1,14 +1,13 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-import { Flags, Model, flags, init, update, view } from './main'
+import { ApplicationBlock } from './counterApplicationWithFlags'
+import { Flags, flags } from './flagsDefinition'
+import { ApplicationLayer } from './services'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
+const program = Program.make({
+  block: ApplicationBlock,
   Flags,
   container: document.getElementById('root'),
 })
 
-Runtime.run(application, { flags })
+Runtime.run(program.provide(ApplicationLayer), { flags })

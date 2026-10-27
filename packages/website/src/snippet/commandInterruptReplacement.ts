@@ -1,5 +1,4 @@
 import { Number } from 'effect'
-import type { Update } from 'foldkit'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
@@ -9,74 +8,71 @@ const SearchState = defineTaggedUnion({
   Cancelling: {},
 })
 
-type UpdateReturn = Update.Return<Model, Message>
+const update = SearchComposition.makeUpdate({
+  UpdatedQuery: (model, { query }) =>
+    SearchState.match(model.searchState, {
+      Idle: () => {
+        const nextGeneration = Number.increment(model.generation)
 
-const update = (model: Model, message: Message) =>
-  Message.match<UpdateReturn>(message, {
-    UpdatedQuery: ({ query }) =>
-      SearchState.match<UpdateReturn>(model.searchState, {
-        Idle: () => {
-          const nextGeneration = Number.increment(model.generation)
-
-          return {
-            model: modifyFields(model, {
-              query: () => query,
-              generation: () => nextGeneration,
-              searchState: () => SearchState.Running(),
-            }),
-            commands: [FetchSuggestions({ query, generation: nextGeneration })],
-          }
-        },
-        Running: () => ({
+        return {
           model: modifyFields(model, {
             query: () => query,
-            generation: Number.increment,
-            searchState: () => SearchState.Cancelling(),
+            generation: () => nextGeneration,
+            searchState: () => SearchState.Running(),
           }),
-          commands: [
-            FetchSuggestions.Interrupt(() =>
-              Message.CompletedCancelFetchSuggestions(),
-            ),
-          ],
+          commands: [FetchSuggestions({ query, generation: nextGeneration })],
+        }
+      },
+      Running: () => ({
+        model: modifyFields(model, {
+          query: () => query,
+          generation: Number.increment,
+          searchState: () => SearchState.Cancelling(),
         }),
-        Cancelling: () => ({
-          model: modifyFields(model, { query: () => query }),
-        }),
+        commands: [
+          FetchSuggestions.Interrupt(() =>
+            Message.CompletedCancelFetchSuggestions(),
+          ),
+        ],
       }),
-
-    CompletedCancelFetchSuggestions: () => ({
-      model: modifyFields(model, {
-        searchState: () => SearchState.Running(),
+      Cancelling: () => ({
+        model: modifyFields(model, { query: () => query }),
       }),
-      commands: [
-        FetchSuggestions({
-          query: model.query,
-          generation: model.generation,
-        }),
-      ],
     }),
 
-    SucceededFetchSuggestions: ({ generation, suggestions }) => {
-      if (generation !== model.generation) {
-        return { model }
-      }
+  CompletedCancelFetchSuggestions: model => ({
+    model: modifyFields(model, {
+      searchState: () => SearchState.Running(),
+    }),
+    commands: [
+      FetchSuggestions({
+        query: model.query,
+        generation: model.generation,
+      }),
+    ],
+  }),
 
-      return {
-        model: modifyFields(model, {
-          searchState: () => SearchState.Idle(),
-          suggestions: () => suggestions,
-        }),
-      }
-    },
-    FailedFetchSuggestions: ({ generation }) => {
-      if (generation !== model.generation) {
-        return { model }
-      }
+  SucceededFetchSuggestions: (model, { generation, suggestions }) => {
+    if (generation !== model.generation) {
+      return { model }
+    }
 
-      return {
-        model: modifyFields(model, {
-          searchState: () => SearchState.Idle(),
-        }),
-      }
-    },
-  })
+    return {
+      model: modifyFields(model, {
+        searchState: () => SearchState.Idle(),
+        suggestions: () => suggestions,
+      }),
+    }
+  },
+  FailedFetchSuggestions: (model, { generation }) => {
+    if (generation !== model.generation) {
+      return { model }
+    }
+
+    return {
+      model: modifyFields(model, {
+        searchState: () => SearchState.Idle(),
+      }),
+    }
+  },
+})

@@ -1,86 +1,84 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Option, Schema } from 'effect'
-import { Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Schema, Tuple } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { Dialog } from '@foldkit/ui'
+import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
 
 // One Model field per dialog level:
 const Model = Schema.Struct({
-  settingsDialog: Dialog.Model,
-  confirmDialog: Dialog.Model,
+  settingsDialog: Dialog.DialogBlock.Model,
+  confirmDialog: Dialog.DialogBlock.Model,
   // ...your other fields
 })
-type Model = typeof Model.Type
 
-const init = () => ({
-  model: {
-    settingsDialog: Dialog.init({ id: 'settings' }),
-    confirmDialog: Dialog.init({ id: 'confirm-delete' }),
-    // ...your other fields
-  },
-})
-
-// Embed each Dialog Message in your parent Message and delegate each to its
-// own Dialog.update (see the basic Dialog example for the delegation).
+// Declare only the parent-owned coordination fact. Each Binding derives its
+// own generated Dialog delivery.
 const Message = defineMessageUnion({
-  GotSettingsDialogMessage: { message: Dialog.Message },
-  GotConfirmDialogMessage: { message: Dialog.Message },
   ClickedDeleteProject: {},
   ConfirmedDeleteProject: {},
 })
-type Message = typeof Message.Type
 
-const foldConfirmDialogOutMessage = Dialog.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
+const ProjectDialogsDefinition = Block.makeDefinition('ProjectDialogs', {
+  Model,
+  Message,
 })
 
-const readConfirmDialog = (model: Model) => Option.some(model.confirmDialog)
-const writeConfirmDialog = (model: Model, confirmDialog: Dialog.Model): Model =>
-  modifyFields(model, { confirmDialog: () => confirmDialog })
-const toGotConfirmDialogMessage = (message: Dialog.Message): Message =>
-  Message.GotConfirmDialogMessage({ message })
+const { makeNoopStep } = ProjectDialogsDefinition
 
-const foldConfirmDialogOpen = Update.foldChildStep({
-  update: Dialog.open,
-  read: readConfirmDialog,
-  write: writeConfirmDialog,
-  toParentMessage: toGotConfirmDialogMessage,
-  foldOutMessage: foldConfirmDialogOutMessage,
+const foldConfirmDialogOutMessage = ProjectDialogsDefinition.makeOutMessageFold(
+  Dialog.DialogBlock,
+  {
+    Opened: makeNoopStep,
+    Closed: makeNoopStep,
+    CompletedClose: makeNoopStep,
+  },
+)
+
+const SettingsDialogBinding = ProjectDialogsDefinition.makeBinding(
+  Dialog.DialogBlock,
+  {
+    field: 'settingsDialog',
+    init: { contextToArgs: () => Tuple.make({ id: 'settings' }) },
+  },
+).withOutMessagePolicy({ fold: foldConfirmDialogOutMessage })
+
+const ConfirmDialogBinding = ProjectDialogsDefinition.makeBinding(
+  Dialog.DialogBlock,
+  {
+    field: 'confirmDialog',
+    init: { contextToArgs: () => Tuple.make({ id: 'confirm-delete' }) },
+  },
+).withOutMessagePolicy({ fold: foldConfirmDialogOutMessage })
+
+const ProjectDialogsComposition = ProjectDialogsDefinition.makeComposition({
+  bindings: [SettingsDialogBinding, ConfirmDialogBinding],
 })
 
-const foldConfirmDialogClose = Update.foldChildStep({
-  update: Dialog.close,
-  read: readConfirmDialog,
-  write: writeConfirmDialog,
-  toParentMessage: toGotConfirmDialogMessage,
-  foldOutMessage: foldConfirmDialogOutMessage,
-})
+const init = ProjectDialogsComposition.makeInit(() => ({
+  model: {
+    // ...your other fields
+  },
+}))
 
 // Opening the confirmation is a parent fact, not a hand-wrapped child message.
 // The button dispatches ClickedDeleteProject; the update opens the confirmation
-// through Dialog.open, keeping Got* for genuine child results.
+// through `ConfirmDialogBinding.requestOpen()`, keeping Got* for genuine child results.
 
-// In the corresponding Message.match handler:
-ClickedDeleteProject: () => foldConfirmDialogOpen(model)
+const update = ProjectDialogsComposition.makeUpdate({
+  ClickedDeleteProject: ConfirmDialogBinding.requestOpen(),
+  ConfirmedDeleteProject: ConfirmDialogBinding.requestClose(),
+})
 
-// Confirming runs the deletion, then closes the confirmation through
-// Dialog.close, the same API the opening fact used.
-// Add the deletion as another Update.combine step when implementing it.
-ConfirmedDeleteProject: () => foldConfirmDialogClose(model)
-
-// Each dialog is its own submodel; the framework stacks them by z-index, traps
+// Each dialog is its own block; the framework stacks them by z-index, traps
 // focus in the topmost, and Escape closes the topmost before the one beneath
 // it. Cancel dismisses the confirmation through the `closeButton` bundle.
-// Delete dispatches a fact that runs the work and closes through Dialog.close.
-const view = (h: HtmlBuilder<Message>) => {
+// Delete dispatches a fact that runs the work and closes through
+// `ConfirmDialogBinding.requestClose()`.
+const view = ProjectDialogsComposition.makeView((model, h) => {
   const confirmDialogView = ({
     dialog,
     backdrop,
@@ -88,7 +86,7 @@ const view = (h: HtmlBuilder<Message>) => {
     title,
     closeButton,
     isVisible,
-  }: Dialog.RenderInfo) =>
+  }: DialogRenderInfo) =>
     h.dialog(
       [...dialog],
       isVisible
@@ -115,7 +113,7 @@ const view = (h: HtmlBuilder<Message>) => {
     panel,
     title,
     isVisible,
-  }: Dialog.RenderInfo) =>
+  }: DialogRenderInfo) =>
     h.dialog(
       [...dialog],
       isVisible
@@ -135,25 +133,25 @@ const view = (h: HtmlBuilder<Message>) => {
         : [],
     )
 
-  const confirmDialog = h.submodel({
-    slotId: model.confirmDialog.id,
-    model: model.confirmDialog,
-    view: Dialog.view,
-    viewInputs: {
-      toView: confirmDialogView,
-    },
-    toParentMessage: message => Message.GotConfirmDialogMessage({ message }),
-  })
+  const confirmDialogViewNode = h.block(
+    ConfirmDialogBinding.embedView({
+      slotId: model.confirmDialog.id,
+      model: model.confirmDialog,
+      viewInputs: {
+        toView: confirmDialogView,
+      },
+    }),
+  )
 
-  const settingsDialog = h.submodel({
-    slotId: model.settingsDialog.id,
-    model: model.settingsDialog,
-    view: Dialog.view,
-    viewInputs: {
-      toView: settingsDialogView,
-    },
-    toParentMessage: message => Message.GotSettingsDialogMessage({ message }),
-  })
+  const settingsDialogViewNode = h.block(
+    SettingsDialogBinding.embedView({
+      slotId: model.settingsDialog.id,
+      model: model.settingsDialog,
+      viewInputs: {
+        toView: settingsDialogView,
+      },
+    }),
+  )
 
-  return h.div([], [settingsDialog, confirmDialog])
-}
+  return h.div([], [settingsDialogViewNode, confirmDialogViewNode])
+})

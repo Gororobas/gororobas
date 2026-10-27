@@ -14,7 +14,6 @@ const ContextMenuState = defineTaggedUnion({
   Closed: {},
   Open: { source: ContextMenuSource },
 })
-type ContextMenuState = typeof ContextMenuState.Type
 
 export const Model = Schema.Struct({
   contextMenu: ContextMenuState,

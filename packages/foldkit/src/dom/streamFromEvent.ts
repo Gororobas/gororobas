@@ -143,17 +143,23 @@ type PreventDefaultEventListenerOptions = Omit<
  * those events, or reach for `streamFromEventFilterMapPreventDefault`, which does
  * so for you.
  *
- * The output type is inferred from the mapper; `Subscription.make` checks
- * that the final Stream emits the application's Message type.
+ * The output type is inferred from the mapper. A Block definition's
+ * `subscriptions` method checks that the final Stream emits the Block's
+ * Message type.
  */
 export type StreamFromEventConfig<
   Target extends EventTarget,
   Type extends EventTypeOf<Target>,
   Output,
 > = Readonly<{
+  /** Event source, or a thunk resolved when the Stream's scope opens. */
   target: Target | (() => Target)
+  /** Event name accepted by the target's declared or native event map. */
   type: Type
+  /** Maps each event synchronously to the value emitted by the Stream. */
   mapEvent: (event: EventOf<Target, Type>) => Output
+  /** Native listener options passed to both `addEventListener` and
+   * `removeEventListener`. */
   options?: AddEventListenerOptions
 }>
 
@@ -179,17 +185,24 @@ export type StreamFromEventConfig<
  * `options: { passive: false }` explicitly when cancelling those events, or
  * reach for `streamFromEventFilterMapPreventDefault`, which does so for you.
  *
- * The output type is inferred from the mapper; `Subscription.make` checks
- * that the final Stream emits the application's Message type.
+ * The output type is inferred from the mapper. A Block definition's
+ * `subscriptions` method checks that the final Stream emits the Block's
+ * Message type.
  */
 export type StreamFromEventFilterMapConfig<
   Target extends EventTarget,
   Type extends EventTypeOf<Target>,
   Output,
 > = Readonly<{
+  /** Event source, or a thunk resolved when the Stream's scope opens. */
   target: Target | (() => Target)
+  /** Event name accepted by the target's declared or native event map. */
   type: Type
+  /** Maps an event to `Some(value)` to emit it, or `None` to ignore it. The
+   * mapper runs synchronously during event dispatch. */
   filterMapEvent: (event: EventOf<Target, Type>) => Option.Option<Output>
+  /** Native listener options passed to both `addEventListener` and
+   * `removeEventListener`. */
   options?: AddEventListenerOptions
 }>
 
@@ -254,17 +267,24 @@ const listen = <EventType extends Event, Output>(
  * rejects `passive: true`; the runtime guard also throws for unchecked
  * JavaScript inputs.
  *
- * The output type is inferred from the mapper; `Subscription.make` checks
- * that the final Stream emits the application's Message type.
+ * The output type is inferred from the mapper. A Block definition's
+ * `subscriptions` method checks that the final Stream emits the Block's
+ * Message type.
  */
 export type StreamFromEventFilterMapPreventDefaultConfig<
   Target extends EventTarget,
   Type extends EventTypeOf<Target>,
   Output,
 > = Readonly<{
+  /** Event source, or a thunk resolved when the Stream's scope opens. */
   target: Target | (() => Target)
+  /** Event name accepted by the target's declared or native event map. */
   type: Type
+  /** Maps an event to `Some(value)` to emit and cancel its default action, or
+   * `None` to ignore it. */
   filterMapEvent: (event: EventOf<Target, Type>) => Option.Option<Output>
+  /** Native listener options. `passive` defaults to `false` and cannot be
+   * `true`, because handled events call `preventDefault()`. */
   options?: PreventDefaultEventListenerOptions
 }>
 
@@ -300,36 +320,41 @@ export type StreamFromEventFilterMapPreventDefaultConfig<
  * `removeEventListener` is registered only after acquire completes, so the
  * listener never leaks on interruption.
  *
- * This is a Stream, not a Subscription entry. Wrap it with
- * `Subscription.persistentEntry` for a listener with no local Model dependencies,
- * or plug it into a `Subscription.make` entry's
- * `dependenciesToStream` (typically behind `Stream.when`) to gate it on a
- * Model condition. The mapper's output type is inferred (even a raw Event is
- * accepted here); `Subscription.make` checks the final Stream against the
- * application's Message type.
+ * This is a Stream, not a Subscription entry. Declare a named entry with no
+ * Model dependencies for an always-active listener, or declare dependencies
+ * and use this Stream in the entry's handler, typically behind `Stream.when`,
+ * to gate it on a Model condition. The mapper's output type is inferred, while
+ * the entry's `messages` schemas constrain the handler's final output.
  *
  * @example
  * ```typescript
- * const subscriptions = Subscription.make<Model, Message>()(entry => ({
+ * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
+ * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
  *   escapeKey: entry(
+ *     'EscapeKey',
  *     { isListening: Schema.Boolean },
  *     {
+ *       messages: [Message.PressedEscape],
  *       modelToDependencies: model => ({ isListening: model.isListening }),
- *       dependenciesToStream: ({ isListening }) =>
- *         Stream.when(
- *           Dom.streamFromEventFilterMap({
- *             target: window,
- *             type: 'keydown',
- *             filterMapEvent: event =>
- *               event.key === 'Escape'
- *                 ? Option.some(Message.PressedEscape())
- *                 : Option.none(),
- *           }),
- *           Effect.sync(() => isListening),
- *         ),
+ *       handler: function* () {
+ *         return ({ isListening }) =>
+ *           Stream.when(
+ *             Dom.streamFromEventFilterMap({
+ *               target: window,
+ *               type: 'keydown',
+ *               filterMapEvent: event =>
+ *                 event.key === 'Escape'
+ *                   ? Option.some(Message.PressedEscape())
+ *                   : Option.none(),
+ *             }),
+ *             Effect.sync(() => isListening),
+ *           )
+ *       },
  *     },
  *   ),
  * }))
+ *
+ * const EffectsLayer = subscriptions.escapeKey.layer
  * ```
  */
 export const streamFromEventFilterMap = <
@@ -357,13 +382,11 @@ export const streamFromEventFilterMap = <
  * `removeEventListener` is registered only after acquire completes, so the
  * listener never leaks on interruption.
  *
- * This is a Stream, not a Subscription entry. Wrap it with
- * `Subscription.persistentEntry` for a listener with no local Model dependencies,
- * or plug it into a `Subscription.make` entry's
- * `dependenciesToStream` (typically behind `Stream.when`) to gate it on a
- * Model condition. The mapper's output type is inferred (even a raw Event is
- * accepted here); `Subscription.make` checks the final Stream against the
- * application's Message type.
+ * This is a Stream, not a Subscription entry. Declare a named entry with no
+ * Model dependencies for an always-active listener, or declare dependencies
+ * and use this Stream in the entry's handler, typically behind `Stream.when`,
+ * to gate it on a Model condition. The mapper's output type is inferred, while
+ * the entry's `messages` schemas constrain the handler's final output.
  *
  * For a listener that reacts to only some events, reach for
  * `streamFromEventFilterMap`, whose mapper returns `Option<Output>`. For a
@@ -372,23 +395,30 @@ export const streamFromEventFilterMap = <
  *
  * @example
  * ```typescript
- * const subscriptions = Subscription.make<Model, Message>()(entry => ({
+ * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
+ * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
  *   shortcut: entry(
+ *     'KeyboardShortcut',
  *     { isListening: Schema.Boolean },
  *     {
+ *       messages: [Message.PressedKey],
  *       modelToDependencies: model => ({ isListening: model.isListening }),
- *       dependenciesToStream: ({ isListening }) =>
- *         Stream.when(
- *           Dom.streamFromEvent({
- *             target: window,
- *             type: 'keydown',
- *             mapEvent: event => Message.PressedKey({ key: event.key }),
- *           }),
- *           Effect.sync(() => isListening),
- *         ),
+ *       handler: function* () {
+ *         return ({ isListening }) =>
+ *           Stream.when(
+ *             Dom.streamFromEvent({
+ *               target: window,
+ *               type: 'keydown',
+ *               mapEvent: event => Message.PressedKey({ key: event.key }),
+ *             }),
+ *             Effect.sync(() => isListening),
+ *           )
+ *       },
  *     },
  *   ),
  * }))
+ *
+ * const EffectsLayer = subscriptions.shortcut.layer
  * ```
  */
 export const streamFromEvent = <
@@ -433,33 +463,38 @@ export const streamFromEvent = <
  * `removeEventListener` is registered only after acquire completes, so the
  * listener never leaks on interruption.
  *
- * This is a Stream, not a Subscription entry. Wrap it with
- * `Subscription.persistentEntry` for a listener with no local Model dependencies,
- * or plug it into a `Subscription.make` entry's
- * `dependenciesToStream` (typically behind `Stream.when`) to gate it on a
- * Model condition. The mapper's output type is inferred (even a raw Event is
- * accepted here); `Subscription.make` checks the final Stream against the
- * application's Message type.
+ * This is a Stream, not a Subscription entry. Declare a named entry with no
+ * Model dependencies for an always-active listener, or declare dependencies
+ * and use this Stream in the entry's handler, typically behind `Stream.when`,
+ * to gate it on a Model condition. The mapper's output type is inferred, while
+ * the entry's `messages` schemas constrain the handler's final output.
  *
  * @example
  * ```typescript
- * const subscriptions = Subscription.make<Model, Message>()(entry => ({
+ * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
+ * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
  *   wheelLock: entry(
+ *     'WheelLock',
  *     { isModalOpen: Schema.Boolean },
  *     {
+ *       messages: [Message.SuppressedWheelScroll],
  *       modelToDependencies: model => ({ isModalOpen: model.isModalOpen }),
- *       dependenciesToStream: ({ isModalOpen }) =>
- *         Stream.when(
- *           Dom.streamFromEventFilterMapPreventDefault({
- *             target: window,
- *             type: 'wheel',
- *             filterMapEvent: () => Option.some(Message.SuppressedWheelScroll()),
- *           }),
- *           Effect.sync(() => isModalOpen),
- *         ),
+ *       handler: function* () {
+ *         return ({ isModalOpen }) =>
+ *           Stream.when(
+ *             Dom.streamFromEventFilterMapPreventDefault({
+ *               target: window,
+ *               type: 'wheel',
+ *               filterMapEvent: () => Option.some(Message.SuppressedWheelScroll()),
+ *             }),
+ *             Effect.sync(() => isModalOpen),
+ *           )
+ *       },
  *     },
  *   ),
  * }))
+ *
+ * const EffectsLayer = subscriptions.wheelLock.layer
  * ```
  */
 export const streamFromEventFilterMapPreventDefault = <

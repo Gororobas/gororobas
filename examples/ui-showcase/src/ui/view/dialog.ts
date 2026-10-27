@@ -1,12 +1,23 @@
 import { Option } from 'effect'
-import { Submodel } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
-import { Combobox, Dialog } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
+import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
 
-import { Message as UiMessage } from '../message'
-import type { City, UiModel } from '../model'
-import { CityCombobox, comboboxInputs } from './combobox'
+import { CityComboboxBlock } from '../combobox'
+import {
+  DialogAnimatedDemoBinding,
+  DialogDemoBinding,
+  NestedDialogChildDemoBinding,
+  NestedDialogParentDemoBinding,
+  OverlayComboboxDemoBinding,
+  OverlayDialogDemoBinding,
+  UiComposition,
+} from '../composition'
+import type { UiViewBuilder } from '../composition'
+import type { City } from '../domain'
+import { Message } from '../message'
+import { comboboxInputs } from './combobox'
 
 const triggerClassName =
   'px-4 py-2 text-base font-normal cursor-pointer transition rounded-lg border border-gray-300 bg-white text-gray-900 hover:bg-gray-100 select-none'
@@ -60,8 +71,8 @@ const OVERLAY_COMBOBOX_ANCHOR = {
 
 const trigger = (
   label: string,
-  message: UiMessage,
-  h: HtmlBuilder<UiMessage>,
+  message: typeof Message.Type,
+  h: UiViewBuilder,
 ): Html =>
   h.div(
     [h.Class(triggerRowClassName)],
@@ -69,10 +80,10 @@ const trigger = (
   )
 
 const confirmContent = (
-  closeButton: Dialog.RenderInfo['closeButton'],
-  title: Dialog.RenderInfo['title'],
-  description: Dialog.RenderInfo['description'],
-  h: HtmlBuilder<UiMessage>,
+  closeButton: DialogRenderInfo['closeButton'],
+  title: DialogRenderInfo['title'],
+  description: DialogRenderInfo['description'],
+  h: UiViewBuilder,
 ): Html =>
   h.div(
     [],
@@ -101,11 +112,11 @@ const confirmContent = (
   )
 
 const editFiltersContent = (
-  title: Dialog.RenderInfo['title'],
-  description: Dialog.RenderInfo['description'],
-  comboboxModel: Combobox.Model,
-  maybeSelectedCity: Option.Option<City>,
-  h: HtmlBuilder<UiMessage>,
+  title: DialogRenderInfo['title'],
+  description: DialogRenderInfo['description'],
+  comboboxModel: typeof CityComboboxBlock.Model.Type,
+  maybeSelectedCity: Option.Option<typeof City.Type>,
+  h: UiViewBuilder,
 ): ReadonlyArray<Html> => [
   h.h2([...title, h.Class(titleClassName)], ['Edit filters']),
   h.p(
@@ -114,32 +125,31 @@ const editFiltersContent = (
       'The combobox panel portals into the dialog, so it renders above the dialog content.',
     ],
   ),
-  h.submodel({
-    slotId: comboboxModel.id,
-    model: comboboxModel,
-    view: CityCombobox.view,
-    viewInputs: {
-      ...comboboxInputs(
-        {
-          inputValue: comboboxModel.inputValue,
-          restingInputValue: Option.getOrElse(maybeSelectedCity, () => ''),
-          anchor: OVERLAY_COMBOBOX_ANCHOR,
-          wrapperClass: 'relative w-full',
-        },
-        h,
-      ),
-      maybeSelectedValue: maybeSelectedCity,
-    },
-    toParentMessage: message =>
-      UiMessage.GotOverlayComboboxDemoMessage({ message }),
-  }),
+  h.block(
+    OverlayComboboxDemoBinding.embedView({
+      slotId: comboboxModel.id,
+      model: comboboxModel,
+      viewInputs: {
+        ...comboboxInputs(
+          {
+            inputValue: comboboxModel.inputValue,
+            restingInputValue: Option.getOrElse(maybeSelectedCity, () => ''),
+            anchor: OVERLAY_COMBOBOX_ANCHOR,
+            wrapperClass: 'relative w-full',
+          },
+          h,
+        ),
+        maybeSelectedValue: maybeSelectedCity,
+      },
+    }),
+  ),
 ]
 
 const projectSettingsContent = (
-  closeButton: Dialog.RenderInfo['closeButton'],
-  title: Dialog.RenderInfo['title'],
-  description: Dialog.RenderInfo['description'],
-  h: HtmlBuilder<UiMessage>,
+  closeButton: DialogRenderInfo['closeButton'],
+  title: DialogRenderInfo['title'],
+  description: DialogRenderInfo['description'],
+  h: UiViewBuilder,
 ): ReadonlyArray<Html> => [
   h.h2([...title, h.Class(titleClassName)], ['Project settings']),
   h.p(
@@ -155,7 +165,7 @@ const projectSettingsContent = (
       h.button(
         [
           h.Class(dangerButtonClassName),
-          h.OnClick(UiMessage.ClickedDeleteProject()),
+          h.OnClick(Message.ClickedDeleteProject()),
         ],
         ['Delete project'],
       ),
@@ -164,10 +174,10 @@ const projectSettingsContent = (
 ]
 
 const deleteProjectContent = (
-  closeButton: Dialog.RenderInfo['closeButton'],
-  title: Dialog.RenderInfo['title'],
-  description: Dialog.RenderInfo['description'],
-  h: HtmlBuilder<UiMessage>,
+  closeButton: DialogRenderInfo['closeButton'],
+  title: DialogRenderInfo['title'],
+  description: DialogRenderInfo['description'],
+  h: UiViewBuilder,
 ): ReadonlyArray<Html> => [
   h.h2([...title, h.Class(titleClassName)], ['Delete project?']),
   h.p(
@@ -188,11 +198,11 @@ const deleteProjectContent = (
 // DEMOS
 
 const dialogWithPanel = (
-  { dialog, backdrop, panel, isVisible }: Dialog.RenderInfo,
+  { dialog, backdrop, panel, isVisible }: DialogRenderInfo,
   backdropClassName: string,
   panelClassNameValue: string,
   content: () => ReadonlyArray<Html>,
-  h: HtmlBuilder<UiMessage>,
+  h: UiViewBuilder,
 ): Html =>
   h.dialog(
     [...dialog, h.Class(dialogClassName)],
@@ -205,10 +215,10 @@ const dialogWithPanel = (
   )
 
 const basicDemo = (
-  dialogModel: Dialog.Model,
-  h: HtmlBuilder<UiMessage>,
-): Html => {
-  const basicDialogView = (render: Dialog.RenderInfo): Html =>
+  dialogModel: typeof DialogBlock.Model.Type,
+  h: UiViewBuilder,
+) => {
+  const basicDialogView = (render: DialogRenderInfo): Html =>
     dialogWithPanel(
       render,
       backdropClassName,
@@ -219,23 +229,23 @@ const basicDemo = (
       h,
     )
 
-  return h.submodel({
-    slotId: dialogModel.id,
-    model: dialogModel,
-    view: Dialog.view,
-    viewInputs: {
-      hasDescription: true,
-      toView: basicDialogView,
-    },
-    toParentMessage: message => UiMessage.GotDialogDemoMessage({ message }),
-  })
+  return h.block(
+    DialogDemoBinding.embedView({
+      slotId: dialogModel.id,
+      model: dialogModel,
+      viewInputs: {
+        hasDescription: true,
+        toView: basicDialogView,
+      },
+    }),
+  )
 }
 
 const animatedDemo = (
-  dialogModel: Dialog.Model,
-  h: HtmlBuilder<UiMessage>,
-): Html => {
-  const animatedDialogView = (render: Dialog.RenderInfo): Html =>
+  dialogModel: typeof DialogBlock.Model.Type,
+  h: UiViewBuilder,
+) => {
+  const animatedDialogView = (render: DialogRenderInfo): Html =>
     dialogWithPanel(
       render,
       animatedBackdropClassName,
@@ -246,26 +256,25 @@ const animatedDemo = (
       h,
     )
 
-  return h.submodel({
-    slotId: dialogModel.id,
-    model: dialogModel,
-    view: Dialog.view,
-    viewInputs: {
-      hasDescription: true,
-      toView: animatedDialogView,
-    },
-    toParentMessage: message =>
-      UiMessage.GotDialogAnimatedDemoMessage({ message }),
-  })
+  return h.block(
+    DialogAnimatedDemoBinding.embedView({
+      slotId: dialogModel.id,
+      model: dialogModel,
+      viewInputs: {
+        hasDescription: true,
+        toView: animatedDialogView,
+      },
+    }),
+  )
 }
 
 const overlayDemo = (
-  dialogModel: Dialog.Model,
-  comboboxModel: Combobox.Model,
-  maybeSelectedCity: Option.Option<City>,
-  h: HtmlBuilder<UiMessage>,
+  dialogModel: typeof DialogBlock.Model.Type,
+  comboboxModel: typeof CityComboboxBlock.Model.Type,
+  maybeSelectedCity: Option.Option<typeof City.Type>,
+  h: UiViewBuilder,
 ): Html => {
-  const overlayDialogView = (render: Dialog.RenderInfo): Html =>
+  const overlayDialogView = (render: DialogRenderInfo): Html =>
     dialogWithPanel(
       render,
       backdropClassName,
@@ -284,28 +293,27 @@ const overlayDemo = (
   return h.div(
     [],
     [
-      trigger('Edit filters', UiMessage.ClickedEditFilters(), h),
-      h.submodel({
-        slotId: dialogModel.id,
-        model: dialogModel,
-        view: Dialog.view,
-        viewInputs: {
-          hasDescription: true,
-          toView: overlayDialogView,
-        },
-        toParentMessage: message =>
-          UiMessage.GotOverlayDialogDemoMessage({ message }),
-      }),
+      trigger('Edit filters', Message.ClickedEditFilters(), h),
+      h.block(
+        OverlayDialogDemoBinding.embedView({
+          slotId: dialogModel.id,
+          model: dialogModel,
+          viewInputs: {
+            hasDescription: true,
+            toView: overlayDialogView,
+          },
+        }),
+      ),
     ],
   )
 }
 
 const nestedDemo = (
-  parentDialogModel: Dialog.Model,
-  childDialogModel: Dialog.Model,
-  h: HtmlBuilder<UiMessage>,
+  parentDialogModel: typeof DialogBlock.Model.Type,
+  childDialogModel: typeof DialogBlock.Model.Type,
+  h: UiViewBuilder,
 ): Html => {
-  const settingsDialogView = (render: Dialog.RenderInfo): Html =>
+  const settingsDialogView = (render: DialogRenderInfo): Html =>
     dialogWithPanel(
       render,
       backdropClassName,
@@ -320,7 +328,7 @@ const nestedDemo = (
       h,
     )
 
-  const deleteProjectDialogView = (render: Dialog.RenderInfo): Html =>
+  const deleteProjectDialogView = (render: DialogRenderInfo): Html =>
     dialogWithPanel(
       render,
       backdropClassName,
@@ -338,73 +346,55 @@ const nestedDemo = (
   return h.div(
     [],
     [
-      trigger(
-        'Open project settings',
-        UiMessage.ClickedOpenProjectSettings(),
-        h,
+      trigger('Open project settings', Message.ClickedOpenProjectSettings(), h),
+      h.block(
+        NestedDialogParentDemoBinding.embedView({
+          slotId: parentDialogModel.id,
+          model: parentDialogModel,
+          viewInputs: {
+            hasDescription: true,
+            toView: settingsDialogView,
+          },
+        }),
       ),
-      h.submodel({
-        slotId: parentDialogModel.id,
-        model: parentDialogModel,
-        view: Dialog.view,
-        viewInputs: {
-          hasDescription: true,
-          toView: settingsDialogView,
-        },
-        toParentMessage: message =>
-          UiMessage.GotNestedDialogParentDemoMessage({ message }),
-      }),
-      h.submodel({
-        slotId: childDialogModel.id,
-        model: childDialogModel,
-        view: Dialog.view,
-        viewInputs: {
-          hasDescription: true,
-          toView: deleteProjectDialogView,
-        },
-        toParentMessage: message =>
-          UiMessage.GotNestedDialogChildDemoMessage({ message }),
-      }),
+      h.block(
+        NestedDialogChildDemoBinding.embedView({
+          slotId: childDialogModel.id,
+          model: childDialogModel,
+          viewInputs: {
+            hasDescription: true,
+            toView: deleteProjectDialogView,
+          },
+        }),
+      ),
     ],
   )
 }
 
-// VIEW
+export const view = UiComposition.makeView((model, h) => {
+  return h.div(
+    [],
+    [
+      h.h2([h.Class('text-2xl font-bold text-gray-900 mb-6')], ['Dialog']),
 
-export const view = Submodel.defineView<UiModel, UiMessage>(
-  (model, h): Html => {
-    return h.div(
-      [],
-      [
-        h.h2([h.Class('text-2xl font-bold text-gray-900 mb-6')], ['Dialog']),
+      h.h3([h.Class(sectionHeadingClassName)], ['Basic']),
+      trigger('Open Dialog', Message.ClickedOpenDialog(), h),
+      basicDemo(model.dialogDemo, h),
 
-        h.h3([h.Class(sectionHeadingClassName)], ['Basic']),
-        trigger('Open Dialog', UiMessage.ClickedOpenDialog(), h),
-        basicDemo(model.dialogDemo, h),
+      h.h3([h.Class(sectionHeadingClassName)], ['Animated']),
+      trigger('Open Animated Dialog', Message.ClickedOpenAnimatedDialog(), h),
+      animatedDemo(model.dialogAnimatedDemo, h),
 
-        h.h3([h.Class(sectionHeadingClassName)], ['Animated']),
-        trigger(
-          'Open Animated Dialog',
-          UiMessage.ClickedOpenAnimatedDialog(),
-          h,
-        ),
-        animatedDemo(model.dialogAnimatedDemo, h),
+      h.h3([h.Class(sectionHeadingClassName)], ['Field']),
+      overlayDemo(
+        model.overlayDialogDemo,
+        model.overlayComboboxDemo,
+        model.maybeOverlayComboboxDemoSelectedCity,
+        h,
+      ),
 
-        h.h3([h.Class(sectionHeadingClassName)], ['Field']),
-        overlayDemo(
-          model.overlayDialogDemo,
-          model.overlayComboboxDemo,
-          model.maybeOverlayComboboxDemoSelectedCity,
-          h,
-        ),
-
-        h.h3([h.Class(sectionHeadingClassName)], ['Stacked']),
-        nestedDemo(
-          model.nestedDialogParentDemo,
-          model.nestedDialogChildDemo,
-          h,
-        ),
-      ],
-    )
-  },
-)
+      h.h3([h.Class(sectionHeadingClassName)], ['Stacked']),
+      nestedDemo(model.nestedDialogParentDemo, model.nestedDialogChildDemo, h),
+    ],
+  )
+})

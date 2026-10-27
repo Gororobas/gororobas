@@ -1,9 +1,9 @@
 import { clsx } from 'clsx'
-import type { HtmlBuilder } from 'foldkit/html'
 
 import { Disclosure } from '@foldkit/ui'
 
 import { Icon } from '../../../icon'
+import type { UiViewBuilder } from '../composition'
 import { Message } from '../message'
 
 export const DISCLOSURE_DEMO_ID = 'disclosure-demo'
@@ -12,12 +12,7 @@ export const DISCLOSURE_COLLAPSED_PREVIEW_DEMO_ID =
 
 const COLLAPSED_PREVIEW_HEIGHT = '6rem'
 
-// VIEW
-
-export const basicDemo = (
-  isDisclosureDemoOpen: boolean,
-  h: HtmlBuilder<Message>,
-) => {
+export const basicDemo = (isDisclosureDemoOpen: boolean, h: UiViewBuilder) => {
   const chevron = (isOpen: boolean) =>
     h.span(
       [
@@ -99,7 +94,7 @@ export const basicDemo = (
 
 export const collapsedPreviewDemo = (
   isDisclosureCollapsedPreviewDemoOpen: boolean,
-  h: HtmlBuilder<Message>,
+  h: UiViewBuilder,
 ) => [
   h.div(
     [h.Class('flex w-full max-w-lg flex-col gap-1.5')],

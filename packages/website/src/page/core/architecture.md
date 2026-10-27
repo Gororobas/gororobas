@@ -47,17 +47,29 @@ Five sources report through the Runtime: Commands, the Browser, Mounts, Subscrip
 
 - **Browser:** interactions with the rendered view, such as clicks and keypresses, produce Messages directly.
 - **Commands:** one-shot side effects such as HTTP requests, focus operations, `localStorage` writes, and navigation calls. The runtime executes each Command and sends its declared result back as a Message. Every Command has a name that appears in [DevTools](/core/devtools), [tests](/testing), and tracing.
-- **Mount:** imperative work scoped to the lifetime of an element in the live DOM. For example: portaling an overlay, attaching an observer, or handing an element to a third-party library. `Mount.define` runs an Effect that emits one Message at acquire. `Mount.defineStream` runs a Stream of Messages from listeners or observers. The runtime dispatches those results and runs the paired cleanup when the element unmounts.
+- **Mount:** imperative work scoped to the lifetime of an element in the live DOM. For example: portaling an overlay, attaching an observer, or handing an element to a third-party library. `FeatureDefinition.makeMount` runs an Effect that emits one Message at acquire. `FeatureDefinition.makeMountStream` runs a Stream of Messages from listeners or observers. The runtime dispatches those results and runs the paired cleanup when the element unmounts.
 - **Subscriptions:** scoped Streams gated by a slice of the Model. The runtime keeps a Subscription alive while that slice holds its value, then starts a fresh scope when the value changes. A Subscription often turns an external source, such as timer ticks, `WebSocket` frames, or system theme changes, into Messages. It can also emit no Messages and maintain DOM state for its lifetime, such as setting `user-select: none` while a drag is active.
 - **ManagedResources:** stateful handles, such as a camera stream, a `WebSocket` connection, or a Web Worker pool, that exist while a slice of the Model holds a particular value. The runtime acquires and releases the handle and dispatches Messages for each lifecycle transition. Commands and Subscriptions can use the typed handle while it is live and receive `ResourceNotAvailable` rather than crashing when it is not.
 
-### Resources
+### Shared Services
 
-Resources sit beneath the loop instead of feeding it directly. They are app-lifetime dependencies such as an `RpcClient`, an analytics client, or a background compute worker. The runtime shares them with Commands, Subscriptions, and startup Flags, but Resources do not produce Messages themselves.
+Shared services sit beneath the loop instead of feeding it directly. They are app-lifetime dependencies such as an `RpcClient`, an analytics client, or a background compute worker. The application Layer shares them with Commands, Subscriptions, and startup Flags, but services do not produce Messages themselves.
 
 ### Model Ownership
 
 Commands, browser events, Mounts, Subscriptions, and ManagedResources never mutate the Model. They report what happened with a Message, and only `update` decides the next state. If you want to know how the app reached its current state, follow the Messages.
+
+## Application Assembly
+
+Each Block owns a part of the Model, its Messages, and the behavior that handles them. A parent Binding says where that child is stored and how its Messages and OutMessages connect to the parent. A Composition establishes the registered children and Mounts and supplies checked helpers for init, update, and view. Completion combines that graph with the local lifecycle declarations and handler recipes.
+
+Layers supply those handlers and their shared dependencies, such as an `RpcClient` or an analytics client. Each feature combines its local handler recipes in `EffectsLayer` and completes its Block with that bundle. Registered child Bindings carry their checked graphs upward; the root `ApplicationLayer` supplies the remaining Services.
+
+An update that returns a Command requires that named operation's handler. The handler Layer requires the services its implementation uses. Adding another service to the implementation changes the Layer's requirements without changing update's handler requirement. TypeScript checks that application assembly supplies the remaining requirements before the Runtime can start. [Handler and service requirements](/core/layers#handler-and-service-requirements) shows how this differs from carrying implementation dependencies through update.
+
+The Runtime builds the application Layer once per start and shares its service instances with effect handlers and startup Flags. A Layer does not produce Messages itself. Command work, Subscription Streams, mounted elements, and ManagedResource handles retain their own lifetimes; [Layers](/core/layers#choosing-the-lifetime) explains which scope owns each.
+
+Defining and completing the Application creates passive configuration. `Runtime.run` starts it. The [Block guide](/core/block) builds a composed feature step by step; the [Layers guide](/core/layers) explains how its implementations and services are supplied.
 
 ## Definitions
 
@@ -72,10 +84,10 @@ Use this table as a reference after you understand the loop:
 | Command         | A description of a one-shot side effect. The runtime executes it and sends the result back as one of its declared Messages.                                                                                 |
 | Mount           | Imperative work scoped to a live DOM element. It emits Messages through an Effect or Stream and cleans up when the element unmounts.                                                                        |
 | Subscription    | A scoped Stream gated by a slice of the Model. The runtime restarts its scope when that slice changes.                                                                                                      |
-| Resource        | An app-lifetime singleton shared with Commands, Subscriptions, and startup Flags. It is a dependency, not a Message source.                                                                                 |
+| Layer           | A recipe for constructing services and effect handlers. The Runtime builds the supplied application Layer once per start and releases its scoped resources on stop.                                         |
 | ManagedResource | A stateful handle scoped to a slice of the Model. The runtime manages its lifecycle, and Commands and Subscriptions can use it while it is live.                                                            |
 | Runtime         | The Foldkit engine that executes Commands, runs Subscriptions, manages Mount and resource lifecycles, and routes Messages back into update.                                                                 |
-| Submodel        | A self-contained Model, Message, update, and Commands that a parent embeds and delegates to. A child can surface high-level facts to its parent through the optional `outMessage` field returned by update. |
+| Block           | A self-contained Model, Message, update, and Commands that a parent embeds and delegates to. A child can surface high-level facts to its parent through the optional `outMessage` field returned by update. |
 
 ## The Restaurant Analogy
 
@@ -91,17 +103,17 @@ Use the analogy to remember who knows the state and who performs effects. The de
 
 ### Mapping the Concepts
 
-| Foldkit         | Restaurant                                                                                                                  |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Model           | The waiter’s notebook: the current state of everything                                                                      |
-| Message         | Something that happens: “table 3 asked for the check”                                                                       |
-| update          | The waiter: hears what happened, updates the notebook, maybe writes a slip                                                  |
-| view            | What the customers actually see: plates on the table, the check arriving                                                    |
-| Command         | A slip for the kitchen: “prepare the salmon”                                                                                |
-| Mount           | Tableside flambé: rolled out to a specific table the moment its dish arrives, rolled away when the plate is cleared         |
-| Subscription    | A standing order: “keep the coffee coming for table 5”                                                                      |
-| Resource        | Kitchen equipment: the oven, the stand mixer, the deep fryer. Turned on when the kitchen opens and available to every dish. |
-| ManagedResource | A specialty station: set up when the menu features the seafood special, broken down when the special ends                   |
-| Runtime         | The kitchen: does the work, reports back when done                                                                          |
+| Foldkit         | Restaurant                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Model           | The waiter’s notebook: the current state of everything                                                              |
+| Message         | Something that happens: “table 3 asked for the check”                                                               |
+| update          | The waiter: hears what happened, updates the notebook, maybe writes a slip                                          |
+| view            | What the customers actually see: plates on the table, the check arriving                                            |
+| Command         | A slip for the kitchen: “prepare the salmon”                                                                        |
+| Mount           | Tableside flambé: rolled out to a specific table the moment its dish arrives, rolled away when the plate is cleared |
+| Subscription    | A standing order: “keep the coffee coming for table 5”                                                              |
+| Layer           | Kitchen equipment and the cooks who use it: available while the restaurant is open to fulfill orders.               |
+| ManagedResource | A specialty station: set up when the menu features the seafood special, broken down when the special ends           |
+| Runtime         | The kitchen: does the work, reports back when done                                                                  |
 
 That’s the architecture in the abstract. The next page shows a complete counter application: the core of the loop (a Model, Messages, `update`, `init`, and `view`) wired together and running.

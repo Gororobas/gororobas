@@ -23,7 +23,7 @@ const frontmatterByPath = import.meta.glob<unknown>('./post/*.md', {
  */
 export type BlogPost = Readonly<{
   slug: string
-  frontmatter: PostFrontmatter
+  frontmatter: typeof PostFrontmatter.Type
   document: unknown
 }>
 

@@ -1,13 +1,11 @@
 import { clsx } from 'clsx'
 import { Match } from 'effect'
-import { Submodel } from 'foldkit'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import { Html } from 'foldkit/html'
 
 import { Session } from '../../domain/session'
 import { notFoundView } from '../../notFoundView'
 import { dashboardRouter, settingsRouter } from '../../route'
-import { Message } from './message'
-import { Model } from './model'
+import { LoggedInComposition, type LoggedInViewBuilder } from './composition'
 import * as Dashboard from './page/dashboard'
 import * as Settings from './page/settings'
 
@@ -17,9 +15,9 @@ const navLinkClassName = (isActive: boolean) =>
   })
 
 const navigationView = (
-  session: Session,
+  session: typeof Session.Type,
   currentRouteTag: string,
-  h: HtmlBuilder<Message>,
+  h: LoggedInViewBuilder,
 ): Html =>
   h.nav(
     [h.Class('bg-blue-500 text-white p-4')],
@@ -64,7 +62,7 @@ const navigationView = (
     ],
   )
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
+export const view = LoggedInComposition.makeView((model, h) =>
   h.div(
     [h.Class('min-h-screen')],
     [

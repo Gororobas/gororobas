@@ -1,12 +1,9 @@
 import { Record } from 'effect'
-import { type Update } from 'foldkit'
 
-import { Message } from './message'
-import type { Model } from './model'
+import { ComingFromReactComposition } from './composition'
 
-export type UpdateReturn = Update.Return<Model, Message>
-
-export const update = (model: Model, message: Message) =>
-  Message.match<UpdateReturn>(message, {
-    ToggledFaq: ({ id, isOpen }) => ({ model: Record.set(model, id, isOpen) }),
-  })
+export const update = ComingFromReactComposition.makeUpdate({
+  ToggledFaq: (model, { id, isOpen }) => ({
+    model: Record.set(model, id, isOpen),
+  }),
+})

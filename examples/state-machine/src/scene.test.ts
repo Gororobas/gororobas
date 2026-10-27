@@ -13,12 +13,16 @@ import { describe, test } from 'vitest'
 
 import { RadioGroup } from '@foldkit/ui'
 
-import { Message, PlaceOrder, initialModel, update } from './main'
+import { PlaceOrder } from './command'
+import { initialModel } from './init'
+import { Message } from './message'
+import { EditionRadioGroupBlock } from './model'
+import { update } from './update'
 import { view } from './view'
 
 const resolveFocusOption = Command.resolve(
-  RadioGroup.FocusOption,
-  RadioGroup.Message.CompletedFocusOption(),
+  RadioGroup.test.FocusOption,
+  EditionRadioGroupBlock.Message.CompletedFocusOption(),
 )
 
 describe('scene', () => {
@@ -55,7 +59,7 @@ describe('scene', () => {
       expect(role('heading', { name: 'Processing your order' })).toExist(),
       Command.resolve(
         PlaceOrder,
-        Message.SucceededPlaceOrder({ orderId: 'DIGI-1001' }),
+        Message.CompletedPlaceOrder({ orderId: 'DIGI-1001' }),
       ),
       expect(text('Order DIGI-1001 confirmed')).toExist(),
     )

@@ -10,6 +10,7 @@ on:
   push:
     branches:
       - main
+      - codex/layers-and-submodels
     paths:
       - '.changeset/**'
       - 'packages/**'
@@ -32,25 +33,29 @@ on:
       - 'scripts/lib/coherent-release.mjs'
       - 'scripts/lib/github-release.mjs'
       - 'scripts/lib/package-version.mjs'
+      - 'scripts/lib/preview-release.mjs'
       - 'scripts/lib/website-package-inputs.mjs'
       - 'scripts/lib/workspace-packages.mjs'
       - 'scripts/version-alignment-notes.mjs'
       - 'scripts/website-vercel-config.mjs'
+      - 'scripts/preview-release-manifest.mjs'
       - '.npmrc'
       - 'tsconfig.base.json'
       - '.github/workflows/deploy-website-build.yml'
       - '.github/workflows/deploy-website-canary.yml'
+      - '.github/workflows/deploy-website-preview.yml'
       - '.github/workflows/release.yml'
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
   version:
     name: Create or update the Version Packages pull request
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       actions: write
@@ -102,7 +107,7 @@ jobs:
 
   stable:
     name: Upload, verify, and promote stable packages
-    if: github.event_name == 'push' && needs.version.outputs.has_changesets == 'false'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.version.outputs.has_changesets == 'false'
     needs: version
     outputs:
       published_commit: ${{ steps.promote.outputs.published_commit }}
@@ -193,14 +198,34 @@ jobs:
       - name: Upload and verify the canary snapshot
         run: pnpm release:canary
         env:
+          FOLDKIT_CANARY_MANIFEST_PATH: ${{ runner.temp }}/foldkit-preview-release.json
           NPM_CONFIG_PROVENANCE: true
           SKIP_SIMPLE_GIT_HOOKS: '1'
 
+      - name: Preserve the verified integration package manifest
+        if: github.ref == 'refs/heads/codex/layers-and-submodels'
+        uses: actions/upload-artifact@v4
+        with:
+          name: foldkit-preview-release-${{ github.sha }}
+          path: ${{ runner.temp }}/foldkit-preview-release.json
+          if-no-files-found: error
+          retention-days: 30
+
   deploy-website-canary:
     needs: canary
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.canary.result == 'success' }}
     uses: ./.github/workflows/deploy-website-canary.yml
     with:
       target: ${{ github.sha }}
+    secrets: inherit
+
+  deploy-website-preview:
+    needs: canary
+    if: ${{ !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/codex/layers-and-submodels' && needs.canary.result == 'success' }}
+    uses: ./.github/workflows/deploy-website-preview.yml
+    with:
+      target: ${{ github.sha }}
+      manifest_artifact: foldkit-preview-release-${{ github.sha }}
     secrets: inherit
 
   finalize:
@@ -208,8 +233,9 @@ jobs:
     needs: stable
     if: >-
       !cancelled() &&
+      github.ref == 'refs/heads/main' &&
       ((github.event_name == 'push' && needs.stable.result == 'success' && needs.stable.outputs.published_commit != '') ||
-       github.event_name == 'workflow_dispatch')
+       (github.event_name == 'workflow_dispatch' && needs.stable.result == 'skipped'))
     runs-on: ubuntu-latest
     env:
       PUBLISHED_COMMIT: ${{ needs.stable.outputs.published_commit || inputs.published_commit }}
@@ -271,7 +297,7 @@ jobs:
   deploy-website:
     name: Deploy the promoted website
     needs: finalize
-    if: ${{ !cancelled() && needs.finalize.result == 'success' }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && needs.finalize.result == 'success' }}
     uses: ./.github/workflows/deploy-website.yml
     with:
       published_commit: ${{ needs.finalize.outputs.published_commit }}

@@ -1,10 +1,7 @@
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { DragAndDrop } from '@foldkit/ui'
-
 export const Message = defineMessageUnion({
-  GotDragAndDropMessage: { message: DragAndDrop.Message },
   ClickedAddCard: { columnId: Schema.String },
   ChangedNewCardTitle: { value: Schema.String },
   SubmittedNewCard: {},
@@ -17,5 +14,3 @@ export const Message = defineMessageUnion({
   CompletedSaveBoard: {},
   CompletedFocusAddCardInput: {},
 })
-
-export type Message = typeof Message.Type

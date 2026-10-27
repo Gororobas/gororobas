@@ -1,15 +1,31 @@
-import { Effect, Schema } from 'effect'
-import { Command } from 'foldkit'
-import { pushUrl } from 'foldkit/navigation'
+import { Effect, Layer, Schema } from 'effect'
+import { load, pushUrl } from 'foldkit/navigation'
 
+import { ApplicationDefinition } from './definition'
 import { Message } from './message'
-import { roomRouter } from './route'
 
-export const NavigateToRoom = Command.define('NavigateToRoom', {
-  args: { roomId: Schema.String },
-  messages: [Message.CompletedNavigateToRoom],
-  execute: ({ roomId }) =>
-    pushUrl(roomRouter({ roomId })).pipe(
-      Effect.as(Message.CompletedNavigateToRoom()),
-    ),
+export const NavigateInternal = ApplicationDefinition.makeCommand(
+  'NavigateInternal',
+  {
+    args: { url: Schema.String },
+    messages: [Message.CompletedNavigateInternal],
+    handler: function* () {
+      return ({ url }) =>
+        pushUrl(url).pipe(Effect.as(Message.CompletedNavigateInternal()))
+    },
+  },
+)
+
+export const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
+  args: { href: Schema.String },
+  messages: [Message.CompletedLoadExternal],
+  handler: function* () {
+    return ({ href }) =>
+      load(href).pipe(Effect.as(Message.CompletedLoadExternal()))
+  },
 })
+
+export const EffectsLayer = Layer.mergeAll(
+  NavigateInternal.layer,
+  LoadExternal.layer,
+)

@@ -10,6 +10,7 @@ import {
   flow,
   pipe,
 } from 'effect'
+import { AsyncData } from 'foldkit'
 
 import {
   type NamedSchemas,
@@ -41,14 +42,12 @@ export const ApiParameter = Schema.Struct({
   defaultValue: NullableString,
   description: NullableString,
 })
-export type ApiParameter = typeof ApiParameter.Type
 
 export const ApiFunctionSignature = Schema.Struct({
   parameters: Schema.Array(ApiParameter),
   returnType: Schema.String,
   typeParameters: Schema.Array(Schema.String),
 })
-export type ApiFunctionSignature = typeof ApiFunctionSignature.Type
 
 export const ApiFunction = Schema.Struct({
   name: Schema.String,
@@ -56,7 +55,6 @@ export const ApiFunction = Schema.Struct({
   signatures: Schema.Array(ApiFunctionSignature),
   sourceUrl: NullableString,
 })
-export type ApiFunction = typeof ApiFunction.Type
 
 export const ApiType = Schema.Struct({
   name: Schema.String,
@@ -64,7 +62,6 @@ export const ApiType = Schema.Struct({
   typeDefinition: Schema.String,
   sourceUrl: NullableString,
 })
-export type ApiType = typeof ApiType.Type
 
 export const ApiVariable = Schema.Struct({
   name: Schema.String,
@@ -72,7 +69,6 @@ export const ApiVariable = Schema.Struct({
   type: Schema.String,
   sourceUrl: NullableString,
 })
-export type ApiVariable = typeof ApiVariable.Type
 
 export const ApiInterface = Schema.Struct({
   name: Schema.String,
@@ -80,7 +76,6 @@ export const ApiInterface = Schema.Struct({
   typeDefinition: Schema.String,
   sourceUrl: NullableString,
 })
-export type ApiInterface = typeof ApiInterface.Type
 
 export const ApiModule = Schema.Struct({
   name: Schema.String,
@@ -89,18 +84,18 @@ export const ApiModule = Schema.Struct({
   interfaces: Schema.Array(ApiInterface),
   variables: Schema.Array(ApiVariable),
 })
-export type ApiModule = typeof ApiModule.Type
 
 export const ParsedApiReference = Schema.Struct({
   modules: Schema.Array(ApiModule),
 })
-export type ParsedApiReference = typeof ParsedApiReference.Type
 
 // SHARED
 
 export const SIGNATURE_COLLAPSE_THRESHOLD = 500
 
-export const signaturesLength = (apiFunction: ApiFunction): number =>
+export const signaturesLength = (
+  apiFunction: typeof ApiFunction.Type,
+): number =>
   Array.reduce(
     apiFunction.signatures,
     0,
@@ -230,7 +225,9 @@ const collectFromItems = (
     ),
   )
 
-export const collectNamedSchemas = (json: TypeDocJson): NamedSchemas => {
+export const collectNamedSchemas = (
+  json: typeof TypeDocJson.Type,
+): NamedSchemas => {
   const entries = Array.flatMap(json.children, module =>
     collectFromItems(module.name, module.children),
   )
@@ -248,7 +245,7 @@ export const collectNamedSchemas = (json: TypeDocJson): NamedSchemas => {
 // PARSE
 
 const partsToSummaryText = (
-  parts: ReadonlyArray<TypeDocCommentPart>,
+  parts: ReadonlyArray<typeof TypeDocCommentPart.Type>,
 ): Option.Option<string> =>
   pipe(
     Array.map(parts, ({ text }) => text),
@@ -282,7 +279,7 @@ const signatureToDescription = (item: TypeDocItem): Option.Option<string> =>
 
 const parseParameter =
   (namedSchemas: NamedSchemas) =>
-  (parameter: TypeDocParam): ApiParameter => ({
+  (parameter: typeof TypeDocParam.Type): typeof ApiParameter.Type => ({
     name: parameter.name,
     type: typeToString(parameter.type, 0, namedSchemas),
     isOptional: parameter.flags.isOptional,
@@ -298,7 +295,7 @@ const parseParameter =
 const parseSignatures = (
   namedSchemas: NamedSchemas,
   item: TypeDocItem,
-): ReadonlyArray<ApiFunctionSignature> =>
+): ReadonlyArray<typeof ApiFunctionSignature.Type> =>
   Option.match(item.signatures, {
     onNone: () => [],
     onSome: Array.map(signature => ({
@@ -316,7 +313,7 @@ const parseSignatures = (
 
 const parseFunction =
   (namedSchemas: NamedSchemas) =>
-  (item: TypeDocItem): ApiFunction => ({
+  (item: TypeDocItem): typeof ApiFunction.Type => ({
     name: item.name,
     description: signatureToDescription(item),
     sourceUrl: itemToSourceUrl(item),
@@ -325,7 +322,7 @@ const parseFunction =
 
 const parseType =
   (namedSchemas: NamedSchemas) =>
-  (item: TypeDocItem): ApiType => ({
+  (item: TypeDocItem): typeof ApiType.Type => ({
     name: item.name,
     description: itemToDescription(item),
     typeDefinition: Option.match(item.type, {
@@ -337,7 +334,7 @@ const parseType =
 
 const parseInterface =
   (namedSchemas: NamedSchemas) =>
-  (item: TypeDocItem): ApiInterface => ({
+  (item: TypeDocItem): typeof ApiInterface.Type => ({
     name: item.name,
     description: itemToDescription(item),
     typeDefinition: typeDefFromChildren(item.children, namedSchemas),
@@ -346,7 +343,7 @@ const parseInterface =
 
 const parseVariable =
   (namedSchemas: NamedSchemas) =>
-  (item: TypeDocItem): ApiVariable => ({
+  (item: TypeDocItem): typeof ApiVariable.Type => ({
     name: item.name,
     description: itemToDescription(item),
     type: typeToString(item.type, 0, namedSchemas),
@@ -357,7 +354,7 @@ const parseItemsAsModule = (
   namedSchemas: NamedSchemas,
   name: string,
   children: ReadonlyArray<TypeDocItem>,
-): ApiModule => ({
+): typeof ApiModule.Type => ({
   name,
   functions: pipe(
     children,
@@ -393,7 +390,7 @@ const collectModules = (
   namedSchemas: NamedSchemas,
   qualifiedName: string,
   children: ReadonlyArray<TypeDocItem>,
-): ReadonlyArray<ApiModule> => {
+): ReadonlyArray<typeof ApiModule.Type> => {
   const namespaces = Array.filter(
     children,
     ({ kind }) => kind === Kind.Namespace,
@@ -426,11 +423,13 @@ const collectModules = (
 
 const parseModule = (
   namedSchemas: NamedSchemas,
-  module: TypeDocModule,
-): ReadonlyArray<ApiModule> =>
+  module: typeof TypeDocModule.Type,
+): ReadonlyArray<typeof ApiModule.Type> =>
   collectModules(namedSchemas, module.name, module.children)
 
-export const parseTypedocJson = (json: TypeDocJson): ParsedApiReference => {
+export const parseTypedocJson = (
+  json: typeof TypeDocJson.Type,
+): typeof ParsedApiReference.Type => {
   const namedSchemas = collectNamedSchemas(json)
   return {
     modules: Array.flatMap(json.children, module =>
@@ -477,7 +476,7 @@ const sectionEntries = <T extends { readonly name: string }>(
   })
 
 export const toModuleTableOfContents = (
-  module: ApiModule,
+  module: typeof ApiModule.Type,
 ): ReadonlyArray<TableOfContentsEntry> => [
   ...sectionEntries(module.name, 'Functions', module.functions, 'function'),
   ...sectionEntries(module.name, 'Types', module.types, 'type'),
@@ -495,12 +494,51 @@ export const slugToModuleName = (slug: string): string =>
   pipe(slug, String.split('-'), Array.map(String.capitalize), Array.join(''))
 
 const modulesBySlug = (
-  modules: ReadonlyArray<ApiModule>,
-): Record<string, ApiModule> =>
+  modules: ReadonlyArray<typeof ApiModule.Type>,
+): Record<string, typeof ApiModule.Type> =>
   Record.fromIterableBy(modules, module => moduleNameToSlug(module.name))
 
 export const resolveModule = (
-  parsedApi: ParsedApiReference,
+  parsedApi: typeof ParsedApiReference.Type,
   slug: string,
-): Option.Option<ApiModule> =>
+): Option.Option<typeof ApiModule.Type> =>
   Record.get(modulesBySlug(parsedApi.modules), slug)
+
+export const ApiData = Schema.Struct({
+  parsedApi: ParsedApiReference,
+  highlights: Schema.Record(Schema.String, Schema.String),
+})
+
+/**
+ * Narrows a full ApiData to what one module's page renders: that module plus
+ * only the highlight entries whose scoped ids belong to it. A prerendered
+ * module page embeds this slice in its hydration Flags instead of the full
+ * reference. The loadInitialData operation returns a Command that loads the full data after
+ * hydration, allowing navigation to other modules.
+ */
+export const sliceApiDataToModule = (
+  apiData: typeof ApiData.Type,
+  moduleSlug: string,
+): Option.Option<typeof ApiData.Type> =>
+  Option.map(resolveModule(apiData.parsedApi, moduleSlug), module => ({
+    parsedApi: { modules: [module] },
+    highlights: Record.filter(apiData.highlights, (_, id) =>
+      scopedIdBelongsToModule(id, module.name),
+    ),
+  }))
+
+export const ApiDataAsyncData = AsyncData.Schema(ApiData, Schema.String)
+
+export const tableOfContentsFor = (
+  model: Readonly<{ apiData: typeof ApiDataAsyncData.schema.Type }>,
+  moduleSlug: string,
+): Option.Option<ReadonlyArray<TableOfContentsEntry>> =>
+  AsyncData.matchData(model.apiData, {
+    onData: data =>
+      Option.map(
+        resolveModule(data.parsedApi, moduleSlug),
+        toModuleTableOfContents,
+      ),
+    onFailure: () => Option.none(),
+    onEmpty: () => Option.none(),
+  })

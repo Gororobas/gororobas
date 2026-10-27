@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
-import { Effect, Fiber, Schema } from 'effect'
-import { type Update } from 'foldkit'
+import { Effect, Fiber, Layer, Schema } from 'effect'
+import { Block, Program } from 'foldkit'
 import { brandViewResult } from 'foldkit/brand'
 import { type Html, inertHtml } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
-import { makeElement } from 'foldkit/runtime'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { transformViewIdentity } from '../src/viewIdentity.ts'
@@ -16,19 +15,21 @@ const Message = defineMessageUnion({
   ClickedToggle: {},
 })
 
-type Message = typeof Message.Type
+const ApplicationComposition = Block.makeDefinition('Application', {
+  Model,
+  Message,
+}).makeComposition()
 
-const init = (): Update.Return<Model, Message> => ({
-  model: { mode: 'Viewing' },
+const init = ApplicationComposition.makeInit(() => ({
+  model: Model.make({ mode: 'Viewing' }),
+}))
+
+const update = ApplicationComposition.makeUpdate({
+  ClickedToggle: model => {
+    const nextMode = model.mode === 'Viewing' ? 'Editing' : 'Viewing'
+    return { model: Model.make({ mode: nextMode }) }
+  },
 })
-
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedToggle: () => {
-      const nextMode = model.mode === 'Viewing' ? 'Editing' : 'Viewing'
-      return { model: { mode: nextMode } }
-    },
-  })
 
 const FIXTURE_MODULE_ID = '/app/src/View.js'
 const FIXTURE_ROOT = '/app'
@@ -172,11 +173,19 @@ const withRunningApp = async (
   view: View,
   run: () => Promise<void>,
 ): Promise<void> => {
-  const element = makeElement({
-    Model,
-    init,
-    update,
-    view,
+  const prepare = () =>
+    ApplicationComposition.prepareBlock({
+      init,
+      update,
+      view: ApplicationComposition.makeView(model => view(model)),
+      EffectsLayer: Layer.empty,
+    })
+  const ApplicationBlock: Block.FromAssemblyWithView<
+    typeof Model,
+    typeof prepare
+  > = Block.assemble(prepare)
+  const element = Program.makeElement({
+    block: ApplicationBlock,
     container,
   })
   const fiber = Effect.runFork(element.start())

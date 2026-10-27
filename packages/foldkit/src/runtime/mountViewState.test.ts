@@ -4,6 +4,7 @@ import {
   Exit,
   Fiber,
   Function,
+  Layer,
   Option,
   PubSub,
   Queue,
@@ -11,7 +12,15 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  vi,
+} from 'vitest'
 
 import type { DevToolsStore } from '../devTools/store.js'
 import { INIT_INDEX, latestEntryIndex } from '../devTools/store.js'
@@ -26,10 +35,9 @@ import { defineMessageUnion } from '../message/index.js'
 import * as Mount from '../mount/index.js'
 import { modifyFields } from '../struct/index.js'
 import * as Subscription from '../subscription/subscription.js'
-import type * as Update from '../update/index.js'
-import { __setDevToolsOverlay } from './devToolsConfig.js'
-import { makeApplication } from './makeApplication.js'
-import { makeElement } from './makeElement.js'
+import * as Update from '../update/index.js'
+import * as Application from './application.js'
+import { type DevToolsConfig, __setDevToolsOverlay } from './devToolsConfig.js'
 
 const Message = defineMessageUnion({
   CompletedMountEditor: {},
@@ -66,8 +74,8 @@ const initialModel = (isEditorShown: boolean): Model => ({
   isEditorShown,
 })
 
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
+const update = Update.define((model: Model, message: Message) =>
+  Message.match(message, {
     CompletedMountEditor: () => ({ model }),
     EditedFromMount: () => ({
       model: modifyFields(model, { mountEditCount: count => count + 1 }),
@@ -83,14 +91,19 @@ const update = (model: Model, message: Message) =>
     HidEditor: () => ({
       model: modifyFields(model, { isEditorShown: () => false }),
     }),
-  })
+  }),
+)
 
-const h = __htmlBuilder<Message>()
+const h = __htmlBuilder<Message, Mount.AnyMountHandler>()
 
-const editorView = (mount: Mount.MountAction<Message>): Html =>
-  h.div([h.Id('editor'), h.OnMount(mount)])
+const editorView = <Requirements extends Mount.AnyMountHandler = never>(
+  mount: Mount.MountAction<Message, never, Requirements>,
+): Html => h.div([h.Id('editor'), h.OnMount(mount)])
 
-const modelView = (model: Model, mount: Mount.MountAction<Message>): Html =>
+const modelView = <Requirements extends Mount.AnyMountHandler = never>(
+  model: Model,
+  mount: Mount.MountAction<Message, never, Requirements>,
+): Html =>
   h.div(
     [],
     [
@@ -161,11 +174,23 @@ describe('Mount view-state awareness', () => {
     const subscriptionMessages = await Effect.runPromise(
       PubSub.unbounded<Message>(),
     )
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const observedViewStates: globalThis.Array<Mount.ViewState> = []
     const processedTags: globalThis.Array<Message['_tag']> = []
     let acquireCount = 0
@@ -175,7 +200,10 @@ describe('Mount view-state awareness', () => {
 
     const MountEditor = Mount.defineStream('MountEditor', {
       messages: [Message.CompletedMountEditor, Message.EditedFromMount],
-      execute: ({ element, viewStateChanges }) =>
+    })
+
+    const MountEditorLayer = MountEditor.toLayer(
+      Effect.succeed(({ element, viewStateChanges }) =>
         Stream.callback<EditorMessage>(queue =>
           Effect.gen(function* () {
             yield* Effect.acquireRelease(
@@ -212,7 +240,8 @@ describe('Mount view-state awareness', () => {
             return yield* Effect.never
           }),
         ),
-    })
+      ),
+    )
 
     let maybeStore: DevToolsStore | null = null
     __setDevToolsOverlay(store => {
@@ -220,7 +249,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(true) }),
       update: (model: Model, message: Message) => {
@@ -229,10 +258,15 @@ describe('Mount view-state awareness', () => {
       },
       view: model => modelView(model, MountEditor()),
       subscriptions,
+      mounts: [MountEditor],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime
+        .provide(Layer.mergeAll(TestMessagesLayer, MountEditorLayer))
+        .start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -304,7 +338,10 @@ describe('Mount view-state awareness', () => {
 
     const MountEditor = Mount.define('MountEditor', {
       messages: [Message.CompletedMountEditor],
-      execute: ({ viewStateChanges }) =>
+    })
+
+    const MountEditorLayer = MountEditor.toLayer(
+      Effect.succeed(({ viewStateChanges }) =>
         Effect.gen(function* () {
           yield* viewStateChanges.pipe(
             Stream.runForEach(viewState =>
@@ -314,7 +351,8 @@ describe('Mount view-state awareness', () => {
           )
           return yield* Queue.take(completedMount)
         }),
-    })
+      ),
+    )
 
     let maybeStore: DevToolsStore | null = null
     __setDevToolsOverlay(store => {
@@ -322,7 +360,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(true) }),
       update: (model: Model, message: Message) => {
@@ -330,10 +368,13 @@ describe('Mount view-state awareness', () => {
         return update(model, message)
       },
       view: model => modelView(model, MountEditor()),
+      mounts: [MountEditor],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime.provide(MountEditorLayer).start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -360,21 +401,36 @@ describe('Mount view-state awareness', () => {
     }
   })
 
-  it('keeps a live Mount bound to the Submodel wrapper from its acquisition render', async () => {
+  it('keeps a live Mount bound to the Block wrapper from its acquisition render', async () => {
     const subscriptionMessages = await Effect.runPromise(
       PubSub.unbounded<Message>(),
     )
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const processedMessages: globalThis.Array<Message> = []
     const emitters: globalThis.Array<() => void> = []
 
     const MountChildEditor = Mount.defineStream('MountChildEditor', {
       messages: [ChildMessage.CompletedChildMount],
-      execute: () =>
+    })
+
+    const MountChildEditorLayer = MountChildEditor.toLayer(
+      Effect.succeed(() =>
         Stream.callback<typeof ChildMessage.CompletedChildMount.Type>(queue =>
           Effect.sync(() => {
             emitters.push(() =>
@@ -382,8 +438,9 @@ describe('Mount view-state awareness', () => {
             )
           }),
         ),
-    })
-    const childH = __htmlBuilder<ChildMessage>()
+      ),
+    )
+    const childH = __htmlBuilder<ChildMessage, Mount.AnyMountHandler>()
     const lazyChild = createLazy()
     const renderChildEditor = () =>
       childH.div([childH.Id('editor'), childH.OnMount(MountChildEditor())])
@@ -397,7 +454,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(true) }),
       update: (model, message) => {
@@ -412,7 +469,7 @@ describe('Mount view-state awareness', () => {
             h.button([h.OnClick(Message.HidEditor())], ['hide']),
             ...(model.isEditorShown
               ? [
-                  h.submodel({
+                  h.block({
                     slotId: 'editor',
                     model: {},
                     view: childView,
@@ -425,11 +482,16 @@ describe('Mount view-state awareness', () => {
               : []),
           ],
         ),
+      mounts: [MountChildEditor],
       container,
       subscriptions,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime
+        .provide(Layer.mergeAll(TestMessagesLayer, MountChildEditorLayer))
+        .start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -473,21 +535,36 @@ describe('Mount view-state awareness', () => {
     }
   })
 
-  it('uses the latest live Submodel wrapper when a surviving Mount emits', async () => {
+  it('uses the latest live Block wrapper when a surviving Mount emits', async () => {
     const subscriptionMessages = await Effect.runPromise(
       PubSub.unbounded<Message>(),
     )
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const processedMessages: globalThis.Array<Message> = []
     const emitters: globalThis.Array<() => void> = []
 
     const MountChildEditor = Mount.defineStream('MountChildEditor', {
       messages: [ChildMessage.CompletedChildMount],
-      execute: () =>
+    })
+
+    const MountChildEditorLayer = MountChildEditor.toLayer(
+      Effect.succeed(() =>
         Stream.callback<typeof ChildMessage.CompletedChildMount.Type>(queue =>
           Effect.sync(() => {
             emitters.push(() =>
@@ -495,8 +572,9 @@ describe('Mount view-state awareness', () => {
             )
           }),
         ),
-    })
-    const childH = __htmlBuilder<ChildMessage>()
+      ),
+    )
+    const childH = __htmlBuilder<ChildMessage, Mount.AnyMountHandler>()
     const childView = defineView<ChildModel, ChildMessage>(() =>
       childH.button([
         childH.Id('editor'),
@@ -505,7 +583,7 @@ describe('Mount view-state awareness', () => {
       ]),
     )
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(true) }),
       update: (model, message) => {
@@ -517,7 +595,7 @@ describe('Mount view-state awareness', () => {
           [],
           [
             h.span([], [`ticks:${model.tickCount}`]),
-            h.submodel({
+            h.block({
               slotId: 'editor',
               model: {},
               view: childView,
@@ -526,11 +604,16 @@ describe('Mount view-state awareness', () => {
             }),
           ],
         ),
+      mounts: [MountChildEditor],
       container,
       subscriptions,
       devTools: false,
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime
+        .provide(Layer.mergeAll(TestMessagesLayer, MountChildEditorLayer))
+        .start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -578,7 +661,10 @@ describe('Mount view-state awareness', () => {
 
     const MountEditor = Mount.defineStream('MountEditor', {
       messages: [Message.EditedFromMount],
-      execute: ({ viewStateChanges }) =>
+    })
+
+    const MountEditorLayer = MountEditor.toLayer(
+      Effect.succeed(({ viewStateChanges }) =>
         Stream.callback<typeof Message.EditedFromMount.Type>(queue =>
           Effect.gen(function* () {
             emitMountMessage = () =>
@@ -592,7 +678,8 @@ describe('Mount view-state awareness', () => {
             return yield* Effect.never
           }),
         ),
-    })
+      ),
+    )
 
     let maybeStore: DevToolsStore | null = null
     __setDevToolsOverlay(store => {
@@ -600,7 +687,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(true) }),
       update: (model: Model, message: Message) => {
@@ -608,10 +695,13 @@ describe('Mount view-state awareness', () => {
         return update(model, message)
       },
       view: model => modelView(model, MountEditor()),
+      mounts: [MountEditor],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime.provide(MountEditorLayer).start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -653,11 +743,23 @@ describe('Mount view-state awareness', () => {
     const subscriptionMessages = await Effect.runPromise(
       PubSub.unbounded<Message>({ replay: 1 }),
     )
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const statesByAcquisition: globalThis.Array<
       globalThis.Array<Mount.ViewState>
     > = []
@@ -666,7 +768,10 @@ describe('Mount view-state awareness', () => {
 
     const MountEditor = Mount.define('MountEditor', {
       messages: [Message.CompletedMountEditor],
-      execute: ({ element, viewStateChanges }) =>
+    })
+
+    const MountEditorLayer = MountEditor.toLayer(
+      Effect.succeed(({ element, viewStateChanges }) =>
         Effect.gen(function* () {
           const observedViewStates: globalThis.Array<Mount.ViewState> = []
           statesByAcquisition.push(observedViewStates)
@@ -685,7 +790,8 @@ describe('Mount view-state awareness', () => {
           )
           return Message.CompletedMountEditor()
         }),
-    })
+      ),
+    )
 
     let maybeStore: DevToolsStore | null = null
     __setDevToolsOverlay(store => {
@@ -693,7 +799,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update: (model, message) => {
@@ -702,10 +808,15 @@ describe('Mount view-state awareness', () => {
       },
       view: model => modelView(model, MountEditor()),
       subscriptions,
+      mounts: [MountEditor],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime
+        .provide(Layer.mergeAll(TestMessagesLayer, MountEditorLayer))
+        .start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -775,11 +886,23 @@ describe('Mount view-state awareness', () => {
       PubSub.unbounded<Message>(),
     )
     const replaySetup = await Effect.runPromise(Queue.unbounded<void>())
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const statesByAcquisition: globalThis.Array<
       globalThis.Array<Mount.ViewState>
     > = []
@@ -787,7 +910,10 @@ describe('Mount view-state awareness', () => {
 
     const MountEditor = Mount.define('MountEditor', {
       messages: [Message.CompletedMountEditor],
-      execute: ({ viewStateChanges }) => {
+    })
+
+    const MountEditorLayer = MountEditor.toLayer(
+      Effect.succeed(({ viewStateChanges }) => {
         const acquisitionId = acquisitionCount
         acquisitionCount += 1
         const observedViewStates: globalThis.Array<Mount.ViewState> = []
@@ -807,8 +933,8 @@ describe('Mount view-state awareness', () => {
             return Message.CompletedMountEditor()
           }),
         )
-      },
-    })
+      }),
+    )
 
     let maybeStore: DevToolsStore | null = null
     __setDevToolsOverlay(store => {
@@ -816,16 +942,21 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update,
       view: model => modelView(model, MountEditor()),
       subscriptions,
+      mounts: [MountEditor],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime
+        .provide(Layer.mergeAll(TestMessagesLayer, MountEditorLayer))
+        .start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -881,11 +1012,23 @@ describe('Mount view-state awareness', () => {
     const subscriptionMessages = await Effect.runPromise(
       PubSub.unbounded<Message>(),
     )
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const processedMessages: globalThis.Array<Message> = []
     const releasedAcquisitionIds: globalThis.Array<number> = []
     const acquisitions: globalThis.Array<
@@ -900,7 +1043,10 @@ describe('Mount view-state awareness', () => {
     const MountEditor = Mount.defineStream('MountEditor', {
       args: { entityId: Schema.Number },
       messages: [Message.EditedEntityFromMount],
-      execute: ({ entityId, viewStateChanges }) =>
+    })
+
+    const MountEditorLayer = MountEditor.toLayer(
+      Effect.succeed(({ entityId, viewStateChanges }) =>
         Stream.callback<typeof Message.EditedEntityFromMount.Type>(queue =>
           Effect.gen(function* () {
             const acquisitionId = acquisitions.length
@@ -930,7 +1076,8 @@ describe('Mount view-state awareness', () => {
             return yield* Effect.never
           }),
         ),
-    })
+      ),
+    )
 
     let maybeStore: DevToolsStore | null = null
     __setDevToolsOverlay(store => {
@@ -938,25 +1085,57 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const init = () => ({ model: initialModel(true) })
+    const recordMessageAndUpdate = (model: Model, message: Message) => {
+      processedMessages.push(message)
+      return update(model, message)
+    }
+    const view = (model: Model) =>
+      modelView(
+        model,
+        MountEditor({
+          entityId: model.tickCount,
+        }),
+      )
+    const devTools = {
+      show: 'Always',
+      keyframeInterval: 1,
+    } satisfies DevToolsConfig
+    const config = {
       Model,
-      init: () => ({ model: initialModel(true) }),
-      update: (model, message) => {
-        processedMessages.push(message)
-        return update(model, message)
-      },
-      view: model =>
-        modelView(
-          model,
-          MountEditor({
-            entityId: model.tickCount,
-          }),
-        ),
+      init,
+      update: recordMessageAndUpdate,
+      view,
       subscriptions,
+      mounts: [MountEditor],
       container,
-      devTools: { show: 'Always', keyframeInterval: 1 },
-    })
-    const runtimeFiber = Effect.runFork(runtime.start())
+      devTools,
+    }
+    const runtime = Application.__makeElementFromConfig<
+      typeof Model,
+      typeof recordMessageAndUpdate,
+      typeof config.mounts,
+      typeof config
+    >(config)
+    expectTypeOf(runtime).toEqualTypeOf<
+      Application.Element<
+        undefined,
+        | Layer.Success<typeof TestMessagesLayer>
+        | Layer.Success<typeof MountEditorLayer>
+      >
+    >()
+    expectTypeOf<
+      Layer.Services<typeof TestMessagesLayer>
+    >().toEqualTypeOf<never>()
+    expectTypeOf<
+      Layer.Services<typeof MountEditorLayer>
+    >().toEqualTypeOf<never>()
+
+    const runtimeFiber = Effect.runFork(
+      runtime
+        .provide(Layer.mergeAll(TestMessagesLayer, MountEditorLayer))
+        .start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -1035,11 +1214,23 @@ describe('Mount view-state awareness', () => {
     const subscriptionMessages = await Effect.runPromise(
       PubSub.unbounded<Message>({ replay: 1 }),
     )
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const processedTags: globalThis.Array<Message['_tag']> = []
 
     const mountEditor: Mount.MountAction<Message> = {
@@ -1053,7 +1244,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update: (model, message) => {
@@ -1065,7 +1256,9 @@ describe('Mount view-state awareness', () => {
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime.provide(TestMessagesLayer).start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -1119,7 +1312,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update: (model: Model, message: Message) => {
@@ -1177,7 +1370,10 @@ describe('Mount view-state awareness', () => {
 
     const ObserveViewState = Mount.define('ObserveViewState', {
       messages: [Message.CompletedMountEditor],
-      execute: ({ viewStateChanges }) =>
+    })
+
+    const ObserveViewStateLayer = ObserveViewState.toLayer(
+      Effect.succeed(({ viewStateChanges }) =>
         Effect.gen(function* () {
           yield* viewStateChanges.pipe(
             Stream.runForEach(viewState =>
@@ -1187,7 +1383,8 @@ describe('Mount view-state awareness', () => {
           )
           return Message.CompletedMountEditor()
         }),
-    })
+      ),
+    )
     const mountEditor: Mount.MountAction<Message> = {
       name: 'MountEditor',
       f: () => Stream.never,
@@ -1199,7 +1396,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update: (model: Model, message: Message) => {
@@ -1216,10 +1413,13 @@ describe('Mount view-state awareness', () => {
         )
       },
       crash: { view: () => h.div([], ['Crashed']) },
+      mounts: [ObserveViewState],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime.provide(ObserveViewStateLayer).start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -1284,7 +1484,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update: (model: Model, message: Message) => {
@@ -1349,7 +1549,10 @@ describe('Mount view-state awareness', () => {
 
     const ObserveViewState = Mount.define('ObserveViewState', {
       messages: [Message.CompletedMountEditor],
-      execute: ({ viewStateChanges }) =>
+    })
+
+    const ObserveViewStateLayer = ObserveViewState.toLayer(
+      Effect.succeed(({ viewStateChanges }) =>
         Effect.gen(function* () {
           yield* viewStateChanges.pipe(
             Stream.runForEach(viewState =>
@@ -1359,7 +1562,8 @@ describe('Mount view-state awareness', () => {
           )
           return Message.CompletedMountEditor()
         }),
-    })
+      ),
+    )
     const mountEditor: Mount.MountAction<Message> = {
       name: 'MountEditor',
       f: () => Stream.never,
@@ -1371,7 +1575,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeApplication({
+    const runtime = Application.__makeFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update,
@@ -1385,10 +1589,13 @@ describe('Mount view-state awareness', () => {
       crash: {
         view: () => ({ title: 'Crashed', body: h.div([], ['Crashed']) }),
       },
+      mounts: [ObserveViewState],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime.provide(ObserveViewStateLayer).start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -1453,14 +1660,22 @@ describe('Mount view-state awareness', () => {
     }
   })
 
-  it('restores a cached lazy Submodel when resume reinserts its subtree', async () => {
+  it('restores a cached lazy Block when resume reinserts its subtree', async () => {
     const processedMessages: globalThis.Array<Message> = []
     let renderCount = 0
     const MountChildEditor = Mount.define('MountChildEditor', {
       messages: [ChildMessage.CompletedChildMount],
-      execute: () => Effect.succeed(ChildMessage.CompletedChildMount()),
     })
-    const childView = defineView<ChildModel, ChildMessage>((_model, childH) =>
+
+    const MountChildEditorLayer = MountChildEditor.toLayer(
+      Effect.succeed(() => Effect.succeed(ChildMessage.CompletedChildMount())),
+    )
+    const childView = defineView<
+      ChildModel,
+      ChildMessage,
+      void,
+      Mount.RequirementsOf<typeof MountChildEditor>
+    >((_model, childH) =>
       childH.div(
         [childH.Id('child-editor'), childH.OnMount(MountChildEditor())],
         [
@@ -1474,7 +1689,7 @@ describe('Mount view-state awareness', () => {
     const lazyChild = createLazy()
     const renderChild = (): Html => {
       renderCount += 1
-      const child = h.submodel({
+      const child = h.block({
         slotId: 'lazy-child',
         model: {},
         view: childView,
@@ -1499,7 +1714,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update: (model: Model, message: Message) => {
@@ -1514,10 +1729,13 @@ describe('Mount view-state awareness', () => {
             ...(model.isEditorShown ? [renderLazyChild()] : []),
           ],
         ),
+      mounts: [MountChildEditor],
       container,
       devTools: { show: 'Always', keyframeInterval: 1 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime.provide(MountChildEditorLayer).start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -1592,7 +1810,7 @@ describe('Mount view-state awareness', () => {
         return Effect.void
       })
 
-      const runtime = makeElement({
+      const runtime = Application.__makeElementFromConfig({
         Model,
         init: () => ({ model: initialModel(false) }),
         update,
@@ -1753,7 +1971,10 @@ describe('Mount view-state awareness', () => {
             }),
           },
         )
-      const lifecycleHtml = __htmlBuilder<LifecycleMessage>()
+      const lifecycleHtml = __htmlBuilder<
+        LifecycleMessage,
+        Mount.AnyMountHandler
+      >()
       const mountPanel: Mount.MountAction<LifecycleMessage> = {
         name: 'MountPanel',
         f: () => Stream.make(LifecycleMessage.CompletedMountPanel()),
@@ -1803,7 +2024,7 @@ describe('Mount view-state awareness', () => {
         return Effect.void
       })
 
-      const runtime = makeElement({
+      const runtime = Application.__makeElementFromConfig({
         Model: LifecycleModel,
         init: () => ({ model: initialLifecycleModel }),
         update: updateLifecycle,
@@ -1963,15 +2184,29 @@ describe('Mount view-state awareness', () => {
         PubSub.unbounded<Message>(),
       )
       let isSubscriptionReady = false
-      const subscriptions = Subscription.make<Model, Message>()(() => ({
-        testMessages: Subscription.persistentEntry(
+      const subscriptions = Subscription.make<Model, Message>()(entry => ({
+        testMessages: entry('TestMessages', {
+          messages: [
+            Message.CompletedMountEditor,
+            Message.EditedFromMount,
+            Message.EditedEntityFromMount,
+            Message.GotChildMountResult,
+            Message.Ticked,
+            Message.ShowedEditor,
+            Message.HidEditor,
+          ],
+        }),
+      }))
+
+      const TestMessagesLayer = subscriptions.testMessages.toLayer(
+        Effect.succeed(() =>
           Stream.fromEffect(
             Effect.sync(() => {
               isSubscriptionReady = true
             }),
           ).pipe(Stream.flatMap(() => Stream.fromPubSub(subscriptionMessages))),
         ),
-      }))
+      )
       let maybeStore: DevToolsStore | null = null
       __setDevToolsOverlay(store => {
         maybeStore = store
@@ -2001,7 +2236,7 @@ describe('Mount view-state awareness', () => {
         )
       }
 
-      const runtime = makeElement({
+      const runtime = Application.__makeElementFromConfig({
         Model,
         init: () => ({ model: initialModel(false) }),
         update,
@@ -2011,7 +2246,9 @@ describe('Mount view-state awareness', () => {
         subscriptions,
         devTools: { show: 'Always', keyframeInterval: 1 },
       })
-      const runtimeFiber = Effect.runFork(runtime.start())
+      const runtimeFiber = Effect.runFork(
+        runtime.provide(TestMessagesLayer).start(),
+      )
 
       try {
         await vi.waitFor(() => {
@@ -2085,24 +2322,40 @@ describe('Mount view-state awareness', () => {
     const subscriptionMessages = await Effect.runPromise(
       PubSub.unbounded<Message>(),
     )
-    const subscriptions = Subscription.make<Model, Message>()(() => ({
-      testMessages: Subscription.persistentEntry(
-        Stream.fromPubSub(subscriptionMessages),
-      ),
+    const subscriptions = Subscription.make<Model, Message>()(entry => ({
+      testMessages: entry('TestMessages', {
+        messages: [
+          Message.CompletedMountEditor,
+          Message.EditedFromMount,
+          Message.EditedEntityFromMount,
+          Message.GotChildMountResult,
+          Message.Ticked,
+          Message.ShowedEditor,
+          Message.HidEditor,
+        ],
+      }),
     }))
+
+    const TestMessagesLayer = subscriptions.testMessages.toLayer(
+      Effect.succeed(() => Stream.fromPubSub(subscriptionMessages)),
+    )
     const observedViewStates: globalThis.Array<Mount.ViewState> = []
     const processedTags: globalThis.Array<Message['_tag']> = []
 
     const ObserveViewState = Mount.define('ObserveViewState', {
       messages: [Message.CompletedMountEditor],
-      execute: ({ viewStateChanges }) =>
+    })
+
+    const ObserveViewStateLayer = ObserveViewState.toLayer(
+      Effect.succeed(({ viewStateChanges }) =>
         viewStateChanges.pipe(
           Stream.runForEach(viewState =>
             Effect.sync(() => observedViewStates.push(viewState)),
           ),
           Effect.as(Message.CompletedMountEditor()),
         ),
-    })
+      ),
+    )
     const mountEditor: Mount.MountAction<Message> = {
       name: 'MountEditor',
       f: () => Stream.never,
@@ -2114,7 +2367,7 @@ describe('Mount view-state awareness', () => {
       return Effect.void
     })
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(false) }),
       update: (model: Model, message: Message) => {
@@ -2123,11 +2376,16 @@ describe('Mount view-state awareness', () => {
       },
       view: (model: Model) =>
         h.div([h.OnMount(ObserveViewState())], [modelView(model, mountEditor)]),
+      mounts: [ObserveViewState],
       container,
       subscriptions,
       devTools: { show: 'Always', keyframeInterval: 1, maxEntries: 20 },
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime
+        .provide(Layer.mergeAll(TestMessagesLayer, ObserveViewStateLayer))
+        .start(),
+    )
 
     try {
       await vi.waitFor(() => {
@@ -2188,7 +2446,10 @@ describe('Mount view-state awareness', () => {
 
     const MountEditor = Mount.define('MountEditor', {
       messages: [Message.CompletedMountEditor],
-      execute: ({ element, viewStateChanges }) =>
+    })
+
+    const MountEditorLayer = MountEditor.toLayer(
+      Effect.succeed(({ element, viewStateChanges }) =>
         Effect.gen(function* () {
           element.setAttribute('data-editor', 'mounted')
           yield* viewStateChanges.pipe(
@@ -2199,17 +2460,21 @@ describe('Mount view-state awareness', () => {
           )
           return Message.CompletedMountEditor()
         }),
-    })
+      ),
+    )
 
-    const runtime = makeElement({
+    const runtime = Application.__makeElementFromConfig({
       Model,
       init: () => ({ model: initialModel(true) }),
       update,
       view: model => modelView(model, MountEditor()),
+      mounts: [MountEditor],
       container,
       devTools: false,
     })
-    const runtimeFiber = Effect.runFork(runtime.start())
+    const runtimeFiber = Effect.runFork(
+      runtime.provide(MountEditorLayer).start(),
+    )
 
     try {
       await vi.waitFor(() => {

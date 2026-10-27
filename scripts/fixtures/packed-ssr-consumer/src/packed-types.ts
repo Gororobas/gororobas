@@ -21,8 +21,8 @@ const either: ReadonlyArray<RenderOptions> = [hydratable, staticOnly]
 const hydrate: HydrateOptions = { buildId: 'deployment-1' }
 
 export type Used = [
-  ApplicationConfig<never, never>,
-  ApplicationConfigWithFlags<never, never, never>,
+  ApplicationConfig<never>,
+  ApplicationConfigWithFlags<never, never>,
   EntryResult,
   InjectIntoTemplateOptions,
   RenderFlagsOptions<never>,

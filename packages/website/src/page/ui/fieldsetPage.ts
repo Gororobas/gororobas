@@ -1,18 +1,10 @@
-import { Submodel } from 'foldkit'
-import type { Html } from 'foldkit/html'
-
 import { type CodeBlock } from '../../component'
-import { slotDocPage } from '../../markdown'
 import { type RenderHeadingLink, demoContainer } from '../../prose'
+import { UiComposition } from './composition'
+import { FieldsetPageContent } from './content'
 import * as Fieldset from './demo/fieldset'
-import raw from './fieldsetPage.md'
-import type { Message } from './message'
-import type { Model } from './model'
 
-const { tableOfContents, view: renderPage } = slotDocPage<'basic' | 'disabled'>(
-  raw,
-  'ui/fieldset',
-)
+const { tableOfContents, view: renderPage } = FieldsetPageContent
 
 export { tableOfContents }
 
@@ -22,8 +14,8 @@ type ViewInputs = Readonly<{
   renderHeadingLink: RenderHeadingLink
 }>
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h): Html =>
+export const view = UiComposition.makeView.withInputs<ViewInputs>(
+  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h) =>
     renderPage({
       demos: {
         basic: demoContainer(...Fieldset.basicDemo(model, h)),

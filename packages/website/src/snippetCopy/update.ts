@@ -1,65 +1,71 @@
-import { Effect, HashSet, Schema } from 'effect'
-import { Command, Update } from 'foldkit'
+import { Effect, HashSet, Layer, Schema } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
+import { SnippetCopyComposition } from './composition'
+import {
+  SnippetCopyDefinition,
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+} from './definition'
 import { Message } from './message'
-import { type Model } from './model'
 
-// UPDATE
+export const update = SnippetCopyComposition.makeUpdate({
+  ClickedCopySnippet: makeCommandsStep.fromMessage(({ snippetId, text }) => [
+    CopySnippet({ snippetId, text }),
+  ]),
 
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedCopySnippet: ({ snippetId, text }) => ({
-      model,
-      commands: [CopySnippet({ snippetId, text })],
+  SucceededCopySnippet: (model, { snippetId }) =>
+    HashSet.has(model.copiedSnippetIds, snippetId)
+      ? { model }
+      : {
+          model: modifyFields(model, {
+            copiedSnippetIds: HashSet.add(snippetId),
+          }),
+          commands: [WaitBeforeHidingCopiedIndicator({ snippetId })],
+        },
+
+  FailedCopySnippet: makeNoopStep(),
+
+  CompletedWaitBeforeHidingCopiedIndicator: makeFieldsStep.fromMessage(
+    ({ snippetId }) => ({
+      copiedSnippetIds: HashSet.remove(snippetId),
     }),
+  ),
+})
 
-    SucceededCopySnippet: ({ snippetId }) =>
-      HashSet.has(model.copiedSnippetIds, snippetId)
-        ? { model }
-        : {
-            model: modifyFields(model, {
-              copiedSnippetIds: HashSet.add(snippetId),
-            }),
-            commands: [WaitBeforeHidingCopiedIndicator({ snippetId })],
-          },
-
-    FailedCopySnippet: () => ({ model }),
-
-    CompletedWaitBeforeHidingCopiedIndicator: ({ snippetId }) => ({
-      model: modifyFields(model, {
-        copiedSnippetIds: HashSet.remove(snippetId),
-      }),
-    }),
-  })
-
-// COMMAND
-
-export const CopySnippet = Command.define('CopySnippet', {
+export const CopySnippet = SnippetCopyDefinition.makeCommand('CopySnippet', {
   args: { snippetId: Schema.String, text: Schema.String },
   messages: [Message.SucceededCopySnippet, Message.FailedCopySnippet],
-  execute: ({ snippetId, text }) =>
-    Effect.tryPromise({
-      try: () => navigator.clipboard.writeText(text),
-      catch: () => new Error('Failed to copy to clipboard'),
-    }).pipe(
-      Effect.as(Message.SucceededCopySnippet({ snippetId })),
-      Effect.catch(() => Effect.succeed(Message.FailedCopySnippet())),
-    ),
+  handler: function* () {
+    return ({ snippetId, text }) =>
+      Effect.tryPromise({
+        try: () => navigator.clipboard.writeText(text),
+        catch: () => new Error('Failed to copy to clipboard'),
+      }).pipe(
+        Effect.as(Message.SucceededCopySnippet({ snippetId })),
+        Effect.catch(() => Effect.succeed(Message.FailedCopySnippet())),
+      )
+  },
 })
 
 const COPY_INDICATOR_DURATION = '2 seconds'
 
-export const WaitBeforeHidingCopiedIndicator = Command.define(
-  'WaitBeforeHidingCopiedIndicator',
-  {
+export const WaitBeforeHidingCopiedIndicator =
+  SnippetCopyDefinition.makeCommand('WaitBeforeHidingCopiedIndicator', {
     args: { snippetId: Schema.String },
     messages: [Message.CompletedWaitBeforeHidingCopiedIndicator],
-    execute: ({ snippetId }) =>
-      Effect.sleep(COPY_INDICATOR_DURATION).pipe(
-        Effect.as(
-          Message.CompletedWaitBeforeHidingCopiedIndicator({ snippetId }),
-        ),
-      ),
-  },
+    handler: function* () {
+      return ({ snippetId }) =>
+        Effect.sleep(COPY_INDICATOR_DURATION).pipe(
+          Effect.as(
+            Message.CompletedWaitBeforeHidingCopiedIndicator({ snippetId }),
+          ),
+        )
+    },
+  })
+
+export const EffectsLayer = Layer.mergeAll(
+  CopySnippet.layer,
+  WaitBeforeHidingCopiedIndicator.layer,
 )

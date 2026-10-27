@@ -1,29 +1,16 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-import { init } from './init'
-import { Message } from './message'
-import { Model } from './model'
-import { RoomsClientLive } from './rpc'
-import { subscriptions } from './subscription'
-import { update } from './update'
-import { view } from './view'
+import { ApplicationBlock } from './block'
+import { ApplicationLayer } from './services'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
-  subscriptions,
-  resources: RoomsClientLive,
+const program = Program.make({
+  block: ApplicationBlock,
   container: document.getElementById('root'),
-  devTools: {
-    Message,
-    mode: 'TimeTravel',
-  },
+  devTools: { dispatch: true, mode: 'TimeTravel' },
   routing: {
-    onUrlRequest: request => Message.ClickedLink({ request }),
-    onUrlChange: url => Message.ChangedUrl({ url }),
+    onUrlRequest: ApplicationBlock.Message.ClickedLink,
+    onUrlChange: ApplicationBlock.Message.ChangedUrl,
   },
 })
 
-Runtime.run(application)
+Runtime.run(program.provide(ApplicationLayer))

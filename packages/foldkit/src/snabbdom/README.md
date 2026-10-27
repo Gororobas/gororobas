@@ -53,6 +53,12 @@ upstream stay reviewable.
   parent selector (`init.ts`). Gated on `import.meta.hot`, plus an internal
   test-only toggle `__overrideDuplicateKeyWarning`; production builds pay only
   the gate check.
+- `Hooks` gains an optional `postdestroy` vnode hook (`hooks.ts`), which
+  `invokeDestroyHook` calls after the `destroy` hooks of the vnode and of every
+  descendant have run (`init.ts`). `h.submodel` uses it to keep a boundary's
+  wrap registered until every listener inside the removed subtree is detached,
+  so an event that a `destroy` hook causes on an element that still listens
+  reaches `update`.
 
 ## Removals relative to upstream
 
@@ -74,6 +80,18 @@ Only the surface Foldkit uses is vendored:
 - The `requestAnimationFrame` feature check guards `typeof window` before
   touching it, so importing the style module in a runtime without a `window`
   global does not throw (`style.ts`).
+- `updateChildren` checks that a child's element is still inside the parent
+  before it uses the element as an `insertBefore` reference or moves it
+  (`init.ts`). A Mount can move a rendered element somewhere else. For example,
+  `@foldkit/ui`'s anchor Mount moves an open overlay panel into the portal
+  root. Upstream passes such an element to `insertBefore`, which throws
+  `NotFoundError`, and a sibling reorder pulls the element back into the
+  parent. The fork takes the next sibling that is still in the parent as the
+  reference, or the end of the parent when there is none, and leaves the moved
+  element where it is. The same search skips a `null` entry in the new
+  children, where upstream appends at the end of the parent. Foldkit's `html`
+  builder drops `null` children, so only direct callers of this `h` can pass
+  one.
 
 ## Non-functional adaptations
 

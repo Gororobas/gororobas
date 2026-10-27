@@ -39,13 +39,23 @@ DevTools displays the value as `<redacted:access token>`. This prevents accident
 
 DevTools are enabled by default in development. Recording and the MCP bridge live in the core runtime. The browser overlay ships separately in `@foldkit/devtools`. When that package is installed as a development dependency, `@foldkit/vite-plugin` mounts the overlay automatically during development. Production builds omit it without an application-level environment check.
 
-Add a `devTools` object to `makeApplication` only when you need to configure DevTools or allow MCP dispatch. To include the overlay in production, move `@foldkit/devtools` to regular `dependencies` and set `show: 'Always'`. You do not need to import the overlay.
+Add a `devTools` object to `Program.make` only when you need to configure DevTools or allow MCP dispatch. To include the overlay in production, move `@foldkit/devtools` to regular `dependencies` and set `show: 'Always'`. You do not need to import the overlay.
 
 ::Snippet{name="devtoolsBasic" label="Configuring DevTools"}
 
 ## Configuration
 
-The `devTools` field accepts an object with the following optional properties, or `false` to disable DevTools entirely.
+The `devTools` field accepts an object with the following optional properties, or `false` to disable the DevTools store, overlay, and browser bridge entirely. Omitting the field keeps development inspection enabled with external dispatch disabled.
+
+### dispatch
+
+`false` by default. Set `dispatch: true` to let external DevTools clients discover and dispatch Messages. Foldkit derives the dispatch Schema from the completed root Block, including generated envelopes for registered child Blocks. Incoming values are decoded against that Codec before they reach update.
+
+Inspection and replay remain available when `dispatch` is omitted or `false`. Message Schema discovery returns `None`, and dispatch requests are rejected.
+
+Enable dispatch only for trusted development clients. Schema decoding validates Message data; it does not authenticate its sender. Generated child envelopes carry runtime-local generations and are not a portable live-dispatch protocol between applications or sessions. See [generated child delivery](/core/block#debugging-in-devtools) for their admission contract.
+
+When the completed root Message Codec needs Services for decoding, `dispatch: true` adds them to the Program's requirements. Supply any remaining decoding Services through `program.provide(...)`. Leaving dispatch disabled adds no Message decoding requirements.
 
 ### show
 
@@ -74,10 +84,6 @@ Pass `{ development, production }` to choose a mode for each environment. When `
 ### banner
 
 An optional string displayed as a banner at the top of the panel. Useful for welcoming visitors or leaving a note for your team.
-
-### Message
-
-The application’s `Message` Schema. Required only for AI agent integration: when set and the running app is connected to the [DevTools MCP](/ai/mcp) server, agents can dispatch Messages into the live runtime. The Schema decodes inbound dispatch payloads at the bridge boundary and rejects mismatches with a clean error. Omit this field to disable agent dispatch entirely.
 
 ### excludeFromHistory {#exclude-from-history}
 

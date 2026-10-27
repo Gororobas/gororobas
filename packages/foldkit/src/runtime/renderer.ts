@@ -1,8 +1,19 @@
-import { Cause, Context, Effect, Exit, Option, type Scope } from 'effect'
+import {
+  Array,
+  Cause,
+  Context,
+  Effect,
+  Exit,
+  Option,
+  Predicate,
+  type Scope,
+} from 'effect'
 
 import {
   type BoundaryRegistry,
   type Document,
+  FOLDKIT_MOUNT_KEY,
+  type FoldkitMountMarker,
   type HtmlBuilder,
   __beginRender as beginHtmlRender,
   __beginReplayRender as beginReplayHtmlRender,
@@ -14,7 +25,13 @@ import {
 } from '../html/index.js'
 import { __hydrateVNode } from '../hydrate.js'
 import { FOLDKIT_APP_ATTRIBUTE } from '../hydrationMarker.js'
-import { MountRuntime, MountTracker } from '../mount/index.js'
+import {
+  type AnyMountHandler,
+  type LayeredMountDefinition,
+  MountRegistrationTypeId,
+  MountRuntime,
+  MountTracker,
+} from '../mount/index.js'
 import type { CommitNotifier } from '../render/commit.js'
 import {
   VNode,
@@ -122,6 +139,7 @@ export const makeRenderer = <Model, Message>({
   duplicateIdScanner,
   maybeResolvedViewTransition,
   commitNotifier,
+  mounts,
   runtimeContext,
   readLiveModel,
   messageQueue,
@@ -129,8 +147,8 @@ export const makeRenderer = <Model, Message>({
 }: Readonly<{
   status: RuntimeStatus
   container: HTMLElement
-  view: (model: Model, h: HtmlBuilder<Message>) => Document
-  htmlBuilder: HtmlBuilder<Message>
+  view: (model: Model, h: HtmlBuilder<Message, AnyMountHandler>) => Document
+  htmlBuilder: HtmlBuilder<Message, AnyMountHandler>
   manageDocument: boolean
   crash: CrashConfig<Model, Message> | undefined
   buildId: string | undefined
@@ -147,9 +165,10 @@ export const makeRenderer = <Model, Message>({
     ResolvedViewTransition<Model, Message>
   >
   commitNotifier: CommitNotifier
+  mounts: ReadonlyArray<LayeredMountDefinition>
   runtimeContext: Context.Context<never>
   readLiveModel: () => Model
-  messageQueue: MessageQueue<Message>
+  messageQueue: MessageQueue<Message, unknown>
   devToolsIntegration: DevToolsIntegration<Model, Message>
 }>): Effect.Effect<Renderer<Model, Message>, never, Scope.Scope> =>
   Effect.gen(function* () {
@@ -158,6 +177,7 @@ export const makeRenderer = <Model, Message>({
       enqueueMessageEffect,
       drainPendingMessages,
       resetDrainBudget,
+      isAnyMessageDeferred,
     } = messageQueue
     const {
       mountTracker,
@@ -271,28 +291,29 @@ export const makeRenderer = <Model, Message>({
     // stay visible.
     yield* Effect.addFinalizer(exit =>
       Effect.gen(function* () {
-        if (!Exit.hasInterrupts(exit)) {
-          return
-        }
-        const maybeCurrentVNode = vnodeSlot.maybeCurrentVNode
-        yield* Option.match(maybeCurrentVNode, {
-          onNone: () => Effect.void,
-          onSome: currentVNode =>
-            Effect.sync(() => {
-              const placeholderNode = __patchVNode(
-                Option.some(currentVNode),
-                null,
-                container,
-              ).elm
-              if (placeholderNode && placeholderNode.parentNode) {
-                placeholderNode.parentNode.replaceChild(
+        if (Exit.hasInterrupts(exit)) {
+          const maybeCurrentVNode = vnodeSlot.maybeCurrentVNode
+          yield* Option.match(maybeCurrentVNode, {
+            onNone: () => Effect.void,
+            onSome: currentVNode =>
+              Effect.sync(() => {
+                const placeholderNode = __patchVNode(
+                  Option.some(currentVNode),
+                  null,
                   container,
-                  placeholderNode,
-                )
-                container.replaceChildren()
-              }
-            }),
-        })
+                ).elm
+                if (placeholderNode && placeholderNode.parentNode) {
+                  placeholderNode.parentNode.replaceChild(
+                    container,
+                    placeholderNode,
+                  )
+                  container.replaceChildren()
+                }
+              }),
+          })
+        }
+
+        yield* mountRuntime.interruptFibers
       }),
     )
 
@@ -301,12 +322,11 @@ export const makeRenderer = <Model, Message>({
     // `Effect.runFork` from their catch blocks), and the Command and
     // Subscription fibers (a Command's Effect and a Subscription's
     // Stream are typed with a `never` error channel, so a cause
-    // escaping one can only be a `resources` Layer build failure or an
-    // escaped defect, both unrecoverable). Each path catches its own
-    // cause so a failure surfaces as the crash view instead of dying
-    // silently and leaving the DOM frozen at the last successful
-    // render. The first crash wins: concurrent Command fibers can fail
-    // on the same broken Layer, and only one should report and render.
+    // escaping one is an unrecoverable defect). Each path catches its
+    // own cause so a failure surfaces as the crash view instead of
+    // dying silently and leaving the DOM frozen at the last successful
+    // render. The first crash wins: concurrent Command fibers can fail,
+    // and only one should report and render.
     const crashWith = (
       cause: Cause.Cause<never>,
       maybeMessage: Option.Option<Message>,
@@ -316,6 +336,7 @@ export const makeRenderer = <Model, Message>({
           return
         }
         status.isCrashed = true
+        messageQueue.drainPendingMessages()
         // NOTE: the crash view should appear at once, not animate in from
         // a snapshot of the state that crashed.
         skipPendingViewTransition()
@@ -357,13 +378,69 @@ export const makeRenderer = <Model, Message>({
     const dispatch = { dispatchAsync, dispatchSync }
 
     // NOTE: One boundary registry per runtime instance, shared
-    // across renders so Submodel wrap descriptors registered by
-    // h.submodel persist between renders. The render function calls
+    // across renders so Block wrap blocks registered by
+    // h.block persist between renders. The render function calls
     // `beginHtmlRender` at the start of each pass; wraps for
-    // unmounted Submodels (e.g. an entry removed from a list) are
-    // dropped from the registry via snabbdom destroy hooks attached
-    // by `h.submodel` to each child vnode.
+    // unmounted Blocks (e.g. an entry removed from a list) are
+    // dropped from the registry via snabbdom `postdestroy` hooks
+    // attached by `h.block` to each child vnode.
     const boundaryRegistry: BoundaryRegistry = createHtmlBoundaryRegistry()
+    const registeredMounts = new Set(
+      mounts.map(mount => mount[MountRegistrationTypeId]),
+    )
+
+    const mountValidationVisits = new WeakMap<VNode, object>()
+
+    const assertLayeredMountsAreRegistered = (root: VNode | null): void => {
+      if (root === null) {
+        return
+      }
+
+      const mountValidationToken = {}
+      let missing: Map<object, string> | undefined
+      const walk = (node: VNode): void => {
+        const { children } = node
+        if (children !== undefined && Array.isArrayNonEmpty(children)) {
+          if (mountValidationVisits.get(node) === mountValidationToken) {
+            return
+          }
+          mountValidationVisits.set(node, mountValidationToken)
+        }
+
+        /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+        const marker = node.data?.[FOLDKIT_MOUNT_KEY] as
+          | FoldkitMountMarker
+          | undefined
+        const registration = marker?.[MountRegistrationTypeId]
+        if (
+          marker !== undefined &&
+          registration !== undefined &&
+          !registeredMounts.has(registration)
+        ) {
+          missing ??= new Map<object, string>()
+          missing.set(registration, marker.name)
+        }
+
+        if (children !== undefined) {
+          for (const child of children) {
+            if (!Predicate.isString(child)) {
+              walk(child)
+            }
+          }
+        }
+      }
+      walk(root)
+
+      if (missing === undefined) {
+        return
+      }
+
+      const names = globalThis.Array.from(missing.values()).sort()
+      throw new Error(
+        `[foldkit] The rendered view contains Layer-backed Mounts that were not registered: ${names.join(', ')}. ` +
+          "Register each Mount Definition in the owning Composition's mounts field.",
+      )
+    }
 
     // NOTE: callers set `isRenderingFrame` before calling this and clear
     // it after. Without it, a Message dispatched while the patch is still
@@ -408,6 +485,7 @@ export const makeRenderer = <Model, Message>({
         },
       )
       const { body: nextVNode } = nextDocument
+      assertLayeredMountsAreRegistered(nextVNode)
 
       reportSlowPhase<SlowViewContext<Model, Message>>(
         maybeLiveSlowView,
@@ -497,7 +575,15 @@ export const makeRenderer = <Model, Message>({
     ) =>
       Effect.gen(function* () {
         status.isRenderingFrame = true
-        const renderContext = yield* Effect.context<never>()
+        const renderContext = Context.add(
+          Context.add(
+            Context.add(runtimeContext, Dispatch, dispatchService),
+            MountTracker,
+            mountTracker,
+          ),
+          MountRuntime,
+          mountRuntime,
+        )
         if (renderMode === 'Replay') {
           beginReplayHtmlRender()
         }
@@ -516,9 +602,6 @@ export const makeRenderer = <Model, Message>({
             drainPendingMessages()
           }),
         ),
-        Effect.provideService(Dispatch, dispatchService),
-        Effect.provideService(MountTracker, mountTracker),
-        Effect.provideService(MountRuntime, mountRuntime),
       )
 
     const liveRenderContext = Context.add(
@@ -530,6 +613,11 @@ export const makeRenderer = <Model, Message>({
       MountRuntime,
       mountRuntime,
     )
+
+    // NOTE: rendering before a deferred drain resumes would restore stale
+    // controlled input values. Disposed or crashed runtimes use the frame guards.
+    const isLiveModelBehindQueue = (): boolean =>
+      isAnyMessageDeferred() && !status.isRuntimeDisposed && !status.isCrashed
 
     // NOTE: the render, Mount drain, DevTools attribution, and
     // patch-time-buffer flush. Shared by the plain path (called directly)
@@ -630,6 +718,14 @@ export const makeRenderer = <Model, Message>({
             return
           }
           update.didRun = true
+
+          // NOTE: a drain may have been deferred since the preceding frame
+          // started the transition. Leave the DOM unchanged until it catches up.
+          if (isLiveModelBehindQueue()) {
+            skipPendingViewTransition()
+            scheduleRenderFrame()
+            return
+          }
           // NOTE: the view state closes the resume window after the
           // store is live but before its plain frame has restored the live
           // DOM. A transition invalidated by jumpTo stays invalid forever,
@@ -662,6 +758,11 @@ export const makeRenderer = <Model, Message>({
     // would strand any `Render.afterCommit` registered against it, and
     // the Dom helpers that gate on it would never run their DOM work.
     const renderFramePlain = (): void => {
+      // NOTE: retain the scheduled frame's pending commit while the drain waits.
+      if (isLiveModelBehindQueue()) {
+        requestAnimationFrame(renderFramePlain)
+        return
+      }
       isRenderFrameScheduled = false
       const isRestoringLiveView = isLiveViewRestorePending
       isLiveViewRestorePending = false

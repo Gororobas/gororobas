@@ -1,72 +1,79 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Option, Schema } from 'effect'
-import { Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Schema, Tuple } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { Tooltip } from '@foldkit/ui'
+import type { RenderInfo as TooltipRenderInfo } from '@foldkit/ui/tooltip'
 
-// Add a field to your Model for the Tooltip Submodel:
+// Add a field to your Model for the Tooltip Block:
 const Model = Schema.Struct({
-  tooltip: Tooltip.Model,
+  tooltip: Tooltip.TooltipBlock.Model,
   // ...your other fields
 })
 
-// In your init function, initialize the Tooltip Submodel with a unique id:
-const init = () => ({
-  model: {
-    tooltip: Tooltip.init({ id: 'save-button' }),
-    // ...your other fields
-  },
+// This excerpt has no parent-owned facts. The Composition derives delivery.
+const Message = defineMessageUnion({})
+
+const TooltipExampleDefinition = Block.makeDefinition('TooltipExample', {
+  Model,
+  Message,
 })
 
-// Embed the Tooltip Message in your parent Message:
-const Message = defineMessageUnion({
-  GotTooltipMessage: { message: Tooltip.Message },
-})
+const { makeNoopStep } = TooltipExampleDefinition
 
 // At module scope, fold the OutMessage into your own Model. `Shown` and
 // `Hidden` mark the visibility transitions. Fire analytics or coordinate with
 // the rest of your UI from the parent. Each arm returns an Update.Step over
-// the parent Model, which already has the next Tooltip Model written back:
-const foldTooltipOutMessage = Tooltip.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  // The child has emitted `Shown`. In this arm the parent can update its
-  // own state or dispatch its own Commands, for example log analytics,
-  // prefetch content, or trigger a downstream Command.
-  Shown: () => model => ({ model }),
-  // The child has emitted `Hidden`. In this arm the parent can update its
-  // own state or dispatch its own Commands, for example clear ephemeral
-  // state, fire analytics, or trigger a downstream Command.
-  Hidden: () => model => ({ model }),
+// the parent Model, which already has the next Tooltip Model written back.
+// The parent Definition checks every named child variant:
+const foldTooltipOutMessage = TooltipExampleDefinition.makeOutMessageFold(
+  Tooltip.TooltipBlock,
+  {
+    // The child has emitted `Shown`. In this arm the parent can update its
+    // own state or dispatch its own Commands, for example log analytics,
+    // prefetch content, or trigger a downstream Command.
+    Shown: makeNoopStep,
+    // The child has emitted `Hidden`. In this arm the parent can update its
+    // own state or dispatch its own Commands, for example clear ephemeral
+    // state, fire analytics, or trigger a downstream Command.
+    Hidden: makeNoopStep,
+  },
+)
+
+// The Binding wires the completed child Block into the parent: it runs Tooltip.TooltipBlock.update,
+// writes the next Tooltip Model back, routes generated delivery and Command
+// results, and hands any OutMessage to the OutMessage fold.
+const TooltipBinding = TooltipExampleDefinition.makeBinding(
+  Tooltip.TooltipBlock,
+  {
+    field: 'tooltip',
+    init: { contextToArgs: () => Tuple.make({ id: 'save-button' }) },
+  },
+).withOutMessagePolicy({ fold: foldTooltipOutMessage })
+
+const TooltipExampleComposition = TooltipExampleDefinition.makeComposition({
+  bindings: [TooltipBinding],
 })
 
-// Update.foldChild wires the child into the parent: it runs Tooltip.update,
-// writes the next Tooltip Model back, maps the Submodel's Commands into your
-// Message type, and hands any OutMessage to foldOutMessage.
-const foldTooltip = Update.foldChild({
-  update: Tooltip.update,
-  read: (model: Model) => Option.some(model.tooltip),
-  write: (model, nextTooltip) =>
-    modifyFields(model, { tooltip: () => nextTooltip }),
-  toParentMessage: message => Message.GotTooltipMessage({ message }),
-  foldOutMessage: foldTooltipOutMessage,
-})
+// In your init function, initialize the Tooltip Block with a unique id:
+const init = TooltipExampleComposition.makeInit(() => ({
+  model: {
+    // ...your other fields
+  },
+}))
 
-// In the corresponding Message.match handler, call the fold:
-GotTooltipMessage: ({ message }) => foldTooltip(model, message)
+const update = TooltipExampleComposition.makeUpdate({})
 
-// Inside your view function, embed the tooltip via h.submodel. The tooltip
+// Inside your view function, embed the tooltip via h.block. The tooltip
 // describes the trigger but does not name it, so give an icon-only trigger
 // an accessible name with `ariaLabel`. (Point `ariaLabelledBy` at a visible
 // label element instead when one exists.) The attribute is only emitted when
 // provided, so the trigger never carries a dangling `aria-labelledby`.
-const view = (h: HtmlBuilder<Message>) => {
-  const tooltipView = ({ trigger, panel, isVisible }: Tooltip.RenderInfo) =>
+const view = TooltipExampleComposition.makeView((model, h) => {
+  const tooltipView = ({ trigger, panel, isVisible }: TooltipRenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
@@ -91,15 +98,15 @@ const view = (h: HtmlBuilder<Message>) => {
       ],
     )
 
-  return h.submodel({
-    slotId: 'save-button',
-    model: model.tooltip,
-    view: Tooltip.view,
-    viewInputs: {
-      ariaLabel: 'Save',
-      anchor: { placement: 'top', gap: 6, padding: 8 },
-      toView: tooltipView,
-    },
-    toParentMessage: message => Message.GotTooltipMessage({ message }),
-  })
-}
+  return h.block(
+    TooltipBinding.embedView({
+      slotId: 'save-button',
+      model: model.tooltip,
+      viewInputs: {
+        ariaLabel: 'Save',
+        anchor: { placement: 'top', gap: 6, padding: 8 },
+        toView: tooltipView,
+      },
+    }),
+  )
+})

@@ -4,6 +4,7 @@ import { describe, it } from '@effect/vitest'
 
 import {
   ROOT_BOUNDARY,
+  beginBoundaryWrapTransaction,
   beginRender,
   boundaryMappers,
   composeBoundary,
@@ -13,6 +14,7 @@ import {
   registerBoundaryWrap,
   resolveBoundaryDispatchThunk,
   resolveMountBoundaryDispatch,
+  rollbackBoundaryWrapTransaction,
 } from './boundary.js'
 import type { DispatchSync } from './runtimeSingleton.js'
 
@@ -92,13 +94,13 @@ describe('composeBoundary', () => {
     // "list" → "row" → "inner", and the wraps registered for those
     // distinct boundaries would clobber each other.
     expect(() => composeBoundary('list', 'row|inner')).toThrow(
-      /h\.submodel slotId cannot contain the boundary separator/,
+      /h\.block slotId cannot contain the boundary separator/,
     )
   })
 
   it('throws when a slotId contains the separator even under the root boundary', () => {
     expect(() => composeBoundary(ROOT_BOUNDARY, 'foo|bar')).toThrow(
-      /h\.submodel slotId cannot contain the boundary separator/,
+      /h\.block slotId cannot contain the boundary separator/,
     )
   })
 })
@@ -153,6 +155,178 @@ describe('getOrCreateBoundaryDispatch', () => {
     const a = getOrCreateBoundaryDispatch(registry, dispatch, 'child')
     const b = getOrCreateBoundaryDispatch(registry, dispatch, 'child')
     expect(a).toBe(b)
+  })
+
+  it('evicts every dispatcher when the owning boundary leaves the DOM', () => {
+    const registry = createBoundaryRegistry()
+    const liveDispatch: DispatchSync = () => {}
+    const replayDispatch: DispatchSync = () => {}
+    const block = { toParentMessage: (message: unknown) => message }
+
+    registerBoundaryWrap(registry, 'child', block, liveDispatch)
+    getOrCreateBoundaryDispatch(registry, liveDispatch, 'child')
+    getOrCreateBoundaryDispatch(registry, replayDispatch, 'child')
+
+    expect(registry.boundaryDispatches.get(liveDispatch)?.size).toBe(1)
+    expect(registry.boundaryDispatches.get(replayDispatch)?.size).toBe(1)
+
+    deregisterBoundaryWrap(registry, 'child', block, liveDispatch)
+
+    expect(registry.boundaryDispatches.get(liveDispatch)).toBeUndefined()
+    expect(registry.boundaryDispatches.get(replayDispatch)).toBeUndefined()
+    expect(registry.boundaryDispatchOwners.has('child')).toBe(false)
+  })
+
+  it('drops an old handler after unmount and gives a same-id remount a fresh dispatcher', () => {
+    const registry = createBoundaryRegistry()
+    const calls: Array<unknown> = []
+    const dispatch: DispatchSync = message => calls.push(message)
+    const first = {
+      toParentMessage: (message: unknown) => ({ generation: 1, message }),
+    }
+
+    registerBoundaryWrap(registry, 'child', first, dispatch)
+    const oldDispatcher = getOrCreateBoundaryDispatch(
+      registry,
+      dispatch,
+      'child',
+    )
+    deregisterBoundaryWrap(registry, 'child', first, dispatch)
+
+    expect(() => oldDispatcher({ _tag: 'BlurredItems' })).not.toThrow()
+    expect(calls).toEqual([])
+
+    beginRender(registry)
+    const second = {
+      toParentMessage: (message: unknown) => ({ generation: 2, message }),
+    }
+    registerBoundaryWrap(registry, 'child', second, dispatch)
+    const currentDispatcher = getOrCreateBoundaryDispatch(
+      registry,
+      dispatch,
+      'child',
+    )
+
+    expect(currentDispatcher).not.toBe(oldDispatcher)
+    oldDispatcher({ _tag: 'BlurredItems' })
+    currentDispatcher({ _tag: 'FocusedItems' })
+    expect(calls).toEqual([
+      { generation: 2, message: { _tag: 'FocusedItems' } },
+    ])
+  })
+
+  it('still throws when an active dispatcher has a missing wrap', () => {
+    const registry = createBoundaryRegistry()
+    const dispatch: DispatchSync = () => {}
+    const block = { toParentMessage: (message: unknown) => message }
+
+    registerBoundaryWrap(registry, 'child', block, dispatch)
+    const activeDispatcher = getOrCreateBoundaryDispatch(
+      registry,
+      dispatch,
+      'child',
+    )
+    registry.wraps.delete('child')
+
+    expect(() => activeDispatcher({ _tag: 'ClickedChild' })).toThrow(
+      /dispatchAcrossBoundary missing wrap for ancestor "child"/,
+    )
+  })
+
+  it('keeps a nested sibling dispatcher active when another sibling unmounts', () => {
+    const registry = createBoundaryRegistry()
+    const calls: Array<unknown> = []
+    const dispatch: DispatchSync = message => calls.push(message)
+    const parent = {
+      toParentMessage: (message: unknown) => ({ _tag: 'GotParent', message }),
+    }
+    const left = {
+      toParentMessage: (message: unknown) => ({ _tag: 'GotLeft', message }),
+    }
+    const right = {
+      toParentMessage: (message: unknown) => ({ _tag: 'GotRight', message }),
+    }
+
+    registerBoundaryWrap(registry, 'parent', parent, dispatch)
+    registerBoundaryWrap(registry, 'parent|left', left, dispatch)
+    registerBoundaryWrap(registry, 'parent|right', right, dispatch)
+    const leftDispatcher = getOrCreateBoundaryDispatch(
+      registry,
+      dispatch,
+      'parent|left',
+    )
+    const rightDispatcher = getOrCreateBoundaryDispatch(
+      registry,
+      dispatch,
+      'parent|right',
+    )
+
+    deregisterBoundaryWrap(registry, 'parent|left', left, dispatch)
+    leftDispatcher({ _tag: 'BlurredLeft' })
+    rightDispatcher({ _tag: 'ClickedRight' })
+
+    expect(calls).toEqual([
+      {
+        _tag: 'GotParent',
+        message: {
+          _tag: 'GotRight',
+          message: { _tag: 'ClickedRight' },
+        },
+      },
+    ])
+  })
+
+  it('does not let a stale destroy hook evict a replacement dispatcher', () => {
+    const registry = createBoundaryRegistry()
+    const dispatch: DispatchSync = () => {}
+    const first = { toParentMessage: (message: unknown) => message }
+    const replacement = { toParentMessage: (message: unknown) => message }
+
+    registerBoundaryWrap(registry, 'child', first, dispatch)
+    const cached = getOrCreateBoundaryDispatch(registry, dispatch, 'child')
+    beginRender(registry)
+    registerBoundaryWrap(registry, 'child', replacement, dispatch)
+
+    deregisterBoundaryWrap(registry, 'child', first, dispatch)
+    expect(getOrCreateBoundaryDispatch(registry, dispatch, 'child')).toBe(
+      cached,
+    )
+
+    deregisterBoundaryWrap(registry, 'child', replacement, dispatch)
+    expect(registry.boundaryDispatches.get(dispatch)).toBeUndefined()
+  })
+
+  it('evicts a dispatcher created by a rolled-back first registration', () => {
+    const registry = createBoundaryRegistry()
+    const dispatch: DispatchSync = () => {}
+    const block = { toParentMessage: (message: unknown) => message }
+    const transaction = beginBoundaryWrapTransaction(registry)
+
+    registerBoundaryWrap(registry, 'child', block, dispatch)
+    getOrCreateBoundaryDispatch(registry, dispatch, 'child')
+    rollbackBoundaryWrapTransaction(registry, transaction)
+
+    expect(registry.boundaryDispatches.get(dispatch)).toBeUndefined()
+    expect(registry.boundaryDispatchOwners.has('child')).toBe(false)
+  })
+
+  it('preserves the dispatcher when a replacement registration rolls back', () => {
+    const registry = createBoundaryRegistry()
+    const dispatch: DispatchSync = () => {}
+    const first = { toParentMessage: (message: unknown) => message }
+    const replacement = { toParentMessage: (message: unknown) => message }
+
+    registerBoundaryWrap(registry, 'child', first, dispatch)
+    const cached = getOrCreateBoundaryDispatch(registry, dispatch, 'child')
+    beginRender(registry)
+    const transaction = beginBoundaryWrapTransaction(registry)
+    registerBoundaryWrap(registry, 'child', replacement, dispatch)
+    rollbackBoundaryWrapTransaction(registry, transaction)
+
+    expect(registry.wraps.get('child')).toBe(first)
+    expect(getOrCreateBoundaryDispatch(registry, dispatch, 'child')).toBe(
+      cached,
+    )
   })
 
   it('returns outerDispatch directly for the root boundary', () => {
@@ -312,7 +486,7 @@ describe('resolveMountBoundaryDispatch', () => {
     expect(replayCalls).toEqual([])
   })
 
-  it('reframes a rejected Mount result with the Submodel diagnostic', () => {
+  it('reframes a rejected Mount result with the Block diagnostic', () => {
     const registry = createBoundaryRegistry()
     const original = new Error('schema said no')
     const dispatch: DispatchSync = () => {}
@@ -345,46 +519,31 @@ describe('resolveMountBoundaryDispatch', () => {
       const registry = createBoundaryRegistry()
       const liveDispatch: DispatchSync = () => {}
       const replayDispatch: DispatchSync = () => {}
-      const initialLiveDescriptor = {
+      const initialLiveBlock = {
         toParentMessage: (message: unknown) => ({ ownerId: 0, message }),
       }
-      const replayDescriptor = {
+      const replayBlock = {
         toParentMessage: (message: unknown) => ({ ownerId: 99, message }),
       }
-      const resumedLiveDescriptor = {
+      const resumedLiveBlock = {
         toParentMessage: (message: unknown) => ({ ownerId: 1, message }),
       }
 
-      registerBoundaryWrap(
-        registry,
-        'child',
-        initialLiveDescriptor,
-        liveDispatch,
-      )
+      registerBoundaryWrap(registry, 'child', initialLiveBlock, liveDispatch)
       beginRender(registry)
-      registerBoundaryWrap(registry, 'child', replayDescriptor, replayDispatch)
+      registerBoundaryWrap(registry, 'child', replayBlock, replayDispatch)
 
       if (finalOwner === 'Live') {
         beginRender(registry)
-        registerBoundaryWrap(
-          registry,
-          'child',
-          resumedLiveDescriptor,
-          liveDispatch,
-        )
+        registerBoundaryWrap(registry, 'child', resumedLiveBlock, liveDispatch)
         deregisterBoundaryWrap(
           registry,
           'child',
-          resumedLiveDescriptor,
+          resumedLiveBlock,
           liveDispatch,
         )
       } else {
-        deregisterBoundaryWrap(
-          registry,
-          'child',
-          replayDescriptor,
-          replayDispatch,
-        )
+        deregisterBoundaryWrap(registry, 'child', replayBlock, replayDispatch)
       }
 
       expect(registry.wraps.size).toBe(0)

@@ -9,7 +9,7 @@ import * as Animation from '../animation/schema.js'
 /** Semantic category of a toast. Drives the default ARIA role: `status` for
  *  `Info` / `Success`, `alert` for `Warning` / `Error`. Also surfaced as
  *  `data-variant` on each entry for per-variant CSS. This is the only
- *  content-adjacent field the component owns. The rest of the entry's
+ *  content-adjacent field the Toast Block owns. The rest of the entry's
  *  content lives in the user-provided payload. */
 export const Variant = Schema.Literals(['Info', 'Success', 'Warning', 'Error'])
 export type Variant = typeof Variant.Type
@@ -76,7 +76,7 @@ export const SWIPE_SETTLE_DURATION = Duration.millis(150)
 
 /** Schema factory for a single toast entry. `payloadSchema` is user-provided
  *  and defines the shape of per-entry content, whatever the consumer wants
- *  to encode. The component itself owns only lifecycle + a11y fields: `id`,
+ *  to encode. The Toast Block itself owns only lifecycle + a11y fields: `id`,
  *  `variant` (for ARIA role), `animation`, `maybeDuration`,
  *  `pendingDismissVersion` (for cancellable auto-dismiss), `isHovered`
  *  (for pause-on-hover), and `swipeState` + `swipeVersion` (for the
@@ -96,11 +96,12 @@ export const makeEntry = <A, I>(payloadSchema: Schema.Codec<A, I>) =>
 
 // MODEL
 
-/** Schema factory for the toast container's state. `nextEntryKey` is a
- *  monotonic counter used to generate unique entry IDs purely from Model
- *  state. Thread the updated model through successive `show()` calls.
- *  Calling `show()` twice against the same pre-update model in the same tick
- *  will produce duplicate entry IDs. */
+/**
+ * Schema factory for the Toast container's state. `nextEntryKey` generates
+ * unique entry IDs from the Model. Thread the updated Model through successive
+ * calls to the exposed `show` operation. Two calls against the same prior Model
+ * produce the same entry ID.
+ */
 export const makeModel = <A, I>(payloadSchema: Schema.Codec<A, I>) =>
   Schema.Struct({
     id: Schema.String,
@@ -112,20 +113,17 @@ export const makeModel = <A, I>(payloadSchema: Schema.Codec<A, I>) =>
 
 // MESSAGE
 
-/** Payload-independent Message variants shared by every bound Toast module. */
+/** Payload-independent Message variants shared by every Toast Block. */
 export const Message = defineMessageUnion({
+  RequestedDismiss: { entryId: Schema.String },
+  RequestedDismissAll: {},
   Dismissed: { entryId: Schema.String },
-  DismissedAll: {},
   CompletedWaitBeforeDismissal: {
     entryId: Schema.String,
     version: Schema.Number,
   },
   HoveredEntry: { entryId: Schema.String },
   LeftEntry: { entryId: Schema.String },
-  GotAnimationMessage: {
-    entryId: Schema.String,
-    message: Animation.Message,
-  },
   PressedEntryPointer: {
     entryId: Schema.String,
     pointerId: Schema.Number,
@@ -142,12 +140,12 @@ export const Message = defineMessageUnion({
 })
 
 export type Dismissed = typeof Message.Dismissed.Type
-export type DismissedAll = typeof Message.DismissedAll.Type
+export type RequestedDismiss = typeof Message.RequestedDismiss.Type
+export type RequestedDismissAll = typeof Message.RequestedDismissAll.Type
 export type CompletedWaitBeforeDismissal =
   typeof Message.CompletedWaitBeforeDismissal.Type
 export type HoveredEntry = typeof Message.HoveredEntry.Type
 export type LeftEntry = typeof Message.LeftEntry.Type
-export type GotAnimationMessage = typeof Message.GotAnimationMessage.Type
 export type PressedEntryPointer = typeof Message.PressedEntryPointer.Type
 export type MovedSwipePointer = typeof Message.MovedSwipePointer.Type
 export type ReleasedSwipePointer = typeof Message.ReleasedSwipePointer.Type
@@ -156,22 +154,25 @@ export type PressedEscape = typeof Message.PressedEscape.Type
 export type CompletedWaitForSwipeSettled =
   typeof Message.CompletedWaitForSwipeSettled.Type
 
-/** Factory for the union of all messages the toast component can produce. */
+/** Factory for the union of all Messages the Toast Block can produce. */
 export const makeMessage = <A, I>(payloadSchema: Schema.Codec<A, I>) =>
   defineMessageUnion({
+    RequestedShow: {
+      payload: payloadSchema,
+      variant: Variant,
+      maybeDuration: Schema.Option(Schema.DurationFromMillis),
+      isSticky: Schema.Boolean,
+    },
     Added: { entry: makeEntry(payloadSchema) },
+    RequestedDismiss: { entryId: Schema.String },
+    RequestedDismissAll: {},
     Dismissed: { entryId: Schema.String },
-    DismissedAll: {},
     CompletedWaitBeforeDismissal: {
       entryId: Schema.String,
       version: Schema.Number,
     },
     HoveredEntry: { entryId: Schema.String },
     LeftEntry: { entryId: Schema.String },
-    GotAnimationMessage: {
-      entryId: Schema.String,
-      message: Animation.Message,
-    },
     PressedEntryPointer: {
       entryId: Schema.String,
       pointerId: Schema.Number,
@@ -187,7 +188,7 @@ export const makeMessage = <A, I>(payloadSchema: Schema.Codec<A, I>) =>
     },
   })
 
-/** Factory for the union of out-messages the toast component can produce. */
+/** Factory for the union of OutMessages the Toast Block can produce. */
 export const makeOutMessage = <A, I>(payloadSchema: Schema.Codec<A, I>) =>
   defineMessageUnion({ DismissedToast: { payload: payloadSchema } })
 
@@ -202,10 +203,11 @@ export type SwipeToDismissConfig = Readonly<{
   direction?: SwipeDirection
 }>
 
-/** Configuration for creating a toast container model. `defaultDuration` is
- *  applied to any `show()` call that doesn't provide its own `duration` or
- *  pass `sticky: true`. Accepts any Effect Duration input; a bare number is
- *  interpreted as milliseconds. */
+/**
+ * Configuration for creating a Toast container Model. `defaultDuration` applies
+ * to `show` calls without an explicit duration, unless `sticky: true` disables
+ * auto-dismissal. Accepts any Effect Duration input; bare numbers are milliseconds.
+ */
 export type InitConfig = Readonly<{
   id: string
   defaultDuration?: Duration.Input

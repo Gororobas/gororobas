@@ -1,41 +1,40 @@
 import { Schema } from 'effect'
-import { Submodel, type Update } from 'foldkit'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { Button } from '@foldkit/ui'
 
-// MODEL
+const Model = Schema.Struct({
+  count: Schema.Number,
+})
 
-export const Model = Schema.Struct({ count: Schema.Number })
-export type Model = typeof Model.Type
-
-export const init: Model = { count: 0 }
-
-// MESSAGE
-
-export const Message = defineMessageUnion({
+const Message = defineMessageUnion({
   ClickedDecrement: {},
   ClickedIncrement: {},
 })
+const CounterDefinition = Block.makeDefinition('Counter', {
+  Model,
+  Message,
+})
 
-export type Message = typeof Message.Type
+const { makeFieldsStep } = CounterDefinition
 
-// UPDATE
+const CounterComposition = CounterDefinition.makeComposition()
 
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedDecrement: () => ({
-      model: modifyFields(model, { count: count => count - 1 }),
-    }),
-    ClickedIncrement: () => ({
-      model: modifyFields(model, { count: count => count + 1 }),
-    }),
-  })
+const init = CounterComposition.makeInit(() => ({
+  model: Model.make({ count: 0 }),
+}))
 
-// VIEW
+const update = CounterComposition.makeUpdate({
+  ClickedDecrement: makeFieldsStep(() => ({
+    count: count => count - 1,
+  })),
+  ClickedIncrement: makeFieldsStep(() => ({
+    count: count => count + 1,
+  })),
+})
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
+const view = CounterComposition.makeView((model, h) =>
   h.div(
     [
       h.Class(
@@ -69,3 +68,14 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
 
 const buttonStyle =
   'h-9 w-9 rounded bg-gray-900 text-white text-lg leading-none hover:bg-gray-700 transition cursor-pointer'
+
+const prepare = () =>
+  CounterComposition.prepareBlock({
+    init,
+    update,
+    view,
+  })
+export const CounterBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)

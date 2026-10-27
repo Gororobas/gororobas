@@ -6,7 +6,7 @@ Command.expectExact(FetchWeather)
 Command.resolve(FetchWeather, SucceededFetchWeather({ weather }))
 
 // Lock in args. Pass a Command instance instead of a Definition to match by
-// name AND args. Catches regressions where the Command fires with wrong inputs.
+// source identity, bound path, AND args. This catches wrong inputs or placement.
 Command.expectExact(FetchWeather({ zipCode: '90210' }))
 
 // Multiple Commands. Resolve a batch in one step; cascading Commands resolve too.
@@ -32,7 +32,7 @@ Command.expectHas(FetchWeather({ zipCode: '90210' }))
 // Negative assertion. Useful before a transition that should produce no Commands.
 Command.expectNone()
 
-// Submodel Command. When the Command lives in a child component, resolve it
+// Block Command. When the Command lives in a child component, resolve it
 // with the child's raw result Message. resolve replays the Command's own
 // mapMessages wrapping automatically, so you never restate the lift.
 Command.resolve(

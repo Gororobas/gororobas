@@ -1,47 +1,31 @@
-// page/settings/subscription.ts
-import { Effect, Option, Schema, Stream } from 'effect'
-import { Dom, Subscription } from 'foldkit'
+import { Block } from 'foldkit'
 
-import {
-  GotThemeMenuMessage,
-  type Message,
-  StartedNavigationAway,
-} from './message'
-import type { Model } from './model'
+import { Message } from './message'
+import { Model } from './model'
 import * as ThemeMenu from './themeMenu'
 
-const themeMenuSubscriptions = Subscription.lift(ThemeMenu.subscriptions)<
+export const SettingsDefinition = Block.makeDefinition('Settings', {
   Model,
-  Message
->({
-  read: model => Option.some(model.themeMenu),
-  toParentMessage: message => GotThemeMenuMessage({ message }),
+  Message,
 })
 
-const localSubscriptions = Subscription.make<Model, Message>()(entry => ({
-  unsavedChangesWarning: entry(
-    { hasUnsavedChanges: Schema.Boolean },
-    {
-      modelToDependencies: model => ({
-        hasUnsavedChanges: model.hasUnsavedChanges,
-      }),
-      dependenciesToStream: ({ hasUnsavedChanges }) =>
-        Stream.when(
-          Dom.streamFromEventFilterMapPreventDefault({
-            target: window,
-            type: 'beforeunload',
-            filterMapEvent: event => {
-              event.returnValue = true
-              return Option.some(StartedNavigationAway())
-            },
-          }),
-          Effect.sync(() => hasUnsavedChanges),
-        ),
-    },
-  ),
-}))
+const { makeNoopStep } = SettingsDefinition
 
-export const subscriptions = Subscription.aggregate(
-  themeMenuSubscriptions,
-  localSubscriptions,
+const foldThemeMenuOutMessage = SettingsDefinition.makeOutMessageFold(
+  ThemeMenu.ThemeMenuBlock,
+  {
+    Selected: makeNoopStep,
+    Closed: makeNoopStep,
+  },
 )
+
+const ThemeMenuBinding = SettingsDefinition.makeBinding(
+  ThemeMenu.ThemeMenuBlock,
+  {
+    field: 'themeMenu',
+  },
+).withOutMessagePolicy({ fold: foldThemeMenuOutMessage })
+
+export const SettingsComposition = SettingsDefinition.makeComposition({
+  bindings: [ThemeMenuBinding],
+})

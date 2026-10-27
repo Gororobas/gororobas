@@ -1,0 +1,1 @@
+export { AsyncCounterDemoBlock } from './block'

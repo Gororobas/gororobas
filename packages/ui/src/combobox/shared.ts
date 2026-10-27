@@ -1,29 +1,33 @@
-import { Array, Effect, Match, Option, Predicate, Schema, pipe } from 'effect'
-import * as Command from 'foldkit/command'
+import {
+  Array,
+  Effect,
+  Function,
+  Layer,
+  Match,
+  Option,
+  Predicate,
+  Schema,
+  pipe,
+} from 'effect'
+import * as Block from 'foldkit/block'
 import * as Dom from 'foldkit/dom'
-import type { ChildAttribute, Html } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
+import type { ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
+import { type MessageUnion, defineMessageUnion } from 'foldkit/message'
 import * as Mount from 'foldkit/mount'
 import { makeModifyFieldsFor } from 'foldkit/struct'
-import { type View as SubmodelView, defineView } from 'foldkit/submodel'
 import * as Update from 'foldkit/update'
 
 import { AnchorConfig, anchorSetup, portalBackdrop } from '../anchor/index.js'
-// NOTE: Animation imports are split across schema + update to avoid a circular
-// dependency: animation → html → runtime → devtools → combobox → animation.
-// The barrel (../animation) imports from html, which starts the cycle.
-import * as Animation from '../animation/schema.js'
-import {
-  hide as animationHide,
-  show as animationShow,
-  update as animationUpdate,
-} from '../animation/update.js'
+import * as Animation from '../animation/index.js'
 import { groupContiguous } from '../group.js'
 import * as OptionExt from '../internal/optionExtensions.js'
 import { idSelector } from '../internal/selectors.js'
 import { findFirstEnabledIndex, keyToIndex } from '../keyboard.js'
 
 export { groupContiguous }
+
+/** Shared Combobox namespace for selection-specific definitions and effects. */
+export const ComboboxNamespace = Block.makeNamespace('Combobox')
 
 // MODEL
 
@@ -40,7 +44,7 @@ export const BaseModel = Schema.Struct({
   nullable: Schema.Boolean,
   immediate: Schema.Boolean,
   selectInputOnFocus: Schema.Boolean,
-  animation: Animation.Model,
+  animation: Animation.AnimationBlock.Model,
   maybeActiveItemIndex: Schema.Option(Schema.Number),
   activationTrigger: ActivationTrigger,
   inputValue: Schema.String,
@@ -74,7 +78,7 @@ export const baseInit = (config: BaseInitConfig): BaseModel => ({
   nullable: config.nullable ?? false,
   immediate: config.immediate ?? false,
   selectInputOnFocus: config.selectInputOnFocus ?? false,
-  animation: Animation.init({ id: `${config.id}-items` }),
+  animation: Animation.AnimationBlock.init({ id: `${config.id}-items` }).model,
   maybeActiveItemIndex: Option.none(),
   activationTrigger: 'Keyboard',
   inputValue: '',
@@ -83,59 +87,86 @@ export const baseInit = (config: BaseInitConfig): BaseModel => ({
 
 // MESSAGE
 
-/** Union of all messages the combobox component can produce. */
-export const Message = defineMessageUnion({
-  Opened: { maybeActiveItemIndex: Schema.Option(Schema.Number) },
-  Closed: {
-    restingInputValue: Schema.String,
-    isClearable: Schema.Boolean,
-  },
-  BlurredInput: {
-    restingInputValue: Schema.String,
-    isClearable: Schema.Boolean,
-  },
-  ActivatedItem: {
-    index: Schema.Number,
-    activationTrigger: ActivationTrigger,
-    maybeImmediateSelection: Schema.Option(
-      Schema.Struct({ item: Schema.String }),
-    ),
-  },
-  DeactivatedItem: {},
-  SelectedItem: {
-    item: Schema.String,
-    displayText: Schema.String,
-    wasSelected: Schema.Boolean,
-  },
-  MovedPointerOverItem: {
-    index: Schema.Number,
-    screenX: Schema.Number,
-    screenY: Schema.Number,
-  },
-  RequestedItemClick: { index: Schema.Number },
-  SuppressedItemCommit: {},
-  SuppressedEmptyItemNavigation: {},
-  CompletedLockScroll: {},
-  CompletedUnlockScroll: {},
-  CompletedInertOthers: {},
-  CompletedRestoreInert: {},
-  CompletedFocusInput: {},
-  CompletedScrollIntoView: {},
-  CompletedClickItem: {},
-  CompletedAnchorCombobox: {},
-  CompletedAttachComboboxPreventBlur: {},
-  CompletedAttachComboboxSelectOnFocus: {},
-  CompletedPortalComboboxBackdrop: {},
-  GotAnimationMessage: { message: Animation.Message },
-  UpdatedInputValue: { value: Schema.String },
-  PressedToggleButton: {
-    restingInputValue: Schema.String,
-    isClearable: Schema.Boolean,
-  },
-})
+/** A synchronous, service-free string Codec whose constructor input preserves
+ *  the exact Item type. The encoded type is retained in the completed Block's
+ *  Message and OutMessage Codecs. */
+export type ItemSchema<Item extends string, ItemEncoded = Item> = Schema.Codec<
+  Item,
+  ItemEncoded,
+  never,
+  never
+> &
+  Readonly<{ '~type.make': Item }>
+
+/** Builds the Combobox Message union with item payloads refined by a Schema. */
+export const makeMessage = <Item extends string, ItemEncoded = Item>(
+  Item: ItemSchema<Item, ItemEncoded>,
+) =>
+  defineMessageUnion({
+    RequestedOpen: {},
+    RequestedClose: {
+      restingInputValue: Schema.String,
+      isClearable: Schema.Boolean,
+    },
+    RequestedSelectItem: {
+      item: Item,
+      displayText: Schema.String,
+    },
+    Opened: { maybeActiveItemIndex: Schema.Option(Schema.Number) },
+    Closed: {
+      restingInputValue: Schema.String,
+      isClearable: Schema.Boolean,
+    },
+    BlurredInput: {
+      restingInputValue: Schema.String,
+      isClearable: Schema.Boolean,
+    },
+    ActivatedItem: {
+      index: Schema.Number,
+      activationTrigger: ActivationTrigger,
+      maybeImmediateSelection: Schema.Option(Schema.Struct({ item: Item })),
+    },
+    DeactivatedItem: {},
+    SelectedItem: {
+      item: Item,
+      displayText: Schema.String,
+      wasSelected: Schema.Boolean,
+    },
+    MovedPointerOverItem: {
+      index: Schema.Number,
+      screenX: Schema.Number,
+      screenY: Schema.Number,
+    },
+    RequestedItemClick: { index: Schema.Number },
+    SuppressedItemCommit: {},
+    SuppressedEmptyItemNavigation: {},
+    CompletedLockScroll: {},
+    CompletedUnlockScroll: {},
+    CompletedInertOthers: {},
+    CompletedRestoreInert: {},
+    CompletedFocusInput: {},
+    CompletedScrollItemIntoView: {},
+    CompletedClickItem: {},
+    CompletedAnchor: {},
+    CompletedAttachPreventBlur: {},
+    CompletedAttachSelectOnFocus: {},
+    CompletedPortalBackdrop: {},
+    CompletedDetectMovementOrAnimationEnd: { generation: Schema.Number },
+    UpdatedInputValue: { value: Schema.String },
+    PressedToggleButton: {
+      restingInputValue: Schema.String,
+      isClearable: Schema.Boolean,
+    },
+  })
+
+/** Union of all Messages the broad string Combobox component can produce. */
+export const Message = makeMessage(Schema.String)
 
 export type Opened = typeof Message.Opened.Type
 export type Closed = typeof Message.Closed.Type
+export type RequestedOpen = typeof Message.RequestedOpen.Type
+export type RequestedClose = typeof Message.RequestedClose.Type
+export type RequestedSelectItem = typeof Message.RequestedSelectItem.Type
 export type BlurredInput = typeof Message.BlurredInput.Type
 export type ActivatedItem = typeof Message.ActivatedItem.Type
 export type DeactivatedItem = typeof Message.DeactivatedItem.Type
@@ -150,13 +181,46 @@ export type CompletedUnlockScroll = typeof Message.CompletedUnlockScroll.Type
 export type CompletedInertOthers = typeof Message.CompletedInertOthers.Type
 export type CompletedRestoreInert = typeof Message.CompletedRestoreInert.Type
 export type CompletedFocusInput = typeof Message.CompletedFocusInput.Type
-export type CompletedScrollIntoView =
-  typeof Message.CompletedScrollIntoView.Type
+export type CompletedScrollItemIntoView =
+  typeof Message.CompletedScrollItemIntoView.Type
 export type CompletedClickItem = typeof Message.CompletedClickItem.Type
 export type UpdatedInputValue = typeof Message.UpdatedInputValue.Type
 export type PressedToggleButton = typeof Message.PressedToggleButton.Type
 
-export type Message = typeof Message.Type
+/** The Message Schema and callable constructors on a created Combobox,
+ * refined to the Item Schema supplied to `create`. */
+export type MessageSchema<Item extends string = string, ItemEncoded = Item> =
+  typeof Message extends MessageUnion<infer Cases>
+    ? MessageUnion<
+        Omit<Cases, 'RequestedSelectItem' | 'SelectedItem' | 'ActivatedItem'> &
+          Readonly<{
+            RequestedSelectItem: Omit<Cases['RequestedSelectItem'], 'item'> &
+              Readonly<{
+                item: ItemSchema<Item, ItemEncoded>
+              }>
+            SelectedItem: Omit<Cases['SelectedItem'], 'item'> &
+              Readonly<{
+                item: ItemSchema<Item, ItemEncoded>
+              }>
+            ActivatedItem: Omit<
+              Cases['ActivatedItem'],
+              'maybeImmediateSelection'
+            > &
+              Readonly<{
+                maybeImmediateSelection: Schema.Option<
+                  Schema.Struct<
+                    Readonly<{
+                      item: ItemSchema<Item, ItemEncoded>
+                    }>
+                  >
+                >
+              }>
+          }>
+      >
+    : never
+
+/** Every Message a created Combobox can process, refined to its Item Schema. */
+export type Message<Item extends string = string> = MessageSchema<Item>['Type']
 
 // OUT MESSAGE
 
@@ -167,14 +231,35 @@ export type Selected<Value extends string = string> = Readonly<{
 
 export type ClearedSelection = typeof OutMessage.ClearedSelection.Type
 
-/** Union of out-messages the combobox component can produce. The parent folds `Selected` into the selection it owns and clears that selection on `ClearedSelection`. */
-export const OutMessage = defineMessageUnion({
-  Selected: { value: Schema.String },
-  ClearedSelection: {},
-})
+/** Builds the Combobox OutMessage union with its selected value refined by a Schema. */
+export const makeOutMessage = <Item extends string, ItemEncoded = Item>(
+  Item: ItemSchema<Item, ItemEncoded>,
+) =>
+  defineMessageUnion({
+    Selected: { value: Item },
+    ClearedSelection: {},
+  })
+
+/** Union of OutMessages the broad string Combobox component can produce. */
+export const OutMessage = makeOutMessage(Schema.String)
+
+/** The OutMessage Schema and callable constructors on a created Combobox,
+ * refined to the Item Schema supplied to `create`. */
+export type OutMessageSchema<Item extends string = string, ItemEncoded = Item> =
+  typeof OutMessage extends MessageUnion<infer Cases>
+    ? MessageUnion<
+        Omit<Cases, 'Selected'> &
+          Readonly<{
+            Selected: Omit<Cases['Selected'], 'value'> &
+              Readonly<{
+                value: ItemSchema<Item, ItemEncoded>
+              }>
+          }>
+      >
+    : never
 
 /** Generic over `Value extends string` so consumers who create the combobox
- *  via `Combobox.create<MyUnion>()` receive `value: MyUnion` in the
+ *  with a refined Item Schema receive `value: Value` in the
  *  `Selected` OutMessage from the factory's `update`, instead of
  *  `value: string`. Defaults to `string`. */
 export type OutMessage<Value extends string = string> =
@@ -215,432 +300,526 @@ export const closedBaseModel = <Model extends BaseModel>(model: Model): Model =>
 
 // UPDATE FACTORY
 
-type SelectedItemContext<Model extends BaseModel> = Readonly<{
-  closeWithFocus: (
-    model: Model,
-    outMessage?: OutMessage,
-  ) => Update.ReturnWithOutMessage<Model, Message, OutMessage>
-}>
-
-type HandlerReturn<Model> = Readonly<{
+type HandlerReturn<Model, EmittedOutMessage> = Readonly<{
   model: Model
-  outMessage?: OutMessage
+  commands?: never
+  outMessage?: EmittedOutMessage
 }>
 
 /** Prevents page scrolling while the combobox popup is open in modal mode. */
-export const LockScroll = Command.define('LockScroll', {
+export const LockScroll = ComboboxNamespace.makeCommand('LockScroll', {
   messages: [Message.CompletedLockScroll],
-  execute: Dom.lockScroll.pipe(Effect.as(Message.CompletedLockScroll())),
+  handler: function* () {
+    return () => Dom.lockScroll.pipe(Effect.as(Message.CompletedLockScroll()))
+  },
 })
 /** Re-enables page scrolling after the combobox popup closes. */
-export const UnlockScroll = Command.define('UnlockScroll', {
+export const UnlockScroll = ComboboxNamespace.makeCommand('UnlockScroll', {
   messages: [Message.CompletedUnlockScroll],
-  execute: Dom.unlockScroll.pipe(Effect.as(Message.CompletedUnlockScroll())),
+  handler: function* () {
+    return () =>
+      Dom.unlockScroll.pipe(Effect.as(Message.CompletedUnlockScroll()))
+  },
 })
 /** Marks all elements outside the combobox as inert for modal behavior. */
-export const InertOthers = Command.define('InertOthers', {
+export const InertOthers = ComboboxNamespace.makeCommand('InertOthers', {
   args: { id: Schema.String },
   messages: [Message.CompletedInertOthers],
-  execute: ({ id }) =>
-    Dom.inertOthers(id, [
-      inputWrapperSelector(id),
-      itemsSelector(id),
-      backdropSelector(id),
-    ]).pipe(Effect.as(Message.CompletedInertOthers())),
+  handler: function* () {
+    return ({ id }) =>
+      Dom.inertOthers(id, [
+        inputWrapperSelector(id),
+        itemsSelector(id),
+        backdropSelector(id),
+      ]).pipe(Effect.as(Message.CompletedInertOthers()))
+  },
 })
 /** Removes the inert attribute from elements outside the combobox. */
-export const RestoreInert = Command.define('RestoreInert', {
+export const RestoreInert = ComboboxNamespace.makeCommand('RestoreInert', {
   args: { id: Schema.String },
   messages: [Message.CompletedRestoreInert],
-  execute: ({ id }) =>
-    Dom.restoreInert(id).pipe(Effect.as(Message.CompletedRestoreInert())),
+  handler: function* () {
+    return ({ id }) =>
+      Dom.restoreInert(id).pipe(Effect.as(Message.CompletedRestoreInert()))
+  },
 })
 /** Moves focus to the combobox input after selection or close. */
-export const FocusInput = Command.define('FocusInput', {
+export const FocusInput = ComboboxNamespace.makeCommand('FocusInput', {
   args: { id: Schema.String },
   messages: [Message.CompletedFocusInput],
-  execute: ({ id }) =>
-    Dom.focus(inputSelector(id)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedFocusInput()),
-    ),
+  handler: function* () {
+    return ({ id }) =>
+      Dom.focus(inputSelector(id)).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusInput()),
+      )
+  },
 })
 /** Scrolls the active combobox item into view after keyboard navigation. */
-export const ScrollIntoView = Command.define('ScrollIntoView', {
-  args: { id: Schema.String, index: Schema.Number },
-  messages: [Message.CompletedScrollIntoView],
-  execute: ({ id, index }) =>
-    Dom.scrollIntoView(itemSelector(id, index)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedScrollIntoView()),
-    ),
-})
+export const ScrollItemIntoView = ComboboxNamespace.makeCommand(
+  'ScrollItemIntoView',
+  {
+    args: { id: Schema.String, index: Schema.Number },
+    messages: [Message.CompletedScrollItemIntoView],
+    handler: function* () {
+      return ({ id, index }) =>
+        Dom.scrollIntoView(itemSelector(id, index)).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedScrollItemIntoView()),
+        )
+    },
+  },
+)
 /** Programmatically clicks the active combobox item's DOM element. */
-export const ClickItem = Command.define('ClickItem', {
+export const ClickItem = ComboboxNamespace.makeCommand('ClickItem', {
   args: { id: Schema.String, index: Schema.Number },
   messages: [Message.CompletedClickItem],
-  execute: ({ id, index }) =>
-    Dom.clickElement(itemSelector(id, index)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedClickItem()),
-    ),
+  handler: function* () {
+    return ({ id, index }) =>
+      Dom.clickElement(itemSelector(id, index)).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedClickItem()),
+      )
+  },
 })
-/** Detects whether the combobox input wrapper moved or the leave animation ended. Whichever comes first; both outcomes signal the Animation submodel that leave is complete. */
-export const DetectMovementOrAnimationEnd = Command.define(
+/** Detects whether the combobox input wrapper moved or the leave animation ended. Whichever comes first; both outcomes signal the Animation block that leave is complete. */
+export const DetectMovementOrAnimationEnd = ComboboxNamespace.makeCommand(
   'DetectMovementOrAnimationEnd',
   {
     args: { id: Schema.String, generation: Schema.Number },
-    messages: [Message.GotAnimationMessage],
-    execute: ({ id, generation }) =>
-      Effect.raceFirst(
-        Dom.detectElementMovement(inputWrapperSelector(id)).pipe(
-          Effect.as(
-            Message.GotAnimationMessage({
-              message: Animation.Message.EndedAnimation({ generation }),
-            }),
+    messages: [Message.CompletedDetectMovementOrAnimationEnd],
+    handler: function* () {
+      return ({ id, generation }) =>
+        Effect.raceFirst(
+          Dom.detectElementMovement(inputWrapperSelector(id)).pipe(
+            Effect.as(
+              Message.CompletedDetectMovementOrAnimationEnd({ generation }),
+            ),
           ),
-        ),
-        Dom.waitForAnimationSettled(itemsSelector(id)).pipe(
-          Effect.as(
-            Message.GotAnimationMessage({
-              message: Animation.Message.EndedAnimation({ generation }),
-            }),
+          Dom.waitForAnimationSettled(itemsSelector(id)).pipe(
+            Effect.as(
+              Message.CompletedDetectMovementOrAnimationEnd({ generation }),
+            ),
           ),
-        ),
-      ),
+        )
+    },
   },
 )
 
-/** Creates a combobox update function from variant-specific handlers. Shared logic (open, close, activate, transition) is handled internally; only close, selection, and immediate-activation behavior varies by variant. */
-export const makeUpdate = <Model extends BaseModel>(
+/** Creates exact Combobox Message handlers from variant-specific behavior. Shared logic handles opening, closing, activation, and transitions; close, selection, and immediate activation vary by variant. */
+export const makeUpdateHandlers = <
+  Item extends string,
+  ItemEncoded,
+  ParentOutMessageSchema extends Schema.Top,
+>(
+  bindChild: Block.BindChild<
+    typeof BaseModel,
+    MessageSchema<Item, ItemEncoded>,
+    ParentOutMessageSchema
+  >,
+  makeOutMessageFold: Block.MakeOutMessageFold<
+    BaseModel,
+    Message<Item>,
+    OutMessage<Item>
+  >,
+  step: Block.DefineStep<BaseModel, Message<Item>, OutMessage<Item>>,
+  stepFields: Block.DefineStepFields<BaseModel, Message<Item>>,
+  stepNoop: Block.DefineStepNoop<BaseModel>,
+  commandsStep: Block.MakeCommandsStep<BaseModel, Message<Item>>,
+  selectionBehavior: 'CloseWithFocus' | 'KeepOpen',
   handlers: Readonly<{
     handleClose: (
-      model: Model,
+      model: BaseModel,
       restingInputValue: string,
       isClearable: boolean,
-    ) => HandlerReturn<Model>
+    ) => HandlerReturn<BaseModel, ClearedSelection>
     handleSelectedItem: (
-      model: Model,
-      item: string,
+      model: BaseModel,
+      item: Item,
       displayText: string,
       wasSelected: boolean,
-      context: SelectedItemContext<Model>,
-    ) => Update.ReturnWithOutMessage<Model, Message, OutMessage>
+    ) => HandlerReturn<BaseModel, Selected<Item>>
     handleImmediateActivation: (
-      model: Model,
-      item: string,
-    ) => HandlerReturn<Model>
+      model: BaseModel,
+      item: Item,
+    ) => HandlerReturn<BaseModel, Selected<Item>>
   }>,
 ) => {
-  type PlainUpdateReturn = Update.Return<Model, Message>
-  type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
+  type Model = BaseModel
 
-  const foldAnimationOutMessage = Animation.OutMessage.match<
-    Update.Step<Model, Message>
-  >({
-    StartedLeaveAnimating:
-      ({ generation }) =>
-      model => ({
-        model,
-        commands: [DetectMovementOrAnimationEnd({ id: model.id, generation })],
-      }),
-    TransitionedOut: () => model => ({ model }),
+  const detectMovementOrAnimationEndStep = (generation: number) =>
+    commandsStep(model => [
+      DetectMovementOrAnimationEnd({ id: model.id, generation }),
+    ])
+
+  const foldAnimationOutMessage = makeOutMessageFold(Animation.AnimationBlock, {
+    StartedLeaveAnimating: ({ generation }) =>
+      detectMovementOrAnimationEndStep(generation),
+    TransitionedOut: stepNoop,
   })
 
-  const foldAnimation = Update.foldChild({
-    update: animationUpdate,
-    read: (model: Model) => Option.some(model.animation),
-    write: (model, nextAnimation) =>
-      modifyBaseFields(model, { animation: () => nextAnimation }),
-    toParentMessage: message => Message.GotAnimationMessage({ message }),
-    foldOutMessage: foldAnimationOutMessage,
-  })
+  const AnimationBinding = bindChild(Animation.AnimationBlock, {
+    field: 'animation',
+    init: false,
+  }).withOutMessagePolicy({ fold: foldAnimationOutMessage })
 
-  const foldAnimationShow = Update.foldChildStep({
-    update: animationShow,
-    read: (model: Model) => Option.some(model.animation),
-    write: (model, nextAnimation) =>
-      modifyBaseFields(model, { animation: () => nextAnimation }),
-    toParentMessage: message => Message.GotAnimationMessage({ message }),
-  })
-
-  const foldAnimationHide = Update.foldChildStep({
-    update: animationHide,
-    read: (model: Model) => Option.some(model.animation),
-    write: (model, nextAnimation) =>
-      modifyBaseFields(model, { animation: () => nextAnimation }),
-    toParentMessage: message => Message.GotAnimationMessage({ message }),
-  })
-
-  const internalUpdate = (model: Model, message: Message): UpdateReturn => {
-    const maybeLockScroll = OptionExt.when(model.isModal, LockScroll())
-    const maybeUnlockScroll = OptionExt.when(model.isModal, UnlockScroll())
-    const maybeInertOthers = OptionExt.when(
-      model.isModal,
-      InertOthers({ id: model.id }),
-    )
-    const maybeRestoreInert = OptionExt.when(
-      model.isModal,
-      RestoreInert({ id: model.id }),
+  const openCommands = (model: Model) =>
+    Array.filter(
+      [LockScroll(), InertOthers({ id: model.id })],
+      () => model.isModal,
     )
 
-    const focusInput = FocusInput({ id: model.id })
+  const closeWithoutFocusCommands = (model: Model) =>
+    Array.filter(
+      [UnlockScroll(), RestoreInert({ id: model.id })],
+      () => model.isModal,
+    )
 
-    const closeWithFocusCommands: ReadonlyArray<Command.Command<Message>> = [
-      focusInput,
-      ...Array.getSomes([maybeUnlockScroll, maybeRestoreInert]),
-    ]
+  const focusInput = (model: Model) => FocusInput({ id: model.id })
 
-    const closeWithoutFocusCommands: ReadonlyArray<Command.Command<Message>> =
-      Array.getSomes([maybeUnlockScroll, maybeRestoreInert])
+  const closeWithFocusCommands = (model: Model) => [
+    focusInput(model),
+    ...closeWithoutFocusCommands(model),
+  ]
 
-    const closeSelectedItemWithFocus = (
-      nextModel: Model,
-      outMessage?: OutMessage,
-    ): UpdateReturn => {
-      const didClose = model.isOpen && !nextModel.isOpen
-      const commands: ReadonlyArray<Command.Command<Message>> = didClose
-        ? closeWithFocusCommands
-        : [focusInput]
+  const closeSelectedItemWithFocus = (
+    model: Model,
+    nextModel: Model,
+    outMessage?: Selected<Item>,
+  ) => {
+    const didClose = model.isOpen && !nextModel.isOpen
+    const commands = didClose
+      ? closeWithFocusCommands(model)
+      : [focusInput(model)]
 
-      if (didClose && model.isAnimated) {
-        return pipe(
-          nextModel,
-          Update.combine([
-            stepModel => ({ model: stepModel, commands }),
-            foldAnimationHide,
+    if (didClose && model.isAnimated) {
+      return step(() =>
+        Function.compose(
+          Update.combineSteps([
+            step(() => ({ model: nextModel, commands })),
+            AnimationBinding.requestHide(),
           ]),
           Update.withOutMessage(outMessage),
-        )
-      }
-
-      return Update.withOutMessage({ model: nextModel, commands }, outMessage)
+        ),
+      )
     }
 
-    const openCombobox = (baseModel: Model): PlainUpdateReturn => {
-      if (model.isAnimated) {
-        return Update.combine(baseModel, [
-          stepModel => ({
-            model: stepModel,
-            commands: Array.getSomes([maybeLockScroll, maybeInertOthers]),
+    if (outMessage === undefined) {
+      return step(() => ({ model: nextModel, commands }))
+    } else {
+      return step(() => ({ model: nextModel, commands, outMessage }))
+    }
+  }
+
+  const openComboboxStep = (model: Model, baseModel: Model) => {
+    if (model.isAnimated) {
+      return Update.combineSteps([
+        step(() => ({ model: baseModel, commands: openCommands(model) })),
+        AnimationBinding.requestShow(),
+        stepFields(() => ({ isOpen: () => true })),
+      ])
+    }
+
+    return step(() => ({
+      model: modifyBaseFields(baseModel, { isOpen: () => true }),
+      commands: openCommands(model),
+    }))
+  }
+
+  const closeComboboxStep = (
+    model: Model,
+    baseModel: Model,
+    commands: ReturnType<typeof closeWithFocusCommands>,
+    restingInputValue: string,
+    isClearable: boolean,
+  ) => {
+    const comboboxClose = handlers.handleClose(
+      baseModel,
+      restingInputValue,
+      isClearable,
+    )
+
+    if (model.isAnimated) {
+      return step(() =>
+        Function.compose(
+          Update.combineSteps([
+            step(() => ({ model: comboboxClose.model, commands })),
+            AnimationBinding.requestHide(),
+          ]),
+          Update.withOutMessage(comboboxClose.outMessage),
+        ),
+      )
+    }
+
+    return step(() =>
+      Update.withOutMessage(
+        { model: comboboxClose.model, commands },
+        comboboxClose.outMessage,
+      ),
+    )
+  }
+
+  const openWithActiveItem = (
+    model: Model,
+    maybeActiveItemIndex: Option.Option<number>,
+  ) => {
+    if (model.isOpen) {
+      return stepNoop()
+    }
+
+    return openComboboxStep(
+      model,
+      modifyBaseFields(model, {
+        maybeActiveItemIndex: () => maybeActiveItemIndex,
+        activationTrigger: () =>
+          Option.match(maybeActiveItemIndex, {
+            onNone: () => 'Pointer' as const,
+            onSome: () => 'Keyboard' as const,
           }),
-          foldAnimationShow,
-          stepModel => ({
-            model: modifyBaseFields(stepModel, { isOpen: () => true }),
-          }),
-        ])
+        maybeLastPointerPosition: () => Option.none(),
+      }),
+    )
+  }
+
+  const closeIfOpen = (
+    model: Model,
+    commands: ReturnType<typeof closeWithFocusCommands>,
+    restingInputValue: string,
+    isClearable: boolean,
+  ) =>
+    model.isOpen
+      ? closeComboboxStep(
+          model,
+          model,
+          commands,
+          restingInputValue,
+          isClearable,
+        )
+      : stepNoop()
+
+  const selectItem = (
+    model: Model,
+    item: Item,
+    displayText: string,
+    wasSelected: boolean,
+  ) => {
+    const selection = handlers.handleSelectedItem(
+      model,
+      item,
+      displayText,
+      wasSelected,
+    )
+
+    if (selectionBehavior === 'CloseWithFocus') {
+      return closeSelectedItemWithFocus(
+        model,
+        selection.model,
+        selection.outMessage,
+      )
+    } else {
+      return step(() => selection)
+    }
+  }
+
+  const cases = {
+    CompletedLockScroll: model => ({ model }),
+    CompletedUnlockScroll: model => ({ model }),
+    CompletedInertOthers: model => ({ model }),
+    CompletedRestoreInert: model => ({ model }),
+    CompletedFocusInput: model => ({ model }),
+    CompletedScrollItemIntoView: model => ({ model }),
+    CompletedClickItem: model => ({ model }),
+    SuppressedItemCommit: model => ({ model }),
+    SuppressedEmptyItemNavigation: model => ({ model }),
+    CompletedAnchor: model => ({ model }),
+    CompletedAttachPreventBlur: model => ({ model }),
+    CompletedAttachSelectOnFocus: model => ({ model }),
+    CompletedPortalBackdrop: model => ({ model }),
+    RequestedOpen: model => openWithActiveItem(model, Option.none()),
+
+    RequestedClose: (model, { restingInputValue, isClearable }) =>
+      closeIfOpen(
+        model,
+        closeWithFocusCommands(model),
+        restingInputValue,
+        isClearable,
+      ),
+
+    RequestedSelectItem: (model, { item, displayText }) =>
+      selectItem(model, item, displayText, false),
+
+    Opened: (model, { maybeActiveItemIndex }) =>
+      openWithActiveItem(model, maybeActiveItemIndex),
+
+    // NOTE: A blur Message can arrive after selection has already closed the
+    // Combobox. Ignore that stale Message so it cannot restore an old input
+    // value or emit ClearedSelection again.
+    Closed: (model, { restingInputValue, isClearable }) =>
+      closeIfOpen(
+        model,
+        closeWithFocusCommands(model),
+        restingInputValue,
+        isClearable,
+      ),
+
+    BlurredInput: (model, { restingInputValue, isClearable }) =>
+      closeIfOpen(
+        model,
+        closeWithoutFocusCommands(model),
+        restingInputValue,
+        isClearable,
+      ),
+
+    ActivatedItem: (
+      model,
+      { index, activationTrigger, maybeImmediateSelection },
+    ) => {
+      const highlightedModel = modifyBaseFields(model, {
+        maybeActiveItemIndex: () => Option.some(index),
+        activationTrigger: () => activationTrigger,
+      })
+
+      const skippedActivation: HandlerReturn<Model, Selected<Item>> = {
+        model: highlightedModel,
+      }
+
+      const activation = Option.match(maybeImmediateSelection, {
+        onNone: () => skippedActivation,
+        onSome: ({ item }) =>
+          handlers.handleImmediateActivation(highlightedModel, item),
+      })
+
+      if (activationTrigger === 'Keyboard') {
+        return Update.withOutMessage(
+          {
+            model: activation.model,
+            commands: [ScrollItemIntoView({ id: model.id, index })],
+          },
+          activation.outMessage,
+        )
+      } else {
+        return activation
+      }
+    },
+
+    MovedPointerOverItem: (model, { index, screenX, screenY }) => {
+      const isSamePosition = Option.exists(
+        model.maybeLastPointerPosition,
+        position =>
+          position.screenX === screenX && position.screenY === screenY,
+      )
+
+      if (isSamePosition) {
+        return { model }
       }
 
       return {
-        model: modifyBaseFields(baseModel, { isOpen: () => true }),
-        commands: Array.getSomes([maybeLockScroll, maybeInertOthers]),
-      }
-    }
-
-    const closeCombobox = (
-      baseModel: Model,
-      commands: ReadonlyArray<Command.Command<Message>>,
-      restingInputValue: string,
-      isClearable: boolean,
-    ): UpdateReturn => {
-      const comboboxClose = handlers.handleClose(
-        baseModel,
-        restingInputValue,
-        isClearable,
-      )
-
-      if (model.isAnimated) {
-        return pipe(
-          comboboxClose.model,
-          Update.combine([
-            stepModel => ({ model: stepModel, commands }),
-            foldAnimationHide,
-          ]),
-          Update.withOutMessage(comboboxClose.outMessage),
-        )
-      }
-
-      return Update.withOutMessage(
-        { model: comboboxClose.model, commands },
-        comboboxClose.outMessage,
-      )
-    }
-
-    return Message.match<UpdateReturn>(message, {
-      CompletedLockScroll: () => ({ model }),
-      CompletedUnlockScroll: () => ({ model }),
-      CompletedInertOthers: () => ({ model }),
-      CompletedRestoreInert: () => ({ model }),
-      CompletedFocusInput: () => ({ model }),
-      CompletedScrollIntoView: () => ({ model }),
-      CompletedClickItem: () => ({ model }),
-      SuppressedItemCommit: () => ({ model }),
-      SuppressedEmptyItemNavigation: () => ({ model }),
-      CompletedAnchorCombobox: () => ({ model }),
-      CompletedAttachComboboxPreventBlur: () => ({ model }),
-      CompletedAttachComboboxSelectOnFocus: () => ({ model }),
-      CompletedPortalComboboxBackdrop: () => ({ model }),
-      Opened: ({ maybeActiveItemIndex }) =>
-        openCombobox(
-          modifyBaseFields(model, {
-            maybeActiveItemIndex: () => maybeActiveItemIndex,
-            activationTrigger: () =>
-              Option.match(maybeActiveItemIndex, {
-                onNone: () => 'Pointer' as const,
-                onSome: () => 'Keyboard' as const,
-              }),
-            maybeLastPointerPosition: () => Option.none(),
-          }),
-        ),
-
-      // NOTE: A blur Message can arrive after selection has already closed the
-      // Combobox. Ignore that stale Message so it cannot restore an old input
-      // value or emit ClearedSelection again.
-      Closed: ({ restingInputValue, isClearable }) =>
-        model.isOpen
-          ? closeCombobox(
-              model,
-              closeWithFocusCommands,
-              restingInputValue,
-              isClearable,
-            )
-          : { model },
-
-      BlurredInput: ({ restingInputValue, isClearable }) =>
-        model.isOpen
-          ? closeCombobox(
-              model,
-              closeWithoutFocusCommands,
-              restingInputValue,
-              isClearable,
-            )
-          : { model },
-
-      ActivatedItem: ({
-        index,
-        activationTrigger,
-        maybeImmediateSelection,
-      }) => {
-        const highlightedModel = modifyBaseFields(model, {
+        model: modifyBaseFields(model, {
           maybeActiveItemIndex: () => Option.some(index),
-          activationTrigger: () => activationTrigger,
-        })
-
-        const skippedActivation: HandlerReturn<Model> = {
-          model: highlightedModel,
-        }
-
-        const activation = Option.match(maybeImmediateSelection, {
-          onNone: () => skippedActivation,
-          onSome: ({ item }) =>
-            handlers.handleImmediateActivation(highlightedModel, item),
-        })
-
-        if (activationTrigger === 'Keyboard') {
-          return Update.withOutMessage(
-            {
-              model: activation.model,
-              commands: [ScrollIntoView({ id: model.id, index })],
-            },
-            activation.outMessage,
-          )
-        } else {
-          return activation
-        }
-      },
-
-      MovedPointerOverItem: ({ index, screenX, screenY }) => {
-        const isSamePosition = Option.exists(
-          model.maybeLastPointerPosition,
-          position =>
-            position.screenX === screenX && position.screenY === screenY,
-        )
-
-        if (isSamePosition) {
-          return { model }
-        }
-
-        return {
-          model: modifyBaseFields(model, {
-            maybeActiveItemIndex: () => Option.some(index),
-            activationTrigger: () => 'Pointer' as const,
-            maybeLastPointerPosition: () => Option.some({ screenX, screenY }),
-          }),
-        }
-      },
-
-      DeactivatedItem: () =>
-        model.activationTrigger === 'Pointer'
-          ? {
-              model: modifyBaseFields(model, {
-                maybeActiveItemIndex: () => Option.none(),
-              }),
-            }
-          : { model },
-
-      SelectedItem: ({ item, displayText, wasSelected }) =>
-        handlers.handleSelectedItem(model, item, displayText, wasSelected, {
-          closeWithFocus: closeSelectedItemWithFocus,
+          activationTrigger: () => 'Pointer' as const,
+          maybeLastPointerPosition: () => Option.some({ screenX, screenY }),
         }),
+      }
+    },
 
-      RequestedItemClick: ({ index }) => ({
-        model,
-        commands: [ClickItem({ id: model.id, index })],
-      }),
-
-      UpdatedInputValue: ({ value }) => {
-        if (model.isOpen) {
-          return {
+    DeactivatedItem: model =>
+      model.activationTrigger === 'Pointer'
+        ? {
             model: modifyBaseFields(model, {
-              inputValue: () => value,
-              maybeActiveItemIndex: () => Option.some(0),
-              activationTrigger: () => 'Keyboard' as const,
+              maybeActiveItemIndex: () => Option.none(),
             }),
           }
-        }
+        : { model },
 
-        return openCombobox(
-          modifyBaseFields(model, {
+    SelectedItem: (model, { item, displayText, wasSelected }) =>
+      selectItem(model, item, displayText, wasSelected),
+
+    RequestedItemClick: (model, { index }) => ({
+      model,
+      commands: [ClickItem({ id: model.id, index })],
+    }),
+
+    UpdatedInputValue: (model, { value }) => {
+      if (model.isOpen) {
+        return step(() => ({
+          model: modifyBaseFields(model, {
             inputValue: () => value,
             maybeActiveItemIndex: () => Option.some(0),
             activationTrigger: () => 'Keyboard' as const,
-            maybeLastPointerPosition: () => Option.none(),
           }),
+        }))
+      }
+
+      return openComboboxStep(
+        model,
+        modifyBaseFields(model, {
+          inputValue: () => value,
+          maybeActiveItemIndex: () => Option.some(0),
+          activationTrigger: () => 'Keyboard' as const,
+          maybeLastPointerPosition: () => Option.none(),
+        }),
+      )
+    },
+
+    PressedToggleButton: (model, { restingInputValue, isClearable }) => {
+      if (model.isOpen) {
+        return closeComboboxStep(
+          model,
+          model,
+          closeWithFocusCommands(model),
+          restingInputValue,
+          isClearable,
         )
-      },
+      }
 
-      PressedToggleButton: ({ restingInputValue, isClearable }) => {
-        if (model.isOpen) {
-          return closeCombobox(
-            model,
-            closeWithFocusCommands,
-            restingInputValue,
-            isClearable,
-          )
-        }
+      const toggledModel = modifyBaseFields(model, {
+        maybeActiveItemIndex: () => Option.none(),
+        activationTrigger: () => 'Pointer' as const,
+        maybeLastPointerPosition: () => Option.none(),
+      })
 
-        return Update.combine(
-          modifyBaseFields(model, {
-            maybeActiveItemIndex: () => Option.none(),
-            activationTrigger: () => 'Pointer' as const,
-            maybeLastPointerPosition: () => Option.none(),
-          }),
-          [
-            stepModel => ({
-              model: stepModel,
-              commands: [focusInput],
-            }),
-            openCombobox,
-          ],
-        )
-      },
+      if (model.isAnimated) {
+        return Update.combineSteps([
+          step(() => ({ model: toggledModel, commands: [focusInput(model)] })),
+          commandsStep(() => openCommands(model)),
+          AnimationBinding.requestShow(),
+          stepFields(() => ({ isOpen: () => true })),
+        ])
+      }
 
-      GotAnimationMessage: ({ message: animationMessage }) =>
-        foldAnimation(model, animationMessage),
-    })
+      return step(() => ({
+        model: modifyBaseFields(toggledModel, { isOpen: () => true }),
+        commands: [focusInput(model), ...openCommands(model)],
+      }))
+    },
+
+    CompletedDetectMovementOrAnimationEnd: (_model, { generation }) =>
+      AnimationBinding.requestFinish(generation),
+  } satisfies Readonly<{
+    [Tag in Message<Item>['_tag']]: (
+      model: Model,
+      message: Extract<Message<Item>, Readonly<{ _tag: Tag }>>,
+    ) => unknown
+  }>
+
+  return {
+    handlers: {
+      ...cases,
+      RequestedOpen: step(cases.RequestedOpen),
+      RequestedClose: step(cases.RequestedClose),
+      RequestedSelectItem: step(cases.RequestedSelectItem),
+      Opened: step(cases.Opened),
+      Closed: step(cases.Closed),
+      BlurredInput: step(cases.BlurredInput),
+      SelectedItem: step(cases.SelectedItem),
+      UpdatedInputValue: step(cases.UpdatedInputValue),
+      PressedToggleButton: step(cases.PressedToggleButton),
+      CompletedDetectMovementOrAnimationEnd: step(
+        cases.CompletedDetectMovementOrAnimationEnd,
+      ),
+    },
+    AnimationBinding,
   }
-
-  return internalUpdate
 }
 
 /** The anchor-positioning Mount this Combobox renders on its items panel.
@@ -650,109 +829,145 @@ export const makeUpdate = <Model extends BaseModel>(
  *  escapes ancestor stacking contexts and overflow clipping. The Mount also
  *  installs the `pointerdown`-cancelling capture listener that prevents
  *  input blur on item presses. Exposed so Scene tests can call
- *  `Scene.Mount.resolve(AnchorCombobox, CompletedAnchorCombobox())`. */
-export const AnchorCombobox = Mount.define('AnchorCombobox', {
+ *  `Scene.Mount.resolve(Anchor, CompletedAnchor())`. */
+export const Anchor = ComboboxNamespace.makeMount('Anchor', {
   args: { buttonId: Schema.String, anchor: AnchorConfig },
-  messages: [Message.CompletedAnchorCombobox],
-  execute: ({ element, buttonId, anchor }) =>
-    Effect.gen(function* () {
-      yield* Effect.acquireRelease(
-        Effect.sync(() => {
-          const preventBlur = (event: Event) => {
-            event.preventDefault()
-          }
-          element.addEventListener('pointerdown', preventBlur, {
-            capture: true,
-          })
-          const teardownAnchor = anchorSetup(element, {
-            buttonId,
-            anchor,
-            interceptTab: false,
-          })
-          return () => {
-            element.removeEventListener('pointerdown', preventBlur, {
+  messages: [Message.CompletedAnchor],
+  handler: function* () {
+    return ({ element, buttonId, anchor }) =>
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(
+          Effect.sync(() => {
+            const preventBlur = (event: Event) => {
+              event.preventDefault()
+            }
+            element.addEventListener('pointerdown', preventBlur, {
               capture: true,
             })
-            teardownAnchor()
-          }
-        }),
-        cleanup => Effect.sync(cleanup),
-      )
-      return Message.CompletedAnchorCombobox()
-    }),
+            const teardownAnchor = anchorSetup(element, {
+              buttonId,
+              anchor,
+              interceptTab: false,
+            })
+            return () => {
+              element.removeEventListener('pointerdown', preventBlur, {
+                capture: true,
+              })
+              teardownAnchor()
+            }
+          }),
+          cleanup => Effect.sync(cleanup),
+        )
+        return Message.CompletedAnchor()
+      })
+  },
 })
 
 /** The Mount this Combobox renders to install a `pointerdown`-cancelling
  *  capture listener that prevents blur on item presses. Exposed so Scene
  *  tests can call
- *  `Scene.Mount.resolve(AttachComboboxPreventBlur, CompletedAttachComboboxPreventBlur())`. */
-export const AttachComboboxPreventBlur = Mount.define(
-  'AttachComboboxPreventBlur',
+ *  `Scene.Mount.resolve(AttachPreventBlur, CompletedAttachPreventBlur())`. */
+export const AttachPreventBlur = ComboboxNamespace.makeMount(
+  'AttachPreventBlur',
   {
-    messages: [Message.CompletedAttachComboboxPreventBlur],
-    execute: ({ element }) =>
-      Effect.gen(function* () {
-        yield* Effect.acquireRelease(
-          Effect.sync(() => {
-            const handler = (event: Event) => {
-              event.preventDefault()
-            }
-            element.addEventListener('pointerdown', handler, { capture: true })
-            return handler
-          }),
-          handler =>
-            Effect.sync(() =>
-              element.removeEventListener('pointerdown', handler, {
+    messages: [Message.CompletedAttachPreventBlur],
+    handler: function* () {
+      return ({ element }) =>
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(
+            Effect.sync(() => {
+              const handler = (event: Event) => {
+                event.preventDefault()
+              }
+              element.addEventListener('pointerdown', handler, {
                 capture: true,
-              }),
-            ),
-        )
-        return Message.CompletedAttachComboboxPreventBlur()
-      }),
+              })
+              return handler
+            }),
+            handler =>
+              Effect.sync(() =>
+                element.removeEventListener('pointerdown', handler, {
+                  capture: true,
+                }),
+              ),
+          )
+          return Message.CompletedAttachPreventBlur()
+        })
+    },
   },
 )
 
 /** The Mount this Combobox renders to install the input's select-on-focus
  *  behavior. Exposed so Scene tests can call
- *  `Scene.Mount.resolve(AttachComboboxSelectOnFocus, CompletedAttachComboboxSelectOnFocus())`. */
-export const AttachComboboxSelectOnFocus = Mount.define(
-  'AttachComboboxSelectOnFocus',
+ *  `Scene.Mount.resolve(AttachSelectOnFocus, CompletedAttachSelectOnFocus())`. */
+export const AttachSelectOnFocus = ComboboxNamespace.makeMount(
+  'AttachSelectOnFocus',
   {
-    messages: [Message.CompletedAttachComboboxSelectOnFocus],
-    execute: ({ element }) =>
-      Effect.gen(function* () {
-        yield* Effect.acquireRelease(
-          Effect.sync(() => {
-            const handler = () => {
-              if (element instanceof HTMLInputElement) {
-                element.select()
+    messages: [Message.CompletedAttachSelectOnFocus],
+    handler: function* () {
+      return ({ element }) =>
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(
+            Effect.sync(() => {
+              const handler = () => {
+                if (element instanceof HTMLInputElement) {
+                  element.select()
+                }
               }
-            }
-            element.addEventListener('focus', handler)
-            return handler
-          }),
-          handler =>
-            Effect.sync(() => element.removeEventListener('focus', handler)),
-        )
-        return Message.CompletedAttachComboboxSelectOnFocus()
-      }),
+              element.addEventListener('focus', handler)
+              return handler
+            }),
+            handler =>
+              Effect.sync(() => element.removeEventListener('focus', handler)),
+          )
+          return Message.CompletedAttachSelectOnFocus()
+        })
+    },
   },
 )
 
 /** The backdrop-portaling Mount this Combobox renders. Exposed so Scene tests can
- *  call `Scene.Mount.resolve(PortalComboboxBackdrop, CompletedPortalComboboxBackdrop())` to
+ *  call `Scene.Mount.resolve(PortalBackdrop, CompletedPortalBackdrop())` to
  *  acknowledge the mount produced by the rendered backdrop. */
-export const PortalComboboxBackdrop = Mount.define('PortalComboboxBackdrop', {
-  messages: [Message.CompletedPortalComboboxBackdrop],
-  execute: ({ element }) =>
-    Effect.gen(function* () {
-      yield* Effect.acquireRelease(
-        Effect.sync(() => portalBackdrop(element)),
-        cleanup => Effect.sync(cleanup),
-      )
-      return Message.CompletedPortalComboboxBackdrop()
-    }),
+export const PortalBackdrop = ComboboxNamespace.makeMount('PortalBackdrop', {
+  messages: [Message.CompletedPortalBackdrop],
+  handler: function* () {
+    return ({ element }) =>
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(
+          Effect.sync(() => portalBackdrop(element)),
+          cleanup => Effect.sync(cleanup),
+        )
+        return Message.CompletedPortalBackdrop()
+      })
+  },
 })
+
+/** Mount Definitions rendered by Combobox views. */
+export const mounts = [
+  Anchor,
+  AttachPreventBlur,
+  AttachSelectOnFocus,
+  PortalBackdrop,
+]
+
+type MountRequirements = Mount.RequirementsOf<typeof mounts>
+
+/** Provides Combobox's local Command and Mount handlers. */
+export const EffectsLayer = Layer.mergeAll(
+  LockScroll.layer,
+  UnlockScroll.layer,
+  InertOthers.layer,
+  RestoreInert.layer,
+  FocusInput.layer,
+  ScrollItemIntoView.layer,
+  ClickItem.layer,
+  DetectMovementOrAnimationEnd.layer,
+  Anchor.layer,
+  AttachPreventBlur.layer,
+  AttachSelectOnFocus.layer,
+  PortalBackdrop.layer,
+)
 
 // VIEW TYPES
 
@@ -768,10 +983,10 @@ export type GroupHeading = Readonly<{
   className?: string
 }>
 
-/** Per-render view inputs passed to `view` via `h.submodel`'s `viewInputs` field.
+/** Per-render view inputs passed to a Combobox connection's `embedView` method.
  *
  *  The Combobox emits a `Selected({ value })` OutMessage on commit.
- *  Fold it in the Combobox's `Update.foldChild` config: single-select
+ *  Fold it through the Combobox connection: single-select
  *  stores the value, while multi-select toggles the value's membership.
  *  `restingInputValue` is the text the input returns to on
  *  close (the selection's display text for single-select, empty for
@@ -861,582 +1076,586 @@ export type ViewBehavior = Readonly<{
 }>
 
 /** Creates a combobox view function from variant-specific behavior. Shared rendering logic (input, items, transitions, keyboard navigation) is handled internally; only listbox multi-select semantics vary by variant. */
-export const makeView = <Model extends BaseModel>(behavior: ViewBehavior) => {
-  const impl = defineView<Model, Message, BaseViewInputs<string>>(
-    (model, viewInputs, h): Html => {
-      const {
-        id,
-        isOpen,
-        immediate,
-        animation: { transitionState },
-        maybeActiveItemIndex,
-      } = model
+export const makeView = <
+  Model extends BaseModel,
+  Item extends string,
+  ParentMessage = never,
+  ItemEncoded = Item,
+>(
+  behavior: ViewBehavior,
+  Message: MessageSchema<Item, ItemEncoded>,
+) => {
+  const impl = (
+    model: Model,
+    viewInputs: BaseViewInputs<Item>,
+    h: HtmlBuilder<Message<Item> | ParentMessage, MountRequirements>,
+  ): Html => {
+    const {
+      id,
+      isOpen,
+      immediate,
+      animation: { transitionState },
+      maybeActiveItemIndex,
+    } = model
 
-      const {
+    const {
+      items,
+      selectedValues,
+      restingInputValue,
+      itemToConfig,
+      itemToValue,
+      itemToDisplayText,
+      isItemDisabled,
+      inputClassName,
+      inputAttributes = [],
+      inputPlaceholder,
+      inputWrapperClassName,
+      inputWrapperAttributes = [],
+      itemsClassName,
+      itemsAttributes = [],
+      itemsScrollClassName,
+      itemsScrollAttributes = [],
+      backdropClassName,
+      backdropAttributes = [],
+      className,
+      attributes = [],
+      buttonContent,
+      buttonClassName,
+      buttonAttributes = [],
+      formName,
+      isDisabled,
+      isReadOnly = false,
+      isInvalid,
+      openOnFocus,
+      itemGroupKey,
+      groupToHeading,
+      groupClassName,
+      groupAttributes = [],
+      separatorClassName,
+      separatorAttributes = [],
+      anchor = {},
+      ariaLabel,
+      ariaLabelledBy,
+    } = viewInputs
+
+    const resolveInputLabel = () => {
+      if (Predicate.isNotUndefined(ariaLabel)) {
+        return [h.AriaLabel(ariaLabel)]
+      } else if (Predicate.isNotUndefined(ariaLabelledBy)) {
+        return [h.AriaLabelledBy(ariaLabelledBy)]
+      } else {
+        return []
+      }
+    }
+
+    const inputLabelAttributes = resolveInputLabel()
+
+    const isValueSelected = (itemValue: Item): boolean =>
+      Array.contains(selectedValues, itemValue)
+
+    const isLeaving =
+      transitionState === 'LeaveStart' || transitionState === 'LeaveAnimating'
+    const isVisible = isOpen || isLeaving
+    const isItemsPanelVisible =
+      isVisible && Array.isReadonlyArrayNonEmpty(items)
+    const isBackdropVisible =
+      isItemsPanelVisible || (isVisible && model.isModal)
+
+    const animationAttributes: ReadonlyArray<
+      ReturnType<typeof h.DataAttribute>
+    > = Match.value(transitionState).pipe(
+      Match.when('EnterStart', () => [
+        h.DataAttribute('closed', ''),
+        h.DataAttribute('enter', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.when('EnterAnimating', () => [
+        h.DataAttribute('enter', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.when('LeaveStart', () => [
+        h.DataAttribute('leave', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.when('LeaveAnimating', () => [
+        h.DataAttribute('closed', ''),
+        h.DataAttribute('leave', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.orElse(() => []),
+    )
+
+    const isDisabledAtIndex = (index: number): boolean =>
+      Predicate.isNotUndefined(isItemDisabled) &&
+      pipe(
         items,
-        selectedValues,
-        restingInputValue,
-        itemToConfig,
-        itemToValue,
-        itemToDisplayText,
-        isItemDisabled,
-        inputClassName,
-        inputAttributes = [],
-        inputPlaceholder,
-        inputWrapperClassName,
-        inputWrapperAttributes = [],
-        itemsClassName,
-        itemsAttributes = [],
-        itemsScrollClassName,
-        itemsScrollAttributes = [],
-        backdropClassName,
-        backdropAttributes = [],
-        className,
-        attributes = [],
-        buttonContent,
-        buttonClassName,
-        buttonAttributes = [],
-        formName,
-        isDisabled,
-        isReadOnly = false,
-        isInvalid,
-        openOnFocus,
-        itemGroupKey,
-        groupToHeading,
-        groupClassName,
-        groupAttributes = [],
-        separatorClassName,
-        separatorAttributes = [],
-        anchor = {},
-        ariaLabel,
-        ariaLabelledBy,
-      } = viewInputs
-
-      const resolveInputLabel = () => {
-        if (Predicate.isNotUndefined(ariaLabel)) {
-          return [h.AriaLabel(ariaLabel)]
-        } else if (Predicate.isNotUndefined(ariaLabelledBy)) {
-          return [h.AriaLabelledBy(ariaLabelledBy)]
-        } else {
-          return []
-        }
-      }
-
-      const inputLabelAttributes = resolveInputLabel()
-
-      const isValueSelected = (itemValue: string): boolean =>
-        Array.contains(selectedValues, itemValue)
-
-      const isLeaving =
-        transitionState === 'LeaveStart' || transitionState === 'LeaveAnimating'
-      const isVisible = isOpen || isLeaving
-      const isItemsPanelVisible =
-        isVisible && Array.isReadonlyArrayNonEmpty(items)
-      const isBackdropVisible =
-        isItemsPanelVisible || (isVisible && model.isModal)
-
-      const animationAttributes: ReadonlyArray<
-        ReturnType<typeof h.DataAttribute>
-      > = Match.value(transitionState).pipe(
-        Match.when('EnterStart', () => [
-          h.DataAttribute('closed', ''),
-          h.DataAttribute('enter', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.when('EnterAnimating', () => [
-          h.DataAttribute('enter', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.when('LeaveStart', () => [
-          h.DataAttribute('leave', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.when('LeaveAnimating', () => [
-          h.DataAttribute('closed', ''),
-          h.DataAttribute('leave', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.orElse(() => []),
+        Array.get(index),
+        Option.exists(item => isItemDisabled(item, index)),
       )
 
-      const isDisabledAtIndex = (index: number): boolean =>
-        Predicate.isNotUndefined(isItemDisabled) &&
-        pipe(
-          items,
-          Array.get(index),
-          Option.exists(item => isItemDisabled(item, index)),
+    const firstEnabledIndex = findFirstEnabledIndex(
+      items.length,
+      0,
+      isDisabledAtIndex,
+    )(0, 1)
+
+    const lastEnabledIndex = findFirstEnabledIndex(
+      items.length,
+      0,
+      isDisabledAtIndex,
+    )(items.length - 1, -1)
+
+    const resolveActiveIndex = keyToIndex(
+      'ArrowDown',
+      'ArrowUp',
+      items.length,
+      Option.getOrElse(maybeActiveItemIndex, () => -1),
+      isDisabledAtIndex,
+    )
+
+    const resolveImmediateSelection = (
+      targetIndex: number,
+    ): Option.Option<{ item: Item }> => {
+      if (isReadOnly) {
+        return Option.none()
+      } else {
+        return pipe(
+          OptionExt.when(immediate, targetIndex),
+          Option.flatMap(index => Array.get(items, index)),
+          Option.map(targetItem => ({
+            item: itemToValue(targetItem, targetIndex),
+          })),
         )
-
-      const firstEnabledIndex = findFirstEnabledIndex(
-        items.length,
-        0,
-        isDisabledAtIndex,
-      )(0, 1)
-
-      const lastEnabledIndex = findFirstEnabledIndex(
-        items.length,
-        0,
-        isDisabledAtIndex,
-      )(items.length - 1, -1)
-
-      const resolveActiveIndex = keyToIndex(
-        'ArrowDown',
-        'ArrowUp',
-        items.length,
-        Option.getOrElse(maybeActiveItemIndex, () => -1),
-        isDisabledAtIndex,
-      )
-
-      const resolveImmediateSelection = (
-        targetIndex: number,
-      ): Option.Option<{ item: string }> => {
-        if (isReadOnly) {
-          return Option.none()
-        } else {
-          return pipe(
-            OptionExt.when(immediate, targetIndex),
-            Option.flatMap(index => Array.get(items, index)),
-            Option.map(targetItem => ({
-              item: itemToValue(targetItem, targetIndex),
-            })),
-          )
-        }
       }
+    }
 
-      const maybeValidActiveItemIndex = Option.flatMap(
-        maybeActiveItemIndex,
-        index => Option.as(Array.get(items, index), index),
-      )
+    const maybeValidActiveItemIndex = Option.flatMap(
+      maybeActiveItemIndex,
+      index => Option.as(Array.get(items, index), index),
+    )
 
-      const resolveCommitMessage = (): Option.Option<Message> => {
-        if (isReadOnly) {
-          return Option.as(
-            maybeValidActiveItemIndex,
-            Message.SuppressedItemCommit(),
-          )
-        } else {
-          return Option.map(maybeValidActiveItemIndex, index =>
-            Message.RequestedItemClick({ index }),
-          )
-        }
+    const resolveCommitMessage = (): Option.Option<Message<Item>> => {
+      if (isReadOnly) {
+        return Option.as(
+          maybeValidActiveItemIndex,
+          Message.SuppressedItemCommit(),
+        )
+      } else {
+        return Option.map(maybeValidActiveItemIndex, index =>
+          Message.RequestedItemClick({ index }),
+        )
       }
+    }
 
-      const handleInputKeyDown = (key: string): Option.Option<Message> =>
-        Match.value(key).pipe(
-          Match.when('ArrowDown', () => {
-            if (Array.isReadonlyArrayEmpty(items)) {
-              return Option.some(Message.SuppressedEmptyItemNavigation())
-            }
+    const handleInputKeyDown = (key: string): Option.Option<Message<Item>> =>
+      Match.value(key).pipe(
+        Match.when('ArrowDown', () => {
+          if (Array.isReadonlyArrayEmpty(items)) {
+            return Option.some(Message.SuppressedEmptyItemNavigation())
+          }
 
-            if (!isOpen) {
-              return Option.some(
-                Message.Opened({
-                  maybeActiveItemIndex: Option.some(firstEnabledIndex),
-                }),
-              )
-            }
-            const targetIndex = resolveActiveIndex('ArrowDown')
+          if (!isOpen) {
             return Option.some(
-              Message.ActivatedItem({
-                index: targetIndex,
-                activationTrigger: 'Keyboard',
-                maybeImmediateSelection: resolveImmediateSelection(targetIndex),
+              Message.Opened({
+                maybeActiveItemIndex: Option.some(firstEnabledIndex),
               }),
             )
-          }),
-          Match.when('ArrowUp', () => {
-            if (Array.isReadonlyArrayEmpty(items)) {
-              return Option.some(Message.SuppressedEmptyItemNavigation())
-            }
-
-            if (!isOpen) {
-              return Option.some(
-                Message.Opened({
-                  maybeActiveItemIndex: Option.some(lastEnabledIndex),
-                }),
-              )
-            }
-            const targetIndex = resolveActiveIndex('ArrowUp')
-            return Option.some(
-              Message.ActivatedItem({
-                index: targetIndex,
-                activationTrigger: 'Keyboard',
-                maybeImmediateSelection: resolveImmediateSelection(targetIndex),
-              }),
-            )
-          }),
-          Match.when('Enter', () => {
-            if (!isOpen) {
-              return Option.none()
-            }
-            return resolveCommitMessage()
-          }),
-          Match.when('Escape', () => {
-            if (!isOpen) {
-              return Option.none()
-            }
-            return Option.some(
-              Message.Closed({ restingInputValue, isClearable: !isReadOnly }),
-            )
-          }),
-          Match.whenOr('Home', 'End', () => {
-            if (!isOpen) {
-              return Option.none()
-            }
-
-            if (Array.isReadonlyArrayEmpty(items)) {
-              return Option.some(Message.SuppressedEmptyItemNavigation())
-            }
-
-            const targetIndex = resolveActiveIndex(key)
-            return Option.some(
-              Message.ActivatedItem({
-                index: targetIndex,
-                activationTrigger: 'Keyboard',
-                maybeImmediateSelection: resolveImmediateSelection(targetIndex),
-              }),
-            )
-          }),
-          Match.orElse(() => Option.none()),
-        )
-
-      const maybeActiveDescendant = Option.match(maybeValidActiveItemIndex, {
-        onNone: () => [],
-        onSome: index => [h.AriaActiveDescendant(itemId(id, index))],
-      })
-
-      const onInputAttributes = isReadOnly
-        ? []
-        : [h.OnInput(value => Message.UpdatedInputValue({ value }))]
-
-      const resolvedInputAttributes = [
-        h.Id(`${id}-input`),
-        h.Role('combobox'),
-        h.AriaExpanded(isItemsPanelVisible),
-        ...(isItemsPanelVisible ? [h.AriaControls(`${id}-items`)] : []),
-        h.Attribute('aria-autocomplete', 'list'),
-        h.Attribute('aria-haspopup', 'listbox'),
-        ...inputLabelAttributes,
-        h.Autocomplete('off'),
-        h.Value(model.inputValue),
-        ...(isItemsPanelVisible ? maybeActiveDescendant : []),
-        ...(inputPlaceholder ? [h.Placeholder(inputPlaceholder)] : []),
-        ...(isDisabled
-          ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
-          : [
-              ...onInputAttributes,
-              h.OnKeyDownPreventDefault(handleInputKeyDown),
-              h.OnBlur(
-                Message.BlurredInput({
-                  restingInputValue,
-                  isClearable: !isReadOnly,
-                }),
-              ),
-              ...(openOnFocus
-                ? [
-                    h.OnFocus(
-                      Message.Opened({ maybeActiveItemIndex: Option.none() }),
-                    ),
-                  ]
-                : []),
-            ]),
-        ...(isReadOnly
-          ? [
-              h.Readonly(true),
-              h.AriaReadonly(true),
-              h.DataAttribute('readonly', ''),
-            ]
-          : []),
-        ...(isInvalid
-          ? [h.AriaInvalid(true), h.DataAttribute('invalid', '')]
-          : []),
-        ...(isVisible ? [h.DataAttribute('open', '')] : []),
-        ...(model.selectInputOnFocus
-          ? [h.OnMount(AttachComboboxSelectOnFocus())]
-          : []),
-        ...(inputClassName ? [h.Class(inputClassName)] : []),
-        ...inputAttributes,
-      ]
-
-      const anchorAttributes = [
-        h.Style({
-          position: 'absolute',
-          margin: '0',
-          visibility: 'hidden',
-        }),
-        h.OnMount(
-          AnchorCombobox({
-            buttonId: `${id}-input-wrapper`,
-            anchor,
-          }),
-        ),
-      ]
-
-      const itemsContainerAttributes = [
-        h.Id(`${id}-items`),
-        h.Role('listbox'),
-        ...(behavior.ariaMultiSelectable ? [h.AriaMultiSelectable(true)] : []),
-        h.AriaLabelledBy(`${id}-input`),
-        h.Tabindex(-1),
-        ...(isReadOnly
-          ? [h.AriaReadonly(true), h.DataAttribute('readonly', '')]
-          : []),
-        ...anchorAttributes,
-        ...animationAttributes,
-        ...(itemsClassName ? [h.Class(itemsClassName)] : []),
-        ...itemsAttributes,
-      ]
-
-      const comboboxItems = Array.map(items, (item, index) => {
-        const isActiveItem = Option.exists(
-          maybeActiveItemIndex,
-          activeIndex => activeIndex === index,
-        )
-        const isDisabledItem = isDisabledAtIndex(index)
-        const isSelectedItem = isValueSelected(itemToValue(item, index))
-        const itemConfig = itemToConfig(item, {
-          isActive: isActiveItem,
-          isDisabled: isDisabledItem,
-          isReadOnly,
-          isSelected: isSelectedItem,
-        })
-
-        const isHoverable = !isDisabledItem && !isLeaving
-        const isClickable = isHoverable && !isReadOnly
-
-        return h.keyed('div')(
-          itemId(id, index),
-          [
-            h.Id(itemId(id, index)),
-            h.Role('option'),
-            h.AriaSelected(isSelectedItem),
-            ...(isActiveItem ? [h.DataAttribute('active', '')] : []),
-            ...(isSelectedItem ? [h.DataAttribute('selected', '')] : []),
-            ...(isDisabledItem
-              ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
-              : []),
-            ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
-            ...(isClickable
-              ? [
-                  h.OnClick(
-                    Message.SelectedItem({
-                      item: itemToValue(item, index),
-                      displayText: itemToDisplayText(item, index),
-                      wasSelected: isValueSelected(itemToValue(item, index)),
-                    }),
-                  ),
-                ]
-              : []),
-            ...(isHoverable
-              ? [
-                  ...(isActiveItem
-                    ? []
-                    : [
-                        h.OnPointerMove((screenX, screenY, pointerType) =>
-                          OptionExt.when(
-                            pointerType !== 'touch',
-                            Message.MovedPointerOverItem({
-                              index,
-                              screenX,
-                              screenY,
-                            }),
-                          ),
-                        ),
-                      ]),
-                  h.OnPointerLeave(pointerType =>
-                    OptionExt.when(
-                      pointerType !== 'touch',
-                      Message.DeactivatedItem(),
-                    ),
-                  ),
-                ]
-              : []),
-            ...(itemConfig.className ? [h.Class(itemConfig.className)] : []),
-          ],
-          [itemConfig.content],
-        )
-      })
-
-      const renderGroupedItems = (): ReadonlyArray<Html> => {
-        if (!itemGroupKey) {
-          return comboboxItems
-        }
-
-        const segments = groupContiguous(comboboxItems, (_, index) =>
-          Array.get(items, index).pipe(
-            Option.match({
-              onNone: () => '',
-              onSome: item => itemGroupKey(item, index),
+          }
+          const targetIndex = resolveActiveIndex('ArrowDown')
+          return Option.some(
+            Message.ActivatedItem({
+              index: targetIndex,
+              activationTrigger: 'Keyboard',
+              maybeImmediateSelection: resolveImmediateSelection(targetIndex),
             }),
-          ),
-        )
-
-        return Array.flatMap(segments, (segment, segmentIndex) => {
-          const maybeHeading = Option.fromNullishOr(
-            groupToHeading && groupToHeading(segment.key),
           )
+        }),
+        Match.when('ArrowUp', () => {
+          if (Array.isReadonlyArrayEmpty(items)) {
+            return Option.some(Message.SuppressedEmptyItemNavigation())
+          }
 
-          const headingId = `${id}-heading-${segment.key}`
-
-          const headingElement = Option.match(maybeHeading, {
-            onNone: () => [],
-            onSome: heading => [
-              h.keyed('div')(
-                headingId,
-                [
-                  h.Id(headingId),
-                  h.Role('presentation'),
-                  ...(heading.className ? [h.Class(heading.className)] : []),
-                ],
-                [heading.content],
-              ),
-            ],
-          })
-
-          const groupContent = [...headingElement, ...segment.items]
-
-          const groupElement = h.keyed('div')(
-            `${id}-group-${segment.key}`,
-            [
-              h.Role('group'),
-              ...(Option.isSome(maybeHeading)
-                ? [h.AriaLabelledBy(headingId)]
-                : []),
-              ...(groupClassName ? [h.Class(groupClassName)] : []),
-              ...groupAttributes,
-            ],
-            groupContent,
+          if (!isOpen) {
+            return Option.some(
+              Message.Opened({
+                maybeActiveItemIndex: Option.some(lastEnabledIndex),
+              }),
+            )
+          }
+          const targetIndex = resolveActiveIndex('ArrowUp')
+          return Option.some(
+            Message.ActivatedItem({
+              index: targetIndex,
+              activationTrigger: 'Keyboard',
+              maybeImmediateSelection: resolveImmediateSelection(targetIndex),
+            }),
           )
+        }),
+        Match.when('Enter', () => {
+          if (!isOpen) {
+            return Option.none()
+          }
+          return resolveCommitMessage()
+        }),
+        Match.when('Escape', () => {
+          if (!isOpen) {
+            return Option.none()
+          }
+          return Option.some(
+            Message.Closed({ restingInputValue, isClearable: !isReadOnly }),
+          )
+        }),
+        Match.whenOr('Home', 'End', () => {
+          if (!isOpen) {
+            return Option.none()
+          }
 
-          const separator =
-            segmentIndex > 0 &&
-            (separatorClassName ||
-              Array.isReadonlyArrayNonEmpty(separatorAttributes))
-              ? [
-                  h.keyed('div')(`${id}-separator-${segmentIndex}`, [
-                    h.Role('separator'),
-                    ...(separatorClassName
-                      ? [h.Class(separatorClassName)]
-                      : []),
-                    ...separatorAttributes,
-                  ]),
-                ]
-              : []
+          if (Array.isReadonlyArrayEmpty(items)) {
+            return Option.some(Message.SuppressedEmptyItemNavigation())
+          }
 
-          return [...separator, groupElement]
-        })
-      }
-
-      const backdrop = h.keyed('div')(`${id}-backdrop`, [
-        h.Id(`${id}-backdrop`),
-        h.OnMount(PortalComboboxBackdrop()),
-        ...(isLeaving
-          ? []
-          : [
-              h.OnClick(
-                Message.Closed({ restingInputValue, isClearable: !isReadOnly }),
-              ),
-            ]),
-        ...(backdropClassName ? [h.Class(backdropClassName)] : []),
-        ...backdropAttributes,
-      ])
-
-      const renderedItems = renderGroupedItems()
-
-      const scrollableItems =
-        itemsScrollClassName ||
-        Array.isReadonlyArrayNonEmpty(itemsScrollAttributes)
-          ? [
-              h.div(
-                [
-                  ...(itemsScrollClassName
-                    ? [h.Class(itemsScrollClassName)]
-                    : []),
-                  ...itemsScrollAttributes,
-                ],
-                renderedItems,
-              ),
-            ]
-          : renderedItems
-
-      const itemsPanel = h.keyed('div')(
-        `${id}-items-container`,
-        itemsContainerAttributes,
-        scrollableItems,
+          const targetIndex = resolveActiveIndex(key)
+          return Option.some(
+            Message.ActivatedItem({
+              index: targetIndex,
+              activationTrigger: 'Keyboard',
+              maybeImmediateSelection: resolveImmediateSelection(targetIndex),
+            }),
+          )
+        }),
+        Match.orElse(() => Option.none()),
       )
 
-      const resolvedInputWrapperAttributes = [
-        h.Id(`${id}-input-wrapper`),
-        ...(inputWrapperClassName ? [h.Class(inputWrapperClassName)] : []),
-        ...inputWrapperAttributes,
-      ]
+    const maybeActiveDescendant = Option.match(maybeValidActiveItemIndex, {
+      onNone: () => [],
+      onSome: index => [h.AriaActiveDescendant(itemId(id, index))],
+    })
 
-      const toggleButton = buttonContent
+    const onInputAttributes = isReadOnly
+      ? []
+      : [h.OnInput(value => Message.UpdatedInputValue({ value }))]
+
+    const resolvedInputAttributes = [
+      h.Id(`${id}-input`),
+      h.Role('combobox'),
+      h.AriaExpanded(isItemsPanelVisible),
+      ...(isItemsPanelVisible ? [h.AriaControls(`${id}-items`)] : []),
+      h.Attribute('aria-autocomplete', 'list'),
+      h.Attribute('aria-haspopup', 'listbox'),
+      ...inputLabelAttributes,
+      h.Autocomplete('off'),
+      h.Value(model.inputValue),
+      ...(isItemsPanelVisible ? maybeActiveDescendant : []),
+      ...(inputPlaceholder ? [h.Placeholder(inputPlaceholder)] : []),
+      ...(isDisabled
+        ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
+        : [
+            ...onInputAttributes,
+            h.OnKeyDownPreventDefault(handleInputKeyDown),
+            h.OnBlur(
+              Message.BlurredInput({
+                restingInputValue,
+                isClearable: !isReadOnly,
+              }),
+            ),
+            ...(openOnFocus
+              ? [
+                  h.OnFocus(
+                    Message.Opened({ maybeActiveItemIndex: Option.none() }),
+                  ),
+                ]
+              : []),
+          ]),
+      ...(isReadOnly
         ? [
-            h.keyed('button')(
-              `${id}-button`,
-              [
-                h.Id(`${id}-button`),
-                h.Type('button'),
-                h.Tabindex(-1),
-                ...(isItemsPanelVisible ? [h.AriaControls(`${id}-items`)] : []),
-                h.AriaExpanded(isItemsPanelVisible),
-                h.Attribute('aria-haspopup', 'listbox'),
-                ...(isDisabled
-                  ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
+            h.Readonly(true),
+            h.AriaReadonly(true),
+            h.DataAttribute('readonly', ''),
+          ]
+        : []),
+      ...(isInvalid
+        ? [h.AriaInvalid(true), h.DataAttribute('invalid', '')]
+        : []),
+      ...(isVisible ? [h.DataAttribute('open', '')] : []),
+      ...(model.selectInputOnFocus ? [h.OnMount(AttachSelectOnFocus())] : []),
+      ...(inputClassName ? [h.Class(inputClassName)] : []),
+      ...inputAttributes,
+    ]
+
+    const anchorAttributes = [
+      h.Style({
+        position: 'absolute',
+        margin: '0',
+        visibility: 'hidden',
+      }),
+      h.OnMount(
+        Anchor({
+          buttonId: `${id}-input-wrapper`,
+          anchor,
+        }),
+      ),
+    ]
+
+    const itemsContainerAttributes = [
+      h.Id(`${id}-items`),
+      h.Role('listbox'),
+      ...(behavior.ariaMultiSelectable ? [h.AriaMultiSelectable(true)] : []),
+      h.AriaLabelledBy(`${id}-input`),
+      h.Tabindex(-1),
+      ...(isReadOnly
+        ? [h.AriaReadonly(true), h.DataAttribute('readonly', '')]
+        : []),
+      ...anchorAttributes,
+      ...animationAttributes,
+      ...(itemsClassName ? [h.Class(itemsClassName)] : []),
+      ...itemsAttributes,
+    ]
+
+    const comboboxItems = Array.map(items, (item, index) => {
+      const isActiveItem = Option.exists(
+        maybeActiveItemIndex,
+        activeIndex => activeIndex === index,
+      )
+      const isDisabledItem = isDisabledAtIndex(index)
+      const isSelectedItem = isValueSelected(itemToValue(item, index))
+      const itemConfig = itemToConfig(item, {
+        isActive: isActiveItem,
+        isDisabled: isDisabledItem,
+        isReadOnly,
+        isSelected: isSelectedItem,
+      })
+
+      const isHoverable = !isDisabledItem && !isLeaving
+      const isClickable = isHoverable && !isReadOnly
+
+      return h.keyed('div')(
+        itemId(id, index),
+        [
+          h.Id(itemId(id, index)),
+          h.Role('option'),
+          h.AriaSelected(isSelectedItem),
+          ...(isActiveItem ? [h.DataAttribute('active', '')] : []),
+          ...(isSelectedItem ? [h.DataAttribute('selected', '')] : []),
+          ...(isDisabledItem
+            ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
+            : []),
+          ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
+          ...(isClickable
+            ? [
+                h.OnClick(
+                  Message.SelectedItem({
+                    item: itemToValue(item, index),
+                    displayText: itemToDisplayText(item, index),
+                    wasSelected: isValueSelected(itemToValue(item, index)),
+                  }),
+                ),
+              ]
+            : []),
+          ...(isHoverable
+            ? [
+                ...(isActiveItem
+                  ? []
                   : [
-                      h.OnClick(
-                        Message.PressedToggleButton({
-                          restingInputValue,
-                          isClearable: !isReadOnly,
-                        }),
+                      h.OnPointerMove((screenX, screenY, pointerType) =>
+                        OptionExt.when(
+                          pointerType !== 'touch',
+                          Message.MovedPointerOverItem({
+                            index,
+                            screenX,
+                            screenY,
+                          }),
+                        ),
                       ),
                     ]),
-                ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
-                h.OnMount(AttachComboboxPreventBlur()),
-                ...(buttonClassName ? [h.Class(buttonClassName)] : []),
-                ...buttonAttributes,
+                h.OnPointerLeave(pointerType =>
+                  OptionExt.when(
+                    pointerType !== 'touch',
+                    Message.DeactivatedItem(),
+                  ),
+                ),
+              ]
+            : []),
+          ...(itemConfig.className ? [h.Class(itemConfig.className)] : []),
+        ],
+        [itemConfig.content],
+      )
+    })
+
+    const renderGroupedItems = (): ReadonlyArray<Html> => {
+      if (!itemGroupKey) {
+        return comboboxItems
+      }
+
+      const segments = groupContiguous(comboboxItems, (_, index) =>
+        Array.get(items, index).pipe(
+          Option.match({
+            onNone: () => '',
+            onSome: item => itemGroupKey(item, index),
+          }),
+        ),
+      )
+
+      return Array.flatMap(segments, (segment, segmentIndex) => {
+        const maybeHeading = Option.fromNullishOr(
+          groupToHeading && groupToHeading(segment.key),
+        )
+
+        const headingId = `${id}-heading-${segment.key}`
+
+        const headingElement = Option.match(maybeHeading, {
+          onNone: () => [],
+          onSome: heading => [
+            h.keyed('div')(
+              headingId,
+              [
+                h.Id(headingId),
+                h.Role('presentation'),
+                ...(heading.className ? [h.Class(heading.className)] : []),
               ],
-              [buttonContent],
+              [heading.content],
+            ),
+          ],
+        })
+
+        const groupContent = [...headingElement, ...segment.items]
+
+        const groupElement = h.keyed('div')(
+          `${id}-group-${segment.key}`,
+          [
+            h.Role('group'),
+            ...(Option.isSome(maybeHeading)
+              ? [h.AriaLabelledBy(headingId)]
+              : []),
+            ...(groupClassName ? [h.Class(groupClassName)] : []),
+            ...groupAttributes,
+          ],
+          groupContent,
+        )
+
+        const separator =
+          segmentIndex > 0 &&
+          (separatorClassName ||
+            Array.isReadonlyArrayNonEmpty(separatorAttributes))
+            ? [
+                h.keyed('div')(`${id}-separator-${segmentIndex}`, [
+                  h.Role('separator'),
+                  ...(separatorClassName ? [h.Class(separatorClassName)] : []),
+                  ...separatorAttributes,
+                ]),
+              ]
+            : []
+
+        return [...separator, groupElement]
+      })
+    }
+
+    const backdrop = h.keyed('div')(`${id}-backdrop`, [
+      h.Id(`${id}-backdrop`),
+      h.OnMount(PortalBackdrop()),
+      ...(isLeaving
+        ? []
+        : [
+            h.OnClick(
+              Message.Closed({ restingInputValue, isClearable: !isReadOnly }),
+            ),
+          ]),
+      ...(backdropClassName ? [h.Class(backdropClassName)] : []),
+      ...backdropAttributes,
+    ])
+
+    const renderedItems = renderGroupedItems()
+
+    const scrollableItems =
+      itemsScrollClassName ||
+      Array.isReadonlyArrayNonEmpty(itemsScrollAttributes)
+        ? [
+            h.div(
+              [
+                ...(itemsScrollClassName
+                  ? [h.Class(itemsScrollClassName)]
+                  : []),
+                ...itemsScrollAttributes,
+              ],
+              renderedItems,
             ),
           ]
-        : []
+        : renderedItems
 
-      const hiddenInputs = formName
-        ? Array.match(selectedValues, {
-            onEmpty: () => [h.input([h.Type('hidden'), h.Name(formName)])],
-            onNonEmpty: Array.map(selectedValue =>
-              h.input([
-                h.Type('hidden'),
-                h.Name(formName),
-                h.Value(selectedValue),
-              ]),
-            ),
-          })
-        : []
+    const itemsPanel = h.keyed('div')(
+      `${id}-items-container`,
+      itemsContainerAttributes,
+      scrollableItems,
+    )
 
-      const wrapperAttributes = [
-        ...(className ? [h.Class(className)] : []),
-        ...attributes,
-        ...(isVisible ? [h.DataAttribute('open', '')] : []),
-        ...(isDisabled ? [h.DataAttribute('disabled', '')] : []),
-        ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
-        ...(isInvalid ? [h.DataAttribute('invalid', '')] : []),
-      ]
+    const resolvedInputWrapperAttributes = [
+      h.Id(`${id}-input-wrapper`),
+      ...(inputWrapperClassName ? [h.Class(inputWrapperClassName)] : []),
+      ...inputWrapperAttributes,
+    ]
 
-      return h.div(wrapperAttributes, [
-        h.div(resolvedInputWrapperAttributes, [
-          h.input(resolvedInputAttributes),
-          ...toggleButton,
-        ]),
-        ...(isBackdropVisible ? [backdrop] : []),
-        ...(isItemsPanelVisible ? [itemsPanel] : []),
-        ...hiddenInputs,
-      ])
-    },
-  )
+    const toggleButton = buttonContent
+      ? [
+          h.keyed('button')(
+            `${id}-button`,
+            [
+              h.Id(`${id}-button`),
+              h.Type('button'),
+              h.Tabindex(-1),
+              ...(isItemsPanelVisible ? [h.AriaControls(`${id}-items`)] : []),
+              h.AriaExpanded(isItemsPanelVisible),
+              h.Attribute('aria-haspopup', 'listbox'),
+              ...(isDisabled
+                ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
+                : [
+                    h.OnClick(
+                      Message.PressedToggleButton({
+                        restingInputValue,
+                        isClearable: !isReadOnly,
+                      }),
+                    ),
+                  ]),
+              ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
+              h.OnMount(AttachPreventBlur()),
+              ...(buttonClassName ? [h.Class(buttonClassName)] : []),
+              ...buttonAttributes,
+            ],
+            [buttonContent],
+          ),
+        ]
+      : []
 
-  return <Item extends string>() =>
-    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-    impl as unknown as SubmodelView<Model, Message, BaseViewInputs<Item>>
+    const hiddenInputs = formName
+      ? Array.match(selectedValues, {
+          onEmpty: () => [h.input([h.Type('hidden'), h.Name(formName)])],
+          onNonEmpty: Array.map(selectedValue =>
+            h.input([
+              h.Type('hidden'),
+              h.Name(formName),
+              h.Value(selectedValue),
+            ]),
+          ),
+        })
+      : []
+
+    const wrapperAttributes = [
+      ...(className ? [h.Class(className)] : []),
+      ...attributes,
+      ...(isVisible ? [h.DataAttribute('open', '')] : []),
+      ...(isDisabled ? [h.DataAttribute('disabled', '')] : []),
+      ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
+      ...(isInvalid ? [h.DataAttribute('invalid', '')] : []),
+    ]
+
+    return h.div(wrapperAttributes, [
+      h.div(resolvedInputWrapperAttributes, [
+        h.input(resolvedInputAttributes),
+        ...toggleButton,
+      ]),
+      ...(isBackdropVisible ? [backdrop] : []),
+      ...(isItemsPanelVisible ? [itemsPanel] : []),
+      ...hiddenInputs,
+    ])
+  }
+
+  return impl
 }

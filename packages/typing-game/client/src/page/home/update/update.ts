@@ -1,125 +1,115 @@
 import { Array, Match, Option, String } from 'effect'
-import { type Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { optionWhen } from '../../../optionWhen'
-import { RoomsClient } from '../../../rpc'
-import { FocusRoomIdInput, FocusUsernameInput, JoinRoom } from '../command'
-import { Message, OutMessage } from '../message'
-import { HomeStep, Model } from '../model'
-import { handleKeyPressed } from './handleKeyPressed'
+import {
+  FocusRoomIdInput,
+  FocusUsernameInput,
+  JoinRoomFromHome,
+} from '../command'
+import { HomeComposition } from '../composition'
+import {
+  makeCommandsStep,
+  makeFieldsStep,
+  makeNoopStep,
+  makeOutMessageStep,
+} from '../definition'
+import { OutMessage } from '../message'
+import { HomeStep } from '../model'
+import { handlePressedKey } from './handlePressedKey'
 
-export type UpdateReturn = Update.ReturnWithOutMessage<
-  Model,
-  Message,
-  OutMessage,
-  RoomsClient
->
-const withUpdateReturn = Match.withReturnType<UpdateReturn>()
+export const update = HomeComposition.makeUpdate({
+  CompletedFocusUsernameInput: makeNoopStep(),
 
-export const update = (model: Model, message: Message) =>
-  Message.match<UpdateReturn>(message, {
-    CompletedFocusUsernameInput: () => ({ model }),
+  CompletedFocusRoomIdInput: makeNoopStep(),
 
-    CompletedFocusRoomIdInput: () => ({ model }),
+  SubmittedUsernameForm: model =>
+    Match.value(model.homeStep).pipe(
+      Match.tag('EnterUsername', ({ username }) => {
+        const nextModel = String.isNonEmpty(username)
+          ? modifyFields(model, {
+              homeStep: () =>
+                HomeStep.SelectAction({
+                  username,
+                  selectedAction: 'CreateRoom',
+                }),
+            })
+          : model
 
-    SubmittedUsernameForm: () =>
-      Match.value(model.homeStep).pipe(
-        withUpdateReturn,
-        Match.tag('EnterUsername', ({ username }) => {
-          const nextModel = String.isNonEmpty(username)
-            ? modifyFields(model, {
-                homeStep: () =>
-                  HomeStep.SelectAction({
-                    username,
-                    selectedAction: 'CreateRoom',
-                  }),
-              })
-            : model
+        return { model: nextModel }
+      }),
+      Match.orElse(() => ({ model })),
+    ),
 
-          return { model: nextModel }
+  PressedKey: (model, message) => handlePressedKey(model)(message),
+
+  ChangedUsername: (model, { value }) =>
+    Match.value(model.homeStep).pipe(
+      Match.tag('EnterUsername', () => ({
+        model: modifyFields(model, {
+          homeStep: () => HomeStep.EnterUsername({ username: value }),
+          formError: () => Option.none(),
         }),
-        Match.orElse(() => ({ model })),
-      ),
+      })),
+      Match.orElse(() => ({ model })),
+    ),
 
-    PressedKey: message => handleKeyPressed(model)(message),
+  BlurredUsernameInput: makeCommandsStep(() => [FocusUsernameInput()]),
 
-    ChangedUsername: ({ value }) =>
-      Match.value(model.homeStep).pipe(
-        withUpdateReturn,
-        Match.tag('EnterUsername', () => ({
-          model: modifyFields(model, {
-            homeStep: () => HomeStep.EnterUsername({ username: value }),
-            formError: () => Option.none(),
-          }),
-        })),
-        Match.orElse(() => ({ model })),
-      ),
+  BlurredRoomIdInput: makeCommandsStep(() => [FocusRoomIdInput()]),
 
-    BlurredUsernameInput: () => ({ model, commands: [FocusUsernameInput()] }),
+  ChangedRoomId: (model, { value }) =>
+    Match.value(model.homeStep).pipe(
+      Match.tag('EnterRoomId', ({ username }) => ({
+        model: modifyFields(model, {
+          homeStep: () =>
+            HomeStep.EnterRoomId({
+              username,
+              roomId: value,
+            }),
+          formError: () => Option.none(),
+        }),
+      })),
+      Match.orElse(() => ({ model })),
+    ),
 
-    BlurredRoomIdInput: () => ({ model, commands: [FocusRoomIdInput()] }),
-
-    ChangedRoomId: ({ value }) =>
-      Match.value(model.homeStep).pipe(
-        withUpdateReturn,
-        Match.tag('EnterRoomId', ({ username }) => ({
-          model: modifyFields(model, {
-            homeStep: () =>
-              HomeStep.EnterRoomId({
-                username,
-                roomId: value,
-              }),
-            formError: () => Option.none(),
-          }),
-        })),
-        Match.orElse(() => ({ model })),
-      ),
-
-    SubmittedJoinRoomForm: () =>
-      Match.value(model.homeStep).pipe(
-        withUpdateReturn,
-        Match.tag('EnterRoomId', ({ username, roomId }) => {
-          if (roomId === 'exit') {
-            return {
-              model: modifyFields(model, {
-                homeStep: () =>
-                  HomeStep.SelectAction({
-                    username,
-                    selectedAction: 'JoinRoom',
-                  }),
-              }),
-            }
+  SubmittedJoinRoomForm: model =>
+    Match.value(model.homeStep).pipe(
+      Match.tag('EnterRoomId', ({ username, roomId }) => {
+        if (roomId === 'exit') {
+          return {
+            model: modifyFields(model, {
+              homeStep: () =>
+                HomeStep.SelectAction({
+                  username,
+                  selectedAction: 'JoinRoom',
+                }),
+            }),
           }
+        }
 
-          const maybeJoin = optionWhen(String.isNonEmpty(roomId), () =>
-            JoinRoom({ username, roomId }),
-          )
+        const maybeJoin = optionWhen(String.isNonEmpty(roomId), () =>
+          JoinRoomFromHome({ username, roomId }),
+        )
 
-          return { model, commands: Array.fromOption(maybeJoin) }
-        }),
-        Match.orElse(() => ({ model })),
-      ),
-
-    SucceededCreateRoom: ({ roomId, player }) => ({
-      model,
-      outMessage: OutMessage.CreatedRoom({ roomId, player }),
-    }),
-
-    SucceededJoinRoom: ({ roomId, player }) => ({
-      model,
-      outMessage: OutMessage.JoinedRoom({ roomId, player }),
-    }),
-
-    FailedCreateRoom: ({ error }) => ({
-      model: modifyFields(model, {
-        formError: () => Option.some(error),
+        return { model, commands: Array.fromOption(maybeJoin) }
       }),
-    }),
+      Match.orElse(() => ({ model })),
+    ),
 
-    FailedJoinRoom: ({ error }) => ({
-      model: modifyFields(model, {
-        formError: () => Option.some(error),
-      }),
-    }),
-  })
+  SucceededCreateRoom: makeOutMessageStep.fromMessage(({ roomId, player }) =>
+    OutMessage.CreatedRoom({ roomId, player }),
+  ),
+
+  SucceededJoinRoomFromHome: makeOutMessageStep.fromMessage(
+    ({ roomId, player }) => OutMessage.JoinedRoom({ roomId, player }),
+  ),
+
+  FailedCreateRoom: makeFieldsStep.fromMessage(({ error }) => ({
+    formError: () => Option.some(error),
+  })),
+
+  FailedJoinRoomFromHome: makeFieldsStep.fromMessage(({ error }) => ({
+    formError: () => Option.some(error),
+  })),
+})

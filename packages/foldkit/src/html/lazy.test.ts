@@ -1,5 +1,5 @@
 import { Context } from 'effect'
-import { afterEach, beforeEach, expect } from 'vitest'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
@@ -11,8 +11,14 @@ import {
   type BoundaryRegistry,
   beginRender,
   createBoundaryRegistry,
+  registerBoundaryWrap,
 } from './boundary.js'
-import { createKeyedLazy, createLazy } from './lazy.js'
+import {
+  type LazyResolution,
+  createKeyedLazy,
+  createLazy,
+  observeLazyResolutions,
+} from './lazy.js'
 import {
   type DispatchSync,
   clearRuntime,
@@ -486,5 +492,144 @@ describe('createKeyedLazy', () => {
     lazy('a', viewFn, ['hello'])
 
     expect(callCount).toBe(2)
+  })
+})
+
+describe('observeLazyResolutions', () => {
+  beforeEach(() => {
+    pushNoOpRuntime()
+  })
+  afterEach(() => {
+    clearRuntime()
+  })
+
+  const observe = (run: () => void): ReadonlyArray<LazyResolution> => {
+    const resolutions: Array<LazyResolution> = []
+    observeLazyResolutions(resolution => {
+      resolutions.push(resolution)
+    }, run)
+    return resolutions
+  }
+
+  it('reports cache hits without a miss reason', () => {
+    const viewFn = (label: string) => h('div', {}, [label])
+    const lazy = createLazy()
+    lazy(viewFn, ['hello'])
+
+    const [resolution] = observe(() => {
+      lazy(viewFn, ['hello'])
+    })
+
+    expect(resolution).toEqual({ slot: expect.any(Object) })
+  })
+
+  it('reports a changed dispatcher as FrameChanged', () => {
+    const viewFn = (label: string) => h('div', {}, [label])
+    const lazy = createLazy()
+    lazy(viewFn, ['hello'])
+
+    const resolutions = observe(() => {
+      setRuntime(() => {}, noOpContext)
+      try {
+        lazy(viewFn, ['hello'])
+      } finally {
+        clearRuntime()
+      }
+    })
+
+    expect(resolutions.map(({ missReason }) => missReason)).toEqual([
+      { _tag: 'FrameChanged' },
+    ])
+  })
+
+  it('reports a replaced Block occurrence as FrameChanged and renders it again', () => {
+    const registry = createBoundaryRegistry()
+    let generation = 0
+    const viewFn = vi.fn(() => {
+      const currentGeneration = generation
+      registerBoundaryWrap(
+        registry,
+        'child',
+        {
+          toParentMessage: message => message,
+          isCurrent: () => generation === currentGeneration,
+        },
+        noOpDispatchSync,
+      )
+      return h('div', {}, ['child'])
+    })
+    const lazy = createLazy()
+
+    setRuntime(noOpDispatchSync, noOpContext, registry)
+    try {
+      beginRender(registry)
+      lazy(viewFn, [])
+      generation++
+      beginRender(registry)
+
+      const resolutions = observe(() => {
+        lazy(viewFn, [])
+      })
+
+      expect(viewFn).toHaveBeenCalledTimes(2)
+      expect(resolutions.map(({ missReason }) => missReason)).toEqual([
+        { _tag: 'FrameChanged' },
+      ])
+
+      beginRender(registry)
+      const currentResolutions = observe(() => {
+        lazy(viewFn, [])
+      })
+
+      expect(viewFn).toHaveBeenCalledTimes(2)
+      expect(currentResolutions.map(({ missReason }) => missReason)).toEqual([
+        undefined,
+      ])
+    } finally {
+      clearRuntime()
+    }
+  })
+
+  it('reports a different number of arguments as ArgumentCountChanged', () => {
+    const viewFn = (...labels: ReadonlyArray<string>) =>
+      h('div', {}, [labels.join(' ')])
+    const lazy = createLazy()
+    lazy(viewFn, ['a'])
+
+    const resolutions = observe(() => {
+      lazy(viewFn, ['a', 'b'])
+    })
+
+    expect(resolutions.map(({ missReason }) => missReason)).toEqual([
+      { _tag: 'ArgumentCountChanged', previousCount: 1, currentCount: 2 },
+    ])
+  })
+
+  it('reports each key with the same factory instance identity', () => {
+    const viewFn = (label: string) => h('div', {}, [label])
+    const lazyRows = createKeyedLazy()
+    lazyRows('a', viewFn, ['a'])
+
+    const [first, second] = observe(() => {
+      lazyRows('a', viewFn, ['a'])
+      lazyRows('b', viewFn, ['b'])
+    })
+
+    expect(first).toEqual({ slot: expect.any(Object), key: 'a' })
+    expect(second).toEqual({
+      slot: first!.slot,
+      key: 'b',
+      missReason: { _tag: 'NoCachedEntry' },
+    })
+  })
+
+  it('stops reporting when the observed function returns', () => {
+    const viewFn = (label: string) => h('div', {}, [label])
+    const lazy = createLazy()
+    const resolutions = observe(() => {})
+
+    lazy(viewFn, ['hello'])
+
+    expect(resolutions).toEqual([])
   })
 })

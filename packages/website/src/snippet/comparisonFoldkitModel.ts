@@ -2,6 +2,11 @@ import { Schema } from 'effect'
 
 import { Dialog, Listbox, RadioGroup } from '@foldkit/ui'
 
+const ThemeListbox = Listbox.create<Theme>()
+const ToolRadioGroup = RadioGroup.create<Tool>()
+const GridSizeRadioGroup = RadioGroup.create<number>()
+const PaletteRadioGroup = RadioGroup.create<PaletteIndex>()
+
 export const Model = Schema.Struct({
   grid: Grid,
   undoStack: Schema.Array(Grid),
@@ -12,13 +17,13 @@ export const Model = Schema.Struct({
   mirrorMode: MirrorMode,
   isDrawing: Schema.Boolean,
   maybeHoveredCell: Schema.Option(Position),
-  errorDialog: Dialog.Model,
+  errorDialog: Dialog.DialogBlock.Model,
   maybeExportError: Schema.Option(Schema.String),
   paletteThemeIndex: Schema.Number,
-  gridSizeConfirmDialog: Dialog.Model,
+  gridSizeConfirmDialog: Dialog.DialogBlock.Model,
   maybePendingGridSize: Schema.Option(Schema.Number),
-  themeListbox: Listbox.Model,
-  toolRadioGroup: RadioGroup.Model,
-  gridSizeRadioGroup: RadioGroup.Model,
-  paletteRadioGroup: RadioGroup.Model,
+  themeListbox: ThemeListbox.Model,
+  toolRadioGroup: ToolRadioGroup.Model,
+  gridSizeRadioGroup: GridSizeRadioGroup.Model,
+  paletteRadioGroup: PaletteRadioGroup.Model,
 })

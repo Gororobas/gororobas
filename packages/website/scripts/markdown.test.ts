@@ -51,6 +51,23 @@ Run \`pnpm create foldkit-app\`.`,
     )
   })
 
+  it('keeps preview documentation and manifest links on the deployment serving the Markdown', () => {
+    setBody(`
+      <p><a href="/core/block#surfacing-facts">Blocks</a>,
+      <a href="/preview-release.json">target manifest</a>, and
+      <a href="https://github.com/foldkit/foldkit">source</a>.</p>
+    `)
+
+    const markdown = extractMarkdownFromRenderedDocument(document, SITE_URL, {
+      isPreservingRootRelativeLinks: true,
+    })
+
+    expect(markdown).toBe(
+      '[Blocks](/core/block#surfacing-facts), [target manifest](/preview-release.json), and [source](https://github.com/foldkit/foldkit).',
+    )
+    expect(markdown).not.toContain('https://foldkit.dev')
+  })
+
   it('emits fenced code blocks with the detected language', () => {
     setBody(`
       <pre><code class="language-typescript">const x = 1

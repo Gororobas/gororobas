@@ -13,6 +13,13 @@ import {
 } from 'effect'
 import { dual } from 'effect/Function'
 
+import {
+  type AggregatedChildren,
+  type AnyBinding,
+  type BindingRequirement,
+  aggregateChildren,
+} from '../block/binding.js'
+import { LocalMountsTypeId, isComposition } from '../block/definition.js'
 import { kebabToPascal } from '../customElement/index.js'
 import type { CustomElementSpec, EventSchema } from '../customElement/index.js'
 import { serializedStylePropertyName } from '../domReflection.js'
@@ -33,15 +40,29 @@ import type {
 } from '../html/index.js'
 import type { Entry as ManagedResourceEntry } from '../managedResource/index.js'
 import { MountTracker } from '../mount/index.js'
-import type { MountDefinition } from '../mount/index.js'
+import type {
+  AnyMountHandler,
+  LayeredMountDefinition,
+  MountDefinition,
+} from '../mount/index.js'
 import { Dispatch } from '../runtime/dispatch.js'
+import {
+  type Registrations as RuntimeRegistrations,
+  type RegistryEntries as RuntimeRegistryEntries,
+  type Subscription as RuntimeSubscription,
+  type MessageDeclaration as SubscriptionMessageDeclaration,
+  aggregate as aggregateSubscriptions,
+  __messageDeclarations as subscriptionMessageDeclarations,
+} from '../subscription/subscription.js'
 import { tagNameFromSelector } from '../tagName.js'
 import type { VNode } from '../vdom.js'
+import { commandArgs, commandMatches } from './bindingMatcher.js'
 import type {
   AnyCommand,
   AnyCommandInstance,
   AnyMount,
   BaseInternal,
+  CommandArgs,
   CommandMatcher,
   MountMatcher,
   MountResolver,
@@ -51,6 +72,7 @@ import type {
   Resolver,
   ResolverEntry,
   SimulationUpdateReturn,
+  SubscriptionEmissionSource,
 } from './internal.js'
 import {
   assertAllCommandsResolved,
@@ -75,6 +97,7 @@ import {
   resolveAllInternal,
   resolveByMatcher,
   resolveMountByMatcher,
+  resolveSubscriptionMessage,
 } from './internal.js'
 import type { Locator, LocatorAll } from './query.js'
 import {
@@ -184,9 +207,17 @@ type GivenStep<Model> = Readonly<{ _phantomModel: Model }> &
   ) => SceneSimulation<M, Message, OutMessage>)
 
 /** A typed Subscription Message step. */
-export type SubscriptionMessageStep<Message> = Readonly<{
+export type SubscriptionMessageStep<Message, Entry = undefined> = Readonly<{
   _tag: 'SubscriptionMessageStep'
+  entry: Entry
   message: Message
+}>
+
+/** A group of Scene steps whose Locators resolve within one parent element. */
+export type InsideStep<Steps extends ReadonlyArray<unknown>> = Readonly<{
+  _tag: 'InsideStep'
+  parent: Locator
+  steps: Steps
 }>
 
 /** A typed OutMessage assertion step. */
@@ -201,14 +232,132 @@ export type OutMessagesStep<OutMessage> = Readonly<{
   expected: readonly [OutMessage, OutMessage, ...ReadonlyArray<OutMessage>]
 }>
 
+type AnySubscriptions = RuntimeRegistrations<any, any, any>
+
+type RegisteredSubscriptions<Model, Message> = RuntimeRegistrations<
+  Model,
+  Message,
+  any
+>
+
+type AnyComposition = Readonly<{
+  Model: Schema.Top
+  Message: Schema.Top
+  [LocalMountsTypeId]: ReadonlyArray<LayeredMountDefinition>
+  bindings: ReadonlyArray<AnyBinding>
+  makeView: (...args: ReadonlyArray<any>) => any
+}>
+
+type ModelSchemaOf<CompositionValue> =
+  CompositionValue extends Readonly<{
+    Model: infer ModelSchema extends Schema.Top
+  }>
+    ? ModelSchema
+    : never
+
+type MessageSchemaOf<CompositionValue> =
+  CompositionValue extends Readonly<{
+    Message: infer MessageSchema extends Schema.Top
+  }>
+    ? MessageSchema
+    : never
+
+type ChildrenOf<CompositionValue> =
+  CompositionValue extends Readonly<{
+    bindings: infer Children extends ReadonlyArray<AnyBinding>
+  }>
+    ? Children
+    : never
+
+type ChildSubscriptions<CompositionValue extends AnyComposition> =
+  AggregatedChildren<ChildrenOf<CompositionValue>>['subscriptions']
+
+/**
+ * Collects a Block Composition's registered child Subscriptions for
+ * Scene emission steps. Local declarations may be supplied as the second
+ * argument. The result retains placement-qualified keys, exact Message
+ * declarations, and the same lift paths used by the Runtime.
+ *
+ * This only prepares test configuration. It does not initialize Models,
+ * construct handler Layers, or start Streams. Completed feature Blocks already
+ * expose their aggregated `subscriptions` directly.
+ *
+ * @param composition - The Block Composition whose child graph is tested.
+ * @param localSubscriptions - Optional Subscriptions declared by that Block.
+ * Duplicate registration keys are rejected rather than overwritten.
+ */
+export function subscriptions<const CompositionValue extends AnyComposition>(
+  composition: CompositionValue,
+): ChildSubscriptions<CompositionValue>
+export function subscriptions<
+  const CompositionValue extends AnyComposition,
+  const LocalSubscriptions extends RegisteredSubscriptions<
+    ModelSchemaOf<NoInfer<CompositionValue>>['Type'],
+    MessageSchemaOf<NoInfer<CompositionValue>>['Type']
+  >,
+>(
+  composition: CompositionValue,
+  localSubscriptions: LocalSubscriptions,
+): RuntimeRegistryEntries<LocalSubscriptions> &
+  ChildSubscriptions<CompositionValue>
+export function subscriptions(
+  composition: AnyComposition,
+  localSubscriptions: AnySubscriptions = {},
+): AnySubscriptions {
+  if (!isComposition(composition)) {
+    throw new Error(
+      '[foldkit] Scene.subscriptions Composition must come from Block.makeDefinition(...).makeComposition(...).',
+    )
+  }
+
+  const children = aggregateChildren(composition.bindings)
+  return aggregateSubscriptions(localSubscriptions, children.subscriptions)
+}
+
+type TestBindingDefinition = Readonly<{
+  mounts: ReadonlyArray<LayeredMountDefinition>
+}>
+
+type TestMountRequirements =
+  | AnyMountHandler
+  | BindingRequirement<string, TestBindingDefinition, Schema.Top>
+
+type TestHtmlBuilder<Message> = HtmlBuilder<Message, TestMountRequirements>
+
 /** A single step in a scene: a `given` step, typed Message or OutMessage step,
  *  or scene simulation transform. */
-export type SceneStep<Model, Message, OutMessage> =
+export type SceneStep<Model, Message, OutMessage, Subscriptions = undefined> =
   | GivenStep<NoInfer<Model>>
-  | Readonly<{
-      _tag: 'SubscriptionMessageStep'
-      message: NoInfer<Message>
-    }>
+  | (RuntimeRegistryEntries<NoInfer<Subscriptions>> extends Readonly<
+      Record<string, RuntimeSubscription<any, any, any, any>>
+    >
+      ? {
+          readonly [
+            Key in keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>
+          ]: RuntimeRegistryEntries<
+            NoInfer<Subscriptions>
+          >[Key] extends Readonly<{
+            messages: infer Messages extends ReadonlyArray<Schema.Top>
+          }>
+            ? SubscriptionMessageStep<
+                Schema.Schema.Type<Messages[number]>,
+                SubscriptionEmissionSource<
+                  RuntimeRegistryEntries<NoInfer<Subscriptions>>[Key]
+                >
+              >
+            : never
+        }[keyof RuntimeRegistryEntries<NoInfer<Subscriptions>>]
+      : never)
+  | InsideStep<
+      ReadonlyArray<
+        SceneStep<
+          NoInfer<Model>,
+          NoInfer<Message>,
+          NoInfer<OutMessage>,
+          NoInfer<Subscriptions>
+        >
+      >
+    >
   | Readonly<{
       _tag: 'OutMessageStep'
       expected: NoInfer<OutMessage>
@@ -285,7 +434,7 @@ type InternalSceneSimulation<
       message: Message,
     ) => SimulationUpdateReturn<Model, OutMessage>
     resolvers: ReadonlyArray<ResolverEntry>
-    viewFn: (model: Model, h: HtmlBuilder<Message>) => Html | Document
+    viewFn: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
     capturingDispatch: CapturingDispatch
     scope: Option.Option<Locator>
     mountSlots: ReadonlyArray<MountSlotState>
@@ -293,6 +442,8 @@ type InternalSceneSimulation<
     outMessageRevision: number
     lastInteractionOutcome: InteractionOutcome
     maybeUnacknowledgedIgnored: Option.Option<IgnoredInteraction>
+    subscriptionDeclarations: ReadonlyArray<SubscriptionMessageDeclaration>
+    keptPendingCommands: ReadonlyArray<AnyCommand>
   }>
 
 const slotKey = ({ name, occurrence }: PendingMount): string =>
@@ -311,8 +462,8 @@ const collectRenderedSlots = (vnode: VNode): ReadonlyArray<PendingMount> => {
       counts.set(marker.name, occurrence + 1)
       const slotWithArgs: PendingMount =
         marker.args === undefined
-          ? { name: marker.name, occurrence }
-          : { name: marker.name, args: marker.args, occurrence }
+          ? { ...marker, occurrence }
+          : { ...marker, args: marker.args, occurrence }
       slots.push(
         marker.messageMappers === undefined
           ? slotWithArgs
@@ -515,7 +666,7 @@ const createCapturingDispatch = (): CapturingDispatch => {
 // RENDERING
 
 const renderView = <Model, Message>(
-  viewFn: (model: Model, h: HtmlBuilder<Message>) => Html | Document,
+  viewFn: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document,
   model: Model,
   dispatch: DispatchService,
 ): VNode => {
@@ -526,10 +677,10 @@ const renderView = <Model, Message>(
     }),
   )
 
-  setHtmlRuntime(dispatch.dispatchSync, sceneContext)
+  setHtmlRuntime(dispatch.dispatchSync, sceneContext, undefined, 'Replay')
   let result: Html | Document
   try {
-    result = viewFn(model, htmlBuilderFor<Message>())
+    result = viewFn(model, htmlBuilderFor<Message, TestMountRequirements>())
   } finally {
     clearHtmlRuntime()
   }
@@ -660,8 +811,16 @@ const assertExternalMessageBoundary = <Model, Message, OutMessage>(
   context: string,
 ): void => {
   const internal = toInternal(simulation)
+  const commandsAtBoundary = Array.filter(
+    internal.commands,
+    command =>
+      !Array.some(
+        internal.keptPendingCommands,
+        keptCommand => keptCommand === command,
+      ),
+  )
 
-  assertNoUnresolvedCommands(internal.commands, context)
+  assertNoUnresolvedCommands(commandsAtBoundary, context)
   assertNoUnresolvedMounts(internal.mounts, context)
   assertNoUnacknowledgedUnmounts(
     unacknowledgedEndedMountsOf(internal.mountSlots),
@@ -681,13 +840,20 @@ const applyExternalMessages = <Model, Message, OutMessage>(
 
 const applySubscriptionMessage = <Model, Message, OutMessage>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
-  message: Message,
+  step: SubscriptionMessageStep<unknown, unknown>,
 ): SceneSimulation<Model, Message, OutMessage> => {
   const internal = toInternal(simulation)
   const context = 'when a Subscription emitted a new Message'
 
   assertExternalMessageBoundary(simulation, context)
 
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  const message = resolveSubscriptionMessage(
+    'Scene.Subscription.emit',
+    internal.subscriptionDeclarations,
+    step.entry,
+    step.message,
+  ) as Message
   const messageUpdate = internal.updateFn(internal.model, message)
 
   /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
@@ -961,9 +1127,9 @@ export const given = <Model>(model: Model): GivenStep<Model> => {
   /* eslint-enable @typescript-eslint/consistent-type-assertions */
 }
 
-/** Resolves a pending Command with the given result Message. Accepts either
- *  a Command Definition (matches by name; any pending Command of that name)
- *  or a Command instance (matches by name AND args; strict). */
+/** Resolves a pending Command with its raw result Message. A Definition matches
+ *  its originating identity; an instance also matches its complete args.
+ *  A scoped instance selects its composition occurrence. */
 const resolveCommand: {
   <Name extends string, ResultMessage>(
     definition: ResolvableCommandDefinition<Name, ResultMessage>,
@@ -1044,8 +1210,9 @@ const resolveAllExactCommands =
     return { ...internal, ...next }
   }
 
-/** Asserts that every given matcher matches a pending Command. Definition
- *  matchers match by name only; Instance matchers match by name + args. */
+/** Asserts that every matcher selects a pending Command. Definitions select
+ *  their originating identity; instances also compare complete args and any
+ *  explicitly scoped composition occurrence. */
 const expectHasCommandsStep =
   (...matchers: ReadonlyArray<CommandMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1056,8 +1223,8 @@ const expectHasCommandsStep =
   }
 
 /** Asserts that the pending Commands match the given matchers exactly
- *  (order-independent). Definition matchers compare by name; Instance
- *  matchers compare by name + args. */
+ *  (order-independent). Definitions select their originating identity;
+ *  instances also compare complete args and any scoped occurrence. */
 const expectExactCommandsStep =
   (...matchers: ReadonlyArray<CommandMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1077,11 +1244,11 @@ const expectNoCommandsStep =
     return simulation
   }
 
-/** Resolves a specific pending Mount with the given result Message. Accepts
- *  either a Mount Definition (matches by name) or a Mount instance produced
- *  by calling a Definition (matches by name + structural-equal args). The
+/** Resolves a specific pending Mount with the given result Message. A
+ *  Definition selects its originating identity; an instance also compares
+ *  complete args and any explicitly scoped composition occurrence. The
  *  first pending mount that matches is resolved. Mirrors `resolve` for
- *  Commands: when the mount lives inside a Submodel, the boundary's own
+ *  Commands: when the mount lives inside a Block, the boundary's own
  *  `toParentMessage` lift (snapshotted at render time) is applied to
  *  `resultMessage`, so pass the child's raw lifecycle result Message. */
 const resolveMount: {
@@ -1128,7 +1295,7 @@ const resolveMount: {
         const key = slotKey(state.slot)
         return resolvedKeys.has(key)
           ? state
-          : state.slot.name === matcher.name
+          : mountMatches(matcher, state.slot)
             ? { slot: state.slot, status: RESOLVED }
             : state
       },
@@ -1156,8 +1323,9 @@ const resolveAllMounts =
       resolveMount(matcher, resultMessage)(current),
     )
 
-/** Asserts that every given Mount is among the pending Mounts. Accepts Mount
- *  Definitions (match by name) and Mount instances (match by name + args). */
+/** Asserts that every matcher selects a pending Mount. Definitions select
+ *  their originating identity; instances also compare complete args and any
+ *  explicitly scoped composition occurrence. */
 const expectHasMountsStep =
   (...matchers: ReadonlyArray<MountMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1168,8 +1336,8 @@ const expectHasMountsStep =
   }
 
 /** Asserts that the pending Mounts match the given matchers exactly
- *  (order-independent). Accepts Mount Definitions (match by name) and Mount
- *  instances (match by name + args). */
+ *  (order-independent). Definitions select their originating identity;
+ *  instances also compare complete args and any scoped occurrence. */
 const expectExactMountsStep =
   (...matchers: ReadonlyArray<MountMatcher>) =>
   <Model, Message, OutMessage = undefined>(
@@ -1245,18 +1413,24 @@ const applyExternalMessage = <Model, Message, OutMessage>(
   return applyExternalMessages(simulation, [message], context)
 }
 
-/** Feeds a Message through update as if a Subscription had emitted it,
- *  then re-renders. Use it for Messages whose real cause is a Subscription
- *  (a timer tick, a WebSocket frame, a global listener), which have no
- *  element in the rendered tree to interact with. Do NOT reach for it when
- *  the Message has a DOM affordance: click the actual button instead, so
- *  the test exercises the handler wiring this step skips. Like an
- *  interaction, it throws if unresolved Commands, unresolved Mounts, or
- *  unacknowledged unmounts are pending. */
-const emitSubscriptionMessage = <Message>(
-  message: Message,
-): SubscriptionMessageStep<Message> => ({
+/**
+ * Feeds a declared Message through update as if a registered Subscription
+ *  emitted it, then re-renders. A lifted Subscription accepts its raw child
+ *  Message and applies the same `toParentMessage` chain as production.
+ */
+const emitSubscriptionMessage = <
+  Entry extends Readonly<{
+    messages: ReadonlyArray<Schema.Top>
+  }>,
+>(
+  entry: Entry,
+  message: NoInfer<Schema.Schema.Type<Entry['messages'][number]>>,
+): SubscriptionMessageStep<
+  Schema.Schema.Type<Entry['messages'][number]>,
+  Entry
+> => ({
   _tag: 'SubscriptionMessageStep',
+  entry,
   message,
 })
 
@@ -1279,7 +1453,8 @@ type SceneManagedResourceEntry<
   Option.Option<any>,
   Value,
   any,
-  OnAcquired
+  OnAcquired,
+  any
 >
 
 /** Declares that a ManagedResource's acquire succeeded, feeding the entry's
@@ -1459,9 +1634,72 @@ const emitCustomElementEvent =
     )
   }
 
-/** Steps that operate on the pending Commands of a scene simulation.
+const formatCommands = (commands: ReadonlyArray<AnyCommand>): string =>
+  Array.match(commands, {
+    onEmpty: () => '    (none)',
+    onNonEmpty: nonEmpty =>
+      pipe(
+        nonEmpty,
+        Array.map(command => `    ${formatCommand(command)}`),
+        Array.join('\n'),
+      ),
+  })
+
+/** Keeps one exact pending Command invocation active across later Scene
+ *  interactions and Subscription deliveries. The Command remains visible to
+ *  assertions and every resolver, and must be resolved before the Scene ends. */
+const keepPendingCommandStep =
+  (matcher: CommandMatcher) =>
+  <Model, Message, OutMessage = undefined>(
+    simulation: SceneSimulation<Model, Message, OutMessage>,
+  ): SceneSimulation<Model, Message, OutMessage> => {
+    const internal = toInternal(simulation)
+    const candidates = Array.filter(
+      internal.commands,
+      command =>
+        !Array.some(
+          internal.keptPendingCommands,
+          keptCommand => keptCommand === command,
+        ) && commandMatches(matcher, command),
+    )
+
+    if (Array.isReadonlyArrayEmpty(candidates)) {
+      throw new Error(
+        `I tried to keep "${formatMatcher(matcher)}" pending but no matching unkept Command was found.\n\n` +
+          `Pending Commands:\n${formatCommands(internal.commands)}`,
+      )
+    }
+
+    if (candidates.length > 1) {
+      throw new Error(
+        `I tried to keep "${formatMatcher(matcher)}" pending but multiple pending Commands match.\n\n` +
+          `Matches:\n${formatCommands(candidates)}\n\n` +
+          'Pass a bound Command instance with the intended occurrence and args.',
+      )
+    }
+
+    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+    return {
+      ...internal,
+      keptPendingCommands: Array.append(
+        internal.keptPendingCommands,
+        Option.getOrThrow(Array.head(candidates)),
+      ),
+    } as unknown as SceneSimulation<Model, Message, OutMessage>
+  }
+
+/** Utilities for inspecting and resolving pending Commands of a scene simulation.
  *  Destructure as `const { Command } = Scene` for concise call sites. */
 export const Command = {
+  /** Projects captured args by reference when the pending Command has this
+   * Definition's source identity, across all Binding and keyed occurrences.
+   * An argless match returns `Some(undefined)`; other sources and name-only
+   * metadata return `None`. This does not decode args, narrow the pending value,
+   * run Effects, or choose among matching occurrences. */
+  argsOf: <Definition extends ResolvableCommandDefinition<string, unknown>>(
+    definition: Definition,
+  ): ((pending: AnyCommand) => Option.Option<CommandArgs<Definition>>) =>
+    commandArgs(definition),
   /** Resolves a specific pending Command with the given result Message. */
   resolve: resolveCommand,
   /** Resolves listed Commands with their result Messages, cascading through any
@@ -1480,6 +1718,10 @@ export const Command = {
   expectExact: expectExactCommandsStep,
   /** Asserts that there are no pending Commands. */
   expectNone: expectNoCommandsStep,
+  /** Keeps one exact pending invocation active across later interactions and
+   *  Subscription deliveries. It remains pending for assertions and
+   *  resolution, and must be resolved before the Scene ends. */
+  keepPending: keepPendingCommandStep,
 } as const
 
 /** Steps that operate on the pending Mounts of a scene simulation.
@@ -1491,7 +1733,7 @@ export const Mount = {
   resolveAll: resolveAllMounts,
   /** Asserts that every given Mount is among the pending Mounts. */
   expectHas: expectHasMountsStep,
-  /** Asserts that the pending Mounts match the given definitions exactly (order-independent, by name). */
+  /** Asserts that the pending Mounts match the given source and instance matchers exactly, regardless of order. */
   expectExact: expectExactMountsStep,
   /** Asserts that there are no pending Mounts. */
   expectNone: expectNoMountsStep,
@@ -1503,9 +1745,16 @@ export const Mount = {
 /** Steps that model Messages arriving from a Subscription.
  *  Destructure as `const { Subscription } = Scene` for concise call sites. */
 export const Subscription = {
-  /** Feeds a Message through update as if a Subscription had emitted it,
-   *  then re-renders. Only for Messages whose real cause is a Subscription;
-   *  if the Message has a DOM affordance, click it instead. */
+  /**
+   * Feeds a Message declared by the Scene's registered Subscriptions through
+   *  update, then re-renders. Pass the raw child Message for a lifted
+   *  Subscription; Scene applies its `toParentMessage` chain. The originating
+   *  definition must have one matching registration in the Scene config and
+   *  declare the Message. When reused across placements, select its bound entry.
+   *  Silent Subscriptions accept no Messages. Use this only for Messages whose
+   *  real cause is a Subscription;
+   *  interact with the rendered DOM for DOM Messages.
+   */
   emit: emitSubscriptionMessage,
 } as const
 
@@ -1720,12 +1969,16 @@ export const tap =
     return simulation
   }
 
-const applySceneStep = <Model, Message, OutMessage>(
+const applySceneStep = <Model, Message, OutMessage, Subscriptions>(
   simulation: SceneSimulation<Model, Message, OutMessage>,
-  step: SceneStep<Model, Message, OutMessage>,
+  step: SceneStep<Model, Message, OutMessage, Subscriptions>,
 ): SceneSimulation<Model, Message, OutMessage> => {
+  if (Predicate.isTagged(step, 'InsideStep')) {
+    return applyInsideStep(simulation, step)
+  }
+
   if (Predicate.isTagged(step, 'SubscriptionMessageStep')) {
-    return applySubscriptionMessage(simulation, step.message)
+    return applySubscriptionMessage(simulation, step)
   }
 
   if (Predicate.isTagged(step, 'OutMessageStep')) {
@@ -1745,9 +1998,9 @@ const applySceneStep = <Model, Message, OutMessage>(
   return simulation
 }
 
-const runSteps = <Model, Message, OutMessage>(
+const runSteps = <Model, Message, OutMessage, Subscriptions>(
   seed: SceneSimulation<Model, Message, OutMessage>,
-  steps: ReadonlyArray<SceneStep<Model, Message, OutMessage>>,
+  steps: ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions>>,
 ): SceneSimulation<Model, Message, OutMessage> =>
   /* eslint-disable @typescript-eslint/consistent-type-assertions */
   Array.reduce(steps, seed, (current, step) => {
@@ -1794,38 +2047,50 @@ const runSteps = <Model, Message, OutMessage>(
   })
 /* eslint-enable @typescript-eslint/consistent-type-assertions */
 
+const applyInsideStep = <Model, Message, OutMessage, Subscriptions>(
+  simulation: SceneSimulation<Model, Message, OutMessage>,
+  step: InsideStep<
+    ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions>>
+  >,
+): SceneSimulation<Model, Message, OutMessage> => {
+  const internal = toInternal(simulation)
+  const priorScope = internal.scope
+  const nextScope = Option.match(priorScope, {
+    onNone: () => step.parent,
+    onSome: within(step.parent),
+  })
+  /* eslint-disable @typescript-eslint/consistent-type-assertions */
+  const scopedEntry = {
+    ...internal,
+    scope: Option.some(nextScope),
+  } as unknown as SceneSimulation<Model, Message, OutMessage>
+  const afterSteps = runSteps<Model, Message, OutMessage, Subscriptions>(
+    scopedEntry,
+    step.steps,
+  )
+  const afterInternal = toInternal(afterSteps)
+  return {
+    ...afterInternal,
+    scope: priorScope,
+  } as unknown as SceneSimulation<Model, Message, OutMessage>
+  /* eslint-enable @typescript-eslint/consistent-type-assertions */
+}
+
 /** Scopes a sequence of steps to a parent element. Every Locator referenced by
  *  child steps (assertions, interactions) resolves within the parent's subtree.
  *  Use this when several steps share the same scope. For a single scoped query,
  *  prefer `within(parent, child)` directly. Nested `inside` calls compose scopes
  *  via `within(outer, inner)`. */
-export const inside =
-  <Model, Message, OutMessage = undefined>(
-    parent: Locator,
-    ...steps: ReadonlyArray<NoInfer<SceneStep<Model, Message, OutMessage>>>
-  ) =>
-  (
-    simulation: SceneSimulation<Model, Message, OutMessage>,
-  ): SceneSimulation<Model, Message, OutMessage> => {
-    const internal = toInternal(simulation)
-    const priorScope = internal.scope
-    const nextScope = Option.match(priorScope, {
-      onNone: () => parent,
-      onSome: within(parent),
-    })
-    /* eslint-disable @typescript-eslint/consistent-type-assertions */
-    const scopedEntry = {
-      ...internal,
-      scope: Option.some(nextScope),
-    } as unknown as SceneSimulation<Model, Message, OutMessage>
-    const afterSteps = runSteps(scopedEntry, steps)
-    const afterInternal = toInternal(afterSteps)
-    return {
-      ...afterInternal,
-      scope: priorScope,
-    } as unknown as SceneSimulation<Model, Message, OutMessage>
-    /* eslint-enable @typescript-eslint/consistent-type-assertions */
-  }
+export const inside = <
+  const Steps extends ReadonlyArray<SceneStep<any, any, any, any>>,
+>(
+  parent: Locator,
+  ...steps: Steps
+): InsideStep<Steps> => ({
+  _tag: 'InsideStep',
+  parent,
+  steps,
+})
 
 const findAncestorWithHandler = (
   root: VNode,
@@ -2996,7 +3261,7 @@ export const expectAll = (locatorAll: LocatorAll) => ({
 
 // VIEW ADAPTERS
 
-/** Adapts a Submodel view that declares `ViewInputs` to the `(model, h)`
+/** Adapts a Block view that declares `ViewInputs` to the `(model, h)`
  *  shape `Scene.scene` takes. `defaults` supplies the full `ViewInputs`
  *  once; the returned factory accepts per-test overrides for everything
  *  except `toView`, so tests vary value inputs while the renderer stays
@@ -3017,61 +3282,98 @@ export const withViewInputs =
     view: (
       model: Model,
       viewInputs: ViewInputs,
-      h: HtmlBuilder<Message>,
+      h: TestHtmlBuilder<Message>,
     ) => Html,
     defaults: NoInfer<ViewInputs>,
   ) =>
   (overrides?: Omit<Partial<NoInfer<ViewInputs>>, 'toView'>) =>
-  (model: Model, h: HtmlBuilder<Message>): Html =>
+  (model: Model, h: TestHtmlBuilder<Message>): Html =>
     view(model, { ...defaults, ...overrides }, h)
 
 // SCENE
 
-/** Executes a scene test. Throws if any Commands or Mounts remain
- *  unresolved, any unmount is unacknowledged, or any interaction fell
- *  through unacknowledged. */
+/**
+ * Executes a scene test. Register the tested program's `subscriptions` to use
+ *  {@link Subscription.emit}; the exact record retains each entry's declared
+ *  Message schemas and lift path. A scene without registered Subscriptions
+ *  cannot use that step.
+ *
+ *  Throws if any Commands or Mounts remain unresolved, any unmount is
+ *  unacknowledged, or any interaction fell through unacknowledged.
+ */
 export const scene: {
-  <Model, Message, OutMessage = never>(
+  <
+    Model,
+    Message,
+    OutMessage = never,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
     config: Readonly<{
       update: (
         model: Model,
         message: Message,
       ) => Readonly<{
         model: Model
-        commands?: ReadonlyArray<AnyCommand>
+        commands?: ReadonlyArray<AnyCommand> | undefined
         outMessage?: OutMessage
       }>
-      view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
+      view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
+      subscriptions?: Subscriptions
     }>,
     ...steps: ReadonlyArray<
-      SceneStep<NoInfer<Model>, NoInfer<Message>, NoInfer<OutMessage>>
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        NoInfer<OutMessage>,
+        NoInfer<Subscriptions>
+      >
     >
   ): void
-  <Model, Message>(
+  <
+    Model,
+    Message,
+    const Subscriptions extends
+      | RegisteredSubscriptions<Model, Message>
+      | undefined = undefined,
+  >(
     config: Readonly<{
       update: (
         model: Model,
         message: Message,
       ) => Readonly<{
         model: Model
-        commands?: ReadonlyArray<AnyCommand>
+        commands?: ReadonlyArray<AnyCommand> | undefined
         outMessage?: never
       }>
-      view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
+      view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
+      subscriptions?: Subscriptions
     }>,
     ...steps: ReadonlyArray<
-      SceneStep<NoInfer<Model>, NoInfer<Message>, undefined>
+      SceneStep<
+        NoInfer<Model>,
+        NoInfer<Message>,
+        undefined,
+        NoInfer<Subscriptions>
+      >
     >
   ): void
-} = <Model, Message, OutMessage = undefined>(
+} = <
+  Model,
+  Message,
+  OutMessage = undefined,
+  Subscriptions extends AnySubscriptions | undefined = undefined,
+>(
   config: Readonly<{
     update: (
       model: Model,
       message: Message,
     ) => SimulationUpdateReturn<Model, OutMessage>
-    view: (model: Model, h: HtmlBuilder<Message>) => Html | Document
+    view: (model: Model, h: TestHtmlBuilder<Message>) => Html | Document
+    subscriptions?: Subscriptions
   }>,
-  ...steps: ReadonlyArray<SceneStep<Model, Message, OutMessage>>
+  ...steps: ReadonlyArray<SceneStep<Model, Message, OutMessage, Subscriptions>>
 ): void => {
   const capturingDispatch = createCapturingDispatch()
 
@@ -3093,6 +3395,10 @@ export const scene: {
     scope: Option.none(),
     lastInteractionOutcome: NotRun,
     maybeUnacknowledgedIgnored: Option.none(),
+    subscriptionDeclarations: subscriptionMessageDeclarations(
+      config.subscriptions ?? {},
+    ),
+    keptPendingCommands: [],
   } as unknown as SceneSimulation<Model, Message, OutMessage>
 
   const result = runSteps(seed, steps)

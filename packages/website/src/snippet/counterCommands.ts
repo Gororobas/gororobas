@@ -1,30 +1,76 @@
-import { Effect } from 'effect'
-import { Command, type Update } from 'foldkit'
+import { Effect, Number, Schema } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
-const Message = defineMessageUnion({
+export const Model = Schema.Struct({ count: Schema.Int })
+
+export const Message = defineMessageUnion({
+  ClickedIncrement: {},
   ClickedResetAfterDelay: {},
-  CompletedDelayReset: {},
+  CompletedWaitBeforeReset: {},
 })
 
-const DelayReset = Command.define(
-  // The identifier for the Command, surfaces in DevTools and Story/Scene tests
-  'DelayReset',
+export const ApplicationDefinition = Block.makeDefinition('Application', {
+  Model,
+  Message,
+})
+
+const { makeFieldsStep, makeCommandsStep } = ApplicationDefinition
+
+export const ApplicationComposition = ApplicationDefinition.makeComposition()
+
+export const WaitBeforeReset = ApplicationDefinition.makeCommand(
+  'WaitBeforeReset',
   {
-    // Every Message this Command can produce
-    messages: [Message.CompletedDelayReset],
-    // The Effect
-    execute: Effect.sleep('1 second').pipe(
-      Effect.as(Message.CompletedDelayReset()),
-    ),
+    messages: [Message.CompletedWaitBeforeReset],
+    handler: function* () {
+      return () =>
+        Effect.sleep('1 second').pipe(
+          Effect.as(Message.CompletedWaitBeforeReset()),
+        )
+    },
   },
 )
 
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedResetAfterDelay: () => ({ model, commands: [DelayReset()] }),
-    CompletedDelayReset: () => ({
-      model: modifyFields(model, { count: () => 0 }),
-    }),
+export const EffectsLayer = WaitBeforeReset.layer
+
+export const init = ApplicationComposition.makeInit(() => ({
+  model: Model.make({ count: 0 }),
+}))
+
+export const update = ApplicationComposition.makeUpdate({
+  ClickedIncrement: makeFieldsStep(() => ({
+    count: Number.increment,
+  })),
+  ClickedResetAfterDelay: makeCommandsStep(() => [WaitBeforeReset()]),
+  CompletedWaitBeforeReset: makeFieldsStep(() => ({
+    count: () => 0,
+  })),
+})
+
+export const view = ApplicationComposition.makeView((model, h) => ({
+  title: `Counter: ${model.count}`,
+  body: h.main(
+    [],
+    [
+      h.p([], [`Count: ${model.count}`]),
+      h.button([h.OnClick(Message.ClickedIncrement())], ['Increment']),
+      h.button(
+        [h.OnClick(Message.ClickedResetAfterDelay())],
+        ['Reset after one second'],
+      ),
+    ],
+  ),
+}))
+
+const prepare = () =>
+  ApplicationComposition.prepareBlock({
+    init,
+    update,
+    view,
+    EffectsLayer,
   })
+export const ApplicationBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)

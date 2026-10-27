@@ -3,19 +3,20 @@ import { expect, given, placeholder, role, scene, text } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Listbox } from '@foldkit/ui'
+import { DietListboxBlock, type Model, PeriodListboxBlock } from './model'
+import { ApplicationRoute, Sorting } from './route'
+import { update } from './update'
+import { view } from './view'
 
-import { AppRoute, type Model, Sorting, update, view } from './main'
-
-const browseModel: Model = {
-  route: AppRoute.Browse({
+const browseModel: typeof Model.Type = {
+  route: ApplicationRoute.Browse({
     search: Option.none(),
     sorting: Sorting.Unsorted(),
     diet: Option.none(),
     period: Option.none(),
   }),
-  dietListbox: Listbox.init({ id: 'diet-filter' }),
-  periodListbox: Listbox.init({ id: 'period-filter' }),
+  dietListbox: DietListboxBlock.init({ id: 'diet-filter' }).model,
+  periodListbox: PeriodListboxBlock.init({ id: 'period-filter' }).model,
 }
 
 describe('view', () => {
@@ -42,7 +43,7 @@ describe('view', () => {
       given(
         modifyFields(browseModel, {
           route: () =>
-            AppRoute.Browse({
+            ApplicationRoute.Browse({
               search: Option.some('Tyranno'),
               sorting: Sorting.Unsorted(),
               diet: Option.none(),
@@ -60,7 +61,7 @@ describe('view', () => {
       given(
         modifyFields(browseModel, {
           route: () =>
-            AppRoute.Browse({
+            ApplicationRoute.Browse({
               search: Option.some('zzzNoMatch'),
               sorting: Sorting.Unsorted(),
               diet: Option.none(),
@@ -77,7 +78,7 @@ describe('view', () => {
       { update, view },
       given(
         modifyFields(browseModel, {
-          route: () => AppRoute.NotFound({ path: '/oops' }),
+          route: () => ApplicationRoute.NotFound({ path: '/oops' }),
         }),
       ),
       expect(role('heading', { name: '404 — Page Not Found' })).toExist(),

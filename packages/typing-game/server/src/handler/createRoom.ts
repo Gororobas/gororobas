@@ -8,20 +8,20 @@ import { ROOM_ID_WORDS } from '../constants.ts'
 import * as Room from '../room.ts'
 
 export const createRoom =
-  (roomByIdRef: SubscriptionRef.SubscriptionRef<Shared.RoomById>) =>
+  (roomByIdRef: SubscriptionRef.SubscriptionRef<typeof Shared.RoomById.Type>) =>
   (payload: Rpc.Payload<typeof Shared.createRoomRpc>) =>
     Effect.gen(function* () {
       const roomId = yield* Room.generateUniqueId(ROOM_ID_WORDS)
       const playerId = yield* Effect.sync(() => randomUUID())
 
-      const player: Shared.Player = {
+      const player: typeof Shared.Player.Type = {
         id: playerId,
         username: payload.username,
       }
 
       const createdAt = yield* Clock.currentTimeMillis
 
-      const newRoom: Shared.Room = {
+      const newRoom: typeof Shared.Room.Type = {
         id: roomId,
         players: [player],
         hostId: playerId,

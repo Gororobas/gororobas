@@ -1,37 +1,38 @@
 import { Effect, Schema, Stream } from 'effect'
-import { Dom, Subscription } from 'foldkit'
+import { Block, Dom } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-
-// MESSAGE
 
 const Message = defineMessageUnion({
   PressedKey: { key: Schema.String },
 })
-type Message = typeof Message.Type
-
-// MODEL
 
 const Model = Schema.Struct({
   isListening: Schema.Boolean,
 })
-type Model = typeof Model.Type
 
-// SUBSCRIPTION
+const ShortcutsDefinition = Block.makeDefinition('Shortcuts', {
+  Model,
+  Message,
+})
 
-const subscriptions = Subscription.make<Model, Message>()(entry => ({
-  shortcut: entry(
+const subscriptions = ShortcutsDefinition.makeSubscriptions(entry => ({
+  shortcutKeyPresses: entry(
+    'ShortcutKeyPresses',
     { isListening: Schema.Boolean },
     {
+      messages: [Message.PressedKey],
       modelToDependencies: model => ({ isListening: model.isListening }),
-      dependenciesToStream: ({ isListening }) =>
-        Stream.when(
-          Dom.streamFromEvent({
-            target: window,
-            type: 'keydown',
-            mapEvent: event => Message.PressedKey({ key: event.key }),
-          }),
-          Effect.sync(() => isListening),
-        ),
+      handler: function* () {
+        return ({ isListening }) =>
+          Stream.when(
+            Dom.streamFromEvent({
+              target: window,
+              type: 'keydown',
+              mapEvent: event => Message.PressedKey({ key: event.key }),
+            }),
+            Effect.sync(() => isListening),
+          )
+      },
     },
   ),
 }))

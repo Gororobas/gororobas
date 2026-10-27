@@ -14,14 +14,15 @@ import { describe, test } from 'vitest'
 
 import { Tabs } from '@foldkit/ui'
 
-import { completeModel, initialModel } from './main.fixture'
 import { Submission } from './model'
+import { completeModel, initialModel } from './model.fixture'
+import { StepTabsBlock } from './navigationComponents'
 import { update } from './update'
 import { view } from './view/view'
 
 const resolveFocusTab = Command.resolve(
-  Tabs.FocusTab,
-  Tabs.Message.CompletedFocusTab(),
+  Tabs.test.FocusTab,
+  StepTabsBlock.Message.CompletedFocusTab(),
 )
 
 describe('view', () => {

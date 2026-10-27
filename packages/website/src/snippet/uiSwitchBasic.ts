@@ -2,7 +2,7 @@
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
 import { Schema } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
@@ -14,33 +14,44 @@ const Model = Schema.Struct({
   // ...your other fields
 })
 
-// In your init function, start it off:
-const init = () => ({
-  model: {
-    notificationsEnabled: false,
-    // ...your other fields
-  },
-})
-
 // A verb-first, past-tense Message carries the new checked state:
 
 const Message = defineMessageUnion({
   ToggledNotifications: { isChecked: Schema.Boolean },
 })
 
-// In the corresponding Message.match handler, store the value.
-// This is the moment to persist the preference, sync to a backend, or fire
-// analytics.
-ToggledNotifications: ({ isChecked }) => ({
-  model: modifyFields(model, { notificationsEnabled: () => isChecked }),
+const NotificationSettingsComposition = Block.makeDefinition(
+  'NotificationSettings',
+  {
+    Model,
+    Message,
+  },
+).makeComposition()
+
+// In your init function, start it off:
+const init = NotificationSettingsComposition.makeInit(() => ({
+  model: {
+    notificationsEnabled: false,
+    // ...your other fields
+  },
+}))
+
+// In the corresponding update handler, store the value. Return Commands
+// to persist the preference, sync to a backend, or record analytics.
+const update = NotificationSettingsComposition.makeUpdate({
+  ToggledNotifications: (model, { isChecked }) => ({
+    model: modifyFields(model, { notificationsEnabled: () => isChecked }),
+  }),
 })
 
 // Inside your view function, render the switch with Switch.view. It reads the
 // checked state from your Model and calls onToggle with the new state. The
 // track color keys off the data-checked attribute; the knob position derives
 // from the same Model field.
-const view = (model, h: HtmlBuilder<Message>) => {
-  const switchView = (attributes: Switch.SwitchAttributes<Message>) =>
+const view = NotificationSettingsComposition.makeView((model, h) => {
+  const switchView = (
+    attributes: Switch.SwitchAttributes<typeof Message.Type>,
+  ) =>
     h.div(
       [h.Class('flex items-center gap-3')],
       [
@@ -85,4 +96,4 @@ const view = (model, h: HtmlBuilder<Message>) => {
     },
     h,
   )
-}
+})

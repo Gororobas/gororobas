@@ -18,8 +18,8 @@ message(ClickedSubmit())
 // Group a reusable sequence without erasing its step types.
 steps(given(initialModel), message(ClickedSubmit()))
 
-// Resolve one Command with its result. Pass a Definition to match by name,
-// or a Command instance to match by name AND args.
+// Resolve one Command with its result. A Definition matches its source identity;
+// an instance also selects its bound path and exact args.
 Command.resolve(FetchWeather, SucceededFetchWeather({ data }))
 Command.resolve(
   FetchWeather({ zipCode: '90210' }),
@@ -51,8 +51,8 @@ model(model => {
   expect(model.count).toBe(0)
 })
 
-// Assert these Commands were produced. Definition matchers match by name only;
-// instance matchers (FetchWeather({ zipCode: '90210' })) match by name AND args.
+// Assert these Commands were produced. Definition matchers retain their source
+// identity; instances also select a bound path and exact args.
 Command.expectHas(FetchWeather)
 Command.expectHas(FetchWeather({ zipCode: '90210' }))
 

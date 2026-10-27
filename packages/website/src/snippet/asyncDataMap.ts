@@ -4,7 +4,7 @@ import { modifyFields } from 'foldkit/struct'
 
 export const prependNewNote =
   (note: Note) =>
-  (model: Model): Model =>
+  (model: typeof Model.Type): typeof Model.Type =>
     Option.match(note.maybeNotebookId, {
       onNone: () =>
         modifyFields(model, {

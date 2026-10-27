@@ -1,15 +1,7 @@
 import { Schema } from 'effect'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Dialog } from '@foldkit/ui'
-
-export const SearchResult = Schema.Struct({
-  url: Schema.String,
-  title: Schema.String,
-  excerpt: Schema.String,
-  section: Schema.String,
-  kind: Schema.String,
-})
+import { SearchResult } from './domain'
 
 export const Message = defineMessageUnion({
   UpdatedSearchQuery: { query: Schema.String },
@@ -18,11 +10,11 @@ export const Message = defineMessageUnion({
     query: Schema.String,
   },
   SelectedSearchResult: { url: Schema.String },
-  GotSearchDialogMessage: { message: Dialog.Message },
   ClearedSearchQuery: {},
+  RequestedOpen: {},
+  InformedOfRouteChange: {},
   CompletedNavigateToResult: {},
   CompletedScrollToResult: {},
   CompletedFocusSearchInput: {},
   PressedArrowKey: { direction: Schema.Literals(['Up', 'Down']) },
 })
-export type Message = typeof Message.Type

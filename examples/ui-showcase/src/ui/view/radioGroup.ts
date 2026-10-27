@@ -1,22 +1,28 @@
-import { Submodel } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
-import { RadioGroup } from '@foldkit/ui'
+import type { RenderInfo } from '@foldkit/ui/radioGroup'
 
-import { Message as UiMessage } from '../message'
-import { type Plan, type UiModel } from '../model'
+import {
+  HorizontalRadioGroupDemoBinding,
+  UiComposition,
+  VerticalRadioGroupDemoBinding,
+} from '../composition'
+import type { UiViewBuilder } from '../composition'
+import type { Plan } from '../domain'
 
-export const PlanRadioGroup = RadioGroup.create<Plan>()
+const plans: ReadonlyArray<typeof Plan.Type> = [
+  'Startup',
+  'Business',
+  'Enterprise',
+]
 
-const plans: ReadonlyArray<Plan> = ['Startup', 'Business', 'Enterprise']
-
-const planDescriptions: Record<Plan, string> = {
+const planDescriptions: Record<typeof Plan.Type, string> = {
   Startup: '12GB / 6 CPUs. Perfect for small projects',
   Business: '16GB / 8 CPUs. For growing teams',
   Enterprise: '32GB / 12 CPUs. Dedicated infrastructure',
 }
 
-const planPrices: Record<Plan, string> = {
+const planPrices: Record<typeof Plan.Type, string> = {
   Startup: '$40/mo',
   Business: '$80/mo',
   Enterprise: '$160/mo',
@@ -38,7 +44,7 @@ const descriptionClassName = 'text-sm text-gray-600'
 
 const priceClassName = 'text-sm font-semibold text-accent-600'
 
-const checkIcon = (h: HtmlBuilder<UiMessage>): Html => {
+const checkIcon = (h: UiViewBuilder) => {
   return h.svg(
     [h.ViewBox('0 0 24 24'), h.Fill('none'), h.Class('size-5 text-accent-600')],
     [
@@ -53,105 +59,95 @@ const checkIcon = (h: HtmlBuilder<UiMessage>): Html => {
   )
 }
 
-const checkPlaceholder = (h: HtmlBuilder<UiMessage>): Html => {
+const checkPlaceholder = (h: UiViewBuilder) => {
   return h.div([h.Class('size-5')])
 }
 
-export const view = Submodel.defineView<UiModel, UiMessage>(
-  (model, h): Html => {
-    const verticalPlanOptionsView = ({
-      group,
-      options,
-    }: RadioGroup.RenderInfo<Plan>): Html =>
-      h.div(
-        [...group, h.Class(verticalGroupClassName)],
-        options.map(option => {
-          const plan = option.value
-          return h.div(
-            [...option.option, h.Class(verticalOptionClassName)],
-            [
-              h.div(
-                [h.Class('flex w-full items-center justify-between')],
-                [
-                  h.div(
-                    [],
-                    [
-                      h.span(
-                        [...option.label, h.Class(labelClassName)],
-                        [plan],
-                      ),
-                      h.p(
-                        [...option.description, h.Class(descriptionClassName)],
-                        [planDescriptions[plan]],
-                      ),
-                    ],
-                  ),
-                  h.div(
-                    [h.Class('flex items-center gap-3')],
-                    [
-                      h.span([h.Class(priceClassName)], [planPrices[plan]]),
-                      option.isSelected ? checkIcon(h) : checkPlaceholder(h),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          )
-        }),
-      )
+export const view = UiComposition.makeView((model, h) => {
+  const verticalPlanOptionsView = ({
+    group,
+    options,
+  }: RenderInfo<typeof Plan.Type>): Html =>
+    h.div(
+      [...group, h.Class(verticalGroupClassName)],
+      options.map(option => {
+        const plan = option.value
+        return h.div(
+          [...option.option, h.Class(verticalOptionClassName)],
+          [
+            h.div(
+              [h.Class('flex w-full items-center justify-between')],
+              [
+                h.div(
+                  [],
+                  [
+                    h.span([...option.label, h.Class(labelClassName)], [plan]),
+                    h.p(
+                      [...option.description, h.Class(descriptionClassName)],
+                      [planDescriptions[plan]],
+                    ),
+                  ],
+                ),
+                h.div(
+                  [h.Class('flex items-center gap-3')],
+                  [
+                    h.span([h.Class(priceClassName)], [planPrices[plan]]),
+                    option.isSelected ? checkIcon(h) : checkPlaceholder(h),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        )
+      }),
+    )
 
-    const horizontalPlanOptionsView = ({
-      group,
-      options,
-    }: RadioGroup.RenderInfo<Plan>): Html =>
-      h.div(
-        [...group, h.Class(horizontalGroupClassName)],
-        options.map(option => {
-          const plan = option.value
-          return h.div(
-            [...option.option, h.Class(horizontalOptionClassName)],
-            [
-              h.div(
-                [h.Class('flex w-full items-center justify-between')],
-                [
-                  h.div(
-                    [],
-                    [
-                      h.span(
-                        [...option.label, h.Class(labelClassName)],
-                        [plan],
-                      ),
-                      h.p(
-                        [...option.description, h.Class(descriptionClassName)],
-                        [planDescriptions[plan]],
-                      ),
-                    ],
-                  ),
-                  option.isSelected ? checkIcon(h) : checkPlaceholder(h),
-                ],
-              ),
-              h.span([h.Class(priceClassName + ' mt-2')], [planPrices[plan]]),
-            ],
-          )
-        }),
-      )
+  const horizontalPlanOptionsView = ({
+    group,
+    options,
+  }: RenderInfo<typeof Plan.Type>): Html =>
+    h.div(
+      [...group, h.Class(horizontalGroupClassName)],
+      options.map(option => {
+        const plan = option.value
+        return h.div(
+          [...option.option, h.Class(horizontalOptionClassName)],
+          [
+            h.div(
+              [h.Class('flex w-full items-center justify-between')],
+              [
+                h.div(
+                  [],
+                  [
+                    h.span([...option.label, h.Class(labelClassName)], [plan]),
+                    h.p(
+                      [...option.description, h.Class(descriptionClassName)],
+                      [planDescriptions[plan]],
+                    ),
+                  ],
+                ),
+                option.isSelected ? checkIcon(h) : checkPlaceholder(h),
+              ],
+            ),
+            h.span([h.Class(priceClassName + ' mt-2')], [planPrices[plan]]),
+          ],
+        )
+      }),
+    )
 
-    return h.div(
-      [],
-      [
-        h.h2(
-          [h.Class('text-2xl font-bold text-gray-900 mb-6')],
-          ['Radio Group'],
-        ),
+  return h.div(
+    [],
+    [
+      h.h2([h.Class('text-2xl font-bold text-gray-900 mb-6')], ['Radio Group']),
 
-        h.h3(
-          [h.Class('text-lg font-semibold text-gray-900 mt-8 mb-4')],
-          ['Vertical'],
-        ),
-        h.submodel({
+      h.h3(
+        [h.Class('text-lg font-semibold text-gray-900 mt-8 mb-4')],
+        ['Vertical'],
+      ),
+      h.block(
+        VerticalRadioGroupDemoBinding.embedView({
           slotId: model.verticalRadioGroupDemo.id,
           model: model.verticalRadioGroupDemo,
-          view: PlanRadioGroup.view,
           viewInputs: {
             selectedValue: model.verticalRadioGroupDemoValue,
             options: plans,
@@ -159,18 +155,17 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
             hasOptionDescription: () => true,
             toView: verticalPlanOptionsView,
           },
-          toParentMessage: message =>
-            UiMessage.GotVerticalRadioGroupDemoMessage({ message }),
         }),
+      ),
 
-        h.h3(
-          [h.Class('text-lg font-semibold text-gray-900 mt-8 mb-4')],
-          ['Horizontal'],
-        ),
-        h.submodel({
+      h.h3(
+        [h.Class('text-lg font-semibold text-gray-900 mt-8 mb-4')],
+        ['Horizontal'],
+      ),
+      h.block(
+        HorizontalRadioGroupDemoBinding.embedView({
           slotId: model.horizontalRadioGroupDemo.id,
           model: model.horizontalRadioGroupDemo,
-          view: PlanRadioGroup.view,
           viewInputs: {
             selectedValue: model.horizontalRadioGroupDemoValue,
             options: plans,
@@ -179,10 +174,8 @@ export const view = Submodel.defineView<UiModel, UiMessage>(
             hasOptionDescription: () => true,
             toView: horizontalPlanOptionsView,
           },
-          toParentMessage: message =>
-            UiMessage.GotHorizontalRadioGroupDemoMessage({ message }),
         }),
-      ],
-    )
-  },
-)
+      ),
+    ],
+  )
+})

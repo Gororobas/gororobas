@@ -1,14 +1,16 @@
 import { Option, Record } from 'effect'
-import { Submodel } from 'foldkit'
-import { Html, type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
+import { Html, inertHtml as ih } from 'foldkit/html'
 
 import { Disclosure } from '@foldkit/ui'
 
 import { type CodeBlock } from '../../component'
 import { Icon } from '../../icon'
-import { slotDocPage } from '../../markdown'
 import { type RenderHeadingLink } from '../../prose'
-import raw from './comingFromReact.md'
+import {
+  ComingFromReactComposition,
+  type ComingFromReactViewBuilder,
+} from './composition'
+import { ComingFromReactContent } from './content'
 import { Message } from './message'
 import type { Model } from './model'
 
@@ -38,8 +40,8 @@ const faqItem = (
   id: string,
   question: string,
   answerContent: ReadonlyArray<Html>,
-  model: Model,
-  h: HtmlBuilder<Message>,
+  model: typeof Model.Type,
+  h: ComingFromReactViewBuilder,
 ): Html =>
   Option.match(Record.get(model, id), {
     onSome: isFaqOpen =>
@@ -78,10 +80,7 @@ const faqItem = (
 
 // PAGE
 
-const { tableOfContents, view: renderPage } = slotDocPage(
-  raw,
-  'coming-from-react',
-)
+const { tableOfContents, view: renderPage } = ComingFromReactContent
 
 export { tableOfContents }
 
@@ -95,8 +94,8 @@ type ViewInputs = Readonly<{
   renderHeadingLink: RenderHeadingLink
 }>
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h): Html =>
+export const view = ComingFromReactComposition.makeView.withInputs<ViewInputs>(
+  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h) =>
     renderPage({
       demos: {},
       renderFaq: (id, question, content) =>

@@ -1,25 +1,18 @@
 import { Array, Match, Option, pipe } from 'effect'
-import { type HtmlBuilder, childAttributes } from 'foldkit/html'
+import { childAttributes } from 'foldkit/html'
 
-import { VirtualList } from '@foldkit/ui'
-
+import type { UiViewBuilder } from '../composition'
+import {
+  VirtualListChatDemoBinding,
+  VirtualListDemoBinding,
+  VirtualListVariableDemoBinding,
+} from '../composition'
+import type { VirtualListChatMessage } from '../domain/domain'
 import { Message } from '../message'
-import type { VirtualListChatMessage } from '../model'
+import { ActivityVirtualListBlock } from './components'
+import { type Activity, ROW_COUNT } from './virtualListData'
 
 // SAMPLE DATA
-
-type Activity = Readonly<{
-  id: number
-  actor: string
-  initial: string
-  colorClass: string
-  verb: string
-  target: string
-  timeAgo: string
-  hasSummary: boolean
-}>
-
-export const ROW_COUNT = 10_000
 
 const actorNames = [
   'Sarah Chen',
@@ -117,8 +110,6 @@ const sampleActivities: ReadonlyArray<Activity> = Array.makeBy(
   },
 )
 
-// VIEW
-
 const containerClassName =
   'h-96 w-full rounded-lg bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 overscroll-none'
 
@@ -147,7 +138,10 @@ const secondaryButtonClassName =
 const headerClassName =
   'flex flex-wrap items-center justify-between gap-3 text-sm text-gray-700 dark:text-gray-400'
 
-export const view = (model: VirtualList.Model, h: HtmlBuilder<Message>) => {
+export const view = (
+  model: typeof ActivityVirtualListBlock.Model.Type,
+  h: UiViewBuilder,
+) => {
   return [
     h.div(
       [h.Class('flex flex-col gap-4 w-full')],
@@ -165,43 +159,42 @@ export const view = (model: VirtualList.Model, h: HtmlBuilder<Message>) => {
             ),
           ],
         ),
-        h.submodel({
-          slotId: model.id,
-          model,
-          view: VirtualList.view<Activity>(),
-          viewInputs: {
-            items: sampleActivities,
-            itemToKey: row => String(row.id),
-            itemToView: row =>
-              h.div(
-                [h.Class(rowClassName)],
-                [
-                  h.div(
-                    [h.Class(avatarClassName(row.colorClass))],
-                    [row.initial],
-                  ),
-                  h.div(
-                    [h.Class(activityTextClassName)],
-                    [
-                      h.span([h.Class(actorClassName)], [row.actor]),
-                      ' ',
-                      row.verb,
-                      ' ',
-                      h.span([h.Class(targetClassName)], [row.target]),
-                    ],
-                  ),
-                  h.div([h.Class(timeAgoClassName)], [row.timeAgo]),
-                ],
-              ),
-            containerClassName,
-            containerAttributes: childAttributes([
-              h.AriaLabel('Activity events'),
-              h.Tabindex(0),
-            ]),
-          },
-          toParentMessage: message =>
-            Message.GotVirtualListDemoMessage({ message }),
-        }),
+        h.block(
+          VirtualListDemoBinding.embedView({
+            slotId: model.id,
+            model,
+            viewInputs: {
+              items: sampleActivities,
+              itemToKey: row => String(row.id),
+              itemToView: row =>
+                h.div(
+                  [h.Class(rowClassName)],
+                  [
+                    h.div(
+                      [h.Class(avatarClassName(row.colorClass))],
+                      [row.initial],
+                    ),
+                    h.div(
+                      [h.Class(activityTextClassName)],
+                      [
+                        h.span([h.Class(actorClassName)], [row.actor]),
+                        ' ',
+                        row.verb,
+                        ' ',
+                        h.span([h.Class(targetClassName)], [row.target]),
+                      ],
+                    ),
+                    h.div([h.Class(timeAgoClassName)], [row.timeAgo]),
+                  ],
+                ),
+              containerClassName,
+              containerAttributes: childAttributes([
+                h.AriaLabel('Activity events'),
+                h.Tabindex(0),
+              ]),
+            },
+          }),
+        ),
       ],
     ),
   ]
@@ -277,8 +270,8 @@ const variableArtifactClassName =
   'mt-1 inline-flex w-fit rounded bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 font-mono text-[10px] text-gray-700 dark:text-gray-300'
 
 export const virtualListVariableDemo = (
-  model: VirtualList.Model,
-  h: HtmlBuilder<Message>,
+  model: typeof ActivityVirtualListBlock.Model.Type,
+  h: UiViewBuilder,
 ) => {
   const variableTallRow = (row: Activity, summary: Summary) =>
     h.div(
@@ -348,27 +341,26 @@ export const virtualListVariableDemo = (
             ),
           ],
         ),
-        h.submodel({
-          slotId: model.id,
-          model,
-          view: VirtualList.view<Activity>(),
-          viewInputs: {
-            items: variableActivities,
-            itemToKey: row => String(row.id),
-            itemToRowHeightPx: variableRowHeightPx,
-            itemToView: (row, index) =>
-              row.hasSummary
-                ? variableTallRow(row, summaryFor(index))
-                : variableShortRow(row),
-            containerClassName,
-            containerAttributes: childAttributes([
-              h.AriaLabel('Variable-height activity events'),
-              h.Tabindex(0),
-            ]),
-          },
-          toParentMessage: message =>
-            Message.GotVirtualListVariableDemoMessage({ message }),
-        }),
+        h.block(
+          VirtualListVariableDemoBinding.embedView({
+            slotId: model.id,
+            model,
+            viewInputs: {
+              items: variableActivities,
+              itemToKey: row => String(row.id),
+              itemToRowHeightPx: variableRowHeightPx,
+              itemToView: (row, index) =>
+                row.hasSummary
+                  ? variableTallRow(row, summaryFor(index))
+                  : variableShortRow(row),
+              containerClassName,
+              containerAttributes: childAttributes([
+                h.AriaLabel('Variable-height activity events'),
+                h.Tabindex(0),
+              ]),
+            },
+          }),
+        ),
       ],
     ),
   ]
@@ -392,8 +384,8 @@ const COLLAPSED_CHAT_MESSAGE_ESTIMATED_HEIGHT_PX = 48
 const EXPANDED_CHAT_MESSAGE_ESTIMATED_HEIGHT_PX = 80
 
 const chatMessageView = (
-  message: VirtualListChatMessage,
-  h: HtmlBuilder<Message>,
+  message: typeof VirtualListChatMessage.Type,
+  h: UiViewBuilder,
 ) => {
   const isSentMessage = message.id % 2 !== 0
 
@@ -438,9 +430,9 @@ const chatMessageView = (
 }
 
 export const virtualListChatDemo = (
-  model: VirtualList.Model,
-  messages: ReadonlyArray<VirtualListChatMessage>,
-  h: HtmlBuilder<Message>,
+  model: typeof ActivityVirtualListBlock.Model.Type,
+  messages: ReadonlyArray<typeof VirtualListChatMessage.Type>,
+  h: UiViewBuilder,
 ) => [
   h.div(
     [h.Class('flex w-full flex-col gap-4')],
@@ -480,30 +472,29 @@ export const virtualListChatDemo = (
           ),
         ],
       ),
-      h.submodel({
-        slotId: model.id,
-        model,
-        view: VirtualList.view<VirtualListChatMessage>(),
-        viewInputs: {
-          items: messages,
-          itemToKey: message => globalThis.String(message.id),
-          itemToView: message => chatMessageView(message, h),
-          dynamicRowHeights: true,
-          itemToEstimatedRowHeightPx: message =>
-            message.isExpanded
-              ? EXPANDED_CHAT_MESSAGE_ESTIMATED_HEIGHT_PX
-              : COLLAPSED_CHAT_MESSAGE_ESTIMATED_HEIGHT_PX,
-          contentAlignment: 'End',
-          containerClassName:
-            'h-96 sm:h-80 w-full rounded-lg bg-gray-100/70 dark:bg-gray-950/40 ring-1 ring-gray-200 dark:ring-gray-800 overscroll-none',
-          containerAttributes: childAttributes([
-            h.AriaLabel('End-anchored chat messages'),
-            h.Tabindex(0),
-          ]),
-        },
-        toParentMessage: message =>
-          Message.GotVirtualListChatDemoMessage({ message }),
-      }),
+      h.block(
+        VirtualListChatDemoBinding.embedView({
+          slotId: model.id,
+          model,
+          viewInputs: {
+            items: messages,
+            itemToKey: message => globalThis.String(message.id),
+            itemToView: message => chatMessageView(message, h),
+            dynamicRowHeights: true,
+            itemToEstimatedRowHeightPx: message =>
+              message.isExpanded
+                ? EXPANDED_CHAT_MESSAGE_ESTIMATED_HEIGHT_PX
+                : COLLAPSED_CHAT_MESSAGE_ESTIMATED_HEIGHT_PX,
+            contentAlignment: 'End',
+            containerClassName:
+              'h-96 sm:h-80 w-full rounded-lg bg-gray-100/70 dark:bg-gray-950/40 ring-1 ring-gray-200 dark:ring-gray-800 overscroll-none',
+            containerAttributes: childAttributes([
+              h.AriaLabel('End-anchored chat messages'),
+              h.Tabindex(0),
+            ]),
+          },
+        }),
+      ),
       h.div(
         [h.Class('flex w-full items-center justify-between gap-2')],
         [

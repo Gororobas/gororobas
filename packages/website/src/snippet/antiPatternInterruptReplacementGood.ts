@@ -1,40 +1,36 @@
 // ✅ Good: update returns FetchSuggestions after interruption.
 
 import { Number } from 'effect'
-import type { Update } from 'foldkit'
 
-type UpdateReturn = Update.Return<Model, Message>
-
-const update = (model: Model, message: Message) =>
-  Message.match<UpdateReturn>(message, {
-    UpdatedQuery: ({ query }) =>
-      SearchState.match<UpdateReturn>(model.searchState, {
-        Running: () => ({
-          model: modifyFields(model, {
-            query: () => query,
-            searchGeneration: Number.increment,
-            searchState: () => SearchState.Cancelling(),
-          }),
-          commands: [
-            FetchSuggestions.Interrupt(() =>
-              Message.CompletedCancelFetchSuggestions(),
-            ),
-          ],
+const update = ApplicationComposition.makeUpdate({
+  UpdatedQuery: (model, { query }) =>
+    SearchState.match(model.searchState, {
+      Running: () => ({
+        model: modifyFields(model, {
+          query: () => query,
+          searchGeneration: Number.increment,
+          searchState: () => SearchState.Cancelling(),
         }),
-        Cancelling: () => ({
-          model: modifyFields(model, { query: () => query }),
-        }),
+        commands: [
+          FetchSuggestions.Interrupt(() =>
+            Message.CompletedCancelFetchSuggestions(),
+          ),
+        ],
       }),
-
-    CompletedCancelFetchSuggestions: () => ({
-      model: modifyFields(model, {
-        searchState: () => SearchState.Running(),
+      Cancelling: () => ({
+        model: modifyFields(model, { query: () => query }),
       }),
-      commands: [
-        FetchSuggestions({
-          query: model.query,
-          generation: model.searchGeneration,
-        }),
-      ],
     }),
-  })
+
+  CompletedCancelFetchSuggestions: model => ({
+    model: modifyFields(model, {
+      searchState: () => SearchState.Running(),
+    }),
+    commands: [
+      FetchSuggestions({
+        query: model.query,
+        generation: model.searchGeneration,
+      }),
+    ],
+  }),
+})

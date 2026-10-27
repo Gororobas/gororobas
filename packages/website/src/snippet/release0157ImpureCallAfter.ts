@@ -6,7 +6,9 @@ const Save = Command.define('Save', {
   ),
 })
 
-const save = (model: Model): Update.Return<Model, Message> => ({
+const save = (
+  model: typeof Model.Type,
+): Update.Return<typeof Model.Type, Message> => ({
   model,
   commands: [Save()],
 })

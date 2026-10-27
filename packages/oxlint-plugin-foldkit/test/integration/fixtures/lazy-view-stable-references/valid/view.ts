@@ -6,7 +6,7 @@ const lazyHeader = createLazy()
 
 const stableHeader = () => undefined
 
-export const view = (model: Model) => lazyHeader(renderHeader, [model.title])
+export const view = (model: typeof Model.Type) => lazyHeader(renderHeader, [model.title])
 
 export const makeLocal = (createLazy: () => () => unknown) => {
   const localLazy = createLazy()

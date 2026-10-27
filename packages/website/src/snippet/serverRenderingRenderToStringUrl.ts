@@ -1,4 +1,8 @@
-Server.renderToString(config, {
-  url: request.url,
-  flags,
-})
+Server.renderToString(
+  ApplicationBlock,
+  { Flags, routing: {} },
+  {
+    url: request.url,
+    flags,
+  },
+)

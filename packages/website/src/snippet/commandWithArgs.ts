@@ -1,48 +1,40 @@
-import { Effect, Schema } from 'effect'
-import { HttpClient, HttpClientRequest } from 'effect/http'
-import { Command, Http, type Update } from 'foldkit'
+// application.ts
+import { Duration, Effect, Schema } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
+
+const Model = Schema.Struct({ count: Schema.Number })
 
 const Message = defineMessageUnion({
-  SubmittedWeatherForm: {},
-  SucceededFetchWeather: { weather: WeatherSchema },
-  FailedFetchWeather: { error: Schema.String },
+  ClickedResetAfterDelay: { delayMs: Schema.Number },
+  CompletedWaitBeforeReset: {},
 })
 
-const FetchWeather = Command.define('FetchWeather', {
-  // Args schema: the per-dispatch inputs the Command needs.
-  args: { zipCode: Schema.String },
-  // Every Message this Command can produce.
-  messages: [Message.SucceededFetchWeather, Message.FailedFetchWeather],
-  // The Effect receives a typed args record.
-  execute: ({ zipCode }) =>
-    Effect.gen(function* () {
-      const client = yield* HttpClient.HttpClient
-      const response = yield* client.execute(
-        HttpClientRequest.get(`/api/weather?zip=${zipCode}`),
-      )
-      const weather = yield* Schema.decodeUnknownEffect(WeatherSchema)(
-        yield* response.json,
-      )
-      return Message.SucceededFetchWeather({ weather })
-    }).pipe(
-      Effect.catch(error =>
-        Effect.succeed(Message.FailedFetchWeather({ error: String(error) })),
-      ),
-      Effect.provide(Http.layer),
-    ),
+const ApplicationDefinition = Block.makeDefinition('Application', {
+  Model,
+  Message,
 })
 
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    // Pass args when dispatching the Command.
-    SubmittedWeatherForm: () => ({
-      model,
-      commands: [FetchWeather({ zipCode: model.zipCodeInput })],
-    }),
-    SucceededFetchWeather: ({ weather }) => ({
-      model: modifyFields(model, { weather: () => weather }),
-    }),
-    FailedFetchWeather: () => ({ model }),
-  })
+const { makeFieldsStep, makeCommandsStep } = ApplicationDefinition
+
+const ApplicationComposition = ApplicationDefinition.makeComposition()
+
+const WaitBeforeReset = ApplicationDefinition.makeCommand('WaitBeforeReset', {
+  args: { delayMs: Schema.Number },
+  messages: [Message.CompletedWaitBeforeReset],
+  handler: function* () {
+    return ({ delayMs }) =>
+      Effect.sleep(Duration.millis(delayMs)).pipe(
+        Effect.as(Message.CompletedWaitBeforeReset()),
+      )
+  },
+})
+
+const update = ApplicationComposition.makeUpdate({
+  ClickedResetAfterDelay: makeCommandsStep.fromMessage(({ delayMs }) => [
+    WaitBeforeReset({ delayMs }),
+  ]),
+  CompletedWaitBeforeReset: makeFieldsStep(() => ({
+    count: () => 0,
+  })),
+})

@@ -1,4 +1,4 @@
-import { Match, Schema } from 'effect'
+import { Effect, Match, Schema } from 'effect'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import { defineMessageUnion } from './index.js'
@@ -29,6 +29,39 @@ describe('defineMessageUnion', () => {
       _tag: 'ChangedCount',
       count: 1,
     })
+  })
+
+  it('constructs a generic nested Schema from its decoded Type', () => {
+    const constructRecorded = <Fields extends Schema.Struct.Fields>(
+      Args: Schema.Struct<Fields>,
+      args: Schema.Struct.Type<Fields>,
+    ) => {
+      const GenericMessage = defineMessageUnion({ Recorded: { args: Args } })
+
+      return GenericMessage.Recorded({ args })
+    }
+    const fields = {
+      count: Schema.NumberFromString,
+      label: Schema.optionalKey(Schema.String),
+      limit: Schema.Number.pipe(
+        Schema.withConstructorDefault(Effect.succeed(10)),
+      ),
+    }
+    const Args = Schema.Struct(fields)
+    const args = Args.make({ count: 1 })
+
+    expect(constructRecorded(Args, args)).toStrictEqual({
+      _tag: 'Recorded',
+      args: { count: 1, limit: 10 },
+    })
+
+    expect(() =>
+      Reflect.apply(
+        defineMessageUnion({ Recorded: { args: Args } }).Recorded,
+        undefined,
+        [{ args: { count: '1' } }],
+      ),
+    ).toThrow('Schema validation failed')
   })
 
   it('uses the fast callable path for directly copyable fields', () => {
@@ -91,6 +124,34 @@ describe('defineMessageUnion', () => {
 
     expect(describeMessage(Message.ClickedReset())).toBe('reset')
     expect(describeMessage(Message.ChangedCount({ count: 4 }))).toBe('count 4')
+  })
+
+  it('accepts never, unknown, and any as explicit output types', () => {
+    const failMessage = Message.match<never>({
+      ClickedReset: () => {
+        throw new Error('reset')
+      },
+      ChangedCount: () => {
+        throw new Error('count')
+      },
+      SelectedItem: () => {
+        throw new Error('item')
+      },
+    })
+    const eraseMessage = Message.match<unknown>({
+      ClickedReset: () => 'reset',
+      ChangedCount: ({ count }) => count,
+      SelectedItem: ({ id }) => ({ id }),
+    })
+    const uncheckedMessage = Message.match<any>({
+      ClickedReset: () => 'reset',
+      ChangedCount: ({ count }) => count,
+      SelectedItem: ({ id }) => ({ id }),
+    })
+
+    expectTypeOf(failMessage).toEqualTypeOf<(message: Message) => never>()
+    expectTypeOf(eraseMessage(Message.ClickedReset())).toEqualTypeOf<unknown>()
+    expectTypeOf(uncheckedMessage(Message.ClickedReset())).toBeAny()
   })
 
   it('infers a union from every handler return', () => {
@@ -158,6 +219,63 @@ describe('defineMessageUnion', () => {
     expect(description).toBe('selected second: Second')
   })
 
+  it('requires exactly the handlers present in a narrowed Message union', () => {
+    type CountMessage = Extract<Message, { readonly _tag: 'ChangedCount' }>
+
+    const describeCount = (message: CountMessage) =>
+      Message.match(message, {
+        ChangedCount: ({ count }) => `count ${count}`,
+      })
+
+    expect(describeCount(Message.ChangedCount({ count: 3 }))).toBe('count 3')
+
+    if (false) {
+      Message.match(messageForFullUnion(), {
+        ClickedReset: () => 'reset',
+        ChangedCount: ({ count }) => `count ${count}`,
+        SelectedItem: ({ label }) => label,
+      })
+
+      // @ts-expect-error A handler outside the narrowed union is rejected.
+      Message.match(messageForStrictSubset(), {
+        ChangedCount: () => 'count',
+        SelectedItem: () => 'selected',
+      })
+
+      // @ts-expect-error Every variant in the narrowed union remains required.
+      Message.match(messageForStrictSubset(), {})
+
+      // @ts-expect-error An inferred data-first match rejects unknown handlers.
+      Message.match(messageForStrictSubset(), {
+        ChangedCount: () => 'count',
+        Unknown: () => 'unknown',
+      })
+
+      const namedCasesWithUnknown = {
+        ClickedReset: () => ({ value: 'reset' }),
+        ChangedCount: ({ count }: { count: number }) => ({
+          value: `count ${count}`,
+        }),
+        SelectedItem: ({ label }: { label: string }) => ({ value: label }),
+        Unknown: () => ({ value: 'unknown' }),
+      }
+
+      const contextualResult: Readonly<{ value: string }> = Message.match(
+        messageForFullUnion(),
+        // @ts-expect-error Contextual output inference cannot admit unknown handlers.
+        namedCasesWithUnknown,
+      )
+      void contextualResult
+
+      // @ts-expect-error An explicit Return cannot narrow the declared output.
+      Message.match<string, Message, 'reset'>({
+        ClickedReset: () => 'reset',
+        ChangedCount: () => 'count',
+        SelectedItem: () => 'selected',
+      })
+    }
+  })
+
   it('rejects names that conflict with the tagged union surface', () => {
     expect(() =>
       Reflect.apply(defineMessageUnion, undefined, [{ match: {} }]),
@@ -202,6 +320,16 @@ describe('defineMessageUnion', () => {
   })
 
   if (false) {
+    const TransformedMessage = defineMessageUnion({
+      Recorded: { args: Schema.Struct({ count: Schema.NumberFromString }) },
+    })
+
+    // @ts-expect-error A constructor rejects another variant's tag.
+    Message.ChangedCount({ _tag: 'SelectedItem', count: 1 })
+    // @ts-expect-error A fieldless constructor rejects undeclared fields.
+    Message.ClickedReset({ unexpected: 1 })
+    // @ts-expect-error A transformed field constructor rejects its encoded input.
+    TransformedMessage.Recorded({ args: { count: '1' } })
     // @ts-expect-error TaggedUnion cases are not part of the Message API
     Message.cases
     // @ts-expect-error TaggedUnion guards are not part of the Message API
@@ -251,3 +379,10 @@ describe('defineMessageUnion', () => {
     expect(describeMessage(Message.ClickedReset())).toBe('other')
   })
 })
+
+const messageForStrictSubset = (): Extract<
+  Message,
+  { readonly _tag: 'ChangedCount' }
+> => Message.ChangedCount({ count: 1 })
+
+const messageForFullUnion = (): Message => Message.ChangedCount({ count: 1 })

@@ -111,9 +111,6 @@ const getOrCreateDialogPortalRoot = (
   return portalRoot
 }
 
-const isDialogPortalRoot = (element: Element): boolean =>
-  element.hasAttribute(DIALOG_PORTAL_ROOT_ATTRIBUTE)
-
 // NOTE: a dialog is its own stacking level (`Dom.showDialog` gives it a
 // near-maximal z-index, `showModal()` puts it in the top layer) and the only
 // subtree a modal dialog leaves interactive. An element portaled out of it is
@@ -130,14 +127,15 @@ const getOrCreatePortalRoot = (element: Element): HTMLElement =>
  *  that removes it again. Inside a `<dialog>`, the portal root is a div
  *  appended to that dialog, so the element stays above the dialog's content
  *  and interactive while a modal dialog makes everything outside it inert.
- *  The cleanup removes that div once it is empty. Otherwise the portal root
- *  is the shared `foldkit-portal-root` div within the element's containing
- *  root: the shadow root when mounted inside one, otherwise `document.body`.
- *  Either way the element escapes the clipping and stacking contexts of the
- *  ancestors it leaves, and keeps its root's scoped styles. Use
- *  `portalBackdrop` for a click-outside backdrop. Designed to be called from
- *  inside an `OnMount` action: the consumer wraps the call in `Effect.sync`
- *  and stashes the returned cleanup in the `Mount` result. */
+ *  Otherwise the portal root is the shared `foldkit-portal-root` div within
+ *  the element's containing root: the shadow root when mounted inside one,
+ *  otherwise `document.body`. Either way the element escapes the clipping
+ *  and stacking contexts of the ancestors it leaves, and keeps its root's
+ *  scoped styles. The cleanup removes the portal root once it is empty, so
+ *  the next open creates a fresh one. Use `portalBackdrop` for a
+ *  click-outside backdrop. Designed to be called from inside an `OnMount`
+ *  action: the consumer wraps the call in `Effect.sync` and stashes the
+ *  returned cleanup in the `Mount` result. */
 export const portalToContainingRoot = (element: Element): (() => void) => {
   const portalRoot = getOrCreatePortalRoot(element)
   portalRoot.appendChild(element)
@@ -151,12 +149,13 @@ export const portalToContainingRoot = (element: Element): (() => void) => {
       // Swallow the error.
     }
 
-    // NOTE: a dialog's children are usually rendered only while it is open,
-    // so after a close an empty portal root would be the dialog's only child,
-    // and on the next open the dialog's content would be inserted after it.
-    // Removing it lets the next element portaled into this dialog append a
-    // fresh root after the content.
-    if (isDialogPortalRoot(portalRoot) && !portalRoot.hasChildNodes()) {
+    // NOTE: a modal overlay isolates siblings before its Mount portals the
+    // panel. An empty shared root would become inert, then receive the panel.
+    // Removing empty roots lets the next open create one after isolation.
+    // Dialog roots must also be removed so a reopened dialog appends its portal
+    // root after the newly rendered content. Occupied shared roots are retained;
+    // opening a modal overlay while one exists can still make its panel inert.
+    if (!portalRoot.hasChildNodes()) {
       portalRoot.remove()
     }
   }

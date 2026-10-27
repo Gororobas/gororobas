@@ -1,2 +1,2 @@
-export * as LoggedOut from './loggedOut'
-export * as LoggedIn from './loggedIn'
+export { LoggedInBlock } from './loggedIn'
+export { LoggedOutBlock } from './loggedOut'

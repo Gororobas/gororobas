@@ -5,10 +5,11 @@ import { type Cell, type HexColor, HexColor as HexColorSchema } from './model'
 
 export type PaletteTheme = Readonly<{
   name: string
-  colors: ReadonlyArray<HexColor>
+  colors: ReadonlyArray<typeof HexColor.Type>
 }>
 
-export const hex = (value: string): HexColor => HexColorSchema.make(value)
+export const hex = (value: string): typeof HexColor.Type =>
+  HexColorSchema.make(value)
 
 export const PALETTE_THEMES: Array.NonEmptyReadonlyArray<PaletteTheme> = [
   {
@@ -118,7 +119,10 @@ export const PALETTE_THEMES: Array.NonEmptyReadonlyArray<PaletteTheme> = [
   },
 ]
 
-export const resolveColor = (cell: Cell, theme: PaletteTheme): HexColor =>
+export const resolveColor = (
+  cell: typeof Cell.Type,
+  theme: PaletteTheme,
+): typeof HexColor.Type =>
   Option.match(cell, {
     onNone: () => EMPTY_COLOR,
     onSome: index => theme.colors[index] ?? EMPTY_COLOR,

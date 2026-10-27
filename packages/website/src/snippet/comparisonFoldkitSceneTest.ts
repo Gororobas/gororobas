@@ -12,7 +12,10 @@ test('failed export shows error dialog that can be dismissed', () => {
       ExportPng,
       FailedExportPng({ error: 'Canvas 2D context not available' }),
     ),
-    Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+    Command.resolve(
+      Dialog.test.ShowDialog,
+      Dialog.DialogBlock.Message.SucceededShowDialog(),
+    ),
     // The error dialog is open. Find elements by role and text content:
     // no CSS selectors, no test IDs, no DOM.
     expect(text('Export Failed')).toExist(),
@@ -22,7 +25,10 @@ test('failed export shows error dialog that can be dismissed', () => {
     click(role('button', { name: 'Dismiss' })),
     // The update function returned a CloseDialog Command. Resolve it
     // the same way a story test does: synchronously, inline.
-    Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
+    Command.resolve(
+      Dialog.test.CloseDialog,
+      Dialog.DialogBlock.Message.CompletedCloseDialog(),
+    ),
     // After the Command resolves, the dialog is gone.
     expect(text('Export Failed')).toBeAbsent(),
   )

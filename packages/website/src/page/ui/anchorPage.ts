@@ -1,4 +1,3 @@
-import { docPage } from '../../markdown'
-import raw from './anchorPage.md'
+import { AnchorPageContent } from './content'
 
-export const { view, tableOfContents } = docPage(raw, 'ui/anchor')
+export const { view, tableOfContents } = AnchorPageContent

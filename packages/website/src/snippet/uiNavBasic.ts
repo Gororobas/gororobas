@@ -10,7 +10,7 @@ import { Nav } from '@foldkit/ui'
 // no Nav.Model to store and no Nav.update to delegate to. Your app already
 // holds the active route in its Model:
 const Model = Schema.Struct({
-  route: AppRoute,
+  route: ApplicationRoute,
   // ...your other fields
 })
 
@@ -38,7 +38,7 @@ const sectionToHref = (section: Section): string =>
   )
 
 const isSectionCurrent =
-  (route: AppRoute) =>
+  (route: ApplicationRoute) =>
   (section: Section): boolean =>
     sectionToRouteTag(section) === route._tag
 
@@ -47,7 +47,7 @@ const isSectionCurrent =
 // carries aria-current="page" and a data-current attribute for styling.
 // Browser-native Tab and Enter handle keyboard navigation; Foldkit's runtime
 // turns the link clicks into route changes:
-const view = (model: Model, h: HtmlBuilder<Message>) => {
+const view = (model: typeof Model.Type, h: HtmlBuilder<Message>) => {
   const navView = ({ nav, items }: Nav.RenderInfo<Section>) =>
     h.nav(
       [...nav, h.Class('flex gap-2')],

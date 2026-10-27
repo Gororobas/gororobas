@@ -24,12 +24,13 @@ const OUTPUT_DIR = resolve(
   'packages/website/public/example-apps-embed',
 )
 const BRIDGE_SCRIPT_PATH = resolve(REPO_ROOT, 'scripts/example-bridge.js')
-const BRIDGE_SCRIPT_TAG = '<script src="bridge.js"></script></head>'
+const bridgeScriptTag = (buildId: string): string =>
+  `<script src="bridge.js?build=${encodeURIComponent(buildId)}"></script></head>`
 const MAX_CONCURRENT_EXAMPLE_BUILDS = 4
 
-// The id the embed's client bundle and prerendered pages agree on. It names one
-// build of one example, so it is generated per example rather than shared, and
-// FOLDKIT_BUILD_ID overrides it when the deployment already names its builds.
+// The id shared by every artifact produced for one embedded example. It names
+// one build of one example, so it is generated per example rather than shared,
+// and FOLDKIT_BUILD_ID overrides it when the deployment names its builds.
 const buildIdForEmbed = (): string => {
   const supplied = process.env['FOLDKIT_BUILD_ID']
   return supplied !== undefined && supplied !== '' ? supplied : randomUUID()
@@ -39,12 +40,12 @@ const runExampleCommand = (
   exampleDir: string,
   slug: string,
   commandArguments: ReadonlyArray<string>,
-  environment: Readonly<Record<string, string>> = {},
+  buildId: string,
 ): Promise<void> =>
   new Promise((resolvePromise, rejectPromise) => {
     const childProcess = spawn('pnpm', ['exec', ...commandArguments], {
       cwd: exampleDir,
-      env: { ...process.env, ...environment },
+      env: { ...process.env, FOLDKIT_BUILD_ID: buildId },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
@@ -78,12 +79,15 @@ const collectHtmlPaths = (directory: string): ReadonlyArray<string> =>
     return entry.name.endsWith('.html') ? [entryPath] : []
   })
 
-const injectBridgeScript = (outputDir: string): void => {
+export const injectBridgeScript = (
+  outputDir: string,
+  buildId: string,
+): void => {
   copyFileSync(BRIDGE_SCRIPT_PATH, resolve(outputDir, 'bridge.js'))
 
   for (const htmlPath of collectHtmlPaths(outputDir)) {
     const html = readFileSync(htmlPath, 'utf8')
-    writeFileSync(htmlPath, html.replace('</head>', BRIDGE_SCRIPT_TAG))
+    writeFileSync(htmlPath, html.replace('</head>', bridgeScriptTag(buildId)))
   }
   console.log('  → injected bridge script')
 }
@@ -92,15 +96,21 @@ const buildSpaExample = async (
   exampleDir: string,
   slug: string,
   outputDir: string,
+  buildId: string,
 ): Promise<void> => {
-  await runExampleCommand(exampleDir, slug, [
-    'vite',
-    'build',
-    '--base',
-    `/example-apps-embed/${slug}/`,
-    '--outDir',
-    outputDir,
-  ])
+  await runExampleCommand(
+    exampleDir,
+    slug,
+    [
+      'vite',
+      'build',
+      '--base',
+      `/example-apps-embed/${slug}/`,
+      '--outDir',
+      outputDir,
+    ],
+    buildId,
+  )
 }
 
 // NOTE: one `vite build` produces the browser bundle, the server bundle and the
@@ -112,13 +122,14 @@ const buildPrerenderedExample = async (
   exampleDir: string,
   slug: string,
   outputDir: string,
+  buildId: string,
 ): Promise<void> => {
   rmSync(resolve(exampleDir, 'dist'), { recursive: true, force: true })
   await runExampleCommand(
     exampleDir,
     slug,
     ['vite', 'build', '--base', `/example-apps-embed/${slug}/`],
-    { FOLDKIT_BUILD_ID: buildIdForEmbed() },
+    buildId,
   )
   cpSync(resolve(exampleDir, 'dist/client'), outputDir, { recursive: true })
 }
@@ -131,16 +142,19 @@ const buildExample = async (
 
   const exampleDir = resolve(EXAMPLES_DIR, slug)
   const outputDir = resolve(OUTPUT_DIR, slug)
+  const buildId = buildIdForEmbed()
 
   await Match.value(livePreview).pipe(
     Match.when('Prerendered', () =>
-      buildPrerenderedExample(exampleDir, slug, outputDir),
+      buildPrerenderedExample(exampleDir, slug, outputDir, buildId),
     ),
-    Match.when('Spa', () => buildSpaExample(exampleDir, slug, outputDir)),
+    Match.when('Spa', () =>
+      buildSpaExample(exampleDir, slug, outputDir, buildId),
+    ),
     Match.exhaustive,
   )
 
-  injectBridgeScript(outputDir)
+  injectBridgeScript(outputDir, buildId)
 
   console.log(`  → ${outputDir}`)
 }
@@ -203,7 +217,9 @@ const main = async (): Promise<void> => {
   console.log(`Built ${embeddedExamples.length} examples into ${OUTPUT_DIR}`)
 }
 
-main().catch(error => {
-  console.error(error)
-  process.exitCode = 1
-})
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(error => {
+    console.error(error)
+    process.exitCode = 1
+  })
+}

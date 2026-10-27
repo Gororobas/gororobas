@@ -2,15 +2,10 @@ import { Option } from 'effect'
 import { type ESTree, type Reference } from 'effect-oxlint'
 
 import {
-  isCallExpression,
   isIdentifier,
   isObjectExpression,
   isStringLiteral,
-  isVariableDeclarator,
   resolveFoldkitApiPath,
-  resolveImportedPath,
-  resolvedVariable,
-  staticMemberPath,
   staticPropertyName,
 } from './guards.ts'
 
@@ -104,110 +99,5 @@ export const messageCases = (
         fields: property.value,
       },
     ]
-  })
-}
-
-export const hasMessagePayloadProperty = (
-  fields: ESTree.ObjectExpression,
-): boolean =>
-  fields.properties.some(
-    property =>
-      property.type === 'Property' &&
-      (isIdentifier(property.key, 'message') ||
-        (isStringLiteral(property.key) && property.key.value === 'message')),
-  )
-
-const isLocalQueryMessageReference = (
-  node: unknown,
-  references: WeakMap<ESTree.Node, Reference>,
-): boolean =>
-  Option.exists(staticMemberPath(node), memberPath => {
-    const [memberName, extraMember] = memberPath.members
-    if (memberName !== 'Message' || extraMember !== undefined) {
-      return false
-    }
-
-    return Option.exists(
-      resolvedVariable(references, memberPath.root),
-      variable =>
-        variable.defs.some(definition => {
-          if (
-            definition.type !== 'Variable' ||
-            !isVariableDeclarator(definition.node) ||
-            !isCallExpression(definition.node.init)
-          ) {
-            return false
-          }
-
-          return Option.exists(
-            resolveFoldkitApiPath(references, definition.node.init.callee),
-            apiPath => {
-              const apiName = apiPath.join('.')
-
-              return (
-                apiName === 'Query.define' ||
-                apiName === 'Experimental.Query.define'
-              )
-            },
-          )
-        }),
-    )
-  })
-
-const containsMessageReference = (
-  node: unknown,
-  references: WeakMap<ESTree.Node, Reference>,
-  visited: WeakSet<object>,
-): boolean => {
-  if (typeof node !== 'object' || node === null || visited.has(node)) {
-    return false
-  }
-
-  visited.add(node)
-  if (isLocalQueryMessageReference(node, references)) {
-    return true
-  }
-
-  if (
-    Option.exists(resolveImportedPath(references, node), path => {
-      const [messageName] = path.members.slice(-1)
-
-      return messageName === 'Message'
-    })
-  ) {
-    return true
-  }
-
-  return Object.entries(node).some(
-    ([key, value]) =>
-      key !== 'parent' &&
-      (Array.isArray(value)
-        ? value.some(element =>
-            containsMessageReference(element, references, visited),
-          )
-        : containsMessageReference(value, references, visited)),
-  )
-}
-
-export const hasSubmodelMessagePayload = (
-  fields: ESTree.ObjectExpression,
-  references: WeakMap<ESTree.Node, Reference> | undefined,
-): boolean => {
-  if (references === undefined) {
-    return hasMessagePayloadProperty(fields)
-  }
-
-  return fields.properties.some(property => {
-    if (
-      property.type !== 'Property' ||
-      !(
-        isIdentifier(property.key, 'message') ||
-        (isStringLiteral(property.key) && property.key.value === 'message')
-      )
-    ) {
-      return false
-    }
-
-    return containsMessageReference(property.value, references, new WeakSet())
   })
 }

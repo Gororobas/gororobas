@@ -1,13 +1,12 @@
 import { Array, Match, Option, Schema, pipe } from 'effect'
 import { taggedStruct } from 'foldkit/schema'
 
-export type File = typeof File.Type
 export type Directory = Readonly<{
   _tag: 'Directory'
   name: string
   entries: ReadonlyArray<FileTreeEntry>
 }>
-export type FileTreeEntry = File | Directory
+export type FileTreeEntry = typeof File.Type | Directory
 
 export const File = taggedStruct('File', {
   name: Schema.String,

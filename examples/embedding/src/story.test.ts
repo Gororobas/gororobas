@@ -2,9 +2,9 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import { Message, type Model, ReportCount, update } from './main'
+import { Message, type Model, ReportCount, update } from './application'
 
-const initialModel: Model = { count: 10, step: 1 }
+const initialModel: typeof Model.Type = { count: 10, step: 1 }
 
 describe('update', () => {
   describe('counting', () => {

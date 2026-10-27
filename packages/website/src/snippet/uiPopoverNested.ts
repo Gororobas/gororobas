@@ -1,87 +1,84 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Option, Schema } from 'effect'
-import { Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Schema, Tuple } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { Popover } from '@foldkit/ui'
+import type { RenderInfo as PopoverRenderInfo } from '@foldkit/ui/popover'
 
-// Add one Popover Submodel field for each level:
+// Add one Popover Block field for each level:
 const Model = Schema.Struct({
-  accountPopover: Popover.Model,
-  accountDetailsPopover: Popover.Model,
+  accountPopover: Popover.PopoverBlock.Model,
+  accountDetailsPopover: Popover.PopoverBlock.Model,
   // ...your other fields
 })
-type Model = typeof Model.Type
+
+// This excerpt has no parent-owned facts. Each Binding derives distinct
+// generated Popover delivery.
+const Message = defineMessageUnion({})
+
+const AccountMenuDefinition = Block.makeDefinition('AccountMenu', {
+  Model,
+  Message,
+})
+
+const { makeNoopStep } = AccountMenuDefinition
+
+const foldPopoverOutMessage = AccountMenuDefinition.makeOutMessageFold(
+  Popover.PopoverBlock,
+  {
+    Opened: makeNoopStep,
+    Closed: makeNoopStep,
+  },
+)
+
+const AccountPopoverBinding = AccountMenuDefinition.makeBinding(
+  Popover.PopoverBlock,
+  {
+    field: 'accountPopover',
+    init: {
+      contextToArgs: () =>
+        Tuple.make({ id: 'account-popover', contentFocus: true }),
+    },
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+
+const AccountDetailsPopoverBinding = AccountMenuDefinition.makeBinding(
+  Popover.PopoverBlock,
+  {
+    field: 'accountDetailsPopover',
+    init: {
+      contextToArgs: () => Tuple.make({ id: 'account-details-popover' }),
+    },
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+
+const AccountMenuComposition = AccountMenuDefinition.makeComposition({
+  bindings: [AccountPopoverBinding, AccountDetailsPopoverBinding],
+})
 
 // The parent uses contentFocus so focus can move into its nested trigger
 // instead of staying on the panel:
-const init = () => ({
+const init = AccountMenuComposition.makeInit(() => ({
   model: {
-    accountPopover: Popover.init({
-      id: 'account-popover',
-      contentFocus: true,
-    }),
-    accountDetailsPopover: Popover.init({ id: 'account-details-popover' }),
     // ...your other fields
   },
-})
+}))
 
-// Embed each Popover Message in your parent Message:
-const Message = defineMessageUnion({
-  GotAccountPopoverMessage: { message: Popover.Message },
-  GotAccountDetailsPopoverMessage: { message: Popover.Message },
-})
-type Message = typeof Message.Type
-
-const foldPopoverOutMessage = Popover.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
-})
-
-const foldAccountPopover = Update.foldChild({
-  update: Popover.update,
-  read: (model: Model) => Option.some(model.accountPopover),
-  write: (model, nextAccountPopover) =>
-    modifyFields(model, { accountPopover: () => nextAccountPopover }),
-  toParentMessage: message => Message.GotAccountPopoverMessage({ message }),
-  foldOutMessage: foldPopoverOutMessage,
-})
-
-const foldAccountDetailsPopover = Update.foldChild({
-  update: Popover.update,
-  read: (model: Model) => Option.some(model.accountDetailsPopover),
-  write: (model, nextAccountDetailsPopover) =>
-    modifyFields(model, {
-      accountDetailsPopover: () => nextAccountDetailsPopover,
-    }),
-  toParentMessage: message =>
-    Message.GotAccountDetailsPopoverMessage({ message }),
-  foldOutMessage: foldPopoverOutMessage,
-})
-
-// In the corresponding Message.match handlers, delegate each
-// Popover to its own Model field:
-GotAccountPopoverMessage: ({ message }) => foldAccountPopover(model, message)
-
-GotAccountDetailsPopoverMessage: ({ message }) =>
-  foldAccountDetailsPopover(model, message)
+const update = AccountMenuComposition.makeUpdate({})
 
 // Inside your view function, render the child Popover inside the parent
 // panel. `focusSelector` points at the child trigger, which Popover derives
 // from the child id as `${id}-button`.
-const view = (h: HtmlBuilder<Message>) => {
+const view = AccountMenuComposition.makeView((model, h) => {
   const accountDetailsPopoverView = ({
     button,
     panel,
     backdrop,
     isVisible,
-  }: Popover.RenderInfo) =>
+  }: PopoverRenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
@@ -109,24 +106,23 @@ const view = (h: HtmlBuilder<Message>) => {
       ],
     )
 
-  const detailsPopover = h.submodel({
-    slotId: 'account-details-popover',
-    model: model.accountDetailsPopover,
-    view: Popover.view,
-    viewInputs: {
-      anchor: { placement: 'right-start', gap: 8, padding: 8 },
-      toView: accountDetailsPopoverView,
-    },
-    toParentMessage: message =>
-      Message.GotAccountDetailsPopoverMessage({ message }),
-  })
+  const detailsPopover = h.block(
+    AccountDetailsPopoverBinding.embedView({
+      slotId: 'account-details-popover',
+      model: model.accountDetailsPopover,
+      viewInputs: {
+        anchor: { placement: 'right-start', gap: 8, padding: 8 },
+        toView: accountDetailsPopoverView,
+      },
+    }),
+  )
 
   const accountPopoverView = ({
     button,
     panel,
     backdrop,
     isVisible,
-  }: Popover.RenderInfo) =>
+  }: PopoverRenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
@@ -149,15 +145,15 @@ const view = (h: HtmlBuilder<Message>) => {
       ],
     )
 
-  return h.submodel({
-    slotId: 'account-popover',
-    model: model.accountPopover,
-    view: Popover.view,
-    viewInputs: {
-      anchor: { placement: 'bottom-start', gap: 4, padding: 8 },
-      focusSelector: '#account-details-popover-button',
-      toView: accountPopoverView,
-    },
-    toParentMessage: message => Message.GotAccountPopoverMessage({ message }),
-  })
-}
+  return h.block(
+    AccountPopoverBinding.embedView({
+      slotId: 'account-popover',
+      model: model.accountPopover,
+      viewInputs: {
+        anchor: { placement: 'bottom-start', gap: 4, padding: 8 },
+        focusSelector: '#account-details-popover-button',
+        toView: accountPopoverView,
+      },
+    }),
+  )
+})

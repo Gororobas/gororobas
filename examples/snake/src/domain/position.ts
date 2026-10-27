@@ -10,17 +10,15 @@ export const Position = Schema.Struct({
 
 export const equivalence = Schema.toEquivalence(Position)
 
-export type Position = typeof Position.Type
-
-export const wrap = ({ x, y }: Position): Position => ({
+export const wrap = ({ x, y }: typeof Position.Type): typeof Position.Type => ({
   x: x < 0 ? GAME.GRID_SIZE - 1 : x >= GAME.GRID_SIZE ? 0 : x,
   y: y < 0 ? GAME.GRID_SIZE - 1 : y >= GAME.GRID_SIZE ? 0 : y,
 })
 
 export const move = (
-  pos: Position,
-  direction: Direction.Direction,
-): Position => {
+  pos: typeof Position.Type,
+  direction: typeof Direction.Direction.Type,
+): typeof Position.Type => {
   const next = Match.value(direction).pipe(
     Match.when('Up', () => ({ x: pos.x, y: pos.y - 1 })),
     Match.when('Down', () => ({ x: pos.x, y: pos.y + 1 })),

@@ -13,4 +13,3 @@ export const Message = defineMessageUnion({
     snippetSize: SnippetSize,
   },
 })
-export type Message = typeof Message.Type

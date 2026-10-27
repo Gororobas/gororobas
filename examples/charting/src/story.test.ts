@@ -1,40 +1,48 @@
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { expect, test } from 'vitest'
 
 import { RadioGroup } from '@foldkit/ui'
 
 import { FetchTelemetry, SyncChart } from './command'
 import {
+  ChartModeRadioGroupBinding,
+  PackageRadioGroupBinding,
+} from './composition'
+import {
   type ChartMode,
   type PackageId,
   chartModes,
   packageIds,
 } from './domain'
-import { loadingModel, readyModel, sampleTelemetry } from './main.fixture'
 import { Message } from './message'
 import { TelemetryAsyncData } from './model'
+import { loadingModel, readyModel, sampleTelemetry } from './model.fixture'
+import { ChartModeRadioGroupBlock, PackageRadioGroupBlock } from './radioGroups'
 import { update } from './update'
 
-const selectedChartMode = (chartMode: ChartMode) =>
-  Message.GotChartModeRadioGroupMessage({
-    message: RadioGroup.Message.SelectedOption({
+const selectedChartMode = (chartMode: typeof ChartMode.Type) =>
+  toParentMessage(
+    ChartModeRadioGroupBinding,
+    ChartModeRadioGroupBlock.Message.SelectedOption({
       index: chartModes.indexOf(chartMode),
       value: chartMode,
     }),
-  })
+  )
 
-const selectedPackage = (packageId: PackageId) =>
-  Message.GotPackageRadioGroupMessage({
-    message: RadioGroup.Message.SelectedOption({
+const selectedPackage = (packageId: typeof PackageId.Type) =>
+  toParentMessage(
+    PackageRadioGroupBinding,
+    PackageRadioGroupBlock.Message.SelectedOption({
       index: packageIds.indexOf(packageId),
       value: packageId,
     }),
-  })
+  )
 
 const resolveChartModeFocus = Command.resolve(
-  RadioGroup.FocusOption,
-  RadioGroup.Message.CompletedFocusOption(),
+  RadioGroup.test.FocusOption,
+  ChartModeRadioGroupBlock.Message.CompletedFocusOption(),
 )
 
 test('mounting the chart syncs current telemetry into ECharts', () => {

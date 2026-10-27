@@ -2,7 +2,7 @@ import { Array } from 'effect'
 import { AsyncData } from 'foldkit'
 import { type Document, type HtmlBuilder } from 'foldkit/html'
 
-const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
+const view = (model: typeof Model.Type, h: HtmlBuilder<Message>): Document => ({
   title: 'Posts',
   body: h.div(
     [],

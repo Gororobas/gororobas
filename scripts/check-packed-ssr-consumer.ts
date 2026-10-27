@@ -170,7 +170,7 @@ type ConsumerFixture = Readonly<{
 
 const CONSUMER_FIXTURES: ReadonlyArray<ConsumerFixture> = [
   {
-    path: 'src/main.ts',
+    path: 'src/application.ts',
     values: { SERVER_ONLY_PIN, PACKED_MARKDOWN_TEXT },
   },
   { path: 'vite.config.ts' },
@@ -295,7 +295,7 @@ const writeConsumerProject = (
 // them whether or not the barrel re-exports them.
 //
 // The fixture also sets `declaration`, so it covers a consumer that exports a
-// program whose type comes from `makeElement` or `makeApplication`, or a
+// program whose type comes from `Program.makeElement` or `Program.make`, or a
 // Machine Edge built with `to` or `when`. If a type that foldkit exports has a
 // key the consumer cannot write, that consumer cannot write its own `.d.ts`
 // file at all, and TypeScript reports TS4023.
@@ -310,7 +310,7 @@ const assertPackedTypesResolve = (projectDir: string): void => {
     result.status === 0,
     'a consumer cannot compile against the packed declarations. It imports ' +
       'the documented types from `foldkit/experimental/server`, exports a ' +
-      'program built with `makeElement` or `makeApplication`, or exports a ' +
+      'program built with `Program.makeElement` or `Program.make`, or exports a ' +
       'Machine Edge built with `to` or `when`:' +
       `\n${result.stdout}${result.stderr}`,
   )
@@ -430,7 +430,9 @@ const assertNoSourceOracle = (buildDir: string): void => {
   const digestsOfSource = new Set(
     [8, 10, 12, 16].map(length =>
       createHash('sha256')
-        .update(readFileSync(join(buildDir, '..', 'src/main.ts'), 'utf8'))
+        .update(
+          readFileSync(join(buildDir, '..', 'src/application.ts'), 'utf8'),
+        )
         .digest('hex')
         .slice(0, length),
     ),

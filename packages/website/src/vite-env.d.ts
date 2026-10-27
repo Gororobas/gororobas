@@ -141,6 +141,7 @@ declare module 'virtual:playground-types' {
 
 interface ImportMetaEnv {
   readonly VITE_FOLDKIT_CANARY_COMMIT?: string
+  readonly VITE_FOLDKIT_PREVIEW_RELEASE?: string
 }
 
 interface ImportMeta {

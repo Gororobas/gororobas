@@ -1,19 +1,18 @@
 import { Array, Option } from 'effect'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { Button, Textarea } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { Cart } from '../domain'
-import { Message } from '../main'
+import { Message } from '../message'
 import { cartRouter, productsRouter } from '../route'
 
-// VIEW
-
 export const view = (
-  cart: Cart.Cart,
+  cart: typeof Cart.Cart.Type,
   deliveryInstructions: string,
   orderPlaced: boolean,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   if (orderPlaced) {
     return h.div(

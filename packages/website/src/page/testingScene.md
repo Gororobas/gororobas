@@ -197,30 +197,40 @@ When update returns Commands, Scene keeps them pending until the test supplies t
 - Interactions throw if there are unresolved Commands when they try to dispatch a Message.
 - `scene` throws at the end if any Command remains unresolved.
 
+Use `Command.keepPending(Definition | instance)` when one ordinary Command is still running and the Scene must perform a later interaction or deliver a Subscription Message before its result arrives. The matcher must select one exact pending invocation. An instance can select its args and bound child occurrence.
+
+::Snippet{name="testingKeepPendingCommand" label="Keep a Command pending across later events"}
+
+The kept Command remains visible to `expectHas`, `expectExact`, and every resolver. `resolveAllExact` still requires the complete pending set, and the Scene still fails at the end until the Command is resolved. The exemption applies only to Scene's boundary check for later Messages; Runtime behavior and the Command value are unchanged.
+
 ### Resolve and Inspect Commands
 
 ::Snippet{name="sceneCommandAssertions" label="Command assertions"}
 
-| Step                                                 | Effect                                                                                                                                                                                                                                       |
-| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Command.resolve(Def, ResultMessage)`                | Resolves the first pending Command with the given name by feeding `ResultMessage` through update. For a child Submodel Command, pass the child’s raw result Message; resolve replays the Command’s own `mapMessages` wrapping automatically. |
-| `Command.resolveAll([Def, ResultMessage], ...)`      | Resolves a batch of pending Commands, walking cascades. Each entry resolves exactly one matching dispatch in declaration order and unmatched entries carry forward; compose with Array.makeBy for N identical responses.                     |
-| `Command.resolveAllExact([Def, ResultMessage], ...)` | Resolves a batch and throws unless every listed resolver matches within the call and no actual Commands remain unresolved. Repeated Definition entries consume repeated dispatches in declaration order.                                     |
-| `Command.expectExact(A, B)`                          | The pending Commands are exactly A and B (order-independent).                                                                                                                                                                                |
-| `Command.expectHas(A)`                               | A is among the pending Commands (subset check).                                                                                                                                                                                              |
-| `Command.expectNone()`                               | There are no pending Commands.                                                                                                                                                                                                               |
+| Step                                                 | Effect                                                                                                                                                                                                                                          |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Command.argsOf(Def)(pending)`                       | Projects the exact captured args when `pending` has the Definition's source identity. It returns `Option`, leaves the pending value unchanged, and does not select among matching occurrences.                                                  |
+| `Command.resolve(Def, ResultMessage)`                | Resolves the first pending Command from the given Definition by feeding `ResultMessage` through update. For a child Block Command, pass the child’s raw result Message; resolve replays the Command’s own `mapMessages` wrapping automatically. |
+| `Command.resolveAll([Def, ResultMessage], ...)`      | Resolves a batch of pending Commands, walking cascades. Each entry resolves exactly one matching dispatch in declaration order and unmatched entries carry forward; compose with Array.makeBy for N identical responses.                        |
+| `Command.resolveAllExact([Def, ResultMessage], ...)` | Resolves a batch and throws unless every listed resolver matches within the call and no actual Commands remain unresolved. Repeated Definition entries consume repeated dispatches in declaration order.                                        |
+| `Command.expectExact(A, B)`                          | The pending Commands are exactly A and B (order-independent).                                                                                                                                                                                   |
+| `Command.expectHas(A)`                               | A is among the pending Commands (subset check).                                                                                                                                                                                                 |
+| `Command.expectNone()`                               | There are no pending Commands.                                                                                                                                                                                                                  |
+| `Command.keepPending(A)`                             | Lets later Scene Messages arrive while the one exact matching invocation remains pending. Assertions, resolvers, `resolveAllExact`, and final completeness still include it.                                                                    |
 
 ### Match Command Names and Arguments
 
 Prefer `Command.expectExact` as the default. It catches bugs where an interaction produces unexpected Commands. Use `Command.expectHas` when you only care about a subset of the pending Commands.
 
-Each matcher accepts either a Command Definition (matches by name) or a Command instance (matches by name AND structural-equal args). Pass a Definition when the test only cares that the Command was dispatched; pass an instance when the args are part of what the test is verifying. `Command.expectExact(FetchWeather({ zipCode: '90210' }))` fails if the runtime dispatched `FetchWeather({ zipCode: '99999' })`, where the same call with just `FetchWeather` would pass.
+Each matcher accepts either a Command Definition or a Command instance. A Definition matches the originating declaration, including after a Binding qualifies its displayed name. An instance also checks structurally equal args, and a bound instance selects its composition path. Pass a Definition when the test only cares that this Command was dispatched; pass an instance when its args are part of what the test is verifying. `Command.expectExact(FetchWeather({ zipCode: '90210' }))` fails if the runtime dispatched `FetchWeather({ zipCode: '99999' })`, where the same call with just `FetchWeather` would pass.
+
+When a Scene helper needs to read captured args before resolving a Command, use `Command.argsOf` with the original Definition. The [Story example](/testing/story#inspect-captured-command-arguments) shows the same projection over both Story and Scene simulations. Keep occurrence selection explicit; `argsOf` returns every source match when mapped across the pending list.
 
 ## Mounts
 
 When a rendered view contains an `OnMount` attribute, Scene keeps that Mount pending until the test supplies its result Message. If the mounted element later leaves the tree, the test must also acknowledge the unmount with `Mount.expectEnded`.
 
-This applies to Mounts declared inside `@foldkit/ui` components too. Popovers, dialogs, and other components export their Mount Definitions so a consumer test can name and resolve them.
+This applies to Mounts declared inside `@foldkit/ui` components too. Popovers, dialogs, and other components expose their original Mount Definitions under their public `test` namespaces so a consumer test can name and resolve them.
 
 ### Mount Lifecycle Rules
 
@@ -234,24 +244,30 @@ This applies to Mounts declared inside `@foldkit/ui` components too. Popovers, d
 
 ::Snippet{name="sceneMountAssertions" label="Mount assertions"}
 
-| Step                                          | Effect                                                                                                                                                                                                                            |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Mount.resolve(Def, ResultMessage)`           | Resolves the first pending mount with the given name by feeding `ResultMessage` through update. For a mount inside a child Submodel, resolve replays the boundary lift automatically, so you pass the child’s raw result Message. |
-| `Mount.resolveAll([Def, ResultMessage], ...)` | Resolves a batch of pending mounts in order.                                                                                                                                                                                      |
-| `Mount.expectExact(A, B)`                     | The pending mounts are exactly A and B (order-independent, by name).                                                                                                                                                              |
-| `Mount.expectHas(A)`                          | A is among the pending mounts (subset check).                                                                                                                                                                                     |
-| `Mount.expectNone()`                          | There are no pending mounts.                                                                                                                                                                                                      |
-| `Mount.expectEnded(A)`                        | A has disappeared from the rendered tree. Required for every Mount that fires and then unmounts during the scene, regardless of whether it was resolved first; otherwise the scene throws at the end.                             |
+| Step                                          | Effect                                                                                                                                                                                                                               |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Mount.resolve(Def, ResultMessage)`           | Resolves the first pending Mount from the given Definition by feeding `ResultMessage` through update. For a Mount inside a child Block, resolve replays the boundary lift automatically, so you pass the child’s raw result Message. |
+| `Mount.resolveAll([Def, ResultMessage], ...)` | Resolves a batch of pending mounts in order.                                                                                                                                                                                         |
+| `Mount.expectExact(A, B)`                     | The pending mounts are exactly A and B (order-independent, by source identity).                                                                                                                                                      |
+| `Mount.expectHas(A)`                          | A is among the pending mounts by source identity.                                                                                                                                                                                    |
+| `Mount.expectNone()`                          | There are no pending mounts.                                                                                                                                                                                                         |
+| `Mount.expectEnded(A)`                        | A has disappeared from the rendered tree. Required for every Mount that fires and then unmounts during the scene, regardless of whether it was resolved first; otherwise the scene throws at the end.                                |
 
-UI components export their Mount definitions (`Popover.AnchorPopover`, `Listbox.AnchorListbox`, and so on) so consumer tests can name them in `Mount.resolve`.
+UI components expose their Mount Definitions as `Popover.test.AnchorPopover`, `Listbox.test.AnchorListbox`, and so on. These are the original declarations, so source-identity matching survives placement-qualified runtime names. The [testing migration cookbook](/testing#migrate-an-existing-test-suite) shows the completed Block and public test namespace together.
 
 ## Subscriptions
 
-A Subscription Message has no element to interact with. `Subscription.emit(message)` feeds a timer tick, WebSocket frame, global listener result, or other Subscription output through update and renders the next view.
+`Subscription.emit` supplies a declared Subscription output, such as a timer tick, WebSocket frame, or global listener result. Register the complete application's Subscriptions in the `scene` config, then pass the exact entry and its raw Message to run update and render the next view. `Scene.subscriptions(ApplicationComposition, localSubscriptions?)` combines the root declarations with the registered children's placement-qualified entries without building Layers or running Streams. A completed feature Block already exposes its complete `.subscriptions` registry. A Scene with no `subscriptions` config accepts no Subscription Message.
 
-::Snippet{name="sceneSubscriptionEmit" label="Emitting a Subscription value"}
+::Snippet{name="testingSubscription" label="Emitting declared Subscription Messages"}
 
-Use it only when the Message's cause lives outside the rendered tree. If the Message comes from a button, click the button. That interaction verifies the handler wiring that `emit` would skip. `emit` throws while Commands, Mounts, or unacknowledged unmounts are pending.
+Each Subscription entry's `messages` collection is its emission contract. `emit(entry, message)` accepts only a raw Message declared by that registered entry and validates its payload at runtime. An entry with `messages: []` has no Message that Scene can emit.
+
+For a lifted Subscription, pass the child Message. Scene replays the entry's generated delivery through every child boundary before calling the update under test. The entry argument always makes the event source explicit, including when several Subscriptions declare the same Message.
+
+`emit` supplies an output from the registered Subscription graph; it does not evaluate `modelToDependencies` against the current Model. This allows a test to represent an event that was already queued when its Subscription became inactive.
+
+Use `emit` for a Subscription-origin fact. If the same Message can come from a button or another DOM interaction, use that interaction when testing the DOM-origin path. The interaction verifies the handler wiring that `emit` would skip. `emit` throws while Commands, Mounts, or unacknowledged unmounts are pending.
 
 ## Managed Resources
 
@@ -295,13 +311,13 @@ A single interaction can drive several updates. A click may invoke a target hand
 
 Scene replaces the tracked sequence after every step that drives update. A step whose updates omit `outMessage` clears the previous sequence, so `expectNoOutMessage()` describes the current transition instead of inheriting an earlier result. Assertions and other steps that do not drive update leave the sequence in place.
 
-## Submodels with ViewInputs
+## Blocks with ViewInputs
 
-A Submodel with ViewInputs has a `(model, viewInputs, h)` view. Scene expects `(model, h)`. `withViewInputs(view, defaults)` adapts the view once and returns a factory for Scene views.
+To test a completed UI Block with render inputs, embed it through a local parent Binding and supply those inputs in the parent view. Author the parent view with `makeView.withInputs` when tests need to vary its inputs. `withViewInputs(view, defaults)` adapts that parent-owned view to Scene's `(model, h)` signature.
 
-::Snippet{name="sceneWithViewInputs" label="Using withViewInputs"}
+::Snippet{name="sceneWithViewInputs" label="Testing an embedded Block with view inputs"}
 
-Each test can override any ViewInputs field except `toView`, so values vary while the renderer stays fixed. See `packages/ui/src/slider/scene.test.ts` for a complete example.
+Each test can override the parent view inputs. Keep the embedded Block's `toView` callback in the parent renderer so the same markup and dispatch boundary are used across cases. A feature's own tests may adapt its private authored view directly.
 
 ## A Complete Scene
 

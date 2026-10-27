@@ -1,17 +1,10 @@
-import { Submodel } from 'foldkit'
-import type { Html } from 'foldkit/html'
-
 import { type CodeBlock } from '../../component'
-import { slotDocPage } from '../../markdown'
 import { type RenderHeadingLink, demoContainer } from '../../prose'
+import { UiComposition } from './composition'
+import { PopoverPageContent } from './content'
 import * as Popover from './demo/popover'
-import type { Message } from './message'
-import type { Model } from './model'
-import raw from './popoverPage.md'
 
-const { tableOfContents, view: renderPage } = slotDocPage<
-  'basic' | 'arrow' | 'animated' | 'nested'
->(raw, 'ui/popover')
+const { tableOfContents, view: renderPage } = PopoverPageContent
 
 export { tableOfContents }
 
@@ -21,8 +14,8 @@ type ViewInputs = Readonly<{
   renderHeadingLink: RenderHeadingLink
 }>
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h): Html =>
+export const view = UiComposition.makeView.withInputs<ViewInputs>(
+  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h) =>
     renderPage({
       demos: {
         basic: demoContainer(...Popover.basicDemo(model.popoverBasicDemo, h)),

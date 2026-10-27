@@ -1,96 +1,195 @@
+import { Array, Result, Schema } from 'effect'
+import type { Effect } from 'effect'
+import type * as Block from 'foldkit/block'
 import * as Story from 'foldkit/story'
+import { __bindCommandMatcher } from 'foldkit/test'
 
-import * as Animation from '../animation/index.js'
-import { Message } from './schema.js'
-import { WaitBeforeDismissal } from './update.js'
+import {
+  AnimationBlock,
+  WaitForAnimationSettled,
+  WaitForPaint,
+} from '../animation/block.js'
+import { Message as AnimationMessage } from '../animation/schema.js'
+import { Message as ToastMessage } from './schema.js'
 
-/** Input for {@link drainEntry}. `entryId` selects the entry whose lifecycle
- *  to drain. `version` is the auto-dismiss timer version echoed back by
- *  `CompletedWaitBeforeDismissal`; it defaults to `0`, the version a freshly
- *  shown entry carries. */
-export type DrainEntryInput = Readonly<{
-  entryId: string
-  version?: number
+const WaitBeforeDismissalArgs = Schema.Struct({
+  entryId: Schema.String,
+  version: Schema.Number,
+  duration: Schema.DurationFromMillis,
+})
+type WaitBeforeDismissalArgs = typeof WaitBeforeDismissalArgs.Type
+
+type CommandInstance<ResultMessage> = Readonly<{
+  name: string
+  args?: Record<string, unknown>
+  effect: Effect.Effect<ResultMessage, unknown, unknown>
 }>
 
-const DEFAULT_VERSION = 0
+type BindingFor<BlockValue> = Block.AnyBinding &
+  Block.BindingEvidence<BlockValue, unknown, unknown, boolean>
+
+type BindingOccurrence<BindingValue> =
+  BindingValue extends Block.BindingEvidence<unknown, unknown, unknown, true> &
+    Readonly<{ fold: (...args: infer Args) => unknown }>
+    ? Args extends readonly [unknown, infer Key, ...ReadonlyArray<unknown>]
+      ? Readonly<{ key: Key & (string | number) }>
+      : never
+    : Readonly<{ key?: never }>
+
+/** Input for a completed Toast Block's `test.drainEntry` helper. `binding`
+ * selects the exact placement of that completed Block. A keyed Binding also
+ * requires an occurrence `key` of that Binding's key type. `entryId` selects a
+ * freshly shown entry, and `version` defaults to its initial timer version
+ * `0`. */
+export type DrainEntryInput<
+  BlockValue,
+  BindingValue extends BindingFor<NoInfer<BlockValue>>,
+> = Readonly<{
+  binding: BindingValue
+  entryId: string
+  version?: number
+}> &
+  BindingOccurrence<BindingValue>
+
+/** Completed Toast Block Story helper for one exact Binding occurrence. */
+export type DrainEntry<BlockValue> = <
+  const BindingValue extends BindingFor<NoInfer<BlockValue>>,
+>(
+  input: DrainEntryInput<BlockValue, BindingValue>,
+) => <Model, Message, OutMessage>(
+  simulation: Story.StorySimulation<Model, Message, OutMessage>,
+) => Story.StorySimulation<Model, Message, OutMessage>
+
+/** Test helpers attached to one completed Toast Block. */
+export type ToastTest<BlockValue> = Readonly<{
+  drainEntry: DrainEntry<BlockValue>
+}>
+
+type FixtureTest<BlockValue> = ToastTest<BlockValue> &
+  Readonly<{
+    matchWaitForPaint: (
+      entryId: string,
+      generation: number,
+    ) => CommandInstance<typeof AnimationMessage.CompletedWaitForPaint.Type>
+    matchWaitForAnimationSettled: (
+      entryId: string,
+      generation: number,
+    ) => CommandInstance<typeof AnimationMessage.EndedAnimation.Type>
+  }>
+
 const ENTER_TRANSITION_GENERATION = 1
 const LEAVE_TRANSITION_GENERATION = 2
 
-/** Builds a `Story.Command.resolveAll` step that drains a single toast
- *  entry's full animation and dismiss lifecycle. Resolving these Commands in
- *  order takes a freshly shown entry from its enter animation through
- *  auto-dismiss and its exit animation, ending with the entry removed from the
- *  stack and the `DismissedToast` OutMessage emitted.
- *
- *  Showing a toast via `Toast.show` emits a multi-step lifecycle that a Story
- *  test must resolve in full or the story fails on leftover Commands. The
- *  steps are:
- *
- *  - enter animation: `WaitForPaint` then `CompletedWaitForPaint`
- *  - enter settle: `WaitForAnimationSettled` then `EndedAnimation`
- *  - auto-dismiss: `WaitBeforeDismissal` then
- *    `CompletedWaitBeforeDismissal`
- *  - exit animation: `WaitForPaint` then `CompletedWaitForPaint`
- *  - exit settle: `WaitForAnimationSettled` then `EndedAnimation`
- *
- *  The enter steps match animation transition generation `1`, which the
- *  entry's `Showed` starts, and the exit steps match generation `2`, which its
- *  `Hid` starts. Each step matches only its own generation, so the helper also
- *  an entry whose enter the test has already resolved. These versions are
- *  separate from the auto-dismiss timer `version`.
- *
- *  Each step resolves with the child's raw result Message. `resolveAll` replays
- *  the matched Command's own recorded wrapping, so a parent that embeds the
- *  toast Submodel drains the same way without restating its `Got*` lift.
- *
- *  @example
- *  ```ts
- *  Story.story(
- *    update,
- *    Story.given(model),
- *    Story.message(ClickedSave()),
- *    Toast.test.drainEntry({ entryId: 'toast-entry-0' }),
- *  )
- *  ```
- */
-export const drainEntry = ({
-  entryId,
-  version = DEFAULT_VERSION,
-}: DrainEntryInput) =>
-  Story.Command.resolveAll(
-    [
-      Animation.WaitForPaint({ generation: ENTER_TRANSITION_GENERATION }),
-      Animation.Message.CompletedWaitForPaint({
-        generation: ENTER_TRANSITION_GENERATION,
-      }),
-    ],
-    [
-      Animation.WaitForAnimationSettled({
-        id: entryId,
-        generation: ENTER_TRANSITION_GENERATION,
-      }),
-      Animation.Message.EndedAnimation({
-        generation: ENTER_TRANSITION_GENERATION,
-      }),
-    ],
-    [
-      WaitBeforeDismissal,
-      Message.CompletedWaitBeforeDismissal({ entryId, version }),
-    ],
-    [
-      Animation.WaitForPaint({ generation: LEAVE_TRANSITION_GENERATION }),
-      Animation.Message.CompletedWaitForPaint({
-        generation: LEAVE_TRANSITION_GENERATION,
-      }),
-    ],
-    [
-      Animation.WaitForAnimationSettled({
-        id: entryId,
-        generation: LEAVE_TRANSITION_GENERATION,
-      }),
-      Animation.Message.EndedAnimation({
-        generation: LEAVE_TRANSITION_GENERATION,
-      }),
-    ],
-  )
+/** @internal Builds instance-bound test helpers while retaining Toast's
+ * private timer Definition and Animation Binding identity. */
+export const makeTest = <const BlockValue extends object>({
+  block,
+  entryAnimationBinding,
+  waitBeforeDismissal,
+}: Readonly<{
+  block: BlockValue
+  entryAnimationBinding: BindingFor<typeof AnimationBlock>
+  waitBeforeDismissal: (
+    args: WaitBeforeDismissalArgs,
+  ) => CommandInstance<typeof ToastMessage.CompletedWaitBeforeDismissal.Type>
+}>): FixtureTest<BlockValue> => {
+  const matchWaitForPaint = (entryId: string, generation: number) =>
+    __bindCommandMatcher(
+      AnimationBlock,
+      entryAnimationBinding,
+      WaitForPaint({ generation }),
+      entryId,
+    )
+
+  const matchWaitForAnimationSettled = (entryId: string, generation: number) =>
+    __bindCommandMatcher(
+      AnimationBlock,
+      entryAnimationBinding,
+      WaitForAnimationSettled({ id: entryId, generation }),
+      entryId,
+    )
+
+  /** Drains one freshly shown entry through enter, auto-dismiss, and exit.
+   * The helper selects the caller's exact Toast Binding, entry id, timer
+   * version, and Animation generations. */
+  const drainEntry: DrainEntry<BlockValue> =
+    <const BindingValue extends BindingFor<NoInfer<BlockValue>>>({
+      binding,
+      entryId,
+      key,
+      version = 0,
+    }: DrainEntryInput<BlockValue, BindingValue>) =>
+    <Model, Message, OutMessage>(
+      simulation: Story.StorySimulation<Model, Message, OutMessage>,
+    ): Story.StorySimulation<Model, Message, OutMessage> => {
+      const bindToastMatcher = <MatchedMessage>(
+        matcher: CommandInstance<MatchedMessage>,
+      ) => __bindCommandMatcher(block, binding, matcher, key)
+
+      const resolveAnimation = (
+        current: Story.StorySimulation<Model, Message, OutMessage>,
+        generation: number,
+      ) => {
+        const afterPaint = Story.Command.resolve(
+          bindToastMatcher(matchWaitForPaint(entryId, generation)),
+          AnimationMessage.CompletedWaitForPaint({ generation }),
+        )(current)
+
+        return Story.Command.resolve(
+          bindToastMatcher(matchWaitForAnimationSettled(entryId, generation)),
+          AnimationMessage.EndedAnimation({ generation }),
+        )(afterPaint)
+      }
+
+      const afterEnter = resolveAnimation(
+        simulation,
+        ENTER_TRANSITION_GENERATION,
+      )
+
+      const timerMatchers = Array.filterMap(afterEnter.commands, command => {
+        const { args } = command
+        if (
+          !Schema.is(WaitBeforeDismissalArgs)(args) ||
+          args.entryId !== entryId ||
+          args.version !== version
+        ) {
+          return Result.failVoid
+        }
+
+        const matcher = bindToastMatcher(waitBeforeDismissal(args))
+        return matcher.matches(command)
+          ? Result.succeed(matcher)
+          : Result.failVoid
+      })
+
+      const timerMatcher = Array.match(timerMatchers, {
+        onEmpty: () => {
+          throw new Error(
+            `[foldkit/ui] Toast.test.drainEntry could not find the fresh auto-dismiss timer for entry "${entryId}" at version ${String(version)}.`,
+          )
+        },
+        onNonEmpty: nonEmpty => {
+          if (Array.isArrayNonEmpty(Array.drop(nonEmpty, 1))) {
+            throw new Error(
+              `[foldkit/ui] Toast.test.drainEntry found multiple auto-dismiss timers for entry "${entryId}" at version ${String(version)}. Select an unambiguous ancestor Binding occurrence.`,
+            )
+          }
+
+          return Array.headNonEmpty(nonEmpty)
+        },
+      })
+
+      const afterTimer = Story.Command.resolve(
+        timerMatcher,
+        ToastMessage.CompletedWaitBeforeDismissal({ entryId, version }),
+      )(afterEnter)
+
+      return resolveAnimation(afterTimer, LEAVE_TRANSITION_GENERATION)
+    }
+
+  return {
+    matchWaitForPaint,
+    matchWaitForAnimationSettled,
+    drainEntry,
+  }
+}

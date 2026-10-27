@@ -6,9 +6,8 @@ export const Painting = Schema.Struct({
   artist: Schema.String,
   gradient: Schema.String,
 })
-export type Painting = typeof Painting.Type
 
-export const paintings: ReadonlyArray<Painting> = [
+export const paintings: ReadonlyArray<typeof Painting.Type> = [
   {
     id: 1,
     title: 'Dawn Over the Harbor',
@@ -49,7 +48,9 @@ export const paintings: ReadonlyArray<Painting> = [
 
 export const findPaintingWithIndex = (
   paintingId: number,
-): Option.Option<Readonly<{ painting: Painting; paintingIndex: number }>> =>
+): Option.Option<
+  Readonly<{ painting: typeof Painting.Type; paintingIndex: number }>
+> =>
   pipe(
     Array.findFirstIndex(paintings, painting => painting.id === paintingId),
     Option.flatMap(paintingIndex =>

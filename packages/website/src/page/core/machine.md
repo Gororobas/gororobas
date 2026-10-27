@@ -117,7 +117,7 @@ Most update functions also handle Messages that do not belong to the transition 
 
 #### Step Form
 
-The fold is dual. Call `foldCheckout(model, message)` directly, or call `foldCheckout(message)` to produce a Step for `Update.combine`. A contextual Machine also supplies `context: model => ...` in the fold configuration.
+The fold is dual. Call `foldCheckout(model, message)` directly, or call `foldCheckout(message)` to produce a Step for `Update.combineSteps`. A contextual Machine also supplies `context: model => ...` in the fold configuration.
 
 ### Inspecting a Transition
 

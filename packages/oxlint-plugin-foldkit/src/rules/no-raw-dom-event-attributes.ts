@@ -164,8 +164,11 @@ const keyPropertyValue = (
 const attributeEventName = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<string> => {
-  if (!isFoldkitHtmlBuilderMember(node.callee, 'Attribute', references)) {
+  if (
+    !isFoldkitHtmlBuilderMember(node.callee, 'Attribute', references, filename)
+  ) {
     return Option.none()
   }
   const [firstArgument] = node.arguments
@@ -175,8 +178,9 @@ const attributeEventName = (
 const propEventName = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<string> => {
-  if (!isFoldkitHtmlBuilderMember(node.callee, 'Prop', references)) {
+  if (!isFoldkitHtmlBuilderMember(node.callee, 'Prop', references, filename)) {
     return Option.none()
   }
   const [configArgument] = node.arguments
@@ -216,8 +220,8 @@ export const noRawDomEventAttributes = Rule.define({
           return Effect.void
         }
         return pipe(
-          attributeEventName(node, references),
-          Option.orElse(() => propEventName(node, references)),
+          attributeEventName(node, references, ctx.filename),
+          Option.orElse(() => propEventName(node, references, ctx.filename)),
           Option.match({
             onNone: () => Effect.void,
             onSome: attributeName =>

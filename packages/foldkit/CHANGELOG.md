@@ -1,5 +1,35 @@
 # foldkit
 
+## 0.169.0
+
+### Minor Changes
+
+- [#1679](https://github.com/foldkit/foldkit/pull/1679) [`76fa0d1`](https://github.com/foldkit/foldkit/commit/76fa0d1ee2a5f9d06333e83a1ee381eab0ed37d5) Thanks [@Tanner-Scadden](https://github.com/Tanner-Scadden)! - Add `Lazy.expectAllReused` to `foldkit/test` to check lazy cache reuse. It renders a view twice with the same Model and throws an error if any lazy call misses its cache on the second render. The error identifies each miss by slot number, includes the key for keyed calls, and explains the reason. `ArgumentsChanged` also lists the changed argument indices. The helper throws if the second render makes no lazy calls. Test Models that render different memoized content separately, and test child views directly when an outer lazy cache hit skips them.
+
+- [#1701](https://github.com/foldkit/foldkit/pull/1701) [`c55d84c`](https://github.com/foldkit/foldkit/commit/c55d84c8199b805edcb4bef0f272c12d85cf8991) Thanks [@SyahrulBhudiF](https://github.com/SyahrulBhudiF)! - Add `Transition.match` and `Transition.matchOrElse` for route entry, exit, stay, and unrelated policies with payloads narrowed to the selected Route tag. Both support a shared return type for composing Steps, including Command requirements and OutMessages. Add `Transition.isExiting` and `Transition.isStaying` predicates.
+
+### Patch Changes
+
+- Rebuild with the release's shared tooling configuration so the published packages and website use the same build inputs.
+
+- [#1528](https://github.com/foldkit/foldkit/pull/1528) [`c9c5fce`](https://github.com/foldkit/foldkit/commit/c9c5fce00a5c20aaa510b8977e0aaa41251bc5a8) Thanks [@armancharan](https://github.com/armancharan)! - Allow input methods to confirm Japanese, Chinese, and Korean conversions in Combobox and other views using `OnKeyDown` attributes. Composing keydowns do not call the handler or prevent the browser default. `Subscription.keyBindings` also ignores keydowns reported with `keyCode` 229 and `isComposing` false, preventing shortcuts from intercepting conversion confirmation.
+
+- [#1508](https://github.com/foldkit/foldkit/pull/1508) [`8c25364`](https://github.com/foldkit/foldkit/commit/8c25364b480e30502f67fa869966facf0b1f3e9f) Thanks [@armancharan](https://github.com/armancharan)! - Fix elements remaining inert after `Dom.restoreInert` when `Dom.inertOthers` is called repeatedly with the same id. Each repeated call acquires the replacement isolation before releasing the previous one, so shared elements keep `inert` and `aria-hidden` throughout. One restore releases that id's isolation.
+
+- [#1548](https://github.com/foldkit/foldkit/pull/1548) [`18ba6fb`](https://github.com/foldkit/foldkit/commit/18ba6fbd2da89d3dece715cdd88621f32ad10b68) Thanks [@artile](https://github.com/artile)! - Stop a render from crashing the app when it inserts a sibling before an element that a Mount moved out of its parent. An open `@foldkit/ui` Popover, Menu, Listbox, Combobox, Tooltip, or DatePicker panel is moved into a portal root by default, while its vnode stays among its siblings. A later render that added an element before the panel, for example a badge between the trigger and the panel, passed the panel to `insertBefore` as the reference node. The panel was no longer a child of that parent, so the browser threw `NotFoundError` and the runtime showed the crash screen.
+
+  The virtual DOM patch now checks that a child's element is still inside its parent. When it is not, the patch inserts before the next sibling that is still there, or at the end of the parent when there is none. A reorder of the siblings also leaves the moved element in the portal root instead of pulling it back.
+
+- [#1659](https://github.com/foldkit/foldkit/pull/1659) [`1ce3d4b`](https://github.com/foldkit/foldkit/commit/1ce3d4b050553d7564ed055488877f0039bbad31) Thanks [@devinjameson](https://github.com/devinjameson)! - Reduce server rendering CPU work by sharing parsed HTML trees across checks that use the same insertion context and scripting mode. Template injection captures the rendered HTML once so validation and insertion use the same markup. All markup safety and hydration checks run in both development and production.
+
+- [#1702](https://github.com/foldkit/foldkit/pull/1702) [`0ce4102`](https://github.com/foldkit/foldkit/commit/0ce410295d8e2e4e76ad101278c78535401bb318) Thanks [@servaasvdc](https://github.com/servaasvdc)! - Prevent inputs bound with `h.Value` and `h.OnInput` from losing typed characters when a render frame runs before queued Messages update the Model.
+
+  Skip rendering while an over-budget Message drain is waiting to resume in a later task, including inside View Transition callbacks. Render after the queue catches up.
+
+- [#1666](https://github.com/foldkit/foldkit/pull/1666) [`96fc8d2`](https://github.com/foldkit/foldkit/commit/96fc8d2ec12c3d8b261bdf017db9e0ebf24ec49f) Thanks [@Tanner-Scadden](https://github.com/Tanner-Scadden)! - Story and Scene errors for unresolved child Commands now point to component test helpers such as `Toast.test.drainEntry`.
+
+- [#1549](https://github.com/foldkit/foldkit/pull/1549) [`4bb393d`](https://github.com/foldkit/foldkit/commit/4bb393d8dd94ff95600aa3f5670624057919124e) Thanks [@artile](https://github.com/artile)! - Fix `dispatchAcrossBoundary missing wrap` when a focused element is removed during Submodel teardown. Boundary wrapping remains available while the subtree's destroy hooks run, allowing `blur` and other teardown events to reach `update`. This covers a focused, portaled Popover panel that closes while its Submodel is removed.
+
 ## 0.168.0
 
 ### Patch Changes

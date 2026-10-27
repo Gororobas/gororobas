@@ -92,6 +92,7 @@ jobs:
 
       - name: Run example E2E shard
         env:
+          DEBUG: pw:webserver
           EXAMPLES: ${{ matrix.examples }}
         run: |
           failed_examples=()

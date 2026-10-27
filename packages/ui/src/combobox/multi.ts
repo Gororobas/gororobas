@@ -1,18 +1,25 @@
-import { Option, Schema } from 'effect'
-import { type Update } from 'foldkit'
+import { Schema, Tuple } from 'effect'
+import * as Block from 'foldkit/block'
 import { modifyFields } from 'foldkit/struct'
-import type { View as SubmodelView } from 'foldkit/submodel'
 
 import {
   type BaseInitConfig,
   BaseModel,
   type BaseViewInputs,
+  ComboboxNamespace,
+  EffectsLayer,
+  type ItemSchema,
   Message,
+  type MessageSchema,
   OutMessage,
+  type OutMessageSchema,
   baseInit,
   closedBaseModel,
-  makeUpdate,
+  makeMessage,
+  makeOutMessage,
+  makeUpdateHandlers,
   makeView,
+  mounts,
 } from './shared.js'
 
 // MODEL
@@ -24,13 +31,16 @@ export const Model = Schema.Struct({
 
 export type Model = typeof Model.Type
 
+const ComboboxDefinition = ComboboxNamespace.makeDefinition({
+  Model,
+  Message,
+  OutMessage,
+})
+
 // INIT
 
 /** Configuration for creating a multi-select combobox model with `init`. `isAnimated` enables CSS transition coordination (default `false`). `isModal` locks page scroll and inerts other elements when open (default `false`). */
 export type InitConfig = BaseInitConfig
-
-/** Creates an initial multi-select combobox model from a config. Defaults to closed with no active item and an empty input. */
-export const init = (config: InitConfig): Model => baseInit(config)
 
 // UPDATE
 
@@ -40,97 +50,177 @@ export const init = (config: InitConfig): Model => baseInit(config)
  *  membership.
  *  Closing never emits `ClearedSelection` because its input rests empty by
  *  design. Clear the selection by toggling each value off. */
-export const update = makeUpdate<Model>({
-  handleClose: model => ({
-    model: modifyFields(closedBaseModel(model), { inputValue: () => '' }),
-  }),
+const defaultUpdate = makeUpdateHandlers(
+  ComboboxDefinition.makeBinding,
+  ComboboxDefinition.makeOutMessageFold,
+  ComboboxDefinition.makeStep,
+  ComboboxDefinition.makeFieldsStep,
+  ComboboxDefinition.makeNoopStep,
+  ComboboxDefinition.makeCommandsStep,
+  'KeepOpen',
+  {
+    handleClose: model => ({
+      model: modifyFields(closedBaseModel(model), { inputValue: () => '' }),
+    }),
 
-  handleSelectedItem: (model, item) => ({
-    model,
-    outMessage: OutMessage.Selected({ value: item }),
-  }),
+    handleSelectedItem: (model, item) => ({
+      model,
+      outMessage: OutMessage.Selected({ value: item }),
+    }),
 
-  handleImmediateActivation: (model, item) => ({
-    model,
-    outMessage: OutMessage.Selected({ value: item }),
-  }),
+    handleImmediateActivation: (model, item) => ({
+      model,
+      outMessage: OutMessage.Selected({ value: item }),
+    }),
+  },
+)
+
+const ComboboxComposition = ComboboxDefinition.makeComposition({
+  mounts,
+  bindings: [defaultUpdate.AnimationBinding],
 })
+
+export const update = ComboboxComposition.makeUpdate(defaultUpdate.handlers)
 
 type UpdateReturn = ReturnType<typeof update>
 
 /** Programmatically opens the Combobox, updating the Model and returning
- *  focus and modal Commands. Use this in domain-event handlers. */
+ *  focus and modal Commands. When it is already open, returns the Model
+ *  unchanged with no Commands. Use this in domain-event handlers. */
 export const open = (model: Model): UpdateReturn =>
-  update(model, Message.Opened({ maybeActiveItemIndex: Option.none() }))
+  block.operations.requestOpen(model)
 
 /** Programmatically closes the Combobox, updating the Model and returning
  *  focus and modal Commands. The multi-select input always rests empty on
  *  close. Use this in domain-event handlers to close the combobox. */
 export const close = (model: Model): UpdateReturn =>
-  update(model, Message.Closed({ restingInputValue: '', isClearable: true }))
+  block.operations.requestClose(model)
 
 /** Programmatically activates an item in the multi-select combobox. Emits
  *  `Selected({ value })`; the parent toggles the value's membership. */
 export const selectItem = (model: Model, item: string): UpdateReturn =>
-  update(
-    model,
-    Message.SelectedItem({ item, displayText: item, wasSelected: false }),
-  )
+  block.operations.requestSelectItem(model, item)
 
 // VIEW
 
-/** Per-render view inputs passed to the view via `h.submodel`'s `viewInputs` field. */
+/** Per-render view inputs passed to the view via `h.block`'s `viewInputs` field. */
 export type ViewInputs<Item extends string> = BaseViewInputs<Item>
 
-const internalView = makeView<Model>({ ariaMultiSelectable: true })
-
-type BundleUpdateReturn<Item extends string> = Update.ReturnWithOutMessage<
-  Model,
-  Message,
-  OutMessage<Item>
->
-
-/** The `view`, `update`, and programmatic helpers that
- *  `Combobox.Multi.create` returns, bound to one `Item` type. Name it to
- *  annotate a value that holds a created bundle, such as a field on a
- *  config object or a function parameter that takes the bundle rather than
- *  calling `create` itself. */
-export type Bundle<Item extends string = string> = Readonly<{
-  view: SubmodelView<Model, Message, ViewInputs<Item>>
-  update: (model: Model, message: Message) => BundleUpdateReturn<Item>
-  selectItem: (model: Model, item: Item) => BundleUpdateReturn<Item>
-  open: (model: Model) => BundleUpdateReturn<Item>
-  close: (model: Model) => BundleUpdateReturn<Item>
-}>
-
-/** Pairs the multi-select combobox's `view` and `update` (and programmatic
- *  helpers) behind a single Item-typed entry point. `selectItem` emits
- *  `Selected({ value })`; the parent toggles the value's membership. */
-export const create = <Item extends string = string>(): Bundle<Item> => {
-  type UpdateReturn = Update.ReturnWithOutMessage<
+const makeBlockParts = <Item extends string, ItemEncoded>(
+  Item: ItemSchema<Item, ItemEncoded>,
+) => {
+  const ItemMessage: MessageSchema<Item, ItemEncoded> = makeMessage(Item)
+  const ItemOutMessage: OutMessageSchema<Item, ItemEncoded> =
+    makeOutMessage(Item)
+  const ComboboxDefinition = ComboboxNamespace.makeDefinition({
     Model,
-    Message,
-    OutMessage<Item>
-  >
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  const typedUpdate = update as (model: Model, message: Message) => UpdateReturn
+    Message: ItemMessage,
+    OutMessage: ItemOutMessage,
+  })
+  const itemUpdate = makeUpdateHandlers(
+    ComboboxDefinition.makeBinding,
+    ComboboxDefinition.makeOutMessageFold,
+    ComboboxDefinition.makeStep,
+    ComboboxDefinition.makeFieldsStep,
+    ComboboxDefinition.makeNoopStep,
+    ComboboxDefinition.makeCommandsStep,
+    'KeepOpen',
+    {
+      handleClose: model => ({
+        model: modifyFields(closedBaseModel(model), { inputValue: () => '' }),
+      }),
+      handleSelectedItem: (model, item) => ({
+        model,
+        outMessage: ItemOutMessage.Selected({ value: item }),
+      }),
+      handleImmediateActivation: (model, item) => ({
+        model,
+        outMessage: ItemOutMessage.Selected({ value: item }),
+      }),
+    },
+  )
+  const ComboboxComposition = ComboboxDefinition.makeComposition({
+    mounts,
+    bindings: [itemUpdate.AnimationBinding],
+  })
+  const update = ComboboxComposition.makeUpdate(itemUpdate.handlers)
+  const init = ComboboxComposition.makeInit((config: InitConfig) => ({
+    model: baseInit(config),
+  }))
+  const view = ComboboxComposition.makeView.withInputs<ViewInputs<Item>>(
+    makeView<Model, Item, typeof ComboboxComposition.Message.Type, ItemEncoded>(
+      { ariaMultiSelectable: true },
+      ItemMessage,
+    ),
+  )
+  const requestOpen = ItemMessage.RequestedOpen
+  const requestClose = () =>
+    Tuple.make(
+      ItemMessage.RequestedClose({
+        restingInputValue: '',
+        isClearable: true,
+      }),
+    )
+  const requestSelectItem = (item: Item) =>
+    Tuple.make(
+      ItemMessage.RequestedSelectItem({
+        item,
+        displayText: item,
+      }),
+    )
+
+  const operations = { requestOpen, requestClose, requestSelectItem }
   return {
-    view: internalView<Item>(),
-    update: typedUpdate,
-    selectItem: (model, item) =>
-      typedUpdate(
-        model,
-        Message.SelectedItem({ item, displayText: item, wasSelected: false }),
-      ),
-    open: model =>
-      typedUpdate(
-        model,
-        Message.Opened({ maybeActiveItemIndex: Option.none() }),
-      ),
-    close: model =>
-      typedUpdate(
-        model,
-        Message.Closed({ restingInputValue: '', isClearable: true }),
-      ),
+    composition: ComboboxComposition,
+    implementation: {
+      view,
+      init,
+      update,
+      operations,
+      EffectsLayer,
+    },
   }
 }
+
+type BlockParts<Item extends string, ItemEncoded> = ReturnType<
+  typeof makeBlockParts<Item, ItemEncoded>
+>
+
+/** A completed multi-select Combobox Block refined to one Item Schema. */
+export interface Completed<
+  Item extends string = string,
+  ItemEncoded = Item,
+> extends Block.CompletedWithViewAndOutMessage<
+  BlockParts<Item, ItemEncoded>['composition'],
+  BlockParts<Item, ItemEncoded>['implementation']
+> {}
+
+const makeBlock = <Item extends string, ItemEncoded>(
+  Item: ItemSchema<Item, ItemEncoded>,
+): Completed<Item, ItemEncoded> => {
+  const { composition, implementation } = makeBlockParts(Item)
+
+  const prepare = () => composition.prepareBlock(implementation)
+  const completedBlock: Block.FromAssemblyWithViewAndOutMessage<
+    typeof Model,
+    typeof prepare
+  > = Block.assemble(prepare)
+
+  return completedBlock
+}
+
+/** Creates a checked multi-select Combobox Block. Pass an Item Schema to
+ * retain its exact Message and OutMessage payloads. */
+export function create(): Completed<string>
+export function create<Item extends string, ItemEncoded>(
+  Item: ItemSchema<Item, ItemEncoded>,
+): Completed<Item, ItemEncoded>
+export function create(Item: ItemSchema<string, unknown> = Schema.String) {
+  return makeBlock(Item)
+}
+
+/** Complete default multi-select Combobox Block definition. */
+export const block = makeBlock(Schema.String)
+
+/** Creates the initial multi-select Combobox Model and Commands. Defaults to closed with no active item and an empty input. */
+export const init = block.init

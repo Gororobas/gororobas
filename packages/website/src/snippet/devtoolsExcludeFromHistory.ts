@@ -1,15 +1,13 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
-  subscriptions,
+import { ApplicationBlock } from './application'
+
+const program = Program.make({
+  block: ApplicationBlock,
   container: document.getElementById('root'),
   devTools: {
     excludeFromHistory: ['TickedFrame', 'MovedPointer'],
   },
 })
 
-Runtime.run(application)
+Runtime.run(program)

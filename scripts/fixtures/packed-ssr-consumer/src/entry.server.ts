@@ -1,8 +1,8 @@
 import { Effect } from 'effect'
 import { Server } from 'foldkit/experimental'
 
+import { ApplicationBlock, Flags } from './application'
 import { PACKED_CONSUMER_HEAD, PACKED_CONSUMER_PROBE } from './document'
-import { Flags, init, view } from './main'
 
 export const renderDocument: Server.DocumentRenderer = (application, assets) =>
   Server.renderDocument(application, assets, {
@@ -11,9 +11,11 @@ export const renderDocument: Server.DocumentRenderer = (application, assets) =>
 
 export const renderPage = (): Promise<Server.EntryResult> =>
   Effect.runPromise(
-    Server.renderToString({ Flags, init, view }, { flags: { start: 0 } }).pipe(
-      Effect.map(rendered => Server.Rendered(rendered)),
-    ),
+    Server.renderToString(
+      ApplicationBlock,
+      { Flags },
+      { flags: { start: 0 } },
+    ).pipe(Effect.map(rendered => Server.Rendered(rendered))),
   )
 
 export const renderWithEmptyBuildId = (): Promise<string> =>
@@ -21,7 +23,8 @@ export const renderWithEmptyBuildId = (): Promise<string> =>
     Effect.map(
       Effect.flip(
         Server.renderToString(
-          { Flags, init, view },
+          ApplicationBlock,
+          { Flags },
           { flags: { start: 0 }, buildId: '' },
         ),
       ),

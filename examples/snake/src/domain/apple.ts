@@ -4,7 +4,7 @@ import { GAME } from '../constants'
 import { Position } from './position'
 import * as Snake from './snake'
 
-export const generatePosition = (snake: Snake.Snake) =>
+export const generatePosition = (snake: typeof Snake.Snake.Type) =>
   Effect.gen(function* () {
     const x = yield* Random.nextIntBetween(0, GAME.GRID_SIZE, {
       halfOpen: true,
@@ -12,7 +12,7 @@ export const generatePosition = (snake: Snake.Snake) =>
     const y = yield* Random.nextIntBetween(0, GAME.GRID_SIZE, {
       halfOpen: true,
     })
-    const pos: Position = { x, y }
+    const pos: typeof Position.Type = { x, y }
 
     if (Snake.contains(snake, pos)) {
       return yield* Effect.fail('PositionCollision' as const)

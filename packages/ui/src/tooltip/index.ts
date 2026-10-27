@@ -1,12 +1,7 @@
-export { Message, OutMessage } from './message.js'
-export type {
-  BlurredTrigger,
-  EnteredTrigger,
-  FocusedTrigger,
-  Hidden,
-  LeftTrigger,
-  PressedEscape,
-  PressedPointerOnTrigger,
-  Shown,
-} from './message.js'
-export * from './tooltip.js'
+export {
+  TooltipBlock,
+  triggerId,
+  type InitConfig,
+  type RenderInfo,
+  type ViewInputs,
+} from './block.js'

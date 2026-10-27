@@ -2,13 +2,14 @@ import { Array, Match, Option, pipe } from 'effect'
 import { AsyncData } from 'foldkit'
 
 import { allPages } from './docsNav'
-import { ApiReference, Blog } from './page'
-import { type AppRoute } from './route'
+import { Blog } from './page'
+import * as ApiReference from './page/apiReference/domain'
+import { type ApplicationRoute } from './route'
 
 const SITE_NAME = 'Foldkit'
 
 const resolveApiModuleName = (
-  apiData: ApiReference.ApiDataAsyncData,
+  apiData: typeof ApiReference.ApiDataAsyncData.schema.Type,
   moduleSlug: string,
 ): string =>
   Option.match(AsyncData.getData(apiData), {
@@ -21,8 +22,8 @@ const resolveApiModuleName = (
   })
 
 export const routeTitle = (
-  route: AppRoute,
-  apiData: ApiReference.ApiDataAsyncData,
+  route: typeof ApplicationRoute.Type,
+  apiData: typeof ApiReference.ApiDataAsyncData.schema.Type,
 ): string =>
   Match.value(route).pipe(
     Match.tag('Home', () => SITE_NAME),

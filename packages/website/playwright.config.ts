@@ -8,6 +8,7 @@ const isLivePlaygroundSmoke = liveWebsiteUrl !== undefined
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: !isLivePlaygroundSmoke,
+  ...(process.env['CI'] ? { workers: 1 } : {}),
   forbidOnly: Boolean(process.env['CI']),
   retries: isLivePlaygroundSmoke || process.env['CI'] === undefined ? 1 : 2,
   reporter: process.env['CI'] ? 'github' : 'list',

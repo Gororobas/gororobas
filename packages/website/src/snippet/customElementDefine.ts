@@ -40,7 +40,6 @@ const qrCode = CustomElement.define({
 const Message = defineMessageUnion({
   ChangedFillColor: { value: Schema.String },
 })
-type Message = typeof Message.Type
 
 // Inside a view, mint typed builders with `withMessage(h)`. The view's
 // builder fixes the Message universe, so the elements' event factories can
@@ -53,7 +52,7 @@ type Message = typeof Message.Type
 
 export const designerView = (
   model: { content: string; fillColor: string },
-  h: HtmlBuilder<Message>,
+  h: HtmlBuilder<typeof Message.Type>,
 ): Html => {
   const fillPicker = hexColorPicker.withMessage(h)
   const qr = qrCode.withMessage(h)

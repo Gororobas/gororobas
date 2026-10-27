@@ -10,4 +10,3 @@ const Session = Schema.Struct({
 const Model = Schema.Struct({
   session: Session,
 })
-type Model = typeof Model.Type

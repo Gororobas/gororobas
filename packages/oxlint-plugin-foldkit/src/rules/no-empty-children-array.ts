@@ -31,6 +31,7 @@ type BuilderCallee = Readonly<{ binding: string; property: string }>
 const builderCallee = (
   callee: unknown,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<BuilderCallee> => {
   if (!isMemberExpression(callee) || callee.computed === true) {
     return Option.none()
@@ -49,7 +50,12 @@ const builderCallee = (
   if (
     references === undefined
       ? !BUILDER_BINDINGS.has(binding)
-      : !isFoldkitHtmlBuilderMember(callee, callee.property.name, references)
+      : !isFoldkitHtmlBuilderMember(
+          callee,
+          callee.property.name,
+          references,
+          filename,
+        )
   ) {
     return Option.none()
   }
@@ -62,9 +68,10 @@ const builderCallee = (
 const elementCallTarget = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<string> =>
   node.arguments.length === 2
-    ? builderCallee(node.callee, references).pipe(
+    ? builderCallee(node.callee, references, filename).pipe(
         Option.filter(({ property }) => ELEMENT_BUILDER_NAMES.has(property)),
         Option.map(({ binding, property }) => `${binding}.${property}([...])`),
       )
@@ -75,11 +82,12 @@ const elementCallTarget = (
 const keyedCallTarget = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<string> => {
   if (node.arguments.length !== 3 || !isCallExpression(node.callee)) {
     return Option.none()
   }
-  return builderCallee(node.callee.callee, references).pipe(
+  return builderCallee(node.callee.callee, references, filename).pipe(
     Option.filter(({ property }) => property === KEYED_PROPERTY),
     Option.map(
       ({ binding }) => `${binding}.${KEYED_PROPERTY}(tag)(key, [...])`,
@@ -113,8 +121,8 @@ export const noEmptyChildrenArray = Rule.define({
           return Effect.void
         }
         const maybeTarget = Option.orElse(
-          elementCallTarget(node, references),
-          () => keyedCallTarget(node, references),
+          elementCallTarget(node, references, ctx.filename),
+          () => keyedCallTarget(node, references, ctx.filename),
         )
         if (Option.isNone(maybeTarget)) {
           return Effect.void

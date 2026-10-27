@@ -1,11 +1,9 @@
 import { HashSet } from 'effect'
-import { type Update } from 'foldkit'
 
-import { type Message } from './message'
-import { type Model } from './model'
+import { SnippetCopyComposition } from './composition'
 
-export const init = (): Update.Return<Model, Message> => ({
+export const init = SnippetCopyComposition.makeInit(() => ({
   model: {
     copiedSnippetIds: HashSet.empty(),
   },
-})
+}))

@@ -1,17 +1,20 @@
 import { Array, Option } from 'effect'
 import { AsyncData } from 'foldkit'
 import type { Html } from 'foldkit/html'
-import { HtmlBuilder } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from '../composition'
 import type { Telemetry } from '../domain'
 import { Message } from '../message'
 import type { Model } from '../model'
-import { chartPanelView } from './chart'
+import * as Chart from './chart'
 import { sidebarView } from './sidebar'
 
-export const headerView = (model: Model, h: HtmlBuilder<Message>): Html => {
+export const headerView = (
+  model: typeof Model.Type,
+  h: ApplicationViewBuilder,
+): Html => {
   const isRefreshing = AsyncData.isRefreshing(model.telemetry)
   const isLoading = AsyncData.isLoading(model.telemetry)
 
@@ -65,7 +68,7 @@ export const headerView = (model: Model, h: HtmlBuilder<Message>): Html => {
 }
 
 const dashboardBanner = (
-  telemetry: Model['telemetry'],
+  telemetry: (typeof Model.Type)['telemetry'],
 ): Option.Option<string> =>
   AsyncData.match(telemetry, {
     onIdle: () => Option.none(),
@@ -81,8 +84,8 @@ const dashboardBanner = (
   })
 
 export const telemetryStateView = (
-  model: Model,
-  h: HtmlBuilder<Message>,
+  model: typeof Model.Type,
+  h: ApplicationViewBuilder,
 ): Html =>
   AsyncData.matchData(model.telemetry, {
     onEmpty: () => loadingView(h),
@@ -91,7 +94,7 @@ export const telemetryStateView = (
       dashboardShellView(model, data, dashboardBanner(model.telemetry), h),
   })
 
-export const loadingView = (h: HtmlBuilder<Message>): Html =>
+export const loadingView = (h: ApplicationViewBuilder): Html =>
   h.section(
     [
       h.Class(
@@ -118,7 +121,7 @@ export const loadingView = (h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-export const failureView = (error: string, h: HtmlBuilder<Message>): Html =>
+export const failureView = (error: string, h: ApplicationViewBuilder): Html =>
   h.section(
     [
       h.Class(
@@ -157,10 +160,10 @@ export const failureView = (error: string, h: HtmlBuilder<Message>): Html =>
   )
 
 export const dashboardShellView = (
-  model: Model,
-  telemetry: Telemetry,
+  model: typeof Model.Type,
+  telemetry: typeof Telemetry.Type,
   maybeBanner: Option.Option<string>,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.section(
     [
@@ -170,6 +173,6 @@ export const dashboardShellView = (
     ],
     [
       sidebarView(model, telemetry, maybeBanner, h),
-      chartPanelView(model, telemetry, h),
+      Chart.chartPanelView(model, telemetry, h),
     ],
   )

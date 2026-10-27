@@ -1,14 +1,18 @@
-import { Array, Effect, Match, Option, Schema } from 'effect'
+import { Array, Effect, Option, Schema } from 'effect'
 import {
   MAX_DISPATCH_BATCH_SIZE,
   Request,
   Response,
 } from 'foldkit/devtools-protocol'
 
-import type { WebSocketClient } from './webSocketClient.js'
+import {
+  type ListedRuntime,
+  type RelayClient,
+  errorReason,
+} from './relayClient.js'
 
 const RUNTIME_ID_DESCRIPTION =
-  'Optional connection id of a specific Foldkit runtime. Defaults to the most recently connected runtime.'
+  'Optional connection id of a specific Foldkit runtime. Defaults to the most recently connected runtime of the most recently started dev server. Call `foldkit_list_runtimes` to find runtimes in other applications, each with its `projectRoot`.'
 
 const DEFAULT_LIST_MESSAGES_LIMIT = 50
 
@@ -166,7 +170,7 @@ const DispatchMessagesInput = Schema.Struct({
 const VariantTagField = Schema.optional(
   Schema.String.annotate({
     description:
-      'Optional dot-separated path of variant `_tag` values. When omitted, the tool returns a small variant index (tag names plus payload field names plus a tagged-union indicator) so agents can enumerate the top-level union cheaply. When provided, the tool walks the path through each variant\'s single tagged-union payload field, narrows the schema along the chain, and collapses any union deeper than the path to a `{ "_summary": "union", "variants": [...] }` placeholder. Extend the path to drill further. Examples: `"ScrolledSidebar"` (one top-level variant), `"GotMobileMenuDialogMessage.GotAnimationMessage"` (two levels of a Submodel chain).',
+      'Optional dot-separated path of variant `_tag` values. When omitted, the tool returns a small variant index (tag names plus payload field names plus a tagged-union indicator) so agents can enumerate the top-level union cheaply. When provided, the tool walks the path through each variant\'s single tagged-union payload field, narrows the schema along the chain, and collapses any union deeper than the path to a `{ "_summary": "union", "variants": [...] }` placeholder. Extend the path to drill further. Examples: `"ScrolledSidebar"` (one top-level variant), `"GotMobileMenuDialogMessage.GotAnimationMessage"` (two levels of a Block chain).',
   }),
 )
 
@@ -214,14 +218,6 @@ const formatError = (reason: string): ToolResult => ({
 })
 
 /**
- * Read a display string from a caught error. Effect's `TimeoutError` carries no
- * `message`, so `error.message` is `undefined` on a relay timeout; fall back to
- * the error's string form (its tag) rather than surfacing `Error: undefined`.
- */
-const errorReason = (error: Error): string =>
-  error.message ? error.message : String(error)
-
-/**
  * Decode a tool's raw input against its Effect Schema. Failure surfaces as an
  * `Error` for the outer handler's `catchAll` to convert into a `ToolResult`.
  */
@@ -233,48 +229,11 @@ const decodeInput = <Input>(
     Effect.mapError(error => new Error(`Invalid input: ${error.message}`)),
   )
 
-/**
- * Resolve a runtime id, defaulting to the most recently connected runtime when
- * the caller did not specify one. Failures (no runtimes connected, relay
- * error) surface as `Error` for the outer handler's `catchAll` to convert.
- */
-const resolveRuntimeId = (
-  wsClient: WebSocketClient,
-  explicit: string | undefined,
-): Effect.Effect<string, Error> => {
-  if (explicit !== undefined) {
-    return Effect.succeed(explicit)
-  }
-  return Effect.gen(function* () {
-    const response = yield* wsClient.sendRequest(
-      Request.RequestListRuntimes(),
-      Option.none(),
-    )
-    return yield* Match.value(response).pipe(
-      Match.tag('ResponseRuntimes', ({ runtimes }) =>
-        Array.last(runtimes).pipe(
-          Option.match({
-            onNone: () =>
-              Effect.fail(
-                new Error(
-                  'No connected Foldkit runtimes. Open a Foldkit dev page and try again.',
-                ),
-              ),
-            onSome: runtime => Effect.succeed(runtime.connectionId),
-          }),
-        ),
-      ),
-      Match.tag('ResponseError', ({ reason }) =>
-        Effect.fail(new Error(reason)),
-      ),
-      Match.orElse(({ _tag }) =>
-        Effect.fail(
-          new Error(`Unexpected response from RequestListRuntimes: ${_tag}`),
-        ),
-      ),
-    )
+const listedRuntimeOutput = ({ runtime, maybeProjectRoot }: ListedRuntime) =>
+  Option.match(maybeProjectRoot, {
+    onNone: () => runtime,
+    onSome: projectRoot => ({ ...runtime, projectRoot }),
   })
-}
 
 const responseToToolResult = (response: typeof Response.Type): ToolResult =>
   response._tag === 'ResponseError'
@@ -282,15 +241,14 @@ const responseToToolResult = (response: typeof Response.Type): ToolResult =>
     : formatResult(response)
 
 const callRuntimeRequest = (
-  wsClient: WebSocketClient,
+  relayClient: RelayClient,
   explicitRuntimeId: string | undefined,
   buildRequest: () => typeof Request.Type,
 ): Effect.Effect<ToolResult> =>
   Effect.gen(function* () {
-    const runtimeId = yield* resolveRuntimeId(wsClient, explicitRuntimeId)
-    const response = yield* wsClient.sendRequest(
+    const response = yield* relayClient.sendRequest(
       buildRequest(),
-      Option.some(runtimeId),
+      Option.fromNullishOr(explicitRuntimeId),
     )
     return responseToToolResult(response)
   }).pipe(
@@ -308,12 +266,13 @@ const runRuntimeTool =
   <Input extends RuntimeToolInput>(
     inputSchema: Schema.Codec<Input>,
     buildRequest: (input: Input) => typeof Request.Type,
-    wsClient: WebSocketClient,
+    relayClient: RelayClient,
   ) =>
   (rawInput: unknown): Effect.Effect<ToolResult> =>
     Effect.gen(function* () {
       const input = yield* decodeInput(inputSchema, rawInput)
-      return yield* callRuntimeRequest(wsClient, input.runtime_id, () =>
+
+      return yield* callRuntimeRequest(relayClient, input.runtime_id, () =>
         buildRequest(input),
       )
     }).pipe(
@@ -326,7 +285,7 @@ const runRuntimeTool =
  * relay, and formats the typed `Response` as MCP tool content.
  */
 export const buildTools = (
-  wsClient: WebSocketClient,
+  relayClient: RelayClient,
 ): ReadonlyArray<ToolDefinition> => [
   {
     name: 'foldkit_get_model',
@@ -340,7 +299,7 @@ export const buildTools = (
           maybePath: Option.fromNullishOr(path),
           expand: expand ?? false,
         }),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -356,7 +315,7 @@ export const buildTools = (
           maybePath: Option.fromNullishOr(path),
           expand: expand ?? false,
         }),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -373,7 +332,7 @@ export const buildTools = (
           maybeChangedPathsMatch: Option.fromNullishOr(changed_paths_match),
           fromEnd: from_end ?? false,
         }),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -388,7 +347,7 @@ export const buildTools = (
           maybeSinceIndex: Option.fromNullishOr(since_index),
           maybeChangedPathsMatch: Option.fromNullishOr(changed_paths_match),
         }),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -404,29 +363,29 @@ export const buildTools = (
           toIndex: to_index,
           maybeChangedPathsMatch: Option.fromNullishOr(changed_paths_match),
         }),
-      wsClient,
+      relayClient,
     ),
   },
   {
     name: 'foldkit_get_message',
     description:
-      'Read a single Message history entry by absolute index. The response carries the SerializedEntry (tag, message body, commands, mountStarts, mountEnds, timestamp, `isModelChanged`, `changedPaths` for leaf-level mutations, `affectedPaths` adding their ancestor paths). Each entry in `commands` carries the Command name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeSubmodelPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Submodel Command). `mountStarts` lists Mounts that fired during the render after this Message; `mountEnds` lists Mounts whose elements were unmounted during that render. Each Mount carries its `name` and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise). For Submodel-routed entries (tag matches `Got*Message`), the entry also carries `submodelPath` listing wrapper tags from outer to inner and `maybeLeafTag` naming the innermost child Message. Model snapshots are not included; call foldkit_get_model_at with `index - 1` (before) and `index` (after) to inspect Model state around the entry.',
+      'Read a single Message history entry by absolute index. The response carries the SerializedEntry (tag, message body, commands, mountStarts, mountEnds, timestamp, `isModelChanged`, `changedPaths` for leaf-level mutations, `affectedPaths` adding their ancestor paths). Each entry in `commands` carries the Command name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeBlockPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Block Command). `mountStarts` lists Mounts that fired during the render after this Message; `mountEnds` lists Mounts whose elements were unmounted during that render. Each Mount carries its `name` and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise). For Block-routed entries (tag matches `Got*Message`), the entry also carries `blockPath` listing wrapper tags from outer to inner and `maybeLeafTag` naming the innermost child Message. Model snapshots are not included; call foldkit_get_model_at with `index - 1` (before) and `index` (after) to inspect Model state around the entry.',
     inputSchema: toInputSchema(GetMessageInput),
     handle: runRuntimeTool(
       GetMessageInput,
       ({ index }) => Request.RequestGetMessage({ index }),
-      wsClient,
+      relayClient,
     ),
   },
   {
     name: 'foldkit_get_init',
     description:
-      "Read the runtime's initial Model, the Commands returned from the application's `init` function, and the Mounts that fired during the first render. The init entry is the synthetic row at index -1 in the DevTools panel; this tool exposes the same data without time-travelling the runtime. `maybeModel` is `None` until the runtime has finished its first render and recorded init, then stays `Some` for the rest of the runtime's life. `commands` lists init-time Commands in the order they were produced, each with its name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeSubmodelPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Submodel Command); `mountStarts` lists Mounts whose elements appeared in the initial render, each with its name and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise).",
+      "Read the runtime's initial Model, the Commands returned from the application's `init` function, and the Mounts that fired during the first render. The init entry is the synthetic row at index -1 in the DevTools panel; this tool exposes the same data without time-travelling the runtime. `maybeModel` is `None` until the runtime has finished its first render and recorded init, then stays `Some` for the rest of the runtime's life. `commands` lists init-time Commands in the order they were produced, each with its name, `args` (`Some(record)` when the Command declared an args schema, `None` otherwise), and `maybeBlockPath` (`None` before the result resolves, `Some([])` for a resolved top-level Command, or `Some(tags)` for a resolved Block Command); `mountStarts` lists Mounts whose elements appeared in the initial render, each with its name and `args` (`Some(record)` when the Mount declared an args schema, `None` otherwise).",
     inputSchema: toInputSchema(GetInitInput),
     handle: runRuntimeTool(
       GetInitInput,
       () => Request.RequestGetInit(),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -437,7 +396,7 @@ export const buildTools = (
     handle: runRuntimeTool(
       GetRuntimeStateInput,
       () => Request.RequestGetRuntimeState(),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -448,7 +407,7 @@ export const buildTools = (
     handle: runRuntimeTool(
       ListKeyframesInput,
       () => Request.RequestListKeyframes(),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -460,7 +419,7 @@ export const buildTools = (
       ReplayToKeyframeInput,
       ({ keyframe_index }) =>
         Request.RequestReplayToKeyframe({ keyframeIndex: keyframe_index }),
-      wsClient,
+      relayClient,
     ),
   },
   {
@@ -471,13 +430,13 @@ export const buildTools = (
     handle: runRuntimeTool(
       ResumeInput,
       () => Request.RequestResume(),
-      wsClient,
+      relayClient,
     ),
   },
   {
     name: 'foldkit_get_message_schema',
     description:
-      'Describe the Message Schema for a Foldkit runtime so agents can construct valid payloads for `foldkit_dispatch_message`. Call with no arguments to receive a small variant index (every top-level variant\'s `_tag`, its payload field names, and which payload fields are themselves tagged-union shapes). Then call with `variant_tag: "ChosenVariant"` to drill in. The argument is a dot-separated path of variant `_tag` values: each segment names a variant, and the walker steps through the variant\'s single tagged-union payload field to reach the next. So `"GotMobileMenuDialogMessage"` narrows one level; `"GotMobileMenuDialogMessage.GotAnimationMessage"` narrows two levels of a Submodel chain. Discriminated unions deeper than the supplied path collapse to `{ "_summary": "union", "variants": [...] }` placeholders so the response stays compact even for deeply-nested apps; extend the path to drill further. `Schema.Option` fields render as `anyOf: [{_tag: "Some", value}, {_tag: "None"}]`. The full document follows the JSON Schema draft-2020-12 shape from `Schema.toJsonSchemaDocument`: `{ dialect, schema, definitions }`. Returns `maybeResult: None` when the runtime hasn\'t configured `DevToolsConfig.Message` (dispatch is also unavailable). Fields with no JSON representation, notably `Schema.instanceOf(File)` for user-uploaded files, render as `{type: "null"}`; those variants can\'t be dispatched via MCP because their values live in browser memory.',
+      'Describe the Message Schema for a Foldkit runtime so agents can construct valid payloads for `foldkit_dispatch_message`. Call with no arguments to receive a small variant index (every top-level variant\'s `_tag`, its payload field names, and which payload fields are themselves tagged-union shapes). Then call with `variant_tag: "ChosenVariant"` to drill in. The argument is a dot-separated path of variant `_tag` values: each segment names a variant, and the walker steps through the variant\'s single tagged-union payload field to reach the next. So `"GotMobileMenuDialogMessage"` narrows one level; `"GotMobileMenuDialogMessage.GotAnimationMessage"` narrows two levels of a Block chain. Discriminated unions deeper than the supplied path collapse to `{ "_summary": "union", "variants": [...] }` placeholders so the response stays compact even for deeply-nested apps; extend the path to drill further. `Schema.Option` fields render as `anyOf: [{_tag: "Some", value}, {_tag: "None"}]`. The full document follows the JSON Schema draft-2020-12 shape from `Schema.toJsonSchemaDocument`: `{ dialect, schema, definitions }`. Returns `maybeResult: None` when the Program has not enabled `devTools.dispatch` (dispatch is also unavailable). Fields with no JSON representation, notably `Schema.instanceOf(File)` for user-uploaded files, render as `{type: "null"}`; those variants can\'t be dispatched via MCP because their values live in browser memory.',
     inputSchema: toInputSchema(GetMessageSchemaInput),
     handle: runRuntimeTool(
       GetMessageSchemaInput,
@@ -485,43 +444,43 @@ export const buildTools = (
         Request.RequestGetMessageSchema({
           maybeVariantTag: Option.fromNullishOr(variant_tag),
         }),
-      wsClient,
+      relayClient,
     ),
   },
   {
     name: 'foldkit_dispatch_message',
     description:
-      "Dispatch a Message into a Foldkit runtime, as if the application itself produced it. Requires the runtime to have configured DevToolsConfig.Message; without it, dispatch is rejected. Call `foldkit_get_message_schema` with no arguments to enumerate the variants, then with `variant_tag` to learn one variant's exact payload shape, before constructing the Message object. The runtime decodes the payload and returns a clean error if it doesn't match. To dispatch several Messages in order with one call, use foldkit_dispatch_messages.",
+      "Dispatch a Message into a Foldkit runtime, as if the application itself produced it. Requires `devTools: { dispatch: true }` on the Program; without it, dispatch is rejected. Call `foldkit_get_message_schema` with no arguments to enumerate the variants, then with `variant_tag` to learn one variant's exact payload shape, before constructing the Message object. The runtime decodes the payload and returns a clean error if it doesn't match. Messages configured with excludeFromHistory are rejected before execution. A successful response identifies the confirmed recorded history entry. A child Message that becomes stale before queued execution is discarded and returns an error. To dispatch several Messages in order with one call, use foldkit_dispatch_messages.",
     inputSchema: toInputSchema(DispatchMessageInput),
     handle: runRuntimeTool(
       DispatchMessageInput,
       ({ message }) => Request.RequestDispatchMessage({ message }),
-      wsClient,
+      relayClient,
     ),
   },
   {
     name: 'foldkit_dispatch_messages',
-    description: `Dispatch an ordered batch of Messages into a Foldkit runtime in one call, first to last, as if the application produced them in quick succession. Prefer this over repeated foldkit_dispatch_message calls when staging state that takes several Messages: reproducing a bug, filling a form, or building a history fixture. Takes 1 to ${MAX_DISPATCH_BATCH_SIZE} Messages. Validation is all-or-nothing: the runtime decodes every payload against the Message Schema before dispatching any of them, and one invalid entry rejects the whole batch with an error naming its zero-based position, so there is never a partially applied prefix to clean up. On success the response carries acceptedAtIndices, the predicted history index for each Message in request order; the runtime may still record its own Messages between entries (for example a Command completing mid-burst), exactly as with rapid user input, and Messages excluded from history via excludeFromHistory are dispatched but never recorded, so entries after one land below their predicted index. Requires DevToolsConfig.Message, like foldkit_dispatch_message.`,
+    description: `Dispatch an ordered batch of Messages into a Foldkit runtime in one call, first to last, as if the application produced them in quick succession. Prefer this over repeated foldkit_dispatch_message calls when staging state that takes several Messages: reproducing a bug, filling a form, or building a history fixture. Takes 1 to ${MAX_DISPATCH_BATCH_SIZE} Messages. Validation is all-or-nothing: the runtime decodes every payload against the Message Schema before dispatching any of them, and one invalid entry rejects the whole batch with an error naming its zero-based position, so there is never a partially applied prefix to clean up. Messages excluded from history are rejected before dispatch. On success, acceptedAtIndices contains the exact recorded history indices in request order. A Message whose captured child occurrence becomes stale before queued execution is omitted, while unrelated Messages recorded between batch entries keep their own indices. Requires devTools: { dispatch: true }, like foldkit_dispatch_message.`,
     inputSchema: toInputSchema(DispatchMessagesInput),
     handle: runRuntimeTool(
       DispatchMessagesInput,
       ({ messages }) => Request.RequestDispatchMessages({ messages }),
-      wsClient,
+      relayClient,
     ),
   },
   {
     name: 'foldkit_list_runtimes',
     description:
-      'List Foldkit runtimes (browser tabs) currently connected to the dev server.',
+      'List Foldkit runtimes (browser tabs) connected to every Foldkit dev server under the project root, or else to every dev server at the nearest root that encloses the project root, oldest dev server first. Each runtime carries `projectRoot`, the root of the dev server it belongs to, unless the MCP server uses a fixed relay address.',
     inputSchema: NO_INPUT_SCHEMA,
     handle: () =>
-      Effect.gen(function* () {
-        const response = yield* wsClient.sendRequest(
-          Request.RequestListRuntimes(),
-          Option.none(),
-        )
-        return responseToToolResult(response)
-      }).pipe(
+      relayClient.listRuntimes.pipe(
+        Effect.map(listed =>
+          formatResult({
+            _tag: 'ResponseRuntimes',
+            runtimes: Array.map(listed, listedRuntimeOutput),
+          }),
+        ),
         Effect.catch(error => Effect.succeed(formatError(errorReason(error)))),
       ),
   },

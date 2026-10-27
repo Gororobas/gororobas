@@ -1,18 +1,30 @@
 import { expect, given, role, scene, text } from 'foldkit/scene'
 import { describe, test } from 'vitest'
 
-import { Counter } from './island'
-import { AppRoute, Model, update, view } from './main'
+import { CounterBlock } from './island'
+import { Model } from './model'
+import { ApplicationRoute } from './route'
+import { update } from './update'
+import { view } from './view'
 
-const home = Model.make({ route: AppRoute.Home(), counter: Counter.init })
+const home = Model.make({
+  route: ApplicationRoute.Home(),
+  counter: CounterBlock.init().model,
+})
 const postsIndex = Model.make({
-  route: AppRoute.Posts(),
-  counter: Counter.init,
+  route: ApplicationRoute.Posts(),
+  counter: CounterBlock.init().model,
 })
 const post = (slug: string) =>
-  Model.make({ route: AppRoute.Post({ slug }), counter: Counter.init })
+  Model.make({
+    route: ApplicationRoute.Post({ slug }),
+    counter: CounterBlock.init().model,
+  })
 const notFound = (path: string) =>
-  Model.make({ route: AppRoute.NotFound({ path }), counter: Counter.init })
+  Model.make({
+    route: ApplicationRoute.NotFound({ path }),
+    counter: CounterBlock.init().model,
+  })
 
 describe('view', () => {
   test('the header renders the site title and navigation on every route', () => {

@@ -1,2 +1,2 @@
-export * as Home from './home'
-export * as Room from './room'
+export { HomeBlock } from './home'
+export { RoomBlock } from './room'

@@ -9,7 +9,7 @@ import { Resvg } from '@resvg/resvg-js'
 
 import { type PostCover, maybePostCover } from '../src/page/blog/frontmatter'
 import { BLOG_AUTHOR, BLOG_SECTION } from '../src/page/blog/meta'
-import { type AppRoute, SITE_URL } from '../src/route'
+import { type ApplicationRoute, SITE_URL } from '../src/route'
 import {
   type BlogPostEntry,
   PUBLIC_DIR,
@@ -197,7 +197,9 @@ const urlPathToSlug = (urlPath: string): string => {
 
 // COVER IMAGES
 
-const maybeRoutePostEntry = (route: AppRoute): Option.Option<BlogPostEntry> =>
+const maybeRoutePostEntry = (
+  route: typeof ApplicationRoute.Type,
+): Option.Option<BlogPostEntry> =>
   Match.value(route).pipe(
     Match.tag('BlogPost', ({ postSlug }) =>
       Array.findFirst(blogPosts, ({ slug }) => slug === postSlug),
@@ -205,7 +207,9 @@ const maybeRoutePostEntry = (route: AppRoute): Option.Option<BlogPostEntry> =>
     Match.orElse(() => Option.none()),
   )
 
-const maybeRouteCover = (route: AppRoute): Option.Option<PostCover> =>
+const maybeRouteCover = (
+  route: typeof ApplicationRoute.Type,
+): Option.Option<PostCover> =>
   Option.flatMap(maybeRoutePostEntry(route), ({ frontmatter }) =>
     maybePostCover(frontmatter),
   )
@@ -311,11 +315,11 @@ const renderOgImage =
   (
     fonts: Array<Font>,
     ogDir: string,
-    routeToUrlPath: (route: AppRoute) => string,
+    routeToUrlPath: (route: typeof ApplicationRoute.Type) => string,
     resolveApiModuleName: ApiModuleNameResolver,
     browser: Browser,
   ) =>
-  (route: AppRoute) => {
+  (route: typeof ApplicationRoute.Type) => {
     const slug = urlPathToSlug(routeToUrlPath(route))
     return pipe(
       Effect.gen(function* () {
@@ -342,8 +346,8 @@ const renderOgImage =
   }
 
 export const generateOgImages = (
-  routes: ReadonlyArray<AppRoute>,
-  routeToUrlPath: (route: AppRoute) => string,
+  routes: ReadonlyArray<typeof ApplicationRoute.Type>,
+  routeToUrlPath: (route: typeof ApplicationRoute.Type) => string,
   distDir: string,
   resolveApiModuleName: ApiModuleNameResolver,
   browser: Browser,
@@ -476,7 +480,9 @@ const sitePageJsonLd = (
     publisher: { '@id': ORGANIZATION_ID },
   })
 
-const maybeSitePageSchemaType = (route: AppRoute): Option.Option<string> =>
+const maybeSitePageSchemaType = (
+  route: typeof ApplicationRoute.Type,
+): Option.Option<string> =>
   Match.value(route).pipe(
     Match.withReturnType<Option.Option<string>>(),
     Match.tag('About', () => Option.some('AboutPage')),
@@ -521,7 +527,7 @@ const replaceOrThrow = (
 
 export const injectMetaTags = (
   html: string,
-  route: AppRoute,
+  route: typeof ApplicationRoute.Type,
   urlPath: string,
   resolveApiModuleName: ApiModuleNameResolver,
 ): string => {

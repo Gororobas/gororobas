@@ -1,10 +1,11 @@
 import { Effect, Fiber, Option } from 'effect'
-import { expect } from 'vitest'
+import { expect, expectTypeOf } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
 import {
   FileReadError,
+  File as FileSchema,
   mimeType,
   name,
   readAsArrayBuffer,
@@ -14,6 +15,11 @@ import {
   selectMultiple,
   size,
 } from './index.js'
+
+expectTypeOf<typeof FileSchema.Type>().toEqualTypeOf<globalThis.File>()
+expectTypeOf<typeof FileSchema.Encoded>().toEqualTypeOf<globalThis.File>()
+expectTypeOf<typeof FileSchema.DecodingServices>().toEqualTypeOf<never>()
+expectTypeOf<typeof FileSchema.EncodingServices>().toEqualTypeOf<never>()
 
 const makeTextFile = (contents: string, fileName: string): File =>
   new File([contents], fileName, { type: 'text/plain' })

@@ -1,16 +1,19 @@
-const LoadAllNotes = Command.define('LoadAllNotes', {
+const LoadAllNotes = ApplicationDefinition.makeCommand('LoadAllNotes', {
   messages: [SettledLoadAllNotes],
-  execute: pipe(
-    fetchAllNotes,
-    Effect.result,
-    Effect.map(result => SettledLoadAllNotes({ result })),
-  ),
+  handler: function* () {
+    return () =>
+      pipe(
+        fetchAllNotes,
+        Effect.result,
+        Effect.map(result => SettledLoadAllNotes({ result })),
+      )
+  },
 })
 
-Match.tagsExhaustive({
-  SettledLoadAllNotes: ({ result }) => ({
-    model: modifyFields(model, {
+const update = ApplicationComposition.makeUpdate({
+  SettledLoadAllNotes: ApplicationDefinition.makeFieldsStep.fromMessage(
+    ({ result }) => ({
       allNotes: previous => AsyncData.settle(previous, result),
     }),
-  }),
+  ),
 })

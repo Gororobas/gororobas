@@ -1,78 +1,70 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Option, Schema } from 'effect'
-import { Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Schema } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { HoverIntent } from '@foldkit/ui'
+import type { RenderInfo as HoverIntentRenderInfo } from '@foldkit/ui/hoverIntent'
 
 const Model = Schema.Struct({
-  hoverMenu: HoverIntent.Model,
+  hoverMenu: HoverIntent.HoverIntentBlock.Model,
   // ...your other fields
-})
-type Model = typeof Model.Type
-
-const init = () => ({
-  model: {
-    hoverMenu: HoverIntent.init(),
-    // ...your other fields
-  },
 })
 
 const Message = defineMessageUnion({
-  GotHoverMenuMessage: { message: HoverIntent.Message },
   ClickedHoverMenuItem: {},
 })
-type Message = typeof Message.Type
 
-const foldHoverMenuOutMessage = HoverIntent.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  Opened: () => model => ({ model }),
-  Closed: () => model => ({ model }),
+const HoverMenuDefinition = Block.makeDefinition('HoverMenu', {
+  Model,
+  Message,
 })
 
-const readHoverMenu = (model: Model) => Option.some(model.hoverMenu)
-const writeHoverMenu = (
-  model: Model,
-  nextHoverMenu: HoverIntent.Model,
-): Model => modifyFields(model, { hoverMenu: () => nextHoverMenu })
-const toGotHoverMenuMessage = (message: HoverIntent.Message): Message =>
-  Message.GotHoverMenuMessage({ message })
+const { makeNoopStep } = HoverMenuDefinition
 
-const foldHoverMenu = Update.foldChild({
-  update: HoverIntent.update,
-  read: readHoverMenu,
-  write: writeHoverMenu,
-  toParentMessage: toGotHoverMenuMessage,
-  foldOutMessage: foldHoverMenuOutMessage,
+const foldHoverMenuOutMessage = HoverMenuDefinition.makeOutMessageFold(
+  HoverIntent.HoverIntentBlock,
+  {
+    Opened: makeNoopStep,
+    Closed: makeNoopStep,
+  },
+)
+
+const HoverMenuBinding = HoverMenuDefinition.makeBinding(
+  HoverIntent.HoverIntentBlock,
+  {
+    field: 'hoverMenu',
+  },
+).withOutMessagePolicy({ fold: foldHoverMenuOutMessage })
+
+const HoverMenuComposition = HoverMenuDefinition.makeComposition({
+  bindings: [HoverMenuBinding],
 })
+
+const init = HoverMenuComposition.makeInit(() => ({
+  model: {
+    // ...your other fields
+  },
+}))
 
 // Close the menu immediately when any item is clicked.
-const foldHoverMenuClose = Update.foldChildStep({
-  update: HoverIntent.close,
-  read: readHoverMenu,
-  write: writeHoverMenu,
-  toParentMessage: toGotHoverMenuMessage,
-  foldOutMessage: foldHoverMenuOutMessage,
-})
 
-// In the corresponding Message.match handlers:
-GotHoverMenuMessage: ({ message }) => foldHoverMenu(model, message)
-ClickedHoverMenuItem: () => foldHoverMenuClose(model)
+// In the corresponding update handlers:
+const update = HoverMenuComposition.makeUpdate({
+  ClickedHoverMenuItem: model => HoverMenuBinding.requestClose()(model),
+})
 
 const triggerId = 'actions-trigger'
 const panelId = 'actions-panel'
 
-const view = (h: HtmlBuilder<Message>) => {
+const view = HoverMenuComposition.makeView((model, h) => {
   const hoverMenuView = ({
     trigger,
     panel,
     isVisible,
-  }: HoverIntent.RenderInfo) =>
+  }: HoverIntentRenderInfo) =>
     h.div(
       [h.Class('relative')],
       [
@@ -119,14 +111,14 @@ const view = (h: HtmlBuilder<Message>) => {
       ],
     )
 
-  return h.submodel({
-    slotId: 'hover-menu',
-    model: model.hoverMenu,
-    view: HoverIntent.view,
-    viewInputs: {
-      focusTriggerSelector: `#${triggerId}`,
-      toView: hoverMenuView,
-    },
-    toParentMessage: toGotHoverMenuMessage,
-  })
-}
+  return h.block(
+    HoverMenuBinding.embedView({
+      slotId: 'hover-menu',
+      model: model.hoverMenu,
+      viewInputs: {
+        focusTriggerSelector: `#${triggerId}`,
+        toView: hoverMenuView,
+      },
+    }),
+  )
+})

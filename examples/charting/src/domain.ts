@@ -1,18 +1,15 @@
 import { Array, Option, Schema, pipe } from 'effect'
 
-// MODEL
-
 export const ChartMode = Schema.Literals(['Adoption', 'Velocity', 'Ecosystem'])
-export type ChartMode = typeof ChartMode.Type
-export const chartModes: ReadonlyArray<ChartMode> = ChartMode.literals
+export const chartModes: ReadonlyArray<typeof ChartMode.Type> =
+  ChartMode.literals
 
 export const Period = Schema.Literals([
   'LastEightWeeks',
   'LastSixteenWeeks',
   'LastYear',
 ])
-export type Period = typeof Period.Type
-export const periods: ReadonlyArray<Period> = Period.literals
+export const periods: ReadonlyArray<typeof Period.Type> = Period.literals
 
 export const PackageId = Schema.Literals([
   'Core',
@@ -20,8 +17,8 @@ export const PackageId = Schema.Literals([
   'Devtools',
   'VitePlugin',
 ])
-export type PackageId = typeof PackageId.Type
-export const packageIds: ReadonlyArray<PackageId> = PackageId.literals
+export const packageIds: ReadonlyArray<typeof PackageId.Type> =
+  PackageId.literals
 
 export const PackageSpec = Schema.Struct({
   id: PackageId,
@@ -29,9 +26,8 @@ export const PackageSpec = Schema.Struct({
   displayName: Schema.String,
   role: Schema.String,
 })
-export type PackageSpec = typeof PackageSpec.Type
 
-export const packageSpecs: ReadonlyArray<PackageSpec> = [
+export const packageSpecs: ReadonlyArray<typeof PackageSpec.Type> = [
   {
     id: 'Core',
     npmName: 'foldkit',
@@ -64,13 +60,11 @@ export const WeeklyTelemetry = Schema.Struct({
   commits: Schema.Number,
   releases: Schema.Number,
 })
-export type WeeklyTelemetry = typeof WeeklyTelemetry.Type
 
 export const WeeklyDownloads = Schema.Struct({
   weekStart: Schema.String,
   downloads: Schema.Number,
 })
-export type WeeklyDownloads = typeof WeeklyDownloads.Type
 
 export const PackageSnapshot = Schema.Struct({
   id: PackageId,
@@ -84,21 +78,18 @@ export const PackageSnapshot = Schema.Struct({
   dependencyCount: Schema.Number,
   downloadsByWeek: Schema.Array(WeeklyDownloads),
 })
-export type PackageSnapshot = typeof PackageSnapshot.Type
 
 export const DependencyEdge = Schema.Struct({
   source: PackageId,
   target: PackageId,
   kind: Schema.Literals(['Dependency', 'PeerDependency']),
 })
-export type DependencyEdge = typeof DependencyEdge.Type
 
 export const ContributorSummary = Schema.Struct({
   login: Schema.String,
   contributions: Schema.Number,
   avatarUrl: Schema.Option(Schema.String),
 })
-export type ContributorSummary = typeof ContributorSummary.Type
 
 export const RepositorySnapshot = Schema.Struct({
   stars: Schema.Number,
@@ -110,7 +101,6 @@ export const RepositorySnapshot = Schema.Struct({
   pushedAt: Schema.String,
   defaultBranch: Schema.String,
 })
-export type RepositorySnapshot = typeof RepositorySnapshot.Type
 
 export const Telemetry = Schema.Struct({
   fetchedAt: Schema.Number,
@@ -121,7 +111,6 @@ export const Telemetry = Schema.Struct({
   topContributors: Schema.Array(ContributorSummary),
   warnings: Schema.Array(Schema.String),
 })
-export type Telemetry = typeof Telemetry.Type
 
 // CONSTANT
 
@@ -131,21 +120,24 @@ const LAST_YEAR_WEEKS = 52
 
 // QUERY
 
-const weekCountByPeriod: Record<Period, number> = {
+const weekCountByPeriod: Record<typeof Period.Type, number> = {
   LastEightWeeks: LAST_EIGHT_WEEKS,
   LastSixteenWeeks: LAST_SIXTEEN_WEEKS,
   LastYear: LAST_YEAR_WEEKS,
 }
 
-const weekCountForPeriod = (period: Period): number => weekCountByPeriod[period]
+const weekCountForPeriod = (period: typeof Period.Type): number =>
+  weekCountByPeriod[period]
 
-export const periodLabels: Record<Period, string> = {
+export const periodLabels: Record<typeof Period.Type, string> = {
   LastEightWeeks: '8 weeks',
   LastSixteenWeeks: '16 weeks',
   LastYear: '1 year',
 }
 
-export const packageIdToSpec = (packageId: PackageId): PackageSpec =>
+export const packageIdToSpec = (
+  packageId: typeof PackageId.Type,
+): typeof PackageSpec.Type =>
   pipe(
     packageSpecs,
     Array.findFirst(({ id }) => id === packageId),
@@ -158,23 +150,23 @@ export const packageIdToSpec = (packageId: PackageId): PackageSpec =>
   )
 
 export const visibleWeeks = (
-  telemetry: Telemetry,
-  period: Period,
-): ReadonlyArray<WeeklyTelemetry> =>
+  telemetry: typeof Telemetry.Type,
+  period: typeof Period.Type,
+): ReadonlyArray<typeof WeeklyTelemetry.Type> =>
   Array.takeRight(telemetry.weeks, weekCountForPeriod(period))
 
-export const totalDownloads = (telemetry: Telemetry): number =>
+export const totalDownloads = (telemetry: typeof Telemetry.Type): number =>
   Array.reduce(
     telemetry.packages,
     0,
     (total, snapshot) => total + snapshot.totalDownloads,
   )
 
-export const totalCommits = (telemetry: Telemetry): number =>
+export const totalCommits = (telemetry: typeof Telemetry.Type): number =>
   Array.reduce(telemetry.weeks, 0, (total, week) => total + week.commits)
 
 export const findPackageSnapshot = (
-  telemetry: Telemetry,
-  packageId: PackageId,
-): Option.Option<PackageSnapshot> =>
+  telemetry: typeof Telemetry.Type,
+  packageId: typeof PackageId.Type,
+): Option.Option<typeof PackageSnapshot.Type> =>
   Array.findFirst(telemetry.packages, snapshot => snapshot.id === packageId)

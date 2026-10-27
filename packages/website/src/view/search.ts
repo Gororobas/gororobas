@@ -1,27 +1,30 @@
 import { clsx } from 'clsx'
-import { Html, type HtmlBuilder } from 'foldkit/html'
+import { Html } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from '../composition'
+import { SearchBinding } from '../composition'
 import { Icon } from '../icon'
 import { Message } from '../message'
 import { type Model } from '../model'
-import * as Search from '../search'
+import { KEYBOARD_WARMUP_INPUT_ID } from '../searchDom'
 
-const keyboardWarmupSelector = `#${Search.KEYBOARD_WARMUP_INPUT_ID}`
+const keyboardWarmupSelector = `#${KEYBOARD_WARMUP_INPUT_ID}`
 
-const onClickOpenSearch = (h: HtmlBuilder<Message>) =>
+const onClickOpenSearch = (h: ApplicationViewBuilder) =>
   h.OnClick(Message.ClickedOpenSearch(), {
     focusSelector: keyboardWarmupSelector,
   })
 
-export const dialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.submodel({
-    slotId: 'search',
-    model: model.search,
-    view: Search.view,
-    toParentMessage: message => Message.GotSearchMessage({ message }),
-  })
+export const dialogView = (
+  model: typeof Model.Type,
+  h: ApplicationViewBuilder,
+): Html =>
+  h.block(SearchBinding.embedView({ slotId: 'search', model: model.search }))
 
-export const triggerView = (className: string, h: HtmlBuilder<Message>): Html =>
+export const triggerView = (
+  className: string,
+  h: ApplicationViewBuilder,
+): Html =>
   h.button(
     [
       h.Class(
@@ -49,7 +52,7 @@ export const triggerView = (className: string, h: HtmlBuilder<Message>): Html =>
 
 export const compactTriggerView = (
   className: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.button(
     [

@@ -16,13 +16,18 @@ const PREVIEW_URL = 'https://preview.example.test'
 const STALE_PREVIEW_URL = 'https://stale.example.test'
 const preview = selector('iframe')
 const Message = defineMessageUnion({ LoadedPreview: {} })
-type Message = typeof Message.Type
 
 const previewApp = {
-  update: (state: PlaygroundPreview.State, _message: Message) => ({
+  update: (
+    state: typeof PlaygroundPreview.State.Type,
+    _message: typeof Message.Type,
+  ) => ({
     model: state,
   }),
-  view: (state: PlaygroundPreview.State, h: HtmlBuilder<Message>) =>
+  view: (
+    state: typeof PlaygroundPreview.State.Type,
+    h: HtmlBuilder<typeof Message.Type>,
+  ) =>
     PlaygroundPreview.view(
       state,
       Message.LoadedPreview(),
@@ -33,7 +38,12 @@ const previewApp = {
 
 const expectPreviewKey =
   (expectedKey: string) =>
-  (simulation: SceneSimulation<PlaygroundPreview.State, Message>) => {
+  (
+    simulation: SceneSimulation<
+      typeof PlaygroundPreview.State.Type,
+      typeof Message.Type
+    >,
+  ) => {
     const frame = simulation.html.children?.find(
       child => typeof child !== 'string' && child.sel === 'iframe',
     )

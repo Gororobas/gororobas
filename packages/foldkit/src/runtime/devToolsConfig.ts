@@ -56,7 +56,7 @@ export type DevToolsOverlay = (
  * - `maxEntries`: Maximum number of recorded Messages retained in history before the oldest is evicted. Defaults to 100. Clamped to the range 20-500: smaller values keep the panel snappy under high message rates, larger values give you more scroll-back. Each retained entry stores a full Model snapshot, so memory cost scales linearly with both `maxEntries` and your Model size.
  * - `keyframeInterval`: Number of recorded Messages between full Model snapshots. Defaults to 31. Time-travel to an index replays `update` forward from the nearest earlier keyframe, so this is a memory/time tradeoff: smaller values store more snapshots (more memory) but make each jump cheaper, down to `1` where every jump is a constant-time snapshot lookup with no replay. Reach for a denser interval when the app has a heavy `update` and time-travel jumps feel sluggish. Clamped to a minimum of 1. Forced to 1 automatically when `excludeFromHistory` is active, since excluded Messages are never replayed.
  *
- * DevTools records Models, Message payloads, Command args, and Mount args. A connected DevTools MCP agent can read that data. Keep secrets out of browser state where possible and use Effect `Redacted` for sensitive values the browser must temporarily hold. `excludeFromHistory` does not hide changes that enter the Model, and omitting `Message` disables agent dispatch without disabling inspection.
+ * DevTools records Models, Message payloads, Command args, and Mount args. A connected DevTools MCP agent can read that data. Keep secrets out of browser state where possible and use Effect `Redacted` for sensitive values the browser must temporarily hold. `excludeFromHistory` does not hide changes that enter the Model. External dispatch is disabled by default and can be enabled with `dispatch: true`.
  */
 export type DevToolsConfig =
   | false
@@ -69,16 +69,20 @@ export type DevToolsConfig =
       maxEntries?: number
       keyframeInterval?: number
       /**
-       * The application's `Message` Schema. When provided and the running app
-       * is connected to the Foldkit DevTools MCP server, AI agents can dispatch
-       * Messages into the runtime. The Schema decodes inbound dispatch payloads
-       * at the bridge boundary and returns a clean error on mismatch.
-       *
-       * Without this field, `RequestDispatchMessage` is rejected with an
-       * informative error.
+       * Allows a connected Foldkit DevTools MCP client to dispatch Messages.
+       * The Program derives the complete dispatch Schema from its root Block.
+       * Defaults to `false`.
        */
-      Message?: Schema.Codec<any, any, unknown, unknown>
+      dispatch?: boolean
     }>
+
+/** @internal DevTools configuration after Program derives its dispatch Schema. */
+export type RuntimeDevToolsConfig<DispatchServices = never> =
+  | false
+  | (Exclude<DevToolsConfig, false> &
+      Readonly<{
+        dispatchSchema?: Schema.Codec<any, any, DispatchServices, unknown>
+      }>)
 
 let registeredDevToolsOverlay: DevToolsOverlay | undefined
 

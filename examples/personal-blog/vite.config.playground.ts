@@ -7,5 +7,9 @@ import tailwindcss from '@tailwindcss/vite'
 import { islandAttributes } from './src/island/islandAttributes'
 
 export default defineConfig({
-  plugins: [tailwindcss(), foldkit(), markdown({ islands: islandAttributes })],
+  plugins: [
+    tailwindcss(),
+    foldkit({ devToolsMcpPort: false }),
+    markdown({ islands: islandAttributes }),
+  ],
 })

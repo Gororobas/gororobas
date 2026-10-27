@@ -7,12 +7,14 @@ export const State = defineTaggedUnion({
   Loading: { previewUrl: Schema.String },
   Loaded: { previewUrl: Schema.String },
 })
-export type State = typeof State.Type
 
-export const start = (previewUrl: string): State =>
+export const start = (previewUrl: string): typeof State.Type =>
   State.Loading({ previewUrl })
 
-export const load = (state: State, previewUrl: string): State => {
+export const load = (
+  state: typeof State.Type,
+  previewUrl: string,
+): typeof State.Type => {
   if (state.previewUrl !== previewUrl || state._tag === 'Loaded') {
     return state
   } else {
@@ -21,7 +23,7 @@ export const load = (state: State, previewUrl: string): State => {
 }
 
 export const view = <Message>(
-  state: State,
+  state: typeof State.Type,
   loadedMessage: Message,
   loadingView: Html,
   h: HtmlBuilder<Message>,

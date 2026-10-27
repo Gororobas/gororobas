@@ -23,12 +23,23 @@ When choosing among pull requests, prefer the oldest non-draft contribution by d
 Start with architecture and correctness. Then audit the entire diff for API design, state modeling, naming, factoring, Effect and Foldkit conventions, tests, comments, prose, changesets, documentation, examples, and public metadata.
 
 - Search for the whole defect class after finding one instance.
-- Read test names, fixture names, comments, TSDoc, changeset text, and user-facing copy as prose.
 - Apply the repository conventions relevant to the changed subsystem. Do not turn concerns from an unrelated component into review requirements.
+- Distinguish library internals from consumer apps when choosing abstractions. Use Effect's `Data.TaggedEnum` for internal diagnostic unions rather than introducing an app union helper into the library.
 - Put tests in the suite owned by the behavior or abstraction under test.
 - For UI changes, inspect both the website and UI showcase when they expose the component. Exercise the browser behavior changed by the diff, including opt-out or disabled behavior and representative dynamic states when relevant.
+- For a new public API or recommended pattern, inspect active guides, snippets, examples, and first-party apps that exercise the affected behavior. When finishing an accepted change, adopt it where it simplifies or clarifies that behavior, preserving lifecycle and navigation semantics. Leave simpler flows alone when adoption adds indirection without making the flow clearer.
 
 Do not expand a focused contribution into a repository-wide migration or a new testing framework. Open a follow-up issue for worthwhile adjacent work.
+
+## Review every piece of prose
+
+Make a separate, exhaustive prose pass over the full diff. Read the writing rules in `AGENTS.md` and the worked examples in `.agents/writing-prose.md` before this pass. Passing tests and accurate technical claims do not establish that the writing is clear.
+
+Account for every changed file and every place a reader encounters words: documentation, headings, snippet labels and teaching comments, TSDoc, implementation comments, test and fixture names, assertion messages, errors and diagnostic hints, changesets, examples, user-facing copy, and the pull request title and description. Do not limit this pass to Markdown or public documentation.
+
+Rewrite unclear prose to state the behavior, condition, or consequence directly. Remove repetition and unnecessary narration; check technical claims against the code. Apply the repository's comment rules rather than polishing comments that should be removed. Read headings, callouts, bullets, and diagnostics on their own as well as in context. Preserve historical published material under the repository's documentation rules.
+
+When the user requests discussion before edits, bring concrete wording and behavior choices into that discussion before changing the pull request. After finishing edits, repeat the prose pass over the final diff, including writing added during cleanup. Do not report the prose review complete while known clarity or style problems remain.
 
 ## Decide between feedback and finishing
 

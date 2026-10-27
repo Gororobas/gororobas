@@ -2,9 +2,9 @@ import { Command, click, expect, given, role, scene, text } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { Message, type Model, ReportCount, update, view } from './main'
+import { Message, type Model, ReportCount, update, view } from './application'
 
-const initialModel: Model = { count: 10, step: 1 }
+const initialModel: typeof Model.Type = { count: 10, step: 1 }
 
 describe('view', () => {
   test('initial view shows the count, the tick description, and the advance button', () => {

@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const server = await import('foldkit/experimental/server')
+const program = await import('foldkit/program')
+const block = await import('foldkit/block')
+const message = await import('foldkit/message')
 const runtime = await import('foldkit/runtime')
 const umbrella = await import('foldkit/experimental')
 
@@ -21,6 +24,11 @@ check(
   'foldkit/experimental/server does not export renderToString',
 )
 check(
+  typeof program.make === 'function' &&
+    typeof program.makeElement === 'function',
+  'foldkit/program does not export make and makeElement',
+)
+check(
   typeof umbrella.Server?.MissingBuildId === 'function',
   'foldkit/experimental Server namespace does not expose MissingBuildId',
 )
@@ -30,14 +38,23 @@ check(
 )
 
 // The build id is settled before the view runs, so this view is never called.
-const { Effect } = await import('effect')
-const error = await Effect.runPromise(
-  Effect.flip(
-    server.renderToString({
-      init: () => ({ model: {} }),
-      view: () => ({ title: 't', body: null }),
+const { Effect, Schema } = await import('effect')
+const Model = Schema.Struct({})
+const Message = message.defineMessageUnion({ IgnoredRender: {} })
+const ApplicationComposition = block
+  .makeDefinition('Application', { Model, Message })
+  .makeComposition()
+const ApplicationBlock = block.assemble(() =>
+  ApplicationComposition.prepareBlock({
+    init: ApplicationComposition.makeInit(() => ({ model: Model.make({}) })),
+    update: ApplicationComposition.makeUpdate({
+      IgnoredRender: model => ({ model }),
     }),
-  ),
+    view: ApplicationComposition.makeView(() => ({ title: 't', body: null })),
+  }),
+)
+const error = await Effect.runPromise(
+  Effect.flip(server.renderToString(ApplicationBlock, {}, {})),
 )
 check(
   error._tag === 'MissingBuildId',

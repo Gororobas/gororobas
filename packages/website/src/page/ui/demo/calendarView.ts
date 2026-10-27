@@ -1,9 +1,16 @@
 import { Match } from 'effect'
-import type { ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
+import type { ChildAttribute, Html } from 'foldkit/html'
 
-import type { Calendar } from '@foldkit/ui'
+import type {
+  CalendarAttributes,
+  DaysModeAttributes,
+  MonthsModeAttributes,
+  Week,
+  YearsModeAttributes,
+} from '@foldkit/ui/calendar'
 
 import { Icon } from '../../../icon'
+import type { UiViewBuilder } from '../composition'
 
 const headerClassName = 'flex items-center justify-between gap-2'
 
@@ -34,23 +41,23 @@ const monthYearGridClassName =
 const monthYearButtonClassName =
   'flex h-full w-full items-center justify-center rounded-md text-sm font-normal text-gray-900 dark:text-gray-100 tabular-nums cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 group-data-[today]:ring-1 group-data-[today]:ring-gray-400 dark:group-data-[today]:ring-gray-500 group-data-[selected]:bg-accent-600 group-data-[selected]:dark:bg-accent-500 group-data-[selected]:text-white! group-data-[selected]:dark:text-accent-900! group-data-[selected]:hover:bg-accent-700 group-data-[selected]:dark:hover:bg-accent-600 group-data-[selected]:active:bg-accent-800 group-data-[selected]:dark:active:bg-accent-700 group-data-[focused]:outline-2 group-data-[focused]:outline-offset-2 group-data-[focused]:outline-accent-600 group-data-[focused]:dark:outline-accent-400 group-data-[disabled]:cursor-not-allowed group-data-[disabled]:opacity-40'
 
-const navButton = <Message>(
+const navButton = (
   attributes: ReadonlyArray<ChildAttribute>,
   icon: Html,
-  h: HtmlBuilder<Message>,
+  h: UiViewBuilder,
 ): Html => h.button([...attributes, h.Class(navButtonClassName)], [icon])
 
-const headingButton = <Message>(
-  heading: Calendar.DaysModeAttributes['heading'],
+const headingButton = (
+  heading: DaysModeAttributes['heading'],
   attributes: ReadonlyArray<ChildAttribute>,
-  h: HtmlBuilder<Message>,
+  h: UiViewBuilder,
 ): Html =>
   h.button(
     [h.Id(heading.id), ...attributes, h.Class(headingButtonClassName)],
     [heading.text, Icon.chevronDown('w-3 h-3')],
   )
 
-const weekRow = <Message>(week: Calendar.Week, h: HtmlBuilder<Message>): Html =>
+const weekRow = (week: Week, h: UiViewBuilder): Html =>
   h.div(
     [...week.attributes, h.Class(rowClassName)],
     week.cells.map(cell =>
@@ -66,10 +73,10 @@ const weekRow = <Message>(week: Calendar.Week, h: HtmlBuilder<Message>): Html =>
     ),
   )
 
-const daysView = <Message>(
-  days: Calendar.DaysModeAttributes,
+const daysView = (
+  days: DaysModeAttributes,
   rootClassName: string,
-  h: HtmlBuilder<Message>,
+  h: UiViewBuilder,
 ): Html =>
   h.div(
     [...days.root, h.Class(rootClassName)],
@@ -100,10 +107,10 @@ const daysView = <Message>(
     ],
   )
 
-const monthsView = <Message>(
-  months: Calendar.MonthsModeAttributes,
+const monthsView = (
+  months: MonthsModeAttributes,
   rootClassName: string,
-  h: HtmlBuilder<Message>,
+  h: UiViewBuilder,
 ): Html =>
   h.div(
     [...months.root, h.Class(rootClassName)],
@@ -129,10 +136,10 @@ const monthsView = <Message>(
     ],
   )
 
-const yearsView = <Message>(
-  years: Calendar.YearsModeAttributes,
+const yearsView = (
+  years: YearsModeAttributes,
   rootClassName: string,
-  h: HtmlBuilder<Message>,
+  h: UiViewBuilder,
 ): Html =>
   h.div(
     [...years.root, h.Class(rootClassName)],
@@ -165,11 +172,8 @@ const yearsView = <Message>(
     ],
   )
 
-export const calendarView = <Message>(
-  rootClassName: string,
-  h: HtmlBuilder<Message>,
-) =>
-  Match.type<Calendar.CalendarAttributes>().pipe(
+export const calendarView = (rootClassName: string, h: UiViewBuilder) =>
+  Match.type<CalendarAttributes>().pipe(
     Match.tagsExhaustive({
       Days: days => daysView(days, rootClassName, h),
       Months: months => monthsView(months, rootClassName, h),

@@ -17,6 +17,8 @@ import {
   parseFragment,
 } from 'parse5'
 
+import type { AnyBlock } from '../../block/definition.js'
+import { lowerBlock } from '../../block/lowering.js'
 import {
   HYDRATION_BUILD_ATTRIBUTE,
   buildIdOrInjected,
@@ -46,7 +48,13 @@ import {
   HYDRATION_IDENTITY_ATTRIBUTE,
   HYDRATION_KEY_ATTRIBUTE,
 } from '../../hydrationMarkers.js'
+import type { AnyMountHandler } from '../../mount/index.js'
 import { hasTrustedInnerHtml } from '../../propertyProvenance.js'
+import {
+  type ValidateProgramBlock,
+  assertDocument,
+  assertProgramConfig,
+} from '../../runtime/programRoot.js'
 import type { VNode } from '../../snabbdom/vnode.js'
 import { tagNameFromSelector } from '../../tagName.js'
 import type { Return as UpdateReturn } from '../../update/index.js'
@@ -1092,48 +1100,115 @@ export type RenderError =
 
 type InitReturn<Model, Message> = UpdateReturn<Model, Message, any>
 
-/** Server-side subset of a routing `makeApplication` config with Flags. The
+/** Server-side subset of a routing Application config with Flags. The
  *  full application config is structurally assignable; `container`, `update`,
  *  and `subscriptions` play no part in a server render.
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
-export type RoutingApplicationConfigWithFlags<Model, Message, Flags> =
-  Readonly<{
-    Flags: Schema.Codec<Flags, any, never, never>
-    routing: unknown
-    init: (flags: Flags, url: Url) => InitReturn<Model, Message>
-    view: (model: Model, h: HtmlBuilder<Message>) => Document
-  }>
+type NativeRoutingApplicationConfigWithFlags<Model, Message, Flags> = Readonly<{
+  Flags: Schema.Codec<Flags, any, never, never>
+  routing: unknown
+  init: (flags: Flags, url: Url) => InitReturn<Model, Message>
+  view: (model: Model, h: HtmlBuilder<Message, AnyMountHandler>) => Document
+}>
 
-/** Server-side subset of a routing `makeApplication` config without Flags.
+/** Server-side subset of a routing Application config without Flags.
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
-export type RoutingApplicationConfig<Model, Message> = Readonly<{
+type NativeRoutingApplicationConfig<Model, Message> = Readonly<{
   routing: unknown
   init: (url: Url) => InitReturn<Model, Message>
-  view: (model: Model, h: HtmlBuilder<Message>) => Document
+  view: (model: Model, h: HtmlBuilder<Message, AnyMountHandler>) => Document
 }>
 
-/** Server-side subset of a non-routing `makeApplication` config with Flags.
+/** Server-side subset of a non-routing Application config with Flags.
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
-export type ApplicationConfigWithFlags<Model, Message, Flags> = Readonly<{
+type NativeApplicationConfigWithFlags<Model, Message, Flags> = Readonly<{
   Flags: Schema.Codec<Flags, any, never, never>
   init: (flags: Flags) => InitReturn<Model, Message>
-  view: (model: Model, h: HtmlBuilder<Message>) => Document
+  view: (model: Model, h: HtmlBuilder<Message, AnyMountHandler>) => Document
 }>
 
-/** Server-side subset of a non-routing `makeApplication` config.
+/** Server-side subset of a non-routing Application config.
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
-export type ApplicationConfig<Model, Message> = Readonly<{
+type NativeApplicationConfig<Model, Message> = Readonly<{
   init: () => InitReturn<Model, Message>
-  view: (model: Model, h: HtmlBuilder<Message>) => Document
+  view: (model: Model, h: HtmlBuilder<Message, AnyMountHandler>) => Document
 }>
+
+type InvalidServerInit<
+  BlockValue extends AnyBlock,
+  Args extends ReadonlyArray<unknown>,
+> = BlockValue extends AnyBlock
+  ? Readonly<Parameters<BlockValue['init']>> extends Args
+    ? Args extends Readonly<Parameters<BlockValue['init']>>
+      ? never
+      : Parameters<BlockValue['init']>
+    : Parameters<BlockValue['init']>
+  : never
+
+type ValidateServerInit<
+  BlockValue extends AnyBlock,
+  Args extends ReadonlyArray<unknown>,
+> = [InvalidServerInit<BlockValue, Args>] extends [never]
+  ? unknown
+  : Readonly<{
+      'Server Flags and routing must match every root Block initializer': InvalidServerInit<
+        BlockValue,
+        Args
+      >
+    }>
+
+type ServerFlagsSchema = Schema.Codec<any, any, never, never>
+
+type ExactServerHostConfig<Config> = Readonly<{
+  [Key in Exclude<keyof Config, 'Flags' | 'routing'>]: never
+}>
+
+/** Server host configuration for a root Block initialized with Flags and a URL.
+ * The Block already contains its init, update, view, and handler recipes. */
+export type RoutingApplicationConfigWithFlags<
+  BlockValue extends AnyBlock,
+  Flags,
+> = Readonly<{
+  /** Encodes the request's Flags for the browser hydration handoff. */
+  Flags: Schema.Codec<Flags, any, never, never>
+  /** Enables URL initialization. Browser routing callbacks are not run on the server. */
+  routing: object
+}> &
+  NoInfer<ValidateServerInit<BlockValue, readonly [Flags, Url]>>
+
+/** Server host configuration for a root Block initialized with a URL. */
+export type RoutingApplicationConfig<BlockValue extends AnyBlock> = Readonly<{
+  /** Enables URL initialization. Pass an empty object when callbacks are unnecessary. */
+  routing: object
+  Flags?: never
+}> &
+  NoInfer<ValidateServerInit<BlockValue, readonly [Url]>>
+
+/** Server host configuration for a root Block initialized with Flags. */
+export type ApplicationConfigWithFlags<
+  BlockValue extends AnyBlock,
+  Flags,
+> = Readonly<{
+  /** Encodes the request's Flags for the browser hydration handoff. */
+  Flags: Schema.Codec<Flags, any, never, never>
+  routing?: never
+}> &
+  NoInfer<ValidateServerInit<BlockValue, readonly [Flags]>>
+
+/** Server host configuration for a root Block whose init takes no arguments. */
+export type ApplicationConfig<BlockValue extends AnyBlock> = Readonly<{
+  Flags?: never
+  routing?: never
+}> &
+  NoInfer<ValidateServerInit<BlockValue, readonly []>>
 
 // Shared by both render shapes. `runtimeId` names the application in the root
 // stamp and Flags payload; it defaults to `'app'` and must be non-empty. It
@@ -1232,14 +1307,14 @@ const noOpDispatch: DispatchSync = () => {}
 // that suspended mid-render would break the invariant; views are pure and
 // cannot.
 const runView = <Model>(
-  view: (model: Model, h: HtmlBuilder<any>) => Document,
+  view: (model: Model, h: HtmlBuilder<any, AnyMountHandler>) => Document,
   model: Model,
 ): Document => {
   const boundaryRegistry = createBoundaryRegistry()
   beginRender(boundaryRegistry)
   setRuntime(noOpDispatch, Context.empty(), boundaryRegistry)
   try {
-    return view(model, htmlBuilderFor())
+    return view(model, htmlBuilderFor<any, AnyMountHandler>())
   } finally {
     clearRuntime()
   }
@@ -1327,7 +1402,7 @@ const validateHydrationRoot = (
 }
 
 /**
- * Renders a `makeApplication`-shaped config to an HTML string on the server.
+ * Renders a completed root Block to an HTML string on the server.
  *
  * Resolves `init` for the request (with the given Flags and URL when the
  * config declares them), runs the pure `view` under a no-op dispatch frame,
@@ -1356,36 +1431,139 @@ const validateHydrationRoot = (
  *
  * @example
  * ```typescript
- * const renderedApplication = yield* Server.renderToString(config, {
- *   url: request.url,
- *   flags: { theme },
- * })
+ * const renderedApplication = yield* Server.renderToString(
+ *   ApplicationBlock,
+ *   { Flags, routing: {} },
+ *   { url: request.url, flags: { theme } },
+ * )
  * ```
  *
  * @experimental Ships from `foldkit/experimental/server`; expect breaking changes while the API settles.
  */
-export function renderToString<Model, Message, Flags>(
-  config: RoutingApplicationConfigWithFlags<Model, Message, Flags>,
-  options: RenderUrlFlagsOptions<Flags>,
+export function renderToString<
+  const BlockValue extends AnyBlock,
+  const Config extends Readonly<{
+    Flags: ServerFlagsSchema
+    routing: object
+  }>,
+>(
+  block: BlockValue & NoInfer<ValidateProgramBlock<BlockValue, 'Document'>>,
+  config: Config &
+    NoInfer<
+      RoutingApplicationConfigWithFlags<BlockValue, Config['Flags']['Type']>
+    > &
+    NoInfer<ExactServerHostConfig<Config>>,
+  options: RenderUrlFlagsOptions<NoInfer<Config['Flags']['Type']>>,
 ): Effect.Effect<RenderedApplication, RenderError>
-export function renderToString<Model, Message>(
-  config: RoutingApplicationConfig<Model, Message>,
+export function renderToString<
+  const BlockValue extends AnyBlock,
+  const Config extends Readonly<{ routing: object; Flags?: never }>,
+>(
+  block: BlockValue & NoInfer<ValidateProgramBlock<BlockValue, 'Document'>>,
+  config: Config &
+    NoInfer<RoutingApplicationConfig<BlockValue>> &
+    NoInfer<ExactServerHostConfig<Config>>,
   options: RenderUrlOptions,
 ): Effect.Effect<RenderedApplication, RenderError>
-export function renderToString<Model, Message, Flags>(
-  config: ApplicationConfigWithFlags<Model, Message, Flags>,
-  options: RenderFlagsOptions<Flags>,
+export function renderToString<
+  const BlockValue extends AnyBlock,
+  const Config extends Readonly<{
+    Flags: ServerFlagsSchema
+    routing?: never
+  }>,
+>(
+  block: BlockValue & NoInfer<ValidateProgramBlock<BlockValue, 'Document'>>,
+  config: Config &
+    NoInfer<ApplicationConfigWithFlags<BlockValue, Config['Flags']['Type']>> &
+    NoInfer<ExactServerHostConfig<Config>>,
+  options: RenderFlagsOptions<NoInfer<Config['Flags']['Type']>>,
 ): Effect.Effect<RenderedApplication, RenderError>
-export function renderToString<Model, Message>(
-  config: ApplicationConfig<Model, Message>,
+export function renderToString<
+  const BlockValue extends AnyBlock,
+  const Config extends object,
+>(
+  block: BlockValue & NoInfer<ValidateProgramBlock<BlockValue, 'Document'>>,
+  config: Config &
+    NoInfer<ApplicationConfig<BlockValue>> &
+    NoInfer<ExactServerHostConfig<Config>>,
   options?: RenderOptions,
 ): Effect.Effect<RenderedApplication, RenderError>
 export function renderToString(
+  block: AnyBlock,
+  config: Readonly<{
+    Flags?: Schema.Codec<any, any, never, never>
+    routing?: unknown
+  }>,
+  options?: RenderOptions & Readonly<{ url?: string; flags?: unknown }>,
+): Effect.Effect<RenderedApplication, RenderError> {
+  assertProgramConfig({ block, container: null }, 'Document')
+
+  if (!Predicate.isObject(config)) {
+    throw new Error('[foldkit] Server host configuration must be an object.')
+  }
+
+  for (const field of Object.keys(config)) {
+    if (field !== 'Flags' && field !== 'routing') {
+      throw new Error(
+        `[foldkit] Server host configuration does not support "${field}". Supply implementations on the completed root Block.`,
+      )
+    }
+  }
+
+  const { Flags, routing } = config
+  if (Reflect.has(config, 'Flags') && !Schema.isSchema(Flags)) {
+    throw new Error('[foldkit] Server Flags must be an Effect Schema.')
+  }
+
+  if (Reflect.has(config, 'routing') && !Predicate.isObject(routing)) {
+    throw new Error(
+      '[foldkit] Server routing must be a configuration object. Pass an empty object to enable URL initialization.',
+    )
+  }
+
+  const { init, view: blockView } = lowerBlock(block)
+  const view = (...args: ReadonlyArray<any>) => {
+    const output = Reflect.apply(blockView, undefined, args)
+    assertDocument(output)
+    return output
+  }
+
+  return __renderFromConfig(
+    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+    {
+      ...(Flags === undefined ? {} : { Flags }),
+      ...(routing === undefined ? {} : { routing }),
+      init,
+      view,
+    } as never,
+    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+    options as never,
+  )
+}
+
+/** @internal Renders pure init/view fixtures without constructing a runtime. */
+export function __renderFromConfig<Model, Message, Flags>(
+  config: NativeRoutingApplicationConfigWithFlags<Model, Message, Flags>,
+  options: RenderUrlFlagsOptions<Flags>,
+): Effect.Effect<RenderedApplication, RenderError>
+export function __renderFromConfig<Model, Message>(
+  config: NativeRoutingApplicationConfig<Model, Message>,
+  options: RenderUrlOptions,
+): Effect.Effect<RenderedApplication, RenderError>
+export function __renderFromConfig<Model, Message, Flags>(
+  config: NativeApplicationConfigWithFlags<Model, Message, Flags>,
+  options: RenderFlagsOptions<Flags>,
+): Effect.Effect<RenderedApplication, RenderError>
+export function __renderFromConfig<Model, Message>(
+  config: NativeApplicationConfig<Model, Message>,
+  options?: RenderOptions,
+): Effect.Effect<RenderedApplication, RenderError>
+export function __renderFromConfig(
   config: Readonly<{
     Flags?: Schema.Codec<unknown, any, never, never>
     routing?: unknown
     init: (...initArguments: ReadonlyArray<any>) => InitReturn<unknown, any>
-    view: (model: any, h: HtmlBuilder<any>) => Document
+    view: (model: any, h: HtmlBuilder<any, AnyMountHandler>) => Document
   }>,
   options?: RenderOptions &
     Readonly<{

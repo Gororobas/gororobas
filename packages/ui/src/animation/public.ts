@@ -1,19 +1,9 @@
 export {
-  init,
-  show,
-  hide,
-  update,
-  toggle,
-  view,
-  defaultLeaveCommand,
-  Model,
-  Message,
-  OutMessage,
-  type Showed,
-  type Hid,
+  AnimationBlock,
   TransitionState,
-  WaitForPaint,
-  WaitForAnimationSettled,
+  type InitConfig,
+  type ViewInputs,
 } from './index.js'
 
-export type { InitConfig, ViewInputs } from './index.js'
+/** Original Animation Command Definitions for Story and Scene test resolution. */
+export * as test from './test.js'

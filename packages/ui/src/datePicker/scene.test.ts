@@ -1,15 +1,24 @@
-import { Match, Option } from 'effect'
+import { Match, Option, Schema } from 'effect'
 import * as Calendar from 'foldkit/calendar'
-import { type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
+import { inertHtml as ih } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
 import { expect } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import * as UiCalendar from '../calendar/index.js'
-import * as Popover from '../popover/public.js'
-import type { Model, ViewInputs } from './index.js'
-import { Message, init, triggerId, update, view } from './index.js'
+import * as UiCalendar from '../calendar/block.js'
+import * as Popover from '../popover/block.js'
+import type { Model, ViewInputs } from './block.js'
+import {
+  DatePickerBlock,
+  Message,
+  init,
+  triggerId,
+  update,
+  view,
+} from './block.js'
+
+type TestHtmlBuilder = Parameters<typeof view>[2]
 
 const acknowledgeAnchorPopover = Scene.Mount.resolve(
   Popover.AnchorPopover,
@@ -21,6 +30,18 @@ const acknowledgePopoverBackdrop = Scene.Mount.resolve(
 )
 
 const today = Calendar.make(2026, 4, 13)
+
+const gotCalendarMessage = ({
+  message,
+}: Readonly<{
+  message: typeof UiCalendar.CalendarBlock.Message.Type
+}>) =>
+  Schema.decodeSync(DatePickerBlock.Message)({
+    _tag: 'GotCalendarMessage',
+    placement: 'calendar',
+    generation: 0,
+    message,
+  })
 
 const germanCalendarViewLabels: UiCalendar.ViewLabels = {
   previousMonthLabel: 'Vorheriger Monat',
@@ -132,7 +153,7 @@ const sceneView =
       'anchor' | 'triggerContent' | 'toCalendarView'
     > = {},
   ) =>
-  (model: Model, h: HtmlBuilder<Message>) =>
+  (model: Model, h: TestHtmlBuilder) =>
     view(
       model,
       {
@@ -150,7 +171,7 @@ const panel = Scene.selector('#picker-popover-panel')
 const grid = Scene.role('grid')
 const hiddenInput = Scene.selector('input[type="hidden"]')
 
-const closedModel = init({ id: 'picker', today })
+const closedModel = init({ id: 'picker', today }).model
 const pickerOpen = update(closedModel, Message.Opened())
 
 describe('DatePicker', () => {
@@ -213,13 +234,13 @@ describe('DatePicker', () => {
   describe('Calendar view labels', () => {
     const pickerMonths = update(
       pickerOpen.model,
-      Message.GotCalendarMessage({
+      gotCalendarMessage({
         message: UiCalendar.Message.ClickedHeading(),
       }),
     )
     const pickerYears = update(
       pickerMonths.model,
-      Message.GotCalendarMessage({
+      gotCalendarMessage({
         message: UiCalendar.Message.ClickedHeading(),
       }),
     )

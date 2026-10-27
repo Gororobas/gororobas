@@ -1,50 +1,52 @@
 import { Schema } from 'effect'
 import { Url } from 'foldkit/url'
 
-import { Dialog, Menu } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui'
 
 import { Deployment } from './deployment'
-import { ResolvedTheme, ThemePreference } from './message'
+import { ResolvedTheme } from './message'
 import {
-  ApiReference,
-  ComingFromReact,
-  Core,
-  Example,
-  Home,
-  Playground,
-  Ui,
+  ApiReferenceBlock,
+  BlockPageBlock,
+  ComingFromReactBlock,
+  ExampleDetailBlock,
+  HomeBlock,
+  PlaygroundBlock,
+  UiBlock,
 } from './page'
-import { AppRoute } from './route'
+import { ApplicationRoute } from './route'
 import * as Search from './search'
 import { SidebarGroups } from './sidebarStorage'
 import * as SnippetCopy from './snippetCopy'
 import * as SnippetDisclosure from './snippetDisclosure'
+import { ThemePreference } from './themePreference'
+import { ThemeMenuBlock } from './view/themeMenu'
 
 export const Model = Schema.Struct({
-  route: AppRoute,
+  route: ApplicationRoute,
   url: Url,
   deployment: Deployment,
-  snippetCopy: SnippetCopy.Model,
-  snippetDisclosure: SnippetDisclosure.Model,
+  snippetCopy: SnippetCopy.SnippetCopyBlock.Model,
+  snippetDisclosure: SnippetDisclosure.SnippetDisclosureBlock.Model,
   maybeGitHubStarCount: Schema.Option(Schema.Number),
   currentYear: Schema.Number,
-  mobileMenuDialog: Dialog.Model,
+  newsletterEmail: Schema.String,
+  mobileMenuDialog: DialogBlock.Model,
   isMobileTableOfContentsOpen: Schema.Boolean,
   activeSection: Schema.Option(Schema.String),
   isNarrowViewport: Schema.Boolean,
   maybeIsPlaygroundSupported: Schema.Option(Schema.Boolean),
-  playground: Schema.Option(Playground.Model),
+  playground: Schema.Option(PlaygroundBlock.Model),
   sidebarGroups: SidebarGroups,
-  coreSubmodelPage: Core.SubmodelPage.Model,
-  maybeHome: Schema.Option(Home.Model),
-  themeMenu: Menu.Model,
+  coreBlockPage: BlockPageBlock.Model,
+  maybeHome: Schema.Option(HomeBlock.Model),
+  themeMenu: ThemeMenuBlock.Model,
   maybeThemePreference: Schema.Option(ThemePreference),
   systemTheme: ResolvedTheme,
   resolvedTheme: ResolvedTheme,
-  uiPages: Ui.Model,
-  comingFromReact: ComingFromReact.Model,
-  apiReference: ApiReference.Model,
-  exampleDetail: Example.ExampleDetail.Model,
-  search: Search.Model,
+  uiPages: UiBlock.Model,
+  comingFromReact: ComingFromReactBlock.Model,
+  apiReference: ApiReferenceBlock.Model,
+  exampleDetail: ExampleDetailBlock.Model,
+  search: Search.SearchBlock.Model,
 })
-export type Model = typeof Model.Type

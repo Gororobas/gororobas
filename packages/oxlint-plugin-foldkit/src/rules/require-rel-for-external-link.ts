@@ -24,10 +24,11 @@ const protectiveRelSubstrings = ['noopener', 'noreferrer']
 const isTargetBlankElement = (
   element: unknown,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): element is ESTree.CallExpression => {
   if (
     !isCallExpression(element) ||
-    !isFoldkitHtmlBuilderMember(element.callee, 'Target', references)
+    !isFoldkitHtmlBuilderMember(element.callee, 'Target', references, filename)
   ) {
     return false
   }
@@ -38,9 +39,10 @@ const isTargetBlankElement = (
 const isRelElement = (
   element: unknown,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): element is ESTree.CallExpression =>
   isCallExpression(element) &&
-  isFoldkitHtmlBuilderMember(element.callee, 'Rel', references)
+  isFoldkitHtmlBuilderMember(element.callee, 'Rel', references, filename)
 
 const relStaticValue = (
   relElement: ESTree.CallExpression,
@@ -86,13 +88,13 @@ export const requireRelForExternalLink = Rule.define({
           return Effect.void
         }
         const maybeTargetBlank = Array.findFirst(node.elements, element =>
-          isTargetBlankElement(element, references),
+          isTargetBlankElement(element, references, ctx.filename),
         )
         if (Option.isNone(maybeTargetBlank)) {
           return Effect.void
         }
         const relElements = Array.filter(node.elements, element =>
-          isRelElement(element, references),
+          isRelElement(element, references, ctx.filename),
         )
         if (Array.isArrayEmpty(relElements)) {
           return ctx.report(

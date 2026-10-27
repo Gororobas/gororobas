@@ -5,11 +5,10 @@ import { modifyFields } from 'foldkit/struct'
 import { CartItem, Item } from './item'
 
 export const Cart = Schema.Array(CartItem)
-export type Cart = typeof Cart.Type
 
 export const addItem =
   (item: Item) =>
-  (cart: Cart): Cart => {
+  (cart: typeof Cart.Type): typeof Cart.Type => {
     const existing = Array.findFirst(
       cart,
       cartItem => cartItem.item.id === item.id,
@@ -28,8 +27,8 @@ export const addItem =
 
 export const removeItem =
   (itemId: string) =>
-  (cart: Cart): Cart =>
+  (cart: typeof Cart.Type): typeof Cart.Type =>
     Array.filter(cart, cartItem => cartItem.item.id !== itemId)
 
-export const totalItems = (cart: Cart): number =>
+export const totalItems = (cart: typeof Cart.Type): number =>
   Array.reduce(cart, 0, (total, { quantity }) => total + quantity)

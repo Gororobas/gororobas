@@ -1,4 +1,4 @@
-import { Context, Stream } from 'effect'
+import { Context, Option, Stream } from 'effect'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
@@ -6,6 +6,12 @@ import { describe, it } from '@effect/vitest'
 import { MountTracker } from '../mount/index.js'
 import { Dispatch } from '../runtime/index.js'
 import { h as snabbdomH } from '../snabbdom/index.js'
+import {
+  type AnyBlockView,
+  type BlockConfig,
+  block as blockImpl,
+  defineView,
+} from './block.js'
 import {
   type BoundaryRegistry,
   beginRender,
@@ -18,16 +24,10 @@ import {
   clearRuntime,
   setRuntime,
 } from './runtimeSingleton.js'
-import {
-  type AnySubmodelView,
-  type SubmodelConfig,
-  defineView,
-  submodel as submodelImpl,
-} from './submodel.js'
 
-const submodel = <View extends AnySubmodelView>(
-  config: SubmodelConfig<View, unknown>,
-): Html => submodelImpl(config, __htmlBuilder())
+const block = <View extends AnyBlockView>(
+  config: BlockConfig<View, unknown>,
+): Html => blockImpl(config, __htmlBuilder())
 
 const setUpRuntime = (
   registry: BoundaryRegistry,
@@ -127,7 +127,7 @@ describe('childAttributes', () => {
       })
     })
 
-    const result = submodel({
+    const result = block({
       slotId: 'fake-checkbox',
       model: {},
       view: fakeCheckboxView,
@@ -140,7 +140,7 @@ describe('childAttributes', () => {
       toParentMessage: message => GotChild({ message }),
     })
     if (result === null) {
-      throw new Error('Expected the Submodel to render an element')
+      throw new Error('Expected the Block to render an element')
     }
     result.elm = document.createElement('div')
     result.data?.hook?.insert?.(result)
@@ -153,12 +153,12 @@ describe('childAttributes', () => {
     })
   })
 
-  it('routes a published OnClick through the Submodel boundary even when the consumer builds the element in the parent boundary', () => {
+  it('routes a published OnClick through the Block boundary even when the consumer builds the element in the parent boundary', () => {
     // This is the scenario the ChildAttribute design solves. The
-    // Submodel publishes attribute records that the consumer spreads
+    // Block publishes attribute records that the consumer spreads
     // into its own `h.div(...)` in the parent's boundary. Without
     // childAttributes, the handler would close over the parent's
-    // dispatcher at vnode-construction time and bypass the Submodel's
+    // dispatcher at vnode-construction time and bypass the Block's
     // wrap. With childAttributes, the published attribute carries
     // the child's dispatcher and the runtime routes the handler
     // through Checkbox's wrap.
@@ -178,7 +178,7 @@ describe('childAttributes', () => {
       })
     })
 
-    const result = submodel({
+    const result = block({
       slotId: 'fake-checkbox',
       model: {},
       view: fakeCheckboxView,
@@ -203,11 +203,90 @@ describe('childAttributes', () => {
     ])
   })
 
+  it('keeps child-owned attribute producers in the Block boundary when a parent slot invokes them', () => {
+    const producerInvocations: Array<unknown> = []
+    const selection = Option.some({ label: 'checkbox' })
+    type ProducerViewInputs = Readonly<{
+      toView: (
+        attributes: {
+          checkbox: (
+            this: Readonly<{ owner: string }>,
+            label: string,
+          ) => ReadonlyArray<ChildAttribute>
+        },
+        selection: Option.Option<Readonly<{ label: string }>>,
+      ) => Html
+    }>
+
+    const producerView = defineView<object, ChildClicked, ProducerViewInputs>(
+      (_model, viewInputs, h) => {
+        const renderInfo = {
+          checkbox: function (label: string) {
+            producerInvocations.push(this, label)
+            return childAttributes([h.OnClick({ _tag: 'ChildClicked' })])
+          },
+        }
+        Object.defineProperty(renderInfo, 'metadata', {
+          value: 'preserved',
+          enumerable: false,
+          writable: false,
+        })
+
+        return viewInputs.toView(renderInfo, selection)
+      },
+    )
+
+    const result = block({
+      slotId: 'attribute-producer',
+      model: {},
+      view: producerView,
+      viewInputs: {
+        toView: (attributes, selected) => {
+          producerInvocations.push(
+            selected,
+            Option.getOrThrow(selected).label,
+            Object.getPrototypeOf(attributes),
+            Object.getOwnPropertyDescriptor(attributes, 'metadata'),
+          )
+          const hParent = __htmlBuilder<ParentDirect>()
+          return hParent.button([
+            ...attributes.checkbox.call({ owner: 'parent-slot' }, 'checkbox'),
+          ])
+        },
+      },
+      toParentMessage: message => GotChild({ message }),
+    })
+
+    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+    const onClick = result?.data?.on?.click as () => void
+    onClick()
+
+    expect(producerInvocations).toEqual([
+      selection,
+      'checkbox',
+      Object.prototype,
+      {
+        value: 'preserved',
+        writable: false,
+        enumerable: false,
+        configurable: false,
+      },
+      { owner: 'parent-slot' },
+      'checkbox',
+    ])
+    expect(dispatched).toEqual([
+      {
+        _tag: 'GotChild',
+        message: { _tag: 'ChildClicked' },
+      },
+    ])
+  })
+
   it("preserves the consumer's own OnClick alongside published ChildAttributes", () => {
     // The consumer can mix its own attributes with the published
     // ones. Each routes through the correct dispatcher: the consumer's
     // OnClick goes unwrapped (parent boundary), the published one
-    // routes through the Submodel's wrap.
+    // routes through the Block's wrap.
     type CheckboxViewInputs = Readonly<{
       toView: (attributes: { checkbox: ReadonlyArray<ChildAttribute> }) => Html
     }>
@@ -224,7 +303,7 @@ describe('childAttributes', () => {
       })
     })
 
-    const result = submodel({
+    const result = block({
       slotId: 'fake-checkbox',
       model: {},
       view: fakeCheckboxView,
@@ -273,8 +352,8 @@ describe('childAttributes', () => {
   })
 
   it('binds each attribute group to the boundary that called childAttributes', () => {
-    // Two Submodels publish separate attribute groups. Each group's
-    // handlers route through its own Submodel's wrap, not the other's.
+    // Two Blocks publish separate attribute groups. Each group's
+    // handlers route through its own Block's wrap, not the other's.
     // When both publish a handler for the same DOM event (here, click),
     // both fire in spread order with their own wrap applied.
     type FirstChild = Readonly<{ _tag: 'FirstChild' }>
@@ -298,7 +377,7 @@ describe('childAttributes', () => {
     let firstAttributes: ReadonlyArray<ChildAttribute> = []
     let secondAttributes: ReadonlyArray<ChildAttribute> = []
 
-    submodel({
+    block({
       slotId: 'first',
       model: {},
       view: defineView<object, FirstChild, CaptureInputs>((_, viewInputs) => {
@@ -315,7 +394,7 @@ describe('childAttributes', () => {
       toParentMessage: message => GotFirst({ message }),
     })
 
-    submodel({
+    block({
       slotId: 'second',
       model: {},
       view: defineView<object, SecondChild, CaptureInputs>((_, viewInputs) => {
@@ -366,7 +445,7 @@ describe('childAttributes', () => {
       },
     )
 
-    const result = submodel({
+    const result = block({
       slotId: 'fake',
       model: {},
       view: fakeView,

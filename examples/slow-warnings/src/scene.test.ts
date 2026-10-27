@@ -2,9 +2,11 @@ import { click, expect, given, role, scene, text } from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import { type Model, update, view } from './main'
+import type { Model } from './model'
+import { update } from './update'
+import { view } from './view'
 
-const initialModel: Model = {
+const initialModel: typeof Model.Type = {
   activeWorkload: 'Idle',
   nextWarningId: 1,
   warnings: [],

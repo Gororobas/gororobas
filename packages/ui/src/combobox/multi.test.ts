@@ -1,47 +1,54 @@
-import { Option } from 'effect'
-import { type HtmlBuilder, inertHtml as ih } from 'foldkit/html'
+import { Option, Schema } from 'effect'
+import { inertHtml as ih } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
 import * as Story from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { expect } from 'vitest'
+import type * as Update from 'foldkit/update'
+import { expect, expectTypeOf } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import * as Animation from '../animation/index.js'
+import * as Animation from '../animation/block.js'
 import { create, init, update } from './multi.js'
 import type { Model, ViewInputs } from './multi.js'
 import {
-  AnchorCombobox,
-  AttachComboboxPreventBlur,
+  Anchor,
+  AttachPreventBlur,
   FocusInput,
   InertOthers,
   LockScroll,
   Message,
   OutMessage,
-  PortalComboboxBackdrop,
+  PortalBackdrop,
   RestoreInert,
-  ScrollIntoView,
+  ScrollItemIntoView,
   UnlockScroll,
   inputId,
+  makeView,
+  mounts,
 } from './shared.js'
 
-const TestCombobox = create<string>()
-const view = TestCombobox.view
+const TestCombobox = create()
+const view = makeView<Model, string>({ ariaMultiSelectable: true }, Message)
 
-const acknowledgeAnchor = Scene.Mount.resolve(
-  AnchorCombobox,
-  Message.CompletedAnchorCombobox(),
-)
+const Fruit = Schema.Literals(['Apple', 'Pear'])
+type Fruit = typeof Fruit.Type
+
+const FruitCombobox = create(Fruit)
+
+type TestHtmlBuilder = Parameters<typeof view>[2]
+
+const acknowledgeAnchor = Scene.Mount.resolve(Anchor, Message.CompletedAnchor())
 const acknowledgeBackdrop = Scene.Mount.resolve(
-  PortalComboboxBackdrop,
-  Message.CompletedPortalComboboxBackdrop(),
+  PortalBackdrop,
+  Message.CompletedPortalBackdrop(),
 )
 const acknowledgePreventBlur = Scene.Mount.resolve(
-  AttachComboboxPreventBlur,
-  Message.CompletedAttachComboboxPreventBlur(),
+  AttachPreventBlur,
+  Message.CompletedAttachPreventBlur(),
 )
 
-const givenClosed = Story.given(init({ id: 'test' }))
+const givenClosed = Story.given(init({ id: 'test' }).model)
 
 const givenOpenMulti = Story.steps(
   givenClosed,
@@ -49,9 +56,74 @@ const givenOpenMulti = Story.steps(
 )
 
 describe('Combobox.Multi', () => {
+  describe('completed Block', () => {
+    it('preserves refined payloads and registered Steps', () => {
+      expectTypeOf<typeof FruitCombobox.OutMessage.Type>().toEqualTypeOf<
+        OutMessage<Fruit>
+      >()
+      FruitCombobox.Message.SelectedItem({
+        item: 'Apple',
+        displayText: 'Apple',
+        wasSelected: false,
+      })
+      FruitCombobox.OutMessage.Selected({ value: 'Apple' })
+      FruitCombobox.Message.SelectedItem({
+        // @ts-expect-error The completed factory preserves the refined Message constructor.
+        item: 'Banana',
+        displayText: 'Banana',
+        wasSelected: false,
+      })
+      // @ts-expect-error The completed factory preserves the refined OutMessage constructor.
+      FruitCombobox.OutMessage.Selected({ value: 'Banana' })
+      expectTypeOf<
+        Update.RequirementsOf<typeof FruitCombobox.update>
+      >().toEqualTypeOf<Update.RequirementsOf<typeof update>>()
+      expect(FruitCombobox.owner).toBe(TestCombobox.owner)
+      expect(FruitCombobox.mounts).toEqual(mounts)
+
+      const selected = FruitCombobox.operations.requestSelectItem(
+        init({ id: 'fruit-multi' }).model,
+        'Apple',
+      )
+      const closed = FruitCombobox.operations.requestClose(selected.model)
+
+      expect(selected.outMessage).toStrictEqual(
+        FruitCombobox.OutMessage.Selected({ value: 'Apple' }),
+      )
+      expect(closed.model.isOpen).toBe(false)
+    })
+
+    it('routes Animation Messages for a generic multi Combobox', () => {
+      Story.story(
+        FruitCombobox.update,
+        Story.given(
+          FruitCombobox.init({ id: 'fruit-combobox', isAnimated: true }).model,
+        ),
+        Story.message(
+          FruitCombobox.Message.Opened({
+            maybeActiveItemIndex: Option.some(0),
+          }),
+        ),
+        Story.Command.resolveAll(
+          [
+            Animation.WaitForPaint,
+            Animation.Message.CompletedWaitForPaint({ generation: 1 }),
+          ],
+          [
+            Animation.WaitForAnimationSettled,
+            Animation.Message.EndedAnimation({ generation: 1 }),
+          ],
+        ),
+        Story.model(model => {
+          expect(model.animation.transitionState).toBe('Idle')
+        }),
+      )
+    })
+  })
+
   describe('init', () => {
     it('defaults to closed with no active item and an empty input', () => {
-      expect(init({ id: 'test' })).toStrictEqual({
+      expect(init({ id: 'test' }).model).toStrictEqual({
         id: 'test',
         isOpen: false,
         isAnimated: false,
@@ -59,7 +131,7 @@ describe('Combobox.Multi', () => {
         nullable: false,
         immediate: false,
         selectInputOnFocus: false,
-        animation: Animation.init({ id: 'test-items' }),
+        animation: Animation.init({ id: 'test-items' }).model,
         maybeActiveItemIndex: Option.none(),
         activationTrigger: 'Keyboard',
         inputValue: '',
@@ -160,8 +232,8 @@ describe('Combobox.Multi', () => {
             }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.message(
             Message.SelectedItem({
@@ -182,7 +254,7 @@ describe('Combobox.Multi', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               isOpen: () => true,
               inputValue: () => 'app',
             }),
@@ -201,7 +273,7 @@ describe('Combobox.Multi', () => {
       it('does not emit ClearedSelection when nullable, since the input rests empty', () => {
         Story.story(
           update,
-          Story.given(init({ id: 'test', nullable: true })),
+          Story.given(init({ id: 'test', nullable: true }).model),
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
           ),
@@ -217,7 +289,7 @@ describe('Combobox.Multi', () => {
       })
 
       it('is a no-op when already closed', () => {
-        const closedModel = modifyFields(init({ id: 'test' }), {
+        const closedModel = modifyFields(init({ id: 'test' }).model, {
           inputValue: () => 'app',
         })
 
@@ -241,7 +313,7 @@ describe('Combobox.Multi', () => {
       it('emits Selected on each immediate activation (parent toggles)', () => {
         Story.story(
           update,
-          Story.given(init({ id: 'test', immediate: true })),
+          Story.given(init({ id: 'test', immediate: true }).model),
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
           ),
@@ -256,8 +328,8 @@ describe('Combobox.Multi', () => {
           ),
           Story.expectOutMessage(OutMessage.Selected({ value: 'apple' })),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.message(
             Message.ActivatedItem({
@@ -270,8 +342,8 @@ describe('Combobox.Multi', () => {
           ),
           Story.expectOutMessage(OutMessage.Selected({ value: 'apple' })),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
           Story.model(model => {
             expect(model.isOpen).toBe(true)
@@ -283,7 +355,7 @@ describe('Combobox.Multi', () => {
 
   describe('modal commands', () => {
     const givenOpenModal = Story.steps(
-      Story.given(init({ id: 'test', isModal: true })),
+      Story.given(init({ id: 'test', isModal: true }).model),
       Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
       Story.Command.resolveAllExact(
         [LockScroll, Message.CompletedLockScroll()],
@@ -330,7 +402,7 @@ describe('Combobox.Multi', () => {
   })
 
   describe('view', () => {
-    const closedModel = () => init({ id: 'test' })
+    const closedModel = () => init({ id: 'test' }).model
 
     const openMultiModel = (): Model => {
       let model!: Model
@@ -351,7 +423,7 @@ describe('Combobox.Multi', () => {
           'items' | 'itemToValue' | 'itemToDisplayText'
         > = {},
       ) =>
-      (model: Model, h: HtmlBuilder<Message>) =>
+      (model: Model, h: TestHtmlBuilder) =>
         view(
           model,
           {
@@ -651,8 +723,8 @@ describe('Combobox.Multi', () => {
           Scene.expect(item(1)).toHaveAttr('data-active', ''),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
         )
       })
@@ -677,8 +749,8 @@ describe('Combobox.Multi', () => {
           Scene.expect(item(1)).not.toHaveAttr('data-selected'),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollItemIntoView,
+            Message.CompletedScrollItemIntoView(),
           ),
         )
       })
@@ -720,7 +792,7 @@ describe('Combobox.Multi', () => {
           Scene.keydown(input, 'Escape'),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
 
@@ -741,7 +813,7 @@ describe('Combobox.Multi', () => {
           Scene.keydown(input, 'Escape'),
           Scene.expectNoOutMessage(),
           Scene.Command.resolve(FocusInput, Message.CompletedFocusInput()),
-          Scene.Mount.expectEnded(AnchorCombobox, PortalComboboxBackdrop),
+          Scene.Mount.expectEnded(Anchor, PortalBackdrop),
         )
       })
     })

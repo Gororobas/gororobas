@@ -1,17 +1,10 @@
-import { Submodel } from 'foldkit'
-import type { Html } from 'foldkit/html'
-
 import { type CodeBlock } from '../../component'
-import { slotDocPage } from '../../markdown'
 import { type RenderHeadingLink, demoContainer } from '../../prose'
+import { UiComposition } from './composition'
+import { SliderPageContent } from './content'
 import * as Slider from './demo/slider'
-import type { Message } from './message'
-import type { Model } from './model'
-import raw from './sliderPage.md'
 
-const { tableOfContents, view: renderPage } = slotDocPage<
-  'horizontal' | 'vertical'
->(raw, 'ui/slider')
+const { tableOfContents, view: renderPage } = SliderPageContent
 
 export { tableOfContents }
 
@@ -21,8 +14,8 @@ type ViewInputs = Readonly<{
   renderHeadingLink: RenderHeadingLink
 }>
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h): Html =>
+export const view = UiComposition.makeView.withInputs<ViewInputs>(
+  (model, { renderCopyButton, renderSnippet, renderHeadingLink }, h) =>
     renderPage({
       demos: {
         horizontal: demoContainer(

@@ -1,9 +1,8 @@
-import type { HtmlBuilder } from 'foldkit/html'
+import { TooltipBlock } from '@foldkit/ui'
+import { type AnchorConfig, triggerId } from '@foldkit/ui/tooltip'
 
-import { Tooltip } from '@foldkit/ui'
-import type { AnchorConfig } from '@foldkit/ui/tooltip'
-
-import { Message } from '../message'
+import type { UiViewBuilder } from '../composition'
+import { TooltipDemoBinding } from '../composition'
 
 // DEMO CONTENT
 
@@ -14,54 +13,54 @@ const panelClassName =
 
 const wrapperClassName = 'relative inline-block'
 
-// VIEW
-
 const TOOLTIP_ANCHOR: AnchorConfig = {
   placement: 'top',
   gap: 6,
   padding: 8,
 }
 
-export const demo = (tooltipModel: Tooltip.Model, h: HtmlBuilder<Message>) => {
+export const demo = (
+  tooltipModel: typeof TooltipBlock.Model.Type,
+  h: UiViewBuilder,
+) => {
   return [
     h.div(
       [h.Class('demo-field')],
       [
         h.label(
-          [h.For(Tooltip.triggerId(tooltipModel.id)), h.Class('demo-label')],
+          [h.For(triggerId(tooltipModel.id)), h.Class('demo-label')],
           ['Tooltip trigger'],
         ),
         h.div(
           [h.Class('relative')],
           [
-            h.submodel({
-              slotId: tooltipModel.id,
-              model: tooltipModel,
-              view: Tooltip.view,
-              viewInputs: {
-                anchor: TOOLTIP_ANCHOR,
-                toView: ({ trigger, panel, isVisible }) =>
-                  h.div(
-                    [h.Class(wrapperClassName)],
-                    [
-                      h.button(
-                        [...trigger, h.Class(triggerClassName)],
-                        [h.span([], ['Hover or focus me'])],
-                      ),
-                      ...(isVisible
-                        ? [
-                            h.div(
-                              [...panel, h.Class(panelClassName)],
-                              [h.span([], ['This is a tooltip'])],
-                            ),
-                          ]
-                        : []),
-                    ],
-                  ),
-              },
-              toParentMessage: message =>
-                Message.GotTooltipDemoMessage({ message }),
-            }),
+            h.block(
+              TooltipDemoBinding.embedView({
+                slotId: tooltipModel.id,
+                model: tooltipModel,
+                viewInputs: {
+                  anchor: TOOLTIP_ANCHOR,
+                  toView: ({ trigger, panel, isVisible }) =>
+                    h.div(
+                      [h.Class(wrapperClassName)],
+                      [
+                        h.button(
+                          [...trigger, h.Class(triggerClassName)],
+                          [h.span([], ['Hover or focus me'])],
+                        ),
+                        ...(isVisible
+                          ? [
+                              h.div(
+                                [...panel, h.Class(panelClassName)],
+                                [h.span([], ['This is a tooltip'])],
+                              ),
+                            ]
+                          : []),
+                      ],
+                    ),
+                },
+              }),
+            ),
           ],
         ),
       ],

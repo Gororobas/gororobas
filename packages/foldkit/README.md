@@ -18,9 +18,11 @@
 
 ---
 
-Foldkit is a TypeScript frontend framework built on [Effect](https://effect.website/). It gives your entire application one architecture: a [Schema](https://effect.website/docs/schema/introduction/)-defined Model as the single source of truth, fact-named Messages, an exhaustive update function, and explicit Commands for side effects. Routing, server rendering, UI components, Submodels, and browser lifecycles all use that same Model and Message flow.
+Foldkit is a TypeScript frontend framework built on [Effect](https://effect.website/). It gives your entire application one architecture: a [Schema](https://effect.website/docs/schema/introduction/)-defined Model as the single source of truth, fact-named Messages, an exhaustive update function, and explicit Commands for side effects. Routing, server rendering, UI components, Blocks, and browser lifecycles all use that same Model and Message flow.
 
 Foldkit uses [The Elm Architecture](https://guide.elm-lang.org/architecture/) instead of component-owned state and hook lifecycles. That discipline is a real commitment. Foldkit works best when the team wants shared conventions across the application and is ready to build on Effect throughout. If your backend already uses Effect, Foldkit carries the same tools and patterns into the browser: Schema, services, Streams, and scoped resources.
+
+Each feature declares the effects it needs and bundles their handlers in [Effect Layers](https://foldkit.dev/core/layers). At the application root, compose those bundles with their required services. TypeScript checks that the requirements are satisfied before the application can run. Tests can provide controlled services while running the same effect handlers.
 
 A Foldkit program can own the whole page or run as a widget inside an existing application, React included, through [`Runtime.embed`](https://foldkit.dev/core/embedding). The same program can [render on the server](https://foldkit.dev/core/server-rendering) at build time or per request, then hydrate in place. Coming from React? [Start here](https://foldkit.dev/react/coming-from-react), or compare the [same pixel-art editor built in both frameworks](https://foldkit.dev/react/foldkit-vs-react-side-by-side).
 
@@ -37,52 +39,43 @@ npx create-foldkit-app@latest
 
 ## Counter
 
-A complete Foldkit program. State lives in a single Model, events become Messages, and a pure function handles every transition. `main.ts` defines the program and `entry.ts` boots the Runtime, so `main.ts` stays importable from tests without booting a Runtime as a side effect.
+A complete Foldkit program. State lives in a single Model, events become Messages, and a pure function handles every transition. `application.ts` exports `ApplicationComposition`, `ApplicationBlock`, and its implementation. `entry.ts` supplies the browser container and boots the Runtime, so importing the application from a test has no startup side effect.
 
 ```ts
-// src/main.ts
+// src/application.ts
 import { Schema } from 'effect'
-import { Runtime, Update } from 'foldkit'
-import { Document, HtmlBuilder } from 'foldkit/html'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-// MODEL
-
 export const Model = Schema.Struct({ count: Schema.Number })
-export type Model = typeof Model.Type
-
-// MESSAGE
 
 export const Message = defineMessageUnion({
   ClickedDecrement: {},
   ClickedIncrement: {},
   ClickedReset: {},
 })
-export type Message = typeof Message.Type
 
-// UPDATE
+export const ApplicationComposition = Block.makeDefinition('Application', {
+  Model,
+  Message,
+}).makeComposition()
 
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedDecrement: () => ({
-      model: modifyFields(model, { count: count => count - 1 }),
-    }),
-    ClickedIncrement: () => ({
-      model: modifyFields(model, { count: count => count + 1 }),
-    }),
-    ClickedReset: () => ({ model: modifyFields(model, { count: () => 0 }) }),
-  })
-
-// INIT
-
-export const init: Runtime.ApplicationInit<Model, Message> = () => ({
-  model: { count: 0 },
+export const update = ApplicationComposition.makeUpdate({
+  ClickedDecrement: model => ({
+    model: modifyFields(model, { count: count => count - 1 }),
+  }),
+  ClickedIncrement: model => ({
+    model: modifyFields(model, { count: count => count + 1 }),
+  }),
+  ClickedReset: model => ({ model: modifyFields(model, { count: () => 0 }) }),
 })
 
-// VIEW
+export const init = ApplicationComposition.makeInit(() => ({
+  model: Model.make({ count: 0 }),
+}))
 
-export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
+export const view = ApplicationComposition.makeView((model, h) => ({
   title: `Counter: ${model.count}`,
   body: h.div(
     [],
@@ -93,27 +86,49 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       h.button([h.OnClick(Message.ClickedIncrement())], ['+']),
     ],
   ),
-})
+}))
+
+const prepare = () =>
+  ApplicationComposition.prepareBlock({
+    init,
+    update,
+    view,
+  })
+export const ApplicationBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)
 ```
 
 ```ts
 // src/entry.ts
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-import { Model, init, update, view } from './main'
+import { ApplicationBlock } from './application'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
+const program = Program.make({
+  block: ApplicationBlock,
   container: document.getElementById('root'),
 })
 
-Runtime.run(application)
+Runtime.run(program)
 ```
 
-Source: [examples/counter](https://github.com/foldkit/foldkit/blob/main/examples/counter/src/main.ts).
+The root is an ordinary Block. `Block.makeDefinition('Application', ...)` owns effect constructors, Steps, lifecycle definitions, and child Bindings. Retain that result as `ApplicationDefinition` when those authoring methods use it. This graphless application chains the top-level factory directly into `makeComposition()` and names the result `ApplicationComposition`. Author init, update, and the primary view through that Composition. Call `prepareBlock` inside the private `prepare` function, then assemble `ApplicationBlock` with its matching `FromAssembly` annotation and `Block.assemble(prepare)`. The explicit Model Schema in that annotation reduces the inference work needed when a parent Schema reads the Block's `Model`. Pass root-owned handler recipes to `prepareBlock` as `EffectsLayer`.
+
+A feature follows the same passive Definition → Composition → assembly sequence. Create `FeatureDefinition` with `Block.makeDefinition('Feature', { Model, Message, OutMessage })` and author effects and Steps through that Definition. Name `FeatureComposition = FeatureDefinition.makeComposition({ bindings, mounts })`, using `FeatureDefinition.makeComposition()` for an empty graph, then author init, update, and the primary view. Prepare and assemble the completed `FeatureBlock` using the checked pattern above. A parent imports that Block, creates a Binding with `const FeatureBinding = ParentDefinition.makeBinding(FeatureBlock, config)`, and includes that Binding in its Composition's child graph. Only the Runtime starts the assembled program.
+
+When local view helpers need the Composition's exact builder capabilities, declare `type FeatureViewBuilder = Block.ViewBuilderFor<typeof FeatureComposition>` immediately after the Composition and export it only for cross-file use. The owner prefix identifies that specific Composition; structural contracts keep the standard `Model`, `Message`, and `OutMessage` names and normally travel through the feature namespace.
+
+Ordinary Effect services stay in `ApplicationLayer`. Keep a small provider composition in `entry.ts`, and extract `layer.ts` only when it is substantial or reused. Supply that Layer after the Program is complete:
+
+```ts
+Runtime.run(program.provide(ApplicationLayer))
+```
+
+`program.provide(ApplicationLayer)` returns another passive program. The Runtime builds the Layer only when it starts that program.
+
+Source: [examples/counter](https://github.com/foldkit/foldkit/blob/main/examples/counter/src/application.ts).
 
 ## What Ships With Foldkit
 
@@ -124,8 +139,8 @@ Routing, server rendering, UI components, composition, and browser lifecycles al
 - **Subscriptions**: External event streams declared as a function of the Model.
 - **Managed Resources**: Model-driven lifecycle for WebSockets, AudioContext, and other long-lived handles.
 - **Mount**: The seam where view code hands a real DOM element to a third-party library that owns its own DOM.
-- **Submodels**: A self-contained Model, update, and view that a parent embeds, wrapping child Messages in a `Got*` envelope.
-- **OutMessage**: A typed channel for a child Submodel to emit domain events up to its parent.
+- **Blocks**: A self-contained Model, update, and view connected to a parent through parent-owned child Bindings.
+- **OutMessage**: A typed channel for a child Block to emit domain events up to its parent.
 - **Embedding**: Run a Foldkit program inside a host app through Schema-typed Ports with `Runtime.embed`.
 - **UI Components**: Accessible, keyboard-friendly primitives in the `@foldkit/ui` package.
 - **Field Validation**: Per-field validation state modeled as a discriminated union.
@@ -158,7 +173,7 @@ Some of what you can build with Foldkit. [See all example apps on foldkit.dev](h
 - **[Route Transitions](https://foldkit.dev/example-apps/route-transitions)**: Live transition log with entry, exit, and stayed navigation policies
 - **[Query Sync](https://foldkit.dev/example-apps/query-sync)**: URL query parameter sync with filtering and sorting
 - **[Snake](https://foldkit.dev/example-apps/snake)**: Classic game built with Subscriptions
-- **[Auth](https://foldkit.dev/example-apps/auth)**: Authentication flow with Submodels and OutMessage
+- **[Auth](https://foldkit.dev/example-apps/auth)**: Authentication flow with Blocks and OutMessage
 - **[Shopping Cart](https://foldkit.dev/example-apps/shopping-cart)**: Nested models and complex state
 - **[WebSocket Chat](https://foldkit.dev/example-apps/websocket-chat)**: Managed Resources with WebSocket integration
 - **[Kanban](https://foldkit.dev/example-apps/kanban)**: Drag-and-drop kanban board with cross-column reordering and keyboard navigation

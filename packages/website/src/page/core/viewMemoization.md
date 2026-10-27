@@ -66,3 +66,23 @@ Foldkit's differ compares the old and new VNode by reference before diffing. Whe
 
 The active dispatch is also part of the internal cache key because event handlers close over it. A DevTools replay uses a non-live dispatch, so Foldkit rebuilds the subtree before returning to the live application even when the function and arguments are unchanged.
 :::
+
+## Testing Cache Reuse
+
+Use `Lazy.expectAllReused` from `foldkit/test` to check that lazy views reuse their cached results. It renders the view twice with the same Model and throws if any lazy call misses its cache on the second render.
+
+::Snippet{name="lazyExpectAllReused" label="Checking lazy cache reuse"}
+
+The error identifies each cache miss by slot number, includes the key for keyed calls, and gives a hint for each kind of miss. For `ArgumentsChanged`, it lists the changed argument indices, starting at zero.
+
+Slot numbers follow the order in which lazy instances are first called on the second render. All keys from one `createKeyedLazy` instance share a slot number.
+
+### Choosing Models to Test
+
+Test each Model state that renders different memoized content. For example, a view whose Model has an `activeTab` field needs a case for each tab:
+
+::Snippet{name="lazyExpectAllReusedStates" label="Checking cache reuse for each tab"}
+
+The helper throws when the second render makes no lazy calls. Choose Models that render the memoized content you want to test. For keyed lists, include several items so the test exercises separate cache entries. Use the view's other tests for states that make no lazy calls.
+
+An outer lazy cache hit skips its child view. Test that child view directly to check the lazy calls inside it. A passing assertion covers only the lazy calls made during the second render.

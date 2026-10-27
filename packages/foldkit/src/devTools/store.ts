@@ -9,6 +9,7 @@ import {
   Record,
   String,
   SubscriptionRef,
+  Tuple,
   pipe,
 } from 'effect'
 
@@ -135,7 +136,7 @@ export type CommandRecord = Readonly<{
   id: number
   name: string
   args?: Record<string, unknown>
-  maybeSubmodelPath: Option.Option<ReadonlyArray<string>>
+  maybeBlockPath: Option.Option<ReadonlyArray<string>>
 }>
 
 export type MountRecord = Readonly<{
@@ -306,46 +307,60 @@ export const createDevToolsStore = (
       isModelChanged: boolean,
     ) =>
       Effect.gen(function* () {
-        const didAutoResume = yield* SubscriptionRef.modify(stateRef, state => {
-          const absoluteIndex = nextEntryIndex(state)
+        const [didAutoResume, absoluteIndex] = yield* SubscriptionRef.modify(
+          stateRef,
+          state => {
+            const absoluteIndex = nextEntryIndex(state)
 
-          const diff = isModelChanged
-            ? computeDiff(modelBeforeUpdate, modelAfterUpdate)
-            : emptyDiff
+            const diff = isModelChanged
+              ? computeDiff(modelBeforeUpdate, modelAfterUpdate)
+              : emptyDiff
 
-          const hasChangedFields = HashSet.size(diff.changedPaths) > 0
+            const hasChangedFields = HashSet.size(diff.changedPaths) > 0
 
-          const nextState = modifyFields(state, {
-            entries: Array.append({
-              tag: message._tag,
-              message,
-              commands,
-              mountStarts: [],
-              mountEnds: [],
-              timestamp: performance.now(),
-              isModelChanged: hasChangedFields,
-              diff,
-            }),
-            keyframes: addKeyframeIfNeeded(absoluteIndex + 1, modelAfterUpdate),
-            maybeLatestModel: () => Option.some(modelAfterUpdate),
-          })
+            const nextState = modifyFields(state, {
+              entries: Array.append({
+                tag: message._tag,
+                message,
+                commands,
+                mountStarts: [],
+                mountEnds: [],
+                timestamp: performance.now(),
+                isModelChanged: hasChangedFields,
+                diff,
+              }),
+              keyframes: addKeyframeIfNeeded(
+                absoluteIndex + 1,
+                modelAfterUpdate,
+              ),
+              maybeLatestModel: () => Option.some(modelAfterUpdate),
+            })
 
-          const recordedState =
-            nextState.entries.length > maxEntries
-              ? evictOldestSegment(nextState)
-              : nextState
+            const recordedState =
+              nextState.entries.length > maxEntries
+                ? evictOldestSegment(nextState)
+                : nextState
 
-          return [state.isPaused && !recordedState.isPaused, recordedState]
-        })
+            return Tuple.make(
+              Tuple.make(
+                state.isPaused && !recordedState.isPaused,
+                absoluteIndex,
+              ),
+              recordedState,
+            )
+          },
+        )
 
         if (didAutoResume) {
           yield* bridge.markRenderPending
         }
+
+        return absoluteIndex
       })
 
     const recordResolvedCommand = (
       id: number,
-      submodelPath: ReadonlyArray<string>,
+      blockPath: ReadonlyArray<string>,
     ) =>
       SubscriptionRef.update(stateRef, state => {
         const updateCommands = (
@@ -357,7 +372,7 @@ export const createDevToolsStore = (
             Option.flatMap(index =>
               Array.modify(commands, index, command =>
                 modifyFields(command, {
-                  maybeSubmodelPath: () => Option.some(submodelPath),
+                  maybeBlockPath: () => Option.some(blockPath),
                 }),
               ),
             ),
@@ -586,10 +601,10 @@ export type DevToolsStore = Readonly<{
     modelAfterUpdate: unknown,
     commands: ReadonlyArray<CommandRecord>,
     isModelChanged: boolean,
-  ) => Effect.Effect<void>
+  ) => Effect.Effect<number>
   recordResolvedCommand: (
     id: number,
-    submodelPath: ReadonlyArray<string>,
+    blockPath: ReadonlyArray<string>,
   ) => Effect.Effect<void>
   updateLatestModel: (model: unknown) => Effect.Effect<void>
   attachRenderedMounts: (

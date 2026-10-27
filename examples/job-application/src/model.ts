@@ -1,19 +1,14 @@
 import { Schema } from 'effect'
 import { defineTaggedUnion } from 'foldkit/schema'
 
-import { Menu, Tabs } from '@foldkit/ui'
-
 import { Step } from './domain'
-import {
-  Attachments,
-  CoverLetter,
-  Education,
-  PersonalInfo,
-  Skills,
-  WorkHistory,
-} from './step'
-
-// SUBMISSION
+import { StepMenuBlock, StepTabsBlock } from './navigationComponents'
+import * as Attachments from './step/attachments'
+import * as CoverLetter from './step/coverLetter'
+import * as Education from './step/education'
+import * as PersonalInfo from './step/personalInfo'
+import * as Skills from './step/skills'
+import * as WorkHistory from './step/workHistory'
 
 export const Submission = defineTaggedUnion({
   NotSubmitted: {},
@@ -21,22 +16,18 @@ export const Submission = defineTaggedUnion({
   SubmitSuccess: {},
   SubmitError: { error: Schema.String },
 })
-export type Submission = typeof Submission.Type
-
-// MODEL
 
 export const Model = Schema.Struct({
   currentStep: Step.Step,
-  personalInfo: PersonalInfo.Model,
-  workHistory: WorkHistory.Model,
-  education: Education.Model,
-  skills: Skills.Model,
-  coverLetter: CoverLetter.Model,
-  attachments: Attachments.Model,
+  personalInfo: PersonalInfo.PersonalInfoBlock.Model,
+  workHistory: WorkHistory.WorkHistoryBlock.Model,
+  education: Education.EducationBlock.Model,
+  skills: Skills.SkillsBlock.Model,
+  coverLetter: CoverLetter.CoverLetterBlock.Model,
+  attachments: Attachments.AttachmentsBlock.Model,
   isPreviewVisible: Schema.Boolean,
   submission: Submission,
-  stepMenu: Menu.Model,
-  stepTabs: Tabs.Model,
+  stepMenu: StepMenuBlock.Model,
+  stepTabs: StepTabsBlock.Model,
   isSubmitAttempted: Schema.Boolean,
 })
-export type Model = typeof Model.Type

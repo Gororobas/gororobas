@@ -15,6 +15,10 @@ const canaryWorkflow = readFileSync(
   resolve(REPO_ROOT, '.github/workflows/deploy-website-canary.yml'),
   'utf8',
 )
+const previewWorkflow = readFileSync(
+  resolve(REPO_ROOT, '.github/workflows/deploy-website-preview.yml'),
+  'utf8',
+)
 const buildWorkflow = readFileSync(
   resolve(REPO_ROOT, '.github/workflows/deploy-website-build.yml'),
   'utf8',
@@ -27,6 +31,7 @@ const openApiSpec = JSON.parse(
 )
 const productionConfig = websiteVercelConfig('production')
 const canaryConfig = websiteVercelConfig('canary')
+const previewConfig = websiteVercelConfig('preview')
 
 const requestUrl = target => new URL(target, 'https://foldkit.dev')
 
@@ -659,6 +664,20 @@ test('the developer portal path redirects to the AI overview', () => {
   )
 })
 
+test('the previous Layers paths redirect to the canonical document', () => {
+  for (const pathname of ['/core/resources', '/core/resources/']) {
+    const result = resolveRequest(productionConfig, pathname)
+    assert.equal(result.kind, 'redirect', pathname)
+    assert.equal(result.status, 308, pathname)
+    assert.equal(result.location, '/core/layers', pathname)
+  }
+
+  const markdown = resolveRequest(productionConfig, '/core/resources.md')
+  assert.equal(markdown.kind, 'redirect')
+  assert.equal(markdown.status, 308)
+  assert.equal(markdown.location, '/core/layers.md')
+})
+
 test('the old manifesto paths redirect to Why Foldkit', () => {
   for (const pathname of [
     '/manifesto',
@@ -734,7 +753,7 @@ test('the deploy workflow copies dotfiles like .well-known into the Vercel outpu
   )
 })
 
-test('only the canary deployment blocks search indexing', () => {
+test('non-production deployments block search indexing', () => {
   assert.equal(
     headersFor(productionConfig, '/get-started')['X-Robots-Tag'],
     undefined,
@@ -743,9 +762,33 @@ test('only the canary deployment blocks search indexing', () => {
     headersFor(canaryConfig, '/get-started')['X-Robots-Tag'],
     'noindex, nofollow',
   )
+  assert.equal(
+    headersFor(previewConfig, '/get-started')['X-Robots-Tag'],
+    'noindex, nofollow',
+  )
 })
 
-test('production and canary call the shared deployment with separate projects', () => {
+test('every reusable deployment hop permits reading the verified artifact', () => {
+  const releaseWorkflow = readFileSync(
+    resolve(REPO_ROOT, '.github/workflows/release.yml'),
+    'utf8',
+  )
+
+  for (const [name, workflow] of [
+    ['release', releaseWorkflow],
+    ['production', productionWorkflow],
+    ['canary', canaryWorkflow],
+    ['preview', previewWorkflow],
+    ['build', buildWorkflow],
+  ]) {
+    const permissions = workflow.match(/^permissions:\n((?:  [^\n]+\n)+)/m)
+
+    assert.notEqual(permissions, null, name)
+    assert.match(permissions[1], /^  actions: read$/m, name)
+  }
+})
+
+test('production, canary, and preview call the shared deployment with separate projects', () => {
   assert.match(
     productionWorkflow,
     /uses: \.\/\.github\/workflows\/deploy-website-build\.yml/,
@@ -765,6 +808,17 @@ test('production and canary call the shared deployment with separate projects', 
   assert.match(
     canaryWorkflow,
     /vercel_project_id: \$\{\{ secrets\.VERCEL_WEBSITE_CANARY_PROJECT_ID \}\}/,
+  )
+
+  assert.match(
+    previewWorkflow,
+    /uses: \.\/\.github\/workflows\/deploy-website-build\.yml/,
+  )
+  assert.match(previewWorkflow, /channel: preview/)
+  assert.doesNotMatch(previewWorkflow, /hostname:/)
+  assert.match(
+    previewWorkflow,
+    /vercel_project_id: \$\{\{ secrets\.VERCEL_WEBSITE_PREVIEW_PROJECT_ID \}\}/,
   )
 })
 
@@ -819,5 +873,76 @@ test('the registry-backed SSG playground build runs only for production', () => 
   assert.match(
     buildWorkflow,
     /- name: Build the exact transformed SSG playground\n\s+if: inputs\.channel == 'production'\n\s+run: pnpm check:playground-ssg-build/,
+  )
+})
+
+test('integration previews consume a verified same-commit manifest and preserve it in the deployed assets', () => {
+  const downloadIndex = buildWorkflow.indexOf(
+    'Download the verified package manifest',
+  )
+  const sourceIndex = buildWorkflow.indexOf('Verify the exact source commit')
+  const manifestIndex = buildWorkflow.indexOf(
+    'Match the preview package manifest to source',
+  )
+  const examplesIndex = buildWorkflow.indexOf('Build examples')
+  const preserveIndex = buildWorkflow.indexOf(
+    'Preserve and verify the preview manifest in the website build',
+  )
+  const deployIndex = buildWorkflow.indexOf('Deploy immutable website build')
+  const deployedManifestIndex = buildWorkflow.indexOf(
+    'Verify the deployed preview manifest',
+  )
+  const smokeIndex = buildWorkflow.indexOf(
+    'Smoke the deployed SSR and SSG playgrounds',
+  )
+  const reportIndex = buildWorkflow.indexOf(
+    'Report the ready integration preview',
+  )
+
+  assert.ok(sourceIndex < downloadIndex)
+  assert.ok(downloadIndex < manifestIndex)
+  assert.ok(manifestIndex < examplesIndex)
+  assert.ok(examplesIndex < preserveIndex)
+  assert.ok(preserveIndex < deployIndex)
+  assert.ok(deployIndex < deployedManifestIndex)
+  assert.ok(deployedManifestIndex < smokeIndex)
+  assert.ok(smokeIndex < reportIndex)
+  assert.match(
+    buildWorkflow,
+    /env:\n\s+FOLDKIT_BUILD_ID: \$\{\{ inputs\.target \}\}/,
+  )
+  assert.match(
+    buildWorkflow,
+    /node scripts\/preview-release-manifest\.mjs verify "\$\{manifest_path\}" "\$\{TARGET\}"/,
+  )
+  assert.match(
+    buildWorkflow,
+    /cp "\$\{FOLDKIT_PREVIEW_RELEASE_MANIFEST\}" packages\/website\/dist\/preview-release\.json/,
+  )
+  assert.match(
+    buildWorkflow,
+    /cmp "\$\{FOLDKIT_PREVIEW_RELEASE_MANIFEST\}" "\$\{deployed_manifest\}"/,
+  )
+  assert.match(
+    readFileSync(
+      resolve(REPO_ROOT, 'scripts/preview-release-manifest.mjs'),
+      'utf8',
+    ),
+    /embedded example .* does not contain build/,
+  )
+})
+
+test('integration previews keep their immutable deployment URL and never move a shared hostname', () => {
+  assert.match(
+    buildWorkflow,
+    /if \[\[ "\$\{DEPLOYMENT_CHANNEL\}" == 'production' \]\]; then[\s\S]+else\n\s+deployment_url=\$\(pnpm dlx vercel@55\.0\.0 deploy --prebuilt --prod --skip-domain --token "\$VERCEL_TOKEN"\)/,
+  )
+  assert.match(
+    buildWorkflow,
+    /- name: Promote the canary deployment\n\s+if: inputs\.channel == 'canary'/,
+  )
+  assert.match(
+    buildWorkflow,
+    /- name: Report the ready integration preview\n\s+if: inputs\.channel == 'preview'/,
   )
 })
