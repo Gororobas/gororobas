@@ -1,4 +1,4 @@
-import { Effect, Exit, ManagedRuntime, Runtime } from "effect"
+import { Cause, Effect, Exit, ManagedRuntime, Runtime } from "effect"
 import { constVoid } from "effect/Function"
 
 /**
@@ -26,8 +26,15 @@ export const runMainWithCustomRuntime = <RuntimeServices, RuntimeError, ProgramE
       process.removeListener("SIGTERM", onSigint)
     }
 
+    // Report why the program stopped, as NodeRuntime.runMain does; otherwise a startup failure
+    // (a missing setting, a locked database) exits with code 1 and no explanation.
+    const reportFailure =
+      Exit.isFailure(exit) && !Cause.hasInterruptsOnly(exit.cause)
+        ? Effect.logError(exit.cause)
+        : Effect.void
+
     // Dispose shared SQL/cluster services before exiting so SQLite checkpoints and releases its files.
-    Effect.runFork(runtime.disposeEffect).addObserver((disposed) => {
+    Effect.runFork(Effect.andThen(reportFailure, runtime.disposeEffect)).addObserver((disposed) => {
       clearInterval(keepAlive)
 
       teardown(Exit.isFailure(disposed) ? disposed : exit, (code) => {
