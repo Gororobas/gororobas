@@ -130,6 +130,8 @@ export const WikiArticleQueriedCardData = Schema.Struct({
   commonNames: Schema.Array(WikiArticleCommonName),
   /** Plants only: the names that identify the species across languages. */
   scientificNames: Schema.Array(Schema.String),
+  /** Cultivars only: the plant they're a variety of, so cards read "Variedade do Milho". */
+  parentPlantName: OptionalColumn(WikiArticleCommonName),
   language: SupportedLanguage,
 })
 

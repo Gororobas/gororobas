@@ -6,6 +6,7 @@ import {
   MediaAssetId,
   RelatedWikiArticle,
   WikiArticleQueriedCardData,
+  WikiArticleCommonName,
   OptionalColumn,
   TiptapDocument,
   WikiArticleQueriedPageData,
@@ -321,6 +322,7 @@ const QueriedCardRow = Schema.Struct({
   ...WikiArticleQueriedCardData.fields,
   commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
   scientificNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.scientificNames),
+  parentPlantName: OptionalColumn(Schema.fromJsonString(WikiArticleCommonName)),
   thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
 })
 
@@ -329,6 +331,12 @@ const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql
   SELECT a.id, a.kind, t.language, t.common_names,
     CASE WHEN a.kind = 'PLANT' THEN coalesce(json_extract(a.attributes, '$.scientificNames'), '[]')
       ELSE '[]' END AS scientific_names,
+    CASE WHEN a.kind = 'PLANT_CULTIVAR' THEN (
+      SELECT json_extract(parent.common_names, '$[0]') FROM wiki_article_translations parent
+      WHERE parent.wiki_article_id = json_extract(a.attributes, '$.parentPlantId')
+      ORDER BY CASE WHEN parent.language = ${language} THEN 0 WHEN parent.language = 'en' THEN 1
+        WHEN parent.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+    END AS parent_plant_name,
     (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
       ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
     (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
