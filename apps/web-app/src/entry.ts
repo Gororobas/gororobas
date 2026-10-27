@@ -1,25 +1,27 @@
+import "./ui/theme/base-styles"
+import { Sheet } from "@pleat/core"
 import { Effect, Option } from "effect"
-import { Runtime } from "foldkit"
+import { Program, Runtime } from "foldkit"
 
-import { Message, Model, init, resources, subscriptions, update, view } from "./main"
+import { ApplicationBlock } from "./app/block"
+import { ApplicationLayer } from "./services"
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
-  resources,
-  subscriptions,
+Sheet.mount()
+
+const program = Program.make({
+  block: ApplicationBlock,
   container: document.getElementById("root"),
   routing: {
-    onUrlRequest: (request) => Message.ClickedLink({ request }),
+    onUrlRequest: ApplicationBlock.Message.ClickedLink,
     // Login fragments contain bearer proofs; keep them out of the message history.
-    onUrlChange: (url) => Message.ChangedUrl({ url: { ...url, hash: Option.none() } }),
+    onUrlChange: (url) =>
+      // oxlint-disable-next-line foldkit/no-child-message-construction-in-root -- The root's own routing Message, built here to drop the fragment before it is recorded.
+      ApplicationBlock.Message.ChangedUrl({ url: { ...url, hash: Option.none() } }),
   },
-  devTools: { Message },
+  devTools: { dispatch: true },
 })
 
-Runtime.run(application)
+Runtime.run(program.provide(ApplicationLayer))
 
 // Development modules are intentionally never cached.
 if (import.meta.env.PROD && "serviceWorker" in navigator) {

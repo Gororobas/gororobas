@@ -10,23 +10,28 @@
     "type-check": "tsc --noEmit",
     "format": "oxfmt",
     "test": "vitest run",
-    "lint": "oxlint src"
+    "lint": "oxlint src",
+    "gen-icons": "bun src/ui/icons/reicon-cli.ts && pnpm run format"
   },
   "dependencies": {
     "@effect/platform-browser": "^4.0.5",
-    "@foldkit/ui": "0.168.0",
+    "@foldkit/ui": "0.169.0-canary.f3be22cfeefe",
+    "@fontsource-variable/alan-sans": "^5.3.1",
     "@gororobas/domain": "workspace:^",
     "@pleat/core": "workspace:^",
     "@pleat/foldkit": "workspace:^",
     "@yielded/auth": "catalog:",
+    "blobatar": "^2.7.0",
     "effect": "catalog:",
-    "foldkit": "0.168.0"
+    "effect-units": "catalog:",
+    "foldkit": "0.169.0-canary.f3be22cfeefe"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:",
-    "@foldkit/devtools": "0.168.0",
+    "@foldkit/devtools": "0.169.0-canary.f3be22cfeefe",
     "@foldkit/devtools-mcp": "0.24.1",
-    "@foldkit/vite-plugin": "0.27.1",
+    "@foldkit/vite-plugin": "0.28.0-canary.f3be22cfeefe",
     "happy-dom": "^20.14.6",
     "typescript": "catalog:",
     "vite": "catalog:",

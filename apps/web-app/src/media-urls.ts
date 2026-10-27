@@ -15,3 +15,8 @@ export const imageUrl = (
   `${API_BASE_PATH}${buildUrl.mediaAssets.getMedia({
     params: { id, format: "images", variant: `${width}` },
   })}`
+
+export const audioUrl = (id: MediaAssetId): string =>
+  `${API_BASE_PATH}${buildUrl.mediaAssets.getMedia({
+    params: { id, format: "audio", variant: "audio.m4a" },
+  })}`

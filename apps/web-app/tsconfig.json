@@ -15,7 +15,9 @@
     "tsBuildInfoFile": ".tsbuildinfo/type-check.tsbuildinfo",
     "paths": {
       "@gororobas/domain/*": ["../../packages/domain/src/*"]
-    }
+    },
+    "customConditions": ["@pleat/source"],
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*"]
 }

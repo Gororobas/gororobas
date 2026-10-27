@@ -1,0 +1,1 @@
+export { WikiArticleBlock } from "./block"

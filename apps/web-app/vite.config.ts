@@ -1,5 +1,4 @@
 import { foldkit } from "@foldkit/vite-plugin"
-import tailwindcss from "@tailwindcss/vite"
 import { defineConfig, loadEnv } from "vite"
 
 import { offlineShell } from "./offline-shell-plugin.ts"
@@ -10,7 +9,7 @@ export default defineConfig(({ mode }) => {
   const apiOrigin = `http://localhost:${environment.API_PORT ?? 4000}`
 
   return {
-    plugins: [tailwindcss(), foldkit(), offlineShell()],
+    plugins: [foldkit(), offlineShell()],
     server: {
       host: true,
       port: Number(environment.WEB_PORT ?? 4443),
@@ -28,6 +27,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     resolve: {
+      conditions: ["@pleat/source"],
       alias: [
         {
           find: /^@gororobas\/domain(\/.*)?$/,
