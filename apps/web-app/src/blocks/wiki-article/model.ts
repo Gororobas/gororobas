@@ -6,6 +6,7 @@ import {
   WikiArticleContributor,
   WikiArticleKind,
   WikiArticleLookup,
+  WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
 } from "@gororobas/domain/wiki/domain"
 import { Schema } from "effect"
@@ -22,6 +23,10 @@ export const BookmarkerResults = AsyncData.Schema(
 )
 export const ContributorResults = AsyncData.Schema(
   Schema.Array(WikiArticleContributor),
+  Schema.String,
+)
+export const CultivarResults = AsyncData.Schema(
+  Schema.Array(WikiArticleQueriedCardData),
   Schema.String,
 )
 export const PublicationResults = AsyncData.Schema(
@@ -41,6 +46,8 @@ export const Model = Schema.Struct({
   relatedAsyncData: RelatedResults.schema,
   bookmarkersAsyncData: BookmarkerResults.schema,
   contributorsAsyncData: ContributorResults.schema,
+  /** Plants only; other kinds start with none. */
+  cultivarsAsyncData: CultivarResults.schema,
   publicationsAsyncData: PublicationResults.schema,
   viewerBookmarks: ViewerBookmarks,
   bookmarkSaving: BookmarkSaving,

@@ -13,7 +13,7 @@ import * as AppDrawer from "../../ui/app-drawer/view"
 import * as AppShell from "../../ui/app-shell"
 import { AppText } from "../../ui/app-text"
 import { Chip } from "../../ui/chip"
-import { FilterPill } from "../../ui/filter-pill"
+import { type Choice, ChoiceRow } from "../../ui/choice-row"
 import * as Icons from "../../ui/icons"
 import type { IconConfig } from "../../ui/icons"
 import { iconSizeProperty } from "../../ui/icons/icon-size"
@@ -22,7 +22,6 @@ import { styledAttributes } from "../../ui/pleat-attributes"
 import { ProfileRow } from "../../ui/profile-row"
 import { PublicationCard } from "../../ui/publication-card"
 import * as SectionHeading from "../../ui/section-heading"
-import { SegmentedControl } from "../../ui/segmented-control"
 import { focusRingDeclarations } from "../../ui/styles/focus-ring"
 import { pageColumnStyle } from "../../ui/styles/page-column"
 import {
@@ -130,26 +129,6 @@ const tabBandStyle = Style.make({
   borderBlockEnd: `${borderWidth.hairline} solid ${toneColors.border}`,
 })
 
-/** Scrolls sideways on small screens; wraps on wide ones, where filter popovers open in place. */
-const buttonRowStyle = Style.make({
-  display: "flex",
-  alignItems: "center",
-  gap: space[2],
-  overflowX: "auto",
-  scrollbarWidth: "none",
-  paddingBlock: space[1],
-  marginInline: `calc(-1 * ${space[4]})`,
-  paddingInline: space[4],
-}).pipe(
-  Style.when(breakpoint.sm, { marginInline: `calc(-1 * ${space[6]})`, paddingInline: space[6] }),
-  Style.when(breakpoint.md, {
-    flexWrap: "wrap",
-    overflowX: "visible",
-    marginInline: 0,
-    paddingInline: 0,
-  }),
-)
-
 const tabListStyle = Style.make({
   display: "flex",
   gap: space[2],
@@ -158,7 +137,7 @@ const tabListStyle = Style.make({
   paddingBlock: space[3],
 })
 
-const searchInputStyle = Style.make({ paddingInlineEnd: space[9], border: 0 })
+const searchInputStyle = Style.make({ paddingInlineEnd: space[9] })
 
 const clearButtonStyle = Style.make({
   position: "absolute",
@@ -195,6 +174,12 @@ const summaryStyle = Style.make({ color: toneColors.foregroundMuted })
 const summaryTextStyle = Style.make({
   color: toneColors.foreground,
   fontWeight: fontWeight.semibold,
+})
+
+/** Matches the choices beside it, which fill with the tone's muted step. */
+const filterTriggerStyle = Style.make({
+  backgroundColor: toneColors.backgroundMuted,
+  borderColor: toneColors.backgroundMuted,
 })
 
 const dividerStyle = Style.make({
@@ -397,7 +382,7 @@ const searchField = (query: SearchQuery, h: SearchViewBuilder): Html =>
         ),
       ),
       h.span(styledAttributes([h.AriaHidden(true)], AppShell.searchIconStyle), [
-        Icons.search({ mode: "filled", tone: "secondary" }),
+        Icons.search({ size: "sm" }),
       ]),
       ...EffectArray.filter(
         [
@@ -611,26 +596,25 @@ const profileGrid = (
 
 /** Links straight into one kind of article, from the overview. */
 const kindShortcuts = (query: SearchQuery, h: SearchViewBuilder): Html =>
-  h.div(
-    styledAttributes([h.AriaLabel("Tipos de artigo")], buttonRowStyle),
-    (["PLANT", "PLANT_CULTIVAR", "CONCEPT", "BOOK", "FILM", "ANIMAL", "TOOL"] as const).map(
-      (kind) =>
-        AppButton.view(
-          {
-            children: [wikiKindLabels[kind].plural],
+  ChoiceRow.view(
+    {
+      label: "Tipos de artigo",
+      options: [
+        { label: "Todos", isSelected: true, href: typeUrl(query, Option.some("wiki")) },
+        ...(["PLANT", "PLANT_CULTIVAR", "CONCEPT", "BOOK", "FILM", "ANIMAL", "TOOL"] as const).map(
+          (kind) => ({
+            label: wikiKindLabels[kind].plural,
+            isSelected: false,
             href: searchUrl({
               text: query.text,
               type: Option.some("wiki"),
               wikiKind: Option.some(kind),
             }),
-            tone: "accent",
-            mode: "outline",
-            size: "sm",
-            styles: [noShrinkStyle],
-          },
-          h,
+          }),
         ),
-    ),
+      ],
+    },
+    h,
   )
 
 const overviewSection = (
@@ -933,10 +917,13 @@ const filterPopover = (
                 h.div(
                   [],
                   [
-                    FilterPill.view(
+                    AppButton.view(
                       {
                         attributes: button,
-                        appearance: group.selectedCount > 0 ? "active" : "idle",
+                        tone: group.selectedCount > 0 ? "primary" : "neutral",
+                        mode: "faded",
+                        size: "sm",
+                        styles: [filterTriggerStyle],
                         children: [
                           group.label,
                           ...countBadge(group.selectedCount, h),
@@ -961,60 +948,35 @@ const filterPopover = (
     },
   )
 
-/** Picks the type's first choice: the article kind, or between a couple of formats. */
-const primaryChoice = (
-  { query, primary }: Readonly<{ query: SearchQuery; primary: FilterGroup }>,
-  h: SearchViewBuilder,
-): ReadonlyArray<Html> => {
+/** The type's first choice, "Todos" first: an article's kind, a post's format, a profile's type. */
+const primaryChoices = ({
+  query,
+  primary,
+}: Readonly<{ query: SearchQuery; primary: FilterGroup }>): ReadonlyArray<
+  Choice<Parameters<SearchViewBuilder["OnClick"]>[0]>
+> => {
   const maybeSelected = EffectArray.findFirst(primary.options, (option) => option.isSelected)
   const choose = (option: FilterOption) =>
     Message.ChangedSearchQuery({ query: option.toggledQuery, navigation: "Push" })
 
-  // A couple of choices read best as a switch, with "Todos" undoing the choice.
-  if (primary.options.length <= 3) {
-    return [
-      SegmentedControl.view(
-        {
-          label: primary.label,
-          segments: [
-            {
-              label: "Todos",
-              isSelected: Option.isNone(maybeSelected),
-              onClick: Option.match(maybeSelected, {
-                onNone: () => Message.ChangedSearchQuery({ query, navigation: "Replace" }),
-                onSome: choose,
-              }),
-            },
-            ...primary.options.map((option) => ({
-              label: option.label,
-              isSelected: option.isSelected,
-              onClick: choose(option),
-            })),
-          ],
-        },
-        h,
-      ),
-    ]
-  }
-
-  // Many choices are pills; once one is chosen it stands alone, and pressing it undoes it.
-  return Option.match(maybeSelected, {
-    onNone: () =>
-      primary.options.map((option) =>
-        FilterPill.view({ children: [option.label], onClick: choose(option) }, h),
-      ),
-    onSome: (selected) => [
-      FilterPill.view(
-        {
-          appearance: "selected",
-          onClick: choose(selected),
-          attributes: [h.AriaPressed("true"), h.AriaLabel(`${selected.label}: remover filtro`)],
-          children: [selected.label, Icons.x({ size: "sm" })],
-        },
-        h,
-      ),
-    ],
-  })
+  return [
+    {
+      label: "Todos",
+      isSelected: Option.isNone(maybeSelected),
+      onClick: Option.match(maybeSelected, {
+        onNone: () => Message.ChangedSearchQuery({ query, navigation: "Replace" }),
+        onSome: choose,
+      }),
+    },
+    ...primary.options.map((option) => ({
+      label: option.label,
+      isSelected: option.isSelected,
+      // Choosing the current option again keeps it; "Todos" is how to undo it.
+      onClick: option.isSelected
+        ? Message.ChangedSearchQuery({ query, navigation: "Replace" })
+        : choose(option),
+    })),
+  ]
 }
 
 /**
@@ -1028,50 +990,86 @@ const filterBar = ({ model, query }: Omit<ViewState, "maybeToday">, h: SearchVie
       const secondary = secondaryFilterGroups(query)
       const secondaryCount = activeSecondaryFilterCount(query)
 
-      return h.div(styledAttributes([h.Role("group"), h.AriaLabel("Filtros")], buttonRowStyle), [
-        ...primaryChoice({ query, primary }, h),
-        ...(EffectArray.isReadonlyArrayNonEmpty(secondary)
-          ? [
-              h.span(styledAttributes([h.AriaHidden(true)], dividerStyle)),
-              h.div(styledAttributes([], mobileOnlyStyle), [
-                FilterPill.view(
+      const maybeSelected = EffectArray.findFirst(primary.options, (option) => option.isSelected)
+      // Article kinds are many: once one is chosen it stands alone, with a way to undo it.
+      const isCollapsed = Option.isSome(maybeSelected) && primary.options.length > 3
+
+      return ChoiceRow.view(
+        {
+          label: primary.label,
+          options: isCollapsed
+            ? primaryChoices({ query, primary }).filter((choice) => choice.isSelected)
+            : primaryChoices({ query, primary }),
+          leading: EffectArray.fromOption(
+            Option.map(
+              Option.filter(maybeSelected, () => isCollapsed),
+              (selected) =>
+                AppButton.view(
                   {
-                    appearance: secondaryCount > 0 ? "active" : "idle",
-                    onClick: Message.ClickedOpenFilters(),
-                    children: [
-                      Icons.filter({ size: "sm" }),
-                      "Todos os filtros",
-                      ...countBadge(secondaryCount, h),
-                    ],
+                    children: [Icons.x({ size: "sm" })],
+                    ariaLabel: `Remover filtro ${selected.label}`,
+                    onClick: Message.ChangedSearchQuery({
+                      query: selected.toggledQuery,
+                      navigation: "Push",
+                    }),
+                    tone: "neutral",
+                    mode: "faded",
+                    size: "sm",
+                    styles: [noShrinkStyle, filterTriggerStyle],
                   },
                   h,
                 ),
-              ]),
-              h.div(
-                styledAttributes([], desktopOnlyStyle),
-                secondary.map((group) => filterPopover({ model, group }, h)),
-              ),
-            ]
-          : []),
-        ...(secondaryCount > 0
-          ? [
-              AppButton.view(
-                {
-                  children: ["Limpar filtros"],
-                  onClick: Message.ChangedSearchQuery({
-                    query: clearedSecondaryFilters(query),
-                    navigation: "Push",
-                  }),
-                  tone: "accent",
-                  mode: "bleed",
-                  size: "sm",
-                  styles: [noShrinkStyle],
-                },
-                h,
-              ),
-            ]
-          : []),
-      ])
+            ),
+          ),
+          trailing: [
+            ...(EffectArray.isReadonlyArrayNonEmpty(secondary)
+              ? [
+                  h.span(styledAttributes([h.AriaHidden(true)], dividerStyle)),
+                  h.div(styledAttributes([], mobileOnlyStyle), [
+                    AppButton.view(
+                      {
+                        children: [
+                          Icons.filter({ size: "sm" }),
+                          "Todos os filtros",
+                          ...countBadge(secondaryCount, h),
+                        ],
+                        onClick: Message.ClickedOpenFilters(),
+                        tone: secondaryCount > 0 ? "primary" : "neutral",
+                        mode: "faded",
+                        size: "sm",
+                        styles: [noShrinkStyle, filterTriggerStyle],
+                      },
+                      h,
+                    ),
+                  ]),
+                  h.div(
+                    styledAttributes([], desktopOnlyStyle),
+                    secondary.map((group) => filterPopover({ model, group }, h)),
+                  ),
+                ]
+              : []),
+            ...(secondaryCount > 0
+              ? [
+                  AppButton.view(
+                    {
+                      children: ["Limpar filtros"],
+                      onClick: Message.ChangedSearchQuery({
+                        query: clearedSecondaryFilters(query),
+                        navigation: "Push",
+                      }),
+                      tone: "accent",
+                      mode: "bleed",
+                      size: "sm",
+                      styles: [noShrinkStyle],
+                    },
+                    h,
+                  ),
+                ]
+              : []),
+          ],
+        },
+        h,
+      )
     },
   })
 

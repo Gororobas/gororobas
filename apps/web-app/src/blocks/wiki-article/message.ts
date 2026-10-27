@@ -5,6 +5,7 @@ import {
   WikiArticleBookmarker,
   WikiArticleContributor,
   WikiArticleKind,
+  WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
 } from "@gororobas/domain/wiki/domain"
 import { Schema } from "effect"
@@ -21,6 +22,8 @@ export const Message = defineMessageUnion({
   FailedLoadBookmarkers: { error: Schema.String },
   SucceededLoadContributors: { contributors: Schema.Array(WikiArticleContributor) },
   FailedLoadContributors: { error: Schema.String },
+  SucceededLoadCultivars: { cultivars: Schema.Array(WikiArticleQueriedCardData) },
+  FailedLoadCultivars: { error: Schema.String },
   SucceededLoadPublications: { publications: Schema.Array(ApiPublicationCardData) },
   FailedLoadPublications: { error: Schema.String },
   UpdatedViewerBookmarks: { bookmarks: ViewerBookmarks },

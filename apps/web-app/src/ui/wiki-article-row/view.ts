@@ -7,6 +7,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { wikiArticleUrl } from "../../app/route"
 import { bookmarkLabels, plantBookmarkLabels, wikiKindLabels } from "../../lib/vocabulary"
 import { ofName, primaryName } from "../../lib/wiki-article-names"
+import { imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import * as Icons from "../icons"
 import { iconSizeProperty } from "../icons/icon-size"
@@ -28,14 +29,23 @@ const rowStyle = Style.make({
 
 // CARD: a color block holding the photo, and a cream panel curving into it with the names.
 
+/** The panel overlaps the media by this much, so its curve sits over the photo. */
+const PANEL_OVERLAP = space[8]
+
+// Edged like publication cards, in the accent tone: a lighter lip along the top.
 const cardStyle = Style.make({
   position: "relative",
   display: "grid",
   blockSize: "100%",
-  gridTemplateColumns: "auto minmax(0, 1fr)",
+  minBlockSize: "7rem",
+  gridTemplateColumns: `calc(6rem + ${PANEL_OVERLAP}) minmax(0, 1fr)`,
   overflow: "hidden",
-  borderRadius: radius.lg,
-  borderBlockEnd: `${borderWidth.strong} solid ${tones.accent.ramp[700]}`,
+  borderWidth: borderWidth.thick,
+  borderStyle: "solid",
+  borderColor: tones.accent.background,
+  borderBlockStartColor: tones.accent.ramp[400],
+  borderRadius: space[7],
+  cornerShape: "squircle",
   backgroundColor: tones.primary.ramp[300],
   color: tones.neutral.ramp[800],
   outline: "none",
@@ -45,24 +55,35 @@ const cardStyle = Style.make({
   Style.when(When.focusVisible, focusRingDeclarations),
 )
 
-const cardMediaStyle = Style.make({ display: "grid", placeItems: "center", padding: space[3] })
+const cardMediaStyle = Style.make({
+  position: "relative",
+  display: "grid",
+  placeItems: "center",
+  paddingInlineEnd: PANEL_OVERLAP,
+})
+
+const cardImageStyle = Style.make({
+  position: "absolute",
+  inset: 0,
+  inlineSize: "100%",
+  blockSize: "100%",
+  objectFit: "cover",
+})
 
 const cardFallbackStyle = Style.make({
   display: "grid",
   placeItems: "center",
-  inlineSize: "5rem",
-  aspectRatio: "1",
-  borderRadius: radius.full,
-  backgroundColor: tones.primary.ramp[100],
   color: tones.accent.ramp[700],
-  [iconSizeProperty]: "2.75rem",
+  [iconSizeProperty]: "3rem",
 })
 
 const cardPanelStyle = Style.make({
+  position: "relative",
   display: "grid",
   alignContent: "center",
   justifyItems: "start",
   rowGap: space[1],
+  marginInlineStart: `calc(-1 * ${PANEL_OVERLAP})`,
   paddingBlock: space[3],
   paddingInline: space[4],
   borderStartStartRadius: "2.5rem",
@@ -136,8 +157,13 @@ const card = <Message>(config: WikiArticleRowConfig, h: HtmlBuilder<Message>): H
           h.div(styledAttributes([h.AriaHidden(true)], cardFallbackStyle), [
             wikiKindIcons[article.kind]({ mode: "duotone", size: "lg" }),
           ]),
-        onSome: () =>
-          Thumbnail.view({ maybeMediaAssetId: article.thumbnailMediaAssetId, alt: name }, h),
+        onSome: (id) =>
+          h.img(
+            styledAttributes(
+              [h.Src(imageUrl(id, 300)), h.Alt(name), h.Attribute("loading", "lazy")],
+              cardImageStyle,
+            ),
+          ),
       }),
     ]),
     h.div(styledAttributes([], cardPanelStyle), [

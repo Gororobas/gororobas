@@ -21,7 +21,7 @@ import { styledAttributes } from "../../../ui/pleat-attributes"
 import { ProfileRow } from "../../../ui/profile-row"
 import { PublicationCard } from "../../../ui/publication-card"
 import { RichText } from "../../../ui/rich-text"
-import { SectionCard } from "../../../ui/section-card"
+import { SectionCard, cardBleedStyle } from "../../../ui/section-card"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import {
   breakpoint,
@@ -127,7 +127,6 @@ const carouselStyle = Style.make({
   gap: space[3],
   overflowX: "auto",
   scrollSnapType: "x mandatory",
-  scrollbarWidth: "thin",
   paddingBlockEnd: space[1],
 })
 
@@ -346,7 +345,7 @@ const publicationsPreview = (
                 onEmpty: () => emptyState(`Ainda não há posts sobre ${aboutName(page)}.`, h),
                 onNonEmpty: (shown) =>
                   h.div(
-                    styledAttributes([], carouselStyle),
+                    styledAttributes([], carouselStyle, cardBleedStyle),
                     shown.map((publication) =>
                       h.keyed("div")(publication.id, styledAttributes([], carouselItemStyle), [
                         PublicationCard.view({ publication, maybeToday }, h),
@@ -360,6 +359,45 @@ const publicationsPreview = (
       ],
     },
     h,
+  )
+
+const cultivarItemStyle = Style.make({
+  flex: "0 0 min(20rem, 85%)",
+  scrollSnapAlign: "start",
+})
+
+/** A plant's varieties, each a card with its photo. Only shown when the plant has some. */
+const cultivars = (
+  { model, page }: Readonly<{ model: Model; page: Page }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> =>
+  EffectArray.fromOption(
+    Option.filter(AsyncData.getData(model.cultivarsAsyncData), EffectArray.isReadonlyArrayNonEmpty),
+  ).map((varieties) =>
+    SectionCard.view(
+      {
+        title: `Variedades ${ofName(page)}`,
+        icon: Icons.layers,
+        children: [
+          h.div(
+            styledAttributes([], carouselStyle, cardBleedStyle),
+            varieties.map((cultivar) =>
+              h.keyed("div")(cultivar.id, styledAttributes([], cultivarItemStyle), [
+                WikiArticleRow.view(
+                  {
+                    article: cultivar,
+                    maybeBookmarkState: HashMap.get(model.viewerBookmarks, cultivar.id),
+                    isCard: true,
+                  },
+                  h,
+                ),
+              ]),
+            ),
+          ),
+        ],
+      },
+      h,
+    ),
   )
 
 /** Only shown once it has articles: an empty "related" list says nothing useful. */
@@ -435,7 +473,7 @@ const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Htm
           icon: Icons.gallery,
           footerLink: { label: "Ver todas as fotos", href: wikiArticleUrl(page, "Photos") },
           children: [
-            h.div(styledAttributes([], photoStripStyle), [
+            h.div(styledAttributes([], photoStripStyle, cardBleedStyle), [
               ...photos
                 .slice(0, PREVIEW_PHOTO_COUNT)
                 .map((photo) =>
@@ -600,17 +638,21 @@ export const view = (
         { order: 3, children: page.kind === "PLANT" ? [PlantOverview.view(page, h)] : [] },
         h,
       ),
-      ...ordered({ order: 5, children: aboutContent(page, h) }, h),
-      ...ordered({ order: 6, children: [publicationsPreview({ model, page, maybeToday }, h)] }, h),
-      ...ordered({ order: 7, children: related(model, h) }, h),
-      ...ordered({ order: 8, children: photosPreview(page, h) }, h),
+      ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
+      ...ordered({ order: 6, children: aboutContent(page, h) }, h),
+      ...ordered({ order: 7, children: [publicationsPreview({ model, page, maybeToday }, h)] }, h),
+      ...ordered({ order: 8, children: related(model, h) }, h),
+      ...ordered({ order: 9, children: photosPreview(page, h) }, h),
     ]),
     h.aside(styledAttributes([h.AriaLabel(`Quem acompanha ${aboutName(page)}`)], columnStyle), [
       ...ordered(
         { order: 2, children: [bookmarkPicker({ model, page, maybeToday, isSignedIn }, h)] },
         h,
       ),
-      ...ordered({ order: 4, children: [bookmarkers({ model, page, maybeToday }, h)] }, h),
-      ...ordered({ order: 9, children: [contributionsPreview({ model, page, maybeToday }, h)] }, h),
+      ...ordered({ order: 5, children: [bookmarkers({ model, page, maybeToday }, h)] }, h),
+      ...ordered(
+        { order: 10, children: [contributionsPreview({ model, page, maybeToday }, h)] },
+        h,
+      ),
     ]),
   ])

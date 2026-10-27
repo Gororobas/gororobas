@@ -12,6 +12,7 @@ import { Chip } from "../../../ui/chip"
 import * as Icons from "../../../ui/icons"
 import type { IconConfig } from "../../../ui/icons"
 import { styledAttributes } from "../../../ui/pleat-attributes"
+import { cardBleedStyle } from "../../../ui/section-card"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import { emptyStateStyle } from "../../../ui/styles/surfaces"
 import {
@@ -190,25 +191,28 @@ export const filterChips = <Value>(
   }>,
   h: WikiArticleViewBuilder,
 ): Html =>
-  h.div(styledAttributes([h.Role("group"), h.AriaLabel(config.label)], chipRowStyle), [
-    Chip.view(
-      {
-        label: "Todos",
-        appearance: Option.isNone(config.selected) ? "selectedOption" : "option",
-        isPressed: Option.isNone(config.selected),
-        onClick: config.toMessage(Option.none()),
-      },
-      h,
-    ),
-    ...config.options.map(([value, label]) =>
+  h.div(
+    styledAttributes([h.Role("group"), h.AriaLabel(config.label)], chipRowStyle, cardBleedStyle),
+    [
       Chip.view(
         {
-          label,
-          appearance: Option.contains(config.selected, value) ? "selectedOption" : "option",
-          isPressed: Option.contains(config.selected, value),
-          onClick: config.toMessage(Option.some(value)),
+          label: "Todos",
+          appearance: Option.isNone(config.selected) ? "selectedOption" : "option",
+          isPressed: Option.isNone(config.selected),
+          onClick: config.toMessage(Option.none()),
         },
         h,
       ),
-    ),
-  ])
+      ...config.options.map(([value, label]) =>
+        Chip.view(
+          {
+            label,
+            appearance: Option.contains(config.selected, value) ? "selectedOption" : "option",
+            isPressed: Option.contains(config.selected, value),
+            onClick: config.toMessage(Option.some(value)),
+          },
+          h,
+        ),
+      ),
+    ],
+  )

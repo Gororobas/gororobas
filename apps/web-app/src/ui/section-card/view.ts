@@ -18,13 +18,27 @@ import {
   toneStyle,
 } from "../theme"
 
+/** The card's inline padding, which side-scrolling strips bleed through. */
+const CARD_PADDING = space[4]
+
 const cardStyle = Style.make({
   display: "grid",
   rowGap: space[4],
-  padding: space[4],
+  padding: CARD_PADDING,
   borderRadius: radius.lg,
   backgroundColor: toneColors.backgroundCard,
   color: toneColors.foreground,
+})
+
+/**
+ * For side-scrolling strips inside a card: they run to the card's edges instead of being cut
+ * by its padding, while their first item still lines up with the title.
+ */
+export const cardBleedStyle = Style.make({
+  marginInline: `calc(-1 * ${CARD_PADDING})`,
+  paddingInline: CARD_PADDING,
+  scrollPaddingInline: CARD_PADDING,
+  scrollbarWidth: "none",
 })
 
 /** The same layout without the card surface, for a page that is only this section. */

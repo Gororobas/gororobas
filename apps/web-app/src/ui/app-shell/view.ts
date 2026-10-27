@@ -14,6 +14,7 @@ import {
   borderWidth,
   breakpoint,
   controlSize,
+  duration,
   fontSize,
   measure,
   radius,
@@ -64,15 +65,20 @@ export const searchSurfaceStyle = Style.make({
   inlineSize: "100%",
   blockSize: controlSize.md,
   paddingInlineStart: space[10],
+  paddingInlineEnd: space[4],
+  border: `${borderWidth.hairline} solid ${tones.neutral.ramp[200]}`,
   borderRadius: radius.full,
   cornerShape: "squircle",
-  backgroundColor: toneColors.selected.background,
+  backgroundColor: tones.neutral.ramp[100],
   color: toneColors.foreground,
   fontSize: fontSize.footnote,
   outline: "none",
+  transitionProperty: "border-color, background-color",
+  transitionDuration: duration.control,
 }).pipe(
   Style.when(breakpoint.sm, { blockSize: controlSize.sm }),
-  Style.when(When.hover, { backgroundColor: toneColors.selected.hover }),
+  Style.when(When.hover, { borderColor: tones.neutral.ramp[300] }),
+  Style.when(When.focus, { backgroundColor: tones.neutral.ramp[50] }),
   Style.when(When.focusVisible, focusRingDeclarations),
 )
 
@@ -100,9 +106,10 @@ export const searchControlStyle = Style.make({
 export const searchIconStyle = Style.make({
   position: "absolute",
   insetBlock: 0,
-  insetInlineStart: space[3],
+  insetInlineStart: space[4],
   display: "flex",
   alignItems: "center",
+  color: toneColors.foregroundMuted,
   pointerEvents: "none",
 })
 
@@ -178,7 +185,7 @@ export const searchLink = <Message>(href: string, h: HtmlBuilder<Message>): Html
     ),
     [
       h.span(styledAttributes([h.AriaHidden(true)], searchIconStyle), [
-        Icons.search({ mode: "filled", tone: "secondary" }),
+        Icons.search({ size: "sm" }),
       ]),
       "Buscar",
     ],

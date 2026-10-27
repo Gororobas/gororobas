@@ -9,6 +9,7 @@ import {
   BookmarkSaving,
   BookmarkerResults,
   ContributorResults,
+  CultivarResults,
   PageResult,
   PublicationResults,
   RelatedResults,
@@ -34,6 +35,12 @@ export const update = WikiArticleComposition.makeUpdate({
   })),
   FailedLoadBookmarkers: makeFieldsStep.fromMessage(({ error }) => ({
     bookmarkersAsyncData: () => BookmarkerResults.Failure({ error }),
+  })),
+  SucceededLoadCultivars: makeFieldsStep.fromMessage(({ cultivars }) => ({
+    cultivarsAsyncData: () => CultivarResults.Success({ data: cultivars }),
+  })),
+  FailedLoadCultivars: makeFieldsStep.fromMessage(({ error }) => ({
+    cultivarsAsyncData: () => CultivarResults.Failure({ error }),
   })),
   SucceededLoadContributors: makeFieldsStep.fromMessage(({ contributors }) => ({
     contributorsAsyncData: () => ContributorResults.Success({ data: contributors }),

@@ -78,6 +78,22 @@ export const LoadContributors = WikiArticleDefinition.makeCommand("LoadContribut
   },
 })
 
+export const LoadCultivars = WikiArticleDefinition.makeCommand("LoadCultivars", {
+  args: { lookup: WikiArticleLookup },
+  messages: [Message.SucceededLoadCultivars, Message.FailedLoadCultivars],
+  handler: function* () {
+    const api = yield* GororobasApiClient
+
+    return ({ lookup }) =>
+      api.wiki.listWikiArticleCultivars({ params: lookup, query: { language: "pt" } }).pipe(
+        Effect.match({
+          onFailure: (error) => Message.FailedLoadCultivars({ error: String(error) }),
+          onSuccess: (cultivars) => Message.SucceededLoadCultivars({ cultivars }),
+        }),
+      )
+  },
+})
+
 export const LoadPublications = WikiArticleDefinition.makeCommand("LoadPublications", {
   args: { wikiArticleId: WikiArticleId },
   messages: [Message.SucceededLoadPublications, Message.FailedLoadPublications],
@@ -123,6 +139,7 @@ export const CommandsLayer = Layer.mergeAll(
   LoadRelated.layer,
   LoadBookmarkers.layer,
   LoadContributors.layer,
+  LoadCultivars.layer,
   LoadPublications.layer,
   SaveBookmark.layer,
 )
