@@ -137,6 +137,43 @@ Feature: Wiki articles
       When "Maria" removes the bookmark
       Then "Mandioca" no longer appears in "Maria"'s bookmarked wiki articles
 
+  Rule: Anyone can see the public profiles that bookmarked an article
+    Readers see each bookmark's state, such as who is planting a plant.
+    INDIFFERENT bookmarks and profiles visible only to the community are left out, as in profile search.
+
+    Background:
+      Given "Maria" has COMMUNITY access
+      And the wiki article "Mandioca" exists
+
+    Scenario: A bookmark lists its profile with the bookmark state
+      Given "Maria" has bookmarked "Mandioca" with state "ACTIVE"
+      Then "Maria" is listed among "Mandioca"'s bookmarkers with state "ACTIVE"
+
+    Scenario: INDIFFERENT bookmarks are not listed
+      Given "Maria" has bookmarked "Mandioca" with state "INDIFFERENT"
+      Then "Maria" is not listed among "Mandioca"'s bookmarkers
+
+    Scenario: Profiles visible only to the community are not listed
+      Given "Maria"'s profile is only visible to the community
+      And "Maria" has bookmarked "Mandioca" with state "ACTIVE"
+      Then "Maria" is not listed among "Mandioca"'s bookmarkers
+
+  Rule: Anyone can see the public profiles that contributed to an article
+    Each approved revision a person authored counts as a contribution. Pending and rejected ones don't.
+
+    Background:
+      Given "Maria" has COMMUNITY access
+      And "Ana" is a MODERATOR
+      And the wiki article "Mandioca" exists
+
+    Scenario: Approved edits count as contributions
+      Given "Maria" has 2 edits to "Mandioca" evaluated as "APPROVED"
+      Then "Maria" is listed among "Mandioca"'s contributors with 2 revisions
+
+    Scenario: Rejected edits don't count as contributions
+      Given "Maria" has 1 edit to "Mandioca" evaluated as "REJECTED"
+      Then "Maria" is not listed among "Mandioca"'s contributors
+
   Rule: Wiki articles relate to the articles their content references, names or is about
     Relations are derived, never edited by hand: entity references contributors place in the content,
     and the articles link inference finds named in it or infers it is about. Readers see relations from both ends.

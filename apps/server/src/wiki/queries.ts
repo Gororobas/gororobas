@@ -20,6 +20,8 @@ import {
   WikiArticleRevisionRow,
   WikiArticleRevisionMediaAssetRow,
   WikiSearchParams,
+  WikiArticleBookmarker,
+  WikiArticleContributor,
 } from "@gororobas/domain"
 import { Handle } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
@@ -318,12 +320,15 @@ export const findMainMedia = SqlSchema.findOneOption({
 const QueriedCardRow = Schema.Struct({
   ...WikiArticleQueriedCardData.fields,
   commonNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.commonNames),
+  scientificNames: Schema.fromJsonString(WikiArticleQueriedCardData.fields.scientificNames),
   thumbnailMediaAssetId: OptionalColumn(MediaAssetId),
 })
 
 /** Cards of published articles, each in its translation that best matches `language`. */
 const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql`
   SELECT a.id, a.kind, t.language, t.common_names,
+    CASE WHEN a.kind = 'PLANT' THEN coalesce(json_extract(a.attributes, '$.scientificNames'), '[]')
+      ELSE '[]' END AS scientific_names,
     (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
       ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
     (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
@@ -340,6 +345,19 @@ export const listCards = SqlSchema.findAll({
   Result: QueriedCardRow,
   execute: (language) =>
     SqlClient.use((sql) => sql`${publishedCardsQuery(sql, language)} ORDER BY a.id`),
+})
+
+export const listCardsByIds = SqlSchema.findAll({
+  Request: Schema.Struct({
+    wikiArticleIds: Schema.Array(WikiArticleId),
+    language: SupportedLanguage,
+  }),
+  Result: QueriedCardRow,
+  execute: ({ wikiArticleIds, language }) =>
+    SqlClient.use(
+      (sql) =>
+        sql`${publishedCardsQuery(sql, language)} AND a.id IN ${sql.in(wikiArticleIds)} ORDER BY a.id`,
+    ),
 })
 
 const RelatedCardRow = Schema.Struct({
@@ -438,4 +456,56 @@ export const searchCards = SqlSchema.findAll({
       ORDER BY a.id
     `
     }),
+})
+
+/** Public, active profiles as `ProfileCardData` JSON, for nesting in a row. */
+const publicProfileCardJson = (sql: SqlClient, personIdColumn: string) => sql`
+  (SELECT json_object('id', p.id, 'type', p.type, 'handle', p.handle, 'name', p.name,
+      'location', p.location, 'photoId', photo.id)
+    FROM profiles p
+    LEFT JOIN media_assets photo ON photo.id = p.photo_id AND photo.moderation_status <> 'CENSORED'
+    WHERE p.id = ${sql.literal(personIdColumn)} AND p.visibility = 'PUBLIC'
+      AND NOT EXISTS (SELECT 1 FROM auth_subjects s WHERE s.id = p.id AND s.active = 0))
+`
+
+/** Like profile search, only public profiles are listed: anyone can read an article's people. */
+export const listBookmarkers = SqlSchema.findAll({
+  Request: WikiArticleId,
+  Result: Schema.Struct({
+    ...WikiArticleBookmarker.fields,
+    profile: Schema.fromJsonString(WikiArticleBookmarker.fields.profile),
+  }),
+  execute: (wikiArticleId) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT * FROM (
+      SELECT b.state, ${publicProfileCardJson(sql, "b.person_id")} AS profile
+      FROM bookmarks_wiki_articles b
+      WHERE b.wiki_article_id = ${wikiArticleId} AND b.state <> 'INDIFFERENT'
+    ) WHERE profile IS NOT NULL
+    ORDER BY json_extract(profile, '$.name') COLLATE NOCASE, json_extract(profile, '$.id')
+  `,
+    ),
+})
+
+export const listContributors = SqlSchema.findAll({
+  Request: WikiArticleId,
+  Result: Schema.Struct({
+    ...WikiArticleContributor.fields,
+    profile: Schema.fromJsonString(WikiArticleContributor.fields.profile),
+  }),
+  execute: (wikiArticleId) =>
+    SqlClient.use(
+      (sql) => sql`
+    SELECT * FROM (
+      SELECT ${publicProfileCardJson(sql, "r.created_by_id")} AS profile,
+        COUNT(*) AS revision_count, MAX(r.created_at) AS last_contributed_at
+      FROM wiki_article_revisions r
+      WHERE r.wiki_article_id = ${wikiArticleId} AND r.evaluation = 'APPROVED'
+        AND r.created_by_id IS NOT NULL
+      GROUP BY r.created_by_id
+    ) WHERE profile IS NOT NULL
+    ORDER BY revision_count DESC, last_contributed_at DESC
+  `,
+    ),
 })

@@ -31,7 +31,9 @@ import { SourceContent, SourceContentFields, TranslatedContent } from "../common
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { LinkInferenceRun, makeLink, makeLinkRow } from "../links/domain.js"
 import { MediaAssetRow } from "../media-assets/domain.js"
+import { ProfileCardData } from "../profiles/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
+import { WikiArticleQueriedCardData } from "../wiki/wiki-article.js"
 
 export const CorePublicationMetadata = Schema.Struct({
   handle: Handle,
@@ -132,6 +134,10 @@ export const ApiPublicationSearchParams = Schema.Struct({
   ownerProfileId: Schema.optional(ProfileId),
   kind: Schema.optional(PublicationKind),
   visibility: Schema.optional(PublicationVisibility),
+  /** Only publications linked to this wiki article, through any link source. */
+  wikiArticleId: Schema.optional(WikiArticleId),
+  /** Preferred language for each card's content. */
+  language: Schema.optional(SupportedLanguage),
   ...PaginationOptions.fields,
 })
 
@@ -145,9 +151,17 @@ export const ApiPublicationCardData = Schema.Struct({
   handle: Handle,
   id: PublicationId,
   ownerProfileId: ProfileId,
+  owner: ProfileCardData,
   publishedAt: Schema.NullOr(TimestampColumn),
   kind: PublicationKind,
   visibility: PublicationVisibility,
+  /** The translation that best matches the requested language. */
+  content: TiptapDocument,
+  language: SupportedLanguage,
+  originalLanguage: ContentLanguage,
+  mediaAssets: Schema.Array(MediaAssetRow),
+  /** CONCEPT articles the publication is about, shown as its themes. */
+  concepts: Schema.Array(WikiArticleQueriedCardData),
 })
 
 export type ApiPublicationCardData = typeof ApiPublicationCardData.Type

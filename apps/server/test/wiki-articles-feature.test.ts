@@ -1,6 +1,7 @@
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { assert, expect, it } from "@effect/vitest"
 import {
+  Handle,
   ApiAuthentication,
   GororobasApi,
   IdGen,
@@ -59,7 +60,7 @@ import {
 import * as Arbitrary from "effect/Arbitrary"
 import { HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
-import { SqlClient } from "effect/sql"
+import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 import sharp from "sharp"
 
@@ -338,10 +339,12 @@ const approvedEdit = ({
   context,
   title,
   edit,
+  status = "APPROVED",
 }: {
   context: WikiContext
   title: string
   edit: Parameters<typeof WikiArticleCrdt.applyEdit>[1]
+  status?: "APPROVED" | "REJECTED"
 }) =>
   Effect.gen(function* () {
     const id = articleId(context, title)
@@ -367,7 +370,7 @@ const approvedEdit = ({
     yield* asPerson({
       context: context,
       name: "Ana",
-      action: service.evaluateRevision(revision, { status: "APPROVED" }),
+      action: service.evaluateRevision(revision, { status }),
     })
 
     return context
@@ -663,6 +666,148 @@ const bookmarked = () =>
           }),
         ),
       ),
+  })
+
+const findArticleHandle = SqlSchema.findOne({
+  Request: WikiArticleId,
+  Result: Schema.Struct({ handle: Handle }),
+  execute: (id) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`SELECT handle FROM wiki_article_handles WHERE wiki_article_id = ${id} LIMIT 1`,
+    ),
+})
+
+const lookupOf = (context: WikiContext, title: string) =>
+  Effect.gen(function* () {
+    const id = articleId(context, title)
+    const article = yield* (yield* WikiArticlesService).getPublishedArticle(id)
+    const { handle } = yield* findArticleHandle(id)
+    return { kind: article.kind, handle }
+  })
+
+const bookmarkersOf = (context: WikiContext, title: string) =>
+  lookupOf(context, title).pipe(
+    Effect.flatMap((lookup) =>
+      WikiArticlesService.use((service) => service.listBookmarkers(lookup)),
+    ),
+  )
+
+const contributorsOf = (context: WikiContext, title: string) =>
+  lookupOf(context, title).pipe(
+    Effect.flatMap((lookup) =>
+      WikiArticlesService.use((service) => service.listContributors(lookup)),
+    ),
+  )
+
+const communityOnlyProfile = () =>
+  Given("{string:name}'s profile is only visible to the community", {
+    params: Schema.Struct({ name: Schema.String }),
+    handler: (_, { name }) =>
+      background().pipe(
+        Effect.tap((context) =>
+          Effect.gen(function* () {
+            const sql = yield* SqlClient.SqlClient
+            yield* sql`UPDATE profiles SET visibility = 'COMMUNITY' WHERE id = ${personNamed(context.actors, name)}`
+          }),
+        ),
+      ),
+  })
+
+const listedBookmarker = () =>
+  Then("{string:name} is listed among {string:title}'s bookmarkers with state {string:state}", {
+    params: Schema.Struct({ name: Schema.String, title: Schema.String, state: BookmarkState }),
+    handler: (context: WikiContext, { name, title, state }) =>
+      Effect.gen(function* () {
+        expect(
+          (yield* bookmarkersOf(context, title)).map((bookmarker) => ({
+            profileId: bookmarker.profile.id,
+            state: bookmarker.state,
+          })),
+        ).toContainEqual({ profileId: personNamed(context.actors, name), state })
+
+        return context
+      }),
+  })
+
+const unlistedBookmarker = () =>
+  Then("{string:name} is not listed among {string:title}'s bookmarkers", {
+    params: Schema.Struct({ name: Schema.String, title: Schema.String }),
+    handler: (context: WikiContext, { name, title }) =>
+      Effect.gen(function* () {
+        expect(
+          (yield* bookmarkersOf(context, title)).map((bookmarker) => bookmarker.profile.id),
+        ).not.toContain(personNamed(context.actors, name))
+
+        return context
+      }),
+  })
+
+const EvaluatedEditsParams = Schema.Struct({
+  name: Schema.Literal("Maria"),
+  count: Schema.Int,
+  title: Schema.String,
+  evaluation: Schema.Literals(["APPROVED", "REJECTED"]),
+})
+
+const evaluateEdits = (
+  context: WikiContext,
+  { count, title, evaluation }: typeof EvaluatedEditsParams.Type,
+) =>
+  Effect.forEach(
+    EffectArray.range(1, count),
+    (edition) =>
+      approvedEdit({
+        context,
+        title,
+        status: evaluation,
+        edit: {
+          _tag: "SetWikiArticleTranslationContent",
+          language: "pt",
+          content: textToRichTextDocument(`Edição ${edition}`),
+        },
+      }),
+    { concurrency: 1, discard: true },
+  ).pipe(Effect.as(context))
+
+const evaluatedEdits = () =>
+  Given("{string:name} has {int:count} edits to {string:title} evaluated as {string:evaluation}", {
+    params: EvaluatedEditsParams,
+    handler: evaluateEdits,
+  })
+
+const evaluatedEdit = () =>
+  Given("{string:name} has {int:count} edit to {string:title} evaluated as {string:evaluation}", {
+    params: EvaluatedEditsParams,
+    handler: evaluateEdits,
+  })
+
+const listedContributor = () =>
+  Then("{string:name} is listed among {string:title}'s contributors with {int:count} revisions", {
+    params: Schema.Struct({ name: Schema.String, title: Schema.String, count: Schema.Int }),
+    handler: (context: WikiContext, { name, title, count }) =>
+      Effect.gen(function* () {
+        expect(
+          (yield* contributorsOf(context, title)).map((contributor) => ({
+            profileId: contributor.profile.id,
+            revisionCount: contributor.revisionCount,
+          })),
+        ).toContainEqual({ profileId: personNamed(context.actors, name), revisionCount: count })
+
+        return context
+      }),
+  })
+
+const unlistedContributor = () =>
+  Then("{string:name} is not listed among {string:title}'s contributors", {
+    params: Schema.Struct({ name: Schema.String, title: Schema.String }),
+    handler: (context: WikiContext, { name, title }) =>
+      Effect.gen(function* () {
+        expect(
+          (yield* contributorsOf(context, title)).map((contributor) => contributor.profile.id),
+        ).not.toContain(personNamed(context.actors, name))
+
+        return context
+      }),
   })
 
 const referencing = (title: string, id: WikiArticleId): TiptapDocument => ({
@@ -1827,6 +1972,51 @@ await Effect.runPromise(
     })
 
     Rule(
+      "Anyone can see the public profiles that bookmarked an article",
+      ({ Background, Scenario }) => {
+        Background({
+          layer: WikiTestLayer,
+          steps: () => runSteps(community(), articleExists()),
+        })
+
+        Scenario("A bookmark lists its profile with the bookmark state", {
+          layer: WikiTestLayer,
+          steps: () => runSteps(bookmarked(), listedBookmarker()),
+        })
+
+        Scenario("INDIFFERENT bookmarks are not listed", {
+          layer: WikiTestLayer,
+          steps: () => runSteps(bookmarked(), unlistedBookmarker()),
+        })
+
+        Scenario("Profiles visible only to the community are not listed", {
+          layer: WikiTestLayer,
+          steps: () => runSteps(communityOnlyProfile(), bookmarked(), unlistedBookmarker()),
+        })
+      },
+    )
+
+    Rule(
+      "Anyone can see the public profiles that contributed to an article",
+      ({ Background, Scenario }) => {
+        Background({
+          layer: WikiTestLayer,
+          steps: () => runSteps(community(), moderator(), articleExists()),
+        })
+
+        Scenario("Approved edits count as contributions", {
+          layer: WikiTestLayer,
+          steps: () => runSteps(evaluatedEdits(), listedContributor()),
+        })
+
+        Scenario("Rejected edits don't count as contributions", {
+          layer: WikiTestLayer,
+          steps: () => runSteps(evaluatedEdit(), unlistedContributor()),
+        })
+      },
+    )
+
+    Rule(
       "Wiki articles relate to the articles their content references, names or is about",
       ({ Background, Scenario }) => {
         Background({
@@ -2002,9 +2192,6 @@ it.effect(
                 expect(error).toMatchObject({
                   _tag: "UnauthorizedError",
                 })
-                expect(yield* read(service.toggleBookmark(id)).pipe(Effect.flip)).toMatchObject({
-                  _tag: "UnauthorizedError",
-                })
                 expect(
                   yield* sql`SELECT * FROM bookmarks_wiki_articles ORDER BY person_id, wiki_article_id`,
                 ).toEqual(before)
@@ -2020,9 +2207,9 @@ it.effect(
                   },
                 ])
 
-                yield* read(service.toggleBookmark(id))
+                yield* read(service.removeBookmark(id))
                 expect(yield* read(service.listBookmarks)).toEqual([])
-                yield* read(service.toggleBookmark(id))
+                yield* read(service.bookmark(id))
                 expect(yield* read(service.listBookmarks)).toEqual([
                   { wikiArticleId: id, state: "INTERESTED" },
                 ])

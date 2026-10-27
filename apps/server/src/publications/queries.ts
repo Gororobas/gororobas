@@ -1,5 +1,8 @@
 import {
+  ApiPublicationCardData,
   ApiPublicationData,
+  SupportedLanguage,
+  WikiArticleId,
   ApiPublicationSearchParams,
   MediaAssetRow,
   ModeratedPublicationRow,
@@ -34,6 +37,13 @@ export const searchPublicationRows = SqlSchema.findAll({
         ? []
         : [sql`publications.owner_profile_id = ${query.ownerProfileId}`]),
       ...(query.kind === undefined ? [] : [sql`publications.kind = ${query.kind}`]),
+      ...(query.wikiArticleId === undefined
+        ? []
+        : [
+            sql`EXISTS (SELECT 1 FROM publication_wiki_articles linked
+              WHERE linked.publication_id = publications.id
+                AND linked.wiki_article_id = ${query.wikiArticleId})`,
+          ]),
       ...(query.visibility === undefined
         ? []
         : [sql`publications.visibility = ${query.visibility}`]),
@@ -54,6 +64,42 @@ export const searchPublicationRows = SqlSchema.findAll({
   `,
     )
   },
+})
+
+const PublicationCardContentRow = Schema.Struct({
+  content: Schema.fromJsonString(ApiPublicationCardData.fields.content),
+  language: ApiPublicationCardData.fields.language,
+  originalLanguage: ApiPublicationCardData.fields.originalLanguage,
+  owner: Schema.fromJsonString(ApiPublicationCardData.fields.owner),
+  conceptIds: Schema.fromJsonString(Schema.Array(WikiArticleId)),
+})
+
+/** The card's translation that best matches `language`, its owner and the CONCEPT articles it's about. */
+export const findPublicationCardContent = SqlSchema.findOneOption({
+  Request: Schema.Struct({ id: PublicationId, language: SupportedLanguage }),
+  Result: PublicationCardContentRow,
+  execute: ({ id, language }) =>
+    SqlClient.use(
+      (sql) => sql`
+      SELECT t.content, t.language, t.original_language,
+        json_object('id', owner.id, 'type', owner.type, 'handle', owner.handle, 'name', owner.name,
+          'location', owner.location, 'photoId', photo.id) AS owner,
+        (SELECT json_group_array(DISTINCT linked.wiki_article_id)
+          FROM publication_wiki_articles linked
+          JOIN wiki_articles article ON article.id = linked.wiki_article_id
+          WHERE linked.publication_id = p.id AND article.kind = 'CONCEPT') AS concept_ids
+      FROM publications p
+      JOIN profiles owner ON owner.id = p.owner_profile_id
+      LEFT JOIN media_assets photo ON photo.id = owner.photo_id AND photo.moderation_status <> 'CENSORED'
+      JOIN publication_translations t ON t.publication_id = p.id AND t.language = (
+        SELECT preferred.language FROM publication_translations preferred
+        WHERE preferred.publication_id = p.id
+        ORDER BY CASE preferred.language WHEN ${language} THEN 1 WHEN 'en' THEN 2 WHEN 'pt' THEN 3
+          WHEN 'es' THEN 4 ELSE 5 END
+        LIMIT 1)
+      WHERE p.id = ${id}
+    `,
+    ),
 })
 
 export const listPublicationCommitRowsByPublicationIdAsc = SqlSchema.findAll({

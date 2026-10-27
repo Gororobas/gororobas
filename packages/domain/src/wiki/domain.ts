@@ -28,6 +28,7 @@ export * from "./kinds/index.js"
 export * from "./wiki-article-translation.js"
 export * from "./wiki-article.js"
 export * from "./wiki-article-relation.js"
+export * from "./wiki-article-people.js"
 export * from "./external-data/domain.js"
 
 const WikiSearchText = Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty()))

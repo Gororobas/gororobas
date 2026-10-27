@@ -128,6 +128,8 @@ export const WikiArticleQueriedCardData = Schema.Struct({
   handle: Handle,
   kind: WikiArticleKind,
   commonNames: Schema.Array(WikiArticleCommonName),
+  /** Plants only: the names that identify the species across languages. */
+  scientificNames: Schema.Array(Schema.String),
   language: SupportedLanguage,
 })
 

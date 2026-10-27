@@ -84,16 +84,30 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
           withApiInfrastructureErrors({ group: "wiki", endpoint: "evaluateWikiArticleRevision" }),
         ),
       )
-      .handle("toggleWikiArticleBookmark", ({ params }) =>
+      .handle("setWikiArticleBookmark", ({ params, payload }) =>
         WikiArticlesService.use((service) =>
-          Effect.gen(function* () {
-            const article = yield* service.getPage({ ...params, language: "pt" })
-            yield* service.toggleBookmark(article.id)
-
-            return true as const
-          }),
+          service
+            .getPage({ ...params, language: "pt" })
+            .pipe(Effect.flatMap((article) => service.bookmark(article.id, payload.state))),
+        ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "setWikiArticleBookmark" })),
+      )
+      .handle("removeWikiArticleBookmark", ({ params }) =>
+        WikiArticlesService.use((service) =>
+          service
+            .getPage({ ...params, language: "pt" })
+            .pipe(Effect.flatMap((article) => service.removeBookmark(article.id))),
         ).pipe(
-          withApiInfrastructureErrors({ group: "wiki", endpoint: "toggleWikiArticleBookmark" }),
+          withApiInfrastructureErrors({ group: "wiki", endpoint: "removeWikiArticleBookmark" }),
+        ),
+      )
+      .handle("listWikiArticleBookmarkers", ({ params }) =>
+        WikiArticlesService.use((service) => service.listBookmarkers(params)).pipe(
+          withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleBookmarkers" }),
+        ),
+      )
+      .handle("listWikiArticleContributors", ({ params }) =>
+        WikiArticlesService.use((service) => service.listContributors(params)).pipe(
+          withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleContributors" }),
         ),
       )
       .handle("setMainMedia", ({ params, payload }) =>

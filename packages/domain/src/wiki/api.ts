@@ -5,18 +5,18 @@ import { UnauthorizedError } from "../authorization/session.js"
 import { BookmarkState, SupportedLanguage } from "../common/enums.js"
 import { HandleTakenError } from "../common/errors.js"
 import { MediaAssetId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
-import { Handle } from "../common/primitives.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import { InvalidMediaAssetError, MediaNotFoundError } from "../media-assets/errors.js"
 import {
   CreateWikiArticlePayload,
   CreateWikiArticleRevisionPayload,
   EvaluateWikiArticleRevisionPayload,
-  WikiArticleKind,
   WikiArticleLookup,
   WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
   RelatedWikiArticle,
+  WikiArticleBookmarker,
+  WikiArticleContributor,
   WikiSearchParams,
 } from "./domain.js"
 import {
@@ -128,10 +128,30 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
     }),
   )
   .add(
-    HttpApiEndpoint.post("toggleWikiArticleBookmark", "/wiki/:kind/:handle/bookmark", {
-      success: Schema.Literal(true),
+    HttpApiEndpoint.put("setWikiArticleBookmark", "/wiki/:kind/:handle/bookmark", {
+      params: WikiArticleLookup,
+      payload: Schema.Struct({ state: BookmarkState }),
       error: [WikiArticleNotFoundError, UnauthorizedError, InvalidCrdtUpdateError],
-      params: Schema.Struct({ handle: Handle, kind: WikiArticleKind }),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.delete("removeWikiArticleBookmark", "/wiki/:kind/:handle/bookmark", {
+      params: WikiArticleLookup,
+      error: [WikiArticleNotFoundError, UnauthorizedError, InvalidCrdtUpdateError],
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("listWikiArticleBookmarkers", "/wiki/:kind/:handle/bookmarkers", {
+      success: Schema.Array(WikiArticleBookmarker),
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
+      params: WikiArticleLookup,
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("listWikiArticleContributors", "/wiki/:kind/:handle/contributors", {
+      success: Schema.Array(WikiArticleContributor),
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
+      params: WikiArticleLookup,
     }),
   )
   .add(

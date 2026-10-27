@@ -285,16 +285,15 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         Effect.flatMap((session) => repository.listBookmarks(session.personId)),
       )
 
-      const toggleBookmark = (wikiArticleId: WikiArticleId) =>
-        Effect.gen(function* () {
-          const bookmarks = yield* listBookmarks
+      const listBookmarkers = (lookup: WikiArticleLookup) =>
+        getPage({ ...lookup, language: "pt" }).pipe(
+          Effect.flatMap((page) => repository.listBookmarkers(page.id)),
+        )
 
-          if (bookmarks.some((bookmark) => bookmark.wikiArticleId === wikiArticleId)) {
-            yield* removeBookmark(wikiArticleId)
-          } else {
-            yield* bookmark(wikiArticleId)
-          }
-        }).pipe(sql.withTransaction)
+      const listContributors = (lookup: WikiArticleLookup) =>
+        getPage({ ...lookup, language: "pt" }).pipe(
+          Effect.flatMap((page) => repository.listContributors(page.id)),
+        )
 
       return {
         createWikiArticle,
@@ -334,7 +333,8 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         bookmark,
         removeBookmark,
         listBookmarks,
-        toggleBookmark,
+        listBookmarkers,
+        listContributors,
       }
     }),
   },

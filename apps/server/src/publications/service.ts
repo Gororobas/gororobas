@@ -36,7 +36,7 @@ import {
   type ModeratedPublicationRow,
   type ModerationDecision,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Option, Schema } from "effect"
+import { Array as EffectArray, Context, DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 import { LoroDoc } from "loro-crdt"
 
@@ -45,11 +45,13 @@ import { MediaAssetsService } from "../media-assets/service.js"
 import { moderateContent } from "../moderation/moderate-content.js"
 import { findById as findOrganizationById } from "../organizations/queries.js"
 import { findById as findPersonById } from "../people/queries.js"
+import { listCardsByIds } from "../wiki/queries.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
 import {
   listPublicationMediaAssets,
   findPublicationApiData,
   searchPublicationRows,
+  findPublicationCardContent,
 } from "./queries.js"
 import { PublicationsRepository } from "./repository.js"
 
@@ -379,9 +381,35 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
             ),
           )
 
-          return visible
-            .slice(query.currentPage * query.pageSize, (query.currentPage + 1) * query.pageSize)
-            .map((row) => ApiPublicationCardData.make(row))
+          const language = query.language ?? "pt"
+          const page = visible.slice(
+            query.currentPage * query.pageSize,
+            (query.currentPage + 1) * query.pageSize,
+          )
+
+          return yield* Effect.forEach(
+            page,
+            (row) =>
+              Effect.gen(function* () {
+                const details = yield* findPublicationCardContent({ id: row.id, language })
+                if (Option.isNone(details)) return Option.none()
+
+                const { conceptIds, ...content } = details.value
+                const concepts = EffectArray.isReadonlyArrayNonEmpty(conceptIds)
+                  ? yield* listCardsByIds({ wikiArticleIds: conceptIds, language })
+                  : []
+
+                return Option.some(
+                  ApiPublicationCardData.make({
+                    ...row,
+                    ...content,
+                    mediaAssets: yield* listPublicationMediaAssets(row.id),
+                    concepts,
+                  }),
+                )
+              }),
+            { concurrency: 1 },
+          ).pipe(Effect.map(EffectArray.getSomes))
         })
 
       const moderate = (input: { id: PublicationId; moderationStatus: ModerationDecision }) =>
