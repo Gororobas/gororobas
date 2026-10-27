@@ -1,5 +1,11 @@
 import { Array, Context, Effect, Fiber, Option, Schema } from 'effect'
 
+import {
+  type DefinitionIdentity,
+  InvocationIdentityTypeId,
+  InvocationNameTypeId,
+  registerIdentity,
+} from '../../block/identity.js'
 import { defineTaggedUnion } from '../../schema/index.js'
 import { CommandDefinitionTypeId, brandAsDefinition } from '../brand.js'
 
@@ -76,9 +82,7 @@ export const __makeRegistry = (): __Registry => {
       Array.match(lookup(key), {
         onEmpty: () => Effect.succeed<Outcome>(Outcome.NotFound()),
         onNonEmpty: fibers =>
-          Effect.map(Fiber.interruptAll(fibers), (): Outcome =>
-            Outcome.Interrupted(),
-          ),
+          Effect.map(Fiber.interruptAll(fibers), () => Outcome.Interrupted()),
       }),
     )
 
@@ -129,6 +133,32 @@ const makeInterruptEffect = <ToMessage>(
     const outcome = yield* registry.interrupt(key)
     return toMessage(outcome)
   })
+
+type IsUnion<Value, Whole = Value> = Value extends Whole
+  ? [Whole] extends [Value]
+    ? false
+    : true
+  : never
+
+type GuaranteedFields<Fields> = Fields extends readonly [
+  infer Field extends string,
+  ...infer Rest,
+]
+  ?
+      | ({} extends Record<Field, never>
+          ? never
+          : true extends IsUnion<Field>
+            ? never
+            : Field)
+      | GuaranteedFields<Rest>
+  : never
+
+/** @internal Preserves required tuple fields and makes uncertain selected fields optional. */
+export type KeyArgs<Args, Fields> =
+  Fields extends ReadonlyArray<keyof Args>
+    ? Partial<Pick<Args, Fields[number]>> &
+        Pick<Args, Extract<GuaranteedFields<Fields>, keyof Args>>
+    : never
 
 /** An Interrupt Command definition derived from an interruptible Command
  *  definition with no declared args. Call as `Definition.Interrupt(toMessage)`
@@ -222,15 +252,21 @@ export interface DefinitionWithArgsNameKeyed<
 export const __makeInterruptDefinitionNoArgs = (
   name: string,
   key: string,
+  identity?: DefinitionIdentity,
 ): unknown => {
   const interruptName = `${name}.Interrupt`
   const definition = (toMessage: (outcome: Outcome) => unknown) => ({
     name: interruptName,
     interruptsKey: key,
     effect: makeInterruptEffect(key, toMessage),
+    [InvocationIdentityTypeId]: identity,
+    [InvocationNameTypeId]: interruptName,
     messageMappers: [],
   })
   brandAsDefinition(definition, interruptName)
+  if (identity !== undefined) {
+    registerIdentity(definition, identity)
+  }
   return definition
 }
 
@@ -239,6 +275,7 @@ export const __makeInterruptDefinitionNoArgs = (
 export const __makeInterruptDefinitionWithArgs = (
   name: string,
   toFullKey: (keyArgs: any) => string,
+  identity?: DefinitionIdentity,
 ): unknown => {
   const interruptName = `${name}.Interrupt`
   const definition = (
@@ -251,9 +288,14 @@ export const __makeInterruptDefinitionWithArgs = (
       args: keyArgs,
       interruptsKey: key,
       effect: makeInterruptEffect(key, toMessage),
+      [InvocationIdentityTypeId]: identity,
+      [InvocationNameTypeId]: interruptName,
       messageMappers: [],
     }
   }
   brandAsDefinition(definition, interruptName)
+  if (identity !== undefined) {
+    registerIdentity(definition, identity)
+  }
   return definition
 }

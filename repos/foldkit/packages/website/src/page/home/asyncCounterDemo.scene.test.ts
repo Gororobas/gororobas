@@ -4,12 +4,12 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import {
-  DelayAdvancePhase,
-  Message,
+  DelayAdvanceAsyncCounterPhase,
   init,
   update,
   view,
-} from './asyncCounterDemo'
+} from './asyncCounterDemo/asyncCounterDemo'
+import { Message } from './asyncCounterDemo/definition'
 
 const init_ = init()
 
@@ -20,8 +20,8 @@ const RESET_PHASE_STEPS = 6
 const advancePhases = (steps: number, generation: number) =>
   Array.makeBy(steps, () =>
     Command.resolve(
-      DelayAdvancePhase,
-      Message.CompletedDelayAdvancePhase({ generation }),
+      DelayAdvanceAsyncCounterPhase,
+      Message.CompletedDelayAdvanceAsyncCounterPhase({ generation }),
     ),
   )
 

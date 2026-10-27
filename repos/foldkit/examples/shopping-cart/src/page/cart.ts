@@ -1,15 +1,17 @@
 import { Array, Option } from 'effect'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { Cart } from '../domain'
-import { Message } from '../main'
+import { Message } from '../message'
 import { checkoutRouter, productsRouter } from '../route'
 
-// VIEW
-
-export const view = (cart: Cart.Cart, h: HtmlBuilder<Message>): Html =>
+export const view = (
+  cart: typeof Cart.Cart.Type,
+  h: ApplicationViewBuilder,
+): Html =>
   h.div(
     [h.Class('max-w-4xl mx-auto px-4')],
     [

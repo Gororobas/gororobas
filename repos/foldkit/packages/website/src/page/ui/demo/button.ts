@@ -1,7 +1,6 @@
-import type { HtmlBuilder } from 'foldkit/html'
-
 import { Button } from '@foldkit/ui'
 
+import type { UiViewBuilder } from '../composition'
 import { Message } from '../message'
 import type { Model } from '../model'
 
@@ -10,9 +9,7 @@ import type { Model } from '../model'
 const buttonClassName =
   'button-accent inline-flex items-center gap-2 rounded-lg px-3 py-2 text-base shadow-sm cursor-pointer data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50'
 
-// VIEW
-
-export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
+export const basicDemo = (model: typeof Model.Type, h: UiViewBuilder) => {
   return [
     h.div(
       [h.Class('flex flex-col items-center gap-2')],
@@ -39,7 +36,7 @@ export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
   ]
 }
 
-export const disabledDemo = (_model: Model, h: HtmlBuilder<Message>) => {
+export const disabledDemo = (_model: typeof Model.Type, h: UiViewBuilder) => {
   return [
     Button.view(
       {

@@ -16,13 +16,6 @@ const Message = defineMessageUnion({
   ClickedExport: {},
   SucceededExportPng: {},
   FailedExportPng: { error: Schema.String },
-  GotErrorDialogMessage: { message: Dialog.Message },
-  GotThemeListboxMessage: { message: Listbox.Message },
-  GotToolRadioGroupMessage: { message: RadioGroup.Message },
-  GotGridSizeRadioGroupMessage: { message: RadioGroup.Message },
-  GotPaletteRadioGroupMessage: { message: RadioGroup.Message },
   ConfirmedGridSizeChange: {},
-  GotGridSizeConfirmDialogMessage: { message: Dialog.Message },
   CompletedSaveCanvas: {},
 })
-type Message = typeof Message.Type

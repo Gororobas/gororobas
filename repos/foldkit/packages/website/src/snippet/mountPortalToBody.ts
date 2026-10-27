@@ -15,15 +15,22 @@ const Message = defineMessageUnion({
 
 const PortalToBody = Mount.define('PortalToBody', {
   messages: [Message.CompletedPortalToBody],
-  execute: ({ element }) =>
-    Effect.gen(function* () {
-      yield* Effect.acquireRelease(
-        Effect.sync(() => document.body.appendChild(element)),
-        () => Effect.sync(() => element.remove()),
-      )
-      return Message.CompletedPortalToBody()
-    }),
+  handler: function* () {
+    return ({ element }) =>
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(
+          Effect.sync(() => document.body.appendChild(element)),
+          () => Effect.sync(() => element.remove()),
+        )
+        return Message.CompletedPortalToBody()
+      })
+  },
 })
 
-const overlayView = (h: HtmlBuilder<Message>): Html =>
+const overlayView = (
+  h: HtmlBuilder<
+    typeof Message.Type,
+    Mount.RequirementsOf<typeof PortalToBody>
+  >,
+): Html =>
   h.div([h.Class('fixed inset-0 bg-black/50'), h.OnMount(PortalToBody())])

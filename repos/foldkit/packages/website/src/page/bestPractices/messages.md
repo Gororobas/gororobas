@@ -12,7 +12,10 @@ Common prefixes make the source of a fact visible:
 | `Updated*`             | An input value changed.                                   | `UpdatedSearchInput`        |
 | `Succeeded*`/`Failed*` | A Command completed with a meaningful success or failure. | `SucceededFetchUser`        |
 | `Completed*`           | Any other Command result.                                 | `CompletedFocusSearchInput` |
-| `Got*`                 | A parent received a child Submodel result.                | `GotSearchMessage`          |
+
+Composition reserves and derives `Got<Placement>Message` tags for child Block
+delivery. Application authors do not declare those variants in the local
+`Message` union.
 
 Avoid imperative names such as `SetCartItems`, `UpdateSearchText`, and `MutateUserState`. Those names prescribe a transition before update has seen the current Model. A fact leaves the decision where it belongs: in update.
 
@@ -22,7 +25,7 @@ For an infallible Command, add `Completed` to the Command name. `FocusSearchInpu
 
 ### Naming the Command
 
-Name the Command for what its `execute` body does, not the later Model transition. A timer that only waits before update begins a dismissal is `WaitBeforeDismissal`, not `DismissAfter`. Its result is `CompletedWaitBeforeDismissal`.
+Name the Command for what its handler does, not the later Model transition. A timer that only waits before update begins a dismissal is `WaitBeforeDismissal`, not `DismissAfter`. Its result is `CompletedWaitBeforeDismissal`.
 
 A payload does not change the rule. `DetermineStartTime` produces `CompletedDetermineStartTime({ startTime })`, and `GenerateCardId` produces `CompletedGenerateCardId({ cardId })`. Names such as `DeterminedStartTime` hide the Command-to-Message pair.
 

@@ -1,9 +1,9 @@
 import { Command, given, message, model, story } from 'foldkit/story'
 import { describe, expect, test } from 'vitest'
 
-import { Message, type Model, update } from './main'
+import { Message, type Model, update } from './application'
 
-const initialModel: Model = {
+const initialModel: typeof Model.Type = {
   content: 'https://foldkit.dev',
   fillColor: '#1e1b4b',
   backgroundColor: '#fef3c7',

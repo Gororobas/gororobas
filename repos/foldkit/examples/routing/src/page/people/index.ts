@@ -1,0 +1,1 @@
+export { PeopleBlock } from './block'

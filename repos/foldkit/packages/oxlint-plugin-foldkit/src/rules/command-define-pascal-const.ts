@@ -1,4 +1,4 @@
-import { Effect, Option } from 'effect'
+import { Array, Effect, Option } from 'effect'
 import {
   AST,
   Diagnostic,
@@ -10,12 +10,14 @@ import {
 
 import {
   indexReferences,
+  isOwnedDefinitionCall,
+  firstCommandNameArgument,
   isCallExpression,
   isIdentifier,
-  isStringLiteral,
   isVariableDeclaration,
   isVariableDeclarator,
   resolveFoldkitApiPath,
+  staticMemberPath,
 } from '../guards.ts'
 
 const PASCAL_CASE_NAME = /^[A-Z][A-Za-z0-9]*$/
@@ -45,6 +47,10 @@ const isCommandDefineCall = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
 ): boolean => {
+  if (isOwnedDefinitionCall(node, 'makeCommand', references)) {
+    return true
+  }
+
   if (references === undefined) {
     return AST.isCallOf(node, 'Command', 'define')
   }
@@ -73,48 +79,64 @@ const headCommandDefineCall = (
   return headCommandDefineCall(node.callee, references)
 }
 
-const missingLiteralNameMessage =
-  "Command.define needs a literal string name as its first argument. The name is the Command's identity and cannot be computed."
+const commandApiLabel = (node: ESTree.CallExpression): string =>
+  Option.match(staticMemberPath(node.callee), {
+    onNone: () => 'Command.define',
+    onSome: path => {
+      const method = Option.getOrElse(Array.last(path.members), () => 'define')
+      return `${path.root.name}.${method}`
+    },
+  })
 
-const nonPascalCaseMessage = (name: string): string =>
-  `Command.define('${name}', ...) must use a PascalCase name, like FetchWeather or FocusInput.`
+const missingLiteralNameMessage = (apiLabel: string): string =>
+  `${apiLabel} needs a literal string name as its first argument. The name is the Command's identity and cannot be computed.`
 
-const notAssignedMessage = (name: string): string =>
-  `Command.define('${name}', ...) must be assigned to a PascalCase const, never inlined in a pipe or expression. Write const ${name} = Command.define('${name}', ...).`
+const nonPascalCaseMessage = (apiLabel: string, name: string): string =>
+  `${apiLabel}('${name}', ...) must use a PascalCase name, like FetchWeather or FocusInput.`
 
-const mismatchedConstMessage = (name: string, actualName: string): string =>
-  `Command.define('${name}', ...) should be assigned to a const named ${name}, not ${actualName}. The const name mirrors the Command identity.`
+const notAssignedMessage = (apiLabel: string, name: string): string =>
+  `${apiLabel}('${name}', ...) must be assigned to a PascalCase const, never inlined in a pipe or expression. Write const ${name} = ${apiLabel}('${name}', ...).`
 
-const notConstMessage = (name: string): string =>
-  `Command.define('${name}', ...) must be assigned to a const, not let or var. Write const ${name} = Command.define('${name}', ...).`
+const mismatchedConstMessage = (
+  apiLabel: string,
+  name: string,
+  actualName: string,
+): string =>
+  `${apiLabel}('${name}', ...) should be assigned to a const named ${name}, not ${actualName}. The const name mirrors the Command identity.`
+
+const notConstMessage = (apiLabel: string, name: string): string =>
+  `${apiLabel}('${name}', ...) must be assigned to a const, not let or var. Write const ${name} = ${apiLabel}('${name}', ...).`
 
 const diagnosticMessage = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
 ): Option.Option<string> => {
-  const [firstArgument] = node.arguments
-  if (!isStringLiteral(firstArgument)) {
-    return Option.some(missingLiteralNameMessage)
+  const apiLabel = commandApiLabel(node)
+  const nameArgument = firstCommandNameArgument(node)
+  if (nameArgument === undefined) {
+    return Option.some(missingLiteralNameMessage(apiLabel))
   }
-  const name = firstArgument.value
+  const name = nameArgument.value
   if (!PASCAL_CASE_NAME.test(name)) {
-    return Option.some(nonPascalCaseMessage(name))
+    return Option.some(nonPascalCaseMessage(apiLabel, name))
   }
   return Option.match(nearestVariableDeclarator(node.parent), {
-    onNone: () => Option.some(notAssignedMessage(name)),
+    onNone: () => Option.some(notAssignedMessage(apiLabel, name)),
     onSome: declarator => {
       const headsInitializer = Option.exists(
         headCommandDefineCall(declarator.init, references),
         call => call === node,
       )
       if (!headsInitializer) {
-        return Option.some(notAssignedMessage(name))
+        return Option.some(notAssignedMessage(apiLabel, name))
       }
       if (!isConstDeclarator(declarator)) {
-        return Option.some(notConstMessage(name))
+        return Option.some(notConstMessage(apiLabel, name))
       }
       if (isIdentifier(declarator.id) && declarator.id.name !== name) {
-        return Option.some(mismatchedConstMessage(name, declarator.id.name))
+        return Option.some(
+          mismatchedConstMessage(apiLabel, name, declarator.id.name),
+        )
       }
       return Option.none()
     },

@@ -1,17 +1,16 @@
 import { Plugin } from 'effect-oxlint'
 
 import { acquireReleaseConstructsInAcquireBody } from './rules/acquire-release-constructs-in-acquire-body.ts'
-import { commandBindingMatchesName } from './rules/command-binding-matches-name.ts'
+import { blockNameMatchesVariable } from './rules/block-name-matches-variable.ts'
 import { commandDefinePascalConst } from './rules/command-define-pascal-const.ts'
-import { gotPrefixRequiresSubmodelPayload } from './rules/got-prefix-requires-submodel-payload.ts'
-import { gotSubmodelMessageName } from './rules/got-submodel-message-name.ts'
-import { gotWrapperCarriesOnlyRouting } from './rules/got-wrapper-carries-only-routing.ts'
 import { keyedRequiredForMappedRows } from './rules/keyed-required-for-mapped-rows.ts'
 import { lazyViewStableReferences } from './rules/lazy-view-stable-references.ts'
 import { mountFactoryMustUseElement } from './rules/mount-factory-must-use-element.ts'
 import { noArrayIndexViewKeys } from './rules/no-array-index-view-keys.ts'
+import { noBindingWriteCoordination } from './rules/no-binding-write-coordination.ts'
 import { noChildMessageConstructionInRoot } from './rules/no-child-message-construction-in-root.ts'
-import { noDirectSubmodelStateUpdate } from './rules/no-direct-submodel-state-update.ts'
+import { noCompletedBlockModelInSchema } from './rules/no-completed-block-model-in-schema.ts'
+import { noDirectBlockStateUpdate } from './rules/no-direct-block-state-update.ts'
 import { noDisablingDevGuardrails } from './rules/no-disabling-dev-guardrails.ts'
 import { noDuplicateOnmountPerElement } from './rules/no-duplicate-onmount-per-element.ts'
 import { noEmptyChildrenArray } from './rules/no-empty-children-array.ts'
@@ -21,6 +20,7 @@ import { noEmptyToParentOutMessage } from './rules/no-empty-to-parent-out-messag
 import { noHandRolledCommandStruct } from './rules/no-hand-rolled-command-struct.ts'
 import { noHardcodedRouteStrings } from './rules/no-hardcoded-route-strings.ts'
 import { noImpureCallAtDecisionTime } from './rules/no-impure-call-at-decision-time.ts'
+import { noManualCompositionRouting } from './rules/no-manual-composition-routing.ts'
 import { noModuleLevelMutableState } from './rules/no-module-level-mutable-state.ts'
 import { noNonportableServerGlobals } from './rules/no-nonportable-server-globals.ts'
 import { noNoopMessage } from './rules/no-noop-message.ts'
@@ -33,10 +33,8 @@ import { preferCallableMessageConstructor } from './rules/prefer-callable-messag
 import { preferCommandMapmessage } from './rules/prefer-command-mapmessage.ts'
 import { preferEffectModuleNames } from './rules/prefer-effect-module-names.ts'
 import { preferOptionOverNullableInModel } from './rules/prefer-option-over-nullable-in-model.ts'
-import { requireFoldForChildUpdateResult } from './rules/require-fold-for-child-update-result.ts'
 import { requireRelForExternalLink } from './rules/require-rel-for-external-link.ts'
-import { selectionSubmodelFactoryAtModuleScope } from './rules/selection-submodel-factory-at-module-scope.ts'
-import { wrapChildOutputInGotMessage } from './rules/wrap-child-output-in-got-message.ts'
+import { selectionBlockFactoryAtModuleScope } from './rules/selection-block-factory-at-module-scope.ts'
 
 const basePlugin = Plugin.define({
   name: 'foldkit',
@@ -44,17 +42,16 @@ const basePlugin = Plugin.define({
   rules: {
     'acquire-release-constructs-in-acquire-body':
       acquireReleaseConstructsInAcquireBody,
-    'command-binding-matches-name': commandBindingMatchesName,
+    'block-name-matches-variable': blockNameMatchesVariable,
     'command-define-pascal-const': commandDefinePascalConst,
-    'got-prefix-requires-submodel-payload': gotPrefixRequiresSubmodelPayload,
-    'got-submodel-message-name': gotSubmodelMessageName,
-    'got-wrapper-carries-only-routing': gotWrapperCarriesOnlyRouting,
     'keyed-required-for-mapped-rows': keyedRequiredForMappedRows,
     'lazy-view-stable-references': lazyViewStableReferences,
     'mount-factory-must-use-element': mountFactoryMustUseElement,
     'no-array-index-view-keys': noArrayIndexViewKeys,
+    'no-binding-write-coordination': noBindingWriteCoordination,
     'no-child-message-construction-in-root': noChildMessageConstructionInRoot,
-    'no-direct-submodel-state-update': noDirectSubmodelStateUpdate,
+    'no-completed-block-model-in-schema': noCompletedBlockModelInSchema,
+    'no-direct-block-state-update': noDirectBlockStateUpdate,
     'no-disabling-dev-guardrails': noDisablingDevGuardrails,
     'no-duplicate-onmount-per-element': noDuplicateOnmountPerElement,
     'no-empty-children-array': noEmptyChildrenArray,
@@ -64,6 +61,7 @@ const basePlugin = Plugin.define({
     'no-hand-rolled-command-struct': noHandRolledCommandStruct,
     'no-hardcoded-route-strings': noHardcodedRouteStrings,
     'no-impure-call-at-decision-time': noImpureCallAtDecisionTime,
+    'no-manual-composition-routing': noManualCompositionRouting,
     'no-module-level-mutable-state': noModuleLevelMutableState,
     'no-nonportable-server-globals': noNonportableServerGlobals,
     'no-noop-message': noNoopMessage,
@@ -76,11 +74,9 @@ const basePlugin = Plugin.define({
     'prefer-command-mapmessage': preferCommandMapmessage,
     'prefer-effect-module-names': preferEffectModuleNames,
     'prefer-option-over-nullable-in-model': preferOptionOverNullableInModel,
-    'require-fold-for-child-update-result': requireFoldForChildUpdateResult,
     'require-rel-for-external-link': requireRelForExternalLink,
-    'selection-submodel-factory-at-module-scope':
-      selectionSubmodelFactoryAtModuleScope,
-    'wrap-child-output-in-got-message': wrapChildOutputInGotMessage,
+    'selection-block-factory-at-module-scope':
+      selectionBlockFactoryAtModuleScope,
   },
 })
 
@@ -99,6 +95,16 @@ const testFilePatterns = [
   '**/*.test.tsx',
   '**/*.spec.ts',
   '**/*.spec.tsx',
+  '**/*.fixture.ts',
+  '**/*.fixture.tsx',
+  '**/test.ts',
+  '**/test.tsx',
+  '**/test/**/*.ts',
+  '**/test/**/*.tsx',
+  '**/tests/**/*.ts',
+  '**/tests/**/*.tsx',
+  '**/fixtures/**/*.ts',
+  '**/fixtures/**/*.tsx',
 ]
 
 const serverFilePatterns = [
@@ -157,19 +163,33 @@ const testOverride = (config: Plugin.OxlintConfig): Override => ({
   ),
 })
 
-const withOverrides = (config: Plugin.OxlintConfig): OverriddenConfig => ({
-  ...config,
-  rules: {
+const withOverrides = (
+  config: Plugin.OxlintConfig,
+  additionalRules: Record<string, Plugin.RuleSeverity> = {},
+): OverriddenConfig => {
+  const rules: Record<string, Plugin.RuleSeverity> = {
     ...config.rules,
+    ...additionalRules,
     'foldkit/no-nonportable-server-globals': 'off',
-  },
-  overrides: [serverOverride, entryOverride, testOverride(config)],
-})
+  }
+
+  return {
+    ...config,
+    rules,
+    overrides: [
+      serverOverride,
+      entryOverride,
+      testOverride({ ...config, rules }),
+    ],
+  }
+}
 
 export default {
   ...basePlugin,
   configs: {
-    recommended: withOverrides(basePlugin.configs.recommended),
+    recommended: withOverrides(basePlugin.configs.recommended, {
+      'require-yield': 'off',
+    }),
     all: withOverrides(basePlugin.configs.all),
   },
 }

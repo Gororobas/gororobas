@@ -1,17 +1,29 @@
 export {
-  combine,
+  combineSteps,
   foldChild,
   foldChildInit,
   foldChildInits,
   foldChildStep,
   foldChildAt,
+  define,
+  defineStep,
   refresh,
   withOutMessage,
 } from './index.js'
 
 export type {
   Commands,
+  DefinedStep,
+  DefinedUpdate,
+  DeferredCombinedStepsPolicy,
+  DeferredResultEvidence,
+  GraphCapability,
+  RegistrationEvidence,
+  RegistrationEvidenceOf,
+  ResultRecipe,
+  RequirementsOf,
   Return,
+  ReturnWithRegistrationEvidence,
   ReturnWithOutMessage,
   Step,
   StepWithOutMessage,
@@ -33,4 +45,5 @@ export type {
   FoldAt,
   FoldAtWithOutMessage,
   FoldWithOutMessage,
+  WithRegistrationEvidence,
 } from './index.js'

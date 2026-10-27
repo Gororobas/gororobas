@@ -12,6 +12,8 @@ import {
   pipe,
 } from 'effect'
 
+import { isImeCompositionKeydown } from '../imeComposition.js'
+
 /** Whether a key binding may fire when its event comes from an editable element. */
 export type WhileTyping = 'Suppress' | 'Allow'
 
@@ -19,10 +21,16 @@ export type WhileTyping = 'Suppress' | 'Allow'
 export type KeySequence = string | Readonly<[string, string, ...Array<string>]>
 
 type BindingBase<Output> = Readonly<{
+  /** Key press or multi-press sequence that selects this binding. */
   keys: KeySequence
+  /** Maps the completing keyboard event to the emitted value. */
   mapEvent: (event: KeyboardEvent) => Output
+  /** Whether this binding participates. Defaults to `true`. */
   isEnabled?: boolean
+  /** Whether events from editable elements may match. Defaults to
+   * `'Suppress'`. */
   whileTyping?: WhileTyping
+  /** Whether each matched press calls `preventDefault()`. Defaults to `true`. */
   preventDefault?: boolean
 }>
 
@@ -37,6 +45,7 @@ export type KeyBinding<Output> = BindingBase<Output> &
   (
     | Readonly<{
         keys: string
+        /** Whether a repeated keydown may emit. Defaults to `'Ignore'`. */
         whenRepeated?: 'Ignore' | 'Allow'
       }>
     | Readonly<{
@@ -49,9 +58,16 @@ type ModKey = 'Control' | 'Meta'
 
 /** Configuration for the {@link streamFromKeyBindings} Stream helper. */
 export type StreamFromKeyBindingsConfig<Output> = Readonly<{
+  /** Bindings evaluated for every keydown. Disabled entries are ignored. */
   bindings: ReadonlyArray<KeyBinding<Output>>
+  /** Event source, or a thunk resolved when the Stream starts. Defaults to the
+   * current `document`. */
   target?: EventTarget | (() => EventTarget)
+  /** Physical modifier represented by `Mod`. Foldkit detects Meta on Apple
+   * platforms and Control elsewhere by default. */
   modKey?: ModKey
+  /** Maximum delay between presses in a sequence. Defaults to one second and
+   * must resolve to a finite positive duration. */
   sequenceTimeout?: Duration.Input
 }>
 
@@ -715,7 +731,7 @@ const handleKeyBindingEvent = <Message>(
     return
   }
 
-  if (event.defaultPrevented || event.isComposing) {
+  if (event.defaultPrevented || isImeCompositionKeydown(event)) {
     context.sequenceController.clearSequence()
     return
   }
@@ -879,8 +895,9 @@ const keyBindingStream = <Message>(
 
 /**
  * Build a Stream that maps declarative key bindings to values. The output is
- * inferred from each binding's `mapEvent` callback; `Subscription.make`
- * checks that the final Stream emits the application's Message type.
+ * inferred from each binding's `mapEvent` callback. A Block definition's
+ * `subscriptions` method checks that the final Stream emits the Block's
+ * Message type.
  *
  * A string describes one key press. Modifiers are joined with `+`:
  * `'Mod+K'`, `'Control+Shift+P'`, or `'Alt+ArrowDown'`. The supported modifiers
@@ -897,9 +914,11 @@ const keyBindingStream = <Message>(
  * Bindings are suppressed by default when the event's composed path contains
  * an `input`, `textarea`, `select`, or contenteditable element. Set
  * `whileTyping` to `'Allow'` for a binding that must work there. Events emitted
- * during IME composition are always ignored. Repeated keydowns are ignored for
- * one-press bindings unless `whenRepeated` is `'Allow'`. An event another
- * handler already canceled is ignored and clears any sequence in progress.
+ * during IME composition are always ignored, including a keydown some browsers
+ * report with `keyCode` 229 and `isComposing` false. Repeated keydowns are
+ * ignored for one-press bindings unless `whenRepeated` is `'Allow'`. An event
+ * another handler already canceled is ignored and clears any sequence in
+ * progress.
  *
  * Matched key presses call `preventDefault()` before dispatching. For a
  * sequence, that policy applies to every matched press. Set `preventDefault`
@@ -907,49 +926,66 @@ const keyBindingStream = <Message>(
  * Duplicate bindings and a complete binding that is also a sequence prefix
  * are rejected when the Stream is created.
  *
- * This helper returns a Stream, not a complete Subscription entry. Use
- * `Subscription.persistentEntry` for a fixed table. When availability depends on
- * the Model that owns the entry, build it inside `dependenciesToStream` and
- * derive each binding's `isEnabled` from the dependency record. A dependency
- * change opens a new Stream scope and resets any sequence in progress. If a
- * parent owns a condition for a lifted child, declare the table at that parent
- * or put bindings with different parent-owned lifetimes in separate child
- * entries so `Subscription.lift` can gate them individually. If the meaning
- * of a key depends on the Model, dispatch a factual key Message and decide
- * what it means in update instead of reading the Model from `mapEvent`.
+ * This helper returns a Stream, not a complete Subscription entry. Declare a
+ * named entry with no Model dependencies for a fixed table. When availability
+ * depends on the Model that owns the entry, build the Stream in the entry's
+ * handler and derive each binding's `isEnabled` from the dependency record. A
+ * dependency change opens a new Stream scope and resets any sequence in
+ * progress. If a parent owns a condition for a lifted child, declare the table
+ * at that parent or put bindings with different parent-owned lifetimes in
+ * separate child entries so each registered child's binding subscriptions can
+ * apply its own `when` gate individually.
+ * If the meaning of a key depends on the Model, dispatch a factual key Message
+ * and decide what it means in update instead of reading the Model from
+ * `mapEvent`.
  *
  * @example
  * ```typescript
- * const subscriptions = Subscription.make<Model, Message>()(entry => ({
+ * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
+ * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
  *   keyBindings: entry(
+ *     'KeyBindings',
  *     { isPaletteOpen: Schema.Boolean },
  *     {
+ *       messages: [
+ *         Message.PressedEscape,
+ *         Message.PressedSearchShortcut,
+ *         Message.PressedListShortcut,
+ *       ],
  *       modelToDependencies: model => ({
  *         isPaletteOpen: model.paletteState._tag === 'Open',
  *       }),
- *       dependenciesToStream: ({ isPaletteOpen }) =>
- *         Dom.streamFromKeyBindings<Message>({
- *           bindings: [
- *             {
- *               keys: 'Escape',
- *               isEnabled: isPaletteOpen,
- *               whileTyping: 'Allow',
- *               mapEvent: () => Message.PressedEscape(),
- *             },
- *             {
- *               keys: 'Mod+K',
- *               whileTyping: 'Allow',
- *               mapEvent: () => Message.PressedSearchShortcut(),
- *             },
- *             {
- *               keys: ['G', 'L'],
- *               mapEvent: () => Message.PressedListShortcut(),
- *             },
- *           ],
- *         }),
+ *       handler: function* () {
+ *         return ({ isPaletteOpen }) =>
+ *           Dom.streamFromKeyBindings<
+ *             | typeof Message.PressedEscape.Type
+ *             | typeof Message.PressedSearchShortcut.Type
+ *             | typeof Message.PressedListShortcut.Type
+ *           >({
+ *             bindings: [
+ *               {
+ *                 keys: 'Escape',
+ *                 isEnabled: isPaletteOpen,
+ *                 whileTyping: 'Allow',
+ *                 mapEvent: () => Message.PressedEscape(),
+ *               },
+ *               {
+ *                 keys: 'Mod+K',
+ *                 whileTyping: 'Allow',
+ *                 mapEvent: () => Message.PressedSearchShortcut(),
+ *               },
+ *               {
+ *                 keys: ['G', 'L'],
+ *                 mapEvent: () => Message.PressedListShortcut(),
+ *               },
+ *             ],
+ *           })
+ *       },
  *     },
  *   ),
  * }))
+ *
+ * const EffectsLayer = subscriptions.keyBindings.layer
  * ```
  */
 export const streamFromKeyBindings = <Output>(

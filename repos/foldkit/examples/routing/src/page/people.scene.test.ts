@@ -2,7 +2,9 @@ import { Array, String } from 'effect'
 import { expect, given, role, scene, text } from 'foldkit/scene'
 import { describe, test } from 'vitest'
 
-import { Model, SearchResults, searchPeople, update, view } from './people'
+import { Model, SearchResults, searchPeople } from './people/model'
+import { update } from './people/update'
+import { view } from './people/view'
 
 const loaded = (searchInput: string) =>
   Model.make({

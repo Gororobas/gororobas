@@ -1,26 +1,27 @@
 import { Option } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
 import * as Scene from 'foldkit/scene'
 import * as Story from 'foldkit/story'
 import { expect } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import * as Animation from '../animation/index.js'
-import { create, init, update } from './multi.js'
+import * as Animation from '../animation/block.js'
+import { init, update } from './multi.js'
 import type { Model, ViewInputs } from './multi.js'
 import {
   AnchorListbox,
-  FocusItems,
+  FocusListboxItems,
   Message,
   OutMessage,
   PortalListboxBackdrop,
-  ScrollIntoView,
+  ScrollListboxItemIntoView,
   buttonId,
+  makeView,
 } from './shared.js'
 
-const TestListbox = create<string>()
-const view = TestListbox.view
+const view = makeView<Model>({ ariaMultiSelectable: true })<string, string>()
+
+type TestHtmlBuilder = Parameters<typeof view>[2]
 
 const acknowledgeAnchor = Scene.Mount.resolve(
   AnchorListbox,
@@ -31,24 +32,27 @@ const acknowledgeBackdrop = Scene.Mount.resolve(
   Message.CompletedPortalListboxBackdrop(),
 )
 
-const givenClosed = Story.given(init({ id: 'test' }))
+const givenClosed = Story.given(init({ id: 'test' }).model)
 
 const givenOpenMulti = Story.steps(
   givenClosed,
   Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
-  Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+  Story.Command.resolve(
+    FocusListboxItems,
+    Message.CompletedFocusListboxItems(),
+  ),
 )
 
 describe('Listbox.Multi', () => {
   describe('init', () => {
     it('defaults to closed with no active item', () => {
-      expect(init({ id: 'test' })).toStrictEqual({
+      expect(init({ id: 'test' }).model).toStrictEqual({
         id: 'test',
         isOpen: false,
         isAnimated: false,
         isModal: false,
         orientation: 'Vertical',
-        animation: Animation.init({ id: 'test-listbox' }),
+        animation: Animation.init({ id: 'test-listbox' }).model,
         maybeActiveItemIndex: Option.none(),
         activationTrigger: 'Keyboard',
         searchQuery: '',
@@ -111,8 +115,8 @@ describe('Listbox.Multi', () => {
             Message.ActivatedItem({ index: 2, activationTrigger: 'Keyboard' }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Story.message(Message.SelectedItem({ item: 'apple' })),
           Story.model(model => {
@@ -124,7 +128,7 @@ describe('Listbox.Multi', () => {
   })
 
   describe('view', () => {
-    const closedModel = () => init({ id: 'test' })
+    const closedModel = () => init({ id: 'test' }).model
 
     const openMultiModel = (): Model => {
       let model!: Model
@@ -145,7 +149,7 @@ describe('Listbox.Multi', () => {
           'items' | 'itemToConfig' | 'buttonContent'
         > = {},
       ) =>
-      (model: Model, h: HtmlBuilder<Message>) =>
+      (model: Model, h: TestHtmlBuilder) =>
         view(
           model,
           {

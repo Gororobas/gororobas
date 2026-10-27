@@ -1,8 +1,7 @@
-import type { HtmlBuilder } from 'foldkit/html'
-
 import { Select } from '@foldkit/ui'
 
 import { Icon } from '../../../icon'
+import type { UiViewBuilder } from '../composition'
 import { Message } from '../message'
 import type { Model } from '../model'
 
@@ -13,9 +12,7 @@ const selectWrapperClassName = 'relative w-full'
 const chevronClassName =
   'pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-500'
 
-// VIEW
-
-export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
+export const basicDemo = (model: typeof Model.Type, h: UiViewBuilder) => {
   return [
     h.div(
       [h.Class('flex flex-col items-start gap-2 w-full max-w-md')],
@@ -66,7 +63,7 @@ export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
   ]
 }
 
-export const disabledDemo = (_model: Model, h: HtmlBuilder<Message>) => {
+export const disabledDemo = (_model: typeof Model.Type, h: UiViewBuilder) => {
   return [
     Select.view(
       {

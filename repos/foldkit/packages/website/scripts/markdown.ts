@@ -1,6 +1,6 @@
 import { Array, Option, Order, String, pipe } from 'effect'
 
-import { type AppRoute, SITE_URL } from '../src/route'
+import { type ApplicationRoute, SITE_URL } from '../src/route'
 import { type PageMetadata } from './metadata'
 
 // EXTRACTION
@@ -14,6 +14,7 @@ const isElementNode = (node: Node): node is Element =>
 export const extractMarkdownFromRenderedDocument = (
   renderedDocument: Document,
   siteUrl: string = SITE_URL,
+  options: Readonly<{ isPreservingRootRelativeLinks?: boolean }> = {},
 ): string => {
   const root = renderedDocument.querySelector('[data-pagefind-body]')
   if (root === null) {
@@ -42,7 +43,7 @@ export const extractMarkdownFromRenderedDocument = (
     if (href.length === 0) {
       return ''
     }
-    if (href.startsWith('/')) {
+    if (href.startsWith('/') && !options.isPreservingRootRelativeLinks) {
       return `${siteUrl}${href}`
     }
     return href
@@ -306,14 +307,12 @@ export const urlPathToMarkdownPath = (urlPath: string): string =>
 
 // SKIP
 
-const SKIPPED_ROUTE_TAGS: ReadonlySet<AppRoute['_tag']> = new Set([
-  'Playground',
-  'NotFound',
-  'Newsletter',
-])
+const SKIPPED_ROUTE_TAGS: ReadonlySet<(typeof ApplicationRoute.Type)['_tag']> =
+  new Set(['Playground', 'NotFound', 'Newsletter'])
 
-export const shouldExportMarkdown = (route: AppRoute): boolean =>
-  !SKIPPED_ROUTE_TAGS.has(route._tag)
+export const shouldExportMarkdown = (
+  route: typeof ApplicationRoute.Type,
+): boolean => !SKIPPED_ROUTE_TAGS.has(route._tag)
 
 // INDEX
 

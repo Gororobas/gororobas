@@ -1,22 +1,27 @@
 import {
   Array,
   Effect,
+  Fiber,
   Option,
   PubSub,
+  Result,
   Schema,
-  type Scope,
+  Scope,
   Stream,
   SubscriptionRef,
 } from 'effect'
 
+import { extractBlockInfo, isTagged } from '../devTools/blockPath.js'
 import {
   type CommandRecord,
   type DevToolsStore,
   type MountRecord,
   createDevToolsStore,
 } from '../devTools/store.js'
-import { extractSubmodelInfo, isTagged } from '../devTools/submodelPath.js'
-import { startWebSocketBridge } from '../devTools/webSocketBridge.js'
+import {
+  type PrepareDispatch,
+  startWebSocketBridge,
+} from '../devTools/webSocketBridge.js'
 import {
   MountRuntime,
   MountTracker,
@@ -24,7 +29,7 @@ import {
   liveViewStateChanges,
 } from '../mount/index.js'
 import {
-  type DevToolsConfig,
+  type RuntimeDevToolsConfig,
   resolveDevToolsConfig,
   resolveDevToolsKeyframeInterval,
   resolveDevToolsMaxEntries,
@@ -82,7 +87,7 @@ export type DevToolsIntegration<Model, Message> = Readonly<{
     currentModel: Model,
     nextModel: Model,
     commands: ReadonlyArray<RecordableCommand>,
-  ) => void
+  ) => Effect.Effect<Option.Option<number>>
   recordCommandResult: (id: number, message: Message) => void
   attachRenderedMounts: () => void
 }>
@@ -93,26 +98,32 @@ const toCommandRecord = ({ id, command }: RecordableCommand): CommandRecord =>
         id,
         name: command.name,
         args: command.args,
-        maybeSubmodelPath: Option.none(),
+        maybeBlockPath: Option.none(),
       }
-    : { id, name: command.name, maybeSubmodelPath: Option.none() }
+    : { id, name: command.name, maybeBlockPath: Option.none() }
 
 /**
  * Builds the DevTools integration for one runtime from the `devTools`
- * config. `update` and `maybeFreezeModel` drive time-travel replay, and
- * `enqueueMessageEffect` is how Messages sent over the WebSocket bridge
- * reach the queue.
+ * config. `update` and `maybeFreezeModel` drive time-travel replay.
+ * `prepareDispatch` admits decoded WebSocket input and captures the queue
+ * guard that belongs to that exact admission. `provideDispatchServices`
+ * supplies application Services used by Message decoding while installation
+ * retains its active Scope for bridge finalizers.
  */
-export const makeDevToolsIntegration = <Model, Message>({
+export const makeDevToolsIntegration = <Model, Message, DispatchServices>({
   devTools,
   update,
   maybeFreezeModel,
-  enqueueMessageEffect,
+  prepareDispatch,
+  provideDispatchServices,
 }: Readonly<{
-  devTools: DevToolsConfig | undefined
+  devTools: RuntimeDevToolsConfig<DispatchServices> | undefined
   update: (model: Model, message: Message) => Readonly<{ model: Model }>
   maybeFreezeModel: (model: Model) => Model
-  enqueueMessageEffect: (message: Message) => Effect.Effect<void>
+  prepareDispatch: PrepareDispatch
+  provideDispatchServices: <A>(
+    effect: Effect.Effect<A, never, DispatchServices>,
+  ) => Effect.Effect<A>
 }>): Effect.Effect<DevToolsIntegration<Model, Message>> =>
   Effect.gen(function* () {
     const resolvedDevTools = resolveDevToolsConfig(devTools)
@@ -154,11 +165,27 @@ export const makeDevToolsIntegration = <Model, Message>({
     // stay a bare comparison.
     let devToolsStore: DevToolsStore | null = null
 
+    const prepareExternalDispatch: PrepareDispatch = message => {
+      if (isTagged(message) && excludeFromHistoryTags.has(message._tag)) {
+        return Result.fail(
+          `Message ${message._tag} is excluded from DevTools history and cannot be dispatched externally.`,
+        )
+      }
+      return prepareDispatch(message)
+    }
+
+    const mountFibers = new Set<Fiber.Fiber<void>>()
+
     const mountRuntime = MountRuntime.of({
       captureViewStateChanges: () =>
         Stream.concat(Stream.make(currentViewState), viewStateChanges).pipe(
           Stream.changes,
         ),
+      registerFiber: fiber => {
+        mountFibers.add(fiber)
+        fiber.addObserver(() => mountFibers.delete(fiber))
+      },
+      interruptFibers: Effect.suspend(() => Fiber.interruptAll(mountFibers)),
     })
 
     const isPausedNow = (): boolean =>
@@ -251,15 +278,18 @@ export const makeDevToolsIntegration = <Model, Message>({
             if (import.meta.hot) {
               const maybeMessageSchema =
                 devTools !== undefined && devTools !== false
-                  ? Option.fromNullishOr(devTools.Message)
-                  : Option.none<Schema.Codec<any, any, unknown, unknown>>()
-              yield* startWebSocketBridge(
-                store,
-                import.meta.hot,
-                /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-                message => enqueueMessageEffect(message as Message),
-                /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-                maybeMessageSchema as Option.Option<Schema.Codec<any, any>>,
+                  ? Option.fromNullishOr(devTools.dispatchSchema)
+                  : Option.none<
+                      Schema.Codec<any, any, DispatchServices, unknown>
+                    >()
+              const runtimeScope = yield* Effect.scope
+              yield* provideDispatchServices(
+                startWebSocketBridge(
+                  store,
+                  import.meta.hot,
+                  maybeMessageSchema,
+                  prepareExternalDispatch,
+                ).pipe(Effect.provideService(Scope.Scope, runtimeScope)),
               )
             }
           }),
@@ -297,21 +327,19 @@ export const makeDevToolsIntegration = <Model, Message>({
       currentModel: Model,
       nextModel: Model,
       commands: ReadonlyArray<RecordableCommand>,
-    ): void => {
-      // NOTE: store writes go through `Effect.runFork`, not
-      // `Effect.runSync`. Both complete inline when the store's state
-      // Ref is uncontended (the always case on this path), but a
-      // DevTools fiber holding the Ref's permit across a yield would
-      // make `runSync` throw and crash the app; `runFork` parks and
-      // finishes the write when the permit frees, and the Ref's FIFO
-      // permit queue preserves write order.
+    ): Effect.Effect<Option.Option<number>> => {
+      // NOTE: the runtime starts this Effect with `Effect.runFork`, not
+      // `Effect.runSync`. A DevTools fiber may hold the state Ref's permit
+      // across a yield, so the recording fiber must be able to park until
+      // the permit is free. The prepared dispatch joins that same fiber to
+      // receive the exact history index assigned by the store.
       if (devToolsStore !== null) {
         const store = devToolsStore
         /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
         const tag = (message as { _tag: string })._tag
         const isModelChanged = currentModel !== nextModel
         if (!excludeFromHistoryTags.has(tag)) {
-          Effect.runFork(
+          return Effect.map(
             store.recordMessage(
               /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
               message as Message & { _tag: string },
@@ -320,11 +348,13 @@ export const makeDevToolsIntegration = <Model, Message>({
               Array.map(commands, toCommandRecord),
               isModelChanged,
             ),
+            Option.some,
           )
         } else if (isModelChanged) {
-          Effect.runFork(store.updateLatestModel(nextModel))
+          return Effect.as(store.updateLatestModel(nextModel), Option.none())
         }
       }
+      return Effect.succeed(Option.none())
     }
 
     const recordCommandResult = (id: number, message: Message): void => {
@@ -332,11 +362,11 @@ export const makeDevToolsIntegration = <Model, Message>({
         return
       }
 
-      const submodelPath = isTagged(message)
-        ? extractSubmodelInfo(message._tag, message).submodelPath
+      const blockPath = isTagged(message)
+        ? extractBlockInfo(message._tag, message).blockPath
         : []
 
-      Effect.runFork(devToolsStore.recordResolvedCommand(id, submodelPath))
+      Effect.runFork(devToolsStore.recordResolvedCommand(id, blockPath))
     }
 
     const resumeDevTools = Effect.suspend(() =>

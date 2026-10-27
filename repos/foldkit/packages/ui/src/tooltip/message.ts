@@ -5,6 +5,7 @@ import { defineMessageUnion } from 'foldkit/message'
 
 /** Union of all messages the tooltip component can produce. */
 export const Message = defineMessageUnion({
+  InformedOfShowDelayChange: { showDelay: Schema.DurationFromMillis },
   EnteredTrigger: {},
   LeftTrigger: {},
   FocusedTrigger: {},

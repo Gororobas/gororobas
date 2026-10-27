@@ -1,20 +1,12 @@
 export {
-  init,
   create,
-  Model,
-  Message,
-  OutMessage,
-  type Selected,
-  type SelectedOption,
-  type FocusedOption,
-  FocusOption,
   Orientation,
+  type InitConfig,
+  type ViewInputs,
+  type RenderInfo,
+  type OptionInfo,
+  type Completed,
 } from './index.js'
 
-export type {
-  InitConfig,
-  ViewInputs,
-  RenderInfo,
-  OptionInfo,
-  Bundle,
-} from './index.js'
+/** Original RadioGroup Command Definitions for Story and Scene test resolution. */
+export * as test from './test.js'

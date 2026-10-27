@@ -3,14 +3,10 @@ import { Interruptible } from 'foldkit/command'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { describe, expect, test } from 'vitest'
 
-import {
-  CancelUploadFile,
-  FAKE_FILES,
-  Message,
-  UploadFile,
-  initialModel,
-  update,
-} from './main'
+import { CancelUploadFile, UploadFile } from './command'
+import { initialModel } from './init'
+import { Message } from './message'
+import { FAKE_FILES, update } from './update'
 
 const firstFile = Array.headNonEmpty(FAKE_FILES)
 const secondFile = Option.getOrThrow(Array.get(FAKE_FILES, 1))
@@ -37,7 +33,7 @@ describe('update', () => {
       ),
       Command.resolve(
         UploadFile({ uploadId: 0, sizeMegabytes: firstFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 0 }),
+        Message.CompletedUploadFile({ uploadId: 0 }),
       ),
       model(model => {
         expect(Array.map(model.uploads, upload => upload.status)).toEqual([
@@ -76,7 +72,7 @@ describe('update', () => {
       message(Message.ClickedStartUpload()),
       Command.resolve(
         UploadFile({ uploadId: 0, sizeMegabytes: firstFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 0 }),
+        Message.CompletedUploadFile({ uploadId: 0 }),
       ),
       message(Message.ClickedCancelUpload({ uploadId: 0 })),
       Command.resolve(
@@ -113,7 +109,7 @@ describe('update', () => {
       ),
       Command.resolve(
         UploadFile({ uploadId: 1, sizeMegabytes: secondFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 1 }),
+        Message.CompletedUploadFile({ uploadId: 1 }),
       ),
       model(model => {
         expect(Array.map(model.uploads, upload => upload.status)).toEqual([
@@ -140,7 +136,7 @@ describe('update', () => {
       ),
       Command.resolve(
         UploadFile({ uploadId: 1, sizeMegabytes: secondFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 1 }),
+        Message.CompletedUploadFile({ uploadId: 1 }),
       ),
       model(model => {
         expect(Array.map(model.uploads, upload => upload.status)).toEqual([
@@ -175,7 +171,7 @@ describe('update', () => {
       ),
       Command.resolve(
         UploadFile({ uploadId: 0, sizeMegabytes: firstFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 0 }),
+        Message.CompletedUploadFile({ uploadId: 0 }),
       ),
       model(model => {
         expect(Array.map(model.uploads, upload => upload.status)).toEqual([
@@ -194,7 +190,7 @@ describe('update', () => {
       message(Message.ClickedStartUpload()),
       Command.resolve(
         UploadFile({ uploadId: 1, sizeMegabytes: secondFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 1 }),
+        Message.CompletedUploadFile({ uploadId: 1 }),
       ),
       message(Message.ClickedCancelAllUploads()),
       Command.resolve(

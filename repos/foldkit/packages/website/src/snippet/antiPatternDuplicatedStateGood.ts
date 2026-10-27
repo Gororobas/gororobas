@@ -8,9 +8,8 @@ const Model = Schema.Struct({
   items: Schema.Array(Item),
   query: Schema.String,
 })
-type Model = typeof Model.Type
 
-const visibleItems = (model: Model) =>
+const visibleItems = (model: typeof Model.Type) =>
   model.items.filter(item =>
     item.name.toLowerCase().includes(model.query.toLowerCase()),
   )

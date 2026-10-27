@@ -1,33 +1,29 @@
 import { Effect, Schema, pipe } from 'effect'
-import { Command, Navigation, Route, type Update, Url } from 'foldkit'
+import { Block, Navigation, Route, Url } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineRouteUnion, int, literal, slash } from 'foldkit/route'
-import { modifyFields } from 'foldkit/struct'
 
 // ROUTE
 
-const AppRoute = defineRouteUnion({
+const ApplicationRoute = defineRouteUnion({
   Home: {},
   Person: { personId: Schema.Number },
   NotFound: { path: Schema.String },
 })
-type AppRoute = typeof AppRoute.Type
 
-const homeRouter = pipe(Route.root, Route.mapTo(AppRoute.Home))
+const homeRouter = pipe(Route.root, Route.mapTo(ApplicationRoute.Home))
 const personRouter = pipe(
   literal('people'),
   slash(int('personId')),
-  Route.mapTo(AppRoute.Person),
+  Route.mapTo(ApplicationRoute.Person),
 )
 const routeParser = Route.oneOf(personRouter, homeRouter)
-const urlToAppRoute = Route.parseUrlWithFallback(routeParser, AppRoute.NotFound)
+const urlToApplicationRoute = Route.parseUrlWithFallback(
+  routeParser,
+  ApplicationRoute.NotFound,
+)
 
-// MODEL
-
-const Model = Schema.Struct({ route: AppRoute })
-type Model = typeof Model.Type
-
-// MESSAGE
+const Model = Schema.Struct({ route: ApplicationRoute })
 
 const Message = defineMessageUnion({
   CompletedNavigateInternal: {},
@@ -35,50 +31,53 @@ const Message = defineMessageUnion({
   ClickedLink: { request: Navigation.UrlRequest },
   ChangedUrl: { url: Url.Url },
 })
-type Message = typeof Message.Type
 
-// COMMAND
+const ApplicationDefinition = Block.makeDefinition('Application', {
+  Model,
+  Message,
+})
 
-const NavigateInternal = Command.define('NavigateInternal', {
+const { makeFieldsStep, makeNoopStep } = ApplicationDefinition
+
+const ApplicationComposition = ApplicationDefinition.makeComposition()
+
+const NavigateInternal = ApplicationDefinition.makeCommand('NavigateInternal', {
   args: { url: Schema.String },
   messages: [Message.CompletedNavigateInternal],
-  execute: ({ url }) =>
-    Navigation.pushUrl(url).pipe(
-      Effect.as(Message.CompletedNavigateInternal()),
-    ),
+  handler: function* () {
+    return ({ url }) =>
+      Navigation.pushUrl(url).pipe(
+        Effect.as(Message.CompletedNavigateInternal()),
+      )
+  },
 })
 
-const LoadExternal = Command.define('LoadExternal', {
+const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
   args: { href: Schema.String },
   messages: [Message.CompletedLoadExternal],
-  execute: ({ href }) =>
-    Navigation.load(href).pipe(Effect.as(Message.CompletedLoadExternal())),
+  handler: function* () {
+    return ({ href }) =>
+      Navigation.load(href).pipe(Effect.as(Message.CompletedLoadExternal()))
+  },
 })
 
-// UPDATE
+const update = ApplicationComposition.makeUpdate({
+  CompletedNavigateInternal: makeNoopStep(),
+  CompletedLoadExternal: makeNoopStep(),
 
-type UpdateReturn = Update.Return<Model, Message>
-
-const update = (model: Model, message: Message) =>
-  Message.match<UpdateReturn>(message, {
-    CompletedNavigateInternal: () => ({ model }),
-    CompletedLoadExternal: () => ({ model }),
-
-    ClickedLink: ({ request }) =>
-      Navigation.UrlRequest.match<UpdateReturn>(request, {
-        Internal: ({ url }) => ({
-          model,
-          commands: [NavigateInternal({ url: Url.toString(url) })],
-        }),
-        External: ({ href }) => ({
-          model,
-          commands: [LoadExternal({ href })],
-        }),
+  ClickedLink: (model, { request }) =>
+    Navigation.UrlRequest.match(request, {
+      Internal: ({ url }) => ({
+        model,
+        commands: [NavigateInternal({ url: Url.toString(url) })],
       }),
-
-    ChangedUrl: ({ url }) => ({
-      model: modifyFields(model, {
-        route: () => urlToAppRoute(url),
+      External: ({ href }) => ({
+        model,
+        commands: [LoadExternal({ href })],
       }),
     }),
-  })
+
+  ChangedUrl: makeFieldsStep.fromMessage(({ url }) => ({
+    route: () => urlToApplicationRoute(url),
+  })),
+})

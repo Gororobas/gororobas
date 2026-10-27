@@ -2,31 +2,46 @@ import path from 'path'
 
 /** Vite resolve aliases that point foldkit subpath imports at the local source. */
 export const foldkitAliases = (dirname: string) => ({
+  'foldkit/program': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/runtime/programPublic',
+  ),
   'foldkit/asyncData': path.resolve(
     dirname,
     '../../packages/foldkit/src/asyncData/public',
   ),
+  'foldkit/brand': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/brand/public',
+  ),
   'foldkit/calendar': path.resolve(
     dirname,
-    '../../packages/foldkit/src/calendar',
+    '../../packages/foldkit/src/calendar/public',
   ),
-  'foldkit/canvas': path.resolve(dirname, '../../packages/foldkit/src/canvas'),
+  'foldkit/canvas': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/canvas/public',
+  ),
   'foldkit/command': path.resolve(
     dirname,
-    '../../packages/foldkit/src/command',
+    '../../packages/foldkit/src/command/public',
   ),
   'foldkit/customElement': path.resolve(
     dirname,
-    '../../packages/foldkit/src/customElement',
+    '../../packages/foldkit/src/customElement/public',
+  ),
+  'foldkit/devtools-protocol': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/devTools/public',
   ),
   'foldkit/devtools-host': path.resolve(
     dirname,
     '../../packages/foldkit/src/devTools/host',
   ),
-  'foldkit/dom': path.resolve(dirname, '../../packages/foldkit/src/dom'),
+  'foldkit/dom': path.resolve(dirname, '../../packages/foldkit/src/dom/public'),
   'foldkit/experimental/machine': path.resolve(
     dirname,
-    '../../packages/foldkit/src/experimental/machine',
+    '../../packages/foldkit/src/experimental/machine/public',
   ),
   'foldkit/experimental/query': path.resolve(
     dirname,
@@ -38,48 +53,91 @@ export const foldkitAliases = (dirname: string) => ({
   ),
   'foldkit/experimental': path.resolve(
     dirname,
-    '../../packages/foldkit/src/experimental',
+    '../../packages/foldkit/src/experimental/public',
   ),
   'foldkit/fieldValidation': path.resolve(
     dirname,
-    '../../packages/foldkit/src/fieldValidation',
+    '../../packages/foldkit/src/fieldValidation/public',
   ),
-  'foldkit/file': path.resolve(dirname, '../../packages/foldkit/src/file'),
-  'foldkit/html': path.resolve(dirname, '../../packages/foldkit/src/html'),
-  'foldkit/http': path.resolve(dirname, '../../packages/foldkit/src/http'),
+  'foldkit/file': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/file/public',
+  ),
+  'foldkit/html': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/html/public',
+  ),
+  'foldkit/http': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/http/public',
+  ),
   'foldkit/managedResource': path.resolve(
     dirname,
-    '../../packages/foldkit/src/managedResource',
+    '../../packages/foldkit/src/managedResource/public',
+  ),
+  'foldkit/bindingInit': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/block/bindingInit',
+  ),
+  'foldkit/variantBinding': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/block/variantBinding',
+  ),
+  'foldkit/mapBinding': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/block/mapBinding',
   ),
   'foldkit/message': path.resolve(
     dirname,
-    '../../packages/foldkit/src/message',
+    '../../packages/foldkit/src/message/public',
   ),
-  'foldkit/mount': path.resolve(dirname, '../../packages/foldkit/src/mount'),
+  'foldkit/model-preservation': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/runtime/modelPreservationPublic',
+  ),
+  'foldkit/mount': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/mount/public',
+  ),
   'foldkit/navigation': path.resolve(
     dirname,
-    '../../packages/foldkit/src/navigation',
+    '../../packages/foldkit/src/navigation/public',
   ),
-  'foldkit/port': path.resolve(dirname, '../../packages/foldkit/src/port'),
-  'foldkit/render': path.resolve(dirname, '../../packages/foldkit/src/render'),
-  'foldkit/route': path.resolve(dirname, '../../packages/foldkit/src/route'),
+  'foldkit/port': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/port/public',
+  ),
+  'foldkit/render': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/render/public',
+  ),
+  'foldkit/route': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/route/public',
+  ),
   'foldkit/runtime': path.resolve(
     dirname,
-    '../../packages/foldkit/src/runtime',
+    '../../packages/foldkit/src/runtime/public',
   ),
   'foldkit/scene': path.resolve(
     dirname,
-    '../../packages/foldkit/src/test/scene',
+    '../../packages/foldkit/src/scene/public',
   ),
-  'foldkit/schema': path.resolve(dirname, '../../packages/foldkit/src/schema'),
+  'foldkit/schema': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/schema/public',
+  ),
   'foldkit/story': path.resolve(
     dirname,
-    '../../packages/foldkit/src/test/story',
+    '../../packages/foldkit/src/story/public',
   ),
-  'foldkit/struct': path.resolve(dirname, '../../packages/foldkit/src/struct'),
-  'foldkit/submodel': path.resolve(
+  'foldkit/struct': path.resolve(
     dirname,
-    '../../packages/foldkit/src/submodel/public',
+    '../../packages/foldkit/src/struct/public',
+  ),
+  'foldkit/block': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/block/public',
   ),
   'foldkit/subscription': path.resolve(
     dirname,
@@ -89,11 +147,15 @@ export const foldkitAliases = (dirname: string) => ({
     dirname,
     '../../packages/foldkit/src/test/vitest',
   ),
+  'foldkit/test': path.resolve(
+    dirname,
+    '../../packages/foldkit/src/test/public',
+  ),
   'foldkit/update': path.resolve(
     dirname,
     '../../packages/foldkit/src/update/public',
   ),
-  'foldkit/url': path.resolve(dirname, '../../packages/foldkit/src/url'),
+  'foldkit/url': path.resolve(dirname, '../../packages/foldkit/src/url/public'),
   '@foldkit/ui/anchor': path.resolve(
     dirname,
     '../../packages/ui/src/anchor/public',

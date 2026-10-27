@@ -1,29 +1,16 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-import {
-  Message,
-  Model,
-  handleSlow,
-  init,
-  subscriptions,
-  update,
-  view,
-} from './main'
+import { ApplicationBlock } from './block'
+import { handleSlow } from './subscription'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
-  subscriptions,
+const program = Program.make({
+  block: ApplicationBlock,
   container: document.getElementById('root'),
   slow: {
     show: 'Always',
     onSlow: handleSlow,
   },
-  devTools: {
-    Message,
-  },
+  devTools: { dispatch: true },
 })
 
-Runtime.run(application)
+Runtime.run(program)

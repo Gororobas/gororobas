@@ -10,7 +10,7 @@ Pin the exact version you deploy and test upgrades against your own SSR or SSG h
 The lowest-risk use today is statically generated public content, which is how this site uses it. Please try it and report what breaks.
 :::
 
-Foldkit renders on the server with the same program the browser runs. `renderToString` resolves `init`, runs the pure view, and returns HTML. `Runtime.hydrate` then adopts matching HTML in place and rebuilds mismatches. The same init, view, update, and Model work whether the HTML was rendered during a build (SSG) or while handling a request (SSR).
+Foldkit renders on the server from the same completed root Block the browser Program uses. `renderToString` resolves `init`, runs the pure view, and returns HTML. `Runtime.hydrate` then adopts matching HTML in place and rebuilds mismatches. The same init, view, update, and Model work whether the HTML was rendered during a build (SSG) or while handling a request (SSR).
 
 ### SSG and SSR
 
@@ -56,13 +56,13 @@ For SSG, the build script takes the host's place. It writes the response to a fi
 
 A server entry connects the application to its host. It exports a `renderPage` function that accepts a Web `Request` and returns a `Promise<EntryResult>`:
 
-::Snippet{name="serverRenderingServerEntry" label="Server entry"}
+::Snippet{name="serverRenderingBlockServerEntry" label="Server entry"}
 
 The outer `Promise` keeps `renderPage` callable from Vite, build scripts, serverless functions, and the emitted `fetch` handler. Those hosts do not need to provide the application's Effect requirements. The entry uses Effect internally; the host sees only the `Promise`.
 
 ### Entry file placement
 
-The entry is application code. Keep it in `src/` (`src/entry.server.ts` in the examples), not in the host's directory. It imports the application's `init`, `view`, and `Flags`, so the server build must compile it with those application imports.
+The entry is application code. Keep it in `src/` (`src/entry.server.ts` in the examples), not in the host's directory. It imports `ApplicationBlock` and, when declared, `Flags`, so the server build must compile those application imports.
 
 An SSR build also requires `ssr.clientEntry` next to `ssr.serverEntry`, such as `'/src/entry.ts'`. The client entry names the browser script the generated document loads. Import the application's stylesheets from that script so Vite includes them in the browser build.
 
@@ -88,9 +88,9 @@ A delivery host runs the built `fetch` handler. It does not import the applicati
 
 #### Application config on the server
 
-`renderToString` accepts the server-relevant subset of a `makeApplication` config. That subset contains `init` and `view`, plus `Flags` and `routing` when the application declares them. A full application config satisfies the subset, so an entry can pass it unchanged.
+`renderToString` takes three arguments: `ApplicationBlock`, server host configuration, and render options. The server host configuration contains only `Flags` and routing declarations when the Block's init requires them. Render options contain request startup inputs such as `flags` and `url`. The browser entry gives that same `ApplicationBlock` to `Program.make` with its DOM container and browser host options.
 
-The `container`, `update`, `subscriptions`, and `managedResources` fields do not participate in server rendering. The server runs the view once over the Model returned by `init`. There is no DOM to attach to and no Message to dispatch.
+The server renderer has no container. It runs the checked root Block's `init` and view once over the resulting Model. It does not start update, Commands, Subscriptions, ManagedResources, Mount handlers, or the handler graph. There is no DOM to attach to and no Message to dispatch.
 
 #### Request URL
 
@@ -169,7 +169,7 @@ The root stamp must have a nonempty id and name the document's single stamped ro
 
 #### Document ownership
 
-A page-owning `makeApplication` controls the document title, language, text direction, canonical URL, and Open Graph URL. It also installs document-wide navigation listeners. With two applications, the last render would own the metadata and the first listener would handle every link. Render one application per page.
+A page-owning `ApplicationBlock` has a `Document` view that controls the document title, language, text direction, canonical URL, and Open Graph URL in both server rendering and a browser Program created by `Program.make`. The browser Program also installs document-wide navigation listeners. With two applications, the last render would own the metadata and the first listener would handle every link. Render one application per page.
 
 #### Static body output
 
@@ -281,7 +281,7 @@ Flags create the same risk. A payload belongs to the deployment that rendered it
 
 #### Generated and explicit build ids
 
-`@foldkit/vite-plugin` generates one opaque id when a Vite app build coordinates the client and server artifacts. It compiles that id into Foldkit in both artifacts, so `Runtime.hydrate(application)` and `Server.renderToString(config, options)` use it without application forwarding.
+`@foldkit/vite-plugin` generates one opaque id when a Vite app build coordinates the client and server artifacts. It compiles that id into Foldkit in both artifacts, so `Runtime.hydrate(program)` and `Server.renderToString(ApplicationBlock, config, options)` use it without application forwarding.
 
 Set an explicit override only when the artifacts build in separate jobs, or when the id should name a deployment in another system. Use the plugin's `buildId` option or the `FOLDKIT_BUILD_ID` environment variable, and give every job the same value:
 
@@ -489,7 +489,7 @@ Every refusal stops before `init` runs. No Command, Subscription, or ManagedReso
 
 For a build-id mismatch, Foldkit compares ids before accessing the Flags payload text, parsing its JSON, or Schema-decoding it. Stale Flags belong to the old deployment. Decoding them first would pass those values to current code before Foldkit noticed the mismatch. Flags-related refusals inspect the payload only far enough to identify the reported error.
 
-Every refusal reports a `[foldkit]` error that names the cause. Failures found while `makeApplication` resolves the container and stamped root throw immediately. Failures found after `Runtime.hydrate` starts use Effect's error reporting. Both reach the console and error monitoring. Neither provides an application hook because startup never reaches a Model.
+Every refusal reports a `[foldkit]` error that names the cause. Failures found while `Program.make` resolves the container and stamped root throw immediately. Failures found after `Runtime.hydrate` starts use Effect's error reporting. Both reach the console and error monitoring. Neither provides an application hook because startup never reaches a Model.
 
 #### Reasons for refusal
 
@@ -502,7 +502,7 @@ Build skew is one reason to refuse. The same policy also covers:
 
 #### Missing container without a handoff
 
-One missing-container case is different. If `makeApplication` cannot find its container and the document contains no `data-foldkit-app`, `data-foldkit-build`, or `data-foldkit-flags`, then no server rendered the page. The application's `<div id="root">` is simply absent, usually because of a typo or because the script ran too early. Foldkit reports the setup error and leaves the page alone.
+One missing-container case is different. If `Program.make` cannot find its container and the document contains no `data-foldkit-app`, `data-foldkit-build`, or `data-foldkit-flags`, then no server rendered the page. The application's `<div id="root">` is simply absent, usually because of a typo or because the script ran too early. Foldkit reports the setup error and leaves the page alone.
 
 Every other refusal contains the page. This includes calling `Runtime.hydrate` with an existing container that has no stamped root, even on a page that was never server-rendered. Calling `hydrate` is the explicit claim that a handoff exists. Use `Runtime.run` for a fresh client boot.
 
@@ -577,7 +577,7 @@ Components that measure the DOM before deciding what to render, such as `Ui.Virt
 
 #### Supported applications and markup
 
-`makeElement` and `embed` applications do not hydrate. Server rendering supports page-owning `makeApplication` programs.
+`Program.makeElement` and `Runtime.embed` Programs do not hydrate. Server rendering accepts a root Block with a `Document` view, the same `ApplicationBlock` used by `Program.make` in the browser.
 
 Ordinary element children under `template` cannot be server-rendered because browsers place them in a separate content fragment that the differ does not walk. Element children under `noscript` become raw text while scripting is enabled and cannot hydrate as the declared nodes. Keep template markup in the HTML shell. Use plain text, trusted `h.InnerHTML`, or shell markup for a noscript fallback.
 

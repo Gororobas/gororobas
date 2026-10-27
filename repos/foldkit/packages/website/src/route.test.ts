@@ -15,6 +15,11 @@ const PARAMETERIZED_ROUTERS: ReadonlySet<string> = new Set([
   'blogPostRouter',
 ])
 
+const PREVIEW_ROUTERS = new Set([
+  'previewMigrationRouter',
+  'previewUpgradeRouter',
+])
+
 const expectedTag = (routerName: string): string => {
   const base = routerName.slice(0, -'Router'.length)
   return base.charAt(0).toUpperCase() + base.slice(1)
@@ -28,6 +33,7 @@ const parameterlessRouters: ReadonlyArray<readonly [string, string]> =
     if (
       !name.endsWith('Router') ||
       PARAMETERIZED_ROUTERS.has(name) ||
+      (!Route.previewDocumentationEnabled && PREVIEW_ROUTERS.has(name)) ||
       !isUrlBuilder(value)
     ) {
       return []
@@ -40,7 +46,7 @@ describe('route table', () => {
   test.each(parameterlessRouters)(
     '%s builds a URL that parses back to its own route',
     (name, path) => {
-      const parsed = Route.urlToAppRoute(
+      const parsed = Route.urlToApplicationRoute(
         Option.getOrThrow(urlFromString(`${SITE}${path}`)),
       )
       expect(parsed._tag).toBe(expectedTag(name))
@@ -53,17 +59,20 @@ describe('route canonical URLs', () => {
     '%s canonical round-trips through the route parser',
     (name, path) => {
       const canonical = Route.routeToCanonicalUrl(
-        Route.urlToAppRoute(Option.getOrThrow(urlFromString(`${SITE}${path}`))),
+        Route.urlToApplicationRoute(
+          Option.getOrThrow(urlFromString(`${SITE}${path}`)),
+        ),
       )
       expect(canonical).toBe(`${SITE}${path}`)
       expect(
-        Route.urlToAppRoute(Option.getOrThrow(urlFromString(canonical)))._tag,
+        Route.urlToApplicationRoute(Option.getOrThrow(urlFromString(canonical)))
+          ._tag,
       ).toBe(expectedTag(name))
     },
   )
 
   test('excludes query parameters from canonical URLs', () => {
-    const route = Route.urlToAppRoute(
+    const route = Route.urlToApplicationRoute(
       Option.getOrThrow(
         urlFromString(`${SITE}/blog/some-post?utm_source=newsletter`),
       ),
@@ -72,18 +81,31 @@ describe('route canonical URLs', () => {
       'https://foldkit.dev/blog/some-post',
     )
   })
+
+  test('parses the previous Layers URL and builds the canonical URL', () => {
+    for (const path of ['/core/resources', '/core/resources/']) {
+      const route = Route.urlToApplicationRoute(
+        Option.getOrThrow(urlFromString(`${SITE}${path}`)),
+      )
+
+      expect(route).toEqual(Route.ApplicationRoute.CoreLayers())
+      expect(Route.routeToCanonicalUrl(route)).toBe(`${SITE}/core/layers`)
+    }
+  })
 })
 
 describe('blog routes', () => {
   test('parses /blog/<slug> into BlogPost', () => {
-    const parsed = Route.urlToAppRoute(
+    const parsed = Route.urlToApplicationRoute(
       Option.getOrThrow(
         urlFromString(`${SITE}/blog/introducing-the-foldkit-blog`),
       ),
     )
 
     expect(parsed).toEqual(
-      Route.AppRoute.BlogPost({ postSlug: 'introducing-the-foldkit-blog' }),
+      Route.ApplicationRoute.BlogPost({
+        postSlug: 'introducing-the-foldkit-blog',
+      }),
     )
   })
 
@@ -92,14 +114,16 @@ describe('blog routes', () => {
 
     expect(path).toBe('/blog/some-post')
 
-    const parsed = Route.urlToAppRoute(
+    const parsed = Route.urlToApplicationRoute(
       Option.getOrThrow(urlFromString(`${SITE}${path}`)),
     )
-    expect(parsed).toEqual(Route.AppRoute.BlogPost({ postSlug: 'some-post' }))
+    expect(parsed).toEqual(
+      Route.ApplicationRoute.BlogPost({ postSlug: 'some-post' }),
+    )
   })
 
   test('leaves /blog/rss.xml to the static feed file', () => {
-    const parsed = Route.urlToAppRoute(
+    const parsed = Route.urlToApplicationRoute(
       Option.getOrThrow(urlFromString(`${SITE}/blog/rss.xml`)),
     )
 
@@ -111,7 +135,7 @@ describe('section predicates', () => {
   const cases: ReadonlyArray<
     Readonly<{
       name: string
-      route: Route.AppRoute
+      route: typeof Route.ApplicationRoute.Type
       isDocsSection: boolean
       isBlog: boolean
       isSearch: boolean
@@ -119,56 +143,56 @@ describe('section predicates', () => {
   > = [
     {
       name: 'GetStarted',
-      route: Route.AppRoute.GetStarted(),
+      route: Route.ApplicationRoute.GetStarted(),
       isDocsSection: true,
       isBlog: false,
       isSearch: true,
     },
     {
       name: 'CoreArchitecture',
-      route: Route.AppRoute.CoreArchitecture(),
+      route: Route.ApplicationRoute.CoreArchitecture(),
       isDocsSection: true,
       isBlog: false,
       isSearch: true,
     },
     {
       name: 'Home',
-      route: Route.AppRoute.Home(),
+      route: Route.ApplicationRoute.Home(),
       isDocsSection: false,
       isBlog: false,
       isSearch: true,
     },
     {
       name: 'Newsletter',
-      route: Route.AppRoute.Newsletter(),
+      route: Route.ApplicationRoute.Newsletter(),
       isDocsSection: false,
       isBlog: false,
       isSearch: true,
     },
     {
       name: 'Playground',
-      route: Route.AppRoute.Playground({ exampleSlug: 'counter' }),
+      route: Route.ApplicationRoute.Playground({ exampleSlug: 'counter' }),
       isDocsSection: false,
       isBlog: false,
       isSearch: false,
     },
     {
       name: 'NotFound',
-      route: Route.AppRoute.NotFound({ path: '/missing' }),
+      route: Route.ApplicationRoute.NotFound({ path: '/missing' }),
       isDocsSection: false,
       isBlog: false,
       isSearch: true,
     },
     {
       name: 'Blog',
-      route: Route.AppRoute.Blog(),
+      route: Route.ApplicationRoute.Blog(),
       isDocsSection: false,
       isBlog: true,
       isSearch: true,
     },
     {
       name: 'BlogPost',
-      route: Route.AppRoute.BlogPost({ postSlug: 'some-post' }),
+      route: Route.ApplicationRoute.BlogPost({ postSlug: 'some-post' }),
       isDocsSection: false,
       isBlog: true,
       isSearch: true,

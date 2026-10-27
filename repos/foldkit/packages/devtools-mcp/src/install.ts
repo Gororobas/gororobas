@@ -48,10 +48,10 @@ const printNextSteps = (alreadyRegistered: boolean): void => {
   console.log('Next steps:')
   console.log('')
   console.log(
-    '  1. Pass your Message Schema to Runtime.makeApplication (enables dispatch):',
+    '  1. Enable Message dispatch in Program.make or Program.makeElement:',
   )
   console.log('')
-  console.log('       devTools: { Message }')
+  console.log('       devTools: { dispatch: true }')
   console.log('')
   console.log(
     '  2. Start your dev server, then restart your AI agent (Claude Code, Cursor, etc.).',

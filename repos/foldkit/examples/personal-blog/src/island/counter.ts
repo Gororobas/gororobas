@@ -1,44 +1,42 @@
 import { Schema } from 'effect'
-import { Submodel, type Update } from 'foldkit'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { Button } from '@foldkit/ui'
 
-// MODEL
+const Model = Schema.Struct({ count: Schema.Number })
 
-export const Model = Schema.Struct({ count: Schema.Number })
-export type Model = typeof Model.Type
-
-export const init: Model = { count: 0 }
-
-// MESSAGE
-
-export const Message = defineMessageUnion({
+const Message = defineMessageUnion({
   ClickedDecrement: {},
   ClickedIncrement: {},
 })
 
-export type Message = typeof Message.Type
+const CounterDefinition = Block.makeDefinition('Counter', {
+  Model,
+  Message,
+})
 
-// UPDATE
+const { makeFieldsStep } = CounterDefinition
 
-export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedDecrement: () => ({
-      model: modifyFields(model, { count: count => count - 1 }),
-    }),
-    ClickedIncrement: () => ({
-      model: modifyFields(model, { count: count => count + 1 }),
-    }),
-  })
+const CounterComposition = CounterDefinition.makeComposition()
 
-// VIEW
+const init = CounterComposition.makeInit(() => ({
+  model: Model.make({ count: 0 }),
+}))
+
+const update = CounterComposition.makeUpdate({
+  ClickedDecrement: makeFieldsStep(() => ({
+    count: count => count - 1,
+  })),
+  ClickedIncrement: makeFieldsStep(() => ({
+    count: count => count + 1,
+  })),
+})
 
 const buttonStyle =
   'h-9 w-9 rounded-full border border-stone-300 text-lg leading-none text-stone-700 hover:bg-stone-100 transition cursor-pointer'
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
+const view = CounterComposition.makeView((model, h) =>
   h.div(
     [h.Class('flex items-center gap-4')],
     [
@@ -65,3 +63,14 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
     ],
   ),
 )
+
+const prepare = () =>
+  CounterComposition.prepareBlock({
+    init,
+    update,
+    view,
+  })
+export const CounterBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)

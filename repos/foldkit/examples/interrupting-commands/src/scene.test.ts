@@ -3,15 +3,11 @@ import { Interruptible } from 'foldkit/command'
 import { Command, click, expect, given, role, scene, text } from 'foldkit/scene'
 import { describe, test } from 'vitest'
 
-import {
-  CancelUploadFile,
-  FAKE_FILES,
-  Message,
-  UploadFile,
-  initialModel,
-  update,
-  view,
-} from './main'
+import { CancelUploadFile, UploadFile } from './command'
+import { initialModel } from './init'
+import { Message } from './message'
+import { FAKE_FILES, update } from './update'
+import { view } from './view'
 
 const firstFile = Array.headNonEmpty(FAKE_FILES)
 
@@ -36,7 +32,7 @@ describe('view', () => {
       expect(role('button', { name: 'Cancel upload 0' })).toExist(),
       Command.resolve(
         UploadFile({ uploadId: 0, sizeMegabytes: firstFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 0 }),
+        Message.CompletedUploadFile({ uploadId: 0 }),
       ),
       expect(text('Done')).toExist(),
     )
@@ -61,7 +57,7 @@ describe('view', () => {
       expect(text('Uploading')).toExist(),
       Command.resolve(
         UploadFile({ uploadId: 0, sizeMegabytes: firstFile.sizeMegabytes }),
-        Message.SucceededUploadFile({ uploadId: 0 }),
+        Message.CompletedUploadFile({ uploadId: 0 }),
       ),
       expect(text('Done')).toExist(),
     )

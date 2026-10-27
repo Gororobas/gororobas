@@ -1,73 +1,80 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Option, Schema } from 'effect'
-import { Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Schema, Tuple } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { Popover } from '@foldkit/ui'
+import type { RenderInfo as PopoverRenderInfo } from '@foldkit/ui/popover'
+import { buttonId as PopoverButtonId } from '@foldkit/ui/popover'
 
-// Add a field to your Model for the Popover Submodel:
+// Add a field to your Model for the Popover Block:
 const Model = Schema.Struct({
-  popover: Popover.Model,
+  popover: Popover.PopoverBlock.Model,
   // ...your other fields
 })
 
-// In your init function, initialize the Popover Submodel with a unique id:
-const init = () => ({
-  model: {
-    popover: Popover.init({ id: 'info' }),
-    // ...your other fields
-  },
+// This excerpt has no parent-owned facts. The Composition derives delivery.
+const Message = defineMessageUnion({})
+
+const PopoverExampleDefinition = Block.makeDefinition('PopoverExample', {
+  Model,
+  Message,
 })
 
-// Embed the Popover Message in your parent Message:
-const Message = defineMessageUnion({
-  GotPopoverMessage: { message: Popover.Message },
-})
+const { makeNoopStep } = PopoverExampleDefinition
 
 // At module scope, fold the OutMessage into your own Model. `Opened` and
 // `Closed` mark the visibility transitions. Fire analytics, coordinate with
 // other UI, or clear ephemeral state on close. Each arm returns an
-// Update.Step over the parent Model, which already has the next Popover Model
-// written back:
-const foldPopoverOutMessage = Popover.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  // The child has emitted `Opened`. In this arm the parent can update its
-  // own state or dispatch its own Commands, for example lazy-load panel
-  // content, log analytics, or trigger a downstream Command.
-  Opened: () => model => ({ model }),
-  // The child has emitted `Closed`. In this arm the parent can update its
-  // own state or dispatch its own Commands, for example persist a draft,
-  // clear ephemeral state, or trigger a downstream Command.
-  Closed: () => model => ({ model }),
+// parent Step over the Model that already has the next Popover Model written
+// back. The parent Definition checks every named variant:
+const foldPopoverOutMessage = PopoverExampleDefinition.makeOutMessageFold(
+  Popover.PopoverBlock,
+  {
+    // The child has emitted `Opened`. In this arm the parent can update its
+    // own state or dispatch its own Commands, for example lazy-load panel
+    // content, log analytics, or trigger a downstream Command.
+    Opened: makeNoopStep,
+    // The child has emitted `Closed`. In this arm the parent can update its
+    // own state or dispatch its own Commands, for example persist a draft,
+    // clear ephemeral state, or trigger a downstream Command.
+    Closed: makeNoopStep,
+  },
+)
+
+// The Binding wires the completed child Block into the parent: it runs Popover.PopoverBlock.update,
+// writes the next Popover Model back, routes generated delivery and Command
+// results, and hands any OutMessage to the OutMessage fold.
+const PopoverBinding = PopoverExampleDefinition.makeBinding(
+  Popover.PopoverBlock,
+  {
+    field: 'popover',
+    init: { contextToArgs: () => Tuple.make({ id: 'info' }) },
+  },
+).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+
+const PopoverExampleComposition = PopoverExampleDefinition.makeComposition({
+  bindings: [PopoverBinding],
 })
 
-// Update.foldChild wires the child into the parent: it runs Popover.update,
-// writes the next Popover Model back, maps the Submodel's Commands into your
-// Message type, and hands any OutMessage to foldOutMessage.
-const foldPopover = Update.foldChild({
-  update: Popover.update,
-  read: (model: Model) => Option.some(model.popover),
-  write: (model, nextPopover) =>
-    modifyFields(model, { popover: () => nextPopover }),
-  toParentMessage: message => Message.GotPopoverMessage({ message }),
-  foldOutMessage: foldPopoverOutMessage,
-})
+// In your init function, initialize the Popover Block with a unique id:
+const init = PopoverExampleComposition.makeInit(() => ({
+  model: {
+    // ...your other fields
+  },
+}))
 
-// In the corresponding Message.match handler, call the fold:
-GotPopoverMessage: ({ message }) => foldPopover(model, message)
+const update = PopoverExampleComposition.makeUpdate({})
 
-// Inside your view function, embed the popover via h.submodel. Give the
+// Inside your view function, embed the popover via h.block. Give the
 // trigger an accessible name: target the trigger id with
-// `Popover.buttonId('info')` from a native `<label for>`, and pass
+// `buttonId('info')` from `@foldkit/ui/popover` from a native `<label for>`, and pass
 // `ariaLabelledBy` so the trigger is named by the label. The attribute is
 // only emitted when provided, so the trigger never carries a dangling
 // `aria-labelledby`.
-const view = (h: HtmlBuilder<Message>) => {
+const view = PopoverExampleComposition.makeView((model, h) => {
   const labelId = 'info-label'
 
   const popoverView = ({
@@ -75,14 +82,11 @@ const view = (h: HtmlBuilder<Message>) => {
     panel,
     backdrop,
     isVisible,
-  }: Popover.RenderInfo) =>
+  }: PopoverRenderInfo) =>
     h.div(
       [h.Class('relative inline-block')],
       [
-        h.label(
-          [h.Id(labelId), h.For(Popover.buttonId('info'))],
-          ['Solutions'],
-        ),
+        h.label([h.Id(labelId), h.For(PopoverButtonId('info'))], ['Solutions']),
         h.button(
           [...button, h.Class('rounded-lg border px-3 py-2 cursor-pointer')],
           [h.span([], ['Solutions'])],
@@ -107,15 +111,15 @@ const view = (h: HtmlBuilder<Message>) => {
       ],
     )
 
-  return h.submodel({
-    slotId: 'info',
-    model: model.popover,
-    view: Popover.view,
-    viewInputs: {
-      ariaLabelledBy: labelId,
-      anchor: { placement: 'bottom-start', gap: 4, padding: 8 },
-      toView: popoverView,
-    },
-    toParentMessage: message => Message.GotPopoverMessage({ message }),
-  })
-}
+  return h.block(
+    PopoverBinding.embedView({
+      slotId: 'info',
+      model: model.popover,
+      viewInputs: {
+        ariaLabelledBy: labelId,
+        anchor: { placement: 'bottom-start', gap: 4, padding: 8 },
+        toView: popoverView,
+      },
+    }),
+  )
+})

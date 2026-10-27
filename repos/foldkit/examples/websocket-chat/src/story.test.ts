@@ -4,22 +4,21 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
 import {
-  ConnectionState,
-  Message,
-  type Model,
   SendMessage,
   TimestampReceivedMessage,
   TimestampSentMessage,
-  update,
-} from './main'
+} from './command'
+import { Message } from './message'
+import { ConnectionState, type Model } from './model'
+import { update } from './update'
 
-const idleModel: Model = {
+const idleModel: typeof Model.Type = {
   connection: ConnectionState.Disconnected(),
   messages: [],
   messageInput: '',
 }
 
-const connectedModel: Model = modifyFields(idleModel, {
+const connectedModel: typeof Model.Type = modifyFields(idleModel, {
   connection: () => ConnectionState.Connected(),
 })
 

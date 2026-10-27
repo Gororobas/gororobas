@@ -97,16 +97,20 @@ describe('streamFromKeyBindings', () => {
 
       expectTypeOf(rawEventStream).toEqualTypeOf<Stream.Stream<KeyboardEvent>>()
 
-      make<{ isActive: boolean }, Message>()(entry => ({
+      const subscriptions = make<{ isActive: boolean }, Message>()(entry => ({
         keyboard: entry(
+          'RawBindingKeyboardEvents',
           { isActive: Schema.Boolean },
           {
+            messages: [Message.PressedKeys],
             modelToDependencies: model => ({ isActive: model.isActive }),
-            // @ts-expect-error a raw KeyboardEvent is not an application Message
-            dependenciesToStream: () => rawEventStream,
           },
         ),
       }))
+      subscriptions.keyboard.toLayer(
+        // @ts-expect-error a raw KeyboardEvent is not an application Message
+        Effect.succeed(() => rawEventStream),
+      )
     }
   })
 
@@ -461,6 +465,26 @@ describe('streamFromKeyBindings', () => {
     await tick()
     await stop(fiber)
 
+    expect(received).toEqual([])
+  })
+
+  it('ignores a keyCode 229 keydown and clears a pending sequence', async () => {
+    const { fiber, received } = await start({
+      bindings: [
+        {
+          keys: ['G', 'H'],
+          mapEvent: toMessage('PressedHomeSequence'),
+        },
+      ],
+    })
+
+    press({ key: 'g' })
+    const compositionKeydown = press({ key: 'h', keyCode: 229 })
+    press({ key: 'h' })
+    await tick()
+    await stop(fiber)
+
+    expect(compositionKeydown.defaultPrevented).toBe(false)
     expect(received).toEqual([])
   })
 

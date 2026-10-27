@@ -28,6 +28,7 @@ export const ExampleSlug = Schema.Literals([
   'websocket-chat',
   'managed-resource-layer',
   'kanban',
+  'workspace',
   'map',
   'canvas-art',
   'generative-art',
@@ -39,7 +40,6 @@ export const ExampleSlug = Schema.Literals([
   'personal-blog',
   'livestore',
 ])
-export type ExampleSlug = typeof ExampleSlug.Type
 
 export type LivePreview =
   | 'Spa'
@@ -48,7 +48,7 @@ export type LivePreview =
   | 'Unavailable'
 
 export type ExampleMeta = Readonly<{
-  slug: ExampleSlug
+  slug: typeof ExampleSlug.Type
   title: string
   description: string
   difficulty: Difficulty
@@ -72,9 +72,9 @@ export const examples: ReadonlyArray<ExampleMeta> = [
     slug: 'counters',
     title: 'Counters',
     description:
-      'Add and remove independent Counter Submodels in a dynamic list. Each row is embedded through h.submodel and routed through a wrapper Message.',
+      'Add and remove independent Counter Blocks in a dynamic list. Each Counter instance is embedded through h.block and receives Messages through generated child delivery.',
     difficulty: 'Beginner',
-    tags: ['Submodels'],
+    tags: ['Blocks'],
     hasRouting: false,
     livePreview: 'Spa',
   },
@@ -152,7 +152,7 @@ export const examples: ReadonlyArray<ExampleMeta> = [
     slug: 'api-cache-query',
     title: 'API Cache Query',
     description:
-      'The API Cache app rewritten with experimental Query.define. Fetching and retained entries live in Query Submodels. The parent folds Got* Messages.',
+      'The API Cache app rewritten with experimental Query.define. Fetching and retained entries live in Query Blocks. The parent folds Got* Messages.',
     difficulty: 'Intermediate',
     tags: [
       'Query',
@@ -238,9 +238,9 @@ export const examples: ReadonlyArray<ExampleMeta> = [
     slug: 'auth',
     title: 'Auth',
     description:
-      'An authentication flow with Submodels, OutMessage, protected routes, and session management.',
+      'An authentication flow with Blocks, OutMessage, protected routes, and session management.',
     difficulty: 'Advanced',
-    tags: ['Auth', 'Routing', 'Submodels', 'OutMessage'],
+    tags: ['Auth', 'Routing', 'Blocks', 'OutMessage'],
     hasRouting: true,
     livePreview: 'Spa',
   },
@@ -310,8 +310,18 @@ export const examples: ReadonlyArray<ExampleMeta> = [
     description:
       'A drag-and-drop kanban board with cross-column reordering, keyboard navigation, fractional indexing, and screen reader announcements.',
     difficulty: 'Advanced',
-    tags: ['Drag & Drop', 'Submodels', 'OutMessage', 'Storage'],
+    tags: ['Drag & Drop', 'Blocks', 'OutMessage', 'Storage'],
     hasRouting: false,
+    livePreview: 'Spa',
+  },
+  {
+    slug: 'workspace',
+    title: 'Workspace',
+    description:
+      'A project workspace with issue lists, routed editors, an accessible board, comments, saved filters, and a command palette. Blocks own interaction state while an Effect Service stores shared data and supports asynchronous failure and retry.',
+    difficulty: 'Advanced',
+    tags: ['Blocks', 'Routing', 'Commands', 'Effect Services'],
+    hasRouting: true,
     livePreview: 'Spa',
   },
   {
@@ -360,7 +370,7 @@ export const examples: ReadonlyArray<ExampleMeta> = [
     description:
       'A Foldkit widget embedded in a plain TypeScript host page through Runtime.embed. The host seeds initial state with Flags, pushes a step value in through an inbound Port, mirrors the count the widget emits through an outbound Port, and mounts and unmounts the widget with dispose. All communication crosses one Schema-typed handle; the host never touches the Model.',
     difficulty: 'Advanced',
-    tags: ['Embedding', 'Ports', 'makeElement', 'Host Interop'],
+    tags: ['Embedding', 'Ports', 'Program.makeElement', 'Host Interop'],
     hasRouting: false,
     livePreview: 'Spa',
   },
@@ -388,7 +398,7 @@ export const examples: ReadonlyArray<ExampleMeta> = [
     slug: 'ui-showcase',
     title: 'UI Showcase',
     description:
-      'An interactive showcase of every Foldkit UI component, with styled routed demos and their parent and Submodel wiring.',
+      'An interactive showcase of every Foldkit UI component, with styled routed demos and their parent and Block wiring.',
     difficulty: 'Advanced',
     tags: ['UI Components', 'Routing'],
     hasRouting: true,
@@ -398,9 +408,9 @@ export const examples: ReadonlyArray<ExampleMeta> = [
     slug: 'personal-blog',
     title: 'Personal Blog',
     description:
-      'A blog whose prose lives in Markdown files. The @foldkit/markdown Vite plugin compiles each file into a typed document, per-node view overrides style the result, and directive islands place a live Counter Submodel and Note callout between paragraphs.',
+      'A blog whose prose lives in Markdown files. The @foldkit/markdown Vite plugin compiles each file into a typed document, per-node view overrides style the result, and directive islands place a live Counter Block and Note callout between paragraphs.',
     difficulty: 'Advanced',
-    tags: ['Markdown', 'Islands', 'Submodels', 'Routing'],
+    tags: ['Markdown', 'Islands', 'Blocks', 'Routing'],
     hasRouting: true,
     livePreview: 'Spa',
   },
@@ -416,16 +426,17 @@ export const examples: ReadonlyArray<ExampleMeta> = [
   },
 ]
 
-export const exampleSlugs: ReadonlyArray<ExampleSlug> = Array.map(
+export const exampleSlugs: ReadonlyArray<typeof ExampleSlug.Type> = Array.map(
   examples,
   ({ slug }) => slug,
 )
 
-export const runnableExampleSlugs: ReadonlyArray<ExampleSlug> = pipe(
-  examples,
-  Array.filter(example => example.livePreview !== 'Unavailable'),
-  Array.map(({ slug }) => slug),
-)
+export const runnableExampleSlugs: ReadonlyArray<typeof ExampleSlug.Type> =
+  pipe(
+    examples,
+    Array.filter(example => example.livePreview !== 'Unavailable'),
+    Array.map(({ slug }) => slug),
+  )
 
 export const findBySlug = (slug: string): Option.Option<ExampleMeta> =>
   Array.findFirst(examples, example => example.slug === slug)

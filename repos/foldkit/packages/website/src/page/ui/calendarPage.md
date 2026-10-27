@@ -20,9 +20,9 @@ Calendar owns navigation state, including the visible month, active grid, and ke
 
 ## Wire Calendar into a Parent
 
-Initialize the Calendar with `Calendar.init()`, store its Model in your parent Model, and delegate its Messages with [`Update.foldChild`](/core/submodel#fold-child). Render it through `h.submodel` with `Calendar.view`.
+Bind `CalendarBlock` in the parent. Declare its startup arguments with the Binding's `init` policy and let the parent Composition assemble its Model. Generated Calendar envelopes route through the Binding automatically. Render it through `h.block(CalendarBinding.embedView(...))`.
 
-Pass the parent-owned selection into `viewInputs.maybeSelectedDate` on every render. When Calendar emits `SelectedDate`, fold that OutMessage into the parent's selected-date field. `Calendar.update` returns `Update.ReturnWithOutMessage<Model, Message, OutMessage>`, so the same fold can handle `ChangedViewMonth` when your application needs month-scoped data.
+Pass the parent-owned selection into `viewInputs.maybeSelectedDate` on every render. When Calendar emits `SelectedDate`, fold that OutMessage into the parent's selected-date field. `Calendar.CalendarBlock.update` retains the Calendar OutMessage contract, so the same Binding fold can handle `ChangedViewMonth` when your application needs month-scoped data.
 
 :::Info{label="See it in an app"}
 See the complete Calendar integration in the [UI Showcase](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/ui/view/calendar.ts).
@@ -30,7 +30,7 @@ See the complete Calendar integration in the [UI Showcase](https://github.com/fo
 
 ## Try It {#examples}
 
-This Calendar highlights today and lets the parent store a selected date. Click a day, or tab into the grid and navigate with the keyboard. The snippet shows the parent Model, `Update.foldChild`, OutMessage handling, and all three view modes.
+This Calendar highlights today and lets the parent store a selected date. Click a day, or tab into the grid and navigate with the keyboard. The snippet shows the parent Model, the Calendar Binding, OutMessage handling, and all three view modes.
 
 ::Demo{name="basic"}
 
@@ -101,7 +101,7 @@ Foldkit ships `defaultEnglishLocale` and nothing else. Supply the locale data yo
 
 ### InitConfig {#init-config}
 
-Pass this configuration to `Calendar.init()`:
+Pass this configuration through the Calendar Binding's child initializer. Direct completed Block calls use `Calendar.CalendarBlock.init()`:
 
 | Name                 | Type                          | Default                | Description                                                                                                                              |
 | -------------------- | ----------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -135,7 +135,7 @@ Store the Calendar Model as a field in the parent Model. It contains interaction
 
 ### ViewInputs {#view-config}
 
-Pass these fields under `viewInputs` when `h.submodel` renders `Calendar.view`. The surrounding `h.submodel` configuration separately receives `slotId`, `model`, `view`, and `toParentMessage`.
+Pass the child Model as `model` and these fields as `viewInputs` to the Calendar Binding's `embedView` method. The Binding supplies the canonical view, Message wrapper, and composition scope. Keep `toView` at the top level; see [Callback dispatch boundaries](/core/block#callback-dispatch-boundaries).
 
 | Name                       | Type                                             | Default                    | Description                                                                                                    |
 | -------------------------- | ------------------------------------------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -197,7 +197,7 @@ Month cells expose `isSelected`, `isFocused`, `isCurrentMonth`, and `isDisabled`
 
 ### OutMessage {#out-message}
 
-Calendar returns an optional OutMessage in the `outMessage` field. Match on its tag in the `foldOutMessage` of your [`Update.foldChild`](/core/submodel#fold-child) configuration.
+Calendar returns an optional OutMessage in the `outMessage` field. Match on its tag in the Binding’s selected `fold` policy.
 
 | Name               | Payload                           | Emitted when                                                                                                                                                                       |
 | ------------------ | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -208,20 +208,21 @@ Use `SelectedDate` to update the parent-owned selection. Use `ChangedViewMonth` 
 
 ### Programmatic Helpers
 
-`selectDate` is a child entry point. Fold it into the parent with `Update.foldChild` because it takes a date as input. The Model-only helpers make silent state adjustments and can be used as point-free `modifyFields` setters.
+Call these operations through the registered Calendar Binding. Each Binding call returns a connected parent Step that dispatches the operation's Message through Calendar update. Return that Step from the parent handler or compose it with `Update.combineSteps`.
 
-| Name         | Type                                                                                            | Behavior                                                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `selectDate` | `(model: Model, date: CalendarDate) => Update.ReturnWithOutMessage<Model, Message, OutMessage>` | Moves the view and cursor to the date and emits `SelectedDate`. Fold the OutMessage to update the parent-owned selection. |
-| `focusDate`  | `(model: Model, date: CalendarDate) => Model`                                                   | Moves the view and cursor without selecting. Use it when an external value should determine which month opens.            |
-| `FocusGrid`  | `(args: { id: string }) => Command`                                                             | Focuses the Calendar grid. A parent such as DatePicker can dispatch it after opening.                                     |
-| `dropToDays` | `(model: Model) => Model`                                                                       | Returns to Days mode and reconciles the cursor with the visible month.                                                    |
+| Binding call                              | Arguments            | Behavior                                                                                                                                                              |
+| ----------------------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CalendarBinding.requestSelectDate(date)` | `date: CalendarDate` | Requests selection. Calendar leaves the Model unchanged and emits nothing when the date is disabled; otherwise it moves the view and cursor and emits `SelectedDate`. |
+| `CalendarBinding.requestFocusDate(date)`  | `date: CalendarDate` | Dispatches `RequestedFocusDate` to move the view and cursor without selecting. Use it when an external value should determine which month opens.                      |
+| `CalendarBinding.requestDropToDays()`     | None                 | Dispatches `RequestedDropToDays` to return to Days mode and reconcile the cursor with the visible month.                                                              |
 
-The reflection helpers update constraints already stored in the Calendar Model. They emit no OutMessage and do not reconcile the parent-owned selection. If a new constraint invalidates that value, update the selection explicitly in the same parent handler.
+`Calendar.FocusGrid({ id })` is the Calendar Command that focuses the grid. A parent such as DatePicker can return it after opening.
 
-| Name                        | Type                                                   | Behavior                                                             |
-| --------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------- |
-| `reflectMinDate`            | `(model: Model, Option<CalendarDate>) => Model`        | Replaces the minimum. Pass `Option.none()` to remove it.             |
-| `reflectMaxDate`            | `(model: Model, Option<CalendarDate>) => Model`        | Replaces the maximum. Pass `Option.none()` to remove it.             |
-| `reflectDisabledDates`      | `(model: Model, ReadonlyArray<CalendarDate>) => Model` | Replaces the disabled-date list. Pass an empty array to clear it.    |
-| `reflectDisabledDaysOfWeek` | `(model: Model, ReadonlyArray<DayOfWeek>) => Model`    | Replaces the disabled-weekday list. Pass an empty array to clear it. |
+The notification operations update constraints already stored in the Calendar Model. Their `InformedOf*Change` branches return `{ model }`, emit no OutMessage, and do not reconcile the parent-owned selection. If a new constraint invalidates that value, update the selection explicitly in the same parent handler.
+
+| Binding call                                                    | Arguments                                    | Behavior                                                                                             |
+| --------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `CalendarBinding.informMinDateChanged(maybeMinDate)`            | `maybeMinDate: Option<CalendarDate>`         | Dispatches `InformedOfMinDateChange`. Pass `Option.none()` to remove the minimum.                    |
+| `CalendarBinding.informMaxDateChanged(maybeMaxDate)`            | `maybeMaxDate: Option<CalendarDate>`         | Dispatches `InformedOfMaxDateChange`. Pass `Option.none()` to remove the maximum.                    |
+| `CalendarBinding.informDisabledDatesChanged(disabledDates)`     | `disabledDates: ReadonlyArray<CalendarDate>` | Dispatches `InformedOfDisabledDatesChange`. Pass an empty array to clear the disabled dates.         |
+| `CalendarBinding.informDisabledDaysOfWeekChanged(disabledDays)` | `disabledDays: ReadonlyArray<DayOfWeek>`     | Dispatches `InformedOfDisabledDaysOfWeekChange`. Pass an empty array to clear the disabled weekdays. |

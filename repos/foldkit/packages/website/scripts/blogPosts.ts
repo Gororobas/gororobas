@@ -63,7 +63,7 @@ const POST_DIR = resolve(SCRIPT_DIR, '../src/page/blog/post')
 
 export type BlogPostEntry = Readonly<{
   slug: string
-  frontmatter: PostFrontmatter
+  frontmatter: typeof PostFrontmatter.Type
   maybeCoverAsset: Option.Option<CoverAsset>
 }>
 

@@ -1,23 +1,26 @@
-const LoadAllNotes = Command.define('LoadAllNotes', {
+const LoadAllNotes = ApplicationDefinition.makeCommand('LoadAllNotes', {
   messages: [SucceededLoadAllNotes, FailedLoadAllNotes],
-  execute: pipe(
-    fetchAllNotes,
-    Effect.match({
-      onSuccess: notes => SucceededLoadAllNotes({ notes }),
-      onFailure: error => FailedLoadAllNotes({ error }),
-    }),
-  ),
+  handler: function* () {
+    return () =>
+      pipe(
+        fetchAllNotes,
+        Effect.match({
+          onSuccess: notes => SucceededLoadAllNotes({ notes }),
+          onFailure: error => FailedLoadAllNotes({ error }),
+        }),
+      )
+  },
 })
 
-Match.tagsExhaustive({
-  SucceededLoadAllNotes: ({ notes }) => ({
-    model: modifyFields(model, {
+const update = ApplicationComposition.makeUpdate({
+  SucceededLoadAllNotes: ApplicationDefinition.makeFieldsStep.fromMessage(
+    ({ notes }) => ({
       allNotes: () => AsyncData.Success({ data: notes }),
     }),
-  }),
-  FailedLoadAllNotes: ({ error }) => ({
-    model: modifyFields(model, {
+  ),
+  FailedLoadAllNotes: ApplicationDefinition.makeFieldsStep.fromMessage(
+    ({ error }) => ({
       allNotes: () => AsyncData.Failure({ error }),
     }),
-  }),
+  ),
 })

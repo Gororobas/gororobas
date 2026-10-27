@@ -1,0 +1,410 @@
+import { Effect, Fiber, Schema } from 'effect'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { createLazy } from '../html/index.js'
+import { defineMessageUnion } from '../message/index.js'
+import * as Mount from '../mount/public.js'
+import { h as rawHtml } from '../snabbdom/index.js'
+import * as Application from './application.js'
+import { __startProgram, run } from './start.js'
+
+const Message = defineMessageUnion({
+  ClickedRevealMount: {},
+  CompletedAnchorPanel: { label: Schema.String },
+})
+type Message = typeof Message.Type
+
+const Model = Schema.Struct({ status: Schema.String })
+type Model = typeof Model.Type
+
+const AnchorPanel = Mount.define('AnchorPanel', {
+  args: { label: Schema.String },
+  messages: [Message.CompletedAnchorPanel],
+})
+
+const update = (_model: Model, message: Message) =>
+  Message.match(message, {
+    ClickedRevealMount: () => ({ model: { status: 'revealing Mount' } }),
+    CompletedAnchorPanel: ({ label }) => ({ model: { status: label } }),
+  })
+
+let container: HTMLElement
+
+beforeEach(() => {
+  container = document.createElement('div')
+  container.id = 'mount-layer-test'
+  document.body.appendChild(container)
+})
+
+afterEach(() => {
+  document.body.innerHTML = ''
+})
+
+const makeApplication = (
+  mounts: readonly [typeof AnchorPanel, ...ReadonlyArray<typeof AnchorPanel>],
+) =>
+  Application.__makeFromConfig({
+    Model,
+    init: () => ({ model: { status: 'ready' } }),
+    update,
+    view: (model, h) => ({
+      title: 'Mount Layer test',
+      body: h.div(
+        [h.OnMount(AnchorPanel({ label: 'anchored' }))],
+        [model.status],
+      ),
+    }),
+    mounts,
+    container,
+  })
+
+describe('Layer-backed Mount runtime', () => {
+  it('runs a registered Mount through its application Layer', async () => {
+    const application = makeApplication([AnchorPanel])
+    const provided = application.provide(
+      AnchorPanel.toLayer(
+        Effect.succeed(({ label }) =>
+          Effect.succeed(Message.CompletedAnchorPanel({ label })),
+        ),
+      ),
+    )
+    const fiber = Effect.runFork(__startProgram(provided, undefined, 'Fresh'))
+
+    try {
+      await vi.waitFor(() => {
+        expect(document.body.textContent).toBe('anchored')
+      })
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('crashes before patching an unregistered Layer-backed Mount', async () => {
+    let reportedError: Error | undefined
+    const application = Application.__makeFromConfig({
+      Model,
+      init: () => ({ model: { status: 'ready' } }),
+      update,
+      view: (model, h) => ({
+        title: 'Unregistered Mount test',
+        body: h.div(
+          [
+            // @ts-expect-error Layer-backed Mount is not registered.
+            h.OnMount(AnchorPanel({ label: 'anchored' })),
+          ],
+          [model.status],
+        ),
+      }),
+      crash: {
+        report: ({ error }) => {
+          reportedError = error
+        },
+      },
+      container,
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fiber = Effect.runFork(
+      __startProgram(application, undefined, 'Fresh'),
+    )
+
+    try {
+      await vi.waitFor(() => {
+        expect(reportedError?.message).toContain(
+          'Layer-backed Mounts that were not registered: AnchorPanel',
+        )
+        expect(document.title).toBe('Application Crash')
+        expect(document.body.textContent).not.toContain('anchored')
+      })
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+      consoleError.mockRestore()
+    }
+  })
+
+  it('keeps the runtime identity check for a same-contract definition instance', async () => {
+    const OtherAnchorPanel = Mount.define('AnchorPanel', {
+      args: { label: Schema.String },
+      messages: [Message.CompletedAnchorPanel],
+    })
+    let reportedError: Error | undefined
+    const application = Application.__makeFromConfig({
+      Model,
+      init: () => ({ model: { status: 'ready' } }),
+      update,
+      view: (model, h) => ({
+        title: 'Mount identity test',
+        body: h.div(
+          [h.OnMount(OtherAnchorPanel({ label: 'anchored' }))],
+          [model.status],
+        ),
+      }),
+      mounts: [AnchorPanel],
+      crash: {
+        report: ({ error }) => {
+          reportedError = error
+        },
+      },
+      container,
+    })
+    const provided = application.provide(
+      AnchorPanel.toLayer(
+        Effect.succeed(({ label }) =>
+          Effect.succeed(Message.CompletedAnchorPanel({ label })),
+        ),
+      ),
+    )
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fiber = Effect.runFork(__startProgram(provided, undefined, 'Fresh'))
+
+    try {
+      await vi.waitFor(() => {
+        expect(reportedError?.message).toContain(
+          'Layer-backed Mounts that were not registered: AnchorPanel',
+        )
+        expect(document.title).toBe('Application Crash')
+        expect(document.body.textContent).not.toContain('anchored')
+      })
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+      consoleError.mockRestore()
+    }
+  })
+
+  it('checks a Layer-backed Mount revealed by a later Model state', async () => {
+    let reportedError: Error | undefined
+    const application = Application.__makeFromConfig({
+      Model,
+      init: () => ({ model: { status: 'ready' } }),
+      update,
+      view: (model, h) => ({
+        title: 'Conditional unregistered Mount test',
+        body:
+          model.status === 'revealing Mount'
+            ? h.div(
+                [
+                  // @ts-expect-error Conditional views carry the same registration requirement.
+                  h.OnMount(AnchorPanel({ label: 'anchored' })),
+                ],
+                [model.status],
+              )
+            : h.button(
+                [h.OnClick(Message.ClickedRevealMount())],
+                ['reveal Mount'],
+              ),
+      }),
+      crash: {
+        report: ({ error }) => {
+          reportedError = error
+        },
+      },
+      container,
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fiber = Effect.runFork(
+      __startProgram(application, undefined, 'Fresh'),
+    )
+
+    try {
+      await vi.waitFor(() => {
+        expect(document.body.textContent).toContain('reveal Mount')
+      })
+
+      document.body.querySelector('button')?.click()
+
+      await vi.waitFor(() => {
+        expect(reportedError?.message).toContain(
+          'Layer-backed Mounts that were not registered: AnchorPanel',
+        )
+        expect(document.title).toBe('Application Crash')
+        expect(document.body.textContent).not.toContain('revealing Mount')
+      })
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+      consoleError.mockRestore()
+    }
+  })
+
+  it('revalidates an unregistered Mount added to a reused lazy VNode before patching', async () => {
+    const cachedChild = rawHtml('div', {}, ['cached content'])
+    const cachedVNode = rawHtml('section', {}, [cachedChild])
+    const buildCachedView = vi.fn(() => cachedVNode)
+    const lazyView = createLazy()
+    const patchView = vi.fn()
+    let reportedError: Error | undefined
+    const application = Application.__makeFromConfig({
+      Model,
+      init: () => ({ model: { status: 'ready' } }),
+      update,
+      view: (model, h) => {
+        if (model.status === 'revealing Mount') {
+          const revealedMount = h.div([
+            // @ts-expect-error Cached raw Html still requires runtime Mount validation.
+            h.OnMount(AnchorPanel({ label: 'anchored' })),
+          ])
+          if (revealedMount !== null) {
+            cachedChild.data = revealedMount.data
+          }
+        }
+
+        const body = h.div(
+          [],
+          [
+            h.button(
+              [h.OnClick(Message.ClickedRevealMount())],
+              ['reveal Mount'],
+            ),
+            lazyView(buildCachedView, []),
+            model.status,
+          ],
+        )
+        if (body !== null) {
+          body.data = { ...body.data, hook: { prepatch: patchView } }
+        }
+
+        return { title: 'Cached unregistered Mount test', body }
+      },
+      crash: {
+        report: ({ error }) => {
+          reportedError = error
+        },
+      },
+      container,
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fiber = Effect.runFork(
+      __startProgram(application, undefined, 'Fresh'),
+    )
+
+    try {
+      await vi.waitFor(() => {
+        expect(document.body.textContent).toContain('cached content')
+        expect(document.body.textContent).toContain('ready')
+      })
+      expect(buildCachedView).toHaveBeenCalledOnce()
+      expect(patchView).not.toHaveBeenCalled()
+
+      document.body.querySelector('button')?.click()
+
+      await vi.waitFor(() => {
+        expect(reportedError?.message).toContain(
+          'Layer-backed Mounts that were not registered: AnchorPanel',
+        )
+        expect(document.title).toBe('Application Crash')
+      })
+      expect(buildCachedView).toHaveBeenCalledOnce()
+      expect(patchView).not.toHaveBeenCalled()
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+      consoleError.mockRestore()
+    }
+  })
+
+  it('allows a registered Mount Definition that the view does not render', async () => {
+    let executions = 0
+    const application = Application.__makeFromConfig({
+      Model,
+      init: () => ({ model: { status: 'ready' } }),
+      update,
+      view: (model, h) => ({
+        title: 'Unused Mount test',
+        body: h.div([], [model.status]),
+      }),
+      mounts: [AnchorPanel],
+      container,
+    })
+    const provided = application.provide(
+      AnchorPanel.toLayer(
+        Effect.succeed(({ label }) => {
+          executions += 1
+          return Effect.succeed(Message.CompletedAnchorPanel({ label }))
+        }),
+      ),
+    )
+    const fiber = Effect.runFork(__startProgram(provided, undefined, 'Fresh'))
+
+    try {
+      await vi.waitFor(() => {
+        expect(document.body.textContent).toBe('ready')
+      })
+      expect(executions).toBe(0)
+    } finally {
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  it('does not globally reject distinct registered definitions with the same name', () => {
+    const otherAnchorPanel = Mount.define('AnchorPanel', {
+      args: { label: Schema.String },
+      messages: [Message.CompletedAnchorPanel],
+    })
+
+    expect(() => makeApplication([AnchorPanel, otherAnchorPanel])).not.toThrow()
+  })
+
+  it('allows repeated registration of one definition', () => {
+    expect(() => makeApplication([AnchorPanel, AnchorPanel])).not.toThrow()
+  })
+
+  it('finishes Mount cleanup before releasing the handler Layer', async () => {
+    const events: Array<string> = []
+    const application = makeApplication([AnchorPanel])
+    const handlerLayer = AnchorPanel.toLayer(
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          events.push('handler acquired')
+          return ({ label }: Readonly<{ label: string }>) =>
+            Effect.gen(function* () {
+              yield* Effect.acquireRelease(
+                Effect.sync(() => {
+                  events.push('Mount acquired')
+                }),
+                () =>
+                  Effect.gen(function* () {
+                    yield* Effect.yieldNow
+                    events.push('Mount released')
+                  }),
+              )
+              return Message.CompletedAnchorPanel({ label })
+            })
+        }),
+        () =>
+          Effect.sync(() => {
+            events.push('handler released')
+          }),
+      ),
+    )
+    const provided = application.provide(handlerLayer)
+    const fiber = Effect.runFork(__startProgram(provided, undefined, 'Fresh'))
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toBe('anchored')
+    })
+    await Effect.runPromise(Fiber.interrupt(fiber))
+
+    expect(events).toEqual([
+      'handler acquired',
+      'Mount acquired',
+      'Mount released',
+      'handler released',
+    ])
+  })
+})
+
+const checkApplicationTypes = (): void => {
+  const application = makeApplication([AnchorPanel])
+
+  // @ts-expect-error The registered AnchorPanel handler has not been provided.
+  run(application)
+
+  run(
+    application.provide(
+      AnchorPanel.toLayer(
+        Effect.succeed(({ label }) =>
+          Effect.succeed(Message.CompletedAnchorPanel({ label })),
+        ),
+      ),
+    ),
+  )
+}
+
+void checkApplicationTypes

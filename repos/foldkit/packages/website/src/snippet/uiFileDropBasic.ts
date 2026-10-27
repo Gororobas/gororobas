@@ -1,75 +1,80 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Array, Option, Schema } from 'effect'
-import { File, Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Array, Schema, Tuple } from 'effect'
+import { Block, File } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { FileDrop } from '@foldkit/ui'
+import type { FileDropAttributes as FileDropFileDropAttributes } from '@foldkit/ui/fileDrop'
 
-// Add the FileDrop Submodel to your Model, plus a list of accepted files:
+// Add the FileDrop Block to your Model, plus a list of accepted files:
 const Model = Schema.Struct({
-  uploader: FileDrop.Model,
+  uploader: FileDrop.FileDropBlock.Model,
   uploadedFiles: Schema.Array(File.File),
   // ...your other fields
 })
 
-// Initialize both fields:
-const init = () => ({
-  model: {
-    uploader: FileDrop.init({ id: 'uploader' }),
-    uploadedFiles: [],
-    // ...your other fields
-  },
+// This excerpt has no parent-owned facts. The Composition derives delivery.
+const Message = defineMessageUnion({})
+
+const FileDropExampleDefinition = Block.makeDefinition('FileDropExample', {
+  Model,
+  Message,
 })
 
-// Embed FileDrop's Message in your parent Message:
-const Message = defineMessageUnion({
-  GotFileDropMessage: { message: FileDrop.Message },
-})
+const { makeFieldsStep, makeNoopStep } = FileDropExampleDefinition
 
 // At module scope, fold the OutMessage FileDrop emits when files arrive (via
 // drop or input change) into your own Model. Each arm returns an Update.Step
 // over the parent Model, which already has the next FileDrop Model written
-// back:
-const foldFileDropOutMessage = FileDrop.OutMessage.match<
-  Update.Step<Model, Message>
->({
-  ReceivedFiles:
-    ({ files }) =>
-    model => ({
-      model: modifyFields(model, {
+// back. The parent Definition checks every named child variant and infers the
+// parent Step from each handler:
+const foldFileDropOutMessage = FileDropExampleDefinition.makeOutMessageFold(
+  FileDrop.FileDropBlock,
+  {
+    ReceivedFiles: ({ files }) =>
+      makeFieldsStep(() => ({
         uploadedFiles: Array.appendAll(files),
-      }),
-    }),
-  // Fires when something is dropped but no files came through (e.g.
-  // a drag of text or a URL). Ignore, or show a hint to the user.
-  RejectedNonFiles: () => model => ({ model }),
+      })),
+    // Fires when something is dropped but no files came through (e.g.
+    // a drag of text or a URL). Ignore, or show a hint to the user.
+    RejectedNonFiles: makeNoopStep,
+  },
+)
+
+// The Binding wires the completed child Block into the parent: it runs FileDrop.FileDropBlock.update,
+// writes the next FileDrop Model back, routes generated delivery, and hands
+// any OutMessage to the OutMessage fold.
+const FileDropBinding = FileDropExampleDefinition.makeBinding(
+  FileDrop.FileDropBlock,
+  {
+    field: 'uploader',
+    init: { contextToArgs: () => Tuple.make({ id: 'uploader' }) },
+  },
+).withOutMessagePolicy({ fold: foldFileDropOutMessage })
+
+const FileDropExampleComposition = FileDropExampleDefinition.makeComposition({
+  bindings: [FileDropBinding],
 })
 
-// Update.foldChild wires the child into the parent: it runs FileDrop.update,
-// writes the next FileDrop Model back, maps the Submodel's Commands into your
-// Message type, and hands any OutMessage to foldOutMessage.
-const foldFileDrop = Update.foldChild({
-  update: FileDrop.update,
-  read: (model: Model) => Option.some(model.uploader),
-  write: (model, nextUploader) =>
-    modifyFields(model, { uploader: () => nextUploader }),
-  toParentMessage: message => Message.GotFileDropMessage({ message }),
-  foldOutMessage: foldFileDropOutMessage,
-})
+// Initialize the fields the parent owns. The Composition initializes the
+// bound FileDrop Model and combines the resulting Commands.
+const init = FileDropExampleComposition.makeInit(() => ({
+  model: {
+    uploadedFiles: [],
+    // ...your other fields
+  },
+}))
 
-// In the corresponding Message.match handler, call the fold:
-GotFileDropMessage: ({ message }) => foldFileDrop(model, message)
+const update = FileDropExampleComposition.makeUpdate({})
 
 // Render the drop zone. The `toView` callback receives attribute groups.
 // Spread `root` onto a <label> so clicking opens the picker, and spread
 // `input` onto a hidden <input type="file"> nested inside. Style the
 // drag-over state via `data-drag-over`.
-const view = (model: Model, h: HtmlBuilder<Message>) => {
-  const fileDropView = (attributes: FileDrop.FileDropAttributes) =>
+const view = FileDropExampleComposition.makeView((model, h) => {
+  const fileDropView = (attributes: FileDropFileDropAttributes) =>
     h.label(
       [
         ...attributes.root,
@@ -84,15 +89,15 @@ const view = (model: Model, h: HtmlBuilder<Message>) => {
       ],
     )
 
-  return h.submodel({
-    slotId: 'uploader',
-    model: model.uploader,
-    view: FileDrop.view,
-    viewInputs: {
-      multiple: true,
-      accept: ['application/pdf', '.doc', '.docx'],
-      toView: fileDropView,
-    },
-    toParentMessage: message => Message.GotFileDropMessage({ message }),
-  })
-}
+  return h.block(
+    FileDropBinding.embedView({
+      slotId: 'uploader',
+      model: model.uploader,
+      viewInputs: {
+        multiple: true,
+        accept: ['application/pdf', '.doc', '.docx'],
+        toView: fileDropView,
+      },
+    }),
+  )
+})

@@ -4,10 +4,9 @@ import { defineMessageUnion } from 'foldkit/message'
 const Message = defineMessageUnion({
   ClickedSave: {},
 })
-type Message = typeof Message.Type
 
 // ❌ Bad
-const badMessage: Message = {
+const badMessage: typeof Message.Type = {
   _tag: 'ClickedSave',
 }
 

@@ -1,27 +1,10 @@
-export {
-  SlowPhase,
-  defaultSlowCallback,
-  embed,
-  hydrate,
-  makeApplication,
-  makeElement,
-  run,
-} from './index.js'
+export { SlowPhase, defaultSlowCallback, embed, hydrate, run } from './index.js'
 
 export type {
   RoutingConfig,
   CrashConfig,
   CrashContext,
   ElementCrashConfig,
-  RoutingApplicationConfigWithFlags,
-  RoutingApplicationConfig,
-  ApplicationConfigWithFlags,
-  ApplicationConfig,
-  ElementConfigWithFlags,
-  ElementConfig,
-  ApplicationInit,
-  RoutingApplicationInit,
-  ElementInit,
   EmbedHandle,
   HydrateOptions,
   InboundPortHandle,
@@ -29,7 +12,6 @@ export type {
   OutboundPortHandle,
   OutboundPortHandles,
   PortHandles,
-  MakeRuntimeReturn,
   RunOptions,
   Visibility,
   SlowConfig,

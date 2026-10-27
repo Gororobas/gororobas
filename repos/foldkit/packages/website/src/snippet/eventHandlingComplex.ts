@@ -4,7 +4,10 @@ import type { HtmlBuilder } from 'foldkit/html'
 // A handler is a pure translator from event data to a Message.
 // It can branch as much as it needs to, with Model-derived state
 // in scope.
-const searchResultsView = (model: Model, h: HtmlBuilder<Message>) => {
+const searchResultsView = (
+  model: typeof Model.Type,
+  h: HtmlBuilder<Message>,
+) => {
   const handleResultsKeyDown = (key: string): Option.Option<Message> =>
     Match.value(key).pipe(
       Match.when('Escape', () => Option.some(DismissedResults())),

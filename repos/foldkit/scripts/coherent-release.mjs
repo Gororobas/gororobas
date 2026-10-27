@@ -11,6 +11,7 @@ import {
   waitForTaggedSnapshot,
 } from './lib/coherent-release.mjs'
 import { releasePackagesForCommit } from './lib/github-release.mjs'
+import { writePreviewReleaseManifest } from './lib/preview-release.mjs'
 import {
   publicWorkspacePackages,
   readWorkspacePackages,
@@ -72,6 +73,15 @@ const main = async () => {
     }
 
     if (command === 'canary') {
+      const manifestPath = process.env['FOLDKIT_CANARY_MANIFEST_PATH']
+
+      if (manifestPath !== undefined) {
+        writePreviewReleaseManifest(manifestPath, {
+          commit: commit(),
+          packages: result.packages,
+        })
+      }
+
       const cli = result.packages.find(
         pkg => pkg.packageJson.name === 'create-foldkit-app',
       )

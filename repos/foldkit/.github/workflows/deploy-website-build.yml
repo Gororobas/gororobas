@@ -13,8 +13,14 @@ on:
         type: string
       hostname:
         description: Stable hostname for the deployment channel
-        required: true
+        required: false
         type: string
+        default: ''
+      manifest_artifact:
+        description: Verified package manifest artifact for an integration preview
+        required: false
+        type: string
+        default: ''
     secrets:
       vercel_token:
         required: true
@@ -24,17 +30,42 @@ on:
         required: true
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FOLDKIT_BUILD_ID: ${{ inputs.target }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.target }}
+
+      - name: Verify the exact source commit
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [[ ! "${TARGET}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "target must be a full lowercase Git commit SHA" >&2
+            exit 1
+          fi
+
+          checked_out=$(git rev-parse HEAD)
+          if [ "${checked_out}" != "${TARGET}" ]; then
+            echo "the checked-out website commit ${checked_out} is not ${TARGET}" >&2
+            exit 1
+          fi
+
+      - name: Download the verified package manifest
+        if: inputs.channel == 'preview'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.manifest_artifact }}
+          path: ${{ runner.temp }}/foldkit-preview-release
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -47,6 +78,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --filter . --filter website... --filter '{examples/**}...'
+
+      - name: Match the preview package manifest to source
+        if: inputs.channel == 'preview'
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          manifest_path="${RUNNER_TEMP}/foldkit-preview-release/foldkit-preview-release.json"
+          manifest=$(node scripts/preview-release-manifest.mjs verify "${manifest_path}" "${TARGET}")
+          echo "FOLDKIT_PREVIEW_RELEASE_MANIFEST=${manifest_path}" >> "${GITHUB_ENV}"
+          echo "VITE_FOLDKIT_PREVIEW_RELEASE=${manifest}" >> "${GITHUB_ENV}"
 
       # NOTE: Production playgrounds install these packages from npm in a
       # visitor's browser. The registry may need a short propagation window
@@ -101,6 +142,17 @@ jobs:
         run: pnpm --filter website prerender
         env:
           FOLDKIT_GITHUB_STAR_COUNT: ${{ steps.github-stars.outputs.count }}
+
+      - name: Preserve and verify the preview manifest in the website build
+        if: inputs.channel == 'preview'
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          cp "${FOLDKIT_PREVIEW_RELEASE_MANIFEST}" packages/website/dist/preview-release.json
+          node scripts/preview-release-manifest.mjs verify-build \
+            "${FOLDKIT_PREVIEW_RELEASE_MANIFEST}" \
+            "${TARGET}" \
+            packages/website/dist
 
       - name: Prepare Vercel output
         env:
@@ -160,6 +212,19 @@ jobs:
           done
           echo "${FOLDKIT_SMOKE_URL} did not reach build ${EXPECTED_BUILD}" >&2
           exit 1
+
+      - name: Verify the deployed preview manifest
+        if: inputs.channel == 'preview'
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          deployed_manifest="${RUNNER_TEMP}/foldkit-deployed-preview-release.json"
+          curl -fsSL \
+            -H 'Cache-Control: no-cache' \
+            "${FOLDKIT_SMOKE_URL}/preview-release.json?release-smoke=${GITHUB_RUN_ID}" \
+            -o "${deployed_manifest}"
+          node scripts/preview-release-manifest.mjs verify "${deployed_manifest}" "${TARGET}"
+          cmp "${FOLDKIT_PREVIEW_RELEASE_MANIFEST}" "${deployed_manifest}"
 
       - name: Check deployed Monaco worker isolation
         run: |
@@ -229,3 +294,10 @@ jobs:
           done
           echo "${HOSTNAME} did not reach build ${EXPECTED_BUILD}" >&2
           exit 1
+
+      - name: Report the ready integration preview
+        if: inputs.channel == 'preview'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.url }}
+          TARGET: ${{ inputs.target }}
+        run: node scripts/preview-release-manifest.mjs summary "${FOLDKIT_PREVIEW_RELEASE_MANIFEST}" "${TARGET}" "${DEPLOYMENT_URL}"

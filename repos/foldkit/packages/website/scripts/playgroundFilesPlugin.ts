@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import type { Plugin } from 'vite'
 
 import { canaryVersion } from '../../../scripts/lib/package-version.mjs'
+import { validatePreviewReleaseManifest } from '../../../scripts/lib/preview-release.mjs'
 import {
   publicWorkspacePackages,
   readWorkspacePackages,
@@ -45,7 +46,7 @@ const EXPECTED_SKIP_EXTENSIONS = new Set([
   '.txt',
   '.webp',
 ])
-const EXCLUDED_DIRECTORIES = new Set(['node_modules', 'dist'])
+const EXCLUDED_DIRECTORIES = new Set(['node_modules', 'dist', 'test'])
 
 // NOTE: The playground keeps only the development dependencies its shipped
 // commands execute: `vite`, the Foldkit plugins its Vite config loads, and
@@ -64,7 +65,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [tailwindcss(), foldkit()],
+  plugins: [tailwindcss(), foldkit({ devToolsMcpPort: false })],
 })
 `
 
@@ -127,10 +128,17 @@ const rewriteWorkspaceSpec =
   }
 
 // NOTE: Rolldown 1.2.9's generated loader rejects its WASI binding because
-// both export `__napiBindingTarget`. WebContainers must use the last compatible
-// release until Rolldown publishes a matching loader and binding pair.
+// both export `__napiBindingTarget`, so WebContainers retain 1.2.6. Install
+// its binding with the project because Rolldown's separate auto-install does
+// not use project overrides. The binding pins emnapi alpha.4, which
+// wasm-runtime 1.2.6 rejects, so keep the last compatible runtime too.
+const PLAYGROUND_DEV_DEPENDENCY_ADDITIONS: DependencySpec = {
+  '@rolldown/binding-wasm32-wasi': '1.2.6',
+}
+
 export const PLAYGROUND_DEPENDENCY_OVERRIDES: DependencySpec = {
   rolldown: '1.2.6',
+  '@napi-rs/wasm-runtime': '1.2.5',
 }
 
 const versionForDeployment = (
@@ -184,10 +192,13 @@ const transformPackageJson = (
       ...PLAYGROUND_DEPENDENCY_OVERRIDES,
     },
     dependencies: rewriteDependencyMap(packageJson.dependencies, rewrite),
-    devDependencies: rewriteDependencyMap(
-      filterToRuntimeDevDependencies(packageJson.devDependencies),
-      rewrite,
-    ),
+    devDependencies: {
+      ...rewriteDependencyMap(
+        filterToRuntimeDevDependencies(packageJson.devDependencies),
+        rewrite,
+      ),
+      ...PLAYGROUND_DEV_DEPENDENCY_ADDITIONS,
+    },
     optionalDependencies: rewriteDependencyMap(
       packageJson.optionalDependencies,
       rewrite,
@@ -354,7 +365,27 @@ export const loadPlaygroundWorkspacePackageVersions = async (): Promise<
   Readonly<Record<string, string>>
 > => {
   const canaryCommit = process.env['VITE_FOLDKIT_CANARY_COMMIT']
+  const previewRelease = process.env['VITE_FOLDKIT_PREVIEW_RELEASE']
   const packages = publicWorkspacePackages(readWorkspacePackages(REPO_ROOT))
+
+  if (previewRelease !== undefined) {
+    if (canaryCommit !== undefined) {
+      throw new Error('A playground build cannot be both canary and preview')
+    }
+
+    const target = process.env['FOLDKIT_BUILD_ID']
+
+    if (target === undefined) {
+      throw new Error('A preview playground requires FOLDKIT_BUILD_ID')
+    }
+
+    return validatePreviewReleaseManifest({
+      manifest: JSON.parse(previewRelease),
+      target,
+      packages,
+    }).packages
+  }
+
   const entries = packages.map<readonly [string, string]>(({ packageJson }) => [
     packageJson.name,
     versionForDeployment(packageJson.version, canaryCommit),

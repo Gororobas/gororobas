@@ -1,6 +1,7 @@
 import { Array, Equal, Option, pipe } from 'effect'
-import { type Html, type HtmlBuilder, createKeyedLazy } from 'foldkit/html'
+import { type Html, createKeyedLazy } from 'foldkit/html'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { EMPTY_COLOR } from '../constant'
 import { floodFill, getMirroredPositions } from '../grid'
 import { Message } from '../message'
@@ -13,7 +14,7 @@ export const EMPTY_PREVIEW_POSITIONS: ReadonlyArray<readonly [number, number]> =
   []
 
 export const computePreviewPositions = (
-  model: Model,
+  model: typeof Model.Type,
 ): ReadonlyArray<readonly [number, number]> => {
   if (model.isDrawing) {
     return EMPTY_PREVIEW_POSITIONS
@@ -33,10 +34,10 @@ export const computePreviewPositions = (
 }
 
 export const computeFillPreview = (
-  grid: Grid,
+  grid: typeof Grid.Type,
   startX: number,
   startY: number,
-  fillColorIndex: PaletteIndex,
+  fillColorIndex: typeof PaletteIndex.Type,
 ): ReadonlyArray<readonly [number, number]> => {
   const filledGrid = floodFill(grid, startX, startY, fillColorIndex)
   const positions: Array<readonly [number, number]> = []
@@ -51,9 +52,9 @@ export const computeFillPreview = (
 }
 
 export const canvasView = (
-  model: Model,
+  model: typeof Model.Type,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const previewPositions = computePreviewPositions(model)
   const previewColor =
@@ -107,12 +108,12 @@ export const canvasView = (
 }
 
 export const rowView = (
-  row: ReadonlyArray<Cell>,
+  row: ReadonlyArray<typeof Cell.Type>,
   y: number,
-  previewColor: HexColor,
+  previewColor: typeof HexColor.Type,
   previewPositions: ReadonlyArray<readonly [number, number]>,
   theme: PaletteTheme,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [h.Style({ display: 'flex', flex: '1' })],

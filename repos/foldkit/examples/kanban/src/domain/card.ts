@@ -6,5 +6,3 @@ export const Card = Schema.Struct({
   description: Schema.String,
   sortKey: Schema.String,
 })
-
-export type Card = typeof Card.Type

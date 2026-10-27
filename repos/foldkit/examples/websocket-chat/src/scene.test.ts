@@ -9,6 +9,7 @@ import {
   placeholder,
   role,
   scene,
+  subscriptions as sceneSubscriptions,
   text,
   type,
 } from 'foldkit/scene'
@@ -16,16 +17,17 @@ import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
 import {
-  ConnectionState,
-  Message,
-  Model,
   SendMessage,
   TimestampReceivedMessage,
   TimestampSentMessage,
-  managedResources,
-  update,
-  view,
-} from './main'
+} from './command'
+import { ApplicationComposition } from './composition'
+import { managedResources } from './managedResource'
+import { Message } from './message'
+import { ConnectionState, Model } from './model'
+import { subscriptions } from './subscription'
+import { update } from './update'
+import { view } from './view'
 
 const idleModel = Model.make({
   connection: ConnectionState.Disconnected(),
@@ -156,13 +158,23 @@ describe('view', () => {
 
   test('a message arriving on the socket Subscription lands in the conversation', () => {
     scene(
-      { update, view },
+      {
+        update,
+        view,
+        subscriptions: sceneSubscriptions(
+          ApplicationComposition,
+          subscriptions,
+        ),
+      },
       given(
         modifyFields(idleModel, {
           connection: () => ConnectionState.Connected(),
         }),
       ),
-      Subscription.emit(Message.ReceivedMessage({ text: 'hello from echo' })),
+      Subscription.emit(
+        subscriptions.chatSocketMessages,
+        Message.ReceivedMessage({ text: 'hello from echo' }),
+      ),
       Command.expectExact(
         TimestampReceivedMessage({ text: 'hello from echo' }),
       ),

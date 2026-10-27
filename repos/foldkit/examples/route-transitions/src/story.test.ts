@@ -4,17 +4,12 @@ import { modifyFields } from 'foldkit/struct'
 import { fromString } from 'foldkit/url'
 import { describe, expect, test } from 'vitest'
 
-import {
-  AppRoute,
-  LoadCatalog,
-  LoadPainting,
-  Message,
-  Model,
-  PaintingStatus,
-  SaveDraft,
-  init,
-  update,
-} from './main'
+import { LoadCatalog, LoadPainting, SaveDraft } from './command'
+import { init } from './init'
+import { Message } from './message'
+import { Model, PaintingStatus } from './model'
+import { ApplicationRoute } from './route'
+import { update } from './update'
 
 const urlOrThrow = (raw: string) =>
   Option.getOrThrowWith(
@@ -22,7 +17,7 @@ const urlOrThrow = (raw: string) =>
     () => new Error(`Failed to parse url: ${raw}`),
   )
 
-const modelOn = (route: AppRoute): Model =>
+const modelOn = (route: typeof ApplicationRoute.Type): typeof Model.Type =>
   Model.make({
     route,
     transitionLog: [],
@@ -42,9 +37,12 @@ describe('init', () => {
     expect(
       Array.map(init_.model.transitionLog, entry => entry.maybePreviousRoute),
     ).toStrictEqual([Option.none()])
-    expect(Array.map(init_.commands ?? [], command => command.name)).toContain(
-      'LoadCatalog',
-    )
+    expect(
+      Array.some(
+        init_.commands ?? [],
+        command => command.name === LoadCatalog.name,
+      ),
+    ).toBe(true)
   })
 
   test('a cold load into the home route loads nothing', () => {
@@ -61,7 +59,7 @@ describe('update', () => {
   test('entering the gallery loads the catalog and logs the transition', () => {
     story(
       update,
-      given(modelOn(AppRoute.Home())),
+      given(modelOn(ApplicationRoute.Home())),
       message(
         Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery') }),
       ),
@@ -71,7 +69,7 @@ describe('update', () => {
         expect(model.transitionLog).toHaveLength(1)
       }),
       Command.expectHas(LoadCatalog),
-      Command.resolve(LoadCatalog, Message.SucceededLoadCatalog()),
+      Command.resolve(LoadCatalog, Message.CompletedLoadCatalog()),
       model(model => {
         expect(model.catalogStatus).toBe('Ready')
       }),
@@ -82,7 +80,7 @@ describe('update', () => {
     story(
       update,
       given(
-        modifyFields(modelOn(AppRoute.Home()), {
+        modifyFields(modelOn(ApplicationRoute.Home()), {
           catalogStatus: () => 'Loading',
         }),
       ),
@@ -99,7 +97,7 @@ describe('update', () => {
   test('entering a painting loads it with the payload from the route', () => {
     story(
       update,
-      given(modelOn(AppRoute.Gallery())),
+      given(modelOn(ApplicationRoute.Gallery())),
       message(
         Message.ChangedUrl({ url: urlOrThrow('http://localhost/gallery/3') }),
       ),
@@ -111,7 +109,7 @@ describe('update', () => {
       Command.expectHas(LoadPainting),
       Command.resolve(
         LoadPainting,
-        Message.SucceededLoadPainting({ paintingId: 3 }),
+        Message.CompletedLoadPainting({ paintingId: 3 }),
       ),
       model(model => {
         expect(model.paintingStatus).toStrictEqual(
@@ -125,7 +123,7 @@ describe('update', () => {
     story(
       update,
       given(
-        modifyFields(modelOn(AppRoute.Painting({ paintingId: 1 })), {
+        modifyFields(modelOn(ApplicationRoute.Painting({ paintingId: 1 })), {
           paintingStatus: () => PaintingStatus.Ready({ paintingId: 1 }),
         }),
       ),
@@ -138,12 +136,14 @@ describe('update', () => {
         )
         expect(
           Array.map(model.transitionLog, entry => entry.maybePreviousRoute),
-        ).toStrictEqual([Option.some(AppRoute.Painting({ paintingId: 1 }))])
+        ).toStrictEqual([
+          Option.some(ApplicationRoute.Painting({ paintingId: 1 })),
+        ])
       }),
       Command.expectHas(LoadPainting),
       Command.resolve(
         LoadPainting,
-        Message.SucceededLoadPainting({ paintingId: 2 }),
+        Message.CompletedLoadPainting({ paintingId: 2 }),
       ),
       model(model => {
         expect(model.paintingStatus).toStrictEqual(
@@ -157,7 +157,7 @@ describe('update', () => {
     story(
       update,
       given(
-        modifyFields(modelOn(AppRoute.Painting({ paintingId: 1 })), {
+        modifyFields(modelOn(ApplicationRoute.Painting({ paintingId: 1 })), {
           paintingStatus: () => PaintingStatus.Ready({ paintingId: 1 }),
         }),
       ),
@@ -177,11 +177,11 @@ describe('update', () => {
     story(
       update,
       given(
-        modifyFields(modelOn(AppRoute.Painting({ paintingId: 2 })), {
+        modifyFields(modelOn(ApplicationRoute.Painting({ paintingId: 2 })), {
           paintingStatus: () => PaintingStatus.Loading({ paintingId: 2 }),
         }),
       ),
-      message(Message.SucceededLoadPainting({ paintingId: 1 })),
+      message(Message.CompletedLoadPainting({ paintingId: 1 })),
       model(model => {
         expect(model.paintingStatus).toStrictEqual(
           PaintingStatus.Loading({ paintingId: 2 }),
@@ -194,7 +194,7 @@ describe('update', () => {
     story(
       update,
       given(
-        modifyFields(modelOn(AppRoute.Studio()), {
+        modifyFields(modelOn(ApplicationRoute.Studio()), {
           studioDraft: () => 'half-finished thought',
         }),
       ),
@@ -202,7 +202,7 @@ describe('update', () => {
       Command.expectHas(SaveDraft),
       Command.resolve(
         SaveDraft,
-        Message.SucceededSaveDraft({ draft: 'half-finished thought' }),
+        Message.CompletedSaveDraft({ draft: 'half-finished thought' }),
       ),
       model(model => {
         expect(model.maybeSavedDraft).toStrictEqual(
@@ -215,7 +215,7 @@ describe('update', () => {
   test('leaving the studio with an empty draft saves nothing', () => {
     story(
       update,
-      given(modelOn(AppRoute.Studio())),
+      given(modelOn(ApplicationRoute.Studio())),
       message(Message.ChangedUrl({ url: urlOrThrow('http://localhost/') })),
       Command.expectNone(),
     )

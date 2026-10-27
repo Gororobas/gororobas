@@ -13,7 +13,9 @@ import { describe, test } from 'vitest'
 
 import { Tabs } from '@foldkit/ui'
 
-import { FetchPostDetail, FetchStats, Message, update, view } from './main'
+import { FetchPostDetail, FetchStats } from './command'
+import { Message } from './message'
+import { ApplicationTabsBlock } from './model'
 import {
   FETCHED_AT,
   cachedFirstPostModel,
@@ -21,11 +23,13 @@ import {
   fixtureStats,
   loadedPostsModel,
   loadingPostsModel,
-} from './main.fixture'
+} from './model.fixture'
+import { update } from './update'
+import { view } from './view/view'
 
 const resolveFocusTab = Command.resolve(
-  Tabs.FocusTab,
-  Tabs.Message.CompletedFocusTab(),
+  Tabs.test.FocusTab,
+  ApplicationTabsBlock.Message.CompletedFocusTab(),
 )
 
 describe('view', () => {
@@ -49,7 +53,7 @@ describe('view', () => {
       Command.expectExact(FetchPostDetail({ postId: 'first-post' })),
       Command.resolve(
         FetchPostDetail,
-        Message.SettledFetchPostDetail({
+        Message.CompletedFetchPostDetail({
           postId: 'first-post',
           result: Result.succeed({
             detail: firstPostDetail,
@@ -84,7 +88,7 @@ describe('view', () => {
       click(role('button', { name: /First Post/ })),
       Command.resolve(
         FetchPostDetail,
-        Message.SettledFetchPostDetail({
+        Message.CompletedFetchPostDetail({
           postId: 'first-post',
           result: Result.fail('The connection dropped.'),
         }),
@@ -104,7 +108,7 @@ describe('view', () => {
       Command.expectExact(FetchStats()),
       Command.resolve(
         FetchStats,
-        Message.SettledFetchStats({
+        Message.CompletedFetchStats({
           result: Result.succeed({
             stats: fixtureStats,
             fetchedAt: FETCHED_AT,

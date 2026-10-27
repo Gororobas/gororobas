@@ -129,6 +129,9 @@ test('loads older messages when scrolling near the start and preserves the visib
   const container = page.getByRole('list', {
     name: 'End-anchored chat messages',
   })
+  await expect(
+    container.locator('[data-virtual-list-item-key]'),
+  ).not.toHaveCount(0)
   await expect.poll(() => distanceFromEnd(container)).toBeLessThanOrEqual(1)
   const initialScrollHeight = await container.evaluate(
     element => element.scrollHeight,
@@ -171,6 +174,9 @@ test('loads older messages after jumping directly from the end to the start', as
   const container = page.getByRole('list', {
     name: 'End-anchored chat messages',
   })
+  await expect(
+    container.locator('[data-virtual-list-item-key]'),
+  ).not.toHaveCount(0)
   await expect.poll(() => distanceFromEnd(container)).toBeLessThanOrEqual(1)
 
   await container.evaluate(element => {
@@ -195,6 +201,9 @@ test('keeps a distant key centered while correcting a low row-height estimate', 
   const container = page.getByRole('list', {
     name: 'End-anchored chat messages',
   })
+  await expect(
+    container.locator('[data-virtual-list-item-key]'),
+  ).not.toHaveCount(0)
   await expect.poll(() => distanceFromEnd(container)).toBeLessThanOrEqual(1)
   await page.locator('[data-virtual-list-chat-scroll-to-message]').click()
 

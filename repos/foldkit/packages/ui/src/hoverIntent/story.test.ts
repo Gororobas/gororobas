@@ -5,14 +5,13 @@ import { expect } from 'vitest'
 import { describe, it } from '@effect/vitest'
 
 import {
-  Message,
-  OutMessage,
   WaitBeforeClosing,
   WaitBeforeOpening,
-  close,
+  HoverIntentBlock as block,
   init,
   update,
-} from './index.js'
+} from './block.js'
+import { Message, OutMessage } from './message.js'
 
 const STALE_VERSION = -1
 
@@ -26,7 +25,7 @@ const resolveStaleClose = Story.Command.resolve(
   Message.CompletedWaitBeforeClosing({ version: STALE_VERSION }),
 )
 
-const withHidden = Story.given(init())
+const withHidden = Story.given(init().model)
 
 const withPointerOpen = Story.steps(
   withHidden,
@@ -45,7 +44,7 @@ const withFocusedOpen = Story.steps(
 describe('HoverIntent', () => {
   describe('init', () => {
     it('defaults to a hidden state with open and close delays', () => {
-      expect(init()).toStrictEqual({
+      expect(init().model).toStrictEqual({
         isOpen: false,
         isTriggerHovered: false,
         isPanelHovered: false,
@@ -60,7 +59,7 @@ describe('HoverIntent', () => {
 
     it('accepts custom delay inputs', () => {
       expect(
-        init({ openDelay: Duration.seconds(1), closeDelay: 50 }),
+        init({ openDelay: Duration.seconds(1), closeDelay: 50 }).model,
       ).toMatchObject({
         openDelay: Duration.seconds(1),
         closeDelay: Duration.millis(50),
@@ -323,7 +322,7 @@ describe('HoverIntent', () => {
     })
 
     it('closes programmatically and clears panel engagement', () => {
-      const focusedOpenUpdate = update(init(), Message.FocusedTrigger())
+      const focusedOpenUpdate = update(init().model, Message.FocusedTrigger())
       const panelHoveredUpdate = update(
         focusedOpenUpdate.model,
         Message.EnteredPanel(),
@@ -332,7 +331,9 @@ describe('HoverIntent', () => {
         panelHoveredUpdate.model,
         Message.FocusedPanel(),
       )
-      const closeUpdate = close(panelFocusedUpdate.model)
+      const closeUpdate = block.operations.requestClose(
+        panelFocusedUpdate.model,
+      )
 
       expect(closeUpdate.model.isOpen).toBe(false)
       expect(closeUpdate.model.isPanelHovered).toBe(false)

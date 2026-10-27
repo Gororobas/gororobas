@@ -1,21 +1,14 @@
 import { Duration, Effect, Schema, Stream } from 'effect'
-import { Subscription, type Update } from 'foldkit'
-import type { Document, HtmlBuilder } from 'foldkit/html'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 const TICK_INTERVAL_MS = 1000
-
-// MODEL
 
 const Model = Schema.Struct({
   count: Schema.Number,
   step: Schema.Number,
   isAutoCounting: Schema.Boolean,
 })
-type Model = typeof Model.Type
-
-// MESSAGE
 
 const Message = defineMessageUnion({
   ClickedIncrement: {},
@@ -23,52 +16,52 @@ const Message = defineMessageUnion({
   ChangedStep: { step: Schema.Number },
   Ticked: {},
 })
-type Message = typeof Message.Type
 
-// SUBSCRIPTION
+const CounterDefinition = Block.makeDefinition('Counter', { Model, Message })
 
-const subscriptions = Subscription.make<Model, Message>()(entry => ({
-  tick: entry(
+const { makeFieldsStep } = CounterDefinition
+
+const CounterComposition = CounterDefinition.makeComposition()
+
+const subscriptions = CounterDefinition.makeSubscriptions(entry => ({
+  gameClockTicks: entry(
+    'GameClockTicks',
     { isAutoCounting: Schema.Boolean },
     {
+      messages: [Message.Ticked],
       modelToDependencies: model => ({
         isAutoCounting: model.isAutoCounting,
       }),
-      dependenciesToStream: ({ isAutoCounting }) =>
-        Stream.when(
-          Stream.tick(Duration.millis(TICK_INTERVAL_MS)).pipe(
-            Stream.drop(1),
-            Stream.map(Message.Ticked),
-          ),
-          Effect.sync(() => isAutoCounting),
-        ),
+      handler: function* () {
+        return ({ isAutoCounting }) =>
+          Stream.when(
+            Stream.tick(Duration.millis(TICK_INTERVAL_MS)).pipe(
+              Stream.drop(1),
+              Stream.map(Message.Ticked),
+            ),
+            Effect.sync(() => isAutoCounting),
+          )
+      },
     },
   ),
 }))
 
-// UPDATE
+const update = CounterComposition.makeUpdate({
+  ClickedIncrement: makeFieldsStep(model => ({
+    count: count => count + model.step,
+  })),
+  ClickedToggleAutoCount: makeFieldsStep(() => ({
+    isAutoCounting: isAutoCounting => !isAutoCounting,
+  })),
+  ChangedStep: makeFieldsStep.fromMessage(({ step }) => ({
+    step: () => step,
+  })),
+  Ticked: makeFieldsStep(model => ({
+    count: count => count + model.step,
+  })),
+})
 
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    ClickedIncrement: () => ({
-      model: modifyFields(model, { count: count => count + model.step }),
-    }),
-    ClickedToggleAutoCount: () => ({
-      model: modifyFields(model, {
-        isAutoCounting: isAutoCounting => !isAutoCounting,
-      }),
-    }),
-    ChangedStep: ({ step }) => ({
-      model: modifyFields(model, { step: () => step }),
-    }),
-    Ticked: () => ({
-      model: modifyFields(model, { count: count => count + model.step }),
-    }),
-  })
-
-// VIEW
-
-const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
+const view = CounterComposition.makeView((model, h) => ({
   title: `Count: ${model.count}`,
   body: h.div(
     [],
@@ -90,4 +83,4 @@ const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
       ),
     ],
   ),
-})
+}))

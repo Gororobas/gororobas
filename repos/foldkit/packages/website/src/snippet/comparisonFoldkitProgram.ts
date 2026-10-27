@@ -1,6 +1,8 @@
-// src/main.ts
+// src/init.ts
 
-export const init: Runtime.ApplicationInit<Model, Message, Flags> = flags => ({
+import { ApplicationComposition } from './composition'
+
+export const init = ApplicationComposition.makeInit((flags: Flags) => ({
   model: {
     grid: Option.match(flags.maybeSavedCanvas, {
       onNone: () => createEmptyGrid(DEFAULT_GRID_SIZE),
@@ -12,22 +14,42 @@ export const init: Runtime.ApplicationInit<Model, Message, Flags> = flags => ({
     mirrorMode: 'None',
     isDrawing: false,
     maybeHoveredCell: Option.none(),
-    errorDialog: Dialog.init({ id: 'export-error-dialog' }),
-    themeListbox: Listbox.init({ id: 'theme-picker' }),
     // remaining fields elided for brevity
   },
-})
+}))
 
-// src/entry.ts (imports Model, Flags, flags, init, update, view, subscriptions from ./main)
+// src/application.ts
 
-const application = Runtime.makeApplication({
-  Model,
+import { Block } from 'foldkit'
+
+import { ApplicationComposition } from './composition'
+import { init } from './init'
+import type { Model } from './model'
+import { update } from './update'
+import { view } from './view'
+
+const prepare = () =>
+  ApplicationComposition.prepareBlock({
+    init,
+    update,
+    view,
+  })
+export const ApplicationBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)
+
+// src/entry.ts
+
+import { Program, Runtime } from 'foldkit'
+
+import { ApplicationBlock } from './application'
+import { Flags, flags } from './flags'
+
+const program = Program.make({
+  block: ApplicationBlock,
   Flags,
-  init,
-  update,
-  view,
-  subscriptions,
   container: document.getElementById('root'),
 })
 
-Runtime.run(application, { flags })
+Runtime.run(program, { flags })

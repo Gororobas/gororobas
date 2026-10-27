@@ -1,11 +1,12 @@
 import { Match, Option } from 'effect'
-import { AsyncData, Submodel } from 'foldkit'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import { AsyncData } from 'foldkit'
+import { Html } from 'foldkit/html'
 
 import * as Shared from '@typing-game/shared'
 
 import { ROOM_PAGE_USERNAME_INPUT_ID } from '../../../constant'
 import { Icon } from '../../../view/icon'
+import { RoomComposition, type RoomViewBuilder } from '../composition'
 import { Message } from '../message'
 import { Model, RoomPlayerSession } from '../model'
 import { findFirstWrongCharIndex } from '../userGameText'
@@ -17,8 +18,8 @@ import { waiting } from './waiting'
 
 export type ViewInputs = Readonly<{ roomId: string }>
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, viewInputs, h): Html => {
+export const view = RoomComposition.makeView.withInputs<ViewInputs>(
+  (model, viewInputs, h) => {
     const { roomId } = viewInputs
 
     const maybeError = AsyncData.getError(model.roomAsyncData)
@@ -90,8 +91,8 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>(
 )
 
 const content = (
-  { roomAsyncData, maybeSession, userGameText, username }: Model,
-  h: HtmlBuilder<Message>,
+  { roomAsyncData, maybeSession, userGameText, username }: typeof Model.Type,
+  h: RoomViewBuilder,
 ): Html =>
   AsyncData.matchData(roomAsyncData, {
     onEmpty: () => h.div([], ['Loading...']),
@@ -104,10 +105,10 @@ const content = (
   })
 
 const gameContent = (
-  room: Shared.Room,
-  maybeSession: Option.Option<RoomPlayerSession>,
+  room: typeof Shared.Room.Type,
+  maybeSession: Option.Option<typeof RoomPlayerSession.Type>,
   userGameText: string,
-  h: HtmlBuilder<Message>,
+  h: RoomViewBuilder,
 ): Html => {
   const maybeGameText = Option.map(room.maybeGame, ({ text }) => text)
   const maybeWrongCharIndex = Option.flatMap(
@@ -134,7 +135,7 @@ const gameContent = (
   )
 }
 
-const joinForm = (username: string, h: HtmlBuilder<Message>): Html =>
+const joinForm = (username: string, h: RoomViewBuilder): Html =>
   h.form(
     [h.OnSubmit(Message.SubmittedJoinRoomFromPage())],
     [
@@ -169,7 +170,7 @@ const joinForm = (username: string, h: HtmlBuilder<Message>): Html =>
 
 const maybeErrorMessage = (
   maybeRoomFormError: Option.Option<string>,
-  h: HtmlBuilder<Message>,
+  h: RoomViewBuilder,
 ): Html =>
   Option.match(maybeRoomFormError, {
     onNone: () => h.empty,

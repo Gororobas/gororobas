@@ -75,6 +75,8 @@ const scaffoldServerRendering =
       'examples/ssr/package.json',
       'packages/examples-e2e/package.json',
       'scripts/check-scaffold-server-rendering.ts',
+      'scripts/scaffold-dependencies.ts',
+      'scripts/scaffold-dependencies.test.mjs',
     ],
     prefixes: [
       'packages/create-foldkit-app/',
@@ -139,6 +141,7 @@ const website =
     files: [
       '.github/workflows/deploy-website-build.yml',
       '.github/workflows/deploy-website-canary.yml',
+      '.github/workflows/deploy-website-preview.yml',
       '.github/workflows/deploy-website.yml',
       '.github/workflows/release.yml',
       'scripts/build-examples.ts',
@@ -146,6 +149,9 @@ const website =
       'scripts/example-bridge.js',
       'scripts/lib/package-version.d.mts',
       'scripts/lib/package-version.mjs',
+      'scripts/lib/preview-release.d.mts',
+      'scripts/lib/preview-release.mjs',
+      'scripts/preview-release-manifest.mjs',
       'scripts/website-vercel-config.mjs',
     ],
     prefixes: [

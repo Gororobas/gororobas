@@ -1,7 +1,6 @@
-import type { HtmlBuilder } from 'foldkit/html'
-
 import { Checkbox } from '@foldkit/ui'
 
+import type { UiViewBuilder } from '../composition'
 import { Message } from '../message'
 import type { Model } from '../model'
 
@@ -16,9 +15,7 @@ const wrapperClassName = 'flex flex-col gap-1'
 
 const topRowClassName = 'flex items-center gap-2'
 
-// VIEW
-
-export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
+export const basicDemo = (model: typeof Model.Type, h: UiViewBuilder) => {
   const checkmark = h.span([h.Class('demo-checkbox-mark')], ['✓'])
 
   return [
@@ -57,7 +54,10 @@ export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
   ]
 }
 
-export const indeterminateDemo = (model: Model, h: HtmlBuilder<Message>) => {
+export const indeterminateDemo = (
+  model: typeof Model.Type,
+  h: UiViewBuilder,
+) => {
   const checkmark = h.span([h.Class('demo-checkbox-mark')], ['✓'])
   const indeterminateMark = h.span([h.Class('demo-checkbox-mark')], ['—'])
 

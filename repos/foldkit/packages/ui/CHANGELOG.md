@@ -1,5 +1,27 @@
 # @foldkit/ui
 
+## 0.169.0
+
+### Minor Changes
+
+- [#1667](https://github.com/foldkit/foldkit/pull/1667) [`b6c5fa3`](https://github.com/foldkit/foldkit/commit/b6c5fa38ee97a48795d811f43b1ec5ed0d701e87) Thanks [@Tanner-Scadden](https://github.com/Tanner-Scadden)! - Add `DragAndDrop.test.settleFocus` and `DragAndDrop.test.resolveKeyboardMove` to resolve focus and movement Commands in keyboard drag Story tests.
+
+- [#1529](https://github.com/foldkit/foldkit/pull/1529) [`39a055b`](https://github.com/foldkit/foldkit/commit/39a055b638a774568baa394ee5b2bf98fa16cd58) Thanks [@armancharan](https://github.com/armancharan)! - A default Popover stays open while focus moves within its panel. It closes when focus leaves the panel, including when focus moves into DevTools. With `contentFocus: true`, the panel has no tab stop and focus leaving it does not close the Popover. The consumer focuses a descendant and handles focus leaving the content.
+
+  The panel now handles focus leave instead of blur. Replace `Scene.blur(panel)` with `Scene.focusLeave(panel)` in Scene tests.
+
+- [#1530](https://github.com/foldkit/foldkit/pull/1530) [`2b6d8dd`](https://github.com/foldkit/foldkit/commit/2b6d8dd23cdc8907955c4ca963f8613925b71fa1) Thanks [@armancharan](https://github.com/armancharan)! - Decide Popover, Menu, and Listbox trigger clicks in update using the current Model. When a mouse press and click arrive before the next render, the click does not request a second open. A modal overlay acquires its scroll lock once, and focus leaving the panel can close it.
+
+  Trigger clicks dispatch `ClickedButton`. Add this variant to exhaustive Message matches for Popover, Menu, and Listbox. Scene tests that assert the Message emitted by a trigger click must expect `ClickedButton`, including the click following a mouse press. Popover clicks previously emitted `RequestedOpen`, `RequestedClose`, or `IgnoredMouseClick`; Menu and Listbox clicks emitted `Opened`, `Closed`, or `IgnoredMouseClick`.
+
+### Patch Changes
+
+- [#1509](https://github.com/foldkit/foldkit/pull/1509) [`45bc431`](https://github.com/foldkit/foldkit/commit/45bc43189b619a873d779fe60f516902d5cb4783) Thanks [@armancharan](https://github.com/armancharan)! - Opening an already open Popover, Menu, Listbox, or Combobox returns the current Model without Commands. Popover emits no additional `Opened` OutMessage; Menu and Listbox preserve the typeahead query and active item. For modal overlays, this prevents repeated locks from leaving the page scroll-locked after one close.
+
+- Rebuild with the release's shared tooling configuration so the published packages and website use the same build inputs.
+
+- [#1521](https://github.com/foldkit/foldkit/pull/1521) [`e29eceb`](https://github.com/foldkit/foldkit/commit/e29eceb84dfae1efb80294b888a0a21806f6201b) Thanks [@armancharan](https://github.com/armancharan)! - Remove an empty shared portal root when an overlay closes. A later modal Popover, Menu, Listbox, or Combobox then creates a fresh root, keeping its panel focusable and available to pointer input and assistive technology. If another portaled element occupies the root when a modal overlay opens, the root can still become inert; this change covers reopen flows where the root becomes empty.
+
 ## 0.168.0
 
 ### Minor Changes

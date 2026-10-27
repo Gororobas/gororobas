@@ -1,11 +1,21 @@
 import { Array, Option, pipe } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
+import { toParentMessage } from 'foldkit/test'
 import { describe, expect, test } from 'vitest'
 
-import * as Entry from './entry'
-import { GenerateEntryId, Message, init, update } from './skills'
+import { GenerateSkillsEntryId } from './command'
+import { EntriesBinding } from './composition'
+import { Message } from './definition'
+import { SkillsEntryBlock } from './entry'
+import { init } from './init'
+import { update } from './update'
 
-const givenInitial = given(init('skills-entry-1'))
+const givenInitial = given(init('skills-entry-1').model)
+
+const entryMessage = (
+  entryId: string,
+  message: typeof SkillsEntryBlock.Message.Type,
+) => toParentMessage(EntriesBinding, entryId, message)
 
 describe('skills', () => {
   test('ClickedAddEntry generates an id and appends an entry', () => {
@@ -13,10 +23,10 @@ describe('skills', () => {
       update,
       givenInitial,
       message(Message.ClickedAddEntry()),
-      Command.expectHas(GenerateEntryId),
+      Command.expectHas(GenerateSkillsEntryId),
       Command.resolve(
-        GenerateEntryId,
-        Message.SucceededGenerateEntryId({ entryId: 'test-skill-1' }),
+        GenerateSkillsEntryId,
+        Message.SucceededGenerateSkillsEntryId({ entryId: 'test-skill-1' }),
       ),
       model(model => {
         expect(model.entries).toHaveLength(2)
@@ -24,31 +34,31 @@ describe('skills', () => {
     )
   })
 
-  test('FailedGenerateEntryId leaves the entries unchanged', () => {
+  test('FailedGenerateSkillsEntryId leaves the entries unchanged', () => {
     story(
       update,
       givenInitial,
-      message(Message.FailedGenerateEntryId()),
+      message(Message.FailedGenerateSkillsEntryId()),
       Command.expectNone(),
       model(model => {
-        expect(model).toEqual(init('skills-entry-1'))
+        expect(model).toEqual(init('skills-entry-1').model)
       }),
     )
   })
 
   test('an entry OutMessage.Removed removes that entry', () => {
     const firstEntry = Option.getOrThrow(
-      Array.head(init('skills-entry-1').entries),
+      Array.head(init('skills-entry-1').model.entries),
     )
 
     story(
       update,
       givenInitial,
       message(
-        Message.GotEntryMessage({
-          entryId: firstEntry.id,
-          message: Entry.Message.ClickedRemoveSelf(),
-        }),
+        entryMessage(
+          firstEntry.id,
+          SkillsEntryBlock.Message.ClickedRemoveSelf(),
+        ),
       ),
       model(model => {
         expect(model.entries).toHaveLength(0)
@@ -56,19 +66,19 @@ describe('skills', () => {
     )
   })
 
-  test('GotEntryMessage folds a name update into the matching entry', () => {
+  test('a generated entry Message updates the matching entry', () => {
     const firstEntry = Option.getOrThrow(
-      Array.head(init('skills-entry-1').entries),
+      Array.head(init('skills-entry-1').model.entries),
     )
 
     story(
       update,
       givenInitial,
       message(
-        Message.GotEntryMessage({
-          entryId: firstEntry.id,
-          message: Entry.Message.UpdatedName({ value: 'TypeScript' }),
-        }),
+        entryMessage(
+          firstEntry.id,
+          SkillsEntryBlock.Message.UpdatedName({ value: 'TypeScript' }),
+        ),
       ),
       model(model => {
         expect(

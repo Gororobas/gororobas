@@ -1,0 +1,1 @@
+export { tableOfContents } from './metadata'

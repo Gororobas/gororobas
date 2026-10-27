@@ -13,4 +13,3 @@ const LoadState = defineTaggedUnion({
 const Model = Schema.Struct({
   loadState: LoadState,
 })
-type Model = typeof Model.Type

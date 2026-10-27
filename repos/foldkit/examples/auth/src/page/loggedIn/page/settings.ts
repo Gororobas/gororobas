@@ -1,13 +1,12 @@
-import { Html, HtmlBuilder } from 'foldkit/html'
+import { Html } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
 import { Session } from '../../../domain/session'
+import type { LoggedInViewBuilder } from '../composition'
 import { Message } from '../message'
 
-// VIEW
-
-const infoRow = (label: string, value: string, h: HtmlBuilder<Message>): Html =>
+const infoRow = (label: string, value: string, h: LoggedInViewBuilder): Html =>
   h.div(
     [
       h.Class(
@@ -20,7 +19,10 @@ const infoRow = (label: string, value: string, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-export const view = (session: Session, h: HtmlBuilder<Message>): Html =>
+export const view = (
+  session: typeof Session.Type,
+  h: LoggedInViewBuilder,
+): Html =>
   h.div(
     [h.Class('max-w-4xl mx-auto px-4')],
     [

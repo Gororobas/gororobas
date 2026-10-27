@@ -1,4 +1,5 @@
-import { Effect, Schema } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
+import { Block } from 'foldkit'
 import * as CustomElement from 'foldkit/customElement'
 import { Server } from 'foldkit/experimental'
 import { type Html, type HtmlBuilder } from 'foldkit/html'
@@ -13,6 +14,32 @@ import {
   isHtmlPropertyRepresentable,
   reflectedAttributeName,
 } from '../packages/foldkit/dist/domReflection.js'
+
+const Model = Schema.Null
+const ApplicationComposition = Block.makeDefinition('Application', {
+  Model,
+  Message: Schema.Never,
+}).makeComposition()
+const makeParityBlock = (
+  view: (
+    model: null,
+    h: HtmlBuilder<never>,
+  ) => Readonly<{ title: string; body: Html }>,
+) => {
+  const prepare = () =>
+    ApplicationComposition.prepareBlock({
+      init: ApplicationComposition.makeInit(() => ({ model: null })),
+      update: ApplicationComposition.makeUpdate({}),
+      view: ApplicationComposition.makeView(view),
+      EffectsLayer: Layer.empty,
+    })
+  const ApplicationBlock: Block.FromAssemblyWithView<
+    typeof Model,
+    typeof prepare
+  > = Block.assemble(prepare)
+
+  return ApplicationBlock
+}
 
 // The state a served element is in, compared against the state the client puts
 // the same element in.
@@ -844,17 +871,15 @@ const renderCase = async (parityCase: ParityCase): Promise<RenderedCase> => {
   let captured: CapturedData = {}
   const rendered = await Effect.runPromise(
     Server.renderToString(
-      {
-        init: () => ({ model: null }),
-        view: (_model: null, h: HtmlBuilder<never>) => {
-          const element = parityCase.build(h)
-          captured = element?.data ?? {}
-          return {
-            title: 'dom state parity',
-            body: containedBy(h, parityCase.container ?? 'Block', element),
-          }
-        },
-      },
+      makeParityBlock((_model, h) => {
+        const element = parityCase.build(h)
+        captured = element?.data ?? {}
+        return {
+          title: 'dom state parity',
+          body: containedBy(h, parityCase.container ?? 'Block', element),
+        }
+      }),
+      {},
       { isHydratable: false },
     ),
   )
@@ -1098,13 +1123,11 @@ const runSerializeRefusals = async (): Promise<void> => {
     const outcome = await Effect.runPromise(
       Effect.result(
         Server.renderToString(
-          {
-            init: () => ({ model: null }),
-            view: (_model: null, h: HtmlBuilder<never>) => ({
-              title: 'dom state parity',
-              body: h.div([], [refusal.build(h)]),
-            }),
-          },
+          makeParityBlock((_model, h) => ({
+            title: 'dom state parity',
+            body: h.div([], [refusal.build(h)]),
+          })),
+          {},
           { isHydratable: false },
         ),
       ),
@@ -1128,13 +1151,11 @@ const main = async (): Promise<void> => {
   let builder: HtmlBuilder<never> | undefined
   await Effect.runPromise(
     Server.renderToString(
-      {
-        init: () => ({ model: null }),
-        view: (_model: null, h: HtmlBuilder<never>) => {
-          builder = h
-          return { title: 'dom state parity', body: h.div([], ['x']) }
-        },
-      },
+      makeParityBlock((_model, h) => {
+        builder = h
+        return { title: 'dom state parity', body: h.div([], ['x']) }
+      }),
+      {},
       { isHydratable: false },
     ),
   )

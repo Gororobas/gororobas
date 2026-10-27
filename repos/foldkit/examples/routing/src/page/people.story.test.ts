@@ -2,14 +2,10 @@ import { Array, String } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { describe, expect, test } from 'vitest'
 
-import {
-  Message,
-  Model,
-  PushSearchUrl,
-  SearchResults,
-  searchPeople,
-  update,
-} from './people'
+import { PushSearchUrl } from './people/command'
+import { Message } from './people/message'
+import { Model, SearchResults, searchPeople } from './people/model'
+import { update } from './people/update'
 
 const givenLoaded = (searchInput: string) =>
   given(
@@ -49,14 +45,14 @@ describe('people', () => {
     )
   })
 
-  test('SucceededFetchPeople stores the loaded results', () => {
+  test('CompletedFetchPeople stores the loaded results', () => {
     const people = searchPeople('designer')
 
     story(
       update,
       givenLoaded(''),
       message(
-        Message.SucceededFetchPeople({
+        Message.CompletedFetchPeople({
           query: 'designer',
           people,
         }),

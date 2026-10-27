@@ -1,4 +1,4 @@
-import { expect } from 'vitest'
+import { expect, expectTypeOf } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
@@ -30,6 +30,30 @@ describe('modifyFields', () => {
       { a: n => n * 2 },
     )
     expect(result).toStrictEqual({ a: 2, b: 'hello', c: true })
+  })
+
+  it('preserves branded source fields in data-first calls', () => {
+    const Brand: unique symbol = Symbol()
+    type Branded = Readonly<{
+      count: number
+      name: string
+      [Brand]: true
+    }>
+    const branded: Branded = { count: 1, name: 'test', [Brand]: true }
+    const result = modifyFields(branded, { count: count => count + 1 })
+
+    expect(result).toStrictEqual({ count: 2, name: 'test', [Brand]: true })
+    expectTypeOf(result).toExtend<Branded>()
+  })
+
+  it('retains narrower transformed fields and rejects widening', () => {
+    const state: Readonly<{ status: 'Idle' | 'Ready' }> = { status: 'Idle' }
+    const ready = modifyFields(state, { status: () => 'Ready' })
+    const widenStatus = (): string => 'Ready'
+
+    expectTypeOf(ready.status).toEqualTypeOf<'Ready'>()
+    // @ts-expect-error A field transform cannot widen its source field.
+    modifyFields(state, { status: widenStatus })
   })
 
   it('handles empty transforms', () => {

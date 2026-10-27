@@ -12,6 +12,8 @@ Event attributes complete the loop. They produce Messages for the runtime to dis
 
 In the [restaurant analogy](/core/architecture#the-restaurant-analogy), view is the meal on the table. The Model records the current facts; view presents them.
 
+The Counter's named `ApplicationComposition` supplies the primary view builder, so the view's Model, Message, child, and Mount capabilities come from the same Composition that assembles `ApplicationBlock`. This excerpt remains in the compact Counter's `application.ts` after the Application and Composition declarations.
+
 ::Snippet{name="counterView" label="Using view"}
 
 :::Info{label="No hook rules"}
@@ -22,7 +24,7 @@ React functional components can hold local state and run effects through hooks, 
 
 ### Document Fields
 
-A `makeApplication` view returns a `Document`, not bare HTML. The Document contains the body to patch into the application container and the document-level state that should track the Model.
+A root Block passed to `Program.make` has a view that returns a `Document`, not bare HTML. The Document contains the body to patch into the application container and the document-level state that should track the Model.
 
 | Field       | Type                       | Required | What the runtime does with it                                                                                                                  |
 | ----------- | -------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -37,7 +39,7 @@ Every field is a function of the Model, just like `body`. There is no imperative
 
 ### Document Ownership
 
-A `makeElement` view returns `Html` directly. An embedded app does not own the page, so it cannot declare the title or document metadata. Everything outside this section applies to both kinds of view. See [Runtime](/core/runtime#make-element) for when to use each one.
+A root Block passed to `Program.makeElement` has a view that returns `Html` directly. An embedded app does not own the page, so it cannot declare the title or document metadata. Everything outside this section applies to both kinds of view. See [Runtime](/core/runtime#to-element) for when to use each one.
 
 ### Language and Direction
 
@@ -59,7 +61,7 @@ The runtime can only synchronize these fields after the first render. Served HTM
 
 The application must decide its canonical URL. Foldkit does not derive `canonical` from the address bar on the client or from `Request.url` during server rendering. Only the application knows which values identify a page. For example: `?page=2` may identify a separate page, while `?utm_source=newsletter` usually does not. Derive the canonical from the typed route in the Model, just as the view derives `title` from the Model.
 
-::Snippet{name="documentCanonical" label="Derive a canonical URL from an AppRoute"}
+::Snippet{name="documentCanonical" label="Derive a canonical URL from an ApplicationRoute"}
 
 #### Restoring Served Metadata
 
@@ -85,7 +87,9 @@ Every view receives `h`, an `HtmlBuilder` typed to the application's Message uni
 
 ::Snippet{name="htmlHelpers" label="HTML helpers"}
 
-The Message type follows the builder. If `h.OnClick` receives a Message outside the application union, TypeScript rejects it. The root runtime supplies its builder, and `Submodel.defineView` supplies one for each child view.
+The Message type follows the builder. If `h.OnClick` receives a Message outside the application union, TypeScript rejects it. The root Runtime supplies its builder, and each Block Composition's `makeView` supplies one for its child view.
+
+The builder also carries the Mount definitions and child Blocks the view may render. A Composition infers them from its local Mounts and child Bindings. `ApplicationComposition.prepareBlock` packages the root registry into the opaque draft, and `Block.assemble` installs it on the completed root Block. See [Mount requirements in reusable views](/core/mount#mount-requirements-in-reusable-views) for child views and attribute slots.
 
 #### Element Builder Arity
 
@@ -93,7 +97,29 @@ Element builders that accept children take attributes first and optional childre
 
 #### Builder Ownership
 
-Application code cannot construct a builder. It only enters through a view parameter, which keeps its Message type aligned with the boundary that dispatches its handlers. Extracted view helpers should take `h: HtmlBuilder<Message>` as their last parameter. A helper that works under any parent can introduce a `ParentMessage` generic and accept `h: HtmlBuilder<ParentMessage>`.
+Application code cannot construct a builder. The canonical owned view enters through `Composition.makeView` or `makeView.withInputs`, which checks the complete view contract when the Block or Application is completed. Let that primary view's `h` parameter infer. A completed Block retains `block.makeView` for authoring an alternate embed view against that already fixed graph; it cannot change the graph or complete another Block.
+
+Ordinary feature-local helpers remain plain functions. After establishing `FeatureComposition`, declare `type FeatureViewBuilder = Block.ViewBuilderFor<typeof FeatureComposition>` on the next line with no blank line and use that alias for each helper's `h` parameter. Export it only when another file uses it. The alias carries the owner's Message type and its registered child and Mount capabilities; it creates no runtime value.
+
+The owner prefix identifies the specific Composition at a plain type import site. Structural contracts keep the standard names `Model`, `Message`, and `OutMessage` because a completed value supplies the feature context, such as `SearchBlock.Model`. Give a helper only the other parameters it uses: a heading helper can take only `h`, a card helper can take its domain value and `h`, and a list helper can take the Model and `h`. Let TypeScript infer whether the helper returns one `Html` value or an array.
+
+::Snippet{name="featureViewHelpers" label="View helpers within a feature"}
+
+A rendering helper shared across Compositions takes a generic `ParentMessage` and the caller's `HtmlBuilder<ParentMessage>`. Both a root view and a child view can call this heading helper with their own `h`; TypeScript infers the Message type at each call:
+
+::Snippet{name="viewSharedHelper" label="Sharing a view helper across Compositions"}
+
+The heading uses only ordinary elements and attributes. Keep helpers tied to one feature on that Composition's `FeatureViewBuilder`.
+
+For a shared helper that forwards Mount-bearing child Attributes, let the caller render those Attributes through a typed callback. This Dialog helper uses a generic builder for its ordinary content and accepts `renderDialog` for the native element carrying the Dialog Mount:
+
+::Snippet{name="viewSharedDialog" label="Shared Dialog content and renderer contract"}
+
+Each caller registers its own Dialog Binding and supplies the renderer from its inferred view builder:
+
+::Snippet{name="viewSharedDialogCaller" label="Rendering Dialog Attributes with the owning builder"}
+
+The callback keeps the caller's scoped Binding capability. Omitting `DialogBinding` from this Composition makes both the child embedding and the native Attributes fail their checks. Annotating a whole shared builder with a raw Dialog Mount requirement does not describe that capability; keep the native renderer at the owning view instead.
 
 ### Inert HTML
 
@@ -143,6 +169,8 @@ A handler can do more than return a one-line Message. The constraint is purity, 
 ::Snippet{name="eventHandlingComplex" label="Complex handler"}
 
 For `OnKeyDownPreventDefault`, returning `Some` claims the key. Foldkit suppresses the browser's default action and dispatches the Message. Returning `None` leaves the key to the browser.
+
+Every `OnKeyDown` attribute leaves a keydown alone while an input method is still composing. Foldkit does not call the handler and does not suppress the browser default, so Enter can confirm a Japanese, Chinese, or Korean conversion.
 
 ### Self-Targeted Keydowns
 

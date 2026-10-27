@@ -29,15 +29,13 @@
       "error",
       { "ignoreDeclarationSort": true, "ignoreCase": false }
     ],
+    "foldkit/block-name-matches-variable": "error",
     "foldkit/no-noop-message": "error",
-    "foldkit/got-submodel-message-name": "error",
-    "foldkit/got-prefix-requires-submodel-payload": "error",
     "foldkit/no-empty-children-array": "error",
     "foldkit/no-empty-commands-array": "error",
     "foldkit/no-empty-to-parent-out-message": "error",
     "foldkit/no-empty-object-tagged-call": "error",
     "foldkit/prefer-callable-message-constructor": "error",
-    "foldkit/command-binding-matches-name": "error",
     "foldkit/no-module-level-mutable-state": "error",
     "foldkit/no-switch-on-message-tag": "error",
     "foldkit/acquire-release-constructs-in-acquire-body": "error",
@@ -48,6 +46,45 @@
     "foldkit/no-prevent-default-in-stream-operator": "error"
   },
   "overrides": [
+    {
+      "files": ["packages/foldkit/declaration-tests/**/*.ts"],
+      "rules": {
+        "foldkit/block-name-matches-variable": "off"
+      }
+    },
+    {
+      "files": ["packages/foldkit/declaration-tests/**/*.rejected.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/foldkit/declaration-tests/composition-safety.accepted.ts",
+        "packages/foldkit/declaration-tests/from-assembly.carrier-guards.ts",
+        "packages/foldkit/declaration-tests/from-assembly.generic.ts",
+        "packages/foldkit/declaration-tests/from-assembly.overloaded-producer.ts"
+      ],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/foldkit/declaration-tests/focused-step.limitations.ts",
+        "packages/foldkit/declaration-tests/keyed-map-field.consume.ts",
+        "packages/foldkit/declaration-tests/operation-hint.source.ts"
+      ],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    },
+    {
+      "files": ["packages/foldkit/type-performance/**/*.ts"],
+      "rules": {
+        "foldkit/block-name-matches-variable": "off"
+      }
+    },
     {
       "files": ["packages/foldkit/src/**/*.ts"],
       "rules": {

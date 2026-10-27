@@ -1,9 +1,5 @@
-// page/home/index.ts
-export { Model } from './model'
-export { Message } from './message'
-export * from './init'
-export * from './update'
-export * from './view'
+// page/products/index.ts
+export { ProductsBlock } from './block'
 
 // page/index.ts
 export * as Home from './home'

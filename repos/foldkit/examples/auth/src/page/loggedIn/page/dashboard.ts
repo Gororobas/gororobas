@@ -1,9 +1,12 @@
-import { Html, HtmlBuilder } from 'foldkit/html'
+import { Html } from 'foldkit/html'
 
 import { Session } from '../../../domain/session'
-import type { Message } from '../message'
+import type { LoggedInViewBuilder } from '../composition'
 
-export const view = (session: Session, h: HtmlBuilder<Message>): Html =>
+export const view = (
+  session: typeof Session.Type,
+  h: LoggedInViewBuilder,
+): Html =>
   h.div(
     [h.Class('max-w-4xl mx-auto px-4')],
     [
@@ -23,11 +26,7 @@ export const view = (session: Session, h: HtmlBuilder<Message>): Html =>
     ],
   )
 
-const statCard = (
-  title: string,
-  value: string,
-  h: HtmlBuilder<Message>,
-): Html =>
+const statCard = (title: string, value: string, h: LoggedInViewBuilder): Html =>
   h.div(
     [h.Class('bg-white rounded-lg shadow-md p-6')],
     [

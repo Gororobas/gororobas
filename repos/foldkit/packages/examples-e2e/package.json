@@ -17,7 +17,7 @@
     "@types/node": "26.4.0",
     "@typescript-eslint/eslint-plugin": "^8.70.1",
     "@typescript-eslint/parser": "^8.70.1",
-    "@typescript/native": "npm:typescript@^7.0.2",
+    "@typescript/native": "npm:typescript@7.1.0-beta",
     "eslint": "^10.11.0",
     "playwright": "^1.63.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2"

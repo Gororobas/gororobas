@@ -1,13 +1,17 @@
 import { Option, Result } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
+import { toParentMessage } from 'foldkit/test'
 import { expect, test } from 'vitest'
 
 import { Tabs } from '@foldkit/ui'
 
-import { Message, postQuery, postsQuery, statsQuery, update } from './main'
+import { TabsBinding } from './composition'
+import { Message } from './message'
+import { AppTabsBlock } from './model'
 import {
   FETCHED_AT,
+  FIRST_POST_REQUEST_KEY,
   failedFirstPostModel,
   failedPostsModel,
   firstPostDetail,
@@ -17,7 +21,9 @@ import {
   loadedStatsModel,
   loadingStatsModel,
   refreshingStatsModel,
-} from './main.fixture'
+} from './model.fixture'
+import { postQuery, postsQuery, statsQuery } from './query'
+import { update } from './update'
 
 const FIRST_REQUEST_GENERATION = 1
 const SECOND_REQUEST_GENERATION = 2
@@ -27,17 +33,19 @@ const postAsyncDataTag = (
   postId: string,
 ): string => postQuery.read(model.postDetails, { postId })._tag
 
-const selectedPostsTab = Message.GotTabsMessage({
-  message: Tabs.Message.SelectedTab({ index: 0, value: 'Posts' }),
-})
+const selectedPostsTab = toParentMessage(
+  TabsBinding,
+  AppTabsBlock.Message.SelectedTab({ index: 0, value: 'Posts' }),
+)
 
-const selectedStatsTab = Message.GotTabsMessage({
-  message: Tabs.Message.SelectedTab({ index: 1, value: 'Stats' }),
-})
+const selectedStatsTab = toParentMessage(
+  TabsBinding,
+  AppTabsBlock.Message.SelectedTab({ index: 1, value: 'Stats' }),
+)
 
 const resolveFocusTab = Command.resolve(
-  Tabs.FocusTab,
-  Tabs.Message.CompletedFocusTab(),
+  Tabs.test.FocusTab,
+  AppTabsBlock.Message.CompletedFocusTab(),
 )
 
 test('first visit to the Stats tab fetches stats', () => {
@@ -220,6 +228,7 @@ test('opening a post once reuses its retained data on later visits', () => {
       postQuery.Message.CompletedFetch({
         args: { postId: 'first-post' },
         generation: FIRST_REQUEST_GENERATION,
+        requestKey: FIRST_POST_REQUEST_KEY,
         result: Result.succeed({
           post: firstPostDetail,
           fetchedAt: FETCHED_AT,
@@ -246,6 +255,7 @@ test('a failed post fetch enters Failure and retry fetches it again', () => {
       postQuery.Message.CompletedFetch({
         args: { postId: 'first-post' },
         generation: FIRST_REQUEST_GENERATION,
+        requestKey: FIRST_POST_REQUEST_KEY,
         result: Result.fail('The connection dropped.'),
       }),
     ),
@@ -261,6 +271,7 @@ test('a failed post fetch enters Failure and retry fetches it again', () => {
       postQuery.Message.CompletedFetch({
         args: { postId: 'first-post' },
         generation: SECOND_REQUEST_GENERATION,
+        requestKey: FIRST_POST_REQUEST_KEY,
         result: Result.succeed({
           post: firstPostDetail,
           fetchedAt: FETCHED_AT,
@@ -287,6 +298,7 @@ test('revisiting a post with a cached failure loads it again', () => {
       postQuery.Message.CompletedFetch({
         args: { postId: 'first-post' },
         generation: SECOND_REQUEST_GENERATION,
+        requestKey: FIRST_POST_REQUEST_KEY,
         result: Result.fail('The connection dropped.'),
       }),
     ),

@@ -5,10 +5,8 @@ export const SnippetSize = defineTaggedUnion({
   Fits: {},
   Overflows: {},
 })
-export type SnippetSize = typeof SnippetSize.Type
 
 export const Model = Schema.Struct({
   openDisclosureIds: Schema.HashSet(Schema.String),
   snippetSizes: Schema.HashMap(Schema.String, SnippetSize),
 })
-export type Model = typeof Model.Type

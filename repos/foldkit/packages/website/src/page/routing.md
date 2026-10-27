@@ -8,27 +8,27 @@ Most routers make you define routes twice: once for matching URLs, and again for
 
 Foldkit’s routing is based on biparsers: parsers that work in both directions. A single route definition handles:
 
-- `/people/42` → `AppRoute.Person { personId: 42 }` (parsing)
-- `AppRoute.Person { personId: 42 }` → `/people/42` (building)
+- `/people/42` → `ApplicationRoute.Person { personId: 42 }` (parsing)
+- `ApplicationRoute.Person { personId: 42 }` → `/people/42` (building)
 
 This symmetry means if you can parse a URL into data, you can always build that data back into the same URL.
 
 ## Defining Routes
 
-`defineRouteUnion` declares every application Route together. Each key is a tag, and its value lists the fields parsed from the URL. `AppRoute` is also an [Effect Schema](https://effect.website/docs/schema/introduction/), so it can be stored in the Model and used to decode unknown values.
+`defineRouteUnion` declares every application Route together. Each key is a tag, and its value lists the fields parsed from the URL. `ApplicationRoute` is also an [Effect Schema](https://effect.website/docs/schema/introduction/), so it can be stored in the Model and used to decode unknown values.
 
 ::Snippet{name="routingDefineRoutes" label="Route definitions"}
 
-- `AppRoute.Home`: no parameters
-- `AppRoute.Person`: holds a `personId: number`
-- `AppRoute.People`: holds an optional `searchText: Option<string>`
-- `AppRoute.NotFound`: holds the unmatched `path: string`
+- `ApplicationRoute.Home`: no parameters
+- `ApplicationRoute.Person`: holds a `personId: number`
+- `ApplicationRoute.People`: holds an optional `searchText: Option<string>`
+- `ApplicationRoute.NotFound`: holds the unmatched `path: string`
 
 ### Construct and Match Routes
 
-Keep each variant on `AppRoute`, just as Message variants stay on `Message`. `AppRoute.Person({ personId: 42 })` constructs a Route, while `Route.mapTo(AppRoute.Person)` uses the same variant as a Schema.
+Keep each variant on `ApplicationRoute`, just as Message variants stay on `Message`. `ApplicationRoute.Person({ personId: 42 })` constructs a Route, while `Route.mapTo(ApplicationRoute.Person)` uses the same variant as a Schema.
 
-Use `AppRoute.match` when every Route needs a branch. Use `AppRoute.isAnyOf(['Blog', 'BlogPost'])` when one check accepts several tags.
+Use `ApplicationRoute.match` when every Route needs a branch. Use `ApplicationRoute.isAnyOf(['Blog', 'BlogPost'])` when one check accepts several tags.
 
 ### Accept a Subset of Routes
 
@@ -36,9 +36,9 @@ If a Model or Schema accepts only some application Routes, create that Schema wi
 
 ::Snippet{name="routingSubset" label="Route subset"}
 
-`subset` includes only the tags you name. If you add a Route to `AppRoute` later, `TopLevelRoute` will not accept it until you add its tag. There is no `omit`: an exclusion list would silently accept every Route added later.
+`subset` includes only the tags you name. If you add a Route to `ApplicationRoute` later, `TopLevelRoute` will not accept it until you add its tag. There is no `omit`: an exclusion list would silently accept every Route added later.
 
-If a module needs to name one variant's type, add an alias beside `AppRoute`: `export type NewsletterRoute = typeof AppRoute.Newsletter.Type`.
+When an annotation needs one variant's type, query its Schema directly: `typeof ApplicationRoute.Newsletter.Type`. A routine `NewsletterRoute` alias only hides which union owns the variant.
 
 ## Building Routers
 
@@ -56,7 +56,7 @@ The primitives:
 - `restString('path')`: captures all remaining segments as one path string
 - `slash(...)`: chains path segments together
 - `Route.query(Schema)`: adds query parameter parsing
-- `Route.mapTo(AppRoute.Person)`: converts parsed data into a typed route
+- `Route.mapTo(ApplicationRoute.Person)`: converts parsed data into a typed route
 
 ## Parsing URLs
 
@@ -112,7 +112,7 @@ Some routes carry a whole path as data: a file tree, a documentation page, a bre
 
 ### Match and Order Rest Routes
 
-`rest` requires at least one segment, so the bare prefix `/files` does not match the rest route. Give the prefix its own route, like `AppRoute.FilesIndex` above. The two never overlap: one matches exactly `/files`, the other matches anything beneath it.
+`rest` requires at least one segment, so the bare prefix `/files` does not match the rest route. Give the prefix its own route, like `ApplicationRoute.FilesIndex` above. The two never overlap: one matches exactly `/files`, the other matches anything beneath it.
 
 A specific route under the same prefix is different. The rest route also matches every URL that `literal('files'), slash(literal('shared'))` accepts, so in `oneOf` the specific route must come first.
 
@@ -150,11 +150,11 @@ Foldkit provides navigation Commands for programmatically changing the URL. Thes
 
 ### Handle Link Requests
 
-When a link is clicked in your application, the `routing.onUrlRequest` handler receives either an Internal or External request. Handle Internal links with `pushUrl` and External links with `load`:
+When a link is clicked in your application, the `routing.onUrlRequest` handler receives either an Internal or External request. When `ClickedLink` has the canonical `{ request }` payload, pass `ApplicationBlock.Message.ClickedLink` directly in `Program.make`. A callback remains available for a custom payload shape. Handle Internal links with `pushUrl` and External links with `load`:
 
 ::Snippet{name="navigationHandleUrlRequest" label="URL request handling"}
 
-After `pushUrl` or `replaceUrl` changes the URL, Foldkit automatically calls your `routing.onUrlChange` handler with the new URL. This is where you parse the URL into a route and update your model.
+After `pushUrl` or `replaceUrl` changes the URL, Foldkit automatically calls your `routing.onUrlChange` handler with the new URL. Pass `ApplicationBlock.Message.ChangedUrl` directly when the Message has the canonical `{ url }` payload. Update parses that URL into a Route and stores it in the Model.
 
 ## Cold Loads and the Initial Route {#cold-loads}
 
@@ -172,9 +172,9 @@ Both code paths resolve a URL into a route, and both should produce the same rou
 
 ::Snippet{name="routingColdLoad" label="Cold load"}
 
-### Preserve the Submodel Boundary
+### Preserve the Block Boundary
 
-When the route-driven state lives in a Submodel, the same factoring follows the Submodel boundary instead of a shared helper: the Submodel’s `init(route)` seeds its state and returns the boot Commands for the cold load, and its `informRouteChanged` helper covers later transitions. [Informing Submodels](/patterns/informing-submodels) shows that shape, and the [Routing example](/example-apps/routing) runs on it.
+When the route-driven state lives in a Block, the same factoring follows the Block boundary instead of a shared helper: the Block Composition's `init(route)` seeds its state and returns the startup Commands for the cold load, and its public `informRouteChanged` operation produces `InformedOfRouteChange` for later transitions. The child update owns both the Model change and any Commands. [Informing Blocks](/patterns/informing-blocks) shows that shape, and the [Routing example](/example-apps/routing) runs on it.
 
 ## Route Transitions
 
@@ -200,16 +200,24 @@ Every helper that takes a tag answers for one named route. When several routes h
 
 ::Snippet{name="routingEnteredAny" label="Using enteredAny"}
 
+### Match Route Transition Cases
+
+`Transition.match` requires handlers for `Entered`, `Exited`, `Stayed`, and `Unrelated`; use it when each case has its own policy. `Transition.matchOrElse` accepts selected handlers and uses one fallback for the omitted cases. Both narrow handler payloads to the selected Route tag. Their `<RouteStep>()(...)` form requires every handler and fallback to return the same Step type while inferring the Route and tag:
+
+`Transition` uses parsed Route values; it does not inspect the raw URL. The `People.searchText` field below comes from `Route.query`, so changing it produces `Stayed`. The handler compares both values and fetches only when they differ. Query parameters omitted from the Route Schema are unavailable to a Transition. The snippet reuses `ApplicationRoute` and `FetchPeople` from the cold-load policy above. `ApplicationDefinition` supplies the Model and Message types for its Steps.
+
+::Snippet{name="routingTransitionMatch" label="Route transition policy"}
+
 ### Detect Route Exits
 
-`Transition.exited(transition, tag)` returns the route the transition left, narrowed to the tag, and `Transition.exitedAny` is its whichever-route form. Exits are for one-shot Commands on the way out, saving a draft, recording that a visit ended. They are not for tearing down things that live while a route is active: listeners, timers, and handles belong to a [Subscription](/core/subscriptions) or [ManagedResource](/core/managed-resources) condition on the Model, which also ends them when the route state disappears for reasons other than navigation.
+`Transition.exited(transition, tag)` returns the route the transition left, narrowed to the tag, and `Transition.exitedAny` is its whichever-route form. Use `Transition.isExiting` when the payload is unnecessary. Exits are for one-shot Commands on the way out, saving a draft, recording that a visit ended. They are not for tearing down things that live while a route is active: listeners, timers, and handles belong to a [Subscription](/core/subscriptions) or [ManagedResource](/core/managed-resources) condition on the Model, which also ends them when the route state disappears for reasons other than navigation.
 
 ### Compare Within-Route Changes
 
-`Transition.stayed(transition, tag)` returns both sides of a within-route navigation, narrowed to the tag: `Some({ previousRoute, nextRoute })` when the transition stayed on that route, `Option.none()` when it entered it, left it, or never touched it. A cold load stays nowhere. Reach for it when the previous payload matters, comparing a detail id or diffing query parameters; when only the next value matters, the `ChangedUrl` handler already has the next route. Staying has no whichever-route form: without a tag the two sides could not narrow to the same route variant together, so matching on one would leave the other typed as the whole union.
+`Transition.stayed(transition, tag)` returns both sides of a within-route navigation, narrowed to the tag: `Some({ previousRoute, nextRoute })` when the transition stayed on that route, `Option.none()` when it entered it, left it, or never touched it. Use `Transition.isStaying` when both payloads are unnecessary. A cold load stays nowhere. Reach for `stayed` when the previous payload matters, comparing a detail id or diffing query parameters; when only the next value matters, the `ChangedUrl` handler already has the next route. Staying has no whichever-route form: without a tag the two sides could not narrow to the same route variant together, so matching on one would leave the other typed as the whole union.
 
 ::Snippet{name="routingExitedStayed" label="Exited and stayed"}
 
-Because a cold load counts as an entry, `init` and the `ChangedUrl` handler share one load-on-entry policy: reloading on `/people` runs the same entry Commands as clicking there from the home page. Transition helpers compose by concatenation, as above; a handler that mixes entry, exit, and per-navigation Commands flattens their results into one batch.
+Because a cold load counts as an entry, `init` and the `ChangedUrl` handler share one load-on-entry policy: reloading on `/people` runs the same entry Commands as clicking there from the home page.
 
 The [Route Transition API reference](/api-reference/route-transition) lists every helper with its full signature.

@@ -6,8 +6,6 @@ export const Session = Schema.Struct({
   name: Schema.String,
 })
 
-export type Session = typeof Session.Type
-
 export const SessionJsonString = Schema.fromJsonString(
   Schema.toCodecJson(Session),
 )

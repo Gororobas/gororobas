@@ -1,29 +1,33 @@
-import { Submodel } from 'foldkit'
 import type { CalendarDate } from 'foldkit/calendar'
-import { type Html, type HtmlBuilder, createKeyedLazy } from 'foldkit/html'
+import { type Html, createKeyedLazy } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
-import { Message, type Model } from './education'
-import * as Entry from './entry'
+import {
+  EducationComposition,
+  type EducationViewBuilder,
+  EntriesBinding,
+} from './composition'
+import { Message } from './definition'
+import { EducationEntryBlock } from './entry'
 
 const lazyEntry = createKeyedLazy()
 
 const entryView = (
-  entry: Entry.Model,
+  entry: typeof EducationEntryBlock.Model.Type,
   today: CalendarDate,
-  h: HtmlBuilder<Message>,
+  h: EducationViewBuilder,
 ): Html =>
-  h.submodel({
-    slotId: entry.id,
-    model: entry,
-    view: Entry.view,
-    viewInputs: { today },
-    toParentMessage: message =>
-      Message.GotEntryMessage({ entryId: entry.id, message }),
-  })
+  h.block(
+    EntriesBinding.embedView({
+      key: entry.id,
+      slotId: entry.id,
+      model: entry,
+      viewInputs: { today },
+    }),
+  )
 
-export const view = Submodel.defineView<Model, Message>((model, h): Html =>
+export const view = EducationComposition.makeView((model, h) =>
   h.div(
     [h.Class('space-y-6')],
     [

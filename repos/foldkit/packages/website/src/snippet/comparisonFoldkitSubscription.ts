@@ -1,31 +1,50 @@
-export const subscriptions = Subscription.make<Model, Message>()(entry => ({
-  undoRedoKeys: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMapPreventDefault({
-      target: document,
-      type: 'keydown',
-      filterMapEvent: toUndoRedoMessage,
-    }),
-  ),
+import { Effect, Schema, Stream } from 'effect'
+import { Dom } from 'foldkit'
 
-  toolKeys: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({
-      target: document,
-      type: 'keydown',
-      filterMapEvent: toToolMessage,
-    }),
-  ),
+import { toToolMessage, toUndoRedoMessage } from './keyboard'
+import { Message } from './message'
+import { pixelArt } from './update'
 
-  mouseRelease: entry(
+export const subscriptions = pixelArt.makeSubscriptions(entry => ({
+  undoRedoKeyPresses: entry('UndoRedoKeyPresses', {
+    messages: [Message.ClickedUndo, Message.ClickedRedo],
+    handler: function* () {
+      return () =>
+        Dom.streamFromEventFilterMapPreventDefault({
+          target: document,
+          type: 'keydown',
+          filterMapEvent: toUndoRedoMessage,
+        })
+    },
+  }),
+
+  toolKeyPresses: entry('ToolKeyPresses', {
+    messages: [Message.SelectedTool],
+    handler: function* () {
+      return () =>
+        Dom.streamFromEventFilterMap({
+          target: document,
+          type: 'keydown',
+          filterMapEvent: toToolMessage,
+        })
+    },
+  }),
+
+  mouseReleases: entry(
+    'MouseReleases',
     { isDrawing: Schema.Boolean },
     {
+      messages: [Message.ReleasedMouse],
       modelToDependencies: model => ({ isDrawing: model.isDrawing }),
-      dependenciesToStream: ({ isDrawing }) =>
-        Stream.when(
-          Stream.fromEventListener(document, 'mouseup').pipe(
-            Stream.map(() => ReleasedMouse()),
-          ),
-          Effect.sync(() => isDrawing),
-        ),
+      handler: function* () {
+        return ({ isDrawing }) =>
+          Stream.when(
+            Stream.fromEventListener(document, 'mouseup').pipe(
+              Stream.map(() => Message.ReleasedMouse()),
+            ),
+            Effect.succeed(isDrawing),
+          )
+      },
     },
   ),
 }))

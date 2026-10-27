@@ -1,37 +1,48 @@
 import { Array, Option, String } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
+import { toParentMessage } from 'foldkit/test'
 import { fromString } from 'foldkit/url'
 import { describe, expect, test } from 'vitest'
 
-import { AppRoute, Message, Model, NavigateInternal, update } from './main'
-import { People } from './page'
+import { NavigateInternal } from './command'
+import { PeoplePageBinding } from './composition'
+import { Message } from './message'
+import { Model } from './model'
+import { PeopleBlock } from './page'
+import { FetchPeople } from './page/people/command'
+import { SearchResults, searchPeople } from './page/people/model'
 import {
+  ApplicationRoute,
   filesIndexRouter,
   homeRouter,
   nestedRouter,
   peopleRouter,
 } from './route'
+import { update } from './update'
 
 const peoplePageWith = (searchInput: string) =>
-  People.Model.make({
+  PeopleBlock.Model.make({
     searchInput,
     searchHistory: Array.liftPredicate(String.isNonEmpty)(searchInput),
-    results: People.SearchResults.Loaded({
+    results: SearchResults.Loaded({
       query: searchInput,
-      people: People.searchPeople(searchInput),
+      people: searchPeople(searchInput),
     }),
   })
 
 const initialPeoplePage = peoplePageWith('')
 
+const peopleMessage = (message: typeof PeopleBlock.Message.Type) =>
+  toParentMessage(PeoplePageBinding, message)
+
 const home = Model.make({
-  route: AppRoute.Home(),
+  route: ApplicationRoute.Home(),
   peoplePage: initialPeoplePage,
 })
 
 const onPeople = (searchInput: string) =>
   Model.make({
-    route: AppRoute.People({
+    route: ApplicationRoute.People({
       searchText: Option.liftPredicate(String.isNonEmpty)(searchInput),
     }),
     peoplePage: peoplePageWith(searchInput),
@@ -45,10 +56,10 @@ const urlOrThrow = (raw: string) =>
 
 const resolveFetch = (searchText: string) =>
   Command.resolve(
-    People.FetchPeople,
-    People.Message.SucceededFetchPeople({
+    FetchPeople,
+    PeopleBlock.Message.CompletedFetchPeople({
       query: searchText,
-      people: People.searchPeople(searchText),
+      people: searchPeople(searchText),
     }),
   )
 
@@ -233,7 +244,7 @@ describe('update', () => {
           expect(model.peoplePage.searchHistory).toStrictEqual(['designer'])
           expect(model.peoplePage.results._tag).toBe('Loading')
         }),
-        Command.expectHas(People.FetchPeople),
+        Command.expectHas(FetchPeople),
         resolveFetch('designer'),
         model(model => {
           if (model.peoplePage.results._tag === 'Loaded') {
@@ -246,17 +257,36 @@ describe('update', () => {
         }),
       )
     })
+
+    test('a hash-only URL change keeps the People page in sync', () => {
+      story(
+        update,
+        given(onPeople('designer')),
+        message(
+          Message.ChangedUrl({
+            url: urlOrThrow(
+              'http://localhost/people?searchText=designer#results',
+            ),
+          }),
+        ),
+        model(model => {
+          expect(model.peoplePage.searchInput).toBe('designer')
+          expect(model.peoplePage.searchHistory).toStrictEqual(['designer'])
+          expect(model.peoplePage.results._tag).toBe('Loading')
+        }),
+        Command.expectHas(FetchPeople),
+        resolveFetch('designer'),
+      )
+    })
   })
 
-  describe('GotPeopleMessage', () => {
-    test('GotPeopleMessage writes through to peoplePage', () => {
+  describe('generated People Message', () => {
+    test('writes through to peoplePage', () => {
       story(
         update,
         given(onPeople('')),
         message(
-          Message.GotPeopleMessage({
-            message: People.Message.ChangedSearchInput({ value: 'd' }),
-          }),
+          peopleMessage(PeopleBlock.Message.ChangedSearchInput({ value: 'd' })),
         ),
         model(model => {
           expect(model.peoplePage.searchInput).toBe('d')

@@ -2,7 +2,7 @@
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
 import { Schema } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
@@ -15,15 +15,6 @@ const Model = Schema.Struct({
   // ...your other fields
 })
 
-// In your init function, start each unchecked:
-const init = () => ({
-  model: {
-    optionA: false,
-    optionB: false,
-    // ...your other fields
-  },
-})
-
 // One Message per child, plus one for the "Select All" parent. Each carries
 // the new checked state:
 
@@ -33,18 +24,43 @@ const Message = defineMessageUnion({
   ToggledOptionB: { isChecked: Schema.Boolean },
 })
 
-// In the corresponding Message.match handler, toggling "Select All"
+const NotificationPreferencesComposition = Block.makeDefinition(
+  'NotificationPreferences',
+  {
+    Model,
+    Message,
+  },
+).makeComposition()
+
+// In your init function, start each unchecked:
+const init = NotificationPreferencesComposition.makeInit(() => ({
+  model: {
+    optionA: false,
+    optionB: false,
+    // ...your other fields
+  },
+}))
+
+// In the corresponding update handler, toggling "Select All"
 // writes the same value to every child:
-ToggledSelectAll: ({ isChecked }) => ({
-  model: modifyFields(model, {
-    optionA: () => isChecked,
-    optionB: () => isChecked,
+const update = NotificationPreferencesComposition.makeUpdate({
+  ToggledSelectAll: (model, { isChecked }) => ({
+    model: modifyFields(model, {
+      optionA: () => isChecked,
+      optionB: () => isChecked,
+    }),
+  }),
+  ToggledOptionA: (model, { isChecked }) => ({
+    model: modifyFields(model, { optionA: () => isChecked }),
+  }),
+  ToggledOptionB: (model, { isChecked }) => ({
+    model: modifyFields(model, { optionB: () => isChecked }),
   }),
 })
 
 // Inside your view function, compute the parent's checked and indeterminate
 // state from the children and pass isIndeterminate straight to Checkbox.view:
-const view = (model, h: HtmlBuilder<Message>) => {
+const view = NotificationPreferencesComposition.makeView((model, h) => {
   const isAllChecked = model.optionA && model.optionB
   const isNoneChecked = !model.optionA && !model.optionB
   const isIndeterminate = !isAllChecked && !isNoneChecked
@@ -59,7 +75,9 @@ const view = (model, h: HtmlBuilder<Message>) => {
     }
   }
 
-  const selectAllView = (attributes: Checkbox.CheckboxAttributes<Message>) =>
+  const selectAllView = (
+    attributes: Checkbox.CheckboxAttributes<typeof Message.Type>,
+  ) =>
     h.div(
       [h.Class('flex items-center gap-2')],
       [
@@ -84,4 +102,4 @@ const view = (model, h: HtmlBuilder<Message>) => {
     },
     h,
   )
-}
+})

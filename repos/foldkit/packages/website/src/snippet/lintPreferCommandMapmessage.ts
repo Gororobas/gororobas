@@ -2,19 +2,20 @@ import { Effect } from 'effect'
 import { Command } from 'foldkit'
 
 // ❌ Bad
-// Effect.map lifts the result Message but records nothing on the mapping chain,
-// so Story/Scene resolve sees the child's raw Message.
+// Mapping the Effect hides this same-feature Message conversion from resolve.
 const badCommand = Command.mapEffect(
-  childCommand,
-  Effect.map(message => Message.GotChildMessage({ message })),
+  documentCommand,
+  Effect.map(({ document }) =>
+    Message.CompletedLoadCurrentDocument({ document, documentId }),
+  ),
 )
 
 // ✅ Good
-// mapEffect may change execution while preserving the result Message.
-const infallibleCommand = Command.mapEffect(childCommand, Effect.orDie)
+// mapEffect changes execution while preserving the original result Message.
+const infallibleCommand = Command.mapEffect(documentCommand, Effect.orDie)
 
 // ✅ Good
-// mapMessage records the lift, so resolve can recover it in tests.
-const goodCommand = Command.mapMessage(childCommand, message =>
-  Message.GotChildMessage({ message }),
+// mapMessage records this conversion for Story and Scene resolution.
+const goodCommand = Command.mapMessage(documentCommand, ({ document }) =>
+  Message.CompletedLoadCurrentDocument({ document, documentId }),
 )

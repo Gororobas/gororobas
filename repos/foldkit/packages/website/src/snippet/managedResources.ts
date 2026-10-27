@@ -1,45 +1,58 @@
-import { Effect, Option, Schema, pipe } from 'effect'
-import { ManagedResource, Runtime } from 'foldkit'
+import { Effect, Layer, Option, Schema, pipe } from 'effect'
+import { Block } from 'foldkit'
 
-// 1. Define a Managed Resource identity
-const CameraStream = ManagedResource.tag<MediaStream>()('CameraStream')
+import { TakePhoto } from './command'
+import { init } from './init'
+import { Message } from './message'
+import type { Model } from './model'
+import { Camera, CameraComposition, CameraStream } from './resource'
+import { update } from './update'
+import { view } from './view'
 
-// 2. Wire the lifecycle with make. The requirements schema sits inline next
-//    to its config: Option.some = active, Option.none = inactive
-const managedResources = ManagedResource.make<Model, Message>()(entry => ({
-  camera: entry(Schema.Option(Schema.Struct({ facingMode: Schema.String })), {
-    resource: CameraStream,
-    modelToMaybeRequirements: model =>
-      pipe(
-        model.callState,
-        Option.liftPredicate(
-          (callState): callState is typeof InCall.Type =>
-            callState._tag === 'InCall',
+const managedResources = Camera.makeManagedResources(entry => ({
+  camera: entry(
+    'ManageCamera',
+    Schema.Option(Schema.Struct({ facingMode: Schema.String })),
+    {
+      resource: CameraStream,
+      modelToMaybeRequirements: model =>
+        pipe(
+          model.callState,
+          Option.liftPredicate(callState => callState._tag === 'InCall'),
+          Option.map(callState => ({ facingMode: callState.facingMode })),
         ),
-        Option.map(callState => ({
-          facingMode: callState.facingMode,
-        })),
-      ),
-    acquire: ({ facingMode }) =>
-      Effect.tryPromise(() =>
-        navigator.mediaDevices.getUserMedia({
-          video: { facingMode },
-        }),
-      ),
-    release: stream =>
-      Effect.sync(() => stream.getTracks().forEach(track => track.stop())),
-    onAcquired: () => AcquiredCamera(),
-    onReleased: () => ReleasedCamera(),
-    onAcquireError: error => FailedAcquireCamera({ error: String(error) }),
-  }),
+      onAcquired: () => Message.AcquiredCamera(),
+      onReleased: () => Message.ReleasedCamera(),
+      onAcquireError: error =>
+        Message.FailedAcquireCamera({ error: globalThis.String(error) }),
+      handler: function* () {
+        return {
+          acquire: ({ facingMode }) =>
+            Effect.tryPromise(() =>
+              navigator.mediaDevices.getUserMedia({ video: { facingMode } }),
+            ),
+          release: stream =>
+            Effect.sync(() =>
+              stream.getTracks().forEach(track => track.stop()),
+            ),
+        }
+      },
+    },
+  ),
 }))
 
-// 3. Pass to makeApplication
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
-  container: document.getElementById('root'),
-  managedResources,
-})
+const prepare = () =>
+  CameraComposition.prepareBlock({
+    init,
+    update,
+    view,
+    managedResources,
+    EffectsLayer: Layer.mergeAll(
+      TakePhoto.layer,
+      managedResources.camera.layer,
+    ),
+  })
+export const CameraBlock: Block.FromAssemblyWithView<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)

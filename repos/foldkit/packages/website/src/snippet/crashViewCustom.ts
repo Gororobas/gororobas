@@ -1,5 +1,9 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 import { Document, HtmlBuilder } from 'foldkit/html'
+
+import { ApplicationBlock } from './block'
+import type { Message } from './message'
+import type { Model } from './model'
 
 const crashView = (
   { error }: Runtime.CrashContext<Model, Message>,
@@ -36,13 +40,10 @@ const crashView = (
   ),
 })
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
+const program = Program.make({
+  block: ApplicationBlock,
   crash: { view: crashView },
   container: document.getElementById('root'),
 })
 
-Runtime.run(application)
+Runtime.run(program)

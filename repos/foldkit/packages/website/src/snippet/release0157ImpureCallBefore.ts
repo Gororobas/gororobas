@@ -5,7 +5,9 @@ const Save = Command.define('Save', {
     Effect.succeed(Message.CompletedSave({ createdAt })),
 })
 
-const save = (model: Model): Update.Return<Model, Message> => ({
+const save = (
+  model: typeof Model.Type,
+): Update.Return<typeof Model.Type, Message> => ({
   model,
   // Wrong: Date.now() runs while update is deciding which Commands to return.
   commands: [Save({ createdAt: Date.now() })],

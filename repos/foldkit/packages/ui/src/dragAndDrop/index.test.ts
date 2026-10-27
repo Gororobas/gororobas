@@ -1,4 +1,4 @@
-import { Effect, Fiber, Option, Stream } from 'effect'
+import { Array, Effect, Fiber, Option, Stream } from 'effect'
 import * as Story from 'foldkit/story'
 import { expect } from 'vitest'
 
@@ -7,8 +7,10 @@ import { describe, it } from '@effect/vitest'
 import {
   FocusItem,
   Message,
+  type Model,
   OutMessage,
   ResolveKeyboardMove,
+  DragAndDropBlock as block,
   ghostStyle,
   init,
   isDragging,
@@ -16,9 +18,10 @@ import {
   maybeDropTarget,
   subscriptions,
   update,
-} from './index.js'
+} from './block.js'
+import * as DragAndDropTest from './test.js'
 
-const defaultInit = () => init({ id: 'test' })
+const defaultInit = () => init({ id: 'test' }).model
 
 const waitForNextTurn = (): Promise<void> =>
   new Promise(resolve => setTimeout(resolve, 0))
@@ -71,11 +74,12 @@ describe('DragAndDrop', () => {
       const model = defaultInit()
       expect(model.id).toBe('test')
       expect(model.orientation).toBe('Vertical')
+      expect(model.keyboardDragGeneration).toBe(0)
       expect(model.dragState._tag).toBe('Idle')
     })
 
     it('accepts a custom orientation', () => {
-      const model = init({ id: 'test', orientation: 'Horizontal' })
+      const model = init({ id: 'test', orientation: 'Horizontal' }).model
       expect(model.orientation).toBe('Horizontal')
     })
   })
@@ -241,6 +245,71 @@ describe('DragAndDrop', () => {
         }),
       )
     })
+  })
+
+  describe('keyboard drag generations', () => {
+    it('ignores a pending keyboard move completion after cancellation', () => {
+      Story.story(
+        update,
+        Story.given(defaultInit()),
+        Story.message(activatedKeyboardDrag),
+        Story.message(Message.PressedArrowKey({ direction: 'Down' })),
+        Story.message(Message.CancelledDrag()),
+        Story.expectOutMessage(OutMessage.Cancelled()),
+        Story.Command.resolve(FocusItem, Message.CompletedFocusItem()),
+        Story.Command.resolve(
+          ResolveKeyboardMove,
+          Message.CompletedResolveKeyboardMove({
+            keyboardDragGeneration: 1,
+            targetContainerId: 'list-1',
+            targetIndex: 1,
+          }),
+        ),
+        Story.model(model => expect(model.dragState._tag).toBe('Idle')),
+        Story.Command.expectNone(),
+      )
+    })
+
+    it.each(['item-1', 'item-2'])(
+      'ignores a previous keyboard drag completion after restarting with %s',
+      restartedItemId => {
+        Story.story(
+          update,
+          Story.given(defaultInit()),
+          Story.message(activatedKeyboardDrag),
+          Story.message(Message.PressedArrowKey({ direction: 'Down' })),
+          Story.message(Message.CancelledDrag()),
+          Story.expectOutMessage(OutMessage.Cancelled()),
+          Story.Command.resolve(FocusItem, Message.CompletedFocusItem()),
+          Story.message(
+            Message.ActivatedKeyboardDrag({
+              itemId: restartedItemId,
+              containerId: 'list-1',
+              index: 0,
+            }),
+          ),
+          Story.Command.resolve(
+            ResolveKeyboardMove,
+            Message.CompletedResolveKeyboardMove({
+              keyboardDragGeneration: 1,
+              targetContainerId: 'list-2',
+              targetIndex: 3,
+            }),
+          ),
+          Story.model(model => {
+            expect(model.keyboardDragGeneration).toBe(2)
+            expect(model.dragState._tag).toBe('KeyboardDragging')
+            if (model.dragState._tag === 'KeyboardDragging') {
+              expect(model.dragState.itemId).toBe(restartedItemId)
+              expect(model.dragState.targetContainerId).toBe('list-1')
+              expect(model.dragState.targetIndex).toBe(0)
+            }
+          }),
+          Story.expectNoOutMessage(),
+          Story.Command.expectNone(),
+        )
+      },
+    )
   })
 
   describe('OutMessage', () => {
@@ -506,7 +575,7 @@ describe('DragAndDrop', () => {
           Effect.sync(() => {
             received.push(message)
           }),
-        ),
+        ).pipe(Effect.provide(block.EffectsLayer)),
       )
 
       await waitForNextTurn()
@@ -534,6 +603,7 @@ describe('DragAndDrop', () => {
         Story.message(activatedKeyboardDrag),
         Story.model(model => {
           expect(model.dragState._tag).toBe('KeyboardDragging')
+          expect(model.keyboardDragGeneration).toBe(1)
           if (model.dragState._tag === 'KeyboardDragging') {
             expect(model.dragState.itemId).toBe('item-1')
             expect(model.dragState.sourceContainerId).toBe('list-1')
@@ -542,6 +612,69 @@ describe('DragAndDrop', () => {
             expect(model.dragState.targetIndex).toBe(0)
           }
         }),
+      )
+    })
+
+    it('emits keyboard facts without announcing an unchanged or inactive target', () => {
+      Story.story(
+        update,
+        Story.given(defaultInit()),
+        Story.message(activatedKeyboardDrag),
+        Story.expectOutMessage(
+          OutMessage.StartedKeyboardDrag({
+            itemId: 'item-1',
+            containerId: 'list-1',
+            index: 0,
+          }),
+        ),
+        Story.message(
+          Message.CompletedResolveKeyboardMove({
+            keyboardDragGeneration: 1,
+            targetContainerId: 'list-2',
+            targetIndex: 3,
+          }),
+        ),
+        Story.expectOutMessage(
+          OutMessage.ChangedKeyboardTarget({
+            itemId: 'item-1',
+            fromContainerId: 'list-1',
+            fromIndex: 0,
+            toContainerId: 'list-2',
+            toIndex: 3,
+          }),
+        ),
+        Story.Command.resolve(
+          FocusItem({ itemId: 'item-1' }),
+          Message.CompletedFocusItem(),
+        ),
+        Story.expectNoOutMessage(),
+        Story.message(
+          Message.CompletedResolveKeyboardMove({
+            keyboardDragGeneration: 1,
+            targetContainerId: 'list-2',
+            targetIndex: 3,
+          }),
+        ),
+        Story.expectNoOutMessage(),
+        Story.Command.resolve(
+          FocusItem({ itemId: 'item-1' }),
+          Message.CompletedFocusItem(),
+        ),
+        Story.message(Message.CancelledDrag()),
+        Story.expectOutMessage(OutMessage.Cancelled()),
+        Story.Command.resolve(
+          FocusItem({ itemId: 'item-1' }),
+          Message.CompletedFocusItem(),
+        ),
+        Story.message(
+          Message.CompletedResolveKeyboardMove({
+            keyboardDragGeneration: 1,
+            targetContainerId: 'list-1',
+            targetIndex: 0,
+          }),
+        ),
+        Story.expectNoOutMessage(),
+        Story.model(model => expect(model.dragState._tag).toBe('Idle')),
       )
     })
 
@@ -554,6 +687,7 @@ describe('DragAndDrop', () => {
         Story.Command.resolve(
           ResolveKeyboardMove,
           Message.CompletedResolveKeyboardMove({
+            keyboardDragGeneration: 1,
             targetContainerId: 'list-1',
             targetIndex: 1,
           }),
@@ -578,6 +712,7 @@ describe('DragAndDrop', () => {
         Story.message(activatedKeyboardDrag),
         Story.message(
           Message.CompletedResolveKeyboardMove({
+            keyboardDragGeneration: 1,
             targetContainerId: 'list-2',
             targetIndex: 3,
           }),
@@ -603,6 +738,7 @@ describe('DragAndDrop', () => {
         Story.message(activatedKeyboardDrag),
         Story.message(
           Message.CompletedResolveKeyboardMove({
+            keyboardDragGeneration: 1,
             targetContainerId: 'list-2',
             targetIndex: 1,
           }),
@@ -673,6 +809,150 @@ describe('DragAndDrop', () => {
           expect(ghostStyle(model)).toStrictEqual(Option.none())
         }),
       )
+    })
+  })
+
+  describe('test helpers', () => {
+    it('settleFocus resolves focus after a keyboard drop', () => {
+      Story.story(
+        update,
+        Story.given(defaultInit()),
+        Story.message(activatedKeyboardDrag),
+        Story.message(Message.ConfirmedKeyboardDrop()),
+        Story.expectOutMessage(
+          OutMessage.Reordered({
+            itemId: 'item-1',
+            fromContainerId: 'list-1',
+            fromIndex: 0,
+            toContainerId: 'list-1',
+            toIndex: 0,
+          }),
+        ),
+        DragAndDropTest.settleFocus({ itemId: 'item-1' }),
+        Story.model(model => {
+          expect(isDragging(model)).toBe(false)
+        }),
+      )
+    })
+
+    it('resolveKeyboardMove supplies the target and resolves focus', () => {
+      Story.story(
+        update,
+        Story.given(defaultInit()),
+        Story.message(activatedKeyboardDrag),
+        Story.message(Message.PressedArrowKey({ direction: 'NextContainer' })),
+        DragAndDropTest.resolveKeyboardMove({
+          itemId: 'item-1',
+          targetContainerId: 'list-2',
+          targetIndex: 3,
+        }),
+        Story.model(model => {
+          expect(maybeDropTarget(model)).toEqual(
+            Option.some({ containerId: 'list-2', index: 3 }),
+          )
+        }),
+      )
+    })
+
+    it('settleFocus rejects a missing focus Command', () => {
+      expect(() =>
+        Story.story(
+          update,
+          Story.given(defaultInit()),
+          DragAndDropTest.settleFocus({ itemId: 'item-1' }),
+        ),
+      ).toThrow('no matching pending Command was found')
+    })
+
+    it('resolveKeyboardMove rejects a pending move for another item', () => {
+      expect(() =>
+        Story.story(
+          update,
+          Story.given(defaultInit()),
+          Story.message(activatedKeyboardDrag),
+          Story.message(
+            Message.PressedArrowKey({ direction: 'NextContainer' }),
+          ),
+          DragAndDropTest.resolveKeyboardMove({
+            itemId: 'item-2',
+            targetContainerId: 'list-2',
+            targetIndex: 3,
+          }),
+        ),
+      ).toThrow('could not find a pending keyboard move for item "item-2"')
+    })
+
+    it('resolveKeyboardMove rejects duplicate pending moves for the item', () => {
+      const updateWithDuplicateMoves = (model: Model, message: Message) => {
+        const dragAndDropUpdate = update(model, message)
+        const commands = dragAndDropUpdate.commands ?? []
+
+        return {
+          ...dragAndDropUpdate,
+          commands: Array.appendAll(commands, commands),
+        }
+      }
+
+      expect(() =>
+        Story.story(
+          updateWithDuplicateMoves,
+          Story.given(defaultInit()),
+          Story.message(activatedKeyboardDrag),
+          Story.message(
+            Message.PressedArrowKey({ direction: 'NextContainer' }),
+          ),
+          DragAndDropTest.resolveKeyboardMove({
+            itemId: 'item-1',
+            targetContainerId: 'list-2',
+            targetIndex: 3,
+          }),
+        ),
+      ).toThrow('Isolate one pending move in this Story')
+    })
+
+    it('resolveKeyboardMove rejects a missing move Command', () => {
+      expect(() =>
+        Story.story(
+          update,
+          Story.given(defaultInit()),
+          Story.message(activatedKeyboardDrag),
+          DragAndDropTest.resolveKeyboardMove({
+            itemId: 'item-1',
+            targetContainerId: 'list-2',
+            targetIndex: 3,
+          }),
+        ),
+      ).toThrow('could not find a pending keyboard move')
+    })
+
+    it('resolveKeyboardMove rejects a move that omits its focus Command', () => {
+      const updateWithoutFocus = (model: Model, message: Message) => {
+        const dragAndDropUpdate = update(model, message)
+
+        return {
+          ...dragAndDropUpdate,
+          commands: Array.filter(
+            dragAndDropUpdate.commands ?? [],
+            command => command.name !== FocusItem.name,
+          ),
+        }
+      }
+
+      expect(() =>
+        Story.story(
+          updateWithoutFocus,
+          Story.given(defaultInit()),
+          Story.message(activatedKeyboardDrag),
+          Story.message(
+            Message.PressedArrowKey({ direction: 'NextContainer' }),
+          ),
+          DragAndDropTest.resolveKeyboardMove({
+            itemId: 'item-1',
+            targetContainerId: 'list-2',
+            targetIndex: 3,
+          }),
+        ),
+      ).toThrow('no matching pending Command was found')
     })
   })
 })

@@ -1,21 +1,16 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-import { Message, Model, init, update, view, viewTransition } from './main'
+import { ApplicationBlock, viewTransition } from './application'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
+const program = Program.make({
+  block: ApplicationBlock,
   container: document.getElementById('root'),
   routing: {
-    onUrlRequest: request => Message.ClickedLink({ request }),
-    onUrlChange: url => Message.ChangedUrl({ url }),
+    onUrlRequest: ApplicationBlock.Message.ClickedLink,
+    onUrlChange: ApplicationBlock.Message.ChangedUrl,
   },
   viewTransition,
-  devTools: {
-    Message,
-  },
+  devTools: { dispatch: true },
 })
 
-Runtime.run(application)
+Runtime.run(program)

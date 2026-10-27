@@ -68,15 +68,9 @@ Prevents constructing Messages by typing or casting object literals. Use the cal
 
 ## Command Shape {#command-rules}
 
-### foldkit/command-binding-matches-name {#command-binding-matches-name}
-
-Keeps a Command binding name in sync with the name passed to Command.define.
-
-::Snippet{name="lintCommandBindingMatchesName" label="Rule: foldkit/command-binding-matches-name"}
-
 ### foldkit/command-define-pascal-const {#command-define-pascal-const}
 
-Requires the const holding a Command.define result to be a non-empty PascalCase identifier that matches the Command name.
+Requires a Command declaration to use a nonempty PascalCase `const` whose name matches the declared Command name. It recognizes standalone `Command.define(...)` and owned `Definition.makeCommand(...)` declarations. This rule includes the former `command-binding-matches-name` checks; remove that retired rule ID from explicit configurations.
 
 ::Snippet{name="lintCommandDefinePascalConst" label="Rule: foldkit/command-define-pascal-const"}
 
@@ -98,7 +92,7 @@ The Effect type tracks the resource value, failure, and requirements, but not wh
 
 ### foldkit/prefer-command-mapmessage {#prefer-command-mapmessage}
 
-Lifts a Command result Message with `Command.mapMessage` or `Command.mapMessages`, not by mapping the Effect inside `Command.mapEffect`. Mapping the Effect dispatches correctly in production but records nothing on the message-mapping chain, so Story and Scene `resolve` see the raw child Message.
+Lifts a Command result Message with `Command.mapMessage` or `Command.mapMessages`, not by mapping the Effect inside `Command.mapEffect`. Mapping the Effect dispatches correctly in production but records nothing on the message-mapping chain, so Story and Scene `resolve` see the original Message. Bindings already lift child Block Commands; this rule applies to explicit Message transformations within a feature or a standalone utility.
 
 `Command.mapEffect` is appropriate when the result Message stays the same and the Effect's execution changes, such as providing a service, adding retry or delay behavior, or changing its error or requirement channel. Its type preserves the result Message; use the Message-specific helpers when the result itself changes.
 
@@ -224,13 +218,13 @@ The rule reports the call wherever it is written. Assigning its result to a loca
 
 #### Deferred Execution Boundaries
 
-Obtain time or randomness inside the Command's `execute` callback instead. Use `Clock` or `Random` for time and ordinary randomness. For UUIDs and cryptographic randomness, use the `Crypto.Crypto` service with the platform's Crypto layer. Return the value in the result Message.
+Obtain time or randomness inside the Command handler instead. Use `Clock` or `Random` for time and ordinary randomness. For UUIDs and cryptographic randomness, use the `Crypto.Crypto` service and supply the platform Crypto Layer at the application root. Return the value in the result Message. An effectful handler constructor can capture the service when the application Layer builds; obtain the changing value inside the returned handler.
 
-The rule recognizes the deferred callback positions in Effect and Stream. It also recognizes these Foldkit lifecycle callbacks when they are declared inline:
+The rule recognizes the deferred callback positions in Effect and Stream. It also recognizes Foldkit handler functions:
 
-- `execute` in `Command.define`, `Mount.define`, and `Mount.defineStream`
-- `dependenciesToStream` in `Subscription.make`
-- `acquire` and `release` in `ManagedResource.make`
+- The Command, Mount, Subscription, and Query function returned by a definition's `handler` generator
+- `acquire` and `release` returned by a ManagedResource entry's `handler` generator
+- The same shapes returned by the implementation Effect passed to `toLayer` for an external alternative
 
 Not every function passed to Effect is deferred. The rule still checks functions stored as Effect values, `Effect.fromOption`'s `onNone`, callbacks passed to `Effect.run*`, transform callbacks after the body of `Effect.fn` or `Effect.fnUntraced`, and callbacks passed to Effect APIs whose names end in `Eager`. It also checks the surrounding lifecycle builders and their synchronous Model projections. For example, `Subscription.make`'s builder and `modelToDependencies` are not execution callbacks.
 
@@ -242,7 +236,7 @@ The presets also disable the rule in TypeScript files under a `server` directory
 
 #### Limits of Static Analysis
 
-This direct-call catalog does not prove that a file is pure. It recognizes static global member paths and ignores locally shadowed globals. It does not follow a method alias such as `const now = Date.now` to a later `now()` call, nor does it inspect a helper's call graph.
+This direct-call catalog does not prove that a file is pure. It recognizes static global member paths and ignores locally shadowed globals. It does not follow a method alias such as `const now = Date.now` to a later `now()` call, nor does it inspect a helper's call graph. Recognition of attached and `toLayer` handlers uses the direct syntax shape without resolving the receiver's TypeScript type.
 
 ::Snippet{name="lintNoImpureCallAtDecisionTime" label="Rule: foldkit/no-impure-call-at-decision-time"}
 
@@ -258,77 +252,73 @@ Flags turning off the freezeModel or slow dev guardrails. Fix the mutation or sl
 
 ::Snippet{name="lintNoDisablingDevGuardrails" label="Rule: foldkit/no-disabling-dev-guardrails"}
 
-## Submodel Wiring {#submodel-rules}
+## Block Wiring {#block-rules}
+
+### foldkit/block-name-matches-variable {#block-name-matches-variable}
+
+Requires a direct `Block.makeDefinition` declaration with a literal name to use `<BlockId>Definition` while preserving the runtime Block ID, such as `SearchDefinition = Block.makeDefinition('Search', ...)`. Root Blocks use the same rule, so `ApplicationDefinition = Block.makeDefinition('Application', ...)`; Composition values keep `<BlockId>Composition` and `ApplicationComposition`. The rule follows imports from `foldkit` and `foldkit/block`, including aliases and namespace imports. It leaves dynamic names, locally shadowed bindings, and unrelated `makeDefinition` methods alone.
+
+The rule reports without changing the source. Whether the identifier or runtime name should change depends on the Block's public identity.
 
 ### foldkit/no-empty-to-parent-out-message {#no-empty-to-parent-out-message}
 
 #### Omit Empty Mappers
 
-Flags an inline `toParentOutMessage` mapper that always returns `undefined`, including a keyed factory whose returned mapper does so. That mapper forwards nothing to the parent, so omit the property.
+Flags an inline `forward` selected through `withOutMessagePolicy` when it always returns `undefined`, including a keyed factory whose returned mapper does so. It also flags an inline `makeOutMessageForward` handler record when every named variant returns `undefined`. Those policies forward nothing to the parent, so omit forwarding.
 
 #### Partial Forwarding
 
-Partial forwarding is valid. Match every child OutMessage variant. Return a parent OutMessage for each variant you want to forward, and return `undefined` for each variant that stops at this Submodel.
+Partial forwarding is valid. Match every child OutMessage variant. Return a parent OutMessage for each variant you want to forward, and return `undefined` for each variant that stops at this Block.
 
 #### Fixing Empty Mappers
 
-The rule fixes straightforward object literals. If removal could disturb a comment, spread, dynamic computed property, or duplicate `toParentOutMessage` key, it reports the problem without changing the code. It does not inspect async functions, generators, getters, setters, or mappers referenced by name.
+The rule fixes straightforward object literals. If removal could disturb a comment, spread, dynamic computed property, or duplicate `forward` key, it reports the problem without changing the code. It does not inspect async functions, generators, getters, setters, or mappers referenced by name.
 
 ::Snippet{name="lintNoEmptyToParentOutMessage" label="Rule: foldkit/no-empty-to-parent-out-message"}
 
-### foldkit/got-submodel-message-name {#got-submodel-message-name}
+### foldkit/no-manual-composition-routing {#no-manual-composition-routing}
 
-Requires wrapper Messages around Submodel Messages to use the Got\*Message convention.
+Keeps generated child delivery out of authored updates. It reports authored `parentMessage`, `toParentMessage`, and `fromParentMessage` fields in recognized Binding configurations, including paired mappings. It also reports `Got*` handlers in an owned `makeUpdate` record and inspection of internal child Message tags. Composition routes registered Bindings automatically. Use `delivery.when` and `delivery.toUpdateContext` for delivery policy, and the Binding's OutMessage policy for parent coordination.
 
-::Snippet{name="lintGotSubmodelMessageName" label="Rule: foldkit/got-submodel-message-name"}
+The rule follows inline and top-level extracted handler records in the same file. It does not perform cross-file type analysis. Standalone `Binding.fold` calls, unrelated `makeUpdate` APIs, and test fixtures remain valid. Runtime and type checks establish the actual graph; lint checks the recognized source patterns.
 
-### foldkit/got-prefix-requires-submodel-payload {#got-prefix-requires-submodel-payload}
-
-Reserves the Got\* prefix for Submodel wrappers. Any Got-prefixed Message must include a child Message payload named message.
-
-::Snippet{name="lintGotPrefixRequiresSubmodelPayload" label="Rule: foldkit/got-prefix-requires-submodel-payload"}
-
-### foldkit/wrap-child-output-in-got-message {#wrap-child-output-in-got-message}
-
-Requires child Command and Subscription output to be wrapped through a Got\*Message constructor, preserving the one-wrap-per-level Submodel convention.
-
-::Snippet{name="lintWrapChildOutputInGotMessage" label="Rule: foldkit/wrap-child-output-in-got-message"}
-
-### foldkit/got-wrapper-carries-only-routing {#got-wrapper-carries-only-routing}
-
-Keeps a Got wrapper payload to the child Message plus routing keys: message, id, or keys ending in Id.
-
-::Snippet{name="lintGotWrapperCarriesOnlyRouting" label="Rule: foldkit/got-wrapper-carries-only-routing"}
+::Snippet{name="lintNoManualCompositionRouting" label="Rule: foldkit/no-manual-composition-routing"}
 
 ### foldkit/no-child-message-construction-in-root {#no-child-message-construction-in-root}
 
-Rejects constructing a child Message variant from a parent, including through a local `const` alias of the child constructor or namespace. Expose a child-owned update capability that applies the internal fact, then integrate it with `Update.foldChild` or `Update.foldChildStep`. A child-owned view, Command, or Subscription may still construct that child's Messages. The rule cannot infer the origin of an arbitrary prebuilt Message value. See [Informing Submodels](/patterns/informing-submodels) for the complete pattern.
+Rejects constructing a child Message variant from a parent, including through a local `const` alias of the child constructor or namespace. Expose a local Message constructor or a Message tuple producer under the child Block’s `operations`, then call the direct Binding method, such as `PeopleBinding.requestClearSelection()`. Forward received child Messages through `PeopleBinding.fold(model, message)` instead. Child-owned authoring helpers may construct that child's Messages. Schema/type references to the completed Block remain valid, and tests may construct local Messages to exercise updates. The rule cannot infer the origin of an arbitrary prebuilt Message value. See [Informing Blocks](/patterns/informing-blocks) for the complete pattern.
+
+Focused Step producers, including `.fromMessage` and named local producers, retain their Definition's Message ownership. A producer shared by parent and child must satisfy both owners.
 
 ::Snippet{name="lintNoChildMessageConstructionInRoot" label="Rule: foldkit/no-child-message-construction-in-root"}
 
-### foldkit/no-direct-submodel-state-update {#no-direct-submodel-state-update}
+### foldkit/no-direct-block-state-update {#no-direct-block-state-update}
 
-Flags a parent update that uses nested `modifyFields` to change a known Submodel field directly. The child update does not run, so validation, Commands, and OutMessages can be skipped. The rule establishes ownership from a module-scope `Update.foldChild` or `Update.foldChildStep` whose `read` and `write` point to the same field, then checks the parent Model passed through that fold. It leaves an unrelated Model with the same field name, fold `write` callbacks, and child-owned silent `reflect*` helpers alone.
+Flags parent transformations that change a known child Block Model without invoking its update. This includes nested `modifyFields`, helper references, aliases, and collection transformations such as `Array.map(Entry.revealErrors)` where the rule can establish child ownership. Call a Message-backed Binding operation instead, so Commands, OutMessages, and registration evidence are preserved.
 
-::Snippet{name="lintNoDirectSubmodelStateUpdate" label="Rule: foldkit/no-direct-submodel-state-update"}
+The rule also reports copying only `.model` from a child update or operation result. It leaves initial Model assembly, parent-owned collection insertion and removal, ordinary domain transformations, and Binding writers alone. It derives ownership from recognized Bindings and follows local helper references; arbitrary cross-file transformations or erased ownership information are outside its analysis. This rule includes the former `require-fold-for-child-update-result` checks; replace that retired rule ID in explicit configurations.
 
-### foldkit/require-fold-for-child-update-result {#require-fold-for-child-update-result}
+Checks also cover `makeFieldsStep` calls used directly or through immutable local aliases as handler-record values. A `.fromMessage` callback receives a Message, so its parameter is not treated as the parent Model. Dynamic helper construction and cross-file Composition graphs remain outside the rule's local provenance checks.
 
-Flags a parent that copies only `.model` from a child helper or update result into its own Model instead of folding the complete result. This can silently discard Commands or an OutMessage. The rule requires an in-file `Update.foldChild` or `Update.foldChildStep` whose `update`, `read`, and `write` establish the child module and field, then follows a local result from that child's helper into the matching `modifyFields` field. The field need not be named after the module: `Products.update(model.productsPage)` is one example. It leaves unrelated helpers, initial Model assembly, fold `write` callbacks, and child-owned silent `reflect*` helpers alone. It does not infer direct helper imports or parent assembly outside `modifyFields`.
+::Snippet{name="lintNoDirectBlockStateUpdate" label="Rule: foldkit/no-direct-block-state-update"}
 
-::Snippet{name="lintRequireFoldForChildUpdateResult" label="Rule: foldkit/require-fold-for-child-update-result"}
+### foldkit/no-binding-write-coordination {#no-binding-write-coordination}
 
-### foldkit/selection-submodel-factory-at-module-scope {#selection-submodel-factory-at-module-scope}
+Keep Binding writers focused on placing the next child Model into parent storage. Use the Binding's OutMessage policy for announcements, sibling coordination, and other parent reactions.
+
+This rule recognizes proven Foldkit Definitions, including imports and immutable aliases. It reports direct `Option.some(model.child)` readers whose `modifyFields` writer stores the next child but also derives a sibling field from it. Nested/wrapped storage, keyed replacement, absence checks, and preserved wrapper metadata remain supported. Complex accessors, mutations, and indirect dependencies still need review. The rule has no automatic fix because choosing a public child fact and parent reaction requires domain decisions.
+
+### foldkit/selection-block-factory-at-module-scope {#selection-block-factory-at-module-scope}
 
 Requires selection component factories, such as Combobox, Listbox, Menu, and Tabs, to be created at module scope so their identity stays stable across renders.
 
-::Snippet{name="lintSelectionSubmodelFactoryAtModuleScope" label="Rule: foldkit/selection-submodel-factory-at-module-scope"}
+::Snippet{name="lintSelectionBlockFactoryAtModuleScope" label="Rule: foldkit/selection-block-factory-at-module-scope"}
 
 ## Lifecycle Handles {#lifecycle-rules}
 
 ### foldkit/mount-factory-must-use-element {#mount-factory-must-use-element}
 
-Requires a Mount's `execute` to read or write its element. If it never touches the element, the cause was misidentified and Mount is the wrong primitive.
+Requires a Mount handler to read or write its element. This covers attached handlers and external alternatives supplied through `toLayer`. If it never touches the element, the cause was misidentified and Mount is the wrong primitive.
 
 ::Snippet{name="lintMountFactoryMustUseElement" label="Rule: foldkit/mount-factory-must-use-element"}
 
@@ -345,3 +335,33 @@ Rejects two OnMount handlers on one element, where the second silently overwrite
 Requires lazy view slots to be declared at module scope so their references stay stable and the memoization actually hits its cache.
 
 ::Snippet{name="lintLazyViewStableReferences" label="Rule: foldkit/lazy-view-stable-references"}
+
+## HTML Builder Recognition
+
+HTML rules recognize the builder passed by `Composition.makeView` and
+`makeView.withInputs`, explicit Foldkit `HtmlBuilder` annotations, and aliases of
+`Block.ViewBuilderFor<typeof FeatureComposition>`. Extracted helpers retain the
+same checks for duplicate `OnMount` attributes, empty children, keys, event attributes, and links.
+Imported aliases are traced through relative TypeScript modules and explicit
+barrels to their actual Foldkit type. A type name ending in `ViewBuilder` does
+not establish ownership by itself.
+
+The source resolver does not follow package path aliases, wildcard re-exports,
+or declaration-only modules. Use a local `HtmlBuilder` or `ViewBuilderFor` type
+annotation at those boundaries when lint recognition is needed.
+
+## Removed Rule IDs
+
+### Command binding names {#command-binding-matches-name}
+
+Replace `foldkit/command-binding-matches-name` with
+`foldkit/command-define-pascal-const` in explicit rule configurations. The latter
+now includes all Command declaration-name checks, including owned
+`Definition.makeCommand(...)` declarations.
+
+### Child update results {#require-fold-for-child-update-result}
+
+Replace `foldkit/require-fold-for-child-update-result` with
+`foldkit/no-direct-block-state-update`. Its checks include copying only a child
+result’s Model and losing Commands or an OutMessage. Use the registered Binding’s
+named operation or legitimate Message forwarding through `fold`.

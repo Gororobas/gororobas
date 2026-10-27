@@ -1,11 +1,11 @@
 import { Option } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
 
-import { DatePicker } from '@foldkit/ui'
+import { triggerId } from '@foldkit/ui/datePicker'
 import type { AnchorConfig } from '@foldkit/ui/popover'
 
 import { Icon } from '../../../icon'
-import { Message } from '../message'
+import type { UiViewBuilder } from '../composition'
+import { DatePickerBasicDemoBinding } from '../composition'
 import type { Model } from '../model'
 import { calendarView } from './calendarView'
 
@@ -28,8 +28,6 @@ const wrapperClassName = 'relative inline-block'
 const calendarWrapperClassName =
   'flex flex-col gap-3 select-none min-w-[268px] min-h-[284px]'
 
-// VIEW
-
 const DATE_PICKER_ANCHOR: AnchorConfig = {
   placement: 'bottom-start',
   gap: 4,
@@ -41,7 +39,7 @@ const formatTriggerLabel = (
 ) =>
   `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`
 
-export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
+export const basicDemo = (model: typeof Model.Type, h: UiViewBuilder) => {
   const triggerContent = (
     maybeDate: Option.Option<
       Readonly<{ year: number; month: number; day: number }>
@@ -65,28 +63,27 @@ export const basicDemo = (model: Model, h: HtmlBuilder<Message>) => {
       [
         h.label(
           [
-            h.For(DatePicker.triggerId(model.datePickerBasicDemo.id)),
+            h.For(triggerId(model.datePickerBasicDemo.id)),
             h.Class('demo-label'),
           ],
           ['Due date'],
         ),
-        h.submodel({
-          slotId: model.datePickerBasicDemo.id,
-          model: model.datePickerBasicDemo,
-          view: DatePicker.view,
-          viewInputs: {
-            anchor: DATE_PICKER_ANCHOR,
-            maybeSelectedDate: model.maybeDatePickerBasicDemoSelectedDate,
-            triggerContent,
-            triggerClassName,
-            panelClassName,
-            backdropClassName,
-            className: wrapperClassName,
-            toCalendarView: calendarView(calendarWrapperClassName, h),
-          },
-          toParentMessage: message =>
-            Message.GotDatePickerBasicDemoMessage({ message }),
-        }),
+        h.block(
+          DatePickerBasicDemoBinding.embedView({
+            slotId: model.datePickerBasicDemo.id,
+            model: model.datePickerBasicDemo,
+            viewInputs: {
+              anchor: DATE_PICKER_ANCHOR,
+              maybeSelectedDate: model.maybeDatePickerBasicDemoSelectedDate,
+              triggerContent,
+              triggerClassName,
+              panelClassName,
+              backdropClassName,
+              className: wrapperClassName,
+              toCalendarView: calendarView(calendarWrapperClassName, h),
+            },
+          }),
+        ),
       ],
     ),
   ]

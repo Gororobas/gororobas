@@ -28,7 +28,7 @@ describe('slugify', () => {
   test('lowercases and dashes non-alphanumeric runs', () => {
     expect(slugify('HTTP Requests')).toBe('http-requests')
     expect(slugify('Commands with Args')).toBe('commands-with-args')
-    expect(slugify('h.submodel')).toBe('h-submodel')
+    expect(slugify('h.block')).toBe('h-block')
     expect(slugify('Build Your Product, Not Your Architecture')).toBe(
       'build-your-product-not-your-architecture',
     )
@@ -245,6 +245,33 @@ describe('faq island registration', () => {
 // module never declared.
 const DEMO_ISLAND_PATTERN = /::Demo\{name="([^"]+)"\}/g
 
+const demoDeclarationSource = (pagePath: string, pageSource: string): string =>
+  Option.match(
+    Array.head(
+      capturedNames(
+        pageSource,
+        /import\s*\{\s*(\w+PageContent)\s*\}\s*from ['"]\.\/content['"]/g,
+      ),
+    ),
+    {
+      onNone: () => pageSource,
+      onSome: contentName => {
+        const contentPath = pagePath.replace(/[^/]+$/, 'content.ts')
+        const contentSource = pageSources[contentPath]
+
+        expect(
+          contentSource,
+          `no content module at ${contentPath}`,
+        ).toBeDefined()
+
+        return Array.findFirst(
+          globalThis.String(contentSource).split('export const '),
+          declaration => declaration.startsWith(`${contentName} =`),
+        ).pipe(Option.getOrThrow)
+      },
+    },
+  )
+
 describe('demo island registration', () => {
   const demoUsages = Array.filterMap(
     Object.entries(markdownSources),
@@ -274,8 +301,13 @@ describe('demo island registration', () => {
 
       expect(pageSource, `no page module at ${pagePath}`).toBeDefined()
 
+      const declarationSource = demoDeclarationSource(
+        pagePath,
+        globalThis.String(pageSource),
+      )
+
       for (const name of names) {
-        expect(globalThis.String(pageSource)).toContain(`'${name}'`)
+        expect(declarationSource).toContain(`'${name}'`)
       }
     },
   )
@@ -296,7 +328,7 @@ const REDUNDANT_SNIPPET_TITLE_SUFFIX_PATTERN =
 const SNIPPET_TITLE_START_PATTERN = /^(?:[A-Z]|[❌✅] [A-Z])/u
 const SNIPPET_TITLE_ENDING_PUNCTUATION_PATTERN = /[.!?:;]$/
 const LOWERCASE_ARCHITECTURE_TYPE_PATTERN =
-  /\b(?:model|models|message|messages|command|commands|subscription|subscriptions|mount|mounts|submodel|submodels|outmessage|outmessages)\b/
+  /\b(?:model|models|message|messages|command|commands|subscription|subscriptions|mount|mounts|block|blocks|outmessage|outmessages)\b/
 const UNSPECIFIC_SNIPPET_TITLES = [
   'Bad',
   'Code',

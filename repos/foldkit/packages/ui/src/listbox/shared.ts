@@ -2,6 +2,8 @@ import {
   Array,
   Effect,
   Equal,
+  Function,
+  Layer,
   Match,
   Number,
   Option,
@@ -10,25 +12,16 @@ import {
   String,
   pipe,
 } from 'effect'
-import * as Command from 'foldkit/command'
+import * as Block from 'foldkit/block'
 import * as Dom from 'foldkit/dom'
-import type { ChildAttribute, Html } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
-import * as Mount from 'foldkit/mount'
+import type { ChildAttribute, Html, HtmlBuilder } from 'foldkit/html'
+import { type MessageUnion, defineMessageUnion } from 'foldkit/message'
+import type * as Mount from 'foldkit/mount'
 import { makeModifyFieldsFor } from 'foldkit/struct'
-import { type View as SubmodelView, defineView } from 'foldkit/submodel'
 import * as Update from 'foldkit/update'
 
 import { AnchorConfig, anchorSetup, portalBackdrop } from '../anchor/index.js'
-// NOTE: Animation imports are split across schema + update to avoid a circular
-// dependency: animation → html → runtime → devtools → listbox → animation.
-// The barrel (../animation) imports from html, which starts the cycle.
-import * as Animation from '../animation/schema.js'
-import {
-  hide as animationHide,
-  show as animationShow,
-  update as animationUpdate,
-} from '../animation/update.js'
+import * as Animation from '../animation/index.js'
 import { groupContiguous } from '../group.js'
 import * as OptionExt from '../internal/optionExtensions.js'
 import { idSelector } from '../internal/selectors.js'
@@ -40,6 +33,9 @@ import {
 import { resolveTypeaheadMatch } from '../typeahead.js'
 
 export { resolveTypeaheadMatch }
+
+/** Shared Listbox namespace for selection-specific definitions and effects. */
+export const ListboxNamespace = Block.makeNamespace('Listbox')
 
 // MODEL
 
@@ -58,7 +54,7 @@ export const BaseModel = Schema.Struct({
   isAnimated: Schema.Boolean,
   isModal: Schema.Boolean,
   orientation: Orientation,
-  animation: Animation.Model,
+  animation: Animation.AnimationBlock.Model,
   maybeActiveItemIndex: Schema.Option(Schema.Number),
   activationTrigger: ActivationTrigger,
   searchQuery: Schema.String,
@@ -85,7 +81,8 @@ export const baseInit = (config: BaseInitConfig): BaseModel => ({
   isAnimated: config.isAnimated ?? false,
   isModal: config.isModal ?? false,
   orientation: config.orientation ?? 'Vertical',
-  animation: Animation.init({ id: `${config.id}-listbox` }),
+  animation: Animation.AnimationBlock.init({ id: `${config.id}-listbox` })
+    .model,
   maybeActiveItemIndex: Option.none(),
   activationTrigger: 'Keyboard',
   searchQuery: '',
@@ -98,6 +95,9 @@ export const baseInit = (config: BaseInitConfig): BaseModel => ({
 
 /** Union of all messages the listbox component can produce. */
 export const Message = defineMessageUnion({
+  RequestedOpen: {},
+  RequestedClose: {},
+  RequestedSelectItem: { item: Schema.String },
   Opened: { maybeActiveItemIndex: Schema.Option(Schema.Number) },
   Closed: {},
   BlurredItems: {},
@@ -117,21 +117,22 @@ export const Message = defineMessageUnion({
     key: Schema.String,
     maybeTargetIndex: Schema.Option(Schema.Number),
   },
-  CompletedDelayClearSearch: { version: Schema.Number },
-  CompletedLockScroll: {},
-  CompletedUnlockScroll: {},
-  CompletedInertOthers: {},
-  CompletedRestoreInert: {},
-  CompletedFocusButton: {},
-  CompletedFocusItems: {},
-  CompletedScrollIntoView: {},
-  CompletedClickItem: {},
+  CompletedDelayClearListboxSearch: { version: Schema.Number },
+  CompletedLockListboxScroll: {},
+  CompletedUnlockListboxScroll: {},
+  CompletedInertListboxOthers: {},
+  CompletedRestoreListboxInert: {},
+  CompletedFocusListboxButton: {},
+  CompletedFocusListboxItems: {},
+  CompletedScrollListboxItemIntoView: {},
+  CompletedClickListboxItem: {},
+  ClickedButton: {},
   IgnoredMouseClick: {},
   SuppressedSpaceScroll: {},
   SuppressedItemCommit: {},
   CompletedAnchorListbox: {},
   CompletedPortalListboxBackdrop: {},
-  GotAnimationMessage: { message: Animation.Message },
+  CompletedDetectListboxMovementOrAnimationEnd: { generation: Schema.Number },
   PressedPointerOnButton: {
     pointerType: Schema.String,
     button: Schema.Number,
@@ -140,6 +141,9 @@ export const Message = defineMessageUnion({
 
 export type Opened = typeof Message.Opened.Type
 export type Closed = typeof Message.Closed.Type
+export type RequestedOpen = typeof Message.RequestedOpen.Type
+export type RequestedClose = typeof Message.RequestedClose.Type
+export type RequestedSelectItem = typeof Message.RequestedSelectItem.Type
 export type BlurredItems = typeof Message.BlurredItems.Type
 export type ActivatedItem = typeof Message.ActivatedItem.Type
 export type DeactivatedItem = typeof Message.DeactivatedItem.Type
@@ -147,8 +151,10 @@ export type SelectedItem = typeof Message.SelectedItem.Type
 export type MovedPointerOverItem = typeof Message.MovedPointerOverItem.Type
 export type RequestedItemClick = typeof Message.RequestedItemClick.Type
 export type Searched = typeof Message.Searched.Type
-export type CompletedDelayClearSearch =
-  typeof Message.CompletedDelayClearSearch.Type
+export type CompletedDelayClearListboxSearch =
+  typeof Message.CompletedDelayClearListboxSearch.Type
+/** A click on the Listbox trigger button. */
+export type ClickedButton = typeof Message.ClickedButton.Type
 export type IgnoredMouseClick = typeof Message.IgnoredMouseClick.Type
 export type SuppressedSpaceScroll = typeof Message.SuppressedSpaceScroll.Type
 export type SuppressedItemCommit = typeof Message.SuppressedItemCommit.Type
@@ -167,6 +173,19 @@ export type Selected<Value extends string = string> = Readonly<{
 export const OutMessage = defineMessageUnion({
   Selected: { value: Schema.String },
 })
+
+/** The OutMessage union interface on a completed Listbox, refined to its
+ * selected Value type. */
+export type OutMessageSchema<Value extends string = string> =
+  typeof OutMessage extends MessageUnion<infer Cases>
+    ? MessageUnion<
+        Omit<Cases, 'Selected'> &
+          Readonly<{
+            Selected: Omit<Cases['Selected'], 'value'> &
+              Readonly<{ value: Schema.Schema<Value> }>
+          }>
+      >
+    : never
 
 /** Generic over `Value extends string` so consumers who create the listbox
  *  via `Listbox.create<MyUnion>()` receive `value: MyUnion` in the
@@ -212,408 +231,507 @@ export const closedModel = <Model extends BaseModel>(model: Model): Model =>
 
 // UPDATE FACTORY
 
-type SelectedItemContext<Model extends BaseModel> = Readonly<{
-  closeWithFocus: (
-    model: Model,
-    outMessage?: OutMessage,
-  ) => Update.ReturnWithOutMessage<Model, Message, OutMessage>
-  closeWithoutFocus: (
-    model: Model,
-    outMessage?: OutMessage,
-  ) => Update.ReturnWithOutMessage<Model, Message, OutMessage>
+type HandlerReturn<Model, Value extends string> = Readonly<{
+  model: Model
+  outMessage?: OutMessage<Value>
 }>
 
 /** Prevents page scrolling while the listbox is open in modal mode. */
-export const LockScroll = Command.define('LockScroll', {
-  messages: [Message.CompletedLockScroll],
-  execute: Dom.lockScroll.pipe(Effect.as(Message.CompletedLockScroll())),
-})
+export const LockListboxScroll = ListboxNamespace.makeCommand(
+  'LockListboxScroll',
+  {
+    messages: [Message.CompletedLockListboxScroll],
+    handler: function* () {
+      return () =>
+        Dom.lockScroll.pipe(Effect.as(Message.CompletedLockListboxScroll()))
+    },
+  },
+)
 /** Re-enables page scrolling after the listbox closes. */
-export const UnlockScroll = Command.define('UnlockScroll', {
-  messages: [Message.CompletedUnlockScroll],
-  execute: Dom.unlockScroll.pipe(Effect.as(Message.CompletedUnlockScroll())),
-})
+export const UnlockListboxScroll = ListboxNamespace.makeCommand(
+  'UnlockListboxScroll',
+  {
+    messages: [Message.CompletedUnlockListboxScroll],
+    handler: function* () {
+      return () =>
+        Dom.unlockScroll.pipe(Effect.as(Message.CompletedUnlockListboxScroll()))
+    },
+  },
+)
 /** Marks all elements outside the listbox as inert for modal behavior. */
-export const InertOthers = Command.define('InertOthers', {
-  args: { id: Schema.String },
-  messages: [Message.CompletedInertOthers],
-  execute: ({ id }) =>
-    Dom.inertOthers(id, [buttonSelector(id), itemsSelector(id)]).pipe(
-      Effect.as(Message.CompletedInertOthers()),
-    ),
-})
+export const InertListboxOthers = ListboxNamespace.makeCommand(
+  'InertListboxOthers',
+  {
+    args: { id: Schema.String },
+    messages: [Message.CompletedInertListboxOthers],
+    handler: function* () {
+      return ({ id }) =>
+        Dom.inertOthers(id, [buttonSelector(id), itemsSelector(id)]).pipe(
+          Effect.as(Message.CompletedInertListboxOthers()),
+        )
+    },
+  },
+)
 /** Removes the inert attribute from elements outside the listbox. */
-export const RestoreInert = Command.define('RestoreInert', {
-  args: { id: Schema.String },
-  messages: [Message.CompletedRestoreInert],
-  execute: ({ id }) =>
-    Dom.restoreInert(id).pipe(Effect.as(Message.CompletedRestoreInert())),
-})
+export const RestoreListboxInert = ListboxNamespace.makeCommand(
+  'RestoreListboxInert',
+  {
+    args: { id: Schema.String },
+    messages: [Message.CompletedRestoreListboxInert],
+    handler: function* () {
+      return ({ id }) =>
+        Dom.restoreInert(id).pipe(
+          Effect.as(Message.CompletedRestoreListboxInert()),
+        )
+    },
+  },
+)
 /** Moves focus back to the listbox button after closing. */
-export const FocusButton = Command.define('FocusButton', {
-  args: { id: Schema.String },
-  messages: [Message.CompletedFocusButton],
-  execute: ({ id }) =>
-    Dom.focus(buttonSelector(id)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedFocusButton()),
-    ),
-})
+export const FocusListboxButton = ListboxNamespace.makeCommand(
+  'FocusListboxButton',
+  {
+    args: { id: Schema.String },
+    messages: [Message.CompletedFocusListboxButton],
+    handler: function* () {
+      return ({ id }) =>
+        Dom.focus(buttonSelector(id)).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusListboxButton()),
+        )
+    },
+  },
+)
 /** Moves focus to the listbox items container after opening. */
-export const FocusItems = Command.define('FocusItems', {
-  args: { id: Schema.String },
-  messages: [Message.CompletedFocusItems],
-  execute: ({ id }) =>
-    Dom.focus(itemsSelector(id)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedFocusItems()),
-    ),
-})
+export const FocusListboxItems = ListboxNamespace.makeCommand(
+  'FocusListboxItems',
+  {
+    args: { id: Schema.String },
+    messages: [Message.CompletedFocusListboxItems],
+    handler: function* () {
+      return ({ id }) =>
+        Dom.focus(itemsSelector(id)).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusListboxItems()),
+        )
+    },
+  },
+)
 /** Scrolls the active listbox item into view after keyboard navigation. */
-export const ScrollIntoView = Command.define('ScrollIntoView', {
-  args: { id: Schema.String, index: Schema.Number },
-  messages: [Message.CompletedScrollIntoView],
-  execute: ({ id, index }) =>
-    Dom.scrollIntoView(itemSelector(id, index)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedScrollIntoView()),
-    ),
-})
+export const ScrollListboxItemIntoView = ListboxNamespace.makeCommand(
+  'ScrollListboxItemIntoView',
+  {
+    args: { id: Schema.String, index: Schema.Number },
+    messages: [Message.CompletedScrollListboxItemIntoView],
+    handler: function* () {
+      return ({ id, index }) =>
+        Dom.scrollIntoView(itemSelector(id, index)).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedScrollListboxItemIntoView()),
+        )
+    },
+  },
+)
 /** Programmatically clicks the active listbox item's DOM element. */
-export const ClickItem = Command.define('ClickItem', {
-  args: { id: Schema.String, index: Schema.Number },
-  messages: [Message.CompletedClickItem],
-  execute: ({ id, index }) =>
-    Dom.clickElement(itemSelector(id, index)).pipe(
-      Effect.ignore,
-      Effect.as(Message.CompletedClickItem()),
-    ),
-})
+export const ClickListboxItem = ListboxNamespace.makeCommand(
+  'ClickListboxItem',
+  {
+    args: { id: Schema.String, index: Schema.Number },
+    messages: [Message.CompletedClickListboxItem],
+    handler: function* () {
+      return ({ id, index }) =>
+        Dom.clickElement(itemSelector(id, index)).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedClickListboxItem()),
+        )
+    },
+  },
+)
 /** Waits for the typeahead search debounce period before clearing the query. */
-export const DelayClearSearch = Command.define('DelayClearSearch', {
-  args: { version: Schema.Number },
-  messages: [Message.CompletedDelayClearSearch],
-  execute: ({ version }) =>
-    Effect.sleep(SEARCH_DEBOUNCE_MILLISECONDS).pipe(
-      Effect.as(Message.CompletedDelayClearSearch({ version })),
-    ),
-})
-/** Detects whether the listbox button moved or the leave animation ended. Whichever comes first; both outcomes signal the Animation submodel that leave is complete. */
-export const DetectMovementOrAnimationEnd = Command.define(
-  'DetectMovementOrAnimationEnd',
+export const DelayClearListboxSearch = ListboxNamespace.makeCommand(
+  'DelayClearListboxSearch',
+  {
+    args: { version: Schema.Number },
+    messages: [Message.CompletedDelayClearListboxSearch],
+    handler: function* () {
+      return ({ version }) =>
+        Effect.sleep(SEARCH_DEBOUNCE_MILLISECONDS).pipe(
+          Effect.as(Message.CompletedDelayClearListboxSearch({ version })),
+        )
+    },
+  },
+)
+/** Detects whether the listbox button moved or the leave animation ended. Whichever comes first; both outcomes signal the Animation block that leave is complete. */
+export const DetectListboxMovementOrAnimationEnd = ListboxNamespace.makeCommand(
+  'DetectListboxMovementOrAnimationEnd',
   {
     args: { id: Schema.String, generation: Schema.Number },
-    messages: [Message.GotAnimationMessage],
-    execute: ({ id, generation }) =>
-      Effect.raceFirst(
-        Dom.detectElementMovement(buttonSelector(id)).pipe(
-          Effect.as(
-            Message.GotAnimationMessage({
-              message: Animation.Message.EndedAnimation({ generation }),
-            }),
+    messages: [Message.CompletedDetectListboxMovementOrAnimationEnd],
+    handler: function* () {
+      return ({ id, generation }) =>
+        Effect.raceFirst(
+          Dom.detectElementMovement(buttonSelector(id)).pipe(
+            Effect.as(
+              Message.CompletedDetectListboxMovementOrAnimationEnd({
+                generation,
+              }),
+            ),
           ),
-        ),
-        Dom.waitForAnimationSettled(itemsSelector(id)).pipe(
-          Effect.as(
-            Message.GotAnimationMessage({
-              message: Animation.Message.EndedAnimation({ generation }),
-            }),
+          Dom.waitForAnimationSettled(itemsSelector(id)).pipe(
+            Effect.as(
+              Message.CompletedDetectListboxMovementOrAnimationEnd({
+                generation,
+              }),
+            ),
           ),
-        ),
-      ),
+        )
+    },
   },
 )
 
-export const makeUpdate = <Model extends BaseModel>(
+/** Creates exact Listbox Message handlers and their Animation Binding. */
+export const makeUpdateHandlers = <
+  Value extends string,
+  ParentOutMessageSchema extends Schema.Top,
+>(
+  bindChild: Block.BindChild<
+    typeof BaseModel,
+    typeof Message,
+    ParentOutMessageSchema
+  >,
+  makeOutMessageFold: Block.MakeOutMessageFold<
+    BaseModel,
+    Message,
+    OutMessage<Value>
+  >,
+  step: Block.DefineStep<BaseModel, Message, OutMessage<Value>>,
+  stepFields: Block.DefineStepFields<BaseModel, Message>,
+  stepNoop: Block.DefineStepNoop<BaseModel>,
+  commandsStep: Block.MakeCommandsStep<BaseModel, Message>,
+  selectionBehavior: 'CloseWithFocus' | 'KeepOpen',
   handleSelectedItem: (
-    model: Model,
+    model: BaseModel,
     item: string,
-    context: SelectedItemContext<Model>,
-  ) => Update.ReturnWithOutMessage<Model, Message, OutMessage>,
+  ) => HandlerReturn<BaseModel, Value>,
 ) => {
-  type PlainUpdateReturn = Update.Return<Model, Message>
-  type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage>
+  type Model = BaseModel
 
-  const foldAnimationOutMessage = Animation.OutMessage.match<
-    Update.Step<Model, Message>
-  >({
-    StartedLeaveAnimating:
-      ({ generation }) =>
-      model => ({
-        model,
-        commands: [DetectMovementOrAnimationEnd({ id: model.id, generation })],
-      }),
-    TransitionedOut: () => model => ({ model }),
+  const detectListboxMovementOrAnimationEndStep = (generation: number) =>
+    commandsStep(model => [
+      DetectListboxMovementOrAnimationEnd({ id: model.id, generation }),
+    ])
+
+  const foldAnimationOutMessage = makeOutMessageFold(Animation.AnimationBlock, {
+    StartedLeaveAnimating: ({ generation }) =>
+      detectListboxMovementOrAnimationEndStep(generation),
+    TransitionedOut: stepNoop,
   })
 
-  const foldAnimation = Update.foldChild({
-    update: animationUpdate,
-    read: (model: Model) => Option.some(model.animation),
-    write: (model, nextAnimation) =>
-      modifyBaseFields(model, { animation: () => nextAnimation }),
-    toParentMessage: message => Message.GotAnimationMessage({ message }),
-    foldOutMessage: foldAnimationOutMessage,
-  })
+  const AnimationBinding = bindChild(Animation.AnimationBlock, {
+    field: 'animation',
+    init: false,
+  }).withOutMessagePolicy({ fold: foldAnimationOutMessage })
 
-  const foldAnimationShow = Update.foldChildStep({
-    update: animationShow,
-    read: (model: Model) => Option.some(model.animation),
-    write: (model, nextAnimation) =>
-      modifyBaseFields(model, { animation: () => nextAnimation }),
-    toParentMessage: message => Message.GotAnimationMessage({ message }),
-  })
+  const modalOpenCommands = (model: Model) =>
+    Array.filter(
+      [LockListboxScroll(), InertListboxOthers({ id: model.id })],
+      () => model.isModal,
+    )
 
-  const foldAnimationHide = Update.foldChildStep({
-    update: animationHide,
-    read: (model: Model) => Option.some(model.animation),
-    write: (model, nextAnimation) =>
-      modifyBaseFields(model, { animation: () => nextAnimation }),
-    toParentMessage: message => Message.GotAnimationMessage({ message }),
-  })
+  const closeWithoutFocusCommands = (model: Model) =>
+    Array.filter(
+      [UnlockListboxScroll(), RestoreListboxInert({ id: model.id })],
+      () => model.isModal,
+    )
 
-  const openListbox = (
-    baseModel: Model,
-    openCommands: ReadonlyArray<Command.Command<Message>>,
-  ): PlainUpdateReturn => {
+  const focusButton = (model: Model) => FocusListboxButton({ id: model.id })
+  const focusItems = (model: Model) => FocusListboxItems({ id: model.id })
+
+  const openCommands = (model: Model) => [
+    ...modalOpenCommands(model),
+    focusItems(model),
+  ]
+
+  const closeWithFocusCommands = (model: Model) => [
+    focusButton(model),
+    ...closeWithoutFocusCommands(model),
+  ]
+
+  const openListboxStep = (model: Model, baseModel: Model) => {
     if (baseModel.isAnimated) {
-      return Update.combine(baseModel, [
-        stepModel => ({
-          model: stepModel,
-          commands: openCommands,
-        }),
-        foldAnimationShow,
-        stepModel => ({
-          model: modifyBaseFields(stepModel, { isOpen: () => true }),
-        }),
+      return Update.combineSteps([
+        step(() => ({ model: baseModel, commands: openCommands(model) })),
+        AnimationBinding.requestShow(),
+        stepFields(() => ({ isOpen: () => true })),
       ])
     }
 
-    return {
+    return step(() => ({
       model: modifyBaseFields(baseModel, { isOpen: () => true }),
-      commands: openCommands,
-    }
+      commands: openCommands(model),
+    }))
   }
 
-  const closeListbox = (
+  const closeListboxStep = (
     baseModel: Model,
-    commands: ReadonlyArray<Command.Command<Message>>,
-  ): PlainUpdateReturn => {
+    commands: ReturnType<typeof closeWithFocusCommands>,
+  ) => {
     if (!baseModel.isOpen) {
-      return { model: baseModel }
+      return step(() => ({ model: baseModel }))
     }
 
     const closed = closedModel(baseModel)
 
     if (baseModel.isAnimated) {
-      return Update.combine(closed, [
-        stepModel => ({ model: stepModel, commands }),
-        foldAnimationHide,
+      return Update.combineSteps([
+        step(() => ({ model: closed, commands })),
+        AnimationBinding.requestHide(),
       ])
     }
 
-    return { model: closed, commands }
+    return step(() => ({ model: closed, commands }))
   }
 
-  const internalUpdate = (model: Model, message: Message): UpdateReturn => {
-    const maybeLockScroll = OptionExt.when(model.isModal, LockScroll())
-    const maybeUnlockScroll = OptionExt.when(model.isModal, UnlockScroll())
-    const maybeInertOthers = OptionExt.when(
-      model.isModal,
-      InertOthers({ id: model.id }),
-    )
-    const maybeRestoreInert = OptionExt.when(
-      model.isModal,
-      RestoreInert({ id: model.id }),
-    )
+  const openWithActiveItem = (
+    model: Model,
+    maybeActiveItemIndex: Option.Option<number>,
+  ) => {
+    if (model.isOpen) {
+      return stepNoop()
+    }
 
-    const focusButton = FocusButton({ id: model.id })
-    const focusItems = FocusItems({ id: model.id })
-
-    const openCommands: ReadonlyArray<Command.Command<Message>> = [
-      ...Array.getSomes([maybeLockScroll, maybeInertOthers]),
-      focusItems,
-    ]
-
-    const closeWithFocusCommands: ReadonlyArray<Command.Command<Message>> = [
-      focusButton,
-      ...Array.getSomes([maybeUnlockScroll, maybeRestoreInert]),
-    ]
-
-    const closeWithoutFocusCommands: ReadonlyArray<Command.Command<Message>> =
-      Array.getSomes([maybeUnlockScroll, maybeRestoreInert])
-
-    return Message.match<UpdateReturn>(message, {
-      CompletedLockScroll: () => ({ model }),
-      CompletedUnlockScroll: () => ({ model }),
-      CompletedInertOthers: () => ({ model }),
-      CompletedRestoreInert: () => ({ model }),
-      CompletedFocusButton: () => ({ model }),
-      CompletedFocusItems: () => ({ model }),
-      CompletedScrollIntoView: () => ({ model }),
-      CompletedClickItem: () => ({ model }),
-      SuppressedSpaceScroll: () => ({ model }),
-      SuppressedItemCommit: () => ({ model }),
-      CompletedAnchorListbox: () => ({ model }),
-      CompletedPortalListboxBackdrop: () => ({ model }),
-      Opened: ({ maybeActiveItemIndex }) =>
-        openListbox(
-          modifyBaseFields(model, {
-            maybeActiveItemIndex: () => maybeActiveItemIndex,
-            activationTrigger: () =>
-              Option.match(maybeActiveItemIndex, {
-                onNone: () => 'Pointer' as const,
-                onSome: () => 'Keyboard' as const,
-              }),
-            searchQuery: () => '',
-            searchVersion: () => 0,
-            maybeLastPointerPosition: () => Option.none(),
+    return openListboxStep(
+      model,
+      modifyBaseFields(model, {
+        maybeActiveItemIndex: () => maybeActiveItemIndex,
+        activationTrigger: () =>
+          Option.match(maybeActiveItemIndex, {
+            onNone: () => 'Pointer' as const,
+            onSome: () => 'Keyboard' as const,
           }),
-          openCommands,
+        searchQuery: () => '',
+        searchVersion: () => 0,
+        maybeLastPointerPosition: () => Option.none(),
+      }),
+    )
+  }
+
+  const selectItem = (model: Model, item: string) => {
+    const selection = handleSelectedItem(model, item)
+    if (selectionBehavior === 'CloseWithFocus') {
+      return step(() =>
+        Function.compose(
+          step(() =>
+            closeListboxStep(selection.model, closeWithFocusCommands(model)),
+          ),
+          Update.withOutMessage(selection.outMessage),
         ),
+      )
+    } else {
+      return step(() => selection)
+    }
+  }
 
-      Closed: () => closeListbox(model, closeWithFocusCommands),
+  const cases = {
+    CompletedLockListboxScroll: model => ({ model }),
+    CompletedUnlockListboxScroll: model => ({ model }),
+    CompletedInertListboxOthers: model => ({ model }),
+    CompletedRestoreListboxInert: model => ({ model }),
+    CompletedFocusListboxButton: model => ({ model }),
+    CompletedFocusListboxItems: model => ({ model }),
+    CompletedScrollListboxItemIntoView: model => ({ model }),
+    CompletedClickListboxItem: model => ({ model }),
+    SuppressedSpaceScroll: model => ({ model }),
+    SuppressedItemCommit: model => ({ model }),
+    CompletedAnchorListbox: model => ({ model }),
+    CompletedPortalListboxBackdrop: model => ({ model }),
+    RequestedOpen: model => openWithActiveItem(model, Option.none()),
 
-      BlurredItems: () => {
-        if (
-          Option.exists(model.maybeLastButtonPointerType, Equal.equals('mouse'))
-        ) {
-          return { model }
-        }
+    RequestedClose: model =>
+      closeListboxStep(model, closeWithFocusCommands(model)),
 
-        return closeListbox(model, closeWithoutFocusCommands)
-      },
+    RequestedSelectItem: (model, { item }) => selectItem(model, item),
 
-      ActivatedItem: ({ index, activationTrigger }) => ({
+    Opened: (model, { maybeActiveItemIndex }) =>
+      openWithActiveItem(model, maybeActiveItemIndex),
+
+    Closed: model => closeListboxStep(model, closeWithFocusCommands(model)),
+
+    BlurredItems: model => {
+      if (
+        Option.exists(model.maybeLastButtonPointerType, Equal.equals('mouse'))
+      ) {
+        return stepNoop()
+      }
+
+      return closeListboxStep(model, closeWithoutFocusCommands(model))
+    },
+
+    ActivatedItem: (model, { index, activationTrigger }) => ({
+      model: modifyBaseFields(model, {
+        maybeActiveItemIndex: () => Option.some(index),
+        activationTrigger: () => activationTrigger,
+      }),
+      commands: Array.filter(
+        [ScrollListboxItemIntoView({ id: model.id, index })],
+        () => activationTrigger === 'Keyboard',
+      ),
+    }),
+
+    MovedPointerOverItem: (model, { index, screenX, screenY }) => {
+      const isSamePosition = Option.exists(
+        model.maybeLastPointerPosition,
+        position =>
+          position.screenX === screenX && position.screenY === screenY,
+      )
+
+      if (isSamePosition) {
+        return { model }
+      }
+
+      return {
         model: modifyBaseFields(model, {
           maybeActiveItemIndex: () => Option.some(index),
-          activationTrigger: () => activationTrigger,
+          activationTrigger: () => 'Pointer' as const,
+          maybeLastPointerPosition: () => Option.some({ screenX, screenY }),
         }),
-        commands:
-          activationTrigger === 'Keyboard'
-            ? [ScrollIntoView({ id: model.id, index })]
-            : [],
-      }),
+      }
+    },
 
-      MovedPointerOverItem: ({ index, screenX, screenY }) => {
-        const isSamePosition = Option.exists(
-          model.maybeLastPointerPosition,
-          position =>
-            position.screenX === screenX && position.screenY === screenY,
-        )
+    DeactivatedItem: model =>
+      model.activationTrigger === 'Pointer'
+        ? {
+            model: modifyBaseFields(model, {
+              maybeActiveItemIndex: () => Option.none(),
+            }),
+          }
+        : { model },
 
-        if (isSamePosition) {
-          return { model }
-        }
+    SelectedItem: (model, { item }) => selectItem(model, item),
 
-        return {
-          model: modifyBaseFields(model, {
-            maybeActiveItemIndex: () => Option.some(index),
-            activationTrigger: () => 'Pointer' as const,
-            maybeLastPointerPosition: () => Option.some({ screenX, screenY }),
-          }),
-        }
-      },
+    RequestedItemClick: (model, { index }) => ({
+      model,
+      commands: [ClickListboxItem({ id: model.id, index })],
+    }),
 
-      DeactivatedItem: () =>
-        model.activationTrigger === 'Pointer'
-          ? {
-              model: modifyBaseFields(model, {
-                maybeActiveItemIndex: () => Option.none(),
-              }),
-            }
-          : { model },
+    Searched: (model, { key, maybeTargetIndex }) => {
+      const nextSearchQuery = model.searchQuery + key
+      const nextSearchVersion = Number.increment(model.searchVersion)
 
-      SelectedItem: ({ item }) =>
-        handleSelectedItem(model, item, {
-          closeWithFocus: (closeModel, outMessage) =>
-            pipe(
-              closeListbox(closeModel, closeWithFocusCommands),
-              Update.withOutMessage(outMessage),
-            ),
-          closeWithoutFocus: (closeModel, outMessage) =>
-            pipe(
-              closeListbox(closeModel, closeWithoutFocusCommands),
-              Update.withOutMessage(outMessage),
-            ),
+      return {
+        model: modifyBaseFields(model, {
+          searchQuery: () => nextSearchQuery,
+          searchVersion: () => nextSearchVersion,
+          maybeActiveItemIndex: () =>
+            Option.orElse(maybeTargetIndex, () => model.maybeActiveItemIndex),
         }),
+        commands: [DelayClearListboxSearch({ version: nextSearchVersion })],
+      }
+    },
 
-      RequestedItemClick: ({ index }) => ({
-        model,
-        commands: [ClickItem({ id: model.id, index })],
-      }),
+    CompletedDelayClearListboxSearch: (model, { version }) => {
+      if (version !== model.searchVersion) {
+        return { model }
+      }
 
-      Searched: ({ key, maybeTargetIndex }) => {
-        const nextSearchQuery = model.searchQuery + key
-        const nextSearchVersion = Number.increment(model.searchVersion)
+      return {
+        model: modifyBaseFields(model, { searchQuery: () => '' }),
+      }
+    },
 
-        return {
-          model: modifyBaseFields(model, {
-            searchQuery: () => nextSearchQuery,
-            searchVersion: () => nextSearchVersion,
-            maybeActiveItemIndex: () =>
-              Option.orElse(maybeTargetIndex, () => model.maybeActiveItemIndex),
-          }),
-          commands: [DelayClearSearch({ version: nextSearchVersion })],
-        }
-      },
+    CompletedDetectListboxMovementOrAnimationEnd: (_model, { generation }) =>
+      AnimationBinding.requestFinish(generation),
 
-      CompletedDelayClearSearch: ({ version }) => {
-        if (version !== model.searchVersion) {
-          return { model }
-        }
+    PressedPointerOnButton: (model, { pointerType, button }) => {
+      const withPointerType = modifyBaseFields(model, {
+        maybeLastButtonPointerType: () => Option.some(pointerType),
+      })
 
-        return {
-          model: modifyBaseFields(model, { searchQuery: () => '' }),
-        }
-      },
+      if (pointerType !== 'mouse' || button !== LEFT_MOUSE_BUTTON) {
+        return step(() => ({ model: withPointerType }))
+      }
 
-      GotAnimationMessage: ({ message: animationMessage }) =>
-        foldAnimation(model, animationMessage),
-
-      PressedPointerOnButton: ({ pointerType, button }) => {
-        const withPointerType = modifyBaseFields(model, {
+      if (model.isOpen) {
+        const closed = modifyBaseFields(closedModel(withPointerType), {
           maybeLastButtonPointerType: () => Option.some(pointerType),
         })
 
-        if (pointerType !== 'mouse' || button !== LEFT_MOUSE_BUTTON) {
-          return { model: withPointerType }
-        }
-
-        if (model.isOpen) {
-          return Update.combine(withPointerType, [
-            stepModel => closeListbox(stepModel, closeWithFocusCommands),
-            stepModel => ({
-              model: modifyBaseFields(stepModel, {
-                maybeLastButtonPointerType: () => Option.some(pointerType),
-              }),
-            }),
+        if (model.isAnimated) {
+          return Update.combineSteps([
+            step(() => ({
+              model: closed,
+              commands: closeWithFocusCommands(model),
+            })),
+            AnimationBinding.requestHide(),
           ])
         }
 
-        return openListbox(
-          modifyBaseFields(withPointerType, {
-            maybeActiveItemIndex: () => Option.none(),
-            activationTrigger: () => 'Pointer' as const,
-            searchQuery: () => '',
-            searchVersion: () => 0,
-            maybeLastPointerPosition: () => Option.none(),
-          }),
-          openCommands,
-        )
-      },
+        return step(() => ({
+          model: closed,
+          commands: closeWithFocusCommands(model),
+        }))
+      }
 
-      IgnoredMouseClick: () => ({
-        model: modifyBaseFields(model, {
-          maybeLastButtonPointerType: () => Option.none(),
+      return openListboxStep(
+        model,
+        modifyBaseFields(withPointerType, {
+          maybeActiveItemIndex: () => Option.none(),
+          activationTrigger: () => 'Pointer' as const,
+          searchQuery: () => '',
+          searchVersion: () => 0,
+          maybeLastPointerPosition: () => Option.none(),
         }),
-      }),
-    })
-  }
+      )
+    },
 
-  return internalUpdate
+    IgnoredMouseClick: model => ({
+      model: modifyBaseFields(model, {
+        maybeLastButtonPointerType: () => Option.none(),
+      }),
+    }),
+    ClickedButton: model => {
+      if (
+        Option.exists(model.maybeLastButtonPointerType, Equal.equals('mouse'))
+      ) {
+        return stepFields(() => ({
+          maybeLastButtonPointerType: () => Option.none(),
+        }))
+      }
+
+      if (model.isOpen) {
+        return closeListboxStep(model, closeWithFocusCommands(model))
+      }
+
+      return openWithActiveItem(model, Option.none())
+    },
+  } satisfies Readonly<{
+    [Tag in Message['_tag']]: (
+      model: Model,
+      message: Extract<Message, Readonly<{ _tag: Tag }>>,
+    ) => unknown
+  }>
+
+  return {
+    handlers: {
+      ...cases,
+      RequestedOpen: step(cases.RequestedOpen),
+      RequestedClose: step(cases.RequestedClose),
+      RequestedSelectItem: step(cases.RequestedSelectItem),
+      Opened: step(cases.Opened),
+      Closed: step(cases.Closed),
+      BlurredItems: step(cases.BlurredItems),
+      SelectedItem: step(cases.SelectedItem),
+      PressedPointerOnButton: step(cases.PressedPointerOnButton),
+      ClickedButton: step(cases.ClickedButton),
+      CompletedDetectListboxMovementOrAnimationEnd: step(
+        cases.CompletedDetectListboxMovementOrAnimationEnd,
+      ),
+    },
+    AnimationBinding,
+  }
 }
 
-/** The anchor-positioning Mount this Listbox renders on its items panel.
+/**
+ * The anchor-positioning Mount this Listbox renders on its items panel.
  *  The panel is always anchored to the button via Floating UI and portaled
  *  to the document body, or into the enclosing `<dialog>` when there is one
  *  (opt out of portaling with `anchor.portal: false`), so it escapes ancestor
@@ -621,46 +739,75 @@ export const makeUpdate = <Model extends BaseModel>(
  *
  *  It also carries the open-focus for the anchored panel. An anchored panel
  *  renders `visibility: hidden` until Floating UI resolves its first position,
- *  and `.focus()` does not land on a hidden element, so `FocusItems` alone
+ *  and `.focus()` does not land on a hidden element, so `FocusListboxItems` alone
  *  cannot focus it. `focusAfterPosition` focuses the panel as part of that
- *  first reveal. `FocusItems` still focuses the panel when no anchor is
+ *  first reveal. `FocusListboxItems` still focuses the panel when no anchor is
  *  configured, where the panel is visible as soon as the render commits.
  *
  *  Exposed so Scene tests can call
- *  `Scene.Mount.resolve(AnchorListbox, CompletedAnchorListbox())`. */
-export const AnchorListbox = Mount.define('AnchorListbox', {
+ *  `Scene.Mount.resolve(AnchorListbox, CompletedAnchorListbox())`.
+ */
+export const AnchorListbox = ListboxNamespace.makeMount('AnchorListbox', {
   args: { buttonId: Schema.String, anchor: AnchorConfig },
   messages: [Message.CompletedAnchorListbox],
-  execute: ({ element, buttonId, anchor }) =>
-    Effect.gen(function* () {
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          anchorSetup(element, {
-            buttonId,
-            anchor,
-            focusAfterPosition: true,
-          }),
-        ),
-        cleanup => Effect.sync(cleanup),
-      )
-      return Message.CompletedAnchorListbox()
-    }),
+  handler: function* () {
+    return ({ element, buttonId, anchor }) =>
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            anchorSetup(element, {
+              buttonId,
+              anchor,
+              focusAfterPosition: true,
+            }),
+          ),
+          cleanup => Effect.sync(cleanup),
+        )
+        return Message.CompletedAnchorListbox()
+      })
+  },
 })
 
 /** The backdrop-portaling Mount this Listbox renders. Exposed so Scene tests can
  *  call `Scene.Mount.resolve(PortalListboxBackdrop, CompletedPortalListboxBackdrop())` to
  *  acknowledge the mount produced by the rendered backdrop. */
-export const PortalListboxBackdrop = Mount.define('PortalListboxBackdrop', {
-  messages: [Message.CompletedPortalListboxBackdrop],
-  execute: ({ element }) =>
-    Effect.gen(function* () {
-      yield* Effect.acquireRelease(
-        Effect.sync(() => portalBackdrop(element)),
-        cleanup => Effect.sync(cleanup),
-      )
-      return Message.CompletedPortalListboxBackdrop()
-    }),
-})
+export const PortalListboxBackdrop = ListboxNamespace.makeMount(
+  'PortalListboxBackdrop',
+  {
+    messages: [Message.CompletedPortalListboxBackdrop],
+    handler: function* () {
+      return ({ element }) =>
+        Effect.gen(function* () {
+          yield* Effect.acquireRelease(
+            Effect.sync(() => portalBackdrop(element)),
+            cleanup => Effect.sync(cleanup),
+          )
+          return Message.CompletedPortalListboxBackdrop()
+        })
+    },
+  },
+)
+
+/** Mount Definitions rendered by Listbox views. */
+export const mounts = [AnchorListbox, PortalListboxBackdrop]
+
+type MountRequirements = Mount.RequirementsOf<typeof mounts>
+
+/** Provides Listbox's local Command and Mount handlers. */
+export const EffectsLayer = Layer.mergeAll(
+  LockListboxScroll.layer,
+  UnlockListboxScroll.layer,
+  InertListboxOthers.layer,
+  RestoreListboxInert.layer,
+  FocusListboxButton.layer,
+  FocusListboxItems.layer,
+  ScrollListboxItemIntoView.layer,
+  ClickListboxItem.layer,
+  DelayClearListboxSearch.layer,
+  DetectListboxMovementOrAnimationEnd.layer,
+  AnchorListbox.layer,
+  PortalListboxBackdrop.layer,
+)
 
 // VIEW TYPES
 
@@ -676,10 +823,10 @@ export type GroupHeading = Readonly<{
   className?: string
 }>
 
-/** Per-render view inputs passed to `view` via `h.submodel`'s `viewInputs` field.
+/** Per-render view inputs passed to a Listbox connection's `embedView` method.
  *
  *  The Listbox emits a `Selected({ value })` OutMessage on commit.
- *  Fold it in the Listbox's `Update.foldChild` config: single-select stores
+ *  Fold it through the Listbox connection: single-select stores
  *  the value, while multi-select toggles its membership. */
 export type BaseViewInputsCommon<Item> = Readonly<{
   items: ReadonlyArray<Item>
@@ -768,533 +915,521 @@ type ViewBehavior = Readonly<{
   ariaMultiSelectable: boolean
 }>
 
+type InternalInputs = BaseViewInputs<unknown, string>
+
 export const makeView = <Model extends BaseModel>(behavior: ViewBehavior) => {
-  const impl = defineView<Model, Message, BaseViewInputs<unknown, string>>(
-    (model, viewInputs, h) => {
-      const {
-        id,
-        isOpen,
-        orientation,
-        animation: { transitionState },
-        maybeActiveItemIndex,
-        searchQuery,
-        maybeLastButtonPointerType,
-      } = model
+  const impl = (
+    model: Model,
+    viewInputs: InternalInputs,
+    h: HtmlBuilder<Message, MountRequirements>,
+  ): Html => {
+    const {
+      id,
+      isOpen,
+      orientation,
+      animation: { transitionState },
+      maybeActiveItemIndex,
+      searchQuery,
+    } = model
 
-      const {
+    const {
+      items,
+      itemToConfig,
+      isItemDisabled,
+      isButtonDisabled,
+      buttonContent,
+      buttonClassName,
+      buttonAttributes = [],
+      itemsClassName,
+      itemsAttributes = [],
+      itemsScrollClassName,
+      itemsScrollAttributes = [],
+      backdropClassName,
+      backdropAttributes = [],
+      className,
+      attributes = [],
+      itemGroupKey,
+      groupToHeading,
+      groupClassName,
+      groupAttributes = [],
+      separatorClassName,
+      separatorAttributes = [],
+      anchor = {},
+      name,
+      form,
+      isDisabled,
+      isReadOnly = false,
+      isInvalid,
+      ariaLabel,
+      ariaLabelledBy,
+      selectedValues,
+    } = viewInputs
+
+    const itemToValue =
+      viewInputs.itemToValue ?? (item => globalThis.String(item))
+    const isValueSelected = (itemValue: string): boolean =>
+      Array.contains(selectedValues, itemValue)
+    const itemToSearchText =
+      viewInputs.itemToSearchText ?? ((item: unknown) => itemToValue(item))
+
+    const isLeaving =
+      transitionState === 'LeaveStart' || transitionState === 'LeaveAnimating'
+    const isVisible = isOpen || isLeaving
+
+    const animationAttributes: ReadonlyArray<
+      ReturnType<typeof h.DataAttribute>
+    > = Match.value(transitionState).pipe(
+      Match.when('EnterStart', () => [
+        h.DataAttribute('closed', ''),
+        h.DataAttribute('enter', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.when('EnterAnimating', () => [
+        h.DataAttribute('enter', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.when('LeaveStart', () => [
+        h.DataAttribute('leave', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.when('LeaveAnimating', () => [
+        h.DataAttribute('closed', ''),
+        h.DataAttribute('leave', ''),
+        h.DataAttribute('transition', ''),
+      ]),
+      Match.orElse(() => []),
+    )
+
+    const isItemDisabledByIndex = (index: number): boolean =>
+      Predicate.isNotUndefined(isItemDisabled) &&
+      pipe(
         items,
-        itemToConfig,
-        isItemDisabled,
-        isButtonDisabled,
-        buttonContent,
-        buttonClassName,
-        buttonAttributes = [],
-        itemsClassName,
-        itemsAttributes = [],
-        itemsScrollClassName,
-        itemsScrollAttributes = [],
-        backdropClassName,
-        backdropAttributes = [],
-        className,
-        attributes = [],
-        itemGroupKey,
-        groupToHeading,
-        groupClassName,
-        groupAttributes = [],
-        separatorClassName,
-        separatorAttributes = [],
-        anchor = {},
-        name,
-        form,
-        isDisabled,
-        isReadOnly = false,
-        isInvalid,
-        ariaLabel,
-        ariaLabelledBy,
-        selectedValues,
-      } = viewInputs
-
-      const itemToValue =
-        viewInputs.itemToValue ?? ((item: unknown) => globalThis.String(item))
-      const isValueSelected = (itemValue: string): boolean =>
-        Array.contains(selectedValues, itemValue)
-      const itemToSearchText =
-        viewInputs.itemToSearchText ?? ((item: unknown) => itemToValue(item))
-
-      const isLeaving =
-        transitionState === 'LeaveStart' || transitionState === 'LeaveAnimating'
-      const isVisible = isOpen || isLeaving
-
-      const animationAttributes: ReadonlyArray<
-        ReturnType<typeof h.DataAttribute>
-      > = Match.value(transitionState).pipe(
-        Match.when('EnterStart', () => [
-          h.DataAttribute('closed', ''),
-          h.DataAttribute('enter', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.when('EnterAnimating', () => [
-          h.DataAttribute('enter', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.when('LeaveStart', () => [
-          h.DataAttribute('leave', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.when('LeaveAnimating', () => [
-          h.DataAttribute('closed', ''),
-          h.DataAttribute('leave', ''),
-          h.DataAttribute('transition', ''),
-        ]),
-        Match.orElse(() => []),
+        Array.get(index),
+        Option.exists(item => isItemDisabled(item, index)),
       )
 
-      const isItemDisabledByIndex = (index: number): boolean =>
-        Predicate.isNotUndefined(isItemDisabled) &&
-        pipe(
+    const isButtonEffectivelyDisabled = isDisabled || isButtonDisabled
+
+    const nextKey = orientation === 'Horizontal' ? 'ArrowRight' : 'ArrowDown'
+    const previousKey = orientation === 'Horizontal' ? 'ArrowLeft' : 'ArrowUp'
+
+    const navigationKeys = [
+      nextKey,
+      previousKey,
+      'Home',
+      'End',
+      'PageUp',
+      'PageDown',
+    ]
+    const isNavigationKey = (key: string): boolean =>
+      Array.contains(navigationKeys, key)
+
+    const firstEnabledIndex = findFirstEnabledIndex(
+      items.length,
+      0,
+      isItemDisabledByIndex,
+    )(0, 1)
+
+    const lastEnabledIndex = findFirstEnabledIndex(
+      items.length,
+      0,
+      isItemDisabledByIndex,
+    )(items.length - 1, -1)
+
+    const selectedItemIndex = pipe(
+      selectedValues,
+      Array.head,
+      Option.flatMap(selectedValue =>
+        Array.findFirstIndex(
           items,
-          Array.get(index),
-          Option.exists(item => isItemDisabled(item, index)),
-        )
-
-      const isButtonEffectivelyDisabled = isDisabled || isButtonDisabled
-
-      const nextKey = orientation === 'Horizontal' ? 'ArrowRight' : 'ArrowDown'
-      const previousKey = orientation === 'Horizontal' ? 'ArrowLeft' : 'ArrowUp'
-
-      const navigationKeys = [
-        nextKey,
-        previousKey,
-        'Home',
-        'End',
-        'PageUp',
-        'PageDown',
-      ]
-      const isNavigationKey = (key: string): boolean =>
-        Array.contains(navigationKeys, key)
-
-      const firstEnabledIndex = findFirstEnabledIndex(
-        items.length,
-        0,
-        isItemDisabledByIndex,
-      )(0, 1)
-
-      const lastEnabledIndex = findFirstEnabledIndex(
-        items.length,
-        0,
-        isItemDisabledByIndex,
-      )(items.length - 1, -1)
-
-      const selectedItemIndex = pipe(
-        selectedValues,
-        Array.head,
-        Option.flatMap(selectedValue =>
-          Array.findFirstIndex(
-            items,
-            item => itemToValue(item) === selectedValue,
-          ),
+          item => itemToValue(item) === selectedValue,
         ),
-      )
+      ),
+    )
 
-      const handleButtonKeyDown = (key: string): Option.Option<Message> => {
-        if (isOpen) {
-          return handleItemsKeyDown(key)
-        }
-
-        return Match.value(key).pipe(
-          Match.whenOr('Enter', ' ', 'ArrowDown', () =>
-            Option.some(
-              Message.Opened({
-                maybeActiveItemIndex: Option.orElse(selectedItemIndex, () =>
-                  Option.some(firstEnabledIndex),
-                ),
-              }),
-            ),
-          ),
-          Match.when('ArrowUp', () =>
-            Option.some(
-              Message.Opened({
-                maybeActiveItemIndex: Option.orElse(selectedItemIndex, () =>
-                  Option.some(lastEnabledIndex),
-                ),
-              }),
-            ),
-          ),
-          Match.orElse(() => Option.none()),
-        )
+    const handleButtonKeyDown = (key: string): Option.Option<Message> => {
+      if (isOpen) {
+        return handleItemsKeyDown(key)
       }
 
-      const handleButtonPointerDown = (
-        pointerType: string,
-        button: number,
-      ): Option.Option<Message> =>
-        Option.some(Message.PressedPointerOnButton({ pointerType, button }))
-
-      const handleButtonClick = (): Message => {
-        const isMouse = Option.exists(
-          maybeLastButtonPointerType,
-          type => type === 'mouse',
-        )
-
-        if (isMouse) {
-          return Message.IgnoredMouseClick()
-        } else if (isOpen) {
-          return Message.Closed()
-        } else {
-          return Message.Opened({ maybeActiveItemIndex: Option.none() })
-        }
-      }
-
-      const handleSpaceKeyUp = (key: string): Option.Option<Message> =>
-        OptionExt.when(key === ' ', Message.SuppressedSpaceScroll())
-
-      const resolveActiveIndex = (key: string): number =>
-        Option.match(maybeActiveItemIndex, {
-          onNone: () =>
-            Match.value(key).pipe(
-              Match.whenOr(
-                previousKey,
-                'End',
-                'PageDown',
-                () => lastEnabledIndex,
+      return Match.value(key).pipe(
+        Match.whenOr('Enter', ' ', 'ArrowDown', () =>
+          Option.some(
+            Message.Opened({
+              maybeActiveItemIndex: Option.orElse(selectedItemIndex, () =>
+                Option.some(firstEnabledIndex),
               ),
-              Match.orElse(() => firstEnabledIndex),
-            ),
-          onSome: activeIndex =>
-            keyToIndex(
-              nextKey,
-              previousKey,
-              items.length,
-              activeIndex,
-              isItemDisabledByIndex,
-            )(key),
-        })
-
-      const searchForKey = (key: string): Option.Option<Message> => {
-        const nextQuery = searchQuery + key
-        const maybeTargetIndex = resolveTypeaheadMatch(
-          items,
-          nextQuery,
-          maybeActiveItemIndex,
-          isItemDisabledByIndex,
-          itemToSearchText,
-          String.isNonEmpty(searchQuery),
-        )
-        return Option.some(Message.Searched({ key, maybeTargetIndex }))
-      }
-
-      const resolveCommitMessage = (): Option.Option<Message> => {
-        if (isReadOnly) {
-          return Option.as(maybeActiveItemIndex, Message.SuppressedItemCommit())
-        } else {
-          return Option.map(maybeActiveItemIndex, index =>
-            Message.RequestedItemClick({ index }),
-          )
-        }
-      }
-
-      const handleItemsKeyDown = (key: string): Option.Option<Message> =>
-        Match.value(key).pipe(
-          Match.when('Escape', () => Option.some(Message.Closed())),
-          Match.when('Enter', resolveCommitMessage),
-          Match.when(' ', () =>
-            String.isNonEmpty(searchQuery)
-              ? searchForKey(' ')
-              : resolveCommitMessage(),
-          ),
-          Match.when(isNavigationKey, () =>
-            Option.some(
-              Message.ActivatedItem({
-                index: resolveActiveIndex(key),
-                activationTrigger: 'Keyboard',
-              }),
-            ),
-          ),
-          Match.when(isPrintableKey, () => searchForKey(key)),
-          Match.orElse(() => Option.none()),
-        )
-
-      const resolveButtonLabel = () => {
-        if (Predicate.isNotUndefined(ariaLabel)) {
-          return [h.AriaLabel(ariaLabel)]
-        } else if (Predicate.isNotUndefined(ariaLabelledBy)) {
-          return [h.AriaLabelledBy(ariaLabelledBy)]
-        } else {
-          return []
-        }
-      }
-
-      const buttonLabelAttributes = resolveButtonLabel()
-
-      const resolvedButtonAttributes = [
-        h.Id(`${id}-button`),
-        h.Type('button'),
-        h.AriaHasPopup('listbox'),
-        h.AriaExpanded(isVisible),
-        ...(isVisible ? [h.AriaControls(`${id}-items`)] : []),
-        ...buttonLabelAttributes,
-        ...(isButtonEffectivelyDisabled
-          ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
-          : [
-              h.OnPointerDown(handleButtonPointerDown),
-              h.OnKeyDownPreventDefault(handleButtonKeyDown),
-              h.OnKeyUpPreventDefault(handleSpaceKeyUp),
-              h.OnClick(handleButtonClick()),
-            ]),
-        ...(isVisible
-          ? [
-              h.DataAttribute('open', ''),
-              h.Style({ position: 'relative', zIndex: '1' }),
-            ]
-          : []),
-        ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
-        ...(isInvalid ? [h.DataAttribute('invalid', '')] : []),
-        ...(buttonClassName ? [h.Class(buttonClassName)] : []),
-        ...buttonAttributes,
-      ]
-
-      const maybeActiveDescendant = Option.match(maybeActiveItemIndex, {
-        onNone: () => [],
-        onSome: index => [h.AriaActiveDescendant(itemId(id, index))],
-      })
-
-      const anchorAttributes = [
-        h.Style({
-          position: 'absolute',
-          margin: '0',
-          visibility: 'hidden',
-        }),
-        h.OnMount(AnchorListbox({ buttonId: `${id}-button`, anchor })),
-      ]
-
-      const itemsContainerAttributes = [
-        h.Id(`${id}-items`),
-        h.Role('listbox'),
-        h.AriaOrientation(String.toLowerCase(orientation)),
-        ...(behavior.ariaMultiSelectable ? [h.AriaMultiSelectable(true)] : []),
-        ...(isReadOnly
-          ? [h.AriaReadonly(true), h.DataAttribute('readonly', '')]
-          : []),
-        h.AriaLabelledBy(`${id}-button`),
-        ...maybeActiveDescendant,
-        h.Tabindex(-1),
-        ...anchorAttributes,
-        ...animationAttributes,
-        ...(isLeaving
-          ? []
-          : [
-              h.OnKeyDownPreventDefault(handleItemsKeyDown),
-              h.OnKeyUpPreventDefault(handleSpaceKeyUp),
-              h.OnBlur(Message.BlurredItems()),
-            ]),
-        ...(itemsClassName ? [h.Class(itemsClassName)] : []),
-        ...itemsAttributes,
-      ]
-
-      const listboxItems = Array.map(items, (item, index) => {
-        const isActiveItem = Option.exists(
-          maybeActiveItemIndex,
-          activeIndex => activeIndex === index,
-        )
-        const isDisabledItem = isItemDisabledByIndex(index)
-        const isSelectedItem = isValueSelected(itemToValue(item))
-        const itemConfig = itemToConfig(item, {
-          isActive: isActiveItem,
-          isDisabled: isDisabledItem,
-          isReadOnly,
-          isSelected: isSelectedItem,
-        })
-
-        const isHoverable = !isDisabledItem && !isLeaving
-        const isClickable = isHoverable && !isReadOnly
-
-        return h.keyed('div')(
-          itemId(id, index),
-          [
-            h.Id(itemId(id, index)),
-            h.Role('option'),
-            h.AriaSelected(isSelectedItem),
-            ...(isActiveItem ? [h.DataAttribute('active', '')] : []),
-            ...(isSelectedItem ? [h.DataAttribute('selected', '')] : []),
-            ...(isDisabledItem
-              ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
-              : []),
-            ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
-            ...(isClickable
-              ? [h.OnClick(Message.SelectedItem({ item: itemToValue(item) }))]
-              : []),
-            ...(isHoverable
-              ? [
-                  ...(isActiveItem
-                    ? []
-                    : [
-                        h.OnPointerMove((screenX, screenY, pointerType) =>
-                          OptionExt.when(
-                            pointerType !== 'touch',
-                            Message.MovedPointerOverItem({
-                              index,
-                              screenX,
-                              screenY,
-                            }),
-                          ),
-                        ),
-                      ]),
-                  h.OnPointerLeave(pointerType =>
-                    OptionExt.when(
-                      pointerType !== 'touch',
-                      Message.DeactivatedItem(),
-                    ),
-                  ),
-                ]
-              : []),
-            ...(itemConfig.className ? [h.Class(itemConfig.className)] : []),
-          ],
-          [itemConfig.content],
-        )
-      })
-
-      const renderGroupedItems = (): ReadonlyArray<Html> => {
-        if (!itemGroupKey) {
-          return listboxItems
-        }
-
-        const segments = groupContiguous(listboxItems, (_, index) =>
-          Array.get(items, index).pipe(
-            Option.match({
-              onNone: () => '',
-              onSome: item => itemGroupKey(item, index),
             }),
           ),
-        )
-
-        return Array.flatMap(segments, (segment, segmentIndex) => {
-          const maybeHeading = Option.fromNullishOr(
-            groupToHeading?.(segment.key),
-          )
-
-          const headingId = `${id}-heading-${segment.key}`
-
-          const headingElement = Option.match(maybeHeading, {
-            onNone: () => [],
-            onSome: heading => [
-              h.keyed('div')(
-                headingId,
-                [
-                  h.Id(headingId),
-                  h.Role('presentation'),
-                  ...(heading.className ? [h.Class(heading.className)] : []),
-                ],
-                [heading.content],
+        ),
+        Match.when('ArrowUp', () =>
+          Option.some(
+            Message.Opened({
+              maybeActiveItemIndex: Option.orElse(selectedItemIndex, () =>
+                Option.some(lastEnabledIndex),
               ),
-            ],
-          })
+            }),
+          ),
+        ),
+        Match.orElse(() => Option.none()),
+      )
+    }
 
-          const groupContent = [...headingElement, ...segment.items]
+    const handleButtonPointerDown = (
+      pointerType: string,
+      button: number,
+    ): Option.Option<Message> =>
+      Option.some(Message.PressedPointerOnButton({ pointerType, button }))
 
-          const groupElement = h.keyed('div')(
-            `${id}-group-${segment.key}`,
-            [
-              h.Role('group'),
-              ...(Option.isSome(maybeHeading)
-                ? [h.AriaLabelledBy(headingId)]
-                : []),
-              ...(groupClassName ? [h.Class(groupClassName)] : []),
-              ...groupAttributes,
-            ],
-            groupContent,
-          )
+    const handleSpaceKeyUp = (key: string): Option.Option<Message> =>
+      OptionExt.when(key === ' ', Message.SuppressedSpaceScroll())
 
-          const separator =
-            segmentIndex > 0 &&
-            (separatorClassName ||
-              Array.isReadonlyArrayNonEmpty(separatorAttributes))
-              ? [
-                  h.keyed('div')(`${id}-separator-${segmentIndex}`, [
-                    h.Role('separator'),
-                    ...(separatorClassName
-                      ? [h.Class(separatorClassName)]
-                      : []),
-                    ...separatorAttributes,
-                  ]),
-                ]
-              : []
+    const resolveActiveIndex = (key: string): number =>
+      Option.match(maybeActiveItemIndex, {
+        onNone: () =>
+          Match.value(key).pipe(
+            Match.whenOr(
+              previousKey,
+              'End',
+              'PageDown',
+              () => lastEnabledIndex,
+            ),
+            Match.orElse(() => firstEnabledIndex),
+          ),
+        onSome: activeIndex =>
+          keyToIndex(
+            nextKey,
+            previousKey,
+            items.length,
+            activeIndex,
+            isItemDisabledByIndex,
+          )(key),
+      })
 
-          return [...separator, groupElement]
-        })
+    const searchForKey = (key: string): Option.Option<Message> => {
+      const nextQuery = searchQuery + key
+      const maybeTargetIndex = resolveTypeaheadMatch(
+        items,
+        nextQuery,
+        maybeActiveItemIndex,
+        isItemDisabledByIndex,
+        itemToSearchText,
+        String.isNonEmpty(searchQuery),
+      )
+      return Option.some(Message.Searched({ key, maybeTargetIndex }))
+    }
+
+    const resolveCommitMessage = (): Option.Option<Message> => {
+      if (isReadOnly) {
+        return Option.as(maybeActiveItemIndex, Message.SuppressedItemCommit())
+      } else {
+        return Option.map(maybeActiveItemIndex, index =>
+          Message.RequestedItemClick({ index }),
+        )
+      }
+    }
+
+    const handleItemsKeyDown = (key: string): Option.Option<Message> =>
+      Match.value(key).pipe(
+        Match.when('Escape', () => Option.some(Message.Closed())),
+        Match.when('Enter', resolveCommitMessage),
+        Match.when(' ', () =>
+          String.isNonEmpty(searchQuery)
+            ? searchForKey(' ')
+            : resolveCommitMessage(),
+        ),
+        Match.when(isNavigationKey, () =>
+          Option.some(
+            Message.ActivatedItem({
+              index: resolveActiveIndex(key),
+              activationTrigger: 'Keyboard',
+            }),
+          ),
+        ),
+        Match.when(isPrintableKey, () => searchForKey(key)),
+        Match.orElse(() => Option.none()),
+      )
+
+    const resolveButtonLabel = () => {
+      if (Predicate.isNotUndefined(ariaLabel)) {
+        return [h.AriaLabel(ariaLabel)]
+      } else if (Predicate.isNotUndefined(ariaLabelledBy)) {
+        return [h.AriaLabelledBy(ariaLabelledBy)]
+      } else {
+        return []
+      }
+    }
+
+    const buttonLabelAttributes = resolveButtonLabel()
+
+    const resolvedButtonAttributes = [
+      h.Id(`${id}-button`),
+      h.Type('button'),
+      h.AriaHasPopup('listbox'),
+      h.AriaExpanded(isVisible),
+      ...(isVisible ? [h.AriaControls(`${id}-items`)] : []),
+      ...buttonLabelAttributes,
+      ...(isButtonEffectivelyDisabled
+        ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
+        : [
+            h.OnPointerDown(handleButtonPointerDown),
+            h.OnKeyDownPreventDefault(handleButtonKeyDown),
+            h.OnKeyUpPreventDefault(handleSpaceKeyUp),
+            h.OnClick(Message.ClickedButton()),
+          ]),
+      ...(isVisible
+        ? [
+            h.DataAttribute('open', ''),
+            h.Style({ position: 'relative', zIndex: '1' }),
+          ]
+        : []),
+      ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
+      ...(isInvalid ? [h.DataAttribute('invalid', '')] : []),
+      ...(buttonClassName ? [h.Class(buttonClassName)] : []),
+      ...buttonAttributes,
+    ]
+
+    const maybeActiveDescendant = Option.match(maybeActiveItemIndex, {
+      onNone: () => [],
+      onSome: index => [h.AriaActiveDescendant(itemId(id, index))],
+    })
+
+    const anchorAttributes = [
+      h.Style({
+        position: 'absolute',
+        margin: '0',
+        visibility: 'hidden',
+      }),
+      h.OnMount(AnchorListbox({ buttonId: `${id}-button`, anchor })),
+    ]
+
+    const itemsContainerAttributes = [
+      h.Id(`${id}-items`),
+      h.Role('listbox'),
+      h.AriaOrientation(String.toLowerCase(orientation)),
+      ...(behavior.ariaMultiSelectable ? [h.AriaMultiSelectable(true)] : []),
+      ...(isReadOnly
+        ? [h.AriaReadonly(true), h.DataAttribute('readonly', '')]
+        : []),
+      h.AriaLabelledBy(`${id}-button`),
+      ...maybeActiveDescendant,
+      h.Tabindex(-1),
+      ...anchorAttributes,
+      ...animationAttributes,
+      ...(isLeaving
+        ? []
+        : [
+            h.OnKeyDownPreventDefault(handleItemsKeyDown),
+            h.OnKeyUpPreventDefault(handleSpaceKeyUp),
+            h.OnBlur(Message.BlurredItems()),
+          ]),
+      ...(itemsClassName ? [h.Class(itemsClassName)] : []),
+      ...itemsAttributes,
+    ]
+
+    const listboxItems = Array.map(items, (item, index) => {
+      const isActiveItem = Option.exists(
+        maybeActiveItemIndex,
+        activeIndex => activeIndex === index,
+      )
+      const isDisabledItem = isItemDisabledByIndex(index)
+      const isSelectedItem = isValueSelected(itemToValue(item))
+      const itemConfig = itemToConfig(item, {
+        isActive: isActiveItem,
+        isDisabled: isDisabledItem,
+        isReadOnly,
+        isSelected: isSelectedItem,
+      })
+
+      const isHoverable = !isDisabledItem && !isLeaving
+      const isClickable = isHoverable && !isReadOnly
+
+      return h.keyed('div')(
+        itemId(id, index),
+        [
+          h.Id(itemId(id, index)),
+          h.Role('option'),
+          h.AriaSelected(isSelectedItem),
+          ...(isActiveItem ? [h.DataAttribute('active', '')] : []),
+          ...(isSelectedItem ? [h.DataAttribute('selected', '')] : []),
+          ...(isDisabledItem
+            ? [h.AriaDisabled(true), h.DataAttribute('disabled', '')]
+            : []),
+          ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
+          ...(isClickable
+            ? [h.OnClick(Message.SelectedItem({ item: itemToValue(item) }))]
+            : []),
+          ...(isHoverable
+            ? [
+                ...(isActiveItem
+                  ? []
+                  : [
+                      h.OnPointerMove((screenX, screenY, pointerType) =>
+                        OptionExt.when(
+                          pointerType !== 'touch',
+                          Message.MovedPointerOverItem({
+                            index,
+                            screenX,
+                            screenY,
+                          }),
+                        ),
+                      ),
+                    ]),
+                h.OnPointerLeave(pointerType =>
+                  OptionExt.when(
+                    pointerType !== 'touch',
+                    Message.DeactivatedItem(),
+                  ),
+                ),
+              ]
+            : []),
+          ...(itemConfig.className ? [h.Class(itemConfig.className)] : []),
+        ],
+        [itemConfig.content],
+      )
+    })
+
+    const renderGroupedItems = (): ReadonlyArray<Html> => {
+      if (!itemGroupKey) {
+        return listboxItems
       }
 
-      const backdrop = h.keyed('div')(`${id}-backdrop`, [
-        h.OnMount(PortalListboxBackdrop()),
-        ...(isLeaving ? [] : [h.OnClick(Message.Closed())]),
-        ...(backdropClassName ? [h.Class(backdropClassName)] : []),
-        ...backdropAttributes,
-      ])
-
-      const renderedItems = renderGroupedItems()
-
-      const scrollableItems =
-        itemsScrollClassName ||
-        Array.isReadonlyArrayNonEmpty(itemsScrollAttributes)
-          ? [
-              h.div(
-                [
-                  ...(itemsScrollClassName
-                    ? [h.Class(itemsScrollClassName)]
-                    : []),
-                  ...itemsScrollAttributes,
-                ],
-                renderedItems,
-              ),
-            ]
-          : renderedItems
-
-      const visibleContent = [
-        backdrop,
-        h.keyed('div')(
-          `${id}-items-container`,
-          itemsContainerAttributes,
-          scrollableItems,
+      const segments = groupContiguous(listboxItems, (_, index) =>
+        Array.get(items, index).pipe(
+          Option.match({
+            onNone: () => '',
+            onSome: item => itemGroupKey(item, index),
+          }),
         ),
-      ]
+      )
 
-      const formAttribute = form ? [h.Attribute('form', form)] : []
+      return Array.flatMap(segments, (segment, segmentIndex) => {
+        const maybeHeading = Option.fromNullishOr(groupToHeading?.(segment.key))
 
-      const hiddenInputs = name
-        ? Array.match(selectedValues, {
-            onEmpty: () => [
-              h.input([h.Type('hidden'), h.Name(name), ...formAttribute]),
-            ],
-            onNonEmpty: Array.map(selectedValue =>
-              h.input([
-                h.Type('hidden'),
-                h.Name(name),
-                h.Value(selectedValue),
-                ...formAttribute,
-              ]),
+        const headingId = `${id}-heading-${segment.key}`
+
+        const headingElement = Option.match(maybeHeading, {
+          onNone: () => [],
+          onSome: heading => [
+            h.keyed('div')(
+              headingId,
+              [
+                h.Id(headingId),
+                h.Role('presentation'),
+                ...(heading.className ? [h.Class(heading.className)] : []),
+              ],
+              [heading.content],
             ),
-          })
-        : []
+          ],
+        })
 
-      const wrapperAttributes = [
-        ...(className ? [h.Class(className)] : []),
-        ...attributes,
-        ...(isVisible ? [h.DataAttribute('open', '')] : []),
-        ...(isDisabled ? [h.DataAttribute('disabled', '')] : []),
-        ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
-        ...(isInvalid ? [h.DataAttribute('invalid', '')] : []),
-      ]
+        const groupContent = [...headingElement, ...segment.items]
 
-      return h.div(wrapperAttributes, [
-        h.keyed('button')(`${id}-button`, resolvedButtonAttributes, [
-          buttonContent,
-        ]),
-        ...hiddenInputs,
-        ...(isVisible ? visibleContent : []),
-      ])
-    },
-  )
+        const groupElement = h.keyed('div')(
+          `${id}-group-${segment.key}`,
+          [
+            h.Role('group'),
+            ...(Option.isSome(maybeHeading)
+              ? [h.AriaLabelledBy(headingId)]
+              : []),
+            ...(groupClassName ? [h.Class(groupClassName)] : []),
+            ...groupAttributes,
+          ],
+          groupContent,
+        )
 
-  return <Item, Value extends string = string>() =>
+        const separator =
+          segmentIndex > 0 &&
+          (separatorClassName ||
+            Array.isReadonlyArrayNonEmpty(separatorAttributes))
+            ? [
+                h.keyed('div')(`${id}-separator-${segmentIndex}`, [
+                  h.Role('separator'),
+                  ...(separatorClassName ? [h.Class(separatorClassName)] : []),
+                  ...separatorAttributes,
+                ]),
+              ]
+            : []
+
+        return [...separator, groupElement]
+      })
+    }
+
+    const backdrop = h.keyed('div')(`${id}-backdrop`, [
+      h.OnMount(PortalListboxBackdrop()),
+      ...(isLeaving ? [] : [h.OnClick(Message.Closed())]),
+      ...(backdropClassName ? [h.Class(backdropClassName)] : []),
+      ...backdropAttributes,
+    ])
+
+    const renderedItems = renderGroupedItems()
+
+    const scrollableItems =
+      itemsScrollClassName ||
+      Array.isReadonlyArrayNonEmpty(itemsScrollAttributes)
+        ? [
+            h.div(
+              [
+                ...(itemsScrollClassName
+                  ? [h.Class(itemsScrollClassName)]
+                  : []),
+                ...itemsScrollAttributes,
+              ],
+              renderedItems,
+            ),
+          ]
+        : renderedItems
+
+    const visibleContent = [
+      backdrop,
+      h.keyed('div')(
+        `${id}-items-container`,
+        itemsContainerAttributes,
+        scrollableItems,
+      ),
+    ]
+
+    const formAttribute = form ? [h.Attribute('form', form)] : []
+
+    const hiddenInputs = name
+      ? Array.match(selectedValues, {
+          onEmpty: () => [
+            h.input([h.Type('hidden'), h.Name(name), ...formAttribute]),
+          ],
+          onNonEmpty: Array.map(selectedValue =>
+            h.input([
+              h.Type('hidden'),
+              h.Name(name),
+              h.Value(selectedValue),
+              ...formAttribute,
+            ]),
+          ),
+        })
+      : []
+
+    const wrapperAttributes = [
+      ...(className ? [h.Class(className)] : []),
+      ...attributes,
+      ...(isVisible ? [h.DataAttribute('open', '')] : []),
+      ...(isDisabled ? [h.DataAttribute('disabled', '')] : []),
+      ...(isReadOnly ? [h.DataAttribute('readonly', '')] : []),
+      ...(isInvalid ? [h.DataAttribute('invalid', '')] : []),
+    ]
+
+    return h.div(wrapperAttributes, [
+      h.keyed('button')(`${id}-button`, resolvedButtonAttributes, [
+        buttonContent,
+      ]),
+      ...hiddenInputs,
+      ...(isVisible ? visibleContent : []),
+    ])
+  }
+
+  return <Item, Value extends string = string, ParentMessage = never>() =>
     /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-    impl as unknown as SubmodelView<Model, Message, BaseViewInputs<Item, Value>>
+    impl as unknown as (
+      model: Model,
+      viewInputs: BaseViewInputs<Item, Value>,
+      h: HtmlBuilder<Message | ParentMessage, MountRequirements>,
+    ) => Html
 }

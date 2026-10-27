@@ -1,30 +1,13 @@
 export {
-  init,
-  boot,
-  update,
-  open,
-  close,
-  view,
+  DialogBlock,
   titleId,
   descriptionId,
-  Model,
-  Message,
-  OutMessage,
-  type Opened,
-  type Closed,
-  type RequestedOpen,
-  type RequestedClose,
-  type SucceededShowDialog,
-  type FailedShowDialog,
-  type SucceededAcquireResources,
-  type FailedAcquireResources,
-  type CompletedCloseDialog,
-  type Unmounted,
-  type CompletedReleaseDialogResources,
-  ShowDialog,
-  AcquireResources,
-  CloseDialog,
-  ReleaseDialogResources,
+  initialFocusMarkerAttribute,
+  initialFocusMarkerSelector,
+  type InitConfig,
+  type ViewInputs,
+  type RenderInfo,
 } from './index.js'
 
-export type { InitConfig, ViewInputs, RenderInfo } from './index.js'
+/** Original Dialog Command Definitions for Story and Scene test resolution. */
+export * as test from './test.js'

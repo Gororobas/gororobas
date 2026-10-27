@@ -1,22 +1,22 @@
 import { clsx } from 'clsx'
 import { Array, Number, Option, Order, pipe } from 'effect'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import { Html } from 'foldkit/html'
 
 import * as Shared from '@typing-game/shared'
 
-import type { Message } from '../message'
+import type { RoomViewBuilder } from '../composition'
 import { RoomPlayerSession } from '../model'
 
 const byHighestWpm = pipe(
   Number.Order,
-  Order.mapInput(({ wpm }: Shared.PlayerScore) => wpm),
+  Order.mapInput(({ wpm }: typeof Shared.PlayerScore.Type) => wpm),
   Order.flip,
 )
 
 const scoreboardView = (
-  scoreboard: Shared.Scoreboard,
+  scoreboard: typeof Shared.Scoreboard.Type,
   hostId: string,
-  h: HtmlBuilder<Message>,
+  h: RoomViewBuilder,
 ): Html => {
   const sortedScoreboard = Array.sort(scoreboard, byHighestWpm)
 
@@ -133,10 +133,10 @@ const scoreboardView = (
 }
 
 export const finished = (
-  maybeScoreboard: Option.Option<Shared.Scoreboard>,
+  maybeScoreboard: Option.Option<typeof Shared.Scoreboard.Type>,
   hostId: string,
-  maybeSession: Option.Option<RoomPlayerSession>,
-  h: HtmlBuilder<Message>,
+  maybeSession: Option.Option<typeof RoomPlayerSession.Type>,
+  h: RoomViewBuilder,
 ): Html => {
   const isLocalPlayerHost = Option.exists(
     maybeSession,

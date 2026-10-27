@@ -7,4 +7,3 @@ export const Message = defineMessageUnion({
   FailedCopySnippet: {},
   CompletedWaitBeforeHidingCopiedIndicator: { snippetId: Schema.String },
 })
-export type Message = typeof Message.Type

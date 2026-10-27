@@ -1,99 +1,99 @@
-import { Option } from 'effect'
-import type { HtmlBuilder } from 'foldkit/html'
-import { defineMessageUnion } from 'foldkit/message'
+import { Option, Schema } from 'effect'
+import { Block } from 'foldkit'
 import * as Scene from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
-import * as Update from 'foldkit/update'
 
 import { describe, it } from '@effect/vitest'
 
-import type { Model as RadioGroupModel, ViewInputs } from './index.js'
+import type { ViewInputs } from './radioGroup.js'
 import {
   FocusOption,
   Message as RadioGroupMessage,
-  OutMessage as RadioGroupOutMessage,
   create,
-  init,
-} from './index.js'
+} from './radioGroup.js'
 
 const RADIO_ID = 'test'
 const options: ReadonlyArray<string> = ['Brush', 'Fill', 'Eraser']
 
 const TestRadioGroup = create()
 
-const Message = defineMessageUnion({
-  GotRadioGroupMessage: { message: RadioGroupMessage },
+const Model = Schema.Struct({
+  radioGroup: TestRadioGroup.Model,
+  maybeSelectedValue: Schema.Option(Schema.String),
 })
-type Message = typeof Message.Type
+type Model = typeof Model.Type
 
-type Model = Readonly<{
-  radioGroup: RadioGroupModel
-  maybeSelectedValue: Option.Option<string>
-}>
+const RadioGroupSceneDefinition = Block.makeDefinition('RadioGroupScene', {
+  Model,
+  Message: Schema.Never,
+})
 
 const modelWith = (maybeSelectedValue: Option.Option<string>): Model => ({
-  radioGroup: init({ id: RADIO_ID }),
+  radioGroup: TestRadioGroup.init({ id: RADIO_ID }).model,
   maybeSelectedValue,
 })
 
 const nothingSelected = modelWith(Option.none())
 
-const foldRadioGroupOutMessage = RadioGroupOutMessage.match<
-  Update.Step<Model, Message>
->({
-  Selected:
-    ({ value }) =>
-    model => ({
-      model: modifyFields(model, {
-        maybeSelectedValue: () => Option.some(value),
+const foldRadioGroupOutMessage = RadioGroupSceneDefinition.makeOutMessageFold(
+  TestRadioGroup,
+  {
+    Selected:
+      ({ value }) =>
+      model => ({
+        model: modifyFields(model, {
+          maybeSelectedValue: () => Option.some(value),
+        }),
       }),
-    }),
+  },
+)
+
+const RadioGroupBinding = RadioGroupSceneDefinition.makeBinding(
+  TestRadioGroup,
+  {
+    field: 'radioGroup',
+    init: false,
+  },
+).withOutMessagePolicy({ fold: foldRadioGroupOutMessage })
+
+const RadioGroupSceneComposition = RadioGroupSceneDefinition.makeComposition({
+  bindings: [RadioGroupBinding],
 })
 
-const foldRadioGroup = Update.foldChild({
-  update: TestRadioGroup.update,
-  read: (model: Model) => Option.some(model.radioGroup),
-  write: (model, nextRadioGroup) =>
-    modifyFields(model, { radioGroup: () => nextRadioGroup }),
-  toParentMessage: message => Message.GotRadioGroupMessage({ message }),
-  foldOutMessage: foldRadioGroupOutMessage,
-})
-
-const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
-    GotRadioGroupMessage: ({ message }) => foldRadioGroup(model, message),
-  })
+const update = RadioGroupSceneComposition.makeUpdate({})
 
 type Overrides = Omit<
   Partial<ViewInputs>,
   'options' | 'selectedValue' | 'ariaLabel' | 'toView'
 >
 
-const testView =
-  (overrides: Overrides = {}) =>
-  (model: Model, h: HtmlBuilder<Message>) =>
-    h.submodel({
-      slotId: RADIO_ID,
-      model: model.radioGroup,
-      view: TestRadioGroup.view,
-      viewInputs: {
-        options,
-        selectedValue: model.maybeSelectedValue,
-        ariaLabel: 'Tool',
-        ...overrides,
-        toView: ({ group, options: optionInfos }) =>
-          h.div(
-            [...group],
-            optionInfos.map(option =>
-              h.button(
-                [...option.option],
-                [h.span([...option.label], [option.value])],
+const rootView = RadioGroupSceneComposition.makeView.withInputs<Overrides>(
+  (model, overrides, h) =>
+    h.block(
+      RadioGroupBinding.embedView({
+        slotId: RADIO_ID,
+        model: model.radioGroup,
+        viewInputs: {
+          options,
+          selectedValue: model.maybeSelectedValue,
+          ariaLabel: 'Tool',
+          ...overrides,
+          toView: ({ group, options: optionInfos }) =>
+            h.div(
+              [...group],
+              optionInfos.map(option =>
+                h.button(
+                  [...option.option],
+                  [h.span([...option.label], [option.value])],
+                ),
               ),
             ),
-          ),
-      },
-      toParentMessage: message => Message.GotRadioGroupMessage({ message }),
-    })
+        },
+      }),
+    ),
+)
+
+const testView = Scene.withViewInputs(rootView, {})
 
 const resolveFocusOption = Scene.Command.resolve(
   FocusOption,

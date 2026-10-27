@@ -1,19 +1,24 @@
 import { Array, Option, pipe } from 'effect'
 import { File } from 'foldkit'
-import type { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { Step } from '../domain'
 import { Message } from '../message'
 import { type Model, Submission } from '../model'
-import { Education, PersonalInfo, Skills, WorkHistory } from '../step'
+import { EducationEntryBlock, WorkHistoryEntryBlock } from '../step'
+import { isComplete as isEducationComplete } from '../step/education/update'
+import { isComplete as isPersonalInfoComplete } from '../step/personalInfo/update'
+import { isComplete as isSkillsComplete } from '../step/skills/update'
+import { isComplete as isWorkHistoryComplete } from '../step/workHistory/update'
 import { employmentRange, pluralize } from './format'
 
 const reviewSection = (
   title: string,
   content: Html,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.section(
     [h.Class('rounded-lg border border-gray-200 p-4')],
@@ -26,7 +31,7 @@ const reviewSection = (
 const fieldRow = (
   label: string,
   value: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   value
     ? h.div(
@@ -39,9 +44,9 @@ const fieldRow = (
     : h.empty
 
 const personalInfoSection = (
-  personalInfo: Model['personalInfo'],
+  personalInfo: (typeof Model.Type)['personalInfo'],
   pronounLabel: string,
-  h: HtmlBuilder<Message>,
+  h: ApplicationViewBuilder,
 ): Html =>
   reviewSection(
     'Personal Information',
@@ -63,8 +68,8 @@ const personalInfoSection = (
   )
 
 const workEntryReview = (
-  entry: WorkHistory.Entry.Model,
-  h: HtmlBuilder<Message>,
+  entry: typeof WorkHistoryEntryBlock.Model.Type,
+  h: ApplicationViewBuilder,
 ): Html => {
   const title = entry.company.value
     ? `${entry.title.value} at ${entry.company.value}`
@@ -95,8 +100,8 @@ const workEntryReview = (
 }
 
 const workHistorySection = (
-  workHistory: Model['workHistory'],
-  h: HtmlBuilder<Message>,
+  workHistory: (typeof Model.Type)['workHistory'],
+  h: ApplicationViewBuilder,
 ): Html =>
   reviewSection(
     `Work History (${pluralize(workHistory.entries.length, 'position', 'positions')})`,
@@ -107,7 +112,9 @@ const workHistorySection = (
     h,
   )
 
-const educationTimeline = (entry: Education.Entry.Model): string => {
+const educationTimeline = (
+  entry: typeof EducationEntryBlock.Model.Type,
+): string => {
   if (entry.isCurrentlyEnrolled) {
     return ' (Currently enrolled)'
   }
@@ -118,8 +125,8 @@ const educationTimeline = (entry: Education.Entry.Model): string => {
 }
 
 const educationEntryReview = (
-  entry: Education.Entry.Model,
-  h: HtmlBuilder<Message>,
+  entry: typeof EducationEntryBlock.Model.Type,
+  h: ApplicationViewBuilder,
 ): Html => {
   const title = entry.fieldOfStudy.value
     ? `${entry.degree.value} in ${entry.fieldOfStudy.value}`
@@ -139,8 +146,8 @@ const educationEntryReview = (
 }
 
 const educationSection = (
-  education: Model['education'],
-  h: HtmlBuilder<Message>,
+  education: (typeof Model.Type)['education'],
+  h: ApplicationViewBuilder,
 ): Html =>
   reviewSection(
     `Education (${pluralize(education.entries.length, 'entry', 'entries')})`,
@@ -152,8 +159,8 @@ const educationSection = (
   )
 
 const skillsSection = (
-  skills: Model['skills'],
-  h: HtmlBuilder<Message>,
+  skills: (typeof Model.Type)['skills'],
+  h: ApplicationViewBuilder,
 ): Html =>
   reviewSection(
     `Skills (${skills.entries.length})`,
@@ -177,8 +184,8 @@ const skillsSection = (
   )
 
 const coverLetterSection = (
-  coverLetter: Model['coverLetter'],
-  h: HtmlBuilder<Message>,
+  coverLetter: (typeof Model.Type)['coverLetter'],
+  h: ApplicationViewBuilder,
 ): Html =>
   reviewSection(
     'Cover Letter',
@@ -195,8 +202,8 @@ const coverLetterSection = (
   )
 
 const attachmentsSection = (
-  attachments: Model['attachments'],
-  h: HtmlBuilder<Message>,
+  attachments: (typeof Model.Type)['attachments'],
+  h: ApplicationViewBuilder,
 ): Html =>
   reviewSection(
     'Attachments',
@@ -235,7 +242,9 @@ const attachmentsSection = (
 const submitButtonClass =
   'w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 transition cursor-pointer'
 
-const blockedNoticeText = (attentionSteps: ReadonlyArray<Step.Step>): string =>
+const blockedNoticeText = (
+  attentionSteps: ReadonlyArray<typeof Step.Step.Type>,
+): string =>
   Array.match(attentionSteps, {
     onEmpty: () => 'Review the required fields before submitting.',
     onNonEmpty: steps =>
@@ -243,8 +252,8 @@ const blockedNoticeText = (attentionSteps: ReadonlyArray<Step.Step>): string =>
   })
 
 const blockedNotice = (
-  attentionSteps: ReadonlyArray<Step.Step>,
-  h: HtmlBuilder<Message>,
+  attentionSteps: ReadonlyArray<typeof Step.Step.Type>,
+  h: ApplicationViewBuilder,
 ): Html =>
   h.p(
     [h.Class('text-sm text-red-600 text-center')],
@@ -252,10 +261,10 @@ const blockedNotice = (
   )
 
 const submissionSection = (
-  submission: Model['submission'],
+  submission: (typeof Model.Type)['submission'],
   shouldShowBlockedNotice: boolean,
-  attentionSteps: ReadonlyArray<Step.Step>,
-  h: HtmlBuilder<Message>,
+  attentionSteps: ReadonlyArray<typeof Step.Step.Type>,
+  h: ApplicationViewBuilder,
 ): Html =>
   Submission.match(submission, {
     NotSubmitted: () =>
@@ -350,9 +359,9 @@ const submissionSection = (
   })
 
 export const review = (
-  model: Model,
-  attentionSteps: ReadonlyArray<Step.Step>,
-  h: HtmlBuilder<Message>,
+  model: typeof Model.Type,
+  attentionSteps: ReadonlyArray<typeof Step.Step.Type>,
+  h: ApplicationViewBuilder,
 ): Html => {
   const pronounLabel = Option.match(model.personalInfo.maybeSelectedPronoun, {
     onNone: () => '',
@@ -361,10 +370,10 @@ export const review = (
   })
 
   const isApplicationComplete =
-    PersonalInfo.isComplete(model.personalInfo) &&
-    WorkHistory.isComplete(model.workHistory) &&
-    Education.isComplete(model.education) &&
-    Skills.isComplete(model.skills)
+    isPersonalInfoComplete(model.personalInfo) &&
+    isWorkHistoryComplete(model.workHistory) &&
+    isEducationComplete(model.education) &&
+    isSkillsComplete(model.skills)
 
   return h.div(
     [h.Class('space-y-4')],

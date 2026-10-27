@@ -1,46 +1,17 @@
 export {
-  init,
   create,
   buttonId,
-  Model,
-  Message,
-  OutMessage,
-  type Selected,
-  type SelectedItem,
-  AnchorMenu,
-  PortalMenuBackdrop,
-  type CompletedDelayClearSearch,
-  LockScroll,
-  UnlockScroll,
-  InertOthers,
-  RestoreInert,
-  FocusItems,
-  FocusButton,
-  ScrollIntoView,
-  ClickItem,
-  DelayClearSearch,
-  DetectMovementOrAnimationEnd,
-  type Opened,
-  type Closed,
-  type BlurredItems,
-  type ActivatedItem,
-  type DeactivatedItem,
-  type MovedPointerOverItem,
-  type RequestedItemClick,
-  type Searched,
-  type PressedPointerOnButton,
-  type ReleasedPointerOnItems,
-  type IgnoredMouseClick,
-  type SuppressedSpaceScroll,
-} from './index.js'
-
-export type {
   ActivationTrigger,
-  InitConfig,
-  ViewInputs,
-  ItemConfig,
-  GroupHeading,
-  Bundle,
+  groupContiguous,
+  resolveTypeaheadMatch,
+  type InitConfig,
+  type ViewInputs,
+  type ItemConfig,
+  type GroupHeading,
+  type Completed,
 } from './index.js'
 
 export type { AnchorConfig } from '../anchor/index.js'
+
+/** Original Menu Command and Mount Definitions for Story and Scene test resolution. */
+export * as test from './test.js'

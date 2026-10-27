@@ -1,7 +1,7 @@
 import { Array, Deferred, Effect, Option, Stream, pipe } from 'effect'
 import * as Mount from 'foldkit/mount'
 import * as Story from 'foldkit/story'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import {
   ApplyScroll,
@@ -11,16 +11,18 @@ import {
   ObserveVirtualList,
   type ScrollAlignment,
   ScrollTarget,
-  informItemsChanged,
+  type ScrollToOptions,
+  block,
   init,
+  scrollTo,
   scrollToEnd,
   scrollToIndex,
   scrollToKey,
   scrollToOffset,
   update,
-} from './index.js'
+} from './virtualList.js'
 
-const defaultInit = (): Model => init({ id: 'test', rowHeightPx: 30 })
+const defaultInit = (): Model => init({ id: 'test', rowHeightPx: 30 }).model
 
 type ScrollReturn = ReturnType<typeof scrollToIndex>
 
@@ -104,7 +106,7 @@ const runMountedScroll = (
 
         return element.scrollTop
       }),
-    ),
+    ).pipe(Effect.provide(block.EffectsLayer)),
   )
 
 const executeScroll = async (
@@ -145,6 +147,39 @@ const completedApplyScroll = (version: number) =>
   })
 
 describe('VirtualList', () => {
+  describe('exposed operations', () => {
+    it('preserves the public model-first call shapes', () => {
+      expectTypeOf<
+        Parameters<typeof block.operations.requestScrollTo>[1]
+      >().toEqualTypeOf<ScrollTarget>()
+      expectTypeOf<
+        Parameters<typeof block.operations.requestScrollTo>[2]
+      >().toEqualTypeOf<ScrollToOptions | undefined>()
+      expectTypeOf<
+        Parameters<typeof block.operations.requestScrollToIndex>[1]
+      >().toEqualTypeOf<number>()
+      expectTypeOf<
+        Parameters<typeof block.operations.requestScrollToIndex>[2]
+      >().toEqualTypeOf<ScrollToOptions | undefined>()
+      expectTypeOf<
+        Parameters<typeof block.operations.requestScrollToKey>[1]
+      >().toEqualTypeOf<string>()
+      expectTypeOf<
+        Parameters<typeof block.operations.requestScrollToKey>[2]
+      >().toEqualTypeOf<ScrollToOptions | undefined>()
+      expectTypeOf<
+        Parameters<typeof block.operations.requestScrollToOffset>[1]
+      >().toEqualTypeOf<number>()
+      expectTypeOf<
+        Parameters<typeof block.operations.informItemsChanged>[1]
+      >().toEqualTypeOf<ReadonlyArray<string>>()
+      expectTypeOf(scrollTo).toEqualTypeOf(block.operations.requestScrollTo)
+      expectTypeOf(scrollToIndex).toEqualTypeOf(
+        block.operations.requestScrollToIndex,
+      )
+    })
+  })
+
   describe('init', () => {
     it('starts in the Unmeasured state with scrollTop 0 and pendingScroll Idle', () => {
       const model = defaultInit()
@@ -162,7 +197,7 @@ describe('VirtualList', () => {
         id: 'test',
         rowHeightPx: 30,
         initialScrollTop: 600,
-      })
+      }).model
       expect(model.scrollTop).toBe(600)
       expect(model.initialScroll._tag).toBe('Pending')
     })
@@ -173,7 +208,7 @@ describe('VirtualList', () => {
         rowHeightPx: 30,
         initialScroll: { target: ScrollTarget.End() },
         followEnd: { thresholdPx: 8 },
-      })
+      }).model
 
       expect(model.initialScroll._tag).toBe('Pending')
       expect(model.endBehavior).toStrictEqual({
@@ -187,7 +222,7 @@ describe('VirtualList', () => {
         id: 'test',
         rowHeightPx: 30,
         initialScroll: { target: ScrollTarget.End() },
-      })
+      }).model
       const measured = update(
         initialModel,
         Message.ResizedContainer({ containerWidth: 320, containerHeight: 90 }),
@@ -199,7 +234,10 @@ describe('VirtualList', () => {
 
       expect(emptyScroll.model.initialScroll._tag).toBe('Pending')
 
-      const arrived = informItemsChanged(emptyScroll.model, ['first', 'last'])
+      const arrived = block.operations.informItemsChanged(emptyScroll.model, [
+        'first',
+        'last',
+      ])
       expect(arrived.model.pendingScroll).toMatchObject({
         _tag: 'Pending',
         request: { _tag: 'Target', target: { _tag: 'End' } },
@@ -230,7 +268,7 @@ describe('VirtualList', () => {
         id: 'test',
         rowHeightPx: 30,
         initialScroll: { target: ScrollTarget.Key({ key: 'wanted' }) },
-      })
+      }).model
       const measured = update(
         initialModel,
         Message.ResizedContainer({ containerWidth: 320, containerHeight: 90 }),
@@ -245,7 +283,9 @@ describe('VirtualList', () => {
 
       expect(missing.model.initialScroll._tag).toBe('Pending')
 
-      const arrived = informItemsChanged(missing.model, ['wanted'])
+      const arrived = block.operations.informItemsChanged(missing.model, [
+        'wanted',
+      ])
       expect(arrived.model.pendingScroll).toMatchObject({
         _tag: 'Pending',
         request: {
@@ -260,7 +300,7 @@ describe('VirtualList', () => {
         id: 'test',
         rowHeightPx: 30,
         initialScroll: { target: ScrollTarget.Key({ key: 'wanted' }) },
-      })
+      }).model
       const explicitScroll = scrollToEnd(initialModel)
 
       expect(explicitScroll.model.initialScroll._tag).toBe('Applied')
@@ -275,7 +315,7 @@ describe('VirtualList', () => {
         id: 'test',
         rowHeightPx: 30,
         initialScroll: { target: ScrollTarget.End() },
-      })
+      }).model
       const measured = update(
         initialModel,
         Message.ResizedContainer({ containerWidth: 320, containerHeight: 90 }),
@@ -323,7 +363,7 @@ describe('VirtualList', () => {
         id: 'test',
         rowHeightPx: 30,
         followEnd: { thresholdPx: 5 },
-      })
+      }).model
       const atEnd = update(
         model,
         Message.ObservedContainerScroll({
@@ -381,7 +421,9 @@ describe('VirtualList', () => {
 
       expect(scrolled.model.pendingScroll._tag).toBe('Idle')
       expect(scrolled.model.pendingScrollVersion).toBe(2)
-      const changed = informItemsChanged(scrolled.model, ['row-20'])
+      const changed = block.operations.informItemsChanged(scrolled.model, [
+        'row-20',
+      ])
       expect(changed.model.pendingScroll._tag).toBe('Pending')
       if (changed.model.pendingScroll._tag === 'Pending') {
         expect(changed.model.pendingScroll.request).toStrictEqual({
@@ -460,7 +502,7 @@ describe('VirtualList', () => {
       Story.story(
         update,
         Story.given(
-          init({ id: 'test', rowHeightPx: 30, initialScrollTop: 600 }),
+          init({ id: 'test', rowHeightPx: 30, initialScrollTop: 600 }).model,
         ),
         Story.message(
           Message.ResizedContainer({
@@ -858,7 +900,7 @@ describe('VirtualList', () => {
 
               return yield* maybeCommand.value.effect
             }),
-          ),
+          ).pipe(Effect.provide(block.EffectsLayer)),
         )
 
         if (outcome._tag !== 'CompletedApplyScroll') {
@@ -906,7 +948,7 @@ describe('VirtualList', () => {
 
               return yield* maybeCommand.value.effect
             }),
-          ),
+          ).pipe(Effect.provide(block.EffectsLayer)),
         )
 
         if (outcome._tag !== 'CompletedApplyScroll') {
@@ -955,7 +997,10 @@ describe('VirtualList', () => {
 
   describe('informItemsChanged', () => {
     it('bumps the layout version and reconciles the stored anchor', () => {
-      const itemChange = informItemsChanged(defaultInit(), ['first', 'second'])
+      const itemChange = block.operations.informItemsChanged(defaultInit(), [
+        'first',
+        'second',
+      ])
 
       expect(itemChange.model.layoutVersion).toBe(1)
       expect(itemChange.model.pendingScroll._tag).toBe('Pending')
@@ -982,7 +1027,7 @@ describe('VirtualList', () => {
     })
 
     it('ignores stale measurements from a previous items layout', () => {
-      const model = informItemsChanged(defaultInit(), []).model
+      const model = block.operations.informItemsChanged(defaultInit(), []).model
       const measurement = update(
         model,
         Message.MeasuredRows({

@@ -1,41 +1,51 @@
-// page/call/managedResource.ts
 import { Effect, Option, Schema } from 'effect'
-import { ManagedResource } from 'foldkit'
+import { Block } from 'foldkit'
 
-import {
-  ClosedSignaling,
-  FailedSignaling,
-  GotVideoCallMessage,
-  type Message,
-  OpenedSignaling,
-} from './message'
-import type { Model } from './model'
+import { init } from './init'
+import { Message } from './message'
+import { Model } from './model'
+import { update } from './update'
 import * as VideoCall from './videoCall'
 
 const SIGNALING_URL = 'wss://example.com/call/signaling'
 
-const SignalingSocket = ManagedResource.tag<WebSocket>()('SignalingSocket')
+const CallDefinition = Block.makeDefinition('Call', { Model, Message })
+const SignalingSocket =
+  CallDefinition.makeResource<WebSocket>()('SignalingSocket')
 
-const videoCallManagedResources = ManagedResource.lift(
-  VideoCall.managedResources,
-)<Model, Message>({
-  read: model => model.videoCall,
-  toParentMessage: message => GotVideoCallMessage({ message }),
+const VideoCallBinding = CallDefinition.makeBinding(VideoCall.VideoCallBlock, {
+  field: 'videoCall',
 })
 
-const localManagedResources = ManagedResource.make<Model, Message>()(entry => ({
-  signalingSocket: entry(Schema.Option(Schema.Null), {
+const CallComposition = CallDefinition.makeComposition({
+  bindings: [VideoCallBinding],
+})
+
+export const managedResources = CallDefinition.makeManagedResources(entry => ({
+  signalingSocket: entry('ManageSignalingSocket', Schema.Option(Schema.Null), {
     resource: SignalingSocket,
     modelToMaybeRequirements: model => Option.as(model.videoCall, null),
-    acquire: () => Effect.try(() => new WebSocket(SIGNALING_URL)),
-    release: socket => Effect.sync(() => socket.close()),
-    onAcquired: () => OpenedSignaling(),
-    onReleased: () => ClosedSignaling(),
-    onAcquireError: error => FailedSignaling({ error: String(error) }),
+    onAcquired: () => Message.OpenedSignaling(),
+    onReleased: () => Message.ClosedSignaling(),
+    onAcquireError: error =>
+      Message.FailedSignaling({ error: globalThis.String(error) }),
+    handler: function* () {
+      return {
+        acquire: () => Effect.try(() => new WebSocket(SIGNALING_URL)),
+        release: socket => Effect.sync(() => socket.close()),
+      }
+    },
   }),
 }))
 
-export const managedResources = ManagedResource.aggregate(
-  videoCallManagedResources,
-  localManagedResources,
-)
+const prepare = () =>
+  CallComposition.prepareBlock({
+    init,
+    update,
+    managedResources,
+    EffectsLayer: managedResources.signalingSocket.layer,
+  })
+export const CallBlock: Block.FromAssemblyWithoutViewOrOutMessage<
+  typeof Model,
+  typeof prepare
+> = Block.assemble(prepare)

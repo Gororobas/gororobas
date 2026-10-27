@@ -1,11 +1,9 @@
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
-import { Option, Schema } from 'effect'
-import { Subscription, Update } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
+import { Option, Schema, Tuple } from 'effect'
+import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
 import { Toast as UiToast } from '@foldkit/ui'
 
@@ -32,135 +30,115 @@ const Model = Schema.Struct({
   maybeLastDismissedBody: Schema.Option(Schema.String),
   // ...your other fields
 })
-type Model = typeof Model.Type
 
-// In your init function, initialize it. Swipe is opt-in: omit
-// swipeToDismiss to leave it disabled, or pass {} for the default rightward
-// 40px gesture. Set threshold to customize the dismissal distance:
-const init = () => ({
-  model: {
-    toast: Toast.init({
-      id: 'app-toast',
-      swipeToDismiss: {},
-    }),
-    maybeLastDismissedBody: Option.none(),
-    // ...your other fields
-  },
-})
-
-// Embed the Toast Message in your parent Message, plus any domain Messages
-// that should push a toast:
+// Declare the parent-owned domain facts that should push a Toast. The
+// Composition derives Toast delivery from the Binding.
 const Message = defineMessageUnion({
-  GotToastMessage: { message: Toast.Message },
   ClickedSave: {},
 })
-type Message = typeof Message.Type
+
+const NotificationsDefinition = Block.makeDefinition('Notifications', {
+  Model,
+  Message,
+})
+
+const { makeFieldsStep } = NotificationsDefinition
 
 // At module scope, fold the OutMessage into your own Model, lifting the
 // DismissedToast event into domain state. The arm returns an Update.Step over
-// the parent Model, which already has the next Toast Model written back:
-const foldToastOutMessage = Toast.OutMessage.match<Update.Step<Model, Message>>(
-  {
-    DismissedToast:
-      ({ payload }) =>
-      model => ({
-        model: modifyFields(model, {
-          maybeLastDismissedBody: () => Option.some(payload.bodyText),
-        }),
-      }),
+// the parent Model, which already has the next Toast Model written back. The
+// parent Definition infers the factory-refined payload from the whole Block:
+const foldToastOutMessage = NotificationsDefinition.makeOutMessageFold(Toast, {
+  DismissedToast: ({ payload }) =>
+    makeFieldsStep(() => ({
+      maybeLastDismissedBody: () => Option.some(payload.bodyText),
+    })),
+})
+
+// The Binding delegates Toast Messages, writes the next Toast Model, maps its
+// Commands, handles its OutMessages, and collects its Subscriptions.
+const ToastBinding = NotificationsDefinition.makeBinding(Toast, {
+  field: 'toast',
+  init: {
+    contextToArgs: () => Tuple.make({ id: 'app-toast', swipeToDismiss: {} }),
   },
-)
+}).withOutMessagePolicy({ fold: foldToastOutMessage })
 
-// Update.foldChild wires the child into the parent: it delegates Toast's own
-// Messages to Toast.update, writes the next Toast Model back, maps the
-// Submodel's Commands into your Message type, and hands any OutMessage to
-// foldOutMessage.
-const foldToast = Update.foldChild({
-  update: Toast.update,
-  read: (model: Model) => Option.some(model.toast),
-  write: (model, nextToast) => modifyFields(model, { toast: () => nextToast }),
-  toParentMessage: message => Message.GotToastMessage({ message }),
-  foldOutMessage: foldToastOutMessage,
+const NotificationsComposition = NotificationsDefinition.makeComposition({
+  bindings: [ToastBinding],
 })
 
-const foldToastShow = Update.foldChild({
-  update: Toast.show,
-  read: (model: Model) => Option.some(model.toast),
-  write: (model, nextToast) => modifyFields(model, { toast: () => nextToast }),
-  toParentMessage: message => Message.GotToastMessage({ message }),
-  foldOutMessage: foldToastOutMessage,
+// In your Composition init function, configure the fields the parent owns.
+// Swipe is opt-in: omit
+// swipeToDismiss to leave it disabled, or pass {} for the default rightward
+// 40px gesture. Set threshold to customize the dismissal distance:
+const init = NotificationsComposition.makeInit(() => ({
+  model: {
+    maybeLastDismissedBody: Option.none(),
+    // ...your other fields
+  },
+}))
+
+declare const changesRouter: () => string
+
+const update = NotificationsComposition.makeUpdate({
+  ClickedSave: model =>
+    ToastBinding.requestShow({
+      variant: 'Success',
+      payload: {
+        bodyText: 'Changes saved',
+        maybeLink: Option.some({ href: changesRouter(), text: 'View' }),
+      },
+    })(model),
 })
 
-// In the corresponding Message.match handler, call the fold:
-GotToastMessage: ({ message }) => foldToast(model, message)
+// Registering `ToastBinding` in `bindings` collects the instance's pointer Subscriptions.
 
-ClickedSave: () =>
-  foldToastShow(model, {
-    variant: 'Success',
-    payload: {
-      bodyText: 'Changes saved',
-      // Generate the href via your app's router (Foldkit's biparser-based
-      // routing builds URLs from typed values, e.g. `changesRouter()`),
-      // not a string literal, so renames flow through.
-      maybeLink: Option.some({ href: changesRouter(), text: 'View' }),
-    },
-  })
-
-// Wire pointer subscriptions once at the app root so swipe tracking
-// continues when the pointer leaves the entry. Without this lift the
-// view still sets data-swipe on pointerdown but never receives move/up.
-export const subscriptions = Subscription.lift(Toast.subscriptions)<
-  Model,
-  Message
->({
-  read: model => Option.some(model.toast),
-  toParentMessage: message => Message.GotToastMessage({ message }),
-})
-
-// In your view, embed Toast via h.submodel once at the app root. The
+// In your view, embed Toast via h.block once at the app root. The
 // entryToView callback lays out each entry from its payload. The
 // component handles the <div> wrapper, hover-to-pause, swipe-to-dismiss
 // (pointerdown + data-swipe="move"/"settling"/"end" +
 // translate/--toast-swipe-move-x), and enter/leave animations.
-const view = (h: HtmlBuilder<Message>) =>
-  h.submodel({
-    slotId: 'app-toast',
-    model: model.toast,
-    view: Toast.view,
-    viewInputs: {
-      position: 'BottomRight',
-      entryClassName: 'toast-entry w-80',
-      entryToView: (entry, handlers) =>
-        h.div(
-          [
-            h.Class(
-              'flex items-start gap-3 rounded-lg border bg-white p-3 shadow',
-            ),
-          ],
-          [
-            h.div(
-              [h.Class('flex-1')],
-              [
-                h.p(
-                  [h.Class('font-semibold text-sm')],
-                  [
-                    h.span(
-                      [h.DataAttribute('toast-swipe-ignore', '')],
-                      [entry.payload.bodyText],
-                    ),
-                  ],
-                ),
-                ...Option.match(entry.payload.maybeLink, {
-                  onNone: () => [],
-                  onSome: ({ href, text }) => [
-                    h.a([h.Class('text-sm underline'), h.Href(href)], [text]),
-                  ],
-                }),
-              ],
-            ),
-            h.button([...handlers.dismiss], ['Close']),
-          ],
-        ),
-    },
-    toParentMessage: message => Message.GotToastMessage({ message }),
-  })
+const view = NotificationsComposition.makeView((model, h) =>
+  h.block(
+    ToastBinding.embedView({
+      slotId: 'app-toast',
+      model: model.toast,
+      viewInputs: {
+        position: 'BottomRight',
+        entryClassName: 'toast-entry w-80',
+        entryToView: (entry, handlers) =>
+          h.div(
+            [
+              h.Class(
+                'flex items-start gap-3 rounded-lg border bg-white p-3 shadow',
+              ),
+            ],
+            [
+              h.div(
+                [h.Class('flex-1')],
+                [
+                  h.p(
+                    [h.Class('font-semibold text-sm')],
+                    [
+                      h.span(
+                        [h.DataAttribute('toast-swipe-ignore', '')],
+                        [entry.payload.bodyText],
+                      ),
+                    ],
+                  ),
+                  ...Option.match(entry.payload.maybeLink, {
+                    onNone: () => [],
+                    onSome: ({ href, text }) => [
+                      h.a([h.Class('text-sm underline'), h.Href(href)], [text]),
+                    ],
+                  }),
+                ],
+              ),
+              h.button([...handlers.dismiss], ['Close']),
+            ],
+          ),
+      },
+    }),
+  ),
+)

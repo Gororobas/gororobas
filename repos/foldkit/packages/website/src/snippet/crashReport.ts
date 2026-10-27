@@ -1,13 +1,12 @@
 import { Option } from 'effect'
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
 import * as Sentry from '@sentry/browser'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
+import { ApplicationBlock } from './application'
+
+const program = Program.make({
+  block: ApplicationBlock,
   crash: {
     report: ({ error, model, message }) => {
       Sentry.captureException(error, {
@@ -18,4 +17,4 @@ const application = Runtime.makeApplication({
   container: document.getElementById('root'),
 })
 
-Runtime.run(application)
+Runtime.run(program)

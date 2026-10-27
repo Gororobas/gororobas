@@ -1,13 +1,15 @@
 import clsx from 'clsx'
 import { Array, Option } from 'effect'
-import { Submodel } from 'foldkit'
 import { type CalendarDate } from 'foldkit/calendar'
-import type { Html } from 'foldkit/html'
 
 import { Button } from '@foldkit/ui'
 
 import { Field, Icon } from '../../../view'
-import { GraduationYearListbox, Message, type Model } from './entry'
+import {
+  EducationEntryComposition,
+  GraduationYearListboxBinding,
+} from './composition'
+import { Message } from './definition'
 
 const GRADUATION_YEAR_WINDOW_SIZE = 30
 const GRADUATION_YEAR_FORWARD_OFFSET = 6
@@ -21,8 +23,8 @@ export type ViewInputs = Readonly<{
   today: CalendarDate
 }>
 
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, viewInputs, h): Html => {
+export const view = EducationEntryComposition.makeView.withInputs<ViewInputs>(
+  (model, viewInputs, h) => {
     const { today } = viewInputs
 
     const showGraduationYear = !model.isCurrentlyEnrolled
@@ -35,51 +37,50 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>(
           [h.Class('block text-sm font-medium text-gray-700')],
           ['Graduation Year'],
         ),
-        h.submodel({
-          slotId: model.graduationYearListbox.id,
-          model: model.graduationYearListbox,
-          view: GraduationYearListbox.view,
-          viewInputs: {
-            items: graduationYears(today),
-            maybeSelectedValue: model.maybeGraduationYear,
-            buttonContent: h.div(
-              [h.Class('flex w-full items-center justify-between gap-2')],
-              [
-                Option.match(model.maybeGraduationYear, {
-                  onNone: () =>
-                    h.span([h.Class('text-gray-400')], ['Select year']),
-                  onSome: graduationYear => h.span([], [graduationYear]),
-                }),
-                h.span(
-                  [h.Class('text-gray-400 shrink-0')],
-                  [Icon.chevronDown()],
-                ),
-              ],
-            ),
-            buttonClassName:
-              'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500',
-            itemsClassName:
-              'rounded-lg border border-gray-200 bg-white shadow-lg py-1 max-h-64 overflow-y-auto w-(--button-width)',
-            itemToConfig: (year, { isActive, isSelected }) => ({
-              className: clsx(
-                'flex items-center gap-2 px-4 py-2 text-sm cursor-pointer',
-                isActive && 'bg-gray-50',
-                isSelected && 'text-indigo-700 font-semibold',
-              ),
-              content: h.div(
-                [h.Class('flex items-center gap-2 w-full')],
+        h.block(
+          GraduationYearListboxBinding.embedView({
+            slotId: model.graduationYearListbox.id,
+            model: model.graduationYearListbox,
+            viewInputs: {
+              items: graduationYears(today),
+              maybeSelectedValue: model.maybeGraduationYear,
+              buttonContent: h.div(
+                [h.Class('flex w-full items-center justify-between gap-2')],
                 [
-                  isSelected ? h.span([], ['✓']) : h.span([h.Class('w-4')]),
-                  h.span([], [year]),
+                  Option.match(model.maybeGraduationYear, {
+                    onNone: () =>
+                      h.span([h.Class('text-gray-400')], ['Select year']),
+                    onSome: graduationYear => h.span([], [graduationYear]),
+                  }),
+                  h.span(
+                    [h.Class('text-gray-400 shrink-0')],
+                    [Icon.chevronDown()],
+                  ),
                 ],
               ),
-            }),
-            backdropClassName: 'fixed inset-0',
-            anchor: { placement: 'bottom-start', gap: 4, padding: 8 },
-          },
-          toParentMessage: message =>
-            Message.GotGraduationYearListboxMessage({ message }),
-        }),
+              buttonClassName:
+                'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-left cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500',
+              itemsClassName:
+                'rounded-lg border border-gray-200 bg-white shadow-lg py-1 max-h-64 overflow-y-auto w-(--button-width)',
+              itemToConfig: (year, { isActive, isSelected }) => ({
+                className: clsx(
+                  'flex items-center gap-2 px-4 py-2 text-sm cursor-pointer',
+                  isActive && 'bg-gray-50',
+                  isSelected && 'text-indigo-700 font-semibold',
+                ),
+                content: h.div(
+                  [h.Class('flex items-center gap-2 w-full')],
+                  [
+                    isSelected ? h.span([], ['✓']) : h.span([h.Class('w-4')]),
+                    h.span([], [year]),
+                  ],
+                ),
+              }),
+              backdropClassName: 'fixed inset-0',
+              anchor: { placement: 'bottom-start', gap: 4, padding: 8 },
+            },
+          }),
+        ),
       ],
     )
 

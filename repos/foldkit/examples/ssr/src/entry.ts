@@ -1,18 +1,13 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-import { Flags, Message, Model, init, update, view } from './main'
+import { ApplicationBlock, Flags } from './application'
 import './styles.css'
 
-const application = Runtime.makeApplication({
-  Model,
+const program = Program.make({
+  block: ApplicationBlock,
   Flags,
-  init,
-  update,
-  view,
   container: document.getElementById('root'),
-  devTools: {
-    Message,
-  },
+  devTools: { dispatch: true },
 })
 
-Runtime.hydrate(application)
+Runtime.hydrate(program)

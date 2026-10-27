@@ -53,6 +53,7 @@ const ABSOLUTE_URL_PATTERN = /^https?:\/\//
 const routingFunctionName = (
   callee: unknown,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): Option.Option<string> => {
   if (references === undefined) {
     return pipe(
@@ -61,7 +62,7 @@ const routingFunctionName = (
     )
   }
 
-  if (isFoldkitHtmlBuilderMember(callee, 'Href', references)) {
+  if (isFoldkitHtmlBuilderMember(callee, 'Href', references, filename)) {
     return Option.some('Href')
   }
 
@@ -126,7 +127,11 @@ export const noHardcodedRouteStrings = Rule.define({
         if (!isCallExpression(node)) {
           return Effect.void
         }
-        const maybeFunctionName = routingFunctionName(node.callee, references)
+        const maybeFunctionName = routingFunctionName(
+          node.callee,
+          references,
+          ctx.filename,
+        )
         if (Option.isNone(maybeFunctionName)) {
           return Effect.void
         }

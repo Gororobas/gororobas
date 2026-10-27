@@ -9,7 +9,6 @@ const EventDate = Calendar.CalendarDateFromIsoString
 const Slug = Schema.String.check(Schema.isPattern(/^[a-z0-9-]+$/)).pipe(
   Schema.brand('Slug'),
 )
-type Slug = typeof Slug.Type
 
 // Reuse each Schema as a rule, so the rule can't drift from the Schema.
 const eventDateRules = makeRules({
@@ -27,4 +26,3 @@ const Model = Schema.Struct({
   eventDate: Field(Schema.String),
   slug: Field(Schema.String),
 })
-type Model = typeof Model.Type

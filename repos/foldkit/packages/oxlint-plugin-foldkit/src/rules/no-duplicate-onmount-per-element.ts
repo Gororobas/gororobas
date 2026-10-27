@@ -19,15 +19,18 @@ const DUPLICATE_ON_MOUNT_MESSAGE =
 const isOnMountCallee = (
   callee: ESTree.Expression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
-): boolean => isFoldkitHtmlBuilderMember(callee, 'OnMount', references)
+  filename?: string,
+): boolean =>
+  isFoldkitHtmlBuilderMember(callee, 'OnMount', references, filename)
 
 const isOnMountCall = (
   element: ESTree.ArrayExpressionElement,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): boolean =>
   element !== null &&
   element.type === 'CallExpression' &&
-  isOnMountCallee(element.callee, references)
+  isOnMountCallee(element.callee, references, filename)
 
 /** Flags array literals carrying two or more top-level OnMount attributes. Foldkit installs a single insert hook and tracks a single Mount fiber per element, so a later OnMount silently replaces the earlier one. */
 export const noDuplicateOnmountPerElement = Rule.define({
@@ -45,7 +48,7 @@ export const noDuplicateOnmountPerElement = Rule.define({
       ArrayExpression: (node: ESTree.Node) => {
         if (!isArrayExpression(node)) return Effect.void
         const onMountCallCount = node.elements.filter(element =>
-          isOnMountCall(element, references),
+          isOnMountCall(element, references, ctx.filename),
         ).length
         if (onMountCallCount <= 1) return Effect.void
         return ctx.report(

@@ -1,23 +1,26 @@
 // page/settings/themeMenu/subscription.ts
 import { Effect, Schema, Stream } from 'effect'
-import { Subscription } from 'foldkit'
 
-import { type Message, PressedEscape } from './message'
-import type { Model } from './model'
+import { themeMenu } from './definition'
+import { Message } from './message'
 
-export const subscriptions = Subscription.make<Model, Message>()(entry => ({
-  escapeKey: entry(
+export const subscriptions = themeMenu.makeSubscriptions(entry => ({
+  themeMenuEscapePresses: entry(
+    'ThemeMenuEscapePresses',
     { isOpen: Schema.Boolean },
     {
+      messages: [Message.PressedEscape],
       modelToDependencies: model => ({ isOpen: model.isOpen }),
-      dependenciesToStream: ({ isOpen }) =>
-        Stream.when(
-          Stream.fromEventListener<KeyboardEvent>(document, 'keydown').pipe(
-            Stream.filter(event => event.key === 'Escape'),
-            Stream.map(PressedEscape),
-          ),
-          Effect.sync(() => isOpen),
-        ),
+      handler: function* () {
+        return ({ isOpen }) =>
+          Stream.when(
+            Stream.fromEventListener<KeyboardEvent>(document, 'keydown').pipe(
+              Stream.filter(event => event.key === 'Escape'),
+              Stream.map(() => Message.PressedEscape()),
+            ),
+            Effect.sync(() => isOpen),
+          )
+      },
     },
   ),
 }))

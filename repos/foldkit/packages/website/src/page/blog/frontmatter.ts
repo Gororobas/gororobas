@@ -119,7 +119,6 @@ export const PostFrontmatter = Schema.Struct({
     },
   ),
 )
-export type PostFrontmatter = typeof PostFrontmatter.Type
 
 // POST COVER
 
@@ -141,7 +140,7 @@ export type PostCover = Readonly<{
  * reads as no cover rather than a broken one.
  */
 export const maybePostCover = (
-  frontmatter: PostFrontmatter,
+  frontmatter: typeof PostFrontmatter.Type,
 ): Option.Option<PostCover> =>
   Option.all({
     src: Option.fromNullishOr(frontmatter.coverImage),

@@ -1,17 +1,12 @@
-import { Runtime } from 'foldkit'
+import { Program, Runtime } from 'foldkit'
 
-import { Message, Model, init, managedResources, update, view } from './main'
+import { ApplicationBlock } from './application'
+import { ApplicationLayer } from './services'
 
-const application = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
-  managedResources,
+const program = Program.make({
+  block: ApplicationBlock,
   container: document.getElementById('root'),
-  devTools: {
-    Message,
-  },
+  devTools: { dispatch: true },
 })
 
-Runtime.run(application)
+Runtime.run(program.provide(ApplicationLayer))

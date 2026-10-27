@@ -1,12 +1,7 @@
 import { clsx } from 'clsx'
 import { Array, Option, Record, Result, pipe } from 'effect'
-import { Submodel } from 'foldkit'
-import {
-  Html,
-  type HtmlBuilder,
-  createKeyedLazy,
-  inertHtml as ih,
-} from 'foldkit/html'
+import { AsyncData } from 'foldkit'
+import { Html, createKeyedLazy, inertHtml as ih } from 'foldkit/html'
 
 import { Disclosure } from '@foldkit/ui'
 
@@ -16,6 +11,13 @@ import {
   headingWithContent,
   pageTitle,
 } from '../../prose'
+import { homeRouter } from '../../route'
+import * as NotFound from '../notFound'
+import {
+  ApiReferenceComposition,
+  type ApiReferenceViewBuilder,
+} from './composition'
+import type { ApiData } from './domain'
 import {
   type ApiFunction,
   type ApiInterface,
@@ -23,13 +25,13 @@ import {
   type ApiParameter,
   type ApiType,
   type ApiVariable,
+  resolveModule,
   scopedId,
   sectionId,
 } from './domain'
 import { Message } from './message'
-import type { ApiData, Model } from './model'
 
-type Highlights = ApiData['highlights']
+type Highlights = (typeof ApiData.Type)['highlights']
 
 const sourceLink = (
   sourceUrl: Option.Option<string>,
@@ -55,11 +57,11 @@ const lazyItem = createKeyedLazy()
 
 const functionView = (
   moduleName: string,
-  apiFunction: ApiFunction,
+  apiFunction: typeof ApiFunction.Type,
   isSignatureDisclosureOpen: boolean | undefined,
   highlights: Highlights,
   renderHeadingLink: RenderHeadingLink,
-  h: HtmlBuilder<Message>,
+  h: ApiReferenceViewBuilder,
 ): Html => {
   const id = scopedId('function', moduleName, apiFunction.name)
 
@@ -105,7 +107,7 @@ const functionView = (
 }
 
 const allParameterDescriptions = (
-  apiFunction: ApiFunction,
+  apiFunction: typeof ApiFunction.Type,
 ): ReadonlyArray<Html> =>
   pipe(
     Array.flatMap(apiFunction.signatures, signature => signature.parameters),
@@ -164,10 +166,10 @@ const disclosurePanelClassName = 'rounded-b-lg overflow-x-auto'
 
 const signaturesView = (
   key: string,
-  apiFunction: ApiFunction,
+  apiFunction: typeof ApiFunction.Type,
   isSignatureDisclosureOpen: boolean | undefined,
   highlights: Highlights,
-  h: HtmlBuilder<Message>,
+  h: ApiReferenceViewBuilder,
 ): Html => {
   const maybeHighlighted = Record.get(highlights, key)
   const isInDisclosure = isSignatureDisclosureOpen !== undefined
@@ -240,7 +242,7 @@ const signaturesView = (
 }
 
 const parameterDescriptions = (
-  parameters: ReadonlyArray<ApiParameter>,
+  parameters: ReadonlyArray<typeof ApiParameter.Type>,
 ): ReadonlyArray<Html> =>
   pipe(
     parameters,
@@ -282,7 +284,9 @@ const parameterDescriptions = (
 const punctuation = (text: string): Html =>
   ih.span([ih.Class('text-gray-600')], [text])
 
-const parameterView = (parameter: ApiParameter): ReadonlyArray<Html> => [
+const parameterView = (
+  parameter: typeof ApiParameter.Type,
+): ReadonlyArray<Html> => [
   ...(parameter.isRest ? [punctuation('...')] : []),
   ih.span(
     [ih.Class('font-normal text-gray-900 dark:text-gray-200')],
@@ -294,7 +298,7 @@ const parameterView = (parameter: ApiParameter): ReadonlyArray<Html> => [
 ]
 
 const parameterListView = (
-  parameters: ReadonlyArray<ApiParameter>,
+  parameters: ReadonlyArray<typeof ApiParameter.Type>,
 ): ReadonlyArray<Html> =>
   Array.match(parameters, {
     onEmpty: () => [ih.div([ih.Class('mb-2')], [punctuation('()')])],
@@ -337,7 +341,7 @@ const descriptionCommentFallback = (
   })
 
 const signatureChildrenFallback = (signature: {
-  readonly parameters: ReadonlyArray<ApiParameter>
+  readonly parameters: ReadonlyArray<typeof ApiParameter.Type>
   readonly returnType: string
   readonly typeParameters: ReadonlyArray<string>
 }): ReadonlyArray<Html> => [
@@ -356,10 +360,10 @@ const signatureChildrenFallback = (signature: {
 
 const typeView = (
   moduleName: string,
-  type: ApiType,
+  type: typeof ApiType.Type,
   highlights: Highlights,
   renderHeadingLink: RenderHeadingLink,
-  h: HtmlBuilder<Message>,
+  h: ApiReferenceViewBuilder,
 ): Html => {
   const id = scopedId('type', moduleName, type.name)
   const maybeHighlighted = Record.get(highlights, id)
@@ -429,10 +433,10 @@ const typeView = (
 
 const interfaceView = (
   moduleName: string,
-  apiInterface: ApiInterface,
+  apiInterface: typeof ApiInterface.Type,
   highlights: Highlights,
   renderHeadingLink: RenderHeadingLink,
-  h: HtmlBuilder<Message>,
+  h: ApiReferenceViewBuilder,
 ): Html => {
   const id = scopedId('interface', moduleName, apiInterface.name)
   const maybeHighlighted = Record.get(highlights, id)
@@ -502,10 +506,10 @@ const interfaceView = (
 
 const variableView = (
   moduleName: string,
-  variable: ApiVariable,
+  variable: typeof ApiVariable.Type,
   highlights: Highlights,
   renderHeadingLink: RenderHeadingLink,
-  h: HtmlBuilder<Message>,
+  h: ApiReferenceViewBuilder,
 ): Html => {
   const id = scopedId('const', moduleName, variable.name)
   const maybeHighlighted = Record.get(highlights, id)
@@ -594,8 +598,8 @@ const section = <T extends { readonly name: string }>(
     ],
   })
 
-type ViewInputs = Readonly<{
-  module: ApiModule
+type ModuleViewInputs = Readonly<{
+  module: typeof ApiModule.Type
   highlights: Highlights
   renderHeadingLink: RenderHeadingLink
 }>
@@ -604,86 +608,91 @@ type ViewInputs = Readonly<{
  * Renders one API module: its sections and every function, type, interface, and
  * constant it exports.
  *
- * The page is dispatched through `h.submodel`, so it takes `renderHeadingLink`
+ * The page is dispatched through `h.block`, so it takes `renderHeadingLink`
  * from its parent rather than building the copy-link itself. The control carries
- * an app-level Message, and a handler's dispatcher comes from the frame the
- * element is built in, so one built here would be rejected by this Submodel's
- * `toParentMessage`.
+ * Application Message, so its event handler must retain the parent's dispatch
+ * frame rather than acquire this Block's frame.
  */
-export const view = Submodel.defineView<Model, Message, ViewInputs>(
-  (model, { module, highlights, renderHeadingLink }, h): Html =>
-    h.div(
-      [h.DataAttribute('pagefind-meta', 'kind:API Reference')],
-      [
-        pageTitle(module.name, module.name),
-        ...section(
-          module.name,
-          'Functions',
-          module.functions,
-          renderHeadingLink,
-          apiFunction => {
-            const key = scopedId('function', module.name, apiFunction.name)
-            return lazyItem(key, functionView, [
-              module.name,
-              apiFunction,
-              model.disclosures[key],
-              highlights,
-              renderHeadingLink,
-              h,
-            ])
-          },
-        ),
-        ...section(
-          module.name,
-          'Types',
-          module.types,
-          renderHeadingLink,
-          type => {
-            const key = scopedId('type', module.name, type.name)
-            return lazyItem(key, typeView, [
-              module.name,
-              type,
-              highlights,
-              renderHeadingLink,
-              h,
-            ])
-          },
-        ),
-        ...section(
-          module.name,
-          'Interfaces',
-          module.interfaces,
-          renderHeadingLink,
-          apiInterface => {
-            const key = scopedId('interface', module.name, apiInterface.name)
-            return lazyItem(key, interfaceView, [
-              module.name,
-              apiInterface,
-              highlights,
-              renderHeadingLink,
-              h,
-            ])
-          },
-        ),
-        ...section(
-          module.name,
-          'Constants',
-          module.variables,
-          renderHeadingLink,
-          variable => {
-            const key = scopedId('const', module.name, variable.name)
-            return lazyItem(key, variableView, [
-              module.name,
-              variable,
-              highlights,
-              renderHeadingLink,
-              h,
-            ])
-          },
-        ),
-      ],
-    ),
-)
+const moduleView =
+  ApiReferenceComposition.makeView.withInputs<ModuleViewInputs>(
+    (model, { module, highlights, renderHeadingLink }, h) =>
+      h.div(
+        [
+          h.DataAttribute('pagefind-meta', 'kind:API Reference'),
+          ...(AsyncData.isSuccess(model.apiData)
+            ? [h.DataAttribute('api-reference-loaded', '')]
+            : []),
+        ],
+        [
+          pageTitle(module.name, module.name),
+          ...section(
+            module.name,
+            'Functions',
+            module.functions,
+            renderHeadingLink,
+            apiFunction => {
+              const key = scopedId('function', module.name, apiFunction.name)
+              return lazyItem(key, functionView, [
+                module.name,
+                apiFunction,
+                model.disclosures[key],
+                highlights,
+                renderHeadingLink,
+                h,
+              ])
+            },
+          ),
+          ...section(
+            module.name,
+            'Types',
+            module.types,
+            renderHeadingLink,
+            type => {
+              const key = scopedId('type', module.name, type.name)
+              return lazyItem(key, typeView, [
+                module.name,
+                type,
+                highlights,
+                renderHeadingLink,
+                h,
+              ])
+            },
+          ),
+          ...section(
+            module.name,
+            'Interfaces',
+            module.interfaces,
+            renderHeadingLink,
+            apiInterface => {
+              const key = scopedId('interface', module.name, apiInterface.name)
+              return lazyItem(key, interfaceView, [
+                module.name,
+                apiInterface,
+                highlights,
+                renderHeadingLink,
+                h,
+              ])
+            },
+          ),
+          ...section(
+            module.name,
+            'Constants',
+            module.variables,
+            renderHeadingLink,
+            variable => {
+              const key = scopedId('const', module.name, variable.name)
+              return lazyItem(key, variableView, [
+                module.name,
+                variable,
+                highlights,
+                renderHeadingLink,
+                h,
+              ])
+            },
+          ),
+        ],
+      ),
+  )
 
 const skeletonFunctionBlocks: ReadonlyArray<{
   readonly id: string
@@ -740,3 +749,26 @@ export const failureView = (error: string): Html =>
       ih.div([ih.Class('text-sm text-gray-700 dark:text-gray-400')], [error]),
     ],
   )
+
+type ViewInputs = Readonly<{
+  moduleSlug: string
+  renderHeadingLink: RenderHeadingLink
+}>
+
+export const view = ApiReferenceComposition.makeView.withInputs<ViewInputs>(
+  (model, { moduleSlug, renderHeadingLink }, h) =>
+    AsyncData.matchData(model.apiData, {
+      onData: data =>
+        Option.match(resolveModule(data.parsedApi, moduleSlug), {
+          onSome: module =>
+            moduleView(
+              model,
+              { module, highlights: data.highlights, renderHeadingLink },
+              h,
+            ),
+          onNone: () => NotFound.view(moduleSlug, homeRouter()),
+        }),
+      onFailure: failureView,
+      onEmpty: skeletonView,
+    }),
+)

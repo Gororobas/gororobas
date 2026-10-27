@@ -1,4 +1,3 @@
-import { docPage } from '../../markdown'
-import raw from './overviewPage.md'
+import { OverviewPageContent } from './content'
 
-export const { view, tableOfContents } = docPage(raw, 'ui/overview')
+export const { view, tableOfContents } = OverviewPageContent

@@ -4,15 +4,15 @@ import { describe, expect, it } from 'vitest'
 import {
   Message,
   OutMessage,
+  SliderBlock as block,
   fractionOfValue,
   init,
-  reflectRange,
   snapAndClamp,
   update,
   valueFromPointer,
-} from './index.js'
+} from './slider.js'
 
-const defaultInit = () => init({ id: 'test', min: 0, max: 10, step: 1 })
+const defaultInit = () => init({ id: 'test', min: 0, max: 10, step: 1 }).model
 
 describe('Slider', () => {
   describe('init', () => {
@@ -76,7 +76,7 @@ describe('Slider', () => {
     it('increments by 10 steps on PageIncrement', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 100, step: 1 })),
+        Story.given(init({ id: 'test', min: 0, max: 100, step: 1 }).model),
         Story.message(
           Message.PressedKeyboardNavigation({
             direction: 'PageIncrement',
@@ -90,7 +90,7 @@ describe('Slider', () => {
     it('decrements by 10 steps on PageDecrement', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 100, step: 1 })),
+        Story.given(init({ id: 'test', min: 0, max: 100, step: 1 }).model),
         Story.message(
           Message.PressedKeyboardNavigation({
             direction: 'PageDecrement',
@@ -104,7 +104,7 @@ describe('Slider', () => {
     it('jumps to min on Min', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 2, max: 20, step: 1 })),
+        Story.given(init({ id: 'test', min: 2, max: 20, step: 1 }).model),
         Story.message(
           Message.PressedKeyboardNavigation({
             direction: 'Min',
@@ -118,7 +118,7 @@ describe('Slider', () => {
     it('jumps to max on Max', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 99, step: 1 })),
+        Story.given(init({ id: 'test', min: 0, max: 99, step: 1 }).model),
         Story.message(
           Message.PressedKeyboardNavigation({
             direction: 'Max',
@@ -132,7 +132,7 @@ describe('Slider', () => {
     it('emits no OutMessage when a step increment is clamped to the same value', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 10, step: 1 })),
+        Story.given(init({ id: 'test', min: 0, max: 10, step: 1 }).model),
         Story.message(
           Message.PressedKeyboardNavigation({
             direction: 'StepIncrement',
@@ -146,7 +146,7 @@ describe('Slider', () => {
     it('emits no OutMessage when a step decrement is clamped to the same value', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 10, step: 1 })),
+        Story.given(init({ id: 'test', min: 0, max: 10, step: 1 }).model),
         Story.message(
           Message.PressedKeyboardNavigation({
             direction: 'StepDecrement',
@@ -160,7 +160,7 @@ describe('Slider', () => {
     it('respects fractional step (0.1)', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 1, step: 0.1 })),
+        Story.given(init({ id: 'test', min: 0, max: 1, step: 0.1 }).model),
         Story.message(
           Message.PressedKeyboardNavigation({
             direction: 'StepIncrement',
@@ -191,7 +191,7 @@ describe('Slider', () => {
     it('ignores a bubbled PressedPointer after PressedThumb so the value is not shifted', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 1, step: 0.05 })),
+        Story.given(init({ id: 'test', min: 0, max: 1, step: 0.05 }).model),
         Story.message(Message.PressedThumb({ originValue: 0.5 })),
         Story.message(
           Message.PressedPointer({ value: 0.45, originValue: 0.5 }),
@@ -257,7 +257,7 @@ describe('Slider', () => {
     it('snaps PressedPointer value to step', () => {
       Story.story(
         update,
-        Story.given(init({ id: 'test', min: 0, max: 10, step: 2 })),
+        Story.given(init({ id: 'test', min: 0, max: 10, step: 2 }).model),
         Story.message(Message.PressedPointer({ value: 4.7, originValue: 0 })),
         Story.expectOutMessage(OutMessage.ChangedValue({ value: 4 })),
       )
@@ -604,19 +604,26 @@ describe('Slider', () => {
     })
   })
 
-  describe('reflectRange', () => {
+  describe('informRangeChanged', () => {
     it('updates min and max', () => {
       const before = defaultInit()
-      const after = reflectRange(before, { min: 100, max: 200 })
-      expect(after.min).toBe(100)
-      expect(after.max).toBe(200)
+      const after = block.operations.informRangeChanged(before, {
+        min: 100,
+        max: 200,
+      })
+      expect(after.model.min).toBe(100)
+      expect(after.model.max).toBe(200)
     })
 
-    it('supports the data-last form for point-free use in modifyFields', () => {
-      const widen = reflectRange({ min: 0, max: 50 })
-      const after = widen(defaultInit())
-      expect(after.min).toBe(0)
-      expect(after.max).toBe(50)
+    it('handles the informed range fact without emitting a value change', () => {
+      const after = update(
+        defaultInit(),
+        Message.InformedOfRangeChange({ min: 0, max: 50 }),
+      )
+      expect(after.outMessage).toBeUndefined()
+      expect(after.commands).toBeUndefined()
+      expect(after.model.min).toBe(0)
+      expect(after.model.max).toBe(50)
     })
 
     it('updates the range even while Dragging', () => {
@@ -626,10 +633,13 @@ describe('Slider', () => {
       )
       expect(dragStart.model.dragState._tag).toBe('Dragging')
 
-      const after = reflectRange(dragStart.model, { min: 7, max: 10 })
-      expect(after.min).toBe(7)
-      expect(after.max).toBe(10)
-      expect(after.dragState._tag).toBe('Dragging')
+      const after = block.operations.informRangeChanged(dragStart.model, {
+        min: 7,
+        max: 10,
+      })
+      expect(after.model.min).toBe(7)
+      expect(after.model.max).toBe(10)
+      expect(after.model.dragState._tag).toBe('Dragging')
     })
   })
 })

@@ -327,3 +327,157 @@ describe('no-empty-to-parent-out-message', () => {
     expect(dynamicComputedResult[0]?.diagnostic.fix).toBeUndefined()
   })
 })
+
+it('rejects an empty forward policy on a completed Block binding', () => {
+  const forward = property({ key: Testing.id('forward') })
+  const policy = objectExpression([forward])
+  const outMessage = property({ key: Testing.id('outMessage'), value: policy })
+  const configuration = objectExpression([
+    property({ key: Testing.id('read'), value: Testing.id('read') }),
+    property({ key: Testing.id('write'), value: Testing.id('write') }),
+    property({
+      key: Testing.id('toParentMessage'),
+      value: Testing.id('toParentMessage'),
+    }),
+    outMessage,
+  ])
+  const binding = {
+    type: 'CallExpression',
+    callee: {
+      type: 'MemberExpression',
+      object: Testing.id('Application'),
+      property: Testing.id('makeBinding'),
+      computed: false,
+    },
+    arguments: [Testing.id('Settings'), configuration],
+  }
+
+  Object.assign(forward, { parent: policy })
+  Object.assign(policy, { parent: outMessage })
+  Object.assign(outMessage, { parent: configuration })
+  Object.assign(configuration, { parent: binding })
+
+  const result = run(policy)
+
+  expect(result).toHaveLength(1)
+  expect(result[0]?.diagnostic.message).toContain('outMessage.forward')
+})
+
+it('rejects an empty forward on a fluent Binding policy', () => {
+  const forward = property({ key: Testing.id('forward') })
+  const policy = objectExpression([
+    property({ key: Testing.id('fold'), value: Testing.id('foldOutMessage') }),
+    forward,
+  ])
+  const binding = {
+    type: 'CallExpression',
+    callee: {
+      type: 'MemberExpression',
+      object: Testing.id('Application'),
+      property: Testing.id('makeBinding'),
+      computed: false,
+    },
+    arguments: [
+      Testing.id('Settings'),
+      objectExpression([
+        property({
+          key: Testing.id('field'),
+          value: Testing.strLiteral('settings'),
+        }),
+      ]),
+    ],
+  }
+  const policyCall = {
+    type: 'CallExpression',
+    callee: {
+      type: 'MemberExpression',
+      object: binding,
+      property: Testing.id('withOutMessagePolicy'),
+      computed: false,
+    },
+    arguments: [policy],
+  }
+
+  Object.assign(forward, { parent: policy })
+  Object.assign(policy, { parent: policyCall })
+
+  const result = run(policy)
+
+  expect(result).toHaveLength(1)
+  expect(result[0]?.diagnostic.message).toContain('outMessage.forward')
+})
+
+it('rejects a makeOutMessageForward record whose handlers all return undefined', () => {
+  const cases = objectExpression([
+    property({ key: Testing.id('Selected') }),
+    property({ key: Testing.id('Closed') }),
+  ])
+  const call = {
+    type: 'CallExpression',
+    callee: {
+      type: 'MemberExpression',
+      object: Testing.id('Application'),
+      property: Testing.id('makeOutMessageForward'),
+      computed: false,
+    },
+    arguments: [Testing.id('ChildBlock'), cases],
+  }
+  Object.assign(cases, { parent: call })
+
+  const result = run(cases)
+
+  expect(result).toHaveLength(1)
+  expect(result[0]?.diagnostic.message).toContain('makeOutMessageForward')
+})
+
+it('ignores an unrelated fluent policy method', () => {
+  const forward = property({ key: Testing.id('forward') })
+  const policy = objectExpression([forward])
+  const policyCall = {
+    type: 'CallExpression',
+    callee: {
+      type: 'MemberExpression',
+      object: Testing.callExpr('unrelated'),
+      property: Testing.id('withOutMessagePolicy'),
+      computed: false,
+    },
+    arguments: [policy],
+  }
+
+  Object.assign(forward, { parent: policy })
+  Object.assign(policy, { parent: policyCall })
+
+  expect(run(policy)).toHaveLength(0)
+})
+
+it('ignores ordinary Function.bind calls', () => {
+  const forward = property({ key: Testing.id('forward') })
+  const policy = objectExpression([forward])
+  const outMessage = property({ key: Testing.id('outMessage'), value: policy })
+  const configuration = objectExpression([
+    property({ key: Testing.id('read'), value: Testing.id('read') }),
+    property({ key: Testing.id('write'), value: Testing.id('write') }),
+    property({
+      key: Testing.id('toParentMessage'),
+      value: Testing.id('toParentMessage'),
+    }),
+    outMessage,
+  ])
+  const binding = {
+    type: 'CallExpression',
+    callee: {
+      type: 'MemberExpression',
+      object: Testing.id('callback'),
+      property: Testing.id('bind'),
+      computed: false,
+    },
+    arguments: [configuration],
+  }
+
+  Object.assign(forward, { parent: policy })
+  Object.assign(policy, { parent: outMessage })
+  Object.assign(outMessage, { parent: configuration })
+  Object.assign(configuration, { parent: binding })
+
+  expect(run(policy)).toHaveLength(0)
+})

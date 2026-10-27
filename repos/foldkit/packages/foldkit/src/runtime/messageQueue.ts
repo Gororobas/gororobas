@@ -1,15 +1,25 @@
-import { Cause, Effect, Option, type Scope } from 'effect'
+import { Cause, Effect, Option, Result, type Scope } from 'effect'
 
 import type { RuntimeStatus } from './runtimeStatus.js'
 
 const DRAIN_BUDGET_MS = 5
+const TERMINATED_RECEIPT_REASON =
+  'Runtime terminated before the queued Message was processed.'
 
 /** The plain functions the runtime uses to buffer, drain, and gate Messages. */
-export type MessageQueue<Message> = Readonly<{
-  enqueueMessage: (message: Message) => void
-  enqueueMessageEffect: (message: Message) => Effect.Effect<void>
+export type MessageQueue<Message, Processed = void> = Readonly<{
+  enqueueMessage: (message: Message, isCurrent?: () => boolean) => void
+  enqueueMessageEffect: (
+    message: Message,
+    isCurrent?: () => boolean,
+  ) => Effect.Effect<void>
+  enqueueMessageReceiptEffect: (
+    message: Message,
+    isCurrent?: () => boolean,
+  ) => Effect.Effect<Result.Result<Option.Option<Processed>, string>>
   drainPendingMessages: () => void
   resetDrainBudget: () => void
+  isAnyMessageDeferred: () => boolean
   completeBoot: () => void
 }>
 
@@ -24,20 +34,27 @@ export type MessageQueue<Message> = Readonly<{
  * the browser can paint, and the channel that schedules that task is
  * closed by the surrounding scope.
  */
-export const makeMessageQueue = <Message>({
+export const makeMessageQueue = <Message, Processed = void>({
   status,
   processMessage,
   crashWith,
 }: Readonly<{
   status: RuntimeStatus
-  processMessage: (message: Message) => void
+  processMessage: (message: Message) => Processed
   crashWith: (
     cause: Cause.Cause<never>,
     maybeMessage: Option.Option<Message>,
   ) => Effect.Effect<void>
-}>): Effect.Effect<MessageQueue<Message>, never, Scope.Scope> =>
+}>): Effect.Effect<MessageQueue<Message, Processed>, never, Scope.Scope> =>
   Effect.gen(function* () {
-    let pendingMessages: Array<Message> = []
+    type PendingMessage = Readonly<{
+      message: Message
+      isCurrent?: () => boolean
+      settle?: (
+        receipt: Result.Result<Option.Option<Processed>, string>,
+      ) => void
+    }>
+    let pendingMessages: Array<PendingMessage> = []
     let isProcessingMessages = false
     // NOTE: a Message arriving before boot completes, say a navigation
     // event during an async boot step, is buffered, not processed.
@@ -46,19 +63,49 @@ export const makeMessageQueue = <Message>({
     // which then drains the buffer.
     let isBootComplete = false
 
-    const enqueueMessage = (message: Message): void => {
+    const enqueue = (
+      message: Message,
+      isCurrent?: () => boolean,
+      settle?: (
+        receipt: Result.Result<Option.Option<Processed>, string>,
+      ) => void,
+    ): void => {
       if (status.isRuntimeDisposed || status.isCrashed) {
+        settle?.(Result.fail(TERMINATED_RECEIPT_REASON))
         return
       }
-      pendingMessages.push(message)
+      pendingMessages.push({
+        message,
+        ...(isCurrent === undefined ? {} : { isCurrent }),
+        ...(settle === undefined ? {} : { settle }),
+      })
       if (!isBootComplete || status.isRenderingFrame) {
         return
       }
       drainPendingMessages()
     }
 
-    const enqueueMessageEffect = (message: Message) =>
-      Effect.sync(() => enqueueMessage(message))
+    const enqueueMessage = (
+      message: Message,
+      isCurrent?: () => boolean,
+    ): void => enqueue(message, isCurrent)
+
+    const enqueueMessageEffect = (
+      message: Message,
+      isCurrent?: () => boolean,
+    ) => Effect.sync(() => enqueueMessage(message, isCurrent))
+
+    const enqueueMessageReceiptEffect = (
+      message: Message,
+      isCurrent?: () => boolean,
+    ) =>
+      Effect.callback<Result.Result<Option.Option<Processed>, string>>(
+        resume => {
+          enqueue(message, isCurrent, receipt =>
+            resume(Effect.succeed(receipt)),
+          )
+        },
+      )
 
     let currentMessage = Option.none<Message>()
 
@@ -98,17 +145,26 @@ export const makeMessageQueue = <Message>({
           maybeDeferredDrainChannel.port2.close()
           maybeDeferredDrainChannel = null
         }
+        for (const pendingMessage of pendingMessages) {
+          pendingMessage.settle?.(Result.fail(TERMINATED_RECEIPT_REASON))
+        }
+        pendingMessages = []
       }),
     )
 
     const drainPendingMessages = (): void => {
+      if (status.isRuntimeDisposed || status.isCrashed) {
+        for (const pendingMessage of pendingMessages) {
+          pendingMessage.settle?.(Result.fail(TERMINATED_RECEIPT_REASON))
+        }
+        pendingMessages = []
+        return
+      }
       if (
         !isBootComplete ||
         isProcessingMessages ||
         status.isRenderingFrame ||
-        isDrainDeferredToNextTask ||
-        status.isRuntimeDisposed ||
-        status.isCrashed
+        isDrainDeferredToNextTask
       ) {
         return
       }
@@ -121,14 +177,24 @@ export const makeMessageQueue = <Message>({
         return
       }
       isProcessingMessages = true
+      let activeBatch: Array<PendingMessage> = []
+      let nextUnsettledIndex = 0
       try {
         while (pendingMessages.length > 0) {
           const batch = pendingMessages
+          activeBatch = batch
+          nextUnsettledIndex = 0
           pendingMessages = []
           for (let index = 0; index < batch.length; index++) {
-            const message = batch[index]!
-            currentMessage = Option.some(message)
-            processMessage(message)
+            const { message, isCurrent, settle } = batch[index]!
+            if (isCurrent === undefined || isCurrent()) {
+              currentMessage = Option.some(message)
+              const processed = processMessage(message)
+              settle?.(Result.succeed(Option.some(processed)))
+            } else {
+              settle?.(Result.succeed(Option.none()))
+            }
+            nextUnsettledIndex = index + 1
 
             const hasRemainingWork =
               index + 1 < batch.length || pendingMessages.length > 0
@@ -141,12 +207,23 @@ export const makeMessageQueue = <Message>({
               // anything in pendingMessages, so they go back to the
               // front to keep arrival order.
               pendingMessages = batch.slice(index + 1).concat(pendingMessages)
+              activeBatch = []
+              nextUnsettledIndex = 0
               scheduleDeferredDrain()
               return
             }
           }
+          activeBatch = []
+          nextUnsettledIndex = 0
         }
       } catch (error) {
+        for (const pendingMessage of activeBatch.slice(nextUnsettledIndex)) {
+          pendingMessage.settle?.(Result.fail(TERMINATED_RECEIPT_REASON))
+        }
+        for (const pendingMessage of pendingMessages) {
+          pendingMessage.settle?.(Result.fail(TERMINATED_RECEIPT_REASON))
+        }
+        pendingMessages = []
         Effect.runFork(crashWith(Cause.die(error), currentMessage))
       } finally {
         const drainEndedAt = performance.now()
@@ -160,6 +237,9 @@ export const makeMessageQueue = <Message>({
       syncWorkMsSinceYield = 0
     }
 
+    const isAnyMessageDeferred = (): boolean =>
+      isDrainDeferredToNextTask && pendingMessages.length > 0
+
     const completeBoot = (): void => {
       isBootComplete = true
       drainPendingMessages()
@@ -168,8 +248,10 @@ export const makeMessageQueue = <Message>({
     return {
       enqueueMessage,
       enqueueMessageEffect,
+      enqueueMessageReceiptEffect,
       drainPendingMessages,
       resetDrainBudget,
+      isAnyMessageDeferred,
       completeBoot,
     }
   })

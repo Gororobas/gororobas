@@ -1,34 +1,58 @@
-import { Option } from 'effect'
+import { Option, Schema } from 'effect'
 import { Scene, Story } from 'foldkit'
-import type { HtmlBuilder } from 'foldkit/html'
 import { modifyFields } from 'foldkit/struct'
 import { expect } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import * as Animation from '../animation/index.js'
+import * as Animation from '../animation/block.js'
 import {
   AnchorListbox,
-  ClickItem,
-  DelayClearSearch,
-  DetectMovementOrAnimationEnd,
-  FocusButton,
-  FocusItems,
-  InertOthers,
-  LockScroll,
+  ClickListboxItem,
+  DelayClearListboxSearch,
+  DetectListboxMovementOrAnimationEnd,
+  FocusListboxButton,
+  FocusListboxItems,
+  InertListboxOthers,
+  LockListboxScroll,
   Message,
   OutMessage,
   PortalListboxBackdrop,
-  RestoreInert,
-  ScrollIntoView,
-  UnlockScroll,
+  RestoreListboxInert,
+  ScrollListboxItemIntoView,
+  UnlockListboxScroll,
   buttonId,
+  makeView,
 } from './shared.js'
 import { create, init, update } from './single.js'
 import type { Model, ViewInputs } from './single.js'
 
-const TestListbox = create<string>()
-const view = TestListbox.view
+const render = makeView<Model>({ ariaMultiSelectable: false })<string, string>()
+const TestListbox = create()
+const gotAnimationMessage = ({
+  message,
+}: Readonly<{ message: typeof Animation.AnimationBlock.Message.Type }>) =>
+  Schema.decodeSync(TestListbox.Message)({
+    _tag: 'GotAnimationMessage',
+    placement: 'animation',
+    generation: 0,
+    message,
+  })
+const view = (
+  model: Model,
+  { maybeSelectedValue, ...baseInputs }: ViewInputs<string>,
+  h: Parameters<typeof render>[2],
+) =>
+  render(
+    model,
+    {
+      ...baseInputs,
+      selectedValues: Option.toArray(maybeSelectedValue),
+    },
+    h,
+  )
+
+type TestHtmlBuilder = Parameters<typeof view>[2]
 
 const acknowledgeAnchor = Scene.Mount.resolve(
   AnchorListbox,
@@ -39,30 +63,33 @@ const acknowledgeBackdrop = Scene.Mount.resolve(
   Message.CompletedPortalListboxBackdrop(),
 )
 
-const animationEndMessage = (generation: number) =>
-  Message.GotAnimationMessage({
-    message: Animation.Message.EndedAnimation({ generation }),
-  })
+const completedDetectListboxMovementOrAnimationEnd = (generation: number) =>
+  Message.CompletedDetectListboxMovementOrAnimationEnd({ generation })
 
 const STALE_CLEAR_SEARCH_VERSION = 9999
 
 const STALE_ANIMATION_GENERATION = -1
 
-const givenClosed = Story.given(init({ id: 'test' }))
+const givenClosed = Story.given(init({ id: 'test' }).model)
 
 const givenOpen = Story.steps(
   givenClosed,
   Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
-  Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+  Story.Command.resolve(
+    FocusListboxItems,
+    Message.CompletedFocusListboxItems(),
+  ),
 )
 
-const givenClosedAnimated = Story.given(init({ id: 'test', isAnimated: true }))
+const givenClosedAnimated = Story.given(
+  init({ id: 'test', isAnimated: true }).model,
+)
 
 const givenOpenAnimated = Story.steps(
   givenClosedAnimated,
   Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
   Story.Command.resolveAll(
-    [FocusItems, Message.CompletedFocusItems()],
+    [FocusListboxItems, Message.CompletedFocusListboxItems()],
     [
       Animation.WaitForPaint,
       Animation.Message.CompletedWaitForPaint({ generation: 1 }),
@@ -80,13 +107,13 @@ const givenOpenAnimated = Story.steps(
 describe('Listbox', () => {
   describe('init', () => {
     it('defaults to closed with no active item', () => {
-      expect(init({ id: 'test' })).toStrictEqual({
+      expect(init({ id: 'test' }).model).toStrictEqual({
         id: 'test',
         isOpen: false,
         isAnimated: false,
         isModal: false,
         orientation: 'Vertical',
-        animation: Animation.init({ id: 'test-listbox' }),
+        animation: Animation.init({ id: 'test-listbox' }).model,
         maybeActiveItemIndex: Option.none(),
         activationTrigger: 'Keyboard',
         searchQuery: '',
@@ -97,28 +124,28 @@ describe('Listbox', () => {
     })
 
     it('accepts isAnimated option', () => {
-      const model = init({ id: 'test', isAnimated: true })
+      const model = init({ id: 'test', isAnimated: true }).model
       expect(model.isAnimated).toBe(true)
       expect(model.animation.transitionState).toBe('Idle')
     })
 
     it('defaults isModal to false', () => {
-      const model = init({ id: 'test' })
+      const model = init({ id: 'test' }).model
       expect(model.isModal).toBe(false)
     })
 
     it('accepts isModal option', () => {
-      const model = init({ id: 'test', isModal: true })
+      const model = init({ id: 'test', isModal: true }).model
       expect(model.isModal).toBe(true)
     })
 
     it('defaults orientation to Vertical', () => {
-      const model = init({ id: 'test' })
+      const model = init({ id: 'test' }).model
       expect(model.orientation).toBe('Vertical')
     })
 
     it('accepts orientation option', () => {
-      const model = init({ id: 'test', orientation: 'Horizontal' })
+      const model = init({ id: 'test', orientation: 'Horizontal' }).model
       expect(model.orientation).toBe('Horizontal')
     })
   })
@@ -132,7 +159,10 @@ describe('Listbox', () => {
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.some(2) }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.model(model => {
             expect(model.isOpen).toBe(true)
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(2))
@@ -144,7 +174,7 @@ describe('Listbox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               searchQuery: () => 'stale',
               searchVersion: () => 1,
             }),
@@ -152,7 +182,10 @@ describe('Listbox', () => {
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.model(model => {
             expect(model.searchQuery).toBe('')
             expect(model.searchVersion).toBe(0)
@@ -167,7 +200,10 @@ describe('Listbox', () => {
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.model(model => {
             expect(model.activationTrigger).toBe('Keyboard')
           }),
@@ -181,7 +217,10 @@ describe('Listbox', () => {
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.none() }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.model(model => {
             expect(model.activationTrigger).toBe('Pointer')
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.none())
@@ -193,7 +232,7 @@ describe('Listbox', () => {
         Story.story(
           update,
           Story.given(
-            modifyFields(init({ id: 'test' }), {
+            modifyFields(init({ id: 'test' }).model, {
               maybeLastPointerPosition: () =>
                 Option.some({
                   screenX: 100,
@@ -204,7 +243,10 @@ describe('Listbox', () => {
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.model(model => {
             expect(model.maybeLastPointerPosition).toStrictEqual(Option.none())
           }),
@@ -218,7 +260,10 @@ describe('Listbox', () => {
           update,
           givenOpen,
           Story.message(Message.Closed()),
-          Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
           Story.model(model => {
             expect(model.isOpen).toBe(false)
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.none())
@@ -302,7 +347,10 @@ describe('Listbox', () => {
           Story.message(
             Message.PressedPointerOnButton({ pointerType: 'mouse', button: 0 }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.model(model => {
             expect(model.isOpen).toBe(true)
             expect(model.activationTrigger).toBe('Pointer')
@@ -321,7 +369,10 @@ describe('Listbox', () => {
           Story.message(
             Message.PressedPointerOnButton({ pointerType: 'mouse', button: 0 }),
           ),
-          Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
           Story.model(model => {
             expect(model.isOpen).toBe(false)
             expect(model.maybeLastButtonPointerType).toStrictEqual(
@@ -362,7 +413,10 @@ describe('Listbox', () => {
           Story.message(
             Message.PressedPointerOnButton({ pointerType: 'mouse', button: 0 }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.model(model => {
             expect(model.maybeLastButtonPointerType).toStrictEqual(
               Option.some('mouse'),
@@ -381,8 +435,8 @@ describe('Listbox', () => {
             Message.ActivatedItem({ index: 3, activationTrigger: 'Keyboard' }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Story.model(model => {
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(3))
@@ -398,15 +452,15 @@ describe('Listbox', () => {
             Message.ActivatedItem({ index: 1, activationTrigger: 'Keyboard' }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Story.message(
             Message.ActivatedItem({ index: 4, activationTrigger: 'Keyboard' }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Story.model(model => {
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(4))
@@ -435,8 +489,8 @@ describe('Listbox', () => {
             Message.ActivatedItem({ index: 2, activationTrigger: 'Keyboard' }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Story.model(model => {
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.some(2))
@@ -468,8 +522,8 @@ describe('Listbox', () => {
             Message.ActivatedItem({ index: 2, activationTrigger: 'Keyboard' }),
           ),
           Story.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Story.message(Message.DeactivatedItem()),
           Story.model(model => {
@@ -560,7 +614,10 @@ describe('Listbox', () => {
           givenOpen,
           Story.message(Message.SelectedItem({ item: 'apple' })),
           Story.expectOutMessage(OutMessage.Selected({ value: 'apple' })),
-          Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
         )
       })
 
@@ -569,7 +626,10 @@ describe('Listbox', () => {
           update,
           givenOpen,
           Story.message(Message.SelectedItem({ item: 'apple' })),
-          Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
           Story.model(model => {
             expect(model.isOpen).toBe(false)
             expect(model.maybeActiveItemIndex).toStrictEqual(Option.none())
@@ -583,7 +643,10 @@ describe('Listbox', () => {
           givenOpen,
           Story.message(Message.SelectedItem({ item: 'apple' })),
           Story.expectOutMessage(OutMessage.Selected({ value: 'apple' })),
-          Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
         )
       })
 
@@ -594,10 +657,16 @@ describe('Listbox', () => {
           Story.message(
             Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
           ),
-          Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Story.message(Message.SelectedItem({ item: 'banana' })),
           Story.expectOutMessage(OutMessage.Selected({ value: 'banana' })),
-          Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
         )
       })
 
@@ -621,7 +690,10 @@ describe('Listbox', () => {
           update,
           givenOpen,
           Story.message(Message.RequestedItemClick({ index: 2 })),
-          Story.Command.resolve(ClickItem, Message.CompletedClickItem()),
+          Story.Command.resolve(
+            ClickListboxItem,
+            Message.CompletedClickListboxItem(),
+          ),
           Story.model(model => {
             expect(model.isOpen).toBe(true)
           }),
@@ -638,8 +710,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'a', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -650,8 +722,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'b', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -669,8 +741,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'x', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -681,8 +753,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'y', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -700,8 +772,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'd', maybeTargetIndex: Option.some(3) }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -719,8 +791,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'z', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -738,8 +810,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'a', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -750,7 +822,7 @@ describe('Listbox', () => {
       })
     })
 
-    describe('CompletedDelayClearSearch', () => {
+    describe('CompletedDelayClearListboxSearch', () => {
       it('clears search query when version matches', () => {
         Story.story(
           update,
@@ -759,15 +831,17 @@ describe('Listbox', () => {
             Message.Searched({ key: 'a', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
           Story.model(model => {
             expect(model.searchVersion).toBe(1)
           }),
-          Story.message(Message.CompletedDelayClearSearch({ version: 1 })),
+          Story.message(
+            Message.CompletedDelayClearListboxSearch({ version: 1 }),
+          ),
           Story.model(model => {
             expect(model.searchQuery).toBe('')
           }),
@@ -782,8 +856,8 @@ describe('Listbox', () => {
             Message.Searched({ key: 'a', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -791,15 +865,17 @@ describe('Listbox', () => {
             Message.Searched({ key: 'b', maybeTargetIndex: Option.none() }),
           ),
           Story.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
           Story.model(model => {
             expect(model.searchVersion).toBe(2)
           }),
-          Story.message(Message.CompletedDelayClearSearch({ version: 1 })),
+          Story.message(
+            Message.CompletedDelayClearListboxSearch({ version: 1 }),
+          ),
           Story.model(model => {
             expect(model.searchQuery).toBe('ab')
           }),
@@ -808,11 +884,11 @@ describe('Listbox', () => {
     })
 
     describe('completed and view-dispatched messages', () => {
-      it('returns model unchanged for CompletedLockScroll', () => {
+      it('returns model unchanged for CompletedLockListboxScroll', () => {
         Story.story(
           update,
           givenOpen,
-          Story.message(Message.CompletedLockScroll()),
+          Story.message(Message.CompletedLockListboxScroll()),
           Story.model(model => {
             expect(model.isOpen).toBe(true)
           }),
@@ -826,7 +902,10 @@ describe('Listbox', () => {
           Story.message(
             Message.PressedPointerOnButton({ pointerType: 'mouse', button: 0 }),
           ),
-          Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
           Story.model(model => {
             expect(model.maybeLastButtonPointerType).toStrictEqual(
               Option.some('mouse'),
@@ -838,6 +917,61 @@ describe('Listbox', () => {
             expect(model.maybeLastButtonPointerType).toStrictEqual(
               Option.none(),
             )
+          }),
+        )
+      })
+
+      it('keeps the listbox open after ClickedButton follows a mouse press', () => {
+        Story.story(
+          update,
+          givenClosed,
+          Story.message(
+            Message.PressedPointerOnButton({
+              pointerType: 'mouse',
+              button: 0,
+            }),
+          ),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
+          Story.message(Message.ClickedButton()),
+          Story.model(model => {
+            expect(model.isOpen).toBe(true)
+            expect(model.maybeLastButtonPointerType).toStrictEqual(
+              Option.none(),
+            )
+          }),
+        )
+      })
+
+      it('opens on ClickedButton when the click did not follow a mouse press', () => {
+        Story.story(
+          update,
+          givenClosed,
+          Story.message(Message.ClickedButton()),
+          Story.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
+          Story.model(model => {
+            expect(model.isOpen).toBe(true)
+            expect(model.activationTrigger).toBe('Pointer')
+          }),
+        )
+      })
+
+      it('closes an open listbox on ClickedButton when the click did not follow a mouse press', () => {
+        Story.story(
+          update,
+          givenOpen,
+          Story.message(Message.ClickedButton()),
+          Story.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
+          Story.model(model => {
+            expect(model.isOpen).toBe(false)
           }),
         )
       })
@@ -879,7 +1013,7 @@ describe('Listbox', () => {
               expect(model.animation.transitionState).toBe('EnterStart')
             }),
             Story.Command.resolveAll(
-              [FocusItems, Message.CompletedFocusItems()],
+              [FocusListboxItems, Message.CompletedFocusListboxItems()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 1 }),
@@ -907,7 +1041,7 @@ describe('Listbox', () => {
               expect(model.animation.transitionState).toBe('EnterAnimating')
             }),
             Story.Command.resolveAll(
-              [FocusItems, Message.CompletedFocusItems()],
+              [FocusListboxItems, Message.CompletedFocusListboxItems()],
               [
                 Animation.WaitForAnimationSettled,
                 Animation.Message.EndedAnimation({ generation: 1 }),
@@ -924,7 +1058,7 @@ describe('Listbox', () => {
               Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
             ),
             Story.Command.resolveAll(
-              [FocusItems, Message.CompletedFocusItems()],
+              [FocusListboxItems, Message.CompletedFocusListboxItems()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 1 }),
@@ -966,12 +1100,15 @@ describe('Listbox', () => {
               expect(model.animation.transitionState).toBe('LeaveStart')
             }),
             Story.Command.resolveAll(
-              [FocusButton, Message.CompletedFocusButton()],
+              [FocusListboxButton, Message.CompletedFocusListboxButton()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectListboxMovementOrAnimationEnd,
+                completedDetectListboxMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -990,7 +1127,10 @@ describe('Listbox', () => {
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectListboxMovementOrAnimationEnd,
+                completedDetectListboxMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -1000,17 +1140,21 @@ describe('Listbox', () => {
             update,
             givenOpenAnimated,
             Story.message(Message.SelectedItem({ item: 'apple' })),
+            Story.expectOutMessage(OutMessage.Selected({ value: 'apple' })),
             Story.model(model => {
               expect(model.isOpen).toBe(false)
               expect(model.animation.transitionState).toBe('LeaveStart')
             }),
             Story.Command.resolveAll(
-              [FocusButton, Message.CompletedFocusButton()],
+              [FocusListboxButton, Message.CompletedFocusListboxButton()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectListboxMovementOrAnimationEnd,
+                completedDetectListboxMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -1028,11 +1172,17 @@ describe('Listbox', () => {
               expect(model.animation.transitionState).toBe('LeaveAnimating')
             }),
             Story.Command.expectHas(
-              DetectMovementOrAnimationEnd({ id: 'test', generation: 2 }),
+              DetectListboxMovementOrAnimationEnd({
+                id: 'test',
+                generation: 2,
+              }),
             ),
             Story.Command.resolveAll(
-              [FocusButton, Message.CompletedFocusButton()],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [FocusListboxButton, Message.CompletedFocusListboxButton()],
+              [
+                DetectListboxMovementOrAnimationEnd,
+                completedDetectListboxMovementOrAnimationEnd(2),
+              ],
             ),
           )
         })
@@ -1043,12 +1193,15 @@ describe('Listbox', () => {
             givenOpenAnimated,
             Story.message(Message.Closed()),
             Story.Command.resolveAll(
-              [FocusButton, Message.CompletedFocusButton()],
+              [FocusListboxButton, Message.CompletedFocusListboxButton()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectListboxMovementOrAnimationEnd,
+                completedDetectListboxMovementOrAnimationEnd(2),
+              ],
             ),
             Story.model(model => {
               expect(model.animation.transitionState).toBe('Idle')
@@ -1065,7 +1218,10 @@ describe('Listbox', () => {
             Story.message(
               Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
             ),
-            Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+            Story.Command.resolve(
+              FocusListboxItems,
+              Message.CompletedFocusListboxItems(),
+            ),
             Story.model(model => {
               expect(model.animation.transitionState).toBe('Idle')
             }),
@@ -1077,7 +1233,10 @@ describe('Listbox', () => {
             update,
             givenOpen,
             Story.message(Message.Closed()),
-            Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+            Story.Command.resolve(
+              FocusListboxButton,
+              Message.CompletedFocusListboxButton(),
+            ),
             Story.model(model => {
               expect(model.animation.transitionState).toBe('Idle')
             }),
@@ -1091,7 +1250,7 @@ describe('Listbox', () => {
             update,
             givenOpen,
             Story.message(
-              Message.GotAnimationMessage({
+              gotAnimationMessage({
                 message: Animation.Message.CompletedWaitForPaint({
                   generation: 0,
                 }),
@@ -1104,11 +1263,11 @@ describe('Listbox', () => {
           )
         })
 
-        it('ignores GotAnimationMessage with EndedAnimation when Idle', () => {
+        it('ignores CompletedDetectListboxMovementOrAnimationEnd when Idle', () => {
           Story.story(
             update,
             givenOpen,
-            Story.message(animationEndMessage(0)),
+            Story.message(completedDetectListboxMovementOrAnimationEnd(0)),
             Story.model(model => {
               expect(model.isOpen).toBe(true)
               expect(model.animation.transitionState).toBe('Idle')
@@ -1126,7 +1285,7 @@ describe('Listbox', () => {
               Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
             ),
             Story.Command.resolveAll(
-              [FocusItems, Message.CompletedFocusItems()],
+              [FocusListboxItems, Message.CompletedFocusListboxItems()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({
@@ -1143,12 +1302,15 @@ describe('Listbox', () => {
               expect(model.animation.transitionState).toBe('LeaveStart')
             }),
             Story.Command.resolveAll(
-              [FocusButton, Message.CompletedFocusButton()],
+              [FocusListboxButton, Message.CompletedFocusListboxButton()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectListboxMovementOrAnimationEnd,
+                completedDetectListboxMovementOrAnimationEnd(2),
+              ],
             ),
             Story.model(model => {
               expect(model.animation.transitionState).toBe('Idle')
@@ -1164,7 +1326,7 @@ describe('Listbox', () => {
               Message.Opened({ maybeActiveItemIndex: Option.some(0) }),
             ),
             Story.Command.resolveAll(
-              [FocusItems, Message.CompletedFocusItems()],
+              [FocusListboxItems, Message.CompletedFocusListboxItems()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 1 }),
@@ -1185,12 +1347,15 @@ describe('Listbox', () => {
               expect(model.animation.transitionState).toBe('LeaveStart')
             }),
             Story.Command.resolveAll(
-              [FocusButton, Message.CompletedFocusButton()],
+              [FocusListboxButton, Message.CompletedFocusListboxButton()],
               [
                 Animation.WaitForPaint,
                 Animation.Message.CompletedWaitForPaint({ generation: 2 }),
               ],
-              [DetectMovementOrAnimationEnd, animationEndMessage(2)],
+              [
+                DetectListboxMovementOrAnimationEnd,
+                completedDetectListboxMovementOrAnimationEnd(2),
+              ],
             ),
             Story.model(model => {
               expect(model.animation.transitionState).toBe('Idle')
@@ -1202,15 +1367,17 @@ describe('Listbox', () => {
   })
 
   describe('modal commands', () => {
-    const givenClosedModal = Story.given(init({ id: 'test', isModal: true }))
+    const givenClosedModal = Story.given(
+      init({ id: 'test', isModal: true }).model,
+    )
 
     const givenOpenModal = Story.steps(
       givenClosedModal,
       Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
       Story.Command.resolveAll(
-        [FocusItems, Message.CompletedFocusItems()],
-        [LockScroll, Message.CompletedLockScroll()],
-        [InertOthers, Message.CompletedInertOthers()],
+        [FocusListboxItems, Message.CompletedFocusListboxItems()],
+        [LockListboxScroll, Message.CompletedLockListboxScroll()],
+        [InertListboxOthers, Message.CompletedInertListboxOthers()],
       ),
     )
 
@@ -1220,9 +1387,9 @@ describe('Listbox', () => {
         givenClosedModal,
         Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
         Story.Command.resolveAll(
-          [FocusItems, Message.CompletedFocusItems()],
-          [LockScroll, Message.CompletedLockScroll()],
-          [InertOthers, Message.CompletedInertOthers()],
+          [FocusListboxItems, Message.CompletedFocusListboxItems()],
+          [LockListboxScroll, Message.CompletedLockListboxScroll()],
+          [InertListboxOthers, Message.CompletedInertListboxOthers()],
         ),
         Story.model(model => {
           expect(model.isOpen).toBe(true)
@@ -1236,9 +1403,9 @@ describe('Listbox', () => {
         givenOpenModal,
         Story.message(Message.Closed()),
         Story.Command.resolveAll(
-          [FocusButton, Message.CompletedFocusButton()],
-          [UnlockScroll, Message.CompletedUnlockScroll()],
-          [RestoreInert, Message.CompletedRestoreInert()],
+          [FocusListboxButton, Message.CompletedFocusListboxButton()],
+          [UnlockListboxScroll, Message.CompletedUnlockListboxScroll()],
+          [RestoreListboxInert, Message.CompletedRestoreListboxInert()],
         ),
         Story.model(model => {
           expect(model.isOpen).toBe(false)
@@ -1259,14 +1426,43 @@ describe('Listbox', () => {
       )
     })
 
+    it('emits no Commands when requestOpen receives an open modal Model', () => {
+      const openModal = modifyFields(
+        init({ id: 'test', isModal: true }).model,
+        {
+          isOpen: () => true,
+          maybeActiveItemIndex: () => Option.some(1),
+          searchQuery: () => 'ap',
+          searchVersion: () => 2,
+        },
+      )
+
+      for (const reopened of [
+        TestListbox.operations.requestOpen(openModal),
+        update(
+          openModal,
+          Message.Opened({ maybeActiveItemIndex: Option.none() }),
+        ),
+      ]) {
+        expect(reopened.commands ?? []).toEqual([])
+        expect(reopened.outMessage).toBeUndefined()
+        expect(reopened.model.isOpen).toBe(true)
+        expect(reopened.model.maybeActiveItemIndex).toStrictEqual(
+          Option.some(1),
+        )
+        expect(reopened.model.searchQuery).toBe('ap')
+        expect(reopened.model.searchVersion).toBe(2)
+      }
+    })
+
     it('emits unlockScroll and restoreInert commands when the items container blurs in modal mode', () => {
       Story.story(
         update,
         givenOpenModal,
         Story.message(Message.BlurredItems()),
         Story.Command.resolveAll(
-          [UnlockScroll, Message.CompletedUnlockScroll()],
-          [RestoreInert, Message.CompletedRestoreInert()],
+          [UnlockListboxScroll, Message.CompletedUnlockListboxScroll()],
+          [RestoreListboxInert, Message.CompletedRestoreListboxInert()],
         ),
         Story.model(model => {
           expect(model.isOpen).toBe(false)
@@ -1293,9 +1489,9 @@ describe('Listbox', () => {
         givenOpenModal,
         Story.message(Message.SelectedItem({ item: 'apple' })),
         Story.Command.resolveAll(
-          [FocusButton, Message.CompletedFocusButton()],
-          [UnlockScroll, Message.CompletedUnlockScroll()],
-          [RestoreInert, Message.CompletedRestoreInert()],
+          [FocusListboxButton, Message.CompletedFocusListboxButton()],
+          [UnlockListboxScroll, Message.CompletedUnlockListboxScroll()],
+          [RestoreListboxInert, Message.CompletedRestoreListboxInert()],
         ),
         Story.model(model => {
           expect(model.isOpen).toBe(false)
@@ -1308,12 +1504,18 @@ describe('Listbox', () => {
         update,
         givenClosed,
         Story.message(Message.Opened({ maybeActiveItemIndex: Option.some(0) })),
-        Story.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+        Story.Command.resolve(
+          FocusListboxItems,
+          Message.CompletedFocusListboxItems(),
+        ),
         Story.model(model => {
           expect(model.isOpen).toBe(true)
         }),
         Story.message(Message.Closed()),
-        Story.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+        Story.Command.resolve(
+          FocusListboxButton,
+          Message.CompletedFocusListboxButton(),
+        ),
         Story.model(model => {
           expect(model.isOpen).toBe(false)
         }),
@@ -1322,7 +1524,7 @@ describe('Listbox', () => {
   })
 
   describe('view', () => {
-    const closedModel = () => init({ id: 'test' })
+    const closedModel = () => init({ id: 'test' }).model
     const openModel = (): Model => {
       let model!: Model
       Story.story(
@@ -1337,7 +1539,7 @@ describe('Listbox', () => {
 
     const sceneView =
       (overrides: Omit<Partial<ViewInputs<string>>, 'buttonContent'> = {}) =>
-      (model: Model, h: HtmlBuilder<Message>) =>
+      (model: Model, h: TestHtmlBuilder) =>
         view(
           model,
           {
@@ -1642,8 +1844,8 @@ describe('Listbox', () => {
           Scene.keydown(itemsContainer, 'B'),
           Scene.expect(item(1)).toHaveAttr('data-active', ''),
           Scene.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -1652,8 +1854,8 @@ describe('Listbox', () => {
           Scene.expect(item(1)).not.toHaveAttr('data-active'),
           Scene.expect(item(2)).toHaveAttr('data-active', ''),
           Scene.Command.resolve(
-            DelayClearSearch,
-            Message.CompletedDelayClearSearch({
+            DelayClearListboxSearch,
+            Message.CompletedDelayClearListboxSearch({
               version: STALE_CLEAR_SEARCH_VERSION,
             }),
           ),
@@ -1668,20 +1870,20 @@ describe('Listbox', () => {
           acknowledgeBackdrop,
           Scene.keydown(itemsContainer, 'ArrowDown'),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Scene.expect(item(1)).toHaveAttr('data-active', ''),
           Scene.keydown(itemsContainer, 'Home'),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Scene.expect(item(0)).toHaveAttr('data-active', ''),
           Scene.keydown(itemsContainer, 'End'),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Scene.expect(item(1)).toHaveAttr('data-active', ''),
           Scene.expectNoOutMessage(),
@@ -1704,8 +1906,8 @@ describe('Listbox', () => {
           Scene.expect(item(0)).toHaveAttr('data-active', ''),
           Scene.keydown(itemsContainer, 'ArrowDown'),
           Scene.Command.resolve(
-            ScrollIntoView,
-            Message.CompletedScrollIntoView(),
+            ScrollListboxItemIntoView,
+            Message.CompletedScrollListboxItemIntoView(),
           ),
           Scene.expect(item(1)).toHaveAttr('data-active', ''),
           Scene.expect(item(0)).not.toHaveAttr('data-active'),
@@ -1756,12 +1958,18 @@ describe('Listbox', () => {
           { update, view: sceneView({ isReadOnly: true }) },
           Scene.given(closedModel()),
           Scene.click(button),
-          Scene.Command.resolve(FocusItems, Message.CompletedFocusItems()),
+          Scene.Command.resolve(
+            FocusListboxItems,
+            Message.CompletedFocusListboxItems(),
+          ),
           Scene.expect(itemsContainer).toExist(),
           acknowledgeAnchor,
           acknowledgeBackdrop,
           Scene.keydown(itemsContainer, 'Escape'),
-          Scene.Command.resolve(FocusButton, Message.CompletedFocusButton()),
+          Scene.Command.resolve(
+            FocusListboxButton,
+            Message.CompletedFocusListboxButton(),
+          ),
           Scene.Mount.expectEnded(AnchorListbox, PortalListboxBackdrop),
           Scene.expect(itemsContainer).toBeAbsent(),
         )
@@ -2139,7 +2347,9 @@ describe('Listbox', () => {
         { id: '3', name: 'Charlie' },
       ]
 
-      const PersonListbox = create<Person>()
+      const renderPersonListbox = makeView<Model>({
+        ariaMultiSelectable: false,
+      })<Person, string>()
 
       const personSceneView =
         (
@@ -2148,19 +2358,25 @@ describe('Listbox', () => {
             'items' | 'itemToValue' | 'itemToConfig' | 'buttonContent'
           > = {},
         ) =>
-        (model: Model, h: HtmlBuilder<Message>) =>
-          PersonListbox.view(
+        (model: Model, h: TestHtmlBuilder) => {
+          const { maybeSelectedValue, ...baseInputs } = {
+            maybeSelectedValue: Option.none<string>(),
+            ...overrides,
+          }
+
+          return renderPersonListbox(
             model,
             {
               items: people,
               itemToValue: person => person.id,
               itemToConfig: () => ({ content: null }),
               buttonContent: null,
-              maybeSelectedValue: Option.none(),
-              ...overrides,
+              ...baseInputs,
+              selectedValues: Option.toArray(maybeSelectedValue),
             },
             h,
           )
+        }
 
       it('items have click handlers with object items', () => {
         Scene.scene(

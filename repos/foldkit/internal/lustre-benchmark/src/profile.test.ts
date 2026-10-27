@@ -1,15 +1,14 @@
-import { Effect } from 'effect'
+import { Block, Program, Runtime } from 'foldkit'
 import { Document, type HtmlBuilder } from 'foldkit/html'
-import { makeApplication } from 'foldkit/runtime'
 import { describe, it } from 'vitest'
 
 // Internal API not on the public surface but needed by the profile harness
 // to capture the runtime's sync dispatcher.
 import { __requireDispatch } from '../../../packages/foldkit/src/html/index.js'
-import { Message, Model, update as baseUpdate, init } from './main.js'
-import type { Todo } from './main.js'
-import { view as naiveView } from './main.js'
-import { view as optimisedView } from './main.optimised.js'
+import { Message, Model, update as baseUpdate, init as init_ } from './todo.js'
+import type { Todo } from './todo.js'
+import { view as naiveView } from './todo.js'
+import { view as optimisedView } from './view.optimised.js'
 
 /**
  * Phase-level profile of the lustre-benchmark optimised TodoMVC runbook.
@@ -117,17 +116,40 @@ const runProfile = async (
     return wrappedView.fn(model, h)
   }
 
-  const application = makeApplication({
+  const ApplicationComposition = Block.makeDefinition('Application', {
     Model,
-    init,
-    update: wrappedUpdate.fn,
-    view: captureView,
+    Message,
+  }).makeComposition()
+  const prepare = () =>
+    ApplicationComposition.prepareBlock({
+      init: ApplicationComposition.makeInit(init_),
+      update: ApplicationComposition.makeUpdate({
+        UpdatedNewTodo: wrappedUpdate.fn,
+        UpdatedEditingTodo: wrappedUpdate.fn,
+        AddedTodo: wrappedUpdate.fn,
+        DeletedTodo: wrappedUpdate.fn,
+        ToggledTodo: wrappedUpdate.fn,
+        StartedEditing: wrappedUpdate.fn,
+        SavedEdit: wrappedUpdate.fn,
+        CancelledEdit: wrappedUpdate.fn,
+        ToggledAll: wrappedUpdate.fn,
+        ClearedCompleted: wrappedUpdate.fn,
+        SelectedFilter: wrappedUpdate.fn,
+      }),
+      view: ApplicationComposition.makeView(captureView),
+    })
+  const ApplicationBlock: Block.FromAssemblyWithView<
+    typeof Model,
+    typeof prepare
+  > = Block.assemble(prepare)
+  const program = Program.make({
+    block: ApplicationBlock,
     container,
     devTools: false,
     freezeModel: false,
   })
 
-  Effect.runFork(application.start())
+  Runtime.run(program)
 
   await waitForCondition(() => capturedDispatch !== null)
 

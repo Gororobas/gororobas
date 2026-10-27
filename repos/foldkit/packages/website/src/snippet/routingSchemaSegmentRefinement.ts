@@ -10,9 +10,8 @@ const UUID_PATTERN =
 const ProductId = Schema.String.check(Schema.isPattern(UUID_PATTERN)).pipe(
   Schema.brand('ProductId'),
 )
-type ProductId = typeof ProductId.Type
 
-const AppRoute = defineRouteUnion({
+const ApplicationRoute = defineRouteUnion({
   Product: { productId: ProductId },
 })
 
@@ -21,7 +20,7 @@ const AppRoute = defineRouteUnion({
 const productRouter = pipe(
   literal('products'),
   slash(schemaSegment('productId', ProductId)),
-  Route.mapTo(AppRoute.Product),
+  Route.mapTo(ApplicationRoute.Product),
 )
 
 // Building still round-trips: a ProductId prints straight back into the path.

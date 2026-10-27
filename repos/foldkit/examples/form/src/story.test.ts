@@ -3,16 +3,13 @@ import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
 import { describe, expect, test } from 'vitest'
 
-import {
-  Message,
-  type Model,
-  SubmitForm,
-  ValidateEmail,
-  initialModel,
-  update,
-} from './main'
+import { SubmitForm, ValidateEmail } from './command'
+import { initialModel } from './init'
+import { Message } from './message'
+import type { Model } from './model'
+import { update } from './update'
 
-const validModel: Model = modifyFields(initialModel, {
+const validModel: typeof Model.Type = modifyFields(initialModel, {
   name: () => FieldValidation.Valid({ value: 'Alice' }),
   email: () => FieldValidation.Valid({ value: 'alice@example.com' }),
 })
@@ -83,7 +80,7 @@ describe('update', () => {
     })
 
     test('a validation result for a superseded email value is ignored', () => {
-      const inFlightModel: Model = modifyFields(initialModel, {
+      const inFlightModel: typeof Model.Type = modifyFields(initialModel, {
         email: () => FieldValidation.Validating({ value: 'alice@example.com' }),
       })
 
@@ -102,7 +99,7 @@ describe('update', () => {
     })
 
     test('a validation result for the current email value updates the field', () => {
-      const inFlightModel: Model = modifyFields(initialModel, {
+      const inFlightModel: typeof Model.Type = modifyFields(initialModel, {
         email: () => FieldValidation.Validating({ value: 'taken@example.com' }),
       })
 

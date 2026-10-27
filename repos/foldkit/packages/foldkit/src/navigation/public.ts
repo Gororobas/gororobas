@@ -6,4 +6,5 @@ export {
   load,
   openUrl,
   UrlRequest,
+  type UrlRequestSchema,
 } from './index.js'

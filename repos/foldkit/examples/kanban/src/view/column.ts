@@ -1,9 +1,16 @@
 import clsx from 'clsx'
 import { Array, Equal, Option, flow, pipe } from 'effect'
-import { Html, HtmlBuilder } from 'foldkit/html'
+import type { Html } from 'foldkit/html'
 
-import { Button, DragAndDrop, Input } from '@foldkit/ui'
+import { Button, Input } from '@foldkit/ui'
+import {
+  type RenderInfo,
+  isDragging,
+  maybeDraggedItemId,
+  maybeDropTarget,
+} from '@foldkit/ui/dragAndDrop'
 
+import type { ApplicationViewBuilder } from '../composition'
 import { ADD_CARD_INPUT_ID } from '../constant'
 import { Card, Column } from '../domain'
 import { Message } from '../message'
@@ -11,10 +18,10 @@ import type { Model } from '../model'
 import { cardView } from './card'
 
 const addCardForm = (
-  model: Model,
+  model: typeof Model.Type,
   columnId: string,
-  toParentMessage: (message: Message) => Message,
-  h: HtmlBuilder<Message>,
+  toParentMessage: (message: typeof Message.Type) => typeof Message.Type,
+  h: ApplicationViewBuilder,
 ): Html => {
   const isAddingToThisColumn = Option.exists(
     model.maybeNewCardColumnId,
@@ -114,7 +121,7 @@ const addCardForm = (
   )
 }
 
-const dropPlaceholder = (h: HtmlBuilder<Message>): Html =>
+const dropPlaceholder = (h: ApplicationViewBuilder): Html =>
   h.keyed('li')('drop-placeholder', [
     h.Class(
       'rounded-lg border-2 border-dashed border-blue-300 bg-blue-50 h-12',
@@ -123,9 +130,9 @@ const dropPlaceholder = (h: HtmlBuilder<Message>): Html =>
   ])
 
 const findDraggedCard = (
-  model: Model,
+  model: typeof Model.Type,
   draggedId: string,
-): Option.Option<Card.Card> =>
+): Option.Option<typeof Card.Card.Type> =>
   pipe(
     model.columns,
     Array.flatMap(({ cards }) => cards),
@@ -133,50 +140,35 @@ const findDraggedCard = (
   )
 
 const defaultCardElements = (
-  model: Model,
-  column: Column.Column,
-  toParentMessage: (message: Message) => Message,
-  h: HtmlBuilder<Message>,
+  model: typeof Model.Type,
+  column: typeof Column.Column.Type,
+  draggable: RenderInfo['draggable'],
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
   Array.map(column.cards, (card, index) =>
-    cardView(
-      model,
-      card,
-      column.id,
-      index,
-      message => toParentMessage(Message.GotDragAndDropMessage({ message })),
-      h,
-    ),
+    cardView(model, card, column.id, index, draggable, h),
   )
 
 const previewCardElements = (
-  model: Model,
-  column: Column.Column,
-  toParentMessage: (message: Message) => Message,
-  h: HtmlBuilder<Message>,
+  model: typeof Model.Type,
+  column: typeof Column.Column.Type,
+  draggable: RenderInfo['draggable'],
+  h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
-  if (!DragAndDrop.isDragging(model.dragAndDrop)) {
-    return defaultCardElements(model, column, toParentMessage, h)
+  if (!isDragging(model.dragAndDrop)) {
+    return defaultCardElements(model, column, draggable, h)
   }
 
-  return Option.match(DragAndDrop.maybeDraggedItemId(model.dragAndDrop), {
-    onNone: () => defaultCardElements(model, column, toParentMessage, h),
+  return Option.match(maybeDraggedItemId(model.dragAndDrop), {
+    onNone: () => defaultCardElements(model, column, draggable, h),
     onSome: draggedId => {
-      const maybeTarget = DragAndDrop.maybeDropTarget(model.dragAndDrop)
+      const maybeTarget = maybeDropTarget(model.dragAndDrop)
       const visibleCards = Array.filter(
         column.cards,
         ({ id }) => id !== draggedId,
       )
       const cardElements = Array.map(visibleCards, (card, index) =>
-        cardView(
-          model,
-          card,
-          column.id,
-          index,
-          message =>
-            toParentMessage(Message.GotDragAndDropMessage({ message })),
-          h,
-        ),
+        cardView(model, card, column.id, index, draggable, h),
       )
 
       const isTargetColumn = Option.exists(
@@ -199,15 +191,7 @@ const previewCardElements = (
         : Option.match(findDraggedCard(model, draggedId), {
             onNone: () => dropPlaceholder(h),
             onSome: card =>
-              cardView(
-                model,
-                card,
-                column.id,
-                targetIndex,
-                message =>
-                  toParentMessage(Message.GotDragAndDropMessage({ message })),
-                h,
-              ),
+              cardView(model, card, column.id, targetIndex, draggable, h),
           })
 
       return pipe(
@@ -220,14 +204,15 @@ const previewCardElements = (
 }
 
 export const columnView = (
-  model: Model,
-  column: Column.Column,
-  toParentMessage: (message: Message) => Message,
-  h: HtmlBuilder<Message>,
+  model: typeof Model.Type,
+  column: typeof Column.Column.Type,
+  render: RenderInfo,
+  toParentMessage: (message: typeof Message.Type) => typeof Message.Type,
+  h: ApplicationViewBuilder,
 ): Html => {
-  const maybeCurrentDropTarget = DragAndDrop.maybeDropTarget(model.dragAndDrop)
+  const maybeCurrentDropTarget = maybeDropTarget(model.dragAndDrop)
   const isDropTarget =
-    DragAndDrop.isDragging(model.dragAndDrop) &&
+    isDragging(model.dragAndDrop) &&
     Option.exists(
       maybeCurrentDropTarget,
       target => target.containerId === column.id,
@@ -270,9 +255,9 @@ export const columnView = (
       h.ul(
         [
           h.Class('flex flex-col gap-2 flex-1 overflow-y-auto min-h-0'),
-          ...DragAndDrop.droppable(column.id, column.name),
+          ...render.droppable(column.id, column.name),
         ],
-        previewCardElements(model, column, toParentMessage, h),
+        previewCardElements(model, column, render.draggable, h),
       ),
       h.div(
         [h.Class('mt-3 pt-2 border-t border-gray-200')],

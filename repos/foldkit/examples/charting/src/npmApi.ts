@@ -28,7 +28,6 @@ export const NpmVersionMetadata = Schema.Struct({
     Schema.Record(Schema.String, Schema.String),
   ),
 })
-export type NpmVersionMetadata = typeof NpmVersionMetadata.Type
 
 export const NpmPackument = Schema.Struct({
   name: Schema.String,
@@ -42,7 +41,7 @@ export const NpmPackument = Schema.Struct({
 // SERVICE
 
 type NpmApiShape = Readonly<{
-  fetchPackage: (spec: PackageSpec) => Effect.Effect<
+  fetchPackage: (spec: typeof PackageSpec.Type) => Effect.Effect<
     Readonly<{
       downloads: typeof NpmDownloadsResponse.Type
       packument: typeof NpmPackument.Type
@@ -55,14 +54,14 @@ export class NpmApi extends Context.Service<NpmApi, NpmApiShape>()(
   'charting/NpmApi',
 ) {}
 
-export const NpmApiLive: Layer.Layer<NpmApi, never, HttpClient.HttpClient> =
+export const NpmApiLayer: Layer.Layer<NpmApi, never, HttpClient.HttpClient> =
   Layer.effect(
     NpmApi,
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient
       const fetch_ = fetchJson(client)
       return {
-        fetchPackage: (spec: PackageSpec) =>
+        fetchPackage: (spec: typeof PackageSpec.Type) =>
           Effect.all(
             {
               downloads: fetch_(NpmDownloadsResponse)(

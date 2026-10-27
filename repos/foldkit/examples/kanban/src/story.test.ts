@@ -1,18 +1,24 @@
 import { Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
+import { toParentMessage } from 'foldkit/test'
 import { generateKeyBetween } from 'fractional-indexing'
 import { describe, expect, test } from 'vitest'
 
-import { DragAndDrop } from '@foldkit/ui'
+import { DragAndDrop, DragAndDropBlock } from '@foldkit/ui'
 
 import { FocusAddCardInput, GenerateCardId, SaveBoard } from './command'
+import { DragAndDropBinding } from './composition'
 import { Column } from './domain'
 import type { Card } from './domain/card'
 import { Message } from './message'
 import type { Model } from './model'
 import { update } from './update'
 
-const card = (id: string, title: string, sortKey: string): Card => ({
+const card = (
+  id: string,
+  title: string,
+  sortKey: string,
+): typeof Card.Type => ({
   id,
   title,
   description: '',
@@ -24,7 +30,7 @@ const k2 = generateKeyBetween(k1, null)
 const k3 = generateKeyBetween(k2, null)
 const k4 = generateKeyBetween(k3, null)
 
-const testColumns: ReadonlyArray<Column.Column> = [
+const testColumns: ReadonlyArray<typeof Column.Column.Type> = [
   {
     id: 'todo',
     name: 'To Do',
@@ -50,13 +56,16 @@ const testColumns: ReadonlyArray<Column.Column> = [
   },
 ]
 
-const emptyModel: Model = {
+const emptyModel: typeof Model.Type = {
   columns: testColumns,
-  dragAndDrop: DragAndDrop.init({ id: 'kanban' }),
+  dragAndDrop: DragAndDropBlock.init({ id: 'kanban' }).model,
   maybeNewCardColumnId: Option.none(),
   newCardTitle: '',
   announcement: '',
 }
+
+const dragAndDropMessage = (message: typeof DragAndDropBlock.Message.Type) =>
+  toParentMessage(DragAndDropBinding, message)
 
 describe('update', () => {
   describe('add card', () => {
@@ -154,32 +163,28 @@ describe('update', () => {
         update,
         given(emptyModel),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.PressedDraggable({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.PressedDraggable({
               itemId: firstCardId,
               containerId: 'todo',
               index: 0,
               screenX: 100,
               screenY: 100,
             }),
-          }),
+          ),
         ),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.MovedPointer({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.MovedPointer({
               screenX: 100,
               screenY: 200,
               clientX: 100,
               clientY: 200,
               maybeDropTarget: Option.some({ containerId: 'todo', index: 3 }),
             }),
-          }),
+          ),
         ),
-        message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.ReleasedPointer(),
-          }),
-        ),
+        message(dragAndDropMessage(DragAndDropBlock.Message.ReleasedPointer())),
         Command.resolve(SaveBoard, Message.CompletedSaveBoard()),
         model(model => {
           const todoColumn = model.columns.find(column => column.id === 'todo')
@@ -195,19 +200,19 @@ describe('update', () => {
         update,
         given(emptyModel),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.PressedDraggable({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.PressedDraggable({
               itemId: cardId,
               containerId: 'todo',
               index: 0,
               screenX: 100,
               screenY: 100,
             }),
-          }),
+          ),
         ),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.MovedPointer({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.MovedPointer({
               screenX: 300,
               screenY: 100,
               clientX: 300,
@@ -217,13 +222,9 @@ describe('update', () => {
                 index: 0,
               }),
             }),
-          }),
+          ),
         ),
-        message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.ReleasedPointer(),
-          }),
-        ),
+        message(dragAndDropMessage(DragAndDropBlock.Message.ReleasedPointer())),
         Command.resolve(SaveBoard, Message.CompletedSaveBoard()),
         model(model => {
           const todoCards = model.columns
@@ -244,35 +245,34 @@ describe('update', () => {
         update,
         given(emptyModel),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.ActivatedKeyboardDrag({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.ActivatedKeyboardDrag({
               itemId: firstCardId,
               containerId: 'todo',
               index: 0,
             }),
-          }),
+          ),
         ),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.CompletedResolveKeyboardMove({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.CompletedResolveKeyboardMove({
+              keyboardDragGeneration: 1,
               targetContainerId: 'todo',
               targetIndex: 2,
             }),
-          }),
+          ),
         ),
-        Command.resolve(
-          DragAndDrop.FocusItem({ itemId: firstCardId }),
-          DragAndDrop.Message.CompletedFocusItem(),
-        ),
+        DragAndDrop.test.settleFocus({
+          binding: DragAndDropBinding,
+          itemId: firstCardId,
+        }),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.ConfirmedKeyboardDrop(),
-          }),
+          dragAndDropMessage(DragAndDropBlock.Message.ConfirmedKeyboardDrop()),
         ),
-        Command.resolve(
-          DragAndDrop.FocusItem,
-          DragAndDrop.Message.CompletedFocusItem(),
-        ),
+        DragAndDrop.test.settleFocus({
+          binding: DragAndDropBinding,
+          itemId: firstCardId,
+        }),
         Command.resolve(SaveBoard, Message.CompletedSaveBoard()),
         model(model => {
           const todoColumn = model.columns.find(column => column.id === 'todo')
@@ -288,35 +288,34 @@ describe('update', () => {
         update,
         given(emptyModel),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.ActivatedKeyboardDrag({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.ActivatedKeyboardDrag({
               itemId: cardId,
               containerId: 'todo',
               index: 0,
             }),
-          }),
+          ),
         ),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.CompletedResolveKeyboardMove({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.CompletedResolveKeyboardMove({
+              keyboardDragGeneration: 1,
               targetContainerId: 'in-progress',
               targetIndex: 0,
             }),
-          }),
+          ),
         ),
-        Command.resolve(
-          DragAndDrop.FocusItem({ itemId: cardId }),
-          DragAndDrop.Message.CompletedFocusItem(),
-        ),
+        DragAndDrop.test.settleFocus({
+          binding: DragAndDropBinding,
+          itemId: cardId,
+        }),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.ConfirmedKeyboardDrop(),
-          }),
+          dragAndDropMessage(DragAndDropBlock.Message.ConfirmedKeyboardDrop()),
         ),
-        Command.resolve(
-          DragAndDrop.FocusItem,
-          DragAndDrop.Message.CompletedFocusItem(),
-        ),
+        DragAndDrop.test.settleFocus({
+          binding: DragAndDropBinding,
+          itemId: cardId,
+        }),
         Command.resolve(SaveBoard, Message.CompletedSaveBoard()),
         model(model => {
           const todoCards = model.columns
@@ -332,27 +331,25 @@ describe('update', () => {
     })
 
     test('cancelled keyboard drag does not change columns', () => {
+      const cardId = 'card-1'
+
       story(
         update,
         given(emptyModel),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.ActivatedKeyboardDrag({
-              itemId: emptyModel.columns[0]!.cards[0]!.id,
+          dragAndDropMessage(
+            DragAndDropBlock.Message.ActivatedKeyboardDrag({
+              itemId: cardId,
               containerId: 'todo',
               index: 0,
             }),
-          }),
+          ),
         ),
-        message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.CancelledDrag(),
-          }),
-        ),
-        Command.resolve(
-          DragAndDrop.FocusItem,
-          DragAndDrop.Message.CompletedFocusItem(),
-        ),
+        message(dragAndDropMessage(DragAndDropBlock.Message.CancelledDrag())),
+        DragAndDrop.test.settleFocus({
+          binding: DragAndDropBinding,
+          itemId: cardId,
+        }),
         model(model => {
           expect(model.columns).toStrictEqual(emptyModel.columns)
         }),
@@ -364,32 +361,28 @@ describe('update', () => {
         update,
         given(emptyModel),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.PressedDraggable({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.PressedDraggable({
               itemId: emptyModel.columns[0]!.cards[0]!.id,
               containerId: 'todo',
               index: 0,
               screenX: 100,
               screenY: 100,
             }),
-          }),
+          ),
         ),
         message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.MovedPointer({
+          dragAndDropMessage(
+            DragAndDropBlock.Message.MovedPointer({
               screenX: 100,
               screenY: 200,
               clientX: 100,
               clientY: 200,
               maybeDropTarget: Option.none(),
             }),
-          }),
+          ),
         ),
-        message(
-          Message.GotDragAndDropMessage({
-            message: DragAndDrop.Message.CancelledDrag(),
-          }),
-        ),
+        message(dragAndDropMessage(DragAndDropBlock.Message.CancelledDrag())),
         model(model => {
           expect(model.columns).toStrictEqual(emptyModel.columns)
         }),

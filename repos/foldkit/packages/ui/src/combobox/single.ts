@@ -1,18 +1,25 @@
-import { Option, Schema } from 'effect'
-import { type Update } from 'foldkit'
+import { Option, Schema, Tuple } from 'effect'
+import * as Block from 'foldkit/block'
 import { modifyFields } from 'foldkit/struct'
-import { type View as SubmodelView, defineView } from 'foldkit/submodel'
 
 import {
   type BaseInitConfig,
   BaseModel,
   type BaseViewInputsCommon,
+  ComboboxNamespace,
+  EffectsLayer,
+  type ItemSchema,
   Message,
+  type MessageSchema,
   OutMessage,
+  type OutMessageSchema,
   baseInit,
   closedBaseModel,
-  makeUpdate,
+  makeMessage,
+  makeOutMessage,
+  makeUpdateHandlers,
   makeView,
+  mounts,
 } from './shared.js'
 
 // MODEL
@@ -24,13 +31,16 @@ export const Model = Schema.Struct({
 
 export type Model = typeof Model.Type
 
+const ComboboxDefinition = ComboboxNamespace.makeDefinition({
+  Model,
+  Message,
+  OutMessage,
+})
+
 // INIT
 
 /** Configuration for creating a single-select combobox model with `init`. `isAnimated` enables CSS transition coordination (default `false`). `isModal` locks page scroll and inerts other elements when open (default `false`). */
 export type InitConfig = BaseInitConfig
-
-/** Creates an initial single-select combobox model from a config. Defaults to closed with no active item and an empty input. */
-export const init = (config: InitConfig): Model => baseInit(config)
 
 // UPDATE
 
@@ -38,55 +48,72 @@ export const init = (config: InitConfig): Model => baseInit(config)
  *  and an optional OutMessage. Selection closes the Combobox and emits
  *  `Selected({ value })` for the parent to store. A nullable Combobox also
  *  emits `ClearedSelection` when it closes with an empty input. */
-export const update = makeUpdate<Model>({
-  handleClose: (model, restingInputValue, isClearable) => {
-    if (isClearable && model.nullable && model.inputValue === '') {
-      return {
-        model: modifyFields(closedBaseModel(model), { inputValue: () => '' }),
-        outMessage: OutMessage.ClearedSelection(),
+const defaultUpdate = makeUpdateHandlers(
+  ComboboxDefinition.makeBinding,
+  ComboboxDefinition.makeOutMessageFold,
+  ComboboxDefinition.makeStep,
+  ComboboxDefinition.makeFieldsStep,
+  ComboboxDefinition.makeNoopStep,
+  ComboboxDefinition.makeCommandsStep,
+  'CloseWithFocus',
+  {
+    handleClose: (model, restingInputValue, isClearable) => {
+      if (isClearable && model.nullable && model.inputValue === '') {
+        return {
+          model: modifyFields(closedBaseModel(model), { inputValue: () => '' }),
+          outMessage: OutMessage.ClearedSelection(),
+        }
       }
-    }
 
-    return {
-      model: modifyFields(closedBaseModel(model), {
-        inputValue: () => restingInputValue,
-      }),
-    }
+      return {
+        model: modifyFields(closedBaseModel(model), {
+          inputValue: () => restingInputValue,
+        }),
+      }
+    },
+
+    handleSelectedItem: (model, item, displayText, wasSelected) => {
+      const nullableDeselect = model.nullable && wasSelected
+
+      return {
+        model: modifyFields(closedBaseModel(model), {
+          inputValue: () => (nullableDeselect ? '' : displayText),
+        }),
+        outMessage: OutMessage.Selected({ value: item }),
+      }
+    },
+
+    handleImmediateActivation: (model, item) => ({
+      model,
+      outMessage: OutMessage.Selected({ value: item }),
+    }),
   },
+)
 
-  handleSelectedItem: (model, item, displayText, wasSelected, context) => {
-    const nullableDeselect = model.nullable && wasSelected
-
-    return context.closeWithFocus(
-      modifyFields(closedBaseModel(model), {
-        inputValue: () => (nullableDeselect ? '' : displayText),
-      }),
-      OutMessage.Selected({ value: item }),
-    )
-  },
-
-  handleImmediateActivation: (model, item) => ({
-    model,
-    outMessage: OutMessage.Selected({ value: item }),
-  }),
+const ComboboxComposition = ComboboxDefinition.makeComposition({
+  mounts,
+  bindings: [defaultUpdate.AnimationBinding],
 })
+
+export const update = ComboboxComposition.makeUpdate(defaultUpdate.handlers)
 
 type UpdateReturn = ReturnType<typeof update>
 
 /** Programmatically opens the Combobox, updating the Model and returning
- *  focus and modal Commands. Use this in domain-event handlers. */
+ *  focus and modal Commands. When it is already open, returns the Model
+ *  unchanged with no Commands. Use this in domain-event handlers. */
 export const open = (model: Model): UpdateReturn =>
-  update(model, Message.Opened({ maybeActiveItemIndex: Option.none() }))
+  block.operations.requestOpen(model)
 
 /** Programmatically closes the Combobox, updating the Model and returning
  *  focus and modal Commands. `restingInputValue` is the text the input
  *  returns to (the parent-owned selection's display text, or empty). Use
  *  this in domain-event handlers to close the combobox. */
 export const close = (model: Model, restingInputValue: string): UpdateReturn =>
-  update(model, Message.Closed({ restingInputValue, isClearable: true }))
+  block.operations.requestClose(model, restingInputValue)
 
 /** Programmatically selects an item in the single-select combobox, closing
- *  the combobox and emitting `Selected({ value })`. The Submodel treats the
+ *  the combobox and emitting `Selected({ value })`. The Block treats the
  *  select as fresh (`wasSelected: false`), so the input rests on
  *  `displayText`; what the selection becomes is the parent's fold to decide,
  *  and a parent that toggles on its own state will still deselect an
@@ -95,12 +122,11 @@ export const selectItem = (
   model: Model,
   item: string,
   displayText: string,
-): UpdateReturn =>
-  update(model, Message.SelectedItem({ item, displayText, wasSelected: false }))
+): UpdateReturn => block.operations.requestSelectItem(model, item, displayText)
 
 // VIEW
 
-/** Per-render view inputs passed to the view via `h.submodel`'s `viewInputs` field. */
+/** Per-render view inputs passed to the view via `h.block`'s `viewInputs` field. */
 export type ViewInputs<Item extends string> = BaseViewInputsCommon<Item> &
   Readonly<{
     /** The selection the parent owns, passed in fresh on every render.
@@ -110,49 +136,75 @@ export type ViewInputs<Item extends string> = BaseViewInputsCommon<Item> &
     maybeSelectedValue: Option.Option<Item>
   }>
 
-const internalView = makeView<Model>({ ariaMultiSelectable: false })
-
-type BundleUpdateReturn<Item extends string> = Update.ReturnWithOutMessage<
-  Model,
-  Message,
-  OutMessage<Item>
->
-
-/** The `view`, `update`, and programmatic helpers that `Combobox.create`
- *  returns, bound to one `Item` type. Name it to annotate a value that
- *  holds a created bundle, such as a field on a config object or a
- *  function parameter that takes the bundle rather than calling `create`
- *  itself. */
-export type Bundle<Item extends string = string> = Readonly<{
-  view: SubmodelView<Model, Message, ViewInputs<Item>>
-  update: (model: Model, message: Message) => BundleUpdateReturn<Item>
-  selectItem: (
-    model: Model,
-    item: Item,
-    displayText: string,
-  ) => BundleUpdateReturn<Item>
-  open: (model: Model) => BundleUpdateReturn<Item>
-  close: (model: Model, restingInputValue: string) => BundleUpdateReturn<Item>
-}>
-
-/** Pairs the single-select combobox's `view` and `update` (and programmatic
- *  helpers) behind a single Item-typed entry point. See `Listbox.create`
- *  for the rationale; the combobox factory follows the same shape with
- *  `selectItem` taking both `item` and `displayText`. `selectItem` emits
- *  `Selected({ value })` with the input resting on `displayText`; what the
- *  selection becomes is the parent's fold to decide. */
-export const create = <Item extends string = string>(): Bundle<Item> => {
-  type UpdateReturn = Update.ReturnWithOutMessage<
+const makeBlockParts = <Item extends string, ItemEncoded>(
+  Item: ItemSchema<Item, ItemEncoded>,
+) => {
+  const ItemMessage: MessageSchema<Item, ItemEncoded> = makeMessage(Item)
+  const ItemOutMessage: OutMessageSchema<Item, ItemEncoded> =
+    makeOutMessage(Item)
+  const ComboboxDefinition = ComboboxNamespace.makeDefinition({
     Model,
-    Message,
-    OutMessage<Item>
-  >
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  const typedUpdate = update as (model: Model, message: Message) => UpdateReturn
-  const arrayBasedView = internalView<Item>()
-  const view = defineView<Model, Message, ViewInputs<Item>>(
+    Message: ItemMessage,
+    OutMessage: ItemOutMessage,
+  })
+  const itemUpdate = makeUpdateHandlers(
+    ComboboxDefinition.makeBinding,
+    ComboboxDefinition.makeOutMessageFold,
+    ComboboxDefinition.makeStep,
+    ComboboxDefinition.makeFieldsStep,
+    ComboboxDefinition.makeNoopStep,
+    ComboboxDefinition.makeCommandsStep,
+    'CloseWithFocus',
+    {
+      handleClose: (model, restingInputValue, isClearable) => {
+        if (isClearable && model.nullable && model.inputValue === '') {
+          return {
+            model: modifyFields(closedBaseModel(model), {
+              inputValue: () => '',
+            }),
+            outMessage: ItemOutMessage.ClearedSelection(),
+          }
+        }
+
+        return {
+          model: modifyFields(closedBaseModel(model), {
+            inputValue: () => restingInputValue,
+          }),
+        }
+      },
+      handleSelectedItem: (model, item, displayText, wasSelected) => {
+        const nullableDeselect = model.nullable && wasSelected
+
+        return {
+          model: modifyFields(closedBaseModel(model), {
+            inputValue: () => (nullableDeselect ? '' : displayText),
+          }),
+          outMessage: ItemOutMessage.Selected({ value: item }),
+        }
+      },
+      handleImmediateActivation: (model, item) => ({
+        model,
+        outMessage: ItemOutMessage.Selected({ value: item }),
+      }),
+    },
+  )
+  const ComboboxComposition = ComboboxDefinition.makeComposition({
+    mounts,
+    bindings: [itemUpdate.AnimationBinding],
+  })
+  const update = ComboboxComposition.makeUpdate(itemUpdate.handlers)
+  const init = ComboboxComposition.makeInit((config: InitConfig) => ({
+    model: baseInit(config),
+  }))
+  const render = makeView<
+    Model,
+    Item,
+    typeof ComboboxComposition.Message.Type,
+    ItemEncoded
+  >({ ariaMultiSelectable: false }, ItemMessage)
+  const view = ComboboxComposition.makeView.withInputs<ViewInputs<Item>>(
     (model, { maybeSelectedValue, ...baseInputs }, h) =>
-      arrayBasedView(
+      render(
         model,
         {
           ...baseInputs,
@@ -161,23 +213,73 @@ export const create = <Item extends string = string>(): Bundle<Item> => {
         h,
       ),
   )
+  const requestOpen = ItemMessage.RequestedOpen
+  const requestClose = (restingInputValue: string) =>
+    Tuple.make(
+      ItemMessage.RequestedClose({
+        restingInputValue,
+        isClearable: true,
+      }),
+    )
+  const requestSelectItem = (item: Item, displayText: string) =>
+    Tuple.make(
+      ItemMessage.RequestedSelectItem({
+        item,
+        displayText,
+      }),
+    )
+
   return {
-    view,
-    update: typedUpdate,
-    selectItem: (model, item, displayText) =>
-      typedUpdate(
-        model,
-        Message.SelectedItem({ item, displayText, wasSelected: false }),
-      ),
-    open: model =>
-      typedUpdate(
-        model,
-        Message.Opened({ maybeActiveItemIndex: Option.none() }),
-      ),
-    close: (model, restingInputValue) =>
-      typedUpdate(
-        model,
-        Message.Closed({ restingInputValue, isClearable: true }),
-      ),
+    composition: ComboboxComposition,
+    implementation: {
+      view,
+      init,
+      update,
+      operations: { requestOpen, requestClose, requestSelectItem },
+      EffectsLayer,
+    },
   }
 }
+
+type BlockParts<Item extends string, ItemEncoded> = ReturnType<
+  typeof makeBlockParts<Item, ItemEncoded>
+>
+
+/** A completed single-select Combobox Block refined to one Item Schema. */
+export interface Completed<
+  Item extends string = string,
+  ItemEncoded = Item,
+> extends Block.CompletedWithViewAndOutMessage<
+  BlockParts<Item, ItemEncoded>['composition'],
+  BlockParts<Item, ItemEncoded>['implementation']
+> {}
+
+const makeBlock = <Item extends string, ItemEncoded>(
+  Item: ItemSchema<Item, ItemEncoded>,
+): Completed<Item, ItemEncoded> => {
+  const { composition, implementation } = makeBlockParts(Item)
+
+  const prepare = () => composition.prepareBlock(implementation)
+  const completedBlock: Block.FromAssemblyWithViewAndOutMessage<
+    typeof Model,
+    typeof prepare
+  > = Block.assemble(prepare)
+
+  return completedBlock
+}
+
+/** Creates a checked single-select Combobox Block. Pass an Item Schema to
+ * retain its exact Message and OutMessage payloads. */
+export function create(): Completed<string>
+export function create<Item extends string, ItemEncoded>(
+  Item: ItemSchema<Item, ItemEncoded>,
+): Completed<Item, ItemEncoded>
+export function create(Item: ItemSchema<string, unknown> = Schema.String) {
+  return makeBlock(Item)
+}
+
+/** Complete default single-select Combobox Block definition. */
+export const block = makeBlock(Schema.String)
+
+/** Creates the initial single-select Combobox Model and Commands. Defaults to closed with no active item and an empty input. */
+export const init = block.init

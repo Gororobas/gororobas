@@ -2,6 +2,7 @@ import { Array, Number, Option, pipe } from 'effect'
 
 import { examples } from './page/example/meta'
 import {
+  type ApplicationRoute,
   aiMcpRouter,
   aiOverviewRouter,
   aiSkillsRouter,
@@ -14,6 +15,7 @@ import {
   comingFromTanStackQueryRouter,
   contentApiRouter,
   coreArchitectureRouter,
+  coreBlockRouter,
   coreCanvasRouter,
   coreCommandsRouter,
   coreCounterExampleRouter,
@@ -26,6 +28,7 @@ import {
   coreFreezeModelRouter,
   coreHttpRouter,
   coreInitAndFlagsRouter,
+  coreLayersRouter,
   coreMachineRouter,
   coreManagedResourcesRouter,
   coreMessagesRouter,
@@ -34,11 +37,9 @@ import {
   corePreserveScrollRouter,
   coreQueryRouter,
   coreRenderRouter,
-  coreResourcesRouter,
   coreRuntimeRouter,
   coreServerRenderingRouter,
   coreSlowWarningsRouter,
-  coreSubmodelRouter,
   coreSubscriptionsRouter,
   coreUpdateRouter,
   coreViewMemoizationRouter,
@@ -50,10 +51,14 @@ import {
   examplesRouter,
   fieldValidationRouter,
   getStartedRouter,
+  maybeExampleSlugForRoute,
   patternsAntiPatternsRouter,
-  patternsInformingSubmodelsRouter,
+  patternsInformingBlocksRouter,
   patternsSubscriptionOrganizationRouter,
   performanceRouter,
+  previewDocumentationEnabled,
+  previewMigrationRouter,
+  previewUpgradeRouter,
   projectOrganizationRouter,
   reactComparisonRouter,
   roadmapRouter,
@@ -86,7 +91,7 @@ import {
   uiProgressRouter,
   uiRadioGroupRouter,
   uiSelectRouter,
-  uiSelectionSubmodelsRouter,
+  uiSelectionBlocksRouter,
   uiSliderRouter,
   uiSwitchRouter,
   uiTabsRouter,
@@ -134,7 +139,7 @@ export const isNavPageActive = (
 // DOCS SECTIONS
 
 export type DocsSection = Readonly<{
-  key: GroupKey
+  key: typeof GroupKey.Type
   label: string
   pageGroups: ReadonlyArray<ReadonlyArray<NavPage>>
 }>
@@ -161,6 +166,20 @@ export const docsSections: ReadonlyArray<DocsSection> = [
           href: roadmapRouter(),
           label: 'Roadmap',
         },
+        ...(previewDocumentationEnabled
+          ? [
+              {
+                _tag: 'PreviewMigration',
+                href: previewMigrationRouter(),
+                label: 'Migrate to the Preview',
+              },
+              {
+                _tag: 'PreviewUpgrade',
+                href: previewUpgradeRouter(),
+                label: 'Upgrade a Preview',
+              },
+            ]
+          : []),
       ],
     ],
   },
@@ -219,9 +238,9 @@ export const docsSections: ReadonlyArray<DocsSection> = [
           label: 'Init & Flags',
         },
         {
-          _tag: 'CoreSubmodel',
-          href: coreSubmodelRouter(),
-          label: 'Submodel',
+          _tag: 'CoreBlock',
+          href: coreBlockRouter(),
+          label: 'Block',
         },
         {
           _tag: 'CoreRuntime',
@@ -308,9 +327,9 @@ export const docsSections: ReadonlyArray<DocsSection> = [
       ],
       [
         {
-          _tag: 'CoreResources',
-          href: coreResourcesRouter(),
-          label: 'Resources',
+          _tag: 'CoreLayers',
+          href: coreLayersRouter(),
+          label: 'Layers',
         },
         {
           _tag: 'CoreManagedResources',
@@ -407,9 +426,9 @@ export const docsSections: ReadonlyArray<DocsSection> = [
           label: 'Project Organization',
         },
         {
-          _tag: 'PatternsInformingSubmodels',
-          href: patternsInformingSubmodelsRouter(),
-          label: 'Informing Submodels',
+          _tag: 'PatternsInformingBlocks',
+          href: patternsInformingBlocksRouter(),
+          label: 'Informing Blocks',
         },
         {
           _tag: 'PatternsSubscriptionOrganization',
@@ -456,9 +475,9 @@ export const docsSections: ReadonlyArray<DocsSection> = [
           label: 'Overview',
         },
         {
-          _tag: 'UiSelectionSubmodels',
-          href: uiSelectionSubmodelsRouter(),
-          label: 'Selection Submodels',
+          _tag: 'UiSelectionBlocks',
+          href: uiSelectionBlocksRouter(),
+          label: 'Selection Blocks',
         },
       ],
       [
@@ -733,7 +752,7 @@ export const pageNeighbors = (_tag: string): PageNeighbors =>
     allPages,
     Array.findFirstIndex(page => page._tag === _tag),
     Option.match({
-      onNone: (): PageNeighbors => ({
+      onNone: () => ({
         maybePrevious: Option.none(),
         maybeNext: Option.none(),
       }),
@@ -747,7 +766,7 @@ export const pageNeighbors = (_tag: string): PageNeighbors =>
 export const findActiveSectionKey = (
   routeTag: string,
   maybeExampleSlug: Option.Option<string>,
-): Option.Option<GroupKey> => {
+): Option.Option<typeof GroupKey.Type> => {
   // NOTE: ApiModule and Blog pages aren't in docsSections. Their groups are
   // rendered separately, so map them explicitly.
   if (routeTag === 'ApiModule') {
@@ -771,3 +790,8 @@ export const findActiveSectionKey = (
     Option.map(section => section.key),
   )
 }
+
+export const findActiveSectionKeyForRoute = (
+  route: typeof ApplicationRoute.Type,
+): Option.Option<typeof GroupKey.Type> =>
+  findActiveSectionKey(route._tag, maybeExampleSlugForRoute(route))

@@ -4,23 +4,18 @@ import { type HtmlBuilder, createKeyedLazy } from 'foldkit/html'
 // rendered page is the expensive part, so it belongs behind the memo.
 const postView = (
   post: Post,
-  snippetCopy: SnippetCopy.Model,
-  snippetDisclosure: SnippetDisclosure.Model,
+  snippetCopy: typeof SnippetCopyBlock.Model.Type,
+  snippetDisclosure: typeof SnippetDisclosureBlock.Model.Type,
   h: HtmlBuilder<Message>,
 ) => {
-  const renderCopyButton = SnippetCopy.renderer(
-    snippetCopy,
-    message => Message.GotSnippetCopyMessage({ message }),
-    h,
+  const renderCopyButton = SnippetCopy.renderer(snippetCopy, config =>
+    h.block(SnippetCopyBinding.embedView(config)),
   )
 
   const content = docPage(post.document, post.slug).view(
     renderCopyButton,
-    SnippetDisclosure.renderer(
-      snippetDisclosure,
-      message => Message.GotSnippetDisclosureMessage({ message }),
-      renderCopyButton,
-      h,
+    SnippetDisclosure.renderer(snippetDisclosure, renderCopyButton, config =>
+      h.block(SnippetDisclosureBinding.embedView(config)),
     ),
     Prose.renderHeadingLink(hash => Message.ClickedCopyLink({ hash }), h),
   )
@@ -36,8 +31,8 @@ const lazyPostView = createKeyedLazy()
 // Coming back to a post you already read returns its cached VNode.
 const view = (
   post: Post,
-  snippetCopy: SnippetCopy.Model,
-  snippetDisclosure: SnippetDisclosure.Model,
+  snippetCopy: typeof SnippetCopyBlock.Model.Type,
+  snippetDisclosure: typeof SnippetDisclosureBlock.Model.Type,
   h: HtmlBuilder<Message>,
 ) =>
   lazyPostView(post.slug, postView, [post, snippetCopy, snippetDisclosure, h])

@@ -2,7 +2,7 @@ import * as Scene from 'foldkit/scene'
 import { modifyFields } from 'foldkit/struct'
 import { describe, test } from 'vitest'
 
-import * as Dialog from '../../dialog/index.js'
+import * as Dialog from '../../dialog/block.js'
 import { initialModel, update, view, viewWithDialog } from './disabledButton.js'
 
 describe('disabled button cleanup', () => {

@@ -107,7 +107,11 @@ const EMBEDDABLE_IMAGE_PATTERN =
   '^/(?:og/.*\\.png|blog/.*\\.(?:avif|gif|jpe?g|png|svg|webp))$'
 
 export const websiteVercelConfig = channel => {
-  if (channel !== 'production' && channel !== 'canary') {
+  if (
+    channel !== 'production' &&
+    channel !== 'canary' &&
+    channel !== 'preview'
+  ) {
     throw new Error(`Unknown website deployment channel: ${channel}`)
   }
 
@@ -250,6 +254,16 @@ export const websiteVercelConfig = channel => {
         src: '^/developers/?$',
         status: 308,
         headers: { Location: '/ai/overview' },
+      },
+      {
+        src: '^/core/resources/?$',
+        status: 308,
+        headers: { Location: '/core/layers' },
+      },
+      {
+        src: '^/core/resources\\.md$',
+        status: 308,
+        headers: { Location: '/core/layers.md' },
       },
       {
         src: '^/manifesto/?$',

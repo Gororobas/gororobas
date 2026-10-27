@@ -1,0 +1,40 @@
+name: Deploy Integration Website Preview
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: Commit whose verified package snapshot to preview
+        required: true
+        type: string
+      manifest_artifact:
+        description: Artifact containing the verified package snapshot
+        required: true
+        type: string
+    secrets:
+      VERCEL_TOKEN:
+        required: true
+      VERCEL_ORG_ID:
+        required: true
+      VERCEL_WEBSITE_PREVIEW_PROJECT_ID:
+        required: true
+
+concurrency:
+  group: deploy-website-preview-${{ inputs.target }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy-website-build.yml
+    with:
+      target: ${{ inputs.target }}
+      channel: preview
+      manifest_artifact: ${{ inputs.manifest_artifact }}
+    secrets:
+      vercel_token: ${{ secrets.VERCEL_TOKEN }}
+      vercel_org_id: ${{ secrets.VERCEL_ORG_ID }}
+      vercel_project_id: ${{ secrets.VERCEL_WEBSITE_PREVIEW_PROJECT_ID }}

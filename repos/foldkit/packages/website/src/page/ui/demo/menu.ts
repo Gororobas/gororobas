@@ -1,16 +1,12 @@
 import { Match } from 'effect'
-import {
-  Html,
-  type HtmlBuilder,
-  childAttributes,
-  inertHtml as ih,
-} from 'foldkit/html'
+import { Html, childAttributes, inertHtml as ih } from 'foldkit/html'
 
-import { Menu } from '@foldkit/ui'
-import type { AnchorConfig } from '@foldkit/ui/menu'
+import { type AnchorConfig, buttonId } from '@foldkit/ui/menu'
 
 import { Icon } from '../../../icon'
-import { Message } from '../message'
+import type { UiViewBuilder } from '../composition'
+import { MenuAnimatedDemoBinding, MenuBasicDemoBinding } from '../composition'
+import { DemoMenuBlock, type MenuItem } from './components'
 
 // DEMO CONTENT
 
@@ -29,10 +25,6 @@ const wrapperClassName = 'relative inline-block'
 const headingClassName = 'demo-option-heading'
 
 const ICON_SIZE = 'w-4 h-4'
-
-export type MenuItem = 'Edit' | 'Duplicate' | 'Archive' | 'Move' | 'Delete'
-
-export const DemoMenu = Menu.create<MenuItem>()
 
 const MENU_ITEMS: ReadonlyArray<MenuItem> = [
   'Edit',
@@ -59,8 +51,6 @@ const itemGroupKey = (item: MenuItem): string =>
     Match.when('Delete', () => 'Danger'),
     Match.orElse(() => 'Actions'),
   )
-
-// VIEW
 
 const MENU_ANCHOR: AnchorConfig = {
   placement: 'bottom-start',
@@ -102,28 +92,30 @@ const menuViewConfig = (itemsClassName: string) => {
   }
 }
 
-export const basicDemo = (menuModel: Menu.Model, h: HtmlBuilder<Message>) => {
+export const basicDemo = (
+  menuModel: typeof DemoMenuBlock.Model.Type,
+  h: UiViewBuilder,
+) => {
   return [
     h.div(
       [h.Class('demo-field')],
       [
         h.label(
-          [h.For(Menu.buttonId(menuModel.id)), h.Class('demo-label')],
+          [h.For(buttonId(menuModel.id)), h.Class('demo-label')],
           ['Row actions'],
         ),
         h.div(
           [h.Class('relative')],
           [
-            h.submodel({
-              slotId: menuModel.id,
-              model: menuModel,
-              view: DemoMenu.view,
-              viewInputs: {
-                ...menuViewConfig(basicItemsClassName),
-              },
-              toParentMessage: message =>
-                Message.GotMenuBasicDemoMessage({ message }),
-            }),
+            h.block(
+              MenuBasicDemoBinding.embedView({
+                slotId: menuModel.id,
+                model: menuModel,
+                viewInputs: {
+                  ...menuViewConfig(basicItemsClassName),
+                },
+              }),
+            ),
           ],
         ),
       ],
@@ -132,30 +124,29 @@ export const basicDemo = (menuModel: Menu.Model, h: HtmlBuilder<Message>) => {
 }
 
 export const animatedDemo = (
-  menuModel: Menu.Model,
-  h: HtmlBuilder<Message>,
+  menuModel: typeof DemoMenuBlock.Model.Type,
+  h: UiViewBuilder,
 ) => {
   return [
     h.div(
       [h.Class('demo-field')],
       [
         h.label(
-          [h.For(Menu.buttonId(menuModel.id)), h.Class('demo-label')],
+          [h.For(buttonId(menuModel.id)), h.Class('demo-label')],
           ['Row actions'],
         ),
         h.div(
           [h.Class('relative')],
           [
-            h.submodel({
-              slotId: menuModel.id,
-              model: menuModel,
-              view: DemoMenu.view,
-              viewInputs: {
-                ...menuViewConfig(animatedItemsClassName),
-              },
-              toParentMessage: message =>
-                Message.GotMenuAnimatedDemoMessage({ message }),
-            }),
+            h.block(
+              MenuAnimatedDemoBinding.embedView({
+                slotId: menuModel.id,
+                model: menuModel,
+                viewInputs: {
+                  ...menuViewConfig(animatedItemsClassName),
+                },
+              }),
+            ),
           ],
         ),
       ],

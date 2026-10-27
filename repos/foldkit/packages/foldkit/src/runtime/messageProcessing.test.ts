@@ -1,9 +1,10 @@
-import { Effect, Fiber, Schema } from 'effect'
+import { Effect, Array as EffectArray, Fiber, Schema } from 'effect'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Command } from '../command/index.js'
 import { __htmlBuilder, __requireDispatch } from '../html/index.js'
 import { defineMessageUnion } from '../message/index.js'
+import { modifyFields } from '../struct/index.js'
 import type * as Update from '../update/index.js'
 import { makeElement } from './makeElement.js'
 
@@ -229,6 +230,186 @@ describe('message processing', () => {
     } finally {
       nowSpy.mockRestore()
       await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+  })
+
+  // NOTE: held frames let tests run a frame between the budget yield and
+  // the MessageChannel task that resumes the drain.
+  const startBurnElementWithHeldFrames = async (
+    viewTransition?: (context: Readonly<{ message: Message }>) => boolean,
+  ) => {
+    const processedLog: Array<string> = []
+    let capturedDispatch: ((message: Message) => void) | undefined
+    let fakeNow = 0
+    const nowSpy = vi
+      .spyOn(performance, 'now')
+      .mockImplementation(() => fakeNow)
+
+    const update = (model: Model, message: Message): UpdateReturn => {
+      if (message._tag !== 'BurnedBudget') {
+        return {
+          model: modifyFields(model, {
+            log: EffectArray.append(message._tag),
+          }),
+        }
+      }
+
+      processedLog.push(message.label)
+      fakeNow += BURN_MS
+
+      return {
+        model: modifyFields(model, {
+          log: EffectArray.append(message.label),
+        }),
+      }
+    }
+
+    const element = makeElement({
+      Model,
+      init: () => ({ model: { log: [] } }),
+      update,
+      view: model => {
+        capturedDispatch = __requireDispatch()
+        return view(model)
+      },
+      container,
+      ...(viewTransition === undefined ? {} : { viewTransition }),
+    })
+
+    const fiber = Effect.runFork(element.start())
+    await vi.waitFor(() => {
+      expect(capturedDispatch).toBeDefined()
+    })
+
+    const heldFrames: Array<FrameRequestCallback> = []
+    const frameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation(callback => {
+        heldFrames.push(callback)
+        return heldFrames.length
+      })
+
+    const runHeldFrame = () => {
+      const frame = heldFrames.shift()
+      expect(frame).toBeDefined()
+      if (frame === undefined) {
+        throw new Error('No animation frame is being held')
+      }
+
+      frame(performance.now())
+    }
+
+    const dispatch = (message: Message): void => {
+      if (capturedDispatch === undefined) {
+        throw new Error('Runtime dispatch is not available')
+      }
+
+      capturedDispatch(message)
+    }
+
+    const dispatchBurns = (labels: ReadonlyArray<string>) => {
+      for (const label of labels) {
+        dispatch(Message.BurnedBudget({ label }))
+      }
+    }
+
+    const stop = async () => {
+      frameSpy.mockRestore()
+      nowSpy.mockRestore()
+      await Effect.runPromise(Fiber.interrupt(fiber))
+    }
+
+    return {
+      processedLog,
+      heldFrames,
+      runHeldFrame,
+      dispatch,
+      dispatchBurns,
+      stop,
+    }
+  }
+
+  it('skips rendering until a deferred Message drain completes', async () => {
+    const { processedLog, heldFrames, runHeldFrame, dispatchBurns, stop } =
+      await startBurnElementWithHeldFrames()
+
+    try {
+      const labels = ['burn-1', 'burn-2', 'burn-3', 'burn-4']
+      dispatchBurns(labels)
+      expect(processedLog).toEqual(['burn-1', 'burn-2'])
+
+      runHeldFrame()
+
+      expect(document.body.textContent).toBe('')
+      expect(heldFrames).toHaveLength(1)
+
+      await vi.waitFor(() => {
+        expect(processedLog).toEqual(labels)
+      })
+      runHeldFrame()
+
+      expect(document.body.textContent).toBe(labels.join(','))
+    } finally {
+      await stop()
+    }
+  })
+
+  it('skips a View Transition while a Message drain is deferred', async () => {
+    let transitionUpdate: (() => void) | undefined
+    const skipTransition = vi.fn()
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: (update: () => void) => {
+        transitionUpdate = update
+        return {
+          updateCallbackDone: Promise.resolve(),
+          skipTransition,
+        }
+      },
+    })
+    const {
+      processedLog,
+      heldFrames,
+      runHeldFrame,
+      dispatch,
+      dispatchBurns,
+      stop,
+    } = await startBurnElementWithHeldFrames(
+      ({ message }) => message._tag === 'AppendedFirst',
+    )
+
+    try {
+      dispatch(Message.AppendedFirst())
+      runHeldFrame()
+      expect(transitionUpdate).toBeDefined()
+
+      const update = transitionUpdate
+      if (update === undefined) {
+        throw new Error('The View Transition update is not available')
+      }
+
+      // NOTE: the browser runs the update callback in a later frame, after
+      // another burst may have exhausted the drain budget.
+      const labels = ['burn-1', 'burn-2', 'burn-3', 'burn-4']
+      dispatchBurns(labels)
+      expect(processedLog).toEqual(['burn-1', 'burn-2'])
+      update()
+
+      expect(document.body.textContent).toBe('')
+      expect(skipTransition).toHaveBeenCalledTimes(1)
+      expect(heldFrames).toHaveLength(1)
+
+      await vi.waitFor(() => {
+        expect(processedLog).toEqual(labels)
+      })
+      runHeldFrame()
+
+      expect(document.body.textContent).toBe(
+        ['AppendedFirst', ...labels].join(','),
+      )
+    } finally {
+      Reflect.deleteProperty(document, 'startViewTransition')
+      await stop()
     }
   })
 

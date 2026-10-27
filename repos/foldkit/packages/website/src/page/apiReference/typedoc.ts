@@ -17,9 +17,8 @@ export const TypeDocFlags = Schema.Struct({
     Schema.withDecodingDefaultKey(Effect.succeed(false)),
   ),
 })
-export type TypeDocFlags = typeof TypeDocFlags.Type
 
-const defaultFlags: TypeDocFlags = {
+const defaultFlags: typeof TypeDocFlags.Type = {
   isOptional: false,
   isPrivate: false,
   isProtected: false,
@@ -31,19 +30,16 @@ export const TypeDocCommentPart = Schema.Struct({
   kind: Schema.String,
   text: Schema.String,
 })
-export type TypeDocCommentPart = typeof TypeDocCommentPart.Type
 
 export const TypeDocBlockTag = Schema.Struct({
   tag: Schema.String,
   content: Schema.Array(TypeDocCommentPart),
 })
-export type TypeDocBlockTag = typeof TypeDocBlockTag.Type
 
 export const TypeDocComment = Schema.Struct({
   summary: Schema.OptionFromOptional(Schema.Array(TypeDocCommentPart)),
   blockTags: Schema.OptionFromOptional(Schema.Array(TypeDocBlockTag)),
 })
-export type TypeDocComment = typeof TypeDocComment.Type
 
 export const TypeDocSource = Schema.Struct({
   fileName: Schema.String,
@@ -51,7 +47,6 @@ export const TypeDocSource = Schema.Struct({
   character: Schema.Number,
   url: Schema.OptionFromOptional(Schema.String),
 })
-export type TypeDocSource = typeof TypeDocSource.Type
 
 type TypeDocIntrinsicType = Readonly<{
   type: 'intrinsic'
@@ -89,9 +84,21 @@ interface TypeDocRestType<Self> {
   readonly elementType: Self
 }
 
+interface TypeDocNamedTupleMemberType<Self> {
+  readonly type: 'namedTupleMember'
+  readonly name: string
+  readonly isOptional: boolean
+  readonly element: Self
+}
+
 interface TypeDocTupleType<Self> {
   readonly type: 'tuple'
   readonly elements: ReadonlyArray<Self>
+}
+
+interface TypeDocTupleTypeEncoded<Self> {
+  readonly type: 'tuple'
+  readonly elements?: ReadonlyArray<Self> | undefined
 }
 
 interface TypeDocUnionType<Self> {
@@ -167,6 +174,7 @@ export type TypeDocType =
   | TypeDocReferenceType<TypeDocType>
   | TypeDocArrayType<TypeDocType>
   | TypeDocRestType<TypeDocType>
+  | TypeDocNamedTupleMemberType<TypeDocType>
   | TypeDocTupleType<TypeDocType>
   | TypeDocUnionType<TypeDocType>
   | TypeDocIntersectionType<TypeDocType>
@@ -189,7 +197,8 @@ type TypeDocTypeEncoded =
   | TypeDocReferenceType<TypeDocTypeEncoded>
   | TypeDocArrayType<TypeDocTypeEncoded>
   | TypeDocRestType<TypeDocTypeEncoded>
-  | TypeDocTupleType<TypeDocTypeEncoded>
+  | TypeDocNamedTupleMemberType<TypeDocTypeEncoded>
+  | TypeDocTupleTypeEncoded<TypeDocTypeEncoded>
   | TypeDocUnionType<TypeDocTypeEncoded>
   | TypeDocIntersectionType<TypeDocTypeEncoded>
   | TypeDocReflectionType<TypeDocItemEncoded>
@@ -233,8 +242,16 @@ export const TypeDocTypeSchema = Schema.suspend(() =>
       elementType: TypeDocTypeSchema,
     }),
     Schema.Struct({
+      type: Schema.Literal('namedTupleMember'),
+      name: Schema.String,
+      isOptional: Schema.Boolean,
+      element: TypeDocTypeSchema,
+    }),
+    Schema.Struct({
       type: Schema.Literal('tuple'),
-      elements: Schema.Array(TypeDocTypeSchema),
+      elements: Schema.Array(TypeDocTypeSchema).pipe(
+        Schema.withDecodingDefaultKey(Effect.succeed([])),
+      ),
     }),
     Schema.Struct({
       type: Schema.Literal('union'),
@@ -295,7 +312,6 @@ export const TypeDocTypeParam = Schema.Struct({
   type: Schema.OptionFromOptional(TypeDocTypeSchema),
   default: Schema.OptionFromOptional(TypeDocTypeSchema),
 })
-export type TypeDocTypeParam = typeof TypeDocTypeParam.Type
 
 export const TypeDocParam = Schema.Struct({
   id: Schema.Number,
@@ -309,7 +325,6 @@ export const TypeDocParam = Schema.Struct({
   defaultValue: Schema.OptionFromOptional(Schema.String),
   comment: Schema.OptionFromOptional(TypeDocComment),
 })
-export type TypeDocParam = typeof TypeDocParam.Type
 
 export const TypeDocSignature = Schema.Struct({
   id: Schema.Number,
@@ -321,7 +336,6 @@ export const TypeDocSignature = Schema.Struct({
   type: Schema.OptionFromOptional(TypeDocTypeSchema),
   typeParameters: Schema.OptionFromOptional(Schema.Array(TypeDocTypeParam)),
 })
-export type TypeDocSignature = typeof TypeDocSignature.Type
 
 const typeDocItemFields = {
   id: Schema.Number,
@@ -379,7 +393,6 @@ export const TypeDocModule = Schema.Struct({
     Schema.withDecodingDefaultKey(Effect.succeed([])),
   ),
 })
-export type TypeDocModule = typeof TypeDocModule.Type
 
 export const TypeDocJson = Schema.Struct({
   schemaVersion: Schema.String,
@@ -389,7 +402,6 @@ export const TypeDocJson = Schema.Struct({
   kind: Schema.Number,
   children: Schema.Array(TypeDocModule),
 })
-export type TypeDocJson = typeof TypeDocJson.Type
 
 export const Kind = {
   Project: 1,

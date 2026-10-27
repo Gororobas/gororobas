@@ -1,7 +1,8 @@
-import { Option, String } from 'effect'
+import { Option, type Schema, String } from 'effect'
 
 import { OptionExt, StringExt } from '../effectExtensions/index.js'
 import { UrlRequest } from '../navigation/urlRequest.js'
+import { isCallableTaggedStruct } from '../schema/index.js'
 import { Url } from '../url/index.js'
 
 /** Configuration for URL routing with handlers for URL requests and URL changes. */
@@ -9,6 +10,83 @@ export type RoutingConfig<Message> = Readonly<{
   onUrlRequest: (request: UrlRequest) => Message
   onUrlChange: (url: Url) => Message
 }>
+
+/** A canonical Message constructor accepted directly by Program routing. */
+export type RoutingMessageConstructor<
+  Field extends string,
+  Value,
+  Message,
+> = Schema.Top &
+  Readonly<{
+    fields: Readonly<Record<Field, unknown>>
+  }> &
+  ((payload: Readonly<Record<Field, Value>>) => Message)
+
+/** A Program routing handler, supplied as a callback or canonical Message constructor. */
+export type RoutingHandler<Field extends string, Value, Message> =
+  | ((value: Value) => Message)
+  | RoutingMessageConstructor<Field, Value, Message>
+
+/** Browser routing input accepted by {@link Program.make}. */
+export type RoutingInputConfig<Message> = Readonly<{
+  onUrlRequest: RoutingHandler<'request', UrlRequest, Message>
+  onUrlChange: RoutingHandler<'url', Url, Message>
+}>
+
+/** @internal Converts erased canonical routing constructors to Runtime callbacks. */
+export const normalizeRoutingInputConfig = <Message>(
+  routing: RoutingInputConfig<Message>,
+): RoutingConfig<Message> => {
+  const onUrlRequest = (request: UrlRequest): Message =>
+    isCallableTaggedStruct(routing.onUrlRequest)
+      ? Reflect.apply(routing.onUrlRequest, undefined, [{ request }])
+      : Reflect.apply(routing.onUrlRequest, undefined, [request])
+  const onUrlChange = (url: Url): Message =>
+    isCallableTaggedStruct(routing.onUrlChange)
+      ? Reflect.apply(routing.onUrlChange, undefined, [{ url }])
+      : Reflect.apply(routing.onUrlChange, undefined, [url])
+
+  return { onUrlRequest, onUrlChange }
+}
+
+/** @internal Converts canonical routing constructors to Runtime callbacks. */
+export function normalizeRoutingConfig<RequestMessage, UrlMessage>(
+  routing: Readonly<{
+    onUrlRequest: (request: UrlRequest) => RequestMessage
+    onUrlChange: (url: Url) => UrlMessage
+  }>,
+): RoutingConfig<RequestMessage | UrlMessage>
+export function normalizeRoutingConfig<RequestMessage, UrlMessage>(
+  routing: Readonly<{
+    onUrlRequest: RoutingMessageConstructor<
+      'request',
+      UrlRequest,
+      RequestMessage
+    >
+    onUrlChange: RoutingMessageConstructor<'url', Url, UrlMessage>
+  }>,
+): RoutingConfig<RequestMessage | UrlMessage>
+export function normalizeRoutingConfig<RequestMessage, UrlMessage>(
+  routing: Readonly<{
+    onUrlRequest: RoutingMessageConstructor<
+      'request',
+      UrlRequest,
+      RequestMessage
+    >
+    onUrlChange: (url: Url) => UrlMessage
+  }>,
+): RoutingConfig<RequestMessage | UrlMessage>
+export function normalizeRoutingConfig<RequestMessage, UrlMessage>(
+  routing: Readonly<{
+    onUrlRequest: (request: UrlRequest) => RequestMessage
+    onUrlChange: RoutingMessageConstructor<'url', Url, UrlMessage>
+  }>,
+): RoutingConfig<RequestMessage | UrlMessage>
+export function normalizeRoutingConfig(
+  routing: RoutingInputConfig<any>,
+): RoutingConfig<any> {
+  return normalizeRoutingInputConfig(routing)
+}
 
 export const addNavigationEventListeners = <Message>(
   dispatch: (message: Message) => void,

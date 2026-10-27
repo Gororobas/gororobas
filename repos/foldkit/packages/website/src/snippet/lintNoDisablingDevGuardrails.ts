@@ -1,16 +1,19 @@
-import { Runtime } from 'foldkit'
+import { Program } from 'foldkit'
+
+import { ApplicationBlock } from './block'
 
 // ❌ Bad
 // Turning off freezeModel silences the dev warning instead of fixing the
 // mutation it caught.
-const badApp = Runtime.makeApplication({
-  Model,
-  init,
-  update,
-  view,
+const badProgram = Program.make({
+  block: ApplicationBlock,
+  container: document.getElementById('root'),
   freezeModel: false,
 })
 
 // ✅ Good
 // Leave the guardrail on and fix the in-place mutation it flags.
-const goodApp = Runtime.makeApplication({ Model, init, update, view })
+const goodProgram = Program.make({
+  block: ApplicationBlock,
+  container: document.getElementById('root'),
+})

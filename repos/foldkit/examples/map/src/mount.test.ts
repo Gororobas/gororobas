@@ -1,7 +1,9 @@
-import { Deferred, Effect, Stream } from 'effect'
+import { Deferred, Effect, Layer, Stream } from 'effect'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 
-import { Message, MountMap } from './main'
+import { MapRegistryLayer } from './mapRegistry'
+import { Message } from './message'
+import { MountMap } from './mount'
 
 const maplibre = vi.hoisted(() => {
   let container: HTMLElement | undefined
@@ -85,10 +87,12 @@ vi.mock('maplibre-gl', () => {
   return { Map, Marker, setWorkerUrl: vi.fn() }
 })
 
-const mountAndInteract = (host: HTMLElement): Effect.Effect<Array<Message>> =>
+const mountAndInteract = (
+  host: HTMLElement,
+): Effect.Effect<Array<typeof Message.Type>> =>
   Effect.scoped(
     Effect.gen(function* () {
-      const received: Array<Message> = []
+      const received: Array<typeof Message.Type> = []
       const mounted = yield* Deferred.make<void>()
 
       yield* MountMap({ hostId: 'test-map-host' })
@@ -123,7 +127,7 @@ const mountAndInteract = (host: HTMLElement): Effect.Effect<Array<Message>> =>
       ])
       return received
     }),
-  )
+  ).pipe(Effect.provide(MountMap.layer.pipe(Layer.provide(MapRegistryLayer))))
 
 describe('MountMap', () => {
   beforeEach(() => {

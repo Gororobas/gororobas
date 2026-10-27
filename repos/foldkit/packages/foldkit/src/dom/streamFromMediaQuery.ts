@@ -13,11 +13,12 @@ import { Effect, Queue, Stream } from 'effect'
  * emits.
  *
  * The return type of `mapMatches` determines the Stream's output type.
- * `Subscription.make` checks that output against the application's Message
- * type.
+ * The entry's declared Message Schemas constrain the final Stream output.
  */
 export type StreamFromMediaQueryConfig<Output> = Readonly<{
+  /** CSS media query passed to `window.matchMedia` when the Stream starts. */
   query: string
+  /** Maps the current and subsequent `matches` values to emitted values. */
   mapMatches: (isMatching: boolean) => Output
 }>
 
@@ -37,22 +38,29 @@ export type StreamFromMediaQueryConfig<Output> = Readonly<{
  * only when the Stream starts. The Stream can therefore be created during
  * server rendering as long as it runs only in the browser.
  *
- * This helper returns a Stream, not a Subscription entry. Pass it to
- * `Subscription.persistentEntry` for a query the application always follows. To
- * follow the query only in a particular Model state, use it with `Stream.when`
- * inside a `Subscription.make` entry.
+ * This helper returns a Stream, not a Subscription entry. Declare a named
+ * entry with no Model dependencies for a query the application always follows.
+ * To follow the query only in a particular Model state, declare dependencies
+ * on the entry and apply `Stream.when` in its handler.
  *
  * @example
  * ```typescript
- * const subscriptions = Subscription.make<Model, Message>()(_entry => ({
- *   reducedMotion: Subscription.persistentEntry(
- *     Dom.streamFromMediaQuery({
- *       query: '(prefers-reduced-motion: reduce)',
- *       mapMatches: isMatching =>
- *         Message.ChangedReducedMotion({ isReducedMotion: isMatching }),
- *     }),
- *   ),
+ * const ExampleDefinition = Block.makeDefinition('Example', { Model, Message })
+ * const subscriptions = ExampleDefinition.makeSubscriptions(entry => ({
+ *   reducedMotion: entry('ReducedMotion', {
+ *     messages: [Message.ChangedReducedMotion],
+ *     handler: function* () {
+ *       return () =>
+ *         Dom.streamFromMediaQuery({
+ *           query: '(prefers-reduced-motion: reduce)',
+ *           mapMatches: isMatching =>
+ *             Message.ChangedReducedMotion({ isReducedMotion: isMatching }),
+ *         })
+ *     },
+ *   }),
  * }))
+ *
+ * const EffectsLayer = subscriptions.reducedMotion.layer
  * ```
  */
 export const streamFromMediaQuery = <Output>(

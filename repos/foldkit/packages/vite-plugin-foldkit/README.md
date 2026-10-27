@@ -171,10 +171,10 @@ When one Vite app build produces the client and server artifacts, the plugin gen
 
 ```typescript
 // src/entry.server.ts
-Server.renderToString(config, { flags })
+Server.renderToString(ApplicationBlock, { Flags }, { flags })
 
 // src/entry.ts
-Runtime.hydrate(application)
+Runtime.hydrate(program)
 ```
 
 Use the `buildId` option or `FOLDKIT_BUILD_ID` as an explicit override when client and server build in separate jobs, or when the id should name a deployment in another system:
@@ -203,19 +203,19 @@ To include the overlay in production, list `@foldkit/devtools` in regular `depen
 
 During development, the plugin starts a WebSocket relay for the [`@foldkit/devtools-mcp`](https://www.npmjs.com/package/@foldkit/devtools-mcp) server. Through the relay, an AI agent can inspect a running Foldkit app and dispatch Messages.
 
-By default, the relay uses the dev server's listener at `/__foldkit/devtools-mcp`. The plugin publishes its address to a registry private to your user, and the MCP server finds it by project. You do not need to coordinate a port between them. The registry lives under `XDG_RUNTIME_DIR` when that is set, or under the operating system's temporary directory. `FOLDKIT_DEVTOOLS_RELAY_DIRECTORY` selects another directory.
+By default, the relay listens at `/__foldkit/devtools-mcp` on its own loopback port. WebSocket handlers on the Vite dev server cannot close its connection. Each dev server publishes its relay's address to a private registry, so the MCP server can find it without a configured port.
 
-The relay follows Vite's `server.host` setting. If you expose the dev server with `--host`, a client still needs the random token in the published address to inspect a Model or dispatch a Message. The plugin will not publish that token into a registry directory owned by another user or readable by other users. It reports the problem in the console.
+The registry lives under `XDG_RUNTIME_DIR` when set, `~/.cache` on macOS and Linux, or the user's temporary directory on Windows. `FOLDKIT_DEVTOOLS_RELAY_DIRECTORY` selects another directory. On Windows, that directory must be a direct child of the user's temporary directory.
 
-In middleware mode, the relay uses a free loopback port because there is no HTTP server to share. It also uses a free loopback port for HTTPS dev servers, whose self-signed certificates the MCP server cannot verify. The plugin publishes these addresses for discovery in the same way.
+For automatic discovery, the relay publishes a random token with its address. The MCP client signs a connection challenge with the token and checks the relay's response before sending tool requests. The plugin refuses to publish the record if another user can read or replace the registry directory. It also rejects symlinks and junctions, checks directory ACLs on macOS, and uses PowerShell to check ownership, access rights, and reparse points on Windows. If the check fails, the plugin reports the problem in the console.
 
-To use a fixed port, set `devToolsMcpPort` in your Vite config:
+An agent on another host cannot reach the automatic loopback relay. To connect from another host, or when the registry check fails, set a fixed port in your Vite config:
 
 ```typescript
 plugins: [foldkit({ devToolsMcpPort: 9988 })]
 ```
 
-Set `FOLDKIT_DEVTOOLS_MCP_PORT` to the same value for the MCP server. A fixed port opens a separate socket on every interface and does not require a token. Use this setting on platforms where directory ownership cannot be verified, including Windows, because the plugin cannot publish a relay address there.
+Set `FOLDKIT_DEVTOOLS_MCP_PORT` to the same value for the MCP server. If the agent runs elsewhere, also set `FOLDKIT_DEVTOOLS_MCP_HOST` to the dev server's host. A fixed port listens on every interface without a token. Do not use it on a shared or untrusted network.
 
 `devToolsMcpPort: false` disables the relay. The relay does not start during Vitest runs or in production builds.
 

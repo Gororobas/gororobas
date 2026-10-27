@@ -16,7 +16,7 @@ export type File = globalThis.File
  * attachedResume: Schema.Option(File.File)
  * ```
  */
-export const File: Schema.Schema<File> = Schema.instanceOf(globalThis.File)
+export const File = Schema.instanceOf(globalThis.File)
 
 /** The file's name including extension, as reported by the browser. */
 export const name = (file: File): string => file.name

@@ -1,18 +1,19 @@
-import { Effect, Option, Schema, Stream } from 'effect'
+import { Effect, Option, Schema } from 'effect'
 import { Command, ManagedResource, Subscription } from 'foldkit'
 
 const Save = Command.define('Save', {
   args: { id: Schema.String, createdAt: Schema.Number },
   messages: [CompletedSave],
-  execute: () => Effect.succeed(CompletedSave()),
 })
+
+export const EagerSaveLayer = Save.toLayer(Effect.succeed(Date.now()))
 
 const makeId = () => Math.random().toString()
 const FakeEffect = {
   sync: <Value>(evaluate: () => Value): Value => evaluate(),
 }
 
-export const update = (model: Model) => ({
+export const update = (model: typeof Model.Type) => ({
   model,
   commands: [
     Save({
@@ -51,28 +52,36 @@ export const cancel = Effect.runCallback(Effect.succeed(1), {
 export const missing = Effect.fromOption(Option.none(), () => Date.now())
 export const functionValue = Effect.succeed(() => Math.random())
 
-export const subscriptions = Subscription.make<Model, Message>()(entry => {
+export const subscriptions = Subscription.make<typeof Model.Type, Message>()(entry => {
   const initializedSubscriptionAt = Date.now()
 
   return {
     clock: entry(
+      'Clock',
       { initializedSubscriptionAt: Schema.Number },
       {
+        messages: [],
         modelToDependencies: () => ({
           initializedSubscriptionAt: Date.now(),
         }),
-        dependenciesToStream: () => Stream.empty,
       },
     ),
   }
 })
 
-export const managedResources = ManagedResource.make<Model, Message>()(
+export const managedResources = ManagedResource.make<typeof Model.Type, Message>()(
   entry => ({
-    connection: entry(Resource, Schema.Struct({}), {
-      modelToMaybeRequirements: () => Option.some({ startedAt: Date.now() }),
-      acquire: () => Effect.succeed(ResourceValue),
-      release: () => Effect.void,
-    }),
+    connection: entry(
+      'Connection',
+      Schema.Struct({}),
+      {
+        resource: Resource,
+        modelToMaybeRequirements: () =>
+          Option.some({ startedAt: Date.now() }),
+        onAcquired: () => AcquiredConnection(),
+        onAcquireError: () => FailedAcquireConnection(),
+        onReleased: () => ReleasedConnection(),
+      },
+    ),
   }),
 )
