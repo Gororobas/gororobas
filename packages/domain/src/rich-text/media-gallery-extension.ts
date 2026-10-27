@@ -2,16 +2,16 @@ import { mergeAttributes, Node } from "@tiptap/core"
 import { Option, Schema } from "effect"
 
 import {
-  MediaGridAttributes,
-  type MediaGridItem,
+  MediaGalleryAttributes,
+  type MediaGalleryItem,
   type TiptapDocument,
   type TiptapNode,
 } from "./domain.js"
 
-const AttributesJson = Schema.fromJsonString(MediaGridAttributes)
+const AttributesJson = Schema.fromJsonString(MediaGalleryAttributes)
 
-export const MediaGrid = Node.create({
-  name: "mediaGrid",
+export const MediaGallery = Node.create({
+  name: "mediaGallery",
   group: "block",
   inline: false,
   selectable: true,
@@ -23,10 +23,10 @@ export const MediaGrid = Node.create({
   }),
   parseHTML: () => [
     {
-      tag: "div[data-media-grid]",
+      tag: "div[data-media-gallery]",
       getAttrs: (element) =>
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- DOM attributes may be absent or contain malformed JSON.
-        Schema.decodeUnknownOption(AttributesJson)(element.getAttribute("data-media-grid")).pipe(
+        Schema.decodeUnknownOption(AttributesJson)(element.getAttribute("data-media-gallery")).pipe(
           (attributes) => (Option.isSome(attributes) ? attributes.value : false),
         ),
     },
@@ -35,12 +35,12 @@ export const MediaGrid = Node.create({
   // The application node view hydrates media; HTML carries lossless references for translation and clipboard use.
   renderHTML: ({ node, HTMLAttributes }) => {
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
-    const { ...attributes } = Schema.decodeUnknownSync(MediaGridAttributes)(node.attrs)
+    const { ...attributes } = Schema.decodeUnknownSync(MediaGalleryAttributes)(node.attrs)
 
     return [
       "div",
       mergeAttributes(HTMLAttributes, {
-        "data-media-grid": Schema.encodeSync(AttributesJson)(attributes),
+        "data-media-gallery": Schema.encodeSync(AttributesJson)(attributes),
       }),
     ]
   },
@@ -48,10 +48,10 @@ export const MediaGrid = Node.create({
 
 export const mediaItemsFromTiptapDocument = (
   document: TiptapDocument,
-): ReadonlyArray<MediaGridItem> => {
-  const items: MediaGridItem[] = []
+): ReadonlyArray<MediaGalleryItem> => {
+  const items: MediaGalleryItem[] = []
   const visit = (node: TiptapNode): void => {
-    if (node.type === "mediaGrid") items.push(...node.attrs.items)
+    if (node.type === "mediaGallery") items.push(...node.attrs.items)
     if ("content" in node) node.content?.forEach(visit)
   }
   document.content.forEach(visit)

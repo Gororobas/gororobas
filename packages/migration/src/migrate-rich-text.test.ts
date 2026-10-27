@@ -69,7 +69,7 @@ it.effect("rewrites mentions and resolves stale image IDs through the Sanity ali
     })
 
     expect(image).toEqual({
-      type: "mediaGrid",
+      type: "mediaGallery",
       attrs: {
         version: 1,
         items: [{ source: "MEDIA_ASSET", format: "IMAGE", mediaAssetId: imageId, alt: "Photo" }],
@@ -130,7 +130,7 @@ it.effect("groups adjacent media across formats, preserves nesting and keeps tex
     expect(migrated.content).toHaveLength(3)
 
     expect(migrated.content[0]).toMatchObject({
-      type: "mediaGrid",
+      type: "mediaGallery",
       attrs: {
         items: [
           { source: "MEDIA_ASSET", mediaAssetId: imageId, format: "IMAGE", alt: "Photo" },
@@ -150,7 +150,7 @@ it.effect("groups adjacent media across formats, preserves nesting and keeps tex
     expect(blockquote.content).toHaveLength(1)
 
     expect(blockquote.content?.[0]).toMatchObject({
-      type: "mediaGrid",
+      type: "mediaGallery",
       attrs: {
         items: [{ source: "EXTERNAL_EMBED", provider: "YOUTUBE" }, { source: "MEDIA_ASSET" }],
       },

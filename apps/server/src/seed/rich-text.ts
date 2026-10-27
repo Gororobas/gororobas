@@ -157,7 +157,7 @@ export const richTextDocument = (options: RichTextOptions) =>
       const [first, ...rest] = media
 
       content.splice(Math.min(1, content.length), 0, {
-        type: "mediaGrid",
+        type: "mediaGallery",
         attrs: { ...(yield* nodeId), version: 1, items: [item(first), ...rest.map(item)] },
       })
     }

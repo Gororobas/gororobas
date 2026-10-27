@@ -1,7 +1,7 @@
 import StarterKit from "@tiptap/starter-kit"
 
 import { EntityReference } from "./entity-reference-extension.js"
-import { MediaGrid } from "./media-grid-extension.js"
+import { MediaGallery } from "./media-gallery-extension.js"
 import { NodeIdExtension } from "./node-id-extension.js"
 
 export const tiptapExtensions = [
@@ -11,6 +11,6 @@ export const tiptapExtensions = [
     heading: { levels: [1, 2, 3] },
   }),
   EntityReference,
-  MediaGrid,
+  MediaGallery,
   NodeIdExtension,
 ]

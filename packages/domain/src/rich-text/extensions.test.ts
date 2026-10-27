@@ -6,11 +6,11 @@ import { assertPropertyEffect } from "../testing.js"
 import {
   EntityReferenceAttributes,
   EntityReferenceTarget,
-  MediaGridAttributes,
+  MediaGalleryAttributes,
   TiptapDocument,
 } from "./domain.js"
 import { linkedEntitiesFromTiptapDocument } from "./entity-reference-extension.js"
-import { mediaItemsFromTiptapDocument } from "./media-grid-extension.js"
+import { mediaItemsFromTiptapDocument } from "./media-gallery-extension.js"
 import { assignTiptapNodeIds } from "./node-ids.js"
 import { tiptapFromHtml, tiptapToHtml } from "./tiptap-to-html.js"
 it.effect(
@@ -20,10 +20,10 @@ it.effect(
       arbitrary: Arbitrary.schema(
         Schema.Struct({
           reference: EntityReferenceAttributes,
-          grid: MediaGridAttributes,
+          gallery: MediaGalleryAttributes,
         }),
       ),
-      predicate: ({ reference, grid }) =>
+      predicate: ({ reference, gallery }) =>
         Effect.sync(() => {
           const document = assignTiptapNodeIds(
             TiptapDocument.make({
@@ -54,8 +54,8 @@ it.effect(
                   ],
                 },
                 {
-                  type: "mediaGrid",
-                  attrs: grid,
+                  type: "mediaGallery",
+                  attrs: gallery,
                 },
               ],
             }),
@@ -65,7 +65,7 @@ it.effect(
           expect(linkedEntitiesFromTiptapDocument(restored)).toEqual([
             Schema.decodeSync(EntityReferenceTarget)(reference),
           ])
-          expect(mediaItemsFromTiptapDocument(restored)).toEqual(grid.items)
+          expect(mediaItemsFromTiptapDocument(restored)).toEqual(gallery.items)
           expect(restored).toEqual(document)
 
           expect(
@@ -93,9 +93,9 @@ it.effect(
               ...document,
               content: [
                 {
-                  type: "mediaGrid",
+                  type: "mediaGallery",
                   attrs: {
-                    ...grid,
+                    ...gallery,
                     items: [],
                   },
                 },

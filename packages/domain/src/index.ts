@@ -62,7 +62,7 @@ export * from "./common/utils/strings.js"
 export * from "./crdts/lib.js"
 
 export * from "./rich-text/entity-reference-extension.js"
-export * from "./rich-text/media-grid-extension.js"
+export * from "./rich-text/media-gallery-extension.js"
 export * from "./rich-text/node-id-extension.js"
 export * from "./rich-text/node-ids.js"
 export * from "./publications/publication-crdt.js"

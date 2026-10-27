@@ -24,7 +24,7 @@ export const IDENTIFIED_NODE_TYPES = [
   "orderedList",
   "listItem",
   "horizontalRule",
-  "mediaGrid",
+  "mediaGallery",
   "entityReference",
 ] as const satisfies ReadonlyArray<Exclude<TiptapNode["type"], "text" | "hardBreak">>
 
@@ -151,9 +151,9 @@ export const assignTiptapNodeIds = (
           ...rule,
           attrs: { ...rule.attrs, nodeId: claim(rule, counterpart) },
         }),
-        mediaGrid: (grid): TiptapBlockNode => ({
-          ...grid,
-          attrs: { ...grid.attrs, nodeId: claim(grid, counterpart) },
+        mediaGallery: (gallery): TiptapBlockNode => ({
+          ...gallery,
+          attrs: { ...gallery.attrs, nodeId: claim(gallery, counterpart) },
         }),
         blockquote: (quote): TiptapBlockNode => {
           const nodeId = claim(quote, counterpart)

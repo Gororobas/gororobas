@@ -176,7 +176,7 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
           )
 
           return yield* Schema.decodeEffect(TiptapNode)({
-            type: "mediaGrid",
+            type: "mediaGallery",
             attrs: {
               version: 1,
               items: [
@@ -199,7 +199,7 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
         )(attrs?.data)
 
         return yield* Schema.decodeEffect(TiptapNode)({
-          type: "mediaGrid",
+          type: "mediaGallery",
           attrs: {
             version: 1,
             items: [
@@ -230,7 +230,7 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
         ...(node.marks === undefined ? {} : { marks: node.marks }),
         ...(attrs ? { attrs } : {}),
         ...(content && EffectArray.isReadonlyArrayNonEmpty(content)
-          ? { content: mergeMediaGrids(content) }
+          ? { content: mergeMediaGalleries(content) }
           : {}),
       })
     })
@@ -238,7 +238,7 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
   // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy documents can contain nodes that are invalid at the document root.
   return yield* Schema.decodeUnknownEffect(TiptapDocument)({
     ...document,
-    content: mergeMediaGrids(
+    content: mergeMediaGalleries(
       yield* Effect.forEach(
         document.content.filter((node) => node.type !== "text" || node.text !== ""),
         rewrite,
@@ -248,16 +248,16 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
   })
 })
 
-/** Merge only adjacent sibling grids; text and nesting preserve their original boundaries. */
-const mergeMediaGrids = (nodes: ReadonlyArray<TiptapNode>): ReadonlyArray<TiptapNode> => {
+/** Merge only adjacent sibling galleries; text and nesting preserve their original boundaries. */
+const mergeMediaGalleries = (nodes: ReadonlyArray<TiptapNode>): ReadonlyArray<TiptapNode> => {
   const merged: TiptapNode[] = []
 
   nodes.forEach((node) => {
     const previous = merged[merged.length - 1]
 
-    if (previous?.type === "mediaGrid" && node.type === "mediaGrid") {
+    if (previous?.type === "mediaGallery" && node.type === "mediaGallery") {
       merged[merged.length - 1] = {
-        type: "mediaGrid",
+        type: "mediaGallery",
         attrs: { version: 1, items: [...previous.attrs.items, ...node.attrs.items] },
       }
     } else merged.push(node)

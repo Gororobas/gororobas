@@ -5,7 +5,7 @@ import * as Arbitrary from "effect/Arbitrary"
 import {
   EntityReferenceAttributes,
   ExternalEmbed,
-  MediaGridItem,
+  MediaGalleryItem,
   TiptapDocument,
 } from "../../src/rich-text/domain.js"
 import { assertPropertyEffect } from "../../src/testing.js"
@@ -218,7 +218,7 @@ it.effect("preserves provider data and captions without accepting mismatched pro
           version: 1,
           content: [
             {
-              type: "mediaGrid",
+              type: "mediaGallery",
               attrs: {
                 version: 1,
                 items: [embed],
@@ -232,7 +232,7 @@ it.effect("preserves provider data and captions without accepting mismatched pro
         expect(
           Option.isNone(
             // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test deliberately supplies a provider incompatible with its embed data.
-            Schema.decodeUnknownOption(MediaGridItem)({
+            Schema.decodeUnknownOption(MediaGalleryItem)({
               ...embed,
               provider: embed.provider === "YOUTUBE" ? "SPOTIFY" : "YOUTUBE",
             }),

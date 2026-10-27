@@ -26,7 +26,7 @@ const editorSchema = new ProseMirrorSchema({
     paragraph: { group: "block", content: "inline*" },
     blockquote: { group: "block", content: "block*" },
     heading: { group: "block", content: "inline*", attrs: { level: { default: 1 } } },
-    mediaGrid: {
+    mediaGallery: {
       group: "block",
       atom: true,
       attrs: { version: { default: 1 }, items: { default: null } },
@@ -72,7 +72,7 @@ const makeContent = ({ first, second, level }: typeof RichTextInputs.Type) =>
             ],
           },
           {
-            type: "mediaGrid",
+            type: "mediaGallery",
             attrs: {
               version: 1,
               items: [

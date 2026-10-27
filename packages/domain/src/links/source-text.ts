@@ -65,7 +65,7 @@ export const makeSourceTextBuilder = () => {
             text: (textNode) => append(textNode.text),
             hardBreak: () => append("\n"),
             entityReference: (reference) => append(reference.attrs.labelAtInsertion),
-            mediaGrid: () => undefined,
+            mediaGallery: () => undefined,
             horizontalRule: () => undefined,
             paragraph: (paragraph) => paragraph.content?.forEach(visit),
             heading: (heading) => heading.content?.forEach(visit),

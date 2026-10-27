@@ -46,7 +46,7 @@ export const EntityReferenceAttributes = EntityReferenceTarget.mapMembers(
 export type EntityReferenceAttributes = typeof EntityReferenceAttributes.Type
 
 /** Labels and alternative text describe this use of the media, rather than the shared file. */
-export const MediaGridItem = Schema.Union([
+export const MediaGalleryItem = Schema.Union([
   Schema.Struct({
     source: Schema.Literal("MEDIA_ASSET"),
     mediaAssetId: MediaAssetId,
@@ -57,15 +57,15 @@ export const MediaGridItem = Schema.Union([
   ExternalEmbed,
 ])
 
-export type MediaGridItem = typeof MediaGridItem.Type
+export type MediaGalleryItem = typeof MediaGalleryItem.Type
 
-export const MediaGridAttributes = Schema.Struct({
+export const MediaGalleryAttributes = Schema.Struct({
   ...NodeIdAttribute,
   version: Schema.Literal(1),
-  items: Schema.NonEmptyArray(MediaGridItem),
+  items: Schema.NonEmptyArray(MediaGalleryItem),
 })
 
-export type MediaGridAttributes = typeof MediaGridAttributes.Type
+export type MediaGalleryAttributes = typeof MediaGalleryAttributes.Type
 
 export const TiptapMark = Schema.Struct({
   type: Schema.Literals(["bold", "italic", "strike", "code", "link"]),
@@ -87,11 +87,11 @@ export const EntityReferenceNode = Schema.Struct({
 })
 export type EntityReferenceNode = typeof EntityReferenceNode.Type
 
-export const MediaGridNode = Schema.Struct({
-  type: Schema.Literal("mediaGrid"),
-  attrs: MediaGridAttributes,
+export const MediaGalleryNode = Schema.Struct({
+  type: Schema.Literal("mediaGallery"),
+  attrs: MediaGalleryAttributes,
 })
-export type MediaGridNode = typeof MediaGridNode.Type
+export type MediaGalleryNode = typeof MediaGalleryNode.Type
 
 export const TiptapHardBreakNode = Schema.Struct({
   type: Schema.Literal("hardBreak"),
@@ -190,7 +190,7 @@ export type TiptapBlockNode =
   | TiptapParagraphNode
   | typeof TiptapHeadingNode.Type
   | typeof TiptapHorizontalRuleNode.Type
-  | MediaGridNode
+  | MediaGalleryNode
   | TiptapBlockquoteNode
   | typeof TiptapBulletListNode.Type
   | typeof TiptapOrderedListNode.Type
@@ -199,7 +199,7 @@ type TiptapBlockNodeEncoded =
   | typeof TiptapParagraphNode.Encoded
   | typeof TiptapHeadingNode.Encoded
   | typeof TiptapHorizontalRuleNode.Encoded
-  | typeof MediaGridNode.Encoded
+  | typeof MediaGalleryNode.Encoded
   | TiptapBlockquoteNodeEncoded
   | typeof TiptapBulletListNode.Encoded
   | typeof TiptapOrderedListNode.Encoded
@@ -208,7 +208,7 @@ export const TiptapBlockNode = Schema.Union([
   TiptapParagraphNode,
   TiptapHeadingNode,
   TiptapHorizontalRuleNode,
-  MediaGridNode,
+  MediaGalleryNode,
   TiptapBlockquoteNode,
   TiptapBulletListNode,
   TiptapOrderedListNode,

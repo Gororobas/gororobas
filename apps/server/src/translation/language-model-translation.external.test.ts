@@ -286,7 +286,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
     }),
   },
 
-  "media grid preservation (pt→en)": {
+  "media gallery preservation (pt→en)": {
     sourceLanguage: ContentLanguage.make("pt"),
     targetLanguage: "en",
     document: TiptapDocument.make({
@@ -303,7 +303,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
           ],
         },
         {
-          type: "mediaGrid",
+          type: "mediaGallery",
           attrs: {
             version: 1,
             items: [
@@ -391,7 +391,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
           ],
         },
         {
-          type: "mediaGrid",
+          type: "mediaGallery",
           attrs: {
             version: 1,
             items: [

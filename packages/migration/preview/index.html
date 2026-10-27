@@ -185,7 +185,7 @@
       if (!node) return ""
       if (node.text) return node.text
       if (node.type === "entityReference") return node.attrs.labelAtInsertion
-      if (node.type === "mediaGrid") return "[mídia]"
+      if (node.type === "mediaGallery") return "[mídia]"
       if (node.type === "hardBreak") return "\n"
       const text = (node.content ?? []).map(contentText).join("")
       return ["paragraph", "heading", "listItem"].includes(node.type) ? `${text}\n` : text
@@ -222,7 +222,7 @@
     }
     const renderContent = (node) => {
       if (!node) return element("p", "Sem conteúdo")
-      if (node.type === "mediaGrid") {
+      if (node.type === "mediaGallery") {
         const grid = element("div")
         grid.style.display = "grid"
         grid.style.gridTemplateColumns = "repeat(auto-fit, minmax(180px, 1fr))"
