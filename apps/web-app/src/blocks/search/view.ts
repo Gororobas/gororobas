@@ -1,6 +1,6 @@
 import type { ProfileCardData } from "@gororobas/domain/profiles/domain"
 import type { ApiPublicationCardData } from "@gororobas/domain/publications/domain"
-import type { WikiArticleKind, WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
+import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Equal, HashMap, Match, Option, Record } from "effect"
 import { AsyncData } from "foldkit"
@@ -13,13 +13,16 @@ import * as AppDrawer from "../../ui/app-drawer/view"
 import * as AppShell from "../../ui/app-shell"
 import { AppText } from "../../ui/app-text"
 import { Chip } from "../../ui/chip"
+import { FilterPill } from "../../ui/filter-pill"
 import * as Icons from "../../ui/icons"
 import type { IconConfig } from "../../ui/icons"
 import { iconSizeProperty } from "../../ui/icons/icon-size"
+import { wikiKindIcons } from "../../ui/icons/wiki-kind-icons"
 import { styledAttributes } from "../../ui/pleat-attributes"
 import { ProfileRow } from "../../ui/profile-row"
 import { PublicationCard } from "../../ui/publication-card"
 import * as SectionHeading from "../../ui/section-heading"
+import { SegmentedControl } from "../../ui/segmented-control"
 import { focusRingDeclarations } from "../../ui/styles/focus-ring"
 import { pageColumnStyle } from "../../ui/styles/page-column"
 import {
@@ -36,6 +39,7 @@ import {
   breakpoint,
   duration,
   fontSize,
+  fontWeight,
   layer,
   radius,
   space,
@@ -54,28 +58,60 @@ import {
 } from "./composition"
 import {
   type FilterGroup,
+  type FilterOption,
   activeSecondaryFilterCount,
   clearedSecondaryFilters,
   isBrowsing,
+  nonEmptyText,
   primaryFilterGroup,
   secondaryFilterGroups,
 } from "./filters"
 import { Message } from "./message"
 import type { Model } from "./model"
 import { articlesShownAt, profilesShownAt, publicationsShownAt } from "./preview"
+import { PUBLICATION_PAGE_SIZE } from "./subscription"
 
 /** Searches without text can match the whole encyclopedia; past this, people refine instead. */
 const TYPED_ARTICLE_COUNT = 60
 
-/** Ways into the content while nothing is typed yet. */
-const SEARCH_IDEAS: ReadonlyArray<string> = [
-  "agrofloresta",
-  "milho",
-  "sementes crioulas",
-  "compostagem",
-  "PANC",
-  "plantio consorciado",
+/** Ways into the content while nothing is typed yet, each with where it searches. */
+const SEARCH_IDEAS: ReadonlyArray<Readonly<{ label: string; context: string; href: string }>> = [
+  {
+    label: "Jacarandá",
+    context: "entre as plantas",
+    href: searchUrl({
+      text: Option.some("Jacarandá"),
+      type: Option.some("wiki"),
+      wikiKind: Option.some("PLANT"),
+    }),
+  },
+  {
+    label: "Livros",
+    context: "na enciclopédia",
+    href: searchUrl({ type: Option.some("wiki"), wikiKind: Option.some("BOOK") }),
+  },
+  {
+    label: "Organizações",
+    context: "entre a gente",
+    href: searchUrl({ type: Option.some("people"), profileType: Option.some("ORGANIZATION") }),
+  },
+  {
+    label: "Aprendizados",
+    context: "nos posts",
+    href: searchUrl({ text: Option.some("aprendizados"), type: Option.some("publications") }),
+  },
+  {
+    label: "Agrofloresta",
+    context: "em tudo",
+    href: searchUrl({ text: Option.some("agrofloresta") }),
+  },
 ]
+
+const searchTypeContexts: Readonly<Record<SearchType, string>> = {
+  wiki: "na enciclopédia",
+  publications: "nos posts",
+  people: "entre a gente",
+}
 
 // SHARED STYLES
 
@@ -154,6 +190,19 @@ const loadingStyle = Style.make({
   fontSize: fontSize.footnote,
 })
 
+const summaryStyle = Style.make({ color: toneColors.foregroundMuted })
+const summaryTextStyle = Style.make({
+  color: toneColors.foreground,
+  fontWeight: fontWeight.semibold,
+})
+
+const dividerStyle = Style.make({
+  flexShrink: 0,
+  inlineSize: borderWidth.hairline,
+  blockSize: space[6],
+  backgroundColor: toneColors.border,
+})
+
 const chipWrapStyle = Style.make({ display: "flex", flexWrap: "wrap", gap: space[2] })
 
 const mobileOnlyStyle = Style.make({ display: "contents" }).pipe(
@@ -198,9 +247,11 @@ const tileGridStyle = Style.make({
 }).pipe(Style.when(breakpoint.md, { gap: space[4] }))
 
 const tileStyle = Style.make({
-  position: "relative",
-  display: "block",
-  minBlockSize: "6.5rem",
+  display: "flex",
+  minBlockSize: "8rem",
+  flexDirection: "column",
+  justifyContent: "space-between",
+  gap: space[2],
   overflow: "hidden",
   padding: space[4],
   borderRadius: radius.lg,
@@ -223,16 +274,44 @@ const tileToneStyle = (tone: Exclude<Tone, "destructive">) =>
   Style.make({ backgroundColor: tones[tone].ramp[300], color: tones[tone].ramp[950] })
 
 const tileIconStyle = Style.make({
-  position: "absolute",
-  insetBlockEnd: `calc(-1 * ${space[2]})`,
-  insetInlineEnd: `calc(-1 * ${space[2]})`,
-  transform: "rotate(-15deg)",
-  [iconSizeProperty]: "4.5rem",
+  alignSelf: "flex-end",
+  marginBlockEnd: `calc(-1 * ${space[3]})`,
+  marginInlineEnd: `calc(-1 * ${space[2]})`,
+  transform: "rotate(-12deg)",
+  [iconSizeProperty]: "3.5rem",
 })
 
-const tileTitleStyle = Style.make({ position: "relative", maxInlineSize: "70%" })
+const browseListStyle = Style.make({
+  display: "grid",
+  borderBlockStart: `${borderWidth.hairline} solid ${toneColors.border}`,
+}).pipe(
+  Style.when(breakpoint.md, {
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    columnGap: space[8],
+  }),
+)
 
-const ideasStyle = Style.make({ display: "flex", flexWrap: "wrap", gap: space[2] })
+const browseRowStyle = Style.make({
+  display: "flex",
+  alignItems: "center",
+  gap: space[2],
+  borderBlockEnd: `${borderWidth.hairline} solid ${toneColors.border}`,
+})
+
+const browseLinkStyle = Style.make({
+  display: "grid",
+  flex: 1,
+  minInlineSize: 0,
+  paddingBlock: space[3],
+  paddingInline: space[2],
+  borderRadius: radius.md,
+  outline: "none",
+}).pipe(
+  Style.when(When.hover, { backgroundColor: toneColors.hover }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
+
+const browseContextStyle = Style.make({ color: toneColors.foregroundMuted })
 
 // HELPERS
 
@@ -245,27 +324,13 @@ type ViewState = Readonly<{
 const searchTypeTitles: Readonly<Record<SearchType, string>> = {
   wiki: "Enciclopédia",
   publications: "Posts",
-  people: "Pessoas e organizações",
+  people: "Gente",
 }
 
 const searchTypeIcons: Readonly<Record<SearchType, (config?: IconConfig) => Html>> = {
   wiki: Icons.encyclopedia,
   publications: Icons.clipboard,
   people: Icons.user,
-}
-
-type BrowsableKind = Exclude<WikiArticleKind, "UNCATEGORIZED">
-
-const wikiKindIcons: Readonly<Record<BrowsableKind, (config?: IconConfig) => Html>> = {
-  PLANT: Icons.leaf,
-  PLANT_CULTIVAR: Icons.layers,
-  CONCEPT: Icons.lightbulb,
-  BOOK: Icons.book,
-  FILM: Icons.video,
-  ANIMAL: Icons.paw,
-  TOOL: Icons.sledgehammer,
-  RESOURCE: Icons.link,
-  NOTEWORTHY_ENTITY: Icons.buildings,
 }
 
 const typeUrl = (query: SearchQuery, type: Option.Option<SearchType>) =>
@@ -292,7 +357,7 @@ const resultsView = <A>(
 const searchField = (query: SearchQuery, h: SearchViewBuilder): Html =>
   h.form(
     styledAttributes(
-      [h.Role("search"), h.OnSubmit(Message.ChangedSearchQuery({ query, navigation: "Replace" }))],
+      [h.Role("search"), h.OnSubmit(Message.SubmittedSearch({ query }))],
       AppShell.searchControlStyle,
     ),
     [
@@ -375,6 +440,41 @@ const tabs = (query: SearchQuery, h: SearchViewBuilder): Html => {
 }
 
 // RESULTS
+
+/** Restates what's being searched, since the field can sit far above the results. */
+const resultSummary = (
+  { query, maybeCount }: Readonly<{ query: SearchQuery; maybeCount: Option.Option<string> }>,
+  h: SearchViewBuilder,
+): ReadonlyArray<Html> =>
+  EffectArray.fromOption(
+    Option.map(nonEmptyText(query), (text) =>
+      h.p(styledAttributes([h.Role("status")], summaryStyle), [
+        Option.match(maybeCount, {
+          onNone: () => "Resultados para ",
+          onSome: (count) => `${count} ${count === "1" ? "resultado" : "resultados"} para `,
+        }),
+        h.span(styledAttributes([], summaryTextStyle), [`“${text}”`]),
+      ]),
+    ),
+  )
+
+const loadedCount = <A>(
+  asyncData: AsyncData.AsyncData<ReadonlyArray<A>, string>,
+  pageSize?: number,
+): Option.Option<string> =>
+  Option.map(AsyncData.getData(asyncData), (items) =>
+    pageSize !== undefined && items.length >= pageSize ? `${pageSize}+` : String(items.length),
+  )
+
+const typedCount = (model: Model, type: SearchType): Option.Option<string> =>
+  Match.value(type).pipe(
+    Match.when("wiki", () => loadedCount(model.wikiAsyncData)),
+    Match.when("publications", () =>
+      loadedCount(model.publicationsAsyncData, PUBLICATION_PAGE_SIZE),
+    ),
+    Match.when("people", () => loadedCount(model.profilesAsyncData)),
+    Match.exhaustive,
+  )
 
 type Preview = Readonly<{ shownAt: (columns: ColumnCount) => number }>
 
@@ -546,6 +646,7 @@ const overviewSection = (
 
 const overview = ({ model, query, maybeToday }: ViewState, h: SearchViewBuilder): Html =>
   h.div(styledAttributes([], sectionsStyle), [
+    ...resultSummary({ query, maybeCount: Option.none() }, h),
     overviewSection(
       {
         type: "wiki",
@@ -636,7 +737,6 @@ const tile = (
         appearance: "large",
         weight: "semibold",
         lineHeight: "tight",
-        styles: [tileTitleStyle],
         children: [label],
       },
       h,
@@ -652,13 +752,41 @@ const tile = (
   ])
 
 /** Nothing typed yet: ways in, like a catalog's sections, and searches to try. */
-const browse = (h: SearchViewBuilder): Html => {
+const browseLink = (
+  { label, context, href }: Readonly<{ label: string; context: string; href: string }>,
+  h: SearchViewBuilder,
+): Html =>
+  h.a(styledAttributes([h.Href(href)], browseLinkStyle), [
+    AppText.view(
+      {
+        element: "span",
+        appearance: "large",
+        weight: "semibold",
+        lineHeight: "tight",
+        children: [label],
+      },
+      h,
+    ),
+    AppText.view(
+      {
+        element: "span",
+        appearance: "footnote",
+        styles: [browseContextStyle],
+        children: [context],
+      },
+      h,
+    ),
+  ])
+
+const browse = (model: Model, h: SearchViewBuilder): Html => {
   const tiles = [
-    ...Record.toEntries(wikiKindIcons).map(([kind, icon]) => ({
-      label: wikiKindLabels[kind].plural,
-      href: searchUrl({ type: Option.some("wiki"), wikiKind: Option.some(kind) }),
-      icon,
-    })),
+    ...Record.toEntries(wikiKindIcons)
+      .filter(([kind]) => kind !== "UNCATEGORIZED")
+      .map(([kind, icon]) => ({
+        label: wikiKindLabels[kind].plural,
+        href: searchUrl({ type: Option.some("wiki"), wikiKind: Option.some(kind) }),
+        icon,
+      })),
     {
       label: searchTypeTitles.publications,
       href: searchUrl({ type: Option.some("publications") }),
@@ -685,21 +813,52 @@ const browse = (h: SearchViewBuilder): Html => {
         ),
       ),
     ]),
-    h.section(styledAttributes([h.AriaLabel("Ideias de buscas")], sectionStyle), [
-      SectionHeading.view({ title: "Ideias de buscas", icon: Icons.search }, h),
-      h.div(
-        styledAttributes([], ideasStyle),
-        SEARCH_IDEAS.map((idea) =>
-          AppButton.view(
-            {
-              children: [Icons.search({ size: "sm" }), idea],
-              href: searchUrl({ text: Option.some(idea) }),
-              tone: "secondary",
-              mode: "faded",
-              size: "sm",
-            },
-            h,
+    ...EffectArray.match(model.recentSearches, {
+      onEmpty: () => [],
+      onNonEmpty: (recentSearches) => [
+        h.section(styledAttributes([h.AriaLabel("Buscas recentes")], sectionStyle), [
+          SectionHeading.view({ title: "Buscas recentes", icon: Icons.history }, h),
+          h.ul(
+            styledAttributes([], browseListStyle),
+            recentSearches.map((recent, index) =>
+              h.keyed("li")(
+                `${recent.text}-${Option.getOrElse(recent.type, () => "all")}`,
+                styledAttributes([], browseRowStyle),
+                [
+                  browseLink(
+                    {
+                      label: recent.text,
+                      context: Option.match(recent.type, {
+                        onNone: () => "em tudo",
+                        onSome: (type) => searchTypeContexts[type],
+                      }),
+                      href: searchUrl({ text: Option.some(recent.text), type: recent.type }),
+                    },
+                    h,
+                  ),
+                  AppButton.view(
+                    {
+                      children: [Icons.x({ size: "sm" })],
+                      ariaLabel: `Remover ${recent.text} das buscas recentes`,
+                      onClick: Message.ClickedRemoveRecentSearch({ index }),
+                      mode: "bleed",
+                      size: "sm",
+                    },
+                    h,
+                  ),
+                ],
+              ),
+            ),
           ),
+        ]),
+      ],
+    }),
+    h.section(styledAttributes([h.AriaLabel("Ideias de buscas")], sectionStyle), [
+      SectionHeading.view({ title: "Ideias de buscas", icon: Icons.lightbulb }, h),
+      h.ul(
+        styledAttributes([], browseListStyle),
+        SEARCH_IDEAS.map((idea) =>
+          h.keyed("li")(idea.href, styledAttributes([], browseRowStyle), [browseLink(idea, h)]),
         ),
       ),
     ]),
@@ -760,12 +919,10 @@ const filterPopover = (
                 h.div(
                   [],
                   [
-                    AppButton.view(
+                    FilterPill.view(
                       {
                         attributes: button,
-                        tone: "accent",
-                        mode: group.selectedCount > 0 ? "faded" : "outline",
-                        size: "sm",
+                        appearance: group.selectedCount > 0 ? "active" : "idle",
                         children: [
                           group.label,
                           ...countBadge(group.selectedCount, h),
@@ -790,10 +947,65 @@ const filterPopover = (
     },
   )
 
+/** Picks the type's first choice: the article kind, or between a couple of formats. */
+const primaryChoice = (
+  { query, primary }: Readonly<{ query: SearchQuery; primary: FilterGroup }>,
+  h: SearchViewBuilder,
+): ReadonlyArray<Html> => {
+  const maybeSelected = EffectArray.findFirst(primary.options, (option) => option.isSelected)
+  const choose = (option: FilterOption) =>
+    Message.ChangedSearchQuery({ query: option.toggledQuery, navigation: "Push" })
+
+  // A couple of choices read best as a switch, with "Todos" undoing the choice.
+  if (primary.options.length <= 3) {
+    return [
+      SegmentedControl.view(
+        {
+          label: primary.label,
+          segments: [
+            {
+              label: "Todos",
+              isSelected: Option.isNone(maybeSelected),
+              onClick: Option.match(maybeSelected, {
+                onNone: () => Message.ChangedSearchQuery({ query, navigation: "Replace" }),
+                onSome: choose,
+              }),
+            },
+            ...primary.options.map((option) => ({
+              label: option.label,
+              isSelected: option.isSelected,
+              onClick: choose(option),
+            })),
+          ],
+        },
+        h,
+      ),
+    ]
+  }
+
+  // Many choices are pills; once one is chosen it stands alone, and pressing it undoes it.
+  return Option.match(maybeSelected, {
+    onNone: () =>
+      primary.options.map((option) =>
+        FilterPill.view({ children: [option.label], onClick: choose(option) }, h),
+      ),
+    onSome: (selected) => [
+      FilterPill.view(
+        {
+          appearance: "selected",
+          onClick: choose(selected),
+          attributes: [h.AriaPressed("true"), h.AriaLabel(`${selected.label}: remover filtro`)],
+          children: [selected.label, Icons.x({ size: "sm" })],
+        },
+        h,
+      ),
+    ],
+  })
+}
+
 /**
- * The type's first choice inline, one tap each. Once chosen, it stands alone beside a button
- * that undoes it, followed by the filters it opens: popovers on wide screens, a drawer of every
- * filter on small ones.
+ * The type's first choice, then the filters it opens: popovers on wide screens, a drawer of
+ * every filter on small ones.
  */
 const filterBar = ({ model, query }: Omit<ViewState, "maybeToday">, h: SearchViewBuilder): Html =>
   Option.match(primaryFilterGroup(query), {
@@ -802,106 +1014,50 @@ const filterBar = ({ model, query }: Omit<ViewState, "maybeToday">, h: SearchVie
       const secondary = secondaryFilterGroups(query)
       const secondaryCount = activeSecondaryFilterCount(query)
 
-      return Option.match(
-        EffectArray.findFirst(primary.options, (option) => option.isSelected),
-        {
-          onNone: () =>
-            h.div(
-              styledAttributes([h.Role("group"), h.AriaLabel(primary.label)], buttonRowStyle),
-              primary.options.map((option) =>
-                AppButton.view(
+      return h.div(styledAttributes([h.Role("group"), h.AriaLabel("Filtros")], buttonRowStyle), [
+        ...primaryChoice({ query, primary }, h),
+        ...(EffectArray.isReadonlyArrayNonEmpty(secondary)
+          ? [
+              h.span(styledAttributes([h.AriaHidden(true)], dividerStyle)),
+              h.div(styledAttributes([], mobileOnlyStyle), [
+                FilterPill.view(
                   {
-                    children: [option.label],
-                    onClick: Message.ChangedSearchQuery({
-                      query: option.toggledQuery,
-                      navigation: "Push",
-                    }),
-                    tone: "accent",
-                    mode: "outline",
-                    size: "sm",
-                    styles: [noShrinkStyle],
+                    appearance: secondaryCount > 0 ? "active" : "idle",
+                    onClick: Message.ClickedOpenFilters(),
+                    children: [
+                      Icons.filter({ size: "sm" }),
+                      "Todos os filtros",
+                      ...countBadge(secondaryCount, h),
+                    ],
                   },
                   h,
                 ),
+              ]),
+              h.div(
+                styledAttributes([], desktopOnlyStyle),
+                secondary.map((group) => filterPopover({ model, group }, h)),
               ),
-            ),
-          onSome: (selected) =>
-            h.div(styledAttributes([h.AriaLabel("Filtros")], buttonRowStyle), [
+            ]
+          : []),
+        ...(secondaryCount > 0
+          ? [
               AppButton.view(
                 {
-                  children: [Icons.x({ size: "sm" })],
-                  ariaLabel: `Remover filtro ${selected.label}`,
+                  children: ["Limpar filtros"],
                   onClick: Message.ChangedSearchQuery({
-                    query: selected.toggledQuery,
+                    query: clearedSecondaryFilters(query),
                     navigation: "Push",
                   }),
                   tone: "accent",
-                  mode: "outline",
+                  mode: "bleed",
                   size: "sm",
                   styles: [noShrinkStyle],
                 },
                 h,
               ),
-              AppButton.view(
-                {
-                  children: [selected.label],
-                  attributes: [h.AriaPressed("true")],
-                  onClick: Message.ChangedSearchQuery({
-                    query: selected.toggledQuery,
-                    navigation: "Push",
-                  }),
-                  tone: "accent",
-                  size: "sm",
-                  styles: [noShrinkStyle],
-                },
-                h,
-              ),
-              ...(EffectArray.isReadonlyArrayNonEmpty(secondary)
-                ? [
-                    h.div(styledAttributes([], mobileOnlyStyle), [
-                      AppButton.view(
-                        {
-                          children: [
-                            Icons.filter({ size: "sm" }),
-                            "Todos os filtros",
-                            ...countBadge(secondaryCount, h),
-                          ],
-                          onClick: Message.ClickedOpenFilters(),
-                          tone: "accent",
-                          mode: secondaryCount > 0 ? "faded" : "outline",
-                          size: "sm",
-                          styles: [noShrinkStyle],
-                        },
-                        h,
-                      ),
-                    ]),
-                    h.div(
-                      styledAttributes([], desktopOnlyStyle),
-                      secondary.map((group) => filterPopover({ model, group }, h)),
-                    ),
-                  ]
-                : []),
-              ...(secondaryCount > 0
-                ? [
-                    AppButton.view(
-                      {
-                        children: ["Limpar filtros"],
-                        onClick: Message.ChangedSearchQuery({
-                          query: clearedSecondaryFilters(query),
-                          navigation: "Push",
-                        }),
-                        tone: "accent",
-                        mode: "bleed",
-                        size: "sm",
-                        styles: [noShrinkStyle],
-                      },
-                      h,
-                    ),
-                  ]
-                : []),
-            ]),
-        },
-      )
+            ]
+          : []),
+      ])
     },
   })
 
@@ -995,6 +1151,7 @@ const typedResults = (
             { title: searchTypeTitles[type], icon: searchTypeIcons[type], element: "h1" },
             h,
           ),
+          ...resultSummary({ query, maybeCount: typedCount(model, type) }, h),
         ]),
         filterBar({ model, query }, h),
         Match.value(type).pipe(
@@ -1057,7 +1214,7 @@ export const view = SearchComposition.makeView.withInputs<ViewInputs>(
       ...(Option.isNone(query.type) && !isBrowsing(query) ? [tabs(query, h)] : []),
       h.div(styledAttributes([], pageColumnStyle, contentStyle), [
         isBrowsing(query)
-          ? browse(h)
+          ? browse(model, h)
           : Option.match(query.type, {
               onNone: () => overview({ model, query, maybeToday }, h),
               onSome: (type) => typedResults({ model, query, maybeToday, type }, h),

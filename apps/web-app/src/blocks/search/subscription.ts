@@ -18,7 +18,7 @@ import { publicationsShownAt } from "./preview"
 const TYPING_SETTLE_TIME = Duration.millis(200)
 
 /** How many posts a posts search loads; the overview loads as many as its widest preview. */
-const PUBLICATION_PAGE_SIZE = 30
+export const PUBLICATION_PAGE_SIZE = 30
 
 export const subscriptions = SearchDefinition.makeSubscriptions((entry) => ({
   results: entry(

@@ -6,6 +6,7 @@ import { Schema } from "effect"
 import { AsyncData } from "foldkit"
 
 import { SearchQuery } from "../../app/route"
+import { RecentSearches } from "../../lib/recent-searches"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
 import { DrawerBlock } from "../../ui/drawer/drawer"
 
@@ -23,6 +24,7 @@ export const Model = Schema.Struct({
   publicationsAsyncData: PublicationResults.schema,
   profilesAsyncData: ProfileResults.schema,
   viewerBookmarks: ViewerBookmarks,
+  recentSearches: RecentSearches,
   filtersDrawer: DrawerBlock.Model,
   filterPopovers: Schema.Array(PopoverBlock.Model),
 })

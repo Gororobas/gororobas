@@ -59,6 +59,7 @@ export const ICONS_OF_INTEREST: ReadonlyArray<IconOfInterest> = [
   "pen",
   "translate",
   "info-circle",
+  "history",
   "book",
   "paw",
   "sledgehammer",

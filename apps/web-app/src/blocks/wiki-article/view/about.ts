@@ -2,6 +2,7 @@ import { BookmarkState } from "@gororobas/domain/common/enums"
 import type { WikiArticleContributor } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, HashMap, Option, Record } from "effect"
+import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { loginRouter, wikiArticleUrl } from "../../../app/route"
@@ -361,70 +362,64 @@ const publicationsPreview = (
     h,
   )
 
-const related = (model: Model, h: WikiArticleViewBuilder): Html =>
-  SectionCard.view(
-    {
-      title: "Artigos relacionados",
-      icon: Icons.encyclopedia,
-      children: [
-        asyncView(
-          {
-            asyncData: model.relatedAsyncData,
-            onData: (articles) => {
-              const kinds = EffectArray.dedupe(articles.map((article) => article.kind))
+/** Only shown once it has articles: an empty "related" list says nothing useful. */
+const related = (model: Model, h: WikiArticleViewBuilder): ReadonlyArray<Html> =>
+  EffectArray.fromOption(
+    Option.map(
+      Option.filter(AsyncData.getData(model.relatedAsyncData), EffectArray.isReadonlyArrayNonEmpty),
+      (articles) => {
+        const kinds = EffectArray.dedupe(articles.map((article) => article.kind))
 
-              const shown = articles
-                .filter((article) =>
-                  Option.match(model.maybeRelatedKindFilter, {
-                    onNone: () => true,
-                    onSome: (kind) => article.kind === kind,
-                  }),
-                )
-                .slice(0, PREVIEW_RELATED_COUNT)
+        const shown = articles
+          .filter((article) =>
+            Option.match(model.maybeRelatedKindFilter, {
+              onNone: () => true,
+              onSome: (kind) => article.kind === kind,
+            }),
+          )
+          .slice(0, PREVIEW_RELATED_COUNT)
 
-              return h.div(styledAttributes([], listStyle), [
-                ...(kinds.length > 1
-                  ? [
-                      filterChips(
-                        {
-                          label: "Filtrar por tipo",
-                          options: kinds.map(
-                            (kind) => [kind, wikiKindLabels[kind].plural] as const,
-                          ),
-                          selected: model.maybeRelatedKindFilter,
-                          toMessage: (maybeKind) => Message.ClickedRelatedKindFilter({ maybeKind }),
-                        },
-                        h,
-                      ),
-                    ]
-                  : []),
-                ...EffectArray.match(shown, {
-                  onEmpty: () => [emptyState("Nenhum artigo relacionado ainda.", h)],
-                  onNonEmpty: (nonEmpty) =>
-                    nonEmpty.map((article) =>
-                      h.keyed("div")(
-                        article.id,
-                        [],
-                        [
-                          WikiArticleRow.view(
-                            {
-                              article,
-                              maybeBookmarkState: HashMap.get(model.viewerBookmarks, article.id),
-                            },
-                            h,
-                          ),
-                        ],
-                      ),
+        return h.div(styledAttributes([], listStyle), [
+          ...(kinds.length > 1
+            ? [
+                filterChips(
+                  {
+                    label: "Filtrar por tipo",
+                    options: kinds.map((kind) => [kind, wikiKindLabels[kind].plural] as const),
+                    selected: model.maybeRelatedKindFilter,
+                    toMessage: (maybeKind) => Message.ClickedRelatedKindFilter({ maybeKind }),
+                  },
+                  h,
+                ),
+              ]
+            : []),
+          ...EffectArray.match(shown, {
+            onEmpty: () => [emptyState("Nenhum artigo relacionado ainda.", h)],
+            onNonEmpty: (nonEmpty) =>
+              nonEmpty.map((article) =>
+                h.keyed("div")(
+                  article.id,
+                  [],
+                  [
+                    WikiArticleRow.view(
+                      {
+                        article,
+                        maybeBookmarkState: HashMap.get(model.viewerBookmarks, article.id),
+                      },
+                      h,
                     ),
-                }),
-              ])
-            },
-          },
-          h,
-        ),
-      ],
-    },
-    h,
+                  ],
+                ),
+              ),
+          }),
+        ])
+      },
+    ),
+  ).map((content) =>
+    SectionCard.view(
+      { title: "Artigos relacionados", icon: Icons.encyclopedia, children: [content] },
+      h,
+    ),
   )
 
 const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
@@ -607,7 +602,7 @@ export const view = (
       ),
       ...ordered({ order: 5, children: aboutContent(page, h) }, h),
       ...ordered({ order: 6, children: [publicationsPreview({ model, page, maybeToday }, h)] }, h),
-      ...ordered({ order: 7, children: [related(model, h)] }, h),
+      ...ordered({ order: 7, children: related(model, h) }, h),
       ...ordered({ order: 8, children: photosPreview(page, h) }, h),
     ]),
     h.aside(styledAttributes([h.AriaLabel(`Quem acompanha ${aboutName(page)}`)], columnStyle), [

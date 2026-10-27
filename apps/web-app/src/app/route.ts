@@ -299,5 +299,10 @@ export const wikiArticleUrl = (
     ? wikiArticleAboutRouter({ kind: lookup.kind, handle: lookup.handle, tab })
     : wikiArticleTabRouter({ kind: lookup.kind, handle: lookup.handle, tab })
 
+export const searchQueryOf = ({
+  _tag,
+  ...query
+}: typeof ApplicationRoute.Search.Type): SearchQuery => query
+
 export const searchUrl = (query: Partial<SearchQuery> = {}): string =>
   searchRouter({ ...emptySearchQuery, ...query })

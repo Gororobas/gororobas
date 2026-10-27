@@ -1,13 +1,14 @@
-import { Option, Schema } from "effect"
+import { Array as EffectArray, Option, Schema } from "effect"
 import { AsyncData } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
 import { SearchQuery, type SearchType } from "../../app/route"
-import { NavigateSearch } from "./command"
+import { addRecentSearch } from "../../lib/recent-searches"
+import { NavigateSearch, SaveRecentSearches } from "./command"
 import { FiltersDrawerBinding, SearchComposition } from "./composition"
 import { makeFieldsStep } from "./definition"
 import { isResultTypeShown } from "./filters"
-import { ProfileResults, PublicationResults, WikiResults } from "./model"
+import { type Model, ProfileResults, PublicationResults, WikiResults } from "./model"
 
 const isSameQuery = Schema.toEquivalence(SearchQuery)
 
@@ -29,6 +30,24 @@ const pendingIfShown = <A>({
 }>): AsyncData.AsyncData<A, string> =>
   isResultTypeShown(query, type) ? pending(asyncData) : AsyncData.Idle()
 
+const remember = (model: Model, query: SearchQuery): Model["recentSearches"] =>
+  Option.match(query.text, {
+    onNone: () => model.recentSearches,
+    onSome: (text) => addRecentSearch(model.recentSearches, { text, type: query.type }),
+  })
+
+/** Records the query and saves the history, when the query adds to it. */
+const rememberStep = (model: Model, query: SearchQuery) => {
+  const recentSearches = remember(model, query)
+
+  return recentSearches === model.recentSearches
+    ? { model }
+    : {
+        model: modifyFields(model, { recentSearches: () => recentSearches }),
+        commands: [SaveRecentSearches({ recentSearches })],
+      }
+}
+
 export const update = SearchComposition.makeUpdate({
   InformedOfQueryChange: (model, { query }) =>
     Option.exists(model.maybeAnsweredQuery, (answered) => isSameQuery(answered, query))
@@ -42,6 +61,25 @@ export const update = SearchComposition.makeUpdate({
             profilesAsyncData: (asyncData) => pendingIfShown({ query, type: "people", asyncData }),
           }),
         },
+  InformedOfOpenedResult: (model, { query }) => rememberStep(model, query),
+  SubmittedSearch: (model, { query }) => {
+    const remembered = rememberStep(model, query)
+    return {
+      model: remembered.model,
+      commands: [...(remembered.commands ?? []), NavigateSearch({ query, navigation: "Replace" })],
+    }
+  },
+  ClickedRemoveRecentSearch: (model, { index }) => {
+    const recentSearches = EffectArray.remove(model.recentSearches, index)
+    return {
+      model: modifyFields(model, { recentSearches: () => recentSearches }),
+      commands: [SaveRecentSearches({ recentSearches })],
+    }
+  },
+  SucceededLoadRecentSearches: makeFieldsStep.fromMessage(({ recentSearches }) => ({
+    recentSearches: () => recentSearches,
+  })),
+  CompletedSaveRecentSearches: makeFieldsStep(() => ({})),
   ChangedSearchQuery: (model, { query, navigation }) => ({
     model,
     commands: [NavigateSearch({ query, navigation })],

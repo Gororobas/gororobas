@@ -1,18 +1,30 @@
 import type { MediaAssetRow } from "@gororobas/domain/media-assets/domain"
 import { tiptapToText } from "@gororobas/domain/rich-text/tiptap-to-text"
 import type { WikiArticleQueriedPageData } from "@gororobas/domain/wiki/domain"
-import { Style } from "@pleat/core"
+import { Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Option, String as EffectString } from "effect"
 import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { type WikiArticleTab, wikiArticleUrl } from "../../../app/route"
-import { AppButton } from "../../../ui/app-button"
 import { AppText } from "../../../ui/app-text"
 import { Chip } from "../../../ui/chip"
+import * as Icons from "../../../ui/icons"
+import type { IconConfig } from "../../../ui/icons"
 import { styledAttributes } from "../../../ui/pleat-attributes"
+import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import { emptyStateStyle } from "../../../ui/styles/surfaces"
-import { breakpoint, space } from "../../../ui/theme"
+import {
+  borderWidth,
+  breakpoint,
+  duration,
+  fontSize,
+  fontWeight,
+  radius,
+  space,
+  toneColors,
+  tones,
+} from "../../../ui/theme"
 import type { WikiArticleViewBuilder } from "../composition"
 import type { Model } from "../model"
 
@@ -46,12 +58,45 @@ export const chipRowStyle = Style.make({
 
 const tabsStyle = Style.make({
   display: "flex",
-  gap: space[2],
+  gap: space[1],
   overflowX: "auto",
   scrollbarWidth: "none",
 })
 
-const tabStyle = Style.make({ flexShrink: 0 })
+/** Underlined tabs that sit on the header's bottom edge. */
+const tabStyle = Style.make({
+  display: "inline-flex",
+  flexShrink: 0,
+  alignItems: "center",
+  gap: space[2],
+  paddingInline: space[3],
+  paddingBlock: space[3],
+  borderBlockEnd: `${borderWidth.thick} solid transparent`,
+  borderStartStartRadius: radius.md,
+  borderStartEndRadius: radius.md,
+  color: tones.neutral.ramp[700],
+  fontWeight: fontWeight.semibold,
+  outline: "none",
+  transitionProperty: "color, background-color, border-color",
+  transitionDuration: duration.control,
+}).pipe(
+  Style.when(When.hover, { color: tones.neutral.ramp[900], backgroundColor: toneColors.hover }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
+
+const currentTabStyle = Style.make({
+  color: tones.accent.ramp[800],
+  borderBlockEndColor: tones.accent.ramp[600],
+})
+
+const compactTabStyle = Style.make({ paddingBlock: space[2], fontSize: fontSize.footnote })
+
+const tabIcons: Readonly<Record<WikiArticleTab, (config?: IconConfig) => Html>> = {
+  About: Icons.encyclopedia,
+  Publications: Icons.clipboard,
+  Photos: Icons.gallery,
+  Contributions: Icons.users,
+}
 
 export const images = (page: Page): ReadonlyArray<ImageAsset> =>
   EffectArray.filter(page.mediaAssets, (media): media is ImageAsset => media.format === "IMAGE")
@@ -64,7 +109,18 @@ export const caption = (media: MediaAssetRow): Option.Option<string> =>
   )
 
 export const tabs = (
-  { page, currentTab, label }: Readonly<{ page: Page; currentTab: WikiArticleTab; label: string }>,
+  {
+    page,
+    currentTab,
+    label,
+    isCompact = false,
+  }: Readonly<{
+    page: Page
+    currentTab: WikiArticleTab
+    label: string
+    /** The compact header's tabs, smaller and without icons. */
+    isCompact?: boolean
+  }>,
   h: WikiArticleViewBuilder,
 ): Html => {
   const entries: ReadonlyArray<readonly [WikiArticleTab, string]> = [
@@ -76,20 +132,25 @@ export const tabs = (
 
   return h.nav(
     styledAttributes([h.AriaLabel(label)], tabsStyle),
-    entries.map(([tab, label]) =>
-      AppButton.view(
-        {
-          children: [label],
-          href: wikiArticleUrl({ kind: page.kind, handle: page.handle }, tab),
-          ariaCurrent: tab === currentTab ? "page" : "false",
-          mode: tab === currentTab ? "default" : "outline",
-          tone: "accent",
-          size: "sm",
-          styles: [tabStyle],
-        },
-        h,
-      ),
-    ),
+    entries.map(([tab, tabLabel]) => {
+      const isCurrent = tab === currentTab
+
+      return h.a(
+        styledAttributes(
+          [
+            h.Href(wikiArticleUrl({ kind: page.kind, handle: page.handle }, tab)),
+            h.AriaCurrent(isCurrent ? "page" : "false"),
+          ],
+          tabStyle,
+          ...(isCurrent ? [currentTabStyle] : []),
+          ...(isCompact ? [compactTabStyle] : []),
+        ),
+        [
+          ...(isCompact ? [] : [tabIcons[tab]({ mode: isCurrent ? "duotone" : "outline" })]),
+          tabLabel,
+        ],
+      )
+    }),
   )
 }
 

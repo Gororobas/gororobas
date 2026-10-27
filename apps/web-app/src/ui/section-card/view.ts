@@ -8,6 +8,7 @@ import { styledAttributes } from "../pleat-attributes"
 import { focusRingDeclarations } from "../styles/focus-ring"
 import {
   borderWidth,
+  duration,
   fontSize,
   fontWeight,
   radius,
@@ -39,18 +40,30 @@ const headingRowStyle = Style.make({
 const headingStyle = Style.make({ display: "flex", alignItems: "center", gap: space[2] })
 const titleStyle = Style.make({ color: tones.secondary.emphasis })
 
-const footerLinkStyle = Style.make({
+const footerStyle = Style.make({
   display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: space[2],
+  justifyContent: "flex-end",
   paddingBlockStart: space[3],
-  borderBlockStart: `${borderWidth.strong} solid ${tones.primary.ramp[300]}`,
-  color: tones.secondary.emphasis,
+  borderBlockStart: `${borderWidth.hairline} solid ${tones.primary.ramp[300]}`,
+})
+
+const footerLinkStyle = Style.make({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: space[1],
+  paddingBlock: space[1],
+  paddingInline: space[2],
+  borderRadius: radius.full,
+  color: tones.accent.ramp[800],
   fontSize: fontSize.footnote,
   fontWeight: fontWeight.semibold,
   outline: "none",
-}).pipe(Style.when(When.focusVisible, focusRingDeclarations))
+  transitionProperty: "background-color",
+  transitionDuration: duration.control,
+}).pipe(
+  Style.when(When.hover, { backgroundColor: tones.accent.ramp[100] }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
 
 export type SectionCardConfig = Readonly<{
   title: string
@@ -93,9 +106,11 @@ export const view = <Message>(config: SectionCardConfig, h: HtmlBuilder<Message>
       ...(config.footerLink === undefined
         ? []
         : [
-            h.a(styledAttributes([h.Href(config.footerLink.href)], footerLinkStyle), [
-              Icons.plus({ size: "md" }),
-              config.footerLink.label,
+            h.div(styledAttributes([], footerStyle), [
+              h.a(styledAttributes([h.Href(config.footerLink.href)], footerLinkStyle), [
+                config.footerLink.label,
+                Icons.arrowRight({ size: "sm" }),
+              ]),
             ]),
           ]),
     ],

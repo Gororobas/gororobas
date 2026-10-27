@@ -258,7 +258,8 @@ export const isResultTypeShown = (query: SearchQuery, type: SearchType): boolean
 
 // API PARAMETERS
 
-const nonEmptyText = (query: SearchQuery) =>
+/** The query's text, trimmed, when there is any. */
+export const nonEmptyText = (query: SearchQuery): Option.Option<string> =>
   Option.filter(Option.map(query.text, EffectString.trim), EffectString.isNonEmpty)
 
 const optionalText = (query: SearchQuery): { readonly text?: string } =>

@@ -15,7 +15,10 @@ const prepare = () =>
     init,
     update,
     view,
-    operations: { informQueryChanged: Message.InformedOfQueryChange },
+    operations: {
+      informQueryChanged: Message.InformedOfQueryChange,
+      informOpenedResult: Message.InformedOfOpenedResult,
+    },
     subscriptions,
     EffectsLayer: Layer.mergeAll(CommandsLayer, subscriptions.layer),
   })

@@ -12,6 +12,7 @@ import { pageColumnStyle } from "../../../ui/styles/page-column"
 import {
   borderWidth,
   breakpoint,
+  controlSize,
   layer,
   space,
   toneColors,
@@ -42,7 +43,6 @@ const headerStyle = Style.make({
   display: "grid",
   rowGap: space[4],
   paddingBlockStart: space[5],
-  paddingBlockEnd: space[3],
 }).pipe(Style.when(breakpoint.md, { paddingBlockStart: space[8] }))
 
 const identityStyle = Style.make({ display: "flex", alignItems: "center", gap: space[4] })
@@ -85,7 +85,7 @@ const compactInnerStyle = Style.make({
   display: "flex",
   alignItems: "center",
   gap: space[3],
-  paddingBlock: space[2],
+  minBlockSize: controlSize.lg,
 })
 
 const compactIdentityStyle = Style.make({
@@ -103,9 +103,13 @@ const compactNameStyle = Style.make({
   textOverflow: "ellipsis",
 })
 
-const compactTabsStyle = Style.make({ display: "none", minInlineSize: 0 }).pipe(
-  Style.when(breakpoint.md, { display: "block", marginInlineStart: "auto" }),
-)
+const compactTabsStyle = Style.make({
+  display: "none",
+  alignSelf: "flex-end",
+  minInlineSize: 0,
+}).pipe(Style.when(breakpoint.md, { display: "block", marginInlineStart: "auto" }))
+
+const compactIdentityPaddingStyle = Style.make({ paddingBlock: space[2] })
 
 const scientificName = (page: Page): Option.Option<string> =>
   page.kind === "PLANT"
@@ -184,29 +188,39 @@ const compactHeader = (
 ): Html =>
   h.div(styledAttributes([], compactHeaderStyle, toneStyle("primary")), [
     h.div(styledAttributes([], pageColumnStyle, compactInnerStyle), [
-      h.a(styledAttributes([h.Href(wikiArticleUrl(page))], compactIdentityStyle), [
-        Thumbnail.view(
-          {
-            maybeMediaAssetId: Option.map(EffectArray.head(images(page)), (photo) => photo.id),
-            alt: "",
-            size: "xs",
-          },
-          h,
+      h.a(
+        styledAttributes(
+          [h.Href(wikiArticleUrl(page))],
+          compactIdentityStyle,
+          compactIdentityPaddingStyle,
         ),
-        AppText.view(
-          {
-            element: "span",
-            appearance: "large",
-            weight: "semibold",
-            lineHeight: "tight",
-            styles: [compactNameStyle],
-            children: [primaryName(page)],
-          },
-          h,
-        ),
-      ]),
+        [
+          Thumbnail.view(
+            {
+              maybeMediaAssetId: Option.map(EffectArray.head(images(page)), (photo) => photo.id),
+              alt: "",
+              size: "xs",
+            },
+            h,
+          ),
+          AppText.view(
+            {
+              element: "span",
+              appearance: "large",
+              weight: "semibold",
+              lineHeight: "tight",
+              styles: [compactNameStyle],
+              children: [primaryName(page)],
+            },
+            h,
+          ),
+        ],
+      ),
       h.div(styledAttributes([], compactTabsStyle), [
-        tabs({ page, currentTab: tab, label: `Seções ${ofName(page)}, atalho` }, h),
+        tabs(
+          { page, currentTab: tab, label: `Seções ${ofName(page)}, atalho`, isCompact: true },
+          h,
+        ),
       ]),
     ]),
   ])

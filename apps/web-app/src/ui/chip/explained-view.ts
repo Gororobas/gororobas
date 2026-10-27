@@ -11,8 +11,9 @@ const triggerStyle = Style.make({ border: 0 })
 const iconStyle = Style.make({ opacity: 0.7 })
 
 // NOTE: A native popover opens on tap and keyboard alike and closes on outside clicks and
-// Escape, without a model for every chip. Where anchor positioning is supported it sits under
-// its chip; elsewhere it keeps the browser's centered placement.
+// Escape, without a model for every chip. `interestfor` opens it on hover too. Where anchor
+// positioning is supported it sits under its chip; elsewhere it keeps the browser's centered
+// placement.
 const popoverStyle = Style.make({
   maxInlineSize: "min(22rem, calc(100vw - 2rem))",
   padding: space[3],
@@ -54,6 +55,8 @@ export const view = <Message>(
           [
             h.Type("button"),
             h.Attribute("popovertarget", id),
+            // Hovering or focusing also shows it, where interest invokers are supported.
+            h.Attribute("interestfor", id),
             h.AriaDescription(`O que significa ${label}?`),
           ],
           chipStyle({ appearance: "tag", isInteractive: true }),
