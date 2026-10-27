@@ -8,7 +8,7 @@ import {
   WikiArticleEditableData,
   ProfileId,
 } from "@gororobas/domain"
-import { Effect, MutableHashMap, Option, Predicate, Record, Schema } from "effect"
+import { Effect, MutableHashMap, Option, Predicate, Record, Result, Schema } from "effect"
 import { diff } from "json-diff-ts"
 import { LoroDoc, LoroMap } from "loro-crdt"
 
@@ -128,24 +128,30 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
 
         // Synthetic migration history replaces rich-text subtrees; live editor
         // updates must retain their container identities through loro-prosemirror.
-        Record.toEntries(translations).forEach(([language, translation]) => {
-          if (translation.content !== null && translation.content !== undefined) {
-            initializeLoroRichText(
-              document
-                .getMap("translations")
-                .ensureMergeableMap(language)
-                .ensureMergeableMap("content"),
-              assignTiptapNodeIds(
-                // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translation content is arbitrary JSON until decoded as a rich-text document.
-                Schema.decodeUnknownSync(TiptapDocument)(translation.content),
-                {
-                  referenceContent: Option.getOrUndefined(
-                    MutableHashMap.get(previousContents, language),
-                  ),
-                },
-              ),
-            )
+        const writtenContents = Record.filterMap(translations, (translation, language) => {
+          if (translation.content === null || translation.content === undefined) {
+            return Result.failVoid
           }
+
+          const content = assignTiptapNodeIds(
+            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translation content is arbitrary JSON until decoded as a rich-text document.
+            Schema.decodeUnknownSync(TiptapDocument)(translation.content),
+            {
+              referenceContent: Option.getOrUndefined(
+                MutableHashMap.get(previousContents, language),
+              ),
+            },
+          )
+
+          initializeLoroRichText(
+            document
+              .getMap("translations")
+              .ensureMergeableMap(language)
+              .ensureMergeableMap("content"),
+            content,
+          )
+
+          return Result.succeed(Schema.encodeSync(TiptapDocument)(content))
         })
 
         document.commit({
@@ -164,6 +170,16 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
         results.push(
           WikiMigrationVersion.make({
             ...version,
+            // What the CRDT holds: the converted article with the node IDs assigned while writing it.
+            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Translations were checked as JSON records above; the content swap keeps that shape.
+            article: yield* Schema.decodeUnknownEffect(WikiArticleEditableData)({
+              ...encoded,
+              translations: Record.map(translations, (translation, language) =>
+                writtenContents[language] === undefined
+                  ? translation
+                  : { ...translation, content: writtenContents[language] },
+              ),
+            }),
             frontier,
             loroDiff: document.diff(from, frontier, true),
             changes: diff(previous, encoded),
