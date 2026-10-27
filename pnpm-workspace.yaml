@@ -41,6 +41,11 @@ catalog:
   vite-plus: 1.1.0
 
 minimumReleaseAgeExclude:
+  - "@foldkit/devtools@0.169.0-canary.f3be22cfeefe"
+  - "@foldkit/ui@0.169.0-canary.f3be22cfeefe"
+  - foldkit@0.169.0-canary.f3be22cfeefe
+  - "@foldkit/oxlint-plugin@0.15.3-canary.f3be22cfeefe"
+  - "@foldkit/vite-plugin@0.28.0-canary.f3be22cfeefe"
   - "@yielded/crypto@0.1.0-beta.42"
   - "@yielded/auth-persistence@0.1.0-beta.42"
   - "@yielded/auth@0.1.0-beta.42"
@@ -50,6 +55,9 @@ minimumReleaseAgeExclude:
 nodeLinker: hoisted
 
 overrides:
+  # Pleat is a workspace package that pins its own dev versions; one copy of each runtime must serve the whole app.
+  effect: "catalog:"
+  foldkit: 0.169.0-canary.f3be22cfeefe
   # Hoisted effect-oxlint and its plugins must share the same Schema runtime.
   "@mpsuesser/oxlint-plugin-effect>effect": "catalog:"
 
