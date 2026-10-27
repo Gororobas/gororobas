@@ -9,7 +9,6 @@ import {
   InvalidCrdtUpdateError,
   LoroDocFrontier,
   type PostSourceData,
-  type PublicationClassification,
   PublicationCommitId,
   PublicationCrdtRow,
   PublicationCrdt,
@@ -18,20 +17,11 @@ import {
   PublicationId,
   PublicationNotFoundError,
   PublicationTranslationRow,
-  PublicationWikiArticleRow,
   type PublicationSourceData,
+  entityReferenceLinks,
   tiptapToText,
 } from "@gororobas/domain"
-import {
-  Array as EffectArray,
-  Context,
-  DateTime,
-  Effect,
-  Equal,
-  Option,
-  Schema,
-  Predicate,
-} from "effect"
+import { Array as EffectArray, Context, DateTime, Effect, Equal, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
 import {
@@ -46,7 +36,7 @@ import {
   insertPublicationCommitRow,
   insertPublicationCrdtRow,
   insertPublicationTranslationRows,
-  insertPublicationWikiArticleRows,
+  replacePublicationWikiArticleLinks,
   updatePublicationCrdtRow,
   upsertPublicationRow,
 } from "./mutations.js"
@@ -138,30 +128,25 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
       }
 
-      const persistWikiArticleProjections = (input: {
-        classification?: PublicationClassification
+      /** Links from `entityReference` nodes; the source content is the only one people write. */
+      const persistEntityReferenceLinks = (input: {
+        sourceData: SourceContent
         publicationId: PublicationId
-      }) => {
-        const rows = (input.classification?.wikiArticles ?? []).flatMap((wikiArticle) => {
-          if (!Predicate.isTagged(wikiArticle, "ResolvedExistingWikiArticleExtraction")) return []
-
-          return PublicationWikiArticleRow.make({
-            extractionText: wikiArticle.extractionText,
+      }) =>
+        replacePublicationWikiArticleLinks({
+          publicationId: input.publicationId,
+          source: "ENTITY_REFERENCE",
+          rows: entityReferenceLinks([
+            { path: ["sourceContent"], content: input.sourceData.sourceContent },
+          ]).map((link) => ({
             publicationId: input.publicationId,
-            wikiArticleId: wikiArticle.wikiArticleId,
-          })
+            wikiArticleId: link.wikiArticleId,
+            source: "ENTITY_REFERENCE",
+            evidence: link.evidence,
+          })),
         })
-
-        return persistProjectionJunctionTables({
-          deleteRows: sql`DELETE FROM publication_wiki_articles WHERE publication_id = ${input.publicationId}`,
-          insertRows: EffectArray.isReadonlyArrayNonEmpty(rows)
-            ? insertPublicationWikiArticleRows(rows)
-            : Effect.void,
-        })
-      }
 
       const persistPublicationProjection = (input: {
-        classification?: PublicationClassification
         currentCrdtFrontier: LoroDocFrontier
         publicationId: PublicationId
         sourceData: PublicationSourceData
@@ -178,12 +163,8 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             publicationId: input.publicationId,
           })
 
-          yield* persistWikiArticleProjections({
-            ...(input.classification
-              ? {
-                  classification: input.classification,
-                }
-              : {}),
+          yield* persistEntityReferenceLinks({
+            sourceData: input.sourceData,
             publicationId: input.publicationId,
           })
         })
@@ -210,7 +191,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           yield* persistCrdtDocumentCreation({
             insertCrdt: insertPublicationCrdtRow(
               PublicationCrdtRow.make({
-                classification: null,
+                linkInference: null,
                 createdAt: now,
                 crdtSnapshot: created.crdtSnapshot,
                 id: publicationId,

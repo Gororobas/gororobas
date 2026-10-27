@@ -30,7 +30,9 @@ export const translateTiptapContent = Effect.fn("translateTiptapContent")(functi
   })
 
   return {
-    content: tiptapFromHtml(translatedHtml),
+    // Translations keep the source's node IDs, so evidence located in the source points at the
+    // same paragraphs in every language.
+    content: tiptapFromHtml(translatedHtml, { referenceContent: content }),
     html: translatedHtml,
     serviceId: service.getServiceId(),
   }

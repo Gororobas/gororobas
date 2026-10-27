@@ -4,6 +4,7 @@ import { LoroList, LoroMap, LoroText, type Delta } from "loro-crdt"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
 import { toLoroString, toLoroValue } from "../crdts/loro-values.js"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "./domain.js"
+import { assignTiptapNodeIds } from "./node-ids.js"
 
 const JsonAttributes = Schema.Record(Schema.String, Schema.Json)
 type RichTextNode = TiptapNode | TiptapTextNode | TiptapDocument
@@ -106,15 +107,15 @@ export const updateLoroRichText = (container: LoroMap, content: TiptapDocument) 
     }
   }
 
-  // No-op edits must not create containers or formatting operations.
-  if (
-    container.get("nodeName") !== undefined &&
-    Equal.equals(loroRichTextToTiptap(container), content)
-  ) {
-    return
-  }
+  const current =
+    container.get("nodeName") !== undefined ? loroRichTextToTiptap(container) : undefined
+  // Content submitted without node IDs keeps the identities of the nodes it replaces.
+  const identified = assignTiptapNodeIds(content, { referenceContent: current })
 
-  writeNode(container, content)
+  // No-op edits must not create containers or formatting operations.
+  if (current !== undefined && Equal.equals(current, identified)) return
+
+  writeNode(container, identified)
 }
 
 /**
@@ -169,7 +170,7 @@ export const initializeLoroRichText = (container: LoroMap, document: TiptapDocum
     })
   }
 
-  writeNode(container, document)
+  writeNode(container, assignTiptapNodeIds(document))
 }
 
 /** Read containers directly: doc.toJSON() discards LoroText marks. */

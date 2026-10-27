@@ -1,4 +1,4 @@
-import { Node } from "@tiptap/core"
+import { mergeAttributes, Node } from "@tiptap/core"
 import { MutableHashSet, Option, Schema } from "effect"
 
 import {
@@ -36,13 +36,16 @@ export const EntityReference = Node.create({
   renderText: ({ node }) =>
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
     Schema.decodeUnknownSync(EntityReferenceAttributes)(node.attrs).labelAtInsertion,
-  renderHTML: ({ node }) => {
+  // `nodeId` is rendered as `data-node-id` by `NodeIdExtension`, like on every other node.
+  renderHTML: ({ node, HTMLAttributes }) => {
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
-    const attributes = Schema.decodeUnknownSync(EntityReferenceAttributes)(node.attrs)
+    const { ...attributes } = Schema.decodeUnknownSync(EntityReferenceAttributes)(node.attrs)
 
     return [
       "span",
-      { "data-entity-reference": Schema.encodeSync(AttributesJson)(attributes) },
+      mergeAttributes(HTMLAttributes, {
+        "data-entity-reference": Schema.encodeSync(AttributesJson)(attributes),
+      }),
       attributes.labelAtInsertion,
     ]
   },

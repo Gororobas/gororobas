@@ -32,7 +32,9 @@ const plant = decodePlant({
       content: {
         type: "doc",
         version: 1,
-        content: [{ type: "paragraph", attrs: { ["__proto__"]: "retained" } }],
+        content: [
+          { type: "paragraph", attrs: { ["__proto__"]: "retained", nodeId: "paragraph001" } },
+        ],
       },
     },
     pt: { commonNames: [{ id: "commonname02", name: "Abóbora" }] },

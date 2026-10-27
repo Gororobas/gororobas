@@ -1,4 +1,4 @@
-import { ContentLanguage } from "@gororobas/domain"
+import { ContentLanguage, TiptapNodeId } from "@gororobas/domain"
 import {
   AuthSecurityRevision,
   Handle,
@@ -164,10 +164,17 @@ export const withPerson = <A, E, R>(
     Effect.flatMap((session) => withSession(action, session)),
   )
 
+/** Editor content carries node IDs (see `NodeIdExtension`), so stored content equals what was sent. */
 export const textToRichTextDocument = (text: string): TiptapDocument => ({
   type: "doc",
   version: 1,
-  content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+  content: [
+    {
+      type: "paragraph",
+      attrs: { nodeId: TiptapNodeId.make("paragraph001") },
+      content: [{ type: "text", text }],
+    },
+  ],
 })
 
 const ContentRepositoriesLayer = Layer.mergeAll(

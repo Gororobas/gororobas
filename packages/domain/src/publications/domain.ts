@@ -3,7 +3,6 @@
  */
 import { Schema } from "effect"
 
-import { PublicationClassification } from "../classification/domain.js"
 import { ContentLanguage } from "../common/content-language.js"
 import {
   EventAttendanceMode,
@@ -30,6 +29,7 @@ import {
 } from "../common/primitives.js"
 import { SourceContent, SourceContentFields, TranslatedContent } from "../common/source-content.js"
 import { CrdtCommit, LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
+import { LinkInferenceRun, makeLink, makeLinkRow } from "../links/domain.js"
 import { MediaAssetRow } from "../media-assets/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
@@ -97,12 +97,10 @@ export type EventSourceData = typeof EventSourceData.Type
 export const PublicationSourceData = Schema.Union([PostSourceData, EventSourceData])
 export type PublicationSourceData = typeof PublicationSourceData.Type
 
-const MatchedWikiArticle = Schema.Struct({
-  wikiArticleId: WikiArticleId,
-  extractionText: Schema.NullOr(Schema.String),
-})
-
-const MatchedWikiArticlesAsJson = Schema.fromJsonString(Schema.Array(MatchedWikiArticle))
+export const PublicationWikiArticleLink = makeLink({ wikiArticleId: WikiArticleId }).pipe(
+  Schema.toTaggedUnion("source"),
+)
+export type PublicationWikiArticleLink = typeof PublicationWikiArticleLink.Type
 
 const PublicationPageDataCommonFields = {
   ...CorePublicationMetadata.fields,
@@ -112,7 +110,7 @@ const PublicationPageDataCommonFields = {
   language: Schema.NullOr(ContentLanguage),
   originalLanguage: Schema.NullOr(ContentLanguage),
   updatedAt: TimestampColumn,
-  wikiArticles: MatchedWikiArticlesAsJson,
+  wikiArticles: Schema.fromJsonString(Schema.Array(PublicationWikiArticleLink)),
 }
 
 const PublicationPagePostData = Schema.Struct({
@@ -272,7 +270,7 @@ export type PublicationHistoryEntry = typeof PublicationHistoryEntry.Type
 
 export const PublicationCrdtRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  classification: Schema.NullOr(Schema.fromJsonString(PublicationClassification)),
+  linkInference: Schema.NullOr(Schema.fromJsonString(LinkInferenceRun)),
   id: PublicationId,
   crdtSnapshot: LoroDocSnapshot,
   moderationStatus: ModerationStatus,
@@ -330,10 +328,9 @@ export const PublicationTranslationRow = Schema.Struct({
 
 export type PublicationTranslationRow = typeof PublicationTranslationRow.Type
 
-export const PublicationWikiArticleRow = Schema.Struct({
-  extractionText: Schema.NullOr(Schema.String),
+export const PublicationWikiArticleRow = makeLinkRow({
   publicationId: PublicationId,
   wikiArticleId: WikiArticleId,
-})
+}).pipe(Schema.toTaggedUnion("source"))
 
 export type PublicationWikiArticleRow = typeof PublicationWikiArticleRow.Type

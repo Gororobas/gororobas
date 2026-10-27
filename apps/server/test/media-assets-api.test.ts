@@ -51,6 +51,7 @@ import {
   captureEmailDelivery,
 } from "./authentication-helpers.js"
 import { textToRichTextDocument } from "./feature-test-helpers.js"
+import { LinkInferenceTestLayer } from "./test-helpers.js"
 const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
 it.live(
@@ -117,6 +118,7 @@ it.live(
           Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
         ),
       ),
+      Layer.provideMerge(LinkInferenceTestLayer),
       Layer.provideMerge(HttpPlatform.layer),
       Layer.provideMerge(Layer.mergeAll(database, IdGenLive, NodeServices.layer, Etag.layer)),
     )

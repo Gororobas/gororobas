@@ -2,6 +2,7 @@ import StarterKit from "@tiptap/starter-kit"
 
 import { EntityReference } from "./entity-reference-extension.js"
 import { MediaGrid } from "./media-grid-extension.js"
+import { NodeIdExtension } from "./node-id-extension.js"
 
 export const tiptapExtensions = [
   StarterKit.configure({
@@ -11,4 +12,5 @@ export const tiptapExtensions = [
   }),
   EntityReference,
   MediaGrid,
+  NodeIdExtension,
 ]

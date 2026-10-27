@@ -75,3 +75,9 @@ export const LoroListItemId = NanoId.check(Schema.isMinLength(12), Schema.isMaxL
   Schema.brand("LoroListItemId"),
 )
 export type LoroListItemId = typeof LoroListItemId.Type
+
+/** Identifies a node within one Tiptap document; unique per document, not globally. */
+export const TiptapNodeId = NanoId.check(Schema.isMinLength(12), Schema.isMaxLength(12)).pipe(
+  Schema.brand("TiptapNodeId"),
+)
+export type TiptapNodeId = typeof TiptapNodeId.Type

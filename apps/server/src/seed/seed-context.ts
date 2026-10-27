@@ -12,7 +12,7 @@ import type {
   WikiArticleStatus,
 } from "@gororobas/domain"
 
-import type { Mention } from "./rich-text.js"
+import type { Reference } from "./rich-text.js"
 import type { SeedMedia } from "./seed-media.js"
 import type { SeedTimeline } from "./seed-timeline.js"
 import type { CatalogPlant, Localized } from "./vocabulary.js"
@@ -82,13 +82,13 @@ export const reviewers = (context: Pick<SeedContext, "people">) =>
   )
 
 /** Entities rich text can reference: people, organizations, articles and publications. */
-export const mentionsFor = (context: Partial<SeedContext>): ReadonlyArray<Mention> => [
-  ...(context.people ?? []).slice(0, 50).map((person): Mention => ({
+export const referencesFor = (context: Partial<SeedContext>): ReadonlyArray<Reference> => [
+  ...(context.people ?? []).slice(0, 50).map((person): Reference => ({
     referenceType: "PROFILE",
     referenceId: person.id,
     label: person.name,
   })),
-  ...(context.organizations ?? []).slice(0, 20).map((organization): Mention => ({
+  ...(context.organizations ?? []).slice(0, 20).map((organization): Reference => ({
     referenceType: "PROFILE",
     referenceId: organization.id,
     label: organization.name,
@@ -96,12 +96,12 @@ export const mentionsFor = (context: Partial<SeedContext>): ReadonlyArray<Mentio
   ...(context.articles ?? [])
     .filter((article) => article.status === "PUBLISHED")
     .slice(0, 80)
-    .map((article): Mention => ({
+    .map((article): Reference => ({
       referenceType: "WIKI_ARTICLE",
       referenceId: article.id,
       label: article.names.pt,
     })),
-  ...(context.publications ?? []).slice(0, 40).map((publication): Mention => ({
+  ...(context.publications ?? []).slice(0, 40).map((publication): Reference => ({
     referenceType: "PUBLICATION",
     referenceId: publication.id,
     label: publication.handle,

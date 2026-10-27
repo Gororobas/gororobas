@@ -33,10 +33,10 @@ import { persistBook } from "../wiki/external-data/kinds/book-persister.js"
 import { persistPlant } from "../wiki/external-data/kinds/plant-persister.js"
 import { buildExternalDataRequest } from "../wiki/external-data/persist-utils.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
-import { richTextDocument, type Mention } from "./rich-text.js"
+import { firstParagraphEvidence, richTextDocument, type Reference } from "./rich-text.js"
 import {
   activePeople,
-  mentionsFor,
+  referencesFor,
   reviewers,
   trustedPeople,
   type SeededArticle,
@@ -126,7 +126,7 @@ const seedArticle = (
       translations: yield* legibleTranslations({
         names,
         subject,
-        mentions: mentionsFor({ ...context, articles: input.earlier }),
+        references: referencesFor({ ...context, articles: input.earlier }),
       }),
     }).pipe(Effect.orDie)
 
@@ -174,16 +174,47 @@ const seedArticle = (
       )
     }
 
-    // Stands in for the classification workflow, which the seed skips.
-    if (status === "PUBLISHED" && (yield* chance(0.5))) {
-      const classified = yield* sample(input.earlier, yield* Random.nextIntBetween(1, 3))
+    // Stands in for the link inference workflow, which the seed skips: the first related article
+    // is named in the content, the others inferred from it.
+    const evidence = Option.fromUndefinedOr(wikiArticle.translations.pt).pipe(
+      Option.flatMap((translation) => translation.content),
+      Option.flatMap((content) =>
+        firstParagraphEvidence(["translations", "pt", "content"], content),
+      ),
+    )
+
+    if (status === "PUBLISHED" && Option.isSome(evidence) && (yield* chance(0.5))) {
+      const [mentioned, ...inferred] = yield* sample(
+        input.earlier,
+        yield* Random.nextIntBetween(1, 3),
+      )
+      const { location, text } = evidence.value
 
       yield* wiki.replaceRelations({
         wikiArticleId: id,
-        source: "CLASSIFICATION",
-        related: classified.map((article) => ({
-          wikiArticleId: article.id,
-          extractionText: article.names.pt,
+        source: "MENTION",
+        rows: (mentioned ? [mentioned] : []).map((article) => ({
+          wikiArticleId: id,
+          relatedWikiArticleId: article.id,
+          source: "MENTION",
+          evidence: [{ location, text: article.names.pt }],
+        })),
+      })
+
+      yield* wiki.replaceRelations({
+        wikiArticleId: id,
+        source: "INFERENCE",
+        rows: inferred.map((article) => ({
+          wikiArticleId: id,
+          relatedWikiArticleId: article.id,
+          source: "INFERENCE",
+          evidence: [
+            {
+              location,
+              text,
+              rationale: `The passage describes practices related to ${article.names.en}.`,
+            },
+          ],
         })),
       })
     }
@@ -230,7 +261,7 @@ export const seedWikiArticles = (
   const weight = (member: ArticleSchema) => KIND_WEIGHTS[member.fields.kind.literal] ?? 1
   const totalWeight = sum(WikiArticleEditableData.members.map(weight))
 
-  // Concepts go first, so other kinds' content can reference the topics they're about; cultivars
+  // Concepts go first, so other kinds' content can reference the concepts they're about; cultivars
   // reference plants, so they go last.
   const seedingOrder = (member: ArticleSchema) => {
     const kind = member.fields.kind.literal
@@ -259,7 +290,7 @@ export const seedWikiArticles = (
 const revisionUpdate = (input: {
   article: SeededArticle
   language: SupportedLanguage
-  mentions: ReadonlyArray<Mention>
+  references: ReadonlyArray<Reference>
 }) =>
   Effect.gen(function* () {
     const wiki = yield* WikiArticlesRepository
@@ -272,7 +303,7 @@ const revisionUpdate = (input: {
     const content = yield* richTextDocument({
       language: input.language,
       paragraphs: [1, 4],
-      mentions: input.mentions,
+      references: input.references,
       long: true,
     })
 
@@ -354,7 +385,7 @@ const seedRevision = (
     const crdtUpdate = yield* revisionUpdate({
       article,
       language: yield* pick(SupportedLanguage.literals),
-      mentions: mentionsFor(context),
+      references: referencesFor(context),
     })
 
     if (Option.isNone(crdtUpdate)) return 0

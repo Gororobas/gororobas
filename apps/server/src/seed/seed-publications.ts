@@ -31,7 +31,7 @@ import { updateModerationStatus } from "../moderation/moderate-content.js"
 import { PublicationCommentsRepository } from "../publication-comments/repository.js"
 import {
   attachMediaToPublication,
-  insertPublicationWikiArticleRows,
+  replacePublicationWikiArticleLinks,
 } from "../publications/mutations.js"
 import {
   HumanCrdtUpdate,
@@ -39,10 +39,10 @@ import {
 } from "../publications/publication-repository-inputs.js"
 import { findPublicationCrdtSnapshotById } from "../publications/queries.js"
 import { PublicationsRepository } from "../publications/repository.js"
-import { richTextDocument } from "./rich-text.js"
+import { firstParagraphEvidence, richTextDocument } from "./rich-text.js"
 import {
   activePeople,
-  mentionsFor,
+  referencesFor,
   type SeededPerson,
   type SeededPublication,
   type SeedContext,
@@ -217,9 +217,20 @@ const editPublication = (input: {
     )
   })
 
-/** Classification persistence is still a workflow @TODO; link rows directly, like the migration. */
-const linkClassification = (context: Pick<SeedContext, "articles">, publicationId: PublicationId) =>
+/** Stands in for the link inference workflow, which the seed doesn't submit. */
+const linkInferredArticles = ({
+  context,
+  publicationId,
+  source,
+}: {
+  context: Pick<SeedContext, "articles">
+  publicationId: PublicationId
+  source: { readonly language: ContentLanguage; readonly content: TiptapDocument }
+}) =>
   Effect.gen(function* () {
+    const evidence = firstParagraphEvidence(["sourceContent"], source.content)
+    if (Option.isNone(evidence)) return
+
     const published = context.articles.filter((article) => article.status === "PUBLISHED")
     const concepts = yield* sampleUpTo(
       published.filter((article) => article.kind === "CONCEPT"),
@@ -229,17 +240,33 @@ const linkClassification = (context: Pick<SeedContext, "articles">, publicationI
       published.filter((article) => article.kind !== "CONCEPT"),
       [0, 3],
     )
-    const articles = [...concepts, ...others]
 
-    if (EffectArray.isReadonlyArrayNonEmpty(articles)) {
-      yield* insertPublicationWikiArticleRows(
-        articles.map((article) => ({
-          publicationId,
-          wikiArticleId: article.id,
-          extractionText: article.names.pt.toLowerCase(),
-        })),
-      )
-    }
+    yield* replacePublicationWikiArticleLinks({
+      publicationId,
+      source: "MENTION",
+      rows: others.map((article) => ({
+        publicationId,
+        wikiArticleId: article.id,
+        source: "MENTION",
+        evidence: [{ ...evidence.value, text: article.names.pt }],
+      })),
+    })
+
+    yield* replacePublicationWikiArticleLinks({
+      publicationId,
+      source: "INFERENCE",
+      rows: concepts.map((article) => ({
+        publicationId,
+        wikiArticleId: article.id,
+        source: "INFERENCE",
+        evidence: [
+          {
+            ...evidence.value,
+            rationale: `The passage describes practices related to ${article.names.en}.`,
+          },
+        ],
+      })),
+    })
   })
 
 /** Rich text opens with a sentence; its first words make a readable handle. */
@@ -276,7 +303,7 @@ const seedPublication = (
     const content = yield* richTextDocument({
       language: textLanguage,
       paragraphs: [1, 6],
-      mentions: mentionsFor(context),
+      references: referencesFor(context),
       media,
       long: true,
     })
@@ -305,7 +332,13 @@ const seedPublication = (
           { concurrency: 1, discard: true },
         )
 
-        if (yield* chance(0.6)) yield* linkClassification(context, publicationId)
+        if (yield* chance(0.6)) {
+          yield* linkInferredArticles({
+            context,
+            publicationId,
+            source: { language: data.sourceLanguage, content: data.sourceContent },
+          })
+        }
 
         return publicationId
       }),

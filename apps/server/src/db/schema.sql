@@ -287,15 +287,16 @@ CREATE TABLE wiki_article_handles (
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
--- Derived relations between articles, one row per source that found them (WikiArticleRelationSource).
+-- Derived relations between articles, one row per source that found them (LinkSource).
 -- `related_wiki_article_id` has no foreign key: content may reference articles that are created
 -- later, and reads only surface relations to published articles.
 CREATE TABLE wiki_article_relations (
   wiki_article_id text NOT NULL,
   related_wiki_article_id text NOT NULL,
-  source text NOT NULL, -- WikiArticleRelationSource
-  extraction_text text,
+  source text NOT NULL, -- LinkSource
+  evidence json, -- where the source established the relation; legacy tags have none
   CHECK (wiki_article_id <> related_wiki_article_id),
+  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL)),
   PRIMARY KEY (wiki_article_id, related_wiki_article_id, source),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
@@ -328,7 +329,7 @@ CREATE TABLE wiki_article_main_media (
 CREATE TABLE publication_crdts (
   id text PRIMARY KEY,
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
-  classification json,
+  link_inference json, -- LinkInferenceRun
   moderation_status text NOT NULL, -- ModerationStatus
   owner_profile_id text NOT NULL,
   created_at text NOT NULL,
@@ -392,11 +393,14 @@ CREATE TABLE publication_media_assets (
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
 ) WITHOUT ROWID;
 
+-- Derived links to the wiki articles a publication is about, one row per source that found them (LinkSource).
 CREATE TABLE publication_wiki_articles (
   publication_id text NOT NULL,
   wiki_article_id text NOT NULL,
-  extraction_text text,
-  PRIMARY KEY (publication_id, wiki_article_id),
+  source text NOT NULL, -- LinkSource
+  evidence json, -- where the source established the link; legacy tags have none
+  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL)),
+  PRIMARY KEY (publication_id, wiki_article_id, source),
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
 ) WITHOUT ROWID;

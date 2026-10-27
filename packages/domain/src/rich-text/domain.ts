@@ -1,13 +1,29 @@
 /** Version 1 of the supported Tiptap document format; custom nodes version their attributes separately. */
-import { Schema } from "effect"
+import { Schema, Tuple } from "effect"
 
 import { MediaAssetFormat } from "../common/enums.js"
-import { MediaAssetId, ProfileId, PublicationId, WikiArticleId } from "../common/ids.js"
+import {
+  MediaAssetId,
+  ProfileId,
+  PublicationId,
+  TiptapNodeId,
+  WikiArticleId,
+} from "../common/ids.js"
 import { ExternalEmbed } from "./external-embed.js"
 
 export * from "./external-embed.js"
 
 const JsonAttributes = Schema.Record(Schema.NonEmptyString, Schema.Json)
+
+/**
+ * Every node except `doc`, `text` and `hardBreak` carries a `nodeId` (see `NodeIdExtension`).
+ * ProseMirror represents an unset attribute as `null`, so documents parsed from HTML or fresh
+ * editor nodes may hold `null` until `assignTiptapNodeIds` runs.
+ */
+const NodeIdAttribute = { nodeId: Schema.optional(Schema.NullOr(TiptapNodeId)) }
+
+// Attributes stay open so content from other Tiptap extensions round-trips through the CRDT.
+const NodeIdAttributes = Schema.StructWithRest(Schema.Struct(NodeIdAttribute), [JsonAttributes])
 
 export const EntityReferenceTarget = Schema.Union([
   Schema.Struct({ referenceType: Schema.Literal("WIKI_ARTICLE"), referenceId: WikiArticleId }),
@@ -17,10 +33,10 @@ export const EntityReferenceTarget = Schema.Union([
 
 export type EntityReferenceTarget = typeof EntityReferenceTarget.Type
 
-export const EntityReferenceAttributes = Schema.Union(
-  EntityReferenceTarget.members.map((target) =>
-    Schema.Struct({
-      ...target.fields,
+export const EntityReferenceAttributes = EntityReferenceTarget.mapMembers(
+  Tuple.map(
+    Schema.fieldsAssign({
+      ...NodeIdAttribute,
       version: Schema.Literal(1),
       labelAtInsertion: Schema.String,
     }),
@@ -44,9 +60,11 @@ export const MediaGridItem = Schema.Union([
 export type MediaGridItem = typeof MediaGridItem.Type
 
 export const MediaGridAttributes = Schema.Struct({
+  ...NodeIdAttribute,
   version: Schema.Literal(1),
   items: Schema.NonEmptyArray(MediaGridItem),
 })
+
 export type MediaGridAttributes = typeof MediaGridAttributes.Type
 
 export const TiptapMark = Schema.Struct({
@@ -82,7 +100,7 @@ export const TiptapHardBreakNode = Schema.Struct({
 
 export const TiptapHorizontalRuleNode = Schema.Struct({
   type: Schema.Literal("horizontalRule"),
-  attrs: Schema.optional(JsonAttributes),
+  attrs: Schema.optional(NodeIdAttributes),
 })
 
 export const TiptapInlineNode = Schema.Union([
@@ -95,7 +113,7 @@ export type TiptapInlineNode = typeof TiptapInlineNode.Type
 
 export const TiptapParagraphNode = Schema.Struct({
   type: Schema.Literal("paragraph"),
-  attrs: Schema.optional(JsonAttributes),
+  attrs: Schema.optional(NodeIdAttributes),
   content: Schema.optional(Schema.Array(TiptapInlineNode)),
 })
 
@@ -103,7 +121,7 @@ export type TiptapParagraphNode = typeof TiptapParagraphNode.Type
 
 export const TiptapHeadingNode = Schema.Struct({
   type: Schema.Literal("heading"),
-  attrs: Schema.Struct({ level: Schema.Literals([1, 2, 3]) }),
+  attrs: Schema.Struct({ ...NodeIdAttribute, level: Schema.Literals([1, 2, 3]) }),
   content: Schema.optional(Schema.Array(TiptapInlineNode)),
 })
 
@@ -114,45 +132,45 @@ const NestedBlock = Schema.suspend(
 
 export interface TiptapBlockquoteNode {
   readonly type: "blockquote"
-  readonly attrs?: typeof JsonAttributes.Type | undefined
+  readonly attrs?: typeof NodeIdAttributes.Type | undefined
   readonly content: readonly [TiptapBlockNode, ...TiptapBlockNode[]]
 }
 
 interface TiptapBlockquoteNodeEncoded {
   readonly type: "blockquote"
-  readonly attrs?: typeof JsonAttributes.Type | undefined
+  readonly attrs?: typeof NodeIdAttributes.Encoded | undefined
   readonly content: readonly [TiptapBlockNodeEncoded, ...TiptapBlockNodeEncoded[]]
 }
 
 export const TiptapBlockquoteNode: Schema.Codec<TiptapBlockquoteNode, TiptapBlockquoteNodeEncoded> =
   Schema.Struct({
     type: Schema.Literal("blockquote"),
-    attrs: Schema.optional(JsonAttributes),
+    attrs: Schema.optional(NodeIdAttributes),
     content: Schema.NonEmptyArray(NestedBlock),
   })
 
 export interface TiptapListItemNode {
   readonly type: "listItem"
-  readonly attrs?: typeof JsonAttributes.Type | undefined
+  readonly attrs?: typeof NodeIdAttributes.Type | undefined
   readonly content: readonly [TiptapParagraphNode, ...TiptapBlockNode[]]
 }
 
 interface TiptapListItemNodeEncoded {
   readonly type: "listItem"
-  readonly attrs?: typeof JsonAttributes.Type | undefined
+  readonly attrs?: typeof NodeIdAttributes.Encoded | undefined
   readonly content: readonly [typeof TiptapParagraphNode.Encoded, ...TiptapBlockNodeEncoded[]]
 }
 
 export const TiptapListItemNode: Schema.Codec<TiptapListItemNode, TiptapListItemNodeEncoded> =
   Schema.Struct({
     type: Schema.Literal("listItem"),
-    attrs: Schema.optional(JsonAttributes),
+    attrs: Schema.optional(NodeIdAttributes),
     content: Schema.TupleWithRest(Schema.Tuple([TiptapParagraphNode]), [NestedBlock]),
   })
 
 export const TiptapBulletListNode = Schema.Struct({
   type: Schema.Literal("bulletList"),
-  attrs: Schema.optional(JsonAttributes),
+  attrs: Schema.optional(NodeIdAttributes),
   content: Schema.NonEmptyArray(TiptapListItemNode),
 })
 
@@ -160,6 +178,7 @@ export const TiptapOrderedListNode = Schema.Struct({
   type: Schema.Literal("orderedList"),
   attrs: Schema.optional(
     Schema.Struct({
+      ...NodeIdAttribute,
       start: Schema.optional(Schema.Int),
       type: Schema.optional(Schema.NullOr(Schema.String)),
     }),

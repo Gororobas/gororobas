@@ -9,10 +9,12 @@ import {
   PlatformAccessLevelOrVisitor,
   SessionContext,
   IntNonNegative,
+  LinkSource,
   LoroDocUpdate,
   MediaAssetRow,
   WikiArticleCommonNameInCrdtList,
   type TiptapDocument,
+  type TiptapNode,
   WikiArticleCommonName,
   SupportedLanguage,
   WikiArticleCrdt,
@@ -20,13 +22,16 @@ import {
   WikiArticleId,
   WikiArticleQueriedPageData,
   WikiArticleProjectionRow,
+  WikiArticleRelationDirection,
   WikiArticleRevisionId,
   WikiSearchParams,
   WikiPlantArticle,
   WikiPlantCultivarArticle,
   snapshotToLoroDoc,
+  nodeIdOf,
   type PlantCultivarEditableAttributes,
 } from "@gororobas/domain"
+import { LinkInferenceModel } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import {
   And,
@@ -45,6 +50,7 @@ import {
   Layer,
   Option,
   Order,
+  Predicate,
   Record,
   Ref,
   Result,
@@ -58,13 +64,9 @@ import { WorkflowEngine } from "effect/workflow"
 import sharp from "sharp"
 
 import {
-  WikiArticleClassificationWorkflow,
-  WikiArticleClassificationWorkflowLayer,
-} from "../src/classification/wiki-article-classification-workflow.js"
-import {
-  type ClassifiedWikiArticle,
-  WikiArticleClassifier,
-} from "../src/classification/wiki-article-classifier.js"
+  WikiArticleLinkInferenceWorkflow,
+  WikiArticleLinkInferenceWorkflowLayer,
+} from "../src/link-inference/wiki-article-link-inference-workflow.js"
 import { MediaAssetsService } from "../src/media-assets/service.js"
 import { resolveSessionFromAuthSubjectId } from "../src/session-service.js"
 import { WikiApiLive } from "../src/wiki/api-live.js"
@@ -89,24 +91,40 @@ const WikiTestLayer = Layer.effect(WikiArticlesService, WikiArticlesService.make
   Layer.provideMerge(PeopleFeatureTestLayer),
   Layer.provideMerge(WorkflowEngine.layerMemory),
 )
-/** What the classifier recognizes in any content, as set by the scenario. */
-const RecognizedWikiArticles = Context.Service<Ref.Ref<ReadonlyArray<ClassifiedWikiArticle>>>(
-  "test/RecognizedWikiArticles",
-)
+/** Names of the articles link inference infers from any content, as set by the scenario. */
+const InferredNames = Context.Service<Ref.Ref<ReadonlyArray<string>>>("test/InferredNames")
 
-const RelationsTestLayer = WikiArticleClassificationWorkflowLayer.pipe(
+/** Infers the scenario's articles from the first paragraph; finds no mentions beyond exact names. */
+const RelationsTestLayer = WikiArticleLinkInferenceWorkflowLayer.pipe(
   Layer.provideMerge(
     Layer.effect(
-      WikiArticleClassifier,
+      LinkInferenceModel,
       Effect.gen(function* () {
-        const recognized = yield* RecognizedWikiArticles
-        return { classify: () => Ref.get(recognized) }
+        const inferredNames = yield* InferredNames
+
+        return {
+          model: null,
+          detectMentions: () => Effect.succeed([]),
+          detectInferences: ({ source }) =>
+            Effect.gen(function* () {
+              const paragraph = source.segments.find((segment) =>
+                segment.location.includes("content"),
+              )
+              if (paragraph === undefined) return []
+
+              return (yield* Ref.get(inferredNames)).map((name) => ({
+                interval: { start: paragraph.start, end: paragraph.end },
+                alignmentStatus: "EXACT" as const,
+                names: { pt: [name], es: [], en: [] },
+                rationale: `The paragraph is about ${name}.`,
+              }))
+            }),
+          disambiguate: () => Effect.succeedNone,
+        }
       }),
     ),
   ),
-  Layer.provideMerge(
-    Layer.effect(RecognizedWikiArticles, Ref.make<ReadonlyArray<ClassifiedWikiArticle>>([])),
-  ),
+  Layer.provideMerge(Layer.effect(InferredNames, Ref.make<ReadonlyArray<string>>([]))),
   Layer.provideMerge(WikiTestLayer),
 )
 
@@ -647,7 +665,7 @@ const bookmarked = () =>
       ),
   })
 
-const mentioning = (title: string, id: WikiArticleId): TiptapDocument => ({
+const referencing = (title: string, id: WikiArticleId): TiptapDocument => ({
   type: "doc",
   version: 1,
   content: [
@@ -669,51 +687,83 @@ const mentioning = (title: string, id: WikiArticleId): TiptapDocument => ({
   ],
 })
 
-const MentionParams = Schema.Struct({ title: Schema.String, mentioned: Schema.String })
+const ReferenceParams = Schema.Struct({ title: Schema.String, referenced: Schema.String })
 
-const approveMention = (context: WikiContext, { title, mentioned }: typeof MentionParams.Type) =>
+const approveReference = (
+  context: WikiContext,
+  { title, referenced }: typeof ReferenceParams.Type,
+) =>
   approvedEdit({
     context,
     title,
     edit: {
       _tag: "SetWikiArticleTranslationContent",
       language: "pt",
-      content: mentioning(mentioned, articleId(context, mentioned)),
+      content: referencing(referenced, articleId(context, referenced)),
     },
   })
 
-const mentionedInRevision = () =>
-  Given("an approved revision makes {string:title}'s content mention {string:mentioned}", {
-    params: MentionParams,
+const referencedInRevision = () =>
+  Given("an approved revision makes {string:title}'s content reference {string:referenced}", {
+    params: ReferenceParams,
     handler: (_, params) =>
-      background().pipe(Effect.flatMap((context) => approveMention(context, params))),
+      background().pipe(Effect.flatMap((context) => approveReference(context, params))),
   })
 
-const recognizedByClassification = () =>
-  Given("classification recognizes {string:recognized} in {string:title}'s content", {
-    params: Schema.Struct({ recognized: Schema.String, title: Schema.String }),
-    handler: (_, { recognized }) =>
+const approveSaying = (context: WikiContext, { title, text }: { title: string; text: string }) =>
+  approvedEdit({
+    context,
+    title,
+    edit: {
+      _tag: "SetWikiArticleTranslationContent",
+      language: "pt",
+      content: textToRichTextDocument(text),
+    },
+  })
+
+const saidInRevision = () =>
+  Given("an approved revision makes {string:title}'s content say {string:text}", {
+    params: Schema.Struct({ title: Schema.String, text: Schema.String }),
+    handler: (_, params) =>
+      background().pipe(Effect.flatMap((context) => approveSaying(context, params))),
+  })
+
+const inferredByLinkInference = () =>
+  Given("link inference infers {string:inferred} from {string:title}'s content", {
+    params: Schema.Struct({ inferred: Schema.String, title: Schema.String }),
+    handler: (_, { inferred }) =>
       Effect.gen(function* () {
         const context = yield* background()
-        yield* Ref.set(yield* RecognizedWikiArticles, [
-          { wikiArticleId: articleId(context, recognized), extractionText: recognized },
-        ])
+        yield* Ref.set(yield* InferredNames, [inferred])
         return context
       }),
   })
 
-const classified = () =>
-  When("{string:title}'s content is classified", {
+const linksInferred = () =>
+  When("links are inferred from {string:title}'s content", {
     params: titleParams,
     handler: (context: WikiContext, { title }) =>
       Effect.gen(function* () {
         const article = Option.getOrThrow(yield* findDatabaseRowById(articleId(context, title)))
-        yield* WikiArticleClassificationWorkflow.execute({
+        yield* WikiArticleLinkInferenceWorkflow.execute({
           wikiArticleId: article.id,
           crdtFrontier: article.currentCrdtFrontier,
         })
         return context
       }),
+  })
+
+const relatedArticlesOf = (title: string) =>
+  Effect.gen(function* () {
+    const { handle } = Option.getOrThrow(
+      yield* (yield* WikiArticlesRepository).findBySearchableName(title.toLowerCase()),
+    )
+
+    return yield* (yield* WikiArticlesService).listRelatedWikiArticles({
+      handle,
+      kind: "PLANT",
+      language: "pt",
+    })
   })
 
 const RelatedArticlesParams = Schema.Struct({
@@ -726,15 +776,7 @@ const expectRelatedArticles = (
   { title, table }: typeof RelatedArticlesParams.Type,
 ) =>
   Effect.gen(function* () {
-    const { handle } = Option.getOrThrow(
-      yield* (yield* WikiArticlesRepository).findBySearchableName(title.toLowerCase()),
-    )
-
-    const related = yield* (yield* WikiArticlesService).listRelatedWikiArticles({
-      handle,
-      kind: "PLANT",
-      language: "pt",
-    })
+    const related = yield* relatedArticlesOf(title)
 
     expect(
       EffectArray.sort(
@@ -755,6 +797,114 @@ const relatedArticles = () =>
   Then("{string:title}'s related articles are:", {
     params: RelatedArticlesParams,
     handler: expectRelatedArticles,
+  })
+
+const RelationLinksParams = Schema.Struct({
+  title: Schema.String,
+  related: Schema.String,
+  table: Schema.Array(
+    Schema.Struct({
+      source: LinkSource,
+      direction: WikiArticleRelationDirection,
+      text: Schema.String,
+    }),
+  ),
+})
+
+const expectRelationLinks = (
+  context: WikiContext,
+  { title, related, table }: typeof RelationLinksParams.Type,
+) =>
+  Effect.gen(function* () {
+    const article = Option.getOrThrow(
+      EffectArray.findFirst(
+        yield* relatedArticlesOf(title),
+        (card) => card.id === articleId(context, related),
+      ),
+    )
+
+    expect(
+      article.links.map((link) => ({
+        source: link.source,
+        direction: link.direction,
+        text: link.source === "LEGACY_TAG" ? "" : link.evidence.map((item) => item.text).join(", "),
+      })),
+    ).toEqual(table)
+
+    return context
+  })
+
+const relatedThrough = () =>
+  Then("{string:title} is related to {string:related} through:", {
+    params: RelationLinksParams,
+    handler: expectRelationLinks,
+  })
+
+const findNode = (nodes: ReadonlyArray<TiptapNode>, nodeId: string): Option.Option<TiptapNode> =>
+  EffectArray.findFirst(nodes, (node) =>
+    Option.exists(nodeIdOf(node), (id) => id === nodeId)
+      ? Option.some(node)
+      : "content" in node
+        ? findNode(node.content ?? [], nodeId)
+        : Option.none(),
+  )
+
+const nodeText = (node: TiptapNode): string =>
+  node.type === "text"
+    ? node.text
+    : node.type === "entityReference"
+      ? node.attrs.labelAtInsertion
+      : "content" in node
+        ? (node.content ?? []).map(nodeText).join("")
+        : ""
+
+/** Readers verify a relation by finding its evidence in the content of the article holding it. */
+const evidencePointsAtNodes = () =>
+  And("every piece of evidence in {string:title}'s relations points at the node holding it", {
+    params: titleParams,
+    handler: (context: WikiContext, { title }) =>
+      Effect.gen(function* () {
+        const service = yield* WikiArticlesService
+        const { handle } = Option.getOrThrow(
+          yield* (yield* WikiArticlesRepository).findBySearchableName(title.toLowerCase()),
+        )
+        const related = yield* relatedArticlesOf(title)
+
+        const evidence = related.flatMap((article) =>
+          article.links.flatMap((link) =>
+            link.source === "LEGACY_TAG"
+              ? []
+              : link.evidence.map((item) => ({
+                  holder:
+                    link.direction === "OUTGOING"
+                      ? { handle, kind: "PLANT" as const }
+                      : { handle: article.handle, kind: article.kind },
+                  item,
+                })),
+          ),
+        )
+
+        expect(evidence).not.toHaveLength(0)
+
+        yield* Effect.forEach(
+          evidence,
+          ({ holder, item }) =>
+            Effect.gen(function* () {
+              const [root, language, field, node] = item.location
+              assert(root === "translations" && field === "content")
+              assert(Schema.is(SupportedLanguage)(language) && Predicate.isObject(node))
+              const page = yield* service.getPage({ ...holder, language })
+              const found = findNode(Option.getOrThrow(page.content).content, node.id)
+
+              expect(nodeText(Option.getOrThrow(found)).toLowerCase()).toContain(
+                item.text.toLowerCase(),
+              )
+            }),
+          { concurrency: 1, discard: true },
+        )
+
+        return context
+      }),
   })
 
 await Effect.runPromise(
@@ -1677,7 +1827,7 @@ await Effect.runPromise(
     })
 
     Rule(
-      "Wiki articles relate to the articles their content mentions or is about",
+      "Wiki articles relate to the articles their content references, names or is about",
       ({ Background, Scenario }) => {
         Background({
           layer: RelationsTestLayer,
@@ -1685,15 +1835,15 @@ await Effect.runPromise(
             runSteps(community(), moderator(), articleExists(), articleExists(), articleExists()),
         })
 
-        Scenario("Mentioning an article relates both articles", {
+        Scenario("Referencing an article relates both articles", {
           layer: RelationsTestLayer,
           steps: () =>
             runSteps(
               When(
-                "an approved revision makes {string:title}'s content mention {string:mentioned}",
+                "an approved revision makes {string:title}'s content reference {string:referenced}",
                 {
-                  params: MentionParams,
-                  handler: approveMention,
+                  params: ReferenceParams,
+                  handler: approveReference,
                 },
               ),
               relatedArticles(),
@@ -1704,41 +1854,80 @@ await Effect.runPromise(
             ),
         })
 
-        Scenario("Removing a mention removes its relation", {
+        Scenario("Removing a reference removes its relation", {
           layer: RelationsTestLayer,
           steps: () =>
             runSteps(
-              mentionedInRevision(),
+              referencedInRevision(),
               When(
-                "an approved revision makes {string:title}'s content mention {string:mentioned}",
+                "an approved revision makes {string:title}'s content reference {string:referenced}",
                 {
-                  params: MentionParams,
-                  handler: approveMention,
+                  params: ReferenceParams,
+                  handler: approveReference,
                 },
               ),
               relatedArticles(),
             ),
         })
 
-        Scenario("Classifying the content relates the article to what it is about", {
+        Scenario("Naming an article in the content relates them", {
           layer: RelationsTestLayer,
-          steps: () => runSteps(recognizedByClassification(), classified(), relatedArticles()),
+          steps: () => runSteps(saidInRevision(), linksInferred(), relatedArticles()),
         })
 
-        Scenario("Classification keeps the relations from mentions", {
+        Scenario("Inferring what the content is about relates the articles", {
+          layer: RelationsTestLayer,
+          steps: () => runSteps(inferredByLinkInference(), linksInferred(), relatedArticles()),
+        })
+
+        Scenario("Link inference keeps the relations from references", {
           layer: RelationsTestLayer,
           steps: () =>
             runSteps(
-              recognizedByClassification(),
+              inferredByLinkInference(),
               And(
-                "an approved revision makes {string:title}'s content mention {string:mentioned}",
+                "an approved revision makes {string:title}'s content reference {string:referenced}",
                 {
-                  params: MentionParams,
-                  handler: approveMention,
+                  params: ReferenceParams,
+                  handler: approveReference,
                 },
               ),
-              classified(),
+              linksInferred(),
               relatedArticles(),
+            ),
+        })
+
+        Scenario("Readers see which article's content established a relation", {
+          layer: RelationsTestLayer,
+          steps: () =>
+            runSteps(
+              When(
+                "an approved revision makes {string:title}'s content reference {string:referenced}",
+                {
+                  params: ReferenceParams,
+                  handler: approveReference,
+                },
+              ),
+              relatedThrough(),
+              And("{string:title} is related to {string:related} through:", {
+                params: RelationLinksParams,
+                handler: expectRelationLinks,
+              }),
+            ),
+        })
+
+        Scenario("Each article's content keeps its own evidence for the same relation", {
+          layer: RelationsTestLayer,
+          steps: () =>
+            runSteps(
+              referencedInRevision(),
+              And("an approved revision makes {string:title}'s content say {string:text}", {
+                params: Schema.Struct({ title: Schema.String, text: Schema.String }),
+                handler: approveSaying,
+              }),
+              linksInferred(),
+              relatedThrough(),
+              evidencePointsAtNodes(),
             ),
         })
       },

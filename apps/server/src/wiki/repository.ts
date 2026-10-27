@@ -2,7 +2,7 @@ import { WikiArticleCrdt } from "@gororobas/domain"
 import {
   CreateWikiArticleInput,
   CreateWikiArticleRevisionInput,
-  contentReferencedWikiArticleIds,
+  entityReferenceRelations,
   projectArticle,
   projectTranslation,
   EMPTY_LORO_DOC_FRONTIER,
@@ -29,12 +29,12 @@ import {
 import { Context, DateTime, Effect, Array as EffectArray, Option, Result } from "effect"
 import { SqlClient } from "effect/sql"
 
-import { requestWikiArticleClassification } from "../classification/wiki-article-classification-workflow.js"
 import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
+import { requestWikiArticleLinkInference } from "../link-inference/wiki-article-link-inference-workflow.js"
 import { type ExternalDataArticle } from "./external-data/persist-utils.js"
 import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
@@ -258,15 +258,18 @@ const persistArticleProjection = (input: {
 
     yield* replaceRelations({
       wikiArticleId: input.wikiArticleId,
-      source: "CONTENT_REFERENCE",
-      related: contentReferencedWikiArticleIds(input.sourceData, input.wikiArticleId).map(
-        (wikiArticleId) => ({ wikiArticleId }),
-      ),
+      source: "ENTITY_REFERENCE",
+      rows: entityReferenceRelations(input.sourceData, input.wikiArticleId).map((link) => ({
+        wikiArticleId: input.wikiArticleId,
+        relatedWikiArticleId: link.wikiArticleId,
+        source: "ENTITY_REFERENCE",
+        evidence: link.evidence,
+      })),
     })
   })
 
 /**
- * Derived work on newly approved content: external provider data and classified relations.
+ * Derived work on newly approved content: external provider data and inferred relations.
  * Best-effort, submitted after the article transaction commits.
  */
 const requestEnrichment = (article: ExternalDataArticle, previous?: WikiArticleProjectionRow) =>
@@ -275,8 +278,8 @@ const requestEnrichment = (article: ExternalDataArticle, previous?: WikiArticleP
       requestExternalDataFetch(article, previous).pipe(
         Effect.catchCause((cause) => Effect.logError("External data submission failed", cause)),
       ),
-      requestWikiArticleClassification(article, previous).pipe(
-        Effect.catchCause((cause) => Effect.logError("Classification submission failed", cause)),
+      requestWikiArticleLinkInference(article, previous).pipe(
+        Effect.catchCause((cause) => Effect.logError("Link inference submission failed", cause)),
       ),
     ],
     { concurrency: "unbounded", discard: true },

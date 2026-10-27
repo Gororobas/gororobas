@@ -1,15 +1,18 @@
 import { Option, Record, Schema } from "effect"
 
 import { SupportedLanguage } from "../../src/common/enums.js"
+import { TiptapNodeId } from "../../src/common/ids.js"
 import { TiptapDocument } from "../../src/rich-text/domain.js"
 import { WikiArticleEditableData } from "../../src/wiki/wiki-article.js"
 
+/** Editor content always carries node IDs (see `NodeIdExtension`). */
 export const wikiRichText = TiptapDocument.make({
   type: "doc",
   version: 1,
   content: [
     {
       type: "paragraph",
+      attrs: { nodeId: TiptapNodeId.make("paragraph001") },
       content: [
         { type: "text", text: "Growing " },
         { type: "text", text: "together", marks: [{ type: "bold" }] },

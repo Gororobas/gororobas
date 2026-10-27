@@ -446,8 +446,10 @@ export const importPreview = ({
             yield* wiki.replaceRelations({
               wikiArticleId: article.id,
               source: "LEGACY_TAG",
-              related: (article.relatedWikiArticleIds ?? []).map((wikiArticleId) => ({
-                wikiArticleId,
+              rows: (article.relatedWikiArticleIds ?? []).map((relatedWikiArticleId) => ({
+                wikiArticleId: article.id,
+                relatedWikiArticleId,
+                source: "LEGACY_TAG",
               })),
             })
           }
@@ -475,7 +477,7 @@ export const importPreview = ({
             yield* sql`INSERT INTO publication_media_assets ${sql.insert({ publicationId: note.id, mediaAssetId })}`
           }
           for (const wikiArticleId of note.wikiArticleIds) {
-            yield* sql`INSERT INTO publication_wiki_articles ${sql.insert({ publicationId: note.id, wikiArticleId, extractionText: null })}`
+            yield* sql`INSERT INTO publication_wiki_articles ${sql.insert({ publicationId: note.id, wikiArticleId, source: "LEGACY_TAG" })}`
           }
         }
 

@@ -6,7 +6,7 @@ import { LoroList, LoroMap, LoroText, type LoroDoc } from "loro-crdt"
 
 import { ContentLanguage } from "../../src/common/content-language.js"
 import { ProfileId } from "../../src/common/ids.js"
-import { PersonId } from "../../src/common/ids.js"
+import { PersonId, TiptapNodeId } from "../../src/common/ids.js"
 import { CrdtCommitEncoded, HumanCommit } from "../../src/crdts/domain.js"
 import {
   loroDocToSnapshot,
@@ -23,7 +23,13 @@ const content = (text: string): TiptapDocument =>
   TiptapDocument.make({
     type: "doc",
     version: 1,
-    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    content: [
+      {
+        type: "paragraph",
+        attrs: { nodeId: TiptapNodeId.make("paragraph001") },
+        content: [{ type: "text", text }],
+      },
+    ],
   })
 
 const original = (text: string) => ({
@@ -184,7 +190,7 @@ describe("Publication CRDT", () => {
         content: [
           {
             type: "paragraph",
-            attrs: { custom: { value: null } },
+            attrs: { custom: { value: null }, nodeId: TiptapNodeId.make("paragraph001") },
             content: [
               {
                 type: "text",
@@ -228,7 +234,7 @@ describe("Publication CRDT", () => {
           ...next,
           content: [
             {
-              attrs: { custom: { value: null } },
+              attrs: { custom: { value: null }, nodeId: TiptapNodeId.make("paragraph001") },
               type: "paragraph",
               content: [
                 {

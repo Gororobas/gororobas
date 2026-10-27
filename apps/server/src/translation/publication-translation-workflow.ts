@@ -91,7 +91,9 @@ export const PublicationTranslationWorkflowLayer = PublicationTranslationWorkflo
       success: Schema.Void,
       error: PersistenceError,
       execute: Effect.gen(function* () {
-        const translatedContent = tiptapFromHtml(translationResult.html)
+        const translatedContent = tiptapFromHtml(translationResult.html, {
+          referenceContent: payload.sourceContent,
+        })
 
         const persistWithRetry = (
           remainingAttempts: number,

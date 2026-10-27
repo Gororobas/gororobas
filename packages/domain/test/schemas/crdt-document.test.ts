@@ -4,7 +4,7 @@ import * as Arbitrary from "effect/Arbitrary"
 import { LoroMap, type LoroDoc } from "loro-crdt"
 
 import { ContentLanguage } from "../../src/common/content-language.js"
-import { PersonId, ProfileId } from "../../src/common/ids.js"
+import { PersonId, ProfileId, TiptapNodeId } from "../../src/common/ids.js"
 import { HumanCommit, LoroDocSnapshot, LoroDocUpdate } from "../../src/crdts/domain.js"
 import { InvalidCrdtUpdateError } from "../../src/crdts/errors.js"
 import { snapshotToLoroDoc } from "../../src/crdts/lib.js"
@@ -20,7 +20,13 @@ const content = (text: string): TiptapDocument =>
   TiptapDocument.make({
     type: "doc",
     version: 1,
-    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
+    content: [
+      {
+        type: "paragraph",
+        attrs: { nodeId: TiptapNodeId.make("paragraph001") },
+        content: [{ type: "text", text }],
+      },
+    ],
   })
 
 const original = {

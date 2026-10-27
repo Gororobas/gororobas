@@ -6,14 +6,14 @@ import {
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
   WikiArticleProjectionRow,
+  type LinkSource,
   WikiArticleRelationRow,
-  type WikiArticleRelationSource,
   WikiArticleRevisionInsertRow,
   WikiArticleRevisionMediaAssetRow,
   WikiArticleRevisionUpdateRow,
   WikiArticleTranslationProjectionRow,
 } from "@gororobas/domain"
-import { Effect, Array as EffectArray, Option, Schema } from "effect"
+import { Effect, Array as EffectArray, Schema } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
 
@@ -140,28 +140,25 @@ export const setMainMedia = SqlSchema.void({
 })
 
 /** Replaces the relations a single source found, leaving other sources' relations untouched. */
-export const replaceRelations = Effect.fn("replaceRelations")(function* (input: {
+export const replaceRelations = <Source extends LinkSource>(input: {
   wikiArticleId: WikiArticleId
-  source: WikiArticleRelationSource
-  related: ReadonlyArray<{ wikiArticleId: WikiArticleId; extractionText?: string | undefined }>
-}) {
-  const sql = yield* SqlClient
+  source: Source
+  rows: ReadonlyArray<Extract<WikiArticleRelationRow, { readonly source: Source }>>
+}) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient
 
-  return yield* persistProjectionJunctionTables({
-    deleteRows: sql`
-      DELETE FROM wiki_article_relations
-      WHERE wiki_article_id = ${input.wikiArticleId} AND source = ${input.source}
-    `,
-    insertRows: insertRelationRows(
-      EffectArray.dedupeWith(
-        input.related.filter((related) => related.wikiArticleId !== input.wikiArticleId),
-        (left, right) => left.wikiArticleId === right.wikiArticleId,
-      ).map((related) => ({
-        wikiArticleId: input.wikiArticleId,
-        relatedWikiArticleId: related.wikiArticleId,
-        source: input.source,
-        extractionText: Option.fromUndefinedOr(related.extractionText),
-      })),
-    ),
-  })
-})
+    yield* persistProjectionJunctionTables({
+      deleteRows: sql`
+        DELETE FROM wiki_article_relations
+        WHERE wiki_article_id = ${input.wikiArticleId} AND source = ${input.source}
+      `,
+      insertRows: insertRelationRows(
+        input.rows.filter(
+          (row) =>
+            row.wikiArticleId === input.wikiArticleId &&
+            row.relatedWikiArticleId !== input.wikiArticleId,
+        ),
+      ),
+    })
+  }).pipe(Effect.withSpan("replaceRelations"))

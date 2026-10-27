@@ -12,6 +12,7 @@
   "dependencies": {
     "@tiptap/core": "catalog:",
     "@tiptap/html": "catalog:",
+    "@tiptap/pm": "catalog:",
     "@tiptap/starter-kit": "catalog:",
     "@yielded/auth": "catalog:",
     "effect": "catalog:",
@@ -21,7 +22,6 @@
     "uuid": "catalog:"
   },
   "devDependencies": {
-    "@tiptap/pm": "catalog:",
     "loro-prosemirror": "catalog:"
   }
 }

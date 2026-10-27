@@ -14,7 +14,7 @@ import {
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Predicate, Random, Record, Schema } from "effect"
 
-import { richTextDocument, type Mention } from "./rich-text.js"
+import { richTextDocument, type Reference } from "./rich-text.js"
 import { chance, digits, nanoId, pick } from "./seed-random.js"
 import {
   AREAS_OF_WORK,
@@ -301,7 +301,7 @@ const legibleTranslation = (input: {
   readonly language: SupportedLanguage
   readonly names: Localized
   readonly subject: ArticleSubject
-  readonly mentions: ReadonlyArray<Mention>
+  readonly references: ReadonlyArray<Reference>
 }) =>
   Effect.gen(function* () {
     const { language } = input
@@ -328,7 +328,7 @@ const legibleTranslation = (input: {
               richTextDocument({
                 language,
                 paragraphs: [1, 5],
-                mentions: input.mentions,
+                references: input.references,
                 long: true,
               }),
               encodeDocument,
@@ -346,7 +346,7 @@ const legibleTranslation = (input: {
 export const legibleTranslations = (input: {
   readonly names: Localized
   readonly subject: ArticleSubject
-  readonly mentions: ReadonlyArray<Mention>
+  readonly references: ReadonlyArray<Reference>
 }) =>
   Effect.gen(function* () {
     const chosen = yield* Effect.filter(

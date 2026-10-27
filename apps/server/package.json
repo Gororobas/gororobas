@@ -18,6 +18,7 @@
     "migrate": "npx tsx scripts/migrate.ts"
   },
   "dependencies": {
+    "@effect/ai-openai-compat": "catalog:",
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
     "@effect/sql-sqlite-node": "catalog:",
@@ -36,10 +37,8 @@
     "@yielded/auth": "catalog:",
     "@yielded/auth-persistence": "catalog:",
     "effect": "catalog:",
-    "langextract": "^1.2.0",
     "loro-crdt": "catalog:",
     "mediabunny": "^1.61.6",
-    "ollama": "^0.6.4",
     "sharp": "^0.35.5",
     "uuid": "catalog:"
   },

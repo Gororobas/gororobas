@@ -1,12 +1,14 @@
 import {
+  assignTiptapNodeIds,
   initializeLoroRichText,
+  loroRichTextToTiptap,
   initializeWikiArticleCommonNames,
   WikiArticleCommonNameInCrdtList,
   TiptapDocument,
   WikiArticleEditableData,
   ProfileId,
 } from "@gororobas/domain"
-import { Effect, Predicate, Record, Schema } from "effect"
+import { Effect, MutableHashMap, Option, Predicate, Record, Schema } from "effect"
 import { diff } from "json-diff-ts"
 import { LoroDoc, LoroMap } from "loro-crdt"
 
@@ -97,11 +99,19 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
           document.setPeerId(BigInt(`0x${version.actorId.replaceAll("-", "").slice(-16)}`))
         }
 
+        // Node IDs carry over between versions, so later evidence can point at older paragraphs.
+        const previousContents = MutableHashMap.empty<string, TiptapDocument>()
+
         document
           .getMap("translations")
           .entries()
-          .forEach(([, translation]) => {
-            if (translation instanceof LoroMap) translation.delete("content")
+          .forEach(([language, translation]) => {
+            if (!(translation instanceof LoroMap)) return
+            const content = translation.get("content")
+            if (content instanceof LoroMap) {
+              MutableHashMap.set(previousContents, language, loroRichTextToTiptap(content))
+            }
+            translation.delete("content")
           })
 
         yield* Effect.forEach(
@@ -125,8 +135,15 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
                 .getMap("translations")
                 .ensureMergeableMap(language)
                 .ensureMergeableMap("content"),
-              // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translation content is arbitrary JSON until decoded as a rich-text document.
-              Schema.decodeUnknownSync(TiptapDocument)(translation.content),
+              assignTiptapNodeIds(
+                // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translation content is arbitrary JSON until decoded as a rich-text document.
+                Schema.decodeUnknownSync(TiptapDocument)(translation.content),
+                {
+                  referenceContent: Option.getOrUndefined(
+                    MutableHashMap.get(previousContents, language),
+                  ),
+                },
+              ),
             )
           }
         })

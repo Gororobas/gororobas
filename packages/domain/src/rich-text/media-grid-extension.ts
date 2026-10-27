@@ -1,4 +1,4 @@
-import { Node } from "@tiptap/core"
+import { mergeAttributes, Node } from "@tiptap/core"
 import { Option, Schema } from "effect"
 
 import {
@@ -33,15 +33,17 @@ export const MediaGrid = Node.create({
   ],
   renderText: () => "",
   // The application node view hydrates media; HTML carries lossless references for translation and clipboard use.
-  renderHTML: ({ node }) => [
-    "div",
-    {
-      "data-media-grid": Schema.encodeSync(AttributesJson)(
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
-        Schema.decodeUnknownSync(MediaGridAttributes)(node.attrs),
-      ),
-    },
-  ],
+  renderHTML: ({ node, HTMLAttributes }) => {
+    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
+    const { ...attributes } = Schema.decodeUnknownSync(MediaGridAttributes)(node.attrs)
+
+    return [
+      "div",
+      mergeAttributes(HTMLAttributes, {
+        "data-media-grid": Schema.encodeSync(AttributesJson)(attributes),
+      }),
+    ]
+  },
 })
 
 export const mediaItemsFromTiptapDocument = (

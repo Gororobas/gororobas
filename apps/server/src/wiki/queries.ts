@@ -4,6 +4,7 @@ import {
   SupportedLanguage,
   MediaAssetRow,
   MediaAssetId,
+  RelatedWikiArticle,
   WikiArticleQueriedCardData,
   OptionalColumn,
   TiptapDocument,
@@ -12,6 +13,7 @@ import {
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
   WikiArticleId,
+  WikiArticleKind,
   WikiArticleLookup,
   WikiArticleProjectionRow,
   WikiArticleRevisionId,
@@ -73,6 +75,45 @@ export const findWikiArticleBySearchableName = SqlSchema.findOneOption({
           ON route.wiki_article_id = translations.wiki_article_id
         WHERE translations.searchable_names LIKE ${pattern}
         LIMIT 1
+      `,
+    ),
+})
+
+/** Every name an article goes by, for link inference to recognize; archived articles are left out. */
+export const listWikiArticleAliases = SqlSchema.findAll({
+  Request: Schema.Void,
+  Result: Schema.Struct({
+    wikiArticleId: WikiArticleId,
+    kind: WikiArticleKind,
+    alias: Schema.String,
+  }),
+  execute: () =>
+    SqlClient.use(
+      (sql) => sql`
+        WITH aliases AS (
+          SELECT translations.wiki_article_id, json_extract(name.value, '$.name') AS alias
+          FROM wiki_article_translations AS translations, json_each(translations.common_names) AS name
+          UNION ALL
+          SELECT articles.id, name.value
+          FROM wiki_articles AS articles,
+            json_each(
+              CASE WHEN articles.kind = 'PLANT_CULTIVAR' THEN
+                CASE WHEN json_extract(articles.attributes, '$.scientificNames._tag') = 'Value'
+                  THEN json_extract(articles.attributes, '$.scientificNames.value')
+                  ELSE '[]'
+                END
+              ELSE json_extract(articles.attributes, '$.scientificNames') END
+            ) AS name
+          UNION ALL
+          SELECT articles.id, name.value
+          FROM wiki_articles AS articles, json_each(articles.attributes, '$.names') AS name
+          UNION ALL
+          SELECT wiki_article_id, handle FROM wiki_article_handles
+        )
+        SELECT DISTINCT aliases.wiki_article_id, articles.kind, aliases.alias
+        FROM aliases
+        INNER JOIN wiki_articles AS articles ON articles.id = aliases.wiki_article_id
+        WHERE articles.status <> 'ARCHIVED' AND aliases.alias IS NOT NULL
       `,
     ),
 })
@@ -301,20 +342,36 @@ export const listCards = SqlSchema.findAll({
     SqlClient.use((sql) => sql`${publishedCardsQuery(sql, language)} ORDER BY a.id`),
 })
 
+const RelatedCardRow = Schema.Struct({
+  ...QueriedCardRow.fields,
+  links: Schema.fromJsonString(RelatedWikiArticle.fields.links),
+})
+
 /** Relations are symmetric for readers: an article lists both the articles it relates to and those relating to it. */
 export const listRelatedCards = SqlSchema.findAll({
   Request: Schema.Struct({ wikiArticleId: WikiArticleId, language: SupportedLanguage }),
-  Result: QueriedCardRow,
+  Result: RelatedCardRow,
   execute: ({ wikiArticleId, language }) =>
     SqlClient.use(
       (sql) => sql`
-    ${publishedCardsQuery(sql, language)}
-      AND a.id IN (
-        SELECT related_wiki_article_id FROM wiki_article_relations WHERE wiki_article_id = ${wikiArticleId}
-        UNION
-        SELECT wiki_article_id FROM wiki_article_relations WHERE related_wiki_article_id = ${wikiArticleId}
-      )
-    ORDER BY a.id
+    WITH relation_links AS (
+      SELECT related_wiki_article_id AS other_id, 'OUTGOING' AS direction, source, evidence
+      FROM wiki_article_relations WHERE wiki_article_id = ${wikiArticleId}
+      UNION ALL
+      SELECT wiki_article_id AS other_id, 'INCOMING' AS direction, source, evidence
+      FROM wiki_article_relations WHERE related_wiki_article_id = ${wikiArticleId}
+    )
+    SELECT cards.*,
+      (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
+          'direction', ordered.direction,
+          'source', ordered.source,
+          'evidence', json(ordered.evidence)
+        ))
+        FROM (SELECT * FROM relation_links l WHERE l.other_id = cards.id ORDER BY l.direction DESC, l.source) ordered
+      ) AS links
+    FROM (${publishedCardsQuery(sql, language)}) cards
+    WHERE cards.id IN (SELECT other_id FROM relation_links)
+    ORDER BY cards.id
   `,
     ),
 })

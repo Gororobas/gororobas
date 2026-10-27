@@ -34,7 +34,13 @@ describe("Wiki CRDT review stress tests", () => {
             content: {
               type: "doc",
               version: 1,
-              content: [{ type: "paragraph", content: [{ type: "text", text: "土 🍅 e\u0301" }] }],
+              content: [
+                {
+                  type: "paragraph",
+                  attrs: { nodeId: "paragraph001" },
+                  content: [{ type: "text", text: "土 🍅 e\u0301" }],
+                },
+              ],
             },
           },
         },
@@ -65,7 +71,11 @@ describe("Wiki CRDT review stress tests", () => {
                   content: [
                     {
                       type: "paragraph",
-                      attrs: { [origin]: origin, nested: { ["__proto__"]: origin } },
+                      attrs: {
+                        [origin]: origin,
+                        nested: { ["__proto__"]: origin },
+                        nodeId: "paragraph001",
+                      },
                       content: [{ type: "text", text: `${origin} 🍅` }],
                     },
                   ],
@@ -93,7 +103,7 @@ describe("Wiki CRDT review stress tests", () => {
             content: [
               {
                 type: "paragraph",
-                attrs: { "�": "�", nested: { ["__proto__"]: "�" } },
+                attrs: { "�": "�", nested: { ["__proto__"]: "�" }, nodeId: "paragraph001" },
                 content: [{ type: "text", text: "� 🍅" }],
               },
             ],
@@ -152,7 +162,12 @@ describe("Wiki CRDT review stress tests", () => {
                 content: {
                   type: "doc",
                   version: 1,
-                  content: [{ type: "paragraph", attrs: { ["__proto__"]: value, value } }],
+                  content: [
+                    {
+                      type: "paragraph",
+                      attrs: { ["__proto__"]: value, value, nodeId: "paragraph001" },
+                    },
+                  ],
                 },
               },
             },

@@ -294,10 +294,11 @@ CREATE TABLE `wiki_article_relations` (
   `wiki_article_id` text NOT NULL,
   `related_wiki_article_id` text NOT NULL,
   `source` text NOT NULL,
-  `extraction_text` text NULL,
+  `evidence` json NULL,
   PRIMARY KEY (`wiki_article_id`, `related_wiki_article_id`, `source`),
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK (wiki_article_id <> related_wiki_article_id)
+  CHECK (wiki_article_id <> related_wiki_article_id),
+  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL))
 ) WITHOUT ROWID;
 -- Create index "idx_wiki_article_relations_related" to table: "wiki_article_relations"
 CREATE INDEX `idx_wiki_article_relations_related` ON `wiki_article_relations` (`related_wiki_article_id`);
@@ -320,7 +321,7 @@ CREATE TABLE `wiki_article_main_media` (
 CREATE TABLE `publication_crdts` (
   `id` text NOT NULL,
   `crdt_snapshot` blob NOT NULL,
-  `classification` json NULL,
+  `link_inference` json NULL,
   `moderation_status` text NOT NULL,
   `owner_profile_id` text NOT NULL,
   `created_at` text NOT NULL,
@@ -390,10 +391,12 @@ CREATE TABLE `publication_media_assets` (
 CREATE TABLE `publication_wiki_articles` (
   `publication_id` text NOT NULL,
   `wiki_article_id` text NOT NULL,
-  `extraction_text` text NULL,
-  PRIMARY KEY (`publication_id`, `wiki_article_id`),
+  `source` text NOT NULL,
+  `evidence` json NULL,
+  PRIMARY KEY (`publication_id`, `wiki_article_id`, `source`),
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_crdts` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL))
 ) WITHOUT ROWID;
 -- Create "publication_comments" table
 CREATE TABLE `publication_comments` (

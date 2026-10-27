@@ -15,6 +15,7 @@ allowBuilds:
   protobufjs: false
 
 catalog:
+  "@effect/ai-openai-compat": ^4.0.5
   "@effect/opentelemetry": "^4.0.5"
   "@effect/platform-node": ^4.0.5
   "@effect/sql-sqlite-node": "^4.0.5"

@@ -1,4 +1,6 @@
 import {
+  LinkInferenceRun,
+  type LinkSource,
   PublicationMediaAssetRow,
   PublicationCommitRow,
   PublicationCrdtRow,
@@ -7,9 +9,11 @@ import {
   PublicationTranslationRow,
   PublicationWikiArticleRow,
 } from "@gororobas/domain"
-import { Schema, Struct } from "effect"
+import { Effect, Array as EffectArray, Schema, Struct } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
+
+import { persistProjectionJunctionTables } from "../common/table-projection.js"
 
 export const deletePublication = SqlSchema.void({
   Request: PublicationId,
@@ -35,13 +39,47 @@ export const insertPublicationTranslationRows = SqlSchema.void({
 
 export const insertPublicationWikiArticleRows = SqlSchema.void({
   Request: Schema.Array(PublicationWikiArticleRow),
-  execute: (rows) =>
-    SqlClient.use((sql) => sql`INSERT INTO publication_wiki_articles ${sql.insert(rows)}`),
+  execute: EffectArray.match({
+    onEmpty: () => Effect.void,
+    onNonEmpty: (rows) =>
+      SqlClient.use((sql) => sql`INSERT INTO publication_wiki_articles ${sql.insert(rows)}`),
+  }),
+})
+
+/** Replaces the links a single source found, leaving other sources' links untouched. */
+export const replacePublicationWikiArticleLinks = <Source extends LinkSource>(input: {
+  publicationId: PublicationId
+  source: Source
+  rows: ReadonlyArray<Extract<PublicationWikiArticleRow, { readonly source: Source }>>
+}) =>
+  Effect.gen(function* () {
+    const sql = yield* SqlClient
+
+    yield* persistProjectionJunctionTables({
+      deleteRows: sql`
+        DELETE FROM publication_wiki_articles
+        WHERE publication_id = ${input.publicationId} AND source = ${input.source}
+      `,
+      insertRows: insertPublicationWikiArticleRows(
+        input.rows.filter((row) => row.publicationId === input.publicationId),
+      ),
+    })
+  }).pipe(Effect.withSpan("replacePublicationWikiArticleLinks"))
+
+export const updatePublicationLinkInference = SqlSchema.void({
+  Request: Schema.Struct({
+    id: PublicationId,
+    linkInference: Schema.fromJsonString(LinkInferenceRun),
+  }),
+  execute: ({ id, linkInference }) =>
+    SqlClient.use(
+      (sql) => sql`UPDATE publication_crdts SET link_inference = ${linkInference} WHERE id = ${id}`,
+    ),
 })
 
 export const updatePublicationCrdtRow = SqlSchema.void({
   Request: PublicationCrdtRow.mapFields(
-    Struct.omit(["classification", "createdAt", "moderationStatus", "ownerProfileId"]),
+    Struct.omit(["linkInference", "createdAt", "moderationStatus", "ownerProfileId"]),
   ),
   execute: ({ id, ...update }) =>
     SqlClient.use(

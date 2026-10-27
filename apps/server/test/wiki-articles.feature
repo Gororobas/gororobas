@@ -137,9 +137,9 @@ Feature: Wiki articles
       When "Maria" removes the bookmark
       Then "Mandioca" no longer appears in "Maria"'s bookmarked wiki articles
 
-  Rule: Wiki articles relate to the articles their content mentions or is about
-    Relations are found automatically, never edited by hand: mentions of other articles in the content,
-    and the articles that classifying the content recognizes. Readers see relations from both ends.
+  Rule: Wiki articles relate to the articles their content references, names or is about
+    Relations are derived, never edited by hand: entity references contributors place in the content,
+    and the articles link inference finds named in it or infers it is about. Readers see relations from both ends.
 
     Background:
       Given "Maria" has COMMUNITY access
@@ -148,8 +148,8 @@ Feature: Wiki articles
       And the wiki article "Feijão" exists
       And the wiki article "Mandioca" exists
 
-    Scenario: Mentioning an article relates both articles
-      When an approved revision makes "Mandioca"'s content mention "Agrofloresta"
+    Scenario: Referencing an article relates both articles
+      When an approved revision makes "Mandioca"'s content reference "Agrofloresta"
       Then "Mandioca"'s related articles are:
         | title        |
         | Agrofloresta |
@@ -157,25 +157,51 @@ Feature: Wiki articles
         | title    |
         | Mandioca |
 
-    Scenario: Removing a mention removes its relation
-      Given an approved revision makes "Mandioca"'s content mention "Agrofloresta"
-      When an approved revision makes "Mandioca"'s content mention "Feijão"
+    Scenario: Removing a reference removes its relation
+      Given an approved revision makes "Mandioca"'s content reference "Agrofloresta"
+      When an approved revision makes "Mandioca"'s content reference "Feijão"
       Then "Mandioca"'s related articles are:
         | title  |
         | Feijão |
 
-    Scenario: Classifying the content relates the article to what it is about
-      Given classification recognizes "Agrofloresta" in "Mandioca"'s content
-      When "Mandioca"'s content is classified
+    Scenario: Naming an article in the content relates them
+      Given an approved revision makes "Mandioca"'s content say "Plantamos mandioca entre os feijões."
+      When links are inferred from "Mandioca"'s content
+      Then "Mandioca"'s related articles are:
+        | title  |
+        | Feijão |
+
+    Scenario: Inferring what the content is about relates the articles
+      Given link inference infers "Agrofloresta" from "Mandioca"'s content
+      When links are inferred from "Mandioca"'s content
       Then "Mandioca"'s related articles are:
         | title        |
         | Agrofloresta |
 
-    Scenario: Classification keeps the relations from mentions
-      Given classification recognizes "Agrofloresta" in "Mandioca"'s content
-      And an approved revision makes "Mandioca"'s content mention "Feijão"
-      When "Mandioca"'s content is classified
+    Scenario: Link inference keeps the relations from references
+      Given link inference infers "Agrofloresta" from "Mandioca"'s content
+      And an approved revision makes "Mandioca"'s content reference "Feijão"
+      When links are inferred from "Mandioca"'s content
       Then "Mandioca"'s related articles are:
         | title        |
         | Agrofloresta |
         | Feijão       |
+
+    Scenario: Readers see which article's content established a relation
+      When an approved revision makes "Mandioca"'s content reference "Agrofloresta"
+      Then "Agrofloresta" is related to "Mandioca" through:
+        | source           | direction | text         |
+        | ENTITY_REFERENCE | INCOMING  | Agrofloresta |
+      And "Mandioca" is related to "Agrofloresta" through:
+        | source           | direction | text         |
+        | ENTITY_REFERENCE | OUTGOING  | Agrofloresta |
+
+    Scenario: Each article's content keeps its own evidence for the same relation
+      Given an approved revision makes "Mandioca"'s content reference "Agrofloresta"
+      And an approved revision makes "Agrofloresta"'s content say "Plantamos mandioca entre as árvores."
+      When links are inferred from "Agrofloresta"'s content
+      Then "Mandioca" is related to "Agrofloresta" through:
+        | source           | direction | text         |
+        | ENTITY_REFERENCE | OUTGOING  | Agrofloresta |
+        | MENTION          | INCOMING  | mandioca     |
+      And every piece of evidence in "Mandioca"'s relations points at the node holding it

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ContentLanguage } from "@gororobas/domain"
+import { ContentLanguage, TiptapNodeId } from "@gororobas/domain"
 import { PublicationCrdt } from "@gororobas/domain"
 import {
   Handle,
@@ -37,6 +37,7 @@ const TestLayerWithPublicationsRepository = Layer.mergeAll(
 const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
 const paragraph = (text: string) => ({
+  attrs: { nodeId: TiptapNodeId.make("paragraph001") },
   content: [{ text, type: "text" as const }],
   type: "paragraph" as const,
 })

@@ -14,6 +14,7 @@ import {
   type ProfileRow,
   type Session,
 } from "@gororobas/domain"
+import { LinkInferenceModelStub } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { ConfigProvider, FileSystem } from "effect"
 import { DateTime, Effect, Exit, Layer, Schema } from "effect"
@@ -22,6 +23,8 @@ import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
 import { IdGenLive } from "../src/id-gen-live.js"
+import { PublicationLinkInferenceWorkflowLayer } from "../src/link-inference/publication-link-inference-workflow.js"
+import { WikiArticleLinkInferenceWorkflowLayer } from "../src/link-inference/wiki-article-link-inference-workflow.js"
 import { MediaAssetsRepository } from "../src/media-assets/repository.js"
 import { MediaAssetsService } from "../src/media-assets/service.js"
 import { MediaAssetsStorage } from "../src/media-assets/storage.js"
@@ -108,6 +111,12 @@ const PeopleServiceLayer = Layer.effect(PeopleService, PeopleService.make).pipe(
 const ProfilesServiceLayer = Layer.effect(ProfileService, ProfileService.make).pipe(
   Layer.provide(TestLayer),
 )
+
+/** Link inference workflows on the in-memory engine, with no language model: only exact names link. */
+export const LinkInferenceTestLayer = Layer.mergeAll(
+  PublicationLinkInferenceWorkflowLayer,
+  WikiArticleLinkInferenceWorkflowLayer,
+).pipe(Layer.provide(LinkInferenceModelStub), Layer.provideMerge(WorkflowEngine.layerMemory))
 
 export const TestLayerWithServices = Layer.mergeAll(
   TestLayer,

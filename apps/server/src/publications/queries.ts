@@ -134,7 +134,8 @@ export const findPublicationPageData = SqlSchema.findOneOption({
       aggregated_wiki_articles AS (
         SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
           'wikiArticleId', pv.wiki_article_id,
-          'extractionText', pv.extraction_text
+          'source', pv.source,
+          'evidence', json(pv.evidence)
         )) AS wiki_articles
         FROM publication_wiki_articles pv
         INNER JOIN target_publication ON target_publication.id = pv.publication_id

@@ -3,10 +3,22 @@ import { describe, expect, it } from "@effect/vitest"
 import { ContentLanguage } from "@gororobas/domain"
 import type { SupportedLanguage } from "@gororobas/domain"
 import { TiptapDocument, type TiptapNode, type TiptapTextNode } from "@gororobas/domain"
-import { Effect, FileSystem, Path, Predicate, Record, Schema, String as EffectString } from "effect"
+import {
+  Effect,
+  FileSystem,
+  Layer,
+  Path,
+  Predicate,
+  Record,
+  Schema,
+  String as EffectString,
+} from "effect"
 
 import { translateTiptapContent } from "./translate-tiptap-content.js"
-import { TranslationServiceOllama } from "./translation-service-ollama.js"
+import {
+  TranslationLanguageModel,
+  TranslationServiceLanguageModelLive,
+} from "./translation-service-language-model.js"
 
 type TiptapAnyNode = TiptapDocument | TiptapNode | TiptapTextNode
 
@@ -454,7 +466,7 @@ const FIXTURES: Record<string, TranslationFixture> = {
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe(
-  "ollama translation quality (external: run with `pnpm --filter @gororobas/server test:external`)",
+  "language model translation quality (external: run with `pnpm --filter @gororobas/server test:external`)",
   { timeout: 180_000, concurrent: false },
   () => {
     Record.toEntries(FIXTURES).forEach(([name, fixture]) => {
@@ -488,7 +500,12 @@ describe(
             EffectString.isEmpty(originalText.trim()) ||
               EffectString.isNonEmpty(translatedText.trim()),
           ).toBe(true)
-        }).pipe(Effect.provide(TranslationServiceOllama), Effect.provide(NodeServices.layer)),
+        }).pipe(
+          Effect.provide(
+            TranslationServiceLanguageModelLive.pipe(Layer.provide(TranslationLanguageModel)),
+          ),
+          Effect.provide(NodeServices.layer),
+        ),
       )
     })
   },

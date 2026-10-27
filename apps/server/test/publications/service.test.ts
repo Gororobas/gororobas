@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ContentLanguage } from "@gororobas/domain"
+import { ContentLanguage, TiptapNodeId } from "@gororobas/domain"
 import { PublicationCrdt } from "@gororobas/domain"
 import {
   Handle,
@@ -18,7 +18,12 @@ import { SqlClient } from "effect/sql"
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { PublicationsService } from "../../src/publications/service.js"
 import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
-import { insertPersonWithDependencies, TestLayer, withSession } from "../test-helpers.js"
+import {
+  insertPersonWithDependencies,
+  LinkInferenceTestLayer,
+  TestLayer,
+  withSession,
+} from "../test-helpers.js"
 
 const PublicationsRepositoryLayer = Layer.effect(
   PublicationsRepository,
@@ -33,11 +38,12 @@ const TestLayerWithPublicationsService = Layer.mergeAll(
   TestLayer,
   PublicationsRepositoryLayer,
   PublicationsServiceLayer,
-)
+).pipe(Layer.provideMerge(LinkInferenceTestLayer.pipe(Layer.provide(TestLayer))))
 
 const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
 const paragraph = (text: string) => ({
+  attrs: { nodeId: TiptapNodeId.make("paragraph001") },
   content: [{ text, type: "text" as const }],
   type: "paragraph" as const,
 })

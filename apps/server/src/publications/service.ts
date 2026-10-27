@@ -40,6 +40,7 @@ import { Context, DateTime, Effect, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 import { LoroDoc } from "loro-crdt"
 
+import { requestPublicationLinkInference } from "../link-inference/publication-link-inference-workflow.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { moderateContent } from "../moderation/moderate-content.js"
 import { findById as findOrganizationById } from "../organizations/queries.js"
@@ -234,7 +235,26 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           }
 
           return { id: publicationId, handle }
-        }).pipe((effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)))
+        }).pipe(
+          (effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)),
+          Effect.tap(({ id }) => requestLinkInference(id)),
+        )
+
+      /** Best-effort, after the transaction commits, so the workflow reads the committed content. */
+      const requestLinkInference = (publicationId: PublicationId) =>
+        repo.findPublicationRowById(publicationId).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.void,
+              onSome: (row) =>
+                requestPublicationLinkInference({
+                  id: publicationId,
+                  currentCrdtFrontier: row.currentCrdtFrontier,
+                }),
+            }),
+          ),
+          Effect.catchCause((cause) => Effect.logError("Link inference submission failed", cause)),
+        )
 
       const updatePublication = (input: UpdatePublicationInput) =>
         Effect.gen(function* () {
@@ -261,7 +281,10 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
               mediaIds: input.mediaIds,
             })
           }
-        }).pipe((effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)))
+        }).pipe(
+          (effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)),
+          Effect.tap(() => requestLinkInference(input.publicationId)),
+        )
 
       const deletePublication = (publicationId: PublicationId) =>
         Effect.gen(function* () {

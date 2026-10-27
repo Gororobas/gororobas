@@ -1,28 +1,34 @@
-import type {
-  EntityReferenceTarget,
-  MediaAssetId,
-  SupportedLanguage,
-  TiptapBlockNode,
-  TiptapDocument,
-  TiptapInlineNode,
-  TiptapListItemNode,
+import {
+  type EvidenceLocation,
+  type EntityReferenceTarget,
+  nodeIdOf,
+  type MediaAssetId,
+  type SupportedLanguage,
+  type TiptapBlockNode,
+  type TiptapDocument,
+  type TiptapInlineNode,
+  type TiptapListItemNode,
+  TiptapNodeId,
 } from "@gororobas/domain"
-import { Array as EffectArray, Effect, Random } from "effect"
+import { Array as EffectArray, Effect, Option, Random } from "effect"
 
-import { chance, pick, pickOption, sample } from "./seed-random.js"
+import { chance, nanoId, pick, pickOption, sample } from "./seed-random.js"
 import { CONCEPTS, HEADINGS, LIST_ITEMS, PLACES, PLANTS, SENTENCES } from "./vocabulary.js"
 
 /** An entity that rich text can reference inline, with the label shown at insertion time. */
-export type Mention = EntityReferenceTarget & { readonly label: string }
+export type Reference = EntityReferenceTarget & { readonly label: string }
 
 export interface RichTextOptions {
   readonly language: SupportedLanguage
   readonly paragraphs: readonly [min: number, max: number]
-  readonly mentions?: ReadonlyArray<Mention>
+  readonly references?: ReadonlyArray<Reference>
   readonly media?: ReadonlyArray<MediaAssetId>
   /** Long documents add headings, lists, quotes and rules between paragraphs. */
   readonly long?: boolean
 }
+
+/** Editors identify every node (see `NodeIdExtension`); seeded content does too, reproducibly. */
+const nodeId = Effect.map(nanoId, (id) => ({ nodeId: TiptapNodeId.make(id) }))
 
 const sentence = (language: SupportedLanguage) =>
   Effect.gen(function* () {
@@ -48,7 +54,7 @@ const markedSentence = (language: SupportedLanguage) =>
     return text(yield* sentence(language), marks)
   })
 
-const paragraph = (language: SupportedLanguage, mentions: ReadonlyArray<Mention>) =>
+const paragraph = (language: SupportedLanguage, references: ReadonlyArray<Reference>) =>
   Effect.gen(function* () {
     const sentences = yield* Effect.replicateEffect(
       markedSentence(language),
@@ -56,25 +62,29 @@ const paragraph = (language: SupportedLanguage, mentions: ReadonlyArray<Mention>
       { concurrency: 1 },
     )
 
-    const mention = (yield* chance(0.5)) ? yield* pickOption(mentions) : undefined
+    const reference = (yield* chance(0.5)) ? yield* pickOption(references) : undefined
 
     const content: Array<TiptapInlineNode> = EffectArray.intersperse(sentences, text(" "))
 
-    if (mention) {
-      const { label, ...target } = mention
+    if (reference) {
+      const { label, ...target } = reference
       content.push(text(" "), {
         type: "entityReference",
-        attrs: { ...target, version: 1, labelAtInsertion: label },
+        attrs: { ...target, ...(yield* nodeId), version: 1, labelAtInsertion: label },
       })
     }
 
-    return { type: "paragraph", content } satisfies TiptapBlockNode
+    return { type: "paragraph", attrs: yield* nodeId, content } satisfies TiptapBlockNode
   })
 
-const listItem = (value: string): TiptapListItemNode => ({
-  type: "listItem",
-  content: [{ type: "paragraph", content: [text(value)] }],
-})
+const listItem = (value: string) =>
+  Effect.gen(function* () {
+    return {
+      type: "listItem",
+      attrs: yield* nodeId,
+      content: [{ type: "paragraph", attrs: yield* nodeId, content: [text(value)] }],
+    } satisfies TiptapListItemNode
+  })
 
 const list = (language: SupportedLanguage, type: "bulletList" | "orderedList") =>
   Effect.gen(function* () {
@@ -82,39 +92,50 @@ const list = (language: SupportedLanguage, type: "bulletList" | "orderedList") =
       LIST_ITEMS[language],
       yield* Random.nextIntBetween(2, 4),
     )
-    return { type, content: [listItem(first), ...rest.map(listItem)] } satisfies TiptapBlockNode
+
+    return {
+      type,
+      attrs: yield* nodeId,
+      content: [
+        yield* listItem(first),
+        ...(yield* Effect.forEach(rest, listItem, { concurrency: 1 })),
+      ],
+    } satisfies TiptapBlockNode
   })
 
 /** Block nodes that break up paragraphs in long documents. */
 const decorations = (
   language: SupportedLanguage,
-  mentions: ReadonlyArray<Mention>,
+  references: ReadonlyArray<Reference>,
 ): EffectArray.NonEmptyReadonlyArray<Effect.Effect<TiptapBlockNode>> => [
   Effect.gen(function* () {
     return {
       type: "heading",
-      attrs: { level: yield* pick([2, 3] as const) },
+      attrs: { level: yield* pick([2, 3] as const), ...(yield* nodeId) },
       content: [text(yield* pick(HEADINGS[language]))],
     } satisfies TiptapBlockNode
   }),
-  Effect.succeed({ type: "horizontalRule" } satisfies TiptapBlockNode),
-  Effect.map(
-    paragraph(language, mentions),
-    (quoted) => ({ type: "blockquote", content: [quoted] }) satisfies TiptapBlockNode,
-  ),
+  Effect.map(nodeId, (attrs) => ({ type: "horizontalRule", attrs }) satisfies TiptapBlockNode),
+  Effect.gen(function* () {
+    return {
+      type: "blockquote",
+      attrs: yield* nodeId,
+      content: [yield* paragraph(language, references)],
+    } satisfies TiptapBlockNode
+  }),
   list(language, "bulletList"),
   list(language, "orderedList"),
 ]
 
 const block = (options: RichTextOptions & { index: number }) =>
   Effect.gen(function* () {
-    const mentions = options.mentions ?? []
+    const references = options.references ?? []
     const decorated = options.long === true && options.index > 0 && (yield* chance(0.35))
     const decoration = decorated
-      ? [yield* Effect.flatten(pick(decorations(options.language, mentions)))]
+      ? [yield* Effect.flatten(pick(decorations(options.language, references)))]
       : []
 
-    return [...decoration, yield* paragraph(options.language, mentions)]
+    return [...decoration, yield* paragraph(options.language, references)]
   })
 
 export const richTextDocument = (options: RichTextOptions) =>
@@ -137,7 +158,7 @@ export const richTextDocument = (options: RichTextOptions) =>
 
       content.splice(Math.min(1, content.length), 0, {
         type: "mediaGrid",
-        attrs: { version: 1, items: [item(first), ...rest.map(item)] },
+        attrs: { ...(yield* nodeId), version: 1, items: [item(first), ...rest.map(item)] },
       })
     }
 
@@ -146,3 +167,22 @@ export const richTextDocument = (options: RichTextOptions) =>
 
 export const shortText = (language: SupportedLanguage) =>
   richTextDocument({ language, paragraphs: [1, 1] })
+
+/** Where seeded link evidence points, standing in for link inference: a document's first paragraph. */
+export const firstParagraphEvidence = (path: EvidenceLocation, document: TiptapDocument) =>
+  EffectArray.head(document.content).pipe(
+    Option.flatMap((block) =>
+      block.type === "paragraph"
+        ? Option.all({
+            nodeId: nodeIdOf(block),
+            text: EffectArray.findFirst(block.content ?? [], (node) =>
+              node.type === "text" ? Option.some(node.text) : Option.none(),
+            ),
+          })
+        : Option.none(),
+    ),
+    Option.map(({ nodeId, text }) => ({
+      location: [...path, { id: nodeId }] satisfies EvidenceLocation,
+      text,
+    })),
+  )

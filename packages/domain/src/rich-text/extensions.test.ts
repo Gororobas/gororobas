@@ -11,6 +11,7 @@ import {
 } from "./domain.js"
 import { linkedEntitiesFromTiptapDocument } from "./entity-reference-extension.js"
 import { mediaItemsFromTiptapDocument } from "./media-grid-extension.js"
+import { assignTiptapNodeIds } from "./node-ids.js"
 import { tiptapFromHtml, tiptapToHtml } from "./tiptap-to-html.js"
 it.effect(
   "preserves versioned references and ordered media through HTML and deduplicates nested targets",
@@ -24,56 +25,48 @@ it.effect(
       ),
       predicate: ({ reference, grid }) =>
         Effect.sync(() => {
-          const document = TiptapDocument.make({
-            type: "doc",
-            version: 1,
-            content: [
-              {
-                type: "paragraph",
-                content: [
-                  {
-                    type: "entityReference",
-                    attrs: reference,
-                  },
-                ],
-              },
-              {
-                type: "blockquote",
-                content: [
-                  {
-                    type: "paragraph",
-                    content: [
-                      {
-                        type: "entityReference",
-                        attrs: reference,
-                      },
-                    ],
-                  },
-                ],
-              },
-              {
-                type: "mediaGrid",
-                attrs: grid,
-              },
-            ],
-          })
+          const document = assignTiptapNodeIds(
+            TiptapDocument.make({
+              type: "doc",
+              version: 1,
+              content: [
+                {
+                  type: "paragraph",
+                  content: [
+                    {
+                      type: "entityReference",
+                      attrs: reference,
+                    },
+                  ],
+                },
+                {
+                  type: "blockquote",
+                  content: [
+                    {
+                      type: "paragraph",
+                      content: [
+                        {
+                          type: "entityReference",
+                          attrs: reference,
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  type: "mediaGrid",
+                  attrs: grid,
+                },
+              ],
+            }),
+          )
 
           const restored = tiptapFromHtml(tiptapToHtml(document))
           expect(linkedEntitiesFromTiptapDocument(restored)).toEqual([
             Schema.decodeSync(EntityReferenceTarget)(reference),
           ])
           expect(mediaItemsFromTiptapDocument(restored)).toEqual(grid.items)
-          const paragraph = restored.content[0]
-          expect(paragraph.type).toBe("paragraph")
-          if (paragraph.type !== "paragraph") throw new Error("Expected a paragraph")
-          expect(paragraph.content?.[0]).toEqual({
-            type: "entityReference",
-            attrs: reference,
-          })
-          expect(restored.content[2]).toEqual({
-            type: "mediaGrid",
-            attrs: grid,
-          })
+          expect(restored).toEqual(document)
 
           expect(
             Schema.is(TiptapDocument)({

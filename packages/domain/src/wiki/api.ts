@@ -16,6 +16,7 @@ import {
   WikiArticleLookup,
   WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
+  RelatedWikiArticle,
   WikiSearchParams,
 } from "./domain.js"
 import {
@@ -74,7 +75,7 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
   )
   .add(
     HttpApiEndpoint.get("listRelatedWikiArticles", "/wiki/:kind/:handle/related", {
-      success: Schema.Array(WikiArticleQueriedCardData),
+      success: Schema.Array(RelatedWikiArticle),
       error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
       params: WikiArticleLookup,
       query: Schema.Struct({ language: Schema.optional(SupportedLanguage) }),
