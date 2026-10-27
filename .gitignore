@@ -29,7 +29,6 @@ workflows.db-shm
 workflows.db-wal
 
 design
-.agents/skills
 skills-lock.json
 .residuality
 apps/client-prototypes
@@ -49,3 +48,5 @@ maple-store-version.json
 .maple-perf-data
 experiments/jev-classification
 experiments/vps-deployment
+experiments/link-inference
+.agents/skills
