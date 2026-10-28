@@ -21,8 +21,8 @@
     "@effect/ai-openai-compat": "catalog:",
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
-    "@effect/sql-sqlite-node": "catalog:",
     "@gororobas/domain": "workspace:^",
+    "@gororobas/effect-sql-turso": "workspace:^",
     "@maple-dev/effect-sdk": "catalog:",
     "@mediabunny/server": "^1.61.6",
     "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@ariga/atlas": "latest",
+    "@effect/sql-sqlite-node": "catalog:",
     "@effect/vitest": "catalog:",
     "@gororobas/effect-bdd": "workspace:^",
     "sql-formatter": "latest"

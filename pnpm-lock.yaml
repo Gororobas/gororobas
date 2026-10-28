@@ -237,6 +237,7 @@ overrides:
   '@mpsuesser/oxlint-plugin-effect>effect': ^4.0.5
 
 patchedDependencies:
+  '@yielded/auth-persistence@0.1.0-beta.42': 3ef1a3e98fdd054c8ae86b5abaf9c4c49a1a052fbc89f7db71751811d1ebf7b7
   '@yielded/auth@0.1.0-beta.42': 4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7
   loro-crdt@1.16.4: 14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd
 
@@ -304,12 +305,12 @@ importers:
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)(redis@6.3.0(@opentelemetry/api@1.9.1))
-      '@effect/sql-sqlite-node':
-        specifier: 'catalog:'
-        version: 4.0.5(effect@4.0.5)
       '@gororobas/domain':
         specifier: workspace:^
         version: link:../../packages/domain
+      '@gororobas/effect-sql-turso':
+        specifier: workspace:^
+        version: link:../../packages/effect-sql-turso
       '@maple-dev/effect-sdk':
         specifier: 'catalog:'
         version: 0.10.1(effect@4.0.5)
@@ -348,7 +349,7 @@ importers:
         version: 0.1.0-beta.42(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
       '@yielded/auth-persistence':
         specifier: 'catalog:'
-        version: 0.1.0-beta.42(effect@4.0.5)
+        version: 0.1.0-beta.42(patch_hash=3ef1a3e98fdd054c8ae86b5abaf9c4c49a1a052fbc89f7db71751811d1ebf7b7)(effect@4.0.5)
       effect:
         specifier: ^4.0.5
         version: 4.0.5
@@ -368,6 +369,9 @@ importers:
       '@ariga/atlas':
         specifier: latest
         version: 1.3.5
+      '@effect/sql-sqlite-node':
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)(vitest@5.0.5)
@@ -496,6 +500,28 @@ importers:
       glob:
         specifier: 'catalog:'
         version: 13.0.6
+    devDependencies:
+      '@effect/vitest':
+        specifier: 'catalog:'
+        version: 4.0.5(effect@4.0.5)(vitest@5.0.5)
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.5
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.3)(happy-dom@20.14.6)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/effect-sql-turso:
+    dependencies:
+      '@tursodatabase/database':
+        specifier: 0.8.3
+        version: 0.8.3
+      effect:
+        specifier: ^4.0.5
+        version: 4.0.5
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'
@@ -2127,11 +2153,36 @@ packages:
   '@tursodatabase/database-common@0.8.3':
     resolution: {integrity: sha512-T8sMfSnRjgGzKMDVkSg0lh1Jh6dDtTWzjYFK0ZJHtKzr+zs69a7Igo4Z+sxfh+rk9gEqn2njLgRYfpMEghMVMw==}
 
+  '@tursodatabase/database-darwin-arm64@0.8.3':
+    resolution: {integrity: sha512-ZqXF8BUqED5mmSIRM5V13xiowc3CAekfpB26Opb4kbix5/9Q6AKgoxyZ1TkgMgjpih1FXAxD5UKdJ6b8D3IElw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@tursodatabase/database-linux-arm64-gnu@0.8.3':
+    resolution: {integrity: sha512-4m9EqKDhL0gwqg6r4KHqX1+2PjMx0xS8CQ61hpoGmWPaCYygePo6O0Zv7EADcf8JJwSBhe7MHyt76gcaEuZDTA==}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@tursodatabase/database-linux-x64-gnu@0.8.3':
+    resolution: {integrity: sha512-CrwYN45/zCSS+qPOqdOw7wI+MKE6ZHWehxwqJJwatW8CAI/tcEWxz3t+gc1v+p8jgGuNGqTJL3QUu2AnQYVC0Q==}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@tursodatabase/database-wasm-common@0.8.3':
     resolution: {integrity: sha512-lqsbszBThqLmnSLUBcCOTqLRigv6kVhOOQonz+2JKM5nU227TTNQibnl3Q3fyfn7HOuYcgiodJgcBECnVc/TXg==}
 
   '@tursodatabase/database-wasm@0.8.1':
     resolution: {integrity: sha512-ioez95VLFScyCQqJhpcQcM4M32L/BWeWwvXACbAQkSfLRuk0IXjZcd80azZlhlAGw/JaYDrgfQmIZHdU0mGi9g==}
+
+  '@tursodatabase/database-win32-x64-msvc@0.8.3':
+    resolution: {integrity: sha512-N19zq+nM9RSeYn4t0FOkfHPMkeWpgHLI2IM3L6dT8KH+bhvdAAAzp2E+cKjl8NQm6RaBSP8f5yqZqV3tp3ET0A==}
+    cpu: [x64]
+    os: [win32]
+
+  '@tursodatabase/database@0.8.3':
+    resolution: {integrity: sha512-pYkADI524URbtreTz+JX7lKtNnfIZU5Pm0n8d6ENnLka3/l1sIexdDmPDWQea4M7CMURv7FxL44oJFYoMQLmOQ==}
 
   '@tybys/wasm-util@0.10.4':
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
@@ -5176,6 +5227,15 @@ snapshots:
 
   '@tursodatabase/database-common@0.8.3': {}
 
+  '@tursodatabase/database-darwin-arm64@0.8.3':
+    optional: true
+
+  '@tursodatabase/database-linux-arm64-gnu@0.8.3':
+    optional: true
+
+  '@tursodatabase/database-linux-x64-gnu@0.8.3':
+    optional: true
+
   '@tursodatabase/database-wasm-common@0.8.3':
     dependencies:
       '@emnapi/core': 1.8.1
@@ -5186,6 +5246,18 @@ snapshots:
     dependencies:
       '@tursodatabase/database-common': 0.8.3
       '@tursodatabase/database-wasm-common': 0.8.3
+
+  '@tursodatabase/database-win32-x64-msvc@0.8.3':
+    optional: true
+
+  '@tursodatabase/database@0.8.3':
+    dependencies:
+      '@tursodatabase/database-common': 0.8.3
+    optionalDependencies:
+      '@tursodatabase/database-darwin-arm64': 0.8.3
+      '@tursodatabase/database-linux-arm64-gnu': 0.8.3
+      '@tursodatabase/database-linux-x64-gnu': 0.8.3
+      '@tursodatabase/database-win32-x64-msvc': 0.8.3
 
   '@tybys/wasm-util@0.10.4':
     dependencies:
@@ -5386,7 +5458,7 @@ snapshots:
   '@voidzero-dev/vite-plus-win32-x64-msvc@1.1.0':
     optional: true
 
-  '@yielded/auth-persistence@0.1.0-beta.42(effect@4.0.5)':
+  '@yielded/auth-persistence@0.1.0-beta.42(patch_hash=3ef1a3e98fdd054c8ae86b5abaf9c4c49a1a052fbc89f7db71751811d1ebf7b7)(effect@4.0.5)':
     dependencies:
       '@yielded/auth': 0.1.0-beta.42(patch_hash=4afa5b7ab41bd9a5b621c1ad0f060b2cce32d0c8ddb042581f306fc1ac3eaef7)(effect@4.0.5)
       '@yielded/crypto': 0.1.0-beta.42(effect@4.0.5)

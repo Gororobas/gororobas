@@ -157,7 +157,7 @@ export const ApiPublicationCardData = Schema.Struct({
   visibility: PublicationVisibility,
   /** The translation that best matches the requested language. */
   content: TiptapDocument,
-  language: SupportedLanguage,
+  language: ContentLanguage,
   originalLanguage: ContentLanguage,
   mediaAssets: Schema.Array(MediaAssetRow),
   /** CONCEPT articles the publication is about, shown as its themes. */

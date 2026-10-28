@@ -128,7 +128,7 @@ it.effect(
         expect((yield* HttpClient.post("/exports.json")).status).toBe(405)
         expect((yield* HttpClient.get("/stored-media-assets/invalid/1280.webp")).status).toBe(404)
       }).pipe(
-        Effect.provide(makeAppSqlClient(report.database, true)),
+        Effect.provide(makeAppSqlClient(report.database, { readonly: true })),
         Effect.provide(NodeHttpServer.layerTest),
       )
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
@@ -155,6 +155,6 @@ it.effect(
       yield* Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient
         expect(yield* sql`SELECT name FROM sqlite_master WHERE type = 'table'`).toEqual([])
-      }).pipe(Effect.provide(makeAppSqlClient(join(run, "preview.sqlite"), true)))
+      }).pipe(Effect.provide(makeAppSqlClient(join(run, "preview.sqlite"), { readonly: true })))
     }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
 )

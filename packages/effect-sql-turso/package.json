@@ -1,0 +1,27 @@
+{
+  "name": "@gororobas/effect-sql-turso",
+  "version": "0.0.0",
+  "description": "Effect SQL adapter for the native Turso database",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./turso-client": "./src/turso-client.ts",
+    "./turso-migrator": "./src/turso-migrator.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest --coverage"
+  },
+  "dependencies": {
+    "@tursodatabase/database": "0.8.3",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

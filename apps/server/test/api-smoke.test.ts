@@ -462,7 +462,7 @@ const seededEnvironment = Effect.gen(function* () {
   )
 }).pipe(Effect.provide(NodeServices.layer))
 
-describe.skip("API smoke", () => {
+describe("API smoke", () => {
   PERSONAS.forEach((persona) =>
     it.live(
       `every endpoint answers ${persona === "visitor" ? "visitors" : `the ${persona} persona`} within its contract`,

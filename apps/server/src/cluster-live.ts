@@ -1,4 +1,4 @@
-import { SqliteClient } from "@effect/sql-sqlite-node"
+import { TursoClient } from "@gororobas/effect-sql-turso"
 import { Config, Effect, Layer } from "effect"
 /**
  * Shared Effect Cluster infrastructure for all durable workflows.
@@ -14,7 +14,7 @@ import { Config, Effect, Layer } from "effect"
 import { ClusterWorkflowEngine, SingleRunner } from "effect/cluster"
 
 // SingleRunner creates its own message and runner tables through SqlMessageStorage.
-const makeWorkflowsSqlLive = (filename: string) => SqliteClient.layer({ filename })
+const makeWorkflowsSqlLive = (filename: string) => TursoClient.layer({ filename })
 
 /** SQLite database for production workflows state */
 const WorkflowsSqlLive = Layer.unwrap(

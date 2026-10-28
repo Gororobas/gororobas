@@ -232,7 +232,7 @@ if (process.argv[1] === import.meta.filename) {
               new URL("../../../apps/server/gororobas.db", import.meta.url).pathname,
             ),
           ),
-          (filename) => makeAppSqlClient(filename, true),
+          (filename) => makeAppSqlClient(filename, { readonly: true }),
         ),
       ),
     ),

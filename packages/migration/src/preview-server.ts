@@ -74,7 +74,7 @@ if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
         ),
       ),
       Layer.provide(server),
-      Layer.provide(makeAppSqlClient(join(previewDirectory, "preview.sqlite"), true)),
+      Layer.provide(makeAppSqlClient(join(previewDirectory, "preview.sqlite"), { readonly: true })),
       Layer.provide(NodeServices.layer),
     ),
   ).pipe(NodeRuntime.runMain)

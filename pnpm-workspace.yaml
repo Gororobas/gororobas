@@ -62,5 +62,6 @@ overrides:
   "@mpsuesser/oxlint-plugin-effect>effect": "catalog:"
 
 patchedDependencies:
+  "@yielded/auth-persistence@0.1.0-beta.42": patches/@yielded__auth-persistence@0.1.0-beta.42.patch
   "@yielded/auth@0.1.0-beta.42": patches/@yielded__auth@0.1.0-beta.42.patch
   loro-crdt@1.16.4: patches/loro-crdt@1.16.4.patch

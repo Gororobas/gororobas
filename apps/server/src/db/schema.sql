@@ -148,7 +148,7 @@ CREATE TABLE organization_memberships (
   PRIMARY KEY (person_id, organization_id),
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
   FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 CREATE TABLE organization_invitations (
   id text NOT NULL PRIMARY KEY,
@@ -192,7 +192,7 @@ CREATE TABLE media_asset_credits (
   PRIMARY KEY (media_asset_id, order_index),
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE,
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- =============
 -- WIKI ARTICLES
@@ -200,12 +200,12 @@ CREATE TABLE media_asset_credits (
 --
 -- The source of truth of contributor-editable article data.
 CREATE TABLE wiki_article_crdts (
-  id text PRIMARY KEY,
+  id text NOT NULL PRIMARY KEY,
   status text NOT NULL, -- WikiArticleStatus
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
   created_at text NOT NULL,
   updated_at text NOT NULL
-) WITHOUT ROWID;
+);
 
 -- Submitted edits. Approved rows are also the article's revision history.
 CREATE TABLE wiki_article_revisions (
@@ -237,7 +237,7 @@ CREATE TABLE wiki_article_revision_media_assets (
   PRIMARY KEY (wiki_article_revision_id, media_asset_id),
   FOREIGN KEY (wiki_article_revision_id) REFERENCES wiki_article_revisions (id) ON DELETE CASCADE,
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 CREATE INDEX idx_wiki_article_revision_media_assets_media_asset ON wiki_article_revision_media_assets (media_asset_id);
 
@@ -273,7 +273,7 @@ CREATE TABLE wiki_article_translations (
   ),
   PRIMARY KEY (wiki_article_id, language),
   FOREIGN KEY (wiki_article_id, kind) REFERENCES wiki_articles (id, kind) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- Owns a route handle across all languages. `languages` records which translations
 -- use it while uniqueness remains scoped only to the article kind.
@@ -285,7 +285,7 @@ CREATE TABLE wiki_article_handles (
   PRIMARY KEY (wiki_article_id, kind, handle),
   UNIQUE (kind, handle),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- Derived relations between articles, one row per source that found them (LinkSource).
 -- `related_wiki_article_id` has no foreign key: content may reference articles that are created
@@ -299,7 +299,7 @@ CREATE TABLE wiki_article_relations (
   CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL)),
   PRIMARY KEY (wiki_article_id, related_wiki_article_id, source),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 CREATE INDEX idx_wiki_article_relations_related ON wiki_article_relations (related_wiki_article_id);
 
@@ -313,13 +313,13 @@ CREATE TABLE wiki_article_media_assets (
   PRIMARY KEY (wiki_article_id, media_asset_id),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 CREATE TABLE wiki_article_main_media (
-  wiki_article_id text PRIMARY KEY,
+  wiki_article_id text NOT NULL PRIMARY KEY,
   media_asset_id text NOT NULL,
   FOREIGN KEY (wiki_article_id, media_asset_id) REFERENCES wiki_article_media_assets (wiki_article_id, media_asset_id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- =====
 -- PUBLICATIONS
@@ -327,7 +327,7 @@ CREATE TABLE wiki_article_main_media (
 --
 -- The source of truth of all publication data
 CREATE TABLE publication_crdts (
-  id text PRIMARY KEY,
+  id text NOT NULL PRIMARY KEY,
   crdt_snapshot blob NOT NULL, -- LoroSnapshot
   link_inference json, -- LinkInferenceRun
   moderation_status text NOT NULL, -- ModerationStatus
@@ -335,7 +335,7 @@ CREATE TABLE publication_crdts (
   created_at text NOT NULL,
   updated_at text NOT NULL,
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- How publications are modified
 CREATE TABLE publication_commits (
@@ -383,7 +383,7 @@ CREATE TABLE publication_translations (
   original_language text NOT NULL,
   PRIMARY KEY (publication_id, language),
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 CREATE TABLE publication_media_assets (
   publication_id text NOT NULL,
@@ -391,7 +391,7 @@ CREATE TABLE publication_media_assets (
   PRIMARY KEY (publication_id, media_asset_id),
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- Derived links to the wiki articles a publication is about, one row per source that found them (LinkSource).
 CREATE TABLE publication_wiki_articles (
@@ -403,7 +403,7 @@ CREATE TABLE publication_wiki_articles (
   PRIMARY KEY (publication_id, wiki_article_id, source),
   FOREIGN KEY (publication_id) REFERENCES publication_crdts (id) ON DELETE CASCADE,
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- ========
 -- COMMENTS
@@ -444,7 +444,7 @@ CREATE TABLE publication_comment_translations (
   PRIMARY KEY (publication_comment_id, language),
   FOREIGN KEY (publication_comment_id) REFERENCES publication_comments (id) ON DELETE CASCADE,
   FOREIGN KEY (publication_comment_id, translated_at_revision_id) REFERENCES publication_comment_content_revisions (publication_comment_id, id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- =========
 -- BOOKMARKS
@@ -457,21 +457,21 @@ CREATE TABLE bookmarks_wiki_articles (
   PRIMARY KEY (person_id, wiki_article_id),
   FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE,
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_crdts (id) ON DELETE CASCADE
-) WITHOUT ROWID;
+);
 
 -- =========
 -- WIKI EXTERNAL DATA
 -- External provider data is separate from contributor-owned CRDT attributes.
 -- =========
 CREATE TABLE wiki_article_external_data_observations (
-  id text PRIMARY KEY,
+  id text NOT NULL PRIMARY KEY,
   wiki_article_id text NOT NULL REFERENCES wiki_article_crdts (id) ON DELETE CASCADE,
   provider text NOT NULL,
   observed_at text NOT NULL,
   article_crdt_frontier json NOT NULL,
   inputs json NOT NULL,
   outcome json NOT NULL
-) WITHOUT ROWID;
+);
 
 CREATE INDEX idx_external_data_observations_article_provider ON wiki_article_external_data_observations (wiki_article_id, provider, observed_at, id);
 

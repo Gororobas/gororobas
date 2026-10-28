@@ -1,0 +1,71 @@
+diff --git a/dist/internal/proof-native.mjs b/dist/internal/proof-native.mjs
+index 116b16d771a5a0bd046a9ba1eb122d42977d0cb6..902b588b892482c7b3a5210844590c2135ae0544 100644
+--- a/dist/internal/proof-native.mjs
++++ b/dist/internal/proof-native.mjs
+@@ -101,9 +101,15 @@ const makeNativeProofStore = Effect.fnUntraced(function* (tables, mapping, batch
+ 		if (!(Number.isSafeInteger(input.lifetimeMillis) && input.lifetimeMillis > 0 && Number.isSafeInteger(input.resendCooldownMillis) && input.resendCooldownMillis >= 0)) return yield* invalidState();
+ 		const key = yield* series(record);
+ 		const binding = bindingJson(record.binding);
+-		const decisionNow = batch || mysql ? now : sql`(select instant from effect_auth_proof_clock)`;
++		// Sample the engine clock under the transaction lock. Turso does not
++		// support scalar subqueries in UPSERT values, so bind the SQLite sample.
++		const sqlite = sql.onDialectOrElse({ sqlite: () => true, orElse: () => false });
++		const sqliteNow = sqlite && !batch ? yield* clock : undefined;
++		const decisionNow = sqliteNow !== undefined
++		  ? sql`${sqliteNow}`
++		  : batch || mysql ? now : sql`(select instant from effect_auth_proof_clock)`;
+ 		const allowed = sql.and([sql`${millis(p.issuedAt)} + ${input.resendCooldownMillis} <= ${decisionNow}`, sql`(${millis(p.expiresAt)} <= ${decisionNow} or ${exact(p.binding, binding)})`]);
+-		let sampled;
++		let sampled = sqliteNow;
+ 		if (batch || mysql) {
+ 			const rows = yield* sql`select ${proof.fields("proof_")} from ${proof.name} where ${key.predicate} ${mysql ? locking : sql``}`;
+ 			sampled = yield* clock;
+@@ -172,7 +178,9 @@ const makeNativeProofStore = Effect.fnUntraced(function* (tables, mapping, batch
+ 				})
+ 			};
+ 		}
+-		const rows = yield* sql`with effect_auth_proof_clock as materialized (select ${now} as instant) ${upsert} returning ${proof.fields("proof_")}`;
++		const rows = yield* (sqlite
++        ? sql`${upsert} returning ${proof.fields("proof_")}`
++        : sql`with effect_auth_proof_clock as materialized (select ${now} as instant) ${upsert} returning ${proof.fields("proof_")}`);
+ 		if (!(rows.length <= 1)) return yield* invalidState();
+ 		return rows[0] === void 0 ? { _tag: "Suppressed" } : {
+ 			_tag: "Issued",
+diff --git a/src/internal/proof-native.ts b/src/internal/proof-native.ts
+index f8cb0522ab7b7a706d4363e1b98a0bbb6c94b443..a24c1d1f2813fb7fdaaba8f249b1d378534dd5f1 100644
+--- a/src/internal/proof-native.ts
++++ b/src/internal/proof-native.ts
+@@ -156,14 +156,20 @@ export const makeNativeProofStore = Effect.fnUntraced(function* (
+     const binding = bindingJson(record.binding);
+     // PostgreSQL's clock_timestamp is volatile. One materialized sample owns
+     // both timestamps and this upsert's cooldown/expiry decision.
+-    const decisionNow = batch || mysql ? now : sql`(select instant from effect_auth_proof_clock)`;
++    // Sample the engine clock under the transaction lock. Turso does not
++    // support scalar subqueries in UPSERT values, so bind the SQLite sample.
++    const sqlite = sql.onDialectOrElse({ sqlite: () => true, orElse: () => false });
++    const sqliteNow = sqlite && !batch ? yield* clock : undefined;
++    const decisionNow = sqliteNow !== undefined
++      ? sql`${sqliteNow}`
++      : batch || mysql ? now : sql`(select instant from effect_auth_proof_clock)`;
+ 
+     const allowed = sql.and([
+       sql`${millis(p.issuedAt)} + ${input.resendCooldownMillis} <= ${decisionNow}`,
+       sql`(${millis(p.expiresAt)} <= ${decisionNow} or ${exact(p.binding, binding)})`,
+     ]);
+ 
+-    let sampled: number | undefined;
++    let sampled: number | undefined = sqliteNow;
+ 
+     if (batch || mysql) {
+       const rows =
+@@ -258,7 +264,9 @@ export const makeNativeProofStore = Effect.fnUntraced(function* (
+     }
+ 
+     const rows =
+-      yield* sql`with effect_auth_proof_clock as materialized (select ${now} as instant) ${upsert} returning ${proof.fields("proof_")}`;
++      yield* (sqlite
++        ? sql`${upsert} returning ${proof.fields("proof_")}`
++        : sql`with effect_auth_proof_clock as materialized (select ${now} as instant) ${upsert} returning ${proof.fields("proof_")}`);
+ 
+     if (!(rows.length <= 1)) return yield* invalidState();
+ 
