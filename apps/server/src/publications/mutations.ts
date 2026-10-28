@@ -79,11 +79,26 @@ export const updatePublicationLinkInference = SqlSchema.void({
     ),
 })
 
-export const updatePublicationSourceRow = SqlSchema.void({
-  Request: PublicationSourceRow.mapFields(Struct.pick(["id", "crdtSnapshot", "updatedAt"])),
-  execute: ({ id, ...update }) =>
+/**
+ * Replaces the CRDT snapshot only while the projection still holds `expectedCrdtFrontier`.
+ * `None` means another write landed first, a second line of defence behind the in-transaction check.
+ */
+export const updatePublicationSourceRow = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    ...PublicationSourceRow.mapFields(Struct.pick(["id", "crdtSnapshot", "updatedAt"])).fields,
+    expectedCrdtFrontier: PublicationProjectionRow.fields.currentCrdtFrontier,
+  }),
+  Result: Schema.Struct({ id: PublicationId }),
+  execute: ({ id, expectedCrdtFrontier, ...update }) =>
     SqlClient.use(
-      (sql) => sql`UPDATE publication_sources SET ${sql.update(update)} WHERE id = ${id}`,
+      (sql) => sql`
+        UPDATE publication_sources SET ${sql.update(update)}
+        WHERE id = ${id} AND EXISTS (
+          SELECT 1 FROM publication_projections
+          WHERE id = ${id} AND current_crdt_frontier = ${expectedCrdtFrontier}
+        )
+        RETURNING id
+      `,
     ),
 })
 

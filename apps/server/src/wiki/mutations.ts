@@ -1,6 +1,10 @@
 import {
   BookmarkState,
+  LoroDocFrontier,
+  MediaAssetId,
   PersonId,
+  TimestampColumn,
+  WikiArticleRevisionId,
   WikiArticleId,
   WikiArticleMediaAssetRow,
   WikiArticleSourceRow,
@@ -51,11 +55,26 @@ export const insertRelationRows = SqlSchema.void({
   }),
 })
 
-export const updateSourceRow = SqlSchema.void({
-  Request: WikiArticleSourceRow,
-  execute: ({ id, createdAt: _, ...update }) =>
+/**
+ * Replaces the CRDT snapshot only while the projection still holds `expectedCrdtFrontier`,
+ * or still has no projection when it's `None` (a first approval).
+ * `None` as a result means another write landed first, a second line of defence behind the in-transaction read.
+ */
+export const updateSourceRow = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    ...WikiArticleSourceRow.fields,
+    expectedCrdtFrontier: Schema.OptionFromNullOr(Schema.fromJsonString(LoroDocFrontier)),
+  }),
+  Result: Schema.Struct({ id: WikiArticleId }),
+  execute: ({ id, createdAt: _, expectedCrdtFrontier, ...update }) =>
     SqlClient.use(
-      (sql) => sql`UPDATE wiki_article_sources SET ${sql.update(update)} WHERE id = ${id}`,
+      (sql) => sql`
+        UPDATE wiki_article_sources SET ${sql.update(update)}
+        WHERE id = ${id} AND (
+          SELECT current_crdt_frontier FROM wiki_article_projections WHERE id = ${id}
+        ) IS ${expectedCrdtFrontier}
+        RETURNING id
+      `,
     ),
 })
 
@@ -101,6 +120,54 @@ export const attachMediaToWikiArticle = SqlSchema.void({
   execute: (row) =>
     SqlClient.use(
       (sql) => sql`INSERT INTO wiki_article_media_assets ${sql.insert(row)} ON CONFLICT DO NOTHING`,
+    ),
+})
+
+export const removeUnselectedWikiArticleMedia = SqlSchema.void({
+  Request: Schema.Struct({
+    wikiArticleId: WikiArticleId,
+    selectedMediaAssetIds: Schema.Array(MediaAssetId),
+  }),
+  execute: ({ wikiArticleId, selectedMediaAssetIds }) =>
+    SqlClient.use(
+      (sql) => sql`
+        DELETE FROM wiki_article_media_assets
+        WHERE wiki_article_id = ${wikiArticleId}
+        ${EffectArray.match(selectedMediaAssetIds, {
+          onEmpty: () => sql``,
+          onNonEmpty: (ids) => sql`AND media_asset_id NOT IN ${sql.in(ids)}`,
+        })}
+      `,
+    ),
+})
+
+/** Copies the category and descriptions a revision chose onto its selected media assets. */
+export const applyRevisionMediaDetails = SqlSchema.void({
+  Request: Schema.Struct({ revisionId: WikiArticleRevisionId, updatedAt: TimestampColumn }),
+  execute: ({ revisionId, updatedAt }) =>
+    SqlClient.use(
+      (sql) => sql`
+        UPDATE media_assets SET
+          category = CASE
+            WHEN (
+              SELECT selection.has_category_override FROM wiki_article_revision_media_assets selection
+              WHERE selection.wiki_article_revision_id = ${revisionId} AND selection.media_asset_id = media_assets.id
+            ) THEN (
+              SELECT selection.category FROM wiki_article_revision_media_assets selection
+              WHERE selection.wiki_article_revision_id = ${revisionId} AND selection.media_asset_id = media_assets.id
+            )
+            ELSE category
+          END,
+          descriptions = COALESCE((
+            SELECT selection.descriptions FROM wiki_article_revision_media_assets selection
+            WHERE selection.wiki_article_revision_id = ${revisionId} AND selection.media_asset_id = media_assets.id
+          ), descriptions),
+          updated_at = ${updatedAt}
+        WHERE id IN (
+          SELECT media_asset_id FROM wiki_article_revision_media_assets
+          WHERE wiki_article_revision_id = ${revisionId}
+        )
+      `,
     ),
 })
 

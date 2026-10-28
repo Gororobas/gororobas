@@ -9,14 +9,12 @@ import {
   MediaNotFoundError,
   Policies,
   SupportedLanguage,
-  WikiArticleCrdt,
   WikiArticleId,
   WikiArticleLookup,
   WikiArticleNotFoundError,
   WikiArticleRevisionId,
-  WikiArticleRevisionNotFoundError,
   type PlantCultivarProjectedAttributes,
-  type WikiArticleEditableData,
+  type WikiMediaSelection,
   type WikiSearchParams,
 } from "@gororobas/domain"
 import { Array as EffectArray, Context, DateTime, Effect, Match, Option } from "effect"
@@ -24,7 +22,6 @@ import { SqlClient } from "effect/sql"
 
 import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { MediaAssetsService } from "../media-assets/service.js"
-import { requestExternalDataFetch } from "./external-data/workflow.js"
 import { WikiArticlesRepository } from "./repository.js"
 
 const resolveProperty = <A>(
@@ -61,26 +58,27 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           ),
         )
 
-      const validateParentIfCultivar = (article: WikiArticleEditableData) =>
-        Effect.gen(function* () {
-          if (article.kind === "PLANT_CULTIVAR") {
-            const parent = yield* getPublishedArticle(article.attributes.parentPlantId)
-            if (parent.kind !== "PLANT") {
-              return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
-            }
-          }
-        })
+      const validateMediaSelection = (
+        selection: WikiMediaSelection | undefined,
+        alreadyAttachedIds: ReadonlyArray<MediaAssetId>,
+      ) =>
+        Effect.forEach(
+          selection ?? [],
+          ({ mediaAssetId }) =>
+            Effect.gen(function* () {
+              const asset = yield* media.getMediaForAttachment(mediaAssetId, {
+                isAlreadyAttached: alreadyAttachedIds.includes(mediaAssetId),
+              })
+              if (asset.format !== "IMAGE") return yield* new MediaNotFoundError({ id: asset.id })
+            }),
+          { concurrency: 1, discard: true },
+        )
 
       const createWikiArticle = (input: CreateWikiArticlePayload) =>
         Effect.gen(function* () {
           const session = yield* assertAuthenticated
           yield* Policies.wiki.canCreate
-          yield* validateParentIfCultivar(input.wikiArticle)
-
-          // Media selections require their own attachment/revision orchestration.
-          if (input.mediaAssets !== undefined) {
-            return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
-          }
+          yield* validateMediaSelection(input.mediaAssets, [])
 
           return yield* repository.createWikiArticle(
             {
@@ -97,9 +95,10 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           const session = yield* assertAuthenticated
           yield* Policies.wiki.canRevise
           yield* getPublishedArticle(id)
-          if (input.mediaAssets !== undefined) {
-            return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
-          }
+          yield* validateMediaSelection(
+            input.mediaAssets,
+            (yield* repository.listWikiArticleMedia(id)).map((asset) => asset.id),
+          )
 
           return yield* repository.createRevision({
             ...input,
@@ -108,6 +107,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           })
         })
 
+      /** The repository validates the approved state and requests enrichment once it commits. */
       const evaluateRevision = (
         revisionId: WikiArticleRevisionId,
         { status, reason }: EvaluateWikiArticleRevisionPayload,
@@ -115,54 +115,14 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         Effect.gen(function* () {
           const session = yield* assertAuthenticated
           yield* Policies.wiki.canEvaluateRevision
-          const revision = yield* repository.findRevisionById(revisionId)
-          if (Option.isNone(revision)) {
-            return yield* new WikiArticleRevisionNotFoundError({ id: revisionId })
-          }
 
-          const previous = yield* repository.findById(revision.value.wikiArticleId)
-
-          if (status === "APPROVED") {
-            const stored = yield* repository.findSourceRowById(revision.value.wikiArticleId)
-            if (Option.isNone(stored)) {
-              return yield* new WikiArticleNotFoundError({ id: revision.value.wikiArticleId })
-            }
-            const updated = yield* WikiArticleCrdt.parseUpdate({
-              snapshot: stored.value.crdtSnapshot,
-              crdtUpdate: revision.value.crdtUpdate,
-            })
-            yield* validateParentIfCultivar(updated.data)
-          }
-
-          yield* repository.evaluateRevision(
-            {
-              revisionId,
-              evaluation: status,
-              evaluatedById: session.personId,
-              evaluationReason: reason,
-            },
-            { enrichment: "skip" },
-          )
-
-          return status === "APPROVED"
-            ? {
-                article: yield* getPublishedArticle(revision.value.wikiArticleId),
-                previous: Option.getOrUndefined(previous),
-              }
-            : undefined
-        }).pipe(
-          sql.withTransaction,
-          Effect.tap((updated) =>
-            updated && status === "APPROVED"
-              ? requestExternalDataFetch(updated.article, updated.previous).pipe(
-                  Effect.catchCause((cause) =>
-                    Effect.logError("External data submission failed", cause),
-                  ),
-                )
-              : Effect.void,
-          ),
-          Effect.asVoid,
-        )
+          yield* repository.evaluateRevision({
+            revisionId,
+            evaluation: status,
+            evaluatedById: session.personId,
+            evaluationReason: reason,
+          })
+        })
 
       const getPage = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
         Effect.gen(function* () {

@@ -108,8 +108,9 @@ const RelationsTestLayer = WikiArticleLinkInferenceWorkflowLayer.pipe(
           detectMentions: () => Effect.succeed([]),
           detectInferences: ({ source }) =>
             Effect.gen(function* () {
-              const paragraph = source.segments.find((segment) =>
-                segment.location.includes("content"),
+              const paragraph = source.segments.find(
+                (segment) =>
+                  segment.location.includes("content") && segment.isEntityReference !== true,
               )
               if (paragraph === undefined) return []
 

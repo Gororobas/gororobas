@@ -178,4 +178,6 @@ export const WikiArticleCrdt = defineCrdtDocument({
   createDocument: createWikiArticleDocument,
   projectDocument: projectWikiArticleDocument,
   applyEdit: applyWikiArticleEdit,
+  // An article's kind is fixed at creation: the kind-scoped projection tables key on it.
+  isValidTransition: (current, next) => current.kind === next.kind,
 })

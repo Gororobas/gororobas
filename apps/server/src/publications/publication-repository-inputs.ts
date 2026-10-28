@@ -21,8 +21,8 @@ export const HumanCrdtUpdate = Schema.TaggedStruct("HumanCrdtUpdate", {
 
 export type HumanCrdtUpdate = typeof HumanCrdtUpdate.Type
 
+/** Has no expected frontier: it's discarded as stale only if the source content at `sourceCrdtFrontier` changed. */
 export const SystemUpsertTranslation = Schema.TaggedStruct("SystemUpsertTranslation", {
-  expectedCurrentCrdtFrontier: LoroDocFrontier,
   publicationId: PublicationId,
   sourceLanguage: ContentLanguage,
   sourceCrdtFrontier: LoroDocFrontier,

@@ -5,7 +5,12 @@ import { LoroListItemId } from "../common/ids.js"
 export class InvalidCrdtUpdateError extends Schema.TaggedError<InvalidCrdtUpdateError>()(
   "InvalidCrdtUpdateError",
   {
-    reason: Schema.Union([Schema.Literal("InvalidFormat"), Schema.Literal("SchemaValidation")]),
+    /** `InvariantViolation`: the document is valid on its own, but not as a successor of the current one. */
+    reason: Schema.Union([
+      Schema.Literal("InvalidFormat"),
+      Schema.Literal("SchemaValidation"),
+      Schema.Literal("InvariantViolation"),
+    ]),
   },
   { httpApiStatus: 400 },
 ) {}

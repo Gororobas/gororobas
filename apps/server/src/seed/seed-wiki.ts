@@ -228,7 +228,10 @@ const seedKind = (
 ) =>
   Effect.gen(function* () {
     const kind = input.member.fields.kind.literal
-    const plants = input.earlier.filter((article) => article.kind === "PLANT" && article.plant)
+    // A cultivar's parent must be a published plant.
+    const plants = input.earlier.filter(
+      (article) => article.kind === "PLANT" && article.plant && article.status === "PUBLISHED",
+    )
 
     // Derive kind-specific attribute shapes from the domain schema itself.
     const structures = yield* Arbitrary.sampleEffect(Arbitrary.schema(input.member), {

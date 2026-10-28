@@ -16,11 +16,6 @@ export default {
     "experiments/**",
     "scratchpad/**",
   ],
-  experimentalTailwindcss: {
-    attributes: ["class", "className"],
-    functions: ["clsx", "cn"],
-    preserveWhitespace: false,
-  },
   experimentalSortImports: {
     groups: [
       ["builtin", "external"],

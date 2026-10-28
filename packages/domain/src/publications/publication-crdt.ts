@@ -60,4 +60,6 @@ export const PublicationCrdt = defineCrdtDocument({
   createDocument: createPublicationDocument,
   projectDocument: projectPublicationCrdtDocument,
   applyEdit: operations.applyAttributeEdit,
+  // A post never becomes an event: the projection's event columns and kind filters key on it.
+  isValidTransition: (current, next) => current.metadata.kind === next.metadata.kind,
 })

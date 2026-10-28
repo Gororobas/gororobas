@@ -23,6 +23,11 @@ export const defineCrdtDocument = <
   // oxlint-disable-next-line effect/no-unknown-returns -- Projections are untrusted until decoded by the model schema.
   projectDocument: (document: LoroDoc) => unknown
   applyEdit: (document: LoroDoc, edit: Edit) => Effect.Effect<void, unknown>
+  /**
+   * Rules every update must keep between the current and the next state, such as fields fixed at creation.
+   * Enforced by `parseUpdate`, `applyUpdate` and `evolve`, so no write path can skip them.
+   */
+  isValidTransition?: (current: S["Type"], next: S["Type"]) => boolean
 }) => {
   const read = (document: LoroDoc) =>
     validateCrdtDocument({
@@ -30,6 +35,19 @@ export const defineCrdtDocument = <
       targetSchema: configuration.schema,
       projectDocument: configuration.projectDocument,
     })
+
+  const assertValidTransition = (snapshot: LoroDocSnapshot, next: S["Type"]) => {
+    const { isValidTransition } = configuration
+    if (isValidTransition === undefined) return Effect.void
+
+    return read(snapshotToLoroDoc(snapshot)).pipe(
+      Effect.flatMap((current) =>
+        isValidTransition(current, next)
+          ? Effect.void
+          : Effect.fail(new InvalidCrdtUpdateError({ reason: "InvariantViolation" })),
+      ),
+    )
+  }
 
   const create = Effect.fn("CrdtDocument.create")(function* (sourceData: S["Type"]) {
     const document = yield* configuration.createDocument(sourceData)
@@ -51,7 +69,10 @@ export const defineCrdtDocument = <
       sourceDocument: snapshotToLoroDoc(input.snapshot),
       targetSchema: configuration.schema,
       projectDocument: configuration.projectDocument,
-    }).pipe(Effect.map(({ loroDoc, data }) => ({ document: loroDoc, data })))
+    }).pipe(
+      Effect.tap(({ data }) => assertValidTransition(input.snapshot, data)),
+      Effect.map(({ loroDoc, data }) => ({ document: loroDoc, data })),
+    )
 
   /** Validates and publishes only the final diff, with server attribution and a timestamp. */
   const applyUpdate = (input: {
@@ -63,7 +84,10 @@ export const defineCrdtDocument = <
       ...input,
       targetSchema: configuration.schema,
       projectDocument: configuration.projectDocument,
-    }).pipe(Effect.map(({ cleanDoc, ...result }) => ({ ...result, document: cleanDoc })))
+    }).pipe(
+      Effect.tap(({ data }) => assertValidTransition(input.snapshot, data)),
+      Effect.map(({ cleanDoc, ...result }) => ({ ...result, document: cleanDoc })),
+    )
 
   /** Applies machine edits sequentially, then uses the same publication boundary as client updates. */
   const evolve = Effect.fn("CrdtDocument.evolve")(function* (input: {

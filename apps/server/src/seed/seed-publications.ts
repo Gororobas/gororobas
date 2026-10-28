@@ -164,7 +164,6 @@ const translatePublication = (input: {
           yield* repository.updatePublication(
             SystemUpsertTranslation.make({
               commit: SEED_TRANSLATION_COMMIT,
-              expectedCurrentCrdtFrontier: frontier,
               publicationId: input.publicationId,
               sourceLanguage: yield* decodeLanguage(input.sourceLanguage),
               sourceCrdtFrontier: frontier,

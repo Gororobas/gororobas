@@ -7,7 +7,7 @@
     "prepare": "effect-tsgo patch --no-typescript --oxlint --tsrs",
     "clean": "node scripts/clean.mjs",
     "build": "pnpm --filter @gororobas/web-app build",
-    "type-check": "pnpm --recursive --if-present --parallel run type-check",
+    "type-check": "pnpm --recursive --if-present --parallel run type-check && tsc --noEmit -p scripts/tsconfig.json",
     "lint": "effect-tsgo oxlint --fix --fix-dangerously --fix-suggestions --config=./oxlint.config.ts",
     "lint:check": "effect-tsgo oxlint --config=./oxlint.config.ts",
     "format": "oxfmt",

@@ -28,7 +28,6 @@ import { MediaAssetsService } from "@gororobas/server/media-assets/service"
 import { MediaAssetsStorage } from "@gororobas/server/media-assets/storage"
 import { PublicationsRepository } from "@gororobas/server/publications/repository"
 import { makeAppSqlClient, makeAppSql } from "@gororobas/server/sql"
-import { updateSourceRow } from "@gororobas/server/wiki/mutations"
 import { WikiArticlesRepository } from "@gororobas/server/wiki/repository"
 import {
   Array as EffectArray,
@@ -411,15 +410,7 @@ export const importPreview = ({
                 latest.timestamp,
               )
 
-              yield* updateSourceRow({
-                id: article.id,
-                crdtSnapshot: snapshot,
-                status: "PUBLISHED",
-                createdAt,
-                updatedAt,
-              })
-
-              yield* sql`UPDATE wiki_article_sources SET created_at = ${DateTime.formatIso(createdAt)} WHERE id = ${article.id}`
+              yield* sql`UPDATE wiki_article_sources SET crdt_snapshot = ${snapshot}, status = 'PUBLISHED', created_at = ${DateTime.formatIso(createdAt)}, updated_at = ${DateTime.formatIso(updatedAt)} WHERE id = ${article.id}`
               yield* sql`UPDATE wiki_article_projections SET current_crdt_frontier = ${JSON.stringify(frontier)}, created_at = ${DateTime.formatIso(createdAt)}, updated_at = ${DateTime.formatIso(updatedAt)} WHERE id = ${article.id}`
             } else revisionCount++
 

@@ -88,8 +88,11 @@ export const inferLinks = Effect.fn("inferLinks")(function* (
   const lookupNames = (names: ModelExtraction["names"]) =>
     [...names.pt, ...names.es, ...names.en].flatMap(aliases.lookup)
 
+  const groundOutsideReferences = (interval: { readonly start: number; readonly end: number }) =>
+    Option.filter(groundSpan(source, interval), (grounded) => !grounded.isEntityReference)
+
   const dictionaryClaims = aliases.scan(source.text).flatMap((occurrence): Array<Claim> =>
-    Option.toArray(groundSpan(source, occurrence)).map((grounded) => ({
+    Option.toArray(groundOutsideReferences(occurrence)).map((grounded) => ({
       source: "MENTION",
       evidence: { location: grounded.location, text: grounded.text },
       names: null,
@@ -101,11 +104,12 @@ export const inferLinks = Effect.fn("inferLinks")(function* (
   const groundExtraction = (extraction: ModelExtraction) =>
     Option.fromNullishOr(extraction.interval).pipe(
       Option.flatMap((interval) =>
-        groundSpan(source, interval).pipe(
+        groundOutsideReferences(interval).pipe(
           Option.map((grounded) => ({
             offset: interval.start,
             evidence: {
-              ...grounded,
+              location: grounded.location,
+              text: grounded.text,
               ...(extraction.alignmentStatus === null
                 ? {}
                 : { alignmentStatus: extraction.alignmentStatus }),

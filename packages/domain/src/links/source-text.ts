@@ -15,6 +15,8 @@ export const SourceSegment = Schema.Struct({
   start: Schema.Int,
   end: Schema.Int,
   location: EvidenceLocation,
+  /** Text a contributor already linked by hand, which inference shouldn't link again. */
+  isEntityReference: Schema.optional(Schema.Boolean),
 })
 
 export type SourceSegment = typeof SourceSegment.Type
@@ -30,6 +32,7 @@ export type SourceText = typeof SourceText.Type
 export interface GroundedSpan {
   readonly location: EvidenceLocation
   readonly text: string
+  readonly isEntityReference: boolean
 }
 
 const BLOCK_SEPARATOR = "\n\n"
@@ -43,10 +46,13 @@ export const makeSourceTextBuilder = () => {
     text += value
   }
 
-  const located = (location: EvidenceLocation, write: () => void) => {
+  const located = (
+    segment: Pick<SourceSegment, "location" | "isEntityReference">,
+    write: () => void,
+  ) => {
     const start = text.length
     write()
-    if (text.length > start) segments.push({ start, end: text.length, location })
+    if (text.length > start) segments.push({ ...segment, start, end: text.length })
   }
 
   /** Blocks of text are separated by blank lines, so spans don't run across them. */
@@ -79,7 +85,13 @@ export const makeSourceTextBuilder = () => {
       const nodeId = nodeIdOf(node)
 
       if (Option.isSome(nodeId)) {
-        located([...path, { id: nodeId.value }], write)
+        located(
+          {
+            location: [...path, { id: nodeId.value }],
+            ...(node.type === "entityReference" ? { isEntityReference: true } : {}),
+          },
+          write,
+        )
       } else {
         write()
       }
@@ -98,7 +110,7 @@ export const makeSourceTextBuilder = () => {
     append(`${label}: `)
     values.forEach((value, index) => {
       if (index > 0) append("; ")
-      located(value.location, () => append(value.text))
+      located({ location: value.location }, () => append(value.text))
     })
   }
 
@@ -141,7 +153,11 @@ export const groundSpan = (
   )
 
   return Option.orElse(innermost(containing), () => innermost(startingIn)).pipe(
-    Option.map((segment) => ({ location: segment.location, text })),
+    Option.map((segment) => ({
+      location: segment.location,
+      text,
+      isEntityReference: segment.isEntityReference === true,
+    })),
   )
 }
 

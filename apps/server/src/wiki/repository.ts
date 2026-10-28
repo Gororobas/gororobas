@@ -9,6 +9,7 @@ import {
   EvaluateWikiArticleRevisionInput,
   HumanCommit,
   IdGen,
+  InvalidCrdtUpdateError,
   SupportedLanguage,
   LoroDocFrontier,
   loroDocToSnapshot,
@@ -26,7 +27,7 @@ import {
   WikiArticleStatus,
   type WikiArticleProjectionRow,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Array as EffectArray, Option, Result } from "effect"
+import { Context, DateTime, Effect, Array as EffectArray, Option, Result, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
 import {
@@ -42,6 +43,8 @@ import {
   removeBookmark,
   setMainMedia,
   attachMediaToWikiArticle,
+  applyRevisionMediaDetails,
+  removeUnselectedWikiArticleMedia,
   insertSourceRow,
   insertHandleRows,
   replaceRelations,
@@ -64,6 +67,7 @@ import {
   listBookmarkers,
   listContributors,
   listWikiArticleMedia,
+  listRevisionMediaAssets,
   findMainMedia,
   findSourceRowById,
   findDatabaseRowByHandle,
@@ -272,11 +276,63 @@ const persistArticleProjection = (input: {
     })
   })
 
+/** A defect: an approval's guarded write found the article changed since its in-transaction read. */
+class WikiArticleSourceChangedError extends Schema.TaggedError<WikiArticleSourceChangedError>()(
+  "WikiArticleSourceChangedError",
+  { id: WikiArticleId },
+) {}
+
+/**
+ * A cultivar names its parent plant, which must already be a published PLANT. Checked on creation,
+ * revision and approval, since the parent can change status between a revision and its evaluation.
+ */
+const assertCultivarParentIsPublishedPlant = Effect.fn("assertCultivarParentIsPublishedPlant")(
+  function* (article: WikiArticleEditableData) {
+    if (article.kind !== "PLANT_CULTIVAR") return
+
+    const { parentPlantId } = article.attributes
+    const parent = yield* findDatabaseRowById(parentPlantId)
+    if (Option.isNone(parent) || parent.value.status !== "PUBLISHED") {
+      return yield* new WikiArticleNotFoundError({ id: parentPlantId })
+    }
+    if (parent.value.kind !== "PLANT") {
+      return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
+    }
+  },
+)
+
+/** A revision that carries a media selection makes it the article's full set of media. */
+const applyRevisionMediaSelection = Effect.fn("applyRevisionMediaSelection")(function* (input: {
+  revisionId: WikiArticleRevisionId
+  wikiArticleId: WikiArticleId
+  updatedAt: DateTime.Utc
+}) {
+  const selection = yield* listRevisionMediaAssets(input.revisionId)
+  const selectedMediaAssetIds = selection.map((row) => row.mediaAssetId)
+
+  yield* removeUnselectedWikiArticleMedia({
+    wikiArticleId: input.wikiArticleId,
+    selectedMediaAssetIds,
+  })
+
+  yield* Effect.forEach(
+    selectedMediaAssetIds,
+    (mediaAssetId) =>
+      attachMediaToWikiArticle({ wikiArticleId: input.wikiArticleId, mediaAssetId }),
+    { concurrency: 1, discard: true },
+  )
+
+  yield* applyRevisionMediaDetails({ revisionId: input.revisionId, updatedAt: input.updatedAt })
+})
+
 /**
  * Derived work on newly approved content: external provider data and inferred relations.
  * Best-effort, submitted after the article transaction commits.
  */
-const requestEnrichment = (article: ExternalDataArticle, previous?: WikiArticleProjectionRow) =>
+export const requestEnrichment = (
+  article: ExternalDataArticle,
+  previous?: WikiArticleProjectionRow,
+) =>
   Effect.all(
     [
       requestExternalDataFetch(article, previous).pipe(
@@ -298,6 +354,7 @@ const createWikiArticle = (
       const wikiArticleId = options.id ?? (yield* IdGen.make(WikiArticleId))
       const revisionId = yield* IdGen.make(WikiArticleRevisionId)
       const now = yield* DateTime.now
+      yield* assertCultivarParentIsPublishedPlant(input.wikiArticle)
       const created = yield* WikiArticleCrdt.create(input.wikiArticle)
 
       yield* persistCrdtDocumentCreation({
@@ -342,6 +399,10 @@ const createWikiArticle = (
         })),
       )
 
+      if (!options.isPendingApproval && input.mediaAssets !== undefined) {
+        yield* applyRevisionMediaSelection({ revisionId, wikiArticleId, updatedAt: now })
+      }
+
       return {
         ...created.data,
         id: wikiArticleId,
@@ -375,6 +436,8 @@ const createRevision = (input: CreateWikiArticleRevisionInput) =>
         crdtUpdate: input.crdtUpdate,
         snapshot: article.crdtSnapshot,
       })
+
+      yield* assertCultivarParentIsPublishedPlant(applied.data)
 
       const revisionId = yield* IdGen.make(WikiArticleRevisionId)
       const now = yield* DateTime.now
@@ -458,6 +521,7 @@ const evaluateRevision = (
         crdtUpdate: revision.crdtUpdate,
         snapshot: article.crdtSnapshot,
       })
+      yield* assertCultivarParentIsPublishedPlant(updated.data)
 
       yield* persistCrdtDocumentUpdate({
         updateCrdtRow: updateSourceRow({
@@ -465,7 +529,16 @@ const evaluateRevision = (
           status: article.status === "PENDING_APPROVAL" ? "PUBLISHED" : article.status,
           crdtSnapshot: loroDocToSnapshot(updated.document),
           updatedAt: now,
-        }),
+          expectedCrdtFrontier: Option.map(previous, (row) => row.currentCrdtFrontier),
+        }).pipe(
+          Effect.flatMap(
+            Option.match({
+              // Unreachable while BEGIN IMMEDIATE serializes writers; a defect if that ever changes.
+              onNone: () => Effect.die(new WikiArticleSourceChangedError({ id: article.id })),
+              onSome: () => Effect.void,
+            }),
+          ),
+        ),
         insertCommitOrUpdateRevision: updateRevisionRow(evaluatedRevision),
         persistProjection: persistArticleProjection({
           currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
@@ -474,6 +547,14 @@ const evaluateRevision = (
           wikiArticleId: article.id,
         }),
       })
+
+      if (revision.hasMediaSelection) {
+        yield* applyRevisionMediaSelection({
+          revisionId: revision.id,
+          wikiArticleId: article.id,
+          updatedAt: now,
+        })
+      }
 
       return {
         article: {

@@ -35,6 +35,10 @@ import { ProfileCardData } from "../profiles/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 import { WikiArticleQueriedCardData } from "../wiki/wiki-article.js"
 
+/**
+ * Kept on `publication_sources`, outside the CRDT: ownership, routing and access control can't
+ * change through a collaborative edit. Visibility changes through its own field of the update.
+ */
 export const CorePublicationMetadata = Schema.Struct({
   handle: Handle,
   ownerProfileId: ProfileId,
@@ -51,7 +55,6 @@ export const PublicationLocalizedData = TranslatedContent
 export type PublicationLocalizedData = typeof PublicationLocalizedData.Type
 
 export const EventMetadata = Schema.Struct({
-  ...CorePublicationMetadata.fields,
   kind: EventKind,
   startDate: TimestampColumn,
   endDate: Schema.NullOr(TimestampColumn),
@@ -62,7 +65,6 @@ export const EventMetadata = Schema.Struct({
 export type EventMetadata = typeof EventMetadata.Type
 
 export const PostMetadata = Schema.Struct({
-  ...CorePublicationMetadata.fields,
   kind: PostKind,
 })
 export type PostMetadata = typeof PostMetadata.Type
@@ -232,10 +234,18 @@ const ApiCreateEventData = Schema.Struct({
 export const ApiCreatePublicationData = Schema.Union([ApiCreatePostData, ApiCreateEventData])
 export type ApiCreatePublicationData = typeof ApiCreatePublicationData.Type
 
-export const ApiUpdatePublicationData = Schema.Struct({
-  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
+export const PublicationCrdtEdit = Schema.Struct({
   crdtUpdate: LoroDocUpdate,
   expectedCurrentCrdtFrontier: LoroDocFrontier,
+})
+
+export type PublicationCrdtEdit = typeof PublicationCrdtEdit.Type
+
+/** Each field changes its own part of the publication, so clients can send any combination. */
+export const ApiUpdatePublicationData = Schema.Struct({
+  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
+  crdtEdit: Schema.optional(PublicationCrdtEdit),
+  visibility: Schema.optional(PublicationVisibility),
 })
 
 export type ApiUpdatePublicationData = typeof ApiUpdatePublicationData.Type
@@ -282,16 +292,16 @@ export const PublicationHistoryEntry = Schema.Struct({
 
 export type PublicationHistoryEntry = typeof PublicationHistoryEntry.Type
 
-export const PublicationCrdtRow = Schema.Struct({
+export const PublicationSourceRow = Schema.Struct({
   ...TimestampedStruct.fields,
+  ...CorePublicationMetadata.fields,
   linkInference: Schema.NullOr(Schema.fromJsonString(LinkInferenceRun)),
   id: PublicationId,
   crdtSnapshot: LoroDocSnapshot,
   moderationStatus: ModerationStatus,
-  ownerProfileId: ProfileId,
 })
 
-export type PublicationCrdtRow = typeof PublicationCrdtRow.Type
+export type PublicationSourceRow = typeof PublicationSourceRow.Type
 
 export const PublicationCommitRow = Schema.Struct({
   ...TimestampedStruct.fields,
@@ -304,15 +314,12 @@ export const PublicationCommitRow = Schema.Struct({
 
 export type PublicationCommitRow = typeof PublicationCommitRow.Type
 
-export const PublicationRow = Schema.Struct({
+/** Projected from the CRDT; `updatedAt` is when the CRDT last changed. */
+export const PublicationProjectionRow = Schema.Struct({
   ...TimestampedStruct.fields,
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
-  handle: Handle,
   id: PublicationId,
-  ownerProfileId: ProfileId,
-  publishedAt: TimestampColumn,
   kind: PublicationKind,
-  visibility: PublicationVisibility,
 
   // Event-specific - always `null` for posts
   startDate: Schema.NullOr(TimestampColumn),
@@ -321,9 +328,17 @@ export const PublicationRow = Schema.Struct({
   attendanceMode: Schema.NullOr(EventAttendanceMode),
 })
 
+export type PublicationProjectionRow = typeof PublicationProjectionRow.Type
+
+/** A publication's projection joined with the core metadata of its source row. */
+export const PublicationRow = Schema.Struct({
+  ...PublicationProjectionRow.fields,
+  ...CorePublicationMetadata.fields,
+})
+
 export type PublicationRow = typeof PublicationRow.Type
 
-/** A publication's projection with the moderation status kept on its aggregate row. */
+/** A publication's row with the moderation status kept on its source row. */
 export const ModeratedPublicationRow = Schema.Struct({
   ...PublicationRow.fields,
   moderationStatus: ModerationStatus,

@@ -1,4 +1,4 @@
-import { NodePath, NodeServices } from "@effect/platform-node"
+import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
 import {
   ApiPublicationData,
@@ -6,535 +6,488 @@ import {
   PublicationCrdt,
   LoroDocUpdate,
   snapshotToLoroDoc,
-  CurrentAuthenticationData,
-  AuthenticationSession,
-  GororobasApi,
   MediaAssetId,
 } from "@gororobas/domain"
-import { Auth } from "@yielded/auth"
-import {
-  FileSystem,
-  ConfigProvider,
-  Context,
-  Effect,
-  DateTime,
-  Layer,
-  ManagedRuntime,
-  Option,
-  Schema,
-  Path,
-} from "effect"
-import { Etag, HttpPlatform, HttpRouter } from "effect/http"
-import { HttpApi, HttpApiBuilder } from "effect/http-api"
+import { ConfigProvider, Effect, FileSystem, Layer, Option, Path, Schema } from "effect"
 import { SqlClient } from "effect/sql"
+import { WorkflowEngine } from "effect/workflow"
 import sharp from "sharp"
 
-import { AppAuth } from "../src/authentication/app-auth.js"
-import {
-  authenticationLayer,
-  ApiAuthenticationLive,
-} from "../src/authentication/authentication-live.js"
 import { IdGenLive } from "../src/id-gen-live.js"
-import { MediaAssetsApiLive } from "../src/media-assets/api-live.js"
-import { MediaAssetsRepository } from "../src/media-assets/repository.js"
-import { MediaAssetsService } from "../src/media-assets/service.js"
-import { MediaAssetsStorage } from "../src/media-assets/storage.js"
-import { PublicationsApiLive } from "../src/publications/api-live.js"
 import { findPublicationCrdtSnapshotById } from "../src/publications/queries.js"
-import { PublicationsRepository } from "../src/publications/repository.js"
-import { PublicationsService } from "../src/publications/service.js"
-import { makeAppSql } from "../src/sql.js"
-import {
-  authenticationTestOrigin,
-  authenticationTestBindingKey,
-  authenticationTestProofKey,
-  captureEmailDelivery,
-} from "./authentication-helpers.js"
+import { AppSqlTest } from "../src/sql.js"
+import { ApiTestClient } from "./api-test-client.js"
 import { textToRichTextDocument } from "./feature-test-helpers.js"
-import { LinkInferenceTestLayer } from "./test-helpers.js"
-const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
-it.live(
-  "streams multipart uploads and serves validated variants, ranges and censorship through HTTP",
-  Effect.fn(function* () {
-    const filesystem = yield* Effect.provide(FileSystem.FileSystem, NodeServices.layer)
-    const directory = yield* filesystem.makeTempDirectoryScoped({
-      prefix: "mediaAssets-api-",
-    })
-    const root = join(directory, "assets")
-    const databaseRuntime = yield* Effect.acquireRelease(
-      Effect.sync(() => ManagedRuntime.make(makeAppSql(join(directory, "preview.sqlite")))),
-      (resource) => Effect.orDie(Effect.tryPromise(() => resource.dispose())),
-    )
-    const databaseRuntimeContext = yield* databaseRuntime.contextEffect
-    const database = Layer.succeedContext(databaseRuntimeContext)
-    const personId = "00000000-0000-7000-8000-000000000001"
-    const timestamp = "2026-10-03T00:00:00Z"
+const ownerId = "00000000-0000-7000-8000-000000000001"
+const ownerEmail = "reviewer@example.invalid"
+const otherId = "00000000-0000-7000-8000-000000000098"
+const otherEmail = "other@example.invalid"
+const timestamp = "2026-10-03T00:00:00Z"
 
-    let authentication = Schema.decodeSync(CurrentAuthenticationData)({
-      account: {
-        id: personId,
-        email: "reviewer@example.invalid",
-        isEmailVerified: true,
-        claimedAt: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      },
-      session: {
-        sessionId: "media-assets-test-session",
-        subjectId: personId,
-        securityRevision: "media-assets-test-revision",
-        assurance: {
-          method: "magic-link",
-          factors: ["possession"],
-          authenticatedAt: DateTime.toEpochMillis(DateTime.makeUnsafe(timestamp)),
-        },
-        issuedAt: DateTime.toEpochMillis(DateTime.makeUnsafe(timestamp)),
-        expiresAt: DateTime.toEpochMillis(DateTime.makeUnsafe("2027-01-01T00:00:00Z")),
-        absoluteExpiresAt: DateTime.toEpochMillis(DateTime.makeUnsafe("2027-01-01T00:00:00Z")),
-        claims: {
-          authSubjectId: personId,
-        },
-      },
-    })
+type Requester = ReturnType<ApiTestClient["Service"]["requestWith"]>
 
-    const services = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
-      Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
-      Layer.provideMerge(
-        Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make).pipe(
-          Layer.provide(NodeServices.layer),
-          Layer.provide(
-            Layer.succeed(
-              ConfigProvider.ConfigProvider,
-              ConfigProvider.fromUnknown({
-                MEDIA_ASSETS_DIRECTORY: root,
-              }),
-            ),
-          ),
-        ),
+const insertPerson = (input: { id: string; email: string; handle: string; accessLevel: string }) =>
+  SqlClient.SqlClient.use((sql) =>
+    sql`INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at) VALUES (${input.id}, ${input.email}, 1, ${input.id}, ${timestamp}, ${timestamp}, ${timestamp})`.pipe(
+      Effect.andThen(
+        sql`INSERT INTO profiles (id, type, handle, name, searchable_text, visibility, created_at, updated_at) VALUES (${input.id}, 'PERSON', ${input.handle}, ${input.handle}, ${input.handle}, 'PUBLIC', ${timestamp}, ${timestamp})`,
       ),
-      Layer.provideMerge(
-        Layer.effect(PublicationsService, PublicationsService.make).pipe(
-          Layer.provideMerge(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
-        ),
+      Effect.andThen(
+        sql`INSERT INTO people (id, access_level) VALUES (${input.id}, ${input.accessLevel})`,
       ),
-      Layer.provideMerge(LinkInferenceTestLayer),
-      Layer.provideMerge(HttpPlatform.layer),
-      Layer.provideMerge(Layer.mergeAll(database, IdGenLive, NodeServices.layer, Etag.layer)),
-    )
+    ),
+  )
 
-    const api = HttpApi.make("GororobasApi").add(
-      GororobasApi.groups.mediaAssets,
-      GororobasApi.groups.publications,
-    )
+const withApi = <A, E, R>(
+  scenario: (context: {
+    api: ApiTestClient["Service"]
+    root: string
+    filesystem: FileSystem.FileSystem
+    path: Path.Path
+    owner: Requester
+    other: Requester
+    visitor: Requester
+  }) => Effect.Effect<A, E, R>,
+) =>
+  Effect.gen(function* () {
+    const filesystem = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const directory = yield* filesystem.makeTempDirectoryScoped({ prefix: "media-assets-api-" })
+    const root = path.join(directory, "assets")
 
-    const authenticationServices = Layer.effect(
-      AppAuth,
-      Effect.gen(function* () {
-        const api = yield* AppAuth
+    return yield* Effect.gen(function* () {
+      yield* insertPerson({
+        id: ownerId,
+        email: ownerEmail,
+        handle: "reviewer",
+        accessLevel: "ADMIN",
+      })
 
-        return {
-          ...api,
-          getSession: () =>
-            Effect.sync(() => (authentication === null ? null : authentication.session)),
-        }
-      }),
-    ).pipe(
-      Layer.provide(
-        authenticationLayer({
-          origin: authenticationTestOrigin,
-          environment: "test",
-          requestBindingKey: authenticationTestBindingKey,
-          proofKey: authenticationTestProofKey,
-        }).pipe(Layer.provide(captureEmailDelivery().layer), Layer.provide(services)),
-      ),
-    )
-
-    const app = yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        HttpRouter.toWebHandler(
-          HttpApiBuilder.layer(api).pipe(
-            Layer.provide([MediaAssetsApiLive, PublicationsApiLive]),
-            Layer.provide(
-              Layer.fresh(ApiAuthenticationLive).pipe(Layer.provide(authenticationServices)),
-            ),
-            Layer.provideMerge(services),
-          ),
-          {
-            disableLogger: true,
-          },
-        ),
-      ),
-      (resource) => Effect.orDie(Effect.tryPromise(() => resource.dispose())),
-    )
-
-    const request = (path: string, init?: RequestInit) =>
-      Effect.tryPromise(() =>
-        app.handler(
-          new Request(`http://localhost${path}`, init),
-          Context.make(Auth.AuthRequest, {
-            invocation: {
-              _tag: "Guest",
-            },
-            credentials: {},
-            credentialCommandSink: () => Effect.void,
-          }),
-        ),
+      // Signed in, but without a profile: not (yet) a member of the community.
+      yield* SqlClient.SqlClient.use(
+        (sql) =>
+          sql`INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at) VALUES (${otherId}, ${otherEmail}, 1, ${otherId}, ${timestamp}, ${timestamp}, ${timestamp})`,
       )
 
-    yield* SqlClient.SqlClient.use((sql) =>
-      Effect.gen(function* () {
-        yield* sql`INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at) VALUES (${personId}, 'reviewer@example.invalid', 1, ${personId}, ${timestamp}, ${timestamp}, ${timestamp})`
-        yield* sql`INSERT INTO profiles (id, type, handle, name, searchable_text, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'reviewer', 'Reviewer', 'reviewer reviewer', 'PUBLIC', ${timestamp}, ${timestamp})`
-        yield* sql`INSERT INTO people (id, access_level) VALUES (${personId}, 'ADMIN')`
-      }),
-    ).pipe(Effect.provide(database))
+      const api = yield* ApiTestClient
 
-    const png = yield* Effect.tryPromise(() =>
-      sharp({
-        create: {
-          width: 80,
-          height: 40,
-          channels: 3,
-          background: "green",
-        },
+      return yield* scenario({
+        api,
+        root,
+        filesystem,
+        path,
+        owner: api.requestWith(yield* api.signInBrowser(ownerEmail)),
+        other: api.requestWith(yield* api.signInBrowser(otherEmail)),
+        visitor: api.requestWith(api.newBrowser()),
       })
-        .png()
-        .toBuffer(),
+    }).pipe(
+      Effect.provide(
+        ApiTestClient.layer.pipe(
+          Layer.provideMerge(
+            Layer.mergeAll(
+              AppSqlTest,
+              IdGenLive,
+              WorkflowEngine.layerMemory,
+              Layer.succeed(
+                ConfigProvider.ConfigProvider,
+                ConfigProvider.fromUnknown({ MEDIA_ASSETS_DIRECTORY: root }),
+              ),
+            ),
+          ),
+        ),
+      ),
     )
+  }).pipe(Effect.provide(NodeServices.layer))
 
-    const file = new Uint8Array(12 * 1024 * 1024)
-    file.set(png)
-    const body = new FormData()
+const MediaUpload = Schema.Struct({
+  id: MediaAssetId,
+  url: Schema.String,
+  byteSize: Schema.Finite,
+})
 
-    body.append(
-      "file",
-      new Blob([file], {
-        type: "image/png",
-      }),
-      "plant.png",
-    )
+const png = Effect.tryPromise(() =>
+  sharp({ create: { width: 80, height: 40, channels: 3, background: "green" } })
+    .png()
+    .toBuffer(),
+)
 
-    const uploaded = yield* request("/media/upload", {
+/** A valid PNG followed by zeros: decoders stop at the image's end, the upload keeps every byte. */
+const paddedPng = (byteSize: number) =>
+  Effect.map(png, (image) => {
+    const file = new Uint8Array(byteSize)
+    file.set(image)
+    return file
+  })
+
+const uploadForm = (files: ReadonlyArray<{ bytes: Uint8Array<ArrayBuffer>; name: string }>) => {
+  const body = new FormData()
+  files.forEach(({ bytes, name }) =>
+    body.append("file", new Blob([bytes], { type: "image/png" }), name),
+  )
+  return body
+}
+
+const upload = ({
+  request,
+  bytes,
+  name,
+}: {
+  request: Requester
+  bytes: Uint8Array<ArrayBuffer>
+  name: string
+}) =>
+  Effect.gen(function* () {
+    const response = yield* request({
+      path: "/media/upload",
       method: "POST",
-      body,
+      body: uploadForm([{ bytes, name }]),
     })
-    expect(uploaded.status).toBe(200)
 
+    expect(response.status).toBe(200)
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP response JSON has not yet been validated against its response schema.
-    const media = Schema.decodeUnknownSync(
-      Schema.Struct({
-        id: Schema.String,
-        url: Schema.String,
-        byteSize: Schema.Finite,
-      }),
-    )(yield* Effect.tryPromise(() => uploaded.json()))
-
-    expect(media.byteSize).toBe(file.length)
-    expect(new Uint8Array(yield* filesystem.readFile(join(root, media.id, "original")))).toEqual(
-      new Uint8Array(file),
+    return yield* Schema.decodeUnknownEffect(MediaUpload)(
+      yield* Effect.tryPromise(() => response.json()),
     )
-    const image = yield* request(media.url)
-    expect(image.headers.get("content-type")).toBe("image/avif")
+  })
 
-    expect(
-      yield* Effect.gen(function* () {
-        const response6 = yield* Effect.tryPromise(() => image.arrayBuffer())
-        return yield* Effect.tryPromise(() => sharp(Buffer.from(response6)).metadata())
-      }),
-    ).toMatchObject({
-      format: "heif",
-      width: 80,
-    })
+const postJson = ({ request, path, body }: { request: Requester; path: string; body: object }) =>
+  request({
+    path,
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  })
 
-    yield* Effect.forEach(
-      [
-        ["bytes=2-6", 2, 6],
-        ["bytes=-4", file.length - 4, file.length - 1],
-        [`bytes=${file.length - 2}-`, file.length - 2, file.length - 1],
-      ] as const,
-      Effect.fn(function* ([range, start, end]) {
-        const response = yield* request(`/media/${media.id}/original/original`, {
-          headers: {
-            range,
+const bytesOf = (response: Response) =>
+  Effect.tryPromise(() => response.arrayBuffer()).pipe(
+    Effect.map((buffer) => new Uint8Array(buffer)),
+  )
+
+const markAsVideo = (mediaAssetId: MediaAssetId) =>
+  SqlClient.SqlClient.use(
+    (sql) =>
+      sql`UPDATE media_assets SET format = 'VIDEO', metadata = ${JSON.stringify({
+        format: "VIDEO",
+        originalWidth: 80,
+        originalHeight: 40,
+        duration: 1000,
+      })} WHERE id = ${mediaAssetId}`,
+  )
+
+it.live("streams a multipart upload to storage and serves a validated AVIF variant", () =>
+  withApi(({ owner, root, filesystem, path }) =>
+    Effect.gen(function* () {
+      const file = yield* paddedPng(12 * 1024 * 1024)
+      const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
+
+      expect(media.byteSize).toBe(file.length)
+      expect(
+        new Uint8Array(yield* filesystem.readFile(path.join(root, media.id, "original"))),
+      ).toEqual(file)
+
+      const image = yield* owner({ path: media.url })
+      expect(image.headers.get("content-type")).toBe("image/avif")
+
+      expect(
+        yield* Effect.tryPromise(async () =>
+          sharp(Buffer.from(await image.arrayBuffer())).metadata(),
+        ),
+      ).toMatchObject({ format: "heif", width: 80 })
+    }),
+  ),
+)
+
+it.live("serves byte ranges, HEAD and stale If-Range requests from the original", () =>
+  withApi(({ owner }) =>
+    Effect.gen(function* () {
+      const file = yield* paddedPng(64 * 1024)
+      const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
+      const originalPath = `/media/${media.id}/original/original`
+
+      yield* Effect.forEach(
+        [
+          ["bytes=2-6", 2, 6],
+          ["bytes=-4", file.length - 4, file.length - 1],
+          [`bytes=${file.length - 2}-`, file.length - 2, file.length - 1],
+        ] as const,
+        Effect.fn(function* ([range, start, end]) {
+          const response = yield* owner({ path: originalPath, headers: { range } })
+
+          expect(response.status).toBe(206)
+          expect(response.headers.get("content-type")).toBe("image/png")
+          expect(response.headers.get("content-range")).toBe(`bytes ${start}-${end}/${file.length}`)
+          expect(response.headers.get("content-length")).toBe(String(end - start + 1))
+          expect(yield* bytesOf(response)).toEqual(file.slice(start, end + 1))
+        }),
+        { concurrency: 1, discard: true },
+      )
+
+      const head = yield* owner({ path: originalPath, method: "HEAD" })
+      expect(head.headers.get("content-length")).toBe(String(file.length))
+      expect((yield* bytesOf(head)).byteLength).toBe(0)
+
+      const staleRange = yield* owner({
+        path: originalPath,
+        headers: { range: "bytes=0-1", "if-range": "different-etag" },
+      })
+      expect(staleRange.status).toBe(200)
+      expect(yield* bytesOf(staleRange)).toEqual(file)
+
+      expect((yield* owner({ path: originalPath, headers: { range: "bytes=-0" } })).status).toBe(
+        416,
+      )
+    }),
+  ),
+)
+
+it.live("rejects unknown variants and malformed uploads", () =>
+  withApi(({ owner, visitor }) =>
+    Effect.gen(function* () {
+      const file = yield* paddedPng(64 * 1024)
+      const media = yield* upload({ request: owner, bytes: file, name: "plant.png" })
+
+      expect((yield* owner({ path: `/media/${media.id}/images/51` })).status).toBe(400)
+      expect((yield* owner({ path: `/media/${media.id}/audio/audio.m4a` })).status).toBe(404)
+
+      const twoFiles = uploadForm([
+        { bytes: file, name: "one.png" },
+        { bytes: file, name: "two.png" },
+      ])
+      expect((yield* owner({ path: "/media/upload", method: "POST", body: twoFiles })).status).toBe(
+        413,
+      )
+
+      const missing = new FormData()
+      missing.append("other", "value")
+      expect((yield* owner({ path: "/media/upload", method: "POST", body: missing })).status).toBe(
+        400,
+      )
+
+      expect(
+        (yield* visitor({
+          path: "/media/upload",
+          method: "POST",
+          body: uploadForm([{ bytes: file, name: "plant.png" }]),
+          headers: { authorization: `Bearer ${ownerId}` },
+        })).status,
+      ).toBe(403)
+    }),
+  ),
+)
+
+it.live("resolves a playlist's relative segments through the media endpoint", () =>
+  withApi(({ owner, visitor, root, filesystem, path }) =>
+    Effect.gen(function* () {
+      const media = yield* upload({
+        request: owner,
+        bytes: yield* paddedPng(64 * 1024),
+        name: "clip.png",
+      })
+
+      yield* markAsVideo(media.id)
+      yield* filesystem.writeFileString(
+        path.join(root, media.id, "master.m3u8"),
+        "#EXTM3U\nsegment-0.ts\n",
+      )
+      yield* filesystem.writeFile(
+        path.join(root, media.id, "segment-0.ts"),
+        new Uint8Array([1, 2, 3]),
+      )
+
+      expect(
+        (yield* postJson({
+          request: owner,
+          path: `/profiles/${ownerId}/publications`,
+          body: {
+            kind: "POST",
+            content: textToRichTextDocument("Public media"),
+            handle: "public-media",
+            visibility: "PUBLIC",
+            mediaIds: [media.id],
+          },
+        })).status,
+      ).toBe(200)
+
+      const playlistUrl = `/media/${media.id}/video/master.m3u8`
+      const playlist = yield* visitor({ path: playlistUrl })
+      expect(playlist.headers.get("content-type")).toBe("application/vnd.apple.mpegurl")
+      expect(yield* Effect.tryPromise(() => playlist.text())).toContain("segment-0.ts")
+
+      const segment = yield* visitor({
+        path: new URL("segment-0.ts", `https://localhost:4443${playlistUrl}`).pathname,
+      })
+      expect(yield* bytesOf(segment)).toEqual(new Uint8Array([1, 2, 3]))
+    }),
+  ),
+)
+
+it.live("keeps a publication's kind when its content is updated", () =>
+  withApi(({ owner }) =>
+    Effect.gen(function* () {
+      const created = yield* Effect.forEach(
+        [
+          { kind: "POST", handle: "plain-post", extra: {} },
+          {
+            kind: "EVENT",
+            handle: "community-gathering",
+            extra: { startDate: "2026-10-09T12:00:00Z" },
+          },
+        ],
+        ({ kind, handle, extra }) =>
+          postJson({
+            request: owner,
+            path: `/profiles/${ownerId}/publications`,
+            body: {
+              kind,
+              content: textToRichTextDocument("Original publication"),
+              handle,
+              visibility: "PUBLIC",
+              ...extra,
+            },
+          }),
+        { concurrency: 1 },
+      )
+
+      yield* Effect.forEach(
+        created,
+        Effect.fn(function* (response) {
+          expect(response.status).toBe(200)
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
+          const publication = Schema.decodeUnknownSync(ApiPublicationData)(
+            yield* Effect.tryPromise(() => response.json()),
+          )
+          const current = snapshotToLoroDoc(
+            Option.getOrThrow(yield* findPublicationCrdtSnapshotById(publication.id)).crdtSnapshot,
+          )
+          const edited = current.fork()
+          yield* PublicationCrdt.applyEdit(edited, {
+            _tag: "SetPublicationSourceContent",
+            content: textToRichTextDocument("Updated publication"),
+          })
+
+          const updatedResponse = yield* owner({
+            path: `/publications/${publication.id}`,
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(
+              Schema.encodeSync(Schema.toCodecJson(ApiUpdatePublicationData))({
+                crdtEdit: {
+                  expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
+                  crdtUpdate: LoroDocUpdate.make(
+                    edited.export({ from: current.version(), mode: "update" }),
+                  ),
+                },
+              }),
+            ),
+          })
+
+          expect(updatedResponse.status).toBe(200)
+          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
+          const updated = Schema.decodeUnknownSync(ApiPublicationData)(
+            yield* Effect.tryPromise(() => updatedResponse.json()),
+          )
+          expect(updated.kind).toBe(publication.kind)
+          expect(updated.content).toEqual(textToRichTextDocument("Updated publication"))
+        }),
+        { concurrency: 1, discard: true },
+      )
+    }),
+  ),
+)
+
+it.live(
+  "hides community media from visitors and other people, and censored media from all but its uploader",
+  () =>
+    withApi(({ owner, other, visitor, root, filesystem, path }) =>
+      Effect.gen(function* () {
+        const file = yield* paddedPng(64 * 1024)
+        const communityMedia = yield* upload({ request: owner, bytes: file, name: "community.png" })
+
+        expect(
+          (yield* postJson({
+            request: owner,
+            path: `/profiles/${ownerId}/publications`,
+            body: {
+              kind: "POST",
+              content: textToRichTextDocument("Community media"),
+              handle: "community-media",
+              visibility: "COMMUNITY",
+              mediaIds: [communityMedia.id],
+            },
+          })).status,
+        ).toBe(200)
+
+        expect((yield* owner({ path: communityMedia.url })).status).toBe(200)
+        expect((yield* visitor({ path: communityMedia.url })).status).toBe(404)
+        expect((yield* visitor({ path: communityMedia.url, method: "HEAD" })).status).toBe(404)
+        expect(
+          (yield* visitor({ path: communityMedia.url, headers: { range: "bytes=0-1" } })).status,
+        ).toBe(404)
+        expect((yield* other({ path: communityMedia.url })).status).toBe(404)
+
+        const publicMedia = yield* upload({ request: owner, bytes: file, name: "public.png" })
+        yield* markAsVideo(publicMedia.id)
+        yield* filesystem.writeFileString(
+          path.join(root, publicMedia.id, "master.m3u8"),
+          "#EXTM3U\nsegment-0.ts\n",
+        )
+
+        expect(
+          (yield* postJson({
+            request: owner,
+            path: `/profiles/${ownerId}/publications`,
+            body: {
+              kind: "POST",
+              content: textToRichTextDocument("Public media"),
+              handle: "public-media",
+              visibility: "PUBLIC",
+              mediaIds: [publicMedia.id],
+            },
+          })).status,
+        ).toBe(200)
+
+        const playlistUrl = `/media/${publicMedia.id}/video/master.m3u8`
+        expect((yield* visitor({ path: playlistUrl })).status).toBe(200)
+        expect((yield* other({ path: playlistUrl })).status).toBe(200)
+
+        expect(
+          (yield* postJson({
+            request: owner,
+            path: `/media/${publicMedia.id}/moderate`,
+            body: {
+              moderationStatus: "CENSORED",
+            },
+          })).status,
+        ).toBe(200)
+
+        // Uploaders keep seeing their censored media; nobody else does.
+        expect((yield* owner({ path: playlistUrl })).status).toBe(200)
+        expect((yield* other({ path: playlistUrl })).status).toBe(404)
+        expect((yield* other({ path: `/media/${publicMedia.id}/original/original` })).status).toBe(
+          404,
+        )
+
+        const reapproved = yield* postJson({
+          request: owner,
+          path: `/media/${publicMedia.id}/moderate`,
+          body: {
+            moderationStatus: "REAPPROVED_AFTER_CENSORING",
           },
         })
 
-        expect(response.status).toBe(206)
-        expect(response.headers.get("content-type")).toBe("image/png")
-        expect(response.headers.get("content-range")).toBe(`bytes ${start}-${end}/${file.length}`)
-        expect(response.headers.get("content-length")).toBe(String(end - start + 1))
-        expect(new Uint8Array(yield* Effect.tryPromise(() => response.arrayBuffer()))).toEqual(
-          file.slice(start, end + 1),
-        )
-      }),
-      { concurrency: 1, discard: true },
-    )
-
-    const head = yield* request(`/media/${media.id}/original/original`, {
-      method: "HEAD",
-    })
-    expect(head.headers.get("content-length")).toBe(String(file.length))
-    expect((yield* Effect.tryPromise(() => head.arrayBuffer())).byteLength).toBe(0)
-
-    const staleRange = yield* request(`/media/${media.id}/original/original`, {
-      headers: {
-        range: "bytes=0-1",
-        "if-range": "different-etag",
-      },
-    })
-
-    expect(staleRange.status).toBe(200)
-    expect(Buffer.from(yield* Effect.tryPromise(() => staleRange.arrayBuffer())).equals(file)).toBe(
-      true,
-    )
-
-    expect(
-      (yield* request(`/media/${media.id}/original/original`, {
-        headers: {
-          range: "bytes=-0",
-        },
-      })).status,
-    ).toBe(416)
-
-    expect((yield* request(`/media/${media.id}/images/51`)).status).toBe(400)
-    expect((yield* request(`/media/${media.id}/audio/audio.m4a`)).status).toBe(404)
-
-    // A playlist's relative segment URL must resolve through the same endpoint.
-    yield* SqlClient.SqlClient.use(
-      (sql) =>
-        sql`UPDATE media_assets SET format = 'VIDEO', metadata = ${JSON.stringify({
-          format: "VIDEO",
-          originalWidth: 80,
-          originalHeight: 40,
-          duration: 1000,
-        })} WHERE id = ${media.id}`,
-    ).pipe(Effect.provide(database))
-
-    yield* filesystem.writeFileString(
-      join(root, media.id, "master.m3u8"),
-      "#EXTM3U\nsegment-0.ts\n",
-    )
-    yield* filesystem.writeFile(join(root, media.id, "segment-0.ts"), new Uint8Array([1, 2, 3]))
-    const playlistUrl = `/media/${media.id}/video/master.m3u8`
-    const playlist = yield* request(playlistUrl)
-    expect(playlist.headers.get("content-type")).toBe("application/vnd.apple.mpegurl")
-    expect(yield* Effect.tryPromise(() => playlist.text())).toContain("segment-0.ts")
-
-    expect(
-      new Uint8Array(
-        yield* Effect.gen(function* () {
-          const response7 = yield* request(
-            new URL("segment-0.ts", `http://localhost${playlistUrl}`).pathname,
-          )
-          return yield* Effect.tryPromise(() => response7.arrayBuffer())
-        }),
-      ),
-    ).toEqual(new Uint8Array([1, 2, 3]))
-
-    const duplicate = new FormData()
-
-    duplicate.append(
-      "file",
-      new Blob([png], {
-        type: "image/png",
-      }),
-      "one.png",
-    )
-
-    duplicate.append(
-      "file",
-      new Blob([png], {
-        type: "image/png",
-      }),
-      "two.png",
-    )
-
-    expect(
-      (yield* request("/media/upload", {
-        method: "POST",
-        body: duplicate,
-      })).status,
-    ).toBe(413)
-
-    const missing = new FormData()
-    missing.append("other", "value")
-
-    expect(
-      (yield* request("/media/upload", {
-        method: "POST",
-        body: missing,
-      })).status,
-    ).toBe(400)
-
-    const privateBody = new FormData()
-    privateBody.append("file", new Blob([png], { type: "image/png" }), "community.png")
-    const privateUpload = yield* request("/media/upload", { method: "POST", body: privateBody })
-    expect(privateUpload.status).toBe(200)
-    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
-    const privateMedia = Schema.decodeUnknownSync(
-      Schema.Struct({ id: MediaAssetId, url: Schema.String }),
-    )(yield* Effect.tryPromise(() => privateUpload.json()))
-
-    const privatePublicationResponse = yield* request(`/profiles/${personId}/publications`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        kind: "POST",
-        content: textToRichTextDocument("Community media"),
-        handle: "community-media",
-        visibility: "COMMUNITY",
-        mediaIds: [privateMedia.id],
-      }),
-    })
-
-    expect(privatePublicationResponse.status).toBe(200)
-    expect((yield* request(privateMedia.url)).status).toBe(200)
-
-    const publicPublicationResponse = yield* request(`/profiles/${personId}/publications`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        kind: "POST",
-        content: textToRichTextDocument("Public media"),
-        handle: "public-media",
-        visibility: "PUBLIC",
-        mediaIds: [media.id],
-      }),
-    })
-
-    expect(publicPublicationResponse.status).toBe(200)
-
-    const eventResponse = yield* request(`/profiles/${personId}/publications`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        kind: "EVENT",
-        content: textToRichTextDocument("Community gathering"),
-        handle: "community-gathering",
-        visibility: "PUBLIC",
-        startDate: "2026-10-09T12:00:00Z",
-      }),
-    })
-
-    expect(eventResponse.status).toBe(200)
-
-    yield* Effect.forEach(
-      [publicPublicationResponse, eventResponse],
-      Effect.fn(function* (response) {
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
-        const publication = Schema.decodeUnknownSync(ApiPublicationData)(
-          yield* Effect.tryPromise(() => response.json()),
-        )
-        const snapshot = Option.getOrThrow(
-          yield* findPublicationCrdtSnapshotById(publication.id).pipe(Effect.provide(database)),
-        ).crdtSnapshot
-        const current = snapshotToLoroDoc(snapshot)
-        const edited = current.fork()
-
-        yield* PublicationCrdt.applyEdit(edited, {
-          _tag: "SetPublicationSourceContent",
-          content: textToRichTextDocument("Updated publication"),
+        expect(reapproved.status).toBe(200)
+        expect(yield* Effect.tryPromise(() => reapproved.json())).toEqual({
+          moderationStatus: "REAPPROVED_AFTER_CENSORING",
         })
+        expect((yield* other({ path: playlistUrl })).status).toBe(200)
 
-        const updatedResponse = yield* request(`/publications/${publication.id}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(
-            Schema.encodeSync(Schema.toCodecJson(ApiUpdatePublicationData))({
-              crdtEdit: {
-                expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
-                crdtUpdate: LoroDocUpdate.make(
-                  edited.export({ from: current.version(), mode: "update" }),
-                ),
-              },
-            }),
-          ),
-        })
-
-        expect(updatedResponse.status).toBe(200)
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
-        const updated = Schema.decodeUnknownSync(ApiPublicationData)(
-          yield* Effect.tryPromise(() => updatedResponse.json()),
-        )
-        expect(updated.kind).toBe(publication.kind)
-        expect(updated.content).toEqual(textToRichTextDocument("Updated publication"))
+        expect(
+          (yield* owner({
+            path: `/media/publications/00000000-0000-7000-8000-000000000001`,
+            method: "POST",
+          })).status,
+        ).toBe(404)
       }),
-      { concurrency: 1, discard: true },
-    )
-
-    const ownerAuthentication = Option.getOrThrow(Option.fromNullishOr(authentication))
-    authentication = null
-    expect((yield* request(media.url)).status).toBe(404) // This asset was changed to VIDEO above.
-    expect((yield* request(playlistUrl)).status).toBe(200)
-    expect((yield* request(privateMedia.url)).status).toBe(404)
-    expect((yield* request(privateMedia.url, { method: "HEAD" })).status).toBe(404)
-    expect((yield* request(privateMedia.url, { headers: { range: "bytes=0-1" } })).status).toBe(404)
-
-    const otherAuthentication = {
-      ...ownerAuthentication,
-      session: {
-        ...ownerAuthentication.session,
-        subjectId: Schema.decodeSync(AuthenticationSession.fields.subjectId)(
-          "00000000-0000-7000-8000-000000000098",
-        ),
-      },
-    }
-
-    authentication = otherAuthentication
-
-    expect((yield* request(playlistUrl)).status).toBe(200)
-    expect((yield* request(privateMedia.url)).status).toBe(404)
-
-    authentication = ownerAuthentication
-    expect((yield* request(privateMedia.url)).status).toBe(200)
-
-    expect(
-      (yield* request(`/media/${media.id}/moderate`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ moderationStatus: "CENSORED" }),
-      })).status,
-    ).toBe(200)
-
-    // Uploaders keep seeing their censored media; nobody else does.
-    expect((yield* request(playlistUrl)).status).toBe(200)
-    authentication = otherAuthentication
-    expect((yield* request(playlistUrl)).status).toBe(404)
-    expect((yield* request(`/media/${media.id}/original/original`)).status).toBe(404)
-    authentication = ownerAuthentication
-
-    const reapproved = yield* request(`/media/${media.id}/moderate`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ moderationStatus: "REAPPROVED_AFTER_CENSORING" }),
-    })
-
-    expect(reapproved.status).toBe(200)
-    expect(yield* Effect.tryPromise(() => reapproved.json())).toEqual({
-      moderationStatus: "REAPPROVED_AFTER_CENSORING",
-    })
-    expect((yield* request(playlistUrl)).status).toBe(200)
-
-    expect(
-      (yield* request(`/media/publications/00000000-0000-7000-8000-000000000001`, {
-        method: "POST",
-      })).status,
-    ).toBe(404)
-
-    authentication = null
-    expect((yield* request(privateMedia.url)).status).toBe(404)
-
-    expect(
-      (yield* request("/media/upload", {
-        method: "POST",
-        body,
-        headers: {
-          authorization: `Bearer ${personId}`,
-        },
-      })).status,
-    ).toBe(403)
-  }),
+    ),
 )

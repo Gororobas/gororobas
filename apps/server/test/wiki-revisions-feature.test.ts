@@ -26,6 +26,7 @@ import { LoroDoc } from "loro-crdt"
 
 import { insertRevisionRow, updateSourceRow } from "../src/wiki/mutations.js"
 import {
+  findDatabaseRowById,
   findSourceRowById,
   findRevisionById,
   listPendingRevisionsByWikiArticleId,
@@ -675,7 +676,13 @@ const approveOppositeCopies = (context: WikiContext, name: string) =>
     const copyId = articleId(copy, "Copy")
     const copyRow = Option.getOrThrow(yield* findSourceRowById(copyId))
     // Preserve operation identities: regenerate neither the initial snapshot nor the proposed updates.
-    yield* updateSourceRow({ ...copyRow, crdtSnapshot: original.crdtSnapshot })
+    const copyProjection = yield* findDatabaseRowById(copyId)
+
+    yield* updateSourceRow({
+      ...copyRow,
+      crdtSnapshot: original.crdtSnapshot,
+      expectedCrdtFrontier: Option.map(copyProjection, (row) => row.currentCrdtFrontier),
+    })
 
     const copied = yield* Effect.forEach(
       revisions,

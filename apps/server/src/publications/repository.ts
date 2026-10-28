@@ -258,7 +258,10 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             ),
           )
 
+          // A human update was built against the frontier its author saw. A system edit (translation)
+          // conflicts only if its source changed, which the staleness check below decides.
           if (
+            Schema.is(HumanCrdtUpdate)(input) &&
             !Equal.equals(publicationRow.currentCrdtFrontier, input.expectedCurrentCrdtFrontier)
           ) {
             return yield* new PublicationConcurrentUpdateError({
@@ -314,19 +317,24 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
                 ],
               })
 
-          if (applied.data.metadata.kind !== publicationRow.kind) {
-            return yield* new InvalidCrdtUpdateError({ reason: "SchemaValidation" })
-          }
-
           const commitId = yield* IdGen.make(PublicationCommitId)
           const now = yield* DateTime.now
 
           yield* persistCrdtDocumentUpdate({
             updateCrdtRow: updatePublicationSourceRow({
               crdtSnapshot: applied.nextSnapshot,
+              expectedCrdtFrontier: publicationRow.currentCrdtFrontier,
               id: input.publicationId,
               updatedAt: now,
-            }),
+            }).pipe(
+              Effect.flatMap(
+                Option.match({
+                  onNone: () =>
+                    Effect.fail(new PublicationConcurrentUpdateError({ id: input.publicationId })),
+                  onSome: () => Effect.void,
+                }),
+              ),
+            ),
             insertCommitOrUpdateRevision: insertPublicationCommitRow({
               id: commitId,
               publicationId: input.publicationId,
@@ -342,7 +350,10 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
               sourceData: applied.data,
             }),
           })
-        })
+        }).pipe(
+          // The snapshot, frontier and staleness checks must see the same state the write replaces.
+          sql.withTransaction,
+        )
 
       /** Changes no CRDT data, so it neither moves the frontier nor conflicts with CRDT edits. */
       const updatePublicationVisibility = (input: {

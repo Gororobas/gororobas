@@ -152,21 +152,29 @@ const makeApiTestClient = Effect.gen(function* () {
   )
   const handler = (request: Request) => app.handler(request, requestContext)
 
-  const clientWith = (browser: TestBrowser) => {
+  /** A `fetch` that sends `browser`'s cookies, for routes the typed client doesn't describe. */
+  const fetchWith = (browser: TestBrowser): typeof globalThis.fetch => {
     // Origin and Cookie are forbidden on an existing Request's headers, so build a new one.
-    const fetch: typeof globalThis.fetch = (input, init) => {
+    return (input, init) => {
       const headers = new Headers(init?.headers)
       headers.set("origin", authenticationTestOrigin)
       headers.set("x-effect-auth-csrf", "1")
       headers.set("cookie", browser.cookieHeader())
       return handler(new Request(input, { ...init, headers }))
     }
-
-    return HttpApiClient.make(GororobasApi, { baseUrl: authenticationTestOrigin }).pipe(
-      Effect.provide(FetchHttpClient.layer),
-      Effect.provideService(FetchHttpClient.Fetch, fetch),
-    )
   }
+
+  /** Sends a raw request as `browser`, for routes the typed client doesn't describe. */
+  const requestWith =
+    (browser: TestBrowser) =>
+    ({ path, ...init }: RequestInit & { readonly path: string }) =>
+      Effect.tryPromise(() => fetchWith(browser)(`${authenticationTestOrigin}${path}`, init))
+
+  const clientWith = (browser: TestBrowser) =>
+    HttpApiClient.make(GororobasApi, { baseUrl: authenticationTestOrigin }).pipe(
+      Effect.provide(FetchHttpClient.layer),
+      Effect.provideService(FetchHttpClient.Fetch, fetchWith(browser)),
+    )
 
   /** A browser with its own cookie jar, like a person's device. */
   const newBrowser = () => makeAuthenticationTestBrowser(handler, authenticationTestOrigin)
@@ -223,8 +231,8 @@ const makeApiTestClient = Effect.gen(function* () {
       body: { payload: { ...pending.flow, reference: pending.reference, secret: code } },
     })
 
-  /** Signs in with the email-code flow and returns a typed client carrying the session cookie. */
-  const signIn = (email: string) =>
+  /** Signs in with the email-code flow and returns the browser carrying the session cookie. */
+  const signInBrowser = (email: string) =>
     Effect.gen(function* () {
       const browser = newBrowser()
       const pending = yield* requestCode(browser, email)
@@ -235,8 +243,11 @@ const makeApiTestClient = Effect.gen(function* () {
         secret: pending.code,
       })
 
-      return yield* clientWith(browser)
+      return browser
     })
+
+  /** Signs in with the email-code flow and returns a typed client carrying the session cookie. */
+  const signIn = (email: string) => Effect.flatMap(signInBrowser(email), clientWith)
 
   /** The email a person signs in with. */
   const emailOf = (personId: PersonId) => Effect.map(findEmail(personId), ({ email }) => email)
@@ -244,7 +255,19 @@ const makeApiTestClient = Effect.gen(function* () {
   /** Signs in as an existing person, using the email on their account. */
   const signInAs = (personId: PersonId) => Effect.flatMap(emailOf(personId), signIn)
 
-  return { visitor, signIn, signInAs, emailOf, newBrowser, requestCode, enterCode, clientWith }
+  return {
+    visitor,
+    signIn,
+    signInBrowser,
+    signInAs,
+    emailOf,
+    newBrowser,
+    requestCode,
+    enterCode,
+    clientWith,
+    fetchWith,
+    requestWith,
+  }
 })
 
 /** One in-process app per scenario: the layer owns its lifetime. */

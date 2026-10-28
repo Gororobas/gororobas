@@ -18,6 +18,7 @@ import {
 import { DateTime, Effect, Equal, Layer, Option, Schema, Struct } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { updatePublicationSourceRow } from "../../src/publications/mutations.js"
 import {
   HumanCrdtUpdate,
   SystemUpsertTranslation,
@@ -336,7 +337,6 @@ describe("PublicationsRepository", () => {
               workflowName: "PublicationTranslationWorkflow",
               workflowVersion: "test",
             }),
-            expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
             sourceCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
             publicationId,
             sourceLanguage: ContentLanguage.make("pt"),
@@ -410,7 +410,6 @@ describe("PublicationsRepository", () => {
               workflowName: "PublicationTranslationWorkflow",
               workflowVersion: "test",
             }),
-            expectedCurrentCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
             sourceCrdtFrontier: Option.getOrThrow(beforeTranslation).currentCrdtFrontier,
             publicationId,
             sourceLanguage: ContentLanguage.make("pt"),
@@ -420,9 +419,6 @@ describe("PublicationsRepository", () => {
         )
 
         const sourceCrdtFrontier = Option.getOrThrow(beforeTranslation).currentCrdtFrontier
-        const afterEnglish = Option.getOrThrow(
-          yield* repository.findPublicationRowById(publicationId),
-        )
 
         yield* repository.updatePublication(
           SystemUpsertTranslation.make({
@@ -431,7 +427,6 @@ describe("PublicationsRepository", () => {
               workflowName: "PublicationTranslationWorkflow",
               workflowVersion: "test",
             }),
-            expectedCurrentCrdtFrontier: afterEnglish.currentCrdtFrontier,
             sourceCrdtFrontier,
             publicationId,
             sourceLanguage: ContentLanguage.make("pt"),
@@ -484,8 +479,6 @@ describe("PublicationsRepository", () => {
           }),
         )
 
-        const afterEdit = Option.getOrThrow(yield* repository.findPublicationRowById(publicationId))
-
         const staleError = yield* repository
           .updatePublication(
             SystemUpsertTranslation.make({
@@ -494,7 +487,6 @@ describe("PublicationsRepository", () => {
                 workflowName: "PublicationTranslationWorkflow",
                 workflowVersion: "test",
               }),
-              expectedCurrentCrdtFrontier: afterEdit.currentCrdtFrontier,
               sourceCrdtFrontier,
               publicationId,
               sourceLanguage: ContentLanguage.make("pt"),
@@ -614,6 +606,22 @@ describe("PublicationsRepository", () => {
 
       const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
       expect(commits).toHaveLength(2)
+
+      // The statement itself also refuses a stale frontier, independently of the in-transaction check.
+      const snapshotBefore =
+        yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`
+
+      const guarded = yield* updatePublicationSourceRow({
+        id: publicationId,
+        crdtSnapshot: initialSnapshot.crdtSnapshot,
+        expectedCrdtFrontier: expectedCurrentCrdtFrontier,
+        updatedAt: yield* DateTime.now,
+      })
+
+      expect(Option.isNone(guarded)).toBe(true)
+      expect(
+        yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`,
+      ).toEqual(snapshotBefore)
     }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
   )
 
