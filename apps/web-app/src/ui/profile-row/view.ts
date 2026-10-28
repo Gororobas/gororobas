@@ -11,7 +11,7 @@ import { space, tones } from "../theme"
 
 const rowStyle = Style.make({ display: "flex", alignItems: "center", gap: space[3] })
 const textStyle = Style.make({ display: "grid", minInlineSize: 0 })
-const nameStyle = Style.make({ color: tones.neutral.ramp[700] })
+const nameStyle = Style.make({ color: tones.neutral.shade[700] })
 
 const nameAppearances = { compact: "footnote", standard: "regular", large: "xl" } as const
 const detailAppearances = { compact: "caption", standard: "footnote", large: "regular" } as const

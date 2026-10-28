@@ -30,7 +30,7 @@ export const chipStyle = Recipe.make({
       /** A value, such as an article's usage. */
       tag: { backgroundColor: tones.primary.ramp[400], color: tones.neutral.ramp[800] },
       /** A choice that narrows a list. */
-      option: { backgroundColor: tones.neutral.ramp[100], color: tones.neutral.ramp[700] },
+      option: { backgroundColor: tones.neutral.shade[100], color: tones.neutral.shade[700] },
       selectedOption: { backgroundColor: tones.primary.ramp[400], color: tones.neutral.ramp[900] },
     },
     isInteractive: {

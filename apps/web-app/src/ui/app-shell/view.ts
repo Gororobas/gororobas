@@ -66,10 +66,10 @@ export const searchSurfaceStyle = Style.make({
   blockSize: controlSize.md,
   paddingInlineStart: space[10],
   paddingInlineEnd: space[4],
-  border: `${borderWidth.hairline} solid ${tones.neutral.ramp[200]}`,
+  border: `${borderWidth.hairline} solid ${tones.neutral.shade[200]}`,
   borderRadius: radius.full,
   cornerShape: "squircle",
-  backgroundColor: tones.neutral.ramp[100],
+  backgroundColor: tones.neutral.shade[100],
   color: toneColors.foreground,
   fontSize: fontSize.footnote,
   outline: "none",
@@ -77,8 +77,8 @@ export const searchSurfaceStyle = Style.make({
   transitionDuration: duration.control,
 }).pipe(
   Style.when(breakpoint.sm, { blockSize: controlSize.sm }),
-  Style.when(When.hover, { borderColor: tones.neutral.ramp[300] }),
-  Style.when(When.focus, { backgroundColor: tones.neutral.ramp[50] }),
+  Style.when(When.hover, { borderColor: tones.neutral.shade[300] }),
+  Style.when(When.focus, { backgroundColor: tones.neutral.shade[50] }),
   Style.when(When.focusVisible, focusRingDeclarations),
 )
 

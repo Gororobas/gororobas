@@ -58,7 +58,7 @@ const footerStyle = Style.make({
   display: "flex",
   justifyContent: "flex-end",
   paddingBlockStart: space[3],
-  borderBlockStart: `${borderWidth.hairline} solid ${tones.primary.ramp[300]}`,
+  borderBlockStart: `${borderWidth.hairline} solid ${tones.primary.shade[300]}`,
 })
 
 const footerLinkStyle = Style.make({
@@ -68,14 +68,14 @@ const footerLinkStyle = Style.make({
   paddingBlock: space[1],
   paddingInline: space[2],
   borderRadius: radius.full,
-  color: tones.accent.ramp[800],
+  color: tones.accent.shade[800],
   fontSize: fontSize.footnote,
   fontWeight: fontWeight.semibold,
   outline: "none",
   transitionProperty: "background-color",
   transitionDuration: duration.control,
 }).pipe(
-  Style.when(When.hover, { backgroundColor: tones.accent.ramp[100] }),
+  Style.when(When.hover, { backgroundColor: tones.accent.shade[100] }),
   Style.when(When.focusVisible, focusRingDeclarations),
 )
 

@@ -103,11 +103,13 @@ const optionalParam = <A extends string>(schema: Schema.Codec<A>, format: "raw" 
     Schema.decodeTo(
       Schema.Option(schema),
       SchemaTransformation.transform({
+        // Free text keeps its spaces: the search field renders from the URL, so trimming here
+        // would swallow the space someone just typed between two words.
         decode: (maybeRaw) =>
           pipe(
             maybeRaw,
-            Option.map(EffectString.trim),
-            Option.filter(EffectString.isNonEmpty),
+            Option.map((raw) => (format === "enum" ? EffectString.trim(raw) : raw)),
+            Option.filter((raw) => EffectString.isNonEmpty(EffectString.trim(raw))),
             Option.flatMap((raw) => decode(fromUrl(raw))),
           ),
         encode: Option.map(toUrl),

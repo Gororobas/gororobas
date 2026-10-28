@@ -37,7 +37,7 @@ import { WikiArticleRow } from "../../../ui/wiki-article-row"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import { BookmarkSaving, type Model } from "../model"
-import * as PlantOverview from "./plant-overview"
+import * as Overview from "./overview"
 import {
   type ArticleState,
   type Page,
@@ -90,7 +90,7 @@ const heroCaptionStyle = Style.make({
   padding: space[3],
   borderRadius: radius.lg,
   backgroundColor: tones.primary.backgroundCard,
-  color: tones.neutral.ramp[800],
+  color: tones.neutral.shade[800],
 })
 
 const bookmarkStyle = Style.make({ display: "grid", rowGap: space[2] })
@@ -324,41 +324,40 @@ const aboutContent = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html
     ),
   )
 
+/** Only shown once it has posts: an empty preview would only repeat the Posts tab's empty state. */
 const publicationsPreview = (
   { model, page, maybeToday }: ArticleState,
   h: WikiArticleViewBuilder,
-): Html =>
-  SectionCard.view(
-    {
-      title: "Posts",
-      icon: Icons.clipboard,
-      footerLink: {
-        label: `Todos os posts sobre ${aboutName(page)}`,
-        href: wikiArticleUrl(page, "Publications"),
+): ReadonlyArray<Html> =>
+  EffectArray.fromOption(
+    Option.filter(
+      AsyncData.getData(model.publicationsAsyncData),
+      EffectArray.isReadonlyArrayNonEmpty,
+    ),
+  ).map((publications) =>
+    SectionCard.view(
+      {
+        title: "Posts",
+        icon: Icons.clipboard,
+        footerLink: {
+          label: `Todos os posts sobre ${aboutName(page)}`,
+          href: wikiArticleUrl(page, "Publications"),
+        },
+        children: [
+          h.div(
+            styledAttributes([], carouselStyle, cardBleedStyle),
+            publications
+              .slice(0, PREVIEW_PUBLICATION_COUNT)
+              .map((publication) =>
+                h.keyed("div")(publication.id, styledAttributes([], carouselItemStyle), [
+                  PublicationCard.view({ publication, maybeToday }, h),
+                ]),
+              ),
+          ),
+        ],
       },
-      children: [
-        asyncView(
-          {
-            asyncData: model.publicationsAsyncData,
-            onData: (publications) =>
-              EffectArray.match(publications.slice(0, PREVIEW_PUBLICATION_COUNT), {
-                onEmpty: () => emptyState(`Ainda não há posts sobre ${aboutName(page)}.`, h),
-                onNonEmpty: (shown) =>
-                  h.div(
-                    styledAttributes([], carouselStyle, cardBleedStyle),
-                    shown.map((publication) =>
-                      h.keyed("div")(publication.id, styledAttributes([], carouselItemStyle), [
-                        PublicationCard.view({ publication, maybeToday }, h),
-                      ]),
-                    ),
-                  ),
-              }),
-          },
-          h,
-        ),
-      ],
-    },
-    h,
+      h,
+    ),
   )
 
 const cultivarItemStyle = Style.make({
@@ -464,46 +463,46 @@ const photosPreview = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Htm
   const photos = images(page)
   const remaining = photos.length - PREVIEW_PHOTO_COUNT
 
-  return EffectArray.match(photos, {
-    onEmpty: () => [],
-    onNonEmpty: () => [
-      SectionCard.view(
-        {
-          title: "Fotos",
-          icon: Icons.gallery,
-          footerLink: { label: "Ver todas as fotos", href: wikiArticleUrl(page, "Photos") },
-          children: [
-            h.div(styledAttributes([], photoStripStyle, cardBleedStyle), [
-              ...photos
-                .slice(0, PREVIEW_PHOTO_COUNT)
-                .map((photo) =>
-                  h.keyed("img")(
-                    photo.id,
-                    styledAttributes(
-                      [
-                        h.Src(imageUrl(photo.id, 300)),
-                        h.Alt(Option.getOrElse(caption(photo), () => "")),
-                        h.Attribute("loading", "lazy"),
-                      ],
-                      photoThumbnailStyle,
+  // A single photo is already the hero's; repeating it here adds nothing.
+  return photos.length <= 1
+    ? []
+    : [
+        SectionCard.view(
+          {
+            title: "Fotos",
+            icon: Icons.gallery,
+            footerLink: { label: "Ver todas as fotos", href: wikiArticleUrl(page, "Photos") },
+            children: [
+              h.div(styledAttributes([], photoStripStyle, cardBleedStyle), [
+                ...photos
+                  .slice(0, PREVIEW_PHOTO_COUNT)
+                  .map((photo) =>
+                    h.keyed("img")(
+                      photo.id,
+                      styledAttributes(
+                        [
+                          h.Src(imageUrl(photo.id, 300)),
+                          h.Alt(Option.getOrElse(caption(photo), () => "")),
+                          h.Attribute("loading", "lazy"),
+                        ],
+                        photoThumbnailStyle,
+                      ),
                     ),
                   ),
-                ),
-              ...(remaining > 0
-                ? [
-                    h.a(
-                      styledAttributes([h.Href(wikiArticleUrl(page, "Photos"))], morePhotosStyle),
-                      [`+${remaining}`],
-                    ),
-                  ]
-                : []),
-            ]),
-          ],
-        },
-        h,
-      ),
-    ],
-  })
+                ...(remaining > 0
+                  ? [
+                      h.a(
+                        styledAttributes([h.Href(wikiArticleUrl(page, "Photos"))], morePhotosStyle),
+                        [`+${remaining}`],
+                      ),
+                    ]
+                  : []),
+              ]),
+            ],
+          },
+          h,
+        ),
+      ]
 }
 
 const contributionsPreview = ({ model, page }: ArticleState, h: WikiArticleViewBuilder): Html =>
@@ -634,13 +633,10 @@ export const view = (
   h.div(styledAttributes([], sectionsStyle, layoutStyle), [
     h.div(styledAttributes([], columnStyle), [
       ...ordered({ order: 1, children: hero(page, h) }, h),
-      ...ordered(
-        { order: 3, children: page.kind === "PLANT" ? [PlantOverview.view(page, h)] : [] },
-        h,
-      ),
+      ...ordered({ order: 3, children: [Overview.view(page, h)] }, h),
       ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
       ...ordered({ order: 6, children: aboutContent(page, h) }, h),
-      ...ordered({ order: 7, children: [publicationsPreview({ model, page, maybeToday }, h)] }, h),
+      ...ordered({ order: 7, children: publicationsPreview({ model, page, maybeToday }, h) }, h),
       ...ordered({ order: 8, children: related(model, h) }, h),
       ...ordered({ order: 9, children: photosPreview(page, h) }, h),
     ]),

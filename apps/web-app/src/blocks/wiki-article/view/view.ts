@@ -1,3 +1,4 @@
+import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Color, Global, Style, When } from "@pleat/core"
 import { Array as EffectArray, DateTime, Match, Option } from "effect"
 import { AsyncData } from "foldkit"
@@ -14,6 +15,7 @@ import {
   breakpoint,
   controlSize,
   layer,
+  radius,
   space,
   toneColors,
   tones,
@@ -23,6 +25,7 @@ import {
 import { Thumbnail } from "../../../ui/thumbnail"
 import { WikiArticleComposition, type WikiArticleViewBuilder } from "../composition"
 import * as About from "./about"
+import * as Overview from "./overview"
 import { type Page, emptyState, images, tabs } from "./shared"
 import * as Tabs from "./tabs"
 
@@ -47,7 +50,21 @@ const headerStyle = Style.make({
 
 const identityStyle = Style.make({ display: "flex", alignItems: "center", gap: space[4] })
 const titleStyle = Style.make({ color: tones.secondary.emphasis })
-const scientificNameStyle = Style.make({ fontStyle: "italic", color: tones.neutral.ramp[700] })
+const scientificNameStyle = Style.make({ fontStyle: "italic", color: tones.neutral.shade[700] })
+const parentPlantStyle = Style.make({ color: tones.neutral.shade[700] })
+
+const parentPlantLinkStyle = Style.make({
+  color: tones.accent.shade[800],
+  textDecorationLine: "underline",
+  textDecorationColor: tones.accent.shade[300],
+  textUnderlineOffset: "0.2em",
+  borderRadius: radius.sm,
+  outline: "none",
+}).pipe(
+  Style.when(When.hover, { textDecorationColor: tones.accent.shade[700] }),
+  Style.when(When.focusVisible, focusRingDeclarations),
+)
+
 const statusStyle = Style.make({ paddingBlock: space[6] })
 
 const thumbnailLinkStyle = Style.make({
@@ -112,9 +129,25 @@ const compactTabsStyle = Style.make({
 const compactIdentityPaddingStyle = Style.make({ paddingBlock: space[2] })
 
 const scientificName = (page: Page): Option.Option<string> =>
-  page.kind === "PLANT"
-    ? Option.flatMap(page.attributes.scientificNames, EffectArray.head)
-    : Option.none()
+  EffectArray.head(Overview.scientificNames(page))
+
+const parentPlant = (page: Page): Option.Option<WikiArticleQueriedCardData> =>
+  page.kind === "PLANT_CULTIVAR" ? Option.map(page.parentPlant, ({ card }) => card) : Option.none()
+
+/** "Variedade do Ingá", leading to the plant whose traits the cultivar inherits. */
+const parentPlantLink = (card: WikiArticleQueriedCardData, h: WikiArticleViewBuilder): Html =>
+  AppText.view(
+    {
+      element: "p",
+      appearance: "large",
+      styles: [parentPlantStyle],
+      children: [
+        "Variedade ",
+        h.a(styledAttributes([h.Href(wikiArticleUrl(card))], parentPlantLinkStyle), [ofName(card)]),
+      ],
+    },
+    h,
+  )
 
 /** The first photo, linking to every photo of the article. */
 const headerThumbnail = (
@@ -160,6 +193,9 @@ const header = (
                 children: [primaryName(page)],
               },
               h,
+            ),
+            ...EffectArray.fromOption(
+              Option.map(parentPlant(page), (card) => parentPlantLink(card, h)),
             ),
             ...EffectArray.fromOption(
               Option.map(scientificName(page), (name) =>

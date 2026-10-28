@@ -20,7 +20,7 @@ const documentStyle = Style.make({
   rowGap: space[3],
   fontSize: fontSize.regular,
   lineHeight: lineHeight.relaxed,
-  color: tones.neutral.ramp[900],
+  color: tones.neutral.shade[900],
 })
 
 const headingStyle = Style.make({ color: tones.secondary.emphasis, lineHeight: lineHeight.tight })
@@ -33,12 +33,12 @@ const quoteStyle = Style.make({
   rowGap: space[2],
   paddingInlineStart: space[4],
   borderInlineStart: `${borderWidth.thick} solid ${tones.primary.ramp[400]}`,
-  color: tones.neutral.ramp[700],
+  color: tones.neutral.shade[700],
 })
 
 const linkStyle = Style.make({ color: tones.secondary.emphasis, textDecoration: "underline" })
 const referenceStyle = Style.make({ color: tones.accent.emphasis, fontWeight: 600 })
-const ruleStyle = Style.make({ borderColor: tones.primary.ramp[300] })
+const ruleStyle = Style.make({ borderColor: tones.primary.shade[300] })
 
 const galleryStyle = Style.make({
   display: "flex",

@@ -75,19 +75,19 @@ const tabStyle = Style.make({
   borderBlockEnd: `${borderWidth.thick} solid transparent`,
   borderStartStartRadius: radius.md,
   borderStartEndRadius: radius.md,
-  color: tones.neutral.ramp[700],
+  color: tones.neutral.shade[700],
   fontWeight: fontWeight.semibold,
   outline: "none",
   transitionProperty: "color, background-color, border-color",
   transitionDuration: duration.control,
 }).pipe(
-  Style.when(When.hover, { color: tones.neutral.ramp[900], backgroundColor: toneColors.hover }),
+  Style.when(When.hover, { color: tones.neutral.shade[900], backgroundColor: toneColors.hover }),
   Style.when(When.focusVisible, focusRingDeclarations),
 )
 
 const currentTabStyle = Style.make({
-  color: tones.accent.ramp[800],
-  borderBlockEndColor: tones.accent.ramp[600],
+  color: tones.accent.shade[800],
+  borderBlockEndColor: tones.accent.shade[600],
 })
 
 const compactTabStyle = Style.make({ paddingBlock: space[2], fontSize: fontSize.footnote })

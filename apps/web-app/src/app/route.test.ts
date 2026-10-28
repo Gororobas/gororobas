@@ -17,10 +17,10 @@ import {
 const parse = (path: string) =>
   urlToApplicationRoute(Option.getOrThrow(fromString(`http://localhost${path}`)))
 
-/** What survives the URL: trimmed, non-empty text and each list value once. */
+/** What survives the URL: text that isn't blank, as typed, and each list value once. */
 const normalized = (query: SearchQuery): SearchQuery => ({
   ...query,
-  text: Option.filter(Option.map(query.text, EffectString.trim), EffectString.isNonEmpty),
+  text: Option.filter(query.text, (text) => EffectString.isNonEmpty(EffectString.trim(text))),
   plantUsages: EffectArray.dedupe(query.plantUsages),
   plantLifecycles: EffectArray.dedupe(query.plantLifecycles),
   plantingMethods: EffectArray.dedupe(query.plantingMethods),

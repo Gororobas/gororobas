@@ -34,8 +34,8 @@ const choiceStyle = Style.make({
 })
 
 const selectedChoiceStyle = Style.make({
-  backgroundColor: tones.primary.ramp[300],
-  borderColor: tones.primary.ramp[300],
+  backgroundColor: tones.primary.shade[300],
+  borderColor: tones.primary.shade[300],
 })
 
 export type Choice<Message> = Readonly<

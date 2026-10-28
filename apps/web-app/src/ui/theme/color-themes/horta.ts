@@ -79,8 +79,37 @@ const red: Ramp = {
 
 // Light and dark mirror each other around 500: a role that sits on shade N in light sits
 // on shade 1000 - N in dark.
+const lightShades = (shade: RampTokens): ToneValues["shade"] => ({
+  50: shade[50],
+  100: shade[100],
+  200: shade[200],
+  300: shade[300],
+  400: shade[400],
+  500: shade[500],
+  600: shade[600],
+  700: shade[700],
+  800: shade[800],
+  900: shade[900],
+  950: shade[950],
+})
+
+const darkShades = (shade: RampTokens): ToneValues["shade"] => ({
+  50: shade[950],
+  100: shade[900],
+  200: shade[800],
+  300: shade[700],
+  400: shade[600],
+  500: shade[500],
+  600: shade[400],
+  700: shade[300],
+  800: shade[200],
+  900: shade[100],
+  950: shade[50],
+})
+
 const lightRoles = (ramp: Ramp, shade: RampTokens): ToneValues => ({
   ramp,
+  shade: lightShades(shade),
   foreground: shade[950],
   foregroundMuted: shade[700],
   emphasis: shade[600],
@@ -108,6 +137,7 @@ const lightRoles = (ramp: Ramp, shade: RampTokens): ToneValues => ({
 
 const darkRoles = (ramp: Ramp, shade: RampTokens): ToneValues => ({
   ramp,
+  shade: darkShades(shade),
   foreground: shade[50],
   foregroundMuted: shade[300],
   emphasis: shade[400],

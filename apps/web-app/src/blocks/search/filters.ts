@@ -251,9 +251,20 @@ export const clearedSecondaryFilters = withoutKindFilters
 export const isBrowsing = (query: SearchQuery): boolean =>
   Option.isNone(query.type) && Option.isNone(nonEmptyText(query))
 
+/** The server's trigram indexes can't match shorter words. */
+export const MINIMUM_WORD_LENGTH = 3
+
+/** Text without any word long enough to search for yet, such as "m" or "pé de". */
+export const isTextTooShort = (query: SearchQuery): boolean =>
+  Option.exists(
+    nonEmptyText(query),
+    (text) => !text.split(/\s+/).some((word) => word.length >= MINIMUM_WORD_LENGTH),
+  )
+
 /** Whether the page shows results of this type, and so should search for them. */
 export const isResultTypeShown = (query: SearchQuery, type: SearchType): boolean =>
   !isBrowsing(query) &&
+  !isTextTooShort(query) &&
   Option.match(query.type, { onNone: () => true, onSome: (shown) => shown === type })
 
 // API PARAMETERS

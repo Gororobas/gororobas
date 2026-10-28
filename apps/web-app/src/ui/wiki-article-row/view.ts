@@ -23,7 +23,7 @@ const rowStyle = Style.make({
   gap: space[4],
   padding: space[1],
   borderRadius: radius.md,
-  color: tones.neutral.ramp[700],
+  color: tones.neutral.shade[700],
   outline: "none",
 }).pipe(Style.when(When.focusVisible, focusRingDeclarations))
 
@@ -43,11 +43,11 @@ const cardStyle = Style.make({
   borderWidth: borderWidth.thick,
   borderStyle: "solid",
   borderColor: tones.accent.background,
-  borderBlockStartColor: tones.accent.ramp[400],
+  borderBlockStartColor: tones.accent.shade[400],
   borderRadius: space[7],
   cornerShape: "squircle",
   backgroundColor: tones.primary.ramp[300],
-  color: tones.neutral.ramp[800],
+  color: tones.neutral.shade[800],
   outline: "none",
   transition: `transform ${duration.fast}`,
 }).pipe(
@@ -111,7 +111,7 @@ const cardNameStyle = Style.make({
   WebkitLineClamp: 3,
 })
 
-const cardScientificNameStyle = Style.make({ fontStyle: "italic", color: tones.neutral.ramp[700] })
+const cardScientificNameStyle = Style.make({ fontStyle: "italic", color: tones.neutral.shade[700] })
 
 const cardBookmarkStyle = Style.make({
   position: "absolute",
@@ -121,8 +121,8 @@ const cardBookmarkStyle = Style.make({
 })
 
 const textStyle = Style.make({ display: "grid", flex: 1, minInlineSize: 0 })
-const nameStyle = Style.make({ color: tones.neutral.ramp[700] })
-const bookmarkStyle = Style.make({ color: tones.neutral.ramp[600] })
+const nameStyle = Style.make({ color: tones.neutral.shade[700] })
+const bookmarkStyle = Style.make({ color: tones.neutral.shade[600] })
 
 export type WikiArticleRowConfig = Readonly<{
   article: WikiArticleQueriedCardData

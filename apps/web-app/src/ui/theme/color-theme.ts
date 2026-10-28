@@ -15,10 +15,15 @@ const rampSpec = {
   950: Token.color,
 }
 
-/** What every tone provides. Views reach for these roles; `ramp` is the escape hatch for a
- *  deliberately chosen shade, and keeps its physical meaning in every mode. */
+/** What every tone provides. Views reach for these roles; `shade` and `ramp` are the escape
+ *  hatches for a deliberately chosen step. */
 const toneColorSpec = {
+  /** Keeps its physical meaning in every mode: for marks that stay one color, such as a
+   *  pastel tile with dark text on it. */
   ramp: rampSpec,
+  /** The ramp mirrored for the current mode: `shade[N]` is `ramp[N]` in light and
+   *  `ramp[1000 - N]` in dark, so text and surfaces drawn from it keep their contrast. */
+  shade: rampSpec,
   foreground: Token.color,
   foregroundMuted: Token.color,
   /** Saturated text and marks that should stand out from body text: headings, icons. */

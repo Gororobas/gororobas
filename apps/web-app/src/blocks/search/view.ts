@@ -62,6 +62,8 @@ import {
   activeSecondaryFilterCount,
   clearedSecondaryFilters,
   isBrowsing,
+  isTextTooShort,
+  MINIMUM_WORD_LENGTH,
   nonEmptyText,
   primaryFilterGroup,
   secondaryFilterGroups,
@@ -1223,14 +1225,26 @@ export const view = SearchComposition.makeView.withInputs<ViewInputs>(
   (model, { query, maybeToday, renderHeader }, h): Html =>
     h.div(styledAttributes([], pageStyle), [
       renderHeader(searchField(query, h)),
-      ...(Option.isNone(query.type) && !isBrowsing(query) ? [tabs(query, h)] : []),
+      ...(Option.isNone(query.type) && !isBrowsing(query) && !isTextTooShort(query)
+        ? [tabs(query, h)]
+        : []),
       h.div(styledAttributes([], pageColumnStyle, contentStyle), [
         isBrowsing(query)
           ? browse(model, h)
-          : Option.match(query.type, {
-              onNone: () => overview({ model, query, maybeToday }, h),
-              onSome: (type) => typedResults({ model, query, maybeToday, type }, h),
-            }),
+          : isTextTooShort(query)
+            ? h.div(
+                [],
+                [
+                  h.p(styledAttributes([h.Role("status")], summaryStyle), [
+                    `Digite pelo menos ${MINIMUM_WORD_LENGTH} letras para buscar.`,
+                  ]),
+                  browse(model, h),
+                ],
+              )
+            : Option.match(query.type, {
+                onNone: () => overview({ model, query, maybeToday }, h),
+                onSome: (type) => typedResults({ model, query, maybeToday, type }, h),
+              }),
       ]),
     ]),
 )

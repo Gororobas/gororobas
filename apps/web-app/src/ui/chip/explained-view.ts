@@ -17,11 +17,11 @@ const iconStyle = Style.make({ opacity: 0.7 })
 const popoverStyle = Style.make({
   maxInlineSize: "min(22rem, calc(100vw - 2rem))",
   padding: space[3],
-  border: `${borderWidth.hairline} solid ${tones.primary.ramp[300]}`,
+  border: `${borderWidth.hairline} solid ${tones.primary.shade[300]}`,
   borderRadius: radius.md,
   backgroundColor: tones.primary.backgroundCard,
   boxShadow: "0 12px 32px rgb(0 0 0 / 12%)",
-  color: tones.neutral.ramp[800],
+  color: tones.neutral.shade[800],
   fontSize: fontSize.footnote,
   lineHeight: lineHeight.normal,
 }).pipe(
