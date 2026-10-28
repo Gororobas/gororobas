@@ -6,6 +6,7 @@ import { Schema, Struct } from "effect"
 import { ProfileType, ProfileVisibility } from "../common/enums.js"
 import { MediaAssetId, OrganizationId, PersonId, ProfileId } from "../common/ids.js"
 import { Handle, TimestampedStruct } from "../common/primitives.js"
+import { toSearchableText } from "../common/utils/strings.js"
 import { OrganizationRow } from "../organizations/domain.js"
 import { TiptapDocument } from "../rich-text/domain.js"
 
@@ -14,6 +15,13 @@ export const ProfileSearchParams = Schema.Struct({
   type: Schema.optional(ProfileType),
 })
 export type ProfileSearchParams = typeof ProfileSearchParams.Type
+
+/** What profile search matches, stored in `profiles.searchable_text` whenever these fields change. */
+export const profileSearchableText = (profile: {
+  readonly name: string
+  readonly handle: string
+  readonly location: string | null
+}) => toSearchableText([profile.name, profile.handle, profile.location ?? ""].join(" "))
 
 export const ProfileCardData = Schema.Struct({
   id: ProfileId,

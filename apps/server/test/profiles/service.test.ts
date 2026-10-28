@@ -1,8 +1,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Handle, IdGen, PersonId, PlatformAccessLevel } from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
-import { Effect, Option, Result, Schema } from "effect"
-import { SqlClient } from "effect/sql"
+import { DateTime, Effect, Option, Result, Schema } from "effect"
 
 import { ProfilesRepository } from "../../src/profiles/repository.js"
 import { ProfileService } from "../../src/profiles/service.js"
@@ -15,14 +14,23 @@ describe("ProfileService reads", () => {
     Effect.gen(function* () {
       const { person: publicPerson } = yield* seedPerson("COMMUNITY")
       const { person: communityPerson } = yield* seedPerson("COMMUNITY")
-      const sql = yield* SqlClient.SqlClient
+      const repository = yield* ProfilesRepository
+      const updatedAt = yield* DateTime.now
 
-      yield* sql`UPDATE profiles SET location = 'Tropical Andes' WHERE id = ${publicPerson.id}`
-      yield* sql`UPDATE profiles SET location = 'Tropical Andes', visibility = 'COMMUNITY' WHERE id = ${communityPerson.id}`
+      yield* repository.updateProfileRow({
+        id: publicPerson.id,
+        location: "Tropical Andes",
+        updatedAt,
+      })
 
-      const profiles = yield* ProfilesRepository.use((repository) =>
-        repository.searchProfiles({ text: "andes" }),
-      )
+      yield* repository.updateProfileRow({
+        id: communityPerson.id,
+        location: "Tropical Andes",
+        visibility: "COMMUNITY",
+        updatedAt,
+      })
+
+      const profiles = yield* repository.searchProfiles({ text: "andes" })
 
       expect(profiles.map(({ id }) => id)).toEqual([publicPerson.id])
     }).pipe(Effect.provide(TestLayerWithServices)),

@@ -8,9 +8,14 @@ import { SqlClient } from "effect/sql"
 
 import { migrations } from "./db/migrations-effect/index.js"
 
-export const appSqlClientConfig = (filename: string, options: { readonly?: boolean } = {}) => ({
+export const appSqlClientConfig = (
+  filename: string,
+  options: { readonly?: boolean } = {},
+): TursoClient.TursoClientConfig => ({
   filename,
   readonly: options.readonly ?? false,
+  // Full-text search indexes, at the end of schema.sql
+  experimental: ["index_method"],
   // Transform column names automatically
   transformResultNames: EffectString.snakeToCamel, // DB → JS (snake_case → camelCase)
   transformQueryNames: EffectString.camelToSnake, // JS → DB (camelCase → snake_case)

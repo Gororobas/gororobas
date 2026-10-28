@@ -20,6 +20,7 @@ import {
   type PublicationSourceData,
   entityReferenceLinks,
   tiptapToText,
+  toSearchableText,
 } from "@gororobas/domain"
 import { Array as EffectArray, Context, DateTime, Effect, Equal, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
@@ -112,13 +113,16 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         sourceData: SourceContent
         publicationId: PublicationId
       }) => {
-        const rows = projectContentTranslations(input.sourceData).map((translation) =>
-          PublicationTranslationRow.make({
+        const rows = projectContentTranslations(input.sourceData).map((translation) => {
+          const contentPlainText = tiptapToText(translation.content)
+
+          return PublicationTranslationRow.make({
             ...translation,
-            contentPlainText: tiptapToText(translation.content),
+            contentPlainText,
+            searchableContent: toSearchableText(contentPlainText),
             publicationId: input.publicationId,
-          }),
-        )
+          })
+        })
 
         return persistProjectionJunctionTables({
           deleteRows: sql`DELETE FROM publication_translations WHERE publication_id = ${input.publicationId}`,

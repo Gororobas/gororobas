@@ -16,54 +16,128 @@ import {
   PublicationRow,
 } from "@gororobas/domain"
 import { GetPublicationPageParams } from "@gororobas/domain/publications/api"
-import { Schema, Struct } from "effect"
+import { Array as EffectArray, Effect, Option, Schema, Struct } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
 
-/** Includes censored publications: `assertCanViewPublication` decides who can still see them. */
+import {
+  containsEveryTerm,
+  fullTextQuery,
+  rankBySimilarity,
+  SIMILARITY_CANDIDATES,
+  similarityQuery,
+} from "../db/full-text-search.js"
+
+/**
+ * Includes censored publications: `assertCanViewPublication` decides who can still see them.
+ * Text searches rank by relevance in any translation, then by recency.
+ */
 export const searchPublicationRows = SqlSchema.findAll({
   Request: ApiPublicationSearchParams,
   Result: ModeratedPublicationRow,
-  execute: (query) => {
-    const textPattern =
-      query.text === undefined ? undefined : `%${query.text.replace(/[\\%_]/g, "\\$&")}%`
-
-    return SqlClient.use(
-      (sql) => sql`
-    SELECT publications.*, publication_crdts.moderation_status FROM publications
-    JOIN publication_crdts ON publication_crdts.id = publications.id
-    WHERE ${sql.and([
-      ...(query.ownerProfileId === undefined
-        ? []
-        : [sql`publications.owner_profile_id = ${query.ownerProfileId}`]),
-      ...(query.kind === undefined ? [] : [sql`publications.kind = ${query.kind}`]),
-      ...(query.wikiArticleId === undefined
-        ? []
-        : [
-            sql`EXISTS (SELECT 1 FROM publication_wiki_articles linked
+  execute: (query) =>
+    SqlClient.use((sql) => {
+      const filters = sql.and([
+        ...(query.ownerProfileId === undefined
+          ? []
+          : [sql`publications.owner_profile_id = ${query.ownerProfileId}`]),
+        ...(query.kind === undefined ? [] : [sql`publications.kind = ${query.kind}`]),
+        ...(query.wikiArticleId === undefined
+          ? []
+          : [
+              sql`EXISTS (SELECT 1 FROM publication_wiki_articles linked
               WHERE linked.publication_id = publications.id
                 AND linked.wiki_article_id = ${query.wikiArticleId})`,
-          ]),
-      ...(query.visibility === undefined
-        ? []
-        : [sql`publications.visibility = ${query.visibility}`]),
-      ...(textPattern === undefined
-        ? []
-        : [
-            sql`(
-        publications.handle LIKE ${textPattern} ESCAPE '\\'
-        OR EXISTS (
-          SELECT 1 FROM publication_translations AS translation
-          WHERE translation.publication_id = publications.id
-            AND translation.content_plain_text LIKE ${textPattern} ESCAPE '\\'
+            ]),
+        ...(query.visibility === undefined
+          ? []
+          : [sql`publications.visibility = ${query.visibility}`]),
+      ])
+
+      if (query.text === undefined) {
+        return sql`
+          SELECT publications.*, publication_crdts.moderation_status FROM publications
+          JOIN publication_crdts ON publication_crdts.id = publications.id
+          WHERE ${filters}
+          ORDER BY publications.published_at DESC, publications.id
+        `
+      }
+
+      const text = query.text
+
+      const matching = Option.match(fullTextQuery(sql, text), {
+        onNone: () => Effect.succeed([]),
+        onSome: (textQuery) => sql`
+          WITH matches AS (
+            SELECT publication_id, searchable_content,
+              fts_score(searchable_content, ${textQuery}) AS score
+            FROM publication_translations
+            WHERE fts_match(searchable_content, ${textQuery})
+          ),
+          publication_matches AS (
+            SELECT publication_id, max(score) AS score FROM matches
+            WHERE ${containsEveryTerm(sql, { searchable: sql`searchable_content`, text })}
+            GROUP BY publication_id
+          )
+          SELECT publications.*, publication_crdts.moderation_status FROM publications
+          JOIN publication_crdts ON publication_crdts.id = publications.id
+          JOIN publication_matches ON publication_matches.publication_id = publications.id
+          WHERE ${filters}
+          ORDER BY publication_matches.score DESC, publications.published_at DESC, publications.id
+        `,
+      })
+
+      // Nothing matches a misspelled word, so look for words within a few edits of it.
+      const similar = Effect.gen(function* () {
+        const candidates = yield* findContentCandidates(text)
+
+        const ids = EffectArray.dedupe(
+          rankBySimilarity({
+            text,
+            candidates,
+            words: (candidate) => candidate.searchableContent,
+          }).map(({ publicationId }) => publicationId),
         )
-      )`,
-          ]),
-    ])}
-    ORDER BY publications.published_at DESC, publications.id
-  `,
-    )
-  },
+
+        if (EffectArray.isReadonlyArrayEmpty(ids)) return []
+
+        return yield* sql`
+          SELECT publications.*, publication_crdts.moderation_status FROM publications
+          JOIN publication_crdts ON publication_crdts.id = publications.id
+          JOIN json_each(${encodeIds(ids)}) ranked ON ranked.value = publications.id
+          WHERE ${filters}
+          ORDER BY ranked.key
+        `
+      })
+
+      return Effect.flatMap(matching, (rows) =>
+        EffectArray.isReadonlyArrayEmpty(rows) ? similar : Effect.succeed(rows),
+      )
+    }),
+})
+
+const encodeIds = Schema.encodeSync(Schema.fromJsonString(Schema.Array(PublicationId)))
+
+/** Translations sharing trigrams with a search, best first, to compare their words with it. */
+const findContentCandidates = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: Schema.Struct({ publicationId: PublicationId, searchableContent: Schema.String }),
+  execute: (text) =>
+    SqlClient.use((sql) =>
+      Option.match(similarityQuery(sql, text), {
+        onNone: () => Effect.succeed([]),
+        onSome: (query) => sql`
+          WITH matches AS (
+            SELECT publication_id, searchable_content,
+              fts_score(searchable_content, ${query}) AS score
+            FROM publication_translations
+            WHERE fts_match(searchable_content, ${query})
+          )
+          SELECT publication_id, searchable_content FROM matches
+          ORDER BY score DESC LIMIT ${sql.literal(String(SIMILARITY_CANDIDATES))}
+        `,
+      }),
+    ),
 })
 
 const PublicationCardContentRow = Schema.Struct({

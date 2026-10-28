@@ -32,5 +32,10 @@ export const commonWikiArticleTranslationProjectionFields = {
   wikiArticleId: WikiArticleId,
   language: SupportedLanguage,
   contentPlainText: Schema.String,
+  /** The first common name, folded with `toSearchableText` for full-text search. */
+  searchableTitle: Schema.String,
+  /** The other common names and scientific names, folded for full-text search. */
   searchableNames: Schema.String,
+  /** `contentPlainText`, folded with `toSearchableText` for full-text search. */
+  searchableContent: Schema.String,
 }

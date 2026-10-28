@@ -19,7 +19,7 @@ import {
   type WikiArticleEditableData,
   type WikiSearchParams,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Match, Option } from "effect"
+import { Array as EffectArray, Context, DateTime, Effect, Match, Option } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { MediaAssetsRepository } from "../media-assets/repository.js"
@@ -179,11 +179,40 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
                     language: lookup.language,
                   })
                 : [],
-            resolvedAttributes:
+            parentPlant:
               page.value.kind === "PLANT_CULTIVAR"
-                ? Option.some(yield* resolveCultivar(page.value.attributes))
+                ? yield* findParentPlant({
+                    parentPlantId: page.value.attributes.parentPlantId,
+                    language: lookup.language,
+                  })
                 : Option.none(),
           }
+        })
+
+      const findParentPlant = ({
+        parentPlantId,
+        language,
+      }: {
+        parentPlantId: WikiArticleId
+        language: SupportedLanguage
+      }) =>
+        Effect.gen(function* () {
+          const maybeParent = yield* repository.findById(parentPlantId)
+          const cards = yield* repository.listCardsByIds({
+            wikiArticleIds: [parentPlantId],
+            language,
+          })
+
+          return Option.flatMap(
+            Option.all({
+              parent: Option.filter(maybeParent, (parent) => parent.status === "PUBLISHED"),
+              card: EffectArray.head(cards),
+            }),
+            ({ parent, card }) =>
+              parent.kind === "PLANT"
+                ? Option.some({ card, attributes: parent.attributes })
+                : Option.none(),
+          )
         })
 
       const listRelatedWikiArticles = (

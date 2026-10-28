@@ -12,6 +12,7 @@ import {
   snapshotToLoroDoc,
   WikiArticleEditableData,
   WikiArticleId,
+  profileSearchableText,
 } from "@gororobas/domain"
 import { IdGenLive } from "@gororobas/server/id-gen-live"
 import { insertMediaAsset, insertMediaAssetCredit } from "@gororobas/server/media-assets/mutations"
@@ -180,7 +181,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
 
       yield* Effect.gen(function* () {
         yield* sql`INSERT INTO auth_subjects ${sql.insert({ id: importerId, email: "migration-preview@example.invalid", isEmailVerified: 0, securityRevision: yield* IdGen.make(AuthSecurityRevision), claimedAt: timestamp, createdAt: timestamp, updatedAt: timestamp })}`
-        yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
+        yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", searchableText: profileSearchableText({ name: "Migration import", handle: "migration-import", location: null }), visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
         yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
         yield* repository.createWikiArticle(
           { wikiArticle: latest.article, createdById: importerId, status: "PUBLISHED" },

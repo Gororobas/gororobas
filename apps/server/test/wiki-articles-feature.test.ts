@@ -2415,6 +2415,65 @@ it.effect("plant search ORs enum selections and matches overlapping numeric rang
   }).pipe(Effect.provide(WikiTestLayer)),
 )
 
+it.effect("text search ranks names above mentions, folds accents and tolerates typos", () =>
+  Effect.gen(function* () {
+    const people = yield* setupPeople()
+
+    let context = yield* Effect.reduce(
+      [
+        ["Fruta-de-papagaio", "Fruta silvestre, parecida com milho."],
+        ["Milho", "Grão cultivado há milênios."],
+        ["Feijão", "Leguminosa."],
+        ["Batata", "Tubérculo."],
+        ["Batata-doce", "Raiz doce."],
+      ] as const,
+      () => people,
+      (context, [title, content]) => seedArticle({ context, title, data: plant(title, content) }),
+    )
+
+    // Matches in its title and alias add up, outscoring the article named just "Feijão"
+    const blackBeans = translation("Feijão-preto", "Feijão de caldo grosso.")
+
+    context = yield* seedArticle({
+      context,
+      title: "Feijão-preto",
+      data: WikiPlantArticle.EditableArticle.make({
+        ...plant("Feijão-preto"),
+        translations: {
+          pt: {
+            ...blackBeans,
+            commonNames: [
+              ...blackBeans.commonNames,
+              Schema.decodeSync(WikiArticleCommonNameInCrdtList)({
+                id: "wikicommon02",
+                name: "Feijão-da-feijoada",
+              }),
+            ],
+            origin: Option.none(),
+          },
+        },
+      }),
+    })
+
+    const service = yield* WikiArticlesService
+    const search = (text: string) =>
+      Effect.map(service.searchWikiArticles({ text }), (cards) =>
+        cards.map((card) => card.commonNames[0]?.name),
+      )
+
+    expect(yield* search("milho")).toEqual(["Milho", "Fruta-de-papagaio"])
+    expect(yield* search("FEIJAO")).toEqual(["Feijão", "Feijão-preto"])
+    expect(yield* search("feijão preto")).toEqual(["Feijão-preto"])
+    expect(yield* search("batata doce")).toEqual(["Batata-doce"])
+    // Trigram indexes can't match shorter terms
+    expect(yield* search("mi")).toEqual([])
+    // Misspelled names come within a few edits of what was meant
+    expect(yield* search("mlho")).toEqual(["Milho"])
+    expect(yield* search("batata dose")).toEqual(["Batata-doce"])
+    expect(yield* search("fiejao")).toEqual(["Feijão", "Feijão-preto"])
+  }).pipe(Effect.provide(WikiTestLayer)),
+)
+
 it.effect("pending and rejected creation remain unavailable; only evaluators can publish", () =>
   Effect.gen(function* () {
     const context = yield* proposeCultivar({

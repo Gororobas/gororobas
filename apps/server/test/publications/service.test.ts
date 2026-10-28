@@ -126,7 +126,7 @@ const makePostSourceData = (input: {
 })
 
 describe("PublicationsService", () => {
-  it.effect("searches publication handles and translated text", () =>
+  it.effect("searches translated text", () =>
     Effect.gen(function* () {
       const service = yield* PublicationsService
       const repository = yield* PublicationsRepository
@@ -161,6 +161,45 @@ describe("PublicationsService", () => {
       )
 
       expect(results.map(({ id }) => id)).toEqual([matchingId])
+    }).pipe(Effect.provide(TestLayerWithPublicationsService)),
+  )
+
+  it.effect("ranks text matches by relevance, folding accents and tolerating typos", () =>
+    Effect.gen(function* () {
+      const service = yield* PublicationsService
+      const repository = yield* PublicationsRepository
+      const person = yield* makePersonFixture({ accessLevel: "COMMUNITY" })
+      const profile = yield* makeProfileFixture({ id: person.id })
+      yield* insertPersonWithDependencies({ person, profile })
+      const now = yield* DateTime.now
+
+      const publish = (handle: string, text: string) =>
+        repository.createPublication({
+          createdById: person.id,
+          sourceData: makePostSourceData({
+            content: makeDocument(text),
+            handle: `${handle}-${person.id.slice(0, 8)}`,
+            ownerProfileId: profile.id,
+            publishedAt: now,
+          }),
+        })
+
+      const mentions = yield* publish("mentions", "Plantei feijão ao lado do milho.")
+      const about = yield* publish("about", "Feijão tropeiro: feijão, couve e mais feijão.")
+      yield* publish("unrelated", "Compostagem em casa.")
+
+      const session = yield* resolveSessionFromAuthSubjectId(person.id)
+
+      const search = (text: string) =>
+        Effect.map(
+          withSession(service.searchPublications({ text, pageSize: 10, currentPage: 0 }), session),
+          (results) => results.map(({ id }) => id),
+        )
+
+      expect(yield* search("feijao")).toEqual([about, mentions])
+      expect(yield* search("Feij")).toEqual([about, mentions])
+      expect(yield* search("milho feijão")).toEqual([mentions])
+      expect(yield* search("compostagen")).toHaveLength(1)
     }).pipe(Effect.provide(TestLayerWithPublicationsService)),
   )
 

@@ -62,7 +62,7 @@ it.live(
       const service = yield* MediaAssetsService
       const personId = yield* IdGen.make(PersonId)
       yield* sql`INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at) VALUES (${personId}, 'mediaAssets@example.invalid', 0, ${personId}, '2026-10-03T00:00:00Z', '2026-10-03T00:00:00Z', '2026-10-03T00:00:00Z')`
-      yield* sql`INSERT INTO profiles (id, type, handle, name, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'importer', 'Importer', 'PUBLIC', '2026-10-03T00:00:00Z', '2026-10-03T00:00:00Z')`
+      yield* sql`INSERT INTO profiles (id, type, handle, name, searchable_text, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'importer', 'Importer', 'importer importer', 'PUBLIC', '2026-10-03T00:00:00Z', '2026-10-03T00:00:00Z')`
       yield* sql`INSERT INTO people (id, access_level) VALUES (${personId}, 'ADMIN')`
 
       const session = AccountSession.make({

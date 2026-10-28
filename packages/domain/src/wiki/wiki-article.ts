@@ -1,9 +1,9 @@
-import { Match, Option, Schema } from "effect"
+import { Array as EffectArray, Match, Option, Schema } from "effect"
 
 import { SupportedLanguage, RevisionEvaluation, WikiArticleStatus } from "../common/enums.js"
 import { MediaAssetId, PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
-import { strToSearchTokens } from "../common/utils/strings.js"
+import { toSearchableText } from "../common/utils/strings.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
 import { tiptapToText } from "../rich-text/tiptap-to-text.js"
 import { WikiAnimalArticle } from "./kinds/animal.js"
@@ -106,8 +106,8 @@ export const WikiArticleTranslationProjectionRow = Schema.Union([
 
 export type WikiArticleTranslationProjectionRow = typeof WikiArticleTranslationProjectionRow.Type
 
-/** A language-specific article projection returned by the read APIs. */
-export const WikiArticleQueriedPageData = Schema.Union([
+/** A language-specific article projection, as stored. Read APIs add what lives in other articles. */
+export const WikiArticleQueriedPageRow = Schema.Union([
   WikiAnimalArticle.QueriedPageData,
   WikiBookArticle.QueriedPageData,
   WikiConceptArticle.QueriedPageData,
@@ -120,7 +120,7 @@ export const WikiArticleQueriedPageData = Schema.Union([
   WikiUncategorizedArticle.QueriedPageData,
 ]).pipe(Schema.toTaggedUnion("kind"))
 
-export type WikiArticleQueriedPageData = typeof WikiArticleQueriedPageData.Type
+export type WikiArticleQueriedPageRow = typeof WikiArticleQueriedPageRow.Type
 
 export const WikiArticleQueriedCardData = Schema.Struct({
   id: WikiArticleId,
@@ -136,6 +136,34 @@ export const WikiArticleQueriedCardData = Schema.Struct({
 })
 
 export type WikiArticleQueriedCardData = typeof WikiArticleQueriedCardData.Type
+
+/** The plant a cultivar varies from: its page links there, and reads inherited traits from it. */
+export const WikiCultivarParentPlant = Schema.Struct({
+  card: WikiArticleQueriedCardData,
+  attributes: WikiPlantArticle.ProjectedAttributes,
+})
+
+export type WikiCultivarParentPlant = typeof WikiCultivarParentPlant.Type
+
+/** A language-specific article returned by the read APIs. */
+export const WikiArticleQueriedPageData = Schema.Union([
+  WikiAnimalArticle.QueriedPageData,
+  WikiBookArticle.QueriedPageData,
+  WikiConceptArticle.QueriedPageData,
+  WikiFilmArticle.QueriedPageData,
+  WikiNoteworthyEntityArticle.QueriedPageData,
+  WikiPlantArticle.QueriedPageData,
+  Schema.Struct({
+    ...WikiPlantCultivarArticle.QueriedPageData.fields,
+    /** None while the parent plant isn't published. */
+    parentPlant: OptionalColumn(WikiCultivarParentPlant),
+  }),
+  WikiResourceArticle.QueriedPageData,
+  WikiToolArticle.QueriedPageData,
+  WikiUncategorizedArticle.QueriedPageData,
+]).pipe(Schema.toTaggedUnion("kind"))
+
+export type WikiArticleQueriedPageData = typeof WikiArticleQueriedPageData.Type
 
 export const projectArticle = (
   editableData: WikiArticleEditableData,
@@ -207,6 +235,15 @@ export const projectArticle = (
   )
 }
 
+/** Scientific names identify a species in every language, so each translation is searchable by them. */
+const scientificNames = (article: WikiArticleEditableData): ReadonlyArray<string> =>
+  article.kind === "PLANT" || article.kind === "ANIMAL"
+    ? Option.match(article.attributes.scientificNames, {
+        onNone: () => [],
+        onSome: (names) => names.map((name) => name.value),
+      })
+    : []
+
 export const projectTranslation = ({
   article,
   language,
@@ -220,6 +257,12 @@ export const projectTranslation = ({
 
   if (!translation) return Option.none()
 
+  const [title = "", ...otherNames] = translation.commonNames.map((name) => name.name)
+  const contentPlainText = Option.match(translation.content, {
+    onNone: () => "",
+    onSome: tiptapToText,
+  })
+
   return Option.some(
     WikiArticleTranslationProjectionRow.make({
       ...translation,
@@ -230,13 +273,12 @@ export const projectTranslation = ({
         name,
         grammaticalGender,
       })),
-      searchableNames: strToSearchTokens(
-        translation.commonNames.map((name) => name.name).join(" "),
+      searchableTitle: toSearchableText(title),
+      searchableNames: toSearchableText(
+        EffectArray.dedupe([...otherNames, ...scientificNames(article)]).join(" "),
       ),
-      contentPlainText: Option.match(translation.content, {
-        onNone: () => "",
-        onSome: tiptapToText,
-      }),
+      contentPlainText,
+      searchableContent: toSearchableText(contentPlainText),
       // This is solely to make TS happy
       // @todo is there a better way to type this construction?
       origin: "origin" in translation ? translation.origin : Option.none(),

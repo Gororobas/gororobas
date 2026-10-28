@@ -111,6 +111,8 @@ CREATE TABLE profiles (
   location text,
   photo_id text,
   visibility text NOT NULL,
+  -- Name, handle and location folded for full-text search (indexed at the end of this file)
+  searchable_text text NOT NULL,
   created_at text NOT NULL,
   updated_at text NOT NULL,
   FOREIGN KEY (photo_id) REFERENCES media_assets (id) ON DELETE SET NULL
@@ -263,9 +265,12 @@ CREATE TABLE wiki_article_translations (
   kind text NOT NULL,
   language text NOT NULL,
   common_names json NOT NULL,
+  -- Names folded for full-text search (indexed at the end of this file): the first common name is the title
+  searchable_title text NOT NULL,
   searchable_names text NOT NULL,
   content json, -- TiptapDocument
   content_plain_text text NOT NULL,
+  searchable_content text NOT NULL,
   origin text,
   CHECK (
     kind = 'PLANT'
@@ -378,6 +383,8 @@ CREATE TABLE publication_translations (
   language text NOT NULL,
   content json NOT NULL,
   content_plain_text text NOT NULL,
+  -- Folded for full-text search (indexed at the end of this file)
+  searchable_content text NOT NULL,
   translated_at_crdt_frontier json NOT NULL,
   translation_source text NOT NULL,
   original_language text NOT NULL,
@@ -532,3 +539,32 @@ CREATE TABLE wiki_book_edition_languages (
 );
 
 CREATE INDEX idx_book_edition_language ON wiki_book_edition_languages (language, wiki_article_id);
+
+-- TURSO ONLY
+--
+-- Atlas can't parse Turso's full-text search indexes, so `scripts/migrate.ts` diffs everything
+-- below this line itself (into `migrations-turso`). Only `CREATE INDEX … USING fts` belongs here.
+--
+-- They index the `searchable_*` columns, folded with `toSearchableText`: Turso's tokenizers don't
+-- fold accents. Trigrams let a search match partial words while someone is still typing, and
+-- BM25 ranks names above passing mentions in content (see `db/full-text-search.ts`).
+CREATE INDEX wiki_article_translations_search ON wiki_article_translations USING fts (
+  searchable_title,
+  searchable_names,
+  searchable_content
+)
+WITH
+  (
+    tokenizer = 'ngram',
+    min_gram = 3,
+    max_gram = 3,
+    weights = 'searchable_title=8.0,searchable_names=4.0,searchable_content=1.0'
+  );
+
+CREATE INDEX publication_translations_search ON publication_translations USING fts (searchable_content)
+WITH
+  (tokenizer = 'ngram', min_gram = 3, max_gram = 3);
+
+CREATE INDEX profiles_search ON profiles USING fts (searchable_text)
+WITH
+  (tokenizer = 'ngram', min_gram = 3, max_gram = 3);

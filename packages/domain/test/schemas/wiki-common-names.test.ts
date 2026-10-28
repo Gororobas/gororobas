@@ -55,7 +55,7 @@ describe("Wiki common names", () => {
         { name: "Mandioca", grammaticalGender: Option.some("FEMALE") },
         { name: "Aipim", grammaticalGender: Option.some("MALE") },
       ])
-      expect(row.searchableNames).toContain("mandioca")
+      expect(row.searchableTitle).toBe("mandioca")
       expect(row.searchableNames).toContain("aipim")
 
       expect(

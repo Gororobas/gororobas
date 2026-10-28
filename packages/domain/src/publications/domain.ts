@@ -333,6 +333,8 @@ export type ModeratedPublicationRow = typeof ModeratedPublicationRow.Type
 export const PublicationTranslationRow = Schema.Struct({
   content: Schema.fromJsonString(TiptapDocument),
   contentPlainText: Schema.String,
+  /** `contentPlainText`, folded with `toSearchableText` for full-text search. */
+  searchableContent: Schema.String,
   language: ContentLanguage,
   originalLanguage: ContentLanguage,
   publicationId: PublicationId,

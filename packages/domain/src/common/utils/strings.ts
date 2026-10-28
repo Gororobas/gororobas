@@ -1,6 +1,8 @@
 import { Effect, Crypto as EffectCrypto, String as EffectString, Predicate } from "effect"
 import { Hex } from "effect/encoding"
 
+import { words } from "../../links/words.js"
+
 /**
  * Limits a string to a certain length for UI or SEO purposes.
  *
@@ -35,16 +37,14 @@ export function capitalize(str: string, allWords = true): string {
   return `${str.charAt(0).toUpperCase()}${str.slice(1) || ""}`
 }
 
-/** @TODO turn into FTS-friendly string */
-export function strToSearchTokens(str: string): string {
-  return str
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, " ")
-    .trim()
-    .split(" ")
-    .filter(EffectString.isNonEmpty)
+/**
+ * Case- and accent-folded words joined by spaces, so "Feijão-Preto" is stored and searched as "feijao preto".
+ * Full-text search indexes these columns: the database doesn't fold accents itself.
+ */
+export const toSearchableText = (text: string): string =>
+  words(text)
+    .map((word) => word.value)
     .join(" ")
-}
 
 export const hashString = (str: string) =>
   EffectCrypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(str))).pipe(

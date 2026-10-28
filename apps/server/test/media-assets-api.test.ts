@@ -185,7 +185,7 @@ it.live(
     yield* SqlClient.SqlClient.use((sql) =>
       Effect.gen(function* () {
         yield* sql`INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at) VALUES (${personId}, 'reviewer@example.invalid', 1, ${personId}, ${timestamp}, ${timestamp}, ${timestamp})`
-        yield* sql`INSERT INTO profiles (id, type, handle, name, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'reviewer', 'Reviewer', 'PUBLIC', ${timestamp}, ${timestamp})`
+        yield* sql`INSERT INTO profiles (id, type, handle, name, searchable_text, visibility, created_at, updated_at) VALUES (${personId}, 'PERSON', 'reviewer', 'Reviewer', 'reviewer reviewer', 'PUBLIC', ${timestamp}, ${timestamp})`
         yield* sql`INSERT INTO people (id, access_level) VALUES (${personId}, 'ADMIN')`
       }),
     ).pipe(Effect.provide(database))

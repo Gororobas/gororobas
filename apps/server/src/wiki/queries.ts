@@ -9,7 +9,7 @@ import {
   WikiArticleCommonName,
   OptionalColumn,
   TiptapDocument,
-  WikiArticleQueriedPageData,
+  WikiArticleQueriedPageRow,
   WikiArticleTranslationProjectionRow,
   WikiArticleCrdtRow,
   WikiArticleHandleProjectionRow,
@@ -23,11 +23,20 @@ import {
   WikiSearchParams,
   WikiArticleBookmarker,
   WikiArticleContributor,
+  toSearchableText,
 } from "@gororobas/domain"
 import { Handle } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { Array as EffectArray, Effect, Option, Schema } from "effect"
 import { SqlSchema } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
+
+import {
+  containsEveryTerm,
+  fullTextQuery,
+  rankBySimilarity,
+  SIMILARITY_CANDIDATES,
+  similarityQuery,
+} from "../db/full-text-search.js"
 
 export const findDatabaseRowById = SqlSchema.findOneOption({
   Request: WikiArticleId,
@@ -76,7 +85,7 @@ export const findWikiArticleBySearchableName = SqlSchema.findOneOption({
         FROM wiki_article_translations AS translations
         INNER JOIN wiki_article_handles AS route
           ON route.wiki_article_id = translations.wiki_article_id
-        WHERE translations.searchable_names LIKE ${pattern}
+        WHERE translations.searchable_title LIKE ${pattern} OR translations.searchable_names LIKE ${pattern}
         LIMIT 1
       `,
     ),
@@ -216,7 +225,7 @@ export const findTranslationRows = SqlSchema.findAll({
 
 export const findPageByHandleAndKind = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...WikiArticleLookup.fields, language: SupportedLanguage }),
-  Result: WikiArticleQueriedPageData.mapMembers((members) =>
+  Result: WikiArticleQueriedPageRow.mapMembers((members) =>
     members.map((member) =>
       Schema.Struct({
         ...member.fields,
@@ -226,7 +235,7 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
         mediaAssets: Schema.Array(Schema.toType(MediaAssetRow)),
       }),
     ),
-  ).pipe(Schema.decodeTo(Schema.toType(WikiArticleQueriedPageData))),
+  ).pipe(Schema.decodeTo(Schema.toType(WikiArticleQueriedPageRow))),
   execute: ({ handle, kind, language }) =>
     SqlClient.use((sql) =>
       sql`
@@ -430,19 +439,9 @@ export const searchCards = SqlSchema.findAll({
       const resourceFilters = search.kind === "RESOURCE" ? search : undefined
       const contentProducerFilters = search.kind === "CONTENT_PRODUCER" ? search : undefined
 
-      return sql`
+      const filtered = sql`
       ${publishedCardsQuery(sql, language)}
         ${kind === undefined ? sql`` : sql`AND a.kind = ${kind}`}
-        ${
-          text === undefined
-            ? sql``
-            : sql`AND (
-          instr(lower(t.searchable_names), lower(${text})) > 0
-          OR instr(lower(t.content_plain_text), lower(${text})) > 0
-          OR instr(lower(t.common_names), lower(${text})) > 0
-          OR instr(lower((SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id LIMIT 1)), lower(${text})) > 0
-        )`
-        }
         ${plantFilters?.plantUsages === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.usage') WHERE value IN ${sql.in(plantFilters.plantUsages)})`}
         ${plantFilters?.plantLifecycles === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.lifecycles') WHERE value IN ${sql.in(plantFilters.plantLifecycles)})`}
         ${plantFilters?.plantingMethods === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.plantingMethods') WHERE value IN ${sql.in(plantFilters.plantingMethods)})`}
@@ -473,9 +472,92 @@ export const searchCards = SqlSchema.findAll({
         ${toolFilters?.toolUsages === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.usage') WHERE value IN ${sql.in(toolFilters.toolUsages)})`}
         ${resourceFilters?.resourceFormats === undefined ? sql`` : sql`AND json_extract(a.attributes, '$.format') IN ${sql.in(resourceFilters.resourceFormats)}`}
         ${contentProducerFilters?.contentChannelTypes === undefined ? sql`` : sql`AND EXISTS (SELECT 1 FROM json_each(a.attributes, '$.channels') WHERE json_extract(value, '$.type') IN ${sql.in(contentProducerFilters.contentChannelTypes)})`}
-      ORDER BY a.id
     `
+
+      if (text === undefined) return sql`${filtered} ORDER BY a.id`
+
+      // Any translation can match: someone reading in Portuguese may still search for "corn".
+      const matching = Option.match(fullTextQuery(sql, text), {
+        onNone: () => Effect.succeed([]),
+        onSome: (query) => sql`
+          WITH matches AS (
+            SELECT wiki_article_id, searchable_title, searchable_names, searchable_content,
+              fts_score(searchable_title, searchable_names, searchable_content, ${query}) AS score
+            FROM wiki_article_translations
+            WHERE fts_match(searchable_title, searchable_names, searchable_content, ${query})
+          ),
+          article_matches AS (
+            SELECT wiki_article_id, max(score) AS score,
+              max(searchable_title = ${toSearchableText(text)}) AS matches_title_exactly
+            FROM matches
+            WHERE ${containsEveryTerm(sql, {
+              searchable: sql`searchable_title || ' ' || searchable_names || ' ' || searchable_content`,
+              text,
+            })}
+            GROUP BY wiki_article_id
+          )
+          SELECT cards.* FROM (${filtered}) cards
+          JOIN article_matches ON article_matches.wiki_article_id = cards.id
+          -- BM25 adds up matches across fields, so "Feijão Jalo", also called "feijão-manteiga",
+          -- would otherwise outrank the article named exactly what was searched: "Feijão".
+          ORDER BY article_matches.matches_title_exactly DESC, article_matches.score DESC, cards.id
+        `,
+      })
+
+      // Nothing matches a misspelled name, so look for names within a few edits of it.
+      const similar = Effect.gen(function* () {
+        const candidates = yield* findNameCandidates(text)
+
+        const ids = EffectArray.dedupe(
+          rankBySimilarity({
+            text,
+            candidates,
+            words: (candidate) => `${candidate.searchableTitle} ${candidate.searchableNames}`,
+            title: (candidate) => candidate.searchableTitle,
+          }).map(({ wikiArticleId }) => wikiArticleId),
+        )
+
+        if (EffectArray.isReadonlyArrayEmpty(ids)) return []
+
+        return yield* sql`
+          SELECT cards.* FROM (${filtered}) cards
+          JOIN json_each(${encodeIds(ids)}) ranked ON ranked.value = cards.id
+          ORDER BY ranked.key
+        `
+      })
+
+      return Effect.flatMap(matching, (rows) =>
+        EffectArray.isReadonlyArrayEmpty(rows) ? similar : Effect.succeed(rows),
+      )
     }),
+})
+
+const encodeIds = Schema.encodeSync(Schema.fromJsonString(Schema.Array(WikiArticleId)))
+
+/** Translations sharing trigrams with a search, best first, to compare their names with it. */
+const findNameCandidates = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: Schema.Struct({
+    wikiArticleId: WikiArticleId,
+    searchableTitle: Schema.String,
+    searchableNames: Schema.String,
+  }),
+  execute: (text) =>
+    SqlClient.use((sql) =>
+      Option.match(similarityQuery(sql, text), {
+        onNone: () => Effect.succeed([]),
+        onSome: (query) => sql`
+          WITH matches AS (
+            SELECT wiki_article_id, searchable_title, searchable_names,
+              fts_score(searchable_title, searchable_names, searchable_content, ${query}) AS score
+            FROM wiki_article_translations
+            WHERE fts_match(searchable_title, searchable_names, searchable_content, ${query})
+          )
+          SELECT wiki_article_id, searchable_title, searchable_names FROM matches
+          ORDER BY score DESC LIMIT ${sql.literal(String(SIMILARITY_CANDIDATES))}
+        `,
+      }),
+    ),
 })
 
 /** Public, active profiles as `ProfileCardData` JSON, for nesting in a row. */

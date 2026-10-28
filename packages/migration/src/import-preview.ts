@@ -20,6 +20,7 @@ import {
   WikiArticleRevisionInsertRow,
   loroDocToUpdate,
   snapshotToLoroDoc,
+  profileSearchableText,
 } from "@gororobas/domain"
 import { IdGenLive } from "@gororobas/server/id-gen-live"
 import { insertMediaAsset, insertMediaAssetCredit } from "@gororobas/server/media-assets/mutations"
@@ -251,7 +252,7 @@ export const importPreview = ({
 
         if (!application) {
           yield* sql`INSERT INTO auth_subjects ${sql.insert({ id: importerId, email: "migration-preview@example.invalid", isEmailVerified: 0, securityRevision: yield* IdGen.make(AuthSecurityRevision), claimedAt: timestamp, createdAt: timestamp, updatedAt: timestamp })}`
-          yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
+          yield* sql`INSERT INTO profiles ${sql.insert({ id: importerId, type: "PERSON", handle: "migration-import", name: "Migration import", searchableText: profileSearchableText({ name: "Migration import", handle: "migration-import", location: null }), visibility: "PUBLIC", createdAt: timestamp, updatedAt: timestamp })}`
           yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
         }
 
@@ -263,7 +264,7 @@ export const importPreview = ({
             return yield* Effect.fail(new Error(`Account ${id} has no email`))
           }
           yield* sql`INSERT INTO auth_subjects ${sql.insert({ id, email: user.account.email.toLowerCase(), isEmailVerified: Number(user.account.is_email_verified), securityRevision: yield* IdGen.make(AuthSecurityRevision), claimedAt: user.account.created_at.toISOString(), createdAt: user.account.created_at.toISOString(), updatedAt: user.account.updated_at.toISOString() })}`
-          yield* sql`INSERT INTO profiles ${sql.insert({ id, type: user.profile.type, handle: user.profile.handle, name: user.profile.name, bio: user.profile.bio ? JSON.stringify(user.profile.bio) : null, location: user.profile.location, visibility: user.profile.visibility, createdAt: user.profile.created_at.toISOString(), updatedAt: user.profile.updated_at.toISOString() })}`
+          yield* sql`INSERT INTO profiles ${sql.insert({ id, type: user.profile.type, handle: user.profile.handle, name: user.profile.name, bio: user.profile.bio ? JSON.stringify(user.profile.bio) : null, location: user.profile.location, searchableText: profileSearchableText(user.profile), visibility: user.profile.visibility, createdAt: user.profile.created_at.toISOString(), updatedAt: user.profile.updated_at.toISOString() })}`
           yield* sql`INSERT INTO people ${sql.insert({ id, accessLevel: user.person.access_level })}`
           people.add(id)
         }
