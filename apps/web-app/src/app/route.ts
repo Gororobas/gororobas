@@ -70,11 +70,10 @@ const slugCodec = <const Value extends string, const Slug extends string>(
       ValueSchema,
       SchemaTransformation.transformEffect({
         decode: (slug) =>
-          Option.match(Record.get(bySlug, slug), {
-            onNone: () =>
-              Effect.fail(new SchemaIssue.InvalidValue({ message: `Unknown slug ${slug}` }, slug)),
-            onSome: Effect.succeed,
-          }),
+          Effect.fromOption(
+            Record.get(bySlug, slug),
+            () => new SchemaIssue.InvalidValue({ message: `Unknown slug ${slug}` }, slug),
+          ),
         encode: (value) => Effect.succeed<string>(slugs[value]),
       }),
     ),

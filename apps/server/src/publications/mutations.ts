@@ -3,9 +3,9 @@ import {
   type LinkSource,
   PublicationMediaAssetRow,
   PublicationCommitRow,
-  PublicationCrdtRow,
+  PublicationSourceRow,
   PublicationId,
-  PublicationRow,
+  PublicationProjectionRow,
   PublicationTranslationRow,
   PublicationWikiArticleRow,
 } from "@gororobas/domain"
@@ -18,7 +18,7 @@ import { persistProjectionJunctionTables } from "../common/table-projection.js"
 export const deletePublication = SqlSchema.void({
   Request: PublicationId,
   execute: (publicationId) =>
-    SqlClient.use((sql) => sql`DELETE FROM publication_crdts WHERE id = ${publicationId}`),
+    SqlClient.use((sql) => sql`DELETE FROM publication_sources WHERE id = ${publicationId}`),
 })
 
 export const insertPublicationCommitRow = SqlSchema.void({
@@ -26,9 +26,9 @@ export const insertPublicationCommitRow = SqlSchema.void({
   execute: (row) => SqlClient.use((sql) => sql`INSERT INTO publication_commits ${sql.insert(row)}`),
 })
 
-export const insertPublicationCrdtRow = SqlSchema.void({
-  Request: PublicationCrdtRow,
-  execute: (row) => SqlClient.use((sql) => sql`INSERT INTO publication_crdts ${sql.insert(row)}`),
+export const insertPublicationSourceRow = SqlSchema.void({
+  Request: PublicationSourceRow,
+  execute: (row) => SqlClient.use((sql) => sql`INSERT INTO publication_sources ${sql.insert(row)}`),
 })
 
 export const insertPublicationTranslationRows = SqlSchema.void({
@@ -47,12 +47,12 @@ export const insertPublicationWikiArticleRows = SqlSchema.void({
 })
 
 /** Replaces the links a single source found, leaving other sources' links untouched. */
-export const replacePublicationWikiArticleLinks = <Source extends LinkSource>(input: {
-  publicationId: PublicationId
-  source: Source
-  rows: ReadonlyArray<Extract<PublicationWikiArticleRow, { readonly source: Source }>>
-}) =>
-  Effect.gen(function* () {
+export const replacePublicationWikiArticleLinks = Effect.fn("replacePublicationWikiArticleLinks")(
+  function* <Source extends LinkSource>(input: {
+    publicationId: PublicationId
+    source: Source
+    rows: ReadonlyArray<Extract<PublicationWikiArticleRow, { readonly source: Source }>>
+  }) {
     const sql = yield* SqlClient
 
     yield* persistProjectionJunctionTables({
@@ -64,7 +64,8 @@ export const replacePublicationWikiArticleLinks = <Source extends LinkSource>(in
         input.rows.filter((row) => row.publicationId === input.publicationId),
       ),
     })
-  }).pipe(Effect.withSpan("replacePublicationWikiArticleLinks"))
+  },
+)
 
 export const updatePublicationLinkInference = SqlSchema.void({
   Request: Schema.Struct({
@@ -73,26 +74,33 @@ export const updatePublicationLinkInference = SqlSchema.void({
   }),
   execute: ({ id, linkInference }) =>
     SqlClient.use(
-      (sql) => sql`UPDATE publication_crdts SET link_inference = ${linkInference} WHERE id = ${id}`,
+      (sql) =>
+        sql`UPDATE publication_sources SET link_inference = ${linkInference} WHERE id = ${id}`,
     ),
 })
 
-export const updatePublicationCrdtRow = SqlSchema.void({
-  Request: PublicationCrdtRow.mapFields(
-    Struct.omit(["linkInference", "createdAt", "moderationStatus", "ownerProfileId"]),
-  ),
+export const updatePublicationSourceRow = SqlSchema.void({
+  Request: PublicationSourceRow.mapFields(Struct.pick(["id", "crdtSnapshot", "updatedAt"])),
   execute: ({ id, ...update }) =>
     SqlClient.use(
-      (sql) => sql`UPDATE publication_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+      (sql) => sql`UPDATE publication_sources SET ${sql.update(update)} WHERE id = ${id}`,
     ),
 })
 
-export const upsertPublicationRow = SqlSchema.void({
-  Request: PublicationRow,
+export const updatePublicationSourceVisibility = SqlSchema.void({
+  Request: PublicationSourceRow.mapFields(Struct.pick(["id", "visibility", "updatedAt"])),
+  execute: ({ id, ...update }) =>
+    SqlClient.use(
+      (sql) => sql`UPDATE publication_sources SET ${sql.update(update)} WHERE id = ${id}`,
+    ),
+})
+
+export const upsertPublicationProjectionRow = SqlSchema.void({
+  Request: PublicationProjectionRow,
   execute: (row) =>
     SqlClient.use(
       (sql) => sql`
-      INSERT INTO publications ${sql.insert(row)}
+      INSERT INTO publication_projections ${sql.insert(row)}
       ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt"])}
     `,
     ),

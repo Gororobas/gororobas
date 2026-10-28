@@ -24,9 +24,9 @@ import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 import { LoroDoc } from "loro-crdt"
 
-import { insertRevisionRow, updateCrdtRow } from "../src/wiki/mutations.js"
+import { insertRevisionRow, updateSourceRow } from "../src/wiki/mutations.js"
 import {
-  findCrdtRowById,
+  findSourceRowById,
   findRevisionById,
   listPendingRevisionsByWikiArticleId,
 } from "../src/wiki/queries.js"
@@ -183,7 +183,7 @@ const contentUpdate = ({
   content: string
 }) =>
   Effect.gen(function* () {
-    const stored = Option.getOrThrow(yield* findCrdtRowById(id))
+    const stored = Option.getOrThrow(yield* findSourceRowById(id))
     const original = snapshotToLoroDoc(stored.crdtSnapshot)
     const changed = original.fork()
 
@@ -222,7 +222,7 @@ const propose = ({
 }) =>
   Effect.gen(function* () {
     const id = articleId(context, title)
-    const stored = yield* findCrdtRowById(id)
+    const stored = yield* findSourceRowById(id)
     const crdtUpdate = yield* contentUpdate({ id, language, content })
 
     const revisionId = yield* act({
@@ -231,7 +231,7 @@ const propose = ({
       action: (yield* WikiArticlesService).createRevision(id, { crdtUpdate }),
     })
 
-    expect(yield* findCrdtRowById(id)).toEqual(stored)
+    expect(yield* findSourceRowById(id)).toEqual(stored)
     const revision = Option.getOrThrow(yield* findRevisionById(revisionId))
     expect(revision.evaluation).toBe("PENDING")
     expect(revision.evaluatedById).toEqual(Option.none())
@@ -318,7 +318,7 @@ const noCreation = () =>
         expect(yield* repository.findBySearchableName("mandioca")).toEqual(Option.none())
         const sql = yield* SqlClient.SqlClient
         expect(yield* sql`SELECT id FROM wiki_article_revisions`).toHaveLength(0)
-        expect(yield* sql`SELECT id FROM wiki_article_crdts`).toHaveLength(0)
+        expect(yield* sql`SELECT id FROM wiki_article_sources`).toHaveLength(0)
         return context
       }),
   })
@@ -353,10 +353,10 @@ const deniedEdit = (visitor = false) =>
         Effect.gen(function* () {
           const id = articleId(context, title)
           const service = yield* WikiArticlesService
-          const stored = yield* findCrdtRowById(id)
+          const stored = yield* findSourceRowById(id)
           const history = yield* service.listRevisionHistory({ wikiArticleId: id })
           const error = yield* propose({ context, name, title }).pipe(Effect.flip)
-          expect(yield* findCrdtRowById(id)).toEqual(stored)
+          expect(yield* findSourceRowById(id)).toEqual(stored)
           expect(yield* service.listRevisionHistory({ wikiArticleId: id })).toEqual(history)
           return { ...context, error }
         }),
@@ -670,12 +670,12 @@ const approveOppositeCopies = (context: WikiContext, name: string) =>
   Effect.gen(function* () {
     const revisions = Option.getOrThrow(Option.fromUndefinedOr(context.concurrent))
     const originalId = articleId(context, "Mandioca")
-    const original = Option.getOrThrow(yield* findCrdtRowById(originalId))
+    const original = Option.getOrThrow(yield* findSourceRowById(originalId))
     const copy = yield* seed({ context, title: "Copy", content: "Raiz tuberosa" })
     const copyId = articleId(copy, "Copy")
-    const copyRow = Option.getOrThrow(yield* findCrdtRowById(copyId))
+    const copyRow = Option.getOrThrow(yield* findSourceRowById(copyId))
     // Preserve operation identities: regenerate neither the initial snapshot nor the proposed updates.
-    yield* updateCrdtRow({ ...copyRow, crdtSnapshot: original.crdtSnapshot })
+    yield* updateSourceRow({ ...copyRow, crdtSnapshot: original.crdtSnapshot })
 
     const copied = yield* Effect.forEach(
       revisions,
@@ -741,7 +741,7 @@ const assertCopiesConverge = (context: WikiContext) =>
             language: "pt",
           })
 
-          const stored = Option.getOrThrow(yield* findCrdtRowById(id))
+          const stored = Option.getOrThrow(yield* findSourceRowById(id))
           const data = yield* WikiArticleCrdt.read(snapshotToLoroDoc(stored.crdtSnapshot))
           expect(page.content).toEqual(data.translations.pt?.content)
           return page
@@ -1185,7 +1185,7 @@ await Effect.runPromise(
                     Effect.gen(function* () {
                       const ids = Option.getOrThrow(Option.fromUndefinedOr(context.concurrent))
                       const stored = Option.getOrThrow(
-                        yield* findCrdtRowById(articleId(context, "Mandioca")),
+                        yield* findSourceRowById(articleId(context, "Mandioca")),
                       )
 
                       const contents = yield* Effect.forEach(

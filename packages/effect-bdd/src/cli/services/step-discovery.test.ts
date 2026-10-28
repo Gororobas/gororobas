@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { Effect, FileSystem, Path } from "effect"
+import { Effect, FileSystem, Layer, Path } from "effect"
 
 import { StepDiscovery, StepDiscoveryLive } from "./step-discovery.js"
 import { StepMatcher, StepMatcherLive } from "./step-matcher.js"
@@ -94,8 +94,6 @@ it.effect(
       expect(checked.scenarios.map((scenario) => scenario.steps[0]?.matched)).toEqual([true, false])
     }).pipe(
       Effect.scoped,
-      Effect.provide(StepDiscoveryLive),
-      Effect.provide(StepMatcherLive),
-      Effect.provide(NodeServices.layer),
+      Effect.provide(Layer.mergeAll(StepDiscoveryLive, StepMatcherLive, NodeServices.layer)),
     ),
 )

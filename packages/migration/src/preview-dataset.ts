@@ -18,7 +18,7 @@ import {
   findPublicationRowById,
 } from "@gororobas/server/publications/queries"
 import {
-  findCrdtRowById,
+  findSourceRowById,
   findDatabaseRowById,
   findTranslationRows,
 } from "@gororobas/server/wiki/queries"
@@ -65,7 +65,7 @@ export const readPreviewDataset = (directory: string) =>
           Effect.gen(function* () {
             // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Preview identifiers are arbitrary JSON values.
             const id = yield* Schema.decodeUnknownEffect(WikiArticleId)(data.id)
-            const crdt = yield* findCrdtRowById(id).pipe(Effect.map(Option.getOrThrow))
+            const crdt = yield* findSourceRowById(id).pipe(Effect.map(Option.getOrThrow))
             const row = yield* findDatabaseRowById(id).pipe(Effect.map(Option.getOrThrow))
             const translations = yield* findTranslationRows(id)
             const article = yield* WikiArticleCrdt.parseUpdate({
@@ -162,7 +162,7 @@ export const readPreviewDataset = (directory: string) =>
       { concurrency: 1 },
     )
 
-    const concepts = yield* sql`SELECT * FROM wiki_articles WHERE kind = 'CONCEPT'`
+    const concepts = yield* sql`SELECT * FROM wiki_article_projections WHERE kind = 'CONCEPT'`
 
     dataset.concepts = exports.concepts.map(({ file, data }) => ({
       ...data,

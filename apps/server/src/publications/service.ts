@@ -1,6 +1,7 @@
 import {
   ApiPublicationCardData,
   ApiPublicationSearchParams,
+  ApiUpdatePublicationData,
   ContentLanguage,
   PublicationCrdt,
 } from "@gororobas/domain"
@@ -22,8 +23,6 @@ import {
   EventSourceData,
   Handle,
   SupportedLanguage,
-  LoroDocFrontier,
-  LoroDocUpdate,
   PostSourceData,
   Policies,
   PublicationId,
@@ -74,14 +73,8 @@ export type CreateEventInput = typeof CreateEventInput.Type
 export const CreatePublicationInput = Schema.Union([CreatePostInput, CreateEventInput])
 export type CreatePublicationInput = typeof CreatePublicationInput.Type
 
-const UpdatePublicationData = Schema.Struct({
-  mediaIds: Schema.optional(Schema.Array(MediaAssetId)),
-  crdtUpdate: LoroDocUpdate,
-  expectedCurrentCrdtFrontier: LoroDocFrontier,
-})
-
 export const UpdatePublicationInput = Schema.Struct({
-  ...UpdatePublicationData.fields,
+  ...ApiUpdatePublicationData.fields,
   publicationId: PublicationId,
 })
 export type UpdatePublicationInput = typeof UpdatePublicationInput.Type
@@ -197,28 +190,15 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
 
           const handle = input.handle ?? (yield* richTextToHandle(input.content))
 
-          const now = yield* DateTime.now
-
-          const coreMetadata = CorePublicationMetadata.make({
-            handle,
-            ownerProfileId: input.ownerProfileId,
-            publishedAt: now,
-            visibility: input.visibility,
-          })
-
           const sourceData: PostSourceData | EventSourceData =
             input.kind === "POST"
               ? PostSourceData.make({
                   ...sourceContent,
-                  metadata: {
-                    ...coreMetadata,
-                    kind: "POST",
-                  },
+                  metadata: { kind: "POST" },
                 })
               : EventSourceData.make({
                   ...sourceContent,
                   metadata: {
-                    ...coreMetadata,
                     kind: "EVENT",
                     startDate: input.startDate,
                     attendanceMode: input.attendanceMode ?? null,
@@ -228,6 +208,12 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
                 })
 
           const publicationId = yield* repo.createPublication({
+            ...CorePublicationMetadata.make({
+              handle,
+              ownerProfileId: input.ownerProfileId,
+              publishedAt: yield* DateTime.now,
+              visibility: input.visibility,
+            }),
             createdById: session.personId,
             sourceData,
           })
@@ -263,19 +249,27 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           const session = yield* assertAuthenticated
           yield* Policies.publications.canEdit(yield* getPublicationById(input.publicationId))
 
-          yield* repo
-            .updatePublication(
-              HumanCrdtUpdate.make({
-                authorId: session.personId,
-                crdtUpdate: input.crdtUpdate,
-                expectedCurrentCrdtFrontier: input.expectedCurrentCrdtFrontier,
-                publicationId: input.publicationId,
-              }),
-            )
-            .pipe(
-              // Only system translations can be stale; a human edit never produces this error.
-              Effect.catchTag("StalePublicationTranslationError", Effect.die),
-            )
+          if (input.crdtEdit !== undefined) {
+            yield* repo
+              .updatePublication(
+                HumanCrdtUpdate.make({
+                  ...input.crdtEdit,
+                  authorId: session.personId,
+                  publicationId: input.publicationId,
+                }),
+              )
+              .pipe(
+                // Only system translations can be stale; a human edit never produces this error.
+                Effect.catchTag("StalePublicationTranslationError", Effect.die),
+              )
+          }
+
+          if (input.visibility !== undefined) {
+            yield* repo.updatePublicationVisibility({
+              publicationId: input.publicationId,
+              visibility: input.visibility,
+            })
+          }
 
           if (input.mediaIds !== undefined) {
             yield* attachMediaToPublication({
@@ -285,7 +279,9 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           }
         }).pipe(
           (effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)),
-          Effect.tap(() => requestLinkInference(input.publicationId)),
+          Effect.tap(() =>
+            input.crdtEdit === undefined ? Effect.void : requestLinkInference(input.publicationId),
+          ),
         )
 
       const deletePublication = (publicationId: PublicationId) =>

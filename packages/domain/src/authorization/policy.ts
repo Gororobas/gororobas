@@ -109,6 +109,7 @@ export const and = <Policies extends ReadonlyArray<Policy<any, any>>>(
   ...policies: Policies
 ): Policy<TupleOfA<Policies>, UnionOfR<Policies>> => {
   // SAFETY: Effect.all preserves input order and each policy's success type, producing the mapped tuple with the union of service requirements.
+  // oxlint-disable-next-line effecttsgo/unsafe-effect-type-assertion -- tsc can't infer the mapped tuple without this assertion; the rule's fix removes it.
   return Effect.all(policies, { concurrency: 1 }) as Policy<TupleOfA<Policies>, UnionOfR<Policies>>
 }
 
@@ -124,7 +125,7 @@ export const toResult = <A, R>(policy: Policy<A, R>) =>
  */
 export const check = <A, R>(policy: Policy<A, R>) =>
   policy.pipe(
-    Effect.map(() => true),
+    Effect.as(true),
     Effect.catchTag("UnauthorizedError", () => Effect.succeed(false)),
   )
 

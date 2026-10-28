@@ -48,7 +48,7 @@ export const withSession = <A, E, R>(
   effect: Effect.Effect<A, E, R | SessionContext>,
   session: Session,
 ): Effect.Effect<A, E, Exclude<R, SessionContext>> =>
-  effect.pipe(Effect.provide(Layer.succeed(SessionContext, session)))
+  effect.pipe(Effect.provideService(SessionContext, session))
 
 /**
  * IdGen test layer that generates UUIDv7 identifiers.

@@ -17,7 +17,7 @@ export const pick = <A>(items: EffectArray.NonEmptyReadonlyArray<A>) =>
 export const pickOption = <A>(items: ReadonlyArray<A>) =>
   EffectArray.isReadonlyArrayNonEmpty(items)
     ? Effect.map(pick(items), (item): A | undefined => item)
-    : Effect.succeed(undefined)
+    : Effect.undefined
 
 /** Distinct items, in random order, up to `count`. */
 export const sample = <A>(items: ReadonlyArray<A>, count: number) =>

@@ -42,11 +42,9 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
     (source) =>
       Effect.gen(function* () {
         if (source.parents.length !== 1) {
-          return yield* Effect.fail(
-            new CultivarParentError({
-              message: `Cultivar ${source.handle} has ${source.parents.length} parents; needs manual resolution`,
-            }),
-          )
+          return yield* new CultivarParentError({
+            message: `Cultivar ${source.handle} has ${source.parents.length} parents; needs manual resolution`,
+          })
         }
 
         const id = yield* context.resolveId(source.id, "WikiArticle")

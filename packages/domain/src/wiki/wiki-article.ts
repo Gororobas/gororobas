@@ -39,14 +39,14 @@ export const WikiArticleKind = Schema.Literals(
 export type WikiArticleKind = typeof WikiArticleKind.Type
 
 /** Stores the canonical contributor-editable state + the status. */
-export const WikiArticleCrdtRow = Schema.Struct({
+export const WikiArticleSourceRow = Schema.Struct({
   ...TimestampedStruct.fields,
   id: WikiArticleId,
   status: WikiArticleStatus,
   crdtSnapshot: LoroDocSnapshot,
 })
 
-export type WikiArticleCrdtRow = typeof WikiArticleCrdtRow.Type
+export type WikiArticleSourceRow = typeof WikiArticleSourceRow.Type
 
 /** A submitted change that has not necessarily changed the canonical article. */
 export const WikiArticleRevisionRow = Schema.Struct({

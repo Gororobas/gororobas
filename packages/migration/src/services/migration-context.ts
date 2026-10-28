@@ -67,9 +67,10 @@ export const MigrationContextLive = Layer.effect(
             Option.isNone(entry) ||
             (entityType !== undefined && entry.value.entityType !== entityType)
           ) {
-            return yield* Effect.fail(
-              new GelIdNotMappedError({ gelId, entityType: Option.fromUndefinedOr(entityType) }),
-            )
+            return yield* new GelIdNotMappedError({
+              gelId,
+              entityType: Option.fromUndefinedOr(entityType),
+            })
           }
 
           return entry.value.sqliteId
@@ -84,12 +85,10 @@ export const MigrationContextLive = Layer.effect(
 
           if (Option.isSome(existing)) {
             if (existing.value.entityType !== entityType) {
-              return yield* Effect.fail(
-                new Schema.SchemaError(
-                  new SchemaIssue.InvalidValue(
-                    { message: "ID mapping entity type mismatch" },
-                    existing.value,
-                  ),
+              return yield* new Schema.SchemaError(
+                new SchemaIssue.InvalidValue(
+                  { message: "ID mapping entity type mismatch" },
+                  existing.value,
                 ),
               )
             }

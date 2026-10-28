@@ -218,7 +218,7 @@ it.live(
       session = VISITOR_SESSION
       expect((yield* request({ path: `/publication-comments/${created.id}` })).status).toBe(404)
       const sql = yield* SqlClient.SqlClient
-      yield* sql`UPDATE publications SET visibility = 'COMMUNITY' WHERE id = ${existing.publicationId}`
+      yield* sql`UPDATE publication_sources SET visibility = 'COMMUNITY' WHERE id = ${existing.publicationId}`
       expect(
         (yield* request({ path: `/publication-comments/${publicationCommentId}` })).status,
       ).toBe(403)

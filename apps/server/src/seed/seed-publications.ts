@@ -90,8 +90,6 @@ const decodeLanguage = Schema.decodeEffect(ContentLanguage)
 
 const sourceData = (input: {
   kind: PublicationKind
-  handle: SeededPublication["handle"]
-  ownerProfileId: ProfileId
   createdAt: number
   sourceLanguage: (typeof SOURCE_LANGUAGES)[number]
   content: TiptapDocument
@@ -101,19 +99,12 @@ const sourceData = (input: {
     const translations =
       input.sourceLanguage === "und" ? {} : { [input.sourceLanguage]: "original" as const }
 
-    const metadata = {
-      handle: input.handle,
-      ownerProfileId: input.ownerProfileId,
-      publishedAt: DateTime.makeUnsafe(input.createdAt),
-      visibility: yield* pickWeighted(PublicationVisibility.literals, { PUBLIC: 3, COMMUNITY: 1 }),
-    }
-
     if (input.kind === "POST") {
       return PostSourceData.make({
         sourceContent: input.content,
         sourceLanguage,
         translations,
-        metadata: { ...metadata, kind: "POST" },
+        metadata: { kind: "POST" },
       })
     }
 
@@ -126,7 +117,6 @@ const sourceData = (input: {
       sourceLanguage,
       translations,
       metadata: {
-        ...metadata,
         kind: "EVENT",
         startDate: DateTime.makeUnsafe(startDate),
         endDate: (yield* chance(0.7))
@@ -310,10 +300,13 @@ const seedPublication = (
 
     const handle = yield* handles(handleBase(content))
 
+    const visibility = yield* pickWeighted(PublicationVisibility.literals, {
+      PUBLIC: 3,
+      COMMUNITY: 1,
+    })
+
     const data = yield* sourceData({
       kind,
-      handle,
-      ownerProfileId,
       createdAt,
       sourceLanguage,
       content,
@@ -322,6 +315,10 @@ const seedPublication = (
     const publicationId = yield* timeline.at(createdAt)(
       Effect.gen(function* () {
         const publicationId = yield* repository.createPublication({
+          handle,
+          ownerProfileId,
+          publishedAt: DateTime.makeUnsafe(createdAt),
+          visibility,
           sourceData: data,
           createdById: author.id,
         })
@@ -384,7 +381,7 @@ const seedPublication = (
         id: publicationId,
         handle,
         ownerProfileId,
-        visibility: data.metadata.visibility,
+        visibility,
         createdAt,
       } satisfies SeededPublication,
     ]

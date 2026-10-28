@@ -502,9 +502,11 @@ describe(
           ).toBe(true)
         }).pipe(
           Effect.provide(
-            TranslationServiceLanguageModelLive.pipe(Layer.provide(TranslationLanguageModel)),
+            Layer.mergeAll(
+              TranslationServiceLanguageModelLive.pipe(Layer.provide(TranslationLanguageModel)),
+              NodeServices.layer,
+            ),
           ),
-          Effect.provide(NodeServices.layer),
         ),
       )
     })

@@ -2,19 +2,17 @@ import { describe, expect, it } from "@effect/vitest"
 import { ContentLanguage } from "@gororobas/domain"
 import {
   PublicationCommentNotFoundError,
-  Handle,
   UnauthorizedError,
-  type PublicationSourceData,
   type SourcePublicationCommentData,
   type TiptapDocument,
 } from "@gororobas/domain"
 import { resolveSessionFromAuthSubjectId } from "@gororobas/server/session-service"
-import { DateTime, Effect, Layer, Option, Schema } from "effect"
+import { DateTime, Effect, Layer, Option } from "effect"
 
 import { PublicationCommentsRepository } from "../../src/publication-comments/repository.js"
 import { PublicationCommentsService } from "../../src/publication-comments/service.js"
 import { PublicationsRepository } from "../../src/publications/repository.js"
-import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
+import { makePersonFixture, makePostPublicationInput, makeProfileFixture } from "../fixtures.js"
 import { insertPersonWithDependencies, TestLayer, withSession } from "../test-helpers.js"
 
 const PublicationsRepositoryLayer = Layer.effect(
@@ -46,26 +44,6 @@ const makeDocument = (text: string): TiptapDocument => ({
   version: 1,
 })
 
-const makeHandle = Schema.decodeSync(Handle)
-
-const makePostSourceData = (input: {
-  content: TiptapDocument
-  handle: string
-  ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
-  publishedAt: PublicationSourceData["metadata"]["publishedAt"]
-}): PublicationSourceData => ({
-  sourceContent: input.content,
-  sourceLanguage: ContentLanguage.make("pt"),
-  translations: { pt: "original" },
-  metadata: {
-    handle: makeHandle(input.handle),
-    kind: "POST",
-    ownerProfileId: input.ownerProfileId,
-    publishedAt: input.publishedAt,
-    visibility: "PUBLIC",
-  },
-})
-
 const makePublicationCommentSourceData = (
   content: TiptapDocument,
 ): SourcePublicationCommentData => ({
@@ -90,7 +68,7 @@ describe("PublicationCommentsService", () => {
 
         const publicationId = yield* publicationsRepository.createPublication({
           createdById: person.id,
-          sourceData: makePostSourceData({
+          ...makePostPublicationInput({
             content: makeDocument("Publication para comentar"),
             handle: `cmt-publication-${person.id.slice(0, 8)}`,
             ownerProfileId: profile.id,
@@ -131,7 +109,7 @@ describe("PublicationCommentsService", () => {
 
       const publicationId = yield* publicationsRepository.createPublication({
         createdById: owner.id,
-        sourceData: makePostSourceData({
+        ...makePostPublicationInput({
           content: makeDocument("Publication para comentario"),
           handle: `cmt-oth-${owner.id.slice(0, 8)}`,
           ownerProfileId: ownerProfile.id,
@@ -175,7 +153,7 @@ describe("PublicationCommentsService", () => {
 
       const publicationId = yield* publicationsRepository.createPublication({
         createdById: person.id,
-        sourceData: makePostSourceData({
+        ...makePostPublicationInput({
           content: makeDocument("Publication para apagar comentario"),
           handle: `cmt-del-${person.id.slice(0, 8)}`,
           ownerProfileId: profile.id,

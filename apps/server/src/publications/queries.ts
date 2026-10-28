@@ -10,7 +10,7 @@ import {
   Handle,
   ProfileId,
   PublicationCommitRow,
-  PublicationCrdtRow,
+  PublicationSourceRow,
   PublicationId,
   PublicationPageData,
   PublicationRow,
@@ -28,6 +28,14 @@ import {
   similarityQuery,
 } from "../db/full-text-search.js"
 
+/** A publication's projection joined with the columns its source row owns. */
+export const selectPublicationRows = (sql: SqlClient) => sql`
+  SELECT projection.*, source.handle, source.owner_profile_id, source.published_at,
+    source.visibility, source.moderation_status
+  FROM publication_projections projection
+  JOIN publication_sources source ON source.id = projection.id
+`
+
 /**
  * Includes censored publications: `assertCanViewPublication` decides who can still see them.
  * Text searches rank by relevance in any translation, then by recency.
@@ -40,26 +48,23 @@ export const searchPublicationRows = SqlSchema.findAll({
       const filters = sql.and([
         ...(query.ownerProfileId === undefined
           ? []
-          : [sql`publications.owner_profile_id = ${query.ownerProfileId}`]),
-        ...(query.kind === undefined ? [] : [sql`publications.kind = ${query.kind}`]),
+          : [sql`source.owner_profile_id = ${query.ownerProfileId}`]),
+        ...(query.kind === undefined ? [] : [sql`projection.kind = ${query.kind}`]),
         ...(query.wikiArticleId === undefined
           ? []
           : [
               sql`EXISTS (SELECT 1 FROM publication_wiki_articles linked
-              WHERE linked.publication_id = publications.id
+              WHERE linked.publication_id = projection.id
                 AND linked.wiki_article_id = ${query.wikiArticleId})`,
             ]),
-        ...(query.visibility === undefined
-          ? []
-          : [sql`publications.visibility = ${query.visibility}`]),
+        ...(query.visibility === undefined ? [] : [sql`source.visibility = ${query.visibility}`]),
       ])
 
       if (query.text === undefined) {
         return sql`
-          SELECT publications.*, publication_crdts.moderation_status FROM publications
-          JOIN publication_crdts ON publication_crdts.id = publications.id
+          ${selectPublicationRows(sql)}
           WHERE ${filters}
-          ORDER BY publications.published_at DESC, publications.id
+          ORDER BY source.published_at DESC, projection.id
         `
       }
 
@@ -79,11 +84,10 @@ export const searchPublicationRows = SqlSchema.findAll({
             WHERE ${containsEveryTerm(sql, { searchable: sql`searchable_content`, text })}
             GROUP BY publication_id
           )
-          SELECT publications.*, publication_crdts.moderation_status FROM publications
-          JOIN publication_crdts ON publication_crdts.id = publications.id
-          JOIN publication_matches ON publication_matches.publication_id = publications.id
+          ${selectPublicationRows(sql)}
+          JOIN publication_matches ON publication_matches.publication_id = projection.id
           WHERE ${filters}
-          ORDER BY publication_matches.score DESC, publications.published_at DESC, publications.id
+          ORDER BY publication_matches.score DESC, source.published_at DESC, projection.id
         `,
       })
 
@@ -102,16 +106,17 @@ export const searchPublicationRows = SqlSchema.findAll({
         if (EffectArray.isReadonlyArrayEmpty(ids)) return []
 
         return yield* sql`
-          SELECT publications.*, publication_crdts.moderation_status FROM publications
-          JOIN publication_crdts ON publication_crdts.id = publications.id
-          JOIN json_each(${encodeIds(ids)}) ranked ON ranked.value = publications.id
+          ${selectPublicationRows(sql)}
+          JOIN json_each(${encodeIds(ids)}) ranked ON ranked.value = projection.id
           WHERE ${filters}
           ORDER BY ranked.key
         `
       })
 
-      return Effect.flatMap(matching, (rows) =>
-        EffectArray.isReadonlyArrayEmpty(rows) ? similar : Effect.succeed(rows),
+      return Effect.filterOrElse(
+        matching,
+        (rows) => !EffectArray.isReadonlyArrayEmpty(rows),
+        (_rows) => similar,
       )
     }),
 })
@@ -160,9 +165,9 @@ export const findPublicationCardContent = SqlSchema.findOneOption({
           'location', owner.location, 'photoId', photo.id) AS owner,
         (SELECT json_group_array(DISTINCT linked.wiki_article_id)
           FROM publication_wiki_articles linked
-          JOIN wiki_articles article ON article.id = linked.wiki_article_id
+          JOIN wiki_article_projections article ON article.id = linked.wiki_article_id
           WHERE linked.publication_id = p.id AND article.kind = 'CONCEPT') AS concept_ids
-      FROM publications p
+      FROM publication_sources p
       JOIN profiles owner ON owner.id = p.owner_profile_id
       LEFT JOIN media_assets photo ON photo.id = owner.photo_id AND photo.moderation_status <> 'CENSORED'
       JOIN publication_translations t ON t.publication_id = p.id AND t.language = (
@@ -207,20 +212,20 @@ export const listPublicationRowsByOwnerProfileId = SqlSchema.findAll({
   execute: (ownerProfileId) =>
     SqlClient.use(
       (sql) => sql`
-      SELECT * FROM publications
-      WHERE owner_profile_id = ${ownerProfileId}
-      ORDER BY updated_at DESC
+      ${selectPublicationRows(sql)}
+      WHERE source.owner_profile_id = ${ownerProfileId}
+      ORDER BY projection.updated_at DESC
     `,
     ),
 })
 
 export const countPublicationRowsByOwnerProfileId = SqlSchema.findOne({
   Request: ProfileId,
-  Result: Schema.Struct({ count: Schema.Number }),
+  Result: Schema.Struct({ count: Schema.Finite }),
   execute: (ownerProfileId) =>
     SqlClient.use(
       (sql) => sql`
-      SELECT COUNT(*) as count FROM publications WHERE owner_profile_id = ${ownerProfileId}
+      SELECT COUNT(*) as count FROM publication_sources WHERE owner_profile_id = ${ownerProfileId}
     `,
     ),
 })
@@ -231,7 +236,7 @@ export const findPublicationPageData = SqlSchema.findOneOption({
       (sql) => sql`
       WITH
       target_publication AS (
-        SELECT * FROM publications WHERE handle = ${req.handle} LIMIT 1
+        ${selectPublicationRows(sql)} WHERE source.handle = ${req.handle} LIMIT 1
       ),
       best_translation AS (
         SELECT
@@ -292,9 +297,7 @@ export const findPublicationRowById = SqlSchema.findOneOption({
   execute: (id) =>
     SqlClient.use(
       (sql) => sql`
-      SELECT p.*, c.moderation_status FROM publications p
-      JOIN publication_crdts c ON c.id = p.id
-      WHERE p.id = ${id}`,
+      ${selectPublicationRows(sql)} WHERE projection.id = ${id}`,
     ),
 })
 
@@ -304,17 +307,15 @@ export const findPublicationRowByHandle = SqlSchema.findOneOption({
   execute: (handle) =>
     SqlClient.use(
       (sql) => sql`
-      SELECT p.*, c.moderation_status FROM publications p
-      JOIN publication_crdts c ON c.id = p.id
-      WHERE p.handle = ${handle}`,
+      ${selectPublicationRows(sql)} WHERE source.handle = ${handle}`,
     ),
 })
 
 export const findPublicationCrdtSnapshotById = SqlSchema.findOneOption({
   Request: PublicationId,
-  Result: PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"])),
+  Result: PublicationSourceRow.mapFields(Struct.pick(["crdtSnapshot"])),
   execute: (id) =>
-    SqlClient.use((sql) => sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${id}`),
+    SqlClient.use((sql) => sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${id}`),
 })
 
 export const findPublicationApiData = SqlSchema.findOneOption({
@@ -323,9 +324,9 @@ export const findPublicationApiData = SqlSchema.findOneOption({
   execute: (id) =>
     SqlClient.use(
       (sql) => sql` 
-    SELECT p.*, t.content, t.language FROM publications p
+    WITH p AS (${selectPublicationRows(sql)} WHERE projection.id = ${id})
+    SELECT p.*, t.content, t.language FROM p
     JOIN publication_translations t ON t.publication_id = p.id
-    WHERE p.id = ${id}
     ORDER BY CASE t.language WHEN 'pt' THEN 0 WHEN 'en' THEN 1 ELSE 2 END LIMIT 1
   `,
     ),

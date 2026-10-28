@@ -165,6 +165,25 @@ Feature: Publications
       Then access is denied
       And the post publication content should be "Mutirão Sábado"
 
+    Scenario: Editor changes the visibility along with the content
+      Given "Carlos" is logged in
+      When they edit the post publication content to "Mutirão Domingo" and its visibility to "COMMUNITY"
+      Then the post publication content should be "Mutirão Domingo"
+      And the post publication visibility should be "COMMUNITY"
+
+    Scenario: Viewer cannot change the visibility
+      Given "Teresa" is logged in
+      When they try to change the post publication visibility to "COMMUNITY"
+      Then access is denied
+      And the post publication visibility should be "PUBLIC"
+
+    # Ownership, handle and publication date live outside the CRDT, so editing it can't change them.
+    Scenario: A CRDT edit cannot hand the post to another profile
+      Given "Carlos" is logged in
+      When they try to send a CRDT edit writing "Xavier" as the post publication owner
+      Then the CRDT edit is rejected as invalid
+      And the post publication should still belong to "Sítio Semente"
+
     Scenario: Manager deletes post
       Given "Maria" is logged in
       When they delete the post publication

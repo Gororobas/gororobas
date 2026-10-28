@@ -1,9 +1,9 @@
-import { ContentLanguage, Handle, TiptapDocument } from "@gororobas/domain"
-import { DateTime, Effect, Layer, Schema } from "effect"
+import { ContentLanguage, TiptapDocument } from "@gororobas/domain"
+import { DateTime, Effect, Layer } from "effect"
 
 import { PublicationCommentsRepository } from "../../src/publication-comments/repository.js"
 import { PublicationsRepository } from "../../src/publications/repository.js"
-import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
+import { makePersonFixture, makePostPublicationInput, makeProfileFixture } from "../fixtures.js"
 import { insertPersonWithDependencies, TestLayer } from "../test-helpers.js"
 
 export const TestLayerWithRepositories = Layer.mergeAll(
@@ -30,18 +30,12 @@ export const fixture = Effect.gen(function* () {
 
   const publicationId = yield* publications.createPublication({
     createdById: person.id,
-    sourceData: {
-      sourceContent: makeDocument("Publication"),
-      sourceLanguage: ContentLanguage.make("pt"),
-      translations: { pt: "original" },
-      metadata: {
-        handle: Schema.decodeSync(Handle)(`publication-comment-${person.id}`),
-        kind: "POST",
-        ownerProfileId: profile.id,
-        publishedAt: yield* DateTime.now,
-        visibility: "PUBLIC",
-      },
-    },
+    ...makePostPublicationInput({
+      content: makeDocument("Publication"),
+      handle: `publication-comment-${person.id}`,
+      ownerProfileId: profile.id,
+      publishedAt: yield* DateTime.now,
+    }),
   })
 
   const publicationCommentId = yield* publicationComments.createPublicationComment({

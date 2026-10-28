@@ -32,7 +32,7 @@ export const Message = defineMessageUnion({
   FailedSendCode: { error: Schema.String },
   SucceededResendCode: { pending: PendingCode },
   FailedResendCode: { error: Schema.String },
-  CompletedWaitForResendCooldown: { sentAt: Schema.Number },
+  CompletedWaitForResendCooldown: { sentAt: Schema.Finite },
   SucceededVerifyCode: { name: Schema.NullOr(Schema.String) },
   FailedVerifyCode: { error: Schema.String },
   SucceededCompleteOnboarding: { name: Schema.String },

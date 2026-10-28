@@ -14,7 +14,7 @@ export const findById = SqlSchema.findOneOption({
 
 export const countOtherAdministrators = SqlSchema.findOne({
   Request: PersonId,
-  Result: Schema.Struct({ count: Schema.Number }),
+  Result: Schema.Struct({ count: Schema.Finite }),
   execute: (personId) =>
     SqlClient.SqlClient.use(
       (sql) => sql`

@@ -36,7 +36,7 @@ export const makePreviewRoutes = (previewDirectory: string) => {
     if (mediaAsset) {
       return yield* HttpServerResponse.file(
         join(previewDirectory, "media-assets", mediaAsset[1], `${mediaAsset[2]}.webp`),
-      ).pipe(Effect.catch(() => Effect.succeed(HttpServerResponse.empty({ status: 404 }))))
+      ).pipe(Effect.orElseSucceed(() => HttpServerResponse.empty({ status: 404 })))
     }
 
     return HttpServerResponse.text("Not found", { status: 404 })

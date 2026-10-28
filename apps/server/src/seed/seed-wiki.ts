@@ -294,7 +294,7 @@ const revisionUpdate = (input: {
 }) =>
   Effect.gen(function* () {
     const wiki = yield* WikiArticlesRepository
-    const stored = yield* wiki.findCrdtRowById(input.article.id)
+    const stored = yield* wiki.findSourceRowById(input.article.id)
     if (Option.isNone(stored)) return Option.none<LoroDocUpdate>()
 
     const original = snapshotToLoroDoc(stored.value.crdtSnapshot)

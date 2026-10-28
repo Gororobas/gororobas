@@ -70,13 +70,11 @@ const CalculatorServiceLive = Layer.effect(
         }),
 
       setValue: (n) =>
-        Effect.gen(function* () {
-          yield* Ref.update(stateRef, (s) => ({
-            ...s,
-            value: n,
-            history: [...s.history, n],
-          }))
-        }),
+        Ref.update(stateRef, (s) => ({
+          ...s,
+          value: n,
+          history: [...s.history, n],
+        })),
 
       subtract: (n) =>
         Effect.gen(function* () {
@@ -99,8 +97,8 @@ const TestLayer = CalculatorServiceLive.pipe(Layer.provideMerge(CalculatorStateL
 // ============================================================================
 
 const CalculatorContext = Schema.Struct({
-  value: Schema.Number,
-  history: Schema.Array(Schema.Number),
+  value: Schema.Finite,
+  history: Schema.Array(Schema.Finite),
 })
 type CalculatorContext = typeof CalculatorContext.Type
 

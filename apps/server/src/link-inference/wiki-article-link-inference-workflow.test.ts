@@ -123,7 +123,7 @@ const createConcept = ({
 const approveContentEdit = (wikiArticleId: WikiArticleId, personId: PersonId) =>
   Effect.gen(function* () {
     const repository = yield* WikiArticlesRepository
-    const stored = Option.getOrThrow(yield* repository.findCrdtRowById(wikiArticleId))
+    const stored = Option.getOrThrow(yield* repository.findSourceRowById(wikiArticleId))
     const current = snapshotToLoroDoc(stored.crdtSnapshot)
     const changed = current.fork()
 

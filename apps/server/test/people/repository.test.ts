@@ -141,7 +141,7 @@ describe("PeopleRepository", () => {
 
               // @effect-diagnostics-next-line globalErrorInEffectFailure:off
               // @effect-diagnostics-next-line missingReturnYieldStar:off
-              yield* Effect.fail(new IntentionalFailure({ message: "Intentional failure" }))
+              yield* new IntentionalFailure({ message: "Intentional failure" })
             }),
         })
 

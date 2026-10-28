@@ -21,7 +21,7 @@ import { MediaAssetsService } from "@gororobas/server/media-assets/service"
 import { MediaAssetsStorage } from "@gororobas/server/media-assets/storage"
 import { makeAppSql } from "@gororobas/server/sql"
 import {
-  findCrdtRowById,
+  findSourceRowById,
   findDatabaseRowById,
   findPageByHandleAndKind,
   findTranslationRows,
@@ -148,10 +148,9 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
             `https://cdn.sanity.io/images/4wdqd7lo/production/${match[1]}-${match[2]}x${match[3]}.${match[4]}`,
           )
           .pipe(
-            Effect.flatMap((response) =>
-              response.status === 200
-                ? Effect.succeed(response)
-                : Effect.die(new Error(`Original download failed: ${response.status}`)),
+            Effect.filterOrElse(
+              (response) => response.status === 200,
+              (response) => Effect.die(new Error(`Original download failed: ${response.status}`)),
             ),
           )
 
@@ -207,7 +206,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
       }).pipe(sql.withTransaction)
 
       const article = yield* findDatabaseRowById(plant.id).pipe(Effect.map(Option.getOrThrow))
-      const crdt = yield* findCrdtRowById(plant.id).pipe(Effect.map(Option.getOrThrow))
+      const crdt = yield* findSourceRowById(plant.id).pipe(Effect.map(Option.getOrThrow))
       const parsed = yield* WikiArticleCrdt.parseUpdate({
         snapshot: crdt.crdtSnapshot,
         crdtUpdate: loroDocToUpdate(snapshotToLoroDoc(crdt.crdtSnapshot)),

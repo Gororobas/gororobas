@@ -10,7 +10,7 @@ import {
   LoroDocFrontier,
   type PostSourceData,
   PublicationCommitId,
-  PublicationCrdtRow,
+  PublicationSourceRow,
   PublicationCrdt,
   PublicationConcurrentUpdateError,
   StalePublicationTranslationError,
@@ -18,6 +18,7 @@ import {
   PublicationNotFoundError,
   PublicationTranslationRow,
   type PublicationSourceData,
+  type PublicationVisibility,
   entityReferenceLinks,
   tiptapToText,
   toSearchableText,
@@ -35,11 +36,12 @@ import {
   deletePublicationMediaAttachments,
   deletePublication,
   insertPublicationCommitRow,
-  insertPublicationCrdtRow,
+  insertPublicationSourceRow,
   insertPublicationTranslationRows,
   replacePublicationWikiArticleLinks,
-  updatePublicationCrdtRow,
-  upsertPublicationRow,
+  updatePublicationSourceRow,
+  updatePublicationSourceVisibility,
+  upsertPublicationProjectionRow,
 } from "./mutations.js"
 import {
   HumanCrdtUpdate,
@@ -85,7 +87,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           const now = yield* DateTime.now
 
           if (input.metadata.kind === "EVENT") {
-            yield* upsertPublicationRow({
+            yield* upsertPublicationProjectionRow({
               ...input.metadata,
               createdAt: now,
               currentCrdtFrontier: input.currentCrdtFrontier,
@@ -96,7 +98,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
             return
           }
 
-          yield* upsertPublicationRow({
+          yield* upsertPublicationProjectionRow({
             ...input.metadata,
             attendanceMode: null,
             createdAt: now,
@@ -193,15 +195,18 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           const created = yield* PublicationCrdt.create(input.sourceData)
 
           yield* persistCrdtDocumentCreation({
-            insertCrdt: insertPublicationCrdtRow(
-              PublicationCrdtRow.make({
+            insertCrdt: insertPublicationSourceRow(
+              PublicationSourceRow.make({
                 linkInference: null,
                 createdAt: now,
                 crdtSnapshot: created.crdtSnapshot,
+                handle: input.handle,
                 id: publicationId,
                 moderationStatus: "APPROVED_BY_DEFAULT",
-                ownerProfileId: input.sourceData.metadata.ownerProfileId,
+                ownerProfileId: input.ownerProfileId,
+                publishedAt: input.publishedAt,
                 updatedAt: now,
+                visibility: input.visibility,
               }),
             ),
             insertCommitOrRevision: insertPublicationCommitRow({
@@ -317,7 +322,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           const now = yield* DateTime.now
 
           yield* persistCrdtDocumentUpdate({
-            updateCrdtRow: updatePublicationCrdtRow({
+            updateCrdtRow: updatePublicationSourceRow({
               crdtSnapshot: applied.nextSnapshot,
               id: input.publicationId,
               updatedAt: now,
@@ -339,6 +344,19 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
         })
 
+      /** Changes no CRDT data, so it neither moves the frontier nor conflicts with CRDT edits. */
+      const updatePublicationVisibility = (input: {
+        publicationId: PublicationId
+        visibility: PublicationVisibility
+      }) =>
+        Effect.gen(function* () {
+          yield* updatePublicationSourceVisibility({
+            id: input.publicationId,
+            visibility: input.visibility,
+            updatedAt: yield* DateTime.now,
+          })
+        })
+
       return {
         listPublicationMediaAttachments,
         attachMediaToPublication,
@@ -353,6 +371,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         listPublicationContributorIdsByPublicationId,
         listPublicationRowsByOwnerProfileId,
         updatePublication,
+        updatePublicationVisibility,
       } as const
     }),
   },

@@ -1,10 +1,8 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
   ContentLanguage,
-  Handle,
   IdGen,
   LoroDocUpdate,
-  PostSourceData,
   PublicationCrdt,
   type PersonId,
   type PublicationId,
@@ -19,7 +17,11 @@ import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
 import { textToRichTextDocument } from "../../test/feature-test-helpers.js"
-import { makePersonFixture, makeProfileFixture } from "../../test/fixtures.js"
+import {
+  makePersonFixture,
+  makePostPublicationInput,
+  makeProfileFixture,
+} from "../../test/fixtures.js"
 import { insertPersonWithDependencies, TestLayer } from "../../test/test-helpers.js"
 import { HumanCrdtUpdate } from "../publications/publication-repository-inputs.js"
 import { findPublicationCrdtSnapshotById } from "../publications/queries.js"
@@ -128,7 +130,7 @@ const listTranslations = SqlSchema.findAll({
 
 const countCommits = SqlSchema.findOne({
   Request: Schema.String,
-  Result: Schema.Struct({ count: Schema.Number }),
+  Result: Schema.Struct({ count: Schema.Finite }),
   execute: (publicationId) =>
     SqlClient.SqlClient.use(
       (sql) =>
@@ -142,21 +144,14 @@ const createPublication = Effect.gen(function* () {
     person,
     profile: yield* makeProfileFixture({ id: person.id }),
   })
-  const now = yield* DateTime.now
 
   const publicationId = yield* (yield* PublicationsRepository).createPublication({
     createdById: person.id,
-    sourceData: PostSourceData.make({
-      sourceContent: textToRichTextDocument("Mutirão no sábado"),
-      sourceLanguage: ContentLanguage.make("pt"),
-      translations: { pt: "original" },
-      metadata: {
-        kind: "POST",
-        handle: Schema.decodeSync(Handle)(`mutirao-${crypto.randomUUID().slice(0, 8)}`),
-        ownerProfileId: person.id,
-        publishedAt: now,
-        visibility: "PUBLIC",
-      },
+    ...makePostPublicationInput({
+      content: textToRichTextDocument("Mutirão no sábado"),
+      handle: `mutirao-${crypto.randomUUID().slice(0, 8)}`,
+      ownerProfileId: person.id,
+      publishedAt: yield* DateTime.now,
     }),
   })
 

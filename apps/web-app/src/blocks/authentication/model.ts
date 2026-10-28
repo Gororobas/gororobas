@@ -10,7 +10,7 @@ export const PendingCode = Schema.Struct({
   flowId: Operations.RequestBindingFlowId,
   email: EmailCodeRequest.fields.email,
   reference: Proofs.ProofReference,
-  sentAt: Schema.Number,
+  sentAt: Schema.Finite,
 })
 
 export type PendingCode = typeof PendingCode.Type

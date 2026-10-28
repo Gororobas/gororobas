@@ -68,7 +68,7 @@ export const withApiInfrastructureErrors =
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A | HttpServerResponse.HttpServerResponse, Exclude<E, InfrastructureError>, R> =>
     // SAFETY: protectApiOperation catches the schema/SQL members and leaves other failures untouched, so Exclude describes the remaining error channel. Success and requirements are unchanged.
-    /* oxlint-disable effect/casting-awareness -- this adapter narrows a generic Effect at an API boundary. */
+    /* oxlint-disable effect/casting-awareness, effecttsgo/unsafe-effect-type-assertion -- this adapter narrows a generic Effect at an API boundary; the rule's fix removes the assertions tsc needs. */
     protectApiOperation(
       operation,
       effect as Effect.Effect<A, Exclude<E, InfrastructureError> | InfrastructureError, R>,

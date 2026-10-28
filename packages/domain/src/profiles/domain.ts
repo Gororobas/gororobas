@@ -85,9 +85,9 @@ export const ProfileMetadataResult = Schema.Struct({
 export type ProfileMetadataResult = typeof ProfileMetadataResult.Type
 
 export const ProfileContentCounts = Schema.Struct({
-  posts: Schema.Number,
-  events: Schema.Number,
-  wikiArticleBookmarks: Schema.Number,
-  publicationComments: Schema.Number,
-  images: Schema.Number,
+  posts: Schema.Finite,
+  events: Schema.Finite,
+  wikiArticleBookmarks: Schema.Finite,
+  publicationComments: Schema.Finite,
+  images: Schema.Finite,
 })

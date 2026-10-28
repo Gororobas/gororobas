@@ -65,7 +65,7 @@ export const linkedEntitiesFromTiptapDocument = (
       if (!MutableHashSet.has(seen, key)) {
         MutableHashSet.add(seen, key)
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- ProseMirror attributes are an unvalidated dictionary.
-        entities.push(Schema.decodeUnknownSync(EntityReferenceTarget)(node.attrs))
+        entities.push(Schema.decodeSync(EntityReferenceTarget)(node.attrs))
       }
     }
 

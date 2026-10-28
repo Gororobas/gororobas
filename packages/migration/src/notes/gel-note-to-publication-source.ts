@@ -1,9 +1,9 @@
 import { ContentLanguage } from "@gororobas/domain"
-import { PostSourceData, PublicationId, WikiArticleId } from "@gororobas/domain"
+import { PublicationId, WikiArticleId } from "@gororobas/domain"
 import { Effect, Schema } from "effect"
 
 import { migrateRichText } from "../migrate-rich-text.js"
-import { GelNoteWithRelations } from "../schemas/gel/entities.js"
+import { GelNoteWithRelations, MigratedPublication } from "../schemas/gel/entities.js"
 import { ensureMappedId, MigrationContext } from "../services/migration-context.js"
 import { noteTypeGelId } from "../tags/source-gel-tags.js"
 import { gelNoteToPublication } from "./gel-note-to-publication.js"
@@ -18,22 +18,22 @@ export const gelNoteToPublicationSource = Effect.fn("gelNoteToPublicationSource"
   const context = yield* MigrationContext
   const post = yield* gelNoteToPublication(note)
   if (!note.created_by) {
-    return yield* Effect.fail(new MissingNoteOwner({ message: `Note ${note.handle} has no owner` }))
+    return yield* new MissingNoteOwner({ message: `Note ${note.handle} has no owner` })
   }
   const ownerProfileId = yield* context.resolveId(note.created_by.id, "Profile")
   const content = yield* migrateRichText(post.content)
 
-  const publication = yield* Schema.decodeEffect(PostSourceData)({
-    metadata: {
-      kind: "POST",
-      handle: note.handle,
-      ownerProfileId,
-      publishedAt: note.published_at.toISOString(),
-      visibility: post.visibility,
+  const publication = yield* Schema.decodeEffect(MigratedPublication)({
+    handle: note.handle,
+    ownerProfileId,
+    publishedAt: note.published_at.toISOString(),
+    visibility: post.visibility,
+    sourceData: {
+      metadata: { kind: "POST" },
+      sourceContent: content,
+      sourceLanguage: ContentLanguage.make("pt"),
+      translations: { pt: "original" },
     },
-    sourceContent: content,
-    sourceLanguage: ContentLanguage.make("pt"),
-    translations: { pt: "original" },
   })
 
   return publication

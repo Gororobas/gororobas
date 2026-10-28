@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ContentLanguage, TiptapNodeId } from "@gororobas/domain"
+import { ContentLanguage, CorePublicationMetadata, TiptapNodeId } from "@gororobas/domain"
 import { PublicationCrdt } from "@gororobas/domain"
 import {
   Handle,
@@ -9,7 +9,7 @@ import {
   LoroDocUpdate,
   PublicationConcurrentUpdateError,
   StalePublicationTranslationError,
-  PublicationCrdtRow,
+  PublicationSourceRow,
   SystemCommit,
   PublicationSourceData,
   type TiptapDocument,
@@ -34,7 +34,7 @@ const TestLayerWithPublicationsRepository = Layer.mergeAll(
   TestLayer,
   PublicationsRepositoryTestLayer,
 )
-const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
+const PublicationCrdtSnapshotRow = PublicationSourceRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
 const paragraph = (text: string) => ({
   attrs: { nodeId: TiptapNodeId.make("paragraph001") },
@@ -108,48 +108,53 @@ const applyUpdateToSnapshot = (input: { crdtUpdate: LoroDocUpdate; snapshot: Lor
   return doc
 }
 
-// oxlint-disable-next-line effect/no-unknown-parameters -- This test helper validates persisted JSON against the storage schema immediately below.
-const makePostSourceData = (input: {
-  content: TiptapDocument
-  handle: string
-  ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
-  publishedAt: PublicationSourceData["metadata"]["publishedAt"]
-}): PublicationSourceData => ({
-  sourceContent: input.content,
+const makePostSourceData = (content: TiptapDocument): PublicationSourceData => ({
+  sourceContent: content,
   sourceLanguage: ContentLanguage.make("pt"),
   translations: { pt: "original" },
-  metadata: {
-    handle: makeHandle(input.handle),
-    kind: "POST",
-    ownerProfileId: input.ownerProfileId,
-    publishedAt: input.publishedAt,
-    visibility: "PUBLIC",
-  },
+  metadata: { kind: "POST" },
 })
 
-const makeEventSourceData = (input: {
-  content: TiptapDocument
-  endDate: PublicationSourceData["metadata"]["publishedAt"]
+const makeCoreMetadata = (input: {
   handle: string
-  locationOrUrl?: string
-  ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
-  publishedAt: PublicationSourceData["metadata"]["publishedAt"]
-  startDate: PublicationSourceData["metadata"]["publishedAt"]
-}): PublicationSourceData => ({
-  sourceContent: input.content,
-  sourceLanguage: ContentLanguage.make("pt"),
-  translations: { pt: "original" },
-  metadata: {
-    attendanceMode: "IN_PERSON",
-    endDate: input.endDate,
+  ownerProfileId: CorePublicationMetadata["ownerProfileId"]
+  publishedAt: CorePublicationMetadata["publishedAt"]
+}) =>
+  CorePublicationMetadata.make({
     handle: makeHandle(input.handle),
-    kind: "EVENT",
-    locationOrUrl: input.locationOrUrl ?? null,
     ownerProfileId: input.ownerProfileId,
     publishedAt: input.publishedAt,
-    startDate: input.startDate,
     visibility: "PUBLIC",
+  })
+
+const makePostInput = (
+  input: Parameters<typeof makeCoreMetadata>[0] & { content: TiptapDocument },
+) => ({
+  ...makeCoreMetadata(input),
+  sourceData: makePostSourceData(input.content),
+})
+
+const makeEventInput = (
+  input: Parameters<typeof makeCoreMetadata>[0] & {
+    content: TiptapDocument
+    endDate: CorePublicationMetadata["publishedAt"]
+    locationOrUrl?: string
+    startDate: CorePublicationMetadata["publishedAt"]
   },
+) => ({
+  ...makeCoreMetadata(input),
+  sourceData: {
+    sourceContent: input.content,
+    sourceLanguage: ContentLanguage.make("pt"),
+    translations: { pt: "original" },
+    metadata: {
+      attendanceMode: "IN_PERSON",
+      endDate: input.endDate,
+      kind: "EVENT",
+      locationOrUrl: input.locationOrUrl ?? null,
+      startDate: input.startDate,
+    },
+  } satisfies PublicationSourceData,
 })
 
 describe("PublicationsRepository", () => {
@@ -163,7 +168,7 @@ describe("PublicationsRepository", () => {
 
       const now = yield* DateTime.now
 
-      const sourceData = makePostSourceData({
+      const publicationInput = makePostInput({
         content: makeDocument("Primeira versao"),
         handle: `pub-${person.id.slice(0, 8)}`,
         ownerProfileId: profile.id,
@@ -172,12 +177,12 @@ describe("PublicationsRepository", () => {
 
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
-        sourceData,
+        ...publicationInput,
       })
 
       const publication = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(publication)).toBe(true)
-      expect(Option.getOrThrow(publication).handle).toBe(sourceData.metadata.handle)
+      expect(Option.getOrThrow(publication).handle).toBe(publicationInput.handle)
 
       const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
       expect(commits).toHaveLength(1)
@@ -192,7 +197,7 @@ describe("PublicationsRepository", () => {
       expect(byOwner[0]?.id).toBe(publicationId)
 
       const pageData = yield* repository.findPublicationPageData({
-        handle: sourceData.metadata.handle,
+        handle: publicationInput.handle,
         language: "pt",
       })
       expect(Option.isSome(pageData)).toBe(true)
@@ -215,7 +220,7 @@ describe("PublicationsRepository", () => {
 
         const now = yield* DateTime.now
 
-        const initialSourceData = makePostSourceData({
+        const publicationInput = makePostInput({
           content: makeDocument("Antes"),
           handle: `pub-${person.id.slice(0, 8)}-update`,
           ownerProfileId: profile.id,
@@ -224,7 +229,7 @@ describe("PublicationsRepository", () => {
 
         const publicationId = yield* repository.createPublication({
           createdById: person.id,
-          sourceData: initialSourceData,
+          ...publicationInput,
         })
 
         const beforeUpdate = yield* repository.findPublicationRowById(publicationId)
@@ -232,12 +237,12 @@ describe("PublicationsRepository", () => {
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         const beforeSnapshotRows = Schema.decodeUnknownSync(
           Schema.Array(PublicationCrdtSnapshotRow),
-        )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
+        )(yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`)
         expect(beforeSnapshotRows).toHaveLength(1)
         const beforeSnapshot = Option.getOrThrow(Option.fromNullishOr(beforeSnapshotRows[0]))
 
         const nextSourceData: PublicationSourceData = {
-          ...initialSourceData,
+          ...publicationInput.sourceData,
           sourceContent: makeDocument("Depois"),
           sourceLanguage: ContentLanguage.make("pt"),
           translations: { pt: "original" },
@@ -307,7 +312,7 @@ describe("PublicationsRepository", () => {
 
         const publicationId = yield* repository.createPublication({
           createdById: person.id,
-          sourceData: makePostSourceData({
+          ...makePostInput({
             content: makeDocument("Texto original"),
             handle: `pub-${person.id.slice(0, 8)}-translate`,
             ownerProfileId: profile.id,
@@ -320,7 +325,7 @@ describe("PublicationsRepository", () => {
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         const beforeSnapshotRows = Schema.decodeUnknownSync(
           Schema.Array(PublicationCrdtSnapshotRow),
-        )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
+        )(yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`)
         expect(beforeSnapshotRows).toHaveLength(1)
         const beforeSnapshot = Option.getOrThrow(Option.fromNullishOr(beforeSnapshotRows[0]))
 
@@ -387,7 +392,7 @@ describe("PublicationsRepository", () => {
 
         const publicationId = yield* repository.createPublication({
           createdById: person.id,
-          sourceData: makePostSourceData({
+          ...makePostInput({
             content: makeDocument("Texto original"),
             handle: `pub-${person.id.slice(0, 8)}-frontier`,
             ownerProfileId: profile.id,
@@ -464,7 +469,7 @@ describe("PublicationsRepository", () => {
         )
         // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
-          yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
+          yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`,
         )
 
         yield* repository.updatePublication(
@@ -474,12 +479,7 @@ describe("PublicationsRepository", () => {
             publicationId,
             crdtUpdate: makePublicationCrdtUpdate({
               snapshot: Option.getOrThrow(Option.fromNullishOr(snapshotRows[0])).crdtSnapshot,
-              nextSourceData: makePostSourceData({
-                content: makeDocument("Original editado"),
-                handle: afterSpanish.handle,
-                ownerProfileId: profile.id,
-                publishedAt: now,
-              }),
+              nextSourceData: makePostSourceData(makeDocument("Original editado")),
             }),
           }),
         )
@@ -521,7 +521,7 @@ describe("PublicationsRepository", () => {
 
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
-        sourceData: makeEventSourceData({
+        ...makeEventInput({
           content: makeDocument("Feira agroecológica"),
           endDate,
           handle: `pub-${person.id.slice(0, 8)}-event`,
@@ -553,7 +553,7 @@ describe("PublicationsRepository", () => {
 
       const now = yield* DateTime.now
 
-      const initialSourceData = makePostSourceData({
+      const publicationInput = makePostInput({
         content: makeDocument("Versao 1"),
         handle: `pub-${person.id.slice(0, 8)}-stale-frontier`,
         ownerProfileId: profile.id,
@@ -562,7 +562,7 @@ describe("PublicationsRepository", () => {
 
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
-        sourceData: initialSourceData,
+        ...publicationInput,
       })
 
       const initialRow = yield* repository.findPublicationRowById(publicationId)
@@ -571,14 +571,14 @@ describe("PublicationsRepository", () => {
       // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       const initialSnapshotRows = Schema.decodeUnknownSync(
         Schema.Array(PublicationCrdtSnapshotRow),
-      )(yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`)
+      )(yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`)
       expect(initialSnapshotRows).toHaveLength(1)
       const initialSnapshot = Option.getOrThrow(Option.fromNullishOr(initialSnapshotRows[0]))
 
       const makeUpdateWithContent = (content: TiptapDocument) =>
         makePublicationCrdtUpdate({
           nextSourceData: {
-            ...initialSourceData,
+            ...publicationInput.sourceData,
             sourceContent: content,
             sourceLanguage: ContentLanguage.make("pt"),
             translations: { pt: "original" },
@@ -627,7 +627,7 @@ describe("PublicationsRepository", () => {
 
       const now = yield* DateTime.now
 
-      const sourceData = makePostSourceData({
+      const publicationInput = makePostInput({
         content: makeDocument("Permanece"),
         handle: `pub-${person.id.slice(0, 8)}-invalid-update`,
         ownerProfileId: profile.id,
@@ -636,7 +636,7 @@ describe("PublicationsRepository", () => {
 
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
-        sourceData,
+        ...publicationInput,
       })
 
       const beforeUpdate = yield* repository.findPublicationRowById(publicationId)
@@ -663,7 +663,7 @@ describe("PublicationsRepository", () => {
       expect(commits).toHaveLength(1)
 
       const pageData = yield* repository.findPublicationPageData({
-        handle: sourceData.metadata.handle,
+        handle: publicationInput.handle,
         language: "pt",
       })
       expect(Option.isSome(pageData)).toBe(true)
@@ -683,7 +683,7 @@ describe("PublicationsRepository", () => {
 
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
-        sourceData: makePostSourceData({
+        ...makePostInput({
           content: makeDocument("Para remover"),
           handle: `pub-${person.id.slice(0, 8)}-delete`,
           ownerProfileId: profile.id,

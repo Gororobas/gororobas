@@ -55,7 +55,8 @@ export const verifyReadApis = Effect.gen(function* () {
   const wikiCount = yield* SqlSchema.findOne({
     Request: Schema.Void,
     Result: Schema.Struct({ count: Schema.Int }),
-    execute: () => sql`SELECT COUNT(*) AS count FROM wiki_articles WHERE status = 'PUBLISHED'`,
+    execute: () =>
+      sql`SELECT COUNT(*) AS count FROM wiki_article_projections WHERE status = 'PUBLISHED'`,
   })()
 
   if (cards.length !== wikiCount.count) {
@@ -110,7 +111,7 @@ export const verifyReadApis = Effect.gen(function* () {
   const publications = yield* SqlSchema.findAll({
     Request: Schema.Void,
     Result: Schema.Struct({ id: PublicationId, handle: Handle, visibility: PublicationVisibility }),
-    execute: () => sql`SELECT id, handle, visibility FROM publications`,
+    execute: () => sql`SELECT id, handle, visibility FROM publication_sources`,
   })()
 
   const publicPublications = publications.filter(
@@ -166,7 +167,7 @@ export const verifyReadApis = Effect.gen(function* () {
     Result: Schema.Struct({ id: MediaAssetId }),
     execute: () =>
       sql`SELECT m.id FROM media_assets m WHERE EXISTS (SELECT 1 FROM wiki_article_media_assets a WHERE a.media_asset_id = m.id)
-      OR EXISTS (SELECT 1 FROM publication_media_assets a JOIN publications p ON p.id = a.publication_id JOIN people owner ON owner.id = p.owner_profile_id WHERE a.media_asset_id = m.id AND p.visibility = 'PUBLIC' AND owner.access_level <> 'NEWCOMER')
+      OR EXISTS (SELECT 1 FROM publication_media_assets a JOIN publication_sources p ON p.id = a.publication_id JOIN people owner ON owner.id = p.owner_profile_id WHERE a.media_asset_id = m.id AND p.visibility = 'PUBLIC' AND owner.access_level <> 'NEWCOMER')
       OR EXISTS (SELECT 1 FROM profiles p WHERE p.photo_id = m.id AND p.visibility = 'PUBLIC')`,
   })()
 
@@ -225,19 +226,21 @@ export const verifyReadApis = Effect.gen(function* () {
 if (process.argv[1] === import.meta.filename) {
   verifyReadApis.pipe(
     Effect.provide(
-      Layer.unwrap(
-        Effect.map(
-          Config.String("APP_DB_FILENAME").pipe(
-            Config.withDefault(
-              new URL("../../../apps/server/gororobas.db", import.meta.url).pathname,
+      Layer.mergeAll(
+        Layer.unwrap(
+          Effect.map(
+            Config.String("APP_DB_FILENAME").pipe(
+              Config.withDefault(
+                new URL("../../../apps/server/gororobas.db", import.meta.url).pathname,
+              ),
             ),
+            (filename) => makeAppSqlClient(filename, { readonly: true }),
           ),
-          (filename) => makeAppSqlClient(filename, { readonly: true }),
         ),
+        NodeHttpClient.layerUndici,
+        NodeServices.layer,
       ),
     ),
-    Effect.provide(NodeHttpClient.layerUndici),
-    Effect.provide(NodeServices.layer),
     NodeRuntime.runMain,
   )
 }

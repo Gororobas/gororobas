@@ -78,8 +78,10 @@ export const searchProfiles = SqlSchema.findAll({
         )
       })
 
-      return Effect.flatMap(matching, (rows) =>
-        EffectArray.isReadonlyArrayEmpty(rows) ? similar : Effect.succeed(rows),
+      return Effect.filterOrElse(
+        matching,
+        (rows) => !EffectArray.isReadonlyArrayEmpty(rows),
+        (_rows) => similar,
       )
     }),
 })
@@ -182,8 +184,10 @@ export const fetchProfileContentCounts = SqlSchema.findOne({
 
       return yield* sql`
       SELECT
-        (SELECT COUNT(*) FROM publications WHERE owner_profile_id = ${id} AND kind = 'POST') as posts,
-        (SELECT COUNT(*) FROM publications WHERE owner_profile_id = ${id} AND kind = 'EVENT') as events,
+        (SELECT COUNT(*) FROM publication_sources s JOIN publication_projections p ON p.id = s.id
+          WHERE s.owner_profile_id = ${id} AND p.kind = 'POST') as posts,
+        (SELECT COUNT(*) FROM publication_sources s JOIN publication_projections p ON p.id = s.id
+          WHERE s.owner_profile_id = ${id} AND p.kind = 'EVENT') as events,
         (SELECT COUNT(*) FROM bookmarks_wiki_articles WHERE person_id = ${id}) as wiki_article_bookmarks,
         (SELECT COUNT(*) FROM publication_comments WHERE owner_profile_id = ${id}) as publication_comments,
         (SELECT COUNT(*) FROM media_assets WHERE format = 'IMAGE' AND owner_profile_id = ${id}) as images

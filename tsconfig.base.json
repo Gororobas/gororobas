@@ -1,5 +1,11 @@
 {
   "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnostics": false
+      }
+    ],
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "moduleDetection": "force",

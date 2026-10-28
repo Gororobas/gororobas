@@ -11,7 +11,7 @@ import {
   TiptapDocument,
   WikiArticleQueriedPageRow,
   WikiArticleTranslationProjectionRow,
-  WikiArticleCrdtRow,
+  WikiArticleSourceRow,
   WikiArticleHandleProjectionRow,
   WikiArticleId,
   WikiArticleKind,
@@ -41,7 +41,8 @@ import {
 export const findDatabaseRowById = SqlSchema.findOneOption({
   Request: WikiArticleId,
   Result: WikiArticleProjectionRow,
-  execute: (id) => SqlClient.use((sql) => sql`SELECT * FROM wiki_articles WHERE id = ${id}`),
+  execute: (id) =>
+    SqlClient.use((sql) => sql`SELECT * FROM wiki_article_projections WHERE id = ${id}`),
 })
 
 export const findDatabaseRowByHandleAndKind = SqlSchema.findOneOption({
@@ -51,7 +52,7 @@ export const findDatabaseRowByHandleAndKind = SqlSchema.findOneOption({
     SqlClient.use(
       (sql) => sql`
         SELECT article.*
-        FROM wiki_articles AS article
+        FROM wiki_article_projections AS article
         INNER JOIN wiki_article_handles AS route
           ON route.wiki_article_id = article.id
         WHERE route.kind = ${kind} AND route.handle = ${handle}
@@ -66,7 +67,7 @@ export const findDatabaseRowByHandle = SqlSchema.findOneOption({
     SqlClient.use(
       (sql) => sql`
         SELECT article.*
-        FROM wiki_articles AS article
+        FROM wiki_article_projections AS article
         INNER JOIN wiki_article_handles AS route
           ON route.wiki_article_id = article.id
         WHERE route.handle = ${handle}
@@ -107,7 +108,7 @@ export const listWikiArticleAliases = SqlSchema.findAll({
           FROM wiki_article_translations AS translations, json_each(translations.common_names) AS name
           UNION ALL
           SELECT articles.id, name.value
-          FROM wiki_articles AS articles,
+          FROM wiki_article_projections AS articles,
             json_each(
               CASE WHEN articles.kind = 'PLANT_CULTIVAR' THEN
                 CASE WHEN json_extract(articles.attributes, '$.scientificNames._tag') = 'Value'
@@ -118,13 +119,13 @@ export const listWikiArticleAliases = SqlSchema.findAll({
             ) AS name
           UNION ALL
           SELECT articles.id, name.value
-          FROM wiki_articles AS articles, json_each(articles.attributes, '$.names') AS name
+          FROM wiki_article_projections AS articles, json_each(articles.attributes, '$.names') AS name
           UNION ALL
           SELECT wiki_article_id, handle FROM wiki_article_handles
         )
         SELECT DISTINCT aliases.wiki_article_id, articles.kind, aliases.alias
         FROM aliases
-        INNER JOIN wiki_articles AS articles ON articles.id = aliases.wiki_article_id
+        INNER JOIN wiki_article_projections AS articles ON articles.id = aliases.wiki_article_id
         WHERE articles.status <> 'ARCHIVED' AND aliases.alias IS NOT NULL
       `,
     ),
@@ -133,13 +134,14 @@ export const listWikiArticleAliases = SqlSchema.findAll({
 export const listDatabaseRows = SqlSchema.findAll({
   Request: Schema.Void,
   Result: WikiArticleProjectionRow,
-  execute: () => SqlClient.use((sql) => sql`SELECT * FROM wiki_articles ORDER BY created_at ASC`),
+  execute: () =>
+    SqlClient.use((sql) => sql`SELECT * FROM wiki_article_projections ORDER BY created_at ASC`),
 })
 
-export const findCrdtRowById = SqlSchema.findOneOption({
+export const findSourceRowById = SqlSchema.findOneOption({
   Request: WikiArticleId,
-  Result: WikiArticleCrdtRow,
-  execute: (id) => SqlClient.use((sql) => sql`SELECT * FROM wiki_article_crdts WHERE id = ${id}`),
+  Result: WikiArticleSourceRow,
+  execute: (id) => SqlClient.use((sql) => sql`SELECT * FROM wiki_article_sources WHERE id = ${id}`),
 })
 
 export const findRevisionById = SqlSchema.findOneOption({
@@ -240,7 +242,7 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
     SqlClient.use((sql) =>
       sql`
     SELECT article.*, translation.*, route.handle
-    FROM wiki_articles AS article
+    FROM wiki_article_projections AS article
     INNER JOIN wiki_article_handles AS route ON route.wiki_article_id = article.id
     INNER JOIN wiki_article_translations AS translation
       ON translation.wiki_article_id = article.id AND translation.kind = article.kind
@@ -289,7 +291,7 @@ export const listPublishedCultivars = SqlSchema.findAll({
   execute: ({ parentPlantId, language }) =>
     SqlClient.use(
       (sql) => sql`
-    SELECT a.*, t.common_names FROM wiki_articles a
+    SELECT a.*, t.common_names FROM wiki_article_projections a
     JOIN wiki_article_translations t ON t.wiki_article_id = a.id
     WHERE a.kind = 'PLANT_CULTIVAR' AND a.status = 'PUBLISHED'
       AND json_extract(a.attributes, '$.parentPlantId') = ${parentPlantId}
@@ -309,7 +311,7 @@ export const listBookmarks = SqlSchema.findAll({
     SqlClient.use(
       (sql) => sql`
     SELECT b.wiki_article_id, b.state FROM bookmarks_wiki_articles b
-    JOIN wiki_articles a ON a.id = b.wiki_article_id
+    JOIN wiki_article_projections a ON a.id = b.wiki_article_id
     WHERE b.person_id = ${personId} AND a.status = 'PUBLISHED' ORDER BY b.wiki_article_id
   `,
     ),
@@ -350,7 +352,7 @@ const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql
       ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
     (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
       WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
-  FROM wiki_articles a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
+  FROM wiki_article_projections a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
   WHERE a.status = 'PUBLISHED' AND t.language = (
     SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
     ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
@@ -526,8 +528,10 @@ export const searchCards = SqlSchema.findAll({
         `
       })
 
-      return Effect.flatMap(matching, (rows) =>
-        EffectArray.isReadonlyArrayEmpty(rows) ? similar : Effect.succeed(rows),
+      return Effect.filterOrElse(
+        matching,
+        (rows) => !EffectArray.isReadonlyArrayEmpty(rows),
+        (_rows) => similar,
       )
     }),
 })

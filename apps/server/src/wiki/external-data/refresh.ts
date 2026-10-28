@@ -21,7 +21,7 @@ export const findArticlesDueForExternalData = SqlSchema.findAll({
       (sql) => sql`
     SELECT article.id AS wiki_article_id,
       COALESCE(MAX(observation.id), 'initial') AS refresh_generation
-    FROM wiki_articles article
+    FROM wiki_article_projections article
     LEFT JOIN wiki_article_external_data_observations observation
       ON observation.wiki_article_id = article.id
       AND observation.article_crdt_frontier = article.current_crdt_frontier

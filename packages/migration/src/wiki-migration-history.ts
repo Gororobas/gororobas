@@ -172,7 +172,7 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
             ...version,
             // What the CRDT holds: the converted article with the node IDs assigned while writing it.
             // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Translations were checked as JSON records above; the content swap keeps that shape.
-            article: yield* Schema.decodeUnknownEffect(WikiArticleEditableData)({
+            article: yield* Schema.decodeEffect(WikiArticleEditableData)({
               ...encoded,
               translations: Record.map(translations, (translation, language) =>
                 writtenContents[language] === undefined

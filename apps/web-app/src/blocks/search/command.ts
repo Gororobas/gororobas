@@ -11,13 +11,12 @@ export const NavigateSearch = SearchDefinition.makeCommand("NavigateSearch", {
   messages: [Message.CompletedNavigateSearch],
   handler: function* () {
     return ({ query, navigation }) =>
-      Match.value(navigation)
-        .pipe(
-          Match.when("Replace", () => replaceUrl(searchUrl(query))),
-          Match.when("Push", () => pushUrl(searchUrl(query))),
-          Match.exhaustive,
-        )
-        .pipe(Effect.as(Message.CompletedNavigateSearch()))
+      Match.value(navigation).pipe(
+        Match.when("Replace", () => replaceUrl(searchUrl(query))),
+        Match.when("Push", () => pushUrl(searchUrl(query))),
+        Match.exhaustive,
+        Effect.as(Message.CompletedNavigateSearch()),
+      )
   },
 })
 

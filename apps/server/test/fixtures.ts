@@ -1,4 +1,5 @@
 import {
+  ContentLanguage,
   Handle,
   IdGen,
   OrganizationId,
@@ -9,14 +10,17 @@ import {
   PersonProfileRow,
   PersonRow,
   PlatformAccessLevel,
+  PostSourceData,
+  ProfileId,
   ProfileRow,
   ProfileVisibility,
   TimestampColumn,
+  type TiptapDocument,
   type InformationVisibility,
   type OrganizationAccessLevel,
   type OrganizationType,
 } from "@gororobas/domain"
-import { DateTime, Effect } from "effect"
+import { DateTime, Effect, Schema } from "effect"
 /* oxlint-disable effect/casting-awareness -- fixture IDs use validated domain brands. */
 /**
  * Fixture factories and arbitraries for property-based testing.
@@ -272,3 +276,22 @@ export const membershipWithDependenciesArbitrary = Arbitrary.map(
     },
   }),
 )
+
+/** Repository input for a PUBLIC post written in Portuguese. */
+export const makePostPublicationInput = (input: {
+  content: TiptapDocument
+  handle: string
+  ownerProfileId: ProfileId
+  publishedAt: DateTime.Utc
+}) => ({
+  handle: Schema.decodeSync(Handle)(input.handle),
+  ownerProfileId: input.ownerProfileId,
+  publishedAt: input.publishedAt,
+  visibility: "PUBLIC" as const,
+  sourceData: PostSourceData.make({
+    sourceContent: input.content,
+    sourceLanguage: ContentLanguage.make("pt"),
+    translations: { pt: "original" },
+    metadata: { kind: "POST" },
+  }),
+})

@@ -18,7 +18,7 @@ import { WorkflowEngine } from "effect/workflow"
 
 import { ModerationService } from "../src/moderation/service.js"
 import { PeopleService } from "../src/people/service.js"
-import { findCrdtRowById, listPendingRevisionsByWikiArticleId } from "../src/wiki/queries.js"
+import { findSourceRowById, listPendingRevisionsByWikiArticleId } from "../src/wiki/queries.js"
 import { WikiArticlesRepository } from "../src/wiki/repository.js"
 import { WikiArticlesService } from "../src/wiki/service.js"
 import {
@@ -129,7 +129,7 @@ const proposedEdit = () =>
     handler: (context: ModerationContext, { name, title }) =>
       Effect.gen(function* () {
         const id = articleId(context, title)
-        const stored = Option.getOrThrow(yield* findCrdtRowById(id))
+        const stored = Option.getOrThrow(yield* findSourceRowById(id))
         const original = snapshotToLoroDoc(stored.crdtSnapshot)
         const changed = original.fork()
 

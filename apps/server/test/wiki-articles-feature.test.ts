@@ -72,7 +72,7 @@ import { MediaAssetsService } from "../src/media-assets/service.js"
 import { resolveSessionFromAuthSubjectId } from "../src/session-service.js"
 import { WikiApiLive } from "../src/wiki/api-live.js"
 import {
-  findCrdtRowById,
+  findSourceRowById,
   findDatabaseRowById,
   findRevisionById,
   listPendingRevisionsByWikiArticleId,
@@ -348,7 +348,7 @@ const approvedEdit = ({
 }) =>
   Effect.gen(function* () {
     const id = articleId(context, title)
-    const stored = Option.getOrThrow(yield* findCrdtRowById(id))
+    const stored = Option.getOrThrow(yield* findSourceRowById(id))
     const current = snapshotToLoroDoc(stored.crdtSnapshot)
     const changed = current.fork()
     yield* WikiArticleCrdt.applyEdit(changed, edit)
@@ -1090,7 +1090,7 @@ await Effect.runPromise(
               handler: (_, { title, content }) =>
                 Effect.gen(function* () {
                   const context = yield* background()
-                  const row = Option.getOrThrow(yield* findCrdtRowById(articleId(context, title)))
+                  const row = Option.getOrThrow(yield* findSourceRowById(articleId(context, title)))
                   const data = yield* WikiArticleCrdt.read(snapshotToLoroDoc(row.crdtSnapshot))
                   expect(data.translations).toEqual({ pt: expect.anything() })
                   expect(data.translations.pt?.content).toEqual(
@@ -2301,7 +2301,7 @@ it.effect(
           }).pipe(Effect.flatMap(approve))
 
           const id = articleId(context, "Banana Prata")
-          const before = Option.getOrThrow(yield* findCrdtRowById(id))
+          const before = Option.getOrThrow(yield* findSourceRowById(id))
           const service = yield* WikiArticlesService
           const original = yield* cultivar(context, "Banana Prata")
           const missing = yield* service.resolveCultivar(original.attributes)
@@ -2317,7 +2317,7 @@ it.effect(
 
           const after = yield* cultivar(context, "Banana Prata")
           expect(after).toEqual(original)
-          expect(Option.getOrThrow(yield* findCrdtRowById(id))).toEqual(before)
+          expect(Option.getOrThrow(yield* findSourceRowById(id))).toEqual(before)
 
           expect((yield* service.resolveCultivar(after.attributes)).developmentCycle).toEqual(
             state === "Unknown"
@@ -2568,7 +2568,7 @@ it.effect(
       )
 
       const sql = yield* SqlClient.SqlClient
-      const before = yield* sql`SELECT * FROM wiki_article_crdts ORDER BY id`
+      const before = yield* sql`SELECT * FROM wiki_article_sources ORDER BY id`
 
       yield* Effect.forEach(
         [WikiArticleId.make("00000000-0000-7000-8000-000000000099"), pending, nonPlant],
@@ -2593,7 +2593,7 @@ it.effect(
             _tag:
               parentPlantId === nonPlant ? "InvalidCrdtUpdateError" : "WikiArticleNotFoundError",
           })
-          expect(yield* sql`SELECT * FROM wiki_article_crdts ORDER BY id`).toEqual(before)
+          expect(yield* sql`SELECT * FROM wiki_article_sources ORDER BY id`).toEqual(before)
         }),
         {
           concurrency: 1,

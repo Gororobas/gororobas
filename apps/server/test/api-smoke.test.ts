@@ -67,10 +67,9 @@ const one = <A extends Schema.Top>(Result: A, query: string) =>
 const SeededTargets = Effect.gen(function* () {
   const publication = yield* one(
     Schema.Struct({ id: PublicationId, handle: Handle, ownerProfileId: ProfileId }),
-    `SELECT p.id, p.handle, p.owner_profile_id FROM publications p
-     JOIN publication_crdts c ON c.id = p.id
-     WHERE p.visibility = 'PUBLIC' AND c.moderation_status = 'APPROVED_BY_DEFAULT'
-     ORDER BY p.id LIMIT 1`,
+    `SELECT id, handle, owner_profile_id FROM publication_sources
+     WHERE visibility = 'PUBLIC' AND moderation_status = 'APPROVED_BY_DEFAULT'
+     ORDER BY id LIMIT 1`,
   )
 
   const comment = yield* one(
@@ -90,7 +89,7 @@ const SeededTargets = Effect.gen(function* () {
 
   const article = yield* one(
     Schema.Struct({ id: WikiArticleId, kind: WikiArticleKind, handle: Handle }),
-    `SELECT a.id, a.kind, h.handle FROM wiki_articles a
+    `SELECT a.id, a.kind, h.handle FROM wiki_article_projections a
      JOIN wiki_article_handles h ON h.wiki_article_id = a.id
      WHERE a.status = 'PUBLISHED' ORDER BY a.id LIMIT 1`,
   )
@@ -99,12 +98,12 @@ const SeededTargets = Effect.gen(function* () {
   const relatedArticle = yield* one(
     Schema.Struct({ kind: WikiArticleKind, handle: Handle }),
     `SELECT a.kind, h.handle FROM wiki_article_relations r
-     JOIN wiki_articles a ON a.id = r.related_wiki_article_id
-     JOIN wiki_articles holder ON holder.id = r.wiki_article_id
+     JOIN wiki_article_projections a ON a.id = r.related_wiki_article_id
+     JOIN wiki_article_projections holder ON holder.id = r.wiki_article_id
      JOIN wiki_article_handles h ON h.wiki_article_id = a.id
      WHERE a.status = 'PUBLISHED' AND holder.status = 'PUBLISHED'
        AND EXISTS (SELECT 1 FROM wiki_article_relations outgoing
-         JOIN wiki_articles target ON target.id = outgoing.related_wiki_article_id
+         JOIN wiki_article_projections target ON target.id = outgoing.related_wiki_article_id
          WHERE outgoing.wiki_article_id = a.id AND target.status = 'PUBLISHED')
      ORDER BY a.id LIMIT 1`,
   )
@@ -293,7 +292,9 @@ const requests = ({
     "publications.updatePublication": () =>
       client.publications.updatePublication({
         params: { id: created.publicationId ?? targets.publication.id },
-        payload: { crdtUpdate: emptyUpdate, expectedCurrentCrdtFrontier: emptyFrontier },
+        payload: {
+          crdtEdit: { crdtUpdate: emptyUpdate, expectedCurrentCrdtFrontier: emptyFrontier },
+        },
       }),
     "publicationComments.createPublicationComment": () =>
       Effect.tap(
@@ -499,8 +500,9 @@ describe("API smoke", () => {
 
           expect(violations.flat()).toEqual([])
         }).pipe(
-          Effect.provide(ApiTestClient.layer),
-          Effect.provide(Layer.unwrap(seededEnvironment)),
+          Effect.provide(
+            ApiTestClient.layer.pipe(Layer.provideMerge(Layer.unwrap(seededEnvironment))),
+          ),
         ),
       { timeout: 120_000 },
     ),

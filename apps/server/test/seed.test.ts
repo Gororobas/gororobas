@@ -10,11 +10,13 @@ import {
   PublicationCommentRow,
   PublicationCommentTranslationRow,
   PublicationCommitRow,
-  PublicationRow,
+  PublicationProjectionRow,
+  PublicationSourceRow,
   PublicationTranslationRow,
   WikiArticleProjectionRow,
   WikiArticleRelationRow,
   WikiArticleRevisionRow,
+  WikiArticleSourceRow,
   WikiArticleTranslationProjectionRow,
 } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
@@ -62,12 +64,14 @@ const ROW_SCHEMAS = {
   publication_comment_translations: PublicationCommentTranslationRow,
   publication_comments: PublicationCommentRow,
   publication_commits: PublicationCommitRow,
+  publication_projections: PublicationProjectionRow,
+  publication_sources: PublicationSourceRow,
   publication_translations: PublicationTranslationRow,
-  publications: PublicationRow,
+  wiki_article_projections: WikiArticleProjectionRow,
   wiki_article_relations: WikiArticleRelationRow,
   wiki_article_revisions: WikiArticleRevisionRow,
+  wiki_article_sources: WikiArticleSourceRow,
   wiki_article_translations: WikiArticleTranslationProjectionRow,
-  wiki_articles: WikiArticleProjectionRow,
 } satisfies Record<string, Schema.Top>
 
 const decodeAllRows = Effect.forEach(
@@ -133,7 +137,7 @@ const withSeedEnvironment = <A, E>(
     )
 
     return yield* run((effect) =>
-      effect.pipe(Effect.provide(AppSqlTest), Effect.provide(environment), Effect.orDie),
+      effect.pipe(Effect.provide(Layer.mergeAll(AppSqlTest, environment)), Effect.orDie),
     )
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 

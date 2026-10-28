@@ -5,6 +5,7 @@ import {
   Handle,
   NonEmptyTrimmedString,
   PlatformAccessLevel,
+  CorePublicationMetadata,
   PostSourceData,
   ProfileId,
   PublicationId,
@@ -208,12 +209,12 @@ export const GelVegetable = Schema.Struct({
   lifecycles: GelOptionalColumn(Schema.Array(Enums.GelVegetableLifeCycle)),
   uses: GelOptionalColumn(Schema.Array(Enums.GelVegetableUsage)),
   origin: GelOptionalColumn(Schema.String),
-  development_cycle_min: GelOptionalColumn(Schema.Number),
-  development_cycle_max: GelOptionalColumn(Schema.Number),
-  height_min: GelOptionalColumn(Schema.Number),
-  height_max: GelOptionalColumn(Schema.Number),
-  temperature_min: GelOptionalColumn(Schema.Number),
-  temperature_max: GelOptionalColumn(Schema.Number),
+  development_cycle_min: GelOptionalColumn(Schema.Finite),
+  development_cycle_max: GelOptionalColumn(Schema.Finite),
+  height_min: GelOptionalColumn(Schema.Finite),
+  height_max: GelOptionalColumn(Schema.Finite),
+  temperature_min: GelOptionalColumn(Schema.Finite),
+  temperature_max: GelOptionalColumn(Schema.Finite),
   content: GelOptionalColumn(Schema.Unknown), // json
   handle: Handle,
 })
@@ -271,12 +272,20 @@ export const GelNoteWithRelations = Schema.Struct({
 
 export type GelNoteWithRelations = typeof GelNoteWithRelations.Type
 
+/** A converted note: the CRDT data and the core metadata kept outside of it. */
+export const MigratedPublication = Schema.Struct({
+  ...CorePublicationMetadata.fields,
+  sourceData: PostSourceData,
+})
+
+export type MigratedPublication = typeof MigratedPublication.Type
+
 export const NoteDataForMigration = Schema.Struct({
   id: PublicationId,
   /** Plants the note mentions and the CONCEPT articles for its Gel note types. */
   wikiArticleIds: Schema.Array(WikiArticleId),
   latest_source: GelNoteWithRelations,
-  publication: Schema.NullOr(PostSourceData),
+  publication: Schema.NullOr(MigratedPublication),
   conversion_error: Schema.NullOr(Schema.String),
 })
 

@@ -12,7 +12,7 @@ import { SqlClient, SqlSchema } from "effect/sql"
 
 /** Aggregate tables that keep their content's `moderation_status`. */
 const MODERATED_TABLES = {
-  PUBLICATION: "publication_crdts",
+  PUBLICATION: "publication_sources",
   PUBLICATION_COMMENT: "publication_comments",
   MEDIA_ASSET: "media_assets",
 } as const satisfies Record<ModeratedContentType, string>

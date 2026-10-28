@@ -3,16 +3,7 @@
  *
  * Import from `@gororobas/domain/testing` in downstream packages.
  */
-import {
-  Array as EffectArray,
-  DateTime,
-  Duration,
-  Effect,
-  Exit,
-  Layer,
-  Predicate,
-  Record,
-} from "effect"
+import { Array as EffectArray, DateTime, Duration, Effect, Exit, Predicate, Record } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 
 import type { Session } from "./authorization/session.js"
@@ -140,7 +131,7 @@ export const runPolicy = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   session: Session,
 ): Effect.Effect<Exit.Exit<A, E>, never, Exclude<R, SessionContext>> =>
-  effect.pipe(Effect.provide(Layer.succeed(SessionContext)(session)), Effect.exit)
+  effect.pipe(Effect.provideService(SessionContext, session), Effect.exit)
 
 /**
  * Run a policy effect with a session and return whether it succeeded

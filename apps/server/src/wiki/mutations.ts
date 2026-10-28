@@ -3,7 +3,7 @@ import {
   PersonId,
   WikiArticleId,
   WikiArticleMediaAssetRow,
-  WikiArticleCrdtRow,
+  WikiArticleSourceRow,
   WikiArticleHandleProjectionRow,
   WikiArticleProjectionRow,
   type LinkSource,
@@ -19,9 +19,10 @@ import { SqlClient } from "effect/sql/SqlClient"
 
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
 
-export const insertCrdtRow = SqlSchema.void({
-  Request: WikiArticleCrdtRow,
-  execute: (row) => SqlClient.use((sql) => sql`INSERT INTO wiki_article_crdts ${sql.insert(row)}`),
+export const insertSourceRow = SqlSchema.void({
+  Request: WikiArticleSourceRow,
+  execute: (row) =>
+    SqlClient.use((sql) => sql`INSERT INTO wiki_article_sources ${sql.insert(row)}`),
 })
 
 export const insertRevisionRow = SqlSchema.void({
@@ -50,11 +51,11 @@ export const insertRelationRows = SqlSchema.void({
   }),
 })
 
-export const updateCrdtRow = SqlSchema.void({
-  Request: WikiArticleCrdtRow,
+export const updateSourceRow = SqlSchema.void({
+  Request: WikiArticleSourceRow,
   execute: ({ id, createdAt: _, ...update }) =>
     SqlClient.use(
-      (sql) => sql`UPDATE wiki_article_crdts SET ${sql.update(update)} WHERE id = ${id}`,
+      (sql) => sql`UPDATE wiki_article_sources SET ${sql.update(update)} WHERE id = ${id}`,
     ),
 })
 
@@ -71,7 +72,7 @@ export const upsertArticleRow = SqlSchema.void({
   execute: (row) =>
     SqlClient.use(
       (sql) => sql`
-        INSERT INTO wiki_articles ${sql.insert(row)}
+        INSERT INTO wiki_article_projections ${sql.insert(row)}
         ON CONFLICT(id) DO UPDATE SET ${sql.update(row, ["id", "createdAt"])}
       `,
     ),
@@ -140,25 +141,26 @@ export const setMainMedia = SqlSchema.void({
 })
 
 /** Replaces the relations a single source found, leaving other sources' relations untouched. */
-export const replaceRelations = <Source extends LinkSource>(input: {
+export const replaceRelations = Effect.fn("replaceRelations")(function* <
+  Source extends LinkSource,
+>(input: {
   wikiArticleId: WikiArticleId
   source: Source
   rows: ReadonlyArray<Extract<WikiArticleRelationRow, { readonly source: Source }>>
-}) =>
-  Effect.gen(function* () {
-    const sql = yield* SqlClient
+}) {
+  const sql = yield* SqlClient
 
-    yield* persistProjectionJunctionTables({
-      deleteRows: sql`
+  yield* persistProjectionJunctionTables({
+    deleteRows: sql`
         DELETE FROM wiki_article_relations
         WHERE wiki_article_id = ${input.wikiArticleId} AND source = ${input.source}
       `,
-      insertRows: insertRelationRows(
-        input.rows.filter(
-          (row) =>
-            row.wikiArticleId === input.wikiArticleId &&
-            row.relatedWikiArticleId !== input.wikiArticleId,
-        ),
+    insertRows: insertRelationRows(
+      input.rows.filter(
+        (row) =>
+          row.wikiArticleId === input.wikiArticleId &&
+          row.relatedWikiArticleId !== input.wikiArticleId,
       ),
-    })
-  }).pipe(Effect.withSpan("replaceRelations"))
+    ),
+  })
+})

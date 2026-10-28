@@ -45,6 +45,58 @@
         "API_PORT": "4100"
       },
       "port": 4543
+    },
+    {
+      "name": "api-migrated",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gororobas/server", "start"],
+      "env": {
+        "API_PORT": "4200",
+        "AUTH_ORIGIN": "http://localhost:4643",
+        "APP_DB_FILENAME": "data/migrated/gororobas.db",
+        "WORKFLOWS_DB_FILENAME": ":memory:",
+        "MEDIA_ASSETS_DIRECTORY": "data/migrated/media-assets"
+      },
+      "port": 4200
+    },
+    {
+      "name": "web-migrated",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gororobas/web-app", "dev"],
+      "env": {
+        "WEB_PORT": "4643",
+        "API_PORT": "4200"
+      },
+      "port": 4643
+    },
+    {
+      "name": "live-draft-solid",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "/Users/h/dev/live-draft-solid", "--pm-on-fail=ignore", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "api-fts-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gororobas/server", "start"],
+      "env": {
+        "API_PORT": "4350",
+        "AUTH_ORIGIN": "http://localhost:4743",
+        "APP_DB_FILENAME": "data/fts-preview/gororobas.db",
+        "WORKFLOWS_DB_FILENAME": ":memory:",
+        "MEDIA_ASSETS_DIRECTORY": "data/fts-preview/media-assets"
+      },
+      "port": 4350
+    },
+    {
+      "name": "web-fts-preview",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gororobas/web-app", "dev"],
+      "env": {
+        "WEB_PORT": "4743",
+        "API_PORT": "4350"
+      },
+      "port": 4743
     }
   ]
 }

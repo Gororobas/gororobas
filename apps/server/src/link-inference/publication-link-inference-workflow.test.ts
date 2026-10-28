@@ -1,7 +1,5 @@
 import { describe, expect, it } from "@effect/vitest"
 import {
-  ContentLanguage,
-  Handle,
   IdGen,
   LinkInferenceModel,
   type LoroDocFrontier,
@@ -9,14 +7,13 @@ import {
   PersonId,
   PublicationCrdt,
   type PublicationId,
-  PublicationCrdtRow,
+  PublicationSourceRow,
   PublicationWikiArticleRow,
   snapshotToLoroDoc,
   TiptapNodeId,
   type TiptapDocument,
   WikiArticleCommonNameInCrdtList,
   WikiConceptArticle,
-  type PublicationSourceData,
 } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
 import { DateTime, Effect, Layer, Option, Schema, Struct } from "effect"
@@ -24,7 +21,11 @@ import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
-import { makePersonFixture, makeProfileFixture } from "../../test/fixtures.js"
+import {
+  makePersonFixture,
+  makePostPublicationInput,
+  makeProfileFixture,
+} from "../../test/fixtures.js"
 import {
   insertPersonWithDependencies,
   LinkInferenceTestLayer,
@@ -89,10 +90,10 @@ const listLinks = SqlSchema.findAll({
 
 const findLinkInference = SqlSchema.findOne({
   Request: Schema.String,
-  Result: PublicationCrdtRow.mapFields(Struct.pick(["linkInference"])),
+  Result: PublicationSourceRow.mapFields(Struct.pick(["linkInference"])),
   execute: (publicationId) =>
     SqlClient.SqlClient.use(
-      (sql) => sql`SELECT link_inference FROM publication_crdts WHERE id = ${publicationId}`,
+      (sql) => sql`SELECT link_inference FROM publication_sources WHERE id = ${publicationId}`,
     ),
 })
 
@@ -110,29 +111,6 @@ const content = (text: string): TiptapDocument => ({
   content: [
     { type: "paragraph", attrs: { nodeId: paragraphId }, content: [{ type: "text", text }] },
   ],
-})
-
-const post = ({
-  run,
-  handle,
-  ownerProfileId,
-  publishedAt,
-}: {
-  run: number
-  handle: string
-  ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
-  publishedAt: PublicationSourceData["metadata"]["publishedAt"]
-}): PublicationSourceData => ({
-  sourceContent: content(`Plantamos feijão ${run} entre o milho.`),
-  sourceLanguage: ContentLanguage.make("pt"),
-  translations: { pt: "original" },
-  metadata: {
-    handle: Schema.decodeSync(Handle)(handle),
-    kind: "POST",
-    ownerProfileId,
-    publishedAt,
-    visibility: "PUBLIC",
-  },
 })
 
 const editSourceContent = (input: {
@@ -202,8 +180,8 @@ const createPost = (run: number) =>
 
     const publicationId = yield* publications.createPublication({
       createdById: personId,
-      sourceData: post({
-        run,
+      ...makePostPublicationInput({
+        content: content(`Plantamos feijão ${run} entre o milho.`),
         handle: `plantio-de-feijao-${run}`,
         ownerProfileId: person.id,
         publishedAt: yield* DateTime.now,

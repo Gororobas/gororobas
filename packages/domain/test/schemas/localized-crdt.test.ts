@@ -1,11 +1,10 @@
 import { assert, describe, expect, it } from "@effect/vitest"
-import { DateTime, Effect, Equal, Schema } from "effect"
+import { Effect, Equal, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { TestClock } from "effect/testing"
 import { LoroList, LoroMap, LoroText, type LoroDoc } from "loro-crdt"
 
 import { ContentLanguage } from "../../src/common/content-language.js"
-import { ProfileId } from "../../src/common/ids.js"
 import { PersonId, TiptapNodeId } from "../../src/common/ids.js"
 import { CrdtCommitEncoded, HumanCommit } from "../../src/crdts/domain.js"
 import {
@@ -41,13 +40,7 @@ const original = (text: string) => ({
 
 const publication = (text: string): PostSourceData =>
   Schema.decodeSync(PostSourceData)({
-    metadata: {
-      kind: "POST",
-      handle: "growing-together",
-      ownerProfileId: ProfileId.make("019a0dce-1fc0-7abc-8abc-123456789abc"),
-      publishedAt: "2026-10-06T00:00:00Z",
-      visibility: "PUBLIC",
-    },
+    metadata: { kind: "POST" },
     sourceContent: content(text),
     sourceLanguage: ContentLanguage.make("pt"),
     translations: { pt: "original" },
@@ -128,9 +121,7 @@ describe("Publication CRDT", () => {
           )
 
           expect(decodedPublication.sourceContent).toEqual(content(toLoroString(text)))
-          expect(DateTime.formatIso(decodedPublication.metadata.publishedAt)).toBe(
-            "2026-10-06T00:00:00.000Z",
-          )
+          expect(decodedPublication.metadata).toEqual({ kind: "POST" })
           return true
         }),
     }),

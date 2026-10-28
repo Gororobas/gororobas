@@ -47,11 +47,11 @@ export const SourceContent = Schema.Struct(SourceContentFields).check(
 export type SourceContent = typeof SourceContent.Type
 
 type ContentProjection = {
-  content: typeof TiptapDocument.Type
+  content: TiptapDocument
   language: ContentLanguage
   originalLanguage: ContentLanguage
   translationSource: TranslationSource
-  translatedAtCrdtFrontier: typeof LoroDocFrontier.Type | null
+  translatedAtCrdtFrontier: LoroDocFrontier | null
 }
 
 /** The original is always projected, including undetermined and unsupported languages. */

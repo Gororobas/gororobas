@@ -118,7 +118,7 @@ test.live(
                   return yield* Effect.fail("abort nested transaction")
                 }),
               )
-              .pipe(Effect.catch(() => Effect.void))
+              .pipe(Effect.ignore)
 
             yield* sql`INSERT INTO parents VALUES (3)`
           }),

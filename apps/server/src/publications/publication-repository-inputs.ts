@@ -1,5 +1,6 @@
 import {
   ContentLanguage,
+  CorePublicationMetadata,
   SupportedLanguage,
   LoroDocFrontier,
   LoroDocUpdate,
@@ -36,7 +37,9 @@ export const UpdatePublicationInput = Schema.Union([HumanCrdtUpdate, SystemUpser
 export type UpdatePublicationInput = typeof UpdatePublicationInput.Type
 
 export const CreatePublicationInput = Schema.Struct({
+  ...CorePublicationMetadata.fields,
   createdById: PersonId,
   sourceData: PublicationSourceData,
 })
+
 export type CreatePublicationInput = typeof CreatePublicationInput.Type

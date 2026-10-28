@@ -16,8 +16,11 @@ import {
   ProfileId,
   ProfileVisibility,
   PublicationCrdt,
+  PublicationCrdtEdit,
   PublicationId,
+  PublicationVisibility,
   SessionContext,
+  type ApiUpdatePublicationData,
   snapshotToLoroDoc,
   tiptapToText,
 } from "@gororobas/domain"
@@ -36,6 +39,7 @@ import { DateTime, Effect, Layer, Option, Result, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { TestClock } from "effect/testing"
+import type { LoroDoc } from "loro-crdt"
 
 import { OrganizationsService } from "../src/organizations/service.js"
 import { PeopleService } from "../src/people/service.js"
@@ -496,7 +500,11 @@ const privateMembers = () =>
 const givenInformationVisibility = () =>
   Given("{string:organization} displays members in {string:visibility}", membersVisibilityStep)
 
-const editPost = (context: PublicationContext, content: string) =>
+/** A CRDT edit made on top of the publication's current state. */
+const crdtEditOf = <E>(
+  context: PublicationContext,
+  change: (document: LoroDoc) => Effect.Effect<void, E>,
+) =>
   Effect.gen(function* () {
     const publication = publicationIn(context)
     const snapshot = Option.getOrThrow(
@@ -505,27 +513,46 @@ const editPost = (context: PublicationContext, content: string) =>
     const current = snapshotToLoroDoc(snapshot)
     const edited = current.fork()
 
-    yield* PublicationCrdt.applyEdit(edited, {
-      _tag: "SetPublicationSourceContent",
-      content: textToRichTextDocument(content),
-    })
+    yield* change(edited)
 
     const row = Option.getOrThrow(
       yield* (yield* PublicationsRepository).findPublicationRowById(publication.id),
     )
+
+    return PublicationCrdtEdit.make({
+      expectedCurrentCrdtFrontier: row.currentCrdtFrontier,
+      crdtUpdate: LoroDocUpdate.make(edited.export({ from: current.version(), mode: "update" })),
+    })
+  })
+
+const setSourceContent = (content: string) => (document: LoroDoc) =>
+  PublicationCrdt.applyEdit(document, {
+    _tag: "SetPublicationSourceContent",
+    content: textToRichTextDocument(content),
+  })
+
+const updatePost = (
+  context: PublicationContext,
+  update: Omit<ApiUpdatePublicationData, "mediaIds">,
+) =>
+  Effect.gen(function* () {
     yield* TestClock.adjust(1)
 
     yield* asViewer(
       context,
       (yield* PublicationsService).updatePublication({
-        publicationId: publication.id,
-        expectedCurrentCrdtFrontier: row.currentCrdtFrontier,
-        crdtUpdate: LoroDocUpdate.make(edited.export({ from: current.version(), mode: "update" })),
+        ...update,
+        publicationId: publicationIn(context).id,
       }),
     )
 
     return context
   })
+
+const editPost = (context: PublicationContext, content: string) =>
+  Effect.flatMap(crdtEditOf(context, setSourceContent(content)), (crdtEdit) =>
+    updatePost(context, { crdtEdit }),
+  )
 
 const edit = () =>
   When("they edit the post publication content to {string:content}", {
@@ -575,6 +602,90 @@ const contentIs = () =>
   Then("the post publication content should be {string:content}", contentIsStep)
 const contentRemains = () =>
   And("the post publication content should be {string:content}", contentIsStep)
+
+const VisibilityChange = Schema.Struct({ visibility: PublicationVisibility })
+
+const editWithVisibility = () =>
+  When(
+    "they edit the post publication content to {string:content} and its visibility to {string:visibility}",
+    {
+      params: Schema.Struct({ ...Content.fields, ...VisibilityChange.fields }),
+      handler: (context: PublicationContext, { content, visibility }) =>
+        Effect.flatMap(crdtEditOf(context, setSourceContent(content)), (crdtEdit) =>
+          updatePost(context, { crdtEdit, visibility }),
+        ),
+    },
+  )
+
+const deniedVisibilityChange = () =>
+  When("they try to change the post publication visibility to {string:visibility}", {
+    params: VisibilityChange,
+    handler: (context: PublicationContext, { visibility }) =>
+      Effect.gen(function* () {
+        const before = yield* readPublicationState(context)
+        const result = yield* denied(context, updatePost(context, { visibility }))
+        expect(yield* readPublicationState(context)).toEqual(before)
+        return result
+      }),
+  })
+
+const visibilityIs = () =>
+  And("the post publication visibility should be {string:visibility}", {
+    params: VisibilityChange,
+    handler: (context: PublicationContext, { visibility }) =>
+      Effect.gen(function* () {
+        const row = yield* (yield* PublicationsService).getPublicationById(
+          publicationIn(context).id,
+        )
+        expect(row.visibility).toBe(visibility)
+        return context
+      }),
+  })
+
+const forgedOwnerEdit = () =>
+  When("they try to send a CRDT edit writing {string:name} as the post publication owner", {
+    params: NamedPerson,
+    handler: (context: PublicationContext, { name }) =>
+      Effect.gen(function* () {
+        const before = yield* readPublicationState(context)
+
+        const crdtEdit = yield* crdtEditOf(context, (document) =>
+          Effect.sync(() => {
+            const metadata = document.getMap("metadata")
+            metadata.set("ownerProfileId", personNamed(context.actors, name))
+            metadata.set("handle", "outra-publicacao")
+            document.commit()
+          }),
+        )
+
+        const result = yield* denied(context, updatePost(context, { crdtEdit }))
+        expect(yield* readPublicationState(context)).toEqual(before)
+        return result
+      }),
+  })
+
+const rejectedAsInvalid = () =>
+  Then("the CRDT edit is rejected as invalid", {
+    handler: (context: PublicationContext) =>
+      Effect.sync(() => {
+        expect(context.error).toBeInstanceOf(InvalidCrdtUpdateError)
+        return context
+      }),
+  })
+
+const stillBelongsTo = () =>
+  And("the post publication should still belong to {string:organization}", {
+    params: Schema.Struct({ organization: Schema.String }),
+    handler: (context: PublicationContext) =>
+      Effect.gen(function* () {
+        const row = yield* (yield* PublicationsService).getPublicationById(
+          publicationIn(context).id,
+        )
+        expect(row.ownerProfileId).toBe(organizationIn(context))
+        expect(row.handle).toBe(publicationIn(context).handle)
+        return context
+      }),
+  })
 
 const deletePost = () =>
   When("they delete the post publication", {
@@ -641,7 +752,7 @@ const historyMatches = () =>
     params: Schema.Struct({
       table: Schema.Array(
         Schema.Struct({
-          version: Schema.NumberFromString,
+          version: Schema.FiniteFromString,
           author: Schema.String,
           content: Schema.String,
         }),
@@ -1207,6 +1318,18 @@ await Effect.runPromise(
         layer: PublicationsFeatureTestLayer,
         steps: () => runSteps(loggedIn(), deniedEdit(), accessDenied(), contentRemains()),
       })
+      Scenario("Editor changes the visibility along with the content", {
+        layer: PublicationsFeatureTestLayer,
+        steps: () => runSteps(loggedIn(), editWithVisibility(), contentIs(), visibilityIs()),
+      })
+      Scenario("Viewer cannot change the visibility", {
+        layer: PublicationsFeatureTestLayer,
+        steps: () => runSteps(loggedIn(), deniedVisibilityChange(), accessDenied(), visibilityIs()),
+      })
+      Scenario("A CRDT edit cannot hand the post to another profile", {
+        layer: PublicationsFeatureTestLayer,
+        steps: () => runSteps(loggedIn(), forgedOwnerEdit(), rejectedAsInvalid(), stillBelongsTo()),
+      })
       Scenario("Manager deletes post", {
         layer: PublicationsFeatureTestLayer,
         steps: () => runSteps(loggedIn(), deletePost(), deleted()),
@@ -1555,10 +1678,12 @@ it.effect("publication updates preserve kind and reject kind changes without per
         yield* withPerson(
           service.updatePublication({
             publicationId: publication.id,
-            expectedCurrentCrdtFrontier: before.currentCrdtFrontier,
-            crdtUpdate: LoroDocUpdate.make(
-              edited.export({ from: current.version(), mode: "update" }),
-            ),
+            crdtEdit: {
+              expectedCurrentCrdtFrontier: before.currentCrdtFrontier,
+              crdtUpdate: LoroDocUpdate.make(
+                edited.export({ from: current.version(), mode: "update" }),
+              ),
+            },
           }),
           personId,
         )
@@ -1599,10 +1724,12 @@ it.effect("publication updates preserve kind and reject kind changes without per
           withPerson(
             service.updatePublication({
               publicationId: publication.id,
-              expectedCurrentCrdtFrontier: after.currentCrdtFrontier,
-              crdtUpdate: LoroDocUpdate.make(
-                changedKind.export({ from: updated.version(), mode: "update" }),
-              ),
+              crdtEdit: {
+                expectedCurrentCrdtFrontier: after.currentCrdtFrontier,
+                crdtUpdate: LoroDocUpdate.make(
+                  changedKind.export({ from: updated.version(), mode: "update" }),
+                ),
+              },
             }),
             personId,
           ),

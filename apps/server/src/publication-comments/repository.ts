@@ -120,12 +120,9 @@ export class PublicationCommentsRepository extends Context.Service<PublicationCo
         sourceRevisionId: PublicationCommentContentRevisionId,
       ) =>
         getPublicationComment(publicationCommentId).pipe(
-          Effect.flatMap((row) =>
-            row.currentRevisionId === sourceRevisionId
-              ? Effect.succeed(row)
-              : Effect.fail(
-                  new PublicationCommentConcurrentUpdateError({ id: publicationCommentId }),
-                ),
+          Effect.filterOrFail(
+            (row) => row.currentRevisionId === sourceRevisionId,
+            (_row) => new PublicationCommentConcurrentUpdateError({ id: publicationCommentId }),
           ),
         )
 

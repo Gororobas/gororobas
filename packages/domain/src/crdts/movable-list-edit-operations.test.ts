@@ -45,7 +45,7 @@ describe("makeMovableListEditOperations", () => {
             // As the arbitrary is not constrained by events that come before, it'll generate a bunch of invalid
             // ids that will throw CrdtListItemNotFoundError. We catch it and return undefined to avoid failing the test.
             // @todo constrain the event arbitraries
-            Effect.catchTag("CrdtListItemNotFoundError", () => Effect.succeed(undefined)),
+            Effect.catchTag("CrdtListItemNotFoundError", () => Effect.void),
           )
 
           return true

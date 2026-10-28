@@ -117,10 +117,9 @@ const assertMonotonic = (
       arbitrary: accountSessionArbitrary,
       predicate: (baseSession) =>
         Effect.gen(function* () {
-          const results = yield* Effect.all(
-            ACCESS_LEVEL_ORDER.map((level) =>
-              runPolicySuccess(policyEffect, sessionWithAccessLevel(baseSession, level)),
-            ),
+          const results = yield* Effect.forEach(
+            ACCESS_LEVEL_ORDER,
+            (level) => runPolicySuccess(policyEffect, sessionWithAccessLevel(baseSession, level)),
             { concurrency: "unbounded" },
           )
 
@@ -422,13 +421,13 @@ describe("Policies", () => {
               visibility: "PUBLIC",
             })
 
-            const results = yield* Effect.all(
-              ACCESS_LEVEL_ORDER.map((level) =>
+            const results = yield* Effect.forEach(
+              ACCESS_LEVEL_ORDER,
+              (level) =>
                 runPolicySuccess(
                   Policies.publications.canView(publication),
                   sessionWithAccessLevel(baseSession, level),
                 ),
-              ),
               { concurrency: "unbounded" },
             )
 

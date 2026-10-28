@@ -282,9 +282,7 @@ const runAtlasDiff = (migrationName: string) =>
     const result = yield* spawner.exitCode(command)
 
     if (result !== ChildProcessSpawner.ExitCode(0)) {
-      return yield* Effect.fail(
-        new MigrationScriptError({ message: `Atlas exited with code ${result}` }),
-      )
+      return yield* new MigrationScriptError({ message: `Atlas exited with code ${result}` })
     }
 
     yield* Effect.log("Atlas migration generated successfully")
@@ -350,7 +348,7 @@ const program = Effect.gen(function* () {
   if (EffectArray.isReadonlyArrayEmpty(args)) {
     yield* Console.error("Usage: npx tsx scripts/migrate.ts <migration_name>")
     yield* Console.error("Example: npx tsx scripts/migrate.ts add_users_table")
-    return yield* Effect.fail(new MigrationScriptError({ message: "Missing migration name" }))
+    return yield* new MigrationScriptError({ message: "Missing migration name" })
   }
 
   const migrationName = yield* Schema.decodeEffect(MigrationNameArg)(args[0]).pipe(

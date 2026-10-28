@@ -316,7 +316,7 @@ describe("external data providers", () => {
     return Effect.gen(function* () {
       const http = yield* makeProviderHttp("GBIF", "https://example.org")
       const result = yield* http
-        .get("/invalid", Schema.Struct({ count: Schema.Number }))
+        .get("/invalid", Schema.Struct({ count: Schema.Finite }))
         .pipe(Effect.result)
       expect(result._tag).toBe("Failure")
       expect(attempts).toBe(1)
@@ -354,7 +354,7 @@ describe("external data providers", () => {
       expect(starts).toHaveLength(3)
       // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Collected request timings must be validated for the expected tuple length.
       const [firstStart, secondStart, thirdStart] = yield* Schema.decodeUnknownEffect(
-        Schema.Tuple([Schema.Number, Schema.Number, Schema.Number]),
+        Schema.Tuple([Schema.Finite, Schema.Finite, Schema.Finite]),
       )(starts)
       expect(secondStart - firstStart).toBeGreaterThanOrEqual(990)
       expect(thirdStart - secondStart).toBeGreaterThanOrEqual(990)

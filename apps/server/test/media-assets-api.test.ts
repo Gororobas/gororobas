@@ -226,7 +226,7 @@ it.live(
       Schema.Struct({
         id: Schema.String,
         url: Schema.String,
-        byteSize: Schema.Number,
+        byteSize: Schema.Finite,
       }),
     )(yield* Effect.tryPromise(() => uploaded.json()))
 
@@ -442,10 +442,12 @@ it.live(
           headers: { "content-type": "application/json" },
           body: JSON.stringify(
             Schema.encodeSync(Schema.toCodecJson(ApiUpdatePublicationData))({
-              expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
-              crdtUpdate: LoroDocUpdate.make(
-                edited.export({ from: current.version(), mode: "update" }),
-              ),
+              crdtEdit: {
+                expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
+                crdtUpdate: LoroDocUpdate.make(
+                  edited.export({ from: current.version(), mode: "update" }),
+                ),
+              },
             }),
           ),
         })

@@ -53,7 +53,7 @@ it.live("nested rollback and concurrent transactions keep their boundaries", () 
           yield* sql`INSERT INTO items VALUES (${value})`
           yield* Effect.gen(function* () {
             yield* sql`INSERT INTO items VALUES (99)`
-            yield* Effect.fail("rollback")
+            return yield* Effect.fail("rollback")
           }).pipe(sql.withTransaction, Effect.ignore)
         }).pipe(sql.withTransaction),
       { concurrency: "unbounded" },
@@ -62,7 +62,7 @@ it.live("nested rollback and concurrent transactions keep their boundaries", () 
     expect(yield* sql`SELECT value FROM items ORDER BY value`.values).toEqual([[1], [2], [3], [4]])
     yield* Effect.gen(function* () {
       yield* sql`INSERT INTO items VALUES (100)`
-      yield* Effect.fail("rollback")
+      return yield* Effect.fail("rollback")
     }).pipe(sql.withTransaction, Effect.ignore)
     expect(yield* sql`SELECT count(*) AS count FROM items`).toEqual([{ count: 4 }])
   }).pipe(Effect.provide(client)),
@@ -144,7 +144,7 @@ it.live("interruption rolls back and releases the connection", () =>
     const transaction = yield* Effect.gen(function* () {
       yield* sql`INSERT INTO items VALUES (1)`
       yield* Deferred.succeed(inserted, undefined)
-      yield* Effect.never
+      return yield* Effect.never
     }).pipe(sql.withTransaction, Effect.forkChild)
 
     yield* Deferred.await(inserted)

@@ -1,6 +1,6 @@
 import { expect, it } from "@effect/vitest"
 import { WikiArticleEditableData, WikiPlantCultivarArticle } from "@gororobas/domain"
-import { Effect, Schema } from "effect"
+import { Effect, Layer, Schema } from "effect"
 import { WorkflowEngine } from "effect/workflow"
 
 import { listWikiArticleAliases } from "../src/wiki/queries.js"
@@ -12,7 +12,7 @@ it.effect("indexes cultivar scientific names without indexing their authored sta
     const { person } = yield* seedPerson("ADMIN")
     const repository = yield* WikiArticlesRepository.make
 
-    const create = (article: typeof WikiArticleEditableData.Type) =>
+    const create = (article: WikiArticleEditableData) =>
       repository.createWikiArticle(
         { wikiArticle: article, createdById: person.id, status: "PUBLISHED" },
         { enrichment: "skip" },
@@ -67,5 +67,5 @@ it.effect("indexes cultivar scientific names without indexing their authored sta
         index === 2 ? expect.arrayContaining([...states[2].value]) : [],
       )
     })
-  }).pipe(Effect.provide(WorkflowEngine.layerMemory), Effect.provide(TestLayer)),
+  }).pipe(Effect.provide(Layer.mergeAll(WorkflowEngine.layerMemory, TestLayer))),
 )

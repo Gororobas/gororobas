@@ -123,7 +123,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           const previous = yield* repository.findById(revision.value.wikiArticleId)
 
           if (status === "APPROVED") {
-            const stored = yield* repository.findCrdtRowById(revision.value.wikiArticleId)
+            const stored = yield* repository.findSourceRowById(revision.value.wikiArticleId)
             if (Option.isNone(stored)) {
               return yield* new WikiArticleNotFoundError({ id: revision.value.wikiArticleId })
             }
@@ -343,21 +343,20 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         resolveCultivar,
         getPublishedArticle,
         listCards: (language: SupportedLanguage) => repository.listCards(language),
-        searchWikiArticles: (params: WikiSearchParams) =>
-          Effect.gen(function* () {
-            yield* Effect.annotateCurrentSpan({
-              "wiki.article.kind": params.kind ?? "all",
-              "wiki.search.language": params.language ?? "pt",
-              "wiki.search.has_text": params.text !== undefined,
-            })
+        searchWikiArticles: Effect.fn("wiki.search")(function* (params: WikiSearchParams) {
+          yield* Effect.annotateCurrentSpan({
+            "wiki.article.kind": params.kind ?? "all",
+            "wiki.search.language": params.language ?? "pt",
+            "wiki.search.has_text": params.text !== undefined,
+          })
 
-            const articles = yield* repository.searchCards({
-              search: params,
-              language: params.language ?? "pt",
-            })
-            yield* Effect.annotateCurrentSpan("wiki.search.result_count", articles.length)
-            return articles
-          }).pipe(Effect.withSpan("wiki.search")),
+          const articles = yield* repository.searchCards({
+            search: params,
+            language: params.language ?? "pt",
+          })
+          yield* Effect.annotateCurrentSpan("wiki.search.result_count", articles.length)
+          return articles
+        }),
         attachMediaToWikiArticle,
         setMainMedia,
         listCultivars: (id: WikiArticleId) =>

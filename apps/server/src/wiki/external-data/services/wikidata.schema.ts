@@ -36,10 +36,10 @@ const Quantity = Schema.Struct({
 })
 
 const GeoCoordinate = Schema.Struct({
-  latitude: Schema.Number,
-  longitude: Schema.Number,
+  latitude: Schema.Finite,
+  longitude: Schema.Finite,
   globe: Schema.optional(Schema.String),
-  precision: Schema.optional(Schema.Number),
+  precision: Schema.optional(Schema.Finite),
 })
 
 /**

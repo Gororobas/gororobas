@@ -75,7 +75,7 @@ export const gelVegetableNamesToCrdtList = (
     })),
   )
 
-const stratumMap: Record<typeof GelStratum.Type, AgroforestryStratum> = {
+const stratumMap: Record<GelStratum, AgroforestryStratum> = {
   EMERGENTE: "EMERGENT",
   ALTO: "HIGH",
   MEDIO: "MEDIUM",
@@ -83,7 +83,7 @@ const stratumMap: Record<typeof GelStratum.Type, AgroforestryStratum> = {
   RASTEIRO: "GROUND",
 }
 
-const plantingMethodMap: Record<typeof GelPlantingMethod.Type, PlantingMethod> = {
+const plantingMethodMap: Record<GelPlantingMethod, PlantingMethod> = {
   BROTO: "SEEDLING",
   ENXERTO: "GRAFT",
   ESTACA: "STEM_CUTTING",
@@ -92,7 +92,7 @@ const plantingMethodMap: Record<typeof GelPlantingMethod.Type, PlantingMethod> =
   TUBERCULO: "TUBER",
 }
 
-const ediblePartMap: Record<typeof GelEdiblePart.Type, EdiblePlantPart> = {
+const ediblePartMap: Record<GelEdiblePart, EdiblePlantPart> = {
   FRUTO: "FRUIT",
   FLOR: "FLOWER",
   FOLHA: "LEAF",
@@ -106,14 +106,14 @@ const ediblePartMap: Record<typeof GelEdiblePart.Type, EdiblePlantPart> = {
   RIZOMA: "RHIZOME",
 }
 
-const lifecycleMap: Record<typeof GelVegetableLifeCycle.Type, PlantLifecycle> = {
+const lifecycleMap: Record<GelVegetableLifeCycle, PlantLifecycle> = {
   SEMESTRAL: "SEMIANNUAL",
   ANUAL: "ANNUAL",
   BIENAL: "BIENNIAL",
   PERENE: "PERENNIAL",
 }
 
-const usageMap: Record<typeof GelVegetableUsage.Type, PlantUsage> = {
+const usageMap: Record<GelVegetableUsage, PlantUsage> = {
   ALIMENTO_ANIMAL: "ANIMAL_FEED",
   ALIMENTO_HUMANO: "HUMAN_FEED",
   CONSTRUCAO: "CONSTRUCTION",

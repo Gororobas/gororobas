@@ -49,9 +49,7 @@ export const sourceGelBookmarks = Effect.gen(function* () {
         const state = Record.toEntries(statuses).find(([status]) => status === row.status)?.[1]
 
         if (!state) {
-          return yield* Effect.fail(
-            new IngestionError({ message: `Unknown bookmark status ${row.status}` }),
-          )
+          return yield* new IngestionError({ message: `Unknown bookmark status ${row.status}` })
         }
 
         return {

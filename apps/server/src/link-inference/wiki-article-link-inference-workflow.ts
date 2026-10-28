@@ -20,7 +20,7 @@ import { SqlClient } from "effect/sql"
 import { Activity, Workflow } from "effect/workflow"
 
 import { replaceRelations } from "../wiki/mutations.js"
-import { findCrdtRowById, findDatabaseRowById, listWikiArticleAliases } from "../wiki/queries.js"
+import { findSourceRowById, findDatabaseRowById, listWikiArticleAliases } from "../wiki/queries.js"
 import { inferLinks } from "./infer-links.js"
 import { LINK_INFERENCE_VERSION } from "./link-inference-version.js"
 import { LinkInferencePersistenceError, withPersistenceRetries } from "./persistence-errors.js"
@@ -62,7 +62,7 @@ const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(func
     error: LinkInferencePersistenceError,
     execute: Effect.gen(function* () {
       const isCurrent = yield* isCurrentFrontier(payload)
-      const crdt = yield* findCrdtRowById(payload.wikiArticleId)
+      const crdt = yield* findSourceRowById(payload.wikiArticleId)
       if (!isCurrent || Option.isNone(crdt)) return null
 
       const data = yield* WikiArticleCrdt.read(snapshotToLoroDoc(crdt.value.crdtSnapshot))

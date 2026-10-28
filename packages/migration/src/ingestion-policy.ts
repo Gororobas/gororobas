@@ -84,8 +84,7 @@ export const prepareIngestion = (exports: MutableExports) =>
 
     exports.notes = exports.notes.filter((entry) => {
       const publication = entry.data.publication
-      const metadata = isJsonObject(publication) ? publication.metadata : null
-      const ownerId = isJsonObject(metadata) ? metadata.ownerProfileId : null
+      const ownerId = isJsonObject(publication) ? publication.ownerProfileId : null
       if (isString(ownerId) && excludedProfiles.includes(ownerId)) {
         excludedPublications.push(entry.data)
         return false

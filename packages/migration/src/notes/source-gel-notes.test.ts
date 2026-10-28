@@ -97,15 +97,15 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
           // The DESCOBERTA note-type concept, then the related plant.
           wikiArticleIds: [mappedId, mappedId],
           publication: {
-            metadata: {
-              kind: "POST",
-              handle: note.handle,
-              visibility: "PUBLIC",
-              ownerProfileId: mappedId,
-              publishedAt: timestamp.toISOString(),
+            handle: note.handle,
+            visibility: "PUBLIC",
+            ownerProfileId: mappedId,
+            publishedAt: timestamp.toISOString(),
+            sourceData: {
+              metadata: { kind: "POST" },
+              sourceLanguage: ContentLanguage.make("pt"),
+              translations: { pt: "original" },
             },
-            sourceLanguage: ContentLanguage.make("pt"),
-            translations: { pt: "original" },
           },
           conversion_error: null,
           latest_source: {

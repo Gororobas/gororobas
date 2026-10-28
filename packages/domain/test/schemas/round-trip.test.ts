@@ -22,7 +22,7 @@ import { PersonRow } from "../../src/people/domain.js"
 import { ProfileRow } from "../../src/profiles/domain.js"
 import {
   PublicationCommitRow,
-  PublicationCrdtRow,
+  PublicationSourceRow,
   PublicationRow,
   PublicationTranslationRow,
 } from "../../src/publications/domain.js"
@@ -32,7 +32,7 @@ import {
   deepEquals,
 } from "../../src/testing.js"
 import {
-  WikiArticleCrdtRow,
+  WikiArticleSourceRow,
   WikiArticleHandleProjectionRow,
   WikiArticleProjectionRow,
   WikiArticleRevisionRow,
@@ -45,11 +45,11 @@ const rowSchemas = [
   { name: "PersonRow", schema: PersonRow },
   { name: "ProfileRow", schema: ProfileRow },
   { name: "PublicationCommitRow", schema: PublicationCommitRow },
-  { name: "PublicationCrdtRow", schema: PublicationCrdtRow },
+  { name: "PublicationSourceRow", schema: PublicationSourceRow },
   { name: "PublicationRow", schema: PublicationRow },
   { name: "PublicationTranslationRow", schema: PublicationTranslationRow },
   { name: "AuthenticationSession", schema: AuthenticationSession },
-  { name: "WikiArticleCrdtRow", schema: WikiArticleCrdtRow },
+  { name: "WikiArticleSourceRow", schema: WikiArticleSourceRow },
   { name: "WikiArticleHandleRow", schema: WikiArticleHandleProjectionRow },
   { name: "WikiArticleProjectionRow", schema: WikiArticleProjectionRow },
   { name: "WikiArticleRevisionRow", schema: WikiArticleRevisionRow },

@@ -1,13 +1,12 @@
 import { describe, expect, it } from "@effect/vitest"
-import { ContentLanguage, TiptapNodeId } from "@gororobas/domain"
+import { TiptapNodeId } from "@gororobas/domain"
 import { PublicationCrdt } from "@gororobas/domain"
 import {
-  Handle,
   LoroDocSnapshot,
   LoroDocUpdate,
-  PublicationCrdtRow,
-  UnauthorizedError,
+  PublicationSourceRow,
   type PublicationSourceData,
+  UnauthorizedError,
   type TiptapDocument,
   snapshotToLoroDoc,
 } from "@gororobas/domain"
@@ -17,7 +16,7 @@ import { SqlClient } from "effect/sql"
 
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { PublicationsService } from "../../src/publications/service.js"
-import { makePersonFixture, makeProfileFixture } from "../fixtures.js"
+import { makePersonFixture, makePostPublicationInput, makeProfileFixture } from "../fixtures.js"
 import {
   insertPersonWithDependencies,
   LinkInferenceTestLayer,
@@ -40,7 +39,7 @@ const TestLayerWithPublicationsService = Layer.mergeAll(
   PublicationsServiceLayer,
 ).pipe(Layer.provideMerge(LinkInferenceTestLayer.pipe(Layer.provide(TestLayer))))
 
-const PublicationCrdtSnapshotRow = PublicationCrdtRow.mapFields(Struct.pick(["crdtSnapshot"]))
+const PublicationCrdtSnapshotRow = PublicationSourceRow.mapFields(Struct.pick(["crdtSnapshot"]))
 
 const paragraph = (text: string) => ({
   attrs: { nodeId: TiptapNodeId.make("paragraph001") },
@@ -53,8 +52,6 @@ const makeDocument = (text: string): TiptapDocument => ({
   type: "doc",
   version: 1,
 })
-
-const makeHandle = Schema.decodeSync(Handle)
 
 const makePublicationCrdtUpdate = (input: {
   nextSourceData: PublicationSourceData
@@ -107,24 +104,6 @@ const makePublicationCrdtUpdate = (input: {
   )
 }
 
-const makePostSourceData = (input: {
-  content: TiptapDocument
-  handle: string
-  ownerProfileId: PublicationSourceData["metadata"]["ownerProfileId"]
-  publishedAt: PublicationSourceData["metadata"]["publishedAt"]
-}): PublicationSourceData => ({
-  sourceContent: input.content,
-  sourceLanguage: ContentLanguage.make("pt"),
-  translations: { pt: "original" },
-  metadata: {
-    handle: makeHandle(input.handle),
-    kind: "POST",
-    ownerProfileId: input.ownerProfileId,
-    publishedAt: input.publishedAt,
-    visibility: "PUBLIC",
-  },
-})
-
 describe("PublicationsService", () => {
   it.effect("searches translated text", () =>
     Effect.gen(function* () {
@@ -137,7 +116,7 @@ describe("PublicationsService", () => {
 
       const matchingId = yield* repository.createPublication({
         createdById: person.id,
-        sourceData: makePostSourceData({
+        ...makePostPublicationInput({
           content: makeDocument("A practical agroecology guide"),
           handle: `search-agroecology-${person.id.slice(0, 8)}`,
           ownerProfileId: profile.id,
@@ -147,7 +126,7 @@ describe("PublicationsService", () => {
 
       yield* repository.createPublication({
         createdById: person.id,
-        sourceData: makePostSourceData({
+        ...makePostPublicationInput({
           content: makeDocument("A different topic"),
           handle: `search-other-${person.id.slice(0, 8)}`,
           ownerProfileId: profile.id,
@@ -176,7 +155,7 @@ describe("PublicationsService", () => {
       const publish = (handle: string, text: string) =>
         repository.createPublication({
           createdById: person.id,
-          sourceData: makePostSourceData({
+          ...makePostPublicationInput({
             content: makeDocument(text),
             handle: `${handle}-${person.id.slice(0, 8)}`,
             ownerProfileId: profile.id,
@@ -219,7 +198,7 @@ describe("PublicationsService", () => {
 
       const now = yield* DateTime.now
 
-      const sourceData = makePostSourceData({
+      const publicationInput = makePostPublicationInput({
         content: makeDocument("Nota do dono"),
         handle: `svc-publication-${owner.id.slice(0, 8)}`,
         ownerProfileId: ownerProfile.id,
@@ -228,33 +207,35 @@ describe("PublicationsService", () => {
 
       const publicationId = yield* repository.createPublication({
         createdById: owner.id,
-        sourceData,
+        ...publicationInput,
       })
 
       const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
       // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
-        yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
+        yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`,
       )
       expect(snapshotRows).toHaveLength(1)
       const snapshot = snapshotRows[0]
       expect(snapshot).toBeDefined()
       if (snapshot === undefined) return
-      const ptLanguage = sourceData.sourceContent
+      const ptLanguage = publicationInput.sourceData.sourceContent
       expect(ptLanguage).toBeDefined()
       if (ptLanguage === undefined) return
 
       const result = yield* withSession(
         service.updatePublication({
-          crdtUpdate: makePublicationCrdtUpdate({
-            nextSourceData: {
-              ...sourceData,
-              sourceContent: makeDocument("Tentativa sem permissao"),
-            },
-            snapshot: snapshot.crdtSnapshot,
-          }),
-          expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
+          crdtEdit: {
+            crdtUpdate: makePublicationCrdtUpdate({
+              nextSourceData: {
+                ...publicationInput.sourceData,
+                sourceContent: makeDocument("Tentativa sem permissao"),
+              },
+              snapshot: snapshot.crdtSnapshot,
+            }),
+            expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
+          },
           publicationId,
         }),
         yield* resolveSessionFromAuthSubjectId(other.id),
@@ -276,7 +257,7 @@ describe("PublicationsService", () => {
 
       const now = yield* DateTime.now
 
-      const sourceData = makePostSourceData({
+      const publicationInput = makePostPublicationInput({
         content: makeDocument("Antes"),
         handle: `service-publication-${person.id.slice(0, 8)}`,
         ownerProfileId: profile.id,
@@ -285,33 +266,35 @@ describe("PublicationsService", () => {
 
       const publicationId = yield* repository.createPublication({
         createdById: person.id,
-        sourceData,
+        ...publicationInput,
       })
 
       const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
       // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
-        yield* sql`SELECT crdt_snapshot FROM publication_crdts WHERE id = ${publicationId}`,
+        yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`,
       )
       expect(snapshotRows).toHaveLength(1)
       const snapshot = snapshotRows[0]
       expect(snapshot).toBeDefined()
       if (snapshot === undefined) return
-      const ptLanguage = sourceData.sourceContent
+      const ptLanguage = publicationInput.sourceData.sourceContent
       expect(ptLanguage).toBeDefined()
       if (ptLanguage === undefined) return
 
       yield* withSession(
         service.updatePublication({
-          crdtUpdate: makePublicationCrdtUpdate({
-            nextSourceData: {
-              ...sourceData,
-              sourceContent: makeDocument("Depois"),
-            },
-            snapshot: snapshot.crdtSnapshot,
-          }),
-          expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
+          crdtEdit: {
+            crdtUpdate: makePublicationCrdtUpdate({
+              nextSourceData: {
+                ...publicationInput.sourceData,
+                sourceContent: makeDocument("Depois"),
+              },
+              snapshot: snapshot.crdtSnapshot,
+            }),
+            expectedCurrentCrdtFrontier: Option.getOrThrow(before).currentCrdtFrontier,
+          },
           publicationId,
         }),
         yield* resolveSessionFromAuthSubjectId(person.id),

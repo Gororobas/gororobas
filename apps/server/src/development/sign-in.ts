@@ -8,7 +8,7 @@
  */
 import { NodeRuntime, NodeServices } from "@effect/platform-node"
 import { AuthenticationApi, DEFAULT_AUTHENTICATION_RETURN_TARGET } from "@gororobas/domain"
-import { Config, Console, Effect, Option, Record, Schedule, Schema } from "effect"
+import { Config, Console, Effect, Layer, Option, Record, Schedule, Schema } from "effect"
 import { Argument, Command, Flag } from "effect/cli"
 import {
   Cookies,
@@ -171,7 +171,6 @@ const command = Command.make(
 )
 
 Command.run(command, { version: "0.0.0" }).pipe(
-  Effect.provide(FetchHttpClient.layer),
-  Effect.provide(NodeServices.layer),
+  Effect.provide(Layer.mergeAll(FetchHttpClient.layer, NodeServices.layer)),
   NodeRuntime.runMain,
 )

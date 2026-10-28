@@ -34,7 +34,7 @@ const VolumeInfo = Schema.Struct({
   printType: Schema.optional(Schema.String),
   mainCategory: Schema.optional(Schema.String),
   categories: Schema.optional(Schema.Array(Schema.String)),
-  averageRating: Schema.optional(Schema.Number.check(Schema.isGreaterThanOrEqualTo(0))),
+  averageRating: Schema.optional(Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))),
   ratingsCount: Schema.optional(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
   contentVersion: Schema.optional(Schema.String),
   imageLinks: Schema.optional(ImageLinks),
@@ -45,7 +45,7 @@ const VolumeInfo = Schema.Struct({
 })
 
 const MonetaryAmount = Schema.Struct({
-  amount: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  amount: Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)),
   currencyCode: Schema.optional(Schema.String),
 })
 

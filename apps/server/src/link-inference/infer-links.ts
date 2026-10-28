@@ -156,7 +156,7 @@ export const inferLinks = Effect.fn("inferLinks")(function* (
         onEmpty: () => Effect.succeed(Option.none<WikiArticleId>()),
         onNonEmpty: (nonEmpty) =>
           nonEmpty.length === 1
-            ? Effect.succeed(Option.some(nonEmpty[0].wikiArticleId))
+            ? Effect.succeedSome(nonEmpty[0].wikiArticleId)
             : model.disambiguate({
                 text: claim.evidence.text,
                 passage: passageAround(source, claim),

@@ -191,7 +191,7 @@ export const LanguageModelInfo = Schema.Struct({
 export type LanguageModelInfo = typeof LanguageModelInfo.Type
 
 /**
- * The record of a publication's latest link inference run, stored on `publication_crdts`. Its
+ * The record of a publication's latest link inference run, stored on `publication_sources`. Its
  * links are persisted as rows; the record keeps what rows can't hold.
  */
 export const LinkInferenceRun = Schema.Struct({

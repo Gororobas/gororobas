@@ -9,7 +9,6 @@ import {
   Handle,
   IdGen,
   MediaAssetId,
-  PostSourceData,
   ProfileId,
   PublicationId,
   WikiArticleId,
@@ -50,7 +49,7 @@ import {
 import { ingestApplication } from "./ingest-application.js"
 import { angieGelProfileId, fallbackGelProfileId, fredGelProfileId } from "./ingestion-policy.js"
 import { PreviewRecord, previewCollections } from "./preview-exports.js"
-import { UserDataForMigration } from "./schemas/gel/entities.js"
+import { MigratedPublication, UserDataForMigration } from "./schemas/gel/entities.js"
 import { gelVegetableNamesToCrdtList } from "./vegetables/gel-vegetable-to-wiki-plant-article.js"
 import { buildWikiMigrationHistory, WikiMigrationVersion } from "./wiki-migration-history.js"
 
@@ -246,17 +245,17 @@ const fixture = Effect.gen(function* () {
           ],
         }
 
-        const sourceData = PostSourceData.make({
-          metadata: {
-            kind: "POST",
-            ownerProfileId: ProfileId.make(owner.profile.id ?? ""),
-            handle,
-            publishedAt: now,
-            visibility,
+        const publication = MigratedPublication.make({
+          ownerProfileId: ProfileId.make(owner.profile.id ?? ""),
+          handle,
+          publishedAt: now,
+          visibility,
+          sourceData: {
+            metadata: { kind: "POST" },
+            sourceContent: content,
+            sourceLanguage: ContentLanguage.make("pt"),
+            translations: { pt: "original" },
           },
-          sourceContent: content,
-          sourceLanguage: ContentLanguage.make("pt"),
-          translations: { pt: "original" },
         })
 
         yield* fs.writeFileString(
@@ -282,7 +281,7 @@ const fixture = Effect.gen(function* () {
               related_to_vegetables: [],
               related_to_notes: [],
             },
-            publication: yield* Schema.encodeEffect(PostSourceData)(sourceData),
+            publication: yield* Schema.encodeEffect(MigratedPublication)(publication),
             conversion_error: null,
           }),
         )
@@ -436,7 +435,7 @@ it.live(
         ])
         expect(yield* sql`PRAGMA foreign_key_check`).toEqual([])
       }).pipe(Effect.provide(makeAppSql(report.database)))
-    }).pipe(Effect.scoped, Effect.provide(IdGenLive), Effect.provide(NodeServices.layer)),
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(IdGenLive, NodeServices.layer))),
   { timeout: 30000 },
 )
 
@@ -473,5 +472,5 @@ it.live("rejects unresolved edit authors without replacing the application datab
     ).toMatchObject({ _tag: "IngestionError", message: expect.stringContaining("unresolved-edit") })
 
     expect(yield* data.fs.readFile(report.database)).toEqual(originalDatabase)
-  }).pipe(Effect.scoped, Effect.provide(IdGenLive), Effect.provide(NodeServices.layer)),
+  }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(IdGenLive, NodeServices.layer))),
 )

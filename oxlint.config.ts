@@ -1,9 +1,11 @@
+import { recommended as effectTsgoRecommended } from "@effect/tsgo/oxlint-presets"
 import foldkit from "@foldkit/oxlint-plugin"
 import effect from "@mpsuesser/oxlint-plugin-effect"
 import { defineConfig } from "oxlint"
 
 export default defineConfig({
   extends: [
+    effectTsgoRecommended,
     {
       ...effect.configs.recommended,
       ignorePatterns: ["./linting/**/*.mjs"],

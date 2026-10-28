@@ -32,11 +32,9 @@ export const ingestApplication = (exportDirectory: string) =>
       (yield* fs.exists(database)) &&
       ((yield* fs.exists(`${database}-wal`)) || (yield* fs.exists(`${database}-shm`)))
     ) {
-      return yield* Effect.fail(
-        new IngestionError({
-          message: `Stop the server before replacing ${database}; SQLite sidecars are present`,
-        }),
-      )
+      return yield* new IngestionError({
+        message: `Stop the server before replacing ${database}; SQLite sidecars are present`,
+      })
     }
 
     const report = yield* importPreview({

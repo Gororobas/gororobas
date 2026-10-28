@@ -4,7 +4,7 @@ import * as Arbitrary from "effect/Arbitrary"
 import { LoroMap, type LoroDoc } from "loro-crdt"
 
 import { ContentLanguage } from "../../src/common/content-language.js"
-import { PersonId, ProfileId, TiptapNodeId } from "../../src/common/ids.js"
+import { PersonId, TiptapNodeId } from "../../src/common/ids.js"
 import { HumanCommit, LoroDocSnapshot, LoroDocUpdate } from "../../src/crdts/domain.js"
 import { InvalidCrdtUpdateError } from "../../src/crdts/errors.js"
 import { snapshotToLoroDoc } from "../../src/crdts/lib.js"
@@ -37,13 +37,7 @@ const original = {
 } as const
 
 const publication = Schema.decodeSync(PublicationSourceData)({
-  metadata: {
-    kind: "POST",
-    handle: "growing-together",
-    ownerProfileId: ProfileId.make("019a0dce-1fc0-7abc-8abc-123456789abc"),
-    publishedAt: "2026-10-06T00:00:00Z",
-    visibility: "PUBLIC",
-  },
+  metadata: { kind: "POST" },
   sourceContent: original.content,
   sourceLanguage: ContentLanguage.make("pt"),
   translations: { pt: "original" },

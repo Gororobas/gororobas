@@ -58,7 +58,7 @@ function readGitignorePatterns(
     const content = yield* Effect.matchEffect(
       fileSystem.readFileString(path.resolve(cwd, ".gitignore")),
       {
-        onFailure: () => Effect.succeed(undefined),
+        onFailure: () => Effect.void,
         onSuccess: Effect.succeed,
       },
     )
@@ -108,13 +108,13 @@ function filterTestFilesWithFeature(
   return Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem
 
-    const matches = yield* Effect.all(
-      files.map((file) =>
-        Effect.matchEffect(fileSystem.readFileString(file), {
-          onFailure: () => Effect.succeed(false),
-          onSuccess: (content) => Effect.succeed(DESCRIBE_FEATURE_REGEX.test(content)),
+    const matches = yield* Effect.forEach(
+      files,
+      (file) =>
+        Effect.match(fileSystem.readFileString(file), {
+          onFailure: () => false,
+          onSuccess: (content) => DESCRIBE_FEATURE_REGEX.test(content),
         }),
-      ),
       { concurrency: 150 },
     )
 
@@ -157,8 +157,9 @@ export function runCheck(
       return discoveredSteps.filter((step) => path.resolve(step.file) === testFile)
     }
 
-    const featureResults = yield* Effect.all(
-      allFeatureFiles.map((featurePath) =>
+    const featureResults = yield* Effect.forEach(
+      allFeatureFiles,
+      (featurePath) =>
         Effect.gen(function* () {
           const feature = yield* parseFeatureFile(featurePath)
 
@@ -168,7 +169,6 @@ export function runCheck(
             featurePath: featurePath,
           })
         }),
-      ),
       { concurrency: "unbounded" },
     )
 
@@ -177,7 +177,7 @@ export function runCheck(
     yield* reporter.report(result)
 
     if (!result.passed) {
-      return yield* Effect.fail(new CheckFailedError({}))
+      return yield* new CheckFailedError({})
     }
   }).pipe(Effect.provide(createCheckLayer(config.format, config.quiet)))
 }

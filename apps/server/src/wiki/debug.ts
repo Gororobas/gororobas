@@ -11,7 +11,7 @@ import { Array as EffectArray, Effect, Option, Predicate, Record, Schema } from 
 import { SqlClient } from "effect/sql"
 
 import { environmentConfig } from "../environment-config.js"
-import { findCrdtRowById } from "./queries.js"
+import { findSourceRowById } from "./queries.js"
 
 const jsonColumns: ReadonlyArray<string> = [
   "attributes",
@@ -70,14 +70,14 @@ export const getWikiArticleDebug = Effect.fn("Wiki.getArticleDebug")(function* (
     })
   }
 
-  const stored = yield* findCrdtRowById(wikiArticleId)
+  const stored = yield* findSourceRowById(wikiArticleId)
   if (Option.isNone(stored)) return yield* new WikiArticleNotFoundError({ id: wikiArticleId })
   const sql = yield* SqlClient.SqlClient
   const canonical = yield* WikiArticleCrdt.read(snapshotToLoroDoc(stored.value.crdtSnapshot))
 
   const data = {
     canonical: yield* Schema.encodeEffect(WikiArticleEditableData)(canonical),
-    projection: yield* sql`SELECT * FROM wiki_articles WHERE id = ${wikiArticleId}`,
+    projection: yield* sql`SELECT * FROM wiki_article_projections WHERE id = ${wikiArticleId}`,
     translations:
       yield* sql`SELECT * FROM wiki_article_translations WHERE wiki_article_id = ${wikiArticleId}`,
     handles:
@@ -114,7 +114,7 @@ export const getWikiArticleDebug = Effect.fn("Wiki.getArticleDebug")(function* (
     publicationReferences:
       yield* sql`SELECT * FROM publication_wiki_articles WHERE wiki_article_id = ${wikiArticleId}`,
     cultivars:
-      yield* sql`SELECT * FROM wiki_articles WHERE kind = 'PLANT_CULTIVAR' AND json_extract(attributes, '$.parentPlantId') = ${wikiArticleId}`,
+      yield* sql`SELECT * FROM wiki_article_projections WHERE kind = 'PLANT_CULTIVAR' AND json_extract(attributes, '$.parentPlantId') = ${wikiArticleId}`,
   }
 
   const sections = yield* Effect.forEach(

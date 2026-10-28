@@ -231,7 +231,7 @@ export const loroRichTextToTiptap = (container: LoroMap): TiptapDocument => {
   // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro nodes have dynamic names and children that require structural validation.
   return Schema.decodeUnknownSync(TiptapDocument, { onExcessProperty: "error" })({
     // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The recursive Loro projection returns unknown data.
-    ...Schema.decodeUnknownSync(JsonAttributes)(readNode(container)),
+    ...Schema.decodeSync(JsonAttributes)(readNode(container)),
     version: 1,
   })
 }

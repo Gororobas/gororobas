@@ -2,7 +2,7 @@ import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
 import { IdGen, TiptapDocument, ValidName } from "@gororobas/domain"
 import { assertPropertyEffect } from "@gororobas/domain/testing"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Layer, Option, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
 import { KeyValueStore } from "effect/persistence"
 
@@ -85,9 +85,12 @@ it.effect(
 
           return true
         }).pipe(
-          Effect.provide(MigrationContextLive),
-          Effect.provide(KeyValueStore.layerMemory),
-          Effect.provide(NodeServices.layer),
+          Effect.provide(
+            MigrationContextLive.pipe(
+              Layer.provide(KeyValueStore.layerMemory),
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ),
           Effect.provideService(IdGen, { generate: () => tagId }),
         ),
     }),

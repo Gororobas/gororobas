@@ -42,8 +42,8 @@ export const listRevisionsAwaitingEvaluation = SqlSchema.findAll({
         revisions.created_by_id,
         revisions.created_at AS waiting_since
       FROM wiki_article_revisions revisions
-      JOIN wiki_article_crdts crdts ON crdts.id = revisions.wiki_article_id
-      LEFT JOIN wiki_articles articles ON articles.id = revisions.wiki_article_id
+      JOIN wiki_article_sources crdts ON crdts.id = revisions.wiki_article_id
+      LEFT JOIN wiki_article_projections articles ON articles.id = revisions.wiki_article_id
       WHERE revisions.evaluation = 'PENDING'
       ORDER BY revisions.created_at ASC, revisions.rowid ASC
     `,

@@ -40,11 +40,9 @@ export const ingestMedia = (
           )
 
           if (!match) {
-            return yield* Effect.fail(
-              new IngestionError({
-                message: `Invalid Sanity image ID: ${image.latest_source.sanity_id}`,
-              }),
-            )
+            return yield* new IngestionError({
+              message: `Invalid Sanity image ID: ${image.latest_source.sanity_id}`,
+            })
           }
 
           const original = path.join(cacheDirectory, image.latest_source.sanity_id)
@@ -102,9 +100,7 @@ export const ingestMedia = (
           })
 
           if (preparedImage.metadata.format !== "IMAGE") {
-            return yield* Effect.fail(
-              new IngestionError({ message: `Expected image: ${image.id}` }),
-            )
+            return yield* new IngestionError({ message: `Expected image: ${image.id}` })
           }
 
           const stored = { ...preparedImage, metadata: preparedImage.metadata }

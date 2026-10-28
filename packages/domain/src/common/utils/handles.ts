@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import { nanoid } from "nanoid"
 
 import { TiptapDocument } from "../../rich-text/domain.js"
 import { tiptapToText } from "../../rich-text/tiptap-to-text.js"
@@ -28,4 +29,4 @@ export const stringToHandle = (str: string) =>
 
 /** Transforms a piece of content into a human-readable URL with a unique ID at the end */
 export const richTextToHandle = (content: TiptapDocument) =>
-  stringToHandle(truncate(tiptapToText(content), 30))
+  stringToHandle(`${truncate(tiptapToText(content), 30)}-${nanoid(8)}`)

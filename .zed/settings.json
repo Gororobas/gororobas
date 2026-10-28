@@ -3,5 +3,26 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
 {
-  "file_scan_exclusions": ["repos/**"]
+  "file_scan_exclusions": ["repos/**"],
+  "languages": {
+    "TypeScript": {
+      "language_servers": ["effect-tsgo", "!vtsls", "!typescript-language-server"]
+    },
+    "TSX": {
+      "language_servers": ["effect-tsgo", "!vtsls", "!typescript-language-server"]
+    },
+    "JavaScript": {
+      "language_servers": ["effect-tsgo", "!vtsls", "!typescript-language-server"]
+    },
+    "JSX": {
+      "language_servers": ["effect-tsgo", "!vtsls", "!typescript-language-server"]
+    }
+  },
+  "lsp": {
+    "effect-tsgo": {
+      "binary": {
+        "path": "node_modules/.bin/tsrs"
+      }
+    }
+  }
 }

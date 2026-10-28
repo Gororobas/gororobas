@@ -55,7 +55,11 @@ import { PeopleService } from "../src/people/service.js"
 import { findPublicationCrdtSnapshotById } from "../src/publications/queries.js"
 import { PublicationsRepository } from "../src/publications/repository.js"
 import { PublicationsService } from "../src/publications/service.js"
-import { findCrdtRowById, findRevisionById, listRevisionMediaAssets } from "../src/wiki/queries.js"
+import {
+  findSourceRowById,
+  findRevisionById,
+  listRevisionMediaAssets,
+} from "../src/wiki/queries.js"
 import { WikiArticlesRepository } from "../src/wiki/repository.js"
 import { WikiArticlesService } from "../src/wiki/service.js"
 import {
@@ -236,10 +240,7 @@ const accessDenied = () =>
 
 const deniedPublicationUpload = () =>
   When("they try to upload media to a publication", {
-    handler: (context: MediaContext) =>
-      Effect.gen(function* () {
-        return yield* deny(context, upload(context))
-      }),
+    handler: (context: MediaContext) => deny(context, upload(context)),
   })
 
 const attached = () =>
@@ -828,7 +829,7 @@ it.effect(
 
       yield* checkVisibility({ ...context, media, actorId: undefined }, true)
       const sql = yield* SqlClient.SqlClient
-      yield* sql`DELETE FROM publication_crdts WHERE id = ${publicPublication.id}`
+      yield* sql`DELETE FROM publication_sources WHERE id = ${publicPublication.id}`
       expect(
         Option.getOrThrow(yield* (yield* MediaAssetsRepository).findMediaAssetById(media.id)).id,
       ).toBe(media.id)
@@ -876,9 +877,9 @@ it.effect("publication creation and edits commit content and media together", ()
 
     const state = Effect.all(
       {
-        crdts: sql`SELECT * FROM publication_crdts ORDER BY id`,
+        sources: sql`SELECT * FROM publication_sources ORDER BY id`,
         commits: sql`SELECT * FROM publication_commits ORDER BY id`,
-        projections: sql`SELECT * FROM publications ORDER BY id`,
+        projections: sql`SELECT * FROM publication_projections ORDER BY id`,
         attachments: sql`SELECT * FROM publication_media_assets ORDER BY publication_id, media_asset_id`,
       },
       { concurrency: 1 },
@@ -940,7 +941,7 @@ it.effect("revision media references preserve selections and roll back invalid a
     const wikiArticleId = articleIn(context, "Mandioca")
     const media = yield* upload(context)
     const repository = yield* WikiArticlesRepository
-    const row = Option.getOrThrow(yield* findCrdtRowById(wikiArticleId))
+    const row = Option.getOrThrow(yield* findSourceRowById(wikiArticleId))
     const document = snapshotToLoroDoc(row.crdtSnapshot)
     const edited = document.fork()
     yield* WikiArticleCrdt.applyEdit(edited, { _tag: "SetSuggestedKind", value: "Plant" })
@@ -1022,7 +1023,7 @@ REVISION_CASES.forEach((hasRevisions) => {
       let revisionId
 
       if (hasRevisions) {
-        const original = Option.getOrThrow(yield* findCrdtRowById(wikiArticleId))
+        const original = Option.getOrThrow(yield* findSourceRowById(wikiArticleId))
         const document = snapshotToLoroDoc(original.crdtSnapshot)
         const edited = document.fork()
         yield* WikiArticleCrdt.applyEdit(edited, { _tag: "SetSuggestedKind", value: "Plant" })
@@ -1038,7 +1039,7 @@ REVISION_CASES.forEach((hasRevisions) => {
       }
 
       const sql = yield* SqlClient.SqlClient
-      const before = yield* findCrdtRowById(wikiArticleId)
+      const before = yield* findSourceRowById(wikiArticleId)
       const files = yield* MediaAssetsStorage
       const filesystem = yield* FileSystem.FileSystem
       expect(yield* filesystem.exists(files.filePath(media.id, "original"))).toBe(true)
@@ -1063,7 +1064,7 @@ REVISION_CASES.forEach((hasRevisions) => {
       expect(
         yield* sql`SELECT * FROM wiki_article_main_media WHERE wiki_article_id = ${wikiArticleId}`,
       ).toEqual([])
-      expect(yield* findCrdtRowById(wikiArticleId)).toEqual(before)
+      expect(yield* findSourceRowById(wikiArticleId)).toEqual(before)
       const revision =
         revisionId === undefined
           ? undefined

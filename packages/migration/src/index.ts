@@ -18,8 +18,8 @@ Command.run(migrate, { version: "0.0.0" }).pipe(
       Layer.provide(
         KeyValueStore.layerFileSystem(new URL("../debug/id-mappings", import.meta.url).pathname),
       ),
+      Layer.provideMerge(Layer.mergeAll(NodeServices.layer, GelClientLive, IdGenLive)),
     ),
   ),
-  Effect.provide(Layer.mergeAll(NodeServices.layer, GelClientLive, IdGenLive)),
   NodeRuntime.runMain,
 )

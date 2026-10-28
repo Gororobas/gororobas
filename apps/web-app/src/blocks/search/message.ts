@@ -15,7 +15,7 @@ export const Message = defineMessageUnion({
   /** The app reports leaving search through one of its results. */
   InformedOfOpenedResult: { query: SearchQuery },
   SubmittedSearch: { query: SearchQuery },
-  ClickedRemoveRecentSearch: { index: Schema.Number },
+  ClickedRemoveRecentSearch: { index: Schema.Finite },
   SucceededLoadRecentSearches: { recentSearches: RecentSearches },
   CompletedSaveRecentSearches: {},
   ChangedSearchQuery: { query: SearchQuery, navigation: Navigation },

@@ -11,7 +11,6 @@ import {
   LoroDocSnapshot,
   LoroDocUpdate,
   PersonId,
-  PostSourceData,
   ProfileId,
   PublicationId,
   WikiArticleEditableData,
@@ -29,7 +28,7 @@ import { MediaAssetsService } from "@gororobas/server/media-assets/service"
 import { MediaAssetsStorage } from "@gororobas/server/media-assets/storage"
 import { PublicationsRepository } from "@gororobas/server/publications/repository"
 import { makeAppSqlClient, makeAppSql } from "@gororobas/server/sql"
-import { updateCrdtRow } from "@gororobas/server/wiki/mutations"
+import { updateSourceRow } from "@gororobas/server/wiki/mutations"
 import { WikiArticlesRepository } from "@gororobas/server/wiki/repository"
 import {
   Array as EffectArray,
@@ -412,7 +411,7 @@ export const importPreview = ({
                 latest.timestamp,
               )
 
-              yield* updateCrdtRow({
+              yield* updateSourceRow({
                 id: article.id,
                 crdtSnapshot: snapshot,
                 status: "PUBLISHED",
@@ -420,8 +419,8 @@ export const importPreview = ({
                 updatedAt,
               })
 
-              yield* sql`UPDATE wiki_article_crdts SET created_at = ${DateTime.formatIso(createdAt)} WHERE id = ${article.id}`
-              yield* sql`UPDATE wiki_articles SET current_crdt_frontier = ${JSON.stringify(frontier)}, created_at = ${DateTime.formatIso(createdAt)}, updated_at = ${DateTime.formatIso(updatedAt)} WHERE id = ${article.id}`
+              yield* sql`UPDATE wiki_article_sources SET created_at = ${DateTime.formatIso(createdAt)} WHERE id = ${article.id}`
+              yield* sql`UPDATE wiki_article_projections SET current_crdt_frontier = ${JSON.stringify(frontier)}, created_at = ${DateTime.formatIso(createdAt)}, updated_at = ${DateTime.formatIso(updatedAt)} WHERE id = ${article.id}`
             } else revisionCount++
 
             const photoIds = EffectArray.dedupe([
@@ -465,18 +464,22 @@ export const importPreview = ({
             )
           }
 
-          const sourceData = PostSourceData.make(note.publication)
-          const owner = sourceData.metadata.ownerProfileId
+          const publication = note.publication
+          const owner = publication.ownerProfileId
           if (!people.has(owner)) {
             return yield* Effect.fail(new Error(`Missing publication owner ${owner}: ${file}`))
           }
           yield* publications.createPublication(
-            { sourceData, createdById: PersonId.make(owner) },
+            { ...publication, createdById: PersonId.make(owner) },
             { id: PublicationId.make(note.id) },
           )
-          for (const mediaAssetId of richTextMediaIds(sourceData.sourceContent.content)) {
+
+          for (const mediaAssetId of richTextMediaIds(
+            publication.sourceData.sourceContent.content,
+          )) {
             yield* sql`INSERT INTO publication_media_assets ${sql.insert({ publicationId: note.id, mediaAssetId })}`
           }
+
           for (const wikiArticleId of note.wikiArticleIds) {
             yield* sql`INSERT INTO publication_wiki_articles ${sql.insert({ publicationId: note.id, wikiArticleId, source: "LEGACY_TAG" })}`
           }

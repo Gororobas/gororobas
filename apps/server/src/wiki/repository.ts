@@ -42,13 +42,13 @@ import {
   removeBookmark,
   setMainMedia,
   attachMediaToWikiArticle,
-  insertCrdtRow,
+  insertSourceRow,
   insertHandleRows,
   replaceRelations,
   insertRevisionRow,
   insertRevisionMediaAssetRows,
   insertTranslationRows,
-  updateCrdtRow,
+  updateSourceRow,
   updateRevisionRow,
   upsertArticleRow,
 } from "./mutations.js"
@@ -65,7 +65,7 @@ import {
   listContributors,
   listWikiArticleMedia,
   findMainMedia,
-  findCrdtRowById,
+  findSourceRowById,
   findDatabaseRowByHandle,
   findDatabaseRowById,
   findHandleOwner,
@@ -301,7 +301,7 @@ const createWikiArticle = (
       const created = yield* WikiArticleCrdt.create(input.wikiArticle)
 
       yield* persistCrdtDocumentCreation({
-        insertCrdt: insertCrdtRow({
+        insertCrdt: insertSourceRow({
           createdAt: now,
           crdtSnapshot: created.crdtSnapshot,
           id: wikiArticleId,
@@ -361,7 +361,7 @@ const createWikiArticle = (
 const createRevision = (input: CreateWikiArticleRevisionInput) =>
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
-      const article = yield* findCrdtRowById(input.wikiArticleId).pipe(
+      const article = yield* findSourceRowById(input.wikiArticleId).pipe(
         Effect.flatMap(
           Option.match({
             onNone: () => Effect.fail(new WikiArticleNotFoundError({ id: input.wikiArticleId })),
@@ -444,7 +444,7 @@ const evaluateRevision = (
         return
       }
 
-      const article = yield* findCrdtRowById(revision.wikiArticleId).pipe(
+      const article = yield* findSourceRowById(revision.wikiArticleId).pipe(
         Effect.flatMap(
           Option.match({
             onNone: () => Effect.fail(new WikiArticleNotFoundError({ id: revision.wikiArticleId })),
@@ -460,7 +460,7 @@ const evaluateRevision = (
       })
 
       yield* persistCrdtDocumentUpdate({
-        updateCrdtRow: updateCrdtRow({
+        updateCrdtRow: updateSourceRow({
           ...article,
           status: article.status === "PENDING_APPROVAL" ? "PUBLISHED" : article.status,
           crdtSnapshot: loroDocToSnapshot(updated.document),
@@ -517,7 +517,7 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         listWikiArticleMedia,
         findMainMedia,
         findById: findDatabaseRowById,
-        findCrdtRowById,
+        findSourceRowById,
         findRevisionById,
         attachMediaToWikiArticle,
         createRevision,

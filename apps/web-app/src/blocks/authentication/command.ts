@@ -192,7 +192,7 @@ export const ResendCode = AuthenticationDefinition.makeCommand("ResendCode", {
 })
 
 export const WaitForResendCooldown = AuthenticationDefinition.makeCommand("WaitForResendCooldown", {
-  args: { sentAt: Schema.Number },
+  args: { sentAt: Schema.Finite },
   messages: [Message.CompletedWaitForResendCooldown],
   handler: function* () {
     return ({ sentAt }) =>

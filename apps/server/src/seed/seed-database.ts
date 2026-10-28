@@ -104,7 +104,7 @@ export interface SeedOptions {
 
 export class SeedDatabaseNotEmptyError extends Schema.TaggedError<SeedDatabaseNotEmptyError>()(
   "SeedDatabaseNotEmptyError",
-  { profiles: Schema.Number },
+  { profiles: Schema.Finite },
 ) {
   override get message() {
     return `Seeding requires an empty database, but it already has ${this.profiles} profiles`
@@ -113,12 +113,12 @@ export class SeedDatabaseNotEmptyError extends Schema.TaggedError<SeedDatabaseNo
 
 export class SeedIntegrityError extends Schema.TaggedError<SeedIntegrityError>()(
   "SeedIntegrityError",
-  { violations: Schema.Number },
+  { violations: Schema.Finite },
 ) {}
 
 const countProfiles = SqlSchema.findOne({
   Request: Schema.Void,
-  Result: Schema.Struct({ count: Schema.Number }),
+  Result: Schema.Struct({ count: Schema.Finite }),
   execute: () => SqlClient.SqlClient.use((sql) => sql`SELECT COUNT(*) AS count FROM profiles`),
 })
 
@@ -139,7 +139,7 @@ const listTables = SqlSchema.findAll({
 
 const countRows = SqlSchema.findOne({
   Request: Schema.String,
-  Result: Schema.Struct({ count: Schema.Number }),
+  Result: Schema.Struct({ count: Schema.Finite }),
   execute: (table) =>
     SqlClient.SqlClient.use((sql) => sql`SELECT COUNT(*) AS count FROM ${sql(table)}`),
 })
