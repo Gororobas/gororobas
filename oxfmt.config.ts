@@ -10,7 +10,6 @@ export default {
     "**/node_modules/**",
     "**/coverage/**",
     "**/.git/**",
-    "**/.beads/**",
     "**/repos/**",
     "**/.agents/**",
     "experiments/**",
