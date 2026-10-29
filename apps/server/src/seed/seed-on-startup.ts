@@ -1,4 +1,4 @@
-import { Config, Effect, Layer, Option } from "effect"
+import { Config, DateTime, Effect, Layer, Option } from "effect"
 
 import {
   countTableRows,
@@ -23,10 +23,14 @@ export const SeedOnStartupLive = Layer.effectDiscard(
       return yield* Effect.log("SEED_SCALE is set, but the database has data; skipping seeding")
     }
 
+    const anchor = yield* Config.Date("SEED_ANCHOR").pipe(Config.option)
+
     const report = yield* seedDatabase({
       scale: scale.value,
       seed: yield* Config.String("SEED").pipe(Config.withDefault(DEFAULT_SEED)),
-      anchor: yield* defaultSeedAnchor,
+      anchor: Option.isSome(anchor)
+        ? DateTime.fromDateUnsafe(anchor.value)
+        : yield* defaultSeedAnchor,
     })
 
     yield* Effect.log(
