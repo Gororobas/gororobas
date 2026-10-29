@@ -11,9 +11,3 @@ export const languageFallbackOrder = (
   requested,
   ...SupportedLanguage.literals.filter((language) => language !== requested),
 ]
-
-/** The first language in `languageFallbackOrder(requested)` that `isAvailable` accepts. */
-export const preferredLanguage = (
-  requested: SupportedLanguage,
-  isAvailable: (language: SupportedLanguage) => boolean,
-): SupportedLanguage | undefined => languageFallbackOrder(requested).find(isAvailable)

@@ -17,10 +17,10 @@ import {
   UnauthorizedError,
   UpdateOrganizationData,
 } from "@gororobas/domain"
-import { HandleTakenError } from "@gororobas/domain/common/errors"
 import { Context, DateTime, Effect, Option, Result, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { claimHandle } from "../common/handle-allocation.js"
 import { PeopleRepository } from "../people/repository.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { OrganizationsRepository } from "./repository.js"
@@ -107,9 +107,12 @@ export class OrganizationsService extends Context.Service<OrganizationsService>(
           yield* Policies.organizations.canCreate
           const session = yield* Policies.common.assertAuthenticated
 
-          if (yield* profiles.isHandleInUse(data.handle)) {
-            return yield* new HandleTakenError({ handle: data.handle, entity: "profile" })
-          }
+          yield* claimHandle({
+            handle: data.handle,
+            entity: "profile",
+            isAvailable: (handle) =>
+              profiles.isHandleInUse(handle).pipe(Effect.map((inUse) => !inUse)),
+          })
 
           const id = yield* IdGen.make(OrganizationId)
           const now = yield* DateTime.now

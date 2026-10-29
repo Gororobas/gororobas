@@ -6,10 +6,10 @@ import {
   ProfileRowUpdate,
   type ProfileRow,
 } from "@gororobas/domain"
-import { HandleTakenError } from "@gororobas/domain/common/errors"
 import { DateTime, Effect, Option, Context } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { claimHandle } from "../common/handle-allocation.js"
 import { ProfilesRepository } from "./repository.js"
 
 /** @effect-expect-leaking SqlClient */
@@ -43,12 +43,16 @@ export class ProfileService extends Context.Service<ProfileService>()("ProfileSe
 
         yield* Policies.profiles.canEdit(profile)
 
-        // Keeping one's current handle isn't a conflict.
-        if (data.handle !== undefined && data.handle !== profile.handle) {
-          const inUse = yield* repo.isHandleInUse(data.handle)
-          if (inUse) {
-            return yield* new HandleTakenError({ handle: data.handle, entity: "profile" })
-          }
+        if (data.handle !== undefined) {
+          yield* claimHandle({
+            handle: data.handle,
+            entity: "profile",
+            // Keeping one's current handle isn't a conflict.
+            isAvailable: (handle) =>
+              handle === profile.handle
+                ? Effect.succeed(true)
+                : repo.isHandleInUse(handle).pipe(Effect.map((inUse) => !inUse)),
+          })
         }
 
         return yield* repo.updateProfileRow({

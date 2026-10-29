@@ -4,6 +4,7 @@ import {
   snapshotToLoroDoc,
   EMPTY_LORO_DOC_FRONTIER,
   type EventSourceData,
+  type Handle,
   HumanCommit,
   IdGen,
   InvalidCrdtUpdateError,
@@ -57,6 +58,7 @@ import {
   findPublicationPageData,
   findPublicationRowByHandle,
   findPublicationRowById,
+  isPublicationHandleInUse,
   listPublicationRevisionRowsByPublicationIdAsc,
   listPublicationContributorIdsByPublicationId,
   listPublicationRowsByOwnerProfileId,
@@ -371,7 +373,15 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
           })
         })
 
+      const isHandleInUse = (handle: Handle) =>
+        isPublicationHandleInUse(handle).pipe(
+          Effect.map((row) => row.result),
+          // The EXISTS query always returns a row.
+          Effect.catchTag("NoSuchElementError", Effect.die),
+        )
+
       return {
+        isHandleInUse,
         findPublicationCrdtSnapshotById,
         replacePublicationWikiArticleLinks,
         updatePublicationLinkInference,

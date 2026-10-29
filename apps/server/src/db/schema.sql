@@ -280,8 +280,8 @@ CREATE TABLE wiki_article_translations (
   FOREIGN KEY (wiki_article_id, kind) REFERENCES wiki_article_projections (id, kind) ON DELETE CASCADE
 );
 
--- Owns a route handle across all languages. `languages` records which translations
--- use it while uniqueness remains scoped only to the article kind.
+-- Route handles, unique within the article kind. `language` is the translation a handle was
+-- allocated for; handles are never replaced, so links keep working after names change.
 CREATE TABLE wiki_article_handles (
   wiki_article_id text NOT NULL,
   kind text NOT NULL, -- WikiArticleKind

@@ -257,6 +257,11 @@ Feature: Wiki article revisions
       Then "Mandioca" es content becomes "Raíz tuberosa"
       And "Mandioca" still has pt content "Raiz tuberosa"
 
+    Scenario: Renaming an article keeps its handle
+      Given "Maria" has submitted a revision renaming "Mandioca" to "Aipim"
+      When "Ana" approves the revision
+      Then the article at handle "mandioca" is named "Aipim"
+
   Rule: Revision history provides auditability
 
     Background:

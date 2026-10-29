@@ -632,6 +632,57 @@ const translationContent = (keyword: typeof Given, pattern: string) =>
       expectContent({ context, title, content, language }),
   })
 
+const renameProposal = () =>
+  Given("{string:name} has submitted a revision renaming {string:title} to {string:newName}", {
+    params: Schema.Struct({ ...nameParams.fields, ...titleParams.fields, newName: Schema.String }),
+    handler: (context: WikiContext, { name, title, newName }) =>
+      Effect.gen(function* () {
+        const id = articleId(context, title)
+        const original = snapshotToLoroDoc(
+          Option.getOrThrow(yield* findSourceRowById(id)).crdtSnapshot,
+        )
+        const changed = original.fork()
+
+        yield* WikiArticleCrdt.applyEdit(changed, {
+          _tag: "UpdatedWikiArticleTranslationCommonName",
+          language: "pt",
+          id: (yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
+            id: "wikicommon01",
+            name: title,
+          })).id,
+          name: newName,
+        })
+
+        changed.commit()
+
+        const revisionId = yield* act({
+          context,
+          name,
+          action: (yield* WikiArticlesService).createRevision(id, {
+            crdtUpdate: LoroDocUpdate.make(
+              changed.export({ mode: "update", from: original.version() }),
+            ),
+          }),
+        })
+
+        return { ...context, revisionId }
+      }),
+  })
+
+const articleNameAtHandle = () =>
+  Then("the article at handle {string:handle} is named {string:newName}", {
+    params: Schema.Struct({ handle: Handle, newName: Schema.String }),
+    handler: (context: WikiContext, { handle, newName }) =>
+      Effect.gen(function* () {
+        const page = yield* withSession(
+          (yield* WikiArticlesService).getPage({ handle, kind: "PLANT", language: "pt" }),
+          VISITOR_SESSION,
+        )
+        expect(page.commonNames.map((commonName) => commonName.name)).toEqual([newName])
+        return context
+      }),
+  })
+
 const concurrentProposals = () =>
   Given(
     "{string:first} and {string:second} have proposed concurrent revisions from the same published CRDT version of {string:title}",
@@ -1357,6 +1408,16 @@ await Effect.runPromise(
               And,
               "{string:title} still has {word:language} content {string:content}",
             ),
+          ),
+      })
+
+      Scenario("Renaming an article keeps its handle", {
+        layer: WikiTestLayer,
+        steps: () =>
+          runSteps(
+            renameProposal(),
+            approval({ keyword: When, pattern: "{string:name} approves the revision" }),
+            articleNameAtHandle(),
           ),
       })
     })

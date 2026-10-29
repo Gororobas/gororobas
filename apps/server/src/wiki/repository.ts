@@ -7,19 +7,17 @@ import {
   projectTranslation,
   EMPTY_LORO_DOC_FRONTIER,
   EvaluateWikiArticleRevisionInput,
+  type Handle,
   HumanCommit,
   IdGen,
   InvalidCrdtUpdateError,
-  preferredLanguage,
   SupportedLanguage,
   LoroDocFrontier,
   loroDocToSnapshot,
   WikiArticleCommonNameInCrdtList,
-  stringToHandle,
   WikiArticleEditableData,
   WikiArticleHandleProjectionRow,
   WikiArticleId,
-  WikiArticleKind,
   WikiArticleNotFoundError,
   WikiArticleRevisionAlreadyEvaluatedError,
   WikiArticleRevisionId,
@@ -28,13 +26,14 @@ import {
   WikiArticleStatus,
   type WikiArticleProjectionRow,
 } from "@gororobas/domain"
-import { Context, DateTime, Effect, Array as EffectArray, Option, Result, Schema } from "effect"
+import { Context, DateTime, Effect, Array as EffectArray, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
 
 import {
   persistCrdtDocumentCreation,
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
+import { allocateHandle } from "../common/handle-allocation.js"
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
 import { requestWikiArticleLinkInference } from "../link-inference/wiki-article-link-inference-definition.js"
 import { type ExternalDataArticle } from "./external-data/persist-utils.js"
@@ -74,6 +73,7 @@ import {
   findDatabaseRowByHandle,
   findDatabaseRowById,
   findHandleOwner,
+  listHandleRows,
   findPageByHandleAndKind,
   findRevisionById,
   findWikiArticleBySearchableName,
@@ -81,86 +81,17 @@ import {
 } from "./queries.js"
 
 /**
- * Returns a list of handle candidates for the given names. Candidates are:
- * - `first-name`
- * - `first-name-second-name`
- * - `first-name-second-name-third-name`
- * ...
- * - `first-name-adbe4fa1ad35`
- **/
-const getPreferredHandleCandidates = Effect.fn("getPreferredHandleCandidates")(function* ({
-  names,
-  kind,
-  id,
-}: {
-  names: ReadonlyArray<WikiArticleCommonNameInCrdtList>
-  kind: WikiArticleKind
-  id: WikiArticleId
-}) {
-  const results = yield* Effect.all(
-    names.map((_, index) =>
-      stringToHandle(
-        names
-          .slice(0, index + 1)
-          .map((value) => value.name)
-          .join(" ")
-          .slice(0, 48),
-      ),
-    ),
-    {
-      concurrency: "unbounded",
-      mode: "result",
-    },
+ * Names to try as an article's handle, most readable first: its first common name, then its first
+ * two names together, and so on.
+ */
+const handleNames = (names: ReadonlyArray<WikiArticleCommonNameInCrdtList>) =>
+  names.map((_, index) =>
+    names
+      .slice(0, index + 1)
+      .map((value) => value.name)
+      .join(" ")
+      .slice(0, 48),
   )
-
-  const plainTextCandidates = EffectArray.dedupe(EffectArray.getSuccesses(results))
-
-  const idSuffix = EffectArray.last(id.split("-"))
-  if (Option.isNone(idSuffix)) return plainTextCandidates
-
-  const fallbackWithKind = yield* Effect.all(
-    plainTextCandidates.map((candidate) => stringToHandle(`${candidate}-${kind}`)),
-    { concurrency: "unbounded", mode: "result" },
-  )
-  const fallbackWithId = yield* Effect.all(
-    plainTextCandidates.map((candidate) => stringToHandle(`${candidate}-${idSuffix.value}`)),
-    { concurrency: "unbounded", mode: "result" },
-  )
-
-  return [
-    ...plainTextCandidates,
-    ...EffectArray.getSuccesses(fallbackWithKind),
-    ...EffectArray.getSuccesses(fallbackWithId),
-  ]
-})
-
-const chooseAvailableHandle = (input: {
-  kind: WikiArticleKind
-  names: ReadonlyArray<WikiArticleCommonNameInCrdtList>
-  wikiArticleId: WikiArticleId
-}) =>
-  Effect.gen(function* () {
-    const preferredCandidates = yield* getPreferredHandleCandidates({
-      names: input.names,
-      kind: input.kind,
-      id: input.wikiArticleId,
-    })
-
-    const available = yield* Effect.findFirst(preferredCandidates, (handle) =>
-      findHandleOwner({ handle, kind: input.kind }).pipe(
-        Effect.map(
-          Option.match({
-            onNone: () => true,
-            onSome: (owner) => owner.wikiArticleId === input.wikiArticleId,
-          }),
-        ),
-      ),
-    )
-
-    const fallback = yield* stringToHandle(input.wikiArticleId)
-
-    return Option.getOrElse(available, () => fallback)
-  })
 
 const persistTranslationProjections = Effect.fn("persistTranslationProjections")(function* (input: {
   sourceData: WikiArticleEditableData
@@ -186,52 +117,60 @@ const persistTranslationProjections = Effect.fn("persistTranslationProjections")
   })
 })
 
-const getTranslation = (sourceData: WikiArticleEditableData, language: SupportedLanguage) => {
-  const available = preferredLanguage(language, (candidate) =>
-    Boolean(sourceData.translations[candidate]),
-  )
-  return available ? sourceData.translations[available] : undefined
-}
-
+/**
+ * Each language gets a handle the first time the article has a translation in it, and keeps it:
+ * handles are never replaced or removed, so links keep working after names change. Readers reach
+ * languages without a translation of their own through the other languages' handles.
+ */
 const persistHandleProjections = Effect.fn("persistHandleProjections")(function* (input: {
   sourceData: WikiArticleEditableData
   wikiArticleId: WikiArticleId
 }) {
-  const sql = yield* SqlClient.SqlClient
+  const { kind } = input.sourceData
+  const existing = yield* listHandleRows(input.wikiArticleId)
 
-  const handleRows = yield* Effect.all(
-    SupportedLanguage.literals.flatMap((language) =>
-      Effect.gen(function* () {
-        const translation = getTranslation(input.sourceData, language)
-        if (!translation) return Result.failVoid
+  const isAvailable = (handle: Handle) =>
+    findHandleOwner({ handle, kind }).pipe(
+      Effect.map(
+        Option.match({
+          onNone: () => true,
+          onSome: (owner) => owner.wikiArticleId === input.wikiArticleId,
+        }),
+      ),
+    )
 
-        const handle = yield* chooseAvailableHandle({
-          kind: input.sourceData.kind,
-          names: translation.commonNames,
-          wikiArticleId: input.wikiArticleId,
-        })
-
-        return Result.succeed(
+  const allocated = yield* Effect.forEach(
+    SupportedLanguage.literals.flatMap((language) => {
+      const translation = input.sourceData.translations[language]
+      return translation === undefined || existing.some((row) => row.language === language)
+        ? []
+        : [{ language, translation }]
+    }),
+    ({ language, translation }) =>
+      allocateHandle({
+        names: handleNames(translation.commonNames),
+        fallbackName: input.wikiArticleId,
+        isAvailable,
+      }).pipe(
+        Effect.map((handle) =>
           WikiArticleHandleProjectionRow.make({
             language,
             handle,
-            kind: input.sourceData.kind,
+            kind,
             wikiArticleId: input.wikiArticleId,
           }),
-        )
-      }),
-    ),
+        ),
+      ),
     { concurrency: 1 },
-  ).pipe(Effect.map(EffectArray.getSuccesses))
+  )
 
-  return yield* persistProjectionJunctionTables({
-    deleteRows: sql`
-      DELETE FROM wiki_article_handles WHERE wiki_article_id = ${input.wikiArticleId}
-    `,
-    insertRows: insertHandleRows(
-      EffectArray.dedupeWith(handleRows, (left, right) => left.handle === right.handle),
+  // Translations can share a handle, which the article only owns once.
+  yield* insertHandleRows(
+    EffectArray.dedupeWith(
+      allocated.filter((row) => !existing.some((current) => current.handle === row.handle)),
+      (left, right) => left.handle === right.handle,
     ),
-  })
+  )
 })
 
 const persistArticleProjection = (input: {

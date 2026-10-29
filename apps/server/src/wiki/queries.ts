@@ -217,6 +217,13 @@ export const findHandleOwner = SqlSchema.findOneOption({
     ),
 })
 
+export const listHandleRows = SqlSchema.findAll({
+  Request: WikiArticleId,
+  Result: WikiArticleHandleProjectionRow,
+  execute: (id) =>
+    SqlClient.use((sql) => sql`SELECT * FROM wiki_article_handles WHERE wiki_article_id = ${id}`),
+})
+
 export const findTranslationRows = SqlSchema.findAll({
   Request: WikiArticleId,
   Result: WikiArticleTranslationProjectionRow,

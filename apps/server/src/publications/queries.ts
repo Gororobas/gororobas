@@ -279,6 +279,16 @@ export const findPublicationPageData = SqlSchema.findOneOption({
   Result: PublicationPageData,
 })
 
+export const isPublicationHandleInUse = SqlSchema.findOne({
+  Request: Handle,
+  Result: Schema.Struct({ result: Schema.BooleanFromBit }),
+  execute: (handle) =>
+    SqlClient.use(
+      (sql) =>
+        sql`SELECT EXISTS(SELECT 1 FROM publication_sources WHERE handle = ${handle}) AS result`,
+    ),
+})
+
 export const findPublicationRowById = SqlSchema.findOneOption({
   Request: PublicationId,
   Result: ModeratedPublicationRow,

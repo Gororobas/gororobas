@@ -5,6 +5,7 @@ import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 
 import { UnauthorizedError } from "../authorization/session.js"
+import { HandleTakenError } from "../common/errors.js"
 import { PublicationId, ProfileId } from "../common/ids.js"
 import { Handle } from "../common/primitives.js"
 import { InvalidCrdtUpdateError } from "../crdts/errors.js"
@@ -48,6 +49,7 @@ export class PublicationsApiGroup extends HttpApiGroup.make("publications")
     HttpApiEndpoint.post("createPublication", "/profiles/:profileId/publications", {
       success: ApiPublicationData,
       error: [
+        HandleTakenError,
         ProfileNotFoundError,
         PublicationNotFoundError,
         InvalidCrdtUpdateError,

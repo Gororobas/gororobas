@@ -36,6 +36,7 @@ import { Array as EffectArray, Context, DateTime, Effect, Option, Schema } from 
 import { SqlClient } from "effect/sql"
 import { LoroDoc } from "loro-crdt"
 
+import { allocateHandle, claimHandle } from "../common/handle-allocation.js"
 import { requestPublicationLinkInference } from "../link-inference/publication-link-inference-workflow.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { moderateContent } from "../moderation/moderate-content.js"
@@ -163,7 +164,17 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
               : {},
           }
 
-          const handle = input.handle ?? (yield* richTextToHandle(input.content))
+          const isAvailable = (candidate: Handle) =>
+            repo.isHandleInUse(candidate).pipe(Effect.map((inUse) => !inUse))
+
+          const handle =
+            input.handle === undefined
+              ? yield* allocateHandle({
+                  names: [yield* richTextToHandle(input.content)],
+                  fallbackName: "publicacao",
+                  isAvailable,
+                })
+              : yield* claimHandle({ handle: input.handle, entity: "publication", isAvailable })
 
           const sourceData: PostSourceData | EventSourceData =
             input.kind === "POST"

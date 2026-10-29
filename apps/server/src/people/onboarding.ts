@@ -4,13 +4,13 @@ import {
   PersonProfileRow,
   ProfileAlreadyExistsError,
   SignInRequiredError,
-  stringToHandle,
 } from "@gororobas/domain"
 import { Auth } from "@yielded/auth"
-import { DateTime, Effect, Option, Random } from "effect"
+import { DateTime, Effect, Option } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { AppAuth } from "../authentication/app-auth.js"
+import { allocateHandle } from "../common/handle-allocation.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PeopleRepository } from "./repository.js"
 
@@ -34,22 +34,17 @@ const FALLBACK_HANDLE_BASE = "pessoa"
 
 const availableHandle = Effect.fn("People.availableHandle")(function* (name: string) {
   const repository = yield* ProfilesRepository
-  // The EXISTS query always returns a row.
-  const isHandleInUse = (handle: string) =>
-    repository.isHandleInUse(handle).pipe(Effect.catchTag("NoSuchElementError", Effect.die))
-  const base = yield* stringToHandle(name).pipe(Effect.orElseSucceed(() => FALLBACK_HANDLE_BASE))
 
-  if (!(yield* isHandleInUse(base))) return yield* stringToHandle(base)
-
-  // A random suffix keeps the name readable without guessing how many namesakes exist.
-  const suffixed = Effect.gen(function* () {
-    const suffix = yield* Random.nextIntBetween(1000, 9999)
-    const handle = yield* stringToHandle(`${base}-${suffix}`)
-    return { handle, isInUse: yield* isHandleInUse(handle) }
+  return yield* allocateHandle({
+    names: [name],
+    fallbackName: FALLBACK_HANDLE_BASE,
+    // The EXISTS query always returns a row.
+    isAvailable: (handle) =>
+      repository.isHandleInUse(handle).pipe(
+        Effect.map((inUse) => !inUse),
+        Effect.catchTag("NoSuchElementError", Effect.die),
+      ),
   })
-
-  const available = yield* suffixed.pipe(Effect.repeat({ until: ({ isInUse }) => !isInUse }))
-  return available.handle
 })
 
 export const completeOnboarding = Effect.fn("People.completeOnboarding")(function* (
