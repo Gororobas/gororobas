@@ -37,6 +37,7 @@ import {
   SIMILARITY_CANDIDATES,
   similarityQuery,
 } from "../db/full-text-search.js"
+import { orderByLanguagePreference } from "../db/language-preference.js"
 
 export const findDatabaseRowById = SqlSchema.findOneOption({
   Request: WikiArticleId,
@@ -247,8 +248,7 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
     INNER JOIN wiki_article_translations AS translation
       ON translation.wiki_article_id = article.id AND translation.kind = article.kind
     WHERE route.handle = ${handle} AND article.kind = ${kind} AND article.status = 'PUBLISHED'
-    ORDER BY CASE WHEN translation.language = ${language} THEN 0
-      WHEN translation.language = 'en' THEN 1 WHEN translation.language = 'es' THEN 2 ELSE 3 END
+    ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "translation.language", language })}
     LIMIT 1
   `.pipe(
         Effect.flatMap((rows) =>
@@ -297,8 +297,7 @@ export const listPublishedCultivars = SqlSchema.findAll({
       AND json_extract(a.attributes, '$.parentPlantId') = ${parentPlantId}
       AND t.language = (
         SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
-        ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
-          WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+        ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "preferred.language", language })} LIMIT 1)
     ORDER BY a.id
   `,
     ),
@@ -345,8 +344,7 @@ const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql
     CASE WHEN a.kind = 'PLANT_CULTIVAR' THEN (
       SELECT json_extract(parent.common_names, '$[0]') FROM wiki_article_translations parent
       WHERE parent.wiki_article_id = json_extract(a.attributes, '$.parentPlantId')
-      ORDER BY CASE WHEN parent.language = ${language} THEN 0 WHEN parent.language = 'en' THEN 1
-        WHEN parent.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+      ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "parent.language", language })} LIMIT 1)
     END AS parent_plant_name,
     (SELECT h.handle FROM wiki_article_handles h WHERE h.wiki_article_id = a.id
       ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
@@ -355,8 +353,7 @@ const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql
   FROM wiki_article_projections a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
   WHERE a.status = 'PUBLISHED' AND t.language = (
     SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
-    ORDER BY CASE WHEN preferred.language = ${language} THEN 0 WHEN preferred.language = 'en' THEN 1
-      WHEN preferred.language = 'es' THEN 2 ELSE 3 END LIMIT 1)
+    ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "preferred.language", language })} LIMIT 1)
 `
 
 export const listCards = SqlSchema.findAll({

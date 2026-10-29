@@ -27,6 +27,7 @@ import {
   SIMILARITY_CANDIDATES,
   similarityQuery,
 } from "../db/full-text-search.js"
+import { orderByLanguagePreference } from "../db/language-preference.js"
 /** A publication's projection joined with the columns its source row owns. */
 import { selectPublicationRows } from "./projection.js"
 
@@ -167,8 +168,7 @@ export const findPublicationCardContent = SqlSchema.findOneOption({
       JOIN publication_translations t ON t.publication_id = p.id AND t.language = (
         SELECT preferred.language FROM publication_translations preferred
         WHERE preferred.publication_id = p.id
-        ORDER BY CASE preferred.language WHEN ${language} THEN 1 WHEN 'en' THEN 2 WHEN 'pt' THEN 3
-          WHEN 'es' THEN 4 ELSE 5 END
+        ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "preferred.language", language })}
         LIMIT 1)
       WHERE p.id = ${id}
     `,
@@ -239,13 +239,7 @@ export const findPublicationPageData = SqlSchema.findOneOption({
           pt.original_language,
           pt.content,
           ROW_NUMBER() OVER (
-            ORDER BY CASE pt.language
-              WHEN ${req.language} THEN 1
-              WHEN 'en' THEN 2
-              WHEN 'pt' THEN 3
-              WHEN 'es' THEN 4
-              ELSE 5
-            END
+            ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "pt.language", language: req.language })}
           ) AS priority_rank
         FROM publication_translations pt
         INNER JOIN target_publication ON target_publication.id = pt.publication_id
@@ -321,7 +315,7 @@ export const findPublicationApiData = SqlSchema.findOneOption({
     WITH p AS (${selectPublicationRows(sql)} WHERE projection.id = ${id})
     SELECT p.*, t.content, t.language FROM p
     JOIN publication_translations t ON t.publication_id = p.id
-    ORDER BY CASE t.language WHEN 'pt' THEN 0 WHEN 'en' THEN 1 ELSE 2 END LIMIT 1
+    ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "t.language", language: "pt" })} LIMIT 1
   `,
     ),
 })

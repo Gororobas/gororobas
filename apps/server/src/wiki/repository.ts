@@ -10,6 +10,7 @@ import {
   HumanCommit,
   IdGen,
   InvalidCrdtUpdateError,
+  preferredLanguage,
   SupportedLanguage,
   LoroDocFrontier,
   loroDocToSnapshot,
@@ -185,16 +186,11 @@ const persistTranslationProjections = Effect.fn("persistTranslationProjections")
   })
 })
 
-/**
- * When the target translation is not available, fall back to an existing language,
- * as ordered by the SupportedLanguage literal order.
- */
 const getTranslation = (sourceData: WikiArticleEditableData, language: SupportedLanguage) => {
-  const targetTranslation = sourceData.translations[language]
-  if (targetTranslation) return targetTranslation
-
-  const existingLanguage = SupportedLanguage.literals.find((l) => sourceData.translations[l])
-  return existingLanguage ? sourceData.translations[existingLanguage] : undefined
+  const available = preferredLanguage(language, (candidate) =>
+    Boolean(sourceData.translations[candidate]),
+  )
+  return available ? sourceData.translations[available] : undefined
 }
 
 const persistHandleProjections = Effect.fn("persistHandleProjections")(function* (input: {
