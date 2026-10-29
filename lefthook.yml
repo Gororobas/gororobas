@@ -7,7 +7,7 @@ pre-commit:
       stage_fixed: true
     oxlint:
       glob: "{apps,packages}/*.{ts,tsx,css}"
-      run: pnpm run lint --quiet {staged_files}
+      run: pnpm exec effect-tsgo oxlint --fix --config=./oxlint.config.ts --quiet {staged_files}
       stage_fixed: true
     type-check:
       glob: "*.{ts,tsx}"

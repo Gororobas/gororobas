@@ -8,10 +8,10 @@
     "clean": "node scripts/clean.mjs",
     "build": "pnpm --filter @gororobas/web-app build",
     "type-check": "pnpm --recursive --if-present --parallel run type-check && tsc --noEmit -p scripts/tsconfig.json",
-    "lint": "effect-tsgo oxlint --fix --fix-dangerously --fix-suggestions --config=./oxlint.config.ts",
-    "lint:check": "effect-tsgo oxlint --config=./oxlint.config.ts",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
+    "lint": "effect-tsgo oxlint --deny-warnings --fix --fix-dangerously --fix-suggestions --config=./oxlint.config.ts",
+    "lint:check": "effect-tsgo oxlint --deny-warnings --config=./oxlint.config.ts",
+    "format": "oxfmt apps packages scripts linting *.ts",
+    "format:check": "oxfmt --check apps packages scripts linting *.ts",
     "test": "vitest --run",
     "test:watch": "vitest",
     "check-bdd": "tsx packages/effect-bdd/bin/effect-bdd-check.ts check --paired --quiet --patterns 'apps/server/test/*.feature' --test-pattern 'apps/server/test/*-feature.test.ts'",
@@ -22,6 +22,7 @@
     "quality-gates": "pnpm run fix && pnpm run check"
   },
   "devDependencies": {
+    "@babel/parser": "7.29.9",
     "@effect/platform-node": "catalog:",
     "@effect/tsgo": "0.62.0",
     "@effect/vitest": "catalog:",

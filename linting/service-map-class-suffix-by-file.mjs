@@ -10,7 +10,7 @@ const getMemberAccess = (expression) => {
   if (
     expression.type === "MemberExpression" &&
     expression.object.type === "Identifier" &&
-    expression.object.name === "ServiceMap" &&
+    ["Context", "ServiceMap"].includes(expression.object.name) &&
     expression.property.type === "Identifier"
   ) {
     return expression.property.name

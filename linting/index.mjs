@@ -1,3 +1,9 @@
+import {
+  moduleImportBoundaries,
+  noStringifiedErrors,
+  noLiteralStylesOutsideTheme,
+  noDuplicateConstants,
+} from "./architecture.mjs"
 import { noDirectFetchRule } from "./no-direct-fetch.mjs"
 import { noDirectIdConstructionRule } from "./no-direct-id-construction.mjs"
 import { noDisableValidationRule } from "./no-disable-validation.mjs"
@@ -23,6 +29,10 @@ import { taggedErrorSuffixRule } from "./tagged-error-suffix.mjs"
 export default {
   meta: { name: "custom-lint-rules" },
   rules: {
+    "module-import-boundaries": moduleImportBoundaries,
+    "no-stringified-errors": noStringifiedErrors,
+    "no-literal-styles-outside-theme": noLiteralStylesOutsideTheme,
+    "no-duplicate-constants": noDuplicateConstants,
     "no-schema-decode-unknown": noSchemaDecodeUnknownRule,
     "no-node-apis": noNodeApisRule,
     "no-function-aliases": noFunctionAliasesRule,

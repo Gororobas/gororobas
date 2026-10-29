@@ -2,6 +2,7 @@ import { describe, it } from "@effect/vitest"
 import effectPlugin from "@mpsuesser/oxlint-plugin-effect"
 import { RuleTester } from "oxlint/plugins-dev"
 
+import localPlugin from "./index.mjs"
 import { noNodeApisRule } from "./no-node-apis.mjs"
 import { noSchemaDecodeUnknownRule } from "./no-schema-decode-unknown.mjs"
 import { preferArrSortRule } from "./prefer-arr-sort.mjs"
@@ -197,4 +198,134 @@ tester.run("require-effect-vitest", requireEffectVitestRule, {
     'import("vitest")',
     'require("vitest")',
   ].map((code) => ({ code, errors: [{ messageId: "effectVitest" }] })),
+})
+
+// Every local rule gets both an accepted and a rejected example so changes to its visitor
+// cannot silently turn enforcement off.
+
+tester.run("no-direct-fetch", localPlugin.rules["no-direct-fetch"], {
+  valid: [{ code: "client.get(url)", filename: "/project/src/example.ts" }],
+  invalid: [{ code: "fetch(url)", filename: "/project/src/example.ts", errors: 1 }],
+})
+
+tester.run("no-direct-id-construction", localPlugin.rules["no-direct-id-construction"], {
+  valid: [{ code: "IdGen.make(PersonId)", filename: "/project/src/example.ts" }],
+  invalid: [{ code: "PersonId.makeUnsafe(value)", filename: "/project/src/example.ts", errors: 1 }],
+})
+
+tester.run("no-disable-validation", localPlugin.rules["no-disable-validation"], {
+  valid: [
+    {
+      code: "Schema.make(value, { disableValidation: false })",
+      filename: "/project/src/example.ts",
+    },
+  ],
+  invalid: [
+    {
+      code: "Schema.make(value, { disableValidation: true })",
+      filename: "/project/src/example.ts",
+      errors: 1,
+    },
+  ],
+})
+
+tester.run("no-nested-layer-provide", localPlugin.rules["no-nested-layer-provide"], {
+  valid: [{ code: "Layer.provide(A, B)", filename: "/project/src/example.ts" }],
+  invalid: [
+    {
+      code: "Layer.provide(A, Layer.provide(B, C))",
+      filename: "/project/src/example.ts",
+      errors: 1,
+    },
+  ],
+})
+
+tester.run("no-sql-type-parameter", localPlugin.rules["no-sql-type-parameter"], {
+  valid: [{ code: "sql`SELECT 1`", filename: "/project/src/example.ts" }],
+  invalid: [{ code: "sql<Row>`SELECT 1`", filename: "/project/src/example.ts", errors: 1 }],
+})
+
+tester.run("pipe-max-arguments", localPlugin.rules["pipe-max-arguments"], {
+  valid: [{ code: "effect.pipe(a,b)", filename: "/project/src/example.ts" }],
+  invalid: [
+    {
+      code: "effect.pipe(f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f,f)",
+      filename: "/project/src/example.ts",
+      errors: 1,
+    },
+  ],
+})
+
+tester.run("prefer-option-from-nullable", localPlugin.rules["prefer-option-from-nullable"], {
+  valid: [{ code: "Option.fromNullable(x)", filename: "/project/src/example.ts" }],
+  invalid: [
+    {
+      code: "x !== null ? Option.some(x) : Option.none()",
+      filename: "/project/src/example.ts",
+      errors: 1,
+    },
+  ],
+})
+
+tester.run("require-canonical-module-names", localPlugin.rules["require-canonical-module-names"], {
+  valid: [{ code: 'import { Schema } from "effect"', filename: "/project/src/example.ts" }],
+  invalid: [
+    {
+      code: 'import { Schema as S } from "effect"',
+      filename: "/project/src/example.ts",
+      errors: 1,
+    },
+  ],
+})
+
+tester.run(
+  "require-effect-alias-for-es-namespaces",
+  localPlugin.rules["require-effect-alias-for-es-namespaces"],
+  {
+    valid: [
+      {
+        code: 'import { Array as EffectArray } from "effect"',
+        filename: "/project/src/example.ts",
+      },
+    ],
+    invalid: [
+      { code: 'import { Array } from "effect"', filename: "/project/src/example.ts", errors: 1 },
+    ],
+  },
+)
+
+tester.run(
+  "service-map-class-suffix-by-file",
+  localPlugin.rules["service-map-class-suffix-by-file"],
+  {
+    valid: [
+      {
+        code: 'class PeopleService extends Context.Service<PeopleService>()("People", {}) {}',
+        filename: "/project/src/service.ts",
+      },
+    ],
+    invalid: [
+      {
+        code: 'class People extends Context.Service<People>()("People", {}) {}',
+        filename: "/project/src/service.ts",
+        errors: 1,
+      },
+    ],
+  },
+)
+
+tester.run("tagged-error-suffix", localPlugin.rules["tagged-error-suffix"], {
+  valid: [
+    {
+      code: 'class MissingError extends Schema.TaggedError<MissingError>()("Missing", {}) {}',
+      filename: "/project/src/example.ts",
+    },
+  ],
+  invalid: [
+    {
+      code: 'class Missing extends Schema.TaggedError<Missing>()("Missing", {}) {}',
+      filename: "/project/src/example.ts",
+      errors: 1,
+    },
+  ],
 })

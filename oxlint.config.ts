@@ -3,12 +3,24 @@ import foldkit from "@foldkit/oxlint-plugin"
 import effect from "@mpsuesser/oxlint-plugin-effect"
 import { defineConfig } from "oxlint"
 
+import designSystem from "./linting/design-system.mjs"
+
 export default defineConfig({
   extends: [
     effectTsgoRecommended,
     {
+      ...foldkit.configs.recommended,
+      rules: {},
+      overrides: [
+        { files: ["apps/web-app/**"], rules: foldkit.configs.recommended.rules },
+        ...foldkit.configs.recommended.overrides.map((override) => ({
+          ...override,
+          files: override.files.map((pattern) => `apps/web-app/${pattern}`),
+        })),
+      ],
+    },
+    {
       ...effect.configs.recommended,
-      ignorePatterns: ["./linting/**/*.mjs"],
       rules: {
         ...effect.configs.recommended.rules,
         "effect/prefer-effect-fn": "off",
@@ -25,18 +37,19 @@ export default defineConfig({
       },
     },
   ],
-  plugins: ["import", "vitest", "react", "eslint", "typescript", "unicorn", "react-perf", "node"],
-  jsPlugins: [
-    "./linting/index.mjs",
-    {
-      name: "foldkit",
-      specifier: "@foldkit/oxlint-plugin",
-    },
-  ],
+  plugins: ["import", "vitest", "eslint", "typescript", "unicorn", "node"],
+  jsPlugins: ["./linting/index.mjs", "./linting/design-system.mjs"],
   options: {
     typeAware: true,
   },
   rules: {
+    "custom-lint-rules/module-import-boundaries": "error",
+    "custom-lint-rules/no-stringified-errors": "error",
+    "custom-lint-rules/no-literal-styles-outside-theme": "error",
+    "custom-lint-rules/no-duplicate-constants": "error",
+    "effecttsgo/unstable-api-usage": "off",
+    "effecttsgo/schema-class-missing-brand": "off",
+    "typescript/restrict-template-expressions": "off",
     "custom-lint-rules/no-schema-decode-unknown": "error",
     curly: ["error", "multi-line"],
     "custom-lint-rules/no-node-apis": "error",
@@ -75,9 +88,42 @@ export default defineConfig({
   },
   overrides: [
     {
-      files: ["apps/web-app/**/*"],
-      rules: foldkit.configs.recommended.rules,
+      files: [
+        "packages/effect-bdd/src/feature/describe-feature.ts",
+        "packages/effect-bdd/src/steps/run-steps.ts",
+      ],
+      // The runner erases heterogeneous step errors and services after the public overloads validate their composition.
+      rules: { "effecttsgo/any-unknown-in-error-context": "off" },
     },
+    { files: ["apps/*/src/**", "packages/*/src/**"], rules: { "import/no-cycle": "error" } },
+    {
+      files: ["linting/**"],
+      rules: {
+        ...Object.fromEntries(
+          Object.keys(effect.configs.recommended.rules).map((rule) => [rule, "off" as const]),
+        ),
+        "custom-lint-rules/no-node-apis": "off",
+        "custom-lint-rules/no-many-function-parameters": "off",
+        "custom-lint-rules/padding-around-large-statements": "off",
+      },
+    },
+
+    {
+      files: ["packages/migration/**"],
+      rules: { "custom-lint-rules/no-schema-decode-unknown": "off" },
+    },
+    {
+      files: ["apps/web-app/**/*"],
+      rules: {
+        ...Object.fromEntries(
+          Object.keys(designSystem.rules).map((name) => [
+            `design-system/${name}`,
+            "error" as const,
+          ]),
+        ),
+      },
+    },
+
     {
       files: ["packages/migration/src/**/*preview*", "packages/migration/preview/**"],
       rules: Object.fromEntries(
@@ -91,10 +137,6 @@ export default defineConfig({
       },
     },
     {
-      files: ["packages/effect-bdd/**/*", "**/*.test.ts", "apps/server/test/**/*"],
-      rules: {},
-    },
-    {
       files: [
         "**/*.test.ts",
         "**/*.test.tsx",
@@ -104,14 +146,13 @@ export default defineConfig({
         "**/test/**/*.tsx",
       ],
       rules: {
+        "effecttsgo/any-unknown-in-error-context": "off",
+        "effecttsgo/global-error-in-effect-failure": "off",
+        "custom-lint-rules/no-schema-decode-unknown": "off",
         "effect/avoid-option-getorthrow": "off",
         "effect/avoid-untagged-errors": "off",
         "effect/avoid-direct-json": "off",
       },
-    },
-    {
-      files: ["**/*.mjs"],
-      rules: {},
     },
   ],
   env: {
@@ -133,7 +174,6 @@ export default defineConfig({
     ".agents/**",
     "experiments/**",
     "scratchpad/**",
-    "linting/**",
     "oxlint.config.ts",
     "vitest.shared.ts",
     "apps/server/scripts/test-auth.ts",

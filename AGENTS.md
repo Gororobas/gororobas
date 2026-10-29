@@ -20,6 +20,8 @@ Do not set `as any`, `@ts-ignore` or `@ts-expect-error` when you're stuck. Think
 
 ## Vendors references
 
+Search vendor code by explicit path (for example, `rg X repos/effect`); root searches exclude `repos/` via `.ignore`.
+
 We're using Effect v4, which includes some breaking changes from Effect v3. Make sure to read the repos/effect folder  (which is a git subtree) to go through the new version's source code when proposing changes.
 
 Foldkit, @yielded/auth, Loro and Turso also have their monorepos available for reference under the `./repos` folder.
@@ -28,7 +30,7 @@ Foldkit, @yielded/auth, Loro and Turso also have their monorepos available for r
 
 Unified, up-to-date database schema is located in `apps/server/src/db/schema.sql`. We use `@ariga/atlas` to generate migration files based on diffs in the schema. We're still in the prototyping phase, this app is not deployed. As such, when you make changes to `schema.sql`, delete existing migrations and re-run `pnpm run migrate initial` from `apps/server` to avoid creating unnecessary migrations while we're figuring out the final schema.
 
-Atlas can't parse Turso-only DDL (full-text search indexes), so it lives after the `-- TURSO ONLY` line at the end of `schema.sql`. `scripts/migrate.ts` diffs that section itself into `src/db/migrations-turso/`, merging it into the same Effect migration as Atlas's statements. Delete `migrations-turso` along with the other migrations when regenerating `initial`.
+Atlas can't parse Turso-only DDL (full-text search indexes), so it lives after the `-- TURSO ONLY` line at the end of `schema.sql`. `apps/server/scripts/migrate.ts` diffs that section itself into `src/db/migrations-turso/`, merging it into the same Effect migration as Atlas's statements. Delete `migrations-turso` along with the other migrations when regenerating `initial`.
 
 Per `apps/server/src/sql.ts`, we use Effect SQL's `transformResultNames` and `transformQueryNames` to auto-convert properties from `snake_case` in SQL to `camelCase` in Typescript, back-and-forth.
 

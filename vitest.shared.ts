@@ -19,7 +19,6 @@ const config: ViteUserConfig = {
   },
   test: {
     alias: {
-      ...alias("cli"),
       ...alias("domain"),
       ...alias("effect-bdd"),
       ...alias("effect-sql-turso-browser"),
