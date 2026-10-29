@@ -25,6 +25,7 @@ import { WorkflowEngine } from "effect/workflow"
 import { IdGenLive } from "../src/id-gen-live.js"
 import { PublicationLinkInferenceWorkflowLayer } from "../src/link-inference/publication-link-inference-workflow.js"
 import { WikiArticleLinkInferenceWorkflowLayer } from "../src/link-inference/wiki-article-link-inference-workflow.js"
+import { MediaDeletionWorkflowLayer } from "../src/media-assets/media-deletion-workflow.js"
 import { MediaAssetsRepository } from "../src/media-assets/repository.js"
 import { MediaAssetsService } from "../src/media-assets/service.js"
 import { MediaAssetsStorage } from "../src/media-assets/storage.js"
@@ -133,6 +134,7 @@ export const TestLayerWithServices = Layer.mergeAll(
   TestLayer,
   PeopleServiceLayer,
   ProfilesServiceLayer,
+  MediaDeletionWorkflowLayer.pipe(Layer.provide(TestLayer)),
 ).pipe(Layer.provideMerge(WorkflowEngine.layerMemory))
 
 /**

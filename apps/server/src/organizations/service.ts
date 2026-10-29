@@ -22,6 +22,7 @@ import { SqlClient } from "effect/sql"
 
 import { claimHandle } from "../common/handle-allocation.js"
 import { PeopleRepository } from "../people/repository.js"
+import { deleteProfilesWithMedia } from "../profiles/profile-deletion.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { OrganizationsRepository } from "./repository.js"
 
@@ -315,12 +316,14 @@ export class OrganizationsService extends Context.Service<OrganizationsService>(
         }).pipe(sql.withTransaction)
 
       const deleteOrganization = (organizationId: OrganizationId) =>
-        Effect.gen(function* () {
-          yield* Policies.organizations.canDelete(organizationId)
-          yield* requireOrganization(organizationId)
-          // Delete the owning profile so its content and organization dependencies cascade together.
-          yield* profiles.deleteProfileReturningMediaAssets(organizationId)
-        }).pipe(sql.withTransaction)
+        deleteProfilesWithMedia((deleteProfiles) =>
+          Effect.gen(function* () {
+            yield* Policies.organizations.canDelete(organizationId)
+            yield* requireOrganization(organizationId)
+            // Delete the owning profile so its content and organization dependencies cascade together.
+            yield* deleteProfiles([organizationId])
+          }),
+        )
 
       const listMembers = (organizationId: OrganizationId) =>
         Effect.gen(function* () {

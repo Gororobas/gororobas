@@ -22,6 +22,7 @@ import {
 import { HttpClient, HttpClientRequest, HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder, HttpApiEndpoint, HttpApiGroup } from "effect/http-api"
 import { SqlClient } from "effect/sql"
+import { WorkflowEngine } from "effect/workflow"
 
 import {
   authenticationTestOrigin,
@@ -33,7 +34,7 @@ import {
   parseDeliveredCode,
 } from "../../test/authentication-helpers.js"
 import { completeOnboarding } from "../people/onboarding.js"
-import { ProfilesRepository } from "../profiles/repository.js"
+import { deleteProfilesWithMedia } from "../profiles/profile-deletion.js"
 import { SessionServiceLive } from "../session-service.js"
 import { makeAuthentication } from "./app-auth.js"
 import { authenticationLayer } from "./authentication-live.js"
@@ -334,9 +335,9 @@ test.live.each([authenticationTestOrigin, "http://localhost:4443"])(
     yield* requestCode(flow("deletion-flow", signup.email))
 
     yield* run(
-      ProfilesRepository.use((repository) =>
-        repository.deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)),
-      ),
+      deleteProfilesWithMedia((deleteProfiles) =>
+        deleteProfiles([ProfileId.make(authSubjectId)]),
+      ).pipe(Effect.provide(WorkflowEngine.layerMemory)),
     )
 
     expect(JSON.stringify(yield* query((sql) => sql`SELECT * FROM auth_proofs`))).not.toContain(

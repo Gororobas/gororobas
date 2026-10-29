@@ -168,6 +168,11 @@ Feature: Organizations
       When "Maria" deletes the organization "Sítio Semente"
       Then the organization "Sítio Semente" no longer exists
 
+    Scenario: Deleting the organization removes its media files
+      Given "Sítio Semente" owns a photo
+      When "Maria" deletes the organization "Sítio Semente"
+      Then the organization's photo and its files are removed
+
     Scenario: Non-manager cannot delete the organization
       When "Irene" tries to delete the organization "Sítio Semente"
       Then access is denied

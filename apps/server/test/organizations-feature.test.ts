@@ -4,6 +4,7 @@ import {
   Handle,
   IdGen,
   InformationVisibility,
+  MediaAssetId,
   OrganizationAccessLevel,
   OrganizationId,
   type OrganizationMembershipData,
@@ -22,10 +23,17 @@ import {
   When,
 } from "@gororobas/effect-bdd"
 import { resolveSessionFromAuthSubjectId, VISITOR_SESSION } from "@gororobas/server/session-service"
-import { DateTime, Effect, Layer, Option, Result, Schema } from "effect"
+import { DateTime, Effect, FileSystem, Layer, Option, Result, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
+import { SqlClient } from "effect/sql"
 import { TestClock } from "effect/testing"
+import { Workflow } from "effect/workflow"
+import sharp from "sharp"
 
+import { MediaDeletionWorkflow } from "../src/media-assets/media-deletion-workflow.js"
+import { MediaAssetsRepository } from "../src/media-assets/repository.js"
+import { MediaAssetsService } from "../src/media-assets/service.js"
+import { MediaAssetsStorage } from "../src/media-assets/storage.js"
 import { OrganizationsRepository } from "../src/organizations/repository.js"
 import { OrganizationsService } from "../src/organizations/service.js"
 import { PeopleService } from "../src/people/service.js"
@@ -1067,6 +1075,92 @@ await Effect.runPromise(
                     expect(yield* organizations.listMembers(organizationId)).toEqual([])
 
                     expect(yield* organizations.listInvitations(organizationId)).toEqual([])
+
+                    return context
+                  }),
+              }),
+            ),
+        })
+
+        Scenario("Deleting the organization removes its media files", {
+          layer: OrganizationsFeatureTestLayer,
+          steps: () =>
+            runSteps(
+              Given("{string:organization} owns a photo", {
+                params: NamedOrganization,
+                handler: (_, { organization }) =>
+                  Effect.gen(function* () {
+                    const context = yield* background()
+                    const organizationId = organizationNamed(context, organization)
+
+                    const file = yield* Effect.tryPromise(() =>
+                      sharp({ create: { width: 8, height: 4, channels: 3, background: "green" } })
+                        .png()
+                        .toBuffer(),
+                    )
+
+                    const photo = yield* withPerson(
+                      (yield* MediaAssetsService).upload({
+                        file,
+                        contentType: "image/png",
+                        fileName: "canteiro.png",
+                      }),
+                      personNamed(context.actors, "Maria"),
+                    )
+
+                    // Uploads belong to their uploader; hand this one to the organization.
+                    yield* SqlClient.SqlClient.use(
+                      (sql) =>
+                        sql`UPDATE media_assets SET owner_profile_id = ${organizationId} WHERE id = ${photo.id}`,
+                    )
+                    return { ...context, photoId: photo.id }
+                  }),
+              }),
+              When("{string:name} deletes the organization {string:organization}", {
+                params: ActorOrganization,
+                handler: (
+                  context: OrganizationContext & { photoId: MediaAssetId },
+                  { name, organization },
+                ) =>
+                  Effect.gen(function* () {
+                    yield* withPerson(
+                      (yield* OrganizationsService).deleteOrganization(
+                        organizationNamed(context, organization),
+                      ),
+                      personNamed(context.actors, name),
+                    )
+
+                    return context
+                  }),
+              }),
+              Then("the organization's photo and its files are removed", {
+                handler: (context: { photoId: MediaAssetId }) =>
+                  Effect.gen(function* () {
+                    const executionId = yield* MediaDeletionWorkflow.executionId({
+                      mediaAssetIds: [context.photoId],
+                    })
+
+                    // Only completes if deleting the organization started the workflow.
+                    yield* MediaDeletionWorkflow.poll(executionId).pipe(
+                      Effect.tap(() => Effect.yieldNow),
+                      Effect.repeat({
+                        until: (result) =>
+                          Option.exists(result, (value) => value instanceof Workflow.Complete),
+                        times: 1000,
+                      }),
+                    )
+
+                    const storage = yield* MediaAssetsStorage
+                    const filesystem = yield* FileSystem.FileSystem
+                    expect(
+                      yield* filesystem.exists(storage.filePath(context.photoId, "original")),
+                    ).toBe(false)
+
+                    expect(
+                      Option.isNone(
+                        yield* (yield* MediaAssetsRepository).findMediaAssetById(context.photoId),
+                      ),
+                    ).toBe(true)
 
                     return context
                   }),
