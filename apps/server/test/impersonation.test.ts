@@ -9,7 +9,7 @@ import { TestLayerWithServices, withSession } from "./test-helpers.js"
 
 it.effect("impersonation isolates concurrent identities", () =>
   Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
+    const administratorId = yield* provisionAdministrator
     const firstPersonId = yield* provisionCommunityPerson(administratorId, "First person")
     const secondPersonId = yield* provisionCommunityPerson(administratorId, "Second person")
     const readIdentity = Effect.gen(function* () {
@@ -34,7 +34,7 @@ it.effect("impersonation isolates concurrent identities", () =>
 
 it.effect("nested impersonation restores the caller's session", () =>
   Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
+    const administratorId = yield* provisionAdministrator
     const firstPersonId = yield* provisionCommunityPerson(administratorId, "First person")
     const secondPersonId = yield* provisionCommunityPerson(administratorId, "Second person")
 
@@ -58,7 +58,7 @@ it.effect("nested impersonation restores the caller's session", () =>
 
 it.effect("impersonation cannot edit another person's profile", () =>
   Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
+    const administratorId = yield* provisionAdministrator
     const firstPersonId = yield* provisionCommunityPerson(administratorId, "First person")
     const secondPersonId = yield* provisionCommunityPerson(administratorId, "Second person")
     const service = yield* ProfileService

@@ -111,7 +111,6 @@ it.live(
       const decodePublicationComment = (response: Response) =>
         Effect.tryPromise(() => response.json()).pipe(
           // The HTTP response JSON is an untrusted boundary.
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown
           Effect.flatMap(Schema.decodeUnknownEffect(PublicationCommentData)),
         )
 
@@ -210,7 +209,6 @@ it.live(
 
       expect(
         yield* Effect.tryPromise(() => censored.json()).pipe(
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The HTTP response JSON is an untrusted boundary.
           Effect.flatMap(Schema.decodeUnknownEffect(ModerationResult)),
         ),
       ).toEqual({ moderationStatus: "CENSORED" })

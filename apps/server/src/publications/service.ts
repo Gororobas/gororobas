@@ -28,11 +28,8 @@ import {
   PublicationId,
   PublicationNotFoundError,
   ProfileId,
-  PersonId,
   OrganizationId,
   MediaAssetId,
-  isCensored,
-  type ModeratedPublicationRow,
   type ModerationDecision,
 } from "@gororobas/domain"
 import { Array as EffectArray, Context, DateTime, Effect, Option, Schema } from "effect"
@@ -42,9 +39,8 @@ import { LoroDoc } from "loro-crdt"
 import { requestPublicationLinkInference } from "../link-inference/publication-link-inference-workflow.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { moderateContent } from "../moderation/moderate-content.js"
-import { findById as findOrganizationById } from "../organizations/queries.js"
-import { findById as findPersonById } from "../people/queries.js"
-import { listCardsByIds } from "../wiki/queries.js"
+import { OrganizationsRepository } from "../organizations/repository.js"
+import { WikiArticlesRepository } from "../wiki/repository.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
 import {
   listPublicationMediaAssets,
@@ -79,32 +75,9 @@ export const UpdatePublicationInput = Schema.Struct({
 })
 export type UpdatePublicationInput = typeof UpdatePublicationInput.Type
 
-/**
- * Censored publications are hidden from every reader but their authors, as if they didn't exist.
- *
- * Otherwise fetches the owner of the publication. If it's a person and they're a NEWCOMER,
- * Policies.publications.canView will ensure publications aren't truly public.
- **/
-export const assertCanViewPublication = (
-  publication: Pick<
-    ModeratedPublicationRow,
-    "id" | "moderationStatus" | "ownerProfileId" | "visibility"
-  >,
-) =>
-  Effect.gen(function* () {
-    if (isCensored(publication.moderationStatus)) {
-      return yield* Policies.publications.canViewCensored(publication).pipe(
-        Effect.catchTag("UnauthorizedError", () =>
-          Effect.fail(new PublicationNotFoundError({ id: publication.id })),
-        ),
-        Effect.asVoid,
-      )
-    }
+import { assertCanViewPublication } from "./access.js"
 
-    const owner = yield* findPersonById(Schema.decodeSync(PersonId)(publication.ownerProfileId))
-    yield* Policies.publications.canView(publication, Option.getOrUndefined(owner)?.accessLevel)
-  })
-
+/** @effect-expect-leaking SqlClient */
 export class PublicationsService extends Context.Service<PublicationsService>()(
   "PublicationsService",
   {
@@ -135,8 +108,9 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
         Effect.gen(function* () {
           const publication = yield* getPublicationById(publicationId)
           yield* assertCanViewPublication(publication)
-          const organization = yield* findOrganizationById(
-            Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
+          const ownerId = yield* Schema.decodeEffect(OrganizationId)(publication.ownerProfileId)
+          const organization = yield* OrganizationsRepository.make.pipe(
+            Effect.flatMap((repository) => repository.findById(ownerId)),
           )
           return Option.getOrUndefined(organization)
         })
@@ -391,8 +365,13 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
                 if (Option.isNone(details)) return Option.none()
 
                 const { conceptIds, ...content } = details.value
+
                 const concepts = EffectArray.isReadonlyArrayNonEmpty(conceptIds)
-                  ? yield* listCardsByIds({ wikiArticleIds: conceptIds, language })
+                  ? yield* WikiArticlesRepository.make.pipe(
+                      Effect.flatMap((repository) =>
+                        repository.listCardsByIds({ wikiArticleIds: conceptIds, language }),
+                      ),
+                    )
                   : []
 
                 return Option.some(

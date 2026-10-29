@@ -35,7 +35,7 @@ import { ProfilesRepository } from "../src/profiles/repository.js"
 import { ProfileService } from "../src/profiles/service.js"
 import { AppSqlTest } from "../src/sql.js"
 import { makePersonFixture, makeProfileFixture } from "./fixtures.js"
-import { getTelemetryLayer } from "./telemetry.js"
+import { telemetryLayer } from "./telemetry.js"
 
 export const DATABASE_PROPERTY_TEST_CONFIG = { runs: 50 } as const
 
@@ -61,7 +61,7 @@ export const IdGenTest = IdGenLive
  * Compose test layers for common test scenarios.
  *
  * Includes:
- * - getTelemetryLayer(): Optional OpenTelemetry instrumentation (enabled via ENABLE_TELEMETRY)
+ * - telemetryLayer: Optional OpenTelemetry instrumentation (enabled via ENABLE_TELEMETRY)
  * - AppSqlTest: In-memory SQLite with migrations
  * - IdGenTest: UUID generation
  * - PeopleRepository: People data access layer
@@ -91,7 +91,7 @@ const MediaTestLayer = Layer.effect(MediaAssetsService, MediaAssetsService.make)
 
 export const TestLayer = Layer.mergeAll(
   MediaTestLayer,
-  getTelemetryLayer(),
+  telemetryLayer,
   IdGenTest,
   Layer.effect(OrganizationsRepository, OrganizationsRepository.make),
   Layer.effect(PeopleRepository, PeopleRepository.make),
@@ -253,7 +253,7 @@ export const insertPersonWithDependencies = ({
     const now = DateTime.formatIso(nowUtc)
     const emailIdPart = person.id.replaceAll("-", "")
     const handleIdPart = person.id.replaceAll("-", "").slice(0, 25)
-    const generatedHandle = Schema.decodeSync(Handle)(`user-${handleIdPart}`)
+    const generatedHandle = yield* Schema.decodeEffect(Handle)(`user-${handleIdPart}`)
 
     yield* sql`
       INSERT INTO auth_subjects (id, email, is_email_verified, security_revision, claimed_at, created_at, updated_at)

@@ -364,7 +364,7 @@ const createWikiArticles = (context: MediaContext, names: readonly string[]) =>
                   translations: {
                     pt: {
                       commonNames: [
-                        Schema.decodeSync(WikiArticleCommonNameInCrdtList)({
+                        yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
                           name: name,
                           id: "mediaplant01",
                         }),
@@ -990,7 +990,9 @@ it.effect("revision media references preserve selections and roll back invalid a
           ...input,
           mediaAssets: [
             {
-              mediaAssetId: Schema.decodeSync(MediaAssetId)("00000000-0000-7000-8000-000000000099"),
+              mediaAssetId: yield* Schema.decodeEffect(MediaAssetId)(
+                "00000000-0000-7000-8000-000000000099",
+              ),
             },
           ],
         })

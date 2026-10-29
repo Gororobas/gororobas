@@ -17,32 +17,24 @@ import {
 } from "@gororobas/domain"
 import { Effect, Layer, Option, Schedule, Schema } from "effect"
 import { SqlClient } from "effect/sql"
-import { Activity, Workflow } from "effect/workflow"
+import { Activity } from "effect/workflow"
 
-import { replaceRelations } from "../wiki/mutations.js"
-import { findSourceRowById, findDatabaseRowById, listWikiArticleAliases } from "../wiki/queries.js"
+import { WikiArticlesRepository } from "../wiki/repository.js"
 import { inferLinks } from "./infer-links.js"
-import { LINK_INFERENCE_VERSION } from "./link-inference-version.js"
 import { LinkInferencePersistenceError, withPersistenceRetries } from "./persistence-errors.js"
 
 const retryPolicy = { times: 3, schedule: Schedule.exponential("200 millis") }
 
-const encodeFrontier = Schema.encodeSync(Schema.fromJsonString(LoroDocFrontier))
-
-export const WikiArticleLinkInferenceWorkflow = Workflow.make("WikiArticleLinkInference", {
-  payload: {
-    wikiArticleId: WikiArticleId,
-    crdtFrontier: LoroDocFrontier,
-  },
-  success: Schema.Null,
-  error: Schema.Union([LinkInferenceModelError, LinkInferencePersistenceError]),
-  idempotencyKey: ({ wikiArticleId, crdtFrontier }) =>
-    `${wikiArticleId}:${encodeFrontier(crdtFrontier)}:${LINK_INFERENCE_VERSION}`,
-})
+import { WikiArticleLinkInferenceWorkflow } from "./wiki-article-link-inference-definition.js"
+export {
+  WikiArticleLinkInferenceWorkflow,
+  requestWikiArticleLinkInference,
+} from "./wiki-article-link-inference-definition.js"
 
 /** Whether the run's frontier is still the article's approved state. */
 const isCurrentFrontier = (payload: typeof WikiArticleLinkInferenceWorkflow.payloadSchema.Type) =>
-  findDatabaseRowById(payload.wikiArticleId).pipe(
+  WikiArticlesRepository.make.pipe(
+    Effect.flatMap((repository) => repository.findDatabaseRowById(payload.wikiArticleId)),
     Effect.map(
       Option.exists((current) =>
         Schema.toEquivalence(LoroDocFrontier)(current.currentCrdtFrontier, payload.crdtFrontier),
@@ -62,7 +54,9 @@ const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(func
     error: LinkInferencePersistenceError,
     execute: Effect.gen(function* () {
       const isCurrent = yield* isCurrentFrontier(payload)
-      const crdt = yield* findSourceRowById(payload.wikiArticleId)
+      const crdt = yield* WikiArticlesRepository.make.pipe(
+        Effect.flatMap((repository) => repository.findSourceRowById(payload.wikiArticleId)),
+      )
       if (!isCurrent || Option.isNone(crdt)) return null
 
       const data = yield* WikiArticleCrdt.read(snapshotToLoroDoc(crdt.value.crdtSnapshot))
@@ -77,7 +71,10 @@ const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(func
     success: InferredLinks,
     error: Schema.Union([LinkInferenceModelError, LinkInferencePersistenceError]),
     execute: Effect.gen(function* () {
-      const aliases = yield* listWikiArticleAliases().pipe(withPersistenceRetries)
+      const aliases = yield* WikiArticlesRepository.make.pipe(
+        Effect.flatMap((repository) => repository.listWikiArticleAliases()),
+        withPersistenceRetries,
+      )
 
       return yield* inferLinks({
         source: article.source,
@@ -118,16 +115,24 @@ const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(func
 
           yield* Effect.all(
             [
-              replaceRelations({
-                wikiArticleId: payload.wikiArticleId,
-                source: "MENTION",
-                rows: mentions,
-              }),
-              replaceRelations({
-                wikiArticleId: payload.wikiArticleId,
-                source: "INFERENCE",
-                rows: inferences,
-              }),
+              WikiArticlesRepository.make.pipe(
+                Effect.flatMap((repository) =>
+                  repository.replaceRelations({
+                    wikiArticleId: payload.wikiArticleId,
+                    source: "MENTION",
+                    rows: mentions,
+                  }),
+                ),
+              ),
+              WikiArticlesRepository.make.pipe(
+                Effect.flatMap((repository) =>
+                  repository.replaceRelations({
+                    wikiArticleId: payload.wikiArticleId,
+                    source: "INFERENCE",
+                    rows: inferences,
+                  }),
+                ),
+              ),
             ],
             { concurrency: 1, discard: true },
           )
@@ -151,26 +156,3 @@ export const WikiArticleLinkInferenceWorkflowLayer = Layer.unwrap(
     )
   }),
 )
-
-/** Best-effort submission after the article transaction commits. */
-export const requestWikiArticleLinkInference = Effect.fn(function* (
-  article: { id: WikiArticleId; currentCrdtFrontier: LoroDocFrontier },
-  previous?: { currentCrdtFrontier: LoroDocFrontier },
-) {
-  const payload = { wikiArticleId: article.id, crdtFrontier: article.currentCrdtFrontier }
-
-  // Interrupt the run for the replaced content, so it doesn't spend model calls on stale text.
-  if (
-    previous &&
-    !Schema.toEquivalence(LoroDocFrontier)(previous.currentCrdtFrontier, payload.crdtFrontier)
-  ) {
-    yield* WikiArticleLinkInferenceWorkflow.interrupt(
-      yield* WikiArticleLinkInferenceWorkflow.executionId({
-        wikiArticleId: article.id,
-        crdtFrontier: previous.currentCrdtFrontier,
-      }),
-    )
-  }
-
-  yield* WikiArticleLinkInferenceWorkflow.execute(payload, { discard: true })
-})

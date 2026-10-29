@@ -24,7 +24,6 @@ import {
 } from "../../test/fixtures.js"
 import { insertPersonWithDependencies, TestLayer } from "../../test/test-helpers.js"
 import { HumanCrdtUpdate } from "../publications/publication-repository-inputs.js"
-import { findPublicationCrdtSnapshotById } from "../publications/queries.js"
 import { PublicationsRepository } from "../publications/repository.js"
 import {
   PublicationTranslationWorkflow,
@@ -66,7 +65,13 @@ const editSourceContent = ({
   Effect.gen(function* () {
     const repository = yield* PublicationsRepository
     const row = Option.getOrThrow(yield* repository.findPublicationRowById(publicationId))
-    const stored = Option.getOrThrow(yield* findPublicationCrdtSnapshotById(publicationId))
+
+    const stored = Option.getOrThrow(
+      yield* PublicationsRepository.make.pipe(
+        Effect.flatMap((repository) => repository.findPublicationCrdtSnapshotById(publicationId)),
+      ),
+    )
+
     const current = snapshotToLoroDoc(stored.crdtSnapshot)
     const next = current.fork()
 
@@ -177,7 +182,14 @@ describe("PublicationTranslationWorkflow", () => {
             const before = Option.getOrThrow(
               yield* repository.findPublicationRowById(publicationId),
             )
-            const stored = Option.getOrThrow(yield* findPublicationCrdtSnapshotById(publicationId))
+
+            const stored = Option.getOrThrow(
+              yield* PublicationsRepository.make.pipe(
+                Effect.flatMap((repository) =>
+                  repository.findPublicationCrdtSnapshotById(publicationId),
+                ),
+              ),
+            )
 
             script.editsDuringTranslation = edits
             script.publicationId = publicationId

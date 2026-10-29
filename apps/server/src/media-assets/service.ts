@@ -16,7 +16,7 @@ import { Record, Context, DateTime, Effect, Option, Schema, Array as EffectArray
 import { SqlClient } from "effect/sql"
 
 import { moderateContent } from "../moderation/moderate-content.js"
-import { assertCanViewPublication } from "../publications/service.js"
+import { assertCanViewPublication } from "../publications/access.js"
 import { processMediaAsset, readMediaAssetMetadata } from "./processing.js"
 import { MediaAssetsRepository } from "./repository.js"
 import { MediaAssetsStorage } from "./storage.js"

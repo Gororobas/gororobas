@@ -25,7 +25,11 @@ const retryPolicy = { times: 3, schedule: Schedule.exponential("200 millis") }
 
 class PublicationCommentTranslationPersistenceError extends Schema.TaggedError<PublicationCommentTranslationPersistenceError>()(
   "PublicationCommentTranslationPersistenceError",
-  { message: Schema.String, retryable: Schema.Boolean, cause: Schema.Defect() },
+  {
+    message: Schema.String,
+    retryable: Schema.Boolean,
+    cause: Schema.Defect(),
+  },
 ) {}
 
 const PersistenceError = Schema.Union([

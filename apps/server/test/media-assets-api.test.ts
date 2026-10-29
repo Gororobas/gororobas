@@ -145,7 +145,6 @@ const upload = ({
     })
 
     expect(response.status).toBe(200)
-    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- HTTP response JSON has not yet been validated against its response schema.
     return yield* Schema.decodeUnknownEffect(MediaUpload)(
       yield* Effect.tryPromise(() => response.json()),
     )
@@ -353,8 +352,7 @@ it.live("keeps a publication's kind when its content is updated", () =>
         created,
         Effect.fn(function* (response) {
           expect(response.status).toBe(200)
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
-          const publication = Schema.decodeUnknownSync(ApiPublicationData)(
+          const publication = yield* Schema.decodeUnknownEffect(ApiPublicationData)(
             yield* Effect.tryPromise(() => response.json()),
           )
           const current = snapshotToLoroDoc(
@@ -371,7 +369,7 @@ it.live("keeps a publication's kind when its content is updated", () =>
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(
-              Schema.encodeSync(Schema.toCodecJson(ApiUpdatePublicationData))({
+              yield* Schema.encodeEffect(Schema.toCodecJson(ApiUpdatePublicationData))({
                 crdtEdit: {
                   expectedCurrentCrdtFrontier: publication.currentCrdtFrontier,
                   crdtUpdate: LoroDocUpdate.make(
@@ -383,8 +381,7 @@ it.live("keeps a publication's kind when its content is updated", () =>
           })
 
           expect(updatedResponse.status).toBe(200)
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Validate the JSON received from the HTTP boundary.
-          const updated = Schema.decodeUnknownSync(ApiPublicationData)(
+          const updated = yield* Schema.decodeUnknownEffect(ApiPublicationData)(
             yield* Effect.tryPromise(() => updatedResponse.json()),
           )
           expect(updated.kind).toBe(publication.kind)

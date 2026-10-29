@@ -35,7 +35,6 @@ it.live(
     )
 
     const dependencies = Layer.mergeAll(
-      makeAppSql(join(directory, "preview.sqlite")),
       IdGenLive,
       NodeServices.layer,
       Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make),
@@ -52,8 +51,11 @@ it.live(
       ),
     )
 
+    const sqlLayer = makeAppSql(join(directory, "preview.sqlite"))
+
     const services = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
       Layer.provideMerge(dependencies),
+      Layer.provideMerge(sqlLayer),
     )
 
     yield* Effect.gen(function* () {

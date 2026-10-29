@@ -167,10 +167,9 @@ export const TelemetryLayer = Layer.unwrap(
  *
  * Returns TelemetryLayer if ENABLE_TELEMETRY=true, otherwise Layer.empty.
  */
-export const getTelemetryLayer = () => {
-  const config = readConfig()
-  return config.enabled ? TelemetryLayer : Layer.empty
-}
+export const telemetryLayer = Layer.suspend(() =>
+  readConfig().enabled ? TelemetryLayer : Layer.empty,
+)
 
 /**
  * Wrap an effect with a custom test span.

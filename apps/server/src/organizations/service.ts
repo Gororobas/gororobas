@@ -28,6 +28,7 @@ import { OrganizationsRepository } from "./repository.js"
 const invitationHasExpired = (invitation: OrganizationInvitationRow, now: DateTime.Utc) =>
   DateTime.Order(now, DateTime.add(invitation.createdAt, { weeks: 2 })) >= 0
 
+/** @effect-expect-leaking SqlClient */
 export class OrganizationsService extends Context.Service<OrganizationsService>()(
   "OrganizationsService",
   {

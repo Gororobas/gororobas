@@ -31,6 +31,7 @@ const PublicationsRepositoryLayer = Layer.effect(
 
 const PublicationsServiceLayer = Layer.effect(PublicationsService, PublicationsService.make).pipe(
   Layer.provide(PublicationsRepositoryLayer),
+  Layer.provide(TestLayer),
 )
 
 const TestLayerWithPublicationsService = Layer.mergeAll(
@@ -212,10 +213,9 @@ describe("PublicationsService", () => {
 
       const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
-      const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
-        yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`,
-      )
+      const snapshotRows = yield* Schema.decodeUnknownEffect(
+        Schema.Array(PublicationCrdtSnapshotRow),
+      )(yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`)
       expect(snapshotRows).toHaveLength(1)
       const snapshot = snapshotRows[0]
       expect(snapshot).toBeDefined()
@@ -271,10 +271,9 @@ describe("PublicationsService", () => {
 
       const before = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isSome(before)).toBe(true)
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
-      const snapshotRows = Schema.decodeUnknownSync(Schema.Array(PublicationCrdtSnapshotRow))(
-        yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`,
-      )
+      const snapshotRows = yield* Schema.decodeUnknownEffect(
+        Schema.Array(PublicationCrdtSnapshotRow),
+      )(yield* sql`SELECT crdt_snapshot FROM publication_sources WHERE id = ${publicationId}`)
       expect(snapshotRows).toHaveLength(1)
       const snapshot = snapshotRows[0]
       expect(snapshot).toBeDefined()

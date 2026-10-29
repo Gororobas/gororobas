@@ -12,6 +12,7 @@ import {
   listMediaAssetProfiles,
 } from "./queries.js"
 
+/** @effect-expect-leaking SqlClient */
 export class MediaAssetsRepository extends Context.Service<MediaAssetsRepository>()(
   "MediaAssetsRepository",
   {

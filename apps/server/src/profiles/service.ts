@@ -12,6 +12,7 @@ import { SqlClient } from "effect/sql"
 
 import { ProfilesRepository } from "./repository.js"
 
+/** @effect-expect-leaking SqlClient */
 export class ProfileService extends Context.Service<ProfileService>()("ProfileService", {
   make: Effect.gen(function* () {
     const repo = yield* ProfilesRepository

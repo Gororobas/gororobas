@@ -5,7 +5,11 @@ import type { SqlError } from "effect/sql"
 /** Workflow activities journal their errors as JSON, so failures must be serializable. */
 export class LinkInferencePersistenceError extends Schema.TaggedError<LinkInferencePersistenceError>()(
   "LinkInferencePersistenceError",
-  { message: Schema.String, retryable: Schema.Boolean, cause: Schema.Defect() },
+  {
+    message: Schema.String,
+    retryable: Schema.Boolean,
+    cause: Schema.Defect(),
+  },
 ) {}
 
 export const withPersistenceRetries = <A, R>(

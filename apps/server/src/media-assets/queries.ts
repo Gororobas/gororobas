@@ -7,7 +7,7 @@ import {
 } from "@gororobas/domain"
 import { SqlClient, SqlSchema } from "effect/sql"
 
-import { selectPublicationRows } from "../publications/queries.js"
+import { selectPublicationRows } from "../publications/projection.js"
 
 export const findMediaAssetById = SqlSchema.findOneOption({
   Request: MediaAssetId,

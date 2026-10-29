@@ -21,14 +21,19 @@ import { makeWikidata } from "../../src/wiki/external-data/services/wikidata.js"
 
 const client = (respond: (url: string) => { body: unknown; status?: number }) =>
   HttpClient.make((request) =>
-    Effect.sync(() => {
+    Effect.gen(function* () {
       const response = respond(request.url)
 
       return HttpClientResponse.fromWeb(
         request,
-        new Response(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(response.body), {
-          status: response.status ?? 200,
-        }),
+        new Response(
+          yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(response.body).pipe(
+            Effect.orDie,
+          ),
+          {
+            status: response.status ?? 200,
+          },
+        ),
       )
     }),
   )
@@ -352,7 +357,6 @@ describe("external data providers", () => {
       yield* http.get("/second", Schema.Struct({}))
       yield* Fiber.join(first)
       expect(starts).toHaveLength(3)
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Collected request timings must be validated for the expected tuple length.
       const [firstStart, secondStart, thirdStart] = yield* Schema.decodeUnknownEffect(
         Schema.Tuple([Schema.Finite, Schema.Finite, Schema.Finite]),
       )(starts)

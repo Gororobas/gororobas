@@ -9,7 +9,7 @@ import {
   fixture,
   makeDocument,
 } from "../../test/publication-comments/fixtures.js"
-import { listPublicationCommentTranslationRowsByPublicationCommentId } from "../publication-comments/queries.js"
+import { PublicationCommentsRepository } from "../publication-comments/repository.js"
 import { LanguageDetectionError, LanguageDetectionService } from "./language-detection-service.js"
 import {
   PublicationCommentTranslationWorkflow,
@@ -84,8 +84,15 @@ describe("PublicationCommentTranslationWorkflow", () => {
       expect(after.currentRevisionId).toBe(before.currentRevisionId)
       expect(after.editCount).toBe(0)
       expect(after.updatedAt).toEqual(before.updatedAt)
-      const translations =
-        yield* listPublicationCommentTranslationRowsByPublicationCommentId(publicationCommentId)
+
+      const translations = yield* PublicationCommentsRepository.make.pipe(
+        Effect.flatMap((repository) =>
+          repository.listPublicationCommentTranslationRowsByPublicationCommentId(
+            publicationCommentId,
+          ),
+        ),
+      )
+
       expect(translations.map((row) => row.language)).toEqual(["pt"])
       expect(translations[0]?.translatedAtRevisionId).toBe(before.currentRevisionId)
       expect(detections).toBe(2)
@@ -129,8 +136,12 @@ describe("PublicationCommentTranslationWorkflow", () => {
 
         expect(
           EffectArray.sort(
-            (yield* listPublicationCommentTranslationRowsByPublicationCommentId(
-              publicationCommentId,
+            (yield* PublicationCommentsRepository.make.pipe(
+              Effect.flatMap((repository) =>
+                repository.listPublicationCommentTranslationRowsByPublicationCommentId(
+                  publicationCommentId,
+                ),
+              ),
             )).map((row) => row.language),
             Order.String,
           ),
@@ -204,8 +215,15 @@ describe("PublicationCommentTranslationWorkflow", () => {
       )
 
       expect(error).toMatchObject({ _tag: "PublicationCommentConcurrentUpdateError" })
+
       expect(
-        yield* listPublicationCommentTranslationRowsByPublicationCommentId(publicationCommentId),
+        yield* PublicationCommentsRepository.make.pipe(
+          Effect.flatMap((repository) =>
+            repository.listPublicationCommentTranslationRowsByPublicationCommentId(
+              publicationCommentId,
+            ),
+          ),
+        ),
       ).toEqual([])
 
       expect(

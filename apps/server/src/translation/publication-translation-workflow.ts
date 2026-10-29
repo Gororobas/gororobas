@@ -35,7 +35,11 @@ const WORKFLOW_VERSION = "2026-10-28.1" as const
 
 class PublicationTranslationPersistenceError extends Schema.TaggedError<PublicationTranslationPersistenceError>()(
   "PublicationTranslationPersistenceError",
-  { message: Schema.String, retryable: Schema.Boolean, cause: Schema.Defect() },
+  {
+    message: Schema.String,
+    retryable: Schema.Boolean,
+    cause: Schema.Defect(),
+  },
 ) {}
 
 /** Activity results are stored as JSON, so persistence failures must be serializable errors. */

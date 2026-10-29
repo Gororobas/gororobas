@@ -31,6 +31,7 @@ import {
   listPublicationCommentRowsByPublicationId,
 } from "./queries.js"
 
+/** @effect-expect-leaking SqlClient */
 export class PublicationCommentsRepository extends Context.Service<PublicationCommentsRepository>()(
   "PublicationCommentsRepository",
   {
@@ -168,6 +169,7 @@ export class PublicationCommentsRepository extends Context.Service<PublicationCo
         )
 
       return {
+        listPublicationCommentTranslationRowsByPublicationCommentId,
         createPublicationComment,
         deletePublicationComment,
         findPublicationCommentContentByIdAndLanguage,

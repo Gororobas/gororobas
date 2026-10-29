@@ -80,7 +80,7 @@ const seed = Command.make(
       }).pipe(Effect.provide(makeAppSql(database)))
 
       yield* Console.log(
-        Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }))({
+        yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))({
           database,
           ...report,
         }),

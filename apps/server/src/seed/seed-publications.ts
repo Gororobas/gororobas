@@ -30,14 +30,9 @@ import {
 import { updateModerationStatus } from "../moderation/moderate-content.js"
 import { PublicationCommentsRepository } from "../publication-comments/repository.js"
 import {
-  attachMediaToPublication,
-  replacePublicationWikiArticleLinks,
-} from "../publications/mutations.js"
-import {
   HumanCrdtUpdate,
   SystemUpsertTranslation,
 } from "../publications/publication-repository-inputs.js"
-import { findPublicationCrdtSnapshotById } from "../publications/queries.js"
 import { PublicationsRepository } from "../publications/repository.js"
 import { firstParagraphEvidence, richTextDocument } from "./rich-text.js"
 import {
@@ -186,7 +181,13 @@ const editPublication = (input: {
 }) =>
   Effect.gen(function* () {
     const repository = yield* PublicationsRepository
-    const stored = yield* findPublicationCrdtSnapshotById(input.publicationId)
+
+    const stored = yield* PublicationsRepository.make.pipe(
+      Effect.flatMap((repository) =>
+        repository.findPublicationCrdtSnapshotById(input.publicationId),
+      ),
+    )
+
     if (Option.isNone(stored)) return
 
     const current = snapshotToLoroDoc(stored.value.crdtSnapshot)
@@ -230,32 +231,40 @@ const linkInferredArticles = ({
       [0, 3],
     )
 
-    yield* replacePublicationWikiArticleLinks({
-      publicationId,
-      source: "MENTION",
-      rows: others.map((article) => ({
-        publicationId,
-        wikiArticleId: article.id,
-        source: "MENTION",
-        evidence: [{ ...evidence.value, text: article.names.pt }],
-      })),
-    })
+    yield* PublicationsRepository.make.pipe(
+      Effect.flatMap((repository) =>
+        repository.replacePublicationWikiArticleLinks({
+          publicationId,
+          source: "MENTION",
+          rows: others.map((article) => ({
+            publicationId,
+            wikiArticleId: article.id,
+            source: "MENTION",
+            evidence: [{ ...evidence.value, text: article.names.pt }],
+          })),
+        }),
+      ),
+    )
 
-    yield* replacePublicationWikiArticleLinks({
-      publicationId,
-      source: "INFERENCE",
-      rows: concepts.map((article) => ({
-        publicationId,
-        wikiArticleId: article.id,
-        source: "INFERENCE",
-        evidence: [
-          {
-            ...evidence.value,
-            rationale: `The passage describes practices related to ${article.names.en}.`,
-          },
-        ],
-      })),
-    })
+    yield* PublicationsRepository.make.pipe(
+      Effect.flatMap((repository) =>
+        repository.replacePublicationWikiArticleLinks({
+          publicationId,
+          source: "INFERENCE",
+          rows: concepts.map((article) => ({
+            publicationId,
+            wikiArticleId: article.id,
+            source: "INFERENCE",
+            evidence: [
+              {
+                ...evidence.value,
+                rationale: `The passage describes practices related to ${article.names.en}.`,
+              },
+            ],
+          })),
+        }),
+      ),
+    )
   })
 
 /** Rich text opens with a sentence; its first words make a readable handle. */
@@ -324,7 +333,12 @@ const seedPublication = (
 
         yield* Effect.forEach(
           media,
-          (mediaAssetId) => attachMediaToPublication({ publicationId, mediaAssetId }),
+          (mediaAssetId) =>
+            PublicationsRepository.make.pipe(
+              Effect.flatMap((repository) =>
+                repository.attachMediaToPublication({ publicationId, mediaAssetId }),
+              ),
+            ),
           { concurrency: 1, discard: true },
         )
 

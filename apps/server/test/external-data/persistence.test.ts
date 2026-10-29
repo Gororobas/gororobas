@@ -37,7 +37,7 @@ const createArticle = Effect.fn(function* (kind: "PLANT" | "BOOK" = "PLANT") {
     pt: { commonNames: [{ id: "testname0001", name: "Test article" }] },
   } as const
 
-  const wikiArticle = Schema.decodeSync(WikiArticleEditableData)(
+  const wikiArticle = yield* Schema.decodeEffect(WikiArticleEditableData)(
     kind === "PLANT"
       ? { kind, attributes: { wikidataId: "Q23501" }, translations }
       : { kind, attributes: { googleBooksVolumeId: "test_volume" }, translations },

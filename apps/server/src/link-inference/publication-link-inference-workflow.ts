@@ -21,12 +21,8 @@ import { DateTime, Effect, Equal, Layer, Option, Schedule, Schema } from "effect
 import { SqlClient } from "effect/sql"
 import { Activity, Workflow } from "effect/workflow"
 
-import {
-  replacePublicationWikiArticleLinks,
-  updatePublicationLinkInference,
-} from "../publications/mutations.js"
-import { findPublicationCrdtSnapshotById } from "../publications/queries.js"
-import { listWikiArticleAliases } from "../wiki/queries.js"
+import { PublicationsRepository } from "../publications/repository.js"
+import { WikiArticlesRepository } from "../wiki/repository.js"
 import { inferLinks } from "./infer-links.js"
 import { LINK_INFERENCE_VERSION } from "./link-inference-version.js"
 import { LinkInferencePersistenceError, withPersistenceRetries } from "./persistence-errors.js"
@@ -55,7 +51,12 @@ const findCurrentSourceContent = (
   payload: typeof PublicationLinkInferenceWorkflow.payloadSchema.Type,
 ) =>
   Effect.gen(function* () {
-    const stored = yield* findPublicationCrdtSnapshotById(payload.publicationId)
+    const stored = yield* PublicationsRepository.make.pipe(
+      Effect.flatMap((repository) =>
+        repository.findPublicationCrdtSnapshotById(payload.publicationId),
+      ),
+    )
+
     if (Option.isNone(stored)) return Option.none()
 
     const current = snapshotToLoroDoc(stored.value.crdtSnapshot)
@@ -105,7 +106,10 @@ const inferPublicationLinks = Effect.fn("PublicationLinkInferenceWorkflow")(func
     error: Schema.Union([LinkInferenceModelError, LinkInferencePersistenceError]),
     execute: Effect.gen(function* () {
       const startedAt = yield* DateTime.now
-      const aliases = yield* listWikiArticleAliases().pipe(withPersistenceRetries)
+      const aliases = yield* WikiArticlesRepository.make.pipe(
+        Effect.flatMap((repository) => repository.listWikiArticleAliases()),
+        withPersistenceRetries,
+      )
 
       const links = yield* inferLinks({
         source,
@@ -147,27 +151,39 @@ const inferPublicationLinks = Effect.fn("PublicationLinkInferenceWorkflow")(func
 
           yield* Effect.all(
             [
-              replacePublicationWikiArticleLinks({
-                publicationId: payload.publicationId,
-                source: "MENTION",
-                rows: mentions,
-              }),
-              replacePublicationWikiArticleLinks({
-                publicationId: payload.publicationId,
-                source: "INFERENCE",
-                rows: inferences,
-              }),
-              updatePublicationLinkInference({
-                id: payload.publicationId,
-                linkInference: LinkInferenceRun.make({
-                  version: LINK_INFERENCE_VERSION,
-                  model: model.model,
-                  crdtFrontier: payload.crdtFrontier,
-                  startedAt: inferred.startedAt,
-                  finishedAt: inferred.finishedAt,
-                  suggestions,
-                }),
-              }),
+              PublicationsRepository.make.pipe(
+                Effect.flatMap((repository) =>
+                  repository.replacePublicationWikiArticleLinks({
+                    publicationId: payload.publicationId,
+                    source: "MENTION",
+                    rows: mentions,
+                  }),
+                ),
+              ),
+              PublicationsRepository.make.pipe(
+                Effect.flatMap((repository) =>
+                  repository.replacePublicationWikiArticleLinks({
+                    publicationId: payload.publicationId,
+                    source: "INFERENCE",
+                    rows: inferences,
+                  }),
+                ),
+              ),
+              PublicationsRepository.make.pipe(
+                Effect.flatMap((repository) =>
+                  repository.updatePublicationLinkInference({
+                    id: payload.publicationId,
+                    linkInference: LinkInferenceRun.make({
+                      version: LINK_INFERENCE_VERSION,
+                      model: model.model,
+                      crdtFrontier: payload.crdtFrontier,
+                      startedAt: inferred.startedAt,
+                      finishedAt: inferred.finishedAt,
+                      suggestions,
+                    }),
+                  }),
+                ),
+              ),
             ],
             { concurrency: 1, discard: true },
           )

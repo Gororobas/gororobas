@@ -108,8 +108,9 @@ export const provisionCommunityPerson = (administratorId: PersonId, name: string
   })
 
 /** The first administrator must be bootstrapped before production approval can run. */
-export const provisionAdministrator = () =>
-  seedPerson("ADMIN").pipe(Effect.map(({ person }) => person.id))
+export const provisionAdministrator = seedPerson("ADMIN").pipe(
+  Effect.map(({ person }) => person.id),
+)
 
 export const PeopleTestDataTable = Schema.Struct({
   table: Schema.Array(Schema.Struct({ name: Schema.String, accessLevel: PlatformAccessLevel })),
@@ -117,7 +118,7 @@ export const PeopleTestDataTable = Schema.Struct({
 
 export const provisionPeople = (table: typeof PeopleTestDataTable.Type.table) =>
   Effect.gen(function* () {
-    const bootstrapAdministratorId = yield* provisionAdministrator()
+    const bootstrapAdministratorId = yield* provisionAdministrator
     const people = yield* PeopleService
 
     const entries = yield* Effect.forEach(

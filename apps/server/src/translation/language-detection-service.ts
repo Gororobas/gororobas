@@ -3,7 +3,11 @@ import { Context, Effect, Layer, Schema } from "effect"
 
 export class LanguageDetectionError extends Schema.TaggedError<LanguageDetectionError>()(
   "LanguageDetectionError",
-  { message: Schema.String, retryable: Schema.Boolean, cause: Schema.optional(Schema.Defect()) },
+  {
+    message: Schema.String,
+    retryable: Schema.Boolean,
+    cause: Schema.optional(Schema.Defect()),
+  },
 ) {}
 
 export const LanguageDetectionService = Context.Service<{

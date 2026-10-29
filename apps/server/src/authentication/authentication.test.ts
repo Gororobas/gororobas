@@ -33,7 +33,7 @@ import {
   parseDeliveredCode,
 } from "../../test/authentication-helpers.js"
 import { completeOnboarding } from "../people/onboarding.js"
-import { deleteProfileReturningMediaAssets } from "../profiles/mutations.js"
+import { ProfilesRepository } from "../profiles/repository.js"
 import { SessionServiceLive } from "../session-service.js"
 import { makeAuthentication } from "./app-auth.js"
 import { authenticationLayer } from "./authentication-live.js"
@@ -332,7 +332,15 @@ test.live.each([authenticationTestOrigin, "http://localhost:4443"])(
 
     // Deleting an account removes the proofs bound to its address.
     yield* requestCode(flow("deletion-flow", signup.email))
-    yield* run(deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)))
+
+    yield* run(
+      ProfilesRepository.make.pipe(
+        Effect.flatMap((repository) =>
+          repository.deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)),
+        ),
+      ),
+    )
+
     expect(JSON.stringify(yield* query((sql) => sql`SELECT * FROM auth_proofs`))).not.toContain(
       signup.email,
     )

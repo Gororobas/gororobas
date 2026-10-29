@@ -25,7 +25,7 @@ const plant = Schema.decodeSync(WikiArticleEditableData)({
 
 const insertImage = (ownerProfileId: Parameters<typeof insertMediaAsset>[0]["ownerProfileId"]) =>
   Effect.gen(function* () {
-    const id = Schema.decodeSync(MediaAssetId)("00000000-0000-7000-8000-0000000000a1")
+    const id = yield* Schema.decodeEffect(MediaAssetId)("00000000-0000-7000-8000-0000000000a1")
     const now = yield* DateTime.now
 
     yield* insertMediaAsset({

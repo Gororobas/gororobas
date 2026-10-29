@@ -20,7 +20,6 @@ import { WorkflowEngine } from "effect/workflow"
 import { textToRichTextDocument } from "../../test/feature-test-helpers.js"
 import { makePersonFixture, makeProfileFixture } from "../../test/fixtures.js"
 import { insertPersonWithDependencies, TestLayer } from "../../test/test-helpers.js"
-import { findDatabaseRowById } from "../wiki/queries.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
 import {
   WikiArticleLinkInferenceWorkflow,
@@ -188,7 +187,11 @@ describe("WikiArticleLinkInferenceWorkflow", () => {
               }),
             }
 
-            const article = Option.getOrThrow(yield* findDatabaseRowById(ids.itself))
+            const article = Option.getOrThrow(
+              yield* WikiArticlesRepository.make.pipe(
+                Effect.flatMap((repository) => repository.findDatabaseRowById(ids.itself)),
+              ),
+            )
 
             state.inferredNames = inferred.map((name) =>
               nameOf(name === "itself" ? "mandioca" : name),
@@ -260,7 +263,12 @@ describe("WikiArticleLinkInferenceWorkflow", () => {
           content: "Leguminosa.",
         })
 
-        const article = Option.getOrThrow(yield* findDatabaseRowById(mandioca))
+        const article = Option.getOrThrow(
+          yield* WikiArticlesRepository.make.pipe(
+            Effect.flatMap((repository) => repository.findDatabaseRowById(mandioca)),
+          ),
+        )
+
         const context = yield* Effect.context<
           WikiArticlesRepository | WorkflowEngine.WorkflowEngine | SqlClient.SqlClient | IdGen
         >()
@@ -271,7 +279,13 @@ describe("WikiArticleLinkInferenceWorkflow", () => {
         state.duringInference = Effect.gen(function* () {
           state.inferredNames = [`feijão ${run}`]
           yield* approveContentEdit(mandioca, person.id)
-          const approved = Option.getOrThrow(yield* findDatabaseRowById(mandioca))
+
+          const approved = Option.getOrThrow(
+            yield* WikiArticlesRepository.make.pipe(
+              Effect.flatMap((repository) => repository.findDatabaseRowById(mandioca)),
+            ),
+          )
+
           yield* WikiArticleLinkInferenceWorkflow.execute({
             wikiArticleId: mandioca,
             crdtFrontier: approved.currentCrdtFrontier,

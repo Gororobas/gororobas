@@ -21,7 +21,7 @@ import {
 } from "effect"
 
 import { IdGenLive } from "../id-gen-live.js"
-import { insertMediaAsset, insertMediaAssetCredit } from "../media-assets/mutations.js"
+import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { MediaAssetsStorage } from "../media-assets/storage.js"
 import { shortText } from "./rich-text.js"
@@ -183,7 +183,9 @@ export const makeSeedMedia = (input: { poolSize: number; timeline: SeedTimeline 
             yield* fileSystem.symlink(path.join(POOL_DIRECTORY, entry.id), link)
           }
 
-          yield* insertMediaAsset({
+          const repository = yield* MediaAssetsRepository.make
+
+          yield* repository.insertMediaAsset({
             id,
             format: "IMAGE",
             metadata: entry.metadata,
@@ -209,7 +211,7 @@ export const makeSeedMedia = (input: { poolSize: number; timeline: SeedTimeline 
                   ? yield* pickOption(creditablePeople)
                   : undefined
 
-                yield* insertMediaAssetCredit({
+                yield* repository.insertMediaAssetCredit({
                   mediaAssetId: id,
                   orderIndex,
                   creditLine: person

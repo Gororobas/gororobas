@@ -29,6 +29,7 @@ const PublicationCommentsServiceLayer = Layer.effect(
   PublicationCommentsService.make,
 ).pipe(
   Layer.provide(Layer.mergeAll(PublicationsRepositoryLayer, PublicationCommentsRepositoryLayer)),
+  Layer.provide(TestLayer),
 )
 
 const TestLayerWithPublicationCommentsService = Layer.mergeAll(

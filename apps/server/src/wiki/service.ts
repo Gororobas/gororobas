@@ -36,6 +36,7 @@ const resolveProperty = <A>(
     }),
   )
 
+/** @effect-expect-leaking SqlClient */
 export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
   "WikiArticlesService",
   {

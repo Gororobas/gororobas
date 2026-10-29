@@ -2374,7 +2374,7 @@ it.effect("plant search ORs enum selections and matches overlapping numeric rang
     })
 
     const matchingHeight = yield* service.searchWikiArticles(
-      Schema.decodeSync(WikiSearchParams)({
+      yield* Schema.decodeEffect(WikiSearchParams)({
         kind: "PLANT",
         heightMin: 150,
         heightMax: 250,
@@ -2445,7 +2445,7 @@ it.effect("text search ranks names above mentions, folds accents and tolerates t
             ...blackBeans,
             commonNames: [
               ...blackBeans.commonNames,
-              Schema.decodeSync(WikiArticleCommonNameInCrdtList)({
+              yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
                 id: "wikicommon02",
                 name: "Feijão-da-feijoada",
               }),

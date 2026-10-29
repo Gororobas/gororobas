@@ -35,7 +35,7 @@ import {
   persistCrdtDocumentUpdate,
 } from "../common/crdt-aggregate-persistence.js"
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
-import { requestWikiArticleLinkInference } from "../link-inference/wiki-article-link-inference-workflow.js"
+import { requestWikiArticleLinkInference } from "../link-inference/wiki-article-link-inference-definition.js"
 import { type ExternalDataArticle } from "./external-data/persist-utils.js"
 import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
@@ -76,6 +76,7 @@ import {
   findPageByHandleAndKind,
   findRevisionById,
   findWikiArticleBySearchableName,
+  listWikiArticleAliases,
 } from "./queries.js"
 
 /**
@@ -575,12 +576,15 @@ const evaluateRevision = (
     ),
   )
 
+/** @effect-expect-leaking SqlClient */
 export class WikiArticlesRepository extends Context.Service<WikiArticlesRepository>()(
   "WikiArticlesRepository",
   {
     // oxlint-disable-next-line require-yield not sure if we can avoid having make as an Effect
     make: Effect.gen(function* () {
       return {
+        findDatabaseRowById,
+        listWikiArticleAliases,
         setBookmark,
         removeBookmark,
         setMainMedia,

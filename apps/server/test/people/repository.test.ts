@@ -19,7 +19,7 @@ import {
   TestLayer,
 } from "../test-helpers.js"
 
-class IntentionalFailure extends Schema.TaggedError<IntentionalFailure>()(
+class IntentionalFailureError extends Schema.TaggedError<IntentionalFailureError>()(
   "PeopleRepositoryTestIntentionalFailure",
   { message: Schema.String },
 ) {}
@@ -141,7 +141,7 @@ describe("PeopleRepository", () => {
 
               // @effect-diagnostics-next-line globalErrorInEffectFailure:off
               // @effect-diagnostics-next-line missingReturnYieldStar:off
-              yield* new IntentionalFailure({ message: "Intentional failure" })
+              yield* new IntentionalFailureError({ message: "Intentional failure" })
             }),
         })
 

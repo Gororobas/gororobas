@@ -40,6 +40,7 @@ import {
   insertPublicationTranslationRows,
   replacePublicationWikiArticleLinks,
   updatePublicationSourceRow,
+  updatePublicationLinkInference,
   updatePublicationSourceVisibility,
   upsertPublicationProjectionRow,
 } from "./mutations.js"
@@ -65,6 +66,8 @@ import {
  * Publications repository with CRUD orchestration:
  * - public read queries for the front-end and policy checks
  * - createPublication/updatePublication/deletePublication as the write surface
+ *
+ * @effect-expect-leaking SqlClient
  */
 export class PublicationsRepository extends Context.Service<PublicationsRepository>()(
   "PublicationsRepository",
@@ -369,6 +372,9 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         })
 
       return {
+        findPublicationCrdtSnapshotById,
+        replacePublicationWikiArticleLinks,
+        updatePublicationLinkInference,
         listPublicationMediaAttachments,
         attachMediaToPublication,
         deletePublicationMediaAttachments,

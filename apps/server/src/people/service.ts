@@ -20,6 +20,7 @@ import { OrganizationsRepository } from "../organizations/repository.js"
 import { ProfilesRepository } from "../profiles/repository.js"
 import { PeopleRepository } from "./repository.js"
 
+/** @effect-expect-leaking SqlClient */
 export class PeopleService extends Context.Service<PeopleService>()("PeopleService", {
   make: Effect.gen(function* () {
     const repo = yield* PeopleRepository

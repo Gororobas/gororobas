@@ -192,7 +192,7 @@ const contentUpdate = ({
       yield* WikiArticleCrdt.applyEdit(changed, {
         _tag: "AddedWikiArticleTranslation",
         language,
-        value: Schema.decodeSync(WikiPlantArticle.EditableTranslation)({
+        value: yield* Schema.decodeEffect(WikiPlantArticle.EditableTranslation)({
           commonNames: [{ id: "wikispanish1", name: "Mandioca" }],
         }),
       })

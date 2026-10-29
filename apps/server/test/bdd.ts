@@ -23,7 +23,7 @@ export class NotImplementedError extends Schema.TaggedError<NotImplementedError>
   { message: Schema.String },
 ) {}
 
-export const makeTestLayer = () => AppSqlTest
+export const testLayer = AppSqlTest
 
 export const notImplemented = <Ctx>(_ctx: Ctx) =>
   Effect.fail(new NotImplementedError({ message: "NotImplemented" }))
@@ -45,14 +45,11 @@ export const createFailingSteps = (
     }),
   )
 
-const describeParsedScenario = (scenario: ParsedScenario, layer = makeTestLayer()): void => {
+const describeParsedScenario = (scenario: ParsedScenario, layer = testLayer): void => {
   it.effect(scenario.name, () => Effect.fail(NotImplementedError).pipe(Effect.provide(layer)))
 }
 
-const describeParsedScenarioOutline = (
-  outline: ParsedScenarioOutline,
-  layer = makeTestLayer(),
-): void => {
+const describeParsedScenarioOutline = (outline: ParsedScenarioOutline, layer = testLayer): void => {
   describe(outline.name, () => {
     outline.examples.forEach((example, index) => {
       const label = Record.toEntries(example)

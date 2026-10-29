@@ -23,7 +23,7 @@ it.effect("indexes cultivar scientific names without indexing their authored sta
     } as const
 
     const parentPlantId = yield* create(
-      Schema.decodeSync(WikiArticleEditableData)({
+      yield* Schema.decodeEffect(WikiArticleEditableData)({
         kind: "PLANT",
         attributes: { scientificNames: [{ id: "sciencename1", value: "Zea mays" }] },
         translations,

@@ -112,7 +112,7 @@ const organizationSetup = () =>
     params: Schema.Struct({ organization: Schema.String }),
     handler: (_, { organization }) =>
       Effect.gen(function* () {
-        const organizationCreatorId = yield* provisionAdministrator()
+        const organizationCreatorId = yield* provisionAdministrator
         const service = yield* OrganizationsService
         const handle = yield* Schema.decodeEffect(Handle)(
           `org-${organizationCreatorId.replaceAll("-", "").slice(0, 24)}`,
@@ -1655,7 +1655,7 @@ it.effect("publication updates preserve kind and reject kind changes without per
             ownerProfileId: personId,
             sourceLanguage: ContentLanguage.make("pt"),
             content: textToRichTextDocument("Original content"),
-            handle: Schema.decodeSync(Handle)(`kind-preservation-${kind.toLowerCase()}`),
+            handle: yield* Schema.decodeEffect(Handle)(`kind-preservation-${kind.toLowerCase()}`),
             visibility: "PUBLIC",
             startDate: now,
           }),

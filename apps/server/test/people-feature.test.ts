@@ -83,7 +83,7 @@ const givenHandle = () =>
 
 it.effect("provisioned newcomers need approval to read community profiles", () =>
   Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
+    const administratorId = yield* provisionAdministrator
     const ownerId = yield* provisionCommunityPerson(administratorId, "Profile owner")
     const profiles = yield* ProfileService
     yield* withSession(
@@ -303,7 +303,7 @@ const givenSoleMemberOrganization = () =>
 
 it.effect("administrator demotion preserves at least one administrator", () =>
   Effect.gen(function* () {
-    const administratorId = yield* provisionAdministrator()
+    const administratorId = yield* provisionAdministrator
     const otherAdministratorId = yield* provisionPerson("Another administrator")
     const people = yield* PeopleRepository
 
@@ -366,7 +366,7 @@ await Effect.runPromise(
             params: NamedPerson,
             handler: (_, { name }) =>
               Effect.gen(function* () {
-                const administratorId = yield* provisionAdministrator()
+                const administratorId = yield* provisionAdministrator
                 const personId = yield* provisionCommunityPerson(administratorId, name)
                 return { administratorId, actors: { [name]: personId } }
               }),
@@ -649,7 +649,7 @@ await Effect.runPromise(
               handler: (_, { name }) =>
                 Effect.gen(function* () {
                   // The first administrator is the only trusted fixture; feature actors follow production provisioning and approval.
-                  const administratorId = yield* provisionAdministrator()
+                  const administratorId = yield* provisionAdministrator
                   const personId = yield* provisionCommunityPerson(administratorId, name)
                   return { administratorId, actors: { [name]: personId } }
                 }),

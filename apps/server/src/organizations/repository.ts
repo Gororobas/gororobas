@@ -20,6 +20,7 @@ import {
   listMembers,
 } from "./queries.js"
 
+/** @effect-expect-leaking SqlClient */
 export class OrganizationsRepository extends Context.Service<OrganizationsRepository>()(
   "OrganizationsRepository",
   {

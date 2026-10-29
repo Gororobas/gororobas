@@ -32,7 +32,6 @@ import {
   TestLayer,
 } from "../../test/test-helpers.js"
 import { HumanCrdtUpdate } from "../publications/publication-repository-inputs.js"
-import { findPublicationCrdtSnapshotById } from "../publications/queries.js"
 import { PublicationsRepository } from "../publications/repository.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
 import { LINK_INFERENCE_VERSION } from "./link-inference-version.js"
@@ -121,7 +120,15 @@ const editSourceContent = (input: {
 }) =>
   Effect.gen(function* () {
     const publications = yield* PublicationsRepository
-    const stored = Option.getOrThrow(yield* findPublicationCrdtSnapshotById(input.publicationId))
+
+    const stored = Option.getOrThrow(
+      yield* PublicationsRepository.make.pipe(
+        Effect.flatMap((repository) =>
+          repository.findPublicationCrdtSnapshotById(input.publicationId),
+        ),
+      ),
+    )
+
     const current = snapshotToLoroDoc(stored.crdtSnapshot)
     const edited = current.fork()
     yield* PublicationCrdt.applyEdit(edited, {

@@ -27,14 +27,8 @@ import {
   SIMILARITY_CANDIDATES,
   similarityQuery,
 } from "../db/full-text-search.js"
-
 /** A publication's projection joined with the columns its source row owns. */
-export const selectPublicationRows = (sql: SqlClient) => sql`
-  SELECT projection.*, source.handle, source.owner_profile_id, source.published_at,
-    source.visibility, source.moderation_status
-  FROM publication_projections projection
-  JOIN publication_sources source ON source.id = projection.id
-`
+import { selectPublicationRows } from "./projection.js"
 
 /**
  * Includes censored publications: `assertCanViewPublication` decides who can still see them.
