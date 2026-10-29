@@ -2,7 +2,7 @@ import { WikiArticleId } from "@gororobas/domain"
 import { Config, DateTime, Duration, Effect, Layer, Option, Schedule, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
-import { findDatabaseRowById } from "../queries.js"
+import { findDatabaseRowById, wikiArticleProjectionsWithStatus } from "../queries.js"
 import { buildExternalDataRequest } from "./persist-utils.js"
 import { FetchArticleExternalData } from "./workflow.js"
 
@@ -21,7 +21,7 @@ export const findArticlesDueForExternalData = SqlSchema.findAll({
       (sql) => sql`
     SELECT article.id AS wiki_article_id,
       COALESCE(MAX(observation.id), 'initial') AS refresh_generation
-    FROM wiki_article_projections article
+    FROM ${wikiArticleProjectionsWithStatus(sql)} article
     LEFT JOIN wiki_article_external_data_observations observation
       ON observation.wiki_article_id = article.id
       AND observation.article_crdt_frontier = article.current_crdt_frontier

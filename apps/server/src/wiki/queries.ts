@@ -39,11 +39,30 @@ import {
 } from "../db/full-text-search.js"
 import { orderByLanguagePreference } from "../db/language-preference.js"
 
+/**
+ * Article projections with their status, which only `wiki_article_sources` stores: approval and
+ * archiving change it without touching the projected CRDT data.
+ */
+export const wikiArticleProjectionsWithStatus = (sql: SqlClient) => sql`(
+  SELECT projection.*, source.status FROM wiki_article_projections AS projection
+  INNER JOIN wiki_article_sources AS source ON source.id = projection.id
+)`
+
 export const findDatabaseRowById = SqlSchema.findOneOption({
   Request: WikiArticleId,
   Result: WikiArticleProjectionRow,
   execute: (id) =>
     SqlClient.use((sql) => sql`SELECT * FROM wiki_article_projections WHERE id = ${id}`),
+})
+
+export const findPublishedDatabaseRowById = SqlSchema.findOneOption({
+  Request: WikiArticleId,
+  Result: WikiArticleProjectionRow,
+  execute: (id) =>
+    SqlClient.use(
+      (sql) =>
+        sql`SELECT * FROM ${wikiArticleProjectionsWithStatus(sql)} WHERE id = ${id} AND status = 'PUBLISHED'`,
+    ),
 })
 
 export const findDatabaseRowByHandleAndKind = SqlSchema.findOneOption({
@@ -126,7 +145,7 @@ export const listWikiArticleAliases = SqlSchema.findAll({
         )
         SELECT DISTINCT aliases.wiki_article_id, articles.kind, aliases.alias
         FROM aliases
-        INNER JOIN wiki_article_projections AS articles ON articles.id = aliases.wiki_article_id
+        INNER JOIN ${wikiArticleProjectionsWithStatus(sql)} AS articles ON articles.id = aliases.wiki_article_id
         WHERE articles.status <> 'ARCHIVED' AND aliases.alias IS NOT NULL
       `,
     ),
@@ -250,7 +269,7 @@ export const findPageByHandleAndKind = SqlSchema.findOneOption({
     SqlClient.use((sql) =>
       sql`
     SELECT article.*, translation.*, route.handle
-    FROM wiki_article_projections AS article
+    FROM ${wikiArticleProjectionsWithStatus(sql)} AS article
     INNER JOIN wiki_article_handles AS route ON route.wiki_article_id = article.id
     INNER JOIN wiki_article_translations AS translation
       ON translation.wiki_article_id = article.id AND translation.kind = article.kind
@@ -298,7 +317,7 @@ export const listPublishedCultivars = SqlSchema.findAll({
   execute: ({ parentPlantId, language }) =>
     SqlClient.use(
       (sql) => sql`
-    SELECT a.*, t.common_names FROM wiki_article_projections a
+    SELECT a.*, t.common_names FROM ${wikiArticleProjectionsWithStatus(sql)} a
     JOIN wiki_article_translations t ON t.wiki_article_id = a.id
     WHERE a.kind = 'PLANT_CULTIVAR' AND a.status = 'PUBLISHED'
       AND json_extract(a.attributes, '$.parentPlantId') = ${parentPlantId}
@@ -317,7 +336,7 @@ export const listBookmarks = SqlSchema.findAll({
     SqlClient.use(
       (sql) => sql`
     SELECT b.wiki_article_id, b.state FROM bookmarks_wiki_articles b
-    JOIN wiki_article_projections a ON a.id = b.wiki_article_id
+    JOIN ${wikiArticleProjectionsWithStatus(sql)} a ON a.id = b.wiki_article_id
     WHERE b.person_id = ${personId} AND a.status = 'PUBLISHED' ORDER BY b.wiki_article_id
   `,
     ),
@@ -357,7 +376,7 @@ const publishedCardsQuery = (sql: SqlClient, language: SupportedLanguage) => sql
       ORDER BY CASE WHEN h.language = t.language THEN 0 ELSE 1 END, h.handle LIMIT 1) AS handle,
     (SELECT m.id FROM wiki_article_main_media main JOIN media_assets m ON m.id = main.media_asset_id
       WHERE main.wiki_article_id = a.id AND m.moderation_status <> 'CENSORED') AS thumbnail_media_asset_id
-  FROM wiki_article_projections a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
+  FROM ${wikiArticleProjectionsWithStatus(sql)} a JOIN wiki_article_translations t ON t.wiki_article_id = a.id
   WHERE a.status = 'PUBLISHED' AND t.language = (
     SELECT preferred.language FROM wiki_article_translations preferred WHERE preferred.wiki_article_id = a.id
     ORDER BY ${orderByLanguagePreference(sql, { languageColumn: "preferred.language", language })} LIMIT 1)

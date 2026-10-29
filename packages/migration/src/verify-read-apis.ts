@@ -56,7 +56,7 @@ export const verifyReadApis = Effect.gen(function* () {
     Request: Schema.Void,
     Result: Schema.Struct({ count: Schema.Int }),
     execute: () =>
-      sql`SELECT COUNT(*) AS count FROM wiki_article_projections WHERE status = 'PUBLISHED'`,
+      sql`SELECT COUNT(*) AS count FROM wiki_article_projections projection JOIN wiki_article_sources source ON source.id = projection.id WHERE source.status = 'PUBLISHED'`,
   })()
 
   if (cards.length !== wikiCount.count) {

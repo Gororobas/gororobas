@@ -1225,10 +1225,8 @@ await Effect.runPromise(
                 }),
                 handler: (context: WikiContext, { title, kind }) =>
                   Effect.gen(function* () {
-                    expect(yield* cultivar(context, title)).toMatchObject({
-                      kind,
-                      status: "PUBLISHED",
-                    })
+                    // `cultivar` only finds published articles.
+                    expect(yield* cultivar(context, title)).toMatchObject({ kind })
                     return context
                   }),
               }),

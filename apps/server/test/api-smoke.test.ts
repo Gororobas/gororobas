@@ -90,8 +90,9 @@ const SeededTargets = Effect.gen(function* () {
   const article = yield* one(
     Schema.Struct({ id: WikiArticleId, kind: WikiArticleKind, handle: Handle }),
     `SELECT a.id, a.kind, h.handle FROM wiki_article_projections a
+     JOIN wiki_article_sources source ON source.id = a.id
      JOIN wiki_article_handles h ON h.wiki_article_id = a.id
-     WHERE a.status = 'PUBLISHED' ORDER BY a.id LIMIT 1`,
+     WHERE source.status = 'PUBLISHED' ORDER BY a.id LIMIT 1`,
   )
 
   // Holds relations to and from published articles, so links in both directions decode.
@@ -99,11 +100,12 @@ const SeededTargets = Effect.gen(function* () {
     Schema.Struct({ kind: WikiArticleKind, handle: Handle }),
     `SELECT a.kind, h.handle FROM wiki_article_relations r
      JOIN wiki_article_projections a ON a.id = r.related_wiki_article_id
-     JOIN wiki_article_projections holder ON holder.id = r.wiki_article_id
+     JOIN wiki_article_sources related ON related.id = a.id
+     JOIN wiki_article_sources holder ON holder.id = r.wiki_article_id
      JOIN wiki_article_handles h ON h.wiki_article_id = a.id
-     WHERE a.status = 'PUBLISHED' AND holder.status = 'PUBLISHED'
+     WHERE related.status = 'PUBLISHED' AND holder.status = 'PUBLISHED'
        AND EXISTS (SELECT 1 FROM wiki_article_relations outgoing
-         JOIN wiki_article_projections target ON target.id = outgoing.related_wiki_article_id
+         JOIN wiki_article_sources target ON target.id = outgoing.related_wiki_article_id
          WHERE outgoing.wiki_article_id = a.id AND target.status = 'PUBLISHED')
      ORDER BY a.id LIMIT 1`,
   )

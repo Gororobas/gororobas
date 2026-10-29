@@ -1,6 +1,5 @@
 import { Schema, SchemaAST } from "effect"
 
-import { WikiArticleStatus } from "../../common/enums.js"
 import { WikiArticleId } from "../../common/ids.js"
 import { Handle, OptionalColumn, TimestampedStruct } from "../../common/primitives.js"
 import { LoroDocFrontier } from "../../crdts/domain.js"
@@ -15,7 +14,6 @@ import {
 export const coreWikiArticleProjectionRowFields = {
   ...TimestampedStruct.fields,
   id: WikiArticleId,
-  status: WikiArticleStatus,
   currentCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
 } as const
 

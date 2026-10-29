@@ -23,7 +23,6 @@ import {
   WikiArticleRevisionId,
   WikiArticleRevisionNotFoundError,
   WikiArticleRevisionRow,
-  WikiArticleStatus,
   type WikiArticleProjectionRow,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Array as EffectArray, Option, Schema } from "effect"
@@ -72,6 +71,7 @@ import {
   findSourceRowById,
   findDatabaseRowByHandle,
   findDatabaseRowById,
+  findPublishedDatabaseRowById,
   findHandleOwner,
   listHandleRows,
   findPageByHandleAndKind,
@@ -176,7 +176,6 @@ const persistHandleProjections = Effect.fn("persistHandleProjections")(function*
 const persistArticleProjection = (input: {
   currentCrdtFrontier: LoroDocFrontier
   sourceData: WikiArticleEditableData
-  status: WikiArticleStatus
   wikiArticleId: WikiArticleId
 }) =>
   Effect.gen(function* () {
@@ -192,7 +191,6 @@ const persistArticleProjection = (input: {
         createdAt,
         currentCrdtFrontier: input.currentCrdtFrontier,
         id: input.wikiArticleId,
-        status: input.status,
         updatedAt: now,
       }),
     )
@@ -227,8 +225,8 @@ const assertCultivarParentIsPublishedPlant = Effect.fn("assertCultivarParentIsPu
     if (article.kind !== "PLANT_CULTIVAR") return
 
     const { parentPlantId } = article.attributes
-    const parent = yield* findDatabaseRowById(parentPlantId)
-    if (Option.isNone(parent) || parent.value.status !== "PUBLISHED") {
+    const parent = yield* findPublishedDatabaseRowById(parentPlantId)
+    if (Option.isNone(parent)) {
       return yield* new WikiArticleNotFoundError({ id: parentPlantId })
     }
     if (parent.value.kind !== "PLANT") {
@@ -320,7 +318,6 @@ const createWikiArticle = (
           : persistArticleProjection({
               currentCrdtFrontier: created.currentCrdtFrontier,
               sourceData: created.data,
-              status: input.status,
               wikiArticleId,
             }),
       })
@@ -479,7 +476,6 @@ const evaluateRevision = (
         persistProjection: persistArticleProjection({
           currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
           sourceData: updated.data,
-          status: article.status === "PENDING_APPROVAL" ? "PUBLISHED" : article.status,
           wikiArticleId: article.id,
         }),
       })
@@ -537,6 +533,7 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         listWikiArticleMedia,
         findMainMedia,
         findById: findDatabaseRowById,
+        findPublishedById: findPublishedDatabaseRowById,
         findSourceRowById,
         findRevisionById,
         attachMediaToWikiArticle,

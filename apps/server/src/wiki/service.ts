@@ -47,14 +47,11 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
       const sql = yield* SqlClient.SqlClient
 
       const getPublishedArticle = (id: WikiArticleId) =>
-        repository.findById(id).pipe(
+        repository.findPublishedById(id).pipe(
           Effect.flatMap(
             Option.match({
               onNone: () => Effect.fail(new WikiArticleNotFoundError({ id })),
-              onSome: (article) =>
-                article.status === "PUBLISHED"
-                  ? Effect.succeed(article)
-                  : Effect.fail(new WikiArticleNotFoundError({ id })),
+              onSome: Effect.succeed,
             }),
           ),
         )
@@ -158,7 +155,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         language: SupportedLanguage
       }) =>
         Effect.gen(function* () {
-          const maybeParent = yield* repository.findById(parentPlantId)
+          const maybeParent = yield* repository.findPublishedById(parentPlantId)
           const cards = yield* repository.listCardsByIds({
             wikiArticleIds: [parentPlantId],
             language,
@@ -166,7 +163,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
 
           return Option.flatMap(
             Option.all({
-              parent: Option.filter(maybeParent, (parent) => parent.status === "PUBLISHED"),
+              parent: maybeParent,
               card: EffectArray.head(cards),
             }),
             ({ parent, card }) =>

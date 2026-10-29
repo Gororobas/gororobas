@@ -171,7 +171,7 @@ it.effect("re-checks the parent on approval, which may have been unpublished mea
     )
     const [pending] = yield* repository.listRevisionHistory({ wikiArticleId: cultivarId })
 
-    yield* sql`UPDATE wiki_article_projections SET status = 'ARCHIVED' WHERE id = ${plantId}`
+    yield* sql`UPDATE wiki_article_sources SET status = 'ARCHIVED' WHERE id = ${plantId}`
 
     const error = yield* repository
       .evaluateRevision(

@@ -118,8 +118,6 @@ CREATE TABLE profiles (
   FOREIGN KEY (photo_id) REFERENCES media_assets (id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_profiles_handle ON profiles (handle);
-
 CREATE TABLE people (
   id text PRIMARY KEY,
   access_level text NOT NULL, -- PlatformAccessLevel
@@ -185,6 +183,8 @@ CREATE TABLE media_assets (
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE
 );
 
+CREATE INDEX idx_media_assets_owner_profile_id ON media_assets (owner_profile_id);
+
 CREATE TABLE media_asset_credits (
   media_asset_id text NOT NULL,
   order_index integer NOT NULL,
@@ -193,14 +193,17 @@ CREATE TABLE media_asset_credits (
   person_id text,
   PRIMARY KEY (media_asset_id, order_index),
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE,
-  FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE CASCADE
+  -- A deleted person's credits stay, so media keeps its other credit details and their order.
+  FOREIGN KEY (person_id) REFERENCES people (id) ON DELETE SET NULL
 );
+
+CREATE INDEX idx_media_asset_credits_person_id ON media_asset_credits (person_id);
 
 -- =============
 -- WIKI ARTICLES
 -- =============
 --
--- The source of truth of contributor-editable article data.
+-- The source of truth of contributor-editable article data, and the only place its status lives.
 CREATE TABLE wiki_article_sources (
   id text NOT NULL PRIMARY KEY,
   status text NOT NULL, -- WikiArticleStatus
@@ -208,6 +211,8 @@ CREATE TABLE wiki_article_sources (
   created_at text NOT NULL,
   updated_at text NOT NULL
 );
+
+CREATE INDEX idx_wiki_article_sources_status ON wiki_article_sources (status);
 
 -- Submitted edits. Approved rows are also the article's revision history.
 CREATE TABLE wiki_article_revisions (
@@ -243,11 +248,10 @@ CREATE TABLE wiki_article_revision_media_assets (
 
 CREATE INDEX idx_wiki_article_revision_media_assets_media_asset ON wiki_article_revision_media_assets (media_asset_id);
 
--- Queryable projection of the canonical CRDT state.
+-- Queryable projection of the canonical CRDT state. Readers join the status from `wiki_article_sources`.
 CREATE TABLE wiki_article_projections (
   id text PRIMARY KEY,
   kind text NOT NULL, -- WikiArticleKind
-  status text NOT NULL, -- WikiArticleStatus
   attributes json NOT NULL,
   current_crdt_frontier json NOT NULL,
   created_at text NOT NULL,
@@ -257,7 +261,7 @@ CREATE TABLE wiki_article_projections (
 
 CREATE UNIQUE INDEX idx_wiki_article_projections_id_kind ON wiki_article_projections (id, kind);
 
-CREATE INDEX idx_wiki_article_projections_kind_status ON wiki_article_projections (kind, status);
+CREATE INDEX idx_wiki_article_projections_kind ON wiki_article_projections (kind);
 
 -- Per-language queryable projection of contributor-editable CRDT data.
 CREATE TABLE wiki_article_translations (
@@ -320,6 +324,8 @@ CREATE TABLE wiki_article_media_assets (
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
 );
 
+CREATE INDEX idx_wiki_article_media_assets_media_asset_id ON wiki_article_media_assets (media_asset_id);
+
 CREATE TABLE wiki_article_main_media (
   wiki_article_id text NOT NULL PRIMARY KEY,
   media_asset_id text NOT NULL,
@@ -363,6 +369,8 @@ CREATE TABLE publication_revisions (
   FOREIGN KEY (created_by_id) REFERENCES people (id) ON DELETE SET NULL
 );
 
+CREATE INDEX idx_publication_revisions_publication_id ON publication_revisions (publication_id, created_at);
+
 -- Queryable projection of the canonical CRDT state.
 -- `updated_at` is when the CRDT last changed.
 CREATE TABLE publication_projections (
@@ -402,6 +410,8 @@ CREATE TABLE publication_media_assets (
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE
 );
 
+CREATE INDEX idx_publication_media_assets_media_asset_id ON publication_media_assets (media_asset_id);
+
 -- Derived links to the wiki articles a publication is about, one row per source that found them (LinkSource).
 CREATE TABLE publication_wiki_articles (
   publication_id text NOT NULL,
@@ -413,6 +423,8 @@ CREATE TABLE publication_wiki_articles (
   FOREIGN KEY (publication_id) REFERENCES publication_sources (id) ON DELETE CASCADE,
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE
 );
+
+CREATE INDEX idx_publication_wiki_articles_wiki_article_id ON publication_wiki_articles (wiki_article_id);
 
 -- ========
 -- COMMENTS
@@ -431,6 +443,10 @@ CREATE TABLE publication_comments (
   FOREIGN KEY (owner_profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
   FOREIGN KEY (publication_id) REFERENCES publication_sources (id) ON DELETE CASCADE
 );
+
+CREATE INDEX idx_publication_comments_publication_id ON publication_comments (publication_id, created_at);
+
+CREATE INDEX idx_publication_comments_parent ON publication_comments (parent_publication_comment_id);
 
 CREATE TABLE publication_comment_content_revisions (
   id text PRIMARY KEY,

@@ -126,8 +126,6 @@ CREATE TABLE `profiles` (
 );
 -- Create index "profiles_handle" to table: "profiles"
 CREATE UNIQUE INDEX `profiles_handle` ON `profiles` (`handle`);
--- Create index "idx_profiles_handle" to table: "profiles"
-CREATE INDEX `idx_profiles_handle` ON `profiles` (`handle`);
 -- Create "people" table
 CREATE TABLE `people` (
   `id` text NULL,
@@ -190,6 +188,8 @@ CREATE TABLE `media_assets` (
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create index "idx_media_assets_owner_profile_id" to table: "media_assets"
+CREATE INDEX `idx_media_assets_owner_profile_id` ON `media_assets` (`owner_profile_id`);
 -- Create "media_asset_credits" table
 CREATE TABLE `media_asset_credits` (
   `media_asset_id` text NOT NULL,
@@ -198,9 +198,11 @@ CREATE TABLE `media_asset_credits` (
   `credit_url` text NULL,
   `person_id` text NULL,
   PRIMARY KEY (`media_asset_id`, `order_index`),
-  CONSTRAINT `0` FOREIGN KEY (`person_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `0` FOREIGN KEY (`person_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
   CONSTRAINT `1` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create index "idx_media_asset_credits_person_id" to table: "media_asset_credits"
+CREATE INDEX `idx_media_asset_credits_person_id` ON `media_asset_credits` (`person_id`);
 -- Create "wiki_article_sources" table
 CREATE TABLE `wiki_article_sources` (
   `id` text NOT NULL,
@@ -210,6 +212,8 @@ CREATE TABLE `wiki_article_sources` (
   `updated_at` text NOT NULL,
   PRIMARY KEY (`id`)
 );
+-- Create index "idx_wiki_article_sources_status" to table: "wiki_article_sources"
+CREATE INDEX `idx_wiki_article_sources_status` ON `wiki_article_sources` (`status`);
 -- Create "wiki_article_revisions" table
 CREATE TABLE `wiki_article_revisions` (
   `id` text NULL,
@@ -250,7 +254,6 @@ CREATE INDEX `idx_wiki_article_revision_media_assets_media_asset` ON `wiki_artic
 CREATE TABLE `wiki_article_projections` (
   `id` text NULL,
   `kind` text NOT NULL,
-  `status` text NOT NULL,
   `attributes` json NOT NULL,
   `current_crdt_frontier` json NOT NULL,
   `created_at` text NOT NULL,
@@ -260,8 +263,8 @@ CREATE TABLE `wiki_article_projections` (
 );
 -- Create index "idx_wiki_article_projections_id_kind" to table: "wiki_article_projections"
 CREATE UNIQUE INDEX `idx_wiki_article_projections_id_kind` ON `wiki_article_projections` (`id`, `kind`);
--- Create index "idx_wiki_article_projections_kind_status" to table: "wiki_article_projections"
-CREATE INDEX `idx_wiki_article_projections_kind_status` ON `wiki_article_projections` (`kind`, `status`);
+-- Create index "idx_wiki_article_projections_kind" to table: "wiki_article_projections"
+CREATE INDEX `idx_wiki_article_projections_kind` ON `wiki_article_projections` (`kind`);
 -- Create "wiki_article_translations" table
 CREATE TABLE `wiki_article_translations` (
   `wiki_article_id` text NOT NULL,
@@ -313,6 +316,8 @@ CREATE TABLE `wiki_article_media_assets` (
   CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create index "idx_wiki_article_media_assets_media_asset_id" to table: "wiki_article_media_assets"
+CREATE INDEX `idx_wiki_article_media_assets_media_asset_id` ON `wiki_article_media_assets` (`media_asset_id`);
 -- Create "wiki_article_main_media" table
 CREATE TABLE `wiki_article_main_media` (
   `wiki_article_id` text NOT NULL,
@@ -354,6 +359,8 @@ CREATE TABLE `publication_revisions` (
   CONSTRAINT `0` FOREIGN KEY (`created_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
   CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create index "idx_publication_revisions_publication_id" to table: "publication_revisions"
+CREATE INDEX `idx_publication_revisions_publication_id` ON `publication_revisions` (`publication_id`, `created_at`);
 -- Create "publication_projections" table
 CREATE TABLE `publication_projections` (
   `id` text NULL,
@@ -391,6 +398,8 @@ CREATE TABLE `publication_media_assets` (
   CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create index "idx_publication_media_assets_media_asset_id" to table: "publication_media_assets"
+CREATE INDEX `idx_publication_media_assets_media_asset_id` ON `publication_media_assets` (`media_asset_id`);
 -- Create "publication_wiki_articles" table
 CREATE TABLE `publication_wiki_articles` (
   `publication_id` text NOT NULL,
@@ -402,6 +411,8 @@ CREATE TABLE `publication_wiki_articles` (
   CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL))
 );
+-- Create index "idx_publication_wiki_articles_wiki_article_id" to table: "publication_wiki_articles"
+CREATE INDEX `idx_publication_wiki_articles_wiki_article_id` ON `publication_wiki_articles` (`wiki_article_id`);
 -- Create "publication_comments" table
 CREATE TABLE `publication_comments` (
   `id` text NULL,
@@ -418,6 +429,10 @@ CREATE TABLE `publication_comments` (
   CONSTRAINT `1` FOREIGN KEY (`owner_profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `2` FOREIGN KEY (`parent_publication_comment_id`) REFERENCES `publication_comments` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create index "idx_publication_comments_publication_id" to table: "publication_comments"
+CREATE INDEX `idx_publication_comments_publication_id` ON `publication_comments` (`publication_id`, `created_at`);
+-- Create index "idx_publication_comments_parent" to table: "publication_comments"
+CREATE INDEX `idx_publication_comments_parent` ON `publication_comments` (`parent_publication_comment_id`);
 -- Create "publication_comment_content_revisions" table
 CREATE TABLE `publication_comment_content_revisions` (
   `id` text NULL,
