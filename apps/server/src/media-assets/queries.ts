@@ -1,13 +1,14 @@
 import {
   MediaAssetId,
   MediaAssetRow,
-  ModeratedPublicationRow,
   ProfileRow,
+  type Session,
   WikiArticleMediaAssetRow,
 } from "@gororobas/domain"
+import { Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
-import { selectPublicationRows } from "../publications/projection.js"
+import { publicationVisibleTo } from "../content-visibility/visible-to.js"
 
 export const findMediaAssetById = SqlSchema.findOneOption({
   Request: MediaAssetId,
@@ -16,17 +17,27 @@ export const findMediaAssetById = SqlSchema.findOneOption({
     SqlClient.SqlClient.use((sql) => sql`SELECT * FROM media_assets WHERE id = ${id}`),
 })
 
-export const listMediaAssetPublications = SqlSchema.findAll({
-  Request: MediaAssetId,
-  Result: ModeratedPublicationRow,
-  execute: (id) =>
-    SqlClient.SqlClient.use(
-      (sql) => sql`
-    ${selectPublicationRows(sql)}
-    JOIN publication_media_assets a ON a.publication_id = projection.id
-    WHERE a.media_asset_id = ${id} ORDER BY projection.id`,
-    ),
-})
+/** Whether publications attach the media, and whether `session` can see any of them. */
+export const findMediaAssetPublicationAccess = (session: Session) =>
+  SqlSchema.findOne({
+    Request: MediaAssetId,
+    Result: Schema.Struct({
+      isAttachedToPublication: Schema.BooleanFromBit,
+      canViewPublication: Schema.BooleanFromBit,
+    }),
+    execute: (id) =>
+      SqlClient.SqlClient.use(
+        (sql) => sql`
+      SELECT
+        EXISTS (SELECT 1 FROM publication_media_assets WHERE media_asset_id = ${id})
+          AS is_attached_to_publication,
+        EXISTS (
+          SELECT 1 FROM publication_media_assets attachment
+          JOIN publication_sources source ON source.id = attachment.publication_id
+          WHERE attachment.media_asset_id = ${id} AND ${publicationVisibleTo(sql, session)}
+        ) AS can_view_publication`,
+      ),
+  })
 
 export const listMediaAssetWikiArticles = SqlSchema.findAll({
   Request: MediaAssetId,

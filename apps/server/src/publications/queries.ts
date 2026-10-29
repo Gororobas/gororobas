@@ -14,12 +14,15 @@ import {
   PublicationId,
   PublicationPageData,
   PublicationRow,
+  type Session,
 } from "@gororobas/domain"
 import { GetPublicationPageParams } from "@gororobas/domain/publications/api"
 import { Array as EffectArray, Effect, Option, Schema, Struct } from "effect"
 import { SqlSchema } from "effect/sql"
+import type { Statement } from "effect/sql"
 import { SqlClient } from "effect/sql/SqlClient"
 
+import { publicationVisibleTo } from "../content-visibility/visible-to.js"
 import {
   containsEveryTerm,
   fullTextQuery,
@@ -32,42 +35,50 @@ import { orderByLanguagePreference } from "../db/language-preference.js"
 import { selectPublicationRows } from "./projection.js"
 
 /**
- * Includes censored publications: `assertCanViewPublication` decides who can still see them.
- * Text searches rank by relevance in any translation, then by recency.
+ * One page of the publications `session` can see (`visibleTo`), so the database filters and
+ * paginates. Text searches rank by relevance in any translation, then by recency.
  */
-export const searchPublicationRows = SqlSchema.findAll({
-  Request: ApiPublicationSearchParams,
-  Result: ModeratedPublicationRow,
-  execute: (query) =>
-    SqlClient.use((sql) => {
-      const filters = sql.and([
-        ...(query.ownerProfileId === undefined
-          ? []
-          : [sql`source.owner_profile_id = ${query.ownerProfileId}`]),
-        ...(query.kind === undefined ? [] : [sql`projection.kind = ${query.kind}`]),
-        ...(query.wikiArticleId === undefined
-          ? []
-          : [
-              sql`EXISTS (SELECT 1 FROM publication_wiki_articles linked
+export const searchPublicationRows = (page: { session: Session; limit: number; offset: number }) =>
+  SqlSchema.findAll({
+    Request: ApiPublicationSearchParams,
+    Result: ModeratedPublicationRow,
+    execute: (query) =>
+      SqlClient.use((sql) => {
+        const paginate = (limit: number, offset: number) =>
+          sql`LIMIT ${sql.literal(String(limit))} OFFSET ${sql.literal(String(offset))}`
+        const pagination = paginate(page.limit, page.offset)
+
+        const filters = sql.and([
+          publicationVisibleTo(sql, page.session),
+          ...(query.ownerProfileId === undefined
+            ? []
+            : [sql`source.owner_profile_id = ${query.ownerProfileId}`]),
+          ...(query.kind === undefined ? [] : [sql`projection.kind = ${query.kind}`]),
+          ...(query.wikiArticleId === undefined
+            ? []
+            : [
+                sql`EXISTS (SELECT 1 FROM publication_wiki_articles linked
               WHERE linked.publication_id = projection.id
                 AND linked.wiki_article_id = ${query.wikiArticleId})`,
-            ]),
-        ...(query.visibility === undefined ? [] : [sql`source.visibility = ${query.visibility}`]),
-      ])
+              ]),
+          ...(query.visibility === undefined ? [] : [sql`source.visibility = ${query.visibility}`]),
+        ])
 
-      if (query.text === undefined) {
-        return sql`
+        if (query.text === undefined) {
+          return sql`
           ${selectPublicationRows(sql)}
           WHERE ${filters}
           ORDER BY source.published_at DESC, projection.id
+          ${pagination}
         `
-      }
+        }
 
-      const text = query.text
+        const text = query.text
 
-      const matching = Option.match(fullTextQuery(sql, text), {
-        onNone: () => Effect.succeed([]),
-        onSome: (textQuery) => sql`
+        const matching = (matchesPage: Statement.Fragment) =>
+          Option.match(fullTextQuery(sql, text), {
+            onNone: () => Effect.succeed([]),
+            onSome: (textQuery) => sql`
           WITH matches AS (
             SELECT publication_id, searchable_content,
               fts_score(searchable_content, ${textQuery}) AS score
@@ -83,38 +94,39 @@ export const searchPublicationRows = SqlSchema.findAll({
           JOIN publication_matches ON publication_matches.publication_id = projection.id
           WHERE ${filters}
           ORDER BY publication_matches.score DESC, source.published_at DESC, projection.id
+          ${matchesPage}
         `,
-      })
+          })
 
-      // Nothing matches a misspelled word, so look for words within a few edits of it.
-      const similar = Effect.gen(function* () {
-        const candidates = yield* findContentCandidates(text)
+        // Nothing matches a misspelled word, so look for words within a few edits of it.
+        const similar = Effect.gen(function* () {
+          const candidates = yield* findContentCandidates(text)
 
-        const ids = EffectArray.dedupe(
-          rankBySimilarity({
-            text,
-            candidates,
-            words: (candidate) => candidate.searchableContent,
-          }).map(({ publicationId }) => publicationId),
-        )
+          const ids = EffectArray.dedupe(
+            rankBySimilarity({
+              text,
+              candidates,
+              words: (candidate) => candidate.searchableContent,
+            }).map(({ publicationId }) => publicationId),
+          )
 
-        if (EffectArray.isReadonlyArrayEmpty(ids)) return []
+          if (EffectArray.isReadonlyArrayEmpty(ids)) return []
 
-        return yield* sql`
+          return yield* sql`
           ${selectPublicationRows(sql)}
           JOIN json_each(${encodeIds(ids)}) ranked ON ranked.value = projection.id
           WHERE ${filters}
           ORDER BY ranked.key
+          ${pagination}
         `
-      })
+        })
 
-      return Effect.filterOrElse(
-        matching,
-        (rows) => !EffectArray.isReadonlyArrayEmpty(rows),
-        (_rows) => similar,
-      )
-    }),
-})
+        // Fall back on whether anything matches at all, so a page past the last match stays empty.
+        return Effect.flatMap(matching(paginate(1, 0)), (firstMatch) =>
+          EffectArray.isReadonlyArrayEmpty(firstMatch) ? similar : matching(pagination),
+        )
+      }),
+  })
 
 const encodeIds = Schema.encodeSync(Schema.fromJsonString(Schema.Array(PublicationId)))
 

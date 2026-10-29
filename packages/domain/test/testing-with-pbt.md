@@ -51,7 +51,10 @@ it.effect("canEdit implies canView", () =>
     Effect.gen(function* () {
       const publication = createTestPublication(session.personId)
       const canEdit = yield* runPolicySuccess(Policies.publications.canEdit(publication), session)
-      const canView = yield* runPolicySuccess(Policies.publications.canView(publication), session)
+      const canView = yield* runPolicySuccess(
+        Policies.publications.canView(personalContent(publication)),
+        session,
+      )
       // Logical implication: if canEdit then canView must also hold
       return !canEdit || canView
     }),

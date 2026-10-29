@@ -10,14 +10,13 @@ import {
   ProfileId,
   assertAuthenticated,
   isCensored,
+  SessionContext,
   type ModerationDecision,
 } from "@gororobas/domain"
 import { Record, Context, DateTime, Effect, Option, Schema, Array as EffectArray } from "effect"
 import { SqlClient } from "effect/sql"
 
 import { moderateContent } from "../moderation/moderate-content.js"
-import { PeopleRepository } from "../people/repository.js"
-import { makeAssertCanViewPublication } from "../publications/access.js"
 import { processMediaAsset, readMediaAssetMetadata } from "./processing.js"
 import { MediaAssetsRepository } from "./repository.js"
 import { MediaAssetsStorage } from "./storage.js"
@@ -45,7 +44,6 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
   {
     make: Effect.gen(function* () {
       const repository = yield* MediaAssetsRepository
-      const assertCanViewPublication = makeAssertCanViewPublication(yield* PeopleRepository)
       const storage = yield* MediaAssetsStorage
 
       const getRow = (id: MediaAssetId) =>
@@ -57,7 +55,10 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
           const row = mediaAsset.value
 
           const wiki = yield* repository.listMediaAssetWikiArticles(id)
-          const publications = yield* repository.listMediaAssetPublications(id)
+          const publications = yield* repository
+            .findMediaAssetPublicationAccess(yield* SessionContext)(id)
+            // The EXISTS query always returns a row.
+            .pipe(Effect.catchTag("NoSuchElementError", Effect.die))
           const profiles = yield* repository.listMediaAssetProfiles(id)
 
           const profileAccess = yield* Effect.forEach(
@@ -70,27 +71,14 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
             { concurrency: 1 },
           )
 
-          const access = yield* Effect.forEach(
-            publications,
-            (publication) =>
-              assertCanViewPublication(publication).pipe(
-                Effect.as(true),
-                // Censored publications grant access to their media only to their authors.
-                Effect.catchTags({
-                  UnauthorizedError: () => Effect.succeed(false),
-                  PublicationNotFoundError: () => Effect.succeed(false),
-                }),
-              ),
-            { concurrency: 1 },
-          )
-
           yield* Policies.media
             .canView(row, {
               hasWikiAttachment: EffectArray.isReadonlyArrayNonEmpty(wiki),
-              canViewPublication: access.some((allowed) => allowed),
+              // Censored publications grant access to their media only to their authors.
+              canViewPublication: publications.canViewPublication,
               canViewProfile: profileAccess.some((allowed) => allowed),
               isAttached:
-                EffectArray.isReadonlyArrayNonEmpty(publications) ||
+                publications.isAttachedToPublication ||
                 EffectArray.isReadonlyArrayNonEmpty(wiki) ||
                 EffectArray.isReadonlyArrayNonEmpty(profiles),
             })

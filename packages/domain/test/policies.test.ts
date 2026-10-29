@@ -24,6 +24,7 @@ import {
   PublicationVisibility,
   Session,
   VisitorSession,
+  type ViewableContent,
 } from "../src/index.js"
 import { assertPropertyEffect, propertyWithPrecondition, runPolicySuccess } from "../src/testing.js"
 
@@ -33,6 +34,19 @@ const IdGenTest = Layer.succeed(IdGen, {
 
 const TEST_PUBLISHED_AT = DateTime.nowUnsafe()
 const TEST_HANDLE = Schema.decodeSync(Handle)("test")
+
+/** A publication owned by a person with community access, as visibility rules read it. */
+const personalContent = (
+  publication: Pick<CorePublicationMetadata, "ownerProfileId" | "visibility">,
+): ViewableContent => ({
+  owner: {
+    type: "PERSON",
+    id: PersonId.make(publication.ownerProfileId),
+    accessLevel: "COMMUNITY",
+  },
+  visibility: publication.visibility,
+  moderationStatus: "APPROVED_BY_DEFAULT",
+})
 
 // ─── Constructive Arbitraries (no filtering) ───────────────────────────────
 
@@ -221,7 +235,7 @@ describe("Policies", () => {
               session,
             )
             const canView = yield* runPolicySuccess(
-              Policies.publications.canView(publication),
+              Policies.publications.canView(personalContent(publication)),
               session,
             )
             if (canEdit === true) return canView
@@ -247,7 +261,7 @@ describe("Policies", () => {
               session,
             )
             const canView = yield* runPolicySuccess(
-              Policies.publications.canView(publication),
+              Policies.publications.canView(personalContent(publication)),
               session,
             )
             return !canDelete || canView
@@ -363,7 +377,10 @@ describe("Policies", () => {
               visibility: "PUBLIC",
             })
 
-            return yield* runPolicySuccess(Policies.publications.canView(publication), session)
+            return yield* runPolicySuccess(
+              Policies.publications.canView(personalContent(publication)),
+              session,
+            )
           }).pipe(Effect.provide(IdGenTest)),
       }),
     )
@@ -383,7 +400,10 @@ describe("Policies", () => {
               visibility: "COMMUNITY",
             })
 
-            return yield* runPolicySuccess(Policies.publications.canView(publication), session)
+            return yield* runPolicySuccess(
+              Policies.publications.canView(personalContent(publication)),
+              session,
+            )
           }).pipe(Effect.provide(IdGenTest)),
       }),
     )
@@ -401,7 +421,7 @@ describe("Policies", () => {
             })
 
             const result = yield* runPolicySuccess(
-              Policies.publications.canView(publication),
+              Policies.publications.canView(personalContent(publication)),
               session,
             )
             return !result
@@ -425,7 +445,7 @@ describe("Policies", () => {
               ACCESS_LEVEL_ORDER,
               (level) =>
                 runPolicySuccess(
-                  Policies.publications.canView(publication),
+                  Policies.publications.canView(personalContent(publication)),
                   sessionWithAccessLevel(baseSession, level),
                 ),
               { concurrency: "unbounded" },

@@ -7,7 +7,7 @@ import {
 } from "./mutations.js"
 import {
   findMediaAssetById,
-  listMediaAssetPublications,
+  findMediaAssetPublicationAccess,
   listMediaAssetWikiArticles,
   listMediaAssetProfiles,
 } from "./queries.js"
@@ -19,7 +19,7 @@ export class MediaAssetsRepository extends Context.Service<MediaAssetsRepository
     make: Effect.succeed({
       insertMediaAsset,
       updateMediaAssetDescriptions,
-      listMediaAssetPublications,
+      findMediaAssetPublicationAccess,
       listMediaAssetWikiArticles,
       listMediaAssetProfiles,
       insertMediaAssetCredit,

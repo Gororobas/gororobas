@@ -28,10 +28,14 @@ import {
  */
 type Policy<A, R = never> = Effect.Effect<A, UnauthorizedError, SessionContext | R>
 
-export const policy = <A, R = never, E = never>(
+/**
+ * Predicates can only fail by denying: one that reads data must handle its own errors first, so
+ * infrastructure failures surface as themselves instead of as 403s.
+ */
+export const policy = <A, R = never>(
   predicate: (
     session: Session,
-  ) => Effect.Effect<Result.Result<A, string>, E, R> | Result.Result<A, string>,
+  ) => Effect.Effect<Result.Result<A, string>, UnauthorizedError, R> | Result.Result<A, string>,
 ): Policy<A, R> =>
   Effect.gen(function* () {
     const session = yield* SessionContext
@@ -43,12 +47,7 @@ export const policy = <A, R = never, E = never>(
     }
 
     return result.success
-  }).pipe(
-    // Policies should always error with Unauthorized
-    Effect.mapError((e) =>
-      Schema.is(UnauthorizedError)(e) ? e : new UnauthorizedError({ session: { type: "VISITOR" } }),
-    ),
-  )
+  })
 
 /** Helper to make policies' positive results explicit */
 export const allow = Result.succeed
@@ -135,10 +134,10 @@ export const assertAuthenticated = policy((session) =>
   isAccountSession(session) === true ? allow(session) : deny("Must be logged-in"),
 )
 
-export const authenticatedPolicy = <A, R = never, E = never>(
+export const authenticatedPolicy = <A, R = never>(
   predicate: (
     session: AccountSession,
-  ) => Effect.Effect<Result.Result<A, string>, E, R> | Result.Result<A, string>,
+  ) => Effect.Effect<Result.Result<A, string>, UnauthorizedError, R> | Result.Result<A, string>,
 ): Policy<A, R> =>
   assertAuthenticated.pipe(Effect.flatMap((session) => policy(() => predicate(session))))
 

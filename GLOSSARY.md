@@ -20,6 +20,8 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Moderation event**: the record of one moderation decision that changed content's status: who decided, when, why and the status it left (`moderation_events`, written by `recordModerationDecision`). It's moderation's counterpart to a revision's evaluation.
 
+**Content visibility**: who can see a publication and the media attached to it (`canViewContent` in `packages/domain/src/content-visibility/`). Censored content is only visible to its authors, a newcomer's content to them and to moderators, and otherwise visibility follows `PUBLIC`/`COMMUNITY` and organization membership. Queries apply the same rule in SQL through `visibleTo`.
+
 ## Handles
 
 **Handle**: the readable, URL-safe name of a profile, publication or wiki article (`Handle`). `apps/server/src/common/handle-allocation.ts` gives every entity its handles: `claimHandle` takes one someone chose or fails with `HandleTakenError`, and `allocateHandle` derives one from names, adding a random suffix when they're taken. A wiki article gets a handle per language the first time it has a translation in that language, and keeps it after renames, so old links keep working.

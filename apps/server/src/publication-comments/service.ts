@@ -14,9 +14,8 @@ import {
 } from "@gororobas/domain"
 import { Effect, Option, Context } from "effect"
 
+import { assertCanViewPublication } from "../content-visibility/content-visibility.js"
 import { moderateContent } from "../moderation/moderate-content.js"
-import { PeopleRepository } from "../people/repository.js"
-import { makeAssertCanViewPublication } from "../publications/access.js"
 import { PublicationsRepository } from "../publications/repository.js"
 import { PublicationCommentsRepository } from "./repository.js"
 
@@ -27,7 +26,6 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
     make: Effect.gen(function* () {
       const publicationCommentsRepository = yield* PublicationCommentsRepository
       const publicationsRepository = yield* PublicationsRepository
-      const assertCanViewPublication = makeAssertCanViewPublication(yield* PeopleRepository)
 
       const getPublicationCommentById = (publicationCommentId: PublicationCommentId) =>
         publicationCommentsRepository.findPublicationCommentRowById(publicationCommentId).pipe(

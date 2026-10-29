@@ -3,15 +3,14 @@ import { Effect, Schema } from "effect"
 import {
   allow,
   assertNonBlockedPerson,
-  assertTrustedPerson,
   authenticatedPolicy,
   deny,
   or,
   organizationPermission,
   policy,
 } from "../authorization/policy.js"
-import type { PlatformAccessLevel } from "../common/enums.js"
 import { OrganizationId } from "../common/ids.js"
+import { canViewContent, type ViewableContent } from "../content-visibility/domain.js"
 import type { OrganizationRow } from "../organizations/domain.js"
 import { organizationsPolicies } from "../organizations/policies.js"
 import type { CorePublicationMetadata } from "./domain.js"
@@ -19,14 +18,6 @@ import type { CorePublicationMetadata } from "./domain.js"
 const isPublicationOwner = (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
   authenticatedPolicy((session) =>
     publication.ownerProfileId === session.personId ? allow(session) : deny(),
-  )
-
-const isPersonalPublicationPublic = (publication: Pick<CorePublicationMetadata, "visibility">) =>
-  or(
-    policy((session) => (publication.visibility === "PUBLIC" ? allow(session) : deny())),
-    policy(() =>
-      publication.visibility === "COMMUNITY" ? Effect.map(assertTrustedPerson, allow) : deny(),
-    ),
   )
 
 const canEdit = (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
@@ -57,9 +48,6 @@ export const publicationsPolicies = {
 
   canEdit,
 
-  /** Authors keep seeing their publications while censored; every other reader loses access. */
-  canViewCensored: canEdit,
-
   canDelete: (publication: Pick<CorePublicationMetadata, "ownerProfileId">) =>
     or(
       isPublicationOwner(publication),
@@ -69,27 +57,9 @@ export const publicationsPolicies = {
       ),
     ),
 
-  canView: (
-    publication: Pick<CorePublicationMetadata, "ownerProfileId" | "visibility">,
-    ownerAccessLevel?: PlatformAccessLevel,
-  ) =>
-    ownerAccessLevel === "NEWCOMER"
-      ? or(
-          isPublicationOwner(publication),
-          authenticatedPolicy((session) =>
-            session.accessLevel === "ADMIN" || session.accessLevel === "MODERATOR"
-              ? allow(session)
-              : deny(),
-          ),
-        )
-      : or(
-          isPublicationOwner(publication),
-          isPersonalPublicationPublic(publication),
-          organizationPermission(
-            "publications:view",
-            Schema.decodeSync(OrganizationId)(publication.ownerProfileId),
-          ),
-        ),
+  /** See `canViewContent`. */
+  canView: (content: ViewableContent) =>
+    policy((session) => (canViewContent(session, content) ? allow(session) : deny())),
 
   canViewHistory: canViewAttribution,
   canViewContributors: canViewAttribution,

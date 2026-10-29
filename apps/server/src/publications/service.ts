@@ -27,6 +27,7 @@ import {
   Policies,
   PublicationId,
   PublicationNotFoundError,
+  SessionContext,
   ProfileId,
   OrganizationId,
   MediaAssetId,
@@ -37,13 +38,12 @@ import { SqlClient } from "effect/sql"
 import { LoroDoc } from "loro-crdt"
 
 import { allocateHandle, claimHandle } from "../common/handle-allocation.js"
+import { assertCanViewPublication } from "../content-visibility/content-visibility.js"
 import { requestPublicationLinkInference } from "../link-inference/publication-link-inference-workflow.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { moderateContent } from "../moderation/moderate-content.js"
 import { OrganizationsRepository } from "../organizations/repository.js"
-import { PeopleRepository } from "../people/repository.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
-import { makeAssertCanViewPublication } from "./access.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
 import {
   listPublicationMediaAssets,
@@ -86,7 +86,6 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
       const repo = yield* PublicationsRepository
       const organizationsRepository = yield* OrganizationsRepository
       const wikiArticlesRepository = yield* WikiArticlesRepository
-      const assertCanViewPublication = makeAssertCanViewPublication(yield* PeopleRepository)
 
       const getPublicationById = (publicationId: PublicationId) =>
         repo.findPublicationRowById(publicationId).pipe(
@@ -351,23 +350,13 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
 
       const searchPublications = (query: typeof ApiPublicationSearchParams.Type) =>
         Effect.gen(function* () {
-          const rows = yield* searchPublicationRows(query)
-
-          const visible = yield* Effect.filter(rows, (row) =>
-            assertCanViewPublication(row).pipe(
-              Effect.as(true),
-              Effect.catchTags({
-                UnauthorizedError: () => Effect.succeed(false),
-                PublicationNotFoundError: () => Effect.succeed(false),
-              }),
-            ),
-          )
+          const page = yield* searchPublicationRows({
+            session: yield* SessionContext,
+            limit: query.pageSize,
+            offset: query.currentPage * query.pageSize,
+          })(query)
 
           const language = query.language ?? "pt"
-          const page = visible.slice(
-            query.currentPage * query.pageSize,
-            (query.currentPage + 1) * query.pageSize,
-          )
 
           return yield* Effect.forEach(
             page,
