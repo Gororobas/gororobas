@@ -5,6 +5,7 @@ import { defineMessageUnion } from "foldkit/message"
 import { modifyFields } from "foldkit/struct"
 
 import { GororobasApiClient } from "../../api-client"
+import { AppText } from "../../ui/app-text"
 
 const DebugData = Schema.Record(Schema.String, Schema.Json)
 
@@ -89,10 +90,10 @@ const view = WikiArticleDebugComposition.makeView((model, h) =>
   h.main(
     [],
     [
-      h.h1([], ["Depuração do artigo"]),
-      h.p([], [model.wikiArticleId]),
+      AppText.view({ element: "h1", attributes: [], children: ["Depuração do artigo"] }, h),
+      AppText.view({ element: "p", attributes: [], children: [model.wikiArticleId] }, h),
       h.button([h.Type("button"), h.OnClick(Message.ClickedReload())], ["Recarregar"]),
-      h.p([h.Role("status")], [model.status]),
+      AppText.view({ element: "p", attributes: [h.Role("status")], children: [model.status] }, h),
       ...Option.match(model.maybeData, {
         onNone: () => [],
         onSome: (data) =>

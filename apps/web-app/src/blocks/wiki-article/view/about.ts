@@ -23,6 +23,7 @@ import { PublicationCard } from "../../../ui/publication-card"
 import { RichText } from "../../../ui/rich-text"
 import { SectionCard, cardBleedStyle } from "../../../ui/section-card"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
+import { borderWidth } from "../../../ui/theme"
 import {
   breakpoint,
   controlSize,
@@ -99,7 +100,7 @@ const bookmarkSelectStyle = Style.make({
   inlineSize: "100%",
   blockSize: controlSize.lg,
   paddingInline: space[4],
-  border: `2px solid ${tones.neutral.ramp[600]}`,
+  border: `${borderWidth.strong} solid ${tones.neutral.ramp[600]}`,
   borderRadius: radius.full,
   cornerShape: "squircle",
   backgroundColor: tones.primary.ramp[400],

@@ -63,3 +63,5 @@ const colorModeStyles: Readonly<Record<ColorMode, Style.Style>> = {
  *  as its context. Native controls follow too, through `color-scheme`. */
 export const colorModeStyle = (mode: ColorMode): Style.Style =>
   Style.merge(colorModeStyles[mode], toneStyle("neutral"))
+
+export { blur, fluidResultCountFontSize } from "./effects"

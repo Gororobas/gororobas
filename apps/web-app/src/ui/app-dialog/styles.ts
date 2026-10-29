@@ -1,5 +1,6 @@
 import { Color, Style, When } from "@pleat/core"
 
+import { blur } from "../theme"
 import { duration, radius, scrim, space, toneColors } from "../theme"
 
 /** Holds while a `<dialog>` is shown. Layout on a dialog itself, such as `display: flex`,
@@ -21,7 +22,7 @@ export const dialogBackdropStyle = Style.make({
   position: "fixed",
   inset: 0,
   backgroundColor: scrim,
-  backdropFilter: "blur(4px)",
+  backdropFilter: blur.dialog,
   transitionProperty: "opacity",
   transitionDuration: duration.moderate,
 }).pipe(Style.when(When.closed, { opacity: 0 }))

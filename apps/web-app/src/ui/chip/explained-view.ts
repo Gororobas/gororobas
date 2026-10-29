@@ -20,7 +20,6 @@ const popoverStyle = Style.make({
   border: `${borderWidth.hairline} solid ${tones.primary.shade[300]}`,
   borderRadius: radius.md,
   backgroundColor: tones.primary.backgroundCard,
-  boxShadow: "0 12px 32px rgb(0 0 0 / 12%)",
   color: tones.neutral.shade[800],
   fontSize: fontSize.footnote,
   lineHeight: lineHeight.normal,

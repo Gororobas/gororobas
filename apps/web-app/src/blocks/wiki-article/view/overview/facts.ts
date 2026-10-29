@@ -239,9 +239,13 @@ export const namesFact = (
       fact(
         {
           title,
-          content: h.p(
-            styledAttributes([], namesStyle),
-            nonEmpty.map((name) => h.span([], [name])),
+          content: AppText.view(
+            {
+              element: "p",
+              attributes: styledAttributes([], namesStyle),
+              children: nonEmpty.map((name) => h.span([], [name])),
+            },
+            h,
           ),
         },
         h,
@@ -262,17 +266,21 @@ export const linkFact = (
       fact(
         {
           title,
-          content: h.p(
-            [],
-            [
-              h.a(
-                styledAttributes(
-                  [h.Href(url.href), h.Target("_blank"), h.Rel("noopener noreferrer")],
-                  externalLinkStyle,
+          content: AppText.view(
+            {
+              element: "p",
+              attributes: [],
+              children: [
+                h.a(
+                  styledAttributes(
+                    [h.Href(url.href), h.Target("_blank"), h.Rel("noopener noreferrer")],
+                    externalLinkStyle,
+                  ),
+                  [Icons.link({ size: "sm" }), displayUrl(url)],
                 ),
-                [Icons.link({ size: "sm" }), displayUrl(url)],
-              ),
-            ],
+              ],
+            },
+            h,
           ),
         },
         h,

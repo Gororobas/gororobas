@@ -13,6 +13,7 @@ import type { Html, HtmlBuilder } from "foldkit/html"
 import { audioUrl, imageUrl } from "../../media-urls"
 import { AppText } from "../app-text"
 import { styledAttributes } from "../pleat-attributes"
+import { fontWeight } from "../theme"
 import { borderWidth, fontSize, lineHeight, radius, space, tones } from "../theme"
 
 const documentStyle = Style.make({
@@ -37,7 +38,7 @@ const quoteStyle = Style.make({
 })
 
 const linkStyle = Style.make({ color: tones.secondary.emphasis, textDecoration: "underline" })
-const referenceStyle = Style.make({ color: tones.accent.emphasis, fontWeight: 600 })
+const referenceStyle = Style.make({ color: tones.accent.emphasis, fontWeight: fontWeight.semibold })
 const ruleStyle = Style.make({ borderColor: tones.primary.shade[300] })
 
 const galleryStyle = Style.make({
@@ -75,8 +76,12 @@ const markedText = <Message>(
   EffectArray.reduce(marks, Function.identity<Html | string>(text), (inner, mark) =>
     Match.value(mark.type).pipe(
       Match.withReturnType<Html | string>(),
-      Match.when("bold", () => h.strong([], [inner])),
-      Match.when("italic", () => h.em([], [inner])),
+      Match.when("bold", () =>
+        AppText.view({ element: "strong", attributes: [], children: [inner] }, h),
+      ),
+      Match.when("italic", () =>
+        AppText.view({ element: "em", attributes: [], children: [inner] }, h),
+      ),
       Match.when("strike", () => h.s([], [inner])),
       Match.when("code", () => h.code([], [inner])),
       Match.when("link", () => {
@@ -191,7 +196,8 @@ const block = <Message>(node: TiptapBlockNode, h: HtmlBuilder<Message>): Html =>
   Match.value(node).pipe(
     Match.withReturnType<Html>(),
     Match.discriminatorsExhaustive("type")({
-      paragraph: ({ content }) => h.p([], inlineContent(content, h)),
+      paragraph: ({ content }) =>
+        AppText.view({ element: "p", attributes: [], children: inlineContent(content, h) }, h),
       heading: ({ attrs, content }) =>
         AppText.view(
           {
@@ -210,9 +216,13 @@ const block = <Message>(node: TiptapBlockNode, h: HtmlBuilder<Message>): Html =>
           attrs.items.map((item) => galleryItem(item, h)),
         ),
       blockquote: ({ content }) =>
-        h.blockquote(
-          styledAttributes([], quoteStyle),
-          content.map((child) => block(child, h)),
+        AppText.view(
+          {
+            element: "blockquote",
+            attributes: styledAttributes([], quoteStyle),
+            children: content.map((child) => block(child, h)),
+          },
+          h,
         ),
       bulletList: ({ content }) =>
         h.ul(

@@ -84,7 +84,12 @@ export const view = AuthenticationComposition.makeView((model, h): Html =>
   h.main(
     styledAttributes([], pageStyle),
     Stage.match(model.stage, {
-      Restoring: () => [h.p([h.Role("status")], ["Verificando sua sessão…"])],
+      Restoring: () => [
+        AppText.view(
+          { element: "p", attributes: [h.Role("status")], children: ["Verificando sua sessão…"] },
+          h,
+        ),
+      ],
       EnteringEmail: ({ email, isSending, error }) => [
         heading("Entre ou crie sua conta", h),
         h.form(styledAttributes([h.OnSubmit(Message.SubmittedEmail())], formStyle), [
@@ -122,7 +127,7 @@ export const view = AuthenticationComposition.makeView((model, h): Html =>
             element: "p",
             children: [
               "Para continuar, clique no link enviado para ",
-              h.strong([], [pending.email]),
+              AppText.view({ element: "strong", attributes: [], children: [pending.email] }, h),
             ],
           },
           h,

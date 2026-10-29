@@ -10,6 +10,7 @@ import { styledAttributes } from "../pleat-attributes"
 import { profileAvatar } from "../profile-avatar/view"
 import { focusRingDeclarations } from "../styles/focus-ring"
 import { pageColumnStyle } from "../styles/page-column"
+import { blur } from "../theme"
 import {
   borderWidth,
   breakpoint,
@@ -122,7 +123,7 @@ const bottomBarStyle = Style.make({
   paddingBlockStart: space[2],
   paddingBlockEnd: viewport.safeAreaBottom,
   backgroundColor: Color.alpha(toneColors.backgroundCard, 0.95),
-  backdropFilter: "blur(8px)",
+  backdropFilter: blur.chrome,
 }).pipe(Style.when(breakpoint.lg, { display: "none" }))
 
 const bottomItemsStyle = Style.make({
