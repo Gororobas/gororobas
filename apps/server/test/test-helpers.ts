@@ -33,7 +33,9 @@ import { PeopleRepository } from "../src/people/repository.js"
 import { PeopleService } from "../src/people/service.js"
 import { ProfilesRepository } from "../src/profiles/repository.js"
 import { ProfileService } from "../src/profiles/service.js"
+import { PublicationsRepository } from "../src/publications/repository.js"
 import { AppSqlTest } from "../src/sql.js"
+import { WikiArticlesRepository } from "../src/wiki/repository.js"
 import { makePersonFixture, makeProfileFixture } from "./fixtures.js"
 import { telemetryLayer } from "./telemetry.js"
 
@@ -69,6 +71,7 @@ export const IdGenTest = IdGenLive
  */
 const MediaTestLayer = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
   Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+  Layer.provideMerge(Layer.effect(PeopleRepository, PeopleRepository.make)),
   Layer.provideMerge(
     Layer.effect(
       MediaAssetsStorage,
@@ -94,7 +97,6 @@ export const TestLayer = Layer.mergeAll(
   telemetryLayer,
   IdGenTest,
   Layer.effect(OrganizationsRepository, OrganizationsRepository.make),
-  Layer.effect(PeopleRepository, PeopleRepository.make),
   Layer.effect(ProfilesRepository, ProfilesRepository.make),
 ).pipe(Layer.provideMerge(AppSqlTest))
 
@@ -116,7 +118,16 @@ const ProfilesServiceLayer = Layer.effect(ProfileService, ProfileService.make).p
 export const LinkInferenceTestLayer = Layer.mergeAll(
   PublicationLinkInferenceWorkflowLayer,
   WikiArticleLinkInferenceWorkflowLayer,
-).pipe(Layer.provide(LinkInferenceModelStub), Layer.provideMerge(WorkflowEngine.layerMemory))
+).pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      Layer.effect(PublicationsRepository, PublicationsRepository.make),
+      Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make),
+    ),
+  ),
+  Layer.provide(LinkInferenceModelStub),
+  Layer.provideMerge(WorkflowEngine.layerMemory),
+)
 
 export const TestLayerWithServices = Layer.mergeAll(
   TestLayer,

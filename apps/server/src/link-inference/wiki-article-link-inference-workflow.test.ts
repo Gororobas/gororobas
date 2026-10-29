@@ -188,8 +188,8 @@ describe("WikiArticleLinkInferenceWorkflow", () => {
             }
 
             const article = Option.getOrThrow(
-              yield* WikiArticlesRepository.make.pipe(
-                Effect.flatMap((repository) => repository.findDatabaseRowById(ids.itself)),
+              yield* WikiArticlesRepository.use((repository) =>
+                repository.findDatabaseRowById(ids.itself),
               ),
             )
 
@@ -264,8 +264,8 @@ describe("WikiArticleLinkInferenceWorkflow", () => {
         })
 
         const article = Option.getOrThrow(
-          yield* WikiArticlesRepository.make.pipe(
-            Effect.flatMap((repository) => repository.findDatabaseRowById(mandioca)),
+          yield* WikiArticlesRepository.use((repository) =>
+            repository.findDatabaseRowById(mandioca),
           ),
         )
 
@@ -281,8 +281,8 @@ describe("WikiArticleLinkInferenceWorkflow", () => {
           yield* approveContentEdit(mandioca, person.id)
 
           const approved = Option.getOrThrow(
-            yield* WikiArticlesRepository.make.pipe(
-              Effect.flatMap((repository) => repository.findDatabaseRowById(mandioca)),
+            yield* WikiArticlesRepository.use((repository) =>
+              repository.findDatabaseRowById(mandioca),
             ),
           )
 

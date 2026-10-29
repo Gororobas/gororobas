@@ -26,6 +26,7 @@ import { insertMediaAsset, insertMediaAssetCredit } from "@gororobas/server/medi
 import { MediaAssetsRepository } from "@gororobas/server/media-assets/repository"
 import { MediaAssetsService } from "@gororobas/server/media-assets/service"
 import { MediaAssetsStorage } from "@gororobas/server/media-assets/storage"
+import { PeopleRepository } from "@gororobas/server/people/repository"
 import { PublicationsRepository } from "@gororobas/server/publications/repository"
 import { makeAppSqlClient, makeAppSql } from "@gororobas/server/sql"
 import { WikiArticlesRepository } from "@gororobas/server/wiki/repository"
@@ -540,6 +541,7 @@ export const importPreview = ({
           Layer.provideMerge(
             Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
               Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+              Layer.provide(Layer.effect(PeopleRepository, PeopleRepository.make)),
               Layer.provideMerge(Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make)),
               Layer.provide(NodeServices.layer),
               Layer.provide(

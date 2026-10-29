@@ -16,6 +16,7 @@ import { SqlClient } from "effect/sql"
 
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { PublicationsService } from "../../src/publications/service.js"
+import { WikiArticlesRepository } from "../../src/wiki/repository.js"
 import { makePersonFixture, makePostPublicationInput, makeProfileFixture } from "../fixtures.js"
 import {
   insertPersonWithDependencies,
@@ -31,6 +32,7 @@ const PublicationsRepositoryLayer = Layer.effect(
 
 const PublicationsServiceLayer = Layer.effect(PublicationsService, PublicationsService.make).pipe(
   Layer.provide(PublicationsRepositoryLayer),
+  Layer.provide(Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)),
   Layer.provide(TestLayer),
 )
 

@@ -19,6 +19,7 @@ import { insertMediaAsset, insertMediaAssetCredit } from "@gororobas/server/medi
 import { MediaAssetsRepository } from "@gororobas/server/media-assets/repository"
 import { MediaAssetsService } from "@gororobas/server/media-assets/service"
 import { MediaAssetsStorage } from "@gororobas/server/media-assets/storage"
+import { PeopleRepository } from "@gororobas/server/people/repository"
 import { makeAppSql } from "@gororobas/server/sql"
 import {
   findSourceRowById,
@@ -116,6 +117,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
 
   const services = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
     Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
+    Layer.provide(Layer.effect(PeopleRepository, PeopleRepository.make)),
     Layer.provideMerge(dependencies),
   )
 

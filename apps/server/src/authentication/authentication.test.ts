@@ -334,10 +334,8 @@ test.live.each([authenticationTestOrigin, "http://localhost:4443"])(
     yield* requestCode(flow("deletion-flow", signup.email))
 
     yield* run(
-      ProfilesRepository.make.pipe(
-        Effect.flatMap((repository) =>
-          repository.deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)),
-        ),
+      ProfilesRepository.use((repository) =>
+        repository.deleteProfileReturningMediaAssets(ProfileId.make(authSubjectId)),
       ),
     )
 

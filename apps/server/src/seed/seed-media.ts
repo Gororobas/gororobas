@@ -183,7 +183,7 @@ export const makeSeedMedia = (input: { poolSize: number; timeline: SeedTimeline 
             yield* fileSystem.symlink(path.join(POOL_DIRECTORY, entry.id), link)
           }
 
-          const repository = yield* MediaAssetsRepository.make
+          const repository = yield* MediaAssetsRepository
 
           yield* repository.insertMediaAsset({
             id,

@@ -67,8 +67,8 @@ const editSourceContent = ({
     const row = Option.getOrThrow(yield* repository.findPublicationRowById(publicationId))
 
     const stored = Option.getOrThrow(
-      yield* PublicationsRepository.make.pipe(
-        Effect.flatMap((repository) => repository.findPublicationCrdtSnapshotById(publicationId)),
+      yield* PublicationsRepository.use((repository) =>
+        repository.findPublicationCrdtSnapshotById(publicationId),
       ),
     )
 
@@ -184,10 +184,8 @@ describe("PublicationTranslationWorkflow", () => {
             )
 
             const stored = Option.getOrThrow(
-              yield* PublicationsRepository.make.pipe(
-                Effect.flatMap((repository) =>
-                  repository.findPublicationCrdtSnapshotById(publicationId),
-                ),
+              yield* PublicationsRepository.use((repository) =>
+                repository.findPublicationCrdtSnapshotById(publicationId),
               ),
             )
 

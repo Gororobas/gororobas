@@ -51,12 +51,8 @@ const findCurrentSourceContent = (
   payload: typeof PublicationLinkInferenceWorkflow.payloadSchema.Type,
 ) =>
   Effect.gen(function* () {
-    const stored = yield* PublicationsRepository.make.pipe(
-      Effect.flatMap((repository) =>
-        repository.findPublicationCrdtSnapshotById(payload.publicationId),
-      ),
-    )
-
+    const repository = yield* PublicationsRepository
+    const stored = yield* repository.findPublicationCrdtSnapshotById(payload.publicationId)
     if (Option.isNone(stored)) return Option.none()
 
     const current = snapshotToLoroDoc(stored.value.crdtSnapshot)
@@ -79,6 +75,9 @@ const findCurrentSourceContent = (
 const inferPublicationLinks = Effect.fn("PublicationLinkInferenceWorkflow")(function* (
   payload: typeof PublicationLinkInferenceWorkflow.payloadSchema.Type,
 ) {
+  const publicationsRepository = yield* PublicationsRepository
+  const wikiArticlesRepository = yield* WikiArticlesRepository
+
   const source = yield* Activity.make({
     name: "load-source-content",
     success: Schema.NullOr(SourceText),
@@ -106,10 +105,9 @@ const inferPublicationLinks = Effect.fn("PublicationLinkInferenceWorkflow")(func
     error: Schema.Union([LinkInferenceModelError, LinkInferencePersistenceError]),
     execute: Effect.gen(function* () {
       const startedAt = yield* DateTime.now
-      const aliases = yield* WikiArticlesRepository.make.pipe(
-        Effect.flatMap((repository) => repository.listWikiArticleAliases()),
-        withPersistenceRetries,
-      )
+      const aliases = yield* wikiArticlesRepository
+        .listWikiArticleAliases()
+        .pipe(withPersistenceRetries)
 
       const links = yield* inferLinks({
         source,
@@ -151,39 +149,27 @@ const inferPublicationLinks = Effect.fn("PublicationLinkInferenceWorkflow")(func
 
           yield* Effect.all(
             [
-              PublicationsRepository.make.pipe(
-                Effect.flatMap((repository) =>
-                  repository.replacePublicationWikiArticleLinks({
-                    publicationId: payload.publicationId,
-                    source: "MENTION",
-                    rows: mentions,
-                  }),
-                ),
-              ),
-              PublicationsRepository.make.pipe(
-                Effect.flatMap((repository) =>
-                  repository.replacePublicationWikiArticleLinks({
-                    publicationId: payload.publicationId,
-                    source: "INFERENCE",
-                    rows: inferences,
-                  }),
-                ),
-              ),
-              PublicationsRepository.make.pipe(
-                Effect.flatMap((repository) =>
-                  repository.updatePublicationLinkInference({
-                    id: payload.publicationId,
-                    linkInference: LinkInferenceRun.make({
-                      version: LINK_INFERENCE_VERSION,
-                      model: model.model,
-                      crdtFrontier: payload.crdtFrontier,
-                      startedAt: inferred.startedAt,
-                      finishedAt: inferred.finishedAt,
-                      suggestions,
-                    }),
-                  }),
-                ),
-              ),
+              publicationsRepository.replacePublicationWikiArticleLinks({
+                publicationId: payload.publicationId,
+                source: "MENTION",
+                rows: mentions,
+              }),
+              publicationsRepository.replacePublicationWikiArticleLinks({
+                publicationId: payload.publicationId,
+                source: "INFERENCE",
+                rows: inferences,
+              }),
+              publicationsRepository.updatePublicationLinkInference({
+                id: payload.publicationId,
+                linkInference: LinkInferenceRun.make({
+                  version: LINK_INFERENCE_VERSION,
+                  model: model.model,
+                  crdtFrontier: payload.crdtFrontier,
+                  startedAt: inferred.startedAt,
+                  finishedAt: inferred.finishedAt,
+                  suggestions,
+                }),
+              }),
             ],
             { concurrency: 1, discard: true },
           )

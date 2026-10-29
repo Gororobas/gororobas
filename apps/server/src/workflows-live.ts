@@ -9,6 +9,9 @@ import { PublicationTranslationWorkflowLayer } from "./translation/publication-t
 import { ExternalDataRefreshLive } from "./wiki/external-data/refresh.js"
 import { ExternalDataProvidersLive } from "./wiki/external-data/services/external-data-providers-live.js"
 import { FetchArticleExternalDataLive } from "./wiki/external-data/workflow.js"
+import { WikiArticlesRepository } from "./wiki/repository.js"
+
+const WikiArticlesRepositoryLive = Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)
 
 export const WorkflowsLive = Layer.mergeAll(
   MediaDeletionWorkflowLayer.pipe(
@@ -16,8 +19,8 @@ export const WorkflowsLive = Layer.mergeAll(
   ),
   PublicationTranslationWorkflowLayer,
   PublicationCommentTranslationWorkflowLayer,
-  PublicationLinkInferenceWorkflowLayer,
-  WikiArticleLinkInferenceWorkflowLayer,
+  PublicationLinkInferenceWorkflowLayer.pipe(Layer.provide(WikiArticlesRepositoryLive)),
+  WikiArticleLinkInferenceWorkflowLayer.pipe(Layer.provide(WikiArticlesRepositoryLive)),
   FetchArticleExternalDataLive.pipe(Layer.provide(ExternalDataProvidersLive)),
   ExternalDataRefreshLive,
 )

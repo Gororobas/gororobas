@@ -52,24 +52,21 @@ const WorkflowTestLayer = Repositories.pipe(
 
 /** Runs once, while the next run is inferring, standing in for an edit made meanwhile. */
 const makeInterleavingTestLayer = (duringInference: { effect: Effect.Effect<void> }) =>
-  Repositories.pipe(
-    Layer.provideMerge(
-      PublicationLinkInferenceWorkflowLayer.pipe(
-        Layer.provide(
-          Layer.succeed(LinkInferenceModel, {
-            model: null,
-            detectMentions: () =>
-              Effect.suspend(() => {
-                const hook = duringInference.effect
-                duringInference.effect = Effect.void
-                return hook
-              }).pipe(Effect.as([])),
-            detectInferences: () => Effect.succeed([]),
-            disambiguate: () => Effect.succeedNone,
-          }),
-        ),
-      ),
+  PublicationLinkInferenceWorkflowLayer.pipe(
+    Layer.provide(
+      Layer.succeed(LinkInferenceModel, {
+        model: null,
+        detectMentions: () =>
+          Effect.suspend(() => {
+            const hook = duringInference.effect
+            duringInference.effect = Effect.void
+            return hook
+          }).pipe(Effect.as([])),
+        detectInferences: () => Effect.succeed([]),
+        disambiguate: () => Effect.succeedNone,
+      }),
     ),
+    Layer.provideMerge(Repositories),
     Layer.provideMerge(WorkflowEngine.layerMemory),
     Layer.provideMerge(TestLayer),
   )
@@ -122,10 +119,8 @@ const editSourceContent = (input: {
     const publications = yield* PublicationsRepository
 
     const stored = Option.getOrThrow(
-      yield* PublicationsRepository.make.pipe(
-        Effect.flatMap((repository) =>
-          repository.findPublicationCrdtSnapshotById(input.publicationId),
-        ),
+      yield* PublicationsRepository.use((repository) =>
+        repository.findPublicationCrdtSnapshotById(input.publicationId),
       ),
     )
 

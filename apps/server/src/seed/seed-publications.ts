@@ -181,13 +181,7 @@ const editPublication = (input: {
 }) =>
   Effect.gen(function* () {
     const repository = yield* PublicationsRepository
-
-    const stored = yield* PublicationsRepository.make.pipe(
-      Effect.flatMap((repository) =>
-        repository.findPublicationCrdtSnapshotById(input.publicationId),
-      ),
-    )
-
+    const stored = yield* repository.findPublicationCrdtSnapshotById(input.publicationId)
     if (Option.isNone(stored)) return
 
     const current = snapshotToLoroDoc(stored.value.crdtSnapshot)
@@ -220,6 +214,7 @@ const linkInferredArticles = ({
   Effect.gen(function* () {
     const evidence = firstParagraphEvidence(["sourceContent"], source.content)
     if (Option.isNone(evidence)) return
+    const repository = yield* PublicationsRepository
 
     const published = context.articles.filter((article) => article.status === "PUBLISHED")
     const concepts = yield* sampleUpTo(
@@ -231,40 +226,32 @@ const linkInferredArticles = ({
       [0, 3],
     )
 
-    yield* PublicationsRepository.make.pipe(
-      Effect.flatMap((repository) =>
-        repository.replacePublicationWikiArticleLinks({
-          publicationId,
-          source: "MENTION",
-          rows: others.map((article) => ({
-            publicationId,
-            wikiArticleId: article.id,
-            source: "MENTION",
-            evidence: [{ ...evidence.value, text: article.names.pt }],
-          })),
-        }),
-      ),
-    )
+    yield* repository.replacePublicationWikiArticleLinks({
+      publicationId,
+      source: "MENTION",
+      rows: others.map((article) => ({
+        publicationId,
+        wikiArticleId: article.id,
+        source: "MENTION",
+        evidence: [{ ...evidence.value, text: article.names.pt }],
+      })),
+    })
 
-    yield* PublicationsRepository.make.pipe(
-      Effect.flatMap((repository) =>
-        repository.replacePublicationWikiArticleLinks({
-          publicationId,
-          source: "INFERENCE",
-          rows: concepts.map((article) => ({
-            publicationId,
-            wikiArticleId: article.id,
-            source: "INFERENCE",
-            evidence: [
-              {
-                ...evidence.value,
-                rationale: `The passage describes practices related to ${article.names.en}.`,
-              },
-            ],
-          })),
-        }),
-      ),
-    )
+    yield* repository.replacePublicationWikiArticleLinks({
+      publicationId,
+      source: "INFERENCE",
+      rows: concepts.map((article) => ({
+        publicationId,
+        wikiArticleId: article.id,
+        source: "INFERENCE",
+        evidence: [
+          {
+            ...evidence.value,
+            rationale: `The passage describes practices related to ${article.names.en}.`,
+          },
+        ],
+      })),
+    })
   })
 
 /** Rich text opens with a sentence; its first words make a readable handle. */
@@ -333,12 +320,7 @@ const seedPublication = (
 
         yield* Effect.forEach(
           media,
-          (mediaAssetId) =>
-            PublicationsRepository.make.pipe(
-              Effect.flatMap((repository) =>
-                repository.attachMediaToPublication({ publicationId, mediaAssetId }),
-              ),
-            ),
+          (mediaAssetId) => repository.attachMediaToPublication({ publicationId, mediaAssetId }),
           { concurrency: 1, discard: true },
         )
 

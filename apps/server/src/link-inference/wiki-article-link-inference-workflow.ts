@@ -33,8 +33,9 @@ export {
 
 /** Whether the run's frontier is still the article's approved state. */
 const isCurrentFrontier = (payload: typeof WikiArticleLinkInferenceWorkflow.payloadSchema.Type) =>
-  WikiArticlesRepository.make.pipe(
-    Effect.flatMap((repository) => repository.findDatabaseRowById(payload.wikiArticleId)),
+  WikiArticlesRepository.use((repository) =>
+    repository.findDatabaseRowById(payload.wikiArticleId),
+  ).pipe(
     Effect.map(
       Option.exists((current) =>
         Schema.toEquivalence(LoroDocFrontier)(current.currentCrdtFrontier, payload.crdtFrontier),
@@ -47,6 +48,8 @@ const ArticleSource = Schema.Struct({ source: SourceText, context: Schema.String
 const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(function* (
   payload: typeof WikiArticleLinkInferenceWorkflow.payloadSchema.Type,
 ) {
+  const repository = yield* WikiArticlesRepository
+
   // A later approval submits its own run, which owns the article's relations from then on.
   const article = yield* Activity.make({
     name: "load-current-article",
@@ -54,9 +57,7 @@ const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(func
     error: LinkInferencePersistenceError,
     execute: Effect.gen(function* () {
       const isCurrent = yield* isCurrentFrontier(payload)
-      const crdt = yield* WikiArticlesRepository.make.pipe(
-        Effect.flatMap((repository) => repository.findSourceRowById(payload.wikiArticleId)),
-      )
+      const crdt = yield* repository.findSourceRowById(payload.wikiArticleId)
       if (!isCurrent || Option.isNone(crdt)) return null
 
       const data = yield* WikiArticleCrdt.read(snapshotToLoroDoc(crdt.value.crdtSnapshot))
@@ -71,10 +72,7 @@ const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(func
     success: InferredLinks,
     error: Schema.Union([LinkInferenceModelError, LinkInferencePersistenceError]),
     execute: Effect.gen(function* () {
-      const aliases = yield* WikiArticlesRepository.make.pipe(
-        Effect.flatMap((repository) => repository.listWikiArticleAliases()),
-        withPersistenceRetries,
-      )
+      const aliases = yield* repository.listWikiArticleAliases().pipe(withPersistenceRetries)
 
       return yield* inferLinks({
         source: article.source,
@@ -115,24 +113,16 @@ const inferWikiArticleLinks = Effect.fn("WikiArticleLinkInferenceWorkflow")(func
 
           yield* Effect.all(
             [
-              WikiArticlesRepository.make.pipe(
-                Effect.flatMap((repository) =>
-                  repository.replaceRelations({
-                    wikiArticleId: payload.wikiArticleId,
-                    source: "MENTION",
-                    rows: mentions,
-                  }),
-                ),
-              ),
-              WikiArticlesRepository.make.pipe(
-                Effect.flatMap((repository) =>
-                  repository.replaceRelations({
-                    wikiArticleId: payload.wikiArticleId,
-                    source: "INFERENCE",
-                    rows: inferences,
-                  }),
-                ),
-              ),
+              repository.replaceRelations({
+                wikiArticleId: payload.wikiArticleId,
+                source: "MENTION",
+                rows: mentions,
+              }),
+              repository.replaceRelations({
+                wikiArticleId: payload.wikiArticleId,
+                source: "INFERENCE",
+                rows: inferences,
+              }),
             ],
             { concurrency: 1, discard: true },
           )

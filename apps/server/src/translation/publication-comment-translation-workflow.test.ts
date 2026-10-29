@@ -85,11 +85,9 @@ describe("PublicationCommentTranslationWorkflow", () => {
       expect(after.editCount).toBe(0)
       expect(after.updatedAt).toEqual(before.updatedAt)
 
-      const translations = yield* PublicationCommentsRepository.make.pipe(
-        Effect.flatMap((repository) =>
-          repository.listPublicationCommentTranslationRowsByPublicationCommentId(
-            publicationCommentId,
-          ),
+      const translations = yield* PublicationCommentsRepository.use((repository) =>
+        repository.listPublicationCommentTranslationRowsByPublicationCommentId(
+          publicationCommentId,
         ),
       )
 
@@ -136,11 +134,9 @@ describe("PublicationCommentTranslationWorkflow", () => {
 
         expect(
           EffectArray.sort(
-            (yield* PublicationCommentsRepository.make.pipe(
-              Effect.flatMap((repository) =>
-                repository.listPublicationCommentTranslationRowsByPublicationCommentId(
-                  publicationCommentId,
-                ),
+            (yield* PublicationCommentsRepository.use((repository) =>
+              repository.listPublicationCommentTranslationRowsByPublicationCommentId(
+                publicationCommentId,
               ),
             )).map((row) => row.language),
             Order.String,
@@ -217,11 +213,9 @@ describe("PublicationCommentTranslationWorkflow", () => {
       expect(error).toMatchObject({ _tag: "PublicationCommentConcurrentUpdateError" })
 
       expect(
-        yield* PublicationCommentsRepository.make.pipe(
-          Effect.flatMap((repository) =>
-            repository.listPublicationCommentTranslationRowsByPublicationCommentId(
-              publicationCommentId,
-            ),
+        yield* PublicationCommentsRepository.use((repository) =>
+          repository.listPublicationCommentTranslationRowsByPublicationCommentId(
+            publicationCommentId,
           ),
         ),
       ).toEqual([])

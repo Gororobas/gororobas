@@ -40,7 +40,9 @@ import { requestPublicationLinkInference } from "../link-inference/publication-l
 import { MediaAssetsService } from "../media-assets/service.js"
 import { moderateContent } from "../moderation/moderate-content.js"
 import { OrganizationsRepository } from "../organizations/repository.js"
+import { PeopleRepository } from "../people/repository.js"
 import { WikiArticlesRepository } from "../wiki/repository.js"
+import { makeAssertCanViewPublication } from "./access.js"
 import { HumanCrdtUpdate } from "./publication-repository-inputs.js"
 import {
   listPublicationMediaAssets,
@@ -75,14 +77,15 @@ export const UpdatePublicationInput = Schema.Struct({
 })
 export type UpdatePublicationInput = typeof UpdatePublicationInput.Type
 
-import { assertCanViewPublication } from "./access.js"
-
 /** @effect-expect-leaking SqlClient */
 export class PublicationsService extends Context.Service<PublicationsService>()(
   "PublicationsService",
   {
     make: Effect.gen(function* () {
       const repo = yield* PublicationsRepository
+      const organizationsRepository = yield* OrganizationsRepository
+      const wikiArticlesRepository = yield* WikiArticlesRepository
+      const assertCanViewPublication = makeAssertCanViewPublication(yield* PeopleRepository)
 
       const getPublicationById = (publicationId: PublicationId) =>
         repo.findPublicationRowById(publicationId).pipe(
@@ -109,9 +112,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           const publication = yield* getPublicationById(publicationId)
           yield* assertCanViewPublication(publication)
           const ownerId = yield* Schema.decodeEffect(OrganizationId)(publication.ownerProfileId)
-          const organization = yield* OrganizationsRepository.make.pipe(
-            Effect.flatMap((repository) => repository.findById(ownerId)),
-          )
+          const organization = yield* organizationsRepository.findById(ownerId)
           return Option.getOrUndefined(organization)
         })
 
@@ -367,11 +368,10 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
                 const { conceptIds, ...content } = details.value
 
                 const concepts = EffectArray.isReadonlyArrayNonEmpty(conceptIds)
-                  ? yield* WikiArticlesRepository.make.pipe(
-                      Effect.flatMap((repository) =>
-                        repository.listCardsByIds({ wikiArticleIds: conceptIds, language }),
-                      ),
-                    )
+                  ? yield* wikiArticlesRepository.listCardsByIds({
+                      wikiArticleIds: conceptIds,
+                      language,
+                    })
                   : []
 
                 return Option.some(

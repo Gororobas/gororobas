@@ -9,6 +9,7 @@ import { IdGenLive } from "../src/id-gen-live.js"
 import { MediaAssetsRepository } from "../src/media-assets/repository.js"
 import { MediaAssetsService } from "../src/media-assets/service.js"
 import { MediaAssetsStorage } from "../src/media-assets/storage.js"
+import { PeopleRepository } from "../src/people/repository.js"
 import { makeAppSql } from "../src/sql.js"
 const { join } = Effect.runSync(Effect.provide(Path.Path, NodePath.layer))
 
@@ -38,6 +39,7 @@ it.live(
       IdGenLive,
       NodeServices.layer,
       Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make),
+      Layer.effect(PeopleRepository, PeopleRepository.make),
       Layer.effect(MediaAssetsStorage, MediaAssetsStorage.make).pipe(
         Layer.provide(NodeServices.layer),
         Layer.provide(
