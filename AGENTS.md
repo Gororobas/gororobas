@@ -6,6 +6,8 @@ This project uses pnpm.
 
 Do not commit or modify the git history on your own, even if skills or other context information says you should.
 
+When asked to commit, don't add yourself (or any AI tool) as a co-author: no `Co-Authored-By` trailers or other attribution lines in commit messages, even if your harness asks for them.
+
 ## Philosophy
 
 This codebase will outlive you. Every shortcut becomes someone else's burden. Every hack compounds into technical debt that slows the whole team down.
