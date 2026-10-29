@@ -159,7 +159,7 @@ const makeEventInput = (
 })
 
 describe("PublicationsRepository", () => {
-  it.effect("createPublication persists projection row and first commit", () =>
+  it.effect("createPublication persists projection row and first revision", () =>
     Effect.gen(function* () {
       const repository = yield* PublicationsRepository
 
@@ -185,9 +185,10 @@ describe("PublicationsRepository", () => {
       expect(Option.isSome(publication)).toBe(true)
       expect(Option.getOrThrow(publication).handle).toBe(publicationInput.handle)
 
-      const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
-      expect(commits).toHaveLength(1)
-      expect(commits[0]?.createdById).toBe(person.id)
+      const revisions =
+        yield* repository.listPublicationRevisionRowsByPublicationIdAsc(publicationId)
+      expect(revisions).toHaveLength(1)
+      expect(revisions[0]?.createdById).toBe(person.id)
 
       const contributors =
         yield* repository.listPublicationContributorIdsByPublicationId(publicationId)
@@ -209,7 +210,7 @@ describe("PublicationsRepository", () => {
   )
 
   it.effect(
-    "updatePublication with HumanCrdtUpdate appends replayable commit and rebuilds projected post content",
+    "updatePublication with HumanCrdtUpdate appends replayable revision and rebuilds projected post content",
     () =>
       Effect.gen(function* () {
         const repository = yield* PublicationsRepository
@@ -262,15 +263,16 @@ describe("PublicationsRepository", () => {
           }),
         )
 
-        const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
-        expect(commits).toHaveLength(2)
-        expect(commits[1]?.createdById).toBe(person.id)
-        expect(commits[1]?.fromCrdtFrontier).toEqual(
+        const revisions =
+          yield* repository.listPublicationRevisionRowsByPublicationIdAsc(publicationId)
+        expect(revisions).toHaveLength(2)
+        expect(revisions[1]?.createdById).toBe(person.id)
+        expect(revisions[1]?.fromCrdtFrontier).toEqual(
           Option.getOrThrow(beforeUpdate).currentCrdtFrontier,
         )
 
         const replayedDoc = applyUpdateToSnapshot({
-          crdtUpdate: Option.getOrThrow(Option.fromNullishOr(commits[1])).crdtUpdate,
+          crdtUpdate: Option.getOrThrow(Option.fromNullishOr(revisions[1])).crdtUpdate,
           snapshot: beforeSnapshot.crdtSnapshot,
         })
         expect((yield* PublicationCrdt.read(replayedDoc)).sourceContent).toEqual(
@@ -298,7 +300,7 @@ describe("PublicationsRepository", () => {
   )
 
   it.effect(
-    "updatePublication with SystemUpsertTranslation creates system commit and translation",
+    "updatePublication with SystemUpsertTranslation creates system revision and translation",
     () =>
       Effect.gen(function* () {
         const repository = yield* PublicationsRepository
@@ -343,11 +345,12 @@ describe("PublicationsRepository", () => {
           }),
         )
 
-        const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
-        expect(commits).toHaveLength(2)
-        expect(commits.some((commit) => commit.createdById === null)).toBe(true)
+        const revisions =
+          yield* repository.listPublicationRevisionRowsByPublicationIdAsc(publicationId)
+        expect(revisions).toHaveLength(2)
+        expect(revisions.some((revision) => revision.createdById === null)).toBe(true)
         const replayedDoc = applyUpdateToSnapshot({
-          crdtUpdate: Option.getOrThrow(Option.fromNullishOr(commits[1])).crdtUpdate,
+          crdtUpdate: Option.getOrThrow(Option.fromNullishOr(revisions[1])).crdtUpdate,
           snapshot: beforeSnapshot.crdtSnapshot,
         })
 
@@ -601,8 +604,9 @@ describe("PublicationsRepository", () => {
         ),
       )
 
-      const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
-      expect(commits).toHaveLength(2)
+      const revisions =
+        yield* repository.listPublicationRevisionRowsByPublicationIdAsc(publicationId)
+      expect(revisions).toHaveLength(2)
 
       // The statement itself also refuses a stale frontier, independently of the in-transaction check.
       const snapshotBefore =
@@ -664,8 +668,9 @@ describe("PublicationsRepository", () => {
         ),
       )
 
-      const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
-      expect(commits).toHaveLength(1)
+      const revisions =
+        yield* repository.listPublicationRevisionRowsByPublicationIdAsc(publicationId)
+      expect(revisions).toHaveLength(1)
 
       const pageData = yield* repository.findPublicationPageData({
         handle: publicationInput.handle,
@@ -676,7 +681,7 @@ describe("PublicationsRepository", () => {
     }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
   )
 
-  it.effect("deletePublication removes publication row and cascades commits", () =>
+  it.effect("deletePublication removes publication row and cascades revisions", () =>
     Effect.gen(function* () {
       const repository = yield* PublicationsRepository
 
@@ -701,8 +706,9 @@ describe("PublicationsRepository", () => {
       const row = yield* repository.findPublicationRowById(publicationId)
       expect(Option.isNone(row)).toBe(true)
 
-      const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(publicationId)
-      expect(commits).toHaveLength(0)
+      const revisions =
+        yield* repository.listPublicationRevisionRowsByPublicationIdAsc(publicationId)
+      expect(revisions).toHaveLength(0)
     }).pipe(Effect.provide(TestLayerWithPublicationsRepository)),
   )
 })

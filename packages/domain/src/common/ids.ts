@@ -56,8 +56,8 @@ export type PostId = typeof PostId.Type
 export const EventId = PublicationId.pipe(Schema.brand("EventId"))
 export type EventId = typeof EventId.Type
 
-export const PublicationCommitId = UUID.pipe(Schema.brand("PublicationCommitId"))
-export type PublicationCommitId = typeof PublicationCommitId.Type
+export const PublicationRevisionId = UUID.pipe(Schema.brand("PublicationRevisionId"))
+export type PublicationRevisionId = typeof PublicationRevisionId.Type
 
 export const WikiArticleId = UUID.pipe(Schema.brand("WikiArticleId"))
 export type WikiArticleId = typeof WikiArticleId.Type

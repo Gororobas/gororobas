@@ -102,6 +102,8 @@ When you add a table, column or wiki kind, extend the seed in `apps/server/src/s
 
 ## Domain notes
 
+`GLOSSARY.md` names the domain concepts that have drifted before (revisions, evaluations, handles…). Use its terms, and add to it when you name a new concept.
+
 - There are no tags: themes and practices (permaculture, land access…) are CONCEPT wiki articles. Wiki articles link to each other through `wiki_article_relations`, and publications link to wiki articles through `publication_wiki_articles`. Links are derived, never edited by hand, and stored one row per source (`LinkSource` in `packages/domain/src/links/`) with the evidence of where they were established: `ENTITY_REFERENCE` (an `entityReference` node a contributor placed, projected with the content), `MENTION` and `INFERENCE` (found by link inference in `apps/server/src/link-inference/`: the content names the article, or is about it without naming it) and `LEGACY_TAG` (imported from the legacy database).
 - Every rich-text node except `doc`, `text` and `hardBreak` has a `nodeId` unique within its document: `NodeIdExtension` assigns them while editing, and `assignTiptapNodeIds` on every CRDT write. Link evidence points at nodes by ID, and machine translations keep their source's node IDs.
 - Publications, publication comments and media assets share one moderation lifecycle (`packages/domain/src/moderation/`): approved by default, censored or reapproved by people with `content:moderate`. While censored, content is hidden from every reader except its authors, and media leaves the galleries it's attached to.

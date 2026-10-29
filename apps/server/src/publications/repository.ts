@@ -9,7 +9,7 @@ import {
   InvalidCrdtUpdateError,
   LoroDocFrontier,
   type PostSourceData,
-  PublicationCommitId,
+  PublicationRevisionId,
   PublicationSourceRow,
   PublicationCrdt,
   PublicationConcurrentUpdateError,
@@ -35,7 +35,7 @@ import {
   attachMediaToPublication,
   deletePublicationMediaAttachments,
   deletePublication,
-  insertPublicationCommitRow,
+  insertPublicationRevisionRow,
   insertPublicationSourceRow,
   insertPublicationTranslationRows,
   replacePublicationWikiArticleLinks,
@@ -57,7 +57,7 @@ import {
   findPublicationPageData,
   findPublicationRowByHandle,
   findPublicationRowById,
-  listPublicationCommitRowsByPublicationIdAsc,
+  listPublicationRevisionRowsByPublicationIdAsc,
   listPublicationContributorIdsByPublicationId,
   listPublicationRowsByOwnerProfileId,
 } from "./queries.js"
@@ -193,7 +193,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
       ) =>
         Effect.gen(function* () {
           const publicationId = options.id ?? (yield* IdGen.make(PublicationId))
-          const commitId = yield* IdGen.make(PublicationCommitId)
+          const revisionId = yield* IdGen.make(PublicationRevisionId)
           const now = yield* DateTime.now
           const created = yield* PublicationCrdt.create(input.sourceData)
 
@@ -212,9 +212,9 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
                 visibility: input.visibility,
               }),
             ),
-            insertCommitOrRevision: insertPublicationCommitRow({
+            insertRevision: insertPublicationRevisionRow({
               publicationId,
-              id: commitId,
+              id: revisionId,
               createdAt: now,
               updatedAt: now,
               createdById: input.createdById,
@@ -320,7 +320,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
                 ],
               })
 
-          const commitId = yield* IdGen.make(PublicationCommitId)
+          const revisionId = yield* IdGen.make(PublicationRevisionId)
           const now = yield* DateTime.now
 
           yield* persistCrdtDocumentUpdate({
@@ -338,8 +338,8 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
                 }),
               ),
             ),
-            insertCommitOrUpdateRevision: insertPublicationCommitRow({
-              id: commitId,
+            persistRevision: insertPublicationRevisionRow({
+              id: revisionId,
               publicationId: input.publicationId,
               createdAt: now,
               updatedAt: now,
@@ -384,7 +384,7 @@ export class PublicationsRepository extends Context.Service<PublicationsReposito
         findPublicationPageData,
         findPublicationRowByHandle,
         findPublicationRowById,
-        listPublicationCommitRowsByPublicationIdAsc,
+        listPublicationRevisionRowsByPublicationIdAsc,
         listPublicationContributorIdsByPublicationId,
         listPublicationRowsByOwnerProfileId,
         updatePublication,

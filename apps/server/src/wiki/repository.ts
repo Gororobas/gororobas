@@ -362,7 +362,7 @@ const createWikiArticle = (
           status: input.status,
           updatedAt: now,
         }),
-        insertCommitOrRevision: insertRevisionRow({
+        insertRevision: insertRevisionRow({
           id: revisionId,
           createdAt: now,
           updatedAt: now,
@@ -536,7 +536,7 @@ const evaluateRevision = (
             }),
           ),
         ),
-        insertCommitOrUpdateRevision: updateRevisionRow(evaluatedRevision),
+        persistRevision: updateRevisionRow(evaluatedRevision),
         persistProjection: persistArticleProjection({
           currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
           sourceData: updated.data,

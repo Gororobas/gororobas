@@ -44,7 +44,7 @@ export const PublicationLinkInferenceWorkflow = Workflow.make("PublicationLinkIn
 
 /**
  * The source content at the run's frontier, while it's still the publication's latest. Later
- * commits that only translate or change metadata leave it, and so the inferred links, current; a
+ * revisions that only translate or change metadata leave it, and so the inferred links, current; a
  * later content edit submits its own run.
  */
 const findCurrentSourceContent = (

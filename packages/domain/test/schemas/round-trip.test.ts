@@ -21,7 +21,7 @@ import { OrganizationRow } from "../../src/organizations/domain.js"
 import { PersonRow } from "../../src/people/domain.js"
 import { ProfileRow } from "../../src/profiles/domain.js"
 import {
-  PublicationCommitRow,
+  PublicationRevisionRow,
   PublicationSourceRow,
   PublicationRow,
   PublicationTranslationRow,
@@ -44,7 +44,7 @@ const rowSchemas = [
   { name: "OrganizationRow", schema: OrganizationRow },
   { name: "PersonRow", schema: PersonRow },
   { name: "ProfileRow", schema: ProfileRow },
-  { name: "PublicationCommitRow", schema: PublicationCommitRow },
+  { name: "PublicationRevisionRow", schema: PublicationRevisionRow },
   { name: "PublicationSourceRow", schema: PublicationSourceRow },
   { name: "PublicationRow", schema: PublicationRow },
   { name: "PublicationTranslationRow", schema: PublicationTranslationRow },

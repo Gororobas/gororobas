@@ -15,7 +15,7 @@ import {
 import {
   MediaAssetId,
   PersonId,
-  PublicationCommitId,
+  PublicationRevisionId,
   PublicationId,
   ProfileId,
   WikiArticleId,
@@ -303,16 +303,16 @@ export const PublicationSourceRow = Schema.Struct({
 
 export type PublicationSourceRow = typeof PublicationSourceRow.Type
 
-export const PublicationCommitRow = Schema.Struct({
+export const PublicationRevisionRow = Schema.Struct({
   ...TimestampedStruct.fields,
-  id: PublicationCommitId,
+  id: PublicationRevisionId,
   publicationId: PublicationId,
   createdById: Schema.NullOr(PersonId),
   crdtUpdate: LoroDocUpdate,
   fromCrdtFrontier: Schema.fromJsonString(LoroDocFrontier),
 })
 
-export type PublicationCommitRow = typeof PublicationCommitRow.Type
+export type PublicationRevisionRow = typeof PublicationRevisionRow.Type
 
 /** Projected from the CRDT; `updatedAt` is when the CRDT last changed. */
 export const PublicationProjectionRow = Schema.Struct({

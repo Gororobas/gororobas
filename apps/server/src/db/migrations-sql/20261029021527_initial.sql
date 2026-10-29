@@ -341,8 +341,8 @@ CREATE UNIQUE INDEX `publication_sources_handle` ON `publication_sources` (`hand
 CREATE INDEX `idx_publication_sources_owner_profile_id` ON `publication_sources` (`owner_profile_id`);
 -- Create index "idx_publication_sources_published_at" to table: "publication_sources"
 CREATE INDEX `idx_publication_sources_published_at` ON `publication_sources` (`published_at`);
--- Create "publication_commits" table
-CREATE TABLE `publication_commits` (
+-- Create "publication_revisions" table
+CREATE TABLE `publication_revisions` (
   `id` text NULL,
   `publication_id` text NOT NULL,
   `created_by_id` text NULL,

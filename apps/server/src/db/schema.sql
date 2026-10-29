@@ -351,7 +351,7 @@ CREATE INDEX idx_publication_sources_owner_profile_id ON publication_sources (ow
 CREATE INDEX idx_publication_sources_published_at ON publication_sources (published_at);
 
 -- How publications are modified
-CREATE TABLE publication_commits (
+CREATE TABLE publication_revisions (
   id text PRIMARY KEY,
   publication_id text NOT NULL,
   created_by_id text,

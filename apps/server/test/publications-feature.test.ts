@@ -309,8 +309,8 @@ const createdStep = {
       )
 
       expect(
-        (yield* repo.listPublicationCommitRowsByPublicationIdAsc(row.id)).map(
-          (commit) => commit.createdById,
+        (yield* repo.listPublicationRevisionRowsByPublicationIdAsc(row.id)).map(
+          (revision) => revision.createdById,
         ),
       ).toEqual([context.actorId])
 
@@ -569,7 +569,7 @@ const readPublicationState = (context: PublicationContext) =>
       row: yield* repo.findPublicationRowById(id),
       snapshot: yield* findPublicationCrdtSnapshotById(id),
       page: yield* repo.findPublicationPageData({ handle, language: "pt" }),
-      commits: yield* repo.listPublicationCommitRowsByPublicationIdAsc(id),
+      revisions: yield* repo.listPublicationRevisionRowsByPublicationIdAsc(id),
     }
   })
 
@@ -718,7 +718,7 @@ const deleted = () =>
         expect(Option.isNone(state.row)).toBe(true)
         expect(Option.isNone(state.snapshot)).toBe(true)
         expect(Option.isNone(state.page)).toBe(true)
-        expect(state.commits).toEqual([])
+        expect(state.revisions).toEqual([])
 
         expect(
           yield* asViewer(
@@ -773,12 +773,12 @@ const historyMatches = () =>
 
         yield* Effect.forEach(
           history,
-          (commit, index) =>
+          (revision, index) =>
             Effect.gen(function* () {
-              replay.import(commit.crdtUpdate)
+              replay.import(revision.crdtUpdate)
               const expected = Option.getOrThrow(Option.fromNullishOr(table[index]))
               expect(expected.version).toBe(index + 1)
-              expect(commit.createdById).toBe(personNamed(context.actors, expected.author))
+              expect(revision.createdById).toBe(personNamed(context.actors, expected.author))
               const data = yield* PublicationCrdt.read(replay)
               expect(tiptapToText(data.sourceContent)).toBe(expected.content)
             }),
@@ -1126,7 +1126,7 @@ const historyAuthorsSetup = () =>
           context,
           (yield* PublicationsService).getHistory(publicationIn(context).id),
         )
-        expect(history.map((commit) => commit.createdById)).toEqual([
+        expect(history.map((revision) => revision.createdById)).toEqual([
           personNamed(context.actors, first),
           personNamed(context.actors, second),
         ])
@@ -1716,7 +1716,7 @@ it.effect("publication updates preserve kind and reject kind changes without per
               : { ...sourceData.metadata, kind: "POST" },
         })
 
-        const commits = yield* repository.listPublicationCommitRowsByPublicationIdAsc(
+        const revisions = yield* repository.listPublicationRevisionRowsByPublicationIdAsc(
           publication.id,
         )
 
@@ -1741,8 +1741,8 @@ it.effect("publication updates preserve kind and reject kind changes without per
           Option.getOrThrow(yield* findPublicationCrdtSnapshotById(publication.id)).crdtSnapshot,
         ).toEqual(updatedSnapshot)
         expect(
-          yield* repository.listPublicationCommitRowsByPublicationIdAsc(publication.id),
-        ).toEqual(commits)
+          yield* repository.listPublicationRevisionRowsByPublicationIdAsc(publication.id),
+        ).toEqual(revisions)
       }),
       { concurrency: 1, discard: true },
     )

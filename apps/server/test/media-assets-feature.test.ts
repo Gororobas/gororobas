@@ -878,7 +878,7 @@ it.effect("publication creation and edits commit content and media together", ()
     const state = Effect.all(
       {
         sources: sql`SELECT * FROM publication_sources ORDER BY id`,
-        commits: sql`SELECT * FROM publication_commits ORDER BY id`,
+        revisions: sql`SELECT * FROM publication_revisions ORDER BY id`,
         projections: sql`SELECT * FROM publication_projections ORDER BY id`,
         attachments: sql`SELECT * FROM publication_media_assets ORDER BY publication_id, media_asset_id`,
       },

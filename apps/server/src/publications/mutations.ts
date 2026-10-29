@@ -2,7 +2,7 @@ import {
   LinkInferenceRun,
   type LinkSource,
   PublicationMediaAssetRow,
-  PublicationCommitRow,
+  PublicationRevisionRow,
   PublicationSourceRow,
   PublicationId,
   PublicationProjectionRow,
@@ -21,9 +21,10 @@ export const deletePublication = SqlSchema.void({
     SqlClient.use((sql) => sql`DELETE FROM publication_sources WHERE id = ${publicationId}`),
 })
 
-export const insertPublicationCommitRow = SqlSchema.void({
-  Request: PublicationCommitRow,
-  execute: (row) => SqlClient.use((sql) => sql`INSERT INTO publication_commits ${sql.insert(row)}`),
+export const insertPublicationRevisionRow = SqlSchema.void({
+  Request: PublicationRevisionRow,
+  execute: (row) =>
+    SqlClient.use((sql) => sql`INSERT INTO publication_revisions ${sql.insert(row)}`),
 })
 
 export const insertPublicationSourceRow = SqlSchema.void({

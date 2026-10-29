@@ -298,7 +298,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
             yield* getAttributionOrganization(publicationId),
           )
 
-          return yield* repo.listPublicationCommitRowsByPublicationIdAsc(publicationId)
+          return yield* repo.listPublicationRevisionRowsByPublicationIdAsc(publicationId)
         })
 
       const getApiHistory = (publicationId: PublicationId) =>

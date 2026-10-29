@@ -133,13 +133,13 @@ const listTranslations = SqlSchema.findAll({
     ),
 })
 
-const countCommits = SqlSchema.findOne({
+const countRevisions = SqlSchema.findOne({
   Request: Schema.String,
   Result: Schema.Struct({ count: Schema.Finite }),
   execute: (publicationId) =>
     SqlClient.SqlClient.use(
       (sql) =>
-        sql`SELECT COUNT(*) AS count FROM publication_commits WHERE publication_id = ${publicationId}`,
+        sql`SELECT COUNT(*) AS count FROM publication_revisions WHERE publication_id = ${publicationId}`,
     ),
 })
 
@@ -205,7 +205,7 @@ describe("PublicationTranslationWorkflow", () => {
             }
 
             yield* PublicationTranslationWorkflow.execute(payload)
-            const commits = (yield* countCommits(publicationId)).count
+            const revisions = (yield* countRevisions(publicationId)).count
 
             // Re-running the same revision is the durable workflow's idempotency, not a second translation.
             script.editsDuringTranslation = 0
@@ -236,7 +236,7 @@ describe("PublicationTranslationWorkflow", () => {
                   },
             )
 
-            expect((yield* countCommits(publicationId)).count).toBe(commits)
+            expect((yield* countRevisions(publicationId)).count).toBe(revisions)
             return true
           }),
       }).pipe(Effect.provide(WorkflowTestLayer)),

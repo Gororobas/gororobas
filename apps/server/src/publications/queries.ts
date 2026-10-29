@@ -9,7 +9,7 @@ import {
   PublicationMediaAssetRow,
   Handle,
   ProfileId,
-  PublicationCommitRow,
+  PublicationRevisionRow,
   PublicationSourceRow,
   PublicationId,
   PublicationPageData,
@@ -175,13 +175,13 @@ export const findPublicationCardContent = SqlSchema.findOneOption({
     ),
 })
 
-export const listPublicationCommitRowsByPublicationIdAsc = SqlSchema.findAll({
+export const listPublicationRevisionRowsByPublicationIdAsc = SqlSchema.findAll({
   Request: PublicationId,
-  Result: PublicationCommitRow,
+  Result: PublicationRevisionRow,
   execute: (publicationId) =>
     SqlClient.use(
       (sql) => sql`
-      SELECT * FROM publication_commits
+      SELECT * FROM publication_revisions
       WHERE publication_id = ${publicationId}
       ORDER BY created_at ASC
     `,
@@ -194,7 +194,7 @@ export const listPublicationContributorIdsByPublicationId = SqlSchema.findAll({
   execute: (publicationId) =>
     SqlClient.use(
       (sql) => sql`
-      SELECT DISTINCT created_by_id FROM publication_commits
+      SELECT DISTINCT created_by_id FROM publication_revisions
       WHERE publication_id = ${publicationId} AND created_by_id IS NOT NULL
     `,
     ),
