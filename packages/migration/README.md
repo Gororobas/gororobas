@@ -31,4 +31,4 @@ pnpm --filter @gororobas/migration verify:apis
 
 `MIGRATION_API_ORIGIN` defaults to `http://127.0.0.1:4000`. `MIGRATION_API_REPORT_FILENAME` optionally saves the report. Verification decodes API responses with domain schemas, checks every article and its history (Gel tags become CONCEPT articles), public profiles, publications by ID/handle and their histories, public media originals and all derivatives, community access denial, and missing-record responses. Automated integration tests additionally sign in a migrated account through magic links and read its bookmarks.
 
-See [the compact decision/surprise log](ingestion-decisions.md). The independent [preview viewer](preview/README.md) remains available through `preview:sqlite`; its synthetic account and metadata-only media are for preview use.
+The independent [preview viewer](preview/README.md) remains available through `preview:sqlite`; its synthetic account and metadata-only media are for preview use.
