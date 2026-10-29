@@ -370,7 +370,7 @@ const requests = ({
     "wiki.evaluateWikiArticleRevision": () =>
       client.wiki.evaluateWikiArticleRevision({
         params: { revisionId: targets.pendingRevision.id },
-        payload: { status: "REJECTED", reason: "Teste de fumaça" },
+        payload: { evaluation: "REJECTED", reason: "Teste de fumaça" },
       }),
     "wiki.setMainMedia": () =>
       client.wiki.setMainMedia({
@@ -380,17 +380,17 @@ const requests = ({
     "publications.moderatePublication": () =>
       client.publications.moderatePublication({
         params: { id: targets.publication.id },
-        payload: { moderationStatus: "REAPPROVED_AFTER_CENSORING" },
+        payload: { decision: "REAPPROVED_AFTER_CENSORING" },
       }),
     "publicationComments.moderatePublicationComment": () =>
       client.publicationComments.moderatePublicationComment({
         params: { id: targets.comment.id },
-        payload: { moderationStatus: "REAPPROVED_AFTER_CENSORING" },
+        payload: { decision: "REAPPROVED_AFTER_CENSORING" },
       }),
     "mediaAssets.moderateMedia": () =>
       client.mediaAssets.moderateMedia({
         params: { id: targets.image.id },
-        payload: { moderationStatus: "REAPPROVED_AFTER_CENSORING" },
+        payload: { decision: "REAPPROVED_AFTER_CENSORING" },
       }),
     "people.setAccessLevel": () =>
       client.people.setAccessLevel({

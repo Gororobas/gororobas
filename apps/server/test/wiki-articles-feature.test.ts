@@ -316,7 +316,7 @@ const approve = (context: WikiContext) =>
       context: context,
       name: "Ana",
       action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), {
-        status: "APPROVED",
+        evaluation: "APPROVED",
       }),
     })
 
@@ -340,12 +340,12 @@ const approvedEdit = ({
   context,
   title,
   edit,
-  status = "APPROVED",
+  evaluation = "APPROVED",
 }: {
   context: WikiContext
   title: string
   edit: Parameters<typeof WikiArticleCrdt.applyEdit>[1]
-  status?: "APPROVED" | "REJECTED"
+  evaluation?: "APPROVED" | "REJECTED"
 }) =>
   Effect.gen(function* () {
     const id = articleId(context, title)
@@ -371,7 +371,7 @@ const approvedEdit = ({
     yield* asPerson({
       context: context,
       name: "Ana",
-      action: service.evaluateRevision(revision, { status }),
+      action: service.evaluateRevision(revision, { evaluation }),
     })
 
     return context
@@ -459,7 +459,7 @@ const approval = () =>
           context: context,
           name: name,
           action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), {
-            status: "APPROVED",
+            evaluation: "APPROVED",
           }),
         })
 
@@ -760,7 +760,7 @@ const evaluateEdits = (
       approvedEdit({
         context,
         title,
-        status: evaluation,
+        evaluation,
         edit: {
           _tag: "SetWikiArticleTranslationContent",
           language: "pt",
@@ -1738,7 +1738,7 @@ await Effect.runPromise(
                     name: name,
                     action: (yield* MediaAssetsService).moderate({
                       id: photoIn(context).id,
-                      moderationStatus: "CENSORED",
+                      decision: "CENSORED",
                     }),
                   })
 
@@ -2497,7 +2497,7 @@ it.effect("pending and rejected creation remain unavailable; only evaluators can
       yield* asPerson({
         context: context,
         name: "Maria",
-        action: service.evaluateRevision(revisionId(context), { status: "APPROVED" }),
+        action: service.evaluateRevision(revisionId(context), { evaluation: "APPROVED" }),
       }).pipe(Effect.flip),
     ).toMatchObject({
       _tag: "UnauthorizedError",
@@ -2508,7 +2508,7 @@ it.effect("pending and rejected creation remain unavailable; only evaluators can
     yield* asPerson({
       context: context,
       name: "Ana",
-      action: service.evaluateRevision(revisionId(context), { status: "REJECTED" }),
+      action: service.evaluateRevision(revisionId(context), { evaluation: "REJECTED" }),
     })
 
     expect(yield* findDatabaseRowById(id)).toEqual(Option.none())
@@ -2520,7 +2520,7 @@ it.effect("pending and rejected creation remain unavailable; only evaluators can
       yield* asPerson({
         context: context,
         name: "Ana",
-        action: service.evaluateRevision(revisionId(context), { status: "APPROVED" }),
+        action: service.evaluateRevision(revisionId(context), { evaluation: "APPROVED" }),
       }).pipe(Effect.flip),
     ).toMatchObject({
       _tag: "WikiArticleRevisionAlreadyEvaluatedError",
@@ -2678,7 +2678,7 @@ it.effect(
         name: "Ana",
         action: (yield* MediaAssetsService).moderate({
           id: photoIn(second).id,
-          moderationStatus: "CENSORED",
+          decision: "CENSORED",
         }),
       })
 
@@ -2793,7 +2793,9 @@ it.live(
         Option.fromNullishOr((yield* listPendingRevisionsByWikiArticleId(proposedId))[0]),
       )
 
-      const evaluate = (payload: { status: string; reason?: string } | { isApproved: boolean }) =>
+      const evaluate = (
+        payload: { evaluation: string; reason?: string } | { isApproved: boolean },
+      ) =>
         Effect.tryPromise(() =>
           app.handler(
             new Request(`http://localhost/wiki/revisions/${pending.id}`, {
@@ -2804,12 +2806,12 @@ it.live(
           ),
         )
 
-      expect((yield* evaluate({ status: "PENDING" })).status).toBe(400)
+      expect((yield* evaluate({ evaluation: "PENDING" })).status).toBe(400)
       expect((yield* evaluate({ isApproved: true })).status).toBe(400)
       expect(Option.getOrThrow(yield* findRevisionById(pending.id)).evaluation).toBe("PENDING")
-      expect((yield* evaluate({ status: "REJECTED", reason: "Needs more detail" })).status).toBe(
-        200,
-      )
+      expect(
+        (yield* evaluate({ evaluation: "REJECTED", reason: "Needs more detail" })).status,
+      ).toBe(200)
       expect(Option.getOrThrow(yield* findRevisionById(pending.id))).toMatchObject({
         evaluation: "REJECTED",
         evaluationReason: Option.some("Needs more detail"),

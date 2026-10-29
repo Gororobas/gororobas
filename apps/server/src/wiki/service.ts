@@ -111,7 +111,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
       /** The repository validates the approved state and requests enrichment once it commits. */
       const evaluateRevision = (
         revisionId: WikiArticleRevisionId,
-        { status, reason }: EvaluateWikiArticleRevisionPayload,
+        { evaluation, reason }: EvaluateWikiArticleRevisionPayload,
       ) =>
         Effect.gen(function* () {
           const session = yield* assertAuthenticated
@@ -119,7 +119,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
 
           yield* repository.evaluateRevision({
             revisionId,
-            evaluation: status,
+            evaluation,
             evaluatedById: session.personId,
             evaluationReason: reason,
           })

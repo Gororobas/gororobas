@@ -453,7 +453,7 @@ it.live(
             request: owner,
             path: `/media/${publicMedia.id}/moderate`,
             body: {
-              moderationStatus: "CENSORED",
+              decision: "CENSORED",
             },
           })).status,
         ).toBe(200)
@@ -469,7 +469,7 @@ it.live(
           request: owner,
           path: `/media/${publicMedia.id}/moderate`,
           body: {
-            moderationStatus: "REAPPROVED_AFTER_CENSORING",
+            decision: "REAPPROVED_AFTER_CENSORING",
           },
         })
 

@@ -860,7 +860,7 @@ const censor = () =>
     handler: (context: PublicationContext, { name }) =>
       withPerson(
         PublicationCommentsService.use((service) =>
-          service.moderate({ id: commentIn(context), moderationStatus: "CENSORED" }),
+          service.moderate({ id: commentIn(context), decision: "CENSORED" }),
         ),
         personNamed(context.actors, name),
       ).pipe(Effect.as(context)),
@@ -879,7 +879,7 @@ const deniedCensor = () =>
           withPerson(
             (yield* PublicationCommentsService).moderate({
               id: commentIn(context),
-              moderationStatus: "CENSORED",
+              decision: "CENSORED",
             }),
             personNamed(context.actors, name),
           ),
@@ -964,15 +964,15 @@ const commentStatus = () =>
 const moderatePublication = ({
   context,
   name,
-  moderationStatus,
+  decision,
 }: {
   context: PublicationContext
   name: string
-  moderationStatus: ModerationDecision
+  decision: ModerationDecision
 }) =>
   withPerson(
     PublicationsService.use((service) =>
-      service.moderate({ id: publicationIn(context).id, moderationStatus }),
+      service.moderate({ id: publicationIn(context).id, decision }),
     ),
     personNamed(context.actors, name),
   )
@@ -981,21 +981,21 @@ const censorPublication = () =>
   When("{string:name} censors the post publication", {
     params: NamedPerson,
     handler: (context: PublicationContext, { name }) =>
-      moderatePublication({ context, name, moderationStatus: "CENSORED" }).pipe(Effect.as(context)),
+      moderatePublication({ context, name, decision: "CENSORED" }).pipe(Effect.as(context)),
   })
 
 const censoredPublication = () =>
   Given("{string:name} has censored the post publication", {
     params: NamedPerson,
     handler: (context: PublicationContext, { name }) =>
-      moderatePublication({ context, name, moderationStatus: "CENSORED" }).pipe(Effect.as(context)),
+      moderatePublication({ context, name, decision: "CENSORED" }).pipe(Effect.as(context)),
   })
 
 const reapprovePublication = () =>
   When("{string:name} reapproves the post publication", {
     params: NamedPerson,
     handler: (context: PublicationContext, { name }) =>
-      moderatePublication({ context, name, moderationStatus: "REAPPROVED_AFTER_CENSORING" }).pipe(
+      moderatePublication({ context, name, decision: "REAPPROVED_AFTER_CENSORING" }).pipe(
         Effect.as(context),
       ),
   })
@@ -1009,7 +1009,7 @@ const deniedPublicationCensor = () =>
         const before = yield* repo.findPublicationRowById(publicationIn(context).id)
         const result = yield* denied(
           context,
-          moderatePublication({ context, name, moderationStatus: "CENSORED" }),
+          moderatePublication({ context, name, decision: "CENSORED" }),
         )
         expect(yield* repo.findPublicationRowById(publicationIn(context).id)).toEqual(before)
         return result
@@ -1589,7 +1589,7 @@ it.effect("censorship survives subsequent author edits", () =>
     const service = yield* PublicationCommentsService
     const repo = yield* PublicationCommentsRepository
     yield* withPerson(
-      service.moderate({ id: publicationCommentId, moderationStatus: "CENSORED" }),
+      service.moderate({ id: publicationCommentId, decision: "CENSORED" }),
       personNamed(context.actors, "Ana"),
     )
 
@@ -1628,7 +1628,7 @@ it.effect("censorship survives subsequent author edits", () =>
     ).toBe("CENSORED")
     expect((yield* readAggregateStatus(publicationCommentId)).moderationStatus).toBe("CENSORED")
     yield* withPerson(
-      service.moderate({ id: publicationCommentId, moderationStatus: "CENSORED" }),
+      service.moderate({ id: publicationCommentId, decision: "CENSORED" }),
       personNamed(context.actors, "Ailton"),
     )
 

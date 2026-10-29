@@ -9,3 +9,11 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 **Loro commit**: Loro's own `document.commit()`, which groups operations inside a CRDT document and carries a `CrdtCommit` message (`HumanCommit` or `SystemCommit`) naming the author. It's an implementation detail of a revision, not a stored record of its own.
 
 **Language fallback**: when content isn't available in the requested language, readers fall back to the requested language, then Portuguese, Spanish and English (`languageFallbackOrder`). SQL readers sort by the same order with `orderByLanguagePreference`.
+
+**Evaluation**: a moderator's verdict on a pending wiki revision: `PENDING`, `APPROVED` or `REJECTED` (`RevisionEvaluation`). The API payload, the TypeScript input and the `evaluation` column all use this name.
+
+## Moderation
+
+**Moderation status**: where a publication, publication comment or media asset stands in the moderation lifecycle: `APPROVED_BY_DEFAULT`, `CENSORED` or `REAPPROVED_AFTER_CENSORING` (`ModerationStatus`, stored in `moderation_status`).
+
+**Moderation decision**: what a moderator does to content: censor or reapprove it (`ModerationDecision`, the `decision` in moderation payloads). Applying a decision changes the content's moderation status.

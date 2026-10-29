@@ -456,7 +456,7 @@ const censorMedia = (denied = false) =>
         const action = withPerson(
           (yield* MediaAssetsService).moderate({
             id: mediaIn(context).id,
-            moderationStatus: "CENSORED",
+            decision: "CENSORED",
           }),
           personNamed(context.actors, name),
         )

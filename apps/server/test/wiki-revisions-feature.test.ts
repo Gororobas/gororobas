@@ -244,17 +244,17 @@ const propose = ({
 const evaluate = ({
   context,
   name,
-  status,
+  evaluation,
 }: {
   context: WikiContext
   name: string
-  status: "APPROVED" | "REJECTED"
+  evaluation: "APPROVED" | "REJECTED"
 }) =>
   Effect.gen(function* () {
     yield* act({
       context,
       name,
-      action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), { status }),
+      action: (yield* WikiArticlesService).evaluateRevision(revisionId(context), { evaluation }),
     })
 
     return context
@@ -367,15 +367,15 @@ const deniedEdit = (visitor = false) =>
 const approval = ({
   keyword,
   pattern,
-  status = "APPROVED",
+  evaluation = "APPROVED",
 }: {
   keyword: typeof Given
   pattern: string
-  status?: "APPROVED" | "REJECTED"
+  evaluation?: "APPROVED" | "REJECTED"
 }) =>
   keyword(pattern, {
     params: nameParams,
-    handler: (context: WikiContext, { name }) => evaluate({ context, name, status }),
+    handler: (context: WikiContext, { name }) => evaluate({ context, name, evaluation }),
   })
 
 const deniedApproval = (creation = false) =>
@@ -386,7 +386,7 @@ const deniedApproval = (creation = false) =>
     {
       params: nameParams,
       handler: (context: WikiContext, { name }) =>
-        evaluate({ context, name, status: "APPROVED" }).pipe(
+        evaluate({ context, name, evaluation: "APPROVED" }).pipe(
           Effect.flip,
           Effect.map((error) => ({ ...context, error })),
           Effect.tap(() =>
@@ -705,13 +705,15 @@ const approveOppositeCopies = (context: WikiContext, name: string) =>
 
     yield* Effect.forEach(
       revisions,
-      (revisionId) => evaluate({ context: { ...context, revisionId }, name, status: "APPROVED" }),
+      (revisionId) =>
+        evaluate({ context: { ...context, revisionId }, name, evaluation: "APPROVED" }),
       { concurrency: 1 },
     )
 
     yield* Effect.forEach(
       [...copied].reverse(),
-      (revisionId) => evaluate({ context: { ...context, revisionId }, name, status: "APPROVED" }),
+      (revisionId) =>
+        evaluate({ context: { ...context, revisionId }, name, evaluation: "APPROVED" }),
       { concurrency: 1 },
     )
 
@@ -814,7 +816,7 @@ const historyFixture = () =>
               yield* evaluate({
                 context: updated,
                 name: entry.evaluated_by,
-                status: entry.evaluation,
+                evaluation: entry.evaluation,
               })
 
               return {
@@ -943,7 +945,7 @@ await Effect.runPromise(
               approval({
                 keyword: When,
                 pattern: "{string:name} rejects the creation revision",
-                status: "REJECTED",
+                evaluation: "REJECTED",
               }),
               evaluationStatus(
                 Then,
@@ -1085,7 +1087,7 @@ await Effect.runPromise(
               approval({
                 keyword: When,
                 pattern: "{string:name} rejects the revision",
-                status: "REJECTED",
+                evaluation: "REJECTED",
               }),
               evaluationStatus(Then, "the revision evaluation becomes {string:evaluation}"),
               unchanged(),
@@ -1136,7 +1138,7 @@ await Effect.runPromise(
             approval({
               keyword: And,
               pattern: "{string:name} has rejected the revision",
-              status: "REJECTED",
+              evaluation: "REJECTED",
             }),
             history({
               keyword: When,
@@ -1335,7 +1337,7 @@ await Effect.runPromise(
                   language,
                 }).pipe(
                   Effect.flatMap((updated) =>
-                    evaluate({ context: updated, name: "Ana", status: "APPROVED" }),
+                    evaluate({ context: updated, name: "Ana", evaluation: "APPROVED" }),
                   ),
                 ),
             }),

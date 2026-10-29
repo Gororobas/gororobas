@@ -150,7 +150,7 @@ it.live(
         )
 
         expect(visitorUpload).toSatisfy(Exit.isFailure)
-        yield* service.moderate({ id: mediaAsset.id, moderationStatus: "CENSORED" })
+        yield* service.moderate({ id: mediaAsset.id, decision: "CENSORED" })
         expect(yield* Effect.exit(service.getRow(mediaAsset.id))).toSatisfy(Exit.isSuccess)
 
         const asVisitor = Effect.provideService(SessionContext, { type: "VISITOR" })

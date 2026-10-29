@@ -17,7 +17,7 @@ import { WikiArticleKind } from "../wiki/wiki-article.js"
 export const ModerationDecision = ModerationStatus.pick(["CENSORED", "REAPPROVED_AFTER_CENSORING"])
 export type ModerationDecision = typeof ModerationDecision.Type
 
-export const ModerateContentPayload = Schema.Struct({ moderationStatus: ModerationDecision })
+export const ModerateContentPayload = Schema.Struct({ decision: ModerationDecision })
 export type ModerateContentPayload = typeof ModerateContentPayload.Type
 
 export const ModerationResult = Schema.Struct({ moderationStatus: ModerationStatus })

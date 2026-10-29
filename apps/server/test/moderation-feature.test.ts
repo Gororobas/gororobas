@@ -179,7 +179,9 @@ const approvedRevision = () =>
         yield* asActor({
           context,
           name,
-          action: (yield* WikiArticlesService).evaluateRevision(revisionId, { status: "APPROVED" }),
+          action: (yield* WikiArticlesService).evaluateRevision(revisionId, {
+            evaluation: "APPROVED",
+          }),
         })
 
         return context

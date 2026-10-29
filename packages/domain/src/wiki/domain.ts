@@ -224,7 +224,7 @@ export const CreateWikiArticleRevisionInput = Schema.Struct({
 export type CreateWikiArticleRevisionInput = typeof CreateWikiArticleRevisionInput.Type
 
 export const EvaluateWikiArticleRevisionPayload = Schema.Struct({
-  status: RevisionEvaluation.pick(["APPROVED", "REJECTED"]),
+  evaluation: RevisionEvaluation.pick(["APPROVED", "REJECTED"]),
   reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
 })
 export type EvaluateWikiArticleRevisionPayload = typeof EvaluateWikiArticleRevisionPayload.Type
@@ -232,7 +232,7 @@ export type EvaluateWikiArticleRevisionPayload = typeof EvaluateWikiArticleRevis
 export const EvaluateWikiArticleRevisionInput = Schema.Struct({
   wikiArticleId: Schema.optional(WikiArticleId),
   evaluatedById: PersonId,
-  evaluation: EvaluateWikiArticleRevisionPayload.fields.status,
+  evaluation: EvaluateWikiArticleRevisionPayload.fields.evaluation,
   evaluationReason: Schema.optional(Schema.String),
   revisionId: WikiArticleRevisionId,
 })

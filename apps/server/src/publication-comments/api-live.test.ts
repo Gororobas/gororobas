@@ -190,7 +190,7 @@ it.live(
         (yield* request({
           path: `/publication-comments/${created.id}/moderate`,
           method: "POST",
-          body: { moderationStatus: "CENSORED" },
+          body: { decision: "CENSORED" },
         })).status,
       ).toBe(403)
 
@@ -204,7 +204,7 @@ it.live(
       const censored = yield* request({
         path: `/publication-comments/${created.id}/moderate`,
         method: "POST",
-        body: { moderationStatus: "CENSORED" },
+        body: { decision: "CENSORED" },
       })
 
       expect(
