@@ -117,11 +117,16 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
           yield* publicationCommentsRepository.deletePublicationComment(publicationCommentId)
         })
 
-      const moderate = (input: { id: PublicationCommentId; decision: ModerationDecision }) =>
+      const moderate = (input: {
+        id: PublicationCommentId
+        decision: ModerationDecision
+        reason?: string | undefined
+      }) =>
         moderateContent({
           contentType: "PUBLICATION_COMMENT",
           id: input.id,
           decision: input.decision,
+          reason: input.reason,
           notFound: () => new PublicationCommentNotFoundError({ id: input.id }),
         })
 

@@ -471,6 +471,39 @@ CREATE TABLE publication_comment_translations (
   FOREIGN KEY (publication_comment_id, translated_at_revision_id) REFERENCES publication_comment_content_revisions (publication_comment_id, id) ON DELETE CASCADE
 );
 
+-- ==========
+-- MODERATION
+-- ==========
+--
+-- Every decision that changed a publication's, comment's or media asset's `moderation_status`,
+-- the way `wiki_article_revisions` keep their evaluations. Exactly one content column is set.
+CREATE TABLE moderation_events (
+  id text PRIMARY KEY,
+  publication_id text,
+  publication_comment_id text,
+  media_asset_id text,
+  decision text NOT NULL, -- ModerationDecision
+  reason text,
+  moderation_status text NOT NULL, -- ModerationStatus the decision left the content in
+  decided_by_id text,
+  decided_at text NOT NULL,
+  CHECK (
+    (publication_id IS NOT NULL) + (publication_comment_id IS NOT NULL) + (media_asset_id IS NOT NULL) = 1
+  ),
+  FOREIGN KEY (publication_id) REFERENCES publication_sources (id) ON DELETE CASCADE,
+  FOREIGN KEY (publication_comment_id) REFERENCES publication_comments (id) ON DELETE CASCADE,
+  FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE,
+  FOREIGN KEY (decided_by_id) REFERENCES people (id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_moderation_events_publication_id ON moderation_events (publication_id);
+
+CREATE INDEX idx_moderation_events_publication_comment_id ON moderation_events (publication_comment_id);
+
+CREATE INDEX idx_moderation_events_media_asset_id ON moderation_events (media_asset_id);
+
+CREATE INDEX idx_moderation_events_decided_by_id ON moderation_events (decided_by_id);
+
 -- =========
 -- BOOKMARKS
 -- =========

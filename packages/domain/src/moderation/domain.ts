@@ -9,7 +9,15 @@
 import { Schema } from "effect"
 
 import { ModerationStatus } from "../common/enums.js"
-import { PersonId, WikiArticleId, WikiArticleRevisionId } from "../common/ids.js"
+import {
+  MediaAssetId,
+  ModerationEventId,
+  PersonId,
+  PublicationCommentId,
+  PublicationId,
+  WikiArticleId,
+  WikiArticleRevisionId,
+} from "../common/ids.js"
 import { Handle, TimestampColumn } from "../common/primitives.js"
 import { WikiArticleKind } from "../wiki/wiki-article.js"
 
@@ -17,7 +25,10 @@ import { WikiArticleKind } from "../wiki/wiki-article.js"
 export const ModerationDecision = ModerationStatus.pick(["CENSORED", "REAPPROVED_AFTER_CENSORING"])
 export type ModerationDecision = typeof ModerationDecision.Type
 
-export const ModerateContentPayload = Schema.Struct({ decision: ModerationDecision })
+export const ModerateContentPayload = Schema.Struct({
+  decision: ModerationDecision,
+  reason: Schema.optional(Schema.Trimmed.check(Schema.isNonEmpty())),
+})
 export type ModerateContentPayload = typeof ModerateContentPayload.Type
 
 export const ModerationResult = Schema.Struct({ moderationStatus: ModerationStatus })
@@ -30,6 +41,25 @@ export const ModeratedContentType = Schema.Literals([
 ])
 
 export type ModeratedContentType = typeof ModeratedContentType.Type
+
+/**
+ * One moderation decision that changed a piece of content's status, like a revision's evaluation.
+ * Exactly one of the content columns is set.
+ */
+export const ModerationEventRow = Schema.Struct({
+  id: ModerationEventId,
+  publicationId: Schema.NullOr(PublicationId),
+  publicationCommentId: Schema.NullOr(PublicationCommentId),
+  mediaAssetId: Schema.NullOr(MediaAssetId),
+  decision: ModerationDecision,
+  reason: Schema.NullOr(Schema.String),
+  /** The status the decision left the content in. */
+  moderationStatus: ModerationStatus,
+  decidedById: Schema.NullOr(PersonId),
+  decidedAt: TimestampColumn,
+})
+
+export type ModerationEventRow = typeof ModerationEventRow.Type
 
 export const isCensored = (status: ModerationStatus) => status === "CENSORED"
 

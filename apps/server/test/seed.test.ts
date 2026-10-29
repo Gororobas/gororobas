@@ -2,6 +2,7 @@ import { NodeServices } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
 import {
   MediaAssetRow,
+  ModerationEventRow,
   OrganizationInvitationRow,
   OrganizationMembershipRow,
   OrganizationRow,
@@ -56,6 +57,7 @@ const TABLES_WITHOUT_SEED_DATA = {
 /** Read-side schemas each seeded table must decode with. */
 const ROW_SCHEMAS = {
   media_assets: MediaAssetRow,
+  moderation_events: ModerationEventRow,
   organization_invitations: OrganizationInvitationRow,
   organization_memberships: OrganizationMembershipRow,
   organizations: OrganizationRow,

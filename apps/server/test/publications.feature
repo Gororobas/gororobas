@@ -298,11 +298,16 @@ Feature: Publications
         | Maria    | yes     |
         | Irene    | yes     |
         | visitors | yes     |
+      And the post publication's moderation history is:
+        | decision                   | moderator |
+        | CENSORED                   | Ana       |
+        | REAPPROVED_AFTER_CENSORING | Ailton    |
 
     Scenario: Community member cannot censor a publication
       When "Irene" tries to censor the post publication
       Then access is denied
       And the post publication has moderation_status "APPROVED_BY_DEFAULT"
+      And the post publication's moderation history is empty
 
   Rule: Member visibility affects public attribution
     Organization members visibility controls both the contributors list and author identities

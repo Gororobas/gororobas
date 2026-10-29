@@ -398,11 +398,16 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           ).pipe(Effect.map(EffectArray.getSomes))
         })
 
-      const moderate = (input: { id: PublicationId; decision: ModerationDecision }) =>
+      const moderate = (input: {
+        id: PublicationId
+        decision: ModerationDecision
+        reason?: string | undefined
+      }) =>
         moderateContent({
           contentType: "PUBLICATION",
           id: input.id,
           decision: input.decision,
+          reason: input.reason,
           notFound: () => new PublicationNotFoundError({ id: input.id }),
         })
 

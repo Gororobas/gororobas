@@ -223,11 +223,16 @@ export class MediaAssetsService extends Context.Service<MediaAssetsService>()(
           return media.value
         })
 
-      const moderate = (input: { id: MediaAssetId; decision: ModerationDecision }) =>
+      const moderate = (input: {
+        id: MediaAssetId
+        decision: ModerationDecision
+        reason?: string | undefined
+      }) =>
         moderateContent({
           contentType: "MEDIA_ASSET",
           id: input.id,
           decision: input.decision,
+          reason: input.reason,
           notFound: () => new MediaNotFoundError({ id: input.id }),
         })
 

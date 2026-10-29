@@ -6,7 +6,8 @@ import {
   Handle,
   LoroDocUpdate,
   ModerationStatus,
-  type ModerationDecision,
+  ModerationDecision,
+  ModerationEventRow,
   InformationVisibility,
   InvalidCrdtUpdateError,
   OrganizationAccessLevel,
@@ -1029,6 +1030,49 @@ const publicationStatus = () =>
       }),
   })
 
+const listPublicationModerationEvents = SqlSchema.findAll({
+  Request: PublicationId,
+  Result: ModerationEventRow,
+  execute: (publicationId) =>
+    SqlClient.SqlClient.use(
+      (sql) =>
+        sql`SELECT * FROM moderation_events WHERE publication_id = ${publicationId} ORDER BY decided_at, rowid`,
+    ),
+})
+
+const moderationHistory = () =>
+  And("the post publication's moderation history is:", {
+    params: Schema.Struct({
+      table: Schema.Array(
+        Schema.Struct({ decision: ModerationDecision, moderator: Schema.String }),
+      ),
+    }),
+    handler: (context: PublicationContext, { table }) =>
+      Effect.gen(function* () {
+        const events = yield* listPublicationModerationEvents(publicationIn(context).id)
+
+        expect(
+          events.map((event) => ({ decision: event.decision, decidedById: event.decidedById })),
+        ).toEqual(
+          table.map((row) => ({
+            decision: row.decision,
+            decidedById: personNamed(context.actors, row.moderator),
+          })),
+        )
+
+        return context
+      }),
+  })
+
+const emptyModerationHistory = () =>
+  And("the post publication's moderation history is empty", {
+    handler: (context: PublicationContext) =>
+      Effect.gen(function* () {
+        expect(yield* listPublicationModerationEvents(publicationIn(context).id)).toEqual([])
+        return context
+      }),
+  })
+
 const ViewerTable = Schema.Struct({ table: Schema.Array(Schema.Struct({ viewer: Schema.String })) })
 
 const publicationHidden = () =>
@@ -1421,12 +1465,19 @@ await Effect.runPromise(
             reapprovePublication(),
             publicationStatus(),
             postVisibility(),
+            moderationHistory(),
           ),
       })
 
       Scenario("Community member cannot censor a publication", {
         layer: PublicationsFeatureTestLayer,
-        steps: () => runSteps(deniedPublicationCensor(), accessDenied(), publicationStatus()),
+        steps: () =>
+          runSteps(
+            deniedPublicationCensor(),
+            accessDenied(),
+            publicationStatus(),
+            emptyModerationHistory(),
+          ),
       })
     })
 

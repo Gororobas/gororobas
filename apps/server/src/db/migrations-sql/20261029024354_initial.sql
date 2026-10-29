@@ -458,6 +458,34 @@ CREATE TABLE `publication_comment_translations` (
   CONSTRAINT `0` FOREIGN KEY (`publication_comment_id`, `translated_at_revision_id`) REFERENCES `publication_comment_content_revisions` (`publication_comment_id`, `id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `1` FOREIGN KEY (`publication_comment_id`) REFERENCES `publication_comments` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
+-- Create "moderation_events" table
+CREATE TABLE `moderation_events` (
+  `id` text NULL,
+  `publication_id` text NULL,
+  `publication_comment_id` text NULL,
+  `media_asset_id` text NULL,
+  `decision` text NOT NULL,
+  `reason` text NULL,
+  `moderation_status` text NOT NULL,
+  `decided_by_id` text NULL,
+  `decided_at` text NOT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `0` FOREIGN KEY (`decided_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+  CONSTRAINT `1` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `2` FOREIGN KEY (`publication_comment_id`) REFERENCES `publication_comments` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CONSTRAINT `3` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+  CHECK (
+    (publication_id IS NOT NULL) + (publication_comment_id IS NOT NULL) + (media_asset_id IS NOT NULL) = 1
+  )
+);
+-- Create index "idx_moderation_events_publication_id" to table: "moderation_events"
+CREATE INDEX `idx_moderation_events_publication_id` ON `moderation_events` (`publication_id`);
+-- Create index "idx_moderation_events_publication_comment_id" to table: "moderation_events"
+CREATE INDEX `idx_moderation_events_publication_comment_id` ON `moderation_events` (`publication_comment_id`);
+-- Create index "idx_moderation_events_media_asset_id" to table: "moderation_events"
+CREATE INDEX `idx_moderation_events_media_asset_id` ON `moderation_events` (`media_asset_id`);
+-- Create index "idx_moderation_events_decided_by_id" to table: "moderation_events"
+CREATE INDEX `idx_moderation_events_decided_by_id` ON `moderation_events` (`decided_by_id`);
 -- Create "bookmarks_wiki_articles" table
 CREATE TABLE `bookmarks_wiki_articles` (
   `person_id` text NOT NULL,

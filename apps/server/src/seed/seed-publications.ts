@@ -27,7 +27,7 @@ import {
   Schema,
 } from "effect"
 
-import { updateModerationStatus } from "../moderation/moderate-content.js"
+import { recordModerationDecision } from "../moderation/moderate-content.js"
 import { PublicationCommentsRepository } from "../publication-comments/repository.js"
 import {
   HumanCrdtUpdate,
@@ -37,6 +37,7 @@ import { PublicationsRepository } from "../publications/repository.js"
 import { firstParagraphEvidence, richTextDocument } from "./rich-text.js"
 import {
   activePeople,
+  reviewers,
   referencesFor,
   type SeededPerson,
   type SeededPublication,
@@ -355,20 +356,31 @@ const seedPublication = (
     }
 
     // A few publications are censored, some of them later reapproved.
-    if (yield* chance(0.03)) {
+    const moderator = yield* pickOption(reviewers(context))
+
+    if (moderator && (yield* chance(0.03))) {
       const censoredAt = yield* timeline.between(createdAt + minutes(30))
-      const moderationStatus = (yield* chance(0.3)) ? "REAPPROVED_AFTER_CENSORING" : "CENSORED"
 
       yield* timeline.at(censoredAt)(
-        Effect.flatMap(DateTime.now, (updatedAt) =>
-          updateModerationStatus({
+        recordModerationDecision({
+          contentType: "PUBLICATION",
+          id: publicationId,
+          decision: "CENSORED",
+          reason: yield* pick(CENSORING_REASONS),
+          decidedById: moderator.id,
+        }),
+      )
+
+      if (yield* chance(0.3)) {
+        yield* timeline.at(yield* timeline.between(censoredAt + minutes(30)))(
+          recordModerationDecision({
             contentType: "PUBLICATION",
             id: publicationId,
-            moderationStatus,
-            updatedAt,
+            decision: "REAPPROVED_AFTER_CENSORING",
+            decidedById: moderator.id,
           }),
-        ),
-      )
+        )
+      }
     }
 
     return [
@@ -481,21 +493,28 @@ const seedComment = (
       )
     }
 
-    if (yield* chance(0.04)) {
+    const moderator = yield* pickOption(reviewers(context))
+
+    if (moderator && (yield* chance(0.04))) {
       yield* timeline.at(yield* timeline.between(createdAt))(
-        Effect.flatMap(DateTime.now, (updatedAt) =>
-          updateModerationStatus({
-            contentType: "PUBLICATION_COMMENT",
-            id,
-            moderationStatus: "CENSORED",
-            updatedAt,
-          }),
-        ),
+        recordModerationDecision({
+          contentType: "PUBLICATION_COMMENT",
+          id,
+          decision: "CENSORED",
+          reason: yield* pick(CENSORING_REASONS),
+          decidedById: moderator.id,
+        }),
       )
     }
 
     return { id, createdAt } satisfies SeededComment
   })
+
+const CENSORING_REASONS = [
+  "Propaganda sem relação com agroecologia",
+  "Linguagem ofensiva",
+  "Informação perigosa sobre agrotóxicos",
+] as const
 
 const COMMENT_COUNTS = [0, 0, 1, 1, 2, 2, 3, 4, 6] as const
 
