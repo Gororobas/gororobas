@@ -37,7 +37,10 @@ export type GelVegetableHistory = typeof GelVegetableHistory.Type
 
 class GelVegetableReconstructionError extends Schema.TaggedError<GelVegetableReconstructionError>()(
   "GelVegetableReconstructionError",
-  { message: Schema.String, error: Schema.optional(Schema.Unknown) },
+  {
+    message: Schema.String,
+    error: Schema.optional(Schema.Unknown),
+  },
 ) {}
 
 const revertGelVegetable = Effect.fn("revertGelVegetable")(function* (

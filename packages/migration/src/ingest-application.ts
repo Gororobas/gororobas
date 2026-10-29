@@ -78,10 +78,10 @@ export const ingestApplication = (exportDirectory: string) =>
 
     yield* fs.writeFileString(
       path.join(report.directory, "application.json"),
-      Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(result),
+      yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(result),
     )
     yield* Effect.log(
-      `Application import: ${Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(result)}`,
+      `Application import: ${yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(result)}`,
     )
     return result
   })

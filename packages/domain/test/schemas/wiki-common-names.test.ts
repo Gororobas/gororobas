@@ -59,8 +59,8 @@ describe("Wiki common names", () => {
       expect(row.searchableNames).toContain("aipim")
 
       expect(
-        Schema.decodeSync(WikiArticleTranslationProjectionRow)(
-          Schema.encodeSync(WikiArticleTranslationProjectionRow)(row),
+        yield* Schema.decodeEffect(WikiArticleTranslationProjectionRow)(
+          yield* Schema.encodeEffect(WikiArticleTranslationProjectionRow)(row),
         ),
       ).toEqual(row)
     }),

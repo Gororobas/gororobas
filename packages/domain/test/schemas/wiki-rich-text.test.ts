@@ -137,7 +137,9 @@ describe("Wiki rich text and loro-prosemirror", () => {
             expect(node.toJSON()).toEqual(
               editorSchema
                 .nodeFromJSON(
-                  toLoroValue(Schema.encodeSync(Schema.toCodecJson(TiptapDocument))(content)),
+                  toLoroValue(
+                    yield* Schema.encodeEffect(Schema.toCodecJson(TiptapDocument))(content),
+                  ),
                 )
                 .toJSON(),
             )
@@ -150,7 +152,7 @@ describe("Wiki rich text and loro-prosemirror", () => {
             const parsed = yield* parse(created, document)
             const translation = parsed.data.translations.en
             assert(translation)
-            const projected = Schema.encodeSync(TiptapDocument)(
+            const projected = yield* Schema.encodeEffect(TiptapDocument)(
               Option.getOrThrow(translation.content),
             )
             expect(editorSchema.nodeFromJSON(projected).toJSON()).toEqual(edited.doc.toJSON())

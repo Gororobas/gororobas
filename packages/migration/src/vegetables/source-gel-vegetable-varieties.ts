@@ -30,7 +30,6 @@ export const sourceGelVegetableVarieties = Effect.gen(function* () {
     )
     .pipe(
       Effect.tap(archiveGelResult("cultivars")),
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(GelCultivar))),
     )
 

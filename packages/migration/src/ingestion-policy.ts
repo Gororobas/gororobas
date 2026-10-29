@@ -226,6 +226,6 @@ export const archiveExcludedAccounts = (input: {
 
     yield* fs.writeFileString(
       path.join(input.directory, "excluded-accounts.json"),
-      Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(excluded),
+      yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(excluded),
     )
   })

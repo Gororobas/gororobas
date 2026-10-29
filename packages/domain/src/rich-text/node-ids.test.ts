@@ -46,7 +46,6 @@ const translatedWithoutIds = (document: TiptapDocument): TiptapDocument => {
   }
 
   const json = Schema.toCodecJson(TiptapDocument)
-  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The translated JSON is checked against the document schema again.
   return Schema.decodeSync(json)(translate(Schema.encodeSync(json)(document)))
 }
 

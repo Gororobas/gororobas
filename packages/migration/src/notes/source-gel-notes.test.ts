@@ -86,13 +86,15 @@ it.effect("converts notes and preserves Gel Date values, mentions and relations"
     Effect.provideService(IdGen, { generate: () => mappedId }),
     Effect.provide(NodeServices.layer),
     Effect.tap(() =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
         expect(writes.length).toBe(3)
         expect(writes[0].path).toMatch(/debug\/raw-gel\/notes\.json$/)
         const { path, content } = writes[2]
         expect(path).toMatch(/debug\/notes\/eucalyptus-discovery\.json$/)
 
-        expect(Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(content)).toMatchObject({
+        expect(
+          yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(content),
+        ).toMatchObject({
           id: mappedId,
           // The DESCOBERTA note-type concept, then the related plant.
           wikiArticleIds: [mappedId, mappedId],
@@ -173,10 +175,10 @@ it.effect("archives private notes separately and removes earlier publication exp
     Effect.provideService(IdGen, { generate: () => mappedId }),
     Effect.provide(NodeServices.layer),
     Effect.tap(() =>
-      Effect.sync(() => {
+      Effect.gen(function* () {
         expect(writes).toHaveLength(2)
         expect(
-          Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(writes[1].content),
+          yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(writes[1].content),
         ).toMatchObject([{ publish_status: "PRIVATE", created_by: note.created_by }])
         expect(writes[1].path).toMatch(/debug\/journal\/notes\.json$/)
         expect(remove).toHaveBeenCalledWith(

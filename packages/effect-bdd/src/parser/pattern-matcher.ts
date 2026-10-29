@@ -89,12 +89,12 @@ export function matchPattern(
   return Option.some(result)
 }
 
-export function decodeParams<A>({
+export function decodeParams<A, R, EncodingServices>({
   schema,
   params,
   stepText,
 }: {
-  schema: Schema.Schema<A>
+  schema: Schema.Codec<A, unknown, R, EncodingServices>
   params: unknown
   stepText: string
 }) {

@@ -24,7 +24,6 @@ describe("Plant cultivar wiki kind", () => {
       predicate: (parentPlantId) =>
         Effect.sync(() => {
           const attributes = Attributes.make({ parentPlantId })
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test deliberately supplies missing required fields.
           expect(() => Schema.decodeUnknownSync(Attributes)({ parentPlantId })).toThrow(/Missing/)
           return Record.toEntries(attributes).every(
             ([key, value]) => key === "parentPlantId" || deepEquals(value, { _tag: "Unknown" }),
@@ -35,7 +34,6 @@ describe("Plant cultivar wiki kind", () => {
 
   it("keeps unknown, inheritance, empty selections and literal values unambiguous", () => {
     const Property = CultivarProperty(Schema.Array(Schema.Literals(["HIGH", "LOW"])))
-    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This decoder also tests deliberately malformed trait values.
     const decode = Schema.decodeUnknownSync(Property)
     expect(decode({ _tag: "Unknown" })).toEqual({ _tag: "Unknown" })
     expect(decode({ _tag: "Inherit" })).toEqual({ _tag: "Inherit" })
@@ -65,7 +63,6 @@ describe("Plant cultivar wiki kind", () => {
     ]
 
     ranges.forEach((field) => {
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This decoder also tests incomplete range endpoints.
       const decode = Schema.decodeUnknownSync(field)
       expect(() => decode({ _tag: "Value", value: { min: 5, max: 2 } })).toThrow(
         /minimum must not exceed maximum/,
@@ -146,6 +143,7 @@ describe("Plant cultivar wiki kind", () => {
     () =>
       Effect.gen(function* () {
         const document = new LoroDoc()
+        // oxlint-disable-next-line effecttsgo/schema-sync-in-effect -- Construct a reusable synchronous fixture codec; this call does not encode or decode a value.
         const decode = Schema.decodeSync(WikiPlantCultivarArticleCrdtOperations.AttributeEdit)
 
         yield* WikiArticleCrdt.applyEdit(

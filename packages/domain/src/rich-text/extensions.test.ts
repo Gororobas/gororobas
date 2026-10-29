@@ -24,7 +24,7 @@ it.effect(
         }),
       ),
       predicate: ({ reference, gallery }) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           const document = assignTiptapNodeIds(
             TiptapDocument.make({
               type: "doc",
@@ -63,7 +63,7 @@ it.effect(
 
           const restored = tiptapFromHtml(tiptapToHtml(document))
           expect(linkedEntitiesFromTiptapDocument(restored)).toEqual([
-            Schema.decodeSync(EntityReferenceTarget)(reference),
+            yield* Schema.decodeEffect(EntityReferenceTarget)(reference),
           ])
           expect(mediaItemsFromTiptapDocument(restored)).toEqual(gallery.items)
           expect(restored).toEqual(document)

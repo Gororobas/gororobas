@@ -66,7 +66,6 @@ export const gelVegetableNamesToCrdtList = (
   names: ReadonlyArray<string>,
   gender?: GelVegetable["gender"],
 ) =>
-  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy names may be empty and must fail the non-empty array constraint.
   Schema.decodeUnknownSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(
     stringsToCrdtList(names).map(({ id, value }, index) => ({
       id,

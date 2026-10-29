@@ -41,7 +41,6 @@ export const sourceGelResources = Effect.gen(function* () {
       Effect.flatMap((resources) =>
         Effect.all(
           resources.map((resource) =>
-            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
             Schema.decodeUnknownEffect(
               Schema.Struct({
                 ...GelResourceWithRelations.fields,
@@ -101,7 +100,6 @@ export const sourceGelResources = Effect.gen(function* () {
           source.audit_logs.filter((log) => log.new && log.action !== "DELETE"),
           (log) =>
             Effect.gen(function* () {
-              // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy audit payloads are unknown until validated.
               const fields = yield* Schema.decodeUnknownEffect(
                 Schema.Record(Schema.String, Schema.Unknown),
               )(log.new)
@@ -110,10 +108,10 @@ export const sourceGelResources = Effect.gen(function* () {
                 ...source,
                 ...fields,
                 created_at: Predicate.isString(fields.created_at)
-                  ? Schema.decodeSync(Schema.DateFromString)(fields.created_at)
+                  ? yield* Schema.decodeEffect(Schema.DateFromString)(fields.created_at)
                   : source.created_at,
                 updated_at: Predicate.isString(fields.updated_at)
-                  ? Schema.decodeSync(Schema.DateFromString)(fields.updated_at)
+                  ? yield* Schema.decodeEffect(Schema.DateFromString)(fields.updated_at)
                   : source.updated_at,
               })
 
@@ -154,8 +152,10 @@ export const sourceGelResources = Effect.gen(function* () {
 
         if (
           last &&
-          Schema.encodeSync(Schema.fromJsonString(WikiArticleEditableData))(last.article) !==
-            Schema.encodeSync(Schema.fromJsonString(WikiArticleEditableData))(article)
+          (yield* Schema.encodeEffect(Schema.fromJsonString(WikiArticleEditableData))(
+            last.article,
+          )) !==
+            (yield* Schema.encodeEffect(Schema.fromJsonString(WikiArticleEditableData))(article))
         ) {
           versionInputs.push({
             article,

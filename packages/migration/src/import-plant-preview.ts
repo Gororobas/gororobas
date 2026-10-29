@@ -98,7 +98,6 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
   ).pipe(Layer.provide(WorkflowEngine.layerMemory))
 
   const dependencies = Layer.mergeAll(
-    makeAppSql(database),
     IdGenLive,
     Layer.effect(WikiArticlesRepository)(WikiArticlesRepository.make),
     noEnrichment,
@@ -113,7 +112,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
       ),
     ),
     NodeHttpClient.layerUndici,
-  )
+  ).pipe(Layer.provideMerge(makeAppSql(database)))
 
   const services = Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
     Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
@@ -228,7 +227,6 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
       })(plant.id)
 
       const storedMediaAssets = yield* sql`SELECT * FROM media_assets`
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
       yield* Schema.decodeUnknownEffect(Schema.Array(MediaAssetRow))(storedMediaAssets)
       const violations = yield* sql`PRAGMA foreign_key_check`
 
@@ -244,7 +242,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
 
       for (const route of routes) {
         const page = yield* findPageByHandleAndKind({
-          handle: Schema.decodeSync(Handle)(route.handle),
+          handle: yield* Schema.decodeEffect(Handle)(route.handle),
           kind: "PLANT",
           language: "pt",
         })

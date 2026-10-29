@@ -42,6 +42,11 @@ import {
   Record,
   Schema,
 } from "effect"
+
+class ImportPreviewError extends Schema.TaggedError<ImportPreviewError>()("ImportPreviewError", {
+  message: Schema.String,
+}) {}
+const previewError = (message: string) => new ImportPreviewError({ message })
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
@@ -158,15 +163,14 @@ export const importPreview = ({
     for (const entry of exports.users) {
       const user = yield* Schema.decodeEffect(Schema.toCodecJson(UserDataForMigration))(entry.data)
       if (!user.profile.id) {
-        return yield* Effect.fail(new Error(`Missing profile ID: ${entry.file}`))
+        return yield* previewError(`Missing profile ID: ${entry.file}`)
       }
       if (!user.account.email) missingEmailAccounts.push(user.profile.id)
 
       entry.data = {
         ...entry.data,
         account: {
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Preview account records contain arbitrary JSON.
-          ...Schema.decodeUnknownSync(PreviewRecord)(entry.data.account),
+          ...(yield* Schema.decodeUnknownEffect(PreviewRecord)(entry.data.account)),
           id: user.profile.id,
           email: user.account.email ?? `migration-${user.profile.id}@example.invalid`,
         },
@@ -256,10 +260,9 @@ export const importPreview = ({
 
         for (const { data } of exports.users) {
           const user = yield* Schema.decodeEffect(Schema.toCodecJson(UserDataForMigration))(data)
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy user profiles may have a missing identifier that must be rejected.
           const id = yield* Schema.decodeUnknownEffect(PersonId)(user.profile.id)
           if (!user.account.email) {
-            return yield* Effect.fail(new Error(`Account ${id} has no email`))
+            return yield* previewError(`Account ${id} has no email`)
           }
           yield* sql`INSERT INTO auth_subjects ${sql.insert({ id, email: user.account.email.toLowerCase(), isEmailVerified: Number(user.account.is_email_verified), securityRevision: yield* IdGen.make(AuthSecurityRevision), claimedAt: user.account.created_at.toISOString(), createdAt: user.account.created_at.toISOString(), updatedAt: user.account.updated_at.toISOString() })}`
           yield* sql`INSERT INTO profiles ${sql.insert({ id, type: user.profile.type, handle: user.profile.handle, name: user.profile.name, bio: user.profile.bio ? JSON.stringify(user.profile.bio) : null, location: user.profile.location, searchableText: profileSearchableText(user.profile), visibility: user.profile.visibility, createdAt: user.profile.created_at.toISOString(), updatedAt: user.profile.updated_at.toISOString() })}`
@@ -268,16 +271,13 @@ export const importPreview = ({
         }
 
         for (const { data } of exports.images) {
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy image records are unvalidated JSON dictionaries.
           const image = yield* Schema.decodeUnknownEffect(ImageExport)(data)
           const dimensions = /^image-[a-f0-9]{40}-(\d+)x(\d+)-[a-z0-9]+$/.exec(
             image.latest_source.sanity_id,
           )
 
           if (!dimensions) {
-            return yield* Effect.fail(
-              new Error(`Invalid Sanity ID: ${image.latest_source.sanity_id}`),
-            )
+            return yield* previewError(`Invalid Sanity ID: ${image.latest_source.sanity_id}`)
           }
 
           const stored = storedMedia?.images[image.id]
@@ -320,12 +320,11 @@ export const importPreview = ({
 
         for (const category of ["concepts", "plants", "cultivars", "resources"] as const) {
           for (const { file, data } of exports[category]) {
-            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy article records are unvalidated JSON dictionaries.
             const article = yield* Schema.decodeUnknownEffect(ArticleExport)(data)
             const latest = article.versions?.at(-1)
             const editable = latest?.article ?? article.article
             if (!editable) {
-              return yield* Effect.fail(new Error(`No converted article: ${category}/${file}`))
+              return yield* previewError(`No converted article: ${category}/${file}`)
             }
 
             yield* wiki.createWikiArticle(
@@ -357,7 +356,7 @@ export const importPreview = ({
                 )
 
                 if (!Schema.toEquivalence(WikiArticleEditableData)(parsed.data, version.article)) {
-                  return yield* Effect.fail(new Error(`CRDT differs from conversion: ${file}`))
+                  return yield* previewError(`CRDT differs from conversion: ${file}`)
                 }
                 const createdAt = yield* Schema.decodeEffect(Schema.DateTimeUtcFromString)(
                   version.timestamp,
@@ -450,15 +449,13 @@ export const importPreview = ({
           const note = yield* Schema.decodeEffect(Schema.toCodecJson(NoteDataForMigration))(data)
 
           if (!note.publication) {
-            return yield* Effect.fail(
-              new Error(`Unconverted note ${file}: ${note.conversion_error}`),
-            )
+            return yield* previewError(`Unconverted note ${file}: ${note.conversion_error}`)
           }
 
           const publication = note.publication
           const owner = publication.ownerProfileId
           if (!people.has(owner)) {
-            return yield* Effect.fail(new Error(`Missing publication owner ${owner}: ${file}`))
+            return yield* previewError(`Missing publication owner ${owner}: ${file}`)
           }
           yield* publications.createPublication(
             { ...publication, createdById: PersonId.make(owner) },
@@ -497,28 +494,23 @@ export const importPreview = ({
             bookmarkCount++
           }
         } else if (application) {
-          return yield* Effect.fail(
-            new Error("Missing frozen bookmarks.json; run a fresh Gel export first"),
-          )
+          return yield* previewError("Missing frozen bookmarks.json; run a fresh Gel export first")
         }
 
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
         yield* Schema.decodeUnknownEffect(Schema.Array(MediaAssetRow))(
           yield* sql`SELECT * FROM media_assets`,
         )
         const violations = yield* sql`PRAGMA foreign_key_check`
 
         if (violations.length) {
-          return yield* Effect.fail(
-            new Error(`Foreign key violations: ${JSON.stringify(violations)}`),
-          )
+          return yield* previewError(`Foreign key violations: ${JSON.stringify(violations)}`)
         }
 
         yield* sql`PRAGMA integrity_check`.pipe(
           Effect.flatMap((rows) =>
             rows[0]?.integrityCheck === "ok"
               ? Effect.void
-              : Effect.fail(new Error("SQLite integrity check failed")),
+              : Effect.fail(previewError("SQLite integrity check failed")),
           ),
         )
       }).pipe(sql.withTransaction)
@@ -545,7 +537,6 @@ export const importPreview = ({
           Layer.effect(PublicationsRepository)(PublicationsRepository.make),
           Layer.effect(WikiArticlesRepository)(WikiArticlesRepository.make),
         ).pipe(
-          Layer.provideMerge(application ? makeAppSql(database) : makeAppSqlClient(database)),
           Layer.provideMerge(
             Layer.effect(MediaAssetsService, MediaAssetsService.make).pipe(
               Layer.provideMerge(Layer.effect(MediaAssetsRepository, MediaAssetsRepository.make)),
@@ -565,6 +556,7 @@ export const importPreview = ({
           Layer.provideMerge(NodeHttpClient.layerUndici),
           Layer.provideMerge(IdGenLive),
           Layer.provideMerge(WorkflowEngine.layerMemory),
+          Layer.provideMerge(application ? makeAppSql(database) : makeAppSqlClient(database)),
         ),
       ),
     )

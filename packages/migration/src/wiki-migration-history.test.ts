@@ -32,13 +32,13 @@ it.effect(
         Effect.gen(function* () {
           const article = WikiPlantArticle.EditableArticle.make({
             kind: "PLANT",
-            attributes: Schema.decodeSync(WikiPlantArticle.EditableAttributes)({}),
+            attributes: yield* Schema.decodeEffect(WikiPlantArticle.EditableAttributes)({}),
             translations: {
               pt: {
                 commonNames: gelVegetableNamesToCrdtList(["Mandioca", "Aipim"], gender),
                 origin: Option.some(origin),
                 content: Option.some(
-                  Schema.decodeSync(TiptapDocument)({
+                  yield* Schema.decodeEffect(TiptapDocument)({
                     type: "doc",
                     version: 1,
                     content: [
@@ -92,10 +92,12 @@ it.effect(
                 })
 
                 expect(
-                  Schema.encodeSync(Schema.toCodecJson(WikiArticleEditableData))(parsed.data),
+                  yield* Schema.encodeEffect(Schema.toCodecJson(WikiArticleEditableData))(
+                    parsed.data,
+                  ),
                 ).toEqual(
                   toLoroValue(
-                    Schema.encodeSync(Schema.toCodecJson(WikiArticleEditableData))(
+                    yield* Schema.encodeEffect(Schema.toCodecJson(WikiArticleEditableData))(
                       inputs[index].article,
                     ),
                   ),

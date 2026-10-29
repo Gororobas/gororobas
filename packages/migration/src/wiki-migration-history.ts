@@ -43,7 +43,6 @@ const synchronizeMap = (map: LoroMap, target: Schema.JsonObject) => {
       if (key === "commonNames") {
         initializeWikiArticleCommonNames(
           list,
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Synthetic wiki history must use validated common-name map containers.
           Schema.decodeUnknownSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(value),
         )
       } else {
@@ -53,7 +52,6 @@ const synchronizeMap = (map: LoroMap, target: Schema.JsonObject) => {
     } else if (Predicate.isObject(value) && !("type" in value) && !("_tag" in value)) {
       synchronizeMap(
         map.ensureMergeableMap(key),
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Nested legacy JSON may be an array rather than an object.
         Schema.decodeUnknownSync(Schema.Record(Schema.String, Schema.Json))(value),
       )
     } else if (value === null) map.delete(key)
@@ -77,11 +75,9 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
     (version) =>
       Effect.gen(function* () {
         const encoded = yield* Schema.encodeEffect(WikiArticleEditableData)(version.article)
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy attributes may contain undefined values and must be checked for JSON compatibility.
         const attributes = yield* Schema.decodeUnknownEffect(
           Schema.Record(Schema.String, Schema.Json),
         )(encoded.attributes)
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translations may contain undefined values and must be checked for JSON compatibility.
         const translations = yield* Schema.decodeUnknownEffect(
           Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Json)),
         )(encoded.translations)
@@ -134,7 +130,6 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
           }
 
           const content = assignTiptapNodeIds(
-            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy translation content is arbitrary JSON until decoded as a rich-text document.
             Schema.decodeUnknownSync(TiptapDocument)(translation.content),
             {
               referenceContent: Option.getOrUndefined(
@@ -171,7 +166,6 @@ export const buildWikiMigrationHistory = Effect.fn("buildWikiMigrationHistory")(
           WikiMigrationVersion.make({
             ...version,
             // What the CRDT holds: the converted article with the node IDs assigned while writing it.
-            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Translations were checked as JSON records above; the content swap keeps that shape.
             article: yield* Schema.decodeEffect(WikiArticleEditableData)({
               ...encoded,
               translations: Record.map(translations, (translation, language) =>

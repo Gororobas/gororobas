@@ -38,7 +38,6 @@ export const sourceGelBookmarks = Effect.gen(function* () {
     )
     .pipe(
       Effect.tap(archiveGelResult("bookmarks")),
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Gel query results cross the source-data boundary.
       Effect.flatMap(Schema.decodeUnknownEffect(Schema.Array(GelBookmark))),
     )
 

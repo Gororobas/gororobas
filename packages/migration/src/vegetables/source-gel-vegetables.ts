@@ -61,7 +61,6 @@ export const sourceGelVegetables = Effect.gen(function* () {
       Effect.flatMap((vegetables) =>
         Effect.all(
           vegetables.map((vegetable) =>
-            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
             Schema.decodeUnknownEffect(GelVegetableWithEditSuggestions)(vegetable),
           ),
           { concurrency: "unbounded", mode: "result" },
@@ -121,10 +120,9 @@ export const sourceGelVegetables = Effect.gen(function* () {
           history,
           (historyEntry) =>
             Effect.gen(function* () {
-              // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy audit content is unknown until validated.
-              const originalContent = Schema.decodeUnknownSync(Schema.NullishOr(GelTiptapDocument))(
-                historyEntry.state.content,
-              )
+              const originalContent = yield* Schema.decodeUnknownEffect(
+                Schema.NullishOr(GelTiptapDocument),
+              )(historyEntry.state.content)
               const content = originalContent ? yield* migrateRichText(originalContent) : null
 
               return VegetableHistoryEntryForMigration.make({

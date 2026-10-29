@@ -22,6 +22,7 @@ const plant = Schema.decodeSync(WikiPlantArticle.EditableArticle)({
 describe("Wiki CRDT review stress tests", () => {
   it.effect("preserves Unicode and normalizes lone surrogates only at Loro writes", () =>
     Effect.gen(function* () {
+      // oxlint-disable-next-line effecttsgo/schema-sync-in-effect -- Construct a reusable synchronous fixture codec; this call does not encode or decode a value.
       const decode = Schema.decodeSync(WikiPlantArticle.EditableArticle)
 
       const input = {
@@ -52,8 +53,8 @@ describe("Wiki CRDT review stress tests", () => {
         snapshot: created.crdtSnapshot,
         crdtUpdate: created.initialCrdtUpdate,
       })
-      expect(Schema.encodeSync(WikiArticleEditableData)(parsed.data)).toEqual(
-        Schema.encodeSync(WikiArticleEditableData)(article),
+      expect(yield* Schema.encodeEffect(WikiArticleEditableData)(parsed.data)).toEqual(
+        yield* Schema.encodeEffect(WikiArticleEditableData)(article),
       )
 
       yield* Effect.forEach(
@@ -97,7 +98,7 @@ describe("Wiki CRDT review stress tests", () => {
             projected.data.translations.en?.content ?? Option.none(),
           )
 
-          expect(Schema.encodeSync(Schema.toCodecJson(TiptapDocument))(content)).toEqual({
+          expect(yield* Schema.encodeEffect(Schema.toCodecJson(TiptapDocument))(content)).toEqual({
             type: "doc",
             version: 1,
             content: [
@@ -154,8 +155,8 @@ describe("Wiki CRDT review stress tests", () => {
       arbitrary: Arbitrary.schema(Schema.Json),
       predicate: (value) =>
         Effect.gen(function* () {
-          const article = Schema.decodeSync(WikiPlantArticle.EditableArticle)({
-            ...Schema.encodeSync(WikiPlantArticle.EditableArticle)(plant),
+          const article = yield* Schema.decodeEffect(WikiPlantArticle.EditableArticle)({
+            ...(yield* Schema.encodeEffect(WikiPlantArticle.EditableArticle)(plant)),
             translations: {
               en: {
                 commonNames: [{ id: "commonname01", name: "Pumpkin" }],

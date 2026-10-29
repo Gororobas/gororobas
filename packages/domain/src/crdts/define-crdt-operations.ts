@@ -1,11 +1,27 @@
 import { Effect, Schema } from "effect"
 import { type LoroDoc } from "loro-crdt"
 
+import type {
+  InvalidCrdtUpdateError,
+  CrdtContainerNotFoundError,
+  CrdtListItemNotFoundError,
+} from "./errors.js"
+
 type MessageSchema = Schema.Codec<unknown, unknown, never, never>
 
 type EditOperation<Message extends MessageSchema> = {
   readonly message: Message
-  handler(document: LoroDoc, payload: Message["Type"]): Effect.Effect<void, unknown, never>
+  handler(
+    document: LoroDoc,
+    payload: Message["Type"],
+  ): Effect.Effect<
+    void,
+    | Schema.SchemaError
+    | InvalidCrdtUpdateError
+    | CrdtContainerNotFoundError
+    | CrdtListItemNotFoundError,
+    never
+  >
 }
 
 type AttributeEdit<Operations> = Operations extends {

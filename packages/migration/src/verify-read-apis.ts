@@ -209,14 +209,14 @@ export const verifyReadApis = Effect.gen(function* () {
   }
 
   yield* Effect.log(
-    `Verified read APIs: ${Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(report)}`,
+    `Verified read APIs: ${yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(report)}`,
   )
   const reportFile = yield* Config.option(Config.String("MIGRATION_API_REPORT_FILENAME"))
 
   if (Option.isSome(reportFile)) {
     yield* (yield* FileSystem.FileSystem).writeFileString(
       reportFile.value,
-      Schema.encodeSync(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(report),
+      yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }))(report),
     )
   }
 

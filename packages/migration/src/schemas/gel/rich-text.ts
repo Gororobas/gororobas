@@ -1,6 +1,7 @@
 import { Schema } from "effect"
 
 /** Legacy input remains permissive; only migrated output uses the current node schemas. */
+// oxlint-disable-next-line effecttsgo/schema-class-missing-brand -- Legacy nodes intentionally accept structural data, including current rich-text nodes.
 export class GelTiptapNode extends Schema.Opaque<GelTiptapNode>()(
   Schema.Struct({
     type: Schema.NonEmptyString,

@@ -126,7 +126,7 @@ export const assignTiptapNodeIds = (
     const [paragraph, ...blocks] = node.content
 
     return {
-      ...node,
+      type: node.type,
       attrs: { ...node.attrs, nodeId },
       content: [
         visitParagraph(paragraph, counterparts[0]),
@@ -160,7 +160,7 @@ export const assignTiptapNodeIds = (
           const counterparts = counterpartsOf(quote.content, counterpart)
 
           return {
-            ...quote,
+            type: quote.type,
             attrs: { ...quote.attrs, nodeId },
             content: EffectArray.map(quote.content, (child, index) =>
               visitBlock(child, counterparts[index]),

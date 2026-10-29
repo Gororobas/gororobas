@@ -15,6 +15,7 @@ import * as Statement from "effect/sql/Statement"
 import * as Stream from "effect/Stream"
 import * as Struct from "effect/Struct"
 
+import { TursoBrowserDatabaseError } from "./turso-browser-database.js"
 /**
  * Turso adapter for Effect SQL, backed by `@tursodatabase/database-wasm`.
  *
@@ -39,7 +40,11 @@ const classifyError = ({
   cause: unknown
   message: string
   operation: string
-}) => classifySqliteError(cause, { message, operation })
+}) =>
+  classifySqliteError(cause instanceof TursoBrowserDatabaseError ? (cause.cause ?? cause) : cause, {
+    message,
+    operation,
+  })
 
 /**
  * Runtime type identifier used to mark `TursoClient` values.

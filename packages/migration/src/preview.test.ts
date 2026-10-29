@@ -101,8 +101,7 @@ it.effect(
         expect(yield* sql`PRAGMA foreign_key_check`).toEqual([])
         const dataset = yield* readPreviewDataset(report.directory)
 
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Raw SQL rows have no statically known selected columns.
-        const plants = Schema.decodeUnknownSync(
+        const plants = yield* Schema.decodeUnknownEffect(
           Schema.Array(
             Schema.Struct({
               article: WikiArticleEditableData,

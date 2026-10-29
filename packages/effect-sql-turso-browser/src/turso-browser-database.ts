@@ -4,14 +4,15 @@ import * as Predicate from "effect/Predicate"
 import * as Schema from "effect/Schema"
 import * as Scope from "effect/Scope"
 
-class TursoBrowserDatabaseError extends Schema.TaggedError<TursoBrowserDatabaseError>()(
+export class TursoBrowserDatabaseError extends Schema.TaggedError<TursoBrowserDatabaseError>()(
   "TursoBrowserDatabaseError",
   {
     message: Schema.String,
+    cause: Schema.optional(Schema.Unknown),
   },
 ) {}
 
-// Keep native driver errors intact: SqlError classification reads their SQLite code.
+// Preserve native driver errors as causes so SqlError can classify their SQLite codes.
 const isDriverError = Schema.is(Schema.instanceOf(Error))
 
 export type DatabaseOptions = NonNullable<Parameters<typeof connect>[1]>
@@ -60,7 +61,7 @@ export type BrowserDatabase = {
     raw: boolean
     safeIntegers: boolean
     values?: boolean | undefined
-  }) => Effect.Effect<unknown, Error>
+  }) => Effect.Effect<unknown, TursoBrowserDatabaseError>
   close: () => Effect.Effect<void>
 }
 
@@ -326,9 +327,10 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
               dispatchPending()
             }),
           catch: (cause) =>
-            isDriverError(cause)
-              ? cause
-              : new TursoBrowserDatabaseError({ message: String(cause) }),
+            new TursoBrowserDatabaseError({
+              message: isDriverError(cause) ? cause.message : String(cause),
+              cause,
+            }),
         }),
       ),
     close: () =>
@@ -355,12 +357,15 @@ const openRaw = async (path: string, options: DatabaseOptions = {}): Promise<Bro
 export const open = (
   path: string,
   options: DatabaseOptions = {},
-): Effect.Effect<BrowserDatabase, Error, Scope.Scope> =>
+): Effect.Effect<BrowserDatabase, TursoBrowserDatabaseError, Scope.Scope> =>
   Effect.acquireRelease(
     Effect.tryPromise({
       try: () => openRaw(path, options),
       catch: (cause) =>
-        isDriverError(cause) ? cause : new TursoBrowserDatabaseError({ message: String(cause) }),
+        new TursoBrowserDatabaseError({
+          message: isDriverError(cause) ? cause.message : String(cause),
+          cause,
+        }),
     }),
     (database) => database.close(),
   )

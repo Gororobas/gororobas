@@ -63,7 +63,6 @@ export const readPreviewDataset = (directory: string) =>
         exports[category],
         ({ file, data }) =>
           Effect.gen(function* () {
-            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Preview identifiers are arbitrary JSON values.
             const id = yield* Schema.decodeUnknownEffect(WikiArticleId)(data.id)
             const crdt = yield* findSourceRowById(id).pipe(Effect.map(Option.getOrThrow))
             const row = yield* findDatabaseRowById(id).pipe(Effect.map(Option.getOrThrow))
@@ -136,7 +135,6 @@ export const readPreviewDataset = (directory: string) =>
       exports.notes,
       ({ file, data }) =>
         Effect.gen(function* () {
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Preview identifiers are arbitrary JSON values.
           const id = yield* Schema.decodeUnknownEffect(PublicationId)(data.id)
           const crdt = yield* findPublicationCrdtSnapshotById(id).pipe(
             Effect.map(Option.getOrThrow),

@@ -202,9 +202,9 @@ describe("Shared CRDT document boundary", () => {
 
       expect(yield* PublicationCrdt.read(created.document)).toEqual(publication)
       const history = evolved.document.exportJsonUpdates(created.document.version())
-      expect(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(history)).not.toContain(
-        "PRIVATE INTERMEDIATE",
-      )
+      expect(
+        yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(history),
+      ).not.toContain("PRIVATE INTERMEDIATE")
 
       expect(
         (yield* PublicationCrdt.parseUpdate({

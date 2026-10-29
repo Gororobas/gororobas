@@ -80,9 +80,10 @@ const fixture = Effect.gen(function* () {
     (legacyId, index) =>
       Effect.gen(function* () {
         const id = yield* IdGen.make(ProfileId)
-        const handle = Schema.decodeSync(Handle)(`person-${index}`)
+        const handle = yield* Schema.decodeEffect(Handle)(`person-${index}`)
         const name = `Person ${index}`
-        const email = index < 2 ? Schema.decodeSync(Email)(`person-${index}@example.com`) : null
+        const email =
+          index < 2 ? yield* Schema.decodeEffect(Email)(`person-${index}@example.com`) : null
 
         const source = {
           id: `source-user-${index}`,
@@ -139,7 +140,7 @@ const fixture = Effect.gen(function* () {
 
   yield* fs.writeFileString(
     path.join(directory, "raw-gel/users.json"),
-    Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(
+    yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(
       users.map((user) => user.latest_source),
     ),
   )
@@ -150,6 +151,7 @@ const fixture = Effect.gen(function* () {
     path.join(directory, "media-cache", sanityId),
     '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="green"/></svg>',
   )
+  // oxlint-disable-next-line effecttsgo/schema-sync-in-effect -- Construct a reusable synchronous fixture codec; this call does not encode or decode a value.
   const json = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))
 
   yield* fs.writeFileString(
@@ -169,7 +171,7 @@ const fixture = Effect.gen(function* () {
 
   const article = WikiPlantArticle.EditableArticle.make({
     kind: "PLANT",
-    attributes: Schema.decodeSync(WikiPlantArticle.EditableAttributes)({}),
+    attributes: yield* Schema.decodeEffect(WikiPlantArticle.EditableAttributes)({}),
     translations: {
       pt: {
         commonNames: gelVegetableNamesToCrdtList(["Buganvilia"]),
@@ -232,7 +234,7 @@ const fixture = Effect.gen(function* () {
       Effect.gen(function* () {
         const owner = users[index === 2 ? 3 : 0]
         const id = yield* IdGen.make(PublicationId)
-        const handle = Schema.decodeSync(Handle)(`post-${index}`)
+        const handle = yield* Schema.decodeEffect(Handle)(`post-${index}`)
 
         const content = {
           type: "doc" as const,
@@ -459,9 +461,13 @@ it.live("rejects unresolved edit authors without replacing the application datab
     const encoded = yield* Schema.encodeEffect(
       Schema.fromJsonString(Schema.Array(WikiMigrationVersion)),
     )(history).pipe(Effect.flatMap(Schema.decodeEffect(Schema.fromJsonString(Schema.Json))))
+
     yield* data.fs.writeFileString(
       filename,
-      Schema.encodeSync(Schema.fromJsonString(PreviewRecord))({ ...record, versions: encoded }),
+      yield* Schema.encodeEffect(Schema.fromJsonString(PreviewRecord))({
+        ...record,
+        versions: encoded,
+      }),
     )
 
     expect(

@@ -135,9 +135,9 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
   // Round-about way of using the encoded version of the translation in the decode calls below
   const translationsEncoded = yield* Schema.decodeEffect(WikiArticleEditableTranslations)({
     pt: {
-      commonNames: Schema.encodeSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(
-        gelVegetableNamesToCrdtList([source.title]),
-      ),
+      commonNames: yield* Schema.encodeEffect(
+        Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList),
+      )(gelVegetableNamesToCrdtList([source.title])),
       content: description ? yield* migrateRichText(description) : description,
     },
   }).pipe(Effect.flatMap(Schema.encodeEffect(WikiArticleEditableTranslations)))

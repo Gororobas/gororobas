@@ -49,7 +49,6 @@ export const sourceGelTags = Effect.gen(function* () {
       Effect.tap(archiveGelResult("tags")),
       Effect.flatMap((tags) =>
         Effect.all(
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
           tags.map((tag) => Schema.decodeUnknownEffect(GelTag)(tag)),
           { concurrency: "unbounded", mode: "result" },
         ),
@@ -88,12 +87,11 @@ export const sourceGelTags = Effect.gen(function* () {
 
         const translations = yield* Schema.decodeEffect(WikiArticleEditableTranslations)({
           pt: {
-            commonNames: Schema.encodeSync(Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList))(
-              gelVegetableNamesToCrdtList(tag.names),
-            ),
+            commonNames: yield* Schema.encodeEffect(
+              Schema.NonEmptyArray(WikiArticleCommonNameInCrdtList),
+            )(gelVegetableNamesToCrdtList(tag.names)),
             content: tag.description
               ? yield* migrateRichText(
-                  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy tag descriptions are untyped JSON.
                   yield* Schema.decodeUnknownEffect(GelTiptapDocument)(tag.description),
                 )
               : undefined,

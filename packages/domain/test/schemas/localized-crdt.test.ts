@@ -74,7 +74,7 @@ describe("Publication CRDT", () => {
         )).document
 
         const identity = textContainer(document).id
-        const sourceLanguage = Schema.decodeSync(ContentLanguage)("ZH-hans")
+        const sourceLanguage = yield* Schema.decodeEffect(ContentLanguage)("ZH-hans")
         expect(sourceLanguage).toBe("zh-Hans")
         yield* PublicationCrdt.applyEdit(document, {
           _tag: "SetPublicationSourceLanguage",
@@ -328,14 +328,14 @@ describe("Publication CRDT", () => {
       })
 
       const history = result.exportJsonUpdates(initialDoc.version())
-      expect(Schema.encodeSync(Schema.fromJsonString(Schema.Unknown))(history)).not.toContain(
-        "PRIVATE-INTERMEDIATE-TEXT",
-      )
+      expect(
+        yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown))(history),
+      ).not.toContain("PRIVATE-INTERMEDIATE-TEXT")
       expect(textContainer(initialDoc).toString()).toBe("Original")
       const frontier = result.frontiers()[0]
       assert(frontier !== undefined)
       const change = result.getChangeAt(frontier)
-      expect(change.message).toBe(Schema.encodeSync(CrdtCommitEncoded)(commit))
+      expect(change.message).toBe(yield* Schema.encodeEffect(CrdtCommitEncoded)(commit))
       expect(change.timestamp).toBeGreaterThan(0)
       expect((yield* PublicationCrdt.read(result)).sourceContent).toEqual(content("Published"))
     }),

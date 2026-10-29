@@ -77,7 +77,6 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
         const data = yield* Schema.decodeEffect(Schema.fromJsonString(JsonObject))(attrs.data)
 
         if (node.type === "mention") {
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy mention data is an unvalidated dictionary.
           const mention = yield* Schema.decodeUnknownEffect(Mention)(data)
 
           const entityType =
@@ -126,10 +125,8 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
             },
           })
         } else {
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy image data is an unknown nested field.
           const image = yield* Schema.decodeUnknownEffect(JsonObject)(data.image)
           const reference = yield* Schema.decodeEffect(ImageReference)(image)
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy image references may omit both identifiers and must be rejected.
           const key = yield* Schema.decodeUnknownEffect(Schema.NonEmptyString)(
             reference.id ??
               (reference.sanity_id ? `image-sanity:${reference.sanity_id}` : undefined),
@@ -193,7 +190,6 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
       }
 
       if (node.type === "video") {
-        // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy video attributes may have missing or non-string data.
         const data = yield* Schema.decodeUnknownEffect(
           Schema.fromJsonString(Schema.Struct({ id: Schema.String })),
         )(attrs?.data)
@@ -223,7 +219,6 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
             )
           : undefined
 
-      // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy node types and attributes are not constrained to the target rich-text schema.
       return yield* Schema.decodeUnknownEffect(TiptapNode)({
         type: node.type,
         ...(node.text === undefined ? {} : { text: node.text }),
@@ -235,7 +230,6 @@ export const migrateRichText = Effect.fn("migrateRichText")(function* (
       })
     })
 
-  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Legacy documents can contain nodes that are invalid at the document root.
   return yield* Schema.decodeUnknownEffect(TiptapDocument)({
     ...document,
     content: mergeMediaGalleries(

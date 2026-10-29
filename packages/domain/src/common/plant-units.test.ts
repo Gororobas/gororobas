@@ -32,18 +32,20 @@ describe("Plant unit storage", () => {
             Effect.fn(function* (edit) {
               yield* WikiPlantArticleCrdtOperations.applyAttributeEdit(
                 document,
-                Schema.decodeSync(WikiPlantArticleCrdtOperations.AttributeEdit)(edit),
+                yield* Schema.decodeEffect(WikiPlantArticleCrdtOperations.AttributeEdit)(edit),
               )
             }),
             { concurrency: 1, discard: true },
           )
 
-          const editable = Schema.decodeSync(WikiPlantArticle.EditableAttributes)(
+          const editable = yield* Schema.decodeEffect(WikiPlantArticle.EditableAttributes)(
             document.getMap("attributes").toJSON(),
           )
           const projected = WikiPlantArticle.projectAttributes(editable)
           const codec = Schema.fromJsonString(WikiPlantArticle.ProjectedAttributes)
-          const decoded = Schema.decodeSync(codec)(Schema.encodeSync(codec)(projected))
+          const decoded = yield* Schema.decodeEffect(codec)(
+            yield* Schema.encodeEffect(codec)(projected),
+          )
           const decodedHeight = Option.getOrThrow(decoded.heightMax)
           const decodedTemperature = Option.getOrThrow(decoded.temperatureMin)
           expect(document.getMap("attributes").get("heightMax")).toBe(height)
@@ -53,7 +55,7 @@ describe("Plant unit storage", () => {
             temperature * 1.8 + 32,
             10,
           )
-          return Schema.encodeSync(Centimeters)(decodedHeight) === height
+          return (yield* Schema.encodeEffect(Centimeters)(decodedHeight)) === height
         }),
     }),
   )

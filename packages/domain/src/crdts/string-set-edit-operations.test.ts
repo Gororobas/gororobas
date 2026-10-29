@@ -19,7 +19,6 @@ const RootJson = Schema.Record(Schema.String, Schema.Unknown)
 
 const getEnumMapJson = (document: LoroDoc) => {
   const container = Schema.decodeSync(RootJson)(document.toJSON())[containerName]
-  // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- Loro JSON containers may be null or have a different shape.
   return container === undefined ? {} : Schema.decodeUnknownSync(MapJson)(container)
 }
 

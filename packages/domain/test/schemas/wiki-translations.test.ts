@@ -82,7 +82,6 @@ describe("Kind-specific wiki translations", () => {
     const encoded = Schema.encodeSync(WikiArticleTranslationProjectionRow)(row)
     expect(JSON.parse(encoded.commonNames)).toEqual([{ name: "Pumpkin", grammaticalGender: null }])
 
-    // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test supplies excess fields to verify that fields from other wiki kinds are stripped.
     const animal = Schema.decodeUnknownSync(WikiArticleTranslationProjectionRow)({
       ...encoded,
       kind: "ANIMAL",
@@ -184,7 +183,7 @@ describe("Kind-specific wiki translations", () => {
               yield* WikiArticleCrdt.applyEdit(document, {
                 _tag: "AddedWikiArticleTranslation",
                 language,
-                value: Schema.decodeSync(WikiArticleEditableTranslation)({
+                value: yield* Schema.decodeEffect(WikiArticleEditableTranslation)({
                   commonNames: [{ id: "translation1", name: "Pumpkin" }],
                 }),
               })
@@ -330,7 +329,7 @@ describe("Kind-specific wiki translations", () => {
         const created = yield* WikiArticleCrdt.create(plant)
         const document = snapshotToLoroDoc(created.crdtSnapshot)
 
-        const value = Schema.decodeSync(WikiArticleEditableTranslation)({
+        const value = yield* Schema.decodeEffect(WikiArticleEditableTranslation)({
           commonNames: [{ id: "translation1", name: "Calabaza", grammaticalGender: "FEMALE" }],
           content: wikiRichText,
         })
@@ -386,7 +385,7 @@ describe("Kind-specific wiki translations", () => {
           _tag: "RemovedWikiArticleTranslation",
           language: "en",
         })
-        const value = Schema.decodeSync(WikiArticleEditableTranslation)({
+        const value = yield* Schema.decodeEffect(WikiArticleEditableTranslation)({
           commonNames: [{ id: "translation2", name: "Squash" }],
         })
 

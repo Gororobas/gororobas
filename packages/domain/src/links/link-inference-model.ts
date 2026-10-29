@@ -7,7 +7,10 @@ import type { SourceText } from "./source-text.js"
 
 export class LinkInferenceModelError extends Schema.TaggedError<LinkInferenceModelError>()(
   "LinkInferenceModelError",
-  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
 ) {}
 
 /** A span a language model quoted, and the article it names or implies. */

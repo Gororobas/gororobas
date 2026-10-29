@@ -28,10 +28,10 @@ import {
  */
 type Policy<A, R = never> = Effect.Effect<A, UnauthorizedError, SessionContext | R>
 
-export const policy = <A, R = never>(
+export const policy = <A, R = never, E = never>(
   predicate: (
     session: Session,
-  ) => Effect.Effect<Result.Result<A, string>, unknown, R> | Result.Result<A, string>,
+  ) => Effect.Effect<Result.Result<A, string>, E, R> | Result.Result<A, string>,
 ): Policy<A, R> =>
   Effect.gen(function* () {
     const session = yield* SessionContext
@@ -90,7 +90,9 @@ export const or = <Policies extends ReadonlyArray<Policy<any, any>>>(
   ...policies: Policies
 ): Policy<UnionOfA<Policies>, UnionOfR<Policies>> => {
   // SAFETY: Recovery returns only values from the supplied policies and accumulates their service requirements; no new success value is introduced.
-  return policies.reduce((acc, p) =>
+  const candidates = policies as ReadonlyArray<Policy<UnionOfA<Policies>, UnionOfR<Policies>>>
+  // SAFETY: Reducing the candidate policies preserves their success and requirement unions.
+  return candidates.reduce((acc, p) =>
     acc.pipe(Effect.catchTag("UnauthorizedError", () => p)),
   ) as Policy<UnionOfA<Policies>, UnionOfR<Policies>>
 }
@@ -133,10 +135,10 @@ export const assertAuthenticated = policy((session) =>
   isAccountSession(session) === true ? allow(session) : deny("Must be logged-in"),
 )
 
-export const authenticatedPolicy = <A, R = never>(
+export const authenticatedPolicy = <A, R = never, E = never>(
   predicate: (
     session: AccountSession,
-  ) => Effect.Effect<Result.Result<A, string>, unknown, R> | Result.Result<A, string>,
+  ) => Effect.Effect<Result.Result<A, string>, E, R> | Result.Result<A, string>,
 ): Policy<A, R> =>
   assertAuthenticated.pipe(Effect.flatMap((session) => policy(() => predicate(session))))
 

@@ -4,7 +4,7 @@ import * as SqlClient from "effect/sql/SqlClient"
 // oxlint-disable-next-line effect/avoid-node-imports, custom-lint-rules/no-node-apis -- Use an independent SQLite reference driver to test the Effect SQL adapter.
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
 
-import type { BrowserDatabase } from "../src/turso-browser-database.js"
+import { TursoBrowserDatabaseError, type BrowserDatabase } from "../src/turso-browser-database.js"
 import * as TursoClient from "../src/turso-client.js"
 // oxlint-disable-next-line effect/no-unknown-parameters -- This adapter validates raw SQL bindings against the independent SQLite driver input types below.
 const parameter = (value: unknown): SQLInputValue => {
@@ -44,7 +44,7 @@ const withDatabase = (body: Effect.Effect<void, unknown, SqlClient.SqlClient>) =
               const result = statement.run(...bindings)
               return raw ? result : []
             },
-            catch: (cause) => (cause instanceof Error ? cause : new Error(String(cause))),
+            catch: (cause) => new TursoBrowserDatabaseError({ message: String(cause), cause }),
           }),
         close: () => Effect.die("Caller-owned connection must not be closed"),
       }

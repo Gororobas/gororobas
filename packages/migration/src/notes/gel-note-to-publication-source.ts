@@ -8,9 +8,12 @@ import { ensureMappedId, MigrationContext } from "../services/migration-context.
 import { noteTypeGelId } from "../tags/source-gel-tags.js"
 import { gelNoteToPublication } from "./gel-note-to-publication.js"
 
-class MissingNoteOwner extends Schema.TaggedError<MissingNoteOwner>()("MissingNoteOwner", {
-  message: Schema.String,
-}) {}
+class MissingNoteOwnerError extends Schema.TaggedError<MissingNoteOwnerError>()(
+  "MissingNoteOwnerError",
+  {
+    message: Schema.String,
+  },
+) {}
 
 export const gelNoteToPublicationSource = Effect.fn("gelNoteToPublicationSource")(function* (
   note: GelNoteWithRelations,
@@ -18,7 +21,7 @@ export const gelNoteToPublicationSource = Effect.fn("gelNoteToPublicationSource"
   const context = yield* MigrationContext
   const post = yield* gelNoteToPublication(note)
   if (!note.created_by) {
-    return yield* new MissingNoteOwner({ message: `Note ${note.handle} has no owner` })
+    return yield* new MissingNoteOwnerError({ message: `Note ${note.handle} has no owner` })
   }
   const ownerProfileId = yield* context.resolveId(note.created_by.id, "Profile")
   const content = yield* migrateRichText(post.content)

@@ -17,12 +17,13 @@ export const defineCrdtDocument = <
   S extends Schema.ConstraintDecoder<unknown, never>,
   Edit,
   E,
+  EditError,
 >(configuration: {
   schema: S
   createDocument: (data: S["Type"]) => Effect.Effect<LoroDoc, E>
   // oxlint-disable-next-line effect/no-unknown-returns -- Projections are untrusted until decoded by the model schema.
   projectDocument: (document: LoroDoc) => unknown
-  applyEdit: (document: LoroDoc, edit: Edit) => Effect.Effect<void, unknown>
+  applyEdit: (document: LoroDoc, edit: Edit) => Effect.Effect<void, EditError>
   /**
    * Rules every update must keep between the current and the next state, such as fields fixed at creation.
    * Enforced by `parseUpdate`, `applyUpdate` and `evolve`, so no write path can skip them.

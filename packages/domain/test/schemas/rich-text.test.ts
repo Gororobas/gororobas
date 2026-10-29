@@ -11,9 +11,7 @@ import {
 import { assertPropertyEffect } from "../../src/testing.js"
 import { largeTiptapDocument } from "../fixtures/large-tiptap-document.js"
 
-// oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- These tests deliberately decode malformed documents and invalid node placements.
 const decode = Schema.decodeUnknownSync(TiptapDocument)
-// oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- These tests deliberately decode malformed documents and invalid node placements.
 const maybeDecode = Schema.decodeUnknownOption(TiptapDocument, {
   onExcessProperty: "error",
 })
@@ -231,7 +229,6 @@ it.effect("preserves provider data and captions without accepting mismatched pro
 
         expect(
           Option.isNone(
-            // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- This test deliberately supplies a provider incompatible with its embed data.
             Schema.decodeUnknownOption(MediaGalleryItem)({
               ...embed,
               provider: embed.provider === "YOUTUBE" ? "SPOTIFY" : "YOUTUBE",

@@ -47,7 +47,6 @@ export const sourceGelUsers = Effect.gen(function* () {
       Effect.tap(archiveGelResult("users")),
       Effect.flatMap((users) =>
         Effect.all(
-          // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- The legacy database client returns unknown query results.
           users.map((user) => Schema.decodeUnknownEffect(GelUserWithProfile)(user)),
           { concurrency: "unbounded", mode: "result" },
         ),
