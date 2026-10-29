@@ -11,21 +11,22 @@ import {
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 
+import { ClientFailure } from "../../lib/client-failure"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
 
 export const Message = defineMessageUnion({
   SucceededLoadPage: { page: WikiArticleQueriedPageData },
-  FailedLoadPage: { error: Schema.String },
+  FailedLoadPage: { error: ClientFailure },
   SucceededLoadRelated: { articles: Schema.Array(RelatedWikiArticle) },
-  FailedLoadRelated: { error: Schema.String },
+  FailedLoadRelated: { error: ClientFailure },
   SucceededLoadBookmarkers: { bookmarkers: Schema.Array(WikiArticleBookmarker) },
-  FailedLoadBookmarkers: { error: Schema.String },
+  FailedLoadBookmarkers: { error: ClientFailure },
   SucceededLoadContributors: { contributors: Schema.Array(WikiArticleContributor) },
-  FailedLoadContributors: { error: Schema.String },
+  FailedLoadContributors: { error: ClientFailure },
   SucceededLoadCultivars: { cultivars: Schema.Array(WikiArticleQueriedCardData) },
-  FailedLoadCultivars: { error: Schema.String },
+  FailedLoadCultivars: { error: ClientFailure },
   SucceededLoadPublications: { publications: Schema.Array(ApiPublicationCardData) },
-  FailedLoadPublications: { error: Schema.String },
+  FailedLoadPublications: { error: ClientFailure },
   UpdatedViewerBookmarks: { bookmarks: ViewerBookmarks },
   SelectedBookmarkState: { maybeState: Schema.Option(BookmarkState) },
   SucceededSaveBookmark: { maybeState: Schema.Option(BookmarkState) },

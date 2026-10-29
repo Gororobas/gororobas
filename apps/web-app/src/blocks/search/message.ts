@@ -5,6 +5,7 @@ import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 
 import { SearchQuery } from "../../app/route"
+import { ClientFailure } from "../../lib/client-failure"
 import { RecentSearches } from "../../lib/recent-searches"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
 
@@ -23,10 +24,10 @@ export const Message = defineMessageUnion({
   ClickedOpenFilters: {},
   ClickedCloseFilters: {},
   SucceededSearchWiki: { articles: Schema.Array(WikiArticleQueriedCardData) },
-  FailedSearchWiki: { error: Schema.String },
+  FailedSearchWiki: { error: ClientFailure },
   SucceededSearchPublications: { publications: Schema.Array(ApiPublicationCardData) },
-  FailedSearchPublications: { error: Schema.String },
+  FailedSearchPublications: { error: ClientFailure },
   SucceededSearchProfiles: { profiles: Schema.Array(ProfileCardData) },
-  FailedSearchProfiles: { error: Schema.String },
+  FailedSearchProfiles: { error: ClientFailure },
   UpdatedViewerBookmarks: { bookmarks: ViewerBookmarks },
 })

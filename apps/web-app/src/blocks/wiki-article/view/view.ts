@@ -10,6 +10,7 @@ import { AppText } from "../../../ui/app-text"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
 import { pageColumnStyle } from "../../../ui/styles/page-column"
+import { blur } from "../../../ui/theme"
 import {
   borderWidth,
   breakpoint,
@@ -87,9 +88,8 @@ const compactHeaderStyle = Style.make({ display: "none" }).pipe(
     display: "block",
     paddingBlockStart: viewport.safeAreaTop,
     backgroundColor: Color.alpha(toneColors.backgroundCard, 0.96),
-    backdropFilter: "blur(8px)",
+    backdropFilter: blur.chrome,
     borderBlockEnd: `${borderWidth.hairline} solid ${toneColors.border}`,
-    boxShadow: "0 4px 16px rgb(0 0 0 / 6%)",
     animationName: revealCompactHeader,
     animationTimingFunction: "linear",
     animationFillMode: "both",
@@ -272,13 +272,18 @@ export const view = WikiArticleComposition.makeView.withInputs<ViewInputs>(
   (model, { tab, isSignedIn, maybeToday }, h): Html =>
     AsyncData.matchData(model.pageAsyncData, {
       onEmpty: () =>
-        h.p(styledAttributes([h.Role("status")], pageColumnStyle, statusStyle), [
-          "Carregando artigo…",
-        ]),
+        AppText.view(
+          {
+            element: "p",
+            attributes: styledAttributes([h.Role("status")], pageColumnStyle, statusStyle),
+            children: ["Carregando artigo…"],
+          },
+          h,
+        ),
       onFailure: (error) =>
         h.div(styledAttributes([], pageColumnStyle, statusStyle), [
           emptyState(
-            error === "NotFound"
+            error.cause === "NotFound"
               ? "Não encontramos esse artigo na enciclopédia."
               : "Não foi possível carregar o artigo agora.",
             h,

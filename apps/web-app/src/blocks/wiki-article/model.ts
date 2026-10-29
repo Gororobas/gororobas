@@ -13,25 +13,26 @@ import { Schema } from "effect"
 import { AsyncData } from "foldkit"
 import { defineTaggedUnion } from "foldkit/schema"
 
+import { ClientFailure } from "../../lib/client-failure"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
 
-export const PageResult = AsyncData.Schema(WikiArticleQueriedPageData, Schema.String)
-export const RelatedResults = AsyncData.Schema(Schema.Array(RelatedWikiArticle), Schema.String)
+export const PageResult = AsyncData.Schema(WikiArticleQueriedPageData, ClientFailure)
+export const RelatedResults = AsyncData.Schema(Schema.Array(RelatedWikiArticle), ClientFailure)
 export const BookmarkerResults = AsyncData.Schema(
   Schema.Array(WikiArticleBookmarker),
-  Schema.String,
+  ClientFailure,
 )
 export const ContributorResults = AsyncData.Schema(
   Schema.Array(WikiArticleContributor),
-  Schema.String,
+  ClientFailure,
 )
 export const CultivarResults = AsyncData.Schema(
   Schema.Array(WikiArticleQueriedCardData),
-  Schema.String,
+  ClientFailure,
 )
 export const PublicationResults = AsyncData.Schema(
   Schema.Array(ApiPublicationCardData),
-  Schema.String,
+  ClientFailure,
 )
 
 export const BookmarkSaving = defineTaggedUnion({

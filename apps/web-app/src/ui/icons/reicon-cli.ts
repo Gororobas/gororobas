@@ -26,7 +26,7 @@ const ReiconRegular = Schema.Struct({
   ),
 })
 
-class MissingReicons extends Schema.TaggedError<MissingReicons>()("MissingReicons", {
+class MissingReiconsError extends Schema.TaggedError<MissingReiconsError>()("MissingReiconsError", {
   iconNames: Schema.Array(Schema.String),
 }) {}
 
@@ -85,7 +85,7 @@ const generateReicons = Effect.gen(function* () {
   })
 
   if (missingIcons[0] !== undefined) {
-    return yield* new MissingReicons({ iconNames: missingIcons })
+    return yield* new MissingReiconsError({ iconNames: missingIcons })
   }
 
   yield* fileSystem.makeDirectory(outputDirectory, { recursive: true })

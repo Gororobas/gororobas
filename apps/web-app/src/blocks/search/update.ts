@@ -3,6 +3,7 @@ import { AsyncData } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
 import { SearchQuery, type SearchType } from "../../app/route"
+import type { ClientFailure } from "../../lib/client-failure"
 import { addRecentSearch } from "../../lib/recent-searches"
 import { NavigateSearch, SaveRecentSearches } from "./command"
 import { FiltersDrawerBinding, SearchComposition } from "./composition"
@@ -13,7 +14,9 @@ import { type Model, ProfileResults, PublicationResults, WikiResults } from "./m
 const isSameQuery = Schema.toEquivalence(SearchQuery)
 
 /** Keeps showing earlier results while the new ones load. */
-const pending = <A>(asyncData: AsyncData.AsyncData<A, string>): AsyncData.AsyncData<A, string> =>
+const pending = <A>(
+  asyncData: AsyncData.AsyncData<A, ClientFailure>,
+): AsyncData.AsyncData<A, ClientFailure> =>
   Option.match(AsyncData.getData(asyncData), {
     onNone: () => AsyncData.Loading(),
     onSome: (data) => AsyncData.Refreshing({ data }),
@@ -26,8 +29,8 @@ const pendingIfShown = <A>({
 }: Readonly<{
   query: SearchQuery
   type: SearchType
-  asyncData: AsyncData.AsyncData<A, string>
-}>): AsyncData.AsyncData<A, string> =>
+  asyncData: AsyncData.AsyncData<A, ClientFailure>
+}>): AsyncData.AsyncData<A, ClientFailure> =>
   isResultTypeShown(query, type) ? pending(asyncData) : AsyncData.Idle()
 
 const remember = (model: Model, query: SearchQuery): Model["recentSearches"] =>

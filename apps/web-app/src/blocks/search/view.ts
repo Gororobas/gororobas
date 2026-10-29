@@ -7,6 +7,7 @@ import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { type SearchQuery, type SearchType, searchUrl } from "../../app/route"
+import type { ClientFailure } from "../../lib/client-failure"
 import { wikiKindLabels } from "../../lib/vocabulary"
 import { AppButton } from "../../ui/app-button"
 import * as AppDrawer from "../../ui/app-drawer/view"
@@ -32,6 +33,7 @@ import {
   resultGridStyle,
 } from "../../ui/styles/result-grid"
 import { emptyStateStyle } from "../../ui/styles/surfaces"
+import { fluidResultCountFontSize } from "../../ui/theme"
 import {
   type Tone,
   borderWidth,
@@ -71,7 +73,7 @@ import {
 import { Message } from "./message"
 import type { Model } from "./model"
 import { articlesShownAt, profilesShownAt, publicationsShownAt } from "./preview"
-import { PUBLICATION_PAGE_SIZE } from "./subscription"
+import { PUBLICATIONS_SEARCH_PAGE_SIZE } from "./subscription"
 
 /** Searches without text can match the whole encyclopedia; past this, people refine instead. */
 const TYPED_ARTICLE_COUNT = 60
@@ -220,7 +222,6 @@ const popoverPanelStyle = Style.make({
   border: `${borderWidth.hairline} solid ${toneColors.border}`,
   borderRadius: radius.lg,
   backgroundColor: toneColors.backgroundCard,
-  boxShadow: "0 12px 32px rgb(0 0 0 / 12%)",
   outline: "none",
 })
 
@@ -255,9 +256,9 @@ const tileStyle = Style.make({
 /** Shrinks with narrow tiles so long names such as "Organizações" stay whole. */
 const tileTitleStyle = Style.make({
   position: "relative",
-  zIndex: 1,
+  zIndex: layer.raised,
   display: "block",
-  fontSize: `clamp(${fontSize.regular}, 11cqi, ${fontSize.large})`,
+  fontSize: fluidResultCountFontSize,
   hyphens: "manual",
 })
 
@@ -338,17 +339,32 @@ const typeUrl = (query: SearchQuery, type: Option.Option<SearchType>) =>
   searchUrl({ text: query.text, type })
 
 const emptyState = (text: string, h: SearchViewBuilder): Html =>
-  h.p(styledAttributes([], emptyStateStyle({ size: "compact" })), [text])
+  AppText.view(
+    {
+      element: "p",
+      attributes: styledAttributes([], emptyStateStyle({ size: "compact" })),
+      children: [text],
+    },
+    h,
+  )
 
 const resultsView = <A>(
   {
     asyncData,
     onData,
-  }: Readonly<{ asyncData: AsyncData.AsyncData<A, string>; onData: (data: A) => Html }>,
+  }: Readonly<{ asyncData: AsyncData.AsyncData<A, ClientFailure>; onData: (data: A) => Html }>,
   h: SearchViewBuilder,
 ): Html =>
   AsyncData.matchData(asyncData, {
-    onEmpty: () => h.p(styledAttributes([h.Role("status")], loadingStyle), ["Buscando…"]),
+    onEmpty: () =>
+      AppText.view(
+        {
+          element: "p",
+          attributes: styledAttributes([h.Role("status")], loadingStyle),
+          children: ["Buscando…"],
+        },
+        h,
+      ),
     onFailure: () => emptyState("Não foi possível buscar agora. Tente novamente em instantes.", h),
     onData,
   })
@@ -362,7 +378,14 @@ const searchField = (query: SearchQuery, h: SearchViewBuilder): Html =>
       AppShell.searchControlStyle,
     ),
     [
-      h.label(styledAttributes([h.For("search-text")], visuallyHiddenStyle), ["Buscar"]),
+      AppText.view(
+        {
+          element: "label",
+          attributes: styledAttributes([h.For("search-text")], visuallyHiddenStyle),
+          children: ["Buscar"],
+        },
+        h,
+      ),
       h.input(
         styledAttributes(
           [
@@ -449,18 +472,25 @@ const resultSummary = (
 ): ReadonlyArray<Html> =>
   EffectArray.fromOption(
     Option.map(nonEmptyText(query), (text) =>
-      h.p(styledAttributes([h.Role("status")], summaryStyle), [
-        Option.match(maybeCount, {
-          onNone: () => "Resultados para ",
-          onSome: (count) => `${count} ${count === "1" ? "resultado" : "resultados"} para `,
-        }),
-        h.span(styledAttributes([], summaryTextStyle), [`“${text}”`]),
-      ]),
+      AppText.view(
+        {
+          element: "p",
+          attributes: styledAttributes([h.Role("status")], summaryStyle),
+          children: [
+            Option.match(maybeCount, {
+              onNone: () => "Resultados para ",
+              onSome: (count) => `${count} ${count === "1" ? "resultado" : "resultados"} para `,
+            }),
+            h.span(styledAttributes([], summaryTextStyle), [`“${text}”`]),
+          ],
+        },
+        h,
+      ),
     ),
   )
 
 const loadedCount = <A>(
-  asyncData: AsyncData.AsyncData<ReadonlyArray<A>, string>,
+  asyncData: AsyncData.AsyncData<ReadonlyArray<A>, ClientFailure>,
   pageSize?: number,
 ): Option.Option<string> =>
   Option.map(AsyncData.getData(asyncData), (items) =>
@@ -471,7 +501,7 @@ const typedCount = (model: Model, type: SearchType): Option.Option<string> =>
   Match.value(type).pipe(
     Match.when("wiki", () => loadedCount(model.wikiAsyncData)),
     Match.when("publications", () =>
-      loadedCount(model.publicationsAsyncData, PUBLICATION_PAGE_SIZE),
+      loadedCount(model.publicationsAsyncData, PUBLICATIONS_SEARCH_PAGE_SIZE),
     ),
     Match.when("people", () => loadedCount(model.profilesAsyncData)),
     Match.exhaustive,
@@ -1235,9 +1265,14 @@ export const view = SearchComposition.makeView.withInputs<ViewInputs>(
             ? h.div(
                 [],
                 [
-                  h.p(styledAttributes([h.Role("status")], summaryStyle), [
-                    `Digite pelo menos ${MINIMUM_WORD_LENGTH} letras para buscar.`,
-                  ]),
+                  AppText.view(
+                    {
+                      element: "p",
+                      attributes: styledAttributes([h.Role("status")], summaryStyle),
+                      children: [`Digite pelo menos ${MINIMUM_WORD_LENGTH} letras para buscar.`],
+                    },
+                    h,
+                  ),
                   browse(model, h),
                 ],
               )

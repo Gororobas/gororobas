@@ -7,7 +7,7 @@ import { Operations, Proofs } from "@yielded/auth"
 import { Clock, Duration, Effect, Layer, Option, Schema } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
-import { AuthenticationClient, SessionAccess } from "../../session-access"
+import { AuthenticationClient, SessionAccess, SessionStorageError } from "../../session-access"
 import { AuthenticationDefinition } from "./definition"
 import { Message, RestoredSession } from "./message"
 import { PendingCode } from "./model"
@@ -21,16 +21,25 @@ const pendingCodeStorageKey = "gororobas.pending-code"
 const PendingCodeJson = Schema.fromJsonString(PendingCode)
 
 const savePendingCode = (pending: PendingCode) =>
-  Effect.try(() =>
-    localStorage.setItem(pendingCodeStorageKey, Schema.encodeSync(PendingCodeJson)(pending)),
+  Schema.encodeEffect(PendingCodeJson)(pending).pipe(
+    Effect.flatMap((encoded) =>
+      Effect.try({
+        try: () => localStorage.setItem(pendingCodeStorageKey, encoded),
+        catch: (cause) => new SessionStorageError({ cause }),
+      }),
+    ),
   )
 
-const clearPendingCode = Effect.try(() => localStorage.removeItem(pendingCodeStorageKey)).pipe(
-  Effect.ignore,
-)
+const clearPendingCode = Effect.try({
+  try: () => localStorage.removeItem(pendingCodeStorageKey),
+  catch: (cause) => new SessionStorageError({ cause }),
+}).pipe(Effect.ignore)
 
 const readPendingCode = Effect.gen(function* () {
-  const stored = yield* Effect.try(() => localStorage.getItem(pendingCodeStorageKey))
+  const stored = yield* Effect.try({
+    try: () => localStorage.getItem(pendingCodeStorageKey),
+    catch: (cause) => new SessionStorageError({ cause }),
+  })
   if (stored === null) return Option.none()
   const pending = yield* Schema.decodeEffect(PendingCodeJson)(stored)
   const now = yield* Clock.currentTimeMillis
@@ -124,6 +133,7 @@ export const RestoreSession = AuthenticationDefinition.makeCommand("RestoreSessi
 
         if (Option.isSome(linkCode)) {
           if (Option.isNone(pending)) return RestoredSession.FailedLink()
+
           return yield* signInWithCode(pending.value, linkCode.value).pipe(
             Effect.map((name) => RestoredSession.SignedIn({ name, connection: "Ready" })),
             Effect.orElseSucceed(() => RestoredSession.FailedLink()),
@@ -143,6 +153,7 @@ export const RestoreSession = AuthenticationDefinition.makeCommand("RestoreSessi
             status === "Ready"
               ? yield* fetchProfileName.pipe(Effect.orElseSucceed(() => identity.name))
               : identity.name
+
           if (access.read().identity === null) return RestoredSession.SignedOut()
           return RestoredSession.SignedIn({ name, connection: access.read().status })
         }
@@ -154,10 +165,7 @@ export const RestoreSession = AuthenticationDefinition.makeCommand("RestoreSessi
               RestoredSession.AwaitingCode({ pending: value, canResend }),
             ),
         })
-      }).pipe(
-        Effect.orElseSucceed(() => RestoredSession.SignedOut()),
-        Effect.map((session) => Message.CompletedRestoreSession({ session })),
-      )
+      }).pipe(Effect.map((session) => Message.CompletedRestoreSession({ session })))
   },
 })
 
@@ -239,7 +247,6 @@ export const SignOut = AuthenticationDefinition.makeCommand("SignOut", {
     return () =>
       Effect.flatMap(SessionAccess, (access) => access.signOut).pipe(
         Effect.as(Message.SucceededSignOut()),
-        Effect.orElseSucceed(() => Message.FailedSignOut()),
       )
   },
 })

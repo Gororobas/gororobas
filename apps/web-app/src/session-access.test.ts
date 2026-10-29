@@ -3,7 +3,12 @@ import { AuthenticationSession } from "@gororobas/domain/authentication/auth-con
 import { Sessions } from "@yielded/auth"
 import { Deferred, Effect, Fiber, Schema } from "effect"
 
-import { makeSessionAccess, sessionStorageKey, type SessionState } from "./session-access"
+import {
+  AuthenticationRequestError,
+  makeSessionAccess,
+  sessionStorageKey,
+  type SessionState,
+} from "./session-access"
 
 const session = Schema.decodeSync(AuthenticationSession)({
   sessionId: "session-1",
@@ -99,6 +104,21 @@ describe("local session access", () => {
     expect(access.read().status).toBe("Ready")
   })
 
+  it("accepts a valid session when the auth adapter wraps renewal-too-early", async () => {
+    const { access, auth } = await fixture()
+
+    auth.renewSession.mockImplementation(() =>
+      Effect.fail(
+        new AuthenticationRequestError({
+          cause: Sessions.SessionRenewalTooEarly.make({ retryAt: session.expiresAt }),
+        }),
+      ),
+    )
+
+    await Effect.runPromise(access.ensureReady("person-1"))
+    expect(access.read().status).toBe("Ready")
+  })
+
   it("keeps identity through transport errors and failed renewals, then retries", async () => {
     const { access, auth } = await fixture()
     auth.renewSession.mockImplementationOnce(() => Effect.fail({ _tag: "SessionUnavailable" }))
@@ -109,18 +129,23 @@ describe("local session access", () => {
     expect(access.read().status).toBe("Ready")
   })
 
-  it.each(["SessionInvalid", "AuthenticationRequired", "StaleAuthentication"])(
-    "logs out on %s and leaves account outboxes untouched",
-    async (_tag) => {
-      const { access, auth, create } = await fixture()
-      localStorage.setItem("gororobas.outbox.person-1", '[{"edit":"kept"}]')
-      auth.renewSession.mockImplementation(() => Effect.fail({ _tag }))
-      await Effect.runPromise(access.ensureReady().pipe(Effect.ignore))
-      expect(access.read()).toEqual({ identity: null, status: "SignedOut" })
-      expect((await create()).read().identity).toBeNull()
-      expect(localStorage.getItem("gororobas.outbox.person-1")).toBe('[{"edit":"kept"}]')
-    },
-  )
+  it.each(
+    ["SessionInvalid", "AuthenticationRequired", "StaleAuthentication"].flatMap((_tag) => [
+      { name: _tag, failure: { _tag } },
+      {
+        name: `${_tag} wrapped by the auth adapter`,
+        failure: new AuthenticationRequestError({ cause: { _tag } }),
+      },
+    ]),
+  )("logs out on $name and leaves account outboxes untouched", async ({ failure }) => {
+    const { access, auth, create } = await fixture()
+    localStorage.setItem("gororobas.outbox.person-1", '[{"edit":"kept"}]')
+    auth.renewSession.mockImplementation(() => Effect.fail(failure))
+    await Effect.runPromise(access.ensureReady().pipe(Effect.ignore))
+    expect(access.read()).toEqual({ identity: null, status: "SignedOut" })
+    expect((await create()).read().identity).toBeNull()
+    expect(localStorage.getItem("gororobas.outbox.person-1")).toBe('[{"edit":"kept"}]')
+  })
 
   it("rejects a server-cleared session", async () => {
     const { access, auth } = await fixture()
@@ -133,7 +158,7 @@ describe("local session access", () => {
   it("never releases one account's outbox under another account", async () => {
     const { access, auth } = await fixture()
     await expect(Effect.runPromise(access.ensureReady("person-2"))).rejects.toMatchObject({
-      _tag: "SessionNotReady",
+      _tag: "SessionNotReadyError",
     })
     expect(auth.getSession).not.toHaveBeenCalled()
 
@@ -145,7 +170,7 @@ describe("local session access", () => {
     )
 
     await expect(Effect.runPromise(access.ensureReady("person-1"))).rejects.toMatchObject({
-      _tag: "SessionNotReady",
+      _tag: "SessionNotReadyError",
     })
     expect(access.read().identity).toBeNull()
   })

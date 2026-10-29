@@ -29,19 +29,35 @@ const StoredSessionJson = Schema.fromJsonString(StoredSession)
 export const sessionStorageKey = "gororobas.local-session"
 export const sessionChangedEvent = "gororobas-session-changed"
 
-export class SessionNotReady extends Schema.TaggedError<SessionNotReady>()("SessionNotReady", {}) {}
+export class SessionNotReadyError extends Schema.TaggedError<SessionNotReadyError>()(
+  "SessionNotReadyError",
+  {},
+) {}
 
-interface AuthPort {
+export class AuthenticationRequestError extends Schema.TaggedError<AuthenticationRequestError>()(
+  "AuthenticationRequestError",
+  { cause: Schema.Unknown },
+) {}
+export class SessionStorageError extends Schema.TaggedError<SessionStorageError>()(
+  "SessionStorageError",
+  { cause: Schema.Unknown },
+) {}
+
+interface AuthPort<AuthError> {
   readonly getSession: (options: {
     fresh: true
-  }) => Effect.Effect<typeof AuthenticationSession.Type | null, unknown>
-  readonly renewSession: () => Effect.Effect<typeof AuthenticationSession.Type, unknown>
-  readonly signOut: () => Effect.Effect<unknown, unknown>
+  }) => Effect.Effect<typeof AuthenticationSession.Type | null, AuthError>
+  readonly renewSession: () => Effect.Effect<typeof AuthenticationSession.Type, AuthError>
+  readonly signOut: () => Effect.Effect<unknown, AuthError>
 }
 
+/** The auth adapter wraps failures; the original tag decides whether the session is gone. */
+const unwrapAuthFailure = <Failure>(error: Failure) =>
+  Schema.is(AuthenticationRequestError)(error) ? error.cause : error
+
 /** Local identity is advisory; only the server-held cookie authorizes network work. */
-export const makeSessionAccess = Effect.fn(function* (options: {
-  readonly auth: AuthPort
+export const makeSessionAccess = Effect.fn(function* <AuthError>(options: {
+  readonly auth: AuthPort<AuthError>
   readonly storage: Storage
   readonly online: () => boolean
   readonly changed: (state: SessionState) => void
@@ -49,7 +65,10 @@ export const makeSessionAccess = Effect.fn(function* (options: {
   const gate = yield* Semaphore.make(1)
   let stored: typeof StoredSession.Type = { identity: null, hasPendingSignOut: false }
 
-  const readStored = Effect.try(() => options.storage.getItem(sessionStorageKey)).pipe(
+  const readStored = Effect.try({
+    try: () => options.storage.getItem(sessionStorageKey),
+    catch: (cause) => new SessionStorageError({ cause }),
+  }).pipe(
     Effect.map((raw) =>
       raw === null ? Option.none() : Schema.decodeOption(StoredSessionJson)(raw),
     ),
@@ -70,9 +89,16 @@ export const makeSessionAccess = Effect.fn(function* (options: {
     state = { identity: stored.identity, status }
     options.changed(state)
   }
-  const persist = Effect.try(() =>
-    options.storage.setItem(sessionStorageKey, Schema.encodeSync(StoredSessionJson)(stored)),
-  ).pipe(Effect.ignore)
+
+  const persist = Effect.suspend(() => Schema.encodeEffect(StoredSessionJson)(stored)).pipe(
+    Effect.flatMap((encoded) =>
+      Effect.try({
+        try: () => options.storage.setItem(sessionStorageKey, encoded),
+        catch: (cause) => new SessionStorageError({ cause }),
+      }),
+    ),
+    Effect.ignore,
+  )
 
   const reject = Effect.gen(function* () {
     stored = { ...stored, identity: null }
@@ -111,10 +137,10 @@ export const makeSessionAccess = Effect.fn(function* (options: {
 
         if (!options.online()) {
           publish(stored.identity === null ? "SignedOut" : "Offline")
-          return yield* new SessionNotReady()
+          return yield* new SessionNotReadyError()
         }
         if (expectedSubjectId !== undefined && stored.identity?.subjectId !== expectedSubjectId) {
-          return yield* new SessionNotReady()
+          return yield* new SessionNotReadyError()
         }
         const now = yield* Clock.currentTimeMillis
 
@@ -136,47 +162,46 @@ export const makeSessionAccess = Effect.fn(function* (options: {
 
           // Reject account switches before rotating a credential or releasing queued work.
           if (stored.identity !== null && stored.identity.subjectId !== current.subjectId) {
-            if (yield* synchronize) return yield* new SessionNotReady()
+            if (yield* synchronize) return yield* new SessionNotReadyError()
             yield* reject
-            return yield* new SessionNotReady()
+            return yield* new SessionNotReadyError()
           }
 
-          return yield* options.auth
-            .renewSession()
-            .pipe(
-              Effect.catch((error) =>
-                Predicate.isTagged(error, "SessionRenewalTooEarly")
-                  ? Effect.succeed(current)
-                  : Effect.fail(error),
-              ),
-            )
+          return yield* options.auth.renewSession().pipe(
+            Effect.catchIf(
+              (error) => Predicate.isTagged(unwrapAuthFailure(error), "SessionRenewalTooEarly"),
+              () => Effect.succeed(current),
+            ),
+          )
         }).pipe(
           Effect.timeout("10 seconds"),
           Effect.catch((error) =>
             Effect.gen(function* () {
-              if (yield* synchronize) return yield* new SessionNotReady()
+              if (yield* synchronize) return yield* new SessionNotReadyError()
+
+              const failure = unwrapAuthFailure(error)
 
               if (
-                Predicate.isTagged(error, "AuthenticationRequired") ||
-                Predicate.isTagged(error, "SessionInvalid") ||
-                Predicate.isTagged(error, "StaleAuthentication")
+                Predicate.isTagged(failure, "AuthenticationRequired") ||
+                Predicate.isTagged(failure, "SessionInvalid") ||
+                Predicate.isTagged(failure, "StaleAuthentication")
               ) {
                 yield* reject
               } else publish(stored.identity === null ? "SignedOut" : "Offline")
 
-              return yield* new SessionNotReady()
+              return yield* new SessionNotReadyError()
             }),
           ),
         )
 
-        if (yield* synchronize) return yield* new SessionNotReady()
+        if (yield* synchronize) return yield* new SessionNotReadyError()
 
         if (
           session === null ||
           (stored.identity !== null && stored.identity.subjectId !== session.subjectId)
         ) {
           yield* reject
-          return yield* new SessionNotReady()
+          return yield* new SessionNotReadyError()
         }
 
         stored = {
@@ -187,7 +212,7 @@ export const makeSessionAccess = Effect.fn(function* (options: {
         yield* persist
         publish("Ready")
         if (expectedSubjectId !== undefined && session.subjectId !== expectedSubjectId) {
-          return yield* new SessionNotReady()
+          return yield* new SessionNotReadyError()
         }
         return stored.identity
       }),
@@ -242,7 +267,7 @@ export const makeSessionAccess = Effect.fn(function* (options: {
 
 export class SessionAccess extends Context.Service<
   SessionAccess,
-  Effect.Success<ReturnType<typeof makeSessionAccess>>
+  Effect.Success<ReturnType<typeof makeSessionAccess<AuthenticationRequestError>>>
 >()("SessionAccess") {}
 
 export const sessionAccessLayer = Layer.effect(
@@ -251,7 +276,20 @@ export const sessionAccessLayer = Layer.effect(
     const { auth } = yield* AuthenticationClient
 
     return yield* makeSessionAccess({
-      auth,
+      auth: {
+        getSession: (options) =>
+          auth
+            .getSession(options)
+            .pipe(Effect.mapError((cause) => new AuthenticationRequestError({ cause }))),
+        renewSession: () =>
+          auth
+            .renewSession()
+            .pipe(Effect.mapError((cause) => new AuthenticationRequestError({ cause }))),
+        signOut: () =>
+          auth
+            .signOut()
+            .pipe(Effect.mapError((cause) => new AuthenticationRequestError({ cause }))),
+      },
       storage: localStorage,
       online: () => navigator.onLine,
       changed: () => window.dispatchEvent(new Event(sessionChangedEvent)),

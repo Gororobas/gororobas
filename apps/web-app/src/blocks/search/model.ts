@@ -6,16 +6,17 @@ import { Schema } from "effect"
 import { AsyncData } from "foldkit"
 
 import { SearchQuery } from "../../app/route"
+import { ClientFailure } from "../../lib/client-failure"
 import { RecentSearches } from "../../lib/recent-searches"
 import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
 import { DrawerBlock } from "../../ui/drawer/drawer"
 
-export const WikiResults = AsyncData.Schema(Schema.Array(WikiArticleQueriedCardData), Schema.String)
+export const WikiResults = AsyncData.Schema(Schema.Array(WikiArticleQueriedCardData), ClientFailure)
 export const PublicationResults = AsyncData.Schema(
   Schema.Array(ApiPublicationCardData),
-  Schema.String,
+  ClientFailure,
 )
-export const ProfileResults = AsyncData.Schema(Schema.Array(ProfileCardData), Schema.String)
+export const ProfileResults = AsyncData.Schema(Schema.Array(ProfileCardData), ClientFailure)
 
 export const Model = Schema.Struct({
   /** The query the results answer. The URL holds the query being shown. */

@@ -45,11 +45,13 @@ export const offlineShell = (): Plugin => ({
         return template
           .replace(
             "__PRECACHE_ASSETS__",
-            Schema.encodeSync(Schema.fromJsonString(Schema.Array(Schema.String)))(assets),
+            yield* Schema.encodeEffect(Schema.fromJsonString(Schema.Array(Schema.String)))(assets),
           )
           .replace(
             "__PRECACHE_NAME__",
-            Schema.encodeSync(Schema.fromJsonString(Schema.String))(`gororobas-shell-${revision}`),
+            yield* Schema.encodeEffect(Schema.fromJsonString(Schema.String))(
+              `gororobas-shell-${revision}`,
+            ),
           )
       }).pipe(Effect.provide(NodeFileSystem.layer)),
     )

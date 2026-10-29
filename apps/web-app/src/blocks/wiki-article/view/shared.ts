@@ -7,6 +7,7 @@ import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { type WikiArticleTab, wikiArticleUrl } from "../../../app/route"
+import type { ClientFailure } from "../../../lib/client-failure"
 import { AppText } from "../../../ui/app-text"
 import { Chip } from "../../../ui/chip"
 import * as Icons from "../../../ui/icons"
@@ -156,13 +157,20 @@ export const tabs = (
 }
 
 export const emptyState = (text: string, h: WikiArticleViewBuilder): Html =>
-  h.p(styledAttributes([], emptyStateStyle({ size: "compact" })), [text])
+  AppText.view(
+    {
+      element: "p",
+      attributes: styledAttributes([], emptyStateStyle({ size: "compact" })),
+      children: [text],
+    },
+    h,
+  )
 
 export const asyncView = <A>(
   {
     asyncData,
     onData,
-  }: Readonly<{ asyncData: AsyncData.AsyncData<A, string>; onData: (data: A) => Html }>,
+  }: Readonly<{ asyncData: AsyncData.AsyncData<A, ClientFailure>; onData: (data: A) => Html }>,
   h: WikiArticleViewBuilder,
 ): Html =>
   AsyncData.matchData(asyncData, {

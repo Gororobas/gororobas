@@ -18,7 +18,7 @@ import { publicationsShownAt } from "./preview"
 const TYPING_SETTLE_TIME = Duration.millis(200)
 
 /** How many posts a posts search loads; the overview loads as many as its widest preview. */
-export const PUBLICATION_PAGE_SIZE = 30
+export const PUBLICATIONS_SEARCH_PAGE_SIZE = 30
 
 export const subscriptions = SearchDefinition.makeSubscriptions((entry) => ({
   results: entry(
@@ -43,7 +43,7 @@ export const subscriptions = SearchDefinition.makeSubscriptions((entry) => ({
             onSome: (query) => {
               const wiki = api.wiki.searchWikiArticles({ query: wikiSearchParams(query) }).pipe(
                 Effect.match({
-                  onFailure: (error) => Message.FailedSearchWiki({ error: String(error) }),
+                  onFailure: (error) => Message.FailedSearchWiki({ error: { cause: error } }),
                   onSuccess: (articles) => Message.SucceededSearchWiki({ articles }),
                 }),
               )
@@ -53,14 +53,14 @@ export const subscriptions = SearchDefinition.makeSubscriptions((entry) => ({
                   query: publicationSearchParams(
                     query,
                     Option.isSome(query.type)
-                      ? PUBLICATION_PAGE_SIZE
+                      ? PUBLICATIONS_SEARCH_PAGE_SIZE
                       : previewCapacity(publicationsShownAt),
                   ),
                 })
                 .pipe(
                   Effect.match({
                     onFailure: (error) =>
-                      Message.FailedSearchPublications({ error: String(error) }),
+                      Message.FailedSearchPublications({ error: { cause: error } }),
                     onSuccess: (publications) =>
                       Message.SucceededSearchPublications({ publications }),
                   }),
@@ -70,17 +70,13 @@ export const subscriptions = SearchDefinition.makeSubscriptions((entry) => ({
                 .searchProfiles({ query: profileSearchParams(query) })
                 .pipe(
                   Effect.match({
-                    onFailure: (error) => Message.FailedSearchProfiles({ error: String(error) }),
+                    onFailure: (error) => Message.FailedSearchProfiles({ error: { cause: error } }),
                     onSuccess: (profiles) => Message.SucceededSearchProfiles({ profiles }),
                   }),
                 )
 
               const searches: ReadonlyArray<
-                Stream.Stream<
-                  | Effect.Success<typeof wiki>
-                  | Effect.Success<typeof publications>
-                  | Effect.Success<typeof profiles>
-                >
+                Stream.Stream<Effect.Success<typeof wiki | typeof publications | typeof profiles>>
               > = [
                 ...(isResultTypeShown(query, "wiki") ? [Stream.fromEffect(wiki)] : []),
                 ...(isResultTypeShown(query, "publications")
