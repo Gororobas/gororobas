@@ -175,3 +175,25 @@ Feature: People
       Then "Maria"'s profile no longer exists
       And "Coletivo Raízes" no longer exists
       And "Coletivo Raízes"'s publications are deleted
+
+  Rule: The community keeps an administrator
+    The last administrator can't delete their account: they hand over first by promoting someone
+    else to ADMIN, like before demoting themselves.
+
+    Background:
+      Given the following people exist:
+        | name   | accessLevel |
+        | Ailton | ADMIN       |
+        | Maria  | COMMUNITY   |
+
+    Scenario: The last administrator cannot delete their account
+      Given "Ailton" is the only ADMIN
+      When "Ailton" tries to delete their account and personal content
+      Then account deletion fails because "Ailton" is the last administrator
+      And "Ailton"'s accessLevel remains ADMIN
+
+    Scenario: An administrator deletes their account after handing over
+      Given "Ailton" has promoted "Maria" to ADMIN
+      When "Ailton" confirms deletion of their account and personal content
+      Then "Ailton"'s profile no longer exists
+      And "Maria" is the only ADMIN

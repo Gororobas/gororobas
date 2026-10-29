@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { ContentLanguage } from "@gororobas/domain"
+import { AccountDeletionResultSuccess, ContentLanguage } from "@gororobas/domain"
 import {
   Handle,
   PersonId,
@@ -1400,6 +1400,98 @@ await Effect.runPromise(
                   return context
                 }),
             }),
+          ),
+      })
+    })
+
+    Rule("The community keeps an administrator", ({ Background, Scenario }) => {
+      Background({ layer: PeopleFeatureTestLayer, steps: () => runSteps(givenPeople()) })
+
+      const onlyAdministrator = (keyword: typeof Given) =>
+        keyword("{string:name} is the only ADMIN", {
+          params: NamedPerson,
+          handler: (_, { name }) =>
+            Effect.gen(function* () {
+              const context = yield* getBackgroundContext(PeopleBackground)
+              const personId = personNamed(context.actors, name)
+              expect(yield* accessLevelForPerson(personId)).toBe("ADMIN")
+              expect(yield* (yield* PeopleRepository).countOtherAdministrators(personId)).toEqual({
+                count: 0,
+              })
+              return context
+            }),
+        })
+
+      Scenario("The last administrator cannot delete their account", {
+        layer: PeopleFeatureTestLayer,
+        steps: () =>
+          runSteps(
+            onlyAdministrator(Given),
+            When("{string:name} tries to delete their account and personal content", {
+              params: NamedPerson,
+              handler: (_, { name }) =>
+                Effect.gen(function* () {
+                  const context = yield* getBackgroundContext(PeopleBackground)
+                  const error = yield* confirmPersonalDeletion(
+                    personNamed(context.actors, name),
+                  ).pipe(Effect.flip)
+                  return { ...context, error }
+                }),
+            }),
+            Then("account deletion fails because {string:name} is the last administrator", {
+              params: NamedPerson,
+              handler: (context: { error: unknown }) =>
+                Effect.sync(() => {
+                  expect(context.error).toMatchObject({
+                    _tag: "AccountDeletionError",
+                    reason: { _tag: "LastAdministrator" },
+                  })
+                  return context
+                }),
+            }),
+            And("{string:name}'s accessLevel remains ADMIN", {
+              params: NamedPerson,
+              handler: (_, { name }) => verifyAccessLevel(name, "ADMIN"),
+            }),
+          ),
+      })
+
+      Scenario("An administrator deletes their account after handing over", {
+        layer: PeopleFeatureTestLayer,
+        steps: () =>
+          runSteps(
+            Given("{string:actor} has promoted {string:target} to ADMIN", {
+              params: Schema.Struct({ actor: Schema.String, target: Schema.String }),
+              handler: (_, { actor, target }) =>
+                Effect.gen(function* () {
+                  const context = yield* getBackgroundContext(PeopleBackground)
+
+                  yield* setAccess({
+                    actorId: personNamed(context.actors, actor),
+                    personId: personNamed(context.actors, target),
+                    accessLevel: "ADMIN",
+                  })
+
+                  return context
+                }),
+            }),
+            When("{string:name} confirms deletion of their account and personal content", {
+              params: NamedPerson,
+              handler: (_, { name }) =>
+                Effect.gen(function* () {
+                  const context = yield* getBackgroundContext(PeopleBackground)
+                  expect(yield* confirmPersonalDeletion(personNamed(context.actors, name))).toEqual(
+                    AccountDeletionResultSuccess.make({}),
+                  )
+                  return context
+                }),
+            }),
+            Then("{string:name}'s profile no longer exists", {
+              params: NamedPerson,
+              handler: (context, { name }) =>
+                expectPersonDeleted(personNamed(context.actors, name)).pipe(Effect.as(context)),
+            }),
+            onlyAdministrator(And),
           ),
       })
     })

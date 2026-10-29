@@ -30,9 +30,15 @@ export const AccountDeletionConfirmation = Schema.Struct({
 })
 export type AccountDeletionConfirmation = typeof AccountDeletionConfirmation.Type
 
-export const AccountDeletionErrorReason = Schema.TaggedStruct("SoleOrgManager", {
+export const SoleOrgManager = Schema.TaggedStruct("SoleOrgManager", {
   organizations: Schema.Array(OrganizationId),
 })
+
+/** The community must keep an administrator: hand over by promoting someone else to ADMIN first. */
+export const LastAdministrator = Schema.TaggedStruct("LastAdministrator", {})
+
+export const AccountDeletionErrorReason = Schema.Union([SoleOrgManager, LastAdministrator])
+export type AccountDeletionErrorReason = typeof AccountDeletionErrorReason.Type
 
 export const AccountDeletionResultSuccess = Schema.TaggedStruct("Success", {})
 

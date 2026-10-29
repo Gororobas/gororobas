@@ -1,13 +1,15 @@
 import {
   AccountDeletionConfirmation,
   AccountDeletionError,
-  AccountDeletionErrorReason,
   AccountDeletionResultConfirmContentDeletion,
   AccountDeletionResultConfirmOrgDeletion,
   AccountDeletionResultSuccess,
+  LastAdministrator,
   OrganizationContentCount,
   PersonId,
   PersonNotFoundError,
+  type PersonRow,
+  SoleOrgManager,
   UnauthorizedError,
   Policies,
   type PlatformAccessLevel,
@@ -28,6 +30,12 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
     const profilesRepo = yield* ProfilesRepository
     const sql = yield* SqlClient.SqlClient
 
+    /** Losing this person's access would leave the community without administrative control. */
+    const isLastAdministrator = (person: Pick<PersonRow, "id" | "accessLevel">) =>
+      person.accessLevel === "ADMIN"
+        ? repo.countOtherAdministrators(person.id).pipe(Effect.map(({ count }) => count === 0))
+        : Effect.succeed(false)
+
     const setAccessLevel = (personId: PersonId, newAccessLevel: PlatformAccessLevel) =>
       Effect.gen(function* () {
         const currentRow = yield* repo.findById(personId).pipe(
@@ -46,15 +54,11 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
 
         const currentSession = yield* Policies.common.assertAuthenticated
 
-        if (currentRow.accessLevel === "ADMIN" && newAccessLevel !== "ADMIN") {
-          const { count } = yield* repo.countOtherAdministrators(personId)
-
-          if (count === 0) {
-            return yield* new UnauthorizedError({
-              message: "Cannot demote the last administrator",
-              session: currentSession,
-            })
-          }
+        if (newAccessLevel !== "ADMIN" && (yield* isLastAdministrator(currentRow))) {
+          return yield* new UnauthorizedError({
+            message: "Cannot demote the last administrator",
+            session: currentSession,
+          })
         }
 
         const now = yield* DateTime.now
@@ -74,6 +78,14 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
         const session = yield* Policies.common.assertAuthenticated
 
         /**
+         * 0. THE COMMUNITY KEEPS AN ADMINISTRATOR, like in `setAccessLevel`
+         */
+        const person = yield* repo.findById(session.personId)
+        if (Option.isSome(person) && (yield* isLastAdministrator(person.value))) {
+          return yield* new AccountDeletionError({ reason: LastAdministrator.make({}) })
+        }
+
+        /**
          * 1. IN CASE OF BEING THE SOLE MANAGER OF AN ORG
          */
         const orgsWhereSoleManager =
@@ -83,7 +95,7 @@ export class PeopleService extends Context.Service<PeopleService>()("PeopleServi
         // 1.1. Prohibit if these orgs have 2+ members
         if (EffectArray.isReadonlyArrayNonEmpty(orgsWithOtherMembers)) {
           return yield* new AccountDeletionError({
-            reason: AccountDeletionErrorReason.make({
+            reason: SoleOrgManager.make({
               organizations: orgsWithOtherMembers.map((o) => o.organizationId),
             }),
           })

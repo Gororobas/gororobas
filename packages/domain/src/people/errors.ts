@@ -16,12 +16,16 @@ export class PersonNotFoundError extends Schema.TaggedError<PersonNotFoundError>
   { httpApiStatus: 404 },
 ) {}
 
-/** Can't delete an organization when the sol */
+/**
+ * Deleting the account would leave an organization's members without a manager, or the community
+ * without an administrator.
+ */
 export class AccountDeletionError extends Schema.TaggedError<AccountDeletionError>()(
   "AccountDeletionError",
   {
     reason: AccountDeletionErrorReason,
   },
+  { httpApiStatus: 409 },
 ) {}
 
 /** Onboarding needs a signed-in account; visitors have none. */
