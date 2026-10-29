@@ -100,10 +100,12 @@ const publishedArticle = () =>
     params: NamedArticle,
     handler: (context: ModerationContext, { title }) =>
       Effect.gen(function* () {
-        const id = yield* (yield* WikiArticlesRepository).createWikiArticle(
-          { wikiArticle: plant(title), createdById: context.administratorId, status: "PUBLISHED" },
-          { enrichment: "skip" },
-        )
+        const id = yield* (yield* WikiArticlesRepository).createWikiArticle({
+          wikiArticle: plant(title),
+          createdById: context.administratorId,
+          status: "PUBLISHED",
+        })
+
         return { ...context, articles: { ...context.articles, [title]: id } }
       }).pipe(later),
   })

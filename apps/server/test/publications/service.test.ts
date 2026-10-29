@@ -19,6 +19,7 @@ import { PublicationsService } from "../../src/publications/service.js"
 import { WikiArticlesRepository } from "../../src/wiki/repository.js"
 import { makePersonFixture, makePostPublicationInput, makeProfileFixture } from "../fixtures.js"
 import {
+  EnrichmentTestLayer,
   insertPersonWithDependencies,
   LinkInferenceTestLayer,
   TestLayer,
@@ -32,6 +33,7 @@ const PublicationsRepositoryLayer = Layer.effect(
 
 const PublicationsServiceLayer = Layer.effect(PublicationsService, PublicationsService.make).pipe(
   Layer.provide(PublicationsRepositoryLayer),
+  Layer.provide(EnrichmentTestLayer),
   Layer.provide(Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make)),
   Layer.provide(TestLayer),
 )

@@ -98,25 +98,22 @@ const createConcept = ({
   content: string
 }) =>
   Effect.flatMap(WikiArticlesRepository, (repository) =>
-    repository.createWikiArticle(
-      {
-        createdById,
-        status: "PUBLISHED",
-        wikiArticle: WikiConceptArticle.EditableArticle.make({
-          kind: "CONCEPT",
-          attributes: WikiConceptArticle.EditableAttributes.make({}),
-          translations: {
-            pt: {
-              commonNames: [
-                Schema.decodeSync(WikiArticleCommonNameInCrdtList)({ id: "commonname01", name }),
-              ],
-              content: Option.some(textToRichTextDocument(content)),
-            },
+    repository.createWikiArticle({
+      createdById,
+      status: "PUBLISHED",
+      wikiArticle: WikiConceptArticle.EditableArticle.make({
+        kind: "CONCEPT",
+        attributes: WikiConceptArticle.EditableAttributes.make({}),
+        translations: {
+          pt: {
+            commonNames: [
+              Schema.decodeSync(WikiArticleCommonNameInCrdtList)({ id: "commonname01", name }),
+            ],
+            content: Option.some(textToRichTextDocument(content)),
           },
-        }),
-      },
-      { enrichment: "skip" },
-    ),
+        },
+      }),
+    }),
   )
 
 const approveContentEdit = (wikiArticleId: WikiArticleId, personId: PersonId) =>
@@ -138,10 +135,11 @@ const approveContentEdit = (wikiArticleId: WikiArticleId, personId: PersonId) =>
       crdtUpdate: LoroDocUpdate.make(changed.export({ mode: "update", from: current.version() })),
     })
 
-    yield* repository.evaluateRevision(
-      { revisionId, evaluatedById: personId, evaluation: "APPROVED" },
-      { enrichment: "skip" },
-    )
+    yield* repository.evaluateRevision({
+      revisionId,
+      evaluatedById: personId,
+      evaluation: "APPROVED",
+    })
   })
 
 describe("WikiArticleLinkInferenceWorkflow", () => {

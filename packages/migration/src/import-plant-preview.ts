@@ -185,7 +185,7 @@ export const importPlantPreview = async (sourceFilename: string, previewRoot: st
         yield* sql`INSERT INTO people ${sql.insert({ id: importerId, accessLevel: "COMMUNITY" })}`
         yield* repository.createWikiArticle(
           { wikiArticle: latest.article, createdById: importerId, status: "PUBLISHED" },
-          { id: plant.id, enrichment: "skip" },
+          { id: plant.id },
         )
 
         for (const [index, mediaAsset] of mediaAssets.entries()) {

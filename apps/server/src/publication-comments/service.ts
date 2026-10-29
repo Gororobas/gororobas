@@ -15,6 +15,7 @@ import {
 import { Effect, Option, Context } from "effect"
 
 import { assertCanViewPublication } from "../content-visibility/content-visibility.js"
+import { Enrichment } from "../enrichment/enrichment.js"
 import { moderateContent } from "../moderation/moderate-content.js"
 import { PublicationsRepository } from "../publications/repository.js"
 import { PublicationCommentsRepository } from "./repository.js"
@@ -26,6 +27,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
     make: Effect.gen(function* () {
       const publicationCommentsRepository = yield* PublicationCommentsRepository
       const publicationsRepository = yield* PublicationsRepository
+      const enrichment = yield* Enrichment
 
       const getPublicationCommentById = (publicationCommentId: PublicationCommentId) =>
         publicationCommentsRepository.findPublicationCommentRowById(publicationCommentId).pipe(
@@ -36,6 +38,12 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
               onSome: Effect.succeed,
             }),
           ),
+        )
+
+      /** After the repository's transaction commits, so translation reads the committed content. */
+      const requestEnrichment = (publicationCommentId: PublicationCommentId) =>
+        getPublicationCommentById(publicationCommentId).pipe(
+          Effect.flatMap(enrichment.onCommentChanged),
         )
 
       const getPublicationById = (publicationId: PublicationId) =>
@@ -66,7 +74,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
             publicationId: input.publicationId,
             sourceData: input.content,
           })
-        })
+        }).pipe(Effect.tap(requestEnrichment))
 
       const createReplyPublicationComment = (input: {
         content: SourcePublicationCommentData
@@ -87,7 +95,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
             publicationId: parent.publicationId,
             sourceData: input.content,
           })
-        })
+        }).pipe(Effect.tap(requestEnrichment))
 
       const updatePublicationComment = (
         input: ApiUpdatePublicationCommentData & { publicationCommentId: PublicationCommentId },
@@ -104,7 +112,7 @@ export class PublicationCommentsService extends Context.Service<PublicationComme
               expectedCurrentRevisionId: input.expectedCurrentRevisionId,
             }),
           )
-        })
+        }).pipe(Effect.tap(() => requestEnrichment(input.publicationCommentId)))
 
       const deletePublicationComment = (publicationCommentId: PublicationCommentId) =>
         Effect.gen(function* () {

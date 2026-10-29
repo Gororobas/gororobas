@@ -334,7 +334,7 @@ export const importPreview = ({
                 createdById: article.creatorId ?? importerId,
                 status: "PUBLISHED",
               },
-              { id: article.id, enrichment: "skip" },
+              { id: article.id },
             )
 
             if (latest && article.versions) {

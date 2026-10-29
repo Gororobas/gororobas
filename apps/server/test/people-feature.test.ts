@@ -970,28 +970,25 @@ await Effect.runPromise(
                   const wiki = yield* WikiArticlesRepository
 
                   const wikiArticleId = yield* wiki
-                    .createWikiArticle(
-                      {
-                        createdById: personNamed(context.actors, name),
-                        status: "PUBLISHED",
-                        wikiArticle: {
-                          kind: "UNCATEGORIZED",
-                          attributes: { suggestedKind: Option.none() },
-                          translations: {
-                            pt: {
-                              commonNames: [
-                                yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
-                                  name: title,
-                                  id: "mandioca0001",
-                                }),
-                              ],
-                              content: Option.some(textToRichTextDocument("Cultivo da mandioca")),
-                            },
+                    .createWikiArticle({
+                      createdById: personNamed(context.actors, name),
+                      status: "PUBLISHED",
+                      wikiArticle: {
+                        kind: "UNCATEGORIZED",
+                        attributes: { suggestedKind: Option.none() },
+                        translations: {
+                          pt: {
+                            commonNames: [
+                              yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
+                                name: title,
+                                id: "mandioca0001",
+                              }),
+                            ],
+                            content: Option.some(textToRichTextDocument("Cultivo da mandioca")),
                           },
                         },
                       },
-                      { enrichment: "skip" },
-                    )
+                    })
                     .pipe(Effect.provide(WorkflowEngine.layerMemory))
 
                   const history = yield* readWikiHistory(wikiArticleId)

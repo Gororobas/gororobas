@@ -22,6 +22,11 @@ import * as Arbitrary from "effect/Arbitrary"
 import { SqlClient } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
+import {
+  Enrichment,
+  EnrichmentRecorder,
+  EnrichmentSubmitterLive,
+} from "../src/enrichment/enrichment.js"
 import { IdGenLive } from "../src/id-gen-live.js"
 import { PublicationLinkInferenceWorkflowLayer } from "../src/link-inference/publication-link-inference-workflow.js"
 import { WikiArticleLinkInferenceWorkflowLayer } from "../src/link-inference/wiki-article-link-inference-workflow.js"
@@ -130,10 +135,25 @@ export const LinkInferenceTestLayer = Layer.mergeAll(
   Layer.provideMerge(WorkflowEngine.layerMemory),
 )
 
+/** Submits enrichment to the in-memory engine; feature tests register the workflows they observe. */
+export const EnrichmentTestLayer = Layer.effect(Enrichment, Enrichment.make).pipe(
+  Layer.provideMerge(EnrichmentSubmitterLive),
+  Layer.provide(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
+  Layer.provide(TestLayer),
+)
+
+/** Records which workflows changes request instead of submitting them (see `RecordedEnrichment`). */
+export const EnrichmentRecorderTestLayer = Layer.effect(Enrichment, Enrichment.make).pipe(
+  Layer.provideMerge(EnrichmentRecorder),
+  Layer.provide(Layer.effect(PublicationsRepository, PublicationsRepository.make)),
+  Layer.provide(TestLayer),
+)
+
 export const TestLayerWithServices = Layer.mergeAll(
   TestLayer,
   PeopleServiceLayer,
   ProfilesServiceLayer,
+  EnrichmentTestLayer,
   MediaDeletionWorkflowLayer.pipe(Layer.provide(TestLayer)),
 ).pipe(Layer.provideMerge(WorkflowEngine.layerMemory))
 

@@ -15,7 +15,6 @@ import {
   Schema,
 } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
-import { WorkflowEngine } from "effect/workflow"
 
 import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { MediaAssetsStorage } from "../media-assets/storage.js"
@@ -166,8 +165,6 @@ const SeedRepositoriesLive = Layer.mergeAll(
   Layer.effect(PublicationCommentsRepository, PublicationCommentsRepository.make),
   Layer.effect(PublicationsRepository, PublicationsRepository.make),
   Layer.effect(WikiArticlesRepository, WikiArticlesRepository.make),
-  // Seeding skips enrichment, but wiki writes still type-check against a workflow engine.
-  WorkflowEngine.layerMemory,
 )
 
 /** Logs how many rows a phase seeded, measured on the real monotonic clock. */

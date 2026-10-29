@@ -24,7 +24,7 @@ import {
   makeDocument,
   TestLayerWithRepositories,
 } from "../../test/publication-comments/fixtures.js"
-import { insertPersonWithDependencies } from "../../test/test-helpers.js"
+import { EnrichmentTestLayer, insertPersonWithDependencies } from "../../test/test-helpers.js"
 import { VISITOR_SESSION, resolveSessionFromAuthSubjectId } from "../session-service.js"
 import { LanguageDetectionServiceStub } from "../translation/language-detection-service.js"
 import { PublicationCommentTranslationWorkflowLayer } from "../translation/publication-comment-translation-workflow.js"
@@ -37,6 +37,7 @@ const dependencies = Layer.mergeAll(
   PublicationCommentTranslationWorkflowLayer,
 ).pipe(
   Layer.provideMerge(TestLayerWithRepositories),
+  Layer.provideMerge(EnrichmentTestLayer),
   Layer.provideMerge(WorkflowEngine.layerMemory),
   Layer.provide(LanguageDetectionServiceStub),
   Layer.provide(

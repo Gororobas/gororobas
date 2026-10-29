@@ -354,28 +354,25 @@ const createWikiArticles = (context: MediaContext, names: readonly string[]) =>
       (name) =>
         Effect.gen(function* () {
           const id = yield* wiki
-            .createWikiArticle(
-              {
-                createdById: context.administratorId,
-                status: "PUBLISHED",
-                wikiArticle: {
-                  kind: "UNCATEGORIZED",
-                  attributes: { suggestedKind: Option.none() },
-                  translations: {
-                    pt: {
-                      commonNames: [
-                        yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
-                          name: name,
-                          id: "mediaplant01",
-                        }),
-                      ],
-                      content: Option.some(textToRichTextDocument(name)),
-                    },
+            .createWikiArticle({
+              createdById: context.administratorId,
+              status: "PUBLISHED",
+              wikiArticle: {
+                kind: "UNCATEGORIZED",
+                attributes: { suggestedKind: Option.none() },
+                translations: {
+                  pt: {
+                    commonNames: [
+                      yield* Schema.decodeEffect(WikiArticleCommonNameInCrdtList)({
+                        name: name,
+                        id: "mediaplant01",
+                      }),
+                    ],
+                    content: Option.some(textToRichTextDocument(name)),
                   },
                 },
               },
-              { enrichment: "skip" },
-            )
+            })
             .pipe(Effect.provide(WorkflowEngine.layerMemory))
 
           return [name, id] as const

@@ -13,7 +13,12 @@ import { PublicationCommentsRepository } from "../../src/publication-comments/re
 import { PublicationCommentsService } from "../../src/publication-comments/service.js"
 import { PublicationsRepository } from "../../src/publications/repository.js"
 import { makePersonFixture, makePostPublicationInput, makeProfileFixture } from "../fixtures.js"
-import { insertPersonWithDependencies, TestLayer, withSession } from "../test-helpers.js"
+import {
+  EnrichmentRecorderTestLayer,
+  insertPersonWithDependencies,
+  TestLayer,
+  withSession,
+} from "../test-helpers.js"
 
 const PublicationsRepositoryLayer = Layer.effect(
   PublicationsRepository,
@@ -29,6 +34,7 @@ const PublicationCommentsServiceLayer = Layer.effect(
   PublicationCommentsService.make,
 ).pipe(
   Layer.provide(Layer.mergeAll(PublicationsRepositoryLayer, PublicationCommentsRepositoryLayer)),
+  Layer.provide(EnrichmentRecorderTestLayer),
   Layer.provide(TestLayer),
 )
 

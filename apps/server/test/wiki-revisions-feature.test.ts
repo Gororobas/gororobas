@@ -132,14 +132,11 @@ const seed = ({
   content?: string
 }) =>
   Effect.gen(function* () {
-    const id = yield* (yield* WikiArticlesRepository).createWikiArticle(
-      {
-        wikiArticle: plant(title, content),
-        createdById: context.administratorId,
-        status: "PUBLISHED",
-      },
-      { enrichment: "skip" },
-    )
+    const id = yield* (yield* WikiArticlesRepository).createWikiArticle({
+      wikiArticle: plant(title, content),
+      createdById: context.administratorId,
+      status: "PUBLISHED",
+    })
 
     return { ...context, articles: { ...context.articles, [title]: id } }
   })

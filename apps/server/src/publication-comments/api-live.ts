@@ -1,20 +1,9 @@
-import { ContentLanguage, GororobasApi, type PublicationCommentData } from "@gororobas/domain"
+import { ContentLanguage, GororobasApi } from "@gororobas/domain"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
-import { PublicationCommentTranslationWorkflow } from "../translation/publication-comment-translation-workflow.js"
 import { PublicationCommentsService } from "./service.js"
-
-const requestTranslations = (publicationComment: PublicationCommentData) =>
-  PublicationCommentTranslationWorkflow.execute(
-    {
-      publicationCommentId: publicationComment.id,
-      sourceRevisionId: publicationComment.currentRevisionId,
-      sourceContent: publicationComment.sourceContent,
-    },
-    { discard: true },
-  )
 
 export const PublicationCommentsApiLive = HttpApiBuilder.group(
   GororobasApi,
@@ -54,7 +43,6 @@ export const PublicationCommentsApiLive = HttpApiBuilder.group(
             })
 
             const publicationComment = yield* service.getPublicationCommentById(id)
-            yield* requestTranslations(publicationComment)
             return publicationComment
           }),
         ).pipe(
@@ -76,7 +64,6 @@ export const PublicationCommentsApiLive = HttpApiBuilder.group(
             })
 
             const publicationComment = yield* service.getPublicationCommentById(id)
-            yield* requestTranslations(publicationComment)
             return publicationComment
           }),
         ).pipe(
@@ -91,7 +78,6 @@ export const PublicationCommentsApiLive = HttpApiBuilder.group(
           Effect.gen(function* () {
             yield* service.updatePublicationComment({ ...payload, publicationCommentId: params.id })
             const publicationComment = yield* service.getPublicationCommentById(params.id)
-            yield* requestTranslations(publicationComment)
             return publicationComment
           }),
         ).pipe(

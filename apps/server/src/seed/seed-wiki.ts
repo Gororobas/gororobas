@@ -154,7 +154,7 @@ const seedArticle = (
     const id = yield* timeline.at(createdAt)(
       wiki.createWikiArticle(
         { wikiArticle, createdById: author.id, status, ...(mediaAssets ? { mediaAssets } : {}) },
-        { enrichment: "skip", isPendingApproval },
+        { isPendingApproval },
       ),
     )
 
@@ -347,17 +347,14 @@ const evaluate = (input: {
   Effect.gen(function* () {
     const wiki = yield* WikiArticlesRepository
 
-    yield* wiki.evaluateRevision(
-      {
-        revisionId: input.revisionId,
-        evaluatedById: input.evaluator,
-        evaluation: input.evaluation,
-        ...(input.evaluation === "REJECTED"
-          ? { evaluationReason: yield* pick(REJECTION_REASONS) }
-          : {}),
-      },
-      { enrichment: "skip" },
-    )
+    yield* wiki.evaluateRevision({
+      revisionId: input.revisionId,
+      evaluatedById: input.evaluator,
+      evaluation: input.evaluation,
+      ...(input.evaluation === "REJECTED"
+        ? { evaluationReason: yield* pick(REJECTION_REASONS) }
+        : {}),
+    })
   })
 
 /** Approves the initial revision of an article awaiting approval, publishing it. */

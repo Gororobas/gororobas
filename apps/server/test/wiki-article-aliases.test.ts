@@ -13,10 +13,11 @@ it.effect("indexes cultivar scientific names without indexing their authored sta
     const repository = yield* WikiArticlesRepository.make
 
     const create = (article: WikiArticleEditableData) =>
-      repository.createWikiArticle(
-        { wikiArticle: article, createdById: person.id, status: "PUBLISHED" },
-        { enrichment: "skip" },
-      )
+      repository.createWikiArticle({
+        wikiArticle: article,
+        createdById: person.id,
+        status: "PUBLISHED",
+      })
 
     const translations = {
       pt: { commonNames: [{ id: "testname0001", name: "Milho" }] },

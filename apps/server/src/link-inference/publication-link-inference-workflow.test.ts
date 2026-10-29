@@ -146,28 +146,25 @@ const editSourceContent = (input: {
 
 const createConcept = (input: { createdById: PersonId; name: string }) =>
   Effect.flatMap(WikiArticlesRepository, (repository) =>
-    repository.createWikiArticle(
-      {
-        createdById: input.createdById,
-        status: "PUBLISHED",
-        wikiArticle: WikiConceptArticle.EditableArticle.make({
-          kind: "CONCEPT",
-          attributes: WikiConceptArticle.EditableAttributes.make({}),
-          translations: {
-            pt: {
-              commonNames: [
-                Schema.decodeSync(WikiArticleCommonNameInCrdtList)({
-                  id: "commonname01",
-                  name: input.name,
-                }),
-              ],
-              content: Option.none(),
-            },
+    repository.createWikiArticle({
+      createdById: input.createdById,
+      status: "PUBLISHED",
+      wikiArticle: WikiConceptArticle.EditableArticle.make({
+        kind: "CONCEPT",
+        attributes: WikiConceptArticle.EditableAttributes.make({}),
+        translations: {
+          pt: {
+            commonNames: [
+              Schema.decodeSync(WikiArticleCommonNameInCrdtList)({
+                id: "commonname01",
+                name: input.name,
+              }),
+            ],
+            content: Option.none(),
           },
-        }),
-      },
-      { enrichment: "skip" },
-    ),
+        },
+      }),
+    }),
   )
 
 const createPost = (run: number) =>

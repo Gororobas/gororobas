@@ -193,13 +193,3 @@ export const PublicationLinkInferenceWorkflowLayer = Layer.unwrap(
     )
   }),
 )
-
-/** Best-effort submission after the publication transaction commits. */
-export const requestPublicationLinkInference = (publication: {
-  readonly id: PublicationId
-  readonly currentCrdtFrontier: LoroDocFrontier
-}) =>
-  PublicationLinkInferenceWorkflow.execute(
-    { publicationId: publication.id, crdtFrontier: publication.currentCrdtFrontier },
-    { discard: true },
-  ).pipe(Effect.catchCause((cause) => Effect.logError("Link inference submission failed", cause)))

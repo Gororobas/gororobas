@@ -23,7 +23,6 @@ import {
   WikiArticleRevisionId,
   WikiArticleRevisionNotFoundError,
   WikiArticleRevisionRow,
-  type WikiArticleProjectionRow,
 } from "@gororobas/domain"
 import { Context, DateTime, Effect, Array as EffectArray, Option, Schema } from "effect"
 import { SqlClient } from "effect/sql"
@@ -34,9 +33,6 @@ import {
 } from "../common/crdt-aggregate-persistence.js"
 import { allocateHandle } from "../common/handle-allocation.js"
 import { persistProjectionJunctionTables } from "../common/table-projection.js"
-import { requestWikiArticleLinkInference } from "../link-inference/wiki-article-link-inference-definition.js"
-import { type ExternalDataArticle } from "./external-data/persist-utils.js"
-import { requestExternalDataFetch } from "./external-data/workflow.js"
 import {
   setBookmark,
   removeBookmark,
@@ -259,29 +255,9 @@ const applyRevisionMediaSelection = Effect.fn("applyRevisionMediaSelection")(fun
   yield* applyRevisionMediaDetails({ revisionId: input.revisionId, updatedAt: input.updatedAt })
 })
 
-/**
- * Derived work on newly approved content: external provider data and inferred relations.
- * Best-effort, submitted after the article transaction commits.
- */
-export const requestEnrichment = (
-  article: ExternalDataArticle,
-  previous?: WikiArticleProjectionRow,
-) =>
-  Effect.all(
-    [
-      requestExternalDataFetch(article, previous).pipe(
-        Effect.catchCause((cause) => Effect.logError("External data submission failed", cause)),
-      ),
-      requestWikiArticleLinkInference(article, previous).pipe(
-        Effect.catchCause((cause) => Effect.logError("Link inference submission failed", cause)),
-      ),
-    ],
-    { concurrency: "unbounded", discard: true },
-  )
-
 const createWikiArticle = (
   input: CreateWikiArticleInput,
-  options: { id?: WikiArticleId; enrichment?: "submit" | "skip"; isPendingApproval?: boolean } = {},
+  options: { id?: WikiArticleId; isPendingApproval?: boolean } = {},
 ) =>
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
@@ -343,11 +319,6 @@ const createWikiArticle = (
       }
     }).pipe(
       sql.withTransaction,
-      Effect.tap((article) =>
-        options.isPendingApproval || options.enrichment === "skip"
-          ? Effect.void
-          : requestEnrichment(article),
-      ),
       Effect.map((article) => article.id),
     ),
   )
@@ -404,10 +375,8 @@ const createRevision = (input: CreateWikiArticleRevisionInput) =>
     }).pipe(sql.withTransaction),
   )
 
-const evaluateRevision = (
-  input: EvaluateWikiArticleRevisionInput,
-  options: { enrichment?: "submit" | "skip" } = {},
-) =>
+/** The approved article state and the one it replaced; None when the revision is rejected. */
+const evaluateRevision = (input: EvaluateWikiArticleRevisionInput) =>
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
       const revision = yield* findRevisionById(input.revisionId).pipe(
@@ -437,7 +406,7 @@ const evaluateRevision = (
 
       if (input.evaluation === "REJECTED") {
         yield* updateRevisionRow(evaluatedRevision)
-        return
+        return Option.none()
       }
 
       const article = yield* findSourceRowById(revision.wikiArticleId).pipe(
@@ -488,23 +457,15 @@ const evaluateRevision = (
         })
       }
 
-      return {
+      return Option.some({
         article: {
           ...updated.data,
           id: article.id,
           currentCrdtFrontier: LoroDocFrontier.make(updated.document.frontiers()),
         },
         previous: Option.getOrUndefined(previous),
-      }
-    }).pipe(
-      sql.withTransaction,
-      Effect.tap((updated) =>
-        updated && options.enrichment !== "skip"
-          ? requestEnrichment(updated.article, updated.previous)
-          : Effect.void,
-      ),
-      Effect.asVoid,
-    ),
+      })
+    }).pipe(sql.withTransaction),
   )
 
 /** @effect-expect-leaking SqlClient */

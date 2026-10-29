@@ -43,10 +43,12 @@ const createArticle = Effect.fn(function* (kind: "PLANT" | "BOOK" = "PLANT") {
       : { kind, attributes: { googleBooksVolumeId: "test_volume" }, translations },
   )
 
-  const id = yield* repository.createWikiArticle(
-    { wikiArticle, createdById: person.id, status: "PUBLISHED" },
-    { enrichment: "skip" },
-  )
+  const id = yield* repository.createWikiArticle({
+    wikiArticle,
+    createdById: person.id,
+    status: "PUBLISHED",
+  })
+
   return buildExternalDataRequest(Option.getOrThrow(yield* findDatabaseRowById(id)))
 })
 

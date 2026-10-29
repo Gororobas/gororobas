@@ -51,10 +51,12 @@ it.effect("rejects a revision that changes the article's kind", () =>
   Effect.gen(function* () {
     const { person } = yield* seedPerson("ADMIN")
     const repository = yield* WikiArticlesRepository.make
-    const wikiArticleId = yield* repository.createWikiArticle(
-      { wikiArticle: plant, createdById: person.id, status: "PUBLISHED" },
-      { enrichment: "skip" },
-    )
+
+    const wikiArticleId = yield* repository.createWikiArticle({
+      wikiArticle: plant,
+      createdById: person.id,
+      status: "PUBLISHED",
+    })
 
     const source = Option.getOrThrow(yield* repository.findSourceRowById(wikiArticleId))
     const current = snapshotToLoroDoc(source.crdtSnapshot)
@@ -93,10 +95,12 @@ it.effect("makes an approved revision's media selection the article's media", ()
     expect(yield* repository.listWikiArticleMedia(wikiArticleId)).toEqual([])
 
     const [revision] = yield* repository.listRevisionHistory({ wikiArticleId })
-    yield* repository.evaluateRevision(
-      { revisionId: revision.id, evaluation: "APPROVED", evaluatedById: person.id },
-      { enrichment: "skip" },
-    )
+
+    yield* repository.evaluateRevision({
+      revisionId: revision.id,
+      evaluation: "APPROVED",
+      evaluatedById: person.id,
+    })
 
     const attached = yield* repository.listWikiArticleMedia(wikiArticleId)
     expect(attached.map((asset) => asset.id)).toEqual([mediaAssetId])
@@ -122,18 +126,12 @@ it.effect("rejects a revision that moves a cultivar under an article that isn't 
     const { person } = yield* seedPerson("ADMIN")
     const repository = yield* WikiArticlesRepository.make
     const published = { createdById: person.id, status: "PUBLISHED" } as const
-    const plantId = yield* repository.createWikiArticle(
-      { ...published, wikiArticle: plant },
-      { enrichment: "skip" },
-    )
-    const toolId = yield* repository.createWikiArticle(
-      { ...published, wikiArticle: tool },
-      { enrichment: "skip" },
-    )
-    const cultivarId = yield* repository.createWikiArticle(
-      { ...published, wikiArticle: cultivarOf(plantId) },
-      { enrichment: "skip" },
-    )
+    const plantId = yield* repository.createWikiArticle({ ...published, wikiArticle: plant })
+    const toolId = yield* repository.createWikiArticle({ ...published, wikiArticle: tool })
+    const cultivarId = yield* repository.createWikiArticle({
+      ...published,
+      wikiArticle: cultivarOf(plantId),
+    })
 
     const source = Option.getOrThrow(yield* repository.findSourceRowById(cultivarId))
     const current = snapshotToLoroDoc(source.crdtSnapshot)
@@ -161,23 +159,28 @@ it.effect("re-checks the parent on approval, which may have been unpublished mea
     const { person } = yield* seedPerson("ADMIN")
     const repository = yield* WikiArticlesRepository.make
     const sql = yield* SqlClient.SqlClient
-    const plantId = yield* repository.createWikiArticle(
-      { createdById: person.id, status: "PUBLISHED", wikiArticle: plant },
-      { enrichment: "skip" },
-    )
+
+    const plantId = yield* repository.createWikiArticle({
+      createdById: person.id,
+      status: "PUBLISHED",
+      wikiArticle: plant,
+    })
+
     const cultivarId = yield* repository.createWikiArticle(
       { createdById: person.id, status: "PENDING_APPROVAL", wikiArticle: cultivarOf(plantId) },
       { isPendingApproval: true },
     )
+
     const [pending] = yield* repository.listRevisionHistory({ wikiArticleId: cultivarId })
 
     yield* sql`UPDATE wiki_article_sources SET status = 'ARCHIVED' WHERE id = ${plantId}`
 
     const error = yield* repository
-      .evaluateRevision(
-        { revisionId: pending.id, evaluation: "APPROVED", evaluatedById: person.id },
-        { enrichment: "skip" },
-      )
+      .evaluateRevision({
+        revisionId: pending.id,
+        evaluation: "APPROVED",
+        evaluatedById: person.id,
+      })
       .pipe(Effect.flip)
 
     expect(error).toMatchObject({ _tag: "WikiArticleNotFoundError", id: plantId })

@@ -3,6 +3,7 @@ import { Layer } from "effect"
 import { HttpRouter } from "effect/http"
 import { HttpApi, HttpApiBuilder } from "effect/http-api"
 
+import { Enrichment, EnrichmentSubmitterLive } from "./enrichment/enrichment.js"
 import { MediaAssetsApiLive } from "./media-assets/api-live.js"
 import { MediaAssetsRepository } from "./media-assets/repository.js"
 import { MediaAssetsService } from "./media-assets/service.js"
@@ -60,7 +61,13 @@ const ServicesLive = Layer.mergeAll(
   Layer.effect(PublicationCommentsService, PublicationCommentsService.make),
   Layer.effect(PublicationsService, PublicationsService.make),
   Layer.effect(WikiArticlesService, WikiArticlesService.make),
-).pipe(Layer.provideMerge(MediaServicesLive), Layer.provideMerge(RepositoriesLive))
+).pipe(
+  Layer.provideMerge(MediaServicesLive),
+  Layer.provideMerge(RepositoriesLive),
+  Layer.provideMerge(
+    Layer.effect(Enrichment, Enrichment.make).pipe(Layer.provideMerge(EnrichmentSubmitterLive)),
+  ),
+)
 
 export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
   PublicationCommentsApiLive,

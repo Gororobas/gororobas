@@ -20,6 +20,7 @@ import {
 import { Array as EffectArray, Context, DateTime, Effect, Match, Option } from "effect"
 import { SqlClient } from "effect/sql"
 
+import { Enrichment } from "../enrichment/enrichment.js"
 import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { WikiArticlesRepository } from "./repository.js"
@@ -42,6 +43,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
   {
     make: Effect.gen(function* () {
       const repository = yield* WikiArticlesRepository
+      const enrichment = yield* Enrichment
       const media = yield* MediaAssetsService
       const mediaRepository = yield* MediaAssetsRepository
       const sql = yield* SqlClient.SqlClient
@@ -105,7 +107,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           })
         })
 
-      /** The repository validates the approved state and requests enrichment once it commits. */
+      /** The repository validates the approved state in its own transaction, so enrichment reads it committed. */
       const evaluateRevision = (
         revisionId: WikiArticleRevisionId,
         { evaluation, reason }: EvaluateWikiArticleRevisionPayload,
@@ -114,12 +116,14 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           const session = yield* assertAuthenticated
           yield* Policies.wiki.canEvaluateRevision
 
-          yield* repository.evaluateRevision({
+          const approved = yield* repository.evaluateRevision({
             revisionId,
             evaluation,
             evaluatedById: session.personId,
             evaluationReason: reason,
           })
+
+          if (Option.isSome(approved)) yield* enrichment.onWikiArticleChanged(approved.value)
         })
 
       const getPage = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>

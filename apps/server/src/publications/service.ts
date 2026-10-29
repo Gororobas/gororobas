@@ -39,7 +39,7 @@ import { LoroDoc } from "loro-crdt"
 
 import { allocateHandle, claimHandle } from "../common/handle-allocation.js"
 import { assertCanViewPublication } from "../content-visibility/content-visibility.js"
-import { requestPublicationLinkInference } from "../link-inference/publication-link-inference-workflow.js"
+import { Enrichment } from "../enrichment/enrichment.js"
 import { MediaAssetsService } from "../media-assets/service.js"
 import { moderateContent } from "../moderation/moderate-content.js"
 import { OrganizationsRepository } from "../organizations/repository.js"
@@ -84,6 +84,7 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
   {
     make: Effect.gen(function* () {
       const repo = yield* PublicationsRepository
+      const enrichment = yield* Enrichment
       const organizationsRepository = yield* OrganizationsRepository
       const wikiArticlesRepository = yield* WikiArticlesRepository
 
@@ -210,23 +211,8 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
           return { id: publicationId, handle }
         }).pipe(
           (effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)),
-          Effect.tap(({ id }) => requestLinkInference(id)),
-        )
-
-      /** Best-effort, after the transaction commits, so the workflow reads the committed content. */
-      const requestLinkInference = (publicationId: PublicationId) =>
-        repo.findPublicationRowById(publicationId).pipe(
-          Effect.flatMap(
-            Option.match({
-              onNone: () => Effect.void,
-              onSome: (row) =>
-                requestPublicationLinkInference({
-                  id: publicationId,
-                  currentCrdtFrontier: row.currentCrdtFrontier,
-                }),
-            }),
-          ),
-          Effect.catchCause((cause) => Effect.logError("Link inference submission failed", cause)),
+          // After commit, so workflows read the committed content.
+          Effect.tap(({ id }) => enrichment.onPublicationContentChanged(id)),
         )
 
       const updatePublication = (input: UpdatePublicationInput) =>
@@ -265,7 +251,9 @@ export class PublicationsService extends Context.Service<PublicationsService>()(
         }).pipe(
           (effect) => SqlClient.SqlClient.use((sql) => sql.withTransaction(effect)),
           Effect.tap(() =>
-            input.crdtEdit === undefined ? Effect.void : requestLinkInference(input.publicationId),
+            input.crdtEdit === undefined
+              ? Effect.void
+              : enrichment.onPublicationContentChanged(input.publicationId),
           ),
         )
 

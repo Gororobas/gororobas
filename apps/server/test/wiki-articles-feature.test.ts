@@ -256,9 +256,7 @@ const seedArticle = ({
         createdById: context.administratorId,
         status: "PUBLISHED",
       },
-      {
-        enrichment: "skip",
-      },
+      {},
     )
 
     return {
@@ -2561,9 +2559,7 @@ it.effect(
           createdById: context.administratorId,
           status: "PUBLISHED",
         },
-        {
-          enrichment: "skip",
-        },
+        {},
       )
 
       const sql = yield* SqlClient.SqlClient
