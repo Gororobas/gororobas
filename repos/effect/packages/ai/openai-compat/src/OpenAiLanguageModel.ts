@@ -13,18 +13,17 @@ import * as AiError from "effect/ai/AiError"
 import * as LanguageModel from "effect/ai/LanguageModel"
 import * as AiModel from "effect/ai/Model"
 import { toCodecOpenAI } from "effect/ai/OpenAiStructuredOutput"
-import type * as Prompt from "effect/ai/Prompt"
+import * as Prompt from "effect/ai/Prompt"
 import type * as Response from "effect/ai/Response"
 import * as Tool from "effect/ai/Tool"
+import * as Arr from "effect/Array"
 import * as Context from "effect/Context"
 import * as DateTime from "effect/DateTime"
 import * as Effect from "effect/Effect"
 import * as Base64 from "effect/encoding/Base64"
 import { dual } from "effect/Function"
-import type * as HttpClientRequest from "effect/http/HttpClientRequest"
 import type * as HttpClientResponse from "effect/http/HttpClientResponse"
 import * as Layer from "effect/Layer"
-import * as Option from "effect/Option"
 import * as Predicate from "effect/Predicate"
 import * as Rec from "effect/Record"
 import * as Redactable from "effect/Redactable"
@@ -134,7 +133,7 @@ declare module "effect/ai/Prompt" {
     /**
      * Provider-specific file options for OpenAI-compatible APIs.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The detail level of the image to be sent to the model. One of `high`, `low`, or `auto`. Defaults to `auto`.
        */
@@ -153,7 +152,7 @@ declare module "effect/ai/Prompt" {
     /**
      * Provider-specific reasoning options for OpenAI-compatible APIs.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The ID of the item to reference.
        */
@@ -184,7 +183,7 @@ declare module "effect/ai/Prompt" {
     /**
      * Provider-specific tool-call options for OpenAI-compatible APIs.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The ID of the item to reference.
        */
@@ -211,7 +210,7 @@ declare module "effect/ai/Prompt" {
     /**
      * Provider-specific tool-result options for OpenAI-compatible APIs.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The ID of the item to reference.
        */
@@ -234,7 +233,7 @@ declare module "effect/ai/Prompt" {
     /**
      * Provider-specific text options for OpenAI-compatible APIs.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The ID of the item to reference.
        */
@@ -263,7 +262,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the text part.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the text part.
        */
@@ -296,7 +295,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the streamed text start.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the streamed text part.
        */
@@ -315,7 +314,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the streamed text end.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the streamed text part.
        */
@@ -338,7 +337,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the reasoning part.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the reasoning part.
        */
@@ -365,7 +364,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the streamed reasoning start.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the reasoning part.
        */
@@ -392,7 +391,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the streamed reasoning delta.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the reasoning part.
        */
@@ -411,7 +410,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the streamed reasoning end.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the reasoning part.
        */
@@ -434,7 +433,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned for the tool call.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The OpenAI item ID associated with the tool call.
        */
@@ -457,7 +456,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific citation metadata for OpenAI-compatible APIs.
      */
-    readonly openai?:
+    readonly "openai-compat"?:
       | {
         /**
          * Identifies a citation to an uploaded file.
@@ -514,7 +513,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific URL citation metadata for OpenAI-compatible APIs.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * Identifies a citation to a URL.
        */
@@ -541,7 +540,7 @@ declare module "effect/ai/Response" {
     /**
      * Provider-specific metadata returned when generation finishes.
      */
-    readonly openai?: {
+    readonly "openai-compat"?: {
       /**
        * The service tier reported by the OpenAI-compatible provider.
        */
@@ -871,7 +870,7 @@ const prepareMessages = Effect.fnUntraced(
 
               case "reasoning": {
                 reasoning += part.text
-                reasoningField ??= part.options.openai?.reasoningField ?? undefined
+                reasoningField ??= part.options["openai-compat"]?.reasoningField ?? undefined
                 break
               }
 
@@ -919,7 +918,11 @@ const prepareMessages = Effect.fnUntraced(
             messages.push({
               role: "tool",
               tool_call_id: part.id,
-              content: typeof part.result === "string" ? part.result : JSON.stringify(part.result)
+              content: Predicate.isNotUndefined(part.modelOutput)
+                ? Prompt.toolModelOutputToText(part.modelOutput)
+                : typeof part.result === "string"
+                ? part.result
+                : JSON.stringify(part.result)
             })
           }
 
@@ -935,16 +938,6 @@ const prepareMessages = Effect.fnUntraced(
 // =============================================================================
 // HTTP Details
 // =============================================================================
-
-const buildHttpRequestDetails = (
-  request: HttpClientRequest.HttpClientRequest
-): typeof Response.HttpRequestDetails.Type => ({
-  method: request.method,
-  url: request.url,
-  urlParams: Array.from(request.urlParams),
-  hash: Option.getOrUndefined(request.hash),
-  headers: Redactable.redact(request.headers) as Record<string, string>
-})
 
 const buildHttpResponseDetails = (
   response: HttpClientResponse.HttpClientResponse
@@ -996,8 +989,7 @@ const makeResponse = Effect.fnUntraced(
       type: "response-metadata",
       id: rawResponse.id,
       modelId: rawResponse.model as string,
-      timestamp: DateTime.formatIso(DateTime.fromDateUnsafe(createdAt)),
-      request: buildHttpRequestDetails(response.request)
+      timestamp: DateTime.formatIso(DateTime.fromDateUnsafe(createdAt))
     })
 
     const choice = rawResponse.choices[0]
@@ -1007,7 +999,7 @@ const makeResponse = Effect.fnUntraced(
       const reasoningField = getResponseReasoningField(message)
       const reasoning = reasoningField !== undefined ? message[reasoningField] : undefined
       if (reasoningField !== undefined && Predicate.isNotNullish(reasoning) && reasoning.length > 0) {
-        parts.push({ type: "reasoning", text: reasoning, metadata: { openai: { reasoningField } } })
+        parts.push({ type: "reasoning", text: reasoning, metadata: { "openai-compat": { reasoningField } } })
       }
 
       if (
@@ -1041,7 +1033,7 @@ const makeResponse = Effect.fnUntraced(
             name: toolName,
             params,
             metadata: {
-              openai: {
+              "openai-compat": {
                 ...makeItemIdMetadata(toolCall.id),
                 ...makeExtraContentMetadata(toolCall.extra_content ?? undefined)
               }
@@ -1062,7 +1054,7 @@ const makeResponse = Effect.fnUntraced(
       reason: finishReason,
       usage: getUsage(rawResponse.usage),
       response: buildHttpResponseDetails(response),
-      ...(serviceTier !== undefined && { metadata: { openai: { serviceTier } } })
+      ...(serviceTier !== undefined && { metadata: { "openai-compat": { serviceTier } } })
     })
 
     return parts
@@ -1106,7 +1098,7 @@ const makeStreamResponse = Effect.fnUntraced(
             parts.push({
               type: "reasoning-end",
               id: reasoningId,
-              metadata: { openai: { ...makeItemIdMetadata(reasoningId) } }
+              metadata: { "openai-compat": { ...makeItemIdMetadata(reasoningId) } }
             })
           }
 
@@ -1114,7 +1106,7 @@ const makeStreamResponse = Effect.fnUntraced(
             parts.push({
               type: "text-end",
               id: textId,
-              metadata: { openai: { ...makeItemIdMetadata(textId) } }
+              metadata: { "openai-compat": { ...makeItemIdMetadata(textId) } }
             })
           }
 
@@ -1140,7 +1132,7 @@ const makeStreamResponse = Effect.fnUntraced(
               name: toolCall.name,
               params,
               metadata: {
-                openai: {
+                "openai-compat": {
                   ...makeItemIdMetadata(toolCall.id),
                   ...makeExtraContentMetadata(toolCall.extraContent)
                 }
@@ -1156,7 +1148,7 @@ const makeStreamResponse = Effect.fnUntraced(
             usage: getUsage(usage),
             response: buildHttpResponseDetails(response),
             ...(normalizedServiceTier !== undefined
-              ? { metadata: { openai: { serviceTier: normalizedServiceTier } } }
+              ? { metadata: { "openai-compat": { serviceTier: normalizedServiceTier } } }
               : undefined)
           })
           return parts
@@ -1183,8 +1175,7 @@ const makeStreamResponse = Effect.fnUntraced(
             type: "response-metadata",
             id: event.id,
             modelId: event.model,
-            timestamp: DateTime.formatIso(DateTime.fromDateUnsafe(new Date(event.created * 1000))),
-            request: buildHttpRequestDetails(response.request)
+            timestamp: DateTime.formatIso(DateTime.fromDateUnsafe(new Date(event.created * 1000)))
           })
         }
 
@@ -1203,7 +1194,7 @@ const makeStreamResponse = Effect.fnUntraced(
             parts.push({
               type: "reasoning-start",
               id: reasoningId,
-              metadata: { openai: { ...makeItemIdMetadata(reasoningId), reasoningField } }
+              metadata: { "openai-compat": { ...makeItemIdMetadata(reasoningId), reasoningField } }
             })
           }
           parts.push({ type: "reasoning-delta", id: reasoningId, delta: reasoningDelta })
@@ -1215,7 +1206,7 @@ const makeStreamResponse = Effect.fnUntraced(
             parts.push({
               type: "reasoning-end",
               id: reasoningId,
-              metadata: { openai: { ...makeItemIdMetadata(reasoningId) } }
+              metadata: { "openai-compat": { ...makeItemIdMetadata(reasoningId) } }
             })
           }
 
@@ -1224,7 +1215,7 @@ const makeStreamResponse = Effect.fnUntraced(
             parts.push({
               type: "text-start",
               id: textId,
-              metadata: { openai: { ...makeItemIdMetadata(textId) } }
+              metadata: { "openai-compat": { ...makeItemIdMetadata(textId) } }
             })
           }
           parts.push({ type: "text-delta", id: textId, delta: choice.delta.content })
@@ -1270,7 +1261,8 @@ const makeStreamResponse = Effect.fnUntraced(
 
         return parts
       })),
-      Stream.flattenIterable
+      Stream.filter(Arr.isArrayNonEmpty),
+      Stream.flattenArray
     )
   }
 )
@@ -1330,7 +1322,7 @@ const annotateStreamResponse = (span: Span, part: Response.StreamPartEncoded) =>
     })
   }
   if (part.type === "finish") {
-    const serviceTier = (part.metadata as any)?.openai?.serviceTier as string | undefined
+    const serviceTier = (part.metadata as any)?.["openai-compat"]?.serviceTier as string | undefined
     addGenAIAnnotations(span, {
       response: {
         finishReasons: [part.reason]
@@ -1373,6 +1365,13 @@ const tryJsonSchema = <S extends Schema.Constraint>(schema: S, method: string) =
     catch: (error) => unsupportedSchemaError(error, method)
   })
 
+const toolParametersError = (tool: Tool.Any, error: unknown, method: string): AiError.AiError =>
+  unsupportedSchemaError(
+    `Tool "${tool.name}" parameters: ${error instanceof Error ? error.message : String(error)}. ` +
+      "For a tool without parameters, omit `parameters` or use `Tool.EmptyParams`",
+    method
+  )
+
 type ToolCodec = ReturnType<typeof toCodecOpenAI>["codec"]
 type ToolCodecs = ReadonlyMap<Tool.Any, ToolCodec>
 
@@ -1409,7 +1408,10 @@ const transformToolCallParams = Effect.fnUntraced(function*(
     Schema.decodeEffect(codec)(toolParams) as Effect.Effect<unknown, Schema.SchemaError>
   ).pipe(
     Effect.flatMap((decoded) =>
-      Schema.encodeUnknownEffect(tool.parametersSchema)(decoded) as Effect.Effect<unknown, Schema.SchemaError>
+      Schema.encodeUnknownEffect(Schema.toCodecJson(tool.parametersSchema))(decoded) as Effect.Effect<
+        unknown,
+        Schema.SchemaError
+      >
     ),
     Effect.orElseSucceed(() => toolParams)
   )
@@ -1457,7 +1459,10 @@ const prepareTools = Effect.fnUntraced(function*<Tools extends ReadonlyArray<Too
       if (Tool.isDynamic(tool) && tool.jsonSchema !== undefined) {
         parameters = tool.jsonSchema
       } else {
-        const prepared = yield* tryCodecTransform(tool.parametersSchema, "prepareTools")
+        const prepared = yield* Effect.try({
+          try: () => toCodecOpenAI(tool.parametersSchema),
+          catch: (error) => toolParametersError(tool, error, "prepareTools")
+        })
         parameters = prepared.jsonSchema
         // Reused to normalize this tool's calls in the response.
         toolCodecs.set(tool, prepared.codec)
@@ -1671,6 +1676,10 @@ const toChatMessageContent = (
     return content
   }
 
+  if (content.length === 1 && content[0].type === "input_text") {
+    return content[0].text
+  }
+
   const parts: Array<ChatCompletionContentPart> = []
 
   for (const part of content) {
@@ -1730,7 +1739,7 @@ const isFileId = (data: string, config: typeof Config.Service): boolean =>
 
 const getExtraContent = (
   part: Prompt.ToolCallPart
-): Schema.JsonObject | null => part.options.openai?.extraContent ?? null
+): Schema.JsonObject | null => part.options["openai-compat"]?.extraContent ?? null
 
 /**
  * The chat message field carrying reasoning text. Providers differ: DeepSeek,
@@ -1749,7 +1758,7 @@ const getResponseReasoningField = (message: {
     ? "reasoning_content"
     : undefined
 
-const getImageDetail = (part: Prompt.FilePart): ImageDetail => part.options.openai?.imageDetail ?? "auto"
+const getImageDetail = (part: Prompt.FilePart): ImageDetail => part.options["openai-compat"]?.imageDetail ?? "auto"
 
 const makeItemIdMetadata = (itemId: string | undefined) => itemId !== undefined ? { itemId } : undefined
 

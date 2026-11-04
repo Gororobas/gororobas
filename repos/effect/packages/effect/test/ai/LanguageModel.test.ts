@@ -69,6 +69,39 @@ describe("LanguageModel", () => {
     response: undefined
   }
 
+  for (const method of ["generateText", "streamText"] as const) {
+    it.effect(`${method} uses current tool schemas and handlers across requests`, () =>
+      Effect.gen(function*() {
+        const run = (tool: typeof MyTool, result: string, disableToolCallResolution = false) => {
+          const toolkit = Toolkit.make(tool)
+          const options = { prompt: "hi", toolkit, disableToolCallResolution }
+          return (method === "generateText"
+            ? LanguageModel.generateText(options).pipe(Effect.map((response) => response.toolResults[0]))
+            : LanguageModel.streamText(options).pipe(
+              Stream.runCollect,
+              Effect.map((parts) => parts.find((part) => part.type === "tool-result"))
+            )).pipe(
+              Effect.provide(toolkit.toLayer({ MyTool: () => Effect.succeed({ testSuccess: result }) }))
+            )
+        }
+        for (const result of ["first", "second"]) {
+          const toolResult = yield* run(MyTool, result)
+          assertDefined(toolResult)
+          deepStrictEqual(toolResult.result, { testSuccess: result })
+        }
+        yield* run(MyTool, "unused", true)
+        const changed = MyTool.setParameters(
+          Schema.Struct({ testParam: Schema.String.check(Schema.isPattern(/^changed$/)) })
+        )
+        const error = yield* run(changed, "unused", true).pipe(Effect.flip)
+        strictEqual(error.reason._tag, "InvalidOutputError")
+        strictEqual(error.isRetryable, true)
+      }).pipe(TestUtils.withLanguageModel({
+        generateText: [{ type: "tool-call", id: "call", name: "MyTool", params: { testParam: "test-param" } }],
+        streamText: [{ type: "tool-call", id: "call", name: "MyTool", params: { testParam: "test-param" } }]
+      })))
+  }
+
   describe("generateText", () => {
     it.effect("records resolved request options on a client span", () =>
       LanguageModel.generateText({ prompt: "hi" }).pipe(
@@ -254,6 +287,35 @@ describe("LanguageModel", () => {
         Effect.provide(TransformToolkitLayer)
       ))
 
+    it.effect("validates locally handled provider-defined tool parameters in their JSON encoding", () =>
+      Effect.gen(function*() {
+        const toolkit = Toolkit.make(
+          Tool.providerDefined({
+            id: "test.schedule",
+            customName: "Schedule",
+            providerName: "schedule",
+            requiresHandler: true,
+            parameters: Schema.Struct({ at: Schema.Date })
+          })({})
+        )
+        const response = yield* LanguageModel.generateText({
+          prompt: [],
+          toolkit,
+          disableToolCallResolution: true
+        })
+
+        deepStrictEqual(response.toolCalls[0]?.params as unknown, { at: "2026-01-01T00:00:00.000Z" })
+      }).pipe(
+        TestUtils.withLanguageModel({
+          generateText: [{
+            type: "tool-call",
+            id: "call",
+            name: "Schedule",
+            params: { at: "2026-01-01T00:00:00.000Z" }
+          }]
+        })
+      ))
+
     it.effect("preserves encoded tool parameters when tool call resolution is enabled", () =>
       Effect.gen(function*() {
         const response = yield* LanguageModel.generateText({
@@ -277,6 +339,40 @@ describe("LanguageModel", () => {
           }]
         }),
         Effect.provide(TransformToolkitLayer)
+      ))
+
+    it.effect("keeps the typed tool result and carries model output into the follow-up prompt", () =>
+      Effect.gen(function*() {
+        const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII="
+        const Screenshot = Tool.make("Screenshot", {
+          success: Schema.Struct({ path: Schema.String, png: Schema.String }),
+          toModelOutput: (result) => [
+            Prompt.textPart({ text: `Screenshot of ${result.path}` }),
+            Prompt.filePart({ mediaType: "image/png", data: result.png })
+          ]
+        })
+        const toolkit = Toolkit.make(Screenshot)
+
+        const response = yield* LanguageModel.generateText({ prompt: [], toolkit }).pipe(
+          Effect.provide(toolkit.toLayer({ Screenshot: () => Effect.succeed({ path: "/home", png }) }))
+        )
+
+        deepStrictEqual(response.toolResults[0]!.result, { path: "/home", png })
+
+        const prompt = Prompt.fromResponseParts(response.content)
+        deepStrictEqual(Schema.decodeSync(Prompt.Prompt)(Schema.encodeSync(Prompt.Prompt)(prompt)), prompt)
+
+        const toolResult = prompt.content[1]!.content[0]
+        assertTrue(typeof toolResult === "object" && toolResult.type === "tool-result")
+        deepStrictEqual(toolResult.result, { path: "/home", png })
+        deepStrictEqual(toolResult.modelOutput, [
+          Prompt.textPart({ text: "Screenshot of /home" }),
+          Prompt.filePart({ mediaType: "image/png", data: png })
+        ])
+      }).pipe(
+        TestUtils.withLanguageModel({
+          generateText: [{ type: "tool-call", id: "call_screenshot", name: "Screenshot", params: {} }]
+        })
       ))
 
     it.effect("validates tool parameters against the schemas of each request", () =>
@@ -312,6 +408,33 @@ describe("LanguageModel", () => {
           }]
         })
       ))
+
+    it.effect("validates tool parameters by tool kind when requests share a schema", () => {
+      const parameters = Schema.Struct({ signature: Schema.optional(Schema.String) })
+      const native = Toolkit.make(
+        Tool.providerDefined({
+          id: "test.sign",
+          customName: "Sign",
+          providerName: "sign",
+          parameters
+        })()
+      )
+      const local = Toolkit.make(Tool.make("Sign", { parameters }))
+      const responses: Array<Array<Response.PartEncoded>> = [
+        [{ type: "tool-call", id: "native", name: "Sign", params: {}, providerExecuted: true }],
+        [{ type: "tool-call", id: "local", name: "Sign", params: { signature: null } }]
+      ]
+      return Effect.gen(function*() {
+        yield* LanguageModel.generateText({ prompt: [], toolkit: native, disableToolCallResolution: true })
+        const response = yield* LanguageModel.generateText({
+          prompt: [],
+          toolkit: local,
+          disableToolCallResolution: true
+        })
+
+        deepStrictEqual(response.toolCalls[0]?.params as unknown, { signature: null })
+      }).pipe(TestUtils.withLanguageModel({ generateText: () => responses.shift()! }))
+    })
 
     it.effect("validates encoded tool parameters after a request with tool call resolution enabled", () => {
       // A tool unused by other tests, so the opaque request decodes it first
@@ -1093,14 +1216,13 @@ describe("LanguageModel", () => {
         const release = yield* Latch.make()
 
         const handlers = MyToolkit.toLayer({
-          MyTool: () =>
-            Effect.gen(function*() {
-              const current = yield* Ref.updateAndGet(active, (n) => n + 1)
-              yield* Ref.update(maxActive, (n) => Math.max(n, current))
-              yield* started.open
-              yield* release.await
-              return { testSuccess: "test-success" }
-            }).pipe(Effect.ensuring(Ref.update(active, (n) => n - 1)))
+          MyTool: Effect.fnUntraced(function*() {
+            const current = yield* Ref.updateAndGet(active, (n) => n + 1)
+            yield* Ref.update(maxActive, (n) => Math.max(n, current))
+            yield* started.open
+            yield* release.await
+            return { testSuccess: "test-success" }
+          }, Effect.ensuring(Ref.update(active, (n) => n - 1)))
         })
 
         const fiber = yield* LanguageModel.streamText({
@@ -1154,16 +1276,15 @@ describe("LanguageModel", () => {
         const release = yield* Latch.make()
 
         const handlers = MyToolkit.toLayer({
-          MyTool: () =>
-            Effect.gen(function*() {
-              const current = yield* Ref.updateAndGet(active, (n) => n + 1)
-              yield* Ref.update(maxActive, (n) => Math.max(n, current))
-              if (current === 2) {
-                yield* twoStarted.open
-              }
-              yield* release.await
-              return { testSuccess: "test-success" }
-            }).pipe(Effect.ensuring(Ref.update(active, (n) => n - 1)))
+          MyTool: Effect.fnUntraced(function*() {
+            const current = yield* Ref.updateAndGet(active, (n) => n + 1)
+            yield* Ref.update(maxActive, (n) => Math.max(n, current))
+            if (current === 2) {
+              yield* twoStarted.open
+            }
+            yield* release.await
+            return { testSuccess: "test-success" }
+          }, Effect.ensuring(Ref.update(active, (n) => n - 1)))
         })
 
         const fiber = yield* LanguageModel.streamText({
@@ -1216,17 +1337,16 @@ describe("LanguageModel", () => {
         const release = yield* Latch.make()
 
         const handlers = MyToolkit.toLayer({
-          MyTool: (_, context) =>
-            Effect.gen(function*() {
-              const toolCallId = context.toolCallId
-              assertDefined(toolCallId)
-              const ids = yield* Ref.updateAndGet(toolCallIds, (ids) => [...ids, toolCallId])
-              if (ids.length === 2) {
-                yield* twoStarted.open
-              }
-              yield* release.await
-              return { testSuccess: "test-success" }
-            })
+          MyTool: Effect.fnUntraced(function*(_, context) {
+            const toolCallId = context.toolCallId
+            assertDefined(toolCallId)
+            const ids = yield* Ref.updateAndGet(toolCallIds, (ids) => [...ids, toolCallId])
+            if (ids.length === 2) {
+              yield* twoStarted.open
+            }
+            yield* release.await
+            return { testSuccess: "test-success" }
+          })
         })
 
         const fiber = yield* LanguageModel.streamText({
@@ -1271,14 +1391,13 @@ describe("LanguageModel", () => {
         const tool = Tool.make("ApprovalConcurrencyTool", {
           parameters: Schema.Struct({ input: Schema.String }),
           success: Schema.Struct({ output: Schema.String }),
-          needsApproval: () =>
-            Effect.gen(function*() {
-              const current = yield* Ref.updateAndGet(active, (n) => n + 1)
-              yield* Ref.update(maxActive, (n) => Math.max(n, current))
-              yield* started.open
-              yield* release.await
-              return false
-            }).pipe(Effect.ensuring(Ref.update(active, (n) => n - 1)))
+          needsApproval: Effect.fnUntraced(function*() {
+            const current = yield* Ref.updateAndGet(active, (n) => n + 1)
+            yield* Ref.update(maxActive, (n) => Math.max(n, current))
+            yield* started.open
+            yield* release.await
+            return false
+          }, Effect.ensuring(Ref.update(active, (n) => n - 1)))
         })
         const toolkit = Toolkit.make(tool)
         const handlers = toolkit.toLayer({
@@ -1675,8 +1794,7 @@ describe("LanguageModel", () => {
                     type: "response-metadata",
                     id: "resp_next",
                     modelId: undefined,
-                    timestamp: undefined,
-                    request: undefined
+                    timestamp: undefined
                   },
                   finishPart
                 ])
@@ -1730,8 +1848,7 @@ describe("LanguageModel", () => {
                     type: "response-metadata",
                     id: "resp_next",
                     modelId: undefined,
-                    timestamp: undefined,
-                    request: undefined
+                    timestamp: undefined
                   },
                   finishPart
                 ])
@@ -1814,8 +1931,7 @@ describe("LanguageModel", () => {
                     type: "response-metadata",
                     id: "resp_next",
                     modelId: undefined,
-                    timestamp: undefined,
-                    request: undefined
+                    timestamp: undefined
                   },
                   finishPart
                 ]),
@@ -1874,8 +1990,7 @@ describe("LanguageModel", () => {
                     type: "response-metadata",
                     id: "resp_next",
                     modelId: undefined,
-                    timestamp: undefined,
-                    request: undefined
+                    timestamp: undefined
                   },
                   finishPart
                 ])
@@ -1935,8 +2050,7 @@ describe("LanguageModel", () => {
                     type: "response-metadata",
                     id: "resp_next",
                     modelId: undefined,
-                    timestamp: undefined,
-                    request: undefined
+                    timestamp: undefined
                   },
                   finishPart
                 ])
@@ -2025,8 +2139,7 @@ describe("LanguageModel", () => {
                     type: "response-metadata",
                     id: "resp_next",
                     modelId: undefined,
-                    timestamp: undefined,
-                    request: undefined
+                    timestamp: undefined
                   },
                   finishPart
                 ])
@@ -2122,8 +2235,7 @@ describe("LanguageModel", () => {
                     type: "response-metadata",
                     id: "resp_next",
                     modelId: undefined,
-                    timestamp: undefined,
-                    request: undefined
+                    timestamp: undefined
                   },
                   finishPart
                 ])
@@ -2167,6 +2279,107 @@ describe("LanguageModel", () => {
   })
 
   describe("tool approval", () => {
+    for (const method of ["generateText", "streamText"] as const) {
+      it.effect(`resolves only pending approvals in mixed approval history (${method})`, () =>
+        Effect.gen(function*() {
+          const executed: Array<string> = []
+          let capturedPrompt: LanguageModel.ProviderOptions["prompt"] | undefined
+          const prompt: Array<Prompt.Message> = []
+
+          for (
+            const [id, approved, resolved] of [
+              ["previous-approved", true, true],
+              ["previous-denied", false, true],
+              ["pending-approved", true, false],
+              ["pending-denied", false, false]
+            ] as const
+          ) {
+            prompt.push(
+              Prompt.assistantMessage({
+                content: [
+                  Prompt.toolCallPart({
+                    id,
+                    name: "ApprovalTool",
+                    params: { action: id },
+                    providerExecuted: false
+                  }),
+                  Prompt.toolApprovalRequestPart({ approvalId: id, toolCallId: id })
+                ]
+              }),
+              Prompt.toolMessage({
+                content: [
+                  Prompt.toolApprovalResponsePart({ approvalId: id, approved, reason: "User declined" }),
+                  ...(resolved
+                    ? [Prompt.toolResultPart({
+                      id,
+                      name: "ApprovalTool",
+                      result: { result: id },
+                      isFailure: !approved,
+                      providerExecuted: false
+                    })]
+                    : [])
+                ]
+              })
+            )
+          }
+
+          const options = { prompt, toolkit: ApprovalToolkit }
+          yield* (method === "generateText"
+            ? LanguageModel.generateText(options)
+            : LanguageModel.streamText(options).pipe(Stream.runDrain)).pipe(
+              TestUtils.withLanguageModel({
+                generateText: (opts) => {
+                  capturedPrompt = opts.prompt
+                  return Effect.succeed([finishPart])
+                },
+                streamText: (opts) => {
+                  capturedPrompt = opts.prompt
+                  return [finishPart]
+                }
+              }),
+              Effect.provide(ApprovalToolkit.toLayer({
+                ApprovalTool: ({ action }) =>
+                  Effect.sync(() => {
+                    executed.push(action)
+                    return { result: "approved-result" }
+                  }),
+                DynamicApprovalTool: () => Effect.succeed({ result: "dynamic-result" })
+              }))
+            )
+
+          deepStrictEqual(executed, ["pending-approved"])
+          assertDefined(capturedPrompt)
+          const parts = capturedPrompt.content.flatMap<Prompt.AssistantMessagePart | Prompt.ToolMessagePart>((
+            message
+          ) => message.role === "assistant" || message.role === "tool" ? message.content : [])
+          deepStrictEqual(parts.filter((part) => part.type === "tool-approval-request"), [])
+          deepStrictEqual(parts.filter((part) => part.type === "tool-approval-response"), [])
+          deepStrictEqual(parts.filter((part) => part.type === "tool-call").map((part) => part.id), [
+            "previous-approved",
+            "previous-denied",
+            "pending-approved",
+            "pending-denied"
+          ])
+          deepStrictEqual(
+            parts.filter((part) => part.type === "tool-result").map((part) => ({
+              id: part.id,
+              result: part.result,
+              isFailure: part.isFailure
+            })),
+            [
+              { id: "previous-approved", result: { result: "previous-approved" }, isFailure: false },
+              { id: "previous-denied", result: { result: "previous-denied" }, isFailure: true },
+              { id: "pending-approved", result: { result: "approved-result" }, isFailure: false },
+              {
+                id: "pending-denied",
+                result: { type: "execution-denied", reason: "User declined" },
+                isFailure: true
+              }
+            ]
+          )
+        }))
+    }
+
     it.effect("emits tool-approval-request when tool has needsApproval: true", () =>
       Effect.gen(function*() {
         const parts: Array<Response.StreamPart<Toolkit.Tools<typeof ApprovalToolkit>, "opaque">> = []

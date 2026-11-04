@@ -36,7 +36,7 @@ import * as Response from "./Response.ts"
 import * as ResponseIdTracker from "./ResponseIdTracker.ts"
 import type { SpanTransformer } from "./Telemetry.ts"
 import { CurrentSpanTransformer } from "./Telemetry.ts"
-import type * as Tool from "./Tool.ts"
+import * as Tool from "./Tool.ts"
 import * as Toolkit from "./Toolkit.ts"
 
 /**
@@ -893,6 +893,13 @@ export const make: (params: {
     Effect.map(Option.getOrElse(() => defaultIdGenerator))
   )
 
+  const contentDecoderFor = makeResponseDecoder((toolkit, deferred) =>
+    Schema.decodeEffect(Schema.mutable(Schema.Array(withUndeclaredToolCalls(Response.Part(toolkit), deferred))))
+  )
+  const streamDecoderFor = makeResponseDecoder((toolkit, deferred) =>
+    Schema.decodeEffect(Schema.NonEmptyArray(withUndeclaredToolCalls(Response.StreamPart(toolkit), deferred)))
+  )
+
   const generateText = <
     Options extends NoExcessProperties<GenerateTextOptions<any>, Options>,
     Tools extends Record<string, Tool.Any> = {}
@@ -1132,10 +1139,8 @@ export const make: (params: {
     }
 
     // Check for pending approvals that need resolution
-    const { approved, denied } = collectToolApprovals(
-      providerOptions.prompt.content,
-      { excludeResolved: true }
-    )
+    const { approved: allResolved, denied: allDenied, pendingApproved: approved, pendingDenied: denied } =
+      collectToolApprovals(providerOptions.prompt.content)
     const hasPendingApprovals = approved.length > 0 || denied.length > 0
 
     // If there is no toolkit, the generated content can be returned immediately
@@ -1245,17 +1250,12 @@ export const make: (params: {
 
     // Strip all resolved approval artifacts (both current and from previous
     // rounds) in a single pass before sending to the provider.
-    {
-      const { approved: allResolved, denied: allDenied } = collectToolApprovals(
-        providerOptions.prompt.content
+    if (allResolved.length > 0 || allDenied.length > 0) {
+      providerOptions.prompt = stripResolvedApprovals(
+        providerOptions.prompt,
+        allResolved,
+        allDenied
       )
-      if (allResolved.length > 0 || allDenied.length > 0) {
-        providerOptions.prompt = stripResolvedApprovals(
-          providerOptions.prompt,
-          allResolved,
-          allDenied
-        )
-      }
     }
 
     const tools = typeof toolChoice === "object" && "oneOf" in toolChoice
@@ -1272,20 +1272,17 @@ export const make: (params: {
       }
     }
 
-    const ResponseSchema = Schema.mutable(Schema.Array(withUndeclaredToolCalls(
-      Response.Part(
-        options.disableToolCallResolution === true && !deferToolCallValidation
-          ? makeToolkitWithEncodedParameters(toolkit)
-          : makeToolkitWithOpaqueParameters(toolkit)
-      ),
+    const decodeContent = contentDecoderFor(
+      toolkit,
+      options.disableToolCallResolution === true && !deferToolCallValidation,
       deferToolCallValidation
-    )))
+    )
 
     // If tool call resolution is disabled, return the response without
     // resolving the tool calls that were generated
     if (options.disableToolCallResolution === true) {
       const rawContent = yield* generateWithNonIncrementalFallback()
-      const content = yield* Schema.decodeEffect(ResponseSchema)(rawContent)
+      const content = yield* decodeContent(rawContent)
       if (deferToolCallValidation) {
         yield* validateProviderExecutedToolCalls(makeToolkitWithEncodedParameters(toolkit), rawContent)
       }
@@ -1301,7 +1298,7 @@ export const make: (params: {
     const rawContent = yield* generateWithNonIncrementalFallback()
 
     // Validate before running tool handlers.
-    const content = yield* Schema.decodeEffect(ResponseSchema)(rawContent)
+    const content = yield* decodeContent(rawContent)
     yield* validateProviderExecutedToolCalls(toolkit, rawContent)
 
     // Resolve the generated tool calls. When the finish reason indicates an
@@ -1407,9 +1404,9 @@ export const make: (params: {
     }
 
     // Check for pending approvals that need resolution
-    const { approved: pendingApproved, denied: pendingDenied } = collectToolApprovals(providerOptions.prompt.content, {
-      excludeResolved: true
-    })
+    const { approved: allResolved, denied: allDenied, pendingApproved, pendingDenied } = collectToolApprovals(
+      providerOptions.prompt.content
+    )
     const hasPendingApprovals = pendingApproved.length > 0 || pendingDenied.length > 0
 
     // If there is no toolkit, return immediately
@@ -1556,6 +1553,7 @@ export const make: (params: {
             preliminary: false,
             result: r.encodedResult,
             encodedResult: r.encodedResult,
+            ...modelOutputField(r.modelOutput),
             isFailure: r.isFailure
           }) as Response.StreamPart<Tools>
         )
@@ -1564,9 +1562,6 @@ export const make: (params: {
 
     // Strip all resolved approval artifacts (both current and from previous
     // rounds) in a single pass before sending to the provider.
-    const { approved: allResolved, denied: allDenied } = collectToolApprovals(
-      providerOptions.prompt.content
-    )
     if (allResolved.length > 0 || allDenied.length > 0) {
       providerOptions.prompt = stripResolvedApprovals(
         providerOptions.prompt,
@@ -1589,15 +1584,11 @@ export const make: (params: {
       }
     }
 
-    const ResponseSchema = Schema.NonEmptyArray(withUndeclaredToolCalls(
-      Response.StreamPart(
-        options.disableToolCallResolution === true && !deferToolCallValidation
-          ? makeToolkitWithEncodedParameters(toolkit)
-          : makeToolkitWithOpaqueParameters(toolkit)
-      ),
+    const decodeParts = streamDecoderFor(
+      toolkit,
+      options.disableToolCallResolution === true && !deferToolCallValidation,
       deferToolCallValidation
-    ))
-    const decodeParts = Schema.decodeEffect(ResponseSchema)
+    )
 
     // If tool call resolution is disabled, return the response without
     // resolving the tool calls that were generated
@@ -1638,8 +1629,7 @@ export const make: (params: {
     const deferredFinishParts: Array<Response.StreamPart<Tools>> = []
 
     // Emit pre-resolved tool results so Chat.streamText persists them to
-    // history. This ensures collectToolApprovals({ excludeResolved }) can
-    // find the corresponding tool-results on future rounds.
+    // history, where collectToolApprovals finds them on future rounds.
     if (preResolvedStreamParts.length > 0) {
       yield* Queue.offerAll(queue, preResolvedStreamParts)
     }
@@ -1691,6 +1681,7 @@ export const make: (params: {
             providerExecuted: false,
             result: result.result,
             encodedResult: result.encodedResult,
+            ...modelOutputField(result.modelOutput),
             isFailure: result.isFailure,
             preliminary: result.preliminary
           }) as Response.StreamPart<Tools>
@@ -2072,16 +2063,13 @@ interface ApprovalResult {
   readonly toolCall?: Prompt.ToolCallPart | undefined
 }
 
-interface CollectToolApprovalsOptions {
-  readonly excludeResolved?: boolean
-}
-
 const collectToolApprovals = (
-  messages: ReadonlyArray<Prompt.Message>,
-  options?: CollectToolApprovalsOptions
+  messages: ReadonlyArray<Prompt.Message>
 ): {
   readonly approved: Array<ApprovalResult>
   readonly denied: Array<ApprovalResult>
+  readonly pendingApproved: Array<ApprovalResult>
+  readonly pendingDenied: Array<ApprovalResult>
 } => {
   const requests = new Map<
     string,
@@ -2124,15 +2112,12 @@ const collectToolApprovals = (
 
   const approved: Array<ApprovalResult> = []
   const denied: Array<ApprovalResult> = []
+  const pendingApproved: Array<ApprovalResult> = []
+  const pendingDenied: Array<ApprovalResult> = []
 
   for (const response of responses) {
     const request = requests.get(response.approvalId)
     if (Predicate.isNotUndefined(request)) {
-      // Skip if already resolved
-      if (options?.excludeResolved && toolResultIds.has(request.toolCallId)) {
-        continue
-      }
-
       const result: ApprovalResult = {
         ...response,
         toolCallId: request.toolCallId,
@@ -2141,13 +2126,15 @@ const collectToolApprovals = (
 
       if (response.approved) {
         approved.push(result)
+        if (!toolResultIds.has(request.toolCallId)) pendingApproved.push(result)
       } else {
         denied.push(result)
+        if (!toolResultIds.has(request.toolCallId)) pendingDenied.push(result)
       }
     }
   }
 
-  return { approved, denied }
+  return { approved, denied, pendingApproved, pendingDenied }
 }
 
 /**
@@ -2217,7 +2204,7 @@ const isApprovalNeeded = Effect.fnUntraced(function*<T extends Tool.Any>(
   }
 
   if (typeof tool.needsApproval === "function") {
-    const params = yield* Schema.decodeUnknownEffect(tool.parametersSchema)(
+    const params = yield* Schema.decodeUnknownEffect(Schema.toCodecJson(tool.parametersSchema))(
       toolCall.params
     ) as any
 
@@ -2283,6 +2270,7 @@ const executeApprovedToolCalls = <Tools extends Record<string, Tool.Any>>(
       name: toolCall.name,
       result: terminalResult.result,
       encodedResult: terminalResult.encodedResult,
+      ...modelOutputField(terminalResult.modelOutput),
       isFailure: terminalResult.isFailure,
       preliminary: terminalResult.preliminary,
       providerExecuted: false
@@ -2362,6 +2350,10 @@ const makeInterruptedToolResult = (
   })
 }
 
+// Omits the key entirely so unmapped tool result parts keep their shape.
+const modelOutputField = (modelOutput: ReadonlyArray<Prompt.ToolModelOutputPart> | undefined) =>
+  modelOutput === undefined ? undefined : { modelOutput }
+
 type ToolResolutionResult<Tools extends Record<string, Tool.Any>> =
   | Response.ToolResultPart<
     Tool.Name<Tools[keyof Tools]>,
@@ -2432,6 +2424,7 @@ const resolveToolCalls = <Tools extends Record<string, Tool.Any>>(
                 providerExecuted: false,
                 result: result.result,
                 encodedResult: result.encodedResult,
+                ...modelOutputField(result.modelOutput),
                 isFailure: result.isFailure,
                 preliminary: result.preliminary
               }) as ToolResolutionResult<Tools>
@@ -2461,6 +2454,7 @@ const resolveToolCalls = <Tools extends Record<string, Tool.Any>>(
               providerExecuted: false,
               result: result.result,
               encodedResult: result.encodedResult,
+              ...modelOutputField(result.modelOutput),
               isFailure: result.isFailure,
               preliminary: result.preliminary
             }) as ToolResolutionResult<Tools>
@@ -2476,6 +2470,31 @@ const resolveToolCalls = <Tools extends Record<string, Tool.Any>>(
 // Utilities
 // =============================================================================
 
+// Provider-executed tools keep the provider's payload; locally handled tool
+// calls carry the JSON encoding of their parameters.
+const hasProviderParameters = (tool: Tool.Any): boolean => Tool.isProviderDefined(tool) && !tool.requiresHandler
+
+// Cache one decoder per model and response kind, keyed by validation mode
+// and tool names, parameter encodings and schema identities in insertion order.
+const makeResponseDecoder = <Decode>(make: (toolkit: Toolkit.Any, deferred: boolean) => Decode) => {
+  let cached: { readonly key: ReadonlyArray<unknown>; readonly decode: Decode } | undefined
+  return (toolkit: Toolkit.WithHandler<any>, encoded: boolean, deferred: boolean): Decode => {
+    const key: Array<unknown> = [encoded, deferred]
+    for (const tool of Object.values(toolkit.tools as Record<string, Tool.Any>)) {
+      key.push(tool.name, hasProviderParameters(tool), tool.parametersSchema, tool.successSchema, tool.failureSchema)
+    }
+    if (cached !== undefined && cached.key.length === key.length && cached.key.every((part, i) => part === key[i])) {
+      return cached.decode
+    }
+    const decode = make(
+      encoded ? makeToolkitWithEncodedParameters(toolkit) : makeToolkitWithOpaqueParameters(toolkit),
+      deferred
+    )
+    cached = { key, decode }
+    return decode
+  }
+}
+
 // Stable parameter-mode copies let Response reuse each tool's part schemas.
 const parameterModeTools = new WeakMap<Tool.Any, { encoded?: Tool.Any; opaque?: Tool.Any }>()
 
@@ -2486,7 +2505,11 @@ const withParameterMode = (tool: Tool.Any, mode: "encoded" | "opaque"): Tool.Any
     parameterModeTools.set(tool, tools)
   }
   return tools[mode] ??= tool.setParameters(
-    mode === "encoded" ? Schema.toEncoded(tool.parametersSchema) : Schema.Unknown
+    mode === "opaque"
+      ? Schema.Unknown
+      : hasProviderParameters(tool)
+      ? Schema.toEncoded(tool.parametersSchema)
+      : Schema.toEncoded(Schema.toCodecJson(tool.parametersSchema))
   )
 }
 
