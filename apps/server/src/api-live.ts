@@ -19,7 +19,6 @@ import { PeopleService } from "./people/service.js"
 import { PlacesApiLive } from "./places/api-live.js"
 import { PlacesService } from "./places/service.js"
 import { ProfilesApiLive } from "./profiles/api-live.js"
-import { ProfileLocationsApiLive } from "./profiles/locations-api-live.js"
 import { ProfileLocationsService } from "./profiles/locations-service.js"
 import { ProfilesRepository } from "./profiles/repository.js"
 import { ProfileService } from "./profiles/service.js"
@@ -42,7 +41,6 @@ const ImplementedApi = HttpApi.make(GororobasApi.identifier).add(
   GororobasApi.groups.people,
   GororobasApi.groups.publications,
   GororobasApi.groups.profiles,
-  GororobasApi.groups.profileLocations,
   GororobasApi.groups.places,
   GororobasApi.groups.wiki,
 )
@@ -86,7 +84,6 @@ export const ApiLive = Layer.provide(HttpApiBuilder.layer(ImplementedApi), [
   PeopleApiLive,
   PublicationsApiLive,
   ProfilesApiLive,
-  ProfileLocationsApiLive,
   PlacesApiLive,
   WikiApiLive,
 ]).pipe(

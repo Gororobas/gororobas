@@ -132,15 +132,6 @@ CREATE TABLE profile_locations (
   visibility text NOT NULL, -- InformationVisibility
   created_at text NOT NULL,
   updated_at text NOT NULL,
-  CHECK ((kind = 'FREE_TEXT') = (free_text IS NOT NULL)),
-  CHECK ((kind = 'KNOWN_PLACE') = (place_id IS NOT NULL)),
-  CHECK (
-    kind = 'KNOWN_PLACE'
-    OR (
-      label IS NULL
-      AND elevation IS NULL
-    )
-  ),
   FOREIGN KEY (profile_id) REFERENCES profiles (id) ON DELETE CASCADE,
   FOREIGN KEY (place_id) REFERENCES wiki_article_sources (id)
 );
@@ -252,7 +243,7 @@ CREATE TABLE wiki_article_revisions (
   from_crdt_frontier json NOT NULL, -- LoroDocFrontier
   evaluation text NOT NULL, -- RevisionEvaluation
   evaluation_reason text,
-  has_media_selection integer NOT NULL DEFAULT 0 CHECK (has_media_selection IN (0, 1)), -- distinguishes an empty selection from unchanged media
+  has_media_selection integer NOT NULL DEFAULT 0, -- distinguishes an empty selection from unchanged media
   evaluated_by_id text,
   evaluated_at text,
   created_at text NOT NULL,
@@ -268,7 +259,7 @@ CREATE TABLE wiki_article_revision_media_assets (
   wiki_article_revision_id text NOT NULL,
   media_asset_id text NOT NULL,
   category text,
-  has_category_override integer NOT NULL DEFAULT 0 CHECK (has_category_override IN (0, 1)), -- distinguishes clearing a category from leaving it unchanged
+  has_category_override integer NOT NULL DEFAULT 0, -- distinguishes clearing a category from leaving it unchanged
   descriptions json,
   PRIMARY KEY (wiki_article_revision_id, media_asset_id),
   FOREIGN KEY (wiki_article_revision_id) REFERENCES wiki_article_revisions (id) ON DELETE CASCADE,
@@ -304,11 +295,7 @@ CREATE TABLE wiki_article_translations (
   content json, -- TiptapDocument
   content_plain_text text NOT NULL,
   searchable_content text NOT NULL,
-  origin text,
-  CHECK (
-    kind = 'PLANT'
-    OR origin IS NULL
-  ),
+  origin text, -- only plants have one
   PRIMARY KEY (wiki_article_id, language),
   FOREIGN KEY (wiki_article_id, kind) REFERENCES wiki_article_projections (id, kind) ON DELETE CASCADE
 );
@@ -325,13 +312,21 @@ CREATE TABLE wiki_article_handles (
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE
 );
 
--- PLACE articles backed by a gazetteer place, which keeps their shape and hierarchy.
+-- Every PLACE article's external identifiers and the place containing it. Those created from the
+-- gazetteer have a Who's On First ID, which keeps their shape.
 CREATE TABLE place_projections (
   wiki_article_id text PRIMARY KEY,
-  whos_on_first_id text NOT NULL UNIQUE,
   place_kind text, -- PlaceKind
-  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE
+  whos_on_first_id text UNIQUE,
+  wikidata_id text,
+  parent_place_id text, -- a municipality's state, a state's country
+  FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE,
+  FOREIGN KEY (parent_place_id) REFERENCES wiki_article_sources (id) ON DELETE SET NULL
 );
+
+CREATE INDEX idx_place_projections_wikidata_id ON place_projections (wikidata_id);
+
+CREATE INDEX idx_place_projections_parent_place_id ON place_projections (parent_place_id);
 
 -- Derived relations between articles, one row per source that found them (LinkSource).
 -- `related_wiki_article_id` has no foreign key: content may reference articles that are created
@@ -341,8 +336,6 @@ CREATE TABLE wiki_article_relations (
   related_wiki_article_id text NOT NULL,
   source text NOT NULL, -- LinkSource
   evidence json, -- where the source established the relation; legacy tags have none
-  CHECK (wiki_article_id <> related_wiki_article_id),
-  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL)),
   PRIMARY KEY (wiki_article_id, related_wiki_article_id, source),
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE
 );
@@ -455,7 +448,6 @@ CREATE TABLE publication_wiki_articles (
   wiki_article_id text NOT NULL,
   source text NOT NULL, -- LinkSource
   evidence json, -- where the source established the link; legacy tags have none
-  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL)),
   PRIMARY KEY (publication_id, wiki_article_id, source),
   FOREIGN KEY (publication_id) REFERENCES publication_sources (id) ON DELETE CASCADE,
   FOREIGN KEY (wiki_article_id) REFERENCES wiki_article_sources (id) ON DELETE CASCADE
@@ -524,9 +516,6 @@ CREATE TABLE moderation_events (
   moderation_status text NOT NULL, -- ModerationStatus the decision left the content in
   decided_by_id text,
   decided_at text NOT NULL,
-  CHECK (
-    (publication_id IS NOT NULL) + (publication_comment_id IS NOT NULL) + (media_asset_id IS NOT NULL) = 1
-  ),
   FOREIGN KEY (publication_id) REFERENCES publication_sources (id) ON DELETE CASCADE,
   FOREIGN KEY (publication_comment_id) REFERENCES publication_comments (id) ON DELETE CASCADE,
   FOREIGN KEY (media_asset_id) REFERENCES media_assets (id) ON DELETE CASCADE,

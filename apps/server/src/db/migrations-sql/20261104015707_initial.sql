@@ -141,16 +141,7 @@ CREATE TABLE `profile_locations` (
   `updated_at` text NOT NULL,
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`place_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE NO ACTION,
-  CONSTRAINT `1` FOREIGN KEY (`profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK ((kind = 'FREE_TEXT') = (free_text IS NOT NULL)),
-  CHECK ((kind = 'KNOWN_PLACE') = (place_id IS NOT NULL)),
-  CHECK (
-    kind = 'KNOWN_PLACE'
-    OR (
-      label IS NULL
-      AND elevation IS NULL
-    )
-  )
+  CONSTRAINT `1` FOREIGN KEY (`profile_id`) REFERENCES `profiles` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_profile_locations_profile_id" to table: "profile_locations"
 CREATE INDEX `idx_profile_locations_profile_id` ON `profile_locations` (`profile_id`);
@@ -259,8 +250,7 @@ CREATE TABLE `wiki_article_revisions` (
   PRIMARY KEY (`id`),
   CONSTRAINT `0` FOREIGN KEY (`evaluated_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
   CONSTRAINT `1` FOREIGN KEY (`created_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
-  CONSTRAINT `2` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK (has_media_selection IN (0, 1))
+  CONSTRAINT `2` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_wiki_article_revisions_article_evaluation" to table: "wiki_article_revisions"
 CREATE INDEX `idx_wiki_article_revisions_article_evaluation` ON `wiki_article_revisions` (`wiki_article_id`, `evaluation`);
@@ -273,8 +263,7 @@ CREATE TABLE `wiki_article_revision_media_assets` (
   `descriptions` json NULL,
   PRIMARY KEY (`wiki_article_revision_id`, `media_asset_id`),
   CONSTRAINT `0` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`wiki_article_revision_id`) REFERENCES `wiki_article_revisions` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK (has_category_override IN (0, 1))
+  CONSTRAINT `1` FOREIGN KEY (`wiki_article_revision_id`) REFERENCES `wiki_article_revisions` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_wiki_article_revision_media_assets_media_asset" to table: "wiki_article_revision_media_assets"
 CREATE INDEX `idx_wiki_article_revision_media_assets_media_asset` ON `wiki_article_revision_media_assets` (`media_asset_id`);
@@ -306,11 +295,7 @@ CREATE TABLE `wiki_article_translations` (
   `searchable_content` text NOT NULL,
   `origin` text NULL,
   PRIMARY KEY (`wiki_article_id`, `language`),
-  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `kind`) REFERENCES `wiki_article_projections` (`id`, `kind`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK (
-    kind = 'PLANT'
-    OR origin IS NULL
-  )
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`, `kind`) REFERENCES `wiki_article_projections` (`id`, `kind`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create "wiki_article_handles" table
 CREATE TABLE `wiki_article_handles` (
@@ -326,13 +311,20 @@ CREATE UNIQUE INDEX `wiki_article_handles_kind_handle` ON `wiki_article_handles`
 -- Create "place_projections" table
 CREATE TABLE `place_projections` (
   `wiki_article_id` text NULL,
-  `whos_on_first_id` text NOT NULL,
   `place_kind` text NULL,
+  `whos_on_first_id` text NULL,
+  `wikidata_id` text NULL,
+  `parent_place_id` text NULL,
   PRIMARY KEY (`wiki_article_id`),
-  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+  CONSTRAINT `0` FOREIGN KEY (`parent_place_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
+  CONSTRAINT `1` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "place_projections_whos_on_first_id" to table: "place_projections"
 CREATE UNIQUE INDEX `place_projections_whos_on_first_id` ON `place_projections` (`whos_on_first_id`);
+-- Create index "idx_place_projections_wikidata_id" to table: "place_projections"
+CREATE INDEX `idx_place_projections_wikidata_id` ON `place_projections` (`wikidata_id`);
+-- Create index "idx_place_projections_parent_place_id" to table: "place_projections"
+CREATE INDEX `idx_place_projections_parent_place_id` ON `place_projections` (`parent_place_id`);
 -- Create "wiki_article_relations" table
 CREATE TABLE `wiki_article_relations` (
   `wiki_article_id` text NOT NULL,
@@ -340,9 +332,7 @@ CREATE TABLE `wiki_article_relations` (
   `source` text NOT NULL,
   `evidence` json NULL,
   PRIMARY KEY (`wiki_article_id`, `related_wiki_article_id`, `source`),
-  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK (wiki_article_id <> related_wiki_article_id),
-  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL))
+  CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_wiki_article_relations_related" to table: "wiki_article_relations"
 CREATE INDEX `idx_wiki_article_relations_related` ON `wiki_article_relations` (`related_wiki_article_id`);
@@ -446,8 +436,7 @@ CREATE TABLE `publication_wiki_articles` (
   `evidence` json NULL,
   PRIMARY KEY (`publication_id`, `wiki_article_id`, `source`),
   CONSTRAINT `0` FOREIGN KEY (`wiki_article_id`) REFERENCES `wiki_article_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK ((source = 'LEGACY_TAG') = (evidence IS NULL))
+  CONSTRAINT `1` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_publication_wiki_articles_wiki_article_id" to table: "publication_wiki_articles"
 CREATE INDEX `idx_publication_wiki_articles_wiki_article_id` ON `publication_wiki_articles` (`wiki_article_id`);
@@ -511,10 +500,7 @@ CREATE TABLE `moderation_events` (
   CONSTRAINT `0` FOREIGN KEY (`decided_by_id`) REFERENCES `people` (`id`) ON UPDATE NO ACTION ON DELETE SET NULL,
   CONSTRAINT `1` FOREIGN KEY (`media_asset_id`) REFERENCES `media_assets` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
   CONSTRAINT `2` FOREIGN KEY (`publication_comment_id`) REFERENCES `publication_comments` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CONSTRAINT `3` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
-  CHECK (
-    (publication_id IS NOT NULL) + (publication_comment_id IS NOT NULL) + (media_asset_id IS NOT NULL) = 1
-  )
+  CONSTRAINT `3` FOREIGN KEY (`publication_id`) REFERENCES `publication_sources` (`id`) ON UPDATE NO ACTION ON DELETE CASCADE
 );
 -- Create index "idx_moderation_events_publication_id" to table: "moderation_events"
 CREATE INDEX `idx_moderation_events_publication_id` ON `moderation_events` (`publication_id`);

@@ -1,18 +1,24 @@
 import { NodeServices } from "@effect/platform-node"
 import { expect } from "@effect/vitest"
 import {
+  createCrdtListItemId,
   gazetteerPlaceLabel,
   type GazetteerPlaceSummary,
   InformationVisibility,
   type PartialDate,
   type ProfileLocationData,
+  Handle,
   type ProfileLocationPayload,
+  type WikiArticleQueriedCardData,
+  WikidataId,
+  WikiPlaceArticle,
 } from "@gororobas/domain"
 import { And, describeFeature, Given, runSteps, Then, When } from "@gororobas/effect-bdd"
 import { Array as EffectArray, Effect, Layer, Option, Order, Record, Result, Schema } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
 
+import { WikiArticlesRepository } from "../src/wiki/repository.js"
 import { ApiTestClient, startTestClockAtRealTime } from "./api-test-client.js"
 import {
   PeopleBackground,
@@ -65,9 +71,7 @@ const clientOf = ({
   })
 
 const locationsOf = (context: LocationsContext, person: string) =>
-  Effect.flatMap(clientOf({ context, person }), (client) =>
-    client.profileLocations.listMyLocations(),
-  )
+  Effect.flatMap(clientOf({ context, person }), (client) => client.profiles.listMyLocations())
 
 const locationText = (location: ProfileLocationData) =>
   location.place._tag === "FreeText" ? location.place.text : location.place.placeName
@@ -96,7 +100,7 @@ const placeInput = ({
   })
 
 const addLocation = (client: Client, payload: ProfileLocationPayload) =>
-  client.profileLocations.addMyLocation({ payload })
+  client.profiles.addMyLocation({ payload })
 
 const givenPeople = () =>
   Given("the following people exist:", {
@@ -300,6 +304,176 @@ const placeArticlesWithoutContributors = () =>
     },
   )
 
+const placeParent = SqlSchema.findOne({
+  Request: Schema.String,
+  Result: Schema.Struct({ parentName: Schema.NullOr(Schema.String) }),
+  execute: (name) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+        SELECT json_extract(parent.common_names, '$[0].name') AS parent_name
+        FROM place_projections place
+        JOIN wiki_article_translations t ON t.wiki_article_id = place.wiki_article_id
+          AND t.language = 'pt'
+        LEFT JOIN wiki_article_translations parent
+          ON parent.wiki_article_id = place.parent_place_id AND parent.language = 'pt'
+        WHERE json_extract(t.common_names, '$[0].name') = ${name}
+      `,
+    ),
+})
+
+const placeIsInside = () =>
+  And("the place {string:place} is inside {string:parent}", {
+    params: Schema.Struct({ place: Schema.String, parent: Schema.String }),
+    handler: (context: LocationsContext, { place, parent }) =>
+      Effect.gen(function* () {
+        expect((yield* placeParent(place)).parentName).toBe(parent)
+        return context
+      }),
+  })
+
+const placeIsInsideNothing = () =>
+  And("the place {string:place} is inside nothing", {
+    params: Schema.Struct({ place: Schema.String }),
+    handler: (context: LocationsContext, { place }) =>
+      Effect.gen(function* () {
+        expect((yield* placeParent(place)).parentName).toBeNull()
+        return context
+      }),
+  })
+
+const placeHandleNamed = SqlSchema.findOne({
+  Request: Schema.String,
+  Result: Schema.Struct({ handle: Handle }),
+  execute: (name) =>
+    SqlClient.SqlClient.use(
+      (sql) => sql`
+        SELECT h.handle FROM wiki_article_handles h
+        JOIN wiki_article_translations t ON t.wiki_article_id = h.wiki_article_id
+          AND t.language = h.language
+        WHERE h.kind = 'PLACE' AND h.language = 'pt'
+          AND json_extract(t.common_names, '$[0].name') = ${name}
+      `,
+    ),
+})
+
+const placePage = (context: LocationsContext, name: string) =>
+  Effect.gen(function* () {
+    const { handle } = yield* placeHandleNamed(name)
+    const page = yield* (yield* context.api.visitor).wiki.getWikiArticleByHandleAndKind({
+      params: { kind: "PLACE", handle },
+      query: { language: "pt" },
+    })
+    expect(page.kind).toBe("PLACE")
+    return page
+  })
+
+const cardNames = (cards: ReadonlyArray<WikiArticleQueriedCardData>) =>
+  cards.flatMap((card) => EffectArray.take(card.commonNames, 1).map(({ name }) => name))
+
+const pageShowsAncestors = () =>
+  Then("the page of {string:place} shows it inside {string:parent} and {string:country}", {
+    params: Schema.Struct({ place: Schema.String, parent: Schema.String, country: Schema.String }),
+    handler: (context: LocationsContext, { place, parent, country }) =>
+      Effect.gen(function* () {
+        const page = yield* placePage(context, place)
+        expect(page.kind === "PLACE" ? cardNames(page.ancestorPlaces) : []).toEqual([
+          parent,
+          country,
+        ])
+        return context
+      }),
+  })
+
+const pageShowsChild = () =>
+  And("the page of {string:place} shows {string:child} inside it", {
+    params: Schema.Struct({ place: Schema.String, child: Schema.String }),
+    handler: (context: LocationsContext, { place, child }) =>
+      Effect.gen(function* () {
+        const page = yield* placePage(context, place)
+        expect(page.kind === "PLACE" ? cardNames(page.childPlaces) : []).toEqual([child])
+        return context
+      }),
+  })
+
+const mapSurroundings = (context: LocationsContext, place: string) =>
+  Effect.gen(function* () {
+    const page = yield* placePage(context, place)
+    const map = page.kind === "PLACE" ? page.map : null
+    expect(map).not.toBeNull()
+    return Option.map(Option.fromNullishOr(map), (found) =>
+      Option.map(found.surroundings, (outline) => outline.name),
+    ).pipe(Option.flatten)
+  })
+
+const mapDrawsInside = () =>
+  And("the map on the page of {string:place} draws it inside {string:surroundings}", {
+    params: Schema.Struct({ place: Schema.String, surroundings: Schema.String }),
+    handler: (context: LocationsContext, { place, surroundings }) =>
+      Effect.gen(function* () {
+        expect(yield* mapSurroundings(context, place)).toEqual(Option.some(surroundings))
+        return context
+      }),
+  })
+
+const mapDrawsInsideNothing = () =>
+  And("the map on the page of {string:place} draws it inside nothing", {
+    params: Schema.Struct({ place: Schema.String }),
+    handler: (context: LocationsContext, { place }) =>
+      Effect.gen(function* () {
+        expect(yield* mapSurroundings(context, place)).toEqual(Option.none())
+        return context
+      }),
+  })
+
+const wrotePlaceArticle = () =>
+  Given(
+    "{string:person} wrote a PLACE article {string:name} about Wikidata's {string:wikidataId}",
+    {
+      params: Schema.Struct({
+        person: Schema.String,
+        name: Schema.String,
+        wikidataId: WikidataId,
+      }),
+      handler: (context: LocationsContext, { person, name, wikidataId }) =>
+        Effect.gen(function* () {
+          const translation = {
+            commonNames: [
+              { id: createCrdtListItemId(), name, grammaticalGender: Option.none() },
+            ] as const,
+            content: Option.none(),
+          }
+
+          yield* (yield* WikiArticlesRepository).createWikiArticle({
+            wikiArticle: WikiPlaceArticle.EditableArticle.make({
+              kind: "PLACE",
+              attributes: WikiPlaceArticle.EditableAttributes.make({
+                placeKind: Option.some("MUNICIPALITY"),
+                whosOnFirstId: Option.none(),
+                wikidataId: Option.some(wikidataId),
+                geonamesId: Option.none(),
+                parentPlaceId: Option.none(),
+              }),
+              translations: { pt: translation, es: translation, en: translation },
+            }),
+            createdById: personNamed(context.actors, person),
+            status: "PUBLISHED",
+          })
+
+          return context
+        }),
+    },
+  )
+
+const onlyPlaceArticleByOneContributor = () =>
+  Then("the only PLACE article is {string:name}, by one contributor", {
+    params: Schema.Struct({ name: Schema.String }),
+    handler: (context: LocationsContext, { name }) =>
+      Effect.gen(function* () {
+        expect(yield* placeArticles()).toEqual([{ name, contributors: 1 }])
+        return context
+      }),
+  })
+
 const locationsAreStep = (names: ReadonlyArray<string>) => ({
   params: Schema.Struct({
     person: Schema.String,
@@ -413,7 +587,7 @@ const triesToRemoveOthers = () =>
     handler: (context: LocationsContext, { person, owner, text }) =>
       Effect.gen(function* () {
         const id = yield* locationIdOf({ context, person: owner, text })
-        const refusal = yield* (yield* clientOf({ context, person })).profileLocations
+        const refusal = yield* (yield* clientOf({ context, person })).profiles
           .deleteMyLocation({ params: { id } })
           .pipe(Effect.flip)
         // Someone else's location is as missing as one that never existed.
@@ -428,7 +602,7 @@ const removesOwn = () =>
     handler: (context: LocationsContext, { person, text }) =>
       Effect.gen(function* () {
         const id = yield* locationIdOf({ context, person: person, text })
-        yield* (yield* clientOf({ context, person })).profileLocations.deleteMyLocation({
+        yield* (yield* clientOf({ context, person })).profiles.deleteMyLocation({
           params: { id },
         })
         return context
@@ -471,9 +645,34 @@ await Effect.runPromise(
             Given("{string:person} has these locations:", hasTheseLocations),
             And("{string:person} has these locations:", hasTheseLocations),
             placeArticlesWithoutContributors(),
+            placeIsInside(),
+            placeIsInside(),
+            placeIsInsideNothing(),
           ),
       },
     )
+
+    Scenario("A place's page shows the places containing it and the places inside it", {
+      layer: ProfileLocationsTestLayer,
+      steps: () =>
+        runSteps(
+          Given("{string:person} has these locations:", hasTheseLocations),
+          pageShowsAncestors(),
+          pageShowsChild(),
+          mapDrawsInside(),
+          mapDrawsInsideNothing(),
+        ),
+    })
+
+    Scenario("A place someone already wrote about isn't created again", {
+      layer: ProfileLocationsTestLayer,
+      steps: () =>
+        runSteps(
+          wrotePlaceArticle(),
+          And("{string:person} has these locations:", hasTheseLocations),
+          onlyPlaceArticleByOneContributor(),
+        ),
+    })
 
     Scenario("Entries go from where people are now to where they've been", {
       layer: ProfileLocationsTestLayer,

@@ -7,6 +7,7 @@ import { Schema } from "effect"
 
 import { PlaceKind } from "../common/enums.js"
 import { CountryCode, WhosOnFirstId } from "../common/external-identifiers.js"
+import { OptionalColumn } from "../common/primitives.js"
 import { AreaGeometry, BoundingBox } from "./geometry.js"
 
 /** The places people can pick. Municipalities are the finest detail anyone's location records. */
@@ -42,6 +43,23 @@ export const GazetteerPlace = Schema.Struct({
 })
 
 export type GazetteerPlace = typeof GazetteerPlace.Type
+
+export const PlaceOutline = Schema.Struct({
+  name: Schema.String,
+  boundingBox: BoundingBox,
+  geometry: AreaGeometry,
+})
+
+export type PlaceOutline = typeof PlaceOutline.Type
+
+/** A gazetteer place's outline, drawn inside its closest ancestor's so readers see where it lies. */
+export const PlaceMap = Schema.Struct({
+  place: PlaceOutline,
+  /** None for countries, which the gazetteer places in nothing larger. */
+  surroundings: OptionalColumn(PlaceOutline),
+})
+
+export type PlaceMap = typeof PlaceMap.Type
 
 export const GazetteerSearchParams = Schema.Struct({
   text: Schema.Trimmed.check(Schema.isNonEmpty(), Schema.isMaxLength(100)),

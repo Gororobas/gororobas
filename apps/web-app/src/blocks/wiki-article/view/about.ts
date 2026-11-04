@@ -17,6 +17,7 @@ import { aboutName, ofName } from "../../../lib/wiki-article-names"
 import { imageUrl } from "../../../media-urls"
 import { AppText } from "../../../ui/app-text"
 import * as Icons from "../../../ui/icons"
+import * as PlaceOutline from "../../../ui/place-outline/view"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { ProfileRow } from "../../../ui/profile-row"
 import { PublicationCard } from "../../../ui/publication-card"
@@ -600,6 +601,49 @@ export const contributorList = (
       ),
   })
 
+const mapStyle = Style.make({ maxInlineSize: "24rem", marginInline: "auto" })
+
+/** Where a gazetteer place lies: its outline, inside the place containing it. */
+const placeMap = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
+  if (page.kind !== "PLACE" || page.map === null) {
+    return []
+  }
+
+  const { place, surroundings } = page.map
+
+  return [
+    SectionCard.view(
+      {
+        title: "Onde fica",
+        icon: Icons.mapPoint,
+        children: [
+          h.div(styledAttributes([], mapStyle), [
+            PlaceOutline.view(
+              {
+                geometry: place.geometry,
+                boundingBox: place.boundingBox,
+                label: place.name,
+                ...Option.match(surroundings, {
+                  onNone: () => ({}),
+                  onSome: (outline) => ({
+                    surroundings: {
+                      geometry: outline.geometry,
+                      boundingBox: outline.boundingBox,
+                      label: outline.name,
+                    },
+                  }),
+                }),
+              },
+              h,
+            ),
+          ]),
+        ],
+      },
+      h,
+    ),
+  ]
+}
+
 /** One column on small screens, in reading order. Wide screens move the reader's own
  *  relationship to the article, and the people around it, into a sidebar. */
 const layoutStyle = Style.make({
@@ -634,7 +678,7 @@ export const view = (
   h.div(styledAttributes([], sectionsStyle, layoutStyle), [
     h.div(styledAttributes([], columnStyle), [
       ...ordered({ order: 1, children: hero(page, h) }, h),
-      ...ordered({ order: 3, children: [Overview.view(page, h)] }, h),
+      ...ordered({ order: 3, children: [Overview.view(page, h), ...placeMap(page, h)] }, h),
       ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
       ...ordered({ order: 6, children: aboutContent(page, h) }, h),
       ...ordered({ order: 7, children: publicationsPreview({ model, page, maybeToday }, h) }, h),

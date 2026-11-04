@@ -1,0 +1,1 @@
+export { ProfileLocationsEditorBlock } from "./block"

@@ -12,7 +12,7 @@ import {
   ApplicationComposition,
   type ApplicationViewBuilder,
   AuthenticationBinding,
-  MyPlacesBinding,
+  ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
@@ -164,13 +164,13 @@ const page = (model: typeof Model.Type, h: ApplicationViewBuilder): Html =>
         h,
       ),
     MyPlaces: () =>
-      Option.match(model.maybeMyPlaces, {
+      Option.match(model.maybeProfileLocationsEditor, {
         onNone: () => h.empty,
-        onSome: (myPlaces) =>
+        onSome: (editor) =>
           h.block(
-            MyPlacesBinding.embedView({
-              slotId: "my-places",
-              model: myPlaces,
+            ProfileLocationsEditorBinding.embedView({
+              slotId: "profile-locations-editor",
+              model: editor,
               viewInputs: { isSignedIn: isSignedIn(model.authentication) },
             }),
           ),

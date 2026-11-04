@@ -6,13 +6,17 @@ import {
   EvaluateWikiArticleRevisionPayload,
   InvalidCrdtUpdateError,
   MediaAssetId,
+  type GazetteerPlace,
   MediaNotFoundError,
+  PlaceMap,
+  PlaceOutline,
   Policies,
   SupportedLanguage,
   WikiArticleId,
   WikiArticleLookup,
   WikiArticleNotFoundError,
   WikiArticleRevisionId,
+  type WhosOnFirstId,
   type PlantCultivarProjectedAttributes,
   type WikiMediaSelection,
   type WikiSearchParams,
@@ -23,6 +27,7 @@ import { SqlClient } from "effect/sql"
 import { Enrichment } from "../enrichment/enrichment.js"
 import { MediaAssetsRepository } from "../media-assets/repository.js"
 import { MediaAssetsService } from "../media-assets/service.js"
+import { Gazetteer } from "../places/gazetteer.js"
 import { WikiArticlesRepository } from "./repository.js"
 
 const resolveProperty = <A>(
@@ -43,6 +48,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
   {
     make: Effect.gen(function* () {
       const repository = yield* WikiArticlesRepository
+      const gazetteer = yield* Gazetteer
       const enrichment = yield* Enrichment
       const media = yield* MediaAssetsService
       const mediaRepository = yield* MediaAssetsRepository
@@ -148,7 +154,54 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
                     language: lookup.language,
                   })
                 : Option.none(),
+            ancestorPlaces:
+              page.value.kind === "PLACE"
+                ? yield* repository.listAncestorPlaceCards({
+                    placeId: page.value.id,
+                    language: lookup.language,
+                  })
+                : [],
+            childPlaces:
+              page.value.kind === "PLACE"
+                ? yield* repository.listChildPlaceCards({
+                    placeId: page.value.id,
+                    language: lookup.language,
+                  })
+                : [],
+            map:
+              page.value.kind === "PLACE" && Option.isSome(page.value.attributes.whosOnFirstId)
+                ? yield* findPlaceMap({
+                    whosOnFirstId: page.value.attributes.whosOnFirstId.value,
+                    language: lookup.language,
+                  })
+                : null,
           }
+        })
+
+      const toOutline = ({ name, boundingBox, geometry }: GazetteerPlace) =>
+        PlaceOutline.make({ name, boundingBox, geometry })
+
+      /** The place's outline inside its closest ancestor's, from the gazetteer. */
+      const findPlaceMap = ({
+        whosOnFirstId,
+        language,
+      }: Readonly<{ whosOnFirstId: WhosOnFirstId; language: SupportedLanguage }>) =>
+        Effect.gen(function* () {
+          const maybePlace = yield* gazetteer.findPlace(whosOnFirstId, language)
+          if (Option.isNone(maybePlace)) return null
+
+          const place = maybePlace.value
+
+          const surroundings = yield* Effect.transposeOption(
+            Option.map(EffectArray.head(place.ancestors), (ancestor) =>
+              gazetteer.findPlace(ancestor.id, language),
+            ),
+          ).pipe(Effect.map(Option.flatten))
+
+          return PlaceMap.make({
+            place: toOutline(place),
+            surroundings: Option.map(surroundings, toOutline),
+          })
         })
 
       const findParentPlant = ({

@@ -16,15 +16,10 @@ export const Locations = AsyncData.Schema(Schema.Array(ProfileLocationData), Cli
 export const FormMode = Schema.Literals(["Place", "FreeText"])
 export type FormMode = typeof FormMode.Type
 
-/** Where the device's position stands: asked for, being resolved, or refused. */
-export const DeviceLocation = Schema.Literals([
-  "Idle",
-  "Locating",
-  "Unavailable",
-  "OutsideGazetteer",
-])
+/** Where finding the municipality around the device stands: asked for, under way, or refused. */
+export const DeviceLookup = Schema.Literals(["Idle", "Locating", "Unavailable", "OutsideGazetteer"])
 
-export type DeviceLocation = typeof DeviceLocation.Type
+export type DeviceLookup = typeof DeviceLookup.Type
 
 export const Form = Schema.Struct({
   maybeEditingId: Schema.Option(ProfileLocationId),
@@ -33,9 +28,9 @@ export const Form = Schema.Struct({
   /** The chosen place, with its outline to show what gets saved. */
   maybePlace: Schema.Option(GazetteerPlace),
   label: Schema.String,
-  /** Only from the device, never typed. */
+  /** Only from a device inside the chosen place, never typed. */
   maybeElevation: Schema.Option(ElevationInMeters),
-  deviceLocation: DeviceLocation,
+  deviceLookup: DeviceLookup,
   startYear: Schema.String,
   startMonth: Schema.String,
   /** Still there: the entry has no end, whatever end was typed before. */

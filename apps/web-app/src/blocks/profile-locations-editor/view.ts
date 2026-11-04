@@ -5,9 +5,10 @@ import {
   gazetteerPlaceLabel,
   type GazetteerPlaceSummary,
 } from "@gororobas/domain/places/domain"
-import { ProfileLocationData } from "@gororobas/domain/profiles/locations"
+import { type ElevationInMeters, ProfileLocationData } from "@gororobas/domain/profiles/locations"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
+import * as Length from "effect-units/Length"
 import { AsyncData } from "foldkit"
 import { childAttributes, type Html } from "foldkit/html"
 
@@ -43,15 +44,15 @@ import {
   CONFIRM_DELETE_BUTTON_ID,
   entryMenuButtonId,
   FREE_TEXT_INPUT_ID,
-  MyPlacesComposition,
-  type MyPlacesViewBuilder,
+  ProfileLocationsEditorComposition,
+  type ProfileLocationsEditorViewBuilder,
   PlaceComboboxBinding,
   placeFieldId,
 } from "./composition"
 import { DateField, Message } from "./message"
 import type { Form, Model } from "./model"
 
-type ViewMessage = typeof MyPlacesComposition.Message.Type
+type ViewMessage = typeof ProfileLocationsEditorComposition.Message.Type
 
 const LocationPlace = ProfileLocationData.fields.place
 
@@ -82,7 +83,7 @@ const visibilityDescriptions: Readonly<Record<InformationVisibility, string>> = 
   PRIVATE: "Só você. Ajuda a Gororobas a te mostrar o que é relevante.",
 }
 
-const deviceLocationMessages: Readonly<Record<Form["deviceLocation"], string | null>> = {
+const deviceLookupMessages: Readonly<Record<Form["deviceLookup"], string | null>> = {
   Idle: null,
   Locating: "Procurando o município onde você está…",
   Unavailable:
@@ -120,7 +121,7 @@ const surfaceStyle = Style.make({
   backgroundColor: tones.neutral.shade[100],
 })
 
-const status = (text: string, h: MyPlacesViewBuilder) =>
+const status = (text: string, h: ProfileLocationsEditorViewBuilder) =>
   AppText.view(
     {
       element: "p",
@@ -132,7 +133,7 @@ const status = (text: string, h: MyPlacesViewBuilder) =>
     h,
   )
 
-const alert = (text: string, h: MyPlacesViewBuilder) =>
+const alert = (text: string, h: ProfileLocationsEditorViewBuilder) =>
   AppText.view(
     {
       element: "p",
@@ -144,7 +145,7 @@ const alert = (text: string, h: MyPlacesViewBuilder) =>
     h,
   )
 
-const muted = (text: string, h: MyPlacesViewBuilder) =>
+const muted = (text: string, h: ProfileLocationsEditorViewBuilder) =>
   AppText.view({ element: "p", appearance: "footnote", isMuted: true, children: [text] }, h)
 
 const period = (location: ProfileLocationData): string | null => {
@@ -156,7 +157,8 @@ const period = (location: ProfileLocationData): string | null => {
   return null
 }
 
-const formatMeters = (meters: number) => `${meters.toLocaleString("pt-BR")} m`
+const formatElevation = (elevation: ElevationInMeters) =>
+  `${Length.inMeters(elevation).toLocaleString("pt-BR")} m`
 
 // TIMELINE
 
@@ -308,7 +310,7 @@ const metaChip = (
     label: string
     background: "neutral" | "primary" | "accent"
   }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ) =>
   h.span(
     styledAttributes(
@@ -381,9 +383,9 @@ const entryMenu = (
     location: ProfileLocationData
     title: string
   }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ): ReadonlyArray<Html> => {
-  const id = `my-places-menu-${location.id}`
+  const id = `profile-locations-editor-menu-${location.id}`
   const anchor = `--${id}`
 
   return [
@@ -435,7 +437,10 @@ const entryMenu = (
   ]
 }
 
-const thumbnail = (place: ProfileLocationData["place"], h: MyPlacesViewBuilder): Html =>
+const thumbnail = (
+  place: ProfileLocationData["place"],
+  h: ProfileLocationsEditorViewBuilder,
+): Html =>
   h.div(
     styledAttributes([], thumbnailSize, entryThumbnailStyle),
     LocationPlace.guards.KnownPlace(place) && place.gazetteerPlace !== null
@@ -478,7 +483,7 @@ const entryView = (
     isDeleting: boolean
     isConfirmingDelete: boolean
   }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ): Html => {
   const place = location.place
   const title = entryTitle(place)
@@ -600,7 +605,7 @@ const stop = (
     isCurrent: boolean
     content: Html
   }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ): Html =>
   h.keyed("li")(key, styledAttributes([], stopStyle), [
     h.span(
@@ -613,7 +618,7 @@ const stop = (
     content,
   ])
 
-const timeline = (model: Model, h: MyPlacesViewBuilder): ReadonlyArray<Html> =>
+const timeline = (model: Model, h: ProfileLocationsEditorViewBuilder): ReadonlyArray<Html> =>
   AsyncData.matchData(model.locations, {
     onEmpty: () => [status("Carregando seus lugares…", h)],
     onFailure: () => [
@@ -633,7 +638,7 @@ const emptyStateStyle = Style.make({
 
 const timelineEntries = (
   { model, locations }: Readonly<{ model: Model; locations: ReadonlyArray<ProfileLocationData> }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ): ReadonlyArray<Html> => {
   const maybeEditingId = Option.flatMap(model.maybeForm, (form) => form.maybeEditingId)
 
@@ -728,7 +733,7 @@ const fieldsetStyle = Style.make({
   padding: 0,
 })
 
-const legend = (text: string, h: MyPlacesViewBuilder) =>
+const legend = (text: string, h: ProfileLocationsEditorViewBuilder) =>
   h.legend(styledAttributes([], Style.make({ padding: 0, marginBlockEnd: space[3] })), [
     AppText.view(
       { element: "span", appearance: "regular", weight: "semibold", children: [text] },
@@ -746,7 +751,7 @@ const textInput = (
     maxLength?: number
     onInput: (value: string) => typeof Message.Type
   }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ) =>
   AppField.view(
     {
@@ -793,7 +798,7 @@ const dateInputs = (
     yearField: DateField
     monthField: DateField
   }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ) =>
   h.div(styledAttributes([h.Role("group"), h.AriaLabel(config.label)], tightStackStyle), [
     AppText.view(
@@ -853,7 +858,7 @@ const checkboxStyle = Style.make({
   cursor: "pointer",
 }).pipe(Style.when(When.focusVisible, focusRingDeclarations))
 
-const datesFieldset = (form: Form, h: MyPlacesViewBuilder) =>
+const datesFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
   h.fieldset(styledAttributes([], fieldsetStyle), [
     legend("Quando", h),
     h.div(styledAttributes([], datesStyle), [
@@ -937,7 +942,7 @@ const selectedVisibilityOptionStyle = Style.make({
   backgroundColor: tones.primary.shade[100],
 }).pipe(Style.when(When.hover, { borderColor: tones.primary.shade[600] }))
 
-const visibilityFieldset = (form: Form, h: MyPlacesViewBuilder) =>
+const visibilityFieldset = (form: Form, h: ProfileLocationsEditorViewBuilder) =>
   h.fieldset(styledAttributes([], fieldsetStyle), [
     legend("Quem pode ver", h),
     h.div(
@@ -954,7 +959,7 @@ const visibilityFieldset = (form: Form, h: MyPlacesViewBuilder) =>
                 styledAttributes(
                   [
                     h.Type("radio"),
-                    h.Name("my-places-visibility"),
+                    h.Name("profile-locations-editor-visibility"),
                     h.Value(visibility),
                     h.Checked(isSelected),
                     h.OnChange(() => Message.ChoseVisibility({ visibility })),
@@ -1035,7 +1040,7 @@ const previewStyle = Style.make({
 })
 
 /** The place's name over its hierarchy, so places with the same name tell apart. */
-const placeItem = (place: GazetteerPlaceSummary, h: MyPlacesViewBuilder): Html =>
+const placeItem = (place: GazetteerPlaceSummary, h: ProfileLocationsEditorViewBuilder): Html =>
   h.div(styledAttributes([], placeItemStyle), [
     AppText.view(
       { element: "span", appearance: "regular", weight: "medium", children: [place.name] },
@@ -1059,7 +1064,7 @@ const placeItem = (place: GazetteerPlaceSummary, h: MyPlacesViewBuilder): Html =
 
 const placePreview = (
   { place, form }: Readonly<{ place: GazetteerPlace; form: Form }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ): Html =>
   h.div(styledAttributes([], previewStyle), [
     h.div(styledAttributes([], thumbnailSize), [
@@ -1083,7 +1088,7 @@ const placePreview = (
       ...EffectArray.fromOption(
         Option.map(form.maybeElevation, (elevation) =>
           h.div(styledAttributes([], rowStyle), [
-            muted(`${formatMeters(elevation)} de altitude, pelo aparelho. Só você vê.`, h),
+            muted(`${formatElevation(elevation)} de altitude, pelo aparelho. Só você vê.`, h),
             AppButton.view(
               {
                 mode: "bleed",
@@ -1101,7 +1106,7 @@ const placePreview = (
 
 const placeFields = (
   { model, form }: Readonly<{ model: Model; form: Form }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ): ReadonlyArray<Html> => {
   const labelOf = (id: WhosOnFirstId) =>
     Option.match(
@@ -1113,7 +1118,7 @@ const placeFields = (
       },
     )
 
-  const deviceMessage = deviceLocationMessages[form.deviceLocation]
+  const deviceMessage = deviceLookupMessages[form.deviceLookup]
 
   return [
     h.div(styledAttributes([], stackStyle), [
@@ -1161,11 +1166,11 @@ const placeFields = (
           {
             mode: "outline",
             size: "sm",
-            isDisabled: form.deviceLocation === "Locating",
+            isDisabled: form.deviceLookup === "Locating",
             onClick: Message.ClickedUseDeviceLocation(),
             children: [
               Icons.gps({ size: "sm" }),
-              form.deviceLocation === "Locating" ? "Localizando…" : "Usar minha localização",
+              form.deviceLookup === "Locating" ? "Localizando…" : "Usar minha localização",
             ],
           },
           h,
@@ -1188,7 +1193,7 @@ const placeFields = (
         placePreview({ place, form }, h),
         textInput(
           {
-            id: "my-places-label",
+            id: "profile-locations-editor-label",
             label: "Como você chama esse lugar? (opcional)",
             value: form.label,
             placeholder: "Ex.: sítio na estrada para Sáchica",
@@ -1203,7 +1208,7 @@ const placeFields = (
   ]
 }
 
-const freeTextFields = (form: Form, h: MyPlacesViewBuilder): ReadonlyArray<Html> => [
+const freeTextFields = (form: Form, h: ProfileLocationsEditorViewBuilder): ReadonlyArray<Html> => [
   h.div(styledAttributes([], stackStyle), [
     textInput(
       {
@@ -1239,7 +1244,7 @@ const formActionsStyle = Style.make({
 
 const formView = (
   { model, form }: Readonly<{ model: Model; form: Form }>,
-  h: MyPlacesViewBuilder,
+  h: ProfileLocationsEditorViewBuilder,
 ): Html => {
   const isEditing = Option.isSome(form.maybeEditingId)
   const title = isEditing ? "Editar lugar" : "Novo lugar no itinerário"
@@ -1306,7 +1311,7 @@ export type ViewInputs = Readonly<{ isSignedIn: boolean }>
 
 const TITLE = "Meu itinerário geográfico"
 
-const intro = (h: MyPlacesViewBuilder) =>
+const intro = (h: ProfileLocationsEditorViewBuilder) =>
   AppText.view(
     {
       element: "p",
@@ -1319,7 +1324,7 @@ const intro = (h: MyPlacesViewBuilder) =>
     h,
   )
 
-export const view = MyPlacesComposition.makeView.withInputs<ViewInputs>(
+export const view = ProfileLocationsEditorComposition.makeView.withInputs<ViewInputs>(
   // oxlint-disable-next-line custom-lint-rules/no-many-function-parameters -- Foldkit's view signature: Model, view inputs and builder.
   (model, { isSignedIn }, h) => {
     const isAdding = Option.exists(model.maybeForm, (form) => Option.isNone(form.maybeEditingId))

@@ -415,6 +415,44 @@ export const listCultivarCards = SqlSchema.findAll({
     ),
 })
 
+/** A place's ancestors stop here, so a hierarchy edited into a cycle can't loop forever. */
+const MAXIMUM_PLACE_DEPTH = 8
+
+/** Cards of the published places containing a place, from its parent to the country. */
+export const listAncestorPlaceCards = SqlSchema.findAll({
+  Request: Schema.Struct({ placeId: WikiArticleId, language: SupportedLanguage }),
+  Result: QueriedCardRow,
+  execute: ({ placeId, language }) =>
+    SqlClient.use(
+      (sql) => sql`
+        WITH RECURSIVE ancestors(id, depth) AS (
+          SELECT parent_place_id, 1 FROM place_projections
+          WHERE wiki_article_id = ${placeId} AND parent_place_id IS NOT NULL
+          UNION ALL
+          SELECT place.parent_place_id, ancestors.depth + 1 FROM place_projections place
+          JOIN ancestors ON place.wiki_article_id = ancestors.id
+          WHERE place.parent_place_id IS NOT NULL
+            AND ancestors.depth < ${sql.literal(String(MAXIMUM_PLACE_DEPTH))}
+        )
+        ${publishedCardsQuery(sql, language)}
+          AND a.id IN (SELECT id FROM ancestors)
+        ORDER BY (SELECT MIN(depth) FROM ancestors WHERE ancestors.id = a.id)
+      `,
+    ),
+})
+
+/** Cards of the published places directly inside a place, by name. */
+export const listChildPlaceCards = SqlSchema.findAll({
+  Request: Schema.Struct({ placeId: WikiArticleId, language: SupportedLanguage }),
+  Result: QueriedCardRow,
+  execute: ({ placeId, language }) =>
+    SqlClient.use(
+      (sql) => sql`${publishedCardsQuery(sql, language)}
+        AND a.id IN (SELECT wiki_article_id FROM place_projections WHERE parent_place_id = ${placeId})
+        ORDER BY json_extract(t.common_names, '$[0].name') COLLATE NOCASE, a.id`,
+    ),
+})
+
 const RelatedCardRow = Schema.Struct({
   ...QueriedCardRow.fields,
   links: Schema.fromJsonString(RelatedWikiArticle.fields.links),

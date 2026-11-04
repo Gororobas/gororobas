@@ -1,1 +1,0 @@
-export { MyPlacesBlock } from "./block"

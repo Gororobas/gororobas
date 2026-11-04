@@ -12,7 +12,16 @@ import {
 import { agreeingWith } from "../../../../lib/wiki-article-names"
 import type { WikiArticleViewBuilder } from "../../composition"
 import type { Page } from "../shared"
-import { chipFact, freeChipFact, linkFact, namesFact, overviewCard, textFact } from "./facts"
+import {
+  articleLinksFact,
+  chipFact,
+  freeChipFact,
+  identifierFact,
+  linkFact,
+  namesFact,
+  overviewCard,
+  textFact,
+} from "./facts"
 import * as Plant from "./plant"
 
 const joined = (maybeValues: Option.Option<ReadonlyArray<string>>): Option.Option<string> =>
@@ -77,8 +86,8 @@ const kindFacts = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
           },
           h,
         ),
-      PLACE: ({ attributes }) =>
-        chipFact(
+      PLACE: ({ attributes, childPlaces }) => [
+        ...chipFact(
           {
             id: "place-kind",
             title: "Tipo de lugar",
@@ -87,6 +96,32 @@ const kindFacts = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
           },
           h,
         ),
+        ...articleLinksFact({ title: "Lugares dentro", cards: childPlaces }, h),
+        ...identifierFact(
+          {
+            title: "Wikidata",
+            maybeId: attributes.wikidataId,
+            toUrl: (id) => new URL(`https://www.wikidata.org/wiki/${id}`),
+          },
+          h,
+        ),
+        ...identifierFact(
+          {
+            title: "GeoNames",
+            maybeId: attributes.geonamesId,
+            toUrl: (id) => new URL(`https://www.geonames.org/${id}`),
+          },
+          h,
+        ),
+        ...identifierFact(
+          {
+            title: "Who's On First",
+            maybeId: attributes.whosOnFirstId,
+            toUrl: (id) => new URL(`https://spelunker.whosonfirst.org/id/${id}`),
+          },
+          h,
+        ),
+      ],
       TOOL: ({ attributes }) =>
         chipFact(
           {

@@ -56,38 +56,77 @@ export const outlinePath = (geometry: AreaGeometry, box: BoundingBox): string =>
     .join("")
 }
 
-/** A place's simplified outline, so people see the area their location records. It fills its
- *  container's width, as a square. */
+// NOTE: The same ramp as the area, dimmed, so the place stands out from what surrounds it.
+const surroundingsStyle = Style.make({
+  fill: tones.primary.ramp[200],
+  stroke: tones.primary.ramp[400],
+  strokeWidth: 1,
+  strokeLinejoin: "round",
+  vectorEffect: "non-scaling-stroke",
+})
+
+/** The smallest box holding both, in case a simplified outline pokes out of its surroundings. */
+const enclosingBox = (first: BoundingBox, second: BoundingBox): BoundingBox => ({
+  minLongitude: Math.min(first.minLongitude, second.minLongitude),
+  minLatitude: Math.min(first.minLatitude, second.minLatitude),
+  maxLongitude: Math.max(first.maxLongitude, second.maxLongitude),
+  maxLatitude: Math.max(first.maxLatitude, second.maxLatitude),
+})
+
+type Outline = Readonly<{ geometry: AreaGeometry; boundingBox: BoundingBox }>
+
+/**
+ * A place's simplified outline, so people see the area it covers. With `surroundings`, such as
+ * a municipality's state, it's drawn inside them. It fills its container's width, as a square.
+ */
 export const view = <Message>(
-  config: Readonly<{
-    geometry: AreaGeometry
-    boundingBox: BoundingBox
-    label: string
-    styles?: ReadonlyArray<Style.Style>
-  }>,
+  config: Outline &
+    Readonly<{
+      label: string
+      surroundings?: Outline & Readonly<{ label: string }>
+      styles?: ReadonlyArray<Style.Style>
+    }>,
   h: HtmlBuilder<Message>,
-): Html =>
-  h.svg(
+): Html => {
+  const { surroundings } = config
+  const box =
+    surroundings === undefined
+      ? config.boundingBox
+      : enclosingBox(config.boundingBox, surroundings.boundingBox)
+  const description =
+    surroundings === undefined
+      ? `Contorno de ${config.label}`
+      : `Contorno de ${config.label} em ${surroundings.label}`
+
+  return h.svg(
     styledAttributes(
       [
         h.Xmlns("http://www.w3.org/2000/svg"),
         h.ViewBox(`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`),
         h.Role("img"),
-        h.AriaLabel(`Contorno de ${config.label}`),
+        h.AriaLabel(description),
       ],
       outlineStyle,
       ...(config.styles ?? []),
     ),
     [
-      h.title([], [`Contorno de ${config.label}`]),
+      h.title([], [description]),
+      ...(surroundings === undefined
+        ? []
+        : [
+            h.path(
+              styledAttributes(
+                [h.D(outlinePath(surroundings.geometry, box)), h.Attribute("fill-rule", "evenodd")],
+                surroundingsStyle,
+              ),
+            ),
+          ]),
       h.path(
         styledAttributes(
-          [
-            h.D(outlinePath(config.geometry, config.boundingBox)),
-            h.Attribute("fill-rule", "evenodd"),
-          ],
+          [h.D(outlinePath(config.geometry, box)), h.Attribute("fill-rule", "evenodd")],
           areaStyle,
         ),
       ),
     ],
   )
+}

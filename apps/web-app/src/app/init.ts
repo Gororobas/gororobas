@@ -1,6 +1,7 @@
 import { Option } from "effect"
 import type { Url } from "foldkit/url"
 
+import { DeviceLocation } from "../lib/device-location"
 import { enterRouteStep } from "./change-route"
 import { ReadToday } from "./command"
 import { ApplicationComposition } from "./composition"
@@ -13,9 +14,10 @@ export const init = ApplicationComposition.makeInit((url: Url) => {
     model: {
       route,
       maybeToday: Option.none(),
+      deviceLocation: DeviceLocation.Unrequested(),
       maybeWikiArticle: Option.none(),
       maybeWikiArticleDebug: Option.none(),
-      maybeMyPlaces: Option.none(),
+      maybeProfileLocationsEditor: Option.none(),
     },
     commands: [ReadToday()],
     steps: [enterRouteStep(route)],

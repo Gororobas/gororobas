@@ -8,7 +8,8 @@
  */
 import { type Handle, stringToHandle } from "@gororobas/domain"
 import { HandleTakenError } from "@gororobas/domain/common/errors"
-import { Array as EffectArray, Effect, Option, Random } from "effect"
+import { Array as EffectArray, Effect, Option } from "effect"
+import { customAlphabet } from "nanoid"
 
 export type HandleAvailability<E, R> = (handle: Handle) => Effect.Effect<boolean, E, R>
 
@@ -23,11 +24,14 @@ export const claimHandle = Effect.fn("claimHandle")(function* <E, R>(input: {
   return input.handle
 })
 
-/** A random suffix keeps the name readable without guessing how many namesakes exist. */
-const MINIMUM_SUFFIX = 1000
-const MAXIMUM_SUFFIX = 9999
+/**
+ * A random suffix keeps the name readable without guessing how many namesakes exist. Lowercase
+ * letters and digits are all `Handle` accepts, and 36⁶ suffixes make collisions rare.
+ */
+const SUFFIX_LENGTH = 6
+const randomSuffix = customAlphabet("0123456789abcdefghijklmnopqrstuvwxyz", SUFFIX_LENGTH)
 /** Leaves room for the suffix within `Handle`'s 90 characters. */
-const MAXIMUM_BASE_LENGTH = 90 - `-${MAXIMUM_SUFFIX}`.length
+const MAXIMUM_BASE_LENGTH = 90 - "-".length - SUFFIX_LENGTH
 
 /**
  * The first of `names` whose handle is available, in order; otherwise the first name's handle
@@ -47,7 +51,7 @@ export const allocateHandle = Effect.fn("allocateHandle")(function* <E, R>(input
     ),
   )
 
-  // Fallback names are written in code, and digits can't make a valid handle invalid.
+  // Fallback names are written in code, and suffixes can't make a valid handle invalid.
   const candidates = EffectArray.isReadonlyArrayNonEmpty(fromNames)
     ? fromNames
     : EffectArray.of(yield* stringToHandle(input.fallbackName).pipe(Effect.orDie))
@@ -58,7 +62,7 @@ export const allocateHandle = Effect.fn("allocateHandle")(function* <E, R>(input
   const base = EffectArray.headNonEmpty(candidates).slice(0, MAXIMUM_BASE_LENGTH)
 
   const suffixed = Effect.gen(function* () {
-    const suffix = yield* Random.nextIntBetween(MINIMUM_SUFFIX, MAXIMUM_SUFFIX)
+    const suffix = yield* Effect.sync(randomSuffix)
     const handle = yield* stringToHandle(`${base}-${suffix}`).pipe(Effect.orDie)
     return { handle, isAvailable: yield* input.isAvailable(handle) }
   })

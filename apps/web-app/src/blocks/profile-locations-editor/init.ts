@@ -1,9 +1,9 @@
 import { Option } from "effect"
 
-import { MyPlacesComposition } from "./composition"
+import { ProfileLocationsEditorComposition } from "./composition"
 import { Locations } from "./model"
 
-export const init = MyPlacesComposition.makeInit(() => ({
+export const init = ProfileLocationsEditorComposition.makeInit(() => ({
   model: {
     locations: Locations.Loading(),
     reloadCount: 0,

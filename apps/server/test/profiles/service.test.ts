@@ -92,7 +92,7 @@ describe("ProfileService reads", () => {
         language: "pt",
       })
 
-      const profiles = yield* repository.searchProfiles({ text: "andes" })
+      const profiles = yield* repository.searchProfiles({ text: "andes", language: "pt" })
 
       expect(profiles.map(({ id }) => id)).toEqual([sharesPublicly.id])
       expect(profiles[0]?.location).toEqual({ text: "Tropical Andes", placeHandle: null })

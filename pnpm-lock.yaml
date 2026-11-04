@@ -362,12 +362,18 @@ importers:
       effect:
         specifier: ^4.0.5
         version: 4.0.5
+      effect-units:
+        specifier: 'catalog:'
+        version: 1.0.1(effect@4.0.5)
       loro-crdt:
         specifier: 'catalog:'
         version: 1.16.4(patch_hash=14330de4b1c08af3704243bbe8e27e2d89cc8703576fd24b9f2030fd00b758bd)
       mediabunny:
         specifier: ^1.61.6
         version: 1.61.6
+      nanoid:
+        specifier: 'catalog:'
+        version: 6.0.2
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@26.6.5)
@@ -377,7 +383,7 @@ importers:
     devDependencies:
       '@ariga/atlas':
         specifier: latest
-        version: 1.3.5
+        version: 1.3.6
       '@effect/sql-sqlite-node':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)
@@ -644,8 +650,8 @@ importers:
 
 packages:
 
-  '@ariga/atlas@1.3.5':
-    resolution: {integrity: sha512-MjPnLaCGEOmjLqrk+BjjMhOzk+Wxq2M9Tt8kBeX12rOdaG1bKxXWvmunYF2UGBLQH7fd1HZCmrow/kpGj7Tppw==}
+  '@ariga/atlas@1.3.6':
+    resolution: {integrity: sha512-x3KF+EblPiXK3EBZuHT7+eLqr8nrjsJkuRrQh/aU3hTaZKISAsyaZrsmuwtH8JKOVfL3TCE71g5ZpFjl21dWJQ==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -4147,7 +4153,7 @@ packages:
 
 snapshots:
 
-  '@ariga/atlas@1.3.5': {}
+  '@ariga/atlas@1.3.6': {}
 
   '@babel/helper-string-parser@7.29.7': {}
 

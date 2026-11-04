@@ -7,7 +7,7 @@ import type { Url } from "foldkit/url"
 
 import {
   AuthenticationBinding,
-  MyPlacesBinding,
+  ProfileLocationsEditorBinding,
   SearchBinding,
   WikiArticleBinding,
   WikiArticleDebugBinding,
@@ -19,18 +19,18 @@ import { ApplicationRoute, urlToApplicationRoute } from "./route"
 const clearPagesStep = makeFieldsStep(() => ({
   maybeWikiArticle: () => Option.none(),
   maybeWikiArticleDebug: () => Option.none(),
-  maybeMyPlaces: () => Option.none(),
+  maybeProfileLocationsEditor: () => Option.none(),
 }))
 
 /** The timeline reloads every time the page opens, so changes made elsewhere show up. */
-const showMyPlacesStep = makeStep((model) =>
-  MyPlacesBinding.init({
+const showProfileLocationsEditorStep = makeStep((model) =>
+  ProfileLocationsEditorBinding.init({
     args: [],
     toParentModel: (child) =>
       modifyFields(model, {
         maybeWikiArticle: () => Option.none(),
         maybeWikiArticleDebug: () => Option.none(),
-        maybeMyPlaces: () => Option.some(child),
+        maybeProfileLocationsEditor: () => Option.some(child),
       }),
   }),
 )
@@ -79,7 +79,7 @@ export const enterRouteStep = (route: ApplicationRoute) =>
     Search: ({ _tag, ...query }) =>
       Update.combineSteps([clearPagesStep, SearchBinding.informQueryChanged({ query })]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),
-    MyPlaces: () => showMyPlacesStep,
+    MyPlaces: () => showProfileLocationsEditorStep,
     NotFound: () => clearPagesStep,
   })
 

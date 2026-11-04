@@ -38,8 +38,10 @@
     "@yielded/auth": "catalog:",
     "@yielded/auth-persistence": "catalog:",
     "effect": "catalog:",
+    "effect-units": "catalog:",
     "loro-crdt": "catalog:",
     "mediabunny": "^1.61.6",
+    "nanoid": "catalog:",
     "sharp": "^0.35.5",
     "uuid": "catalog:"
   },

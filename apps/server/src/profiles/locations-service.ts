@@ -115,7 +115,7 @@ const findLatestKnownPlace = SqlSchema.findOneOption({
       (sql) => sql`
         SELECT place.whos_on_first_id FROM profile_locations location
         JOIN place_projections place ON place.wiki_article_id = location.place_id
-        WHERE location.profile_id = ${profileId}
+        WHERE location.profile_id = ${profileId} AND place.whos_on_first_id IS NOT NULL
         ORDER BY ${profileLocationOrder(sql)}
         LIMIT 1
       `,
@@ -323,13 +323,16 @@ export class ProfileLocationsService extends Context.Service<ProfileLocationsSer
       )
 
       /** The country of the latest entry with a gazetteer place, to rank place searches. */
-      const latestKnownCountry = (profileId: ProfileId) =>
+      const latestKnownCountry = ({
+        profileId,
+        language,
+      }: Readonly<{ profileId: ProfileId; language: SupportedLanguage }>) =>
         Effect.gen(function* () {
           const latest = yield* findLatestKnownPlace(profileId)
           if (Option.isNone(latest)) return Option.none()
           const summaries = yield* gazetteer.findSummaries({
             ids: [latest.value.whosOnFirstId],
-            language: "pt",
+            language,
           })
           return Option.fromNullishOr(summaries[latest.value.whosOnFirstId]?.countryCode)
         })

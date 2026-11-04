@@ -7,6 +7,7 @@ import {
   WikiArticleRevisionId,
   PlaceKind,
   WhosOnFirstId,
+  WikidataId,
   WikiArticleId,
   WikiArticleMediaAssetRow,
   WikiArticleSourceRow,
@@ -106,12 +107,14 @@ export const upsertArticleRow = SqlSchema.void({
     ),
 })
 
-/** Gazetteer-backed places, so profile locations and filters can join on Who's On First IDs. */
+/** So profile locations, filters and the place hierarchy can join on places' identifiers. */
 export const upsertPlaceProjectionRow = SqlSchema.void({
   Request: Schema.Struct({
     wikiArticleId: WikiArticleId,
-    whosOnFirstId: WhosOnFirstId,
     placeKind: Schema.NullOr(PlaceKind),
+    whosOnFirstId: Schema.NullOr(WhosOnFirstId),
+    wikidataId: Schema.NullOr(WikidataId),
+    parentPlaceId: Schema.NullOr(WikiArticleId),
   }),
   execute: (row) =>
     SqlClient.use(

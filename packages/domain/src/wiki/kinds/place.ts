@@ -2,6 +2,7 @@ import { Schema } from "effect"
 
 import { PlaceKind } from "../../common/enums.js"
 import { GeoNamesId, WhosOnFirstId, WikidataId } from "../../common/external-identifiers.js"
+import { WikiArticleId } from "../../common/ids.js"
 import { OptionalColumn } from "../../common/primitives.js"
 import { defineKind } from "./define-kind.js"
 
@@ -11,6 +12,8 @@ const ProjectedAttributes = Schema.Struct({
   whosOnFirstId: OptionalColumn(WhosOnFirstId),
   wikidataId: OptionalColumn(WikidataId),
   geonamesId: OptionalColumn(GeoNamesId),
+  /** The PLACE article containing this one: a municipality's state, a state's country. */
+  parentPlaceId: OptionalColumn(WikiArticleId),
 })
 
 export const WikiPlaceArticle = defineKind({

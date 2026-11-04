@@ -57,6 +57,8 @@ import {
 import {
   listCards,
   listCardsByIds,
+  listAncestorPlaceCards,
+  listChildPlaceCards,
   listRelatedCards,
   searchCards,
   listRevisionHistory,
@@ -177,11 +179,13 @@ const persistPlaceProjection = (input: {
   sourceData: WikiArticleEditableData
   wikiArticleId: WikiArticleId
 }) =>
-  input.sourceData.kind === "PLACE" && Option.isSome(input.sourceData.attributes.whosOnFirstId)
+  input.sourceData.kind === "PLACE"
     ? upsertPlaceProjectionRow({
         wikiArticleId: input.wikiArticleId,
-        whosOnFirstId: input.sourceData.attributes.whosOnFirstId.value,
         placeKind: Option.getOrNull(input.sourceData.attributes.placeKind),
+        whosOnFirstId: Option.getOrNull(input.sourceData.attributes.whosOnFirstId),
+        wikidataId: Option.getOrNull(input.sourceData.attributes.wikidataId),
+        parentPlaceId: Option.getOrNull(input.sourceData.attributes.parentPlaceId),
       })
     : deletePlaceProjectionRow(input.wikiArticleId)
 
@@ -526,6 +530,8 @@ export class WikiArticlesRepository extends Context.Service<WikiArticlesReposito
         listRevisionHistory,
         listPublishedCultivars,
         listCultivarCards,
+        listAncestorPlaceCards,
+        listChildPlaceCards,
         listBookmarks,
         listBookmarkers,
         listContributors,

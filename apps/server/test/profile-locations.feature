@@ -37,6 +37,25 @@ Feature: Profile locations
       | place          | label | from | until | visibility |
       | Villa de Leyva |       |      |       | PRIVATE    |
     Then there are PLACE articles for "Colômbia", "Boyacá" and "Villa de Leyva", without contributors
+    And the place "Villa de Leyva" is inside "Boyacá"
+    And the place "Boyacá" is inside "Colômbia"
+    And the place "Colômbia" is inside nothing
+
+  Scenario: A place's page shows the places containing it and the places inside it
+    Given "Cora" has these locations:
+      | place          | label | from | until | visibility |
+      | Villa de Leyva |       |      |       | PUBLIC     |
+    Then the page of "Villa de Leyva" shows it inside "Boyacá" and "Colômbia"
+    And the page of "Boyacá" shows "Villa de Leyva" inside it
+    And the map on the page of "Villa de Leyva" draws it inside "Boyacá"
+    And the map on the page of "Colômbia" draws it inside nothing
+
+  Scenario: A place someone already wrote about isn't created again
+    Given "Davi" wrote a PLACE article "Villa de Leyva" about Wikidata's "Q1409503"
+    And "Cora" has these locations:
+      | place          | label | from | until | visibility |
+      | Villa de Leyva |       |      |       | PUBLIC     |
+    Then the only PLACE article is "Villa de Leyva", by one contributor
 
   Scenario: Entries go from where people are now to where they've been
     Given "Cora" has these locations:

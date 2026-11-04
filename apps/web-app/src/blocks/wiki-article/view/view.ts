@@ -5,7 +5,8 @@ import { AsyncData } from "foldkit"
 import type { Html } from "foldkit/html"
 
 import { type WikiArticleTab, wikiArticleUrl } from "../../../app/route"
-import { ofName, primaryName } from "../../../lib/wiki-article-names"
+import { placeKindLabels } from "../../../lib/vocabulary"
+import { inPreposition, ofName, primaryName } from "../../../lib/wiki-article-names"
 import { AppText } from "../../../ui/app-text"
 import { styledAttributes } from "../../../ui/pleat-attributes"
 import { focusRingDeclarations } from "../../../ui/styles/focus-ring"
@@ -149,6 +150,40 @@ const parentPlantLink = (card: WikiArticleQueriedCardData, h: WikiArticleViewBui
     h,
   )
 
+const articleLink = (card: WikiArticleQueriedCardData, h: WikiArticleViewBuilder): Html =>
+  h.a(styledAttributes([h.Href(wikiArticleUrl(card))], parentPlantLinkStyle), [primaryName(card)])
+
+/** "Município em Boyacá · Colombia", each containing place leading to its own page. */
+const placeLineage = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> => {
+  if (page.kind !== "PLACE") {
+    return []
+  }
+
+  const kindLabel = Option.match(page.attributes.placeKind, {
+    onNone: () => "Lugar",
+    onSome: (placeKind) => placeKindLabels[placeKind],
+  })
+
+  return EffectArray.match(page.ancestorPlaces, {
+    onEmpty: () => [],
+    onNonEmpty: ([parent, ...others]) => [
+      AppText.view(
+        {
+          element: "p",
+          appearance: "large",
+          styles: [parentPlantStyle],
+          children: [
+            `${kindLabel} ${inPreposition(parent)} `,
+            articleLink(parent, h),
+            ...others.flatMap((ancestor) => [" · ", articleLink(ancestor, h)]),
+          ],
+        },
+        h,
+      ),
+    ],
+  })
+}
+
 /** The first photo, linking to every photo of the article. */
 const headerThumbnail = (
   { page, size }: Readonly<{ page: Page; size: "sm" | "md" }>,
@@ -197,6 +232,7 @@ const header = (
             ...EffectArray.fromOption(
               Option.map(parentPlant(page), (card) => parentPlantLink(card, h)),
             ),
+            ...placeLineage(page, h),
             ...EffectArray.fromOption(
               Option.map(scientificName(page), (name) =>
                 AppText.view(

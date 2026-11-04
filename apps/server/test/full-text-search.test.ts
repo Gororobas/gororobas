@@ -81,6 +81,7 @@ describe("full-text search", () => {
           const profiles = yield* ProfilesRepository.use((repository) =>
             repository.searchProfiles({
               text: uppercase ? part.toUpperCase() : part.toLowerCase(),
+              language: "pt",
             }),
           )
 
@@ -99,7 +100,7 @@ describe("full-text search", () => {
 
       expect(
         yield* ProfilesRepository.use((repository) =>
-          repository.searchProfiles({ text: "bananna" }),
+          repository.searchProfiles({ text: "bananna", language: "pt" }),
         ),
       ).toEqual([])
     }).pipe(Effect.provide(TestLayer)),
@@ -112,9 +113,9 @@ describe("full-text search", () => {
       const profile = yield* makeProfileFixture({ id: person.id, name: "João Semente" })
       yield* insertPersonWithDependencies({ person, profile })
 
-      expect((yield* repository.searchProfiles({ text: "joao" })).map(({ id }) => id)).toEqual([
-        profile.id,
-      ])
+      expect(
+        (yield* repository.searchProfiles({ text: "joao", language: "pt" })).map(({ id }) => id),
+      ).toEqual([profile.id])
 
       yield* repository.updateProfileRow({
         id: profile.id,
@@ -122,13 +123,13 @@ describe("full-text search", () => {
         updatedAt: profile.updatedAt,
       })
 
-      expect(yield* repository.searchProfiles({ text: "joao" })).toEqual([])
-      expect((yield* repository.searchProfiles({ text: "mraia" })).map(({ id }) => id)).toEqual([
-        profile.id,
-      ])
-      expect((yield* repository.searchProfiles({ text: "maria" })).map(({ id }) => id)).toEqual([
-        profile.id,
-      ])
+      expect(yield* repository.searchProfiles({ text: "joao", language: "pt" })).toEqual([])
+      expect(
+        (yield* repository.searchProfiles({ text: "mraia", language: "pt" })).map(({ id }) => id),
+      ).toEqual([profile.id])
+      expect(
+        (yield* repository.searchProfiles({ text: "maria", language: "pt" })).map(({ id }) => id),
+      ).toEqual([profile.id])
     }).pipe(Effect.provide(TestLayer)),
   )
 })

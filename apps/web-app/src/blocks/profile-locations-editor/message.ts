@@ -1,12 +1,12 @@
 import { InformationVisibility } from "@gororobas/domain/common/enums"
 import { ProfileLocationId } from "@gororobas/domain/common/ids"
 import { GazetteerPlace, GazetteerPlaceSummary } from "@gororobas/domain/places/domain"
-import { ElevationInMeters, ProfileLocationData } from "@gororobas/domain/profiles/locations"
+import { ProfileLocationData } from "@gororobas/domain/profiles/locations"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
 
 import { ClientFailure } from "../../lib/client-failure"
-import { DeviceLocation, FormMode } from "./model"
+import { DeviceLookup, FormMode } from "./model"
 
 export const DateField = Schema.Literals(["startYear", "startMonth", "endYear", "endMonth"])
 export type DateField = typeof DateField.Type
@@ -32,11 +32,9 @@ export const Message = defineMessageUnion({
   FailedLoadPlace: {},
 
   ClickedUseDeviceLocation: {},
-  SucceededLocateDevice: {
-    place: GazetteerPlace,
-    maybeElevation: Schema.Option(ElevationInMeters),
-  },
-  FailedLocateDevice: { reason: DeviceLocation },
+  InformedOfDeviceLocation: {},
+  SucceededFindMunicipality: { place: GazetteerPlace },
+  FailedFindMunicipality: { reason: DeviceLookup },
 
   CompletedFocusElement: {},
 
@@ -49,4 +47,9 @@ export const Message = defineMessageUnion({
   CancelledDeleteLocation: {},
   SucceededDeleteLocation: {},
   FailedDeleteLocation: { message: Schema.String },
+})
+
+export const OutMessage = defineMessageUnion({
+  /** Using the device's position: the application reads it and informs the editor. */
+  RequestedDeviceLocation: {},
 })

@@ -5,6 +5,7 @@ import { MediaAssetId, PersonId, WikiArticleId, WikiArticleRevisionId } from "..
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { toSearchableText } from "../common/utils/strings.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
+import { PlaceMap } from "../places/domain.js"
 import { tiptapToText } from "../rich-text/tiptap-to-text.js"
 import { WikiAnimalArticle } from "./kinds/animal.js"
 import { WikiBookArticle } from "./kinds/book.js"
@@ -164,7 +165,15 @@ export const WikiArticleQueriedPageData = Schema.Union([
     parentPlant: OptionalColumn(WikiCultivarParentPlant),
   }),
   WikiResourceArticle.QueriedPageData,
-  WikiPlaceArticle.QueriedPageData,
+  Schema.Struct({
+    ...WikiPlaceArticle.QueriedPageData.fields,
+    /** Published places containing this one, from its parent to the country. */
+    ancestorPlaces: Schema.Array(WikiArticleQueriedCardData),
+    /** Published places whose parent is this one, by name. */
+    childPlaces: Schema.Array(WikiArticleQueriedCardData),
+    /** Null for places that aren't in the gazetteer. */
+    map: Schema.NullOr(PlaceMap),
+  }),
   WikiToolArticle.QueriedPageData,
   WikiUncategorizedArticle.QueriedPageData,
 ]).pipe(Schema.toTaggedUnion("kind"))

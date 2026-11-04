@@ -5,7 +5,8 @@
  * Entries never hold coordinates. A known place is a PLACE wiki article for a municipality, state
  * or country, and the only detail finer than that is the elevation a device reported.
  */
-import { Array as EffectArray, Option, Schema, SchemaGetter } from "effect"
+import { Array as EffectArray, Option, Schema, SchemaTransformation } from "effect"
+import * as Length from "effect-units/Length"
 
 import { InformationVisibility } from "../common/enums.js"
 import { WhosOnFirstId } from "../common/external-identifiers.js"
@@ -19,17 +20,37 @@ import {
 import { PartialDate } from "../common/utils/dates.js"
 import { GazetteerPlace } from "../places/domain.js"
 
+const ELEVATION_STEP_IN_METERS = 10
+
+const toElevationStep = (meters: number) =>
+  Math.round(meters / ELEVATION_STEP_IN_METERS) * ELEVATION_STEP_IN_METERS
+
+const ElevationNumber = Schema.Finite.check(Schema.isBetween({ minimum: -500, maximum: 9000 }))
+
+const elevationTransformation = SchemaTransformation.transform({
+  decode: (meters: number) => Length.meters(toElevationStep(meters)),
+  encode: (length: Length.Length) => toElevationStep(Length.inMeters(length)),
+})
+
 /**
- * Meters above sea level, rounded to 10: as precise as the device allows, without pretending to
- * more. Readers other than its owner never see it.
+ * Height above sea level, stored as meters rounded to 10: as precise as the device allows,
+ * without pretending to more. Readers other than its owner never see it.
  */
-export const ElevationInMeters = Schema.Finite.check(
-  Schema.isBetween({ minimum: -500, maximum: 9000 }),
-).pipe(
-  Schema.decodeTo(Schema.Int.check(Schema.isMultipleOf(10)), {
-    decode: SchemaGetter.transform((meters: number) => Math.round(meters / 10) * 10),
-    encode: SchemaGetter.transform((meters: number) => meters),
-  }),
+export const ElevationInMeters = ElevationNumber.pipe(
+  Schema.decodeTo(
+    Length.Length.annotate({
+      // Generate elevations through the same storage conversion, so they round-trip exactly.
+      toCodecArbitrary: () =>
+        Schema.link<Length.Length>()(
+          Schema.Int.check(
+            Schema.isBetween({ minimum: -500, maximum: 9000 }),
+            Schema.isMultipleOf(ELEVATION_STEP_IN_METERS),
+          ),
+          elevationTransformation,
+        ),
+    }),
+    elevationTransformation,
+  ),
 )
 
 export type ElevationInMeters = typeof ElevationInMeters.Type

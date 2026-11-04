@@ -1,10 +1,13 @@
 import type { Block } from "foldkit"
+import { modifyFields } from "foldkit/struct"
 
 import { AuthenticationBlock } from "../blocks/authentication"
-import { MyPlacesBlock } from "../blocks/my-places"
+import { ProfileLocationsEditorBlock } from "../blocks/profile-locations-editor"
 import { SearchBlock } from "../blocks/search"
 import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
+import { DeviceLocation } from "../lib/device-location"
+import { LocateDevice } from "./command"
 import { ApplicationDefinition } from "./definition"
 import { ApplicationRoute } from "./route"
 
@@ -42,10 +45,24 @@ export const WikiArticleDebugBinding = ApplicationDefinition.makeBinding(WikiArt
   subscriptions: { when: (model, wikiArticleId) => isDebugRouteFor(model.route, wikiArticleId) },
 })
 
-export const MyPlacesBinding = ApplicationDefinition.makeBinding(MyPlacesBlock, {
-  field: "maybeMyPlaces",
-  delivery: { when: (model) => ApplicationRoute.guards.MyPlaces(model.route) },
-  subscriptions: { when: (model) => ApplicationRoute.guards.MyPlaces(model.route) },
+export const ProfileLocationsEditorBinding = ApplicationDefinition.makeBinding(
+  ProfileLocationsEditorBlock,
+  {
+    field: "maybeProfileLocationsEditor",
+    delivery: {
+      when: (model) => ApplicationRoute.guards.MyPlaces(model.route),
+      toUpdateContext: (model) => [model.deviceLocation],
+    },
+    subscriptions: { when: (model) => ApplicationRoute.guards.MyPlaces(model.route) },
+  },
+).withOutMessagePolicy({
+  fold: ApplicationDefinition.makeOutMessageFold(ProfileLocationsEditorBlock, {
+    RequestedDeviceLocation: () =>
+      ApplicationDefinition.makeStep((model) => ({
+        model: modifyFields(model, { deviceLocation: () => DeviceLocation.Locating() }),
+        commands: [LocateDevice()],
+      })),
+  }),
 })
 
 export const ApplicationComposition = ApplicationDefinition.makeComposition({
@@ -54,7 +71,7 @@ export const ApplicationComposition = ApplicationDefinition.makeComposition({
     SearchBinding,
     WikiArticleBinding,
     WikiArticleDebugBinding,
-    MyPlacesBinding,
+    ProfileLocationsEditorBinding,
   ],
 })
 

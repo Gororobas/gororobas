@@ -3,9 +3,9 @@ import { Array as EffectArray, Effect, Option } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
+import { requestLocale } from "../common/request-locale.js"
 import { ProfileLocationsService } from "../profiles/locations-service.js"
 import { Gazetteer } from "./gazetteer.js"
-import { requestLocale } from "./request-locale.js"
 
 const orNotFound = <A>(place: Option.Option<A>, id?: GazetteerPlaceNotFoundError["id"]) =>
   Effect.fromOption(place, () => new GazetteerPlaceNotFoundError({ id }))
@@ -16,9 +16,10 @@ export const PlacesApiLive = HttpApiBuilder.group(GororobasApi, "places", (handl
       Effect.gen(function* () {
         const session = yield* assertAuthenticated
         const locale = yield* requestLocale
-        const latestCountry = yield* (yield* ProfileLocationsService).latestKnownCountry(
-          session.personId,
-        )
+        const latestCountry = yield* (yield* ProfileLocationsService).latestKnownCountry({
+          profileId: session.personId,
+          language: locale.language,
+        })
 
         return yield* (yield* Gazetteer).search({
           text: query.text,

@@ -34,6 +34,13 @@ export const ofName = (article: NamedArticle): string =>
     onSome: (definite) => `d${definite} ${primaryName(article)}`,
   })
 
+/** "no" Brasil, "na" Colômbia, or "em" Boyacá when the name's gender is unknown. */
+export const inPreposition = (article: NamedArticle): "no" | "na" | "em" =>
+  Option.match(definiteArticle(article), {
+    onNone: () => "em",
+    onSome: (definite) => (definite === "o" ? "no" : "na"),
+  })
+
 /** Picks the word agreeing with the name's gender: "Também conhecida como" for Banana. */
 export const agreeingWith = (
   article: NamedArticle,

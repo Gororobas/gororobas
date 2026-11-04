@@ -13,6 +13,7 @@ import {
   type ProfileLocationPayload,
 } from "@gororobas/domain"
 import { DateTime, Array as EffectArray, Effect, Option, Random } from "effect"
+import * as Length from "effect-units/Length"
 
 import { Gazetteer } from "../places/gazetteer.js"
 import { ProfileLocationsService } from "../profiles/locations-service.js"
@@ -78,7 +79,7 @@ export const seedProfileLocations = (
           gazetteerPlaceId: place.id,
           label: (yield* chance(0.3)) ? Option.some(yield* pick(LOCATION_LABELS)) : Option.none(),
           elevation: (yield* chance(0.3))
-            ? Option.some((yield* Random.nextIntBetween(0, 360)) * 10)
+            ? Option.some(Length.meters((yield* Random.nextIntBetween(0, 360)) * 10))
             : Option.none(),
         },
         timezone,
@@ -153,7 +154,7 @@ export const seedProfileLocations = (
                     _tag: "GazetteerPlace",
                     gazetteerPlaceId: villaDeLeyva.id,
                     label: Option.some("Sítio na estrada para Sáchica"),
-                    elevation: Option.some(2150),
+                    elevation: Option.some(Length.meters(2150)),
                   },
                   startDate: Option.some(year(anchorYear - 1, "America/Bogota")),
                   endDate: Option.none(),

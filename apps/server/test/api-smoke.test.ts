@@ -43,6 +43,7 @@ import {
   Record,
   Schema,
 } from "effect"
+import * as Length from "effect-units/Length"
 import { HttpApi } from "effect/http-api"
 import { SqlClient, SqlSchema } from "effect/sql"
 import { WorkflowEngine } from "effect/workflow"
@@ -282,18 +283,18 @@ const requests = ({
       client.places.getGazetteerPlace({ params: { id: villaDeLeyva } }),
     "places.findMunicipalityContaining": () =>
       client.places.findMunicipalityContaining({ payload: VILLA_DE_LEYVA_COORDINATES }),
-    "profileLocations.listMyLocations": () => client.profileLocations.listMyLocations(),
+    "profiles.listMyLocations": () => client.profiles.listMyLocations(),
 
     // Creation
-    "profileLocations.addMyLocation": () =>
+    "profiles.addMyLocation": () =>
       Effect.tap(
-        client.profileLocations.addMyLocation({
+        client.profiles.addMyLocation({
           payload: {
             place: {
               _tag: "GazetteerPlace",
               gazetteerPlaceId: villaDeLeyva,
               label: Option.some(`Sítio de ${persona}`),
-              elevation: Option.some(2150),
+              elevation: Option.some(Length.meters(2150)),
             },
             startDate: Option.none(),
             endDate: Option.none(),
@@ -305,8 +306,8 @@ const requests = ({
             created.profileLocationId = location.id
           }),
       ),
-    "profileLocations.updateMyLocation": () =>
-      client.profileLocations.updateMyLocation({
+    "profiles.updateMyLocation": () =>
+      client.profiles.updateMyLocation({
         params: { id: created.profileLocationId ?? missingProfileLocationId },
         payload: {
           place: { _tag: "FreeText", text: "Viajando por aí" },
@@ -451,8 +452,8 @@ const requests = ({
       }),
 
     // Destructive endpoints last, acting on what the persona created when possible.
-    "profileLocations.deleteMyLocation": () =>
-      client.profileLocations.deleteMyLocation({
+    "profiles.deleteMyLocation": () =>
+      client.profiles.deleteMyLocation({
         params: { id: created.profileLocationId ?? missingProfileLocationId },
       }),
     "publicationComments.deletePublicationComment": () =>

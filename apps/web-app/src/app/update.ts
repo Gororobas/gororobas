@@ -5,7 +5,7 @@ import { toString as urlToString } from "foldkit/url"
 
 import { changeRouteStep } from "./change-route"
 import { LoadExternal, NavigateInternal } from "./command"
-import { ApplicationComposition, SearchBinding } from "./composition"
+import { ApplicationComposition, ProfileLocationsEditorBinding, SearchBinding } from "./composition"
 import { makeCommandsStep, makeFieldsStep, makeNoopStep } from "./definition"
 import { ApplicationRoute, searchQueryOf, urlToApplicationRoute } from "./route"
 
@@ -35,4 +35,9 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedReadToday: makeFieldsStep.fromMessage(({ today }) => ({
     maybeToday: () => Option.some(today),
   })),
+  CompletedLocateDevice: (model, { deviceLocation }) =>
+    Update.combineSteps([
+      makeFieldsStep(() => ({ deviceLocation: () => deviceLocation })),
+      ProfileLocationsEditorBinding.informOfDeviceLocation(deviceLocation),
+    ])(model),
 })

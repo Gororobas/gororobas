@@ -7,6 +7,7 @@ import {
   ProfileSearchParams,
   ProfileCardData,
   ProfileLocationCardData,
+  SupportedLanguage,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Schema, SchemaGetter } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
@@ -26,16 +27,16 @@ const ProfileCardRow = Schema.Struct({
   location: Schema.NullOr(Schema.fromJsonString(ProfileLocationCardData)),
 })
 
-/** Text searches rank by relevance, then alphabetically. */
+/** Text searches rank by relevance, then alphabetically. Places are named in `language`. */
 export const searchProfiles = SqlSchema.findAll({
-  Request: ProfileSearchParams,
+  Request: Schema.Struct({ ...ProfileSearchParams.fields, language: SupportedLanguage }),
   Result: ProfileCardRow,
   execute: (query) =>
     SqlClient.SqlClient.use((sql) => {
       /** Text searches join their ranking, and order by it before the name. */
       const select = (ranking: Statement.Fragment, orderBy: Statement.Fragment) => sql`
         SELECT p.id, p.type, p.handle, p.name, m.id AS photo_id,
-          ${latestPublicProfileLocationJson(sql, { profileIdColumn: "p.id", language: "pt" })} AS location
+          ${latestPublicProfileLocationJson(sql, { profileIdColumn: "p.id", language: query.language })} AS location
         FROM profiles p
         ${ranking}
         LEFT JOIN media_assets m ON m.id = p.photo_id AND m.moderation_status <> 'CENSORED'

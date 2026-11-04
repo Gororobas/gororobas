@@ -22,7 +22,7 @@ export const selectPlaceStep = (id: string) =>
                       ...model,
                       maybeForm: Option.some({
                         ...form,
-                        // Another municipality than the device's: its elevation doesn't apply.
+                        // Set again once the outline loads, if the device is inside the place.
                         maybeElevation: Option.none(),
                         maybeError: Option.none(),
                       }),

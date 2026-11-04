@@ -18,9 +18,11 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Place**: a PLACE wiki article: anywhere people recognize, from countries and municipalities to biomes, páramos and watersheds (`PlaceKind`). Whether it's a single territory or a kind of place found in many regions, people perceive it as a place.
 
-**Gazetteer place**: a country, state or municipality from the gazetteer (Who's On First), identified by its `WhosOnFirstId`. It becomes a place wiki article the first time something references it, created by the system and attributed to no one; `place_projections` maps one to the other.
+**Gazetteer place**: a country, state or municipality from the gazetteer (Who's On First), identified by its `WhosOnFirstId`. It becomes a place wiki article the first time something references it, created by the system and attributed to no one, along with its ancestors' articles; `place_projections` maps one to the other. A gazetteer place never gets a second article: an existing article with its Who's On First ID, or else its Wikidata ID, is reused.
 
-**Profile location**: one entry of a profile's location timeline: a place, with an optional label and device elevation, or free text in the owner's words, with optional partial dates and its own `InformationVisibility`. Coordinates are never stored. The **latest location** is the first entry in timeline order (open-ended entries, then the latest started); profile cards show it only when it's public.
+**Parent place**: the place containing another (`parentPlaceId`): a municipality's state, a state's country.
+
+**Profile location**: one entry of a profile's location timeline: a place, with an optional label and device elevation (only when the device was inside the place), or free text in the owner's words, with optional partial dates and its own `InformationVisibility`. Coordinates are never stored. The **latest location** is the first entry in timeline order (open-ended entries, then the latest started); profile cards show it only when it's public.
 
 ## Moderation
 
@@ -34,4 +36,4 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 ## Handles
 
-**Handle**: the readable, URL-safe name of a profile, publication or wiki article (`Handle`). `apps/server/src/common/handle-allocation.ts` gives every entity its handles: `claimHandle` takes one someone chose or fails with `HandleTakenError`, and `allocateHandle` derives one from names, adding a random suffix when they're taken. A wiki article gets a handle per language the first time it has a translation in that language, and keeps it after renames, so old links keep working.
+**Handle**: the readable, URL-safe name of a profile, publication or wiki article (`Handle`). `apps/server/src/common/handle-allocation.ts` gives every entity its handles: `claimHandle` takes one someone chose or fails with `HandleTakenError`, and `allocateHandle` derives one from names, adding a random six-character suffix when they're taken. A wiki article gets a handle per language the first time it has a translation in that language, and keeps it after renames, so old links keep working.

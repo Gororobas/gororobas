@@ -1,7 +1,7 @@
 import { Duration, Effect, Option, Schema, Stream } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
-import { MyPlacesDefinition } from "./definition"
+import { ProfileLocationsEditorDefinition } from "./definition"
 import { Message } from "./message"
 
 /** Lets fast typing settle before searching. Each new text interrupts the previous search. */
@@ -10,7 +10,7 @@ const TYPING_SETTLE_TIME = Duration.millis(200)
 /** Shorter texts match too many places to be useful. */
 const MINIMUM_SEARCH_LENGTH = 2
 
-export const subscriptions = MyPlacesDefinition.makeSubscriptions((entry) => ({
+export const subscriptions = ProfileLocationsEditorDefinition.makeSubscriptions((entry) => ({
   locations: entry(
     "LoadMyLocations",
     { reloadCount: Schema.Int },
@@ -22,7 +22,7 @@ export const subscriptions = MyPlacesDefinition.makeSubscriptions((entry) => ({
 
         return () =>
           Stream.fromEffect(
-            api.profileLocations.listMyLocations().pipe(
+            api.profiles.listMyLocations().pipe(
               Effect.match({
                 onFailure: (error) => Message.FailedLoadLocations({ error: { cause: error } }),
                 onSuccess: (locations) => Message.SucceededLoadLocations({ locations }),

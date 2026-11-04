@@ -38,6 +38,8 @@ Per `apps/server/src/sql.ts`, we use Effect SQL's `transformResultNames` and `tr
 
 To be clear: always write symbols' names with Typescript's best practice of `camelCase`. In .sql, always write column and table names in `snake_case`. Effect SQL will do the transformation automatically.
 
+Don't write `CHECK` constraints: enforce invariants with Effect Schema (tagged unions, refinements) where rows are written. Schemas are easier to change than migrating the database.
+
 When writing SQL statements, use Effect SQL's SqlSchema if possible. For examples, look at apps/server/src/publications/queries.ts and apps/server/src/publications/mutations.ts
 
 ## Comments

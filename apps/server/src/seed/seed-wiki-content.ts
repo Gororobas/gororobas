@@ -146,6 +146,10 @@ const legibleAttribute = (input: {
   Effect.gen(function* () {
     const { key, value, context } = input
 
+    // Gazetteer places are recognized by their Wikidata IDs too, so a generated place could stand
+    // in for a real one.
+    if (key === "wikidataId" && context.subject.kind === "PLACE") return null
+
     // External identifiers are forced on most articles, so seeded data exercises enrichment.
     if (key === "wikidataId") {
       return context.isRepresentative || (yield* chance(0.75))
@@ -156,6 +160,8 @@ const legibleAttribute = (input: {
     // Gazetteer-backed places are created from the gazetteer (`seed-locations.ts`), never with
     // generated IDs that could collide with real ones.
     if (key === "whosOnFirstId") return null
+    // Only gazetteer places have parents, set when they're created.
+    if (key === "parentPlaceId") return null
 
     if (key === "googleBooksVolumeId") {
       return context.isRepresentative || (yield* chance(0.7)) ? yield* nanoId : null

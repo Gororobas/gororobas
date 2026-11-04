@@ -1,8 +1,15 @@
-import { GororobasApi, Policies, ProfileNotFoundError } from "@gororobas/domain"
+import {
+  assertAuthenticated,
+  GororobasApi,
+  Policies,
+  ProfileNotFoundError,
+} from "@gororobas/domain"
 import { Effect, Option } from "effect"
 import { HttpApiBuilder } from "effect/http-api"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
+import { requestLocale } from "../common/request-locale.js"
+import { ProfileLocationsService } from "./locations-service.js"
 import { ProfilesRepository } from "./repository.js"
 
 export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (handlers) =>
@@ -12,7 +19,8 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
         yield* Effect.annotateCurrentSpan("profiles.search.has_text", query.text !== undefined)
         yield* Effect.annotateCurrentSpan("profiles.search.type", query.type ?? "all")
         const repo = yield* ProfilesRepository
-        const profiles = yield* repo.searchProfiles(query)
+        const { language } = yield* requestLocale
+        const profiles = yield* repo.searchProfiles({ ...query, language })
         yield* Effect.annotateCurrentSpan("profiles.search.result_count", profiles.length)
         return profiles
       }).pipe(
@@ -56,5 +64,49 @@ export const ProfilesApiLive = HttpApiBuilder.group(GororobasApi, "profiles", (h
           group: "profiles",
         }),
       ),
+    )
+    .handle("listMyLocations", () =>
+      Effect.gen(function* () {
+        const session = yield* assertAuthenticated
+        const { language } = yield* requestLocale
+        return yield* (yield* ProfileLocationsService).list({
+          profileId: session.personId,
+          language,
+        })
+      }).pipe(withApiInfrastructureErrors({ endpoint: "listMyLocations", group: "profiles" })),
+    )
+    .handle("addMyLocation", ({ payload }) =>
+      Effect.gen(function* () {
+        const session = yield* assertAuthenticated
+        const { language } = yield* requestLocale
+
+        return yield* (yield* ProfileLocationsService).add({
+          profileId: session.personId,
+          payload,
+          language,
+        })
+      }).pipe(withApiInfrastructureErrors({ endpoint: "addMyLocation", group: "profiles" })),
+    )
+    .handle("updateMyLocation", ({ params, payload }) =>
+      Effect.gen(function* () {
+        const session = yield* assertAuthenticated
+        const { language } = yield* requestLocale
+
+        return yield* (yield* ProfileLocationsService).update({
+          profileId: session.personId,
+          id: params.id,
+          payload,
+          language,
+        })
+      }).pipe(withApiInfrastructureErrors({ endpoint: "updateMyLocation", group: "profiles" })),
+    )
+    .handle("deleteMyLocation", ({ params }) =>
+      Effect.gen(function* () {
+        const session = yield* assertAuthenticated
+        yield* (yield* ProfileLocationsService).remove({
+          profileId: session.personId,
+          id: params.id,
+        })
+      }).pipe(withApiInfrastructureErrors({ endpoint: "deleteMyLocation", group: "profiles" })),
     ),
 )

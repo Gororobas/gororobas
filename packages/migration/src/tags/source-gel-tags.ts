@@ -63,6 +63,7 @@ export const gelTagArticle = ({
           whosOnFirstId: Option.none(),
           wikidataId: Option.none(),
           geonamesId: Option.none(),
+          parentPlaceId: Option.none(),
         }),
         translations,
       })

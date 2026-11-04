@@ -1,15 +1,16 @@
 import { WhosOnFirstId } from "@gororobas/domain/common/external-identifiers"
 import { ProfileLocationId } from "@gororobas/domain/common/ids"
 import type { PartialDate } from "@gororobas/domain/common/utils/dates"
-import { ElevationInMeters, ProfileLocationPayload } from "@gororobas/domain/profiles/locations"
+import { Coordinates } from "@gororobas/domain/places/geometry"
+import { ProfileLocationPayload } from "@gororobas/domain/profiles/locations"
 import { Effect, Layer, Option, Predicate, Schema } from "effect"
 import * as Dom from "foldkit/dom"
 
 import { GororobasApiClient } from "../../api-client"
-import { MyPlacesDefinition } from "./definition"
+import { ProfileLocationsEditorDefinition } from "./definition"
 import { Message } from "./message"
 
-export const LoadPlace = MyPlacesDefinition.makeCommand("LoadPlace", {
+export const LoadPlace = ProfileLocationsEditorDefinition.makeCommand("LoadPlace", {
   args: { id: WhosOnFirstId },
   messages: [Message.SucceededLoadPlace, Message.FailedLoadPlace],
   handler: function* () {
@@ -25,57 +26,29 @@ export const LoadPlace = MyPlacesDefinition.makeCommand("LoadPlace", {
   },
 })
 
-class PositionUnavailableError extends Schema.TaggedError<PositionUnavailableError>()(
-  "PositionUnavailableError",
-  {},
-) {}
-
-const currentPosition = Effect.callback<GeolocationPosition, PositionUnavailableError>((resume) => {
-  if (!("geolocation" in navigator)) {
-    resume(Effect.fail(new PositionUnavailableError()))
-    return
-  }
-
-  navigator.geolocation.getCurrentPosition(
-    (position) => resume(Effect.succeed(position)),
-    () => resume(Effect.fail(new PositionUnavailableError())),
-    { enableHighAccuracy: true, timeout: 20_000, maximumAge: 60_000 },
-  )
-})
-
 /**
  * Finds the municipality around the device. The coordinates only travel to the server's lookup,
- * which doesn't keep them; the elevation is kept only when the device reports one.
+ * which doesn't keep them.
  */
-export const LocateDevice = MyPlacesDefinition.makeCommand("LocateDevice", {
-  messages: [Message.SucceededLocateDevice, Message.FailedLocateDevice],
+export const FindMunicipality = ProfileLocationsEditorDefinition.makeCommand("FindMunicipality", {
+  args: { coordinates: Coordinates },
+  messages: [Message.SucceededFindMunicipality, Message.FailedFindMunicipality],
   handler: function* () {
     const api = yield* GororobasApiClient
 
-    return () =>
-      Effect.gen(function* () {
-        const { coords } = yield* currentPosition
-        const place = yield* api.places.findMunicipalityContaining({
-          payload: { latitude: coords.latitude, longitude: coords.longitude },
-        })
-
-        return Message.SucceededLocateDevice({
-          place,
-          maybeElevation: Option.flatMap(Option.fromNullishOr(coords.altitude), (altitude) =>
-            Schema.decodeOption(ElevationInMeters)(altitude),
-          ),
-        })
-      }).pipe(
+    return ({ coordinates }) =>
+      api.places.findMunicipalityContaining({ payload: coordinates }).pipe(
+        Effect.map((place) => Message.SucceededFindMunicipality({ place })),
         Effect.catchTag("GazetteerPlaceNotFoundError", () =>
-          Effect.succeed(Message.FailedLocateDevice({ reason: "OutsideGazetteer" })),
+          Effect.succeed(Message.FailedFindMunicipality({ reason: "OutsideGazetteer" })),
         ),
-        Effect.orElseSucceed(() => Message.FailedLocateDevice({ reason: "Unavailable" })),
+        Effect.orElseSucceed(() => Message.FailedFindMunicipality({ reason: "Unavailable" })),
       )
   },
 })
 
 /** Moves focus where the next step happens, such as the form's first field once it opens. */
-export const FocusElement = MyPlacesDefinition.makeCommand("FocusElement", {
+export const FocusElement = ProfileLocationsEditorDefinition.makeCommand("FocusElement", {
   args: { id: Schema.String },
   messages: [Message.CompletedFocusElement],
   handler: function* () {
@@ -110,7 +83,7 @@ const toPartialDate = (parts: DateParts, timezone: string): PartialDate =>
     onSome: (month) => ({ precision: "month", year: parts.year, month, timezone }),
   })
 
-export const SaveLocation = MyPlacesDefinition.makeCommand("SaveLocation", {
+export const SaveLocation = ProfileLocationsEditorDefinition.makeCommand("SaveLocation", {
   args: { maybeId: Schema.Option(ProfileLocationId), draft: LocationDraft },
   messages: [Message.SucceededSaveLocation, Message.FailedSaveLocation],
   handler: function* () {
@@ -137,22 +110,21 @@ export const SaveLocation = MyPlacesDefinition.makeCommand("SaveLocation", {
       })
 
       return Option.match(maybeId, {
-        onNone: () => api.profileLocations.addMyLocation({ payload }).pipe(toMessage),
-        onSome: (id) =>
-          api.profileLocations.updateMyLocation({ params: { id }, payload }).pipe(toMessage),
+        onNone: () => api.profiles.addMyLocation({ payload }).pipe(toMessage),
+        onSome: (id) => api.profiles.updateMyLocation({ params: { id }, payload }).pipe(toMessage),
       })
     }
   },
 })
 
-export const DeleteLocation = MyPlacesDefinition.makeCommand("DeleteLocation", {
+export const DeleteLocation = ProfileLocationsEditorDefinition.makeCommand("DeleteLocation", {
   args: { id: ProfileLocationId },
   messages: [Message.SucceededDeleteLocation, Message.FailedDeleteLocation],
   handler: function* () {
     const api = yield* GororobasApiClient
 
     return ({ id }) =>
-      api.profileLocations.deleteMyLocation({ params: { id } }).pipe(
+      api.profiles.deleteMyLocation({ params: { id } }).pipe(
         Effect.match({
           onFailure: () =>
             Message.FailedDeleteLocation({ message: "Não foi possível remover. Tente novamente." }),
@@ -164,7 +136,7 @@ export const DeleteLocation = MyPlacesDefinition.makeCommand("DeleteLocation", {
 
 export const CommandsLayer = Layer.mergeAll(
   LoadPlace.layer,
-  LocateDevice.layer,
+  FindMunicipality.layer,
   FocusElement.layer,
   SaveLocation.layer,
   DeleteLocation.layer,

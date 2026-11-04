@@ -1,7 +1,10 @@
+import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option, String as EffectString } from "effect"
 import type { Html } from "foldkit/html"
 
+import { wikiArticleUrl } from "../../../../app/route"
+import { primaryName } from "../../../../lib/wiki-article-names"
 import { AppText } from "../../../../ui/app-text"
 import { Chip } from "../../../../ui/chip"
 import * as Icons from "../../../../ui/icons"
@@ -36,7 +39,8 @@ const chipsStyle = Style.make({ display: "flex", flexWrap: "wrap", gap: space[2]
 
 const namesStyle = Style.make({ display: "flex", flexWrap: "wrap", columnGap: space[3] })
 
-const externalLinkStyle = Style.make({
+/** Underlined links, inside Gororobas or out. */
+const linkStyle = Style.make({
   display: "inline-flex",
   alignItems: "center",
   gap: space[1],
@@ -256,37 +260,83 @@ export const namesFact = (
 /** "companhiadasletras.com.br": enough to know where the link leads, as paths are mostly noise. */
 const displayUrl = (url: URL): string => url.hostname.replace(/^www\./, "")
 
+const externalLinkFact = (
+  { title, url, label }: Readonly<{ title: string; url: URL; label: string }>,
+  h: WikiArticleViewBuilder,
+): Html =>
+  fact(
+    {
+      title,
+      content: AppText.view(
+        {
+          element: "p",
+          attributes: [],
+          children: [
+            h.a(
+              styledAttributes(
+                [h.Href(url.href), h.Target("_blank"), h.Rel("noopener noreferrer")],
+                linkStyle,
+              ),
+              [Icons.link({ size: "sm" }), label],
+            ),
+          ],
+        },
+        h,
+      ),
+    },
+    h,
+  )
+
 /** A link that leaves Gororobas, opening in a new tab. */
 export const linkFact = (
   { title, maybeUrl }: Readonly<{ title: string; maybeUrl: Option.Option<URL> }>,
   h: WikiArticleViewBuilder,
 ): ReadonlyArray<Html> =>
   EffectArray.fromOption(
-    Option.map(maybeUrl, (url) =>
+    Option.map(maybeUrl, (url) => externalLinkFact({ title, url, label: displayUrl(url) }, h)),
+  )
+
+/** An ID in another database, such as Wikidata's "Q1409503", linking to its entry there. */
+export const identifierFact = <Id extends string>(
+  {
+    title,
+    maybeId,
+    toUrl,
+  }: Readonly<{ title: string; maybeId: Option.Option<Id>; toUrl: (id: Id) => URL }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> =>
+  EffectArray.fromOption(
+    Option.map(maybeId, (id) => externalLinkFact({ title, url: toUrl(id), label: id }, h)),
+  )
+
+/** Other articles, each leading to its page. */
+export const articleLinksFact = (
+  { title, cards }: Readonly<{ title: string; cards: ReadonlyArray<WikiArticleQueriedCardData> }>,
+  h: WikiArticleViewBuilder,
+): ReadonlyArray<Html> =>
+  EffectArray.match(cards, {
+    onEmpty: () => [],
+    onNonEmpty: (nonEmpty) => [
       fact(
         {
           title,
           content: AppText.view(
             {
               element: "p",
-              attributes: [],
-              children: [
-                h.a(
-                  styledAttributes(
-                    [h.Href(url.href), h.Target("_blank"), h.Rel("noopener noreferrer")],
-                    externalLinkStyle,
-                  ),
-                  [Icons.link({ size: "sm" }), displayUrl(url)],
-                ),
-              ],
+              attributes: styledAttributes([], namesStyle),
+              children: nonEmpty.map((card) =>
+                h.a(styledAttributes([h.Href(wikiArticleUrl(card))], linkStyle), [
+                  primaryName(card),
+                ]),
+              ),
             },
             h,
           ),
         },
         h,
       ),
-    ),
-  )
+    ],
+  })
 
 export const rangeText = (minimum: string, maximum: string): string =>
   minimum === maximum ? minimum : `De ${minimum} a ${maximum}`
