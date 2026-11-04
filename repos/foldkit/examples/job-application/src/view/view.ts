@@ -2,8 +2,9 @@ import clsx from 'clsx'
 import { Array, Equal, HashSet, Match, Option, pipe } from 'effect'
 import type { ChildAttribute, Html } from 'foldkit/html'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
+import { Education, PersonalInfo, Skills, WorkHistory } from '../blocks'
 import {
   ApplicationComposition,
   type ApplicationViewBuilder,
@@ -18,66 +19,50 @@ import {
 import { Step } from '../domain'
 import { Message } from '../message'
 import { type Model } from '../model'
-import {
-  hasErrors as educationHasErrors,
-  isComplete as isEducationComplete,
-} from '../step/education/update'
-import {
-  isComplete as isPersonalInfoComplete,
-  hasErrors as personalInfoHasErrors,
-} from '../step/personalInfo/update'
-import {
-  isComplete as isSkillsComplete,
-  hasErrors as skillsHasErrors,
-} from '../step/skills/update'
-import {
-  isComplete as isWorkHistoryComplete,
-  hasErrors as workHistoryHasErrors,
-} from '../step/workHistory/update'
 import { preview } from './preview'
 import { review } from './review'
 import { stepMenu, stepTabButton } from './stepNav'
 
 const stepHasErrors =
-  (model: typeof Model.Type) =>
-  (step: typeof Step.Step.Type): boolean =>
+  (model: Model) =>
+  (step: Step.Step): boolean =>
     Match.value(step).pipe(
       Match.when('PersonalInfo', () =>
-        personalInfoHasErrors(model.personalInfo),
+        PersonalInfo.hasErrors(model.personalInfo),
       ),
-      Match.when('WorkHistory', () => workHistoryHasErrors(model.workHistory)),
-      Match.when('Education', () => educationHasErrors(model.education)),
-      Match.when('Skills', () => skillsHasErrors(model.skills)),
+      Match.when('WorkHistory', () => WorkHistory.hasErrors(model.workHistory)),
+      Match.when('Education', () => Education.hasErrors(model.education)),
+      Match.when('Skills', () => Skills.hasErrors(model.skills)),
       Match.orElse(() => false),
     )
 
 const stepIsComplete =
-  (model: typeof Model.Type) =>
-  (step: typeof Step.Step.Type): boolean =>
+  (model: Model) =>
+  (step: Step.Step): boolean =>
     Match.value(step).pipe(
       Match.when('PersonalInfo', () =>
-        isPersonalInfoComplete(model.personalInfo),
+        PersonalInfo.isComplete(model.personalInfo),
       ),
-      Match.when('WorkHistory', () => isWorkHistoryComplete(model.workHistory)),
-      Match.when('Education', () => isEducationComplete(model.education)),
-      Match.when('Skills', () => isSkillsComplete(model.skills)),
+      Match.when('WorkHistory', () =>
+        WorkHistory.isComplete(model.workHistory),
+      ),
+      Match.when('Education', () => Education.isComplete(model.education)),
+      Match.when('Skills', () => Skills.isComplete(model.skills)),
       Match.orElse(() => true),
     )
 
 const stepNeedsAttention =
-  (model: typeof Model.Type) =>
-  (step: typeof Step.Step.Type): boolean =>
+  (model: Model) =>
+  (step: Step.Step): boolean =>
     stepHasErrors(model)(step) ||
     (model.isSubmitAttempted && !stepIsComplete(model)(step))
 
-const stepsNeedingAttention = (
-  model: typeof Model.Type,
-): ReadonlyArray<typeof Step.Step.Type> =>
+const stepsNeedingAttention = (model: Model): ReadonlyArray<Step.Step> =>
   Array.filter(Step.all, stepNeedsAttention(model))
 
 const stepContent = (
-  model: typeof Model.Type,
-  attentionSteps: ReadonlyArray<typeof Step.Step.Type>,
+  model: Model,
+  attentionSteps: ReadonlyArray<Step.Step>,
   h: ApplicationViewBuilder,
 ): Html =>
   Match.value(model.currentStep).pipe(
@@ -133,23 +118,20 @@ const stepContent = (
     Match.exhaustive,
   )
 
-const isFirstStep = (model: typeof Model.Type): boolean =>
+const isFirstStep = (model: Model): boolean =>
   pipe(Step.all, Array.head, Option.exists(Equal.equals(model.currentStep)))
 
-const isLastStep = (model: typeof Model.Type): boolean =>
+const isLastStep = (model: Model): boolean =>
   pipe(Step.all, Array.last, Option.exists(Equal.equals(model.currentStep)))
 
-const navigationButtons = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) =>
+const navigationButtons = (model: Model, h: ApplicationViewBuilder) =>
   h.div(
     [h.Class('flex justify-between pt-6 mt-8 border-t border-gray-200')],
     [
       ...(isFirstStep(model)
         ? [h.empty]
         : [
-            Button.view(
+            buttonView(
               {
                 onClick: Message.ClickedPrevious(),
                 toView: attributes =>
@@ -169,7 +151,7 @@ const navigationButtons = (
       ...(isLastStep(model)
         ? []
         : [
-            Button.view(
+            buttonView(
               {
                 onClick: Message.ClickedNext(),
                 toView: attributes =>
@@ -205,8 +187,8 @@ const pageHeader = (h: ApplicationViewBuilder) =>
   )
 
 const stepContentPanel = (
-  model: typeof Model.Type,
-  attentionSteps: ReadonlyArray<typeof Step.Step.Type>,
+  model: Model,
+  attentionSteps: ReadonlyArray<Step.Step>,
   panelAttributes: ReadonlyArray<ChildAttribute>,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -226,9 +208,9 @@ const stepContentPanel = (
   )
 
 const stepTabsLayout = (
-  model: typeof Model.Type,
-  attentionSteps: ReadonlyArray<typeof Step.Step.Type>,
-  attentionStepSet: HashSet.HashSet<typeof Step.Step.Type>,
+  model: Model,
+  attentionSteps: ReadonlyArray<Step.Step>,
+  attentionStepSet: HashSet.HashSet<Step.Step>,
   h: ApplicationViewBuilder,
 ): Html =>
   h.block(
@@ -283,10 +265,7 @@ const stepTabsLayout = (
     }),
   )
 
-const desktopPreviewSidebar = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) =>
+const desktopPreviewSidebar = (model: Model, h: ApplicationViewBuilder) =>
   h.div(
     [h.Class('hidden w-80 shrink-0 xl:block')],
     [
@@ -315,14 +294,11 @@ const desktopPreviewSidebar = (
     ],
   )
 
-const mobilePreviewToggle = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) =>
+const mobilePreviewToggle = (model: Model, h: ApplicationViewBuilder) =>
   h.div(
     [h.Class('fixed top-4 right-4 xl:hidden')],
     [
-      Button.view(
+      buttonView(
         {
           onClick: Message.ToggledPreview(),
           toView: attributes =>
@@ -346,10 +322,7 @@ const mobilePreviewToggle = (
     ],
   )
 
-const mobilePreviewOverlay = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) =>
+const mobilePreviewOverlay = (model: Model, h: ApplicationViewBuilder) =>
   h.div(
     [
       h.Class(

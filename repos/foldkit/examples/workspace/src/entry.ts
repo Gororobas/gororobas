@@ -1,10 +1,11 @@
 import { Program, Runtime } from 'foldkit'
 
-import { ApplicationBlock } from './block'
-import { ApplicationLayer } from './services'
+import { ApplicationBlock, layer } from './block'
+import { AppLayer } from './services'
 
 const program = Program.make({
   block: ApplicationBlock,
+  layer,
   container: document.getElementById('root'),
   routing: {
     onUrlRequest: ApplicationBlock.Message.ClickedLink,
@@ -13,4 +14,4 @@ const program = Program.make({
   devTools: { dispatch: true },
 })
 
-Runtime.run(program.provide(ApplicationLayer))
+Runtime.run(program.provide(AppLayer))

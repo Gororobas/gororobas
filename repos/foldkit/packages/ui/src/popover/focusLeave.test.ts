@@ -1,33 +1,34 @@
-import { Schema } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, vi } from 'vitest'
 
 import { describe, it } from '@effect/vitest'
 
-import { PopoverBlock } from './block.js'
+import { PopoverBlock, layer } from './block.js'
 
 const Model = Schema.Struct({ popover: PopoverBlock.Model })
-const PopoverFocusLeaveTestDefinition = Block.makeDefinition(
-  'PopoverFocusLeaveTest',
-  {
-    Model,
-    Message: Schema.Never,
-  },
-)
-const foldPopoverOutMessage =
-  PopoverFocusLeaveTestDefinition.makeOutMessageFold(PopoverBlock, {
-    Opened: () => PopoverFocusLeaveTestDefinition.makeNoopStep(),
-    Closed: () => PopoverFocusLeaveTestDefinition.makeNoopStep(),
-  })
-const PopoverBinding = PopoverFocusLeaveTestDefinition.makeBinding(
+type Model = typeof Model.Type
+const PopoverFocusLeaveTestKey = Symbol('PopoverFocusLeaveTest')
+const PopoverFocusLeaveTestBlock = Block.make('PopoverFocusLeaveTest', {
+  key: PopoverFocusLeaveTestKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  Model,
+  Message: Schema.Never,
+})
+const foldPopoverOutMessage = PopoverFocusLeaveTestBlock.makeOutMessageFold(
   PopoverBlock,
   {
-    field: 'popover',
-    init: false,
+    Opened: () => PopoverFocusLeaveTestBlock.makeNoopStep(),
+    Closed: () => PopoverFocusLeaveTestBlock.makeNoopStep(),
   },
-).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+)
+const PopoverBinding = PopoverFocusLeaveTestBlock.makeBinding(PopoverBlock, {
+  field: 'popover',
+  init: false,
+}).withOutMessagePolicy({ fold: foldPopoverOutMessage })
 const PopoverFocusLeaveTestComposition =
-  PopoverFocusLeaveTestDefinition.makeComposition({
+  PopoverFocusLeaveTestBlock.makeComposition({
     bindings: [PopoverBinding],
   })
 const view = PopoverFocusLeaveTestComposition.makeView((model, h) =>
@@ -69,22 +70,29 @@ const view = PopoverFocusLeaveTestComposition.makeView((model, h) =>
 )
 
 const makeProgram = (container: HTMLElement) => {
-  const prepare = () =>
-    PopoverFocusLeaveTestComposition.prepareBlock({
-      init: PopoverFocusLeaveTestComposition.makeInit(() =>
-        PopoverBinding.init({
-          args: [{ id: 'sort' }],
-          toParentModel: popover => ({ popover }),
-        }),
-      ),
-      update: PopoverFocusLeaveTestComposition.makeUpdate({}),
-      view,
-    })
-  const block: Block.FromAssemblyWithView<typeof Model, typeof prepare> =
-    Block.assemble(prepare)
+  const block = {
+    block: PopoverFocusLeaveTestBlock,
+    layer: PopoverFocusLeaveTestBlock.makeLayer(
+      Effect.gen(function* () {
+        const popover = yield* PopoverBinding
+
+        return {
+          children: [popover],
+          init: PopoverFocusLeaveTestComposition.makeInit(() =>
+            PopoverBinding.init({
+              args: [{ id: 'sort' }],
+              toParentModel: popover => ({ popover }),
+            }),
+          ),
+          update: PopoverFocusLeaveTestComposition.makeUpdate({}),
+          view,
+        }
+      }),
+    ).pipe(Layer.provide(layer)),
+  }
 
   return Program.makeElement({
-    block,
+    ...block,
     container,
   })
 }

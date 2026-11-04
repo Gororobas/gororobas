@@ -1,8 +1,7 @@
-import { Predicate, Schema } from 'effect'
+import type { Schema } from 'effect'
 
 import type { BindChild, BindChildConstructorResult } from './bindChild.js'
 import type { BindableBlock, BindingStorageEvidence } from './binding.js'
-import { runtimeBindingOf } from './composition.js'
 import type { InstanceKey } from './instanceContext.js'
 import type {
   KeyedMapField,
@@ -39,36 +38,8 @@ type ChildUpdateContext<BlockValue extends BindableBlock> =
     ? Context
     : readonly []
 
-type MapBindingDefinition = Readonly<{
-  Model: AnySchema
-  Message: AnySchema
-  OutMessage?: AnySchema
-  ChildInitContext?: AnySchema
-}>
-
-type OutMessageSchemaOfDefinition<DefinitionValue> =
-  DefinitionValue extends Readonly<{
-    OutMessage: infer OutMessageSchema extends AnySchema
-  }>
-    ? OutMessageSchema
-    : undefined
-
-type ChildInitContextOfDefinition<DefinitionValue> =
-  DefinitionValue extends Readonly<{
-    ChildInitContext: infer ChildInitContextSchema extends AnySchema
-  }>
-    ? ChildInitContextSchema['Type']
-    : never
-
-type BindChildOfDefinition<DefinitionValue extends MapBindingDefinition> =
-  BindChild<
-    DefinitionValue['Model'],
-    DefinitionValue['Message'],
-    OutMessageSchemaOfDefinition<DefinitionValue>,
-    ChildInitContextOfDefinition<DefinitionValue>
-  >
-
-type MapBindingConfigKey =
+/** @internal The supported storage and delivery fields of a map Binding. */
+export type MapBindingConfigKey =
   | 'field'
   | 'childField'
   | 'placement'
@@ -95,7 +66,8 @@ type KeySchemaFor<ParentModelSchema extends AnySchema, Field extends string> =
       : never
     : never
 
-type KeyFor<
+/** @internal The exact decoded key of a map Binding's parent storage. */
+export type KeyFor<
   ParentModelSchema extends AnySchema,
   Field extends string,
 > = Extract<KeySchemaFor<ParentModelSchema, Field>['Type'], InstanceKey>
@@ -136,13 +108,17 @@ type DeliveryContext<BlockValue extends BindableBlock, ParentModel, Key> = [
       ) => ChildUpdateContext<BlockValue>
     }>
 
-type DeliveryRequirement<BlockValue extends BindableBlock, ParentModel, Key> = [
-  ChildUpdateContext<BlockValue>,
-] extends [readonly []]
+/** @internal Requires dispatch context only when the child declares it. */
+export type DeliveryRequirement<
+  BlockValue extends BindableBlock,
+  ParentModel,
+  Key,
+> = [ChildUpdateContext<BlockValue>] extends [readonly []]
   ? Readonly<{ delivery?: DeliveryContext<BlockValue, ParentModel, Key> }>
   : Readonly<{ delivery: DeliveryContext<BlockValue, ParentModel, Key> }>
 
-type ContextualProperties<
+/** @internal Contextual storage and delivery inference shared by constructor authoring. */
+export type ContextualProperties<
   Keys extends MapBindingConfigKey,
   BlockValue extends BindableBlock,
   ParentModelSchema extends AnySchema,
@@ -186,7 +162,8 @@ type ValidateKeys<Config> =
         }>
       >
 
-type ValidField<
+/** @internal Restricts selection to exact or explicitly wrapped child storage. */
+export type ValidField<
   BlockValue extends BindableBlock,
   ParentModelSchema extends AnySchema,
   Keys,
@@ -207,7 +184,8 @@ type ValidateMessageMapping<BlockValue extends BindableBlock, Keys> = [
     : InvalidConfig<'A Message-free child cannot configure Message delivery'>
   : readonly []
 
-type ValidateConfig<BlockValue extends BindableBlock, Keys, Config> =
+/** @internal Rejects erased, ambiguous, or unsupported map configuration. */
+export type ValidateConfig<BlockValue extends BindableBlock, Keys, Config> =
   IsAny<Config> extends true
     ? InvalidConfig<'Map Binding config cannot use any'>
     : IsUnknown<Config> extends true
@@ -218,7 +196,8 @@ type ValidateConfig<BlockValue extends BindableBlock, Keys, Config> =
           ? ValidateMessageMapping<BlockValue, Keys>
           : ValidateKeys<Config>
 
-type ValidateConcrete<BlockValue extends BindableBlock> =
+/** @internal Rejects unresolved child graph requirements before binding. */
+export type ValidateConcrete<BlockValue extends BindableBlock> =
   unknown extends ValidateConcreteComposition<BlockValue>
     ? readonly []
     : readonly [error: ValidateConcreteComposition<BlockValue>]
@@ -228,7 +207,8 @@ type FieldOfSource<Source, Fallback extends string> =
     ? Field
     : Fallback
 
-type ResultConfig<
+/** @internal Retains storage, key Schema, and placement evidence after inference. */
+export type MapBindingResultConfig<
   Source,
   ParentModelSchema extends AnySchema,
   Field extends string,
@@ -257,49 +237,42 @@ type ResultConfig<
     }>
   >
 
-/** Creates a keyed child Binding over an exact required Record or Effect
- * HashMap field owned by the supplied parent Definition.
- *
- * Add `childField` when each map value is a closed parent-owned Struct wrapping
- * the exact child Model. Placement defaults to `field`. Map membership controls
- * occurrence presence, while `subscriptions` gates only Subscription Streams.
- * Insertion remains parent-owned through `initAndInsert` from
- * `foldkit/bindingInit` for direct child values, or the returned Binding's
- * explicit `init` operation for wrapper metadata and mixed transitions. This
- * dedicated subpath keeps its Schema-derived generic
- * surface isolated from ordinary Binding type checking. */
-export interface MakeMapBinding {
+/** Call signature for `Definition.makeMapBinding`. See {@link Definition} for
+ * the owned constructor's storage and initialization contract. */
+export interface MakeMapBinding<
+  ParentModelSchema extends AnySchema,
+  ParentMessageSchema extends AnySchema,
+  ParentOutMessageSchema extends AnySchema | undefined,
+  ParentChildInitContext = never,
+> {
   <
-    const DefinitionValue extends MapBindingDefinition,
     const BlockValue extends BindableBlock,
     const Keys extends MapBindingConfigKey,
     const Field extends string,
     const ChildField extends string,
     const Source extends object,
   >(
-    definition: DefinitionValue &
-      Readonly<{ makeBinding: BindChildOfDefinition<DefinitionValue> }>,
     block: BlockValue,
     config: Source &
       Readonly<{ outMessage?: never }> &
       ContextualProperties<
         Keys,
         BlockValue,
-        DefinitionValue['Model'],
+        ParentModelSchema,
         Field,
         ChildField
       > &
       Readonly<{
         field: Field &
-          ValidField<BlockValue, DefinitionValue['Model'], Keys, ChildField>
+          ValidField<BlockValue, ParentModelSchema, Keys, ChildField>
         childField?: ChildField
       }> &
       ([BlockValue['Message']['Type']] extends [never]
         ? Readonly<{ delivery?: never }>
         : DeliveryRequirement<
             BlockValue,
-            DefinitionValue['Model']['Type'],
-            KeyFor<DefinitionValue['Model'], Field>
+            ParentModelSchema['Type'],
+            KeyFor<ParentModelSchema, Field>
           >),
     ...validation: readonly [
       ...ValidateConfig<BlockValue, NoInfer<Keys>, NoInfer<Source>>,
@@ -307,43 +280,42 @@ export interface MakeMapBinding {
     ]
   ): BindChildConstructorResult<
     BlockValue,
-    DefinitionValue['Model'],
-    DefinitionValue['Message'],
-    OutMessageSchemaOfDefinition<DefinitionValue>,
-    ResultConfig<Source, DefinitionValue['Model'], Field>,
-    ChildInitContextOfDefinition<DefinitionValue>
+    ParentModelSchema,
+    ParentMessageSchema,
+    ParentOutMessageSchema,
+    MapBindingResultConfig<Source, ParentModelSchema, Field>,
+    ParentChildInitContext
   >
 }
 
-/** Creates a keyed child Binding from a parent Definition's required Record or
- * Effect HashMap field. */
-export const makeMapBinding = ((): MakeMapBinding =>
+/** @internal Creates a passive parent-owned map Binding constructor. */
+export const makeMapBinding = <
+  ParentModelSchema extends AnySchema,
+  ParentMessageSchema extends AnySchema,
+  ParentOutMessageSchema extends AnySchema | undefined,
+  ParentChildInitContext = never,
+>(
+  makeBinding: BindChild<
+    ParentModelSchema,
+    ParentMessageSchema,
+    ParentOutMessageSchema,
+    ParentChildInitContext
+  >,
+): MakeMapBinding<
+  ParentModelSchema,
+  ParentMessageSchema,
+  ParentOutMessageSchema,
+  ParentChildInitContext
+> =>
   /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-  ((definition: object, block: BindableBlock, config: object): unknown => {
-    const makeBinding = Reflect.get(definition, 'makeBinding')
-    if (!Predicate.isFunction(makeBinding)) {
-      throw new Error(
-        '[foldkit] makeMapBinding requires a parent Definition with makeBinding.',
-      )
-    }
-
-    const binding = Reflect.apply(makeBinding, definition, [
+  ((block: BindableBlock, config: object): unknown => {
+    return Reflect.apply(makeBinding, undefined, [
       block,
       asKeyedMapBindingConfig(config),
     ])
-    if (!Predicate.isObject(binding)) {
-      throw new Error(
-        '[foldkit] makeMapBinding requires a parent Definition whose makeBinding method returns a native child Binding.',
-      )
-    }
-
-    try {
-      runtimeBindingOf(binding)
-    } catch {
-      throw new Error(
-        '[foldkit] makeMapBinding requires a parent Definition whose makeBinding method returns a native child Binding.',
-      )
-    }
-
-    return binding
-  }) as unknown as MakeMapBinding)()
+  }) as unknown as MakeMapBinding<
+    ParentModelSchema,
+    ParentMessageSchema,
+    ParentOutMessageSchema,
+    ParentChildInitContext
+  >

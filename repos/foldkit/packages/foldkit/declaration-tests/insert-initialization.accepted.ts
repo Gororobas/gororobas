@@ -1,7 +1,6 @@
 import { Context, Effect, HashMap, Schema } from 'effect'
-import { Block, Message } from 'foldkit'
-import { initAndInsert } from 'foldkit/bindingInit'
-import { makeMapBinding } from 'foldkit/mapBinding'
+import { Block, Message, Update } from 'foldkit'
+import { initAndInsert, makeInitIfMissingStep } from 'foldkit/bindingInit'
 
 export class ReadService extends Context.Service<
   ReadService,
@@ -65,8 +64,7 @@ export const ParentDefinition = Block.makeDefinition(
   'DeclarationInsertParent',
   { Model: ParentModel, Message: ParentMessage },
 )
-const ChildrenByIdBindingWithoutPolicy = makeMapBinding(
-  ParentDefinition,
+const ChildrenByIdBindingWithoutPolicy = ParentDefinition.makeMapBinding(
   ChildBlock,
   { field: 'childrenById' },
 )
@@ -77,12 +75,11 @@ export const ChildrenByIdBinding =
         ChangedCount: () => ParentDefinition.makeNoopStep(),
       })(outMessage),
   })
-export const ChildrenByNumberBinding = makeMapBinding(
-  ParentDefinition,
+export const ChildrenByNumberBinding = ParentDefinition.makeMapBinding(
   ChildBlock,
   { field: 'childrenByNumber' },
 )
-export const RowsByIdBinding = makeMapBinding(ParentDefinition, ChildBlock, {
+export const RowsByIdBinding = ParentDefinition.makeMapBinding(ChildBlock, {
   field: 'rowsById',
   childField: 'child',
 })
@@ -106,7 +103,7 @@ export const insertRecord = (
   })
 export const insertHashMap = (model: typeof ParentModel.Type, key: number) =>
   initAndInsert(ChildrenByNumberBinding, model, { key, args: [1] })
-export const insertStep = ParentDefinition.makeStep(model =>
+export const insert = ParentDefinition.makeStep(model =>
   insertRecord(model, firstId),
 )
 export const update = ParentComposition.makeUpdate({
@@ -120,10 +117,45 @@ export const init = ParentComposition.makeInit(() => ({
     rowsById: {},
     label: 'current',
   },
-  steps: [insertStep],
+  steps: [insert],
 }))
 const prepareParent = () => ParentComposition.prepareBlock({ init, update })
 export const ParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<
   typeof ParentModel,
   typeof prepareParent
 > = Block.assemble(prepareParent)
+
+export const initRecordIfMissing = makeInitIfMissingStep(ChildrenByIdBinding, {
+  key: firstId,
+  args: [1, 'first label', 'second label'],
+})
+export const initHashMapIfMissing = makeInitIfMissingStep(
+  ChildrenByNumberBinding,
+  { key: 1, args: [1] },
+)
+export const initChildren = ParentDefinition.makeStep(() =>
+  Update.combineSteps([initRecordIfMissing, initRecordIfMissing]),
+)
+export const initChildrenUpdate = ParentComposition.makeUpdate({
+  RequestedInsert: (model, { id, count }) =>
+    makeInitIfMissingStep(ChildrenByIdBinding, {
+      key: id,
+      args: [count],
+    })(model),
+})
+export const initChildrenDirectUpdate = ParentComposition.makeUpdate({
+  RequestedInsert: initRecordIfMissing,
+})
+export const initWithChildren = ParentComposition.makeInit(() => ({
+  model,
+  steps: [initChildren],
+}))
+const prepareInitializingParent = () =>
+  ParentComposition.prepareBlock({
+    init: initWithChildren,
+    update: initChildrenUpdate,
+  })
+export const InitializingParentBlock: Block.FromAssemblyWithoutViewOrOutMessage<
+  typeof ParentModel,
+  typeof prepareInitializingParent
+> = Block.assemble(prepareInitializingParent)

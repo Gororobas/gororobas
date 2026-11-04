@@ -1,32 +1,35 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { Switch } from '@foldkit/ui'
+import { type SwitchAttributes, view as uiSwitchView } from '@foldkit/ui/switch'
 
 // Store the on/off state as a plain boolean field in your Model:
 const Model = Schema.Struct({
   notificationsEnabled: Schema.Boolean,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // A verb-first, past-tense Message carries the new checked state:
 
 const Message = defineMessageUnion({
   ToggledNotifications: { isChecked: Schema.Boolean },
 })
+type Message = typeof Message.Type
 
-const NotificationSettingsComposition = Block.makeDefinition(
-  'NotificationSettings',
-  {
-    Model,
-    Message,
-  },
-).makeComposition()
+export const NotificationSettingsKey = Symbol('NotificationSettings')
+
+export const NotificationSettingsBlock = Block.make('NotificationSettings', {
+  key: NotificationSettingsKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  Model,
+  Message,
+})
+
+const NotificationSettingsComposition =
+  NotificationSettingsBlock.makeComposition()
 
 // In your init function, start it off:
 const init = NotificationSettingsComposition.makeInit(() => ({
@@ -49,9 +52,7 @@ const update = NotificationSettingsComposition.makeUpdate({
 // track color keys off the data-checked attribute; the knob position derives
 // from the same Model field.
 const view = NotificationSettingsComposition.makeView((model, h) => {
-  const switchView = (
-    attributes: Switch.SwitchAttributes<typeof Message.Type>,
-  ) =>
+  const switchView = (attributes: SwitchAttributes<Message>) =>
     h.div(
       [h.Class('flex items-center gap-3')],
       [
@@ -86,7 +87,7 @@ const view = NotificationSettingsComposition.makeView((model, h) => {
       ],
     )
 
-  return Switch.view(
+  return uiSwitchView(
     {
       id: 'notifications',
       isChecked: model.notificationsEnabled,
@@ -97,3 +98,14 @@ const view = NotificationSettingsComposition.makeView((model, h) => {
     h,
   )
 })
+
+export const layer = NotificationSettingsBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)

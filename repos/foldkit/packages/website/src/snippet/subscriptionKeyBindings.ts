@@ -7,20 +7,30 @@ const SearchState = defineTaggedUnion({
   Closed: {},
   Open: {},
 })
+type SearchState = typeof SearchState.Type
 
 const Model = Schema.Struct({
   searchState: SearchState,
 })
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   PressedSearchShortcut: {},
   PressedEscape: {},
   PressedHomeShortcut: {},
 })
+type Message = typeof Message.Type
 
-const SearchDefinition = Block.makeDefinition('Search', { Model, Message })
+export const SearchKey = Symbol('Search')
 
-const subscriptions = SearchDefinition.makeSubscriptions(entry => ({
+const SearchBlock = Block.make('Search', {
+  key: SearchKey,
+  Init: Schema.Tuple([]),
+  Model,
+  Message,
+})
+
+const subscriptions = SearchBlock.makeSubscriptions(entry => ({
   keyBindings: entry(
     'KeyBindings',
     { searchState: SearchState },
@@ -33,7 +43,7 @@ const subscriptions = SearchDefinition.makeSubscriptions(entry => ({
       modelToDependencies: model => ({ searchState: model.searchState }),
       handler: function* () {
         return ({ searchState }) =>
-          Dom.streamFromKeyBindings<typeof Message.Type>({
+          Dom.streamFromKeyBindings<Message>({
             bindings: [
               {
                 keys: 'Mod+K',

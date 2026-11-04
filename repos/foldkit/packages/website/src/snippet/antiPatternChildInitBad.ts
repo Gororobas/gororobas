@@ -1,27 +1,20 @@
-// ❌ Bad: running the child Step directly and copying selected fields drops
-// the RestoredTheme OutMessage.
+// ❌ A connected initializer is a recipe; taking its Model discards its channels.
+import { Option } from 'effect'
 
-// init.ts
+import { ApplicationComposition, SettingsBinding } from './composition'
 
-import { ApplicationComposition } from './composition'
+export const init = ApplicationComposition.makeInit((username, savedTheme) => {
+  const settingsInit = SettingsBinding.init({
+    args: [],
+    toParentModel: settings => ({
+      username,
+      settings,
+      maybeRestoredTheme: Option.none(),
+    }),
+  })
 
-const init = ApplicationComposition.makeInit(
-  (username: string, savedTheme: Settings.Theme) => {
-    const settingsInit = Settings.init()
-    const settingsRestore = Settings.restore(settingsInit.model, savedTheme)
-    const commands = Command.mapMessages(settingsRestore.commands, message =>
-      Message.GotSettingsMessage({ message }),
-    )
-
-    // ❌ The parent keeps the Model and Commands but drops
-    // settingsRestore.outMessage.
-    return {
-      model: Model.make({
-        username,
-        settings: settingsRestore.model,
-        maybeRestoredTheme: Option.none(),
-      }),
-      commands,
-    }
-  },
-)
+  return {
+    model: settingsInit.model,
+    steps: [SettingsBinding.requestRestore({ theme: savedTheme })],
+  }
+})

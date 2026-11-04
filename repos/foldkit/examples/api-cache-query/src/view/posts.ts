@@ -1,7 +1,7 @@
 import { Array, Option } from 'effect'
 import { AsyncData } from 'foldkit'
 
-import * as Button from '@foldkit/ui/button'
+import { view as buttonView } from '@foldkit/ui/button'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Post, PostDetail } from '../data'
@@ -16,14 +16,11 @@ import {
 } from './shared'
 
 const isPostCached = (
-  postDetails: (typeof Model.Type)['postDetails'],
+  postDetails: Model['postDetails'],
   postId: string,
 ): boolean => AsyncData.hasData(postQuery.read(postDetails, { postId }))
 
-export const postsTabView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) =>
+export const postsTabView = (model: Model, h: ApplicationViewBuilder) =>
   Option.match(model.maybeSelectedPostId, {
     onNone: () =>
       h.section([h.Class('flex flex-col gap-4')], [postsListView(model, h)]),
@@ -35,10 +32,7 @@ export const postsTabView = (
       ),
   })
 
-export const postsListView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) => {
+export const postsListView = (model: Model, h: ApplicationViewBuilder) => {
   const postsAsyncData = postsQuery.read(model.posts)
   const isPending = AsyncData.isPending(postsAsyncData)
 
@@ -49,7 +43,7 @@ export const postsListView = (
         [h.Class('flex items-center justify-between')],
         [
           h.h2([h.Class('text-xl font-bold text-slate-800')], ['Posts']),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedRefreshPosts(),
               isDisabled: isPending,
@@ -106,8 +100,8 @@ export const postListItems = (
     posts,
     postDetails,
   }: Readonly<{
-    posts: ReadonlyArray<typeof Post.Type>
-    postDetails: (typeof Model.Type)['postDetails']
+    posts: ReadonlyArray<Post>
+    postDetails: Model['postDetails']
   }>,
   h: ApplicationViewBuilder,
 ) =>
@@ -116,7 +110,7 @@ export const postListItems = (
       post.id,
       [],
       [
-        Button.view(
+        buttonView(
           {
             onClick: Message.ClickedPost({ postId: post.id }),
             toView: attributes =>
@@ -161,7 +155,7 @@ export const postListItems = (
   )
 
 export const postDetailView = (
-  { model, postId }: Readonly<{ model: typeof Model.Type; postId: string }>,
+  { model, postId }: Readonly<{ model: Model; postId: string }>,
   h: ApplicationViewBuilder,
 ) => {
   const postAsyncData = postQuery.read(model.postDetails, { postId })
@@ -169,7 +163,7 @@ export const postDetailView = (
   return h.div(
     [h.Class('flex flex-col gap-4')],
     [
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedBackToPosts(),
           toView: attributes =>
@@ -217,10 +211,7 @@ export const postDetailView = (
 }
 
 export const postCard = (
-  {
-    post,
-    fetchedAt,
-  }: Readonly<{ post: typeof PostDetail.Type; fetchedAt: number }>,
+  { post, fetchedAt }: Readonly<{ post: PostDetail; fetchedAt: number }>,
   h: ApplicationViewBuilder,
 ) =>
   h.article(

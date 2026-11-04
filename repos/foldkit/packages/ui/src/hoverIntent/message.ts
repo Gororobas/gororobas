@@ -14,10 +14,10 @@ export const Message = defineMessageUnion({
   FocusedPanel: {},
   BlurredPanel: {},
   PressedEscape: { source: Schema.Literals(['Trigger', 'Panel']) },
-  RequestedClose: {},
   CompletedWaitBeforeOpening: { version: Schema.Number },
   CompletedWaitBeforeClosing: { version: Schema.Number },
 })
+export type Message = typeof Message.Type
 
 export type EnteredTrigger = typeof Message.EnteredTrigger.Type
 export type LeftTrigger = typeof Message.LeftTrigger.Type
@@ -28,11 +28,16 @@ export type BlurredTrigger = typeof Message.BlurredTrigger.Type
 export type FocusedPanel = typeof Message.FocusedPanel.Type
 export type BlurredPanel = typeof Message.BlurredPanel.Type
 export type PressedEscape = typeof Message.PressedEscape.Type
-export type RequestedClose = typeof Message.RequestedClose.Type
 export type CompletedWaitBeforeOpening =
   typeof Message.CompletedWaitBeforeOpening.Type
 export type CompletedWaitBeforeClosing =
   typeof Message.CompletedWaitBeforeClosing.Type
+
+/** Requests accepted from a parent independently of local HoverIntent events. */
+export const InMessage = defineMessageUnion({ RequestedClose: {} })
+export type InMessage = typeof InMessage.Type
+
+export type RequestedClose = typeof InMessage.RequestedClose.Type
 
 // OUT MESSAGE
 
@@ -41,6 +46,7 @@ export const OutMessage = defineMessageUnion({
   Opened: {},
   Closed: {},
 })
+export type OutMessage = typeof OutMessage.Type
 
 export type Opened = typeof OutMessage.Opened.Type
 export type Closed = typeof OutMessage.Closed.Type

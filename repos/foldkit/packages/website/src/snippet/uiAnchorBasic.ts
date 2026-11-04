@@ -1,6 +1,3 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, Message, update,
-// and view definitions.
 import { Effect, Schema } from 'effect'
 import { Mount } from 'foldkit'
 import type { Html, HtmlBuilder } from 'foldkit/html'
@@ -15,7 +12,7 @@ const Message = defineMessageUnion({
   ClickedTrigger: {},
   CompletedAnchorPanel: {},
 })
-
+type Message = typeof Message.Type
 // Mount.define takes the Definition name and a config containing the args
 // Schema, result Messages, and handler generator. The returned handler
 // receives the live element alongside the args captured at mount.
@@ -44,7 +41,7 @@ const AnchorPanel = Mount.define('AnchorPanel', {
 // top left corner before Floating UI resolves its first position; anchorSetup
 // clears that once the panel is placed:
 const view = (
-  h: HtmlBuilder<typeof Message.Type, Mount.RequirementsOf<typeof AnchorPanel>>,
+  h: HtmlBuilder<Message, Mount.RequirementsOf<typeof AnchorPanel>>,
 ): Html =>
   h.div(
     [],

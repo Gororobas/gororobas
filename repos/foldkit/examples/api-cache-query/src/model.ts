@@ -1,14 +1,15 @@
 import { Schema } from 'effect'
 
-import * as Tabs from '@foldkit/ui/tabs'
+import { makeBlock as makeTabsBlock } from '@foldkit/ui/tabs'
 
 import { postQuery, postsQuery, statsQuery } from './query'
 
 export const TABS_ID = 'api-cache-query-tabs'
 
 export const Tab = Schema.Literals(['Posts', 'Stats'])
+export type Tab = typeof Tab.Type
 
-export const AppTabsBlock = Tabs.create<typeof Tab.Type>()
+export const AppTabsBlock = makeTabsBlock<Tab>()
 
 export const Model = Schema.Struct({
   tabs: AppTabsBlock.Model,
@@ -18,3 +19,4 @@ export const Model = Schema.Struct({
   maybeSelectedPostId: Schema.Option(Schema.String),
   stats: statsQuery.Model,
 })
+export type Model = typeof Model.Type

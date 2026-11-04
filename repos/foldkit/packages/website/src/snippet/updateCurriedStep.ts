@@ -1,41 +1,57 @@
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const Model = Schema.Struct({ routeChangeCount: Schema.Number })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({
-  InformedOfRouteChange: {},
   ClickedReset: {},
 })
-const RouteAwareComposition = Block.makeDefinition('RouteAware', {
+type Message = typeof Message.Type
+
+const InMessage = defineMessageUnion({ InformedOfRouteChange: {} })
+type InMessage = typeof InMessage.Type
+
+export const RouteAwareKey = Symbol('RouteAware')
+
+export const RouteAwareBlock = Block.make('RouteAware', {
+  key: RouteAwareKey,
+  Init: Schema.Tuple([]),
+
   Model,
   Message,
-}).makeComposition()
-const informRouteChanged = Message.InformedOfRouteChange
+  InMessage,
+})
+
+const RouteAwareComposition = RouteAwareBlock.makeComposition()
 
 const init = RouteAwareComposition.makeInit(() => ({
   model: Model.make({ routeChangeCount: 0 }),
 }))
 
 const update = RouteAwareComposition.makeUpdate({
-  InformedOfRouteChange: model => ({
-    model: modifyFields(model, {
-      routeChangeCount: count => count + 1,
-    }),
-  }),
   ClickedReset: model => ({
     model: modifyFields(model, { routeChangeCount: () => 0 }),
   }),
 })
 
-const prepare = () =>
-  RouteAwareComposition.prepareBlock({
-    init,
-    update,
-    operations: { informRouteChanged },
-  })
-export const RouteAwareBlock: Block.FromAssemblyWithoutViewOrOutMessage<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+const inMessageUpdate = RouteAwareComposition.makeInMessageUpdate({
+  InformedOfRouteChange: model => ({
+    model: modifyFields(model, {
+      routeChangeCount: count => count + 1,
+    }),
+  }),
+})
+
+export const layer = RouteAwareBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      inMessageUpdate,
+    }
+  }),
+)

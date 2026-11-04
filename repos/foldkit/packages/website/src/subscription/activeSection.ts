@@ -11,6 +11,10 @@ import {
 } from 'effect'
 import { AsyncData, Render } from 'foldkit'
 
+import * as ApiReference from '../blocks/apiReference/domain'
+import * as CoreBlockMetadata from '../blocks/blockPage/domain'
+import * as ComingFromReact from '../blocks/comingFromReact/domain'
+import * as UiDocumentation from '../blocks/ui/domain'
 import { Message } from '../message'
 import type { Model } from '../model'
 import {
@@ -44,12 +48,12 @@ import {
   TypingTerminal,
   WhyFoldkit,
 } from '../page'
-import * as ApiReference from '../page/apiReference/domain'
-import * as ComingFromReact from '../page/comingFromReact/domain'
-import * as CoreBlockMetadata from '../page/core/blockPage/domain'
-import * as UiDocumentation from '../page/ui/domain'
 
-export const activeSectionDependencies = (model: typeof Model.Type) => {
+type ChangedActiveSectionMessage = typeof Message.ChangedActiveSection.Type
+
+type ChangedActiveSection = ChangedActiveSectionMessage
+
+export const activeSectionDependencies = (model: Model) => {
   const currentPageTableOfContents = Match.value(model.route).pipe(
     Match.tags({
       WhyFoldkit: () => WhyFoldkit.tableOfContents,
@@ -186,7 +190,7 @@ export const activeSectionDependencies = (model: typeof Model.Type) => {
 }
 
 export const activeSectionChanges = (sections: ReadonlyArray<string>) =>
-  Stream.callback<typeof Message.ChangedActiveSection.Type>(queue =>
+  Stream.callback<ChangedActiveSection>(queue =>
     Effect.gen(function* () {
       if (!Array.isReadonlyArrayNonEmpty(sections)) {
         return yield* Effect.never

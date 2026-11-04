@@ -366,14 +366,20 @@ export const makeRenderer = <Model, Message>({
       maybeLastDirtyMessage = Option.some(message)
     }
 
-    const dispatchSync = (message: unknown): void => {
+    const dispatchSync = (
+      message: unknown,
+      isCurrent?: () => boolean,
+    ): void => {
       /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-      enqueueMessage(message as Message)
+      enqueueMessage(message as Message, isCurrent)
     }
 
-    const dispatchAsync = (message: unknown): Effect.Effect<void> =>
+    const dispatchAsync = (
+      message: unknown,
+      isCurrent?: () => boolean,
+    ): Effect.Effect<void> =>
       /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-      enqueueMessageEffect(message as Message)
+      enqueueMessageEffect(message as Message, isCurrent)
 
     const dispatch = { dispatchAsync, dispatchSync }
 
@@ -389,22 +395,21 @@ export const makeRenderer = <Model, Message>({
       mounts.map(mount => mount[MountRegistrationTypeId]),
     )
 
-    const mountValidationVisits = new WeakMap<VNode, object>()
+    const mountValidationVisits = new Set<VNode>()
 
     const assertLayeredMountsAreRegistered = (root: VNode | null): void => {
       if (root === null) {
         return
       }
 
-      const mountValidationToken = {}
       let missing: Map<object, string> | undefined
       const walk = (node: VNode): void => {
         const { children } = node
         if (children !== undefined && Array.isArrayNonEmpty(children)) {
-          if (mountValidationVisits.get(node) === mountValidationToken) {
+          if (mountValidationVisits.has(node)) {
             return
           }
-          mountValidationVisits.set(node, mountValidationToken)
+          mountValidationVisits.add(node)
         }
 
         /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
@@ -429,7 +434,11 @@ export const makeRenderer = <Model, Message>({
           }
         }
       }
-      walk(root)
+      try {
+        walk(root)
+      } finally {
+        mountValidationVisits.clear()
+      }
 
       if (missing === undefined) {
         return

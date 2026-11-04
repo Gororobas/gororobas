@@ -29,6 +29,10 @@ import {
 } from 'vite'
 import { describe, expect, it, onTestFinished } from 'vitest'
 
+import {
+  DEVELOPMENT_BUILD_ID_MODULE_ID,
+  RESOLVED_DEVELOPMENT_BUILD_ID_MODULE_ID,
+} from '../src/buildToken.ts'
 import { crawlFoldkitPackages } from '../src/foldkitPackages.ts'
 import { foldkit } from '../src/index.ts'
 import { readForcedEffectEntries } from './forcedEffectEntries.ts'
@@ -336,12 +340,14 @@ const ServerEntry = Schema.Struct({
   foldkitEffectSchema: Schema.Unknown,
   applicationEffectSchema: Schema.Unknown,
 })
+type ServerEntry = typeof ServerEntry.Type
 
 const decodeServerEntry = Schema.decodeUnknownSync(ServerEntry)
 
 const ConsumerEntry = Schema.Struct({
   viaConsumer: Schema.Struct({ copy: Schema.String }),
 })
+type ConsumerEntry = typeof ConsumerEntry.Type
 
 const decodeConsumerEntry = Schema.decodeUnknownSync(ConsumerEntry)
 
@@ -380,8 +386,9 @@ const renderServerEntry = async (
   environments: NonNullable<InlineConfig['environments']>,
 ): Promise<
   Readonly<{
-    serverEntry: typeof ServerEntry.Type
+    serverEntry: ServerEntry
     clientBuildTokenCode: string | undefined
+    clientBuildIdCode: string | undefined
     environment: RunnableDevEnvironment
   }>
 > => {
@@ -397,10 +404,15 @@ const renderServerEntry = async (
     await server.environments.client.transformRequest(
       join(root, 'node_modules/foldkit/dist/buildToken.js'),
     )
+  const clientBuildIdTransform =
+    await server.environments.client.transformRequest(
+      RESOLVED_DEVELOPMENT_BUILD_ID_MODULE_ID,
+    )
 
   return {
     serverEntry,
     clientBuildTokenCode: clientBuildTokenTransform?.code,
+    clientBuildIdCode: clientBuildIdTransform?.code,
     environment,
   }
 }
@@ -428,7 +440,10 @@ const expectClientBuildId = (
 
   expect(typeof injectedBuildId).toBe('string')
   expect(rendered.clientBuildTokenCode).toContain(
-    `injectedBuildId = ${JSON.stringify(injectedBuildId)}`,
+    DEVELOPMENT_BUILD_ID_MODULE_ID,
+  )
+  expect(rendered.clientBuildIdCode).toContain(
+    `export const buildId = ${JSON.stringify(injectedBuildId)}`,
   )
 }
 
@@ -472,6 +487,7 @@ const AppManifest = Schema.StructWithRest(
   }),
   [Schema.Record(Schema.String, Schema.Unknown)],
 )
+type AppManifest = typeof AppManifest.Type
 
 const decodeAppManifest = Schema.decodeUnknownSync(
   Schema.fromJsonString(AppManifest),

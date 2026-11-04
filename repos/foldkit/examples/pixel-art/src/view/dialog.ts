@@ -1,14 +1,17 @@
 import { Option } from 'effect'
 import type { Html } from 'foldkit/html'
 
-import { Button, DialogBlock } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
+import { DialogBlock } from '@foldkit/ui/dialog'
 
 import {
   type ApplicationViewBuilder,
-  ErrorDialogBinding as ErrorDialogBinding,
-  GridSizeConfirmDialogBinding as GridSizeConfirmDialogBinding,
+  ErrorDialogBinding,
+  GridSizeConfirmDialogBinding,
 } from '../composition'
 import { Message } from '../message'
+
+type DialogModel = typeof DialogBlock.Model.Type
 
 const dialogClassName =
   'bg-transparent p-0 open:flex items-center justify-center'
@@ -17,7 +20,7 @@ const panelClassName =
   'bg-gray-900 border border-gray-700 rounded-lg p-6 max-w-sm relative shadow-xl'
 
 export const errorDialogView = (
-  errorDialog: typeof DialogBlock.Model.Type,
+  errorDialog: DialogModel,
   maybeExportError: Option.Option<string>,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -80,7 +83,7 @@ export const errorDialogView = (
   )
 
 export const gridSizeConfirmDialogView = (
-  gridSizeConfirmDialog: typeof DialogBlock.Model.Type,
+  gridSizeConfirmDialog: DialogModel,
   maybePendingGridSize: Option.Option<number>,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -137,7 +140,7 @@ export const gridSizeConfirmDialogView = (
                               ],
                               ['Cancel'],
                             ),
-                            Button.view(
+                            buttonView(
                               {
                                 onClick: Message.ConfirmedGridSizeChange(),
                                 toView: attributes =>

@@ -3,15 +3,15 @@ import { Update } from 'foldkit'
 
 import * as Parent from './blockDeferredConnectedStepSetup'
 
-const resetSettingsStep = Parent.ApplicationDefinition.makeStep(() =>
+const resetSettings = Parent.ApplicationBlock.makeStep(() =>
   Update.combineSteps([
     Parent.SettingsBinding.requestReset(),
-    Parent.ApplicationDefinition.makeFieldsStep(() => ({
+    Parent.ApplicationBlock.makeFieldsStep(() => ({
       resetCount: Number.increment,
     })),
   ]),
 )
 
 export const update = Parent.ApplicationComposition.makeUpdate({
-  RequestedResetSettings: model => resetSettingsStep(model),
+  RequestedResetSettings: model => resetSettings(model),
 })

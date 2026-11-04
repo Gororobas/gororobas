@@ -5,15 +5,24 @@ import { defineMessageUnion } from 'foldkit/message'
 const Model = Schema.Struct({
   count: Schema.Number,
 })
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   ClickedIncrement: {},
   ClickedDecrement: {},
 })
-const ApplicationComposition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+
+export const ApplicationKey = Symbol('Application')
+
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
-}).makeComposition()
+})
+
+const ApplicationComposition = ApplicationBlock.makeComposition()
 
 const init = ApplicationComposition.makeInit(() => ({
   model: { count: 0 },

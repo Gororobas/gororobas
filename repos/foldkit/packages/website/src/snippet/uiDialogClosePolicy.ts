@@ -1,33 +1,26 @@
 import { Update } from 'foldkit'
 
-import { Dialog } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui/dialog'
 
-import {
-  EditorComposition,
-  EditorDefinition,
-  Message,
-} from './editor/definition'
+import { EditorBlock, EditorComposition, Message } from './editor/definition'
 
-const foldDialogOutMessage = EditorDefinition.makeOutMessageFold(
-  Dialog.DialogBlock,
-  {
-    Opened: EditorDefinition.makeNoopStep,
-    Closed: () =>
-      EditorDefinition.makeFieldsStep(() => ({
-        route: () => '/projects',
-      })),
-    CompletedClose: EditorDefinition.makeNoopStep,
-  },
-)
+const foldDialogOutMessage = EditorBlock.makeOutMessageFold(DialogBlock, {
+  Opened: EditorBlock.makeNoopStep,
+  Closed: () =>
+    EditorBlock.makeFieldsStep(() => ({
+      route: () => '/projects',
+    })),
+  CompletedClose: EditorBlock.makeNoopStep,
+})
 
-export const DialogBinding = EditorDefinition.makeBinding(Dialog.DialogBlock, {
+export const DialogBinding = EditorBlock.makeBinding(DialogBlock, {
   field: 'dialog',
 }).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
 export const update = EditorComposition.makeUpdate({
   SavedProject: (model, { project }) =>
     Update.combineSteps(model, [
-      EditorDefinition.makeFieldsStep(() => ({
+      EditorBlock.makeFieldsStep(() => ({
         project: () => project,
       })),
       DialogBinding.requestClose(),

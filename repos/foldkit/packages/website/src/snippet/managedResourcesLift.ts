@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from 'effect'
+import { Effect, Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 
 import { init } from './init'
@@ -9,19 +9,25 @@ import * as VideoCall from './videoCall'
 
 const SIGNALING_URL = 'wss://example.com/call/signaling'
 
-const CallDefinition = Block.makeDefinition('Call', { Model, Message })
-const SignalingSocket =
-  CallDefinition.makeResource<WebSocket>()('SignalingSocket')
+export const CallKey = Symbol('Call')
 
-const VideoCallBinding = CallDefinition.makeBinding(VideoCall.VideoCallBlock, {
+export const CallBlock = Block.make('Call', {
+  key: CallKey,
+  Init: Schema.Tuple([]),
+  Model,
+  Message,
+})
+const SignalingSocket = CallBlock.makeResource<WebSocket>()('SignalingSocket')
+
+const VideoCallBinding = CallBlock.makeBinding(VideoCall.VideoCallBlock, {
   field: 'videoCall',
 })
 
-const CallComposition = CallDefinition.makeComposition({
+const CallComposition = CallBlock.makeComposition({
   bindings: [VideoCallBinding],
 })
 
-export const managedResources = CallDefinition.makeManagedResources(entry => ({
+export const managedResources = CallBlock.makeManagedResources(entry => ({
   signalingSocket: entry('ManageSignalingSocket', Schema.Option(Schema.Null), {
     resource: SignalingSocket,
     modelToMaybeRequirements: model => Option.as(model.videoCall, null),
@@ -38,14 +44,16 @@ export const managedResources = CallDefinition.makeManagedResources(entry => ({
   }),
 }))
 
-const prepare = () =>
-  CallComposition.prepareBlock({
-    init,
-    update,
-    managedResources,
-    EffectsLayer: managedResources.signalingSocket.layer,
-  })
-export const CallBlock: Block.FromAssemblyWithoutViewOrOutMessage<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = CallBlock.makeLayer(
+  Effect.gen(function* () {
+    const videoCall = yield* VideoCallBinding
+
+    return {
+      children: [videoCall],
+      init,
+      update,
+      managedResources,
+      EffectsLayer: managedResources.signalingSocket.layer,
+    }
+  }),
+).pipe(Layer.provide(VideoCall.layer))

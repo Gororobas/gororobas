@@ -2,30 +2,39 @@ import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import * as Dialog from '@foldkit/ui/dialog'
+import { DialogBlock } from '@foldkit/ui/dialog'
 
 import { confirmDialogInputs } from './viewSharedDialog'
 
-const Model = Schema.Struct({ dialog: Dialog.DialogBlock.Model })
+const Model = Schema.Struct({ dialog: DialogBlock.Model })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({ ClickedConfirmDeletion: {} })
-const DeleteIssueDefinition = Block.makeDefinition('DeleteIssue', {
+type Message = typeof Message.Type
+
+export const DeleteIssueKey = Symbol('DeleteIssue')
+
+const DeleteIssueBlock = Block.make('DeleteIssue', {
+  key: DeleteIssueKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = DeleteIssueDefinition
+const { makeNoopStep } = DeleteIssueBlock
 
-const DialogBinding = DeleteIssueDefinition.makeBinding(Dialog.DialogBlock, {
+const DialogBinding = DeleteIssueBlock.makeBinding(DialogBlock, {
   field: 'dialog',
   init: { contextToArgs: () => [{ id: 'delete-issue' }] },
 }).withOutMessagePolicy({
-  fold: DeleteIssueDefinition.makeOutMessageFold(Dialog.DialogBlock, {
+  fold: DeleteIssueBlock.makeOutMessageFold(DialogBlock, {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
     CompletedClose: makeNoopStep,
   }),
 })
-const DeleteIssueComposition = DeleteIssueDefinition.makeComposition({
+const DeleteIssueComposition = DeleteIssueBlock.makeComposition({
   bindings: [DialogBinding],
 })
 

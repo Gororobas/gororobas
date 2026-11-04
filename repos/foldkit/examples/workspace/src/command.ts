@@ -1,32 +1,27 @@
 import { Clock, DateTime, Effect, Layer, Schema } from 'effect'
 import { load, pushUrl, replaceUrl } from 'foldkit/navigation'
 
-import { ApplicationDefinition } from './definition'
+import { ApplicationBlock } from './definition'
 import { IssueDraft, IssueStatus } from './domain'
 import { Message } from './message'
 import { WorkspaceRepository } from './repository'
 
-export const LoadWorkspace = ApplicationDefinition.makeCommand(
-  'LoadWorkspace',
-  {
-    messages: [Message.SucceededLoadWorkspace, Message.FailedLoadWorkspace],
-    handler: function* () {
-      const repository = yield* WorkspaceRepository
+export const LoadWorkspace = ApplicationBlock.makeCommand('LoadWorkspace', {
+  messages: [Message.SucceededLoadWorkspace, Message.FailedLoadWorkspace],
+  handler: function* () {
+    const repository = yield* WorkspaceRepository
 
-      return () =>
-        repository.load.pipe(
-          Effect.map(snapshot => Message.SucceededLoadWorkspace({ snapshot })),
-          Effect.catch(error =>
-            Effect.succeed(
-              Message.FailedLoadWorkspace({ error: error.message }),
-            ),
-          ),
-        )
-    },
+    return () =>
+      repository.load.pipe(
+        Effect.map(workspace => Message.SucceededLoadWorkspace({ workspace })),
+        Effect.catch(error =>
+          Effect.succeed(Message.FailedLoadWorkspace({ error: error.message })),
+        ),
+      )
   },
-)
+})
 
-export const NavigateInternal = ApplicationDefinition.makeCommand(
+export const NavigateInternal = ApplicationBlock.makeCommand(
   'NavigateInternal',
   {
     args: { url: Schema.String },
@@ -38,7 +33,7 @@ export const NavigateInternal = ApplicationDefinition.makeCommand(
   },
 )
 
-export const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
+export const LoadExternal = ApplicationBlock.makeCommand('LoadExternal', {
   args: { href: Schema.String },
   messages: [Message.CompletedLoadExternal],
   handler: function* () {
@@ -47,7 +42,7 @@ export const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
   },
 })
 
-export const ReplaceInternalUrl = ApplicationDefinition.makeCommand(
+export const ReplaceInternalUrl = ApplicationBlock.makeCommand(
   'ReplaceInternalUrl',
   {
     args: { url: Schema.String },
@@ -59,7 +54,7 @@ export const ReplaceInternalUrl = ApplicationDefinition.makeCommand(
   },
 )
 
-export const SimulateSaveFailure = ApplicationDefinition.makeCommand(
+export const SimulateSaveFailure = ApplicationBlock.makeCommand(
   'SimulateSaveFailure',
   {
     messages: [Message.CompletedSimulateSaveFailure],
@@ -74,7 +69,7 @@ export const SimulateSaveFailure = ApplicationDefinition.makeCommand(
   },
 )
 
-export const MoveIssue = ApplicationDefinition.makeCommand('MoveIssue', {
+export const MoveIssue = ApplicationBlock.makeCommand('MoveIssue', {
   args: {
     issueId: Schema.String,
     status: IssueStatus,
@@ -87,7 +82,7 @@ export const MoveIssue = ApplicationDefinition.makeCommand('MoveIssue', {
 
     return args =>
       repository.moveIssue(args).pipe(
-        Effect.map(snapshot => Message.SucceededMoveIssue({ snapshot })),
+        Effect.map(movedIssue => Message.SucceededMoveIssue({ movedIssue })),
         Effect.catch(error =>
           Effect.succeed(
             Message.FailedMoveIssue({
@@ -102,32 +97,31 @@ export const MoveIssue = ApplicationDefinition.makeCommand('MoveIssue', {
   },
 })
 
-export const AppendActivity = ApplicationDefinition.makeCommand(
-  'AppendActivity',
-  {
-    args: {
-      issueId: Schema.String,
-      authorId: Schema.String,
-      body: Schema.String,
-    },
-    messages: [Message.SucceededAppendActivity, Message.FailedAppendActivity],
-    handler: function* () {
-      const repository = yield* WorkspaceRepository
-
-      return args =>
-        repository.addComment(args).pipe(
-          Effect.map(issue => Message.SucceededAppendActivity({ issue })),
-          Effect.catch(error =>
-            Effect.succeed(
-              Message.FailedAppendActivity({ error: error.message }),
-            ),
-          ),
-        )
-    },
+export const AppendActivity = ApplicationBlock.makeCommand('AppendActivity', {
+  args: {
+    issueId: Schema.String,
+    authorId: Schema.String,
+    body: Schema.String,
   },
-)
+  messages: [Message.SucceededAppendActivity, Message.FailedAppendActivity],
+  handler: function* () {
+    const repository = yield* WorkspaceRepository
 
-export const AssignIssue = ApplicationDefinition.makeCommand('AssignIssue', {
+    return args =>
+      repository.addComment(args).pipe(
+        Effect.map(comment =>
+          Message.SucceededAppendActivity({ issueId: args.issueId, comment }),
+        ),
+        Effect.catch(error =>
+          Effect.succeed(
+            Message.FailedAppendActivity({ error: error.message }),
+          ),
+        ),
+      )
+  },
+})
+
+export const AssignIssue = ApplicationBlock.makeCommand('AssignIssue', {
   args: {
     issueId: Schema.String,
     draft: IssueDraft,
@@ -141,14 +135,14 @@ export const AssignIssue = ApplicationDefinition.makeCommand('AssignIssue', {
 
     return args =>
       Effect.gen(function* () {
-        const issue = yield* repository.saveIssue(args)
+        const savedIssue = yield* repository.saveIssue(args)
 
         const createdAt = DateTime.formatIso(
           DateTime.makeUnsafe(yield* clock.currentTimeMillis),
         )
 
         return Message.SucceededAssignIssue({
-          issue,
+          savedIssue,
           actorId: args.actorId,
           createdAt,
         })

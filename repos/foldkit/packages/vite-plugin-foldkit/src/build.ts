@@ -17,6 +17,14 @@ import type {
   ViteBuilder,
 } from 'vite'
 
+import {
+  DEV_TOOLS_OVERLAY_MODULE_ID,
+  DEV_TOOLS_OVERLAY_MODULE_SOURCE,
+  RESOLVED_DEV_TOOLS_OVERLAY_MODULE_ID,
+  shouldInjectDevToolsOverlay,
+} from './devToolsOverlay.js'
+import { installPrerenderPreview } from './preview.js'
+
 /** How a build materializes the URLs a server entry can render. */
 export type FoldkitPrerenderOptions = Readonly<{
   /**
@@ -78,7 +86,6 @@ export const FoldkitBuildManifest = Schema.Struct({
   /** Every path this build generated a page for, in the order it generated. */
   prerendered: Schema.Array(Schema.String),
 })
-
 /**
  * The decoded shape of `foldkit.build.json`.
  *
@@ -100,7 +107,6 @@ export const FoldkitBuildMetadata = Schema.Struct({
   /** Portable data also written to `foldkit.build.json`. */
   manifest: FoldkitBuildManifest,
 })
-
 /** The serializable, frozen snapshot of a completed Foldkit build. */
 export type FoldkitBuildMetadata = typeof FoldkitBuildMetadata.Type
 
@@ -472,6 +478,10 @@ const assetsForFetchModule = (
  * use the server entry's `renderDocument` export with the emitted browser assets.
  * The browser build has a script input and emits no HTML until prerendering.
  * The server bundle's default export is `{ fetch }`.
+ *
+ * With prerendering enabled, `vite preview` resolves generated directory-index
+ * pages at their declared paths. Vite serves the existing files without running
+ * the server entry. Custom application hosts retain their own routing.
  */
 export const foldkitBuild = (
   serverEntry: string,
@@ -624,7 +634,11 @@ export const foldkitBuild = (
 
   return {
     name: 'foldkit:build',
-    apply: 'build',
+    apply: (_config, { command, isPreview }) =>
+      command === 'build' || (isPreview === true && prerender !== undefined),
+    ...(prerender === undefined
+      ? {}
+      : { configurePreviewServer: installPrerenderPreview }),
     sharedDuringBuild: true,
     api: {
       serverEntry,
@@ -667,6 +681,9 @@ export const foldkitBuild = (
       },
     },
     resolveId(id) {
+      if (id === DEV_TOOLS_OVERLAY_MODULE_ID) {
+        return RESOLVED_DEV_TOOLS_OVERLAY_MODULE_ID
+      }
       if (id === CLIENT_MODULE_ID) {
         return RESOLVED_CLIENT_MODULE_ID
       }
@@ -676,14 +693,23 @@ export const foldkitBuild = (
       return undefined
     },
     load(id) {
+      if (id === RESOLVED_DEV_TOOLS_OVERLAY_MODULE_ID) {
+        return DEV_TOOLS_OVERLAY_MODULE_SOURCE
+      }
       if (id === RESOLVED_CLIENT_MODULE_ID) {
         const { modulePreload } = this.environment.config.build
         const polyfill =
           modulePreload !== false && modulePreload.polyfill
             ? "import 'vite/modulepreload-polyfill'\n"
             : ''
+        const overlay = shouldInjectDevToolsOverlay(
+          'build',
+          this.environment.config.root,
+        )
+          ? `import ${JSON.stringify(DEV_TOOLS_OVERLAY_MODULE_ID)}\n`
+          : ''
 
-        return `${polyfill}import ${JSON.stringify(options.clientEntry)}\n`
+        return `${polyfill}${overlay}import ${JSON.stringify(options.clientEntry)}\n`
       }
       if (id !== RESOLVED_FETCH_MODULE_ID) {
         return
@@ -709,10 +735,14 @@ export const foldkitBuild = (
         )
       },
     },
-    config: userConfig => {
+    config: (userConfig, { isPreview }) => {
       const client: EnvironmentOptions = {
         build: {
-          outDir: clientOutDir,
+          outDir: isPreview
+            ? (userConfig.environments?.['client']?.build?.outDir ??
+              userConfig.build?.outDir ??
+              clientOutDir)
+            : clientOutDir,
           rolldownOptions: { input: { [CLIENT_CHUNK_NAME]: CLIENT_MODULE_ID } },
         },
       }
@@ -747,6 +777,16 @@ export const foldkitBuild = (
         : { environments: { client, ssr } }
     },
     configResolved(config) {
+      if (
+        config.command === 'build' &&
+        (config.environments['client']?.build.watch ||
+          config.environments['ssr']?.build.watch)
+      ) {
+        throw new Error(
+          '[foldkit] ssr.build does not support build.watch or vite build --watch. Use the Vite dev server for SSR development, or rerun a full vite build when sources change.',
+        )
+      }
+
       if (config.base === '' || config.base === './') {
         throw new Error(
           '[foldkit] ssr.build requires an absolute URL or root-relative base, such as "/" or "/app/". A relative base cannot locate browser assets consistently across server-rendered routes.',

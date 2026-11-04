@@ -37,6 +37,44 @@ import * as Story from './story.js'
 
 // TEST
 
+describe('initialization', () => {
+  test('retains initial Commands and OutMessage for explicit assertions and resolution', () => {
+    const formInit = childUpdate(
+      { status: 'Submitting' },
+      FormChildJsChildMessage.SucceededSubmitForm({ id: 'initial' }),
+    )
+
+    Story.story(
+      childUpdate,
+      Story.__givenInit(formInit),
+      Story.expectOutMessage(
+        FormChildJsChildOutMessage.RequestedSave({ id: 'initial' }),
+      ),
+      Story.Command.expectExact(ResetForm),
+      Story.Command.resolve(
+        ResetForm,
+        FormChildJsChildMessage.CompletedResetForm(),
+      ),
+      Story.expectNoOutMessage(),
+      Story.model(model => {
+        expect(model.status).toBe('Idle')
+      }),
+    )
+  })
+
+  test('accepts an initialization result with only a Model', () => {
+    Story.story(
+      update,
+      Story.__givenInit({ model: { count: 3, log: [] } }),
+      Story.Command.expectNone(),
+      Story.expectNoOutMessage(),
+      Story.model(model => {
+        expect(model.count).toBe(3)
+      }),
+    )
+  })
+})
+
 describe('message', () => {
   test('multiple Messages update the Model sequentially', () => {
     Story.story(
@@ -989,22 +1027,20 @@ describe('outMessage', () => {
   })
 
   test('validates the data-first update contract', () => {
-    const missingModel = (
-      _model: CounterModel,
-      _message: typeof CounterMessage.Type,
-    ) => ({ status: 'Done' })
-    const wrongModel = (
-      _model: CounterModel,
-      _message: typeof CounterMessage.Type,
-    ) => ({ model: { status: 'Done' } })
+    const missingModel = (_model: CounterModel, _message: CounterMessage) => ({
+      status: 'Done',
+    })
+    const wrongModel = (_model: CounterModel, _message: CounterMessage) => ({
+      model: { status: 'Done' },
+    })
     const requiredContext = (
       model: CounterModel,
-      _message: typeof CounterMessage.Type,
+      _message: CounterMessage,
       _context: string,
     ) => ({ model })
     const optionalContext = (
       model: CounterModel,
-      _message: typeof CounterMessage.Type,
+      _message: CounterMessage,
       _context?: string,
     ) => ({ model })
 
@@ -1187,7 +1223,7 @@ describe("resolveAll applies each Command's own message mapping", () => {
 
 describe('type safety', () => {
   test('retains the explicit generic call shape', () => {
-    Story.story<CounterModel, typeof CounterMessage.Type>(
+    Story.story<CounterModel, CounterMessage>(
       update,
       Story.given({ count: 0, log: [] }),
       Story.message(CounterMessage.ClickedIncrement()),

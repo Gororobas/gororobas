@@ -8,6 +8,7 @@ import {
   Option,
   Predicate,
   Schema,
+  Tuple,
   pipe,
 } from 'effect'
 import * as Block from 'foldkit/block'
@@ -33,14 +34,63 @@ export const Model = Schema.Struct({
   pendingShowVersion: Schema.Number,
   maybeLastPointerType: Schema.Option(Schema.String),
 })
-
 export type Model = typeof Model.Type
 
-const TooltipDefinition = Block.makeDefinition('Tooltip', {
+const TooltipNamespace = Block.makeNamespace('Tooltip')
+
+/** The anchor-positioning Mount this Tooltip renders on its panel. */
+export const AnchorTooltip = TooltipNamespace.makeMount('AnchorTooltip', {
+  args: { buttonId: Schema.String, anchor: AnchorConfig },
+  messages: [Message.CompletedAnchorTooltip],
+  handler: function* () {
+    return ({ element, buttonId, anchor }) =>
+      Effect.gen(function* () {
+        yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            anchorSetup(element, {
+              buttonId,
+              anchor,
+              interceptTab: false,
+            }),
+          ),
+          cleanup => Effect.sync(cleanup),
+        )
+        return Message.CompletedAnchorTooltip()
+      })
+  },
+})
+
+/** @internal Stable identity of the Tooltip contract. */
+export const TooltipKey = Symbol('Tooltip')
+
+export const TooltipBlock = Block.make(TooltipNamespace, {
+  key: TooltipKey,
   Model,
   Message,
   OutMessage,
+  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  view: {
+    kind: 'Element',
+    Inputs: Block.makeInputContract<ViewInputs>(),
+    mounts: [AnchorTooltip],
+  },
+  operations: {
+    /** Supplies a new hover delay without changing visibility or restarting a
+     * pending timer. Accepts any Effect Duration input. */
+    informShowDelayChanged: {
+      message: (showDelay: Duration.Input) =>
+        Tuple.make(
+          Message.InformedOfShowDelayChange({
+            showDelay: Duration.fromInputUnsafe(showDelay),
+          }),
+        ),
+      outMessage: OutMessage,
+    },
+  },
 })
+
+/** Public Tooltip authoring contract and passive graph identity. */
+export type TooltipBlock = typeof TooltipBlock
 
 // SELECTORS
 
@@ -80,39 +130,14 @@ const makeInitialModel = (config: InitConfig): Model => ({
 
 /** Waits for the tooltip's show delay before emitting
  *  `CompletedWaitBeforeShowing`. */
-export const WaitBeforeShowing = TooltipDefinition.makeCommand(
-  'WaitBeforeShowing',
-  {
-    args: { delay: Schema.DurationFromMillis, version: Schema.Number },
-    messages: [Message.CompletedWaitBeforeShowing],
-    handler: function* () {
-      return ({ delay, version }) =>
-        Effect.sleep(delay).pipe(
-          Effect.as(Message.CompletedWaitBeforeShowing({ version })),
-        )
-    },
-  },
-)
-
-/** The anchor-positioning Mount this Tooltip renders on its panel. */
-export const AnchorTooltip = TooltipDefinition.makeMount('AnchorTooltip', {
-  args: { buttonId: Schema.String, anchor: AnchorConfig },
-  messages: [Message.CompletedAnchorTooltip],
+export const WaitBeforeShowing = TooltipBlock.makeCommand('WaitBeforeShowing', {
+  args: { delay: Schema.DurationFromMillis, version: Schema.Number },
+  messages: [Message.CompletedWaitBeforeShowing],
   handler: function* () {
-    return ({ element, buttonId, anchor }) =>
-      Effect.gen(function* () {
-        yield* Effect.acquireRelease(
-          Effect.sync(() =>
-            anchorSetup(element, {
-              buttonId,
-              anchor,
-              interceptTab: false,
-            }),
-          ),
-          cleanup => Effect.sync(cleanup),
-        )
-        return Message.CompletedAnchorTooltip()
-      })
+    return ({ delay, version }) =>
+      Effect.sleep(delay).pipe(
+        Effect.as(Message.CompletedWaitBeforeShowing({ version })),
+      )
   },
 })
 
@@ -125,7 +150,7 @@ export const EffectsLayer = Layer.mergeAll(
   AnchorTooltip.layer,
 )
 
-const TooltipComposition = TooltipDefinition.makeComposition({ mounts })
+const TooltipComposition = TooltipBlock.makeComposition({ mounts })
 
 /** Creates an initial Tooltip Model and Commands from a config. Defaults to hidden. */
 export const init = TooltipComposition.makeInit((config: InitConfig) => ({
@@ -304,7 +329,7 @@ export type ViewInputs = Readonly<{
 /** Renders a headless tooltip with an anchored non-interactive panel.
  *  Shows on hover (after delay) or focus (from keyboard, touch, or pen;
  *  mouse-click focus is excluded). Hides on leave, blur, or Escape. */
-export const view = TooltipComposition.makeView.withInputs<ViewInputs>(
+export const view = TooltipComposition.makeView.withInputs(
   (model, viewInputs, h) => {
     const { id, isOpen } = model
     const { anchor, toView, isDisabled, ariaLabel, ariaLabelledBy } = viewInputs
@@ -375,26 +400,18 @@ export const view = TooltipComposition.makeView.withInputs<ViewInputs>(
   },
 )
 
-const prepare = () =>
-  TooltipComposition.prepareBlock({
-    init,
-    update,
-    view,
-    operations: {
-      /** Supplies a new hover delay without changing visibility or restarting a
-       * pending timer. Accepts any Effect Duration input. */
-      informShowDelayChanged: (showDelay: Duration.Input) => [
-        Message.InformedOfShowDelayChange({
-          showDelay: Duration.fromInputUnsafe(showDelay),
-        }),
-      ],
-    },
-    EffectsLayer,
-  })
-/** Completed Tooltip Block contract. */
-export interface TooltipBlock extends Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepare
-> {}
-/** Completed Tooltip Block for binding into a parent. */
-export const TooltipBlock: TooltipBlock = Block.assemble(prepare)
+/** Constructs the Tooltip implementation without starting occurrence effects. */
+export const layer = TooltipBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      EffectsLayer,
+    }
+  }),
+)
+
+/** @internal Selected implementation used by component tests. */
+export const block = { block: TooltipBlock, layer }

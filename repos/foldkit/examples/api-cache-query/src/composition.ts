@@ -1,46 +1,46 @@
 import { Match } from 'effect'
 import { type Block, Update } from 'foldkit'
 
-import { ApplicationDefinition, makeFieldsStep, makeStep } from './definition'
+import { ApplicationBlock, makeFieldsStep, makeStep } from './definition'
 import { AppTabsBlock, TABS_ID, type Tab } from './model'
 import { postQuery, postsQuery, statsQuery } from './query'
 
-export const PostsBinding = ApplicationDefinition.makeBinding(postsQuery, {
+export const PostsBinding = ApplicationBlock.makeBinding(postsQuery, {
   field: 'posts',
 })
 
-export const StatsBinding = ApplicationDefinition.makeBinding(statsQuery, {
+export const StatsBinding = ApplicationBlock.makeBinding(statsQuery, {
   field: 'stats',
 })
 
-export const PostDetailsBinding = ApplicationDefinition.makeBinding(postQuery, {
+export const PostDetailsBinding = ApplicationBlock.makeBinding(postQuery, {
   field: 'postDetails',
 })
 
-const activateTabStep = (tab: typeof Tab.Type) => {
-  const selectTabStep = makeFieldsStep(() => ({
+const activateTab = (tab: Tab) => {
+  const selectTab = makeFieldsStep(() => ({
     activeTab: () => tab,
   }))
 
-  const loadTabStep = Match.value(tab).pipe(
+  const loadTab = Match.value(tab).pipe(
     Match.when('Posts', () => PostsBinding.requestLoadIfMissing()),
     Match.when('Stats', () => StatsBinding.requestLoadIfMissing()),
     Match.exhaustive,
   )
 
-  return makeStep(() => Update.combineSteps([selectTabStep, loadTabStep]))
+  return makeStep(() => Update.combineSteps([selectTab, loadTab]))
 }
 
-export const TabsBinding = ApplicationDefinition.makeBinding(AppTabsBlock, {
+export const TabsBinding = ApplicationBlock.makeBinding(AppTabsBlock, {
   field: 'tabs',
   init: { contextToArgs: () => [{ id: TABS_ID }] },
 }).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(AppTabsBlock, {
-    Selected: ({ value }) => activateTabStep(value),
+  fold: ApplicationBlock.makeOutMessageFold(AppTabsBlock, {
+    Selected: ({ value }) => activateTab(value),
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [TabsBinding, PostsBinding, StatsBinding, PostDetailsBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<

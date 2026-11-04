@@ -1,11 +1,20 @@
 import { Command, given, message, model, story } from 'foldkit/story'
-import { expect, test } from 'vitest'
+import { expect } from 'vitest'
 
-import { Message, Model, WaitBeforeReset, update } from './application'
+import { it } from '@effect/vitest'
 
-test('resets the count after waiting', () => {
+import {
+  ApplicationBlock,
+  Message,
+  Model,
+  WaitBeforeReset,
+  layer,
+  update,
+} from './application'
+
+it.effect('resets the count after waiting', () =>
   story(
-    update,
+    { block: ApplicationBlock, layer },
     given(Model.make({ count: 5 })),
     message(Message.ClickedResetAfterDelay()),
     Command.expectExact(WaitBeforeReset),
@@ -13,5 +22,5 @@ test('resets the count after waiting', () => {
     model(model => {
       expect(model.count).toBe(0)
     }),
-  )
-})
+  ),
+)

@@ -2,14 +2,14 @@ import { Array, Effect, Predicate, Schema } from 'effect'
 import { KeyValueStore } from 'effect/persistence'
 
 import { CANVAS_SIZE_PX, EXPORT_SCALE, STORAGE_KEY } from './constant'
-import { ApplicationDefinition } from './definition'
+import { ApplicationBlock } from './definition'
 import { Message } from './message'
 import type { Model, SavedCanvas } from './model'
 import { Grid, PaletteIndex } from './model'
 import { SavedCanvasJsonString } from './model'
 import { PALETTE_THEMES, resolveColor } from './palette'
 
-export const SaveCanvas = ApplicationDefinition.makeCommand('SaveCanvas', {
+export const SaveCanvas = ApplicationBlock.makeCommand('SaveCanvas', {
   args: {
     grid: Grid,
     gridSize: Schema.Number,
@@ -22,7 +22,7 @@ export const SaveCanvas = ApplicationDefinition.makeCommand('SaveCanvas', {
 
     return ({ grid, gridSize, paletteThemeIndex, selectedColorIndex }) =>
       Effect.gen(function* () {
-        const data: typeof SavedCanvas.Type = {
+        const data: SavedCanvas = {
           grid,
           gridSize,
           paletteThemeIndex,
@@ -37,7 +37,7 @@ export const SaveCanvas = ApplicationDefinition.makeCommand('SaveCanvas', {
   },
 })
 
-export const saveCanvas = (model: typeof Model.Type) =>
+export const saveCanvas = (model: Model) =>
   SaveCanvas({
     grid: model.grid,
     gridSize: model.gridSize,
@@ -45,7 +45,7 @@ export const saveCanvas = (model: typeof Model.Type) =>
     selectedColorIndex: model.selectedColorIndex,
   })
 
-export const ExportPng = ApplicationDefinition.makeCommand('ExportPng', {
+export const ExportPng = ApplicationBlock.makeCommand('ExportPng', {
   args: {
     grid: Grid,
     gridSize: Schema.Number,

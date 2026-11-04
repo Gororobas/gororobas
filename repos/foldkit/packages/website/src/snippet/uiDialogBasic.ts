@@ -1,36 +1,42 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Dialog } from '@foldkit/ui'
-import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
+import {
+  DialogBlock,
+  layer as DialogLayer,
+  type RenderInfo as DialogRenderInfo,
+} from '@foldkit/ui/dialog'
 
 // Add a field to your Model for the Dialog Block:
 const Model = Schema.Struct({
-  dialog: Dialog.DialogBlock.Model,
+  dialog: DialogBlock.Model,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // A fact for the trigger, plus the Dialog Message embedded in your parent
 // Message for the block delegation:
 const Message = defineMessageUnion({
   ClickedOpenDialog: {},
 })
+type Message = typeof Message.Type
 
-const DialogExampleDefinition = Block.makeDefinition('DialogExample', {
+export const DialogExampleKey = Symbol('DialogExample')
+
+export const DialogExampleBlock = Block.make('DialogExample', {
+  key: DialogExampleKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = DialogExampleDefinition
+const { makeNoopStep } = DialogExampleBlock
 
 // One boundary handles Dialog Messages, Commands, and OutMessages. Replace
 // either no-op arm with the parent transition that should follow that event.
-const foldDialogOutMessage = DialogExampleDefinition.makeOutMessageFold(
-  Dialog.DialogBlock,
+const foldDialogOutMessage = DialogExampleBlock.makeOutMessageFold(
+  DialogBlock,
   {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
@@ -38,12 +44,12 @@ const foldDialogOutMessage = DialogExampleDefinition.makeOutMessageFold(
   },
 )
 
-const DialogBinding = DialogExampleDefinition.makeBinding(Dialog.DialogBlock, {
+const DialogBinding = DialogExampleBlock.makeBinding(DialogBlock, {
   field: 'dialog',
-  init: { contextToArgs: () => Tuple.make({ id: 'confirm' }) },
+  init: { contextToArgs: () => [{ id: 'confirm' }] },
 }).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
-const DialogExampleComposition = DialogExampleDefinition.makeComposition({
+const DialogExampleComposition = DialogExampleBlock.makeComposition({
   bindings: [DialogBinding],
 })
 
@@ -107,3 +113,16 @@ const view = DialogExampleComposition.makeView((model, h) => {
     ],
   )
 })
+
+export const layer = DialogExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const dialog = yield* DialogBinding
+
+    return {
+      children: [dialog],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(DialogLayer))

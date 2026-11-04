@@ -1,39 +1,32 @@
 import { Option } from 'effect'
 import { Url } from 'foldkit'
-import { initAndSet } from 'foldkit/bindingInit'
 import { modifyFields } from 'foldkit/struct'
 
-import { RoomBinding } from '../composition'
 import { makeFieldsStep, makeNoopStep } from '../definition'
 import { type Model } from '../model'
 import { ApplicationRoute, urlToApplicationRoute } from '../route'
+import { initRoom } from '../steps'
 
-const clearRoomInstanceStep = makeFieldsStep(() => ({
+const clearRoomInstance = makeFieldsStep(() => ({
   maybeRoomInstance: () => Option.none(),
 }))
 
-const keepRoomInstanceStep = makeNoopStep()
+const keepRoomInstance = makeNoopStep()
 
-export const initRoom = (model: typeof Model.Type, roomId: string) =>
-  initAndSet(RoomBinding, model, {
-    key: roomId,
-    args: [Option.some(roomId)],
-  })
-
-export const changeRoute = (model: typeof Model.Type, url: Url.Url) => {
+export const changeRoute = (model: Model, url: Url.Url) => {
   const route = urlToApplicationRoute(url)
   const routeChanged = modifyFields(model, { route: () => route })
 
   return ApplicationRoute.match(route, {
-    Home: () => clearRoomInstanceStep(routeChanged),
+    Home: () => clearRoomInstance(routeChanged),
     Room: ({ roomId }) =>
       Option.match(model.maybeRoomInstance, {
         onNone: () => initRoom(routeChanged, roomId),
         onSome: roomInstance =>
           roomInstance.roomId === roomId
-            ? keepRoomInstanceStep(routeChanged)
+            ? keepRoomInstance(routeChanged)
             : initRoom(routeChanged, roomId),
       }),
-    NotFound: () => clearRoomInstanceStep(routeChanged),
+    NotFound: () => clearRoomInstance(routeChanged),
   })
 }

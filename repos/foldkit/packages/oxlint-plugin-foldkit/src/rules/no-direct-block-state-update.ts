@@ -10,31 +10,35 @@ import {
 } from 'effect-oxlint'
 
 import {
+  blockBindingChild,
+  blockBindingConfiguration,
+  blockBindingMethod,
+  blockBindingOwner,
   indexReferences,
   isCallExpression,
   isIdentifier,
   isIdentifierReference,
   isMemberExpression,
   isObjectExpression,
+  isOwnedDefinitionCall,
+  isVariableDeclaration,
   isVariableDeclarator,
+  ownedDefinitionMethodOwner,
   resolveFoldkitApiPath,
   resolveImportedPath,
   resolvedVariable,
-  staticMemberPath,
   staticMemberName,
+  staticMemberPath,
   staticPropertyName,
   staticStringValue,
-  blockBindingChild,
-  blockBindingMethod,
-  blockBindingConfiguration,
-  blockBindingParent,
-  isOwnedDefinitionCall,
-  ownedDefinitionMethodOwner,
-  isVariableDeclaration,
 } from '../guards.ts'
+import {
+  type UpdateAuthoring,
+  ownedUpdateAuthoringCallee,
+} from '../update-authoring.ts'
 
 const directBlockStateUpdateMessage = (fieldName: string): string =>
-  `Do not update the Block field \`${fieldName}\` directly from its parent. Expose the local Message constructor through the child Block's \`operations\` record, then call the named method on the registered Binding so the child update handles the transition.`
+  `Do not update the Block field \`${fieldName}\` directly from its parent. Declare a public child InMessage, then call the named method on the registered Binding so the child inMessageUpdate handler owns the transition.`
 
 const discardedChildReturnMessage = (
   fieldName: string,
@@ -344,18 +348,6 @@ const definitionOwnerForPath = (
       })),
 })
 
-const definitionOwnerForExpression = (
-  node: unknown,
-  references: WeakMap<ESTree.Node, Reference> | undefined,
-): DefinitionOwner | undefined => {
-  const maybePath = staticMemberPath(node)
-  if (Option.isNone(maybePath)) {
-    return undefined
-  }
-
-  return definitionOwnerForPath(maybePath.value, references)
-}
-
 const definitionOwner = (
   node: ESTree.CallExpression,
   methodName: string,
@@ -411,8 +403,9 @@ const isSameDefinitionOwner = (
 const foldKind = (
   node: ESTree.CallExpression,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  importerFilename?: string,
 ): FoldKind | undefined => {
-  const bindingMethod = blockBindingMethod(node, references)
+  const bindingMethod = blockBindingMethod(node, references, importerFilename)
   if (Option.isSome(bindingMethod)) {
     return bindingMethod.value === 'Keyed' ? 'Keyed' : 'Fold'
   }
@@ -675,6 +668,7 @@ const foldDefinitions = (
   program: ESTree.Program,
   scopes: ReadonlyArray<OxlintScope> | undefined,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  importerFilename?: string,
 ): Readonly<{
   byVariable: WeakMap<Variable, FoldDefinition>
   fallbackByName: ReadonlyMap<string, FoldDefinition>
@@ -712,7 +706,7 @@ const foldDefinitions = (
       if (!isIdentifier(declarator.id) || !isCallExpression(declarator.init)) {
         continue
       }
-      const kind = foldKind(declarator.init, references)
+      const kind = foldKind(declarator.init, references, importerFilename)
       if (kind === undefined) {
         continue
       }
@@ -720,22 +714,36 @@ const foldDefinitions = (
       const configuration = blockBindingConfiguration(
         declarator.init,
         references,
+        importerFilename,
       )
       if (!isObjectExpression(configuration)) {
         continue
       }
 
-      const bindingMethod = blockBindingMethod(declarator.init, references)
-      const boundChild = blockBindingChild(declarator.init, references)
+      const bindingMethod = blockBindingMethod(
+        declarator.init,
+        references,
+        importerFilename,
+      )
+      const boundChild = blockBindingChild(
+        declarator.init,
+        references,
+        importerFilename,
+      )
       const childOwner = Option.isSome(bindingMethod)
         ? childBlockOwner(boundChild, references)
         : undefined
-      const owner = Option.isSome(bindingMethod)
-        ? definitionOwnerForExpression(
-            blockBindingParent(declarator.init, references),
-            references,
-          )
-        : undefined
+      const owner = Option.getOrUndefined(
+        Option.map(
+          blockBindingOwner(declarator.init, references, importerFilename),
+          bindingOwner => {
+            const owner = definitionOwnerForPath(bindingOwner.path, references)
+            return bindingOwner.importedPath === undefined
+              ? owner
+              : { ...owner, importedPath: bindingOwner.importedPath }
+          },
+        ),
+      )
       const directField =
         Option.isSome(bindingMethod) &&
         propertyValue(configuration, 'field') !== undefined
@@ -843,7 +851,7 @@ type CompositionDefinition = Readonly<{
 
 type CompositionUpdate = Readonly<{
   definition: CompositionDefinition
-  kind: 'Direct' | 'WithContext'
+  kind: UpdateAuthoring['kind']
 }>
 
 const compositionDefinitions = (
@@ -931,18 +939,15 @@ const compositionDefinitionForUpdate = (
     fallbackByName: ReadonlyMap<string, CompositionDefinition>
   }>,
   references: WeakMap<ESTree.Node, Reference> | undefined,
+  filename?: string,
 ): CompositionUpdate | undefined => {
-  const maybePath = staticMemberPath(callee)
-  if (
-    Option.isNone(maybePath) ||
-    (maybePath.value.members.join('.') !== 'makeUpdate' &&
-      maybePath.value.members.join('.') !== 'makeUpdate.withContext')
-  ) {
+  const authored = ownedUpdateAuthoringCallee(callee, references, filename)
+  if (Option.isNone(authored)) {
     return undefined
   }
 
-  const { root } = maybePath.value
-  const kind = maybePath.value.members.length === 1 ? 'Direct' : 'WithContext'
+  const { root } = authored.value.owner.path
+  const { kind } = authored.value
   if (references === undefined) {
     const definition = definitions.fallbackByName.get(root.name)
     return definition === undefined ? undefined : { definition, kind }
@@ -1002,7 +1007,12 @@ const compositionUpdateHandlers = (
       property.type === 'Property' ? [property.value] : [],
     )
   const [authored] = node.arguments
-  if (kind === 'Direct') {
+  if (kind === 'Shared') {
+    return authored === undefined || authored.type === 'SpreadElement'
+      ? []
+      : [authored]
+  }
+  if (kind === 'Record') {
     const handlers = resolvedObjectValue(authored, references)
     return handlers === undefined ? [] : handlerValues(handlers)
   }
@@ -1349,7 +1359,12 @@ const foldEvidence = (
   importerFilename?: string,
 ): FoldEvidence => {
   const callbacks = moduleCallbacks(program)
-  const definitions = foldDefinitions(program, scopes, references)
+  const definitions = foldDefinitions(
+    program,
+    scopes,
+    references,
+    importerFilename,
+  )
   const compositions = compositionDefinitions(
     program,
     scopes,
@@ -1487,6 +1502,7 @@ const foldEvidence = (
       node.callee,
       compositions,
       references,
+      importerFilename,
     )
     if (compositionUpdate !== undefined) {
       const handlers = compositionUpdateHandlers(

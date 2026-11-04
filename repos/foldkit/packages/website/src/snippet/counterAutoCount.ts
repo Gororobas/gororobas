@@ -1,4 +1,4 @@
-import { Duration, Effect, Schema, Stream } from 'effect'
+import { Duration, Schema, Stream } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
@@ -7,38 +7,35 @@ const Message = defineMessageUnion({
   ToggledAutoCounting: {},
   Ticked: {},
 })
+type Message = typeof Message.Type
 
 const Model = Schema.Struct({
   count: Schema.Number,
   isAutoCounting: Schema.Boolean,
 })
+type Model = typeof Model.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 
-export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
-  gameClockTicks: entry(
-    'GameClockTicks',
-    { isAutoCounting: Schema.Boolean },
-    {
-      messages: [Message.Ticked],
-      modelToDependencies: model => ({
-        isAutoCounting: model.isAutoCounting,
-      }),
-      handler: function* () {
-        return ({ isAutoCounting }) =>
-          Stream.when(
-            Stream.tick(Duration.seconds(1)).pipe(
-              Stream.drop(1),
-              Stream.map(Message.Ticked),
-            ),
-            Effect.sync(() => isAutoCounting),
-          )
-      },
+export const subscriptions = ApplicationBlock.makeSubscriptions(entry => ({
+  gameClockTicks: entry('GameClockTicks', {
+    messages: [Message.Ticked],
+    when: model => model.isAutoCounting,
+    handler: function* () {
+      return () =>
+        Stream.tick(Duration.seconds(1)).pipe(
+          Stream.drop(1),
+          Stream.map(Message.Ticked),
+        )
     },
-  ),
+  }),
 }))

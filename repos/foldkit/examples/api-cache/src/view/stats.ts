@@ -1,7 +1,7 @@
 import { Option } from 'effect'
 import { AsyncData } from 'foldkit'
 
-import * as Button from '@foldkit/ui/button'
+import { view as buttonView } from '@foldkit/ui/button'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Stats } from '../data'
@@ -12,10 +12,7 @@ import { errorPanel, loadingPanel, toolbarButtonClassName } from './shared'
 const formatFetchedAt = (fetchedAt: number): string =>
   new Date(fetchedAt).toLocaleTimeString()
 
-export const statsTabView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) => {
+export const statsTabView = (model: Model, h: ApplicationViewBuilder) => {
   const isPending = AsyncData.isPending(model.stats)
 
   return h.div(
@@ -25,7 +22,7 @@ export const statsTabView = (
         [h.Class('flex items-center justify-between')],
         [
           h.h2([h.Class('text-xl font-bold text-slate-800')], ['Stats']),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedRefreshStats(),
               isDisabled: isPending,
@@ -79,7 +76,7 @@ export const statsTabView = (
 }
 
 type StatsCardsInput = Readonly<{
-  stats: typeof Stats.Type
+  stats: Stats
   fetchedAt: number
   isRefreshing: boolean
 }>

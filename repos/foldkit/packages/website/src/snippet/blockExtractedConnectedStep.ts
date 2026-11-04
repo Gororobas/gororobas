@@ -1,34 +1,42 @@
-import { Number, Schema } from 'effect'
+import { Effect, Layer, Number, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { Theme } from './blockDefinition'
-import { SettingsBlock } from './blockSettings'
+import { SettingsStore, Theme } from './blockDefinition'
+import { SettingsBlock, layer as SettingsLayer } from './blockSettings'
 
 export const Model = Schema.Struct({
   settings: SettingsBlock.Model,
   themeChangeCount: Schema.Number,
 })
+export type Model = typeof Model.Type
+
 const Message = defineMessageUnion({ RequestedDarkTheme: {} })
+type Message = typeof Message.Type
+
 export const OutMessage = defineMessageUnion({
   ChangedTheme: { theme: Theme, changeCount: Schema.Number },
 })
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export type OutMessage = typeof OutMessage.Type
+
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  effects: { services: [SettingsStore] },
   Model,
   Message,
   OutMessage,
 })
 
-const { makeOutMessageStep } = ApplicationDefinition
+const { makeOutMessageStep } = ApplicationBlock
 
-export const SettingsBinding = ApplicationDefinition.makeBinding(
-  SettingsBlock,
-  {
-    field: 'settings',
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(SettingsBlock, {
+export const SettingsBinding = ApplicationBlock.makeBinding(SettingsBlock, {
+  field: 'settings',
+}).withOutMessagePolicy({
+  fold: ApplicationBlock.makeOutMessageFold(SettingsBlock, {
     ChangedTheme: ({ theme }) =>
       makeOutMessageStep(model =>
         OutMessage.ChangedTheme({
@@ -39,19 +47,35 @@ export const SettingsBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-const changeThemeStep = (theme: typeof Theme.Type) => {
-  const requestThemeChangeStep = SettingsBinding.requestThemeChange({ theme })
+const changeTheme = (theme: Theme) => {
+  const requestThemeChange = SettingsBinding.requestThemeChange({ theme })
 
-  return (model: Parameters<typeof requestThemeChangeStep>[0]) =>
-    requestThemeChangeStep(
+  return (model: Parameters<typeof requestThemeChange>[0]) =>
+    requestThemeChange(
       modifyFields(model, { themeChangeCount: Number.increment }),
     )
 }
 
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [SettingsBinding],
 })
 
 export const update = ApplicationComposition.makeUpdate({
-  RequestedDarkTheme: changeThemeStep('Dark'),
+  RequestedDarkTheme: changeTheme('Dark'),
 })
+
+const init = ApplicationComposition.makeInit(() => ({
+  model: { themeChangeCount: 3 },
+}))
+
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const settings = yield* SettingsBinding
+
+    return {
+      children: [settings],
+      init,
+      update,
+    }
+  }),
+).pipe(Layer.provide(SettingsLayer))

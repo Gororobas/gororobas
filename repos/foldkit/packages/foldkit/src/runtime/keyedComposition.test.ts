@@ -49,6 +49,7 @@ const ItemModel = Schema.Struct({
   source: Schema.String,
   maybeObserved: Schema.Option(Schema.String),
 })
+type ItemModel = typeof ItemModel.Type
 const ItemMessage = defineMessageUnion({
   ClickedReadValue: {},
   CompletedReadValue: { value: Schema.String },
@@ -58,6 +59,7 @@ const ItemMessage = defineMessageUnion({
   FailedAcquireValue: {},
   EmittedPulse: { value: Schema.String },
 })
+type ItemMessage = typeof ItemMessage.Type
 const Value = ItemNamespace.makeResource<string>()('Value')
 const ReadValue = ItemNamespace.makeCommand('ReadValue', {
   messages: [ItemMessage.CompletedReadValue, ItemMessage.FailedReadValue],
@@ -207,11 +209,13 @@ const itemBlock: Block.FromAssemblyWithView<
 > = Block.assemble(prepareItemBlock)
 
 const RootModel = Schema.Struct({ entries: Schema.Array(ItemModel) })
+type RootModel = typeof RootModel.Type
 const RootMessage = defineMessageUnion({
   ClickedRemoveFirst: {},
   ClickedAddReplacement: {},
   ClickedRestoreFirst: {},
 })
+type RootMessage = typeof RootMessage.Type
 const RootBaseDefinition = Block.makeDefinition('Application', {
   Model: RootModel,
   Message: RootMessage,
@@ -229,7 +233,7 @@ const rootInit = () => ({
     entries: [firstEntry, itemBlock.init(2, 'other').model],
   },
 })
-const addReplacementStep = RootBaseDefinition.makeStep(model =>
+const addReplacement = RootBaseDefinition.makeStep(model =>
   EntriesBinding.init({
     key: 1,
     args: [1, 'new'],
@@ -239,7 +243,7 @@ const addReplacementStep = RootBaseDefinition.makeStep(model =>
       }),
   }),
 )
-const restoreFirstStep = RootBaseDefinition.makeFieldsStep(() => ({
+const restoreFirst = RootBaseDefinition.makeFieldsStep(() => ({
   entries: current => [...current, firstEntry],
 }))
 const rootUpdate = root.makeUpdate({
@@ -247,13 +251,13 @@ const rootUpdate = root.makeUpdate({
     RootBaseDefinition.makeFieldsStep(() => ({
       entries: Array.filter(entry => entry.id !== 1),
     }))(model),
-  ClickedAddReplacement: model => addReplacementStep(model),
-  ClickedRestoreFirst: model => restoreFirstStep(model),
+  ClickedAddReplacement: model => addReplacement(model),
+  ClickedRestoreFirst: model => restoreFirst(model),
 })
 const lazyEntries = createKeyedLazy()
 const entryRenderCounts = new Map<number, number>()
 const renderEntry = (
-  entry: typeof ItemModel.Type,
+  entry: ItemModel,
   h: Block.ViewBuilderFor<typeof root>,
 ) => {
   entryRenderCounts.set(entry.id, (entryRenderCounts.get(entry.id) ?? 0) + 1)
@@ -479,7 +483,7 @@ describe('keyed Block occurrences', () => {
         expect(mountsStopped).toEqual(['old'])
         expect(mountsStarted).toEqual(['old', 'other', 'new'])
       })
-      expect(interrupted).toEqual([])
+      expect(interrupted).toEqual(['old'])
       staleDispatch(ItemMessage.ClickedReadValue())
       expect(reads).toEqual(['old', 'other'])
       subscriptionEmitters.get('new')!('fresh pulse')

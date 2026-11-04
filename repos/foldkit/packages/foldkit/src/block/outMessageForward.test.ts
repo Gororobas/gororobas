@@ -5,12 +5,16 @@ import { defineMessageUnion } from '../message/index.js'
 import * as Block from './public.js'
 
 const Choice = Schema.Literals(['Apple', 'Pear'])
+type Choice = typeof Choice.Type
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({ RequestedClose: {} })
+type ChildMessage = typeof ChildMessage.Type
 const ChildOutMessage = defineMessageUnion({
   Selected: { value: Choice },
   Closed: {},
 })
+type ChildOutMessage = typeof ChildOutMessage.Type
 const ChildDefinition = Block.makeDefinition('ForwardChild', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -32,12 +36,16 @@ const ChildBlock: Block.FromAssemblyWithOutMessage<
 > = Block.assemble(prepareChildBlock)
 
 const ParentModel = Schema.Struct({ choice: Choice })
+type ParentModel = typeof ParentModel.Type
 const ParentMessage = defineMessageUnion({ RequestedReset: {} })
+type ParentMessage = typeof ParentMessage.Type
 const ParentOutMessage = defineMessageUnion({
   Chose: { value: Choice },
   Dismissed: {},
 })
+type ParentOutMessage = typeof ParentOutMessage.Type
 const ForeignOutMessage = defineMessageUnion({ Escaped: {} })
+type ForeignOutMessage = typeof ForeignOutMessage.Type
 const ParentDefinition = Block.makeDefinition('ForwardParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -126,6 +134,7 @@ if (false) {
   })
 
   // @ts-expect-error A forwarding policy must forward at least one parent OutMessage.
+  // oxlint-disable-next-line foldkit/no-empty-to-parent-out-message -- This fixture verifies TypeScript rejects an empty forwarding policy.
   ParentDefinition.makeOutMessageForward(ChildBlock, {
     Selected: () => undefined,
     Closed: () => undefined,

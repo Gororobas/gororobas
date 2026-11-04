@@ -3,17 +3,23 @@ import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 const Model = Schema.Struct({})
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   TickedHeartbeat: {},
 })
+type Message = typeof Message.Type
 
-const HeartbeatDefinition = Block.makeDefinition('Heartbeat', {
+export const HeartbeatKey = Symbol('Heartbeat')
+
+const HeartbeatBlock = Block.make('Heartbeat', {
+  key: HeartbeatKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-export const subscriptions = HeartbeatDefinition.makeSubscriptions(entry => ({
+export const subscriptions = HeartbeatBlock.makeSubscriptions(entry => ({
   heartbeatTicks: entry('HeartbeatTicks', {
     messages: [Message.TickedHeartbeat],
     handler: function* () {

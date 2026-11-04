@@ -1,45 +1,50 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit each into your own Model, init, Message,
-// update, subscriptions, and view definitions.
-import { Array, Schema, Tuple } from 'effect'
+import { Array, Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { DragAndDrop } from '@foldkit/ui'
+import {
+  DragAndDropBlock,
+  layer as DragAndDropLayer,
+} from '@foldkit/ui/dragAndDrop'
 
 // Add a field to your Model for the DragAndDrop Block plus the items being sorted:
 const Model = Schema.Struct({
   items: Schema.Array(
     Schema.Struct({ id: Schema.String, label: Schema.String }),
   ),
-  dragAndDrop: DragAndDrop.DragAndDropBlock.Model,
+  dragAndDrop: DragAndDropBlock.Model,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // This excerpt has no parent-owned facts. The Composition derives delivery.
 const Message = defineMessageUnion({})
-
+type Message = typeof Message.Type
 declare const reorder: (
-  items: (typeof Model.Type)['items'],
+  items: Model['items'],
   itemId: string,
   fromIndex: number,
   toIndex: number,
-) => (typeof Model.Type)['items']
+) => Model['items']
 
-const SortableListDefinition = Block.makeDefinition('SortableList', {
+export const SortableListKey = Symbol('SortableList')
+
+export const SortableListBlock = Block.make('SortableList', {
+  key: SortableListKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = SortableListDefinition
+const { makeFieldsStep, makeNoopStep } = SortableListBlock
 
 // At module scope, fold the OutMessage into your own Model. `Reordered`
 // carries the move so you can apply it to your own list. Each arm returns an
 // Update.Step over the parent Model, which already has the next DragAndDrop
-// Model written back. The parent Definition checks the complete child union
+// Model written back. The parent Block checks the complete child union
 // and infers each parent Step:
-const foldDragAndDropOutMessage = SortableListDefinition.makeOutMessageFold(
-  DragAndDrop.DragAndDropBlock,
+const foldDragAndDropOutMessage = SortableListBlock.makeOutMessageFold(
+  DragAndDropBlock,
   {
     Reordered: ({ itemId, fromIndex, toIndex }) =>
       makeFieldsStep(() => ({
@@ -55,17 +60,13 @@ const foldDragAndDropOutMessage = SortableListDefinition.makeOutMessageFold(
   },
 )
 
-// The Binding delegates the child update, writes the next DragAndDrop Model,
-// routes generated delivery, handles OutMessages, and collects Subscriptions.
-const DragAndDropBinding = SortableListDefinition.makeBinding(
-  DragAndDrop.DragAndDropBlock,
-  {
-    field: 'dragAndDrop',
-    init: { contextToArgs: () => Tuple.make({ id: 'sortable-list' }) },
-  },
-).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
+// The Binding retains the child contract; construction supplies its implementation.
+const DragAndDropBinding = SortableListBlock.makeBinding(DragAndDropBlock, {
+  field: 'dragAndDrop',
+  init: { contextToArgs: () => [{ id: 'sortable-list' }] },
+}).withOutMessagePolicy({ fold: foldDragAndDropOutMessage })
 
-const SortableListComposition = SortableListDefinition.makeComposition({
+const SortableListComposition = SortableListBlock.makeComposition({
   bindings: [DragAndDropBinding],
 })
 
@@ -118,3 +119,16 @@ const view = SortableListComposition.makeView((model, h) =>
     }),
   ),
 )
+
+export const layer = SortableListBlock.makeLayer(
+  Effect.gen(function* () {
+    const dragAndDrop = yield* DragAndDropBinding
+
+    return {
+      children: [dragAndDrop],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(DragAndDropLayer))

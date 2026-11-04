@@ -1,31 +1,41 @@
-import { Array, Schema, Tuple } from 'effect'
+import { Array, Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { childAttributes } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Combobox } from '@foldkit/ui'
-import { inputId as MultiComboboxInputId } from '@foldkit/ui/combobox'
+import {
+  Multi as MultiCombobox,
+  inputId as MultiComboboxInputId,
+} from '@foldkit/ui/combobox'
 
 const City = Schema.Literals(['Johannesburg', 'Kyiv', 'Oxford', 'Wellington'])
+type City = typeof City.Type
 
-const CitiesCombobox = Combobox.Multi.create(City)
+const CitiesCombobox = MultiCombobox.makeBlock(City)
 
 const Model = Schema.Struct({
   selectedCities: Schema.Array(City),
   comboboxMulti: CitiesCombobox.Model,
 })
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({})
+type Message = typeof Message.Type
 
-const CitiesPickerDefinition = Block.makeDefinition('CitiesPicker', {
+export const CitiesPickerKey = Symbol('CitiesPicker')
+
+export const CitiesPickerBlock = Block.make('CitiesPicker', {
+  key: CitiesPickerKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = CitiesPickerDefinition
+const { makeFieldsStep, makeNoopStep } = CitiesPickerBlock
 
 // The parent toggles the committed value in the selection it owns.
-const foldComboboxMultiOutMessage = CitiesPickerDefinition.makeOutMessageFold(
+const foldComboboxMultiOutMessage = CitiesPickerBlock.makeOutMessageFold(
   CitiesCombobox,
   {
     Selected: ({ value }) =>
@@ -39,15 +49,15 @@ const foldComboboxMultiOutMessage = CitiesPickerDefinition.makeOutMessageFold(
   },
 )
 
-const ComboboxBinding = CitiesPickerDefinition.makeBinding(CitiesCombobox, {
+const ComboboxMultiBinding = CitiesPickerBlock.makeBinding(CitiesCombobox, {
   field: 'comboboxMulti',
-  init: { contextToArgs: () => Tuple.make({ id: 'cities-multi' }) },
+  init: { contextToArgs: () => [{ id: 'cities-multi' }] },
 }).withOutMessagePolicy({ fold: foldComboboxMultiOutMessage })
 
 // Including the Binding collects its lifecycle and handler graph.
 
-const CitiesPickerComposition = CitiesPickerDefinition.makeComposition({
-  bindings: [ComboboxBinding],
+const CitiesPickerComposition = CitiesPickerBlock.makeComposition({
+  bindings: [ComboboxMultiBinding],
 })
 
 const init = CitiesPickerComposition.makeInit(() => ({
@@ -58,7 +68,7 @@ const init = CitiesPickerComposition.makeInit(() => ({
 
 const update = CitiesPickerComposition.makeUpdate({})
 
-const cities: ReadonlyArray<typeof City.Type> = [
+const cities: ReadonlyArray<City> = [
   'Johannesburg',
   'Kyiv',
   'Oxford',
@@ -85,7 +95,7 @@ const view = CitiesPickerComposition.makeView((model, h) => {
         ['Cities'],
       ),
       h.block(
-        ComboboxBinding.embedView({
+        ComboboxMultiBinding.embedView({
           slotId: 'cities-multi',
           model: model.comboboxMulti,
           viewInputs: {
@@ -121,13 +131,15 @@ const view = CitiesPickerComposition.makeView((model, h) => {
   )
 })
 
-const prepare = () =>
-  CitiesPickerComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const CitiesPickerBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = CitiesPickerBlock.makeLayer(
+  Effect.gen(function* () {
+    const combobox = yield* ComboboxMultiBinding
+
+    return {
+      children: [combobox],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(MultiCombobox.layer))

@@ -6,14 +6,19 @@ import {
   ChildrenByIdBinding,
   ChildrenByNumberBinding,
   Id,
+  InitializingParentBlock,
   ParentBlock,
   ParentModel,
   Read,
   ReadService,
   init,
+  initChildren,
+  initHashMapIfMissing,
+  initRecordIfMissing,
+  initWithChildren,
+  insert,
   insertHashMap,
   insertRecord,
-  insertStep,
 } from './insert-initialization.accepted.js'
 
 type Equal<Left, Right> =
@@ -86,11 +91,61 @@ export type ExactHashMapEvidence = Expect<
   >
 >
 export type StepRequirements = Expect<
-  Equal<Update.RequirementsOf<typeof insertStep>, ExpectedRequirements>
+  Equal<Update.RequirementsOf<typeof insert>, ExpectedRequirements>
 >
 export type InitializedModel = Expect<
   Equal<ReturnType<typeof init>['model'], typeof ParentModel.Type>
 >
 export type ProviderServices = Expect<
   Equal<Layer.Services<typeof ParentBlock.EffectsLayer>, ReadService>
+>
+
+export type ExactInitializationInput = Expect<
+  Equal<
+    Parameters<typeof initRecordIfMissing>[0],
+    typeof ParentModel.Type &
+      Update.GraphCapability<
+        typeof ParentModel.Type,
+        Block.RequirementOfBinding<typeof ChildrenByIdBinding>
+      >
+  >
+>
+export type ExactInitializationRecipe = Expect<
+  Equal<
+    ReturnType<typeof initRecordIfMissing>,
+    Update.ResultRecipe<
+      typeof ParentModel.Type,
+      ExpectedMessage,
+      never,
+      ExpectedRequirements,
+      Block.RequirementOfBinding<typeof ChildrenByIdBinding>
+    >
+  >
+>
+export type ExactInitializationRequirements = Expect<
+  Equal<Update.RequirementsOf<typeof initRecordIfMissing>, ExpectedRequirements>
+>
+export type ExactInitializationEvidence = Expect<
+  Equal<
+    Update.RegistrationEvidenceOf<ReturnType<typeof initRecordIfMissing>>,
+    Block.RequirementOfBinding<typeof ChildrenByIdBinding>
+  >
+>
+export type ExactHashMapInitializationRequirements = Expect<
+  Equal<
+    Update.RequirementsOf<typeof initHashMapIfMissing>,
+    ExpectedHashMapRequirements
+  >
+>
+export type ComposedInitializationRequirements = Expect<
+  Equal<Update.RequirementsOf<typeof initChildren>, ExpectedRequirements>
+>
+export type ReusedInitializedModel = Expect<
+  Equal<ReturnType<typeof initWithChildren>['model'], typeof ParentModel.Type>
+>
+export type InitializationProviderServices = Expect<
+  Equal<
+    Layer.Services<typeof InitializingParentBlock.EffectsLayer>,
+    ReadService
+  >
 >

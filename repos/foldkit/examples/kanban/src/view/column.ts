@@ -2,13 +2,14 @@ import clsx from 'clsx'
 import { Array, Equal, Option, flow, pipe } from 'effect'
 import type { Html } from 'foldkit/html'
 
-import { Button, Input } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 import {
   type RenderInfo,
   isDragging,
   maybeDraggedItemId,
   maybeDropTarget,
 } from '@foldkit/ui/dragAndDrop'
+import { view as inputView } from '@foldkit/ui/input'
 
 import type { ApplicationViewBuilder } from '../composition'
 import { ADD_CARD_INPUT_ID } from '../constant'
@@ -18,9 +19,9 @@ import type { Model } from '../model'
 import { cardView } from './card'
 
 const addCardForm = (
-  model: typeof Model.Type,
+  model: Model,
   columnId: string,
-  toParentMessage: (message: typeof Message.Type) => typeof Message.Type,
+  toParentMessage: (message: Message) => Message,
   h: ApplicationViewBuilder,
 ): Html => {
   const isAddingToThisColumn = Option.exists(
@@ -29,7 +30,7 @@ const addCardForm = (
   )
 
   if (!isAddingToThisColumn) {
-    return Button.view(
+    return buttonView(
       {
         onClick: toParentMessage(Message.ClickedAddCard({ columnId })),
         toView: attributes =>
@@ -57,7 +58,7 @@ const addCardForm = (
         [h.For(ADD_CARD_INPUT_ID), h.Class('sr-only')],
         ['New card title'],
       ),
-      Input.view(
+      inputView(
         {
           id: ADD_CARD_INPUT_ID,
           onInput: value =>
@@ -83,7 +84,7 @@ const addCardForm = (
       h.div(
         [h.Class('flex gap-2 justify-end')],
         [
-          Button.view(
+          buttonView(
             {
               onClick: toParentMessage(Message.CancelledNewCard()),
               toView: attributes =>
@@ -99,7 +100,7 @@ const addCardForm = (
             },
             h,
           ),
-          Button.view(
+          buttonView(
             {
               type: 'submit',
               toView: attributes =>
@@ -130,9 +131,9 @@ const dropPlaceholder = (h: ApplicationViewBuilder): Html =>
   ])
 
 const findDraggedCard = (
-  model: typeof Model.Type,
+  model: Model,
   draggedId: string,
-): Option.Option<typeof Card.Card.Type> =>
+): Option.Option<Card.Card> =>
   pipe(
     model.columns,
     Array.flatMap(({ cards }) => cards),
@@ -140,8 +141,8 @@ const findDraggedCard = (
   )
 
 const defaultCardElements = (
-  model: typeof Model.Type,
-  column: typeof Column.Column.Type,
+  model: Model,
+  column: Column.Column,
   draggable: RenderInfo['draggable'],
   h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> =>
@@ -150,8 +151,8 @@ const defaultCardElements = (
   )
 
 const previewCardElements = (
-  model: typeof Model.Type,
-  column: typeof Column.Column.Type,
+  model: Model,
+  column: Column.Column,
   draggable: RenderInfo['draggable'],
   h: ApplicationViewBuilder,
 ): ReadonlyArray<Html> => {
@@ -204,10 +205,10 @@ const previewCardElements = (
 }
 
 export const columnView = (
-  model: typeof Model.Type,
-  column: typeof Column.Column.Type,
+  model: Model,
+  column: Column.Column,
   render: RenderInfo,
-  toParentMessage: (message: typeof Message.Type) => typeof Message.Type,
+  toParentMessage: (message: Message) => Message,
   h: ApplicationViewBuilder,
 ): Html => {
   const maybeCurrentDropTarget = maybeDropTarget(model.dragAndDrop)

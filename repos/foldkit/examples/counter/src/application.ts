@@ -1,27 +1,34 @@
-import { Number, Schema } from 'effect'
+import { Effect, Number, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 export const Model = Schema.Struct({
   count: Schema.Number,
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedDecrement: {},
   ClickedIncrement: {},
   ClickedReset: {},
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
   Model,
   Message,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
 })
 
-const { makeFieldsStep } = ApplicationDefinition
+const { makeFieldsStep } = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 
 export const init = ApplicationComposition.makeInit(() => ({
   model: { count: 0 },
@@ -55,7 +62,7 @@ export const view = ApplicationComposition.makeView((model, h) => ({
       h.div(
         [h.Class('flex flex-wrap justify-center gap-4')],
         [
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedDecrement(),
               toView: attributes =>
@@ -63,7 +70,7 @@ export const view = ApplicationComposition.makeView((model, h) => ({
             },
             h,
           ),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedReset(),
               toView: attributes =>
@@ -74,7 +81,7 @@ export const view = ApplicationComposition.makeView((model, h) => ({
             },
             h,
           ),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedIncrement(),
               toView: attributes =>
@@ -90,13 +97,13 @@ export const view = ApplicationComposition.makeView((model, h) => ({
 
 const buttonStyle = 'bg-black text-white hover:bg-gray-700 px-4 py-2 transition'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)

@@ -1,10 +1,11 @@
 import { Match, Option } from 'effect'
 
+import { HomeBlock } from '../blocks'
 import { PreviewBanner, Shared } from '../component'
 import type { ApplicationViewBuilder } from '../composition'
 import {
   ApplicationComposition,
-  HomeBinding,
+  MaybeHomeBinding,
   PlaygroundBinding,
   SnippetCopyBinding,
   SnippetDisclosureBinding,
@@ -13,16 +14,18 @@ import { Deployment } from '../deployment'
 import { Docs, Marketing } from '../layout'
 import { Message } from '../message'
 import { type Model } from '../model'
-import { HomeBlock, Newsletter } from '../page'
+import { Newsletter } from '../page'
 import { routeToCanonicalUrl } from '../route'
 import { routeTitle } from '../routeTitle'
 import * as SnippetCopyRenderer from '../snippetCopyRenderer'
 import * as SnippetDisclosureRenderer from '../snippetDisclosureRenderer'
 import * as Blog from './blog'
 
+type HomeBlockModel = typeof HomeBlock.Model.Type
+
 type HomeViewInput = Readonly<{
-  model: typeof Model.Type
-  homeModel: typeof HomeBlock.Model.Type
+  model: Model
+  homeModel: HomeBlockModel
 }>
 
 const homeView = (
@@ -34,7 +37,7 @@ const homeView = (
     config => h.block(SnippetCopyBinding.embedView(config)),
   )
   const content = h.block(
-    HomeBinding.embedView({
+    MaybeHomeBinding.embedView({
       slotId: 'home',
       model: homeModel,
       viewInputs: {
@@ -64,7 +67,7 @@ const homeView = (
   )
 }
 
-const newsletterView = (model: typeof Model.Type, h: ApplicationViewBuilder) =>
+const newsletterView = (model: Model, h: ApplicationViewBuilder) =>
   Marketing.view(
     model,
     {

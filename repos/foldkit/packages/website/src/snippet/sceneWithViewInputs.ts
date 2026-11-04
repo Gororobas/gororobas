@@ -1,31 +1,46 @@
-import { Schema } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { inertHtml as ih } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
-import { expect, given, role, scene, withViewInputs } from 'foldkit/scene'
+import { expect, role, scene, init as sceneInit } from 'foldkit/scene'
 
-import { Slider } from '@foldkit/ui'
+import {
+  type SliderAttributes,
+  SliderBlock,
+  layer as SliderLayer,
+} from '@foldkit/ui/slider'
 
-const Model = Schema.Struct({ slider: Slider.SliderBlock.Model })
+const Model = Schema.Struct({ slider: SliderBlock.Model })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({})
-const ApplicationDefinition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+
+export const ApplicationKey = Symbol('Application')
+
+type ViewInputs = Readonly<{ value: number; isDisabled?: boolean }>
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
   Model,
   Message,
 })
 
-const { makeNoopStep } = ApplicationDefinition
+const { makeNoopStep } = ApplicationBlock
 
-const SliderBinding = ApplicationDefinition.makeBinding(Slider.SliderBlock, {
+const SliderBinding = ApplicationBlock.makeBinding(SliderBlock, {
   field: 'slider',
   init: {
     contextToArgs: () => [{ id: 'volume', min: 0, max: 10, step: 1 }],
   },
 }).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(Slider.SliderBlock, {
+  fold: ApplicationBlock.makeOutMessageFold(SliderBlock, {
     ChangedValue: makeNoopStep,
   }),
 })
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [SliderBinding],
 })
 
@@ -40,7 +55,7 @@ const view = ApplicationComposition.makeView.withInputs<
       viewInputs: {
         value,
         ...(isDisabled === undefined ? {} : { isDisabled }),
-        toView: (attributes: Slider.SliderAttributes) =>
+        toView: (attributes: SliderAttributes) =>
           ih.div(
             [...attributes.root],
             [ih.div([...attributes.track]), ih.div([...attributes.thumb])],
@@ -50,27 +65,37 @@ const view = ApplicationComposition.makeView.withInputs<
   ),
 )
 
-const model = Model.make({
-  slider: Slider.SliderBlock.init({
-    id: 'volume',
-    min: 0,
-    max: 10,
-    step: 1,
-  }).model,
-})
+const init = ApplicationComposition.makeInit(() => ({ model: {} }))
 
-// Defaults supply the full ViewInputs once. The returned factory produces
-// a (model, h) view for scene, taking per-test overrides.
-const sceneView = withViewInputs(view, { value: 5 })
+const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const slider = yield* SliderBinding
 
-scene(
-  { update, view: sceneView() },
-  given(model),
-  expect(role('slider')).toHaveAttr('aria-valuenow', '5'),
+    return {
+      children: [slider],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(SliderLayer))
+
+await Effect.runPromise(
+  scene(
+    { block: ApplicationBlock, layer, viewInputs: { value: 5 } },
+    sceneInit(),
+    expect(role('slider')).toHaveAttr('aria-valuenow', '5'),
+  ),
 )
 
-scene(
-  { update, view: sceneView({ isDisabled: true }) },
-  given(model),
-  expect(role('slider')).toHaveAttr('aria-disabled', 'true'),
+await Effect.runPromise(
+  scene(
+    {
+      block: ApplicationBlock,
+      layer,
+      viewInputs: { value: 5, isDisabled: true },
+    },
+    sceneInit(),
+    expect(role('slider')).toHaveAttr('aria-disabled', 'true'),
+  ),
 )

@@ -14,6 +14,7 @@ import {
   chmod,
   mkdir,
   readFile,
+  readlink,
   readdir,
   rm,
   symlink,
@@ -23,7 +24,7 @@ import { createServer as createNetServer } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { join, resolve } from 'node:path'
 import {
-  type HmrContext,
+  type HotUpdateOptions,
   type MinimalPluginContextWithoutEnvironment,
   type Plugin,
   type ViteDevServer,
@@ -61,6 +62,7 @@ import {
   useRelayRegistry,
   waitUntilPublished,
 } from './relayFixtures.ts'
+import { createServerCache } from './serverCache.ts'
 
 const PACKAGE_ROOT = resolve(import.meta.dirname, '..')
 const TEST_TIMEOUT = 20_000
@@ -69,6 +71,7 @@ const MODEL_PRESERVATION_RESPONSE_BUDGET = 500
 const startMiddlewareModeServer = async (devToolsMcpPort: number) => {
   const server = await createServer({
     root: PACKAGE_ROOT,
+    cacheDir: await createServerCache(),
     configFile: false,
     logLevel: 'silent',
     server: { middlewareMode: true },
@@ -81,6 +84,7 @@ const startMiddlewareModeServer = async (devToolsMcpPort: number) => {
 const startStandaloneServer = async (devToolsMcpPort: number) => {
   const server = await createServer({
     root: PACKAGE_ROOT,
+    cacheDir: await createServerCache(),
     configFile: false,
     logLevel: 'silent',
     server: { port: 0, host: '127.0.0.1' },
@@ -202,6 +206,7 @@ const startMiddlewareServer = async (
 ) => {
   const server = await createServer({
     root: PACKAGE_ROOT,
+    cacheDir: await createServerCache(),
     configFile: false,
     logLevel: 'silent',
     server: { middlewareMode: true },
@@ -218,6 +223,7 @@ const startListeningServer = async (
 ) => {
   const server = await createServer({
     root: PACKAGE_ROOT,
+    cacheDir: await createServerCache(),
     configFile: false,
     logLevel: 'silent',
     server: { port: 0, host },
@@ -251,6 +257,7 @@ const decodeRelayRecordJson = Schema.decodeUnknownSync(
 // NOTE: This exceeds every PID Linux or macOS can issue, so no live process can
 // carry it.
 const DEAD_PID = 2_147_483_647
+const OTHER_PID_NAMESPACE = 'pid:[1]'
 
 const connectionRefused = (url: string) =>
   new Promise<boolean>(resolveRefused => {
@@ -335,13 +342,8 @@ describe('DevTools MCP relay', () => {
       const plugin = replacedServer.config.plugins.find(
         candidate => candidate.name === 'foldkit',
       )
-      if (
-        plugin === undefined ||
-        !Predicate.isFunction(plugin.handleHotUpdate)
-      ) {
-        throw new Error(
-          'expected the foldkit plugin with a handleHotUpdate hook',
-        )
+      if (plugin === undefined || !Predicate.isFunction(plugin.hotUpdate)) {
+        throw new Error('expected the foldkit plugin with a hotUpdate hook')
       }
 
       await server.restart()
@@ -355,14 +357,22 @@ describe('DevTools MCP relay', () => {
       })
       expect(await requestModel(client, 'marker')).toBeUndefined()
 
-      const hotUpdate: HmrContext = {
+      const hotUpdate: HotUpdateOptions = {
+        type: 'update',
         file: join(PACKAGE_ROOT, 'src', 'index.ts'),
         timestamp: Date.now(),
-        modules: [await server.moduleGraph.ensureEntryFromUrl('/src/index.ts')],
+        modules: [
+          await server.environments.client.moduleGraph.ensureEntryFromUrl(
+            '/src/index.ts',
+          ),
+        ],
         read: () => '',
         server: replacedServer,
       }
-      plugin.handleHotUpdate.call(pluginContext, hotUpdate)
+      await plugin.hotUpdate.call(
+        { ...pluginContext, environment: replacedServer.environments.client },
+        hotUpdate,
+      )
 
       expect(await requestModel(client, 'app')).toBeUndefined()
     },
@@ -1118,6 +1128,14 @@ describe('DevTools MCP relay discovery', () => {
         url: record.url,
         pid: process.pid,
         startedAt: record.startedAt,
+        ...(process.platform === 'linux'
+          ? {
+              namespaces: {
+                pid: await readlink('/proc/self/ns/pid'),
+                network: await readlink('/proc/self/ns/net'),
+              },
+            }
+          : {}),
       })
     },
     TEST_TIMEOUT,
@@ -1130,6 +1148,10 @@ describe('DevTools MCP relay discovery', () => {
       const root = first.config.root
       const firstRecord = await waitUntilPublished(root)
       const second = await startListeningServer({})
+
+      expect(second.config.root).toBe(root)
+      expect(second.config.cacheDir).not.toBe(first.config.cacheDir)
+
       await expect
         .poll(async () => (await publishedRecords(root)).length, {
           timeout: POLL_TIMEOUT,
@@ -1164,6 +1186,56 @@ describe('DevTools MCP relay discovery', () => {
       expect(await readdir(directories.registry)).toStrictEqual([
         `${encodeURIComponent(record.id)}.json`,
       ])
+    },
+    TEST_TIMEOUT,
+  )
+
+  it.skipIf(process.platform !== 'linux')(
+    'keeps a live relay record from another PID namespace when a Vite plugin publishes',
+    async () => {
+      const firstServer = await startMiddlewareServer({})
+      const firstRecord = await waitUntilPublished(firstServer.config.root)
+      const foreignRecord = {
+        ...firstRecord,
+        pid: DEAD_PID,
+        namespaces: {
+          pid: OTHER_PID_NAMESPACE,
+          network: await readlink('/proc/self/ns/net'),
+        },
+      }
+      await writeFile(
+        join(
+          directories.registry,
+          `${encodeURIComponent(foreignRecord.id)}.json`,
+        ),
+        JSON.stringify(foreignRecord),
+      )
+
+      const secondServer = await startMiddlewareServer({})
+      const secondRecord = await waitUntilPublished(secondServer.config.root)
+
+      expect(
+        Array.sort(await readdir(directories.registry), Order.String),
+      ).toStrictEqual(
+        Array.sort(
+          [
+            `${encodeURIComponent(foreignRecord.id)}.json`,
+            `${encodeURIComponent(secondRecord.id)}.json`,
+          ],
+          Order.String,
+        ),
+      )
+      expect(
+        JSON.parse(
+          await readFile(
+            join(
+              directories.registry,
+              `${encodeURIComponent(foreignRecord.id)}.json`,
+            ),
+            'utf-8',
+          ),
+        ),
+      ).toStrictEqual(foreignRecord)
     },
     TEST_TIMEOUT,
   )

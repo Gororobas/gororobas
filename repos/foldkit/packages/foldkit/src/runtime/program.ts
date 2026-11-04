@@ -6,6 +6,7 @@ import type {
   RequirementsOfBlock,
   RuntimeServicesOfBlock,
 } from '../block/requirements.js'
+import { selectLayer } from '../experimental/contracted/runtime.js'
 import type { UrlRequest } from '../navigation/urlRequest.js'
 import type { Ports } from '../port/index.js'
 import type { Url } from '../url/index.js'
@@ -23,14 +24,36 @@ import {
 import type { CrashConfig, ElementCrashConfig } from './crashUI.js'
 import type { DevToolsConfig, RuntimeDevToolsConfig } from './devToolsConfig.js'
 import type { ValidHandlerContracts } from './handlerContracts.js'
+import { makeConstructedProgram } from './programConstruction.js'
+import type { ConstructionProgramFromRoot } from './programConstructionTypes.js'
 import {
+  type ProgramViewDiagnostic,
   type ValidateProgramBlock,
   assertDocument,
   assertElementHtml,
   assertProgramConfig,
 } from './programRoot.js'
+import {
+  type DeclaredHostContract,
+  type DeclaredRootBlock,
+  type LayeredContract,
+  type LayeredRoot,
+  type RootRequirements,
+  type RootRuntimeServices,
+  type SelectedRootOfConfig,
+  type ValidateSelectedConfig,
+  assertCompletedRoot,
+  rootConstructionOf,
+} from './rootBlock.js'
 import type { SlowConfig } from './slowPhase.js'
 import type { ViewTransitionConfig } from './viewTransition.js'
+
+export type {
+  ConstructionPending,
+  ConstructionProgram,
+  ConstructionProgramFromRoot,
+  ConstructionProviders,
+} from './programConstructionTypes.js'
 
 type AnyFlagsSchema = Schema.Codec<any, any, never, never>
 
@@ -101,7 +124,7 @@ type CommonHostOptions<
   EffectsLayer?: never
   /** Host handlers must be resolved on the completed root Block. */
   hostHandlers?: never
-  /** The DOM element owned by this Program. */
+  /** The DOM element owned by this Program. Set its unique, nonempty id before passing it here. */
   container: HTMLElement | null
   /** Declared inbound and outbound Ports. */
   ports?: PortsValue
@@ -305,6 +328,7 @@ type PageHostConfigKeys =
 
 type ElementHostConfigKeys =
   | 'block'
+  | 'layer'
   | 'Flags'
   | 'flags'
   | keyof ElementHostOptions<AnyBlock, Ports | undefined>
@@ -441,7 +465,298 @@ export type Element<
   'Element'
 >
 
-/** Creates a passive page-owning Program from a completed root Block. */
+type LayeredProgramRequirements<BlockValue extends LayeredRoot, Config> =
+  | RootRequirements<BlockValue>
+  | Exclude<
+      ProgramDispatchRequirements<LayeredContract<BlockValue>, Config>,
+      | Layer.Success<LayeredContract<BlockValue>['EffectsLayer']>
+      | RootRuntimeServices<BlockValue>
+    >
+
+type LayeredElementFromBlock<
+  BlockValue extends LayeredRoot,
+  Config,
+  PortsValue extends Ports | undefined,
+> = ConstructionProgramFromRoot<
+  BlockValue,
+  RootPorts<PortsValue>,
+  void,
+  LayeredProgramRequirements<BlockValue, Config>,
+  'Element'
+>
+
+type SelectedElementFromConfig<
+  Config,
+  PortsValue extends Ports | undefined,
+> = ConstructionProgramFromRoot<
+  SelectedRootOfConfig<Config>,
+  RootPorts<PortsValue>,
+  void,
+  LayeredProgramRequirements<SelectedRootOfConfig<Config>, Config>,
+  'Element'
+>
+
+type SelectedPageFromConfig<
+  Config,
+  PortsValue extends Ports | undefined,
+  FlagsSchema extends AnyFlagsSchema | undefined = undefined,
+> = ConstructionProgramFromRoot<
+  SelectedRootOfConfig<Config>,
+  RootPorts<PortsValue>,
+  RootFlags<FlagsSchema>,
+  LayeredProgramRequirements<SelectedRootOfConfig<Config>, Config>,
+  'Application'
+>
+
+/**
+ * Creates a passive page-owning Program from a completed root Block whose view
+ * returns a Document. Use `makeElement` for an Html view. Set a unique, nonempty
+ * container id before calling this function.
+ *
+ * A Layer-owned root is acquired when the Program starts. Its pending Program
+ * accepts `provide({ services, runtime })`: shared Services build before the
+ * graph, and optional runtime providers build after ManagedResource handles
+ * exist. Plain `provide(layer)` supplies runtime providers only.
+ */
+export function make<
+  const Config extends Readonly<{
+    block: DeclaredRootBlock
+    layer: Layer.Layer<any, any, any>
+  }>,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<Config> &
+    NoInfer<ValidateSelectedConfig<Config>> &
+    PageHostOptions<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      PortsValue
+    > &
+    PageWithoutRoutingModeFields<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      undefined
+    > &
+    NoInfer<
+      ValidateProgramBlock<DeclaredHostContract<Config['block']>, 'Document'>
+    > &
+    NoInfer<ExactHostConfig<Config, PageHostConfigKeys | 'layer'>> &
+    NoInfer<ExactDevToolsConfig<Config>>,
+): SelectedPageFromConfig<Config, PortsValue>
+export function make<
+  const Config extends Readonly<{
+    block: DeclaredRootBlock
+    layer: Layer.Layer<any, any, any>
+  }>,
+  const FlagsSchema extends AnyFlagsSchema,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<Config> &
+    NoInfer<ValidateSelectedConfig<Config>> &
+    PageHostOptions<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      PortsValue
+    > &
+    PageWithoutRoutingModeFields<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      FlagsSchema
+    > &
+    NoInfer<
+      ValidateProgramBlock<DeclaredHostContract<Config['block']>, 'Document'>
+    > &
+    NoInfer<ExactHostConfig<Config, PageHostConfigKeys | 'layer'>> &
+    NoInfer<ExactDevToolsConfig<Config>>,
+): ConstructionProgramFromRoot<
+  SelectedRootOfConfig<Config>,
+  RootPorts<PortsValue>,
+  RootFlags<FlagsSchema>,
+  LayeredProgramRequirements<SelectedRootOfConfig<Config>, Config>,
+  'Application'
+>
+export function make<
+  const Config extends Readonly<{
+    block: DeclaredRootBlock
+    layer: Layer.Layer<any, any, any>
+  }>,
+  const FlagsSchema extends AnyFlagsSchema | undefined,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<Config> &
+    NoInfer<ValidateSelectedConfig<Config>> &
+    PageHostOptions<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      PortsValue
+    > &
+    PageWithRoutingModeFields<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      FlagsSchema,
+      RoutingConfig<
+        NoInfer<CommonBlockMessage<DeclaredHostContract<Config['block']>>>
+      >
+    > &
+    NoInfer<
+      ValidateProgramBlock<DeclaredHostContract<Config['block']>, 'Document'>
+    > &
+    NoInfer<ExactHostConfig<Config, PageHostConfigKeys | 'layer'>> &
+    NoInfer<ExactDevToolsConfig<Config>>,
+): SelectedPageFromConfig<Config, PortsValue, FlagsSchema>
+export function make<
+  const Config extends Readonly<{
+    block: DeclaredRootBlock
+    layer: Layer.Layer<any, any, any>
+  }>,
+  const FlagsSchema extends AnyFlagsSchema | undefined,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<Config> &
+    NoInfer<ValidateSelectedConfig<Config>> &
+    PageHostOptions<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      PortsValue
+    > &
+    PageWithRoutingModeFields<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      FlagsSchema,
+      RoutingInputConfig<
+        NoInfer<CommonBlockMessage<DeclaredHostContract<Config['block']>>>
+      >
+    > &
+    NoInfer<
+      ValidateProgramBlock<DeclaredHostContract<Config['block']>, 'Document'>
+    > &
+    NoInfer<ExactHostConfig<Config, PageHostConfigKeys | 'layer'>> &
+    NoInfer<ExactDevToolsConfig<Config>>,
+): SelectedPageFromConfig<Config, PortsValue, FlagsSchema>
+export function make<
+  const Config extends object,
+  const BlockValue extends LayeredRoot,
+  const FlagsSchema extends AnyFlagsSchema | undefined,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<{ block: BlockValue }> &
+    PageHostOptions<NoInfer<LayeredContract<BlockValue>>, PortsValue> &
+    PageWithoutRoutingModeFields<
+      NoInfer<LayeredContract<BlockValue>>,
+      FlagsSchema
+    > &
+    NoInfer<ValidateProgramBlock<LayeredContract<BlockValue>, 'Document'>> &
+    NoInfer<ExactPageHostConfig<Config>>,
+): ConstructionProgramFromRoot<
+  BlockValue,
+  RootPorts<PortsValue>,
+  RootFlags<FlagsSchema>,
+  LayeredProgramRequirements<BlockValue, Config>,
+  'Application'
+>
+export function make<
+  const Config extends object,
+  const BlockValue extends LayeredRoot,
+  const FlagsSchema extends AnyFlagsSchema | undefined,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<{ block: BlockValue }> &
+    PageHostOptions<NoInfer<LayeredContract<BlockValue>>, PortsValue> &
+    PageWithRoutingModeFields<
+      NoInfer<LayeredContract<BlockValue>>,
+      FlagsSchema,
+      RoutingConfig<NoInfer<CommonBlockMessage<LayeredContract<BlockValue>>>>
+    > &
+    NoInfer<ValidateProgramBlock<LayeredContract<BlockValue>, 'Document'>> &
+    NoInfer<ExactPageHostConfig<Config>>,
+): ConstructionProgramFromRoot<
+  BlockValue,
+  RootPorts<PortsValue>,
+  RootFlags<FlagsSchema>,
+  LayeredProgramRequirements<BlockValue, Config>,
+  'Application'
+>
+export function make<
+  const Config extends object,
+  const BlockValue extends LayeredRoot,
+  const FlagsSchema extends AnyFlagsSchema | undefined,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<{ block: BlockValue }> &
+    PageHostOptions<NoInfer<LayeredContract<BlockValue>>, PortsValue> &
+    PageWithRoutingModeFields<
+      NoInfer<LayeredContract<BlockValue>>,
+      FlagsSchema,
+      ConstructorRoutingConfig<
+        NoInfer<CommonBlockMessage<LayeredContract<BlockValue>>>
+      >
+    > &
+    NoInfer<ValidateProgramBlock<LayeredContract<BlockValue>, 'Document'>> &
+    NoInfer<ExactPageHostConfig<Config>>,
+): ConstructionProgramFromRoot<
+  BlockValue,
+  RootPorts<PortsValue>,
+  RootFlags<FlagsSchema>,
+  LayeredProgramRequirements<BlockValue, Config>,
+  'Application'
+>
+export function make<
+  const Config extends object,
+  const BlockValue extends LayeredRoot,
+  const FlagsSchema extends AnyFlagsSchema | undefined,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<{ block: BlockValue }> &
+    PageHostOptions<NoInfer<LayeredContract<BlockValue>>, PortsValue> &
+    PageWithRoutingModeFields<
+      NoInfer<LayeredContract<BlockValue>>,
+      FlagsSchema,
+      ConstructorRequestRoutingConfig<
+        NoInfer<CommonBlockMessage<LayeredContract<BlockValue>>>
+      >
+    > &
+    NoInfer<ValidateProgramBlock<LayeredContract<BlockValue>, 'Document'>> &
+    NoInfer<ExactPageHostConfig<Config>>,
+): ConstructionProgramFromRoot<
+  BlockValue,
+  RootPorts<PortsValue>,
+  RootFlags<FlagsSchema>,
+  LayeredProgramRequirements<BlockValue, Config>,
+  'Application'
+>
+export function make<
+  const Config extends object,
+  const BlockValue extends LayeredRoot,
+  const FlagsSchema extends AnyFlagsSchema | undefined,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<{ block: BlockValue }> &
+    NoInfer<
+      ProgramViewDiagnostic<
+        LayeredContract<BlockValue>,
+        PageHostOptions<NoInfer<LayeredContract<BlockValue>>, PortsValue> &
+          PageWithRoutingModeFields<
+            NoInfer<LayeredContract<BlockValue>>,
+            FlagsSchema,
+            ConstructorUrlRoutingConfig<
+              CommonBlockMessage<LayeredContract<BlockValue>>
+            >
+          > &
+          NoInfer<
+            ValidateProgramBlock<LayeredContract<BlockValue>, 'Document'>
+          > &
+          NoInfer<ExactPageHostConfig<Config>>
+      >
+    > &
+    Readonly<{ Flags?: FlagsSchema; ports?: PortsValue }>,
+): ConstructionProgramFromRoot<
+  BlockValue,
+  RootPorts<PortsValue>,
+  RootFlags<FlagsSchema>,
+  LayeredProgramRequirements<BlockValue, Config>,
+  'Application'
+>
 export function make<
   const Config extends object,
   const BlockValue extends AnyBlock,
@@ -538,14 +853,20 @@ export function make<
 >(
   config: Config &
     Readonly<{ block: BlockValue }> &
-    PageHostOptions<NoInfer<BlockValue>, PortsValue> &
-    PageWithRoutingModeFields<
-      NoInfer<BlockValue>,
-      FlagsSchema,
-      ConstructorUrlRoutingConfig<NoInfer<CommonBlockMessage<BlockValue>>>
+    NoInfer<
+      ProgramViewDiagnostic<
+        BlockValue,
+        PageHostOptions<NoInfer<BlockValue>, PortsValue> &
+          PageWithRoutingModeFields<
+            NoInfer<BlockValue>,
+            FlagsSchema,
+            ConstructorUrlRoutingConfig<CommonBlockMessage<BlockValue>>
+          > &
+          NoInfer<ValidateProgramBlock<BlockValue, 'Document'>> &
+          NoInfer<ExactPageHostConfig<Config>>
+      >
     > &
-    NoInfer<ValidateProgramBlock<BlockValue, 'Document'>> &
-    NoInfer<ExactPageHostConfig<Config>>,
+    Readonly<{ Flags?: FlagsSchema; ports?: PortsValue }>,
 ): Program<
   RootPorts<PortsValue>,
   RootFlags<FlagsSchema>,
@@ -555,7 +876,31 @@ export function make<
 >
 export function make(config: unknown): unknown {
   assertProgramConfig(config, 'Document')
+  if ('layer' in config) {
+    const { layer, ...hostOptions } = config
+
+    if (!Layer.isLayer(layer)) {
+      throw new Error('[foldkit] Program root layer must be an Effect Layer.')
+    }
+
+    return Reflect.apply(make, undefined, [
+      {
+        ...hostOptions,
+        block: Reflect.apply(selectLayer, undefined, [config.block, layer]),
+      },
+    ])
+  }
+
+  if (rootConstructionOf(config.block) !== undefined) {
+    const snapshot = { ...config }
+
+    return makeConstructedProgram(snapshot, 'Application', block =>
+      Reflect.apply(make, undefined, [{ ...snapshot, block }]),
+    )
+  }
+
   const { block, routing, devTools, ...hostOptions } = config
+  assertCompletedRoot(block)
   const lowered = lowerBlock(block)
   const view = (model: unknown, h: unknown) => {
     const output = lowered.view(model, h)
@@ -596,7 +941,107 @@ type ElementFromBlock<
     >
   : never
 
-/** Creates a passive container-scoped Program from a completed root Block. */
+/**
+ * Creates a passive container-scoped Program from a completed root Block whose
+ * view returns Html. Set a unique, nonempty container id before calling this
+ * function. Supply a Flags Effect in this config when declaring Flags.
+ *
+ * A Layer-owned root accepts a shared and runtime provider plan through
+ * `provide({ services, runtime })`. The graph is acquired under the host Scope
+ * at startup. Plain `provide(layer)` remains runtime-only.
+ */
+export function makeElement<
+  const Config extends Readonly<{
+    block: DeclaredRootBlock
+    layer: Layer.Layer<any, any, any>
+  }>,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<Config> &
+    NoInfer<ValidateSelectedConfig<Config>> &
+    ElementHostOptions<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      PortsValue
+    > &
+    ElementWithoutFlagsModeFields<
+      NoInfer<DeclaredHostContract<Config['block']>>
+    > &
+    NoInfer<
+      ValidateProgramBlock<DeclaredHostContract<Config['block']>, 'Element'>
+    > &
+    NoInfer<ExactElementHostConfig<Config>>,
+): SelectedElementFromConfig<Config, PortsValue>
+export function makeElement<
+  const Config extends Readonly<{
+    block: DeclaredRootBlock
+    layer: Layer.Layer<any, any, any>
+  }>,
+  const FlagsSchema extends AnyFlagsSchema,
+  const FlagsEffect extends Effect.Effect<FlagsSchema['Type'], never, any>,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<Config> &
+    NoInfer<ValidateSelectedConfig<Config>> &
+    ElementHostOptions<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      PortsValue
+    > &
+    ElementWithFlagsModeFields<
+      NoInfer<DeclaredHostContract<Config['block']>>,
+      FlagsSchema,
+      FlagsEffect
+    > &
+    NoInfer<
+      ValidateProgramBlock<DeclaredHostContract<Config['block']>, 'Element'>
+    > &
+    NoInfer<ExactElementHostConfig<Config>>,
+): ConstructionProgramFromRoot<
+  SelectedRootOfConfig<Config>,
+  RootPorts<PortsValue>,
+  void,
+  | LayeredProgramRequirements<SelectedRootOfConfig<Config>, Config>
+  | FlagsRequirements<FlagsEffect>,
+  'Element'
+>
+export function makeElement<
+  const Config extends object,
+  const BlockValue extends LayeredRoot,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<{ block: BlockValue }> &
+    ElementHostOptions<NoInfer<LayeredContract<BlockValue>>, PortsValue> &
+    ElementWithoutFlagsModeFields<NoInfer<LayeredContract<BlockValue>>> &
+    NoInfer<ValidateProgramBlock<LayeredContract<BlockValue>, 'Element'>> &
+    NoInfer<ExactElementHostConfig<Config>>,
+): LayeredElementFromBlock<BlockValue, Config, PortsValue>
+export function makeElement<
+  const Config extends object,
+  const BlockValue extends LayeredRoot,
+  const FlagsSchema extends AnyFlagsSchema,
+  const FlagsEffect extends Effect.Effect<FlagsSchema['Type'], never, any>,
+  const PortsValue extends Ports | undefined = undefined,
+>(
+  config: Config &
+    Readonly<{ block: BlockValue }> &
+    ElementHostOptions<NoInfer<LayeredContract<BlockValue>>, PortsValue> &
+    ElementWithFlagsModeFields<
+      NoInfer<LayeredContract<BlockValue>>,
+      FlagsSchema,
+      FlagsEffect
+    > &
+    NoInfer<ValidateProgramBlock<LayeredContract<BlockValue>, 'Element'>> &
+    NoInfer<ExactElementHostConfig<Config>>,
+): ConstructionProgramFromRoot<
+  BlockValue,
+  RootPorts<PortsValue>,
+  void,
+  | LayeredProgramRequirements<BlockValue, Config>
+  | FlagsRequirements<FlagsEffect>,
+  'Element'
+>
 export function makeElement<
   const Config extends object,
   const BlockValue extends AnyBlock,
@@ -630,7 +1075,31 @@ export function makeElement<
 >
 export function makeElement(config: unknown): unknown {
   assertProgramConfig(config, 'Element')
+  if ('layer' in config) {
+    const { layer, ...hostOptions } = config
+
+    if (!Layer.isLayer(layer)) {
+      throw new Error('[foldkit] Program root layer must be an Effect Layer.')
+    }
+
+    return Reflect.apply(makeElement, undefined, [
+      {
+        ...hostOptions,
+        block: Reflect.apply(selectLayer, undefined, [config.block, layer]),
+      },
+    ])
+  }
+
+  if (rootConstructionOf(config.block) !== undefined) {
+    const snapshot = { ...config }
+
+    return makeConstructedProgram(snapshot, 'Element', block =>
+      Reflect.apply(makeElement, undefined, [{ ...snapshot, block }]),
+    )
+  }
+
   const { block, devTools, ...hostOptions } = config
+  assertCompletedRoot(block)
   const lowered = lowerBlock(block)
   const view = (model: unknown, h: unknown) => {
     const output = lowered.view(model, h)

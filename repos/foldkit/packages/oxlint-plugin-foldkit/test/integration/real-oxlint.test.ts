@@ -1,6 +1,7 @@
 import {
   copyFileSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -8,7 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { transform } from 'rolldown/experimental'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -119,6 +120,24 @@ describe('real-oxlint rule fixtures', () => {
     })
   }
 
+  it.each([
+    ['block-name-matches-variable', 6],
+    ['no-binding-write-coordination', 3],
+    ['no-impure-call-at-decision-time', 5],
+    ['no-child-message-construction-in-root', 2],
+    ['no-direct-block-state-update', 1],
+    ['no-manual-composition-routing', 1],
+    ['no-empty-to-parent-out-message', 1],
+    ['no-empty-children-array', 2],
+  ])('recognizes unified Block authoring for %s', (rule, expectedCount) => {
+    const diagnostics = diagnosticsFor(rule, 'invalid').filter(diagnostic =>
+      diagnostic.filename.endsWith('/unified.ts'),
+    )
+
+    expect(diagnostics).toHaveLength(expectedCount)
+    expect(diagnosticsFor(rule, 'valid')).toEqual([])
+  })
+
   it('reports sibling coordination through proven Binding writers and aliases', () => {
     const diagnostics = diagnosticsFor(
       'no-binding-write-coordination',
@@ -126,7 +145,19 @@ describe('real-oxlint rule fixtures', () => {
     )
     expect(
       diagnostics.map(diagnostic => basename(diagnostic.filename)).sort(),
-    ).toEqual(['aliases.ts', 'direct.ts', 'map-binding.ts'])
+    ).toEqual([
+      'aliases.ts',
+      'direct.ts',
+      'map-binding.ts',
+      'map-namespace-destructured.ts',
+      'map-namespace-direct.ts',
+      'map-namespace-method-alias.ts',
+      'map-namespace-owner-alias.ts',
+      'map-namespace-owner-destructured.ts',
+      'unified.ts',
+      'unified.ts',
+      'unified.ts',
+    ])
     expect(
       diagnostics.every(diagnostic =>
         diagnostic.message.includes('OutMessage'),
@@ -164,7 +195,7 @@ describe('real-oxlint rule fixtures', () => {
 
   it('reports every direct decision-time operation in its invalid fixture', () => {
     expect(countDiagnostics('no-impure-call-at-decision-time', 'invalid')).toBe(
-      31,
+      36,
     )
   })
 
@@ -175,7 +206,7 @@ describe('real-oxlint rule fixtures', () => {
   })
 
   it('traces direct, named, and automatically routed child updates', () => {
-    expect(countDiagnostics('no-direct-block-state-update', 'invalid')).toBe(28)
+    expect(countDiagnostics('no-direct-block-state-update', 'invalid')).toBe(29)
   })
 
   it('tracks HashMap child updates across direct, applied, and piped forms', () => {
@@ -189,6 +220,20 @@ describe('real-oxlint rule fixtures', () => {
     ).filter(diagnostic => diagnostic.filename.endsWith('map-binding.ts'))
 
     expect(invalid).toHaveLength(5)
+    expect(valid).toEqual([])
+  })
+
+  it('tracks extracted map Binding policy selection without matching unrelated helpers', () => {
+    const invalid = diagnosticsFor(
+      'no-empty-to-parent-out-message',
+      'invalid',
+    ).filter(diagnostic => diagnostic.filename.endsWith('map-binding.ts'))
+    const valid = diagnosticsFor(
+      'no-empty-to-parent-out-message',
+      'valid',
+    ).filter(diagnostic => diagnostic.filename.endsWith('map-binding.ts'))
+
+    expect(invalid).toHaveLength(4)
     expect(valid).toEqual([])
   })
 
@@ -216,7 +261,7 @@ describe('real-oxlint rule fixtures', () => {
 
   it('reports disabled, missing, and manual child routing', () => {
     expect(countDiagnostics('no-manual-composition-routing', 'invalid')).toBe(
-      11,
+      19,
     )
   })
 
@@ -234,6 +279,8 @@ describe('real-oxlint rule fixtures', () => {
       [
         'ApplicationComposition.Message.ClickedFromShadowedParameters',
         'Child.Message.ClickedAliasSave',
+        'Child.Message.ClickedUnifiedExtracted',
+        'Child.Message.ClickedUnifiedLocal',
         'Child.Message.ClickedBarrelSave',
         'Child.Message.ClickedDirectBarrelSave',
         'Child.Message.ClickedFromElementCompletion',
@@ -246,6 +293,10 @@ describe('real-oxlint rule fixtures', () => {
         'Child.Message.ClickedImportedParentViewSave',
         'Child.Message.ClickedParentStepSave',
         'Child.Message.ClickedParentCommandsStepSave',
+        'Child.Message.ClickedParentMapSave',
+        'Child.Message.ClickedParentMapSave',
+        'Child.Message.ClickedParentMapSave',
+        'Child.Message.ClickedParentMapSave',
         'Child.Message.ClickedParentMapSave',
         'Child.Message.ClickedParentViewSave',
         'Child.Message.ClickedFromContextRecord',
@@ -291,7 +342,7 @@ describe('real-oxlint rule fixtures', () => {
   })
 
   it('resolves aliased constructors and helpers to their imported APIs', () => {
-    expect(countDiagnostics('block-name-matches-variable', 'invalid')).toBe(14)
+    expect(countDiagnostics('block-name-matches-variable', 'invalid')).toBe(20)
     expect(countDiagnostics('no-hardcoded-route-strings', 'invalid')).toBe(2)
     expect(countDiagnostics('keyed-required-for-mapped-rows', 'invalid')).toBe(
       3,
@@ -314,7 +365,7 @@ describe('real-oxlint rule fixtures', () => {
   })
 
   it('recognizes explicit and contextual HtmlBuilder parameters', () => {
-    expect(countDiagnostics('no-empty-children-array', 'invalid')).toBe(8)
+    expect(countDiagnostics('no-empty-children-array', 'invalid')).toBe(10)
   })
 
   it('reports every invalid Mount handler', () => {
@@ -409,6 +460,19 @@ describe('real-oxlint rule fixtures', () => {
   it('renames an Effect module only when the exported name is unbound', async () => {
     const rule = 'prefer-effect-module-names'
     const configPath = join(workDir, `${rule}.fix.oxlintrc.json`)
+    const targetDir = join(workDir, `${rule}.fix`)
+    const expectedDiagnosticCount = 8
+    const unsafeFixFixtures = [
+      { name: 'shorthand-property', diagnosticCount: 1 },
+      { name: 'reexport', diagnosticCount: 1 },
+      { name: 'nested-shadow', diagnosticCount: 1 },
+      { name: 'commented-specifier', diagnosticCount: 1 },
+      { name: 'duplicate-target-same-import', diagnosticCount: 1 },
+      { name: 'duplicate-target-across-imports', diagnosticCount: 2 },
+    ]
+
+    mkdirSync(targetDir)
+
     writeFileSync(
       configPath,
       JSON.stringify({
@@ -422,18 +486,44 @@ describe('real-oxlint rule fixtures', () => {
     )
 
     const safeSourcePath = join(fixturesRoot, rule, 'invalid', 'imports.ts')
-    const safeTargetPath = join(workDir, `${rule}.safe-fix.ts`)
+    const safeTargetPath = join(targetDir, 'imports.ts')
     copyFileSync(safeSourcePath, safeTargetPath)
-    const safeDiagnostics = runOxlint({
+    const collisionSourcePath = join(
+      fixturesRoot,
+      rule,
+      'invalid',
+      'global-collision.ts',
+    )
+    const collisionTargetPath = join(targetDir, 'global-collision.ts')
+    copyFileSync(collisionSourcePath, collisionTargetPath)
+
+    for (const { name } of unsafeFixFixtures) {
+      copyFileSync(
+        join(fixturesRoot, rule, 'invalid', `${name}.ts`),
+        join(targetDir, `${name}.ts`),
+      )
+    }
+
+    const diagnostics = runOxlint({
       oxlintBin,
       cwd: workDir,
       configPath,
-      target: safeTargetPath,
+      target: targetDir,
       fix: true,
     })
+    const diagnosticsForFile = (name: string) =>
+      diagnostics.filter(
+        diagnostic =>
+          diagnostic.filename ===
+          relative(workDir, join(targetDir, name)).replaceAll('\\', '/'),
+      )
     const safeSource = readFileSync(safeTargetPath, 'utf8')
 
-    expect(safeDiagnostics).toHaveLength(0)
+    expect(diagnostics).toHaveLength(expectedDiagnosticCount)
+    expect(
+      diagnostics.every(diagnostic => diagnostic.code === `foldkit(${rule})`),
+    ).toBe(true)
+    expect(diagnosticsForFile('imports.ts')).toHaveLength(0)
     expect(safeSource).not.toContain('Match as M')
     expect(safeSource).not.toContain('Schema as S')
     expect(safeSource).not.toContain('String as String_')
@@ -442,57 +532,26 @@ describe('real-oxlint rule fixtures', () => {
     expect(safeSource).toContain('String.isNonEmpty')
     await expect(getTypeScriptParseErrors(safeSource)).resolves.toEqual([])
 
-    const collisionSourcePath = join(
-      fixturesRoot,
-      rule,
-      'invalid',
-      'global-collision.ts',
-    )
-    const collisionTargetPath = join(workDir, `${rule}.collision-fix.ts`)
-    copyFileSync(collisionSourcePath, collisionTargetPath)
-    const collisionDiagnostics = runOxlint({
-      oxlintBin,
-      cwd: workDir,
-      configPath,
-      target: collisionTargetPath,
-      fix: true,
-    })
     const collisionSource = readFileSync(collisionTargetPath, 'utf8')
 
-    expect(collisionDiagnostics).toHaveLength(1)
+    expect(diagnosticsForFile('global-collision.ts')).toHaveLength(1)
     expect(collisionSource).toContain('String as String_')
     expect(collisionSource).toContain('String(42)')
 
-    for (const unsafeFixFixture of [
-      { name: 'shorthand-property', diagnosticCount: 1 },
-      { name: 'reexport', diagnosticCount: 1 },
-      { name: 'nested-shadow', diagnosticCount: 1 },
-      { name: 'commented-specifier', diagnosticCount: 1 },
-      { name: 'duplicate-target-same-import', diagnosticCount: 1 },
-      { name: 'duplicate-target-across-imports', diagnosticCount: 2 },
-    ]) {
+    for (const unsafeFixFixture of unsafeFixFixtures) {
       const sourcePath = join(
         fixturesRoot,
         rule,
         'invalid',
         `${unsafeFixFixture.name}.ts`,
       )
-      const targetPath = join(
-        workDir,
-        `${rule}.${unsafeFixFixture.name}-fix.ts`,
-      )
+      const targetPath = join(targetDir, `${unsafeFixFixture.name}.ts`)
       const originalSource = readFileSync(sourcePath, 'utf8')
-      copyFileSync(sourcePath, targetPath)
-      const diagnostics = runOxlint({
-        oxlintBin,
-        cwd: workDir,
-        configPath,
-        target: targetPath,
-        fix: true,
-      })
       const source = readFileSync(targetPath, 'utf8')
 
-      expect(diagnostics).toHaveLength(unsafeFixFixture.diagnosticCount)
+      expect(diagnosticsForFile(`${unsafeFixFixture.name}.ts`)).toHaveLength(
+        unsafeFixFixture.diagnosticCount,
+      )
       expect(source).toBe(originalSource)
     }
   })

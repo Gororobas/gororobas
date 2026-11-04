@@ -71,7 +71,7 @@ Commands describe one-shot work that produces one result. Subscriptions describe
 
 ### Defining Entries
 
-`FeatureDefinition.makeSubscriptions` receives a function that builds a named record of entries for the Block. When a Layer-backed entry depends on the Model, `entry` takes three arguments:
+`FeatureBlock.makeSubscriptions` receives a function that builds a named record of entries for the Block. The counter uses a `when` predicate to run its timer only while `isAutoCounting` is `true`. An entry whose Stream also needs Model values takes three arguments:
 
 - A stable handler name for the Layer requirement.
 - A field map defining the dependency Schema, in the same shape passed to `Schema.Struct`.
@@ -81,13 +81,21 @@ Create one registry for all Subscriptions owned by the Block. Add entries to tha
 
 If an adapter already exposes a dependency Struct, pass its `.fields` as the second argument: `dependenciesSchema.fields`. Passing the Struct itself produces a field-map error, often wrapped in `No overload matches this call`.
 
-`modelToDependencies` extracts the values that control the entry. The `handler` generator constructs the Stream factory, and the owned registry’s `subscriptions.layer` supplies its attached handlers to the application. Foldkit compares the extracted record structurally by default, so unrelated Model updates do not restart the timer.
+`modelToDependencies` extracts the values the Stream needs. The `handler` generator constructs the Stream factory, and the owned registry’s `subscriptions.layer` supplies its attached handlers to the application. Foldkit compares the extracted record structurally by default, so unrelated Model updates do not restart the Stream.
 
 When `isAutoCounting` changes to `true`, the new Stream starts ticking. When it changes back to `false`, the active scope closes and the timer stops.
 
+### Gating an Entry on the Model
+
+The optional `when` predicate decides whether the entry runs for the current Model. While it returns `false`, Foldkit runs no Stream and skips `modelToDependencies`. Opening the gate starts the Stream with current dependencies. Closing it interrupts the Stream and closes its scope, even when `keepAliveEquivalence` would otherwise retain it.
+
+The gate controls Stream lifetime. Attached handler Layers still build at Runtime startup, so their constructor errors and Service requirements remain part of the Block's contract while the gate is closed.
+
+Use `when` for conditions on the owning Model and Binding `subscriptions.when` for parent policy. [`Subscription.expectActive`](/testing/scene#subscription-activity) and `expectInactive` can inspect these gates. Conditions inside the Stream, such as `Stream.when` or a branch returning `Stream.empty`, remain valid for Stream-local decisions but are not visible to activity assertions.
+
 ### Completing the Block
 
-Include the record when completing its owning Block. The completed value carries the Subscription registrations and their handler recipes through parent Bindings to the root. Assemble `ApplicationBlock` with the same Block API; the entry supplies it and the container to `Program.make`, calls `program.provide(layer)` when shared Services remain, and then starts the Program:
+Return the registry from the owning Block's `makeLayer` constructor alongside its local handler recipes. Acquired child connections carry their Subscription registrations and handlers into the parent graph. The entry selects `{ block: ApplicationBlock, layer }` in `Program.make`, supplies the container and host options, calls `program.provide(ApplicationLayer)` when ordinary Services remain, and then starts the Program:
 
 ::Snippet{name="counterEntryWithSubscriptions" label="Subscription application entry"}
 
@@ -99,15 +107,15 @@ The [websocket-chat example](/example-apps/websocket-chat) shows a more involved
 
 The declared Message Schemas constrain the Stream returned by both the attached handler and an external `toLayer` implementation. Emitting an undeclared Message is a type error. Scene uses these Schemas to validate `Subscription.emit(entry, message)` against the composed source, including its generated delivery through parents. An empty declaration requires a `Stream<never>` for work that emits no Messages.
 
-An external generic Stream helper can infer its result Message from one callback and then reject a different, valid variant returned by another callback. If the error compares two declared Message variants, inspect the helper's callback inference. Give the callback that determines the generic result an explicit return type for the union this entry declares. Use `typeof Message.Type` when the entry declares the full Message union. The entry's `messages` declaration still checks every variant the resulting Stream may emit.
+An external generic Stream helper can infer its result Message from one callback and then reject a different, valid variant returned by another callback. If the error compares two declared Message variants, inspect the helper's callback inference. Give the callback that determines the generic result an explicit return type for the union this entry declares. Use the `Message` alias when the entry declares the full Message union. The entry's `messages` declaration still checks every variant the resulting Stream may emit.
 
 ### Handler Construction and Layers
 
-Each entry, such as `subscriptions.gameClockTicks`, is an individual owned definition. Its record key identifies the local runtime entry, while its handler name becomes part of the owned Layer requirement that assembly must satisfy. Several child Bindings can carry one definition into different placements while retaining separate Stream scopes. Naming also gives tools a declared identity to display; Subscription lifecycle events in DevTools are follow-up work. An entry with `handler` exposes `.layer`; include that recipe in the local `EffectsLayer` passed to `FeatureComposition.prepareBlock`.
+Each entry, such as `subscriptions.gameClockTicks`, is an individual owned definition. Its record key identifies the local runtime entry, while its handler name becomes part of the owned Layer requirement that assembly must satisfy. Several child Bindings can carry one definition into different placements while retaining separate Stream scopes. Naming also gives tools a declared identity to display; Subscription lifecycle events in DevTools are follow-up work. An entry with `handler` exposes `.layer`; include that recipe in the local `EffectsLayer` passed to `FeatureBlock.makeLayer`.
 
-When every entry has an attached handler, the owned registry also exposes `subscriptions.layer`. When Subscription declarations are split from Block assembly, that module exports the Block's one registry. Compose `Feature.subscriptions.layer` with other local providers in `EffectsLayer`. When the registry supplies every local handler, pass `EffectsLayer: subscriptions.layer` directly to `FeatureComposition.prepareBlock`. The registry Layer merges the recipes passively; the Runtime constructs them later. An empty record supplies an empty Layer. The registry Layer preserves each handler's Service requirements and constructor errors.
+When every entry has an attached handler, the owned registry also exposes `subscriptions.layer`. When Subscription declarations are split from Block assembly, that module exports the Block's one registry. Compose `Feature.subscriptions.layer` with other local providers in `EffectsLayer`. When the registry supplies every local handler, pass `EffectsLayer: subscriptions.layer` directly to `FeatureBlock.makeLayer`. The registry Layer merges the recipes passively; the Runtime constructs them later. An empty record supplies an empty Layer. The registry Layer preserves each handler's Service requirements and constructor errors.
 
-The registry Layer is unavailable if any entry leaves its handler to the host. Supply those contracts explicitly through `hostHandlers` and `provideHandlers`. Individual `subscriptions.entry.layer` recipes remain available for intentionally selective assembly. The entry key `layer` is reserved; the registry recipe is metadata and never becomes a running Subscription or a Scene emission source.
+The registry Layer is unavailable if any entry has no attached handler. Compose explicit entry providers in `EffectsLayer`, using each original entry's `toLayer` for separately authored implementations. Individual `subscriptions.entry.layer` recipes remain available for intentionally selective assembly. The entry key `layer` is reserved; the registry recipe is metadata and never becomes a running Subscription or a Scene emission source.
 
 `Subscription.aggregate` remains available at graph, adapter, and test boundaries that need to join independent Subscription records. Do not use it to recombine several registries for one Block; declare those entries together in that Block's registry.
 
@@ -115,7 +123,9 @@ The Runtime runs the attached handler generator once while building the applicat
 
 ### External Host Handlers
 
-Omit `handler` for a Subscription contract whose Stream belongs to an external host. Such an entry has no `.layer`. List it in the completed Block's `hostHandlers`, then let the host call `block.provideHandlers(entry.toLayer(...))` before connecting the feature. A focused orchestration test can use the same seam, though ordinary execution tests keep the attached handler and replace its underlying service Layers.
+Omit `handler` when its implementation is authored separately. Such an entry has no `.layer`; construct a provider through the original entry's `toLayer` and include it in the implementation's `EffectsLayer` before completion. Do not recreate a same-shaped Subscription definition.
+
+When a feature owns the Stream transformation, keep that handler attached and let the host provide its upstream Service. For example, the host can supply a transport while the real handler decodes events into Messages. Ordinary execution tests replace that upstream Service and retain the Stream and its Model-driven lifecycle. See [host implementations](/core/layers#host-implementations-for-reusable-features).
 
 ### Execution Testing
 
@@ -123,9 +133,9 @@ In a whole-application execution test, retain that real Stream handler and repla
 
 ### Handler Requirements and Identity
 
-Subscription names are local to their named Block. Two features can both declare `GameClockTicks`; their owners keep the definitions distinct. Names must be unique within one owner. Composition derives a path for each Binding placement, so repeated uses of one completed child share its handler recipe while retaining separate Stream scopes.
+Subscription names are local to their named Block. Two features can both declare `GameClockTicks`; their owners keep the definitions distinct. Names must be unique within one owner. Composition derives a path for each Binding placement, so repeated uses of one child implementation share its handler recipe while retaining separate Stream scopes.
 
-A Subscription handler requirement contains its owned name, decoded dependency record, and declared Message union. `FeatureComposition.prepareBlock` checks that each local requirement is supplied by `EffectsLayer` or declared in `hostHandlers`; `block.provideHandlers` checks an external provider against those declared contracts. Use `Subscription.HandlerOf<typeof subscriptions.gameClockTicks>` for an explicit requirement; the expanded form is `Subscription.Handler<Name, Dependencies, DeclaredMessage>`, with all three arguments required.
+A Subscription handler requirement contains its owned name, decoded dependency record, and declared Message union. `FeatureBlock.makeLayer` checks that `EffectsLayer` supplies each local handler and preserves its declared Service and error channels. Use `Subscription.HandlerOf<typeof subscriptions.gameClockTicks>` for an explicit requirement; the expanded form is `Subscription.Handler<Name, Dependencies, DeclaredMessage>`, with all three arguments required.
 
 Definitions created by different named Blocks receive different owned names even when their local names and protocols match. Each definition also retains a private runtime identity. An external implementation should use the declared entry's `toLayer` so it keeps that identity.
 
@@ -155,11 +165,11 @@ Use `Stream.tick` for discrete wall-clock steps that should occur every N millis
 
 ## Streams Without Local Model Dependencies
 
-For a Layer-backed Subscription with no local Model dependencies, pass its stable handler name and declared Messages to `entry`. Local Model changes leave the Stream running. A parent can still gate the entry when lifting it.
+For a Layer-backed Subscription with no local Model dependencies, pass its stable handler name and declared Messages to `entry`. Local Model changes leave the Stream running while its own `when` predicate and any parent gate remain open.
 
 ::Snippet{name="subscriptionPersistent" label="Heartbeat without Model dependencies"}
 
-For work whose lifetime depends on the Model, define an entry with `FeatureDefinition.makeSubscriptions` and derive its dependencies from the Model.
+For work whose lifetime depends on the Model, define an entry with `FeatureBlock.makeSubscriptions` and derive its dependencies from the Model.
 
 ## Dom Streams
 
@@ -187,11 +197,11 @@ Most entries should use the first `dependencies` argument directly. Reach for `r
 
 When a parent embeds a Block with Subscriptions, its Binding lifts the child's Messages into the parent Message type and applies the same presence policy used by update. `None` in a direct Option field, `false` from `presentWhen`, or `None` from a custom `read` stops every child Stream without reading child dependencies.
 
-`ParentDefinition.makeBinding(ChildBlock, { field, ... })` performs that lift once for a direct child field. Custom storage uses `read` and `write`. Include the Binding in the parent's `bindings` list, and the parent collects the lifted entries under placement-qualified keys. The same Composition routes the child's generated envelopes through its Binding and installs the collected graph through `prepareBlock({ init, update, view, ... })`.
+`ParentBlock.makeBinding(ChildBlock, { field, ... })` performs that lift once for a direct child field. Custom storage uses `read` and `write`. Include the Binding in the parent's `bindings` list, and the parent collects the lifted entries under placement-qualified keys. The same Composition routes the child's generated envelopes through its Binding and installs the collected graph through `FeatureBlock.makeLayer`.
 
 ### Gating Child Subscriptions
 
-The optional `when` field lets the parent add a Stream condition the child cannot see. One predicate can gate the whole record, or a map can gate selected entries. Put the policy under `subscriptions.when` in the Binding. This gate controls Stream lifetime only: it does not make the child absent, stop ManagedResources or Mounts, or prevent `binding.fold` from running.
+The optional `when` field lets the parent add a Stream condition the child cannot see. One predicate can gate the whole record, or a map can gate selected entries. Put the policy under `subscriptions.when` in the Binding. The child's own entry gate also applies. This gate controls Stream lifetime only: it does not make the child absent, stop ManagedResources or Mounts, or prevent `binding.fold` from running.
 
 Use direct-field `presentWhen` when the condition governs the whole child rather than its Streams. That predicate makes the Binding absent for updates and every lifecycle channel. A custom accessor expresses the same policy by returning `None` from `read`.
 

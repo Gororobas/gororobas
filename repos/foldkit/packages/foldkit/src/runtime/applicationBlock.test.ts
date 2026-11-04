@@ -25,9 +25,11 @@ class ValueSource extends Context.Service<
 
 const ChildOwnerNamespace = makeNamespace('RootChild')
 const ChildModel = Schema.Struct({ label: Schema.String })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   CompletedReadValue: { value: Schema.String },
 })
+type ChildMessage = typeof ChildMessage.Type
 const ReadValue = ChildOwnerNamespace.makeCommand('ReadValue', {
   messages: [ChildMessage.CompletedReadValue],
   handler: function* () {
@@ -59,6 +61,7 @@ const childBlock: Block.FromAssemblyWithView<
 > = Block.assemble(prepareChildBlock)
 
 const Model = Schema.Struct({ left: ChildModel, right: ChildModel })
+type Model = typeof Model.Type
 const ApplicationDefinition = Block.makeDefinition('Application', {
   Model,
   Message: Schema.Never,
@@ -95,9 +98,11 @@ class HostDependency extends Context.Service<
 
 const HostChildOwnerNamespace = makeNamespace('ApplicationHostChild')
 const HostChildModel = Schema.Struct({ value: Schema.String })
+type HostChildModel = typeof HostChildModel.Type
 const HostChildMessage = defineMessageUnion({
   CompletedReadHostValue: { value: Schema.String },
 })
+type HostChildMessage = typeof HostChildMessage.Type
 const ReadHostValue = HostChildOwnerNamespace.makeCommand('ReadHostValue', {
   messages: [HostChildMessage.CompletedReadHostValue],
 })
@@ -137,6 +142,7 @@ const resolvedHostChild = unresolvedHostChild.provideHandlers(
 )
 
 const HostParentModel = Schema.Struct({ child: HostChildModel })
+type HostParentModel = typeof HostParentModel.Type
 const HostParentDefinition = Block.makeDefinition('Application', {
   Model: HostParentModel,
   Message: Schema.Never,
@@ -144,7 +150,7 @@ const HostParentDefinition = Block.makeDefinition('Application', {
 const UnresolvedHostBinding = HostParentDefinition.makeBinding(
   unresolvedHostChild,
   {
-    read: (model: typeof HostParentModel.Type) => Option.some(model.child),
+    read: (model: HostParentModel) => Option.some(model.child),
     write: (model, nextChild) =>
       modifyFields(model, { child: () => nextChild }),
   },
@@ -152,7 +158,7 @@ const UnresolvedHostBinding = HostParentDefinition.makeBinding(
 const ResolvedHostBinding = HostParentDefinition.makeBinding(
   resolvedHostChild,
   {
-    read: (model: typeof HostParentModel.Type) => Option.some(model.child),
+    read: (model: HostParentModel) => Option.some(model.child),
     write: (model, nextChild) =>
       modifyFields(model, { child: () => nextChild }),
   },
@@ -210,6 +216,139 @@ afterEach(() => {
 })
 
 describe('completed root Block hosting', () => {
+  it('awaits teardown before embedding an independently constructed Program', async () => {
+    const container = document.createElement('div')
+    container.id = 'replaceable-element'
+    document.body.append(container)
+
+    const WidgetModel = Schema.Struct({ label: Schema.String })
+    type WidgetModel = typeof WidgetModel.Type
+    const WidgetDefinition = Block.makeDefinition('ReplaceableWidget', {
+      Model: WidgetModel,
+      Message: Schema.Never,
+    })
+    const widgetComposition = WidgetDefinition.makeComposition()
+    const makeWidgetBlock = (label: string) => {
+      const prepareWidgetBlock = () =>
+        widgetComposition.prepareBlock({
+          init: () => ({ model: { label } }),
+          update: widgetComposition.makeUpdate({}),
+          view: widgetComposition.makeView((model, h) =>
+            h.div([], [model.label]),
+          ),
+          EffectsLayer: Layer.empty,
+        })
+
+      const widgetBlock: Block.FromAssemblyWithView<
+        typeof WidgetModel,
+        typeof prepareWidgetBlock
+      > = Block.assemble(prepareWidgetBlock)
+
+      return widgetBlock
+    }
+
+    const releaseGate = Deferred.makeUnsafe<void>()
+    const events: Array<string> = []
+    let currentHandle: ReturnType<typeof embed> | undefined
+    let reentrantDisposal: Promise<void> | undefined
+    const FirstLayer = Layer.effect(
+      ValueSource,
+      Effect.acquireRelease(
+        Effect.sync(() => {
+          events.push('first acquired')
+          return { value: 'first' }
+        }),
+        () =>
+          Effect.sync(() => {
+            events.push('first release started')
+            if (currentHandle === undefined) {
+              throw new Error(
+                'The host handle was not assigned before release.',
+              )
+            }
+            reentrantDisposal = currentHandle.dispose()
+          }).pipe(
+            Effect.andThen(Deferred.await(releaseGate)),
+            Effect.andThen(
+              Effect.sync(() => {
+                events.push('first released')
+              }),
+            ),
+          ),
+      ),
+    )
+    const SecondLayer = Layer.sync(ValueSource, () => {
+      events.push('second acquired')
+      return { value: 'second' }
+    })
+    const firstProgram = Program.makeElement({
+      block: makeWidgetBlock('first'),
+      container,
+    }).provide(FirstLayer)
+    const firstHandle = embed(firstProgram)
+    currentHandle = firstHandle
+    let secondHandle: ReturnType<typeof embed> | undefined
+
+    try {
+      await vi.waitFor(() => {
+        expect(document.body.textContent).toContain('first')
+        expect(events).toEqual(['first acquired'])
+      })
+
+      let isDisposalComplete = false
+      const disposalPromise = firstHandle.dispose()
+      expect(firstHandle.dispose()).toBe(disposalPromise)
+      const disposal = disposalPromise.then(() => {
+        isDisposalComplete = true
+      })
+
+      await vi.waitFor(() => {
+        expect(events).toEqual(['first acquired', 'first release started'])
+      })
+      expect(reentrantDisposal).toBe(disposalPromise)
+
+      await Promise.resolve()
+      expect(isDisposalComplete).toBe(false)
+      let isReentrantDisposalComplete = false
+      const reentrantCompletion = reentrantDisposal?.then(() => {
+        isReentrantDisposalComplete = true
+      })
+      await Promise.resolve()
+      expect(isReentrantDisposalComplete).toBe(false)
+
+      Deferred.doneUnsafe(releaseGate, Effect.void)
+      await disposal
+      await reentrantCompletion
+
+      const restoredContainer = document.getElementById('replaceable-element')
+      expect(restoredContainer).not.toBeNull()
+      if (restoredContainer === null) {
+        throw new Error('The disposed Program did not restore its container.')
+      }
+
+      const secondProgram = Program.makeElement({
+        block: makeWidgetBlock('second'),
+        container: restoredContainer,
+      }).provide(SecondLayer)
+      secondHandle = embed(secondProgram)
+
+      await vi.waitFor(() => {
+        expect(document.body.textContent).toContain('second')
+        expect(events).toEqual([
+          'first acquired',
+          'first release started',
+          'first released',
+          'second acquired',
+        ])
+      })
+    } finally {
+      Deferred.doneUnsafe(releaseGate, Effect.void)
+      await firstHandle.dispose()
+      await vi.waitFor(() => expect(events).toContain('first released'))
+      await secondHandle?.dispose()
+    }
+  })
+
   it('includes child recipes and lifts initialization Commands through the real runtime', async () => {
     const container = document.createElement('div')
     container.id = 'composed-element'
@@ -268,6 +407,7 @@ describe('completed root Block hosting', () => {
     const LeafOwnerNamespace = makeNamespace('NestedCommandLeaf')
     const LeafValue = LeafOwnerNamespace.makeResource<string>()('Value')
     const LeafModel = Schema.Struct({ value: Schema.String })
+    type LeafModel = typeof LeafModel.Type
     const LeafMessage = defineMessageUnion({
       ClickedReadValue: {},
       CompletedReadValue: { value: Schema.String },
@@ -276,6 +416,7 @@ describe('completed root Block hosting', () => {
       ReleasedValue: {},
       FailedAcquireValue: {},
     })
+    type LeafMessage = typeof LeafMessage.Type
     const ReadLeafValue = LeafOwnerNamespace.makeCommand('ReadLeafValue', {
       messages: [LeafMessage.CompletedReadValue, LeafMessage.FailedReadValue],
       handler: function* () {
@@ -351,6 +492,7 @@ describe('completed root Block hosting', () => {
 
     const MiddleOwnerNamespace = makeNamespace('NestedCommandMiddle')
     const MiddleModel = Schema.Struct({ leaf: LeafModel })
+    type MiddleModel = typeof MiddleModel.Type
     const MiddleDefinition = MiddleOwnerNamespace.makeDefinition({
       Model: MiddleModel,
       Message: Schema.Never,
@@ -384,6 +526,7 @@ describe('completed root Block hosting', () => {
     > = Block.assemble(prepareMiddleBlock)
 
     const RootModel = Schema.Struct({ middle: MiddleModel })
+    type RootModel = typeof RootModel.Type
     const RootDefinition = Block.makeDefinition('Application', {
       Model: RootModel,
       Message: Schema.Never,
@@ -466,9 +609,11 @@ describe('completed root Block hosting', () => {
     )
     const ServiceChildOwnerNamespace = makeNamespace('ServiceLifetimeChild')
     const ServiceChildModel = Schema.Struct({ value: Schema.String })
+    type ServiceChildModel = typeof ServiceChildModel.Type
     const ServiceChildMessage = defineMessageUnion({
       CompletedReadSharedValue: { value: Schema.String },
     })
+    type ServiceChildMessage = typeof ServiceChildMessage.Type
     const ReadSharedValue = ServiceChildOwnerNamespace.makeCommand(
       'ReadSharedValue',
       {
@@ -513,10 +658,12 @@ describe('completed root Block hosting', () => {
     const ServiceRootModel = Schema.Struct({
       maybeChild: Schema.Option(ServiceChildModel),
     })
+    type ServiceRootModel = typeof ServiceRootModel.Type
     const ServiceRootMessage = defineMessageUnion({
       ClickedRemoveServiceChild: {},
       ClickedAddServiceChild: {},
     })
+    type ServiceRootMessage = typeof ServiceRootMessage.Type
     const ServiceRootDefinition = Block.makeDefinition('Application', {
       Model: ServiceRootModel,
       Message: ServiceRootMessage,
@@ -642,6 +789,7 @@ describe('completed root Block hosting', () => {
     let acquisitions = 0
     const Value = FeatureOwnerNamespace.makeResource<string>()('Value')
     const FeatureModel = Schema.Struct({ label: Schema.String })
+    type FeatureModel = typeof FeatureModel.Type
     const FeatureMessage = defineMessageUnion({
       AcquiredValue: {},
       ReleasedValue: {},
@@ -649,10 +797,12 @@ describe('completed root Block hosting', () => {
       CompletedObserveValue: { value: Schema.String },
       FailedObserveValue: {},
     })
+    type FeatureMessage = typeof FeatureMessage.Type
     const FeatureOutMessage = defineMessageUnion({
       AcquiredValue: {},
       ObservedValue: { value: Schema.String },
     })
+    type FeatureOutMessage = typeof FeatureOutMessage.Type
     const ObserveValue = FeatureOwnerNamespace.makeMountStream('ObserveValue', {
       messages: [
         FeatureMessage.CompletedObserveValue,
@@ -731,13 +881,14 @@ describe('completed root Block hosting', () => {
       typeof prepareFeatureBlock
     > = Block.assemble(prepareFeatureBlock)
     const RootModel = Schema.Struct({ left: FeatureModel, right: FeatureModel })
+    type RootModel = typeof RootModel.Type
     const RootDefinition = Block.makeDefinition('Application', {
       Model: RootModel,
       Message: Schema.Never,
     })
     const seen: Array<string> = []
     const foldFeatureOutMessage = (source: 'GotLeft' | 'GotRight') =>
-      FeatureOutMessage.match<Update.Step<typeof RootModel.Type, never>>({
+      FeatureOutMessage.match<Update.Step<RootModel, never>>({
         AcquiredValue: () => model => {
           acquisitions += 1
           if (acquisitions === 2) {
@@ -755,12 +906,12 @@ describe('completed root Block hosting', () => {
       })
     const LeftBinding = RootDefinition.makeBinding(featureBlock, {
       placement: 'Left',
-      read: (model: typeof RootModel.Type) => Option.some(model.left),
+      read: (model: RootModel) => Option.some(model.left),
       write: (model, nextLeft) => modifyFields(model, { left: () => nextLeft }),
     }).withOutMessagePolicy({ fold: foldFeatureOutMessage('GotLeft') })
     const RightBinding = RootDefinition.makeBinding(featureBlock, {
       placement: 'Right',
-      read: (model: typeof RootModel.Type) => Option.some(model.right),
+      read: (model: RootModel) => Option.some(model.right),
       write: (model, nextRight) =>
         modifyFields(model, { right: () => nextRight }),
     }).withOutMessagePolicy({ fold: foldFeatureOutMessage('GotRight') })

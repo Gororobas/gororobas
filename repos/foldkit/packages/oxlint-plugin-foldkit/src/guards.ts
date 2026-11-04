@@ -242,6 +242,7 @@ export type ImportedPath = Readonly<{
 export type DefinitionMethodOwner = Readonly<{
   importedPath: Pick<ImportedPath, 'source' | 'members'> | undefined
   isFromMessageAdapter: boolean
+  isImportedHelper?: boolean
   path: StaticMemberPath
 }>
 
@@ -290,7 +291,6 @@ const foldkitNamespaceBySource: Readonly<Record<string, string>> = {
   'foldkit/experimental': 'Experimental',
   'foldkit/experimental/query': 'Query',
   'foldkit/html': 'Html',
-  'foldkit/mapBinding': 'MapBinding',
   'foldkit/managedResource': 'ManagedResource',
   'foldkit/message': 'Message',
   'foldkit/mount': 'Mount',
@@ -755,13 +755,14 @@ const isFoldkitViewBuilderType = (
 const isFoldkitDefinitionViewCallback = (
   references: WeakMap<ESTree.Node, Reference>,
   functionNode: ESTree.ArrowFunctionExpression | ESTree.Function,
+  importerFilename?: string,
 ): boolean => {
   const parent = functionNode.parent
   if (!isCallExpression(parent) || !parent.arguments.includes(functionNode)) {
     return false
   }
 
-  if (isOwnedDefinitionCall(parent, 'makeView', references)) {
+  if (isOwnedDefinitionCall(parent, 'makeView', references, importerFilename)) {
     return true
   }
 
@@ -773,7 +774,12 @@ const isFoldkitDefinitionViewCallback = (
 
     return (
       isMemberExpression(parent.callee) &&
-      isOwnedDefinitionCallee(parent.callee.object, 'makeView', references)
+      isOwnedDefinitionCallee(
+        parent.callee.object,
+        'makeView',
+        references,
+        importerFilename,
+      )
     )
   })
 }
@@ -825,7 +831,12 @@ const isHtmlBuilderParameter = (
         Option.exists(
           Array.last(definition.node.params),
           parameter => parameter === definition.name,
-        ) && isFoldkitDefinitionViewCallback(references, definition.node)
+        ) &&
+        isFoldkitDefinitionViewCallback(
+          references,
+          definition.node,
+          importerFilename,
+        )
       )
     }),
   )
@@ -935,8 +946,9 @@ const bindingConfigHasProperties = (
   node: ESTree.CallExpression,
   names: ReadonlyArray<string>,
   references?: WeakMap<ESTree.Node, Reference>,
+  importerFilename?: string,
 ): boolean => {
-  const config = blockBindingConfiguration(node, references)
+  const config = blockBindingConfiguration(node, references, importerFilename)
   if (!isObjectExpression(config)) {
     return false
   }
@@ -958,8 +970,9 @@ const bindingConfigHasStaticStringProperty = (
   node: ESTree.CallExpression,
   name: string,
   references?: WeakMap<ESTree.Node, Reference>,
+  importerFilename?: string,
 ): boolean => {
-  const config = blockBindingConfiguration(node, references)
+  const config = blockBindingConfiguration(node, references, importerFilename)
   if (!isObjectExpression(config)) {
     return false
   }
@@ -986,54 +999,55 @@ const directBindingCall = (
   return node
 }
 
-/** Returns the owned `makeBinding` call beneath a direct fluent policy chain. */
+/** Returns the owned Binding constructor call beneath a direct fluent policy chain. */
 export const blockBindingSourceCall = (
   node: ESTree.CallExpression,
 ): ESTree.CallExpression => directBindingCall(node)
 
-const isMapBindingCall = (
+/** Resolves a Binding constructor to its Definition owner. */
+export const blockBindingOwner = (
   node: ESTree.CallExpression,
-  references: WeakMap<ESTree.Node, Reference> | undefined,
-): boolean =>
-  references !== undefined &&
-  Option.exists(resolveFoldkitApiPath(references, node.callee), path => {
-    const [namespace, helperName, extraMember] = path
-    return (
-      namespace === 'MapBinding' &&
-      helperName === 'makeMapBinding' &&
-      extraMember === undefined
-    )
-  })
+  references?: WeakMap<ESTree.Node, Reference>,
+  importerFilename?: string,
+): Option.Option<DefinitionMethodOwner> => {
+  const bindingCall = directBindingCall(node)
+  return Option.orElse(
+    ownedDefinitionMethodOwner(
+      bindingCall.callee,
+      'makeMapBinding',
+      references,
+      importerFilename,
+    ),
+    () =>
+      ownedDefinitionMethodOwner(
+        bindingCall.callee,
+        'makeBinding',
+        references,
+        importerFilename,
+      ),
+  )
+}
 
-/** Recognizes a Definition method or dedicated Foldkit helper Binding call. */
+/** Recognizes a parent-owned Definition Binding constructor. */
 export const isBlockBindingCall = (
   node: ESTree.CallExpression,
   references?: WeakMap<ESTree.Node, Reference>,
-): boolean => {
-  const bindingCall = directBindingCall(node)
-  return (
-    isMapBindingCall(bindingCall, references) ||
-    isOwnedDefinitionCall(bindingCall, 'makeBinding', references)
-  )
-}
+  importerFilename?: string,
+): boolean =>
+  Option.isSome(blockBindingOwner(node, references, importerFilename))
 
 /** Returns a parent-owned Binding configuration, or a standalone fold configuration. */
 export const blockBindingConfiguration = (
   node: ESTree.CallExpression,
   references?: WeakMap<ESTree.Node, Reference>,
+  importerFilename?: string,
 ): ESTree.CallExpression['arguments'][number] | undefined => {
   const bindingCall = directBindingCall(node)
 
   return Option.getOrUndefined(
     Array.get(
       bindingCall.arguments,
-      isMapBindingCall(bindingCall, references)
-        ? 2
-        : Option.exists(staticMemberPath(bindingCall.callee), path =>
-              Option.contains(Array.last(path.members), 'makeBinding'),
-            )
-          ? 1
-          : 0,
+      isBlockBindingCall(bindingCall, references, importerFilename) ? 1 : 0,
     ),
   )
 }
@@ -1042,51 +1056,55 @@ export const blockBindingConfiguration = (
 export const blockBindingChild = (
   node: ESTree.CallExpression,
   references?: WeakMap<ESTree.Node, Reference>,
+  importerFilename?: string,
 ): unknown => {
   const bindingCall = directBindingCall(node)
-  if (isMapBindingCall(bindingCall, references)) {
-    return Option.getOrUndefined(Array.get(bindingCall.arguments, 1))
-  }
-  if (!isOwnedDefinitionCall(bindingCall, 'makeBinding', references)) {
-    return undefined
-  }
-  return Option.getOrUndefined(Array.head(bindingCall.arguments))
-}
-
-/** Returns the parent Definition supplied to a recognized Binding call. */
-export const blockBindingParent = (
-  node: ESTree.CallExpression,
-  references?: WeakMap<ESTree.Node, Reference>,
-): unknown => {
-  const bindingCall = directBindingCall(node)
-  if (isMapBindingCall(bindingCall, references)) {
-    return Option.getOrUndefined(Array.head(bindingCall.arguments))
-  }
-  if (
-    !isMemberExpression(bindingCall.callee) ||
-    !Option.contains(staticMemberName(bindingCall.callee), 'makeBinding')
-  ) {
-    return undefined
-  }
-  return bindingCall.callee.object
+  return isBlockBindingCall(bindingCall, references, importerFilename)
+    ? Option.getOrUndefined(Array.head(bindingCall.arguments))
+    : undefined
 }
 
 /** Recognizes static and keyed parent-owned child Bindings from their configuration. */
 export const blockBindingMethod = (
   node: ESTree.CallExpression,
   references?: WeakMap<ESTree.Node, Reference>,
+  importerFilename?: string,
 ): Option.Option<'Static' | 'Keyed'> => {
   const bindingCall = directBindingCall(node)
-  if (isMapBindingCall(bindingCall, references)) {
+  if (
+    isOwnedDefinitionCall(
+      bindingCall,
+      'makeMapBinding',
+      references,
+      importerFilename,
+    )
+  ) {
     return Option.some('Keyed')
   }
-  if (!isOwnedDefinitionCall(bindingCall, 'makeBinding', references)) {
+  if (
+    !isOwnedDefinitionCall(
+      bindingCall,
+      'makeBinding',
+      references,
+      importerFilename,
+    )
+  ) {
     return Option.none()
   }
 
   if (
-    bindingConfigHasProperties(node, ['field', 'key'], references) &&
-    bindingConfigHasStaticStringProperty(node, 'key', references)
+    bindingConfigHasProperties(
+      node,
+      ['field', 'key'],
+      references,
+      importerFilename,
+    ) &&
+    bindingConfigHasStaticStringProperty(
+      node,
+      'key',
+      references,
+      importerFilename,
+    )
   ) {
     return Option.some('Keyed')
   }
@@ -1096,14 +1114,20 @@ export const blockBindingMethod = (
       node,
       ['readAll', 'key', 'read', 'writeAt'],
       references,
+      importerFilename,
     )
   ) {
     return Option.some('Keyed')
   }
 
   if (
-    bindingConfigHasProperties(node, ['read', 'write'], references) ||
-    bindingConfigHasProperties(node, ['field'], references)
+    bindingConfigHasProperties(
+      node,
+      ['read', 'write'],
+      references,
+      importerFilename,
+    ) ||
+    bindingConfigHasProperties(node, ['field'], references, importerFilename)
   ) {
     return Option.some('Static')
   }
@@ -1115,6 +1139,7 @@ export const blockBindingMethod = (
 export const isBindingPolicyCall = (
   node: ESTree.CallExpression,
   references?: WeakMap<ESTree.Node, Reference>,
+  importerFilename?: string,
   visited: ReadonlySet<Variable> = new Set(),
 ): boolean => {
   if (
@@ -1126,7 +1151,9 @@ export const isBindingPolicyCall = (
 
   const source = node.callee.object
   if (isCallExpression(source)) {
-    return Option.isSome(blockBindingMethod(source, references))
+    return Option.isSome(
+      blockBindingMethod(source, references, importerFilename),
+    )
   }
   if (references === undefined || !isIdentifierReference(source)) {
     return false
@@ -1148,14 +1175,25 @@ export const isBindingPolicyCall = (
       }
 
       return (
-        Option.isSome(blockBindingMethod(definition.node.init, references)) ||
-        isBindingPolicyCall(definition.node.init, references, nextVisited)
+        Option.isSome(
+          blockBindingMethod(
+            definition.node.init,
+            references,
+            importerFilename,
+          ),
+        ) ||
+        isBindingPolicyCall(
+          definition.node.init,
+          references,
+          importerFilename,
+          nextVisited,
+        )
       )
     })
   })
 }
 
-/** Finds the owner before an authoring method or its focused Message adapter. */
+/** Finds the owner before an authoring method or its Message adapter. */
 export const definitionMethodOwnerPath = (
   callee: unknown,
   method: string,
@@ -1166,7 +1204,12 @@ export const definitionMethodOwnerPath = (
     }
     if (
       Array.contains(
-        ['makeFieldsStep', 'makeCommandsStep', 'makeOutMessageStep'],
+        [
+          'makeFieldsStep',
+          'makeCommandsStep',
+          'makeOutMessageStep',
+          'makeStep',
+        ],
         method,
       ) &&
       Option.contains(Array.last(path.members), 'fromMessage') &&
@@ -1177,13 +1220,52 @@ export const definitionMethodOwnerPath = (
     return Option.none()
   })
 
+const importedPathThroughAliases = (
+  references: WeakMap<ESTree.Node, Reference>,
+  path: StaticMemberPath,
+  visited: ReadonlySet<Variable> = new Set(),
+): Option.Option<ImportedPath> => {
+  const imported = resolveImportedPath(references, path.root)
+  if (Option.isSome(imported)) {
+    return Option.some({
+      ...imported.value,
+      members: [...imported.value.members, ...path.members],
+      localMembers: [path.root.name, ...path.members],
+    })
+  }
+
+  return Option.gen(function* () {
+    const variable = yield* resolvedVariable(references, path.root)
+    if (visited.has(variable) || Array.length(variable.defs) !== 1) {
+      return yield* Option.none()
+    }
+    const [definition] = variable.defs
+    if (
+      definition?.type !== 'Variable' ||
+      !isVariableDeclarator(definition.node) ||
+      !isIdentifier(definition.node.id) ||
+      !isVariableDeclaration(definition.node.parent) ||
+      definition.node.parent.kind !== 'const'
+    ) {
+      return yield* Option.none()
+    }
+
+    const alias = yield* staticMemberPath(definition.node.init)
+    return yield* importedPathThroughAliases(
+      references,
+      { root: alias.root, members: [...alias.members, ...path.members] },
+      new Set([...visited, variable]),
+    )
+  })
+}
+
 const importedOwnerForPath = (
   references: WeakMap<ESTree.Node, Reference>,
   path: StaticMemberPath,
 ): Option.Option<Pick<ImportedPath, 'source' | 'members'>> =>
-  Option.map(resolveImportedPath(references, path.root), imported => ({
+  Option.map(importedPathThroughAliases(references, path), imported => ({
     source: imported.source,
-    members: [...imported.members, ...path.members],
+    members: imported.members,
   }))
 
 const directlyExportedDefinitionMethodOwner = (
@@ -1194,6 +1276,12 @@ const directlyExportedDefinitionMethodOwner = (
   if (!importsFoldkitBlockNamespace(source)) {
     return Option.none()
   }
+
+  const isBlockAuthoringOwner = (name: string): boolean =>
+    new RegExp(
+      `^\\s*(?:export\\s+)?const\\s+${escapedRegExp(name)}\\s*=\\s*Block\\.(?:makeDefinition|make)\\s*\\(`,
+      'mu',
+    ).test(source.text)
 
   const declarations = source.text.matchAll(
     /^\s*export\s+const\s*\{([^}]*)\}\s*=\s*([A-Za-z_$][\w$]*)/gmu,
@@ -1221,11 +1309,18 @@ const directlyExportedDefinitionMethodOwner = (
       continue
     }
 
-    const ownsFoldkitDefinition = new RegExp(
-      `^\\s*(?:export\\s+)?const\\s+${escapedRegExp(ownerName)}\\s*=\\s*Block\\.makeDefinition\\s*\\(`,
+    if (isBlockAuthoringOwner(ownerName)) {
+      return Option.some(ownerName)
+    }
+
+    const compositionOwner = new RegExp(
+      `^\\s*(?:export\\s+)?const\\s+${escapedRegExp(ownerName)}\\s*=\\s*([A-Za-z_$][\\w$]*)\\.makeComposition\\s*\\(`,
       'mu',
-    ).test(source.text)
-    if (ownsFoldkitDefinition) {
+    ).exec(source.text)?.[1]
+    if (
+      compositionOwner !== undefined &&
+      isBlockAuthoringOwner(compositionOwner)
+    ) {
       return Option.some(ownerName)
     }
   }
@@ -1280,12 +1375,12 @@ const isObjectPattern = (node: unknown): node is ESTree.ObjectPattern =>
   'type' in node &&
   node.type === 'ObjectPattern'
 
-const isFocusedMessageAdapterPath = (
+const isMessageStepAdapterPath = (
   path: StaticMemberPath,
   method: string,
 ): boolean =>
   Array.contains(
-    ['makeFieldsStep', 'makeCommandsStep', 'makeOutMessageStep'],
+    ['makeFieldsStep', 'makeCommandsStep', 'makeOutMessageStep', 'makeStep'],
     method,
   ) &&
   Option.contains(Array.last(path.members), 'fromMessage') &&
@@ -1321,6 +1416,7 @@ const localDefinitionMethodOwner = (
       return {
         importedPath,
         isFromMessageAdapter: false,
+        isImportedHelper: true,
         path: { root: helper, members: [] },
       }
     }
@@ -1337,6 +1433,30 @@ const localDefinitionMethodOwner = (
     if (isIdentifier(definition.node.id)) {
       const initializer = yield* Option.fromNullishOr(definition.node.init)
       const aliasPath = yield* staticMemberPath(initializer)
+      const imported = importedPathThroughAliases(
+        references,
+        isMessageStepAdapterPath(aliasPath, method)
+          ? { ...aliasPath, members: aliasPath.members.slice(0, -1) }
+          : aliasPath,
+      )
+      if (
+        Option.isSome(imported) &&
+        Array.length(imported.value.members) === 1
+      ) {
+        const importedPath = yield* importedDefinitionMethodOwner(
+          references,
+          importerFilename,
+          imported.value,
+          method,
+        )
+        return {
+          importedPath,
+          isFromMessageAdapter: isMessageStepAdapterPath(aliasPath, method),
+          isImportedHelper: true,
+          path: { root: aliasPath.root, members: [] },
+        }
+      }
+
       const directOwner = definitionMethodOwnerPath(initializer, method)
       if (Option.isSome(directOwner)) {
         if (!isOwnedDefinitionPath(directOwner.value, references)) {
@@ -1347,13 +1467,13 @@ const localDefinitionMethodOwner = (
           importedPath: Option.getOrUndefined(
             importedOwnerForPath(references, directOwner.value),
           ),
-          isFromMessageAdapter: isFocusedMessageAdapterPath(aliasPath, method),
+          isFromMessageAdapter: isMessageStepAdapterPath(aliasPath, method),
           path: directOwner.value,
         }
       }
 
       const isFocusedAdapter =
-        isFocusedMessageAdapterPath(aliasPath, method) &&
+        isMessageStepAdapterPath(aliasPath, method) &&
         Array.length(aliasPath.members) === 1 &&
         Option.contains(Array.head(aliasPath.members), 'fromMessage')
       if (
@@ -1389,6 +1509,24 @@ const localDefinitionMethodOwner = (
 
     const initializer = yield* Option.fromNullishOr(definition.node.init)
     const path = yield* staticMemberPath(initializer)
+    const imported = importedPathThroughAliases(references, path)
+    if (
+      Option.isSome(imported) &&
+      Array.isReadonlyArrayEmpty(imported.value.members)
+    ) {
+      const importedPath = yield* importedDefinitionMethodOwner(
+        references,
+        importerFilename,
+        { ...imported.value, members: [method] },
+        method,
+      )
+      return {
+        importedPath,
+        isFromMessageAdapter: false,
+        isImportedHelper: true,
+        path,
+      }
+    }
     if (!isOwnedDefinitionPath(path, references)) {
       return yield* Option.none()
     }
@@ -1431,6 +1569,7 @@ const isOwnedDefinitionPath = (
           apiPath => {
             const resolvedPath = Array.join(apiPath, '.')
             return (
+              resolvedPath === 'Block.make' ||
               resolvedPath === 'Block.makeDefinition' ||
               resolvedPath === 'Block.makeNamespace'
             )
@@ -1462,13 +1601,56 @@ const isOwnedDefinitionPath = (
       )
     }
 
-    return variable.defs.some(
-      definition =>
-        definition.type === 'Variable' &&
-        isVariableDeclarator(definition.node) &&
-        isCallExpression(definition.node.init) &&
-        isOwnedStage(definition.node.init),
-    )
+    return variable.defs.some(definition => {
+      if (
+        definition.type === 'ImportBinding' &&
+        definition.parent?.type === 'ImportDeclaration'
+      ) {
+        const { value: source } = definition.parent.source
+        return (
+          source.startsWith('.') ||
+          source.startsWith('@/') ||
+          source.startsWith('~/')
+        )
+      }
+      if (
+        definition.type !== 'Variable' ||
+        !isVariableDeclarator(definition.node)
+      ) {
+        return false
+      }
+      const initializer = definition.node.init
+      if (isCallExpression(initializer)) {
+        return isOwnedStage(initializer)
+      }
+      if (
+        !isVariableDeclaration(definition.node.parent) ||
+        definition.node.parent.kind !== 'const'
+      ) {
+        return false
+      }
+
+      const aliasPath = staticMemberPath(initializer)
+      if (Option.isNone(aliasPath)) {
+        return false
+      }
+      const imported = resolveImportedPath(references, initializer)
+      if (Option.isSome(imported)) {
+        const { source } = imported.value
+        return (
+          source.startsWith('.') ||
+          source.startsWith('@/') ||
+          source.startsWith('~/')
+        )
+      }
+      return (
+        Array.isReadonlyArrayEmpty(aliasPath.value.members) &&
+        Option.exists(
+          resolvedVariable(references, aliasPath.value.root),
+          owner => isOwnedVariable(owner, new Set([...visited, variable])),
+        )
+      )
+    })
   }
 
   return Option.exists(resolvedVariable(references, path.root), isOwnedVariable)
@@ -1481,13 +1663,42 @@ export const ownedDefinitionMethodOwner = (
   references: WeakMap<ESTree.Node, Reference> | undefined,
   importerFilename?: string,
 ): Option.Option<DefinitionMethodOwner> => {
+  if (references !== undefined) {
+    const calleePath = staticMemberPath(callee)
+    const imported = Option.flatMap(calleePath, path =>
+      importedPathThroughAliases(
+        references,
+        isMessageStepAdapterPath(path, method)
+          ? { ...path, members: path.members.slice(0, -1) }
+          : path,
+      ),
+    )
+    if (Option.isSome(imported) && Array.length(imported.value.members) === 1) {
+      return Option.gen(function* () {
+        const importedPath = yield* importedDefinitionMethodOwner(
+          references,
+          importerFilename,
+          imported.value,
+          method,
+        )
+        const path = yield* staticMemberPath(callee)
+        return {
+          importedPath,
+          isFromMessageAdapter: isMessageStepAdapterPath(path, method),
+          isImportedHelper: true,
+          path: { root: path.root, members: [] },
+        }
+      })
+    }
+  }
+
   const directOwner = definitionMethodOwnerPath(callee, method)
   if (Option.isSome(directOwner)) {
     if (references === undefined) {
       return Option.some({
         importedPath: undefined,
         isFromMessageAdapter: Option.exists(staticMemberPath(callee), path =>
-          isFocusedMessageAdapterPath(path, method),
+          isMessageStepAdapterPath(path, method),
         ),
         path: directOwner.value,
       })
@@ -1500,7 +1711,7 @@ export const ownedDefinitionMethodOwner = (
         importedOwnerForPath(references, directOwner.value),
       ),
       isFromMessageAdapter: Option.exists(staticMemberPath(callee), path =>
-        isFocusedMessageAdapterPath(path, method),
+        isMessageStepAdapterPath(path, method),
       ),
       path: directOwner.value,
     })
@@ -1512,7 +1723,7 @@ export const ownedDefinitionMethodOwner = (
 
   return Option.flatMap(staticMemberPath(callee), path => {
     const isFocusedAdapter =
-      isFocusedMessageAdapterPath(path, method) &&
+      isMessageStepAdapterPath(path, method) &&
       Array.length(path.members) === 1 &&
       Option.contains(Array.head(path.members), 'fromMessage')
     if (!Array.isReadonlyArrayEmpty(path.members) && !isFocusedAdapter) {

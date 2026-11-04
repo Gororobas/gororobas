@@ -3,39 +3,59 @@ import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 export const Theme = Schema.Literals(['Light', 'Dark', 'System'])
+export type Theme = typeof Theme.Type
 
 export const Model = Schema.Struct({ theme: Theme })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ChangedTheme: { theme: Theme },
-  RequestedThemeChange: { theme: Theme },
-  RequestedReset: {},
   CompletedSaveTheme: {},
   FailedSaveTheme: {},
 })
+export type Message = typeof Message.Type
+
+export const InMessage = defineMessageUnion({
+  RequestedThemeChange: { theme: Theme },
+  RequestedReset: {},
+})
+export type InMessage = typeof InMessage.Type
 
 export const OutMessage = defineMessageUnion({
   ChangedTheme: { theme: Theme },
 })
-
-export const SettingsDefinition = Block.makeDefinition('Settings', {
-  Model,
-  Message,
-  OutMessage,
-})
-
-export const { makeStep, makeNoopStep } = SettingsDefinition
-
-export const SettingsComposition = SettingsDefinition.makeComposition()
+export type OutMessage = typeof OutMessage.Type
 
 export class SettingsStore extends Context.Service<
   SettingsStore,
   Readonly<{
-    saveTheme: (theme: typeof Theme.Type) => Effect.Effect<void, Error>
+    saveTheme: (theme: Theme) => Effect.Effect<void, Error>
   }>
 >()('SettingsStore') {}
 
-export const SaveTheme = SettingsDefinition.makeCommand('SaveTheme', {
+export const SettingsKey = Symbol('Settings')
+
+export const SettingsBlock = Block.make('Settings', {
+  key: SettingsKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  effects: { services: [SettingsStore] },
+  inMessageOutputs: {
+    RequestedThemeChange: { outMessage: OutMessage },
+    RequestedReset: { outMessage: OutMessage },
+  },
+
+  Model,
+  Message,
+  InMessage,
+  OutMessage,
+})
+
+export const { makeStep, makeNoopStep } = SettingsBlock
+
+export const SettingsComposition = SettingsBlock.makeComposition()
+
+export const SaveTheme = SettingsBlock.makeCommand('SaveTheme', {
   args: { theme: Theme },
   messages: [Message.CompletedSaveTheme, Message.FailedSaveTheme],
   handler: function* () {

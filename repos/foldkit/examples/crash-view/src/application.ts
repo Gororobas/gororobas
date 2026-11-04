@@ -1,25 +1,39 @@
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block, Runtime } from 'foldkit'
 import { Document, HtmlBuilder } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 export const Model = Schema.Null
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedCrash: {},
 })
+export type Message = typeof Message.Type
+type ClickedCrash = typeof Message.ClickedCrash.Type
 
-export const ApplicationComposition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
   Model,
   Message,
-}).makeComposition()
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
+})
+
+type ApplicationMessage = Block.ExecutableOf<
+  typeof ApplicationBlock
+>['Message']['Type']
+
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 
 const handleClickedCrash = (
-  _model: typeof Model.Type,
-  _message: typeof Message.ClickedCrash.Type,
-): { model: typeof Model.Type } => {
+  _model: Model,
+  _message: ClickedCrash,
+): { model: Model } => {
   throw new Error('This is a simulated crash!')
 }
 
@@ -36,7 +50,7 @@ export const view = ApplicationComposition.makeView((_model, h) => ({
   body: h.div(
     [h.Class('min-h-screen bg-white flex items-center justify-center')],
     [
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedCrash(),
           toView: attributes =>
@@ -59,7 +73,7 @@ export const view = ApplicationComposition.makeView((_model, h) => ({
 // CRASH
 
 export const crashView = (
-  { error }: Runtime.CrashContext<typeof Model.Type, typeof Message.Type>,
+  { error }: Runtime.CrashContext<Model, ApplicationMessage>,
   h: HtmlBuilder<never>,
 ): Document => ({
   title: 'Crash View Example | crashed',
@@ -78,7 +92,7 @@ export const crashView = (
             ['Something went wrong'],
           ),
           h.p([h.Class('text-gray-700 mb-6 leading-relaxed')], [error.message]),
-          Button.view(
+          buttonView(
             {
               toView: attributes =>
                 h.button(
@@ -101,13 +115,13 @@ export const crashView = (
   ),
 })
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)

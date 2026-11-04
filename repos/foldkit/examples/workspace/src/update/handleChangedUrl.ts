@@ -2,18 +2,16 @@ import { Option } from 'effect'
 import { Update } from 'foldkit'
 
 import { makeFieldsStep, makeStep } from '../definition'
-import type { Message } from '../message'
-import type { Model } from '../model'
+import type { ChangedUrl } from '../message'
 import { urlToApplicationRoute } from '../route'
-import { initializeActiveChildrenStep } from './initializeActiveChildren'
+import { initChildren } from './initChildren'
 
-export const handleChangedUrlStep = makeStep(
-  (_model: typeof Model.Type, { url }: typeof Message.ChangedUrl.Type) =>
-    Update.combineSteps([
-      makeFieldsStep(() => ({
-        route: () => urlToApplicationRoute(url),
-        maybeNotice: () => Option.none(),
-      })),
-      initializeActiveChildrenStep,
-    ]),
+export const handleChangedUrl = makeStep.fromMessage(({ url }: ChangedUrl) =>
+  Update.combineSteps([
+    makeFieldsStep(() => ({
+      route: () => urlToApplicationRoute(url),
+      maybeNotice: () => Option.none(),
+    })),
+    initChildren,
+  ]),
 )

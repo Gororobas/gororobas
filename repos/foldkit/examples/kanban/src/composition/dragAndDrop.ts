@@ -1,15 +1,14 @@
 import { Array, Option, pipe } from 'effect'
 import { modifyFields } from 'foldkit/struct'
 
-import { DragAndDropBlock } from '@foldkit/ui'
-import { maybeDraggedItemId } from '@foldkit/ui/dragAndDrop'
+import { DragAndDropBlock, maybeDraggedItemId } from '@foldkit/ui/dragAndDrop'
 
 import { SaveBoard } from '../command'
-import { ApplicationDefinition, makeFieldsStep, makeStep } from '../definition'
+import { ApplicationBlock, makeFieldsStep, makeStep } from '../definition'
 import { Column } from '../domain'
 
 const findCardTitle = (
-  columns: ReadonlyArray<typeof Column.Column.Type>,
+  columns: ReadonlyArray<Column.Column>,
   cardId: string,
 ): string =>
   pipe(
@@ -23,7 +22,7 @@ const findCardTitle = (
   )
 
 const findColumnName = (
-  columns: ReadonlyArray<typeof Column.Column.Type>,
+  columns: ReadonlyArray<Column.Column>,
   columnId: string,
 ): string =>
   pipe(
@@ -35,7 +34,7 @@ const findColumnName = (
     }),
   )
 
-const foldDragAndDropOutMessage = ApplicationDefinition.makeOutMessageFold(
+const foldDragAndDropOutMessage = ApplicationBlock.makeOutMessageFold(
   DragAndDropBlock,
   {
     StartedKeyboardDrag: ({ itemId }) =>
@@ -83,7 +82,7 @@ const foldDragAndDropOutMessage = ApplicationDefinition.makeOutMessageFold(
   },
 )
 
-export const DragAndDropBinding = ApplicationDefinition.makeBinding(
+export const DragAndDropBinding = ApplicationBlock.makeBinding(
   DragAndDropBlock,
   {
     field: 'dragAndDrop',

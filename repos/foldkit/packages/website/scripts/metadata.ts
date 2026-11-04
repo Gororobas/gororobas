@@ -1,11 +1,11 @@
 import { Array, Match, Option } from 'effect'
 
+import { findBySlug } from '../src/blocks/exampleDetail/meta'
 import {
   BLOG_DESCRIPTION,
   BLOG_SECTION,
   BLOG_TITLE,
 } from '../src/page/blog/meta'
-import { findBySlug } from '../src/page/example/meta'
 import { type ApplicationRoute } from '../src/route'
 import { blogPosts } from './blogPosts'
 
@@ -45,7 +45,7 @@ const tooling = (title: string, description: string): PageMetadata =>
   docs(title, description, 'Tooling')
 
 type StaticRouteTag = Exclude<
-  (typeof ApplicationRoute.Type)['_tag'],
+  ApplicationRoute['_tag'],
   'ApiModule' | 'BlogPost' | 'ExampleDetail' | 'Playground'
 >
 
@@ -488,7 +488,7 @@ const METADATA_BY_TAG: Record<StaticRouteTag, PageMetadata> = {
 }
 
 export const routeToMetadata = (
-  route: typeof ApplicationRoute.Type,
+  route: ApplicationRoute,
   resolveApiModuleName: ApiModuleNameResolver,
 ): PageMetadata =>
   Match.value(route).pipe(

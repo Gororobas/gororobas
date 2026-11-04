@@ -1,4 +1,4 @@
-import { Schema, Tuple } from 'effect'
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
@@ -8,23 +8,31 @@ const Model = Schema.Struct({
   counter: CounterBlock.Model,
   revision: Schema.Number,
 })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({
   ClickedResetCounter: {},
   ClickedIncrementRevision: {},
   CompletedSave: {},
 })
-const ApplicationDefinition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+
+export const ApplicationKey = Symbol('Application')
+
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = ApplicationDefinition
+const { makeFieldsStep, makeNoopStep } = ApplicationBlock
 
-const CounterBinding = ApplicationDefinition.makeBinding(CounterBlock, {
+const CounterBinding = ApplicationBlock.makeBinding(CounterBlock, {
   field: 'counter',
-  init: { contextToArgs: () => Tuple.make(0) },
+  init: { contextToArgs: () => [0] },
 })
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [CounterBinding],
 })
 

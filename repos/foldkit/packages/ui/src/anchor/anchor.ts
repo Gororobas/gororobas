@@ -27,7 +27,6 @@ export const Placement = Schema.Literals([
   'left-start',
   'left-end',
 ])
-
 export type Placement = typeof Placement.Type
 
 /** Schema mirroring `@floating-ui/dom`'s `Padding` type: a uniform number or a
@@ -41,7 +40,6 @@ export const Padding = Schema.Union([
     left: Schema.optionalKey(Schema.Number),
   }),
 ])
-
 export type Padding = typeof Padding.Type
 
 /** Static configuration for anchor-based positioning of a floating element relative to a button. */
@@ -53,10 +51,10 @@ export const AnchorConfig = Schema.Struct({
   portal: Schema.optional(Schema.Boolean),
   isPlacementLocked: Schema.optional(Schema.Boolean),
 })
-
 export type AnchorConfig = typeof AnchorConfig.Type
 
 const PORTAL_ROOT_ID = 'foldkit-portal-root'
+const CONTAINING_PORTAL_ROOT_ATTRIBUTE = 'data-foldkit-owned-portal-root'
 const DIALOG_PORTAL_ROOT_ATTRIBUTE = 'data-foldkit-portal-root'
 
 const getOrCreateContainingRootPortalRoot = (element: Element): HTMLElement => {
@@ -78,6 +76,7 @@ const getOrCreateContainingRootPortalRoot = (element: Element): HTMLElement => {
 
   const portalRoot = document.createElement('div')
   portalRoot.id = PORTAL_ROOT_ID
+  portalRoot.setAttribute(CONTAINING_PORTAL_ROOT_ATTRIBUTE, '')
 
   // NOTE: prepended (not appended) so portaled overlays sit BEFORE the app's
   // listbox/popover/menu wrappers in tree order. Those wrappers are
@@ -131,8 +130,9 @@ const getOrCreatePortalRoot = (element: Element): HTMLElement =>
  *  the element's containing root: the shadow root when mounted inside one,
  *  otherwise `document.body`. Either way the element escapes the clipping
  *  and stacking contexts of the ancestors it leaves, and keeps its root's
- *  scoped styles. The cleanup removes the portal root once it is empty, so
- *  the next open creates a fresh one. Use `portalBackdrop` for a
+ *  scoped styles. The cleanup removes an empty portal root created by Foldkit,
+ *  so the next open creates a fresh one. App-owned roots are preserved. Use
+ *  `portalBackdrop` for a
  *  click-outside backdrop. Designed to be called from inside an `OnMount`
  *  action: the consumer wraps the call in `Effect.sync` and stashes the
  *  returned cleanup in the `Mount` result. */
@@ -155,7 +155,11 @@ export const portalToContainingRoot = (element: Element): (() => void) => {
     // Dialog roots must also be removed so a reopened dialog appends its portal
     // root after the newly rendered content. Occupied shared roots are retained;
     // opening a modal overlay while one exists can still make its panel inert.
-    if (!portalRoot.hasChildNodes()) {
+    if (
+      (portalRoot.hasAttribute(CONTAINING_PORTAL_ROOT_ATTRIBUTE) ||
+        portalRoot.hasAttribute(DIALOG_PORTAL_ROOT_ATTRIBUTE)) &&
+      !portalRoot.hasChildNodes()
+    ) {
       portalRoot.remove()
     }
   }

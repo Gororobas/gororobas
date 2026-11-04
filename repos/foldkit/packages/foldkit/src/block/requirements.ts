@@ -19,11 +19,23 @@ import type {
   RequirementsOfBindings,
   ValidateBindingOperationNames,
 } from './binding.js'
+import type { InputOperationOutputOf } from './compiledOperation.js'
 import type { LocalMountsTypeId } from './definition.js'
+import type { LayerOutputs } from './layerOutputs.js'
 import type { IsConcreteOwner, Owner } from './owner.js'
 import type { Qualify, Scoped } from './scope.js'
 
 type AnyFunction = (...args: ReadonlyArray<any>) => any
+
+/** @internal Carries runtime-provided resource capabilities across a private graph boundary. */
+export declare const PublicRuntimeServicesTypeId: unique symbol
+
+declare const PublicSubscriptionRequirementsTypeId: unique symbol
+
+/** @internal Retains a Subscription's raw requirements through a private execution adapter. */
+export interface SubscriptionRequirementsEvidence<Requirements> {
+  readonly [PublicSubscriptionRequirementsTypeId]: Requirements
+}
 
 type ReturnOf<Function extends AnyFunction> = Function extends (
   ...args: ReadonlyArray<never>
@@ -281,12 +293,7 @@ export type ManagedResourceLifecycleRequirements<ManagedResources> =
 export type ManagedResourceRuntimeServices<ManagedResources> =
   ManagedResourceServicesOf<ManagedResources>
 
-/**
- * @internal Extracts the services produced by a Layer recipe.
- */
-export type LayerOutputs<LayerRecipe> = LayerRecipe extends Layer.Any
-  ? Layer.Success<LayerRecipe>
-  : never
+export type { LayerOutputs } from './layerOutputs.js'
 
 /**
  * @internal Extracts the services needed to construct a Layer recipe.
@@ -370,10 +377,14 @@ type BindingRuntimeServices<Binding> =
 
 type ChildRuntimeServices<Block> =
   Block extends Readonly<{
-    bindings: ReadonlyArray<infer Binding>
+    [PublicRuntimeServicesTypeId]: infer Services
   }>
-    ? BindingRuntimeServices<Binding>
-    : never
+    ? Services
+    : Block extends Readonly<{
+          bindings: ReadonlyArray<infer Binding>
+        }>
+      ? BindingRuntimeServices<Binding>
+      : never
 
 type RuntimeServicesOfBlockMember<Block> = Block extends unknown
   ?
@@ -410,7 +421,27 @@ type BlockLocalMounts<Block> =
       ? Mounts
       : readonly []
 
+type ExposedOperations<Block> =
+  Block extends Readonly<{ operations: infer Operations }>
+    ? Operations[keyof Operations]
+    : never
+
+type ExposedOperationOutput<Block> = InputOperationOutputOf<
+  ExposedOperations<Block>
+>
+
+type ExposedOperationRequirements<Block> =
+  IsAny<ExposedOperationOutput<Block>> extends true
+    ? ExposedOperationOutput<Block>
+    : IsUnknown<ExposedOperationOutput<Block>> extends true
+      ? unknown
+      : Update.RequirementsOfResult<ExposedOperationOutput<Block>>
+
+type ExposedOperationRegistrationEvidence<Block> =
+  Update.RegistrationEvidenceOf<ExposedOperationOutput<Block>>
+
 type LocalOperationRequirements<Block> =
+  | ExposedOperationRequirements<Block>
   | (Block extends Readonly<{ init: infer Init }>
       ? ProducerRequirements<Init>
       : never)
@@ -544,6 +575,10 @@ type InvalidHostDefinitions<Block> =
 
 type PrecisionFailures<Block> =
   | ErasedRequirement<
+      'exposed input operations',
+      ExposedOperationRequirements<Block>
+    >
+  | ErasedRequirement<
       'init, update, or exposed operations',
       Block extends Readonly<{ init: infer Init }>
         ? ProducerRequirements<Init>
@@ -609,6 +644,7 @@ type ValidateBlockOperationNames<Block> =
     : unknown
 
 type LocalOperationRegistrationEvidence<Block> =
+  | ExposedOperationRegistrationEvidence<Block>
   | (Block extends Readonly<{ init: infer Init }>
       ? ProducerRegistrationEvidence<Init>
       : never)
@@ -711,7 +747,9 @@ type FastLocalCompositionChannels<Composition> = [Composition] extends [
 ]
   ? Readonly<{
       initRequirements: ProducerRequirements<Init>
-      updateRequirements: ProducerRequirements<UpdateFunction>
+      updateRequirements:
+        | ProducerRequirements<UpdateFunction>
+        | ExposedOperationRequirements<Composition>
       subscriptionRequirements: SubscriptionRequirements<Subscriptions>
       managedResourceRequirements: ManagedResourceLifecycleRequirements<ManagedResources>
       managedResourceServices: ManagedResourceRuntimeServices<ManagedResources>
@@ -723,6 +761,7 @@ type FastLocalCompositionChannels<Composition> = [Composition] extends [
       registrationEvidence:
         | ProducerRegistrationEvidence<Init>
         | ProducerRegistrationEvidence<UpdateFunction>
+        | ExposedOperationRegistrationEvidence<Composition>
       registeredChildEvidence: RequirementsOfBindings<Children>
     }>
   : never
@@ -731,11 +770,11 @@ type FallbackLocalCompositionChannels<Composition> = Readonly<{
   initRequirements: Composition extends Readonly<{ init: infer Init }>
     ? ProducerRequirements<Init>
     : never
-  updateRequirements: Composition extends Readonly<{
-    update: infer UpdateFunction
-  }>
-    ? ProducerRequirements<UpdateFunction>
-    : never
+  updateRequirements:
+    | ExposedOperationRequirements<Composition>
+    | (Composition extends Readonly<{ update: infer UpdateFunction }>
+        ? ProducerRequirements<UpdateFunction>
+        : never)
   subscriptionRequirements: Composition extends Readonly<{
     subscriptions: infer Subscriptions
   }>
@@ -764,6 +803,7 @@ type LocalCompositionChannels<Composition> =
 type ValidateLocalCompositionChannels<
   Composition,
   Channels extends LocalCompositionChannelsShape,
+  HandlerValidation extends 'Indexed' | 'Equivalent' = 'Indexed',
   LocalRequirements =
     | Channels['initRequirements']
     | Channels['updateRequirements']
@@ -848,11 +888,15 @@ type ValidateLocalCompositionChannels<
     : Readonly<{
         'Block hostHandlers must match residual handler requirements': UnexpectedHostHandler
       }>) &
-  ValidHandlerContracts<HandlerContract>
+  ValidHandlerContracts<HandlerContract, never, HandlerValidation>
 
-type ValidateLocalComposition<Composition> = ValidateLocalCompositionChannels<
+type ValidateLocalComposition<
   Composition,
-  LocalCompositionChannels<Composition>
+  HandlerValidation extends 'Indexed' | 'Equivalent',
+> = ValidateLocalCompositionChannels<
+  Composition,
+  LocalCompositionChannels<Composition>,
+  HandlerValidation
 >
 
 type HandlerContracts<Block> = HandlerRequirements<
@@ -888,16 +932,23 @@ type ValidateDefinitionComposition<Definition, Composition> =
 export type ValidateComposition<Definition, Composition> =
   ValidateDefinitionComposition<Definition, Composition>
 
-type ValidateDefinitionImplementation<Definition, Composition> =
+type ValidateDefinitionImplementation<
+  Definition,
+  Composition,
+  HandlerValidation extends 'Indexed' | 'Equivalent',
+> =
   Definition extends Readonly<{ owner: infer OwnerValue }>
     ? IsConcreteOwner<OwnerValue> extends true
-      ? ValidateLocalComposition<Composition>
+      ? ValidateLocalComposition<Composition, HandlerValidation>
       : ValidateHostDefinitions<Composition>
-    : ValidateLocalComposition<Composition>
+    : ValidateLocalComposition<Composition, HandlerValidation>
 
 /**
  * @internal Validates implementation-owned channels after child bindings have
  * already validated their block graphs.
  */
-export type ValidateImplementationComposition<Definition, Composition> =
-  ValidateDefinitionImplementation<Definition, Composition>
+export type ValidateImplementationComposition<
+  Definition,
+  Composition,
+  HandlerValidation extends 'Indexed' | 'Equivalent' = 'Indexed',
+> = ValidateDefinitionImplementation<Definition, Composition, HandlerValidation>

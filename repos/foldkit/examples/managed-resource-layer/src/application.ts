@@ -1,20 +1,12 @@
-import {
-  Context,
-  Crypto,
-  Effect,
-  Layer,
-  Match,
-  Number,
-  Option,
-  Schema,
-} from 'effect'
+import { Context, Effect, Layer, Match, Number, Option, Schema } from 'effect'
+import { SecureRandom } from 'effect/crypto'
 import { Block } from 'foldkit'
 import { Html } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
 import { modifyFields } from 'foldkit/struct'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 interface ComputeEngine {
   readonly engineId: string
@@ -29,14 +21,15 @@ class ComputeEngineService extends Context.Service<
 const ComputeEngineLayer: Layer.Layer<
   ComputeEngineService,
   never,
-  Crypto.Crypto
+  SecureRandom.SecureRandom
 > = Layer.effect(
   ComputeEngineService,
   Effect.acquireRelease(
     Effect.gen(function* () {
-      const crypto = yield* Crypto.Crypto
-      const id = yield* Effect.orDie(crypto.randomUUIDv4)
+      const secureRandom = yield* SecureRandom.SecureRandom
+      const id = yield* secureRandom.uuidV4()
       const engineId = `engine-${id.slice(0, 8)}`
+
       return { engineId, square: value => value * value }
     }),
     ({ engineId }) => Effect.log(`Tore down ${engineId}`),
@@ -49,12 +42,14 @@ export const EngineState = defineTaggedUnion({
   Ready: { engineId: Schema.String },
   Failed: { reason: Schema.String },
 })
+export type EngineState = typeof EngineState.Type
 
 export const Model = Schema.Struct({
   engine: EngineState,
   computeCount: Schema.Number,
   maybeSquareResult: Schema.Option(Schema.Number),
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedStartEngine: {},
@@ -66,23 +61,29 @@ export const Message = defineMessageUnion({
   SucceededCompute: { result: Schema.Number },
   FailedCompute: {},
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
+  effects: { services: [SecureRandom.SecureRandom] },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = ApplicationDefinition
+const { makeFieldsStep, makeNoopStep } = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
 
-const Engine =
-  ApplicationDefinition.makeResource<ComputeEngine>()('ComputeEngine')
+const Engine = ApplicationBlock.makeResource<ComputeEngine>()('ComputeEngine')
 
-export const Compute = ApplicationDefinition.makeCommand('Compute', {
+export const Compute = ApplicationBlock.makeCommand('Compute', {
   args: { value: Schema.Number },
   messages: [Message.SucceededCompute, Message.FailedCompute],
   handler: function* () {
@@ -143,7 +144,7 @@ export const init = ApplicationComposition.makeInit(() => ({
 
 // MANAGED RESOURCE
 
-export const managedResources = ApplicationDefinition.makeManagedResources(
+export const managedResources = ApplicationBlock.makeManagedResources(
   entry => ({
     engine: entry('ManageEngine', Schema.Option(Schema.Null), {
       resource: Engine,
@@ -180,12 +181,12 @@ const buttonClassName =
 
 const primaryButton = (
   label: string,
-  message: typeof Message.Type,
+  message: Message,
   colorClassName: string,
   isDisabled: boolean,
   h: ApplicationViewBuilder,
 ): Html =>
-  Button.view(
+  buttonView(
     {
       onClick: message,
       isDisabled,
@@ -202,7 +203,7 @@ const primaryButton = (
   )
 
 const engineStatusView = (
-  engine: typeof EngineState.Type,
+  engine: EngineState,
   h: ApplicationViewBuilder,
 ): Html => {
   const status = EngineState.match(engine, {
@@ -228,7 +229,7 @@ const engineStatusView = (
 }
 
 const engineControlsView = (
-  engine: typeof EngineState.Type,
+  engine: EngineState,
   h: ApplicationViewBuilder,
 ): Html => {
   const controls = Match.value(engine).pipe(
@@ -271,8 +272,7 @@ const squareResultView = (
   return h.div([h.Class('text-gray-800')], [text])
 }
 
-const isEngineReady = (engine: typeof EngineState.Type): boolean =>
-  engine._tag === 'Ready'
+const isEngineReady = (engine: EngineState): boolean => engine._tag === 'Ready'
 
 export const view = ApplicationComposition.makeView((model, h) => {
   const isComputeDisabled = !isEngineReady(model.engine)
@@ -306,15 +306,15 @@ export const view = ApplicationComposition.makeView((model, h) => {
   }
 })
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    managedResources,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      managedResources,
+      EffectsLayer,
+    }
+  }),
+)

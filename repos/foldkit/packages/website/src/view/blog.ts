@@ -1,6 +1,7 @@
 import { Match, Option } from 'effect'
 import { Html, createKeyedLazy, inertHtml as ih } from 'foldkit/html'
 
+import { SnippetCopyBlock, SnippetDisclosureBlock, UiBlock } from '../blocks'
 import { Shared } from '../component'
 import type { ApplicationViewBuilder } from '../composition'
 import {
@@ -12,25 +13,32 @@ import { Docs } from '../layout'
 import { docPage } from '../markdown'
 import { Message } from '../message'
 import { type Model } from '../model'
-import { Blog, NotFound, UiBlock } from '../page'
+import { Blog, NotFound } from '../page'
 import * as Release0167 from '../page/blog/post/foldkit-0-167-0'
 import * as Prose from '../prose'
 import { type ApplicationRoute, homeRouter } from '../route'
-import { SnippetCopyBlock } from '../snippetCopy'
 import * as SnippetCopyRenderer from '../snippetCopyRenderer'
-import { SnippetDisclosureBlock } from '../snippetDisclosure'
 import * as SnippetDisclosureRenderer from '../snippetDisclosureRenderer'
 import * as Search from './search'
 import * as Sidebar from './sidebar'
+
+type BlogRoute = typeof ApplicationRoute.Blog.Type
+type BlogPostRoute = typeof ApplicationRoute.BlogPost.Type
+
+type SnippetCopyBlockModel = typeof SnippetCopyBlock.Model.Type
+type SnippetDisclosureBlockModel = typeof SnippetDisclosureBlock.Model.Type
+type UiBlockModel = typeof UiBlock.Model.Type
+type Blog = BlogRoute
+type BlogPost = BlogPostRoute
 
 const PagefindBody = ih.DataAttribute('pagefind-body', '')
 const PagefindIgnore = ih.DataAttribute('pagefind-ignore', '')
 
 const postView = (
   post: Blog.BlogPost,
-  snippetCopy: typeof SnippetCopyBlock.Model.Type,
-  snippetDisclosure: typeof SnippetDisclosureBlock.Model.Type,
-  uiPages: typeof UiBlock.Model.Type,
+  snippetCopy: SnippetCopyBlockModel,
+  snippetDisclosure: SnippetDisclosureBlockModel,
+  uiPages: UiBlockModel,
   h: ApplicationViewBuilder,
 ): Html => {
   const renderCopyButton = SnippetCopyRenderer.renderer(snippetCopy, config =>
@@ -69,10 +77,8 @@ const postView = (
 const lazyPostView = createKeyedLazy()
 
 export const view = (
-  model: typeof Model.Type,
-  blogRoute:
-    | typeof ApplicationRoute.Blog.Type
-    | typeof ApplicationRoute.BlogPost.Type,
+  model: Model,
+  blogRoute: Blog | BlogPost,
   h: ApplicationViewBuilder,
 ): Html => {
   const content = Match.value(blogRoute).pipe(

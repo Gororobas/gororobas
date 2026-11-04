@@ -2,6 +2,7 @@ import { Array, Option, pipe } from 'effect'
 import { Update } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
+import { Education, PersonalInfo, Skills, WorkHistory } from './blocks'
 import { SubmitApplication } from './command'
 import {
   ApplicationComposition,
@@ -13,38 +14,32 @@ import {
 import { makeFieldsStep, makeStep } from './definition'
 import { Step } from './domain'
 import { type Model, Submission } from './model'
-import { isComplete as isEducationComplete } from './step/education/update'
-import { isComplete as isPersonalInfoComplete } from './step/personalInfo/update'
-import { isComplete as isSkillsComplete } from './step/skills/update'
-import { isComplete as isWorkHistoryComplete } from './step/workHistory/update'
 
-const isApplicationComplete = (model: typeof Model.Type): boolean =>
-  isPersonalInfoComplete(model.personalInfo) &&
-  isWorkHistoryComplete(model.workHistory) &&
-  isEducationComplete(model.education) &&
-  isSkillsComplete(model.skills)
+const isApplicationComplete = (model: Model): boolean =>
+  PersonalInfo.isComplete(model.personalInfo) &&
+  WorkHistory.isComplete(model.workHistory) &&
+  Education.isComplete(model.education) &&
+  Skills.isComplete(model.skills)
 
-const toNextStep = (current: typeof Step.Step.Type): typeof Step.Step.Type =>
+const toNextStep = (current: Step.Step): Step.Step =>
   pipe(
     Step.all,
     Array.get(Step.indexOf(current) + 1),
     Option.getOrElse(() => current),
   )
 
-const toPreviousStep = (
-  current: typeof Step.Step.Type,
-): typeof Step.Step.Type =>
+const toPreviousStep = (current: Step.Step): Step.Step =>
   pipe(
     Step.all,
     Array.get(Step.indexOf(current) - 1),
     Option.getOrElse(() => current),
   )
 
-const markSubmitAttemptedStep = makeFieldsStep(() => ({
+const markSubmitAttempted = makeFieldsStep(() => ({
   isSubmitAttempted: () => true,
 }))
 
-const submitWhenCompleteStep = makeStep(model => {
+const submitWhenComplete = makeStep(model => {
   if (isApplicationComplete(model)) {
     return {
       model: modifyFields(model, {
@@ -72,12 +67,12 @@ export const update = ApplicationComposition.makeUpdate({
 
   ClickedSubmit: model =>
     Update.combineSteps(model, [
-      markSubmitAttemptedStep,
+      markSubmitAttempted,
       PersonalInfoBinding.requestRevealErrors(),
       WorkHistoryBinding.requestRevealErrors(),
       EducationBinding.requestRevealErrors(),
       SkillsBinding.requestRevealErrors(),
-      submitWhenCompleteStep,
+      submitWhenComplete,
     ]),
 
   SucceededSubmitApplication: makeFieldsStep(() => ({

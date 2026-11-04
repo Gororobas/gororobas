@@ -15,13 +15,17 @@ class Storage extends Context.Service<
 >()('BlockAuthoring/Storage') {}
 class TrackingUnavailable extends Data.TaggedError('TrackingUnavailable')<{}> {}
 const Model = Schema.Struct({ value: Schema.String })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({
   RequestedClear: {},
   RequestedSave: { value: Schema.String },
   CompletedSave: {},
 })
+type Message = typeof Message.Type
 const ForeignMessage = defineMessageUnion({ ForeignCompleted: {} })
+type ForeignMessage = typeof ForeignMessage.Type
 const OutMessage = defineMessageUnion({ Saved: { value: Schema.String } })
+type OutMessage = typeof OutMessage.Type
 const Search = Block.makeDefinition('Search', { Model, Message, OutMessage })
 const Save = Search.makeCommand('Save', {
   args: { value: Schema.String },
@@ -36,7 +40,7 @@ const ForeignInitCommand = Command.define('ForeignInitCommand', {
   messages: [ForeignMessage.ForeignCompleted],
 })
 
-type SearchInitReturn = Readonly<{ model: typeof Model.Type }>
+type SearchInitReturn = Readonly<{ model: Model }>
 
 function overloadedSearchInit(value: number): SearchInitReturn
 function overloadedSearchInit(value: string): SearchInitReturn
@@ -65,11 +69,11 @@ const TrackPointer = Search.makeMountStream('TrackPointer', {
   },
 })
 const search = Search.makeComposition({})
-const clearStep = Search.makeStep(model => ({
+const clear = Search.makeStep(model => ({
   model: modifyFields(model, { value: () => '' }),
 }))
 const update = search.makeUpdate({
-  RequestedClear: model => clearStep(model),
+  RequestedClear: model => clear(model),
   RequestedSave: (model, { value }) => ({
     model: modifyFields(model, { value: () => value }),
     commands: [Save({ value })],
@@ -102,7 +106,7 @@ expectTypeOf<
 expectTypeOf<
   Layer.Error<typeof TrackPointer.layer>
 >().toEqualTypeOf<TrackingUnavailable>()
-expectTypeOf(clearStep(Model.make({ value: 'before' })).model).toEqualTypeOf<
+expectTypeOf(clear(Model.make({ value: 'before' })).model).toEqualTypeOf<
   typeof Model.Type
 >()
 const EarlyNamespace = Block.makeNamespace('Early')

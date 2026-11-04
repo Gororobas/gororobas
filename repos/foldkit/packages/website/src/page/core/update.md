@@ -46,25 +46,39 @@ In a split feature, export the Step helpers its implementation needs from `defin
 
 ::Snippet{name="updateStepHelperDefinition" label="Exporting owned Step helpers"}
 
-Implementation files import those helpers from the Definition module. Their Model, Message and result contracts retain the owning Definition's types:
+Implementation files import those helpers from the Block declaration module. Their Model, Message and result contracts retain the owning Block's types:
 
 ::Snippet{name="updateStepHelperImports" label="Importing owned Step helpers"}
 
-A compact feature destructures its helpers beside its Definition. Keep qualified calls when a module works with several Definitions and the qualifier makes the owner clear. Feature barrels keep authoring helpers private and export the completed Block.
+A compact feature destructures its helpers beside its Block. Keep qualified calls when a module works with several Blocks and the qualifier makes the owner clear. Feature barrels keep authoring helpers private and export the public Block declaration and construction `layer`.
 
 For example, `CompletedSave: makeNoopStep()` constructs a Model-preserving Step once and uses it as the handler. Pass the constructed Step, including the factory call's parentheses. The bare `makeNoopStep` factory does not have a handler's signature.
 
-Keep a Step with the behavior it owns. A Block's reusable internal transition can live in `update.ts` or an owning helper module. Parent coordination belongs beside its Bindings and policies. Steps are useful throughout update authoring, not only in composition files or calls to `Update.combineSteps`.
+#### Shared Steps
+
+Keep a Step used by only one responsibility with that code. Put reusable Steps shared by update, composition, or init in the owning Block's `steps.ts`. For a larger module, use responsibility files such as `steps/search.ts` and `steps/quoteLoading.ts`, with an explicit `steps/index.ts` barrel. The owner is the Block whose Model the Step transforms. Keep shared Steps independent of the owning update and construction Layer.
+
+`update.ts` maps incoming Messages to handlers and Steps. `composition.ts` registers relationships and maps child OutMessages to parent Steps. `steps.ts` owns the reusable transitions those entry points share. Keep Binding registration and OutMessage policy in composition. A Step that closes over a Binding from composition must read it in a deferred producer when the modules depend on one another; module initialization must not invoke that Binding.
 
 When a handler only applies an existing compatible Model-first Step, supply the Step directly as its record value. A no-argument Binding operation returns that Step without applying it. Keep a callback when it consumes the Message payload, derives arguments from the Model, defers argument construction until dispatch, supplies dispatch context, or provides necessary contextual inference. Payload-first `Message.match` branches have a different signature and require their own callbacks.
 
 The retained precision depends on the visible handler and helper return types. A broad annotation or an already-erased helper contract cannot recover narrower Commands or OutMessages.
 
+Inline handlers and Model-aware `makeStep` producers infer the Model and exact Message from their `makeUpdate` entry, including entries returned by `.withContext`. Use `makeStep.fromMessage` when only the Message constructs the Step. An extracted producer needs its own precise parameter contract; operation arguments outside a handler record retain their explicit domain types.
+
+#### Naming Application Transitions
+
+Name application-authored Step values and factories for their operation: `clearSearch`, `changeSearchQuery(query)`, and `applyDomainResult(result)`. Their definitions and types establish the Step role; omit the `make` prefix and `Step` suffix from these application names.
+
+Preserve framework helpers and types such as `makeStep`, `makeFieldsStep`, `makeCommandsStep`, `makeOutMessageStep`, `makeNoopStep`, `Update.Step`, and `Update.combineSteps`, along with other public framework helpers whose names include `Step`.
+
+Keep existing naming conventions for unrelated factories, Commands, Messages, Bindings, OutMessage folds and matchers, dedicated `handle<MessageTag>` handlers, public operation keys, and applied update-like results.
+
 ### Updates with Dispatch Context
 
 Use `FeatureComposition.makeUpdate.withContext(context => handlers)` when local handlers need additional dispatch arguments. The factory receives those arguments and returns the exhaustive local handler record. Its handlers receive the Model and exact Message payload as usual. Required, defaulted, optional, and rest context arguments retain their call shapes.
 
-Creating the update is passive. The factory runs for each local dispatch and does not run for a routed child-only delivery. Context-factory handlers that use a generic Step may need the explicit adapter `model => step(model)` for inference; they do not need a Model annotation.
+Creating the update is passive. The factory runs for each local dispatch and does not run for a routed child-only delivery. Context-factory handlers do not need a Model annotation, and a compatible Step can be a record value directly, as in the plain handler record.
 
 ::Snippet{name="updateCurriedContext" label="Authoring an update with dispatch context"}
 
@@ -72,33 +86,96 @@ Creating the update is passive. The factory runs for each local dispatch and doe
 
 `FeatureComposition.makeUpdate` accepts an exhaustive handler record. The callback-taking overload is removed. Use `makeUpdate({})` for a message-free or routed-only Composition; registered Bindings still route child delivery automatically.
 
-Name an extracted handler dedicated to one Message `handle<MessageTag>`, such as `handleUpdatedDescription`, and pass it directly when its Model-first signature is compatible. Give every named Model-first Step value a descriptive name ending in `Step`, such as `refreshStep`. Give a purposeful transition factory that returns a Step an operation name ending in `Step` too. Factory methods, imported authoring helpers, named OutMessage folds and matchers, direct inline handlers, public operation keys, Message tags, and applied update-like results keep their established names. Keep callbacks that adapt payloads, derive inputs, or provide contextual inference.
+Name an extracted handler dedicated to one Message `handle<MessageTag>`, such as `handleUpdatedDescription`, and pass it directly when its Model-first signature is compatible. Keep callbacks that adapt payloads, derive inputs, or provide contextual inference.
 
-If a single handler mixes connected Binding recipes with local results, use canonical local results. Definition-owned Steps supply those result contracts. Return the connected recipe intact, and use `makeFieldsStep`, `makeCommandsStep`, `makeNoopStep`, or `makeStep` for its local branches. A raw `{ model }` beside a connected recipe is rejected because structural inference can otherwise erase Commands or OutMessages before Composition sees them. Ordinary raw-only handlers remain supported.
+If a single handler mixes connected Binding recipes with local results, use canonical local results. Block-owned Steps supply those result contracts. Return the connected recipe intact, and use `makeFieldsStep`, `makeCommandsStep`, `makeNoopStep`, or `makeStep` for its local branches. A raw `{ model }` beside a connected recipe is rejected because structural inference can otherwise erase Commands or OutMessages before Composition sees them. Ordinary raw-only handlers remain supported.
 
-::Snippet{name="updateCanonicalLocalResults" label="Preserving local results beside connected operations"}
+The diagnostic **“Raw local branches beside connected or Block-owned Steps must use FeatureBlock.makeStep or a focused Step helper”** identifies the handler that mixes those results. It applies to branches within one handler. Another handler returning only `{ model }` does not need a wrapper. These two handlers differ only in the local branch's result contract:
+
+::Snippet{name="updateMixedConnectedBranchesBefore" label="❌ Mixing a raw local result with a connected recipe"}
+
+::Snippet{name="updateMixedConnectedBranchesAfter" label="✅ Preserving a local result beside a connected recipe"}
 
 For other domain unions, use their `match` for exhaustive matching and `matchOrElse` for selected variants with a fallback. Use [Effect's `Match`](https://effect.website/docs/code-style/pattern-matching/) when one handler matches several tags, for partial matching, or for unions without their own matcher.
+
+### Checking Missing Handlers Before Structural Errors
+
+An incomplete handler record can report that a connected `ResultRecipe` has no `model` instead of naming the missing Message tag. First compare the record keys with the owning Block's local Message union. Add every missing handler, including Command completions that need no further work; `CompletedSave: makeNoopStep()` is appropriate when saving has already been handled. Generated child envelopes do not need local handlers.
+
+After the record is complete, diagnose any remaining result-channel or registration error. Do not add a `model` field to a connected recipe or cast its return to silence this cascade. Missing-tag diagnostic priority is a compiler-reporting limitation; the record remains exhaustive.
 
 ### Calling update as a Step
 
 An authored update supports both call directions. The Runtime calls `update(model, message, ...context)`. Application code can call `update(message)(model, ...context)` to turn one truthful Message into a Step. The curried form retains the same Command requirements, OutMessage type, and registered graph evidence.
 
-Use the curried form for internal Step composition. A Block's `operations` record has a narrower purpose: each named operation produces a Message and any update context. Put the local Message constructor directly under `operations` when the public arguments map directly to its payload. Completion creates the operation without constructing a Message. The completed Block or a registered Binding passes that Message through the Block's update synchronously as part of the pure transition. It does not enqueue another Runtime Message or add a startup phase. The same Message branch owns the child invariant, Model change, Command, and OutMessage. This `informRouteChanged` operation records that a parent informed the child of a route change:
+Use the curried form for internal Step composition. Declare parent requests and notifications separately through [InMessage and inMessageUpdate](/core/block#inmessages). The Block generates Binding methods for those inputs. This Block receives a route notification through `informRouteChange`; its local reset button remains in update:
 
-::Snippet{name="updateCurriedStep" label="Declaring a Message-producing operation"}
+::Snippet{name="updateCurriedStep" label="Separating parent notifications from local facts"}
 
-A constructor-backed operation takes one constructor payload object for a constructor with fields, with constructor defaults honored, followed by the update context. An empty-fields constructor takes no payload placeholder. Use a tuple producer under `operations` when the public inputs need mapping, refinement, defaults, or an exact context tuple. Inline tuple producers receive context from `prepareBlock`; use `Tuple.make(Message.Fact(...), ...context)` when extracting one so TypeScript preserves the tuple. Both forms complete through the same update path. The update preserves the selected Message handler's output, while update utilities retain the union across handlers. A producer that can select several Messages retains all their possible outputs. Calling a pure operation does not run effects returned by another branch. Keep standalone and Definition-owned Steps for internal composition that does not form part of the Block's public operation API.
+The explicit `operations` record remains available for positional arguments, generic adapters, defaults, or mappings to existing local Messages. A constructor-backed operation takes the constructor payload followed by update context; an empty-fields constructor takes no payload placeholder. A tuple producer returns `[Message, ...context]`; prefer an array literal when contextual typing preserves the tuple. Use `Tuple.make` only if extracting the producer would otherwise widen its result and lose the required tuple positions. These adapters enter update synchronously and preserve the selected handler's result channels. Keep standalone and Block-owned Steps for internal composition that does not form part of the Block's public input API.
 
-The context rule is exact: `update(message)(model, ...context)`. `Update.combineSteps` accepts unary Steps, so an update with required dispatch context needs an explicit unary adapter that supplies that context, as `refreshStep` does in the dispatch-context example above.
+The context rule is exact: `update(message)(model, ...context)`. `Update.combineSteps` accepts unary Steps, so an update with required dispatch context needs an explicit unary adapter that supplies that context, as `refresh` does in the dispatch-context example above.
 
-`Update.defineStep` does the same inference for a standalone Step producer. Annotate its Model parameter and let the helper infer the returned Command requirements and OutMessage. Author an OutMessage fold with `ParentDefinition.makeOutMessageFold(ChildBlock, handlers)` whether the fold is inline in a Binding policy or extracted to a named value. The completed child and parent Definition supply the child payloads, parent Model, result channels, and `FoldContext`. Callers can compose Steps that do not emit OutMessages through `Update.combineSteps` without naming a service union by hand.
+`Update.defineStep` does the same inference for a standalone Step producer. Annotate its Model parameter and let the helper infer the returned Command requirements and OutMessage. Author an OutMessage fold with `ParentBlock.makeOutMessageFold(ChildBlock, handlers)` whether the fold is inline in a Binding policy or extracted to a named value. The child contract and parent Block supply the child payloads, parent Model, result channels, and `FoldContext`. Callers can compose Steps that do not emit OutMessages through `Update.combineSteps` without naming a service union by hand.
 
 `Update.RequirementsOf<typeof update>` extracts the inferred handler service union from an update. Use it when a parent or exported type needs to name those requirements. Application assembly reads the requirements from the update return type directly.
 
 ### Omitting Commands
 
 An update, init, Step, or component helper that statically creates no Commands omits `commands`. When it computes a Commands collection, it returns that collection directly without checking whether it is empty. The [`foldkit/no-empty-commands-array`](/tooling/oxlint-plugin#no-empty-commands-array) lint rule rejects only a literal `commands: []` property.
+
+## Composing Updates
+
+Most Blocks need one exhaustive `makeUpdate(record)`. Use `makeUpdate.compose`
+when behavior belongs across handlers, such as persisting a document after any
+edit. The composed update contains exactly one exhaustive update and any focused
+updates, applied in the order supplied.
+
+For example, assume a Draft Block owns `text`. `UpdatedText` edits it,
+`CompletedRestoreDraft` supplies saved text, and `CompletedPersistDraft` reports
+storage completion. Its `PersistDraft` Command accepts the text to save:
+
+::Snippet{name="updateComposition" label="Persisting changes across update handlers"}
+
+Shared callbacks (`each`, `on`, and `except`) receive the current Model, the
+original Message, and `{ before }`. `before` is the Model at entry to the entire composed update.
+Declared dispatch context follows that third argument. Grouping updates does
+not reset the snapshot.
+
+Restoring the document does not request another save because `except` excludes
+that Message. A save completion does not change the text, so it returns no new
+save Command. Compare the fields being persisted rather than unrelated Model
+bookkeeping.
+
+Choose focused updates by the dispatches they handle:
+
+| Builder                            | Applies to                                                                       |
+| ---------------------------------- | -------------------------------------------------------------------------------- |
+| `makeUpdate.cases(record)`         | The named local Message tags, with exact payload inference per handler           |
+| `makeUpdate.each(handler)`         | Every accepted update dispatch, including child delivery                         |
+| `makeUpdate.on(tags)(handler)`     | The selected local Message tags                                                  |
+| `makeUpdate.except(tags)(handler)` | Every accepted dispatch except the selected local tags, including child delivery |
+
+Pass an existing compatible Step directly or return a result or Step from the
+callback. Extract the complete builder expression into another module without
+adding an application type annotation. A focused update does not replace a
+handler in the exhaustive record. When both apply, both run in order.
+
+`makeUpdate.compose` also groups focused updates into reusable bundles. Include
+one exhaustive update before completing the Block. Bundles belong to the same
+Composition and preserve the order in which their pieces are listed. The
+exhaustive update handles local Messages and routes child delivery once at its
+position in that order; its child OutMessage fold finishes before a later
+focused update runs.
+
+Shared callbacks are silent with respect to OutMessages. An additional
+`cases` record may emit only when another applicable record cannot emit for
+the same Message. Later silent updates preserve an existing OutMessage.
+Command intents accumulate in update order; their effects and completions do
+not run in that order. The same helpers are available on `Composition.makeInMessageUpdate`. Its
+selectors and callbacks narrow the InMessage union, while returned Commands
+still produce ordinary local Messages. Each invocation preserves its own
+original `before` Model. Init remains a separate entry point.
 
 ## Composing Results
 
@@ -138,13 +215,23 @@ This error often points to update results being composed by hand. When both oper
 
 #### Child Bindings and Multiple Steps
 
-A child Binding projects `init`, `fold`, and every declared operation. Calling a Binding operation returns a connected parent Step that preserves the child's Message mapping, selected operation's Command requirements and OutMessage type, OutMessage policy, and Binding requirement. Its Model input requires the exact registered graph, so typed calls with a raw Model fail. Apply one to the contextual Model inside `makeUpdate`, include it in `makeInit` startup, or return it from the owner's `makeStep` producer. Return or compose the connected result intact: its public type exposes no `.model` or `.commands` before checked execution and cannot be narrowed to a useful `{ model }` return. The raw recipe exposes only channels produced directly by the child transition. `makeUpdate` and `makeInit` resolve the registered OutMessage policy and sibling operations into the final parent Command Message, requirements, and OutMessage channels. Derive an exported parent contract from that Composition-authored update or the completed Block. `Definition.makeStep` preserves or wraps a connected value. A completed `block.operations.operation(model, ...args)` carries its own graph, accepts the raw Block Model, dispatches the produced Message through update, and returns the readable executed result. A keyed Binding prepends its key to the operation arguments. Ordinary internal Steps remain directly callable. TypeScript can erase a function result when assigning it to a method that returns `void`; outside the exact graph, invoking that erased method only constructs and discards passive configuration and executes no child work. Do not treat that structural erasure as a usable execution path or claim that every erasure fails compilation.
+A child Binding projects `init`, `fold`, and every declared operation. Calling a Binding operation returns a connected parent Step that preserves the child's Message mapping, selected operation's Command requirements and OutMessage type, OutMessage policy, and Binding requirement. Its Model input requires the exact registered graph, so typed calls with a raw Model fail. Apply one to the contextual Model inside `makeUpdate`, include it in `makeInit` startup, or return it from the owner's `makeStep` producer. Return or compose the connected result intact: its public type exposes no `.model` or `.commands` before checked execution and cannot be narrowed to a useful `{ model }` return. The raw recipe exposes only channels produced directly by the child transition. `makeUpdate` and `makeInit` resolve the registered OutMessage policy and sibling operations into the final parent Command Message, requirements, and OutMessage channels. Declare the parent contract on its public Block and let `makeLayer` check the Composition-authored channels against it. `FeatureBlock.makeStep` preserves or wraps a connected value. An acquired executable's `operations.operation(model, ...args)` carries its own graph, accepts the raw Block Model, dispatches the produced Message through update, and returns the readable executed result. A keyed Binding prepends its key to the operation arguments.
 
-The graph requirement is intentional: an ordinary `Model` type says nothing about whether the Dialog Binding and its OutMessage policy are registered. Migrate a helper that accepts a raw Model into a Definition-owned Step, then return that Step from `makeUpdate`, list it in `makeInit`, or compose it with another Step through `Update.combineSteps`.
+Ordinary internal Steps remain directly callable. TypeScript can erase a function result when assigning it to a method that returns `void`; outside the exact graph, invoking that erased method only constructs and discards passive configuration and executes no child work. Do not treat that structural erasure as a usable execution path or claim that every erasure fails compilation.
+
+The graph requirement is intentional: an ordinary `Model` type says nothing about whether the Dialog Binding and its OutMessage policy are registered. Migrate a helper that accepts a raw Model into a Block-owned Step, then return that Step from `makeUpdate`, list it in `makeInit`, or compose it with another Step through `Update.combineSteps`.
 
 ::Snippet{name="updateConnectedStepBefore" label="❌ Applying a connected Step to a raw Model"}
 
 ::Snippet{name="updateConnectedStepAfter" label="✅ Deferring a connected Step to its Composition"}
+
+The same distinction applies inside a Block-owned producer. Its `model` argument has the domain fields; it does not gain registration just because the producer belongs to the Block. `combineSteps(model, steps)` applies immediately and therefore fails there. Return `combineSteps(steps)` instead: the registered Composition supplies its capable Model when it runs the Step.
+
+::Snippet{name="blockAppliedConnectedStep" label="❌ Applying a connected combination inside its producer"}
+
+::Snippet{name="blockDeferredConnectedStep" label="✅ Deferring a connected combination to its Composition"}
+
+Inside `Composition.makeUpdate`, the handler's contextual Model already carries registration, so the data-first combination remains valid there. Deferring pure Step application does not schedule Commands or introduce another Runtime phase.
 
 #### Extracting a Local Edit Before an Emitting Operation
 
@@ -156,7 +243,7 @@ The child fold sees the updated parent fields. Return its complete result so Com
 
 #### Combining Steps
 
-Use `Update.combineSteps` when two or more operations transform the same Model and a later Step should receive the Model produced by an earlier Step. Use the owning Definition's narrow helper when that Step only changes fields:
+Use `Update.combineSteps` when two or more operations transform the same Model and a later Step should receive the Model produced by an earlier Step. Use the owning Block's narrow helper when that Step only changes fields:
 
 ::Snippet{name="updateCombineFoldDialog" label="Composing a child fold and another Step"}
 
@@ -174,7 +261,7 @@ For example, a Workspace Block contains Search and Editor Blocks. Their required
 
 ::Snippet{name="updateIndependentInits" label="Initializing Search and Editor Blocks"}
 
-#### Parent Construction and Fold Order
+#### Parent initialization
 
 The Composition combines the Search and Editor Models with the Workspace Block's own fields. It retains each child's init Commands and appends the Commands returned by the restoration Steps.
 
@@ -208,7 +295,7 @@ When the selected `fold` returns `CompletedRange`, Foldkit uses it and skips the
 
 `Update.combineSteps` has no OutMessage channel. Return an OutMessage-producing Binding operation's complete result directly. The compiler rejects ordinary emitting Steps at the combination call and identifies the incompatible `outMessage` channel.
 
-A connected operation can acquire a parent OutMessage channel through its registered policy. The matching Composition checks that channel during update and init authoring, including nested combinations and combinations extracted through Definition-owned Steps. Return the emitting operation's complete result directly. Attaching another OutMessage afterward does not repair a combination that discards a child policy's OutMessage.
+A connected operation can acquire a parent OutMessage channel through its registered policy. The matching Composition checks that channel during update and init authoring, including nested combinations and combinations extracted through Block-owned Steps. Return the emitting operation's complete result directly. Attaching another OutMessage afterward does not repair a combination that discards a child policy's OutMessage.
 
 These checks depend on the channels visible in the supplied contracts. They cannot recover an OutMessage already erased by an inaccurate upstream annotation. Runtime rejection remains a safeguard for JavaScript and erased contracts.
 
@@ -234,7 +321,7 @@ When the OutMessage is already known while constructing a new result, include it
 
 ::Snippet{name="updateKnownOutMessage" label="Returning a known OutMessage"}
 
-For a Step or handler whose only job is to emit an OutMessage while preserving the Model, use the owning Definition's [`makeOutMessageStep(producer)`](/core/block#focused-step-producers). Its producer may read the current Model and exact Message; `.fromMessage` omits the Model, and `() => outMessage` supplies a fixed value. Cohesive mixed handlers can keep returning the result directly.
+For a Step or handler whose only job is to emit an OutMessage while preserving the Model, use the owning Block's [`makeOutMessageStep(producer)`](/core/block#focused-step-producers). Its producer may read the current Model and exact Message; `.fromMessage` omits the Model, and `() => outMessage` supplies a fixed value. Cohesive mixed handlers can keep returning the result directly.
 
 #### Attaching an Optional OutMessage
 

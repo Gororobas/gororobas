@@ -2,15 +2,20 @@ import * as echarts from 'echarts/core'
 import { Effect, Option, Queue, Schema, Stream, pipe } from 'effect'
 
 import { ChartRegistry } from './chartRegistry'
-import { ApplicationDefinition } from './definition'
+import { ApplicationBlock } from './definition'
 import { Message } from './message'
+import type {
+  ClickedChartDatum,
+  FailedMountChart,
+  SucceededMountChart,
+} from './message'
 
 export const CHART_HOST_ID = 'charting-chart'
 
 type MountChartMessage =
-  | typeof Message.SucceededMountChart.Type
-  | typeof Message.FailedMountChart.Type
-  | typeof Message.ClickedChartDatum.Type
+  | SucceededMountChart
+  | FailedMountChart
+  | ClickedChartDatum
 
 const toChartMountError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(`Failed to mount chart: ${error}`)
@@ -18,6 +23,7 @@ const toChartMountError = (error: unknown): Error =>
 const ChartClickEvent = Schema.Struct({
   data: Schema.OptionFromOptional(Schema.Struct({ id: Schema.String })),
 })
+type ChartClickEvent = typeof ChartClickEvent.Type
 
 const datumIdFromChartClickEvent = (event: unknown): Option.Option<string> =>
   pipe(
@@ -115,7 +121,7 @@ const mountChart = (
     ),
   )
 
-export const MountChart = ApplicationDefinition.makeMountStream('MountChart', {
+export const MountChart = ApplicationBlock.makeMountStream('MountChart', {
   args: { hostId: Schema.String },
   messages: [
     Message.SucceededMountChart,

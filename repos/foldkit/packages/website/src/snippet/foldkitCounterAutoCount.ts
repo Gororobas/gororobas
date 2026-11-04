@@ -8,20 +8,30 @@ const Model = Schema.Struct({
   count: Schema.Number,
   isAutoCounting: Schema.Boolean,
 })
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   ClickedIncrement: {},
   ClickedToggleAutoCount: {},
   Ticked: {},
 })
+type Message = typeof Message.Type
 
-const CounterDefinition = Block.makeDefinition('Counter', { Model, Message })
+export const CounterKey = Symbol('Counter')
 
-const { makeFieldsStep } = CounterDefinition
+const CounterBlock = Block.make('Counter', {
+  key: CounterKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
+  Model,
+  Message,
+})
 
-const CounterComposition = CounterDefinition.makeComposition()
+const { makeFieldsStep } = CounterBlock
 
-const subscriptions = CounterDefinition.makeSubscriptions(entry => ({
+const CounterComposition = CounterBlock.makeComposition()
+
+const subscriptions = CounterBlock.makeSubscriptions(entry => ({
   gameClockTicks: entry(
     'GameClockTicks',
     { isAutoCounting: Schema.Boolean },

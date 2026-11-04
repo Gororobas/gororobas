@@ -7,28 +7,34 @@ import { Api, ApiLayer } from './api'
 // Remote state is a value in the Model. AsyncData is the shipped six-state
 // union, so there is no hand-rolled loading/failure/stale union to maintain.
 const UserAsyncData = AsyncData.Schema(User, ApiError)
-
+type UserAsyncData = typeof UserAsyncData.schema.Type
 export const Model = Schema.Struct({
   user: UserAsyncData.schema,
 })
+export type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   ClickedLoadUser: {},
   SucceededLoadUser: { user: User },
   FailedLoadUser: { error: ApiError },
 })
+type Message = typeof Message.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeFieldsStep } = ApplicationDefinition
+const { makeFieldsStep } = ApplicationBlock
 
-const ApplicationComposition = ApplicationDefinition.makeComposition()
+const ApplicationComposition = ApplicationBlock.makeComposition()
 
 // Api is an Effect service; ApiLayer provides it.
-const FetchUser = ApplicationDefinition.makeCommand('FetchUser', {
+const FetchUser = ApplicationBlock.makeCommand('FetchUser', {
   messages: [Message.SucceededLoadUser, Message.FailedLoadUser],
   handler: function* () {
     const api = yield* Api

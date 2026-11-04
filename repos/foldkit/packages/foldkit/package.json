@@ -1,6 +1,6 @@
 {
   "name": "foldkit",
-  "version": "0.169.0",
+  "version": "0.170.0",
   "description": "A TypeScript frontend framework, built on Effect and architected like Elm",
   "type": "module",
   "main": "./dist/index.js",
@@ -63,13 +63,13 @@
       "types": "./dist/http/public.d.ts",
       "import": "./dist/http/public.js"
     },
+    "./internal/block": {
+      "types": "./dist/internal/block/public.d.ts",
+      "import": "./dist/internal/block/public.js"
+    },
     "./managedResource": {
       "types": "./dist/managedResource/public.d.ts",
       "import": "./dist/managedResource/public.js"
-    },
-    "./mapBinding": {
-      "types": "./dist/block/mapBinding.d.ts",
-      "import": "./dist/block/mapBinding.js"
     },
     "./message": {
       "types": "./dist/message/public.d.ts",
@@ -180,30 +180,31 @@
   "scripts": {
     "clean": "rimraf dist *.tsbuildinfo",
     "build": "pnpm run clean && tsc -b tsconfig.build.json",
-    "check:emitted-declarations": "node scripts/check-emitted-declarations.ts",
+    "check:emitted-declarations": "node scripts/check-emitted-declarations.ts && pnpm check:child-instances",
+    "check:child-instances": "node scripts/check-child-instances.ts",
     "check:compiler-diagnostics": "node scripts/check-compiler-diagnostics.ts",
     "check:block-type-performance": "node scripts/check-block-type-performance.ts",
     "update:block-type-performance": "node scripts/check-block-type-performance.ts --update",
     "watch": "tsc -b tsconfig.build.json --watch",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p declaration-tests/tsconfig.route-step-program.source.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p declaration-tests/tsconfig.route-step-program.source.json && tsc -p declaration-tests/tsconfig.route-path.source.json && tsc -p declaration-tests/tsconfig.machine.source.json && tsc -p declaration-tests/tsconfig.scene-routing.source.json && tsc -p declaration-tests/tsconfig.query-policy.source.json && tsc -p declaration-tests/tsconfig.host-handlers.source.json && tsc -p declaration-tests/tsconfig.update-composition.source.json",
     "test": "vitest run --coverage"
   },
   "dependencies": {
     "parse5": "^8.0.1"
   },
   "peerDependencies": {
-    "@effect/platform-browser": "4.0.0",
-    "effect": "4.0.0"
+    "@effect/platform-browser": "~4.1.0",
+    "effect": "~4.1.0"
   },
   "devDependencies": {
-    "@effect/platform-browser": "4.0.0",
-    "@effect/vitest": "4.0.0",
-    "@vitest/coverage-v8": "^5.0.2",
-    "effect": "4.0.0",
-    "happy-dom": "^20.14.5",
+    "@effect/platform-browser": "4.1.0",
+    "@effect/vitest": "4.1.0",
+    "@vitest/coverage-v8": "^5.0.3",
+    "effect": "4.1.0",
+    "happy-dom": "^21.0.4",
     "rimraf": "^6.1.3",
     "typescript": "7.1.0-beta",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.3"
   },
   "keywords": [
     "effect",

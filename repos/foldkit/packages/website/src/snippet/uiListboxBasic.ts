@@ -1,19 +1,17 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Option, Schema, Tuple } from 'effect'
+import { Effect, Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Listbox } from '@foldkit/ui'
-import { buttonId as ListboxButtonId } from '@foldkit/ui/listbox'
+import {
+  buttonId as ListboxButtonId,
+  layer as ListboxLayer,
+  makeBlock as makeListboxBlock,
+} from '@foldkit/ui/listbox'
 
 const Plan = Schema.Literals(['Free', 'Pro', 'Enterprise'])
-
-// Declare a typed Listbox once at module scope. `view` and `update` are
-// bound to `Plan`: `items` is typed as `ReadonlyArray<Plan>` and the
-// OutMessage carries `value: Plan`.
-const PlanListbox = Listbox.create<typeof Plan.Type>()
+type Plan = typeof Plan.Type
+// One passive contract retains Plan in its view inputs and OutMessages.
+const PlanListbox = makeListboxBlock<Plan>()
 
 // Add a field to your Model for the Listbox Block, plus a field for
 // the selected value your app actually cares about. Using the `Plan`
@@ -23,43 +21,44 @@ const Model = Schema.Struct({
   listbox: PlanListbox.Model,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // This excerpt has no parent-owned facts. The Composition derives delivery.
 const Message = defineMessageUnion({})
+type Message = typeof Message.Type
 
-const PlanPickerDefinition = Block.makeDefinition('PlanPicker', {
+export const PlanPickerKey = Symbol('PlanPicker')
+
+export const PlanPickerBlock = Block.make('PlanPicker', {
+  key: PlanPickerKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = PlanPickerDefinition
+const { makeFieldsStep } = PlanPickerBlock
 
 // At module scope, fold the OutMessage into your own Model. When the user
 // commits a selection it carries `Selected({ value })` where `value: Plan`.
 // The arm returns an Update.Step over the parent Model, which already has the
 // next Listbox Model written back. Passing the completed child Block preserves
 // the factory's refined `Plan` payload without a repeated type argument:
-const foldListboxOutMessage = PlanPickerDefinition.makeOutMessageFold(
-  PlanListbox,
-  {
-    Selected: ({ value }) =>
-      makeFieldsStep(() => ({
-        maybePlan: () => Option.some(value),
-      })),
-  },
-)
+const foldListboxOutMessage = PlanPickerBlock.makeOutMessageFold(PlanListbox, {
+  Selected: ({ value }) =>
+    makeFieldsStep(() => ({
+      maybePlan: () => Option.some(value),
+    })),
+})
 
-// The Binding wires the completed child Block into the parent: it delegates keyboard
-// navigation, typeahead, and open/close to PlanListbox.update, writes the next
-// Listbox Model back, routes generated delivery and Command results, and
-// hands any OutMessage to the OutMessage fold.
-const PlanListboxBinding = PlanPickerDefinition.makeBinding(PlanListbox, {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const ListboxBinding = PlanPickerBlock.makeBinding(PlanListbox, {
   field: 'listbox',
-  init: { contextToArgs: () => Tuple.make({ id: 'plan' }) },
+  init: { contextToArgs: () => [{ id: 'plan' }] },
 }).withOutMessagePolicy({ fold: foldListboxOutMessage })
 
-const PlanPickerComposition = PlanPickerDefinition.makeComposition({
-  bindings: [PlanListboxBinding],
+const PlanPickerComposition = PlanPickerBlock.makeComposition({
+  bindings: [ListboxBinding],
 })
 
 // In your init function, initialize the Listbox Block with a unique id:
@@ -73,7 +72,7 @@ const init = PlanPickerComposition.makeInit(() => ({
 // The Composition routes generated Listbox delivery through the Binding.
 const update = PlanPickerComposition.makeUpdate({})
 
-const plans: ReadonlyArray<typeof Plan.Type> = ['Free', 'Pro', 'Enterprise']
+const plans: ReadonlyArray<Plan> = ['Free', 'Pro', 'Enterprise']
 
 // Inside your view function, embed the Listbox via h.block using
 // its canonical view. Associate a visible label with the trigger via a native
@@ -86,7 +85,7 @@ const view = PlanPickerComposition.makeView((model, h) =>
     [
       h.label([h.For(ListboxButtonId('plan'))], ['Plan']),
       h.block(
-        PlanListboxBinding.embedView({
+        ListboxBinding.embedView({
           slotId: 'plan',
           model: model.listbox,
           viewInputs: {
@@ -119,3 +118,16 @@ const view = PlanPickerComposition.makeView((model, h) =>
     ],
   ),
 )
+
+export const layer = PlanPickerBlock.makeLayer(
+  Effect.gen(function* () {
+    const planListbox = yield* ListboxBinding
+
+    return {
+      children: [planListbox],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(ListboxLayer))

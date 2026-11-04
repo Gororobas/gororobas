@@ -3,7 +3,7 @@ import { AsyncData, type Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
 import { FetchPosts, FetchStats } from './command'
-import { ApplicationDefinition, makeStep } from './definition'
+import { ApplicationBlock, makeStep } from './definition'
 import {
   ApplicationTabsBlock,
   type Model,
@@ -14,7 +14,7 @@ import {
 } from './model'
 
 export const applyPostsTransition = (
-  model: typeof Model.Type,
+  model: Model,
   maybeNextPosts: Option.Option<typeof PostsData.schema.Type>,
 ) =>
   Option.match(maybeNextPosts, {
@@ -26,7 +26,7 @@ export const applyPostsTransition = (
   })
 
 export const applyStatsTransition = (
-  model: typeof Model.Type,
+  model: Model,
   maybeNextStats: Option.Option<typeof StatsData.schema.Type>,
 ) =>
   Option.match(maybeNextStats, {
@@ -37,7 +37,7 @@ export const applyStatsTransition = (
     }),
   })
 
-const activateTab = (tab: typeof Tab.Type) => (model: typeof Model.Type) => {
+const activateTab = (tab: Tab) => (model: Model) => {
   const modelWithActiveTab = modifyFields(model, { activeTab: () => tab })
 
   return Match.value(tab).pipe(
@@ -57,19 +57,16 @@ const activateTab = (tab: typeof Tab.Type) => (model: typeof Model.Type) => {
   )
 }
 
-export const TabsBinding = ApplicationDefinition.makeBinding(
-  ApplicationTabsBlock,
-  {
-    field: 'tabs',
-    init: { contextToArgs: () => [{ id: TABS_ID }] },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(ApplicationTabsBlock, {
+export const TabsBinding = ApplicationBlock.makeBinding(ApplicationTabsBlock, {
+  field: 'tabs',
+  init: { contextToArgs: () => [{ id: TABS_ID }] },
+}).withOutMessagePolicy({
+  fold: ApplicationBlock.makeOutMessageFold(ApplicationTabsBlock, {
     Selected: ({ value }) => makeStep(activateTab(value)),
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [TabsBinding],
 })
 export type ApplicationViewBuilder = Block.ViewBuilderFor<

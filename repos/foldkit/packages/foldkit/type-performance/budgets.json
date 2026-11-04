@@ -14,16 +14,24 @@
       "maxTypesDelta": 389460
     },
     "workspace-composition-4": {
-      "maxInstantiationsDelta": 2639574,
-      "maxTypesDelta": 206314
+      "maxInstantiationsDelta": 3017735,
+      "maxTypesDelta": 229173
     },
     "workspace-composition-8": {
-      "maxInstantiationsDelta": 4515010,
-      "maxTypesDelta": 280523
+      "maxInstantiationsDelta": 5498506,
+      "maxTypesDelta": 299721
     },
     "wide-subscriptions-100": {
-      "maxInstantiationsDelta": 548398,
-      "maxTypesDelta": 24566
+      "maxInstantiationsDelta": 548740,
+      "maxTypesDelta": 24583
+    },
+    "machine-search": {
+      "maxInstantiationsDelta": 83700,
+      "maxTypesDelta": 18800
+    },
+    "attribute-bundles-200": {
+      "maxInstantiationsDelta": 114377,
+      "maxTypesDelta": 29634
     }
   }
 }

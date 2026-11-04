@@ -1,10 +1,14 @@
 import { Command, given, message, model, story } from 'foldkit/story'
-import { expect, test } from 'vitest'
+import { expect } from 'vitest'
+
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, layer } from './application'
 
 // Story: test the state machine
-test('fetch weather updates the model', () => {
+it.effect('fetch weather updates the model', () =>
   story(
-    update,
+    { block: ApplicationBlock, layer },
     given(model),
     message(SubmittedWeatherForm()),
     model(model => {
@@ -15,5 +19,5 @@ test('fetch weather updates the model', () => {
     model(model => {
       expect(model.weather._tag).toBe('WeatherSuccess')
     }),
-  )
-})
+  ),
+)

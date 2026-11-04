@@ -13,10 +13,10 @@ import {
   PlainBinding,
   PlainBlock,
   RestContextBlock,
-  combinedMixedConnectedStep,
-  deferredMixedConnectedStep,
+  combinedMixedConnected,
+  deferredMixedConnected,
+  initPlain,
   initialParentModel,
-  initializePlainStep,
   mixedConnectedSteps,
 } from './composition-safety.accepted.js'
 
@@ -30,12 +30,12 @@ const rejectRawMixedConnectedSteps = () => {
   // @ts-expect-error A predeclared tuple retains the connected graph requirement.
   Update.combineSteps(initialParentModel, mixedConnectedSteps)
   // @ts-expect-error A deferred combination still requires its registered Composition.
-  deferredMixedConnectedStep(initialParentModel)
+  deferredMixedConnected(initialParentModel)
 }
 const rejectReadableMixedRecipe = (
-  model: Parameters<typeof combinedMixedConnectedStep>[0],
+  model: Parameters<typeof combinedMixedConnected>[0],
 ) => {
-  const combined = combinedMixedConnectedStep(model)
+  const combined = combinedMixedConnected(model)
 
   // @ts-expect-error A connected combination remains opaque before composition.
   combined.model
@@ -111,11 +111,11 @@ declare const unknownParentCommandRequirements: Update.Commands<
 PlainBinding.init({ args: [], toParentModel: child => Struct.modifyFields(initialParentModel, { plain: () => child }), commands: unknownParentCommandRequirements })
 
 // @ts-expect-error Foldkit's explicit Step cannot erase connected registration evidence.
-const erasedConnectedStep: Update.Step<
+const erasedConnected: Update.Step<
   typeof ParentModel.Type,
   typeof ParentMessage.Type
-> = initializePlainStep
-void erasedConnectedStep
+> = initPlain
+void erasedConnected
 
 const MissingPlainBindingComposition =
   CompositionSafetyParentDefinition.makeComposition({
@@ -123,7 +123,7 @@ const MissingPlainBindingComposition =
   })
 MissingPlainBindingComposition.makeInit(() =>
   // @ts-expect-error A connected initializer cannot run without its registered Binding capability.
-  initializePlainStep(initialParentModel),
+  initPlain(initialParentModel),
 )
 
 const directConnectedInit = MissingPlainBindingComposition.makeInit(() =>
@@ -138,10 +138,10 @@ MissingPlainBindingComposition.prepareBlock({
   init: directConnectedInit,
   update: MissingPlainBindingComposition.makeUpdate({
     CompletedParentInitialization: model => ({ model }),
-    RequestedInitializeEntry: model => ({ model }),
-    RequestedInitializePlain: model => ({ model }),
-    RequestedInitializePlainWithOwningParentCommand: model => ({ model }),
-    RequestedInitializePlainWithParentCommands: model => ({ model }),
+    RequestedInitEntry: model => ({ model }),
+    RequestedInitPlain: model => ({ model }),
+    RequestedInitPlainWithOwningParentCommand: model => ({ model }),
+    RequestedInitPlainWithParentCommands: model => ({ model }),
   }),
   EffectsLayer: LoadParameterizedChild.layer,
 })

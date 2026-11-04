@@ -1,6 +1,7 @@
-import { Menu, Tabs } from '@foldkit/ui'
+import { makeBlock as makeMenuBlock } from '@foldkit/ui/menu'
+import { makeBlock as makeTabsBlock } from '@foldkit/ui/tabs'
 
 import { Step } from './domain'
 
-export const StepMenuBlock = Menu.create<typeof Step.Step.Type>()
-export const StepTabsBlock = Tabs.create<typeof Step.Step.Type>()
+export const StepMenuBlock = makeMenuBlock<Step.Step>()
+export const StepTabsBlock = makeTabsBlock<Step.Step>()

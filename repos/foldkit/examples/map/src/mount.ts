@@ -2,19 +2,25 @@ import { Array, Effect, Queue, Schema, Stream } from 'effect'
 import type { Map as MapInstance } from 'maplibre-gl'
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 
-import { ApplicationDefinition } from './definition'
+import { ApplicationBlock } from './definition'
 import { featuredLocations } from './locations'
 import { MapRegistry } from './mapRegistry'
 import { Message } from './message'
+import type {
+  ClickedMarker,
+  FailedMountMap,
+  MovedMap,
+  SucceededMountMap,
+} from './message'
 import type { Bounds } from './model'
 
 const INITIAL_MAP_ZOOM = 1
 
 type MountMapMessage =
-  | typeof Message.SucceededMountMap.Type
-  | typeof Message.FailedMountMap.Type
-  | typeof Message.MovedMap.Type
-  | typeof Message.ClickedMarker.Type
+  | SucceededMountMap
+  | FailedMountMap
+  | MovedMap
+  | ClickedMarker
 const toMapMountError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(`Failed to mount map: ${error}`)
 
@@ -84,7 +90,7 @@ const listenToMapMovesAndMarkerClicks = (
       }),
   )
 
-export const MountMap = ApplicationDefinition.makeMountStream('MountMap', {
+export const MountMap = ApplicationBlock.makeMountStream('MountMap', {
   args: { hostId: Schema.String },
   messages: [
     Message.SucceededMountMap,
@@ -131,6 +137,7 @@ export const MountMap = ApplicationDefinition.makeMountStream('MountMap', {
               Effect.sync(() => map.remove()).pipe(
                 Effect.ensuring(maps.remove(hostId, map)),
               ),
+            { interruptible: true },
           )
           const { map, maplibre } = mapResource
 
@@ -160,7 +167,7 @@ export const MountMap = ApplicationDefinition.makeMountStream('MountMap', {
       )
   },
 })
-const boundsFromMap = (map: MapInstance): typeof Bounds.Type => {
+const boundsFromMap = (map: MapInstance): Bounds => {
   const bounds = map.getBounds()
   return {
     west: bounds.getWest(),

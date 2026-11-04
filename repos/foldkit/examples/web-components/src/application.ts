@@ -1,11 +1,12 @@
 import { clsx } from 'clsx'
-import { Schema } from 'effect'
+import { Effect, Schema } from 'effect'
 import { Block, CustomElement } from 'foldkit'
 import { Html } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import 'vanilla-colorful/hex-color-picker.js'
 
-import { Button, Input } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
+import { view as inputView } from '@foldkit/ui/input'
 import '@shoelace-style/shoelace/dist/components/qr-code/qr-code.js'
 
 export const Model = Schema.Struct({
@@ -13,21 +14,28 @@ export const Model = Schema.Struct({
   fillColor: Schema.String,
   backgroundColor: Schema.String,
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   UpdatedContent: { value: Schema.String },
   ChangedFillColor: { value: Schema.String },
   ChangedBackgroundColor: { value: Schema.String },
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = ApplicationDefinition
+const { makeFieldsStep } = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
@@ -142,10 +150,7 @@ const FIELD_LABEL_CLASS =
 const FIELD_CONTROL_CLASS =
   'px-3 py-2 text-sm rounded-md border border-slate-300 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200'
 
-const designerView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const designerView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [
       h.Class(
@@ -155,10 +160,7 @@ const designerView = (
     [controlsView(model, h), previewView(model, h)],
   )
 
-const controlsView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const controlsView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('flex flex-col gap-5')],
     [
@@ -184,11 +186,8 @@ const controlsView = (
     ],
   )
 
-const contentFieldView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html =>
-  Input.view(
+const contentFieldView = (model: Model, h: ApplicationViewBuilder): Html =>
+  inputView(
     {
       id: 'qr-content',
       value: model.content,
@@ -220,7 +219,7 @@ const colorFieldView = (
     id: string
     label: string
     value: string
-    onChange: (value: string) => typeof Message.Type
+    onChange: (value: string) => Message
   }>,
   h: ApplicationViewBuilder,
 ): Html => {
@@ -272,13 +271,13 @@ const swatchClass = (isActive: boolean): string =>
 
 const swatchRow = (
   active: string,
-  onChange: (value: string) => typeof Message.Type,
+  onChange: (value: string) => Message,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
     [h.Class('flex flex-wrap gap-1.5 max-w-[10rem]')],
     PRESET_COLORS.map(color =>
-      Button.view(
+      buttonView(
         {
           onClick: onChange(color),
           toView: attributes =>
@@ -299,10 +298,7 @@ const swatchRow = (
 
 const QR_SIZE = 220
 
-const previewView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
+const previewView = (model: Model, h: ApplicationViewBuilder): Html => {
   const qr = qrCode.withMessage(h)
 
   return h.div(
@@ -332,13 +328,13 @@ const previewView = (
   )
 }
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)
