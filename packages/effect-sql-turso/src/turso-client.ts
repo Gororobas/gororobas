@@ -145,6 +145,7 @@ export const make = (
     return Object.assign(
       yield* Client.make({
         ...acquirers,
+        driver: "turso",
         compiler: Statement.makeCompilerSqlite(options.transformQueryNames),
         transformRows,
         beginTransaction: options.readonly ? "BEGIN" : "BEGIN IMMEDIATE",

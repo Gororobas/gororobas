@@ -12,9 +12,6 @@ import { ViewerBookmarks } from "../../lib/viewer-bookmarks"
 export const Navigation = Schema.Literals(["Replace", "Push"])
 
 export const Message = defineMessageUnion({
-  InformedOfQueryChange: { query: SearchQuery },
-  /** The app reports leaving search through one of its results. */
-  InformedOfOpenedResult: { query: SearchQuery },
   SubmittedSearch: { query: SearchQuery },
   ClickedRemoveRecentSearch: { index: Schema.Finite },
   SucceededLoadRecentSearches: { recentSearches: RecentSearches },

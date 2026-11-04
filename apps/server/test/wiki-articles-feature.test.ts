@@ -16,13 +16,12 @@ import {
   WikiArticleCommonNameInCrdtList,
   type TiptapDocument,
   type TiptapNode,
-  WikiArticleCommonName,
+  WikiArticleQueriedCardData,
   SupportedLanguage,
   WikiArticleCrdt,
   WikiArticleEditableData,
   WikiArticleId,
   WikiArticleQueriedPageData,
-  WikiArticleProjectionRow,
   WikiArticleRelationDirection,
   WikiArticleRevisionId,
   WikiSearchParams,
@@ -138,12 +137,9 @@ const WikiBackground = Schema.Struct({
 type WikiContext = typeof WikiBackground.Type & {
   revisionId?: WikiArticleRevisionId
   photo?: MediaAssetRow
-  page?: WikiArticleQueriedPageData & {
-    translationUnavailable: boolean
-    cultivars: readonly (WikiArticleProjectionRow & {
-      commonNames: readonly WikiArticleCommonName[]
-    })[]
-  }
+  page?: WikiArticleQueriedPageData
+  /** The plant page's cultivars section, as readers load it. */
+  cultivars?: ReadonlyArray<WikiArticleQueriedCardData>
   error?: unknown
 }
 
@@ -157,6 +153,8 @@ const revisionId = (context: WikiContext) =>
   Option.getOrThrow(Option.fromNullishOr(context.revisionId))
 const photoIn = (context: WikiContext) => Option.getOrThrow(Option.fromNullishOr(context.photo))
 const pageIn = (context: WikiContext) => Option.getOrThrow(Option.fromNullishOr(context.page))
+const cultivarsIn = (context: WikiContext) =>
+  Option.getOrThrow(Option.fromNullishOr(context.cultivars))
 
 const asPerson = <A, E, R>({
   context,
@@ -526,13 +524,13 @@ const view = (
       yield* (yield* WikiArticlesRepository).findBySearchableName(title.toLowerCase()),
     )
 
+    const service = yield* WikiArticlesService
+    const lookup = { handle: row.handle, kind: "PLANT" as const, language }
+
     return {
       ...context,
-      page: yield* (yield* WikiArticlesService).getPage({
-        handle: row.handle,
-        kind: "PLANT",
-        language,
-      }),
+      page: yield* service.getPage(lookup),
+      cultivars: yield* service.listCultivarCards(lookup),
     }
   })
 
@@ -1138,7 +1136,6 @@ await Effect.runPromise(
             And("they see an indicator that Spanish translation is unavailable", {
               handler: (context: WikiContext) =>
                 Effect.sync(() => {
-                  expect(pageIn(context).translationUnavailable).toBe(true)
                   expect(pageIn(context).language).toBe("pt")
                   return context
                 }),
@@ -1238,7 +1235,7 @@ await Effect.runPromise(
                     const page = yield* view(context, { title: parent, language: "pt" })
 
                     expect(
-                      pageIn(page).cultivars.map((cultivar) =>
+                      cultivarsIn(page).map((cultivar) =>
                         cultivar.commonNames.map((name) => name.name),
                       ),
                     ).toContainEqual([title])
@@ -1581,22 +1578,7 @@ await Effect.runPromise(
               When("viewing {string:title}", {
                 params: titleParams,
                 handler: (context: WikiContext, { title }) =>
-                  Effect.gen(function* () {
-                    const row = Option.getOrThrow(
-                      yield* (yield* WikiArticlesRepository).findBySearchableName(
-                        title.toLowerCase(),
-                      ),
-                    )
-
-                    return {
-                      ...context,
-                      page: yield* (yield* WikiArticlesService).getPage({
-                        handle: row.handle,
-                        kind: "PLANT",
-                        language: "pt",
-                      }),
-                    }
-                  }),
+                  view(context, { title, language: "pt" }),
               }),
               Then("the cultivars section lists {string:first} and {string:second}", {
                 params: Schema.Struct({
@@ -1605,15 +1587,15 @@ await Effect.runPromise(
                 }),
                 handler: (context: WikiContext, { first, second }) =>
                   Effect.sync(() => {
-                    expect(pageIn(context).cultivars).toHaveLength(2)
+                    expect(cultivarsIn(context)).toHaveLength(2)
 
                     expect(
-                      pageIn(context).cultivars.flatMap((row) =>
+                      cultivarsIn(context).flatMap((row) =>
                         row.commonNames.map((name) => name.name),
                       ),
                     ).toEqual(expect.arrayContaining([first, second]))
 
-                    expect(pageIn(context).cultivars.map((row) => row.id)).toEqual(
+                    expect(cultivarsIn(context).map((row) => row.id)).toEqual(
                       expect.arrayContaining([
                         articleId(context, first),
                         articleId(context, second),
@@ -1626,17 +1608,8 @@ await Effect.runPromise(
               And("their cards name {string:parent} as the plant they belong to", {
                 params: Schema.Struct({ parent: Schema.String }),
                 handler: (context: WikiContext, { parent }) =>
-                  Effect.gen(function* () {
-                    const cards = yield* (yield* WikiArticlesService).listCultivarCards({
-                      handle: pageIn(context).handle,
-                      kind: "PLANT",
-                      language: "pt",
-                    })
-
-                    expect(cards.map((card) => card.id)).toEqual(
-                      expect.arrayContaining(pageIn(context).cultivars.map((row) => row.id)),
-                    )
-                    expect(cards).toHaveLength(pageIn(context).cultivars.length)
+                  Effect.sync(() => {
+                    const cards = cultivarsIn(context)
                     expect(
                       cards.map((card) => Option.map(card.parentPlantName, (name) => name.name)),
                     ).toEqual(cards.map(() => Option.some(parent)))

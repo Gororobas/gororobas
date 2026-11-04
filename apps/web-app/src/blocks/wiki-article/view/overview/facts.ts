@@ -1,10 +1,7 @@
-import type { WikiArticleQueriedCardData } from "@gororobas/domain/wiki/domain"
 import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option, String as EffectString } from "effect"
 import type { Html } from "foldkit/html"
 
-import { wikiArticleUrl } from "../../../../app/route"
-import { primaryName } from "../../../../lib/wiki-article-names"
 import { AppText } from "../../../../ui/app-text"
 import { Chip } from "../../../../ui/chip"
 import * as Icons from "../../../../ui/icons"
@@ -308,35 +305,6 @@ export const identifierFact = <Id extends string>(
   EffectArray.fromOption(
     Option.map(maybeId, (id) => externalLinkFact({ title, url: toUrl(id), label: id }, h)),
   )
-
-/** Other articles, each leading to its page. */
-export const articleLinksFact = (
-  { title, cards }: Readonly<{ title: string; cards: ReadonlyArray<WikiArticleQueriedCardData> }>,
-  h: WikiArticleViewBuilder,
-): ReadonlyArray<Html> =>
-  EffectArray.match(cards, {
-    onEmpty: () => [],
-    onNonEmpty: (nonEmpty) => [
-      fact(
-        {
-          title,
-          content: AppText.view(
-            {
-              element: "p",
-              attributes: styledAttributes([], namesStyle),
-              children: nonEmpty.map((card) =>
-                h.a(styledAttributes([h.Href(wikiArticleUrl(card))], linkStyle), [
-                  primaryName(card),
-                ]),
-              ),
-            },
-            h,
-          ),
-        },
-        h,
-      ),
-    ],
-  })
 
 export const rangeText = (minimum: string, maximum: string): string =>
   minimum === maximum ? minimum : `De ${minimum} a ${maximum}`

@@ -4,7 +4,7 @@ import { GororobasApiClient } from "../../api-client"
 import { SearchQuery } from "../../app/route"
 import { streamViewerBookmarks } from "../../lib/viewer-bookmarks"
 import { previewCapacity } from "../../ui/styles/result-grid"
-import { SearchDefinition } from "./definition"
+import { SearchBlock } from "./definition"
 import {
   isResultTypeShown,
   profileSearchParams,
@@ -20,7 +20,7 @@ const TYPING_SETTLE_TIME = Duration.millis(200)
 /** How many posts a posts search loads; the overview loads as many as its widest preview. */
 export const PUBLICATIONS_SEARCH_PAGE_SIZE = 30
 
-export const subscriptions = SearchDefinition.makeSubscriptions((entry) => ({
+export const subscriptions = SearchBlock.makeSubscriptions((entry) => ({
   results: entry(
     "SearchContent",
     { maybeAnsweredQuery: Schema.Option(SearchQuery) },

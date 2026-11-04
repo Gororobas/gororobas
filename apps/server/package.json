@@ -10,6 +10,7 @@
     "seed": "tsx --env-file-if-exists=.env src/seed/seed-cli.ts",
     "setup:env": "tsx src/development/setup-environment.ts",
     "dev:sign-in": "tsx --env-file-if-exists=.env src/development/sign-in.ts",
+    "external-data": "tsx --env-file-if-exists=.env src/development/external-data-cli.ts",
     "type-check": "tsc --noEmit -p tsconfig.json",
     "type-check:watch": "tsc --noEmit -p tsconfig.json -w",
     "test": "vitest",

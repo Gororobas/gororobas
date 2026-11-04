@@ -3,10 +3,10 @@ import { pushUrl, replaceUrl } from "foldkit/navigation"
 
 import { SearchQuery, searchUrl } from "../../app/route"
 import { RecentSearches, RecentSearchesStore } from "../../lib/recent-searches"
-import { SearchDefinition } from "./definition"
+import { SearchBlock } from "./definition"
 import { Message, Navigation } from "./message"
 
-export const NavigateSearch = SearchDefinition.makeCommand("NavigateSearch", {
+export const NavigateSearch = SearchBlock.makeCommand("NavigateSearch", {
   args: { query: SearchQuery, navigation: Navigation },
   messages: [Message.CompletedNavigateSearch],
   handler: function* () {
@@ -20,7 +20,7 @@ export const NavigateSearch = SearchDefinition.makeCommand("NavigateSearch", {
   },
 })
 
-export const LoadRecentSearches = SearchDefinition.makeCommand("LoadRecentSearches", {
+export const LoadRecentSearches = SearchBlock.makeCommand("LoadRecentSearches", {
   messages: [Message.SucceededLoadRecentSearches],
   handler: function* () {
     const store = yield* RecentSearchesStore
@@ -31,7 +31,7 @@ export const LoadRecentSearches = SearchDefinition.makeCommand("LoadRecentSearch
   },
 })
 
-export const SaveRecentSearches = SearchDefinition.makeCommand("SaveRecentSearches", {
+export const SaveRecentSearches = SearchBlock.makeCommand("SaveRecentSearches", {
   args: { recentSearches: RecentSearches },
   messages: [Message.CompletedSaveRecentSearches],
   handler: function* () {

@@ -28,6 +28,8 @@ We're using Effect v4, which includes some breaking changes from Effect v3. Make
 
 Foldkit, @yielded/auth, Loro and Turso also have their monorepos available for reference under the `./repos` folder.
 
+Foldkit's Blocks preview has no published build on Effect 4.1, so the workspace installs it from the `repos/foldkit` subtree as `file:` dependencies. After pulling the subtree (and in a fresh checkout, before `pnpm install`), run `pnpm run build:foldkit`.
+
 ## Database
 
 Unified, up-to-date database schema is located in `apps/server/src/db/schema.sql`. We use `@ariga/atlas` to generate migration files based on diffs in the schema. We're still in the prototyping phase, this app is not deployed. As such, when you make changes to `schema.sql`, delete existing migrations and re-run `pnpm run migrate initial` from `apps/server` to avoid creating unnecessary migrations while we're figuring out the final schema.

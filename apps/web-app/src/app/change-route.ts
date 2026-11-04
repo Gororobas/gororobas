@@ -77,7 +77,7 @@ export const enterRouteStep = (route: ApplicationRoute) =>
     Login: () =>
       Update.combineSteps([clearPagesStep, AuthenticationBinding.requestRestoreSession()]),
     Search: ({ _tag, ...query }) =>
-      Update.combineSteps([clearPagesStep, SearchBinding.informQueryChanged({ query })]),
+      Update.combineSteps([clearPagesStep, SearchBinding.informQueryChange({ query })]),
     WikiArticle: ({ kind, handle }) => showWikiArticleStep({ kind, handle }),
     MyPlaces: () => showProfileLocationsEditorStep,
     NotFound: () => clearPagesStep,

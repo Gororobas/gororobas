@@ -1,7 +1,7 @@
 import { Duration, Effect, Option, Schema, Stream } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
-import { ProfileLocationsEditorDefinition } from "./definition"
+import { ProfileLocationsEditorBlock } from "./definition"
 import { Message } from "./message"
 
 /** Lets fast typing settle before searching. Each new text interrupts the previous search. */
@@ -10,7 +10,7 @@ const TYPING_SETTLE_TIME = Duration.millis(200)
 /** Shorter texts match too many places to be useful. */
 const MINIMUM_SEARCH_LENGTH = 2
 
-export const subscriptions = ProfileLocationsEditorDefinition.makeSubscriptions((entry) => ({
+export const subscriptions = ProfileLocationsEditorBlock.makeSubscriptions((entry) => ({
   locations: entry(
     "LoadMyLocations",
     { reloadCount: Schema.Int },

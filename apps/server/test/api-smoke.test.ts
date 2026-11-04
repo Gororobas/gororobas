@@ -275,6 +275,11 @@ const requests = ({
         params: { kind: targets.article.kind, handle: targets.article.handle },
         query: { language: "pt" },
       }),
+    "wiki.listWikiArticleChildPlaces": () =>
+      client.wiki.listWikiArticleChildPlaces({
+        params: { kind: targets.article.kind, handle: targets.article.handle },
+        query: { language: "pt", pageSize: 24, currentPage: 0 },
+      }),
     "moderation.getModerationQueue": () => client.moderation.getModerationQueue(),
 
     "places.searchGazetteerPlaces": () =>

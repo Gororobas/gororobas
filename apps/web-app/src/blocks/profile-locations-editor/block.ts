@@ -1,27 +1,28 @@
-import { Layer } from "effect"
-import { Block } from "foldkit"
+import { layer as ComboboxLayer } from "@foldkit/ui/combobox"
+import { Effect, Layer } from "effect"
 
 import { CommandsLayer } from "./command"
-import { ProfileLocationsEditorComposition } from "./composition"
+import { PlaceComboboxBinding } from "./composition"
+import { ProfileLocationsEditorBlock } from "./definition"
 import { init } from "./init"
-import { Message } from "./message"
-import type { Model } from "./model"
 import { subscriptions } from "./subscription"
-import { update } from "./update"
+import { inMessageUpdate, update } from "./update"
 import { view } from "./view"
 
-const prepare = () =>
-  ProfileLocationsEditorComposition.prepareBlock({
-    init,
-    update,
-    view,
-    operations: { informOfDeviceLocation: Message.InformedOfDeviceLocation },
-    subscriptions,
-    EffectsLayer: Layer.mergeAll(CommandsLayer, subscriptions.layer),
-  })
+export const layer = ProfileLocationsEditorBlock.makeLayer(
+  Effect.gen(function* () {
+    const placeCombobox = yield* PlaceComboboxBinding
 
-/** The signed-in person's location timeline: add, edit and remove where they are and have been. */
-export const ProfileLocationsEditorBlock: Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+    return {
+      children: [placeCombobox],
+      init,
+      update,
+      inMessageUpdate,
+      view,
+      subscriptions,
+      EffectsLayer: Layer.mergeAll(CommandsLayer, subscriptions.layer),
+    }
+  }),
+).pipe(Layer.provide(ComboboxLayer))
+
+export { ProfileLocationsEditorBlock } from "./definition"

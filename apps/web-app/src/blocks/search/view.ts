@@ -1114,7 +1114,7 @@ const filtersDrawer = (
       slotId: "search-filters",
       model: model.filtersDrawer,
       viewInputs: {
-        toView: (render) =>
+        toView: (render, drawerBuilder) =>
           AppDrawer.view(
             {
               render,
@@ -1165,7 +1165,7 @@ const filtersDrawer = (
                 ),
               ],
             },
-            h,
+            drawerBuilder,
           ),
       },
     }),

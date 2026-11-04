@@ -14,6 +14,8 @@ export type GbifIdentifier = typeof GbifIdentifier.Type
 export const WikidataResult = Schema.Struct({
   observation: Observation,
   gbifId: Schema.NullOr(GbifIdentifier),
+  /** The item's taxon name (P225), for matching taxa whose GBIF ID is outdated. */
+  taxonName: Schema.NullOr(Schema.String),
   wikipediaLinks: Schema.Array(ExternalLink),
 })
 

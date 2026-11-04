@@ -94,7 +94,7 @@ export const authenticationLayer = (options: {
   ).pipe(
     Layer.provideMerge(http.layer),
     Layer.provide(dependencies),
-    Layer.provide(WebCrypto.layerWebCrypto),
+    Layer.provide(WebCrypto.layer),
   )
 }
 

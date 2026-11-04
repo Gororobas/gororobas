@@ -1,8 +1,24 @@
+import { Schema } from "effect"
 import { Block } from "foldkit"
 
+import { GororobasApiClient } from "../../api-client"
+import { RecentSearchesStore } from "../../lib/recent-searches"
+import { SessionAccess } from "../../session-access"
+import { InMessage } from "./in-message"
 import { Message } from "./message"
 import { Model } from "./model"
+import type { ViewInputs } from "./view"
 
-export const SearchDefinition = Block.makeDefinition("Search", { Model, Message })
+export const SearchKey = Symbol("Search")
 
-export const { makeFieldsStep, makeNoopStep, makeStep } = SearchDefinition
+export const SearchBlock = Block.make("Search", {
+  key: SearchKey,
+  Init: Schema.Tuple([]),
+  view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
+  effects: { services: [GororobasApiClient, RecentSearchesStore, SessionAccess] },
+  InMessage,
+  Model,
+  Message,
+})
+
+export const { makeFieldsStep, makeNoopStep, makeStep } = SearchBlock

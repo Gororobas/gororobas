@@ -1,1 +1,1 @@
-export { WikiArticleDebugBlock } from "./wiki-article-debug"
+export { WikiArticleDebugBlock, layer } from "./wiki-article-debug"

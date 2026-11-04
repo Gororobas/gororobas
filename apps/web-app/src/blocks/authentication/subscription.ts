@@ -1,10 +1,10 @@
 import { Effect, Stream } from "effect"
 
 import { SessionAccess, sessionChangedEvent, sessionStorageKey } from "../../session-access"
-import { AuthenticationDefinition } from "./definition"
+import { AuthenticationBlock } from "./definition"
 import { Message } from "./message"
 
-export const subscriptions = AuthenticationDefinition.makeSubscriptions((entry) => ({
+export const subscriptions = AuthenticationBlock.makeSubscriptions((entry) => ({
   session: entry(
     "WatchSessionAccess",
     {},

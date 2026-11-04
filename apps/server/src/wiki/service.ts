@@ -18,7 +18,13 @@ import {
   WikiArticleRevisionId,
   type WhosOnFirstId,
   type PlantCultivarProjectedAttributes,
+  type WikiArticleQueriedPageData,
+  type WikiArticleQueriedPageRow,
+  WikiChildPlacesPage,
+  type WikiChildPlacesParams,
   type WikiMediaSelection,
+  WikiPlacePageData,
+  WikiPlantCultivarPageData,
   type WikiSearchParams,
 } from "@gororobas/domain"
 import { Array as EffectArray, Context, DateTime, Effect, Match, Option } from "effect"
@@ -41,6 +47,9 @@ const resolveProperty = <A>(
       Value: ({ value }) => Option.some(value),
     }),
   )
+
+type PlantCultivarPageRow = Extract<WikiArticleQueriedPageRow, { kind: "PLANT_CULTIVAR" }>
+type PlacePageRow = Extract<WikiArticleQueriedPageRow, { kind: "PLACE" }>
 
 /** @effect-expect-leaking SqlClient */
 export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
@@ -132,51 +141,50 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           if (Option.isSome(approved)) yield* enrichment.onWikiArticleChanged(approved.value)
         })
 
-      const getPage = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
-        Effect.gen(function* () {
-          const page = yield* repository.findPageByHandleAndKind(lookup)
-          if (Option.isNone(page)) return yield* new WikiArticleNotFoundError(lookup)
+      /** The article's own projection, without what its page reads from other articles. */
+      const findPage = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
+        repository.findPageByHandleAndKind(lookup).pipe(
+          Effect.flatMap(
+            Option.match({
+              onNone: () => Effect.fail(new WikiArticleNotFoundError(lookup)),
+              onSome: Effect.succeed,
+            }),
+          ),
+        )
 
-          return {
-            ...page.value,
-            translationUnavailable: page.value.language !== lookup.language,
-            cultivars:
-              page.value.kind === "PLANT"
-                ? yield* repository.listPublishedCultivars({
-                    parentPlantId: page.value.id,
-                    language: lookup.language,
-                  })
-                : [],
-            parentPlant:
-              page.value.kind === "PLANT_CULTIVAR"
-                ? yield* findParentPlant({
-                    parentPlantId: page.value.attributes.parentPlantId,
-                    language: lookup.language,
-                  })
-                : Option.none(),
-            ancestorPlaces:
-              page.value.kind === "PLACE"
-                ? yield* repository.listAncestorPlaceCards({
-                    placeId: page.value.id,
-                    language: lookup.language,
-                  })
-                : [],
-            childPlaces:
-              page.value.kind === "PLACE"
-                ? yield* repository.listChildPlaceCards({
-                    placeId: page.value.id,
-                    language: lookup.language,
-                  })
-                : [],
-            map:
-              page.value.kind === "PLACE" && Option.isSome(page.value.attributes.whosOnFirstId)
-                ? yield* findPlaceMap({
-                    whosOnFirstId: page.value.attributes.whosOnFirstId.value,
-                    language: lookup.language,
-                  })
-                : null,
-          }
-        })
+      const getPage = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
+        findPage(lookup).pipe(Effect.flatMap((row) => withKindPageData(row, lookup.language)))
+
+      /** Adds what each kind's page shows from other articles and the gazetteer. */
+      const withKindPageData = (row: WikiArticleQueriedPageRow, language: SupportedLanguage) =>
+        Match.value(row).pipe(
+          Match.discriminator("kind")("PLANT_CULTIVAR", (cultivar) =>
+            getPlantCultivarPageData(cultivar, language),
+          ),
+          Match.discriminator("kind")("PLACE", (place) => getPlacePageData(place, language)),
+          Match.orElse((page) => Effect.succeed<WikiArticleQueriedPageData>(page)),
+        )
+
+      const getPlantCultivarPageData = (
+        cultivar: PlantCultivarPageRow,
+        language: SupportedLanguage,
+      ) =>
+        findParentPlant({ parentPlantId: cultivar.attributes.parentPlantId, language }).pipe(
+          Effect.map((parentPlant) => WikiPlantCultivarPageData.make({ ...cultivar, parentPlant })),
+        )
+
+      /** Ancestors come from the app's database and the map from the gazetteer's, so they load together. */
+      const getPlacePageData = (place: PlacePageRow, language: SupportedLanguage) =>
+        Effect.all(
+          {
+            ancestorPlaces: repository.listAncestorPlaceCards({ placeId: place.id, language }),
+            map: Option.match(place.attributes.whosOnFirstId, {
+              onNone: () => Effect.succeed(null),
+              onSome: (whosOnFirstId) => findPlaceMap({ whosOnFirstId, language }),
+            }),
+          },
+          { concurrency: "unbounded" },
+        ).pipe(Effect.map((related) => WikiPlacePageData.make({ ...place, ...related })))
 
       const toOutline = ({ name, boundingBox, geometry }: GazetteerPlace) =>
         PlaceOutline.make({ name, boundingBox, geometry })
@@ -230,11 +238,41 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           )
         })
 
+      /** One page of a place's children, each with its outline from the gazetteer in one lookup. */
+      const listChildPlaces = (lookup: WikiArticleLookup & WikiChildPlacesParams) =>
+        Effect.gen(function* () {
+          const { language, pageSize, currentPage } = lookup
+          const page = yield* findPage(lookup)
+          if (page.kind !== "PLACE") return WikiChildPlacesPage.make({ places: [], totalCount: 0 })
+
+          const { count } = yield* repository.countChildPlaces({ placeId: page.id, language })
+
+          const rows = yield* repository.listChildPlaceCards({
+            placeId: page.id,
+            language,
+            limit: pageSize,
+            offset: pageSize * currentPage,
+          })
+
+          const outlines = yield* gazetteer.findPlaces({
+            ids: EffectArray.getSomes(rows.map((row) => Option.fromNullishOr(row.whosOnFirstId))),
+            language,
+          })
+
+          return WikiChildPlacesPage.make({
+            totalCount: count,
+            places: rows.map(({ whosOnFirstId, ...card }) => {
+              const place = whosOnFirstId === null ? undefined : outlines[whosOnFirstId]
+              return { card, outline: place === undefined ? null : toOutline(place) }
+            }),
+          })
+        })
+
       const listRelatedWikiArticles = (
         lookup: WikiArticleLookup & { language: SupportedLanguage },
       ) =>
         Effect.gen(function* () {
-          const page = yield* getPage(lookup)
+          const page = yield* findPage(lookup)
           return yield* repository.listRelatedCards({
             wikiArticleId: page.id,
             language: lookup.language,
@@ -330,12 +368,12 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
       )
 
       const listBookmarkers = (lookup: WikiArticleLookup) =>
-        getPage({ ...lookup, language: "pt" }).pipe(
+        findPage({ ...lookup, language: "pt" }).pipe(
           Effect.flatMap((page) => repository.listBookmarkers(page.id)),
         )
 
       const listCultivarCards = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
-        getPage(lookup).pipe(
+        findPage(lookup).pipe(
           Effect.flatMap((page) =>
             page.kind === "PLANT"
               ? repository.listCultivarCards({ parentPlantId: page.id, language: lookup.language })
@@ -344,7 +382,7 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         )
 
       const listContributors = (lookup: WikiArticleLookup) =>
-        getPage({ ...lookup, language: "pt" }).pipe(
+        findPage({ ...lookup, language: "pt" }).pipe(
           Effect.flatMap((page) => repository.listContributors(page.id)),
         )
 
@@ -353,7 +391,9 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         createRevision,
         evaluateRevision,
         listRevisionHistory: repository.listRevisionHistory,
+        findPage,
         getPage,
+        listChildPlaces,
         listRelatedWikiArticles,
         resolveCultivar,
         getPublishedArticle,

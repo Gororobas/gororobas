@@ -8,6 +8,7 @@ import {
   WikiArticleLookup,
   WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
+  WikiChildPlacesPage,
 } from "@gororobas/domain/wiki/domain"
 import { Schema } from "effect"
 import { AsyncData } from "foldkit"
@@ -30,6 +31,8 @@ export const CultivarResults = AsyncData.Schema(
   Schema.Array(WikiArticleQueriedCardData),
   ClientFailure,
 )
+/** The places inside a place, as many pages of them as the reader asked for. */
+export const ChildPlaceResults = AsyncData.Schema(WikiChildPlacesPage, ClientFailure)
 export const PublicationResults = AsyncData.Schema(
   Schema.Array(ApiPublicationCardData),
   ClientFailure,
@@ -49,6 +52,8 @@ export const Model = Schema.Struct({
   contributorsAsyncData: ContributorResults.schema,
   /** Plants only; other kinds start with none. */
   cultivarsAsyncData: CultivarResults.schema,
+  /** Places only; other kinds start with none. */
+  childPlacesAsyncData: ChildPlaceResults.schema,
   publicationsAsyncData: PublicationResults.schema,
   viewerBookmarks: ViewerBookmarks,
   bookmarkSaving: BookmarkSaving,

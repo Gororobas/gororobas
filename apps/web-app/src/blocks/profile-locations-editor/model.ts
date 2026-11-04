@@ -9,7 +9,7 @@ import { AsyncData } from "foldkit"
 
 import { ClientFailure } from "../../lib/client-failure"
 
-export const PlaceCombobox = Combobox.create(WhosOnFirstId)
+export const PlaceCombobox = Combobox.makeBlock(WhosOnFirstId)
 
 export const Locations = AsyncData.Schema(Schema.Array(ProfileLocationData), ClientFailure)
 

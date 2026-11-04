@@ -8,14 +8,14 @@ import { WikiArticleBlock } from "../blocks/wiki-article"
 import { WikiArticleDebugBlock } from "../blocks/wiki-article-debug"
 import { DeviceLocation } from "../lib/device-location"
 import { LocateDevice } from "./command"
-import { ApplicationDefinition } from "./definition"
+import { ApplicationBlock } from "./definition"
 import { ApplicationRoute } from "./route"
 
-export const AuthenticationBinding = ApplicationDefinition.makeBinding(AuthenticationBlock, {
+export const AuthenticationBinding = ApplicationBlock.makeBinding(AuthenticationBlock, {
   field: "authentication",
 })
 
-export const SearchBinding = ApplicationDefinition.makeBinding(SearchBlock, {
+export const SearchBinding = ApplicationBlock.makeBinding(SearchBlock, {
   field: "search",
   subscriptions: { when: (model) => ApplicationRoute.guards.Search(model.route) },
 })
@@ -26,7 +26,7 @@ export const wikiArticleKey = (lookup: Readonly<{ kind: string; handle: string }
 const isWikiArticleRouteFor = (route: ApplicationRoute, articleKey: string) =>
   ApplicationRoute.guards.WikiArticle(route) && wikiArticleKey(route) === articleKey
 
-export const WikiArticleBinding = ApplicationDefinition.makeBinding(WikiArticleBlock, {
+export const WikiArticleBinding = ApplicationBlock.makeBinding(WikiArticleBlock, {
   field: "maybeWikiArticle",
   key: "articleKey",
   childField: "model",
@@ -37,7 +37,7 @@ export const WikiArticleBinding = ApplicationDefinition.makeBinding(WikiArticleB
 const isDebugRouteFor = (route: ApplicationRoute, wikiArticleId: string) =>
   ApplicationRoute.guards.WikiArticleDebug(route) && route.wikiArticleId === wikiArticleId
 
-export const WikiArticleDebugBinding = ApplicationDefinition.makeBinding(WikiArticleDebugBlock, {
+export const WikiArticleDebugBinding = ApplicationBlock.makeBinding(WikiArticleDebugBlock, {
   field: "maybeWikiArticleDebug",
   key: "wikiArticleId",
   childField: "model",
@@ -45,7 +45,7 @@ export const WikiArticleDebugBinding = ApplicationDefinition.makeBinding(WikiArt
   subscriptions: { when: (model, wikiArticleId) => isDebugRouteFor(model.route, wikiArticleId) },
 })
 
-export const ProfileLocationsEditorBinding = ApplicationDefinition.makeBinding(
+export const ProfileLocationsEditorBinding = ApplicationBlock.makeBinding(
   ProfileLocationsEditorBlock,
   {
     field: "maybeProfileLocationsEditor",
@@ -56,16 +56,16 @@ export const ProfileLocationsEditorBinding = ApplicationDefinition.makeBinding(
     subscriptions: { when: (model) => ApplicationRoute.guards.MyPlaces(model.route) },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(ProfileLocationsEditorBlock, {
+  fold: ApplicationBlock.makeOutMessageFold(ProfileLocationsEditorBlock, {
     RequestedDeviceLocation: () =>
-      ApplicationDefinition.makeStep((model) => ({
+      ApplicationBlock.makeStep((model) => ({
         model: modifyFields(model, { deviceLocation: () => DeviceLocation.Locating() }),
         commands: [LocateDevice()],
       })),
   }),
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [
     AuthenticationBinding,
     SearchBinding,

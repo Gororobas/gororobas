@@ -31,7 +31,7 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
       .handle("getWikiRevisionHistory", ({ params }) =>
         WikiArticlesService.use((service) =>
           Effect.gen(function* () {
-            const article = yield* service.getPage({ ...params, language: "pt" })
+            const article = yield* service.findPage({ ...params, language: "pt" })
             return yield* service.listRevisionHistory({
               wikiArticleId: article.id,
               evaluation: "APPROVED",
@@ -65,7 +65,7 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
       .handle("createWikiArticleRevision", ({ params, payload }) =>
         WikiArticlesService.use((service) =>
           Effect.gen(function* () {
-            const article = yield* service.getPage({ ...params, language: "pt" })
+            const article = yield* service.findPage({ ...params, language: "pt" })
             const id = yield* service.createRevision(article.id, payload)
             return { id }
           }),
@@ -87,14 +87,14 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
       .handle("setWikiArticleBookmark", ({ params, payload }) =>
         WikiArticlesService.use((service) =>
           service
-            .getPage({ ...params, language: "pt" })
+            .findPage({ ...params, language: "pt" })
             .pipe(Effect.flatMap((article) => service.bookmark(article.id, payload.state))),
         ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "setWikiArticleBookmark" })),
       )
       .handle("removeWikiArticleBookmark", ({ params }) =>
         WikiArticlesService.use((service) =>
           service
-            .getPage({ ...params, language: "pt" })
+            .findPage({ ...params, language: "pt" })
             .pipe(Effect.flatMap((article) => service.removeBookmark(article.id))),
         ).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "removeWikiArticleBookmark" }),
@@ -115,6 +115,11 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
           service.listCultivarCards({ ...params, language: query.language }),
         ).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleCultivars" }),
+        ),
+      )
+      .handle("listWikiArticleChildPlaces", ({ params, query }) =>
+        WikiArticlesService.use((service) => service.listChildPlaces({ ...params, ...query })).pipe(
+          withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleChildPlaces" }),
         ),
       )
       .handle("setMainMedia", ({ params, payload }) =>

@@ -1348,7 +1348,7 @@ await Effect.runPromise(
                     VISITOR_SESSION,
                   )
 
-                  expect(page.translationUnavailable).toBe(true)
+                  expect(language).not.toBe("pt")
                   expect(page.language).toBe("pt")
                   return context
                 }),

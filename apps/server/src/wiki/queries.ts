@@ -23,6 +23,7 @@ import {
   WikiSearchParams,
   WikiArticleBookmarker,
   WikiArticleContributor,
+  WhosOnFirstId,
   toSearchableText,
 } from "@gororobas/domain"
 import { Handle } from "@gororobas/domain"
@@ -441,16 +442,38 @@ export const listAncestorPlaceCards = SqlSchema.findAll({
     ),
 })
 
-/** Cards of the published places directly inside a place, by name. */
+const childPlacesQuery = (
+  sql: SqlClient,
+  { placeId, language }: Readonly<{ placeId: string; language: SupportedLanguage }>,
+) => sql`${publishedCardsQuery(sql, language)}
+  AND a.id IN (SELECT wiki_article_id FROM place_projections WHERE parent_place_id = ${placeId})`
+
+/** Cards of the published places directly inside a place, by name, with their gazetteer IDs for outlines. */
 export const listChildPlaceCards = SqlSchema.findAll({
-  Request: Schema.Struct({ placeId: WikiArticleId, language: SupportedLanguage }),
-  Result: QueriedCardRow,
-  execute: ({ placeId, language }) =>
+  Request: Schema.Struct({
+    placeId: WikiArticleId,
+    language: SupportedLanguage,
+    limit: Schema.Int,
+    offset: Schema.Int,
+  }),
+  Result: Schema.Struct({ ...QueriedCardRow.fields, whosOnFirstId: Schema.NullOr(WhosOnFirstId) }),
+  execute: ({ placeId, language, limit, offset }) =>
     SqlClient.use(
-      (sql) => sql`${publishedCardsQuery(sql, language)}
-        AND a.id IN (SELECT wiki_article_id FROM place_projections WHERE parent_place_id = ${placeId})
-        ORDER BY json_extract(t.common_names, '$[0].name') COLLATE NOCASE, a.id`,
+      (sql) => sql`
+        SELECT children.*, place.whos_on_first_id
+        FROM (${childPlacesQuery(sql, { placeId, language })}) children
+        JOIN place_projections place ON place.wiki_article_id = children.id
+        ORDER BY json_extract(children.common_names, '$[0].name') COLLATE NOCASE, children.id
+        LIMIT ${limit} OFFSET ${offset}
+      `,
     ),
+})
+
+export const countChildPlaces = SqlSchema.findOne({
+  Request: Schema.Struct({ placeId: WikiArticleId, language: SupportedLanguage }),
+  Result: Schema.Struct({ count: Schema.Int }),
+  execute: (request) =>
+    SqlClient.use((sql) => sql`SELECT COUNT(*) AS count FROM (${childPlacesQuery(sql, request)})`),
 })
 
 const RelatedCardRow = Schema.Struct({

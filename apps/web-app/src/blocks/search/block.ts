@@ -1,27 +1,30 @@
-import { Layer } from "effect"
-import { Block } from "foldkit"
+import { layer as PopoverLayer } from "@foldkit/ui/popover"
+import { Effect, Layer } from "effect"
 
+import { layer as DrawerLayer } from "../../ui/drawer"
 import { CommandsLayer } from "./command"
-import { SearchComposition } from "./composition"
+import { FilterPopoversBinding, FiltersDrawerBinding } from "./composition"
+import { SearchBlock } from "./definition"
 import { init } from "./init"
-import { Message } from "./message"
-import type { Model } from "./model"
 import { subscriptions } from "./subscription"
-import { update } from "./update"
+import { inMessageUpdate, update } from "./update"
 import { view } from "./view"
 
-const prepare = () =>
-  SearchComposition.prepareBlock({
-    init,
-    update,
-    view,
-    operations: {
-      informQueryChanged: Message.InformedOfQueryChange,
-      informOpenedResult: Message.InformedOfOpenedResult,
-    },
-    subscriptions,
-    EffectsLayer: Layer.mergeAll(CommandsLayer, subscriptions.layer),
-  })
+export const layer = SearchBlock.makeLayer(
+  Effect.gen(function* () {
+    const filtersDrawer = yield* FiltersDrawerBinding
+    const filterPopovers = yield* FilterPopoversBinding
 
-export const SearchBlock: Block.FromAssemblyWithView<typeof Model, typeof prepare> =
-  Block.assemble(prepare)
+    return {
+      children: [filtersDrawer, filterPopovers],
+      init,
+      update,
+      inMessageUpdate,
+      view,
+      subscriptions,
+      EffectsLayer: Layer.mergeAll(CommandsLayer, subscriptions.layer),
+    }
+  }),
+).pipe(Layer.provide(Layer.mergeAll(DrawerLayer, PopoverLayer)))
+
+export { SearchBlock } from "./definition"

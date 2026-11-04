@@ -51,7 +51,7 @@ const rememberStep = (model: Model, query: SearchQuery) => {
       }
 }
 
-export const update = SearchComposition.makeUpdate({
+export const inMessageUpdate = SearchComposition.makeInMessageUpdate({
   InformedOfQueryChange: (model, { query }) =>
     Option.exists(model.maybeAnsweredQuery, (answered) => isSameQuery(answered, query))
       ? { model }
@@ -65,6 +65,9 @@ export const update = SearchComposition.makeUpdate({
           }),
         },
   InformedOfOpenedResult: (model, { query }) => rememberStep(model, query),
+})
+
+export const update = SearchComposition.makeUpdate({
   SubmittedSearch: (model, { query }) => {
     const remembered = rememberStep(model, query)
     return {

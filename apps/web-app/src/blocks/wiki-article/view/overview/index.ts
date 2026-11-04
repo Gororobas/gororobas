@@ -13,7 +13,6 @@ import { agreeingWith } from "../../../../lib/wiki-article-names"
 import type { WikiArticleViewBuilder } from "../../composition"
 import type { Page } from "../shared"
 import {
-  articleLinksFact,
   chipFact,
   freeChipFact,
   identifierFact,
@@ -86,7 +85,7 @@ const kindFacts = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
           },
           h,
         ),
-      PLACE: ({ attributes, childPlaces }) => [
+      PLACE: ({ attributes }) => [
         ...chipFact(
           {
             id: "place-kind",
@@ -96,7 +95,6 @@ const kindFacts = (page: Page, h: WikiArticleViewBuilder): ReadonlyArray<Html> =
           },
           h,
         ),
-        ...articleLinksFact({ title: "Lugares dentro", cards: childPlaces }, h),
         ...identifierFact(
           {
             title: "Wikidata",

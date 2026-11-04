@@ -64,7 +64,7 @@ export const insertGazetteerPlace = (place: GazetteerPlaceInput) =>
       EffectArray.chunksOf(names, NAMES_PER_STATEMENT),
       (chunk) =>
         sql`INSERT INTO gazetteer_place_names ${sql.insert(
-          chunk.map((name) => ({
+          EffectArray.map(chunk, (name) => ({
             placeId: place.id,
             language: name.language,
             name: name.name,
@@ -80,7 +80,7 @@ export const insertGazetteerPlace = (place: GazetteerPlaceInput) =>
       onEmpty: () => Effect.void,
       onNonEmpty: (ancestorIds) =>
         sql`INSERT INTO gazetteer_place_ancestors ${sql.insert(
-          ancestorIds.map((ancestorId, index) => ({
+          EffectArray.map(ancestorIds, (ancestorId, index) => ({
             placeId: place.id,
             ancestorId,
             depth: index + 1,

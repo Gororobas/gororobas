@@ -46,7 +46,7 @@ Feature: Profile locations
       | place          | label | from | until | visibility |
       | Villa de Leyva |       |      |       | PUBLIC     |
     Then the page of "Villa de Leyva" shows it inside "Boyacá" and "Colômbia"
-    And the page of "Boyacá" shows "Villa de Leyva" inside it
+    And the page of "Boyacá" lists "Villa de Leyva" among the places inside it, with its outline
     And the map on the page of "Villa de Leyva" draws it inside "Boyacá"
     And the map on the page of "Colômbia" draws it inside nothing
 

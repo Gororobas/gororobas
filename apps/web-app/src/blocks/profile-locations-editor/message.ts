@@ -32,7 +32,6 @@ export const Message = defineMessageUnion({
   FailedLoadPlace: {},
 
   ClickedUseDeviceLocation: {},
-  InformedOfDeviceLocation: {},
   SucceededFindMunicipality: { place: GazetteerPlace },
   FailedFindMunicipality: { reason: DeviceLookup },
 

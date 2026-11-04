@@ -1,7 +1,7 @@
 import { inputId } from "@foldkit/ui/combobox"
 import type { Block } from "foldkit"
 
-import { ProfileLocationsEditorDefinition } from "./definition"
+import { ProfileLocationsEditorBlock } from "./definition"
 import { type FormMode, PlaceCombobox } from "./model"
 import { clearPlaceStep, selectPlaceStep } from "./place-selection"
 
@@ -16,17 +16,17 @@ export const entryMenuButtonId = (id: string) => `profile-locations-editor-menu-
 export const placeFieldId = (mode: FormMode) =>
   mode === "Place" ? inputId(PLACE_COMBOBOX_ID) : FREE_TEXT_INPUT_ID
 
-export const PlaceComboboxBinding = ProfileLocationsEditorDefinition.makeBinding(PlaceCombobox, {
+export const PlaceComboboxBinding = ProfileLocationsEditorBlock.makeBinding(PlaceCombobox, {
   field: "placeCombobox",
   init: { contextToArgs: () => [{ id: PLACE_COMBOBOX_ID, nullable: true }] },
 }).withOutMessagePolicy({
-  fold: ProfileLocationsEditorDefinition.makeOutMessageFold(PlaceCombobox, {
+  fold: ProfileLocationsEditorBlock.makeOutMessageFold(PlaceCombobox, {
     Selected: ({ value }) => selectPlaceStep(value),
     ClearedSelection: () => clearPlaceStep,
   }),
 })
 
-export const ProfileLocationsEditorComposition = ProfileLocationsEditorDefinition.makeComposition({
+export const ProfileLocationsEditorComposition = ProfileLocationsEditorBlock.makeComposition({
   bindings: [PlaceComboboxBinding],
 })
 export type ProfileLocationsEditorViewBuilder = Block.ViewBuilderFor<

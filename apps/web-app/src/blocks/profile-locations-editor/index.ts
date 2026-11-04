@@ -1,1 +1,1 @@
-export { ProfileLocationsEditorBlock } from "./block"
+export { ProfileLocationsEditorBlock, layer } from "./block"

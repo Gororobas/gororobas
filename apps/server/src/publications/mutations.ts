@@ -34,8 +34,11 @@ export const insertPublicationSourceRow = SqlSchema.void({
 
 export const insertPublicationTranslationRows = SqlSchema.void({
   Request: Schema.Array(PublicationTranslationRow),
-  execute: (rows) =>
-    SqlClient.use((sql) => sql`INSERT INTO publication_translations ${sql.insert(rows)}`),
+  execute: EffectArray.match({
+    onEmpty: () => Effect.void,
+    onNonEmpty: (rows) =>
+      SqlClient.use((sql) => sql`INSERT INTO publication_translations ${sql.insert(rows)}`),
+  }),
 })
 
 export const insertPublicationWikiArticleRows = SqlSchema.void({

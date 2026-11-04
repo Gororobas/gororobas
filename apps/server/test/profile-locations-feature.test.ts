@@ -384,16 +384,25 @@ const pageShowsAncestors = () =>
       }),
   })
 
-const pageShowsChild = () =>
-  And("the page of {string:place} shows {string:child} inside it", {
-    params: Schema.Struct({ place: Schema.String, child: Schema.String }),
-    handler: (context: LocationsContext, { place, child }) =>
-      Effect.gen(function* () {
-        const page = yield* placePage(context, place)
-        expect(page.kind === "PLACE" ? cardNames(page.childPlaces) : []).toEqual([child])
-        return context
-      }),
-  })
+const pageListsChild = () =>
+  And(
+    "the page of {string:place} lists {string:child} among the places inside it, with its outline",
+    {
+      params: Schema.Struct({ place: Schema.String, child: Schema.String }),
+      handler: (context: LocationsContext, { place, child }) =>
+        Effect.gen(function* () {
+          const { handle } = yield* placeHandleNamed(place)
+          const children = yield* (yield* context.api.visitor).wiki.listWikiArticleChildPlaces({
+            params: { kind: "PLACE", handle },
+            query: { language: "pt", pageSize: 10, currentPage: 0 },
+          })
+          expect(children.totalCount).toBe(1)
+          expect(cardNames(children.places.map(({ card }) => card))).toEqual([child])
+          expect(children.places.map(({ outline }) => outline?.name)).toEqual([child])
+          return context
+        }),
+    },
+  )
 
 const mapSurroundings = (context: LocationsContext, place: string) =>
   Effect.gen(function* () {
@@ -658,7 +667,7 @@ await Effect.runPromise(
         runSteps(
           Given("{string:person} has these locations:", hasTheseLocations),
           pageShowsAncestors(),
-          pageShowsChild(),
+          pageListsChild(),
           mapDrawsInside(),
           mapDrawsInsideNothing(),
         ),

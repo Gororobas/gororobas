@@ -7,6 +7,7 @@ import {
   WikiArticleKind,
   WikiArticleQueriedCardData,
   WikiArticleQueriedPageData,
+  WikiChildPlacesPage,
 } from "@gororobas/domain/wiki/domain"
 import { Schema } from "effect"
 import { defineMessageUnion } from "foldkit/message"
@@ -25,6 +26,9 @@ export const Message = defineMessageUnion({
   FailedLoadContributors: { error: ClientFailure },
   SucceededLoadCultivars: { cultivars: Schema.Array(WikiArticleQueriedCardData) },
   FailedLoadCultivars: { error: ClientFailure },
+  SucceededLoadChildPlaces: { page: WikiChildPlacesPage },
+  FailedLoadChildPlaces: { error: ClientFailure },
+  ClickedLoadMoreChildPlaces: {},
   SucceededLoadPublications: { publications: Schema.Array(ApiPublicationCardData) },
   FailedLoadPublications: { error: ClientFailure },
   UpdatedViewerBookmarks: { bookmarks: ViewerBookmarks },

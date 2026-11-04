@@ -38,6 +38,6 @@ export const update = ApplicationComposition.makeUpdate({
   CompletedLocateDevice: (model, { deviceLocation }) =>
     Update.combineSteps([
       makeFieldsStep(() => ({ deviceLocation: () => deviceLocation })),
-      ProfileLocationsEditorBinding.informOfDeviceLocation(deviceLocation),
+      ProfileLocationsEditorBinding.informDeviceLocation(deviceLocation),
     ])(model),
 })

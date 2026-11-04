@@ -55,9 +55,6 @@ export type Model = typeof Model.Type
 // MESSAGE
 
 export const Message = defineMessageUnion({
-  RequestedOpen: {},
-  RequestedClose: {},
-  InformedOfSwipeAvailability: { isSwipeEnabled: Schema.Boolean },
   PressedSwipeArea: {
     clientX: Schema.Finite,
     clientY: Schema.Finite,
@@ -81,6 +78,17 @@ export const Message = defineMessageUnion({
 
 export type Message = typeof Message.Type
 
+// IN MESSAGE
+
+/** What a parent can ask of the drawer, through its Binding's `requestOpen`, `requestClose` and `informSwipeAvailability`. */
+export const InMessage = defineMessageUnion({
+  RequestedOpen: {},
+  RequestedClose: {},
+  InformedOfSwipeAvailability: { isSwipeEnabled: Schema.Boolean },
+})
+
+export type InMessage = typeof InMessage.Type
+
 // OUT MESSAGE
 
 export const OutMessage = defineMessageUnion({
@@ -89,29 +97,40 @@ export const OutMessage = defineMessageUnion({
 })
 export type OutMessage = typeof OutMessage.Type
 
-const DrawerDefinition = Block.makeDefinition("Drawer", {
-  Model,
-  Message,
-  OutMessage,
+export const DrawerKey = Symbol("Drawer")
+
+export const DrawerBlock = Block.make("Drawer", {
+  key: DrawerKey,
+  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  view: { kind: "Element", Inputs: Block.makeInputContract<ViewInputs>() },
   ChildInitContext: Schema.Struct({
     id: Schema.String,
     isAnimated: Schema.optionalKey(Schema.Boolean),
     focusSelector: Schema.optionalKey(Schema.String),
   }),
+  InMessage,
+  // Requests go through the Dialog, whose fold forwards either of its OutMessages.
+  inMessageOutputs: {
+    RequestedOpen: { outMessage: OutMessage },
+    RequestedClose: { outMessage: OutMessage },
+  },
+  Model,
+  Message,
+  OutMessage,
 })
 
-const DialogBinding = DrawerDefinition.makeBinding(Dialog.DialogBlock, {
+const DialogBinding = DrawerBlock.makeBinding(Dialog.DialogBlock, {
   field: "dialog",
   init: { contextToArgs: (config) => [config] },
 }).withOutMessagePolicy({
-  fold: DrawerDefinition.makeOutMessageFold(Dialog.DialogBlock, {
-    Opened: () => DrawerDefinition.makeOutMessageStep(() => OutMessage.Opened()),
+  fold: DrawerBlock.makeOutMessageFold(Dialog.DialogBlock, {
+    Opened: () => DrawerBlock.makeOutMessageStep(() => OutMessage.Opened()),
     Closed: () =>
-      DrawerDefinition.makeStep((model) => ({
+      DrawerBlock.makeStep((model) => ({
         model: modifyFields(model, { gestureState: () => Idle() }),
         outMessage: OutMessage.Closed(),
       })),
-    CompletedClose: DrawerDefinition.makeNoopStep,
+    CompletedClose: DrawerBlock.makeNoopStep,
   }),
 })
 
@@ -121,7 +140,6 @@ const DialogBinding = DrawerDefinition.makeBinding(Dialog.DialogBlock, {
 export type InitConfig = Readonly<{
   id: string
   dismissDirection?: DismissDirection
-  isOpen?: boolean
   isAnimated?: boolean
   isSwipeEnabled?: boolean
   focusSelector?: string
@@ -143,7 +161,7 @@ type SwipeMessage =
   | typeof Message.CancelledSwipe.Type
 
 /** Keeps the drawer viewport above an on-screen keyboard for its mounted lifetime. */
-export const TrackVirtualKeyboard = DrawerDefinition.makeMount("TrackVirtualKeyboard", {
+export const TrackVirtualKeyboard = DrawerBlock.makeMount("TrackVirtualKeyboard", {
   messages: [Message.CompletedTrackVirtualKeyboard],
   handler: function* () {
     return ({ element }) =>
@@ -152,7 +170,7 @@ export const TrackVirtualKeyboard = DrawerDefinition.makeMount("TrackVirtualKeyb
 })
 
 /** Tracks a pointer-captured swipe for the mounted swipe area. */
-export const TrackDrawerSwipe = DrawerDefinition.makeMountStream("TrackDrawerSwipe", {
+export const TrackDrawerSwipe = DrawerBlock.makeMountStream("TrackDrawerSwipe", {
   messages: [
     Message.PressedSwipeArea,
     Message.MovedSwipePointer,
@@ -289,10 +307,11 @@ export const TrackDrawerSwipe = DrawerDefinition.makeMountStream("TrackDrawerSwi
   },
 })
 
-const DrawerComposition = DrawerDefinition.makeComposition({
+const DrawerComposition = DrawerBlock.makeComposition({
   bindings: [DialogBinding],
   mounts: [TrackVirtualKeyboard, TrackDrawerSwipe],
 })
+export type DrawerViewBuilder = Block.ViewBuilderFor<typeof DrawerComposition>
 
 // UPDATE
 
@@ -358,7 +377,7 @@ const nextSwipingState = (
   })
 }
 
-const releasedSwipe = DrawerDefinition.makeStep((model, { swiping, pointer }: SwipeSample) => {
+const releasedSwipe = DrawerBlock.makeStep((model, { swiping, pointer }: SwipeSample) => {
   const { clientX, clientY } = pointer
   const finalSwiping = nextSwipingState(model, { swiping, pointer })
 
@@ -386,8 +405,7 @@ const releasedSwipe = DrawerDefinition.makeStep((model, { swiping, pointer }: Sw
     : { model: nextModel }
 })
 
-/** Processes a drawer message and returns the next Model, Commands, and OutMessage. */
-export const update = DrawerComposition.makeUpdate({
+const inMessageUpdate = DrawerComposition.makeInMessageUpdate({
   RequestedOpen: (model) => DialogBinding.requestOpen()(model),
   RequestedClose: (model) => DialogBinding.requestClose()(model),
   InformedOfSwipeAvailability: (model, { isSwipeEnabled }) => ({
@@ -396,6 +414,10 @@ export const update = DrawerComposition.makeUpdate({
       ...(isSwipeEnabled ? {} : { gestureState: () => Idle() }),
     }),
   }),
+})
+
+/** Processes a drawer message and returns the next Model, Commands, and OutMessage. */
+export const update = DrawerComposition.makeUpdate({
   PressedSwipeArea: (model, { clientX, clientY, timeStamp, panelWidth, panelHeight }) =>
     model.isSwipeEnabled && model.dialog.isOpen && Predicate.isTagged(model.gestureState, "Idle")
       ? {
@@ -473,14 +495,14 @@ export const update = DrawerComposition.makeUpdate({
   ReleasedSwipePointer: (model, { clientX, clientY, timeStamp }) =>
     Match.value(model.gestureState).pipe(
       Match.tag("Pressed", () =>
-        DrawerDefinition.makeStep(() => ({
+        DrawerBlock.makeStep(() => ({
           model: modifyFields(model, { gestureState: () => Idle() }),
         }))(model),
       ),
       Match.tag("Swiping", (swiping) =>
         releasedSwipe(model, { swiping, pointer: { clientX, clientY, timeStamp } }),
       ),
-      Match.orElse(() => DrawerDefinition.makeStep(() => ({ model: model }))(model)),
+      Match.orElse(() => DrawerBlock.makeStep(() => ({ model: model }))(model)),
     ),
   CancelledSwipe: (model) => ({ model: modifyFields(model, { gestureState: () => Idle() }) }),
   CompletedTrackVirtualKeyboard: (model) => ({ model: model }),
@@ -538,7 +560,8 @@ export type RenderInfo = Readonly<{
 
 /** Per-render inputs for Drawer.view. */
 export type ViewInputs = Readonly<{
-  toView: (render: RenderInfo) => Html
+  /** Renders with the drawer's own builder: only it can attach the drawer's and its Dialog's Mounts. */
+  toView: (render: RenderInfo, h: DrawerViewBuilder) => Html
 }>
 
 /** Renders a headless drawer backed by Foldkit Dialog. */
@@ -607,26 +630,29 @@ export const view = DrawerComposition.makeView.withInputs<ViewInputs>(
         model: model.dialog,
         viewInputs: {
           toView: (dialogRender) =>
-            viewInputs.toView({
-              dialog: dialogRender.dialog,
-              backdrop: [...dialogRender.backdrop, ...backdropAttributes],
-              viewport: viewportAttributes,
-              panel: [...dialogRender.panel, ...panelAttributes],
-              content: contentAttributes,
-              swipeArea: swipeAreaAttributes,
-              title: dialogRender.title,
-              description: dialogRender.description,
-              initialFocus: dialogRender.initialFocus,
-              isVisible: dialogRender.isVisible,
-              isSwiping,
-            }),
+            viewInputs.toView(
+              {
+                dialog: dialogRender.dialog,
+                backdrop: [...dialogRender.backdrop, ...backdropAttributes],
+                viewport: viewportAttributes,
+                panel: [...dialogRender.panel, ...panelAttributes],
+                content: contentAttributes,
+                swipeArea: swipeAreaAttributes,
+                title: dialogRender.title,
+                description: dialogRender.description,
+                initialFocus: dialogRender.initialFocus,
+                isVisible: dialogRender.isVisible,
+                isSwiping,
+              },
+              h,
+            ),
         },
       }),
     )
   },
 )
 
-const initialize = DrawerComposition.makeInit((config: InitConfig) => ({
+const init = DrawerComposition.makeInit((config: InitConfig) => ({
   childInitContext: config,
   model: {
     dismissDirection: config.dismissDirection ?? "Down",
@@ -635,29 +661,17 @@ const initialize = DrawerComposition.makeInit((config: InitConfig) => ({
   },
 }))
 
-export const init = (config: InitConfig): Model => {
-  const model = initialize(config).model
-  return config.isOpen ? update(model, Message.RequestedOpen()).model : model
-}
-export const open = (model: Model) => update(model, Message.RequestedOpen())
-export const close = (model: Model) => update(model, Message.RequestedClose())
-export const reflectSwipeEnabled =
-  (isSwipeEnabled: boolean) =>
-  (model: Model): Model =>
-    update(model, Message.InformedOfSwipeAvailability({ isSwipeEnabled })).model
+export const layer = DrawerBlock.makeLayer(
+  Effect.gen(function* () {
+    const dialog = yield* DialogBinding
 
-const prepare = () =>
-  DrawerComposition.prepareBlock({
-    init: initialize,
-    update,
-    view,
-    operations: {
-      requestOpen: Message.RequestedOpen,
-      requestClose: Message.RequestedClose,
-      informSwipeAvailability: Message.InformedOfSwipeAvailability,
-    },
-    EffectsLayer: Layer.mergeAll(TrackVirtualKeyboard.layer, TrackDrawerSwipe.layer),
-  })
-
-export const DrawerBlock: Block.FromAssemblyWithViewAndOutMessage<typeof Model, typeof prepare> =
-  Block.assemble(prepare)
+    return {
+      children: [dialog],
+      init,
+      update,
+      inMessageUpdate,
+      view,
+      EffectsLayer: Layer.mergeAll(TrackVirtualKeyboard.layer, TrackDrawerSwipe.layer),
+    }
+  }),
+).pipe(Layer.provide(Dialog.layer))

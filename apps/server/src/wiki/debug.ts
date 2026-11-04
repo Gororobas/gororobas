@@ -11,6 +11,7 @@ import { Array as EffectArray, Effect, Option, Predicate, Record, Schema } from 
 import { SqlClient } from "effect/sql"
 
 import { environmentConfig } from "../environment-config.js"
+import { ExternalDataReport, reportExternalData } from "./external-data/report.js"
 import { findSourceRowById } from "./queries.js"
 
 const jsonColumns: ReadonlyArray<string> = [
@@ -107,6 +108,9 @@ export const getWikiArticleDebug = Effect.fn("Wiki.getArticleDebug")(function* (
       yield* sql`SELECT * FROM wiki_book_editions WHERE wiki_article_id = ${wikiArticleId}`,
     bookEditionLanguages:
       yield* sql`SELECT * FROM wiki_book_edition_languages WHERE wiki_article_id = ${wikiArticleId}`,
+    externalDataReport: yield* Schema.encodeEffect(Schema.Array(ExternalDataReport))(
+      yield* reportExternalData([wikiArticleId]),
+    ),
     externalDataObservations:
       yield* sql`SELECT * FROM wiki_article_external_data_observations WHERE wiki_article_id = ${wikiArticleId} ORDER BY observed_at DESC`,
     bookmarks:

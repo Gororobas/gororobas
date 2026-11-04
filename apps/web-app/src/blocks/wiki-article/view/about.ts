@@ -39,6 +39,7 @@ import { WikiArticleRow } from "../../../ui/wiki-article-row"
 import type { WikiArticleViewBuilder } from "../composition"
 import { Message } from "../message"
 import { BookmarkSaving, type Model } from "../model"
+import * as ChildPlaces from "./child-places"
 import * as Overview from "./overview"
 import {
   type ArticleState,
@@ -680,6 +681,7 @@ export const view = (
       ...ordered({ order: 1, children: hero(page, h) }, h),
       ...ordered({ order: 3, children: [Overview.view(page, h), ...placeMap(page, h)] }, h),
       ...ordered({ order: 4, children: cultivars({ model, page }, h) }, h),
+      ...ordered({ order: 4, children: ChildPlaces.view({ model, page }, h) }, h),
       ...ordered({ order: 6, children: aboutContent(page, h) }, h),
       ...ordered({ order: 7, children: publicationsPreview({ model, page, maybeToday }, h) }, h),
       ...ordered({ order: 8, children: related(model, h) }, h),

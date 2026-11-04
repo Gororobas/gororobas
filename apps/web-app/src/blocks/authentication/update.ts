@@ -21,8 +21,11 @@ const sentCode = (pending: PendingCode, notice?: string) => ({
   commands: [WaitForResendCooldown({ sentAt: pending.sentAt })],
 })
 
-export const update = AuthenticationComposition.makeUpdate({
+export const inMessageUpdate = AuthenticationComposition.makeInMessageUpdate({
   RequestedRestoreSession: (model) => ({ model, commands: [RestoreSession()] }),
+})
+
+export const update = AuthenticationComposition.makeUpdate({
   ChangedSessionAccess: (model, { state }) => {
     const { stage } = model
 

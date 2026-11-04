@@ -232,22 +232,6 @@ export const update = ProfileLocationsEditorComposition.makeUpdate.withContext(
       model: withForm(model, (form) => ({ ...form, deviceLookup: "Locating" })),
       outMessage: OutMessage.RequestedDeviceLocation(),
     }),
-    InformedOfDeviceLocation: (model) => {
-      const isLocating = Option.exists(model.maybeForm, (form) => form.deviceLookup === "Locating")
-
-      if (!isLocating) {
-        return { model }
-      }
-
-      return DeviceLocation.match(deviceLocation, {
-        Unrequested: () => ({ model }),
-        Locating: () => ({ model }),
-        Located: ({ coordinates }) => ({ model, commands: [FindMunicipality({ coordinates })] }),
-        Unavailable: () => ({
-          model: withForm(model, (form) => ({ ...form, deviceLookup: "Unavailable" })),
-        }),
-      })
-    },
     SucceededFindMunicipality: (model, { place }) =>
       Update.combineSteps(model, [
         makeStep((current) => ({
@@ -370,5 +354,27 @@ export const update = ProfileLocationsEditorComposition.makeUpdate.withContext(
         maybeListError: () => Option.some(message),
       }),
     }),
+  }),
+)
+
+/** Finds the municipality around the device, once the application has read where it is. */
+export const inMessageUpdate = ProfileLocationsEditorComposition.makeInMessageUpdate.withContext(
+  (deviceLocation: DeviceLocation) => ({
+    InformedOfDeviceLocation: (model) => {
+      const isLocating = Option.exists(model.maybeForm, (form) => form.deviceLookup === "Locating")
+
+      if (!isLocating) {
+        return { model }
+      }
+
+      return DeviceLocation.match(deviceLocation, {
+        Unrequested: () => ({ model }),
+        Locating: () => ({ model }),
+        Located: ({ coordinates }) => ({ model, commands: [FindMunicipality({ coordinates })] }),
+        Unavailable: () => ({
+          model: withForm(model, (form) => ({ ...form, deviceLookup: "Unavailable" })),
+        }),
+      })
+    },
   }),
 )

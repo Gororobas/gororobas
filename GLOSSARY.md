@@ -14,6 +14,10 @@ Terms the code uses with one meaning only. When a concept here appears in code, 
 
 **Enrichment**: the derived work a committed change requests: external provider data and link inference for approved wiki articles, link inference and translations for publication content, translations for comments. Services request it through `Enrichment` (`apps/server/src/enrichment/`) after their transaction commits; requests are best-effort and logged when they fail.
 
+**External data observation**: one provider's answer to one external data fetch for a wiki article, stored with the article frontier and inputs it was fetched for: the raw responses on success, the `ExternalDataFetchError` on failure (`wiki_article_external_data_observations`). Projections such as Wikipedia links, GBIF media and book editions are replaced only by successful observations.
+
+**External ID resolution**: proposing which provider record (a Wikidata item, a Google Books volume) an article is about when the article has no ID, with the evidence that found it (`ExternalIdResolution`, `apps/server/src/wiki/external-data/id-resolution.ts`). Resolution never edits articles; assigning the ID is an edit for a person to review.
+
 ## Places
 
 **Place**: a PLACE wiki article: anywhere people recognize, from countries and municipalities to biomes, páramos and watersheds (`PlaceKind`). Whether it's a single territory or a kind of place found in many regions, people perceive it as a place.

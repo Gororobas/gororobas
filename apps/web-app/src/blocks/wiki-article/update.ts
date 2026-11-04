@@ -2,12 +2,19 @@ import { HashMap, Option } from "effect"
 import { AsyncData } from "foldkit"
 import { modifyFields } from "foldkit/struct"
 
-import { LoadBookmarkers, LoadPublications, SaveBookmark } from "./command"
+import {
+  CHILD_PLACES_PAGE_SIZE,
+  LoadBookmarkers,
+  LoadChildPlaces,
+  LoadPublications,
+  SaveBookmark,
+} from "./command"
 import { WikiArticleComposition } from "./composition"
 import { makeFieldsStep } from "./definition"
 import {
   BookmarkSaving,
   BookmarkerResults,
+  ChildPlaceResults,
   ContributorResults,
   CultivarResults,
   PageResult,
@@ -42,6 +49,45 @@ export const update = WikiArticleComposition.makeUpdate({
   FailedLoadCultivars: makeFieldsStep.fromMessage(({ error }) => ({
     cultivarsAsyncData: () => CultivarResults.Failure({ error }),
   })),
+  SucceededLoadChildPlaces: makeFieldsStep.fromMessage(({ page }) => ({
+    childPlacesAsyncData: (current) =>
+      ChildPlaceResults.Success({
+        data: Option.match(AsyncData.getData(current), {
+          onNone: () => page,
+          onSome: (loaded) => ({ ...page, places: [...loaded.places, ...page.places] }),
+        }),
+      }),
+  })),
+  FailedLoadChildPlaces: makeFieldsStep.fromMessage(({ error }) => ({
+    childPlacesAsyncData: (current) =>
+      Option.match(AsyncData.getData(current), {
+        onNone: () => ChildPlaceResults.Failure({ error }),
+        onSome: (data) => ChildPlaceResults.Stale({ error, data }),
+      }),
+  })),
+  ClickedLoadMoreChildPlaces: (model) =>
+    Option.match(
+      Option.filter(
+        AsyncData.getData(model.childPlacesAsyncData),
+        (loaded) =>
+          !AsyncData.isRefreshing(model.childPlacesAsyncData) &&
+          loaded.places.length < loaded.totalCount,
+      ),
+      {
+        onNone: () => ({ model }),
+        onSome: (loaded) => ({
+          model: modifyFields(model, {
+            childPlacesAsyncData: () => ChildPlaceResults.Refreshing({ data: loaded }),
+          }),
+          commands: [
+            LoadChildPlaces({
+              lookup: model.lookup,
+              currentPage: Math.floor(loaded.places.length / CHILD_PLACES_PAGE_SIZE),
+            }),
+          ],
+        }),
+      },
+    ),
   SucceededLoadContributors: makeFieldsStep.fromMessage(({ contributors }) => ({
     contributorsAsyncData: () => ContributorResults.Success({ data: contributors }),
   })),

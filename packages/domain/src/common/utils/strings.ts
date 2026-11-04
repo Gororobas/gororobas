@@ -1,5 +1,4 @@
-import { Effect, Crypto as EffectCrypto, String as EffectString, Predicate } from "effect"
-import { Hex } from "effect/encoding"
+import { String as EffectString, Predicate } from "effect"
 
 import { words } from "../../links/words.js"
 
@@ -45,8 +44,3 @@ export const toSearchableText = (text: string): string =>
   words(text)
     .map((word) => word.value)
     .join(" ")
-
-export const hashString = (str: string) =>
-  EffectCrypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(str))).pipe(
-    Effect.map((digest) => Hex.encode(digest).slice(0, 16)),
-  )

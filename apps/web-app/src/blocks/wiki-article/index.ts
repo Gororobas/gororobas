@@ -1,1 +1,1 @@
-export { WikiArticleBlock } from "./block"
+export { WikiArticleBlock, layer } from "./block"

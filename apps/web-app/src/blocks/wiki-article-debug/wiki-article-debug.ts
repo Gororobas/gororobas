@@ -22,8 +22,18 @@ const Message = defineMessageUnion({
   ClickedReload: {},
 })
 
-const WikiArticleDebugDefinition = Block.makeDefinition("WikiArticleDebug", { Model, Message })
-const WikiArticleDebugComposition = WikiArticleDebugDefinition.makeComposition()
+export const WikiArticleDebugKey = Symbol("WikiArticleDebug")
+
+export const WikiArticleDebugBlock = Block.make("WikiArticleDebug", {
+  key: WikiArticleDebugKey,
+  Init: Schema.Tuple([WikiArticleId]),
+  view: { kind: "Element" },
+  effects: { services: [GororobasApiClient] },
+  Model,
+  Message,
+})
+
+const WikiArticleDebugComposition = WikiArticleDebugBlock.makeComposition()
 
 const init = WikiArticleDebugComposition.makeInit((wikiArticleId: WikiArticleId) => ({
   model: {
@@ -52,7 +62,7 @@ const update = WikiArticleDebugComposition.makeUpdate({
   }),
 })
 
-const subscriptions = WikiArticleDebugDefinition.makeSubscriptions((entry) => ({
+const subscriptions = WikiArticleDebugBlock.makeSubscriptions((entry) => ({
   article: entry(
     "LoadWikiArticleDebug",
     { wikiArticleId: WikiArticleId, reloadCount: Schema.Int },
@@ -105,14 +115,15 @@ const view = WikiArticleDebugComposition.makeView((model, h) =>
   ),
 )
 
-const prepare = () =>
-  WikiArticleDebugComposition.prepareBlock({
-    init,
-    update,
-    view,
-    subscriptions,
-    EffectsLayer: subscriptions.layer,
-  })
-
-export const WikiArticleDebugBlock: Block.FromAssemblyWithView<typeof Model, typeof prepare> =
-  Block.assemble(prepare)
+export const layer = WikiArticleDebugBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      subscriptions,
+      EffectsLayer: subscriptions.layer,
+    }
+  }),
+)

@@ -3,10 +3,10 @@ import { DateTime, Effect, Layer, Option, Schema } from "effect"
 import { load, pushUrl } from "foldkit/navigation"
 
 import { DeviceLocation } from "../lib/device-location"
-import { ApplicationDefinition } from "./definition"
+import { ApplicationBlock } from "./definition"
 import { Message } from "./message"
 
-export const NavigateInternal = ApplicationDefinition.makeCommand("NavigateInternal", {
+export const NavigateInternal = ApplicationBlock.makeCommand("NavigateInternal", {
   args: { url: Schema.String },
   messages: [Message.CompletedNavigateInternal],
   handler: function* () {
@@ -14,7 +14,7 @@ export const NavigateInternal = ApplicationDefinition.makeCommand("NavigateInter
   },
 })
 
-export const LoadExternal = ApplicationDefinition.makeCommand("LoadExternal", {
+export const LoadExternal = ApplicationBlock.makeCommand("LoadExternal", {
   args: { href: Schema.String },
   messages: [Message.CompletedLoadExternal],
   handler: function* () {
@@ -22,7 +22,7 @@ export const LoadExternal = ApplicationDefinition.makeCommand("LoadExternal", {
   },
 })
 
-export const ReadToday = ApplicationDefinition.makeCommand("ReadToday", {
+export const ReadToday = ApplicationBlock.makeCommand("ReadToday", {
   messages: [Message.CompletedReadToday],
   handler: function* () {
     return () => DateTime.now.pipe(Effect.map((today) => Message.CompletedReadToday({ today })))
@@ -48,7 +48,7 @@ const currentPosition = Effect.callback<GeolocationPosition, PositionUnavailable
 })
 
 /** Asks the browser where the device is, which may prompt the person for permission. */
-export const LocateDevice = ApplicationDefinition.makeCommand("LocateDevice", {
+export const LocateDevice = ApplicationBlock.makeCommand("LocateDevice", {
   messages: [Message.CompletedLocateDevice],
   handler: function* () {
     return () =>

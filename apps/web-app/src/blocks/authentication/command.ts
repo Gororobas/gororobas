@@ -8,7 +8,7 @@ import { Clock, Duration, Effect, Layer, Option, Schema } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
 import { AuthenticationClient, SessionAccess, SessionStorageError } from "../../session-access"
-import { AuthenticationDefinition } from "./definition"
+import { AuthenticationBlock } from "./definition"
 import { Message, RestoredSession } from "./message"
 import { PendingCode } from "./model"
 
@@ -123,7 +123,7 @@ const signInWithCode = Effect.fn(function* (pending: PendingCode, code: string) 
 
 const genericError = "Algo deu errado. Tente novamente."
 
-export const RestoreSession = AuthenticationDefinition.makeCommand("RestoreSession", {
+export const RestoreSession = AuthenticationBlock.makeCommand("RestoreSession", {
   messages: [Message.CompletedRestoreSession],
   handler: function* () {
     return () =>
@@ -169,7 +169,7 @@ export const RestoreSession = AuthenticationDefinition.makeCommand("RestoreSessi
   },
 })
 
-export const SendCode = AuthenticationDefinition.makeCommand("SendCode", {
+export const SendCode = AuthenticationBlock.makeCommand("SendCode", {
   args: { email: Schema.String },
   messages: [Message.SucceededSendCode, Message.FailedSendCode],
   handler: function* () {
@@ -185,7 +185,7 @@ export const SendCode = AuthenticationDefinition.makeCommand("SendCode", {
   },
 })
 
-export const ResendCode = AuthenticationDefinition.makeCommand("ResendCode", {
+export const ResendCode = AuthenticationBlock.makeCommand("ResendCode", {
   args: { pending: PendingCode },
   messages: [Message.SucceededResendCode, Message.FailedResendCode],
   handler: function* () {
@@ -199,7 +199,7 @@ export const ResendCode = AuthenticationDefinition.makeCommand("ResendCode", {
   },
 })
 
-export const WaitForResendCooldown = AuthenticationDefinition.makeCommand("WaitForResendCooldown", {
+export const WaitForResendCooldown = AuthenticationBlock.makeCommand("WaitForResendCooldown", {
   args: { sentAt: Schema.Finite },
   messages: [Message.CompletedWaitForResendCooldown],
   handler: function* () {
@@ -210,7 +210,7 @@ export const WaitForResendCooldown = AuthenticationDefinition.makeCommand("WaitF
   },
 })
 
-export const VerifyCode = AuthenticationDefinition.makeCommand("VerifyCode", {
+export const VerifyCode = AuthenticationBlock.makeCommand("VerifyCode", {
   args: { pending: PendingCode, code: Schema.String },
   messages: [Message.SucceededVerifyCode, Message.FailedVerifyCode],
   handler: function* () {
@@ -226,7 +226,7 @@ export const VerifyCode = AuthenticationDefinition.makeCommand("VerifyCode", {
   },
 })
 
-export const CompleteOnboarding = AuthenticationDefinition.makeCommand("CompleteOnboarding", {
+export const CompleteOnboarding = AuthenticationBlock.makeCommand("CompleteOnboarding", {
   args: { name: Schema.String },
   messages: [Message.SucceededCompleteOnboarding, Message.FailedCompleteOnboarding],
   handler: function* () {
@@ -241,7 +241,7 @@ export const CompleteOnboarding = AuthenticationDefinition.makeCommand("Complete
   },
 })
 
-export const SignOut = AuthenticationDefinition.makeCommand("SignOut", {
+export const SignOut = AuthenticationBlock.makeCommand("SignOut", {
   messages: [Message.SucceededSignOut, Message.FailedSignOut],
   handler: function* () {
     return () =>
@@ -251,7 +251,7 @@ export const SignOut = AuthenticationDefinition.makeCommand("SignOut", {
   },
 })
 
-export const CheckConnection = AuthenticationDefinition.makeCommand("CheckConnection", {
+export const CheckConnection = AuthenticationBlock.makeCommand("CheckConnection", {
   messages: [Message.ChangedSessionAccess],
   handler: function* () {
     return () =>

@@ -1,4 +1,4 @@
-import { NodeServices } from "@effect/platform-node"
+import { NodeCrypto, NodeServices } from "@effect/platform-node"
 import { Maple } from "@maple-dev/effect-sdk/server"
 import { Layer, ManagedRuntime } from "effect"
 
@@ -7,6 +7,8 @@ import { ErrorReporterLive } from "./error-reporter-live.js"
 import { GazetteerFixture } from "./places/gazetteer-fixture.js"
 import { GazetteerLive } from "./places/gazetteer-live.js"
 import { AppSqlLive, AppSqlTest } from "./sql.js"
+
+const PlatformLive = Layer.mergeAll(NodeServices.layer, NodeCrypto.layerDigest)
 
 export const AppRuntimeLive = ManagedRuntime.make(
   Layer.provide(
@@ -22,14 +24,14 @@ export const AppRuntimeLive = ManagedRuntime.make(
         environment: "development",
       }),
     ),
-    NodeServices.layer,
+    PlatformLive,
   ),
 )
 
 export const AppRuntimeTest = ManagedRuntime.make(
   Layer.provide(
     Layer.mergeAll(AppSqlTest, GazetteerFixture, ClusterTest, ErrorReporterLive),
-    NodeServices.layer,
+    PlatformLive,
   ),
 )
 

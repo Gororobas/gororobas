@@ -5,7 +5,6 @@ import { MediaAssetId, PersonId, WikiArticleId, WikiArticleRevisionId } from "..
 import { Handle, OptionalColumn, TimestampColumn, TimestampedStruct } from "../common/primitives.js"
 import { toSearchableText } from "../common/utils/strings.js"
 import { LoroDocFrontier, LoroDocSnapshot, LoroDocUpdate } from "../crdts/domain.js"
-import { PlaceMap } from "../places/domain.js"
 import { tiptapToText } from "../rich-text/tiptap-to-text.js"
 import { WikiAnimalArticle } from "./kinds/animal.js"
 import { WikiBookArticle } from "./kinds/book.js"
@@ -142,43 +141,6 @@ export const WikiArticleQueriedCardData = Schema.Struct({
 })
 
 export type WikiArticleQueriedCardData = typeof WikiArticleQueriedCardData.Type
-
-/** The plant a cultivar varies from: its page links there, and reads inherited traits from it. */
-export const WikiCultivarParentPlant = Schema.Struct({
-  card: WikiArticleQueriedCardData,
-  attributes: WikiPlantArticle.ProjectedAttributes,
-})
-
-export type WikiCultivarParentPlant = typeof WikiCultivarParentPlant.Type
-
-/** A language-specific article returned by the read APIs. */
-export const WikiArticleQueriedPageData = Schema.Union([
-  WikiAnimalArticle.QueriedPageData,
-  WikiBookArticle.QueriedPageData,
-  WikiConceptArticle.QueriedPageData,
-  WikiFilmArticle.QueriedPageData,
-  WikiNoteworthyEntityArticle.QueriedPageData,
-  WikiPlantArticle.QueriedPageData,
-  Schema.Struct({
-    ...WikiPlantCultivarArticle.QueriedPageData.fields,
-    /** None while the parent plant isn't published. */
-    parentPlant: OptionalColumn(WikiCultivarParentPlant),
-  }),
-  WikiResourceArticle.QueriedPageData,
-  Schema.Struct({
-    ...WikiPlaceArticle.QueriedPageData.fields,
-    /** Published places containing this one, from its parent to the country. */
-    ancestorPlaces: Schema.Array(WikiArticleQueriedCardData),
-    /** Published places whose parent is this one, by name. */
-    childPlaces: Schema.Array(WikiArticleQueriedCardData),
-    /** Null for places that aren't in the gazetteer. */
-    map: Schema.NullOr(PlaceMap),
-  }),
-  WikiToolArticle.QueriedPageData,
-  WikiUncategorizedArticle.QueriedPageData,
-]).pipe(Schema.toTaggedUnion("kind"))
-
-export type WikiArticleQueriedPageData = typeof WikiArticleQueriedPageData.Type
 
 export const projectArticle = (
   editableData: WikiArticleEditableData,

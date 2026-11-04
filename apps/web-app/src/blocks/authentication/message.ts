@@ -24,7 +24,6 @@ export const Message = defineMessageUnion({
   UpdatedName: { value: Schema.String },
   SubmittedName: {},
   ClickedSignOut: {},
-  RequestedRestoreSession: {},
   CompletedRestoreSession: { session: RestoredSession },
   ChangedSessionAccess: { state: SessionState },
   ChangedConnection: {},

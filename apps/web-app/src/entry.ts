@@ -2,19 +2,21 @@ import "./ui/theme/base-styles"
 import { Sheet } from "@pleat/core"
 import { Effect, Option } from "effect"
 import { Program, Runtime } from "foldkit"
+import type { Url } from "foldkit/url"
 
-import { ApplicationBlock } from "./app/block"
+import { ApplicationBlock, layer } from "./app/block"
 import { ApplicationLayer } from "./services"
 
 Sheet.mount()
 
 const program = Program.make({
   block: ApplicationBlock,
+  layer,
   container: document.getElementById("root"),
   routing: {
     onUrlRequest: ApplicationBlock.Message.ClickedLink,
     // Login fragments contain bearer proofs; keep them out of the message history.
-    onUrlChange: (url) =>
+    onUrlChange: (url: Url) =>
       // oxlint-disable-next-line foldkit/no-child-message-construction-in-root -- The root's own routing Message, built here to drop the fragment before it is recorded.
       ApplicationBlock.Message.ChangedUrl({ url: { ...url, hash: Option.none() } }),
   },

@@ -7,10 +7,10 @@ import { Effect, Layer, Option, Predicate, Schema } from "effect"
 import * as Dom from "foldkit/dom"
 
 import { GororobasApiClient } from "../../api-client"
-import { ProfileLocationsEditorDefinition } from "./definition"
+import { ProfileLocationsEditorBlock } from "./definition"
 import { Message } from "./message"
 
-export const LoadPlace = ProfileLocationsEditorDefinition.makeCommand("LoadPlace", {
+export const LoadPlace = ProfileLocationsEditorBlock.makeCommand("LoadPlace", {
   args: { id: WhosOnFirstId },
   messages: [Message.SucceededLoadPlace, Message.FailedLoadPlace],
   handler: function* () {
@@ -30,7 +30,7 @@ export const LoadPlace = ProfileLocationsEditorDefinition.makeCommand("LoadPlace
  * Finds the municipality around the device. The coordinates only travel to the server's lookup,
  * which doesn't keep them.
  */
-export const FindMunicipality = ProfileLocationsEditorDefinition.makeCommand("FindMunicipality", {
+export const FindMunicipality = ProfileLocationsEditorBlock.makeCommand("FindMunicipality", {
   args: { coordinates: Coordinates },
   messages: [Message.SucceededFindMunicipality, Message.FailedFindMunicipality],
   handler: function* () {
@@ -48,7 +48,7 @@ export const FindMunicipality = ProfileLocationsEditorDefinition.makeCommand("Fi
 })
 
 /** Moves focus where the next step happens, such as the form's first field once it opens. */
-export const FocusElement = ProfileLocationsEditorDefinition.makeCommand("FocusElement", {
+export const FocusElement = ProfileLocationsEditorBlock.makeCommand("FocusElement", {
   args: { id: Schema.String },
   messages: [Message.CompletedFocusElement],
   handler: function* () {
@@ -83,7 +83,7 @@ const toPartialDate = (parts: DateParts, timezone: string): PartialDate =>
     onSome: (month) => ({ precision: "month", year: parts.year, month, timezone }),
   })
 
-export const SaveLocation = ProfileLocationsEditorDefinition.makeCommand("SaveLocation", {
+export const SaveLocation = ProfileLocationsEditorBlock.makeCommand("SaveLocation", {
   args: { maybeId: Schema.Option(ProfileLocationId), draft: LocationDraft },
   messages: [Message.SucceededSaveLocation, Message.FailedSaveLocation],
   handler: function* () {
@@ -117,7 +117,7 @@ export const SaveLocation = ProfileLocationsEditorDefinition.makeCommand("SaveLo
   },
 })
 
-export const DeleteLocation = ProfileLocationsEditorDefinition.makeCommand("DeleteLocation", {
+export const DeleteLocation = ProfileLocationsEditorBlock.makeCommand("DeleteLocation", {
   args: { id: ProfileLocationId },
   messages: [Message.SucceededDeleteLocation, Message.FailedDeleteLocation],
   handler: function* () {

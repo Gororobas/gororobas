@@ -1,6 +1,6 @@
 import type { Block } from "foldkit"
 
-import { WikiArticleDefinition } from "./definition"
+import { WikiArticleBlock } from "./definition"
 
-export const WikiArticleComposition = WikiArticleDefinition.makeComposition()
+export const WikiArticleComposition = WikiArticleBlock.makeComposition()
 export type WikiArticleViewBuilder = Block.ViewBuilderFor<typeof WikiArticleComposition>

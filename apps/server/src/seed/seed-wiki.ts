@@ -510,6 +510,7 @@ const plantExternalData = (article: SeededArticle, wikidataId: string) =>
             payload: {},
           },
           gbifId: { kind: "taxon", id: yield* taxonId },
+          taxonName: plant.scientificName,
           wikipediaLinks: SupportedLanguage.literals.map((language) => ({
             language,
             url: `https://${language}.wikipedia.org/wiki/${encodeURIComponent(plant.names[language].replaceAll(" ", "_"))}`,

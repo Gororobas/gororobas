@@ -17,6 +17,8 @@ import {
   RelatedWikiArticle,
   WikiArticleBookmarker,
   WikiArticleContributor,
+  WikiChildPlacesPage,
+  WikiChildPlacesParams,
   WikiSearchParams,
 } from "./domain.js"
 import {
@@ -160,6 +162,14 @@ export class WikiApiGroup extends HttpApiGroup.make("wiki")
       error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
       params: WikiArticleLookup,
       query: Schema.Struct({ language: SupportedLanguage }),
+    }),
+  )
+  .add(
+    HttpApiEndpoint.get("listWikiArticleChildPlaces", "/wiki/:kind/:handle/child-places", {
+      success: WikiChildPlacesPage,
+      error: [WikiArticleNotFoundError, InvalidCrdtUpdateError],
+      params: WikiArticleLookup,
+      query: WikiChildPlacesParams,
     }),
   )
   .add(

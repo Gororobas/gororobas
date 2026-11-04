@@ -278,6 +278,7 @@ export const make = (
     return Object.assign(
       yield* Client.make({
         acquirer,
+        driver: "turso-browser",
         compiler,
         transactionAcquirer,
         onCommitFailure,

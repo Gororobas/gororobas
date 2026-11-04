@@ -10,7 +10,7 @@ import { Style, When } from "@pleat/core"
 import { Array as EffectArray, Option } from "effect"
 import * as Length from "effect-units/Length"
 import { AsyncData } from "foldkit"
-import { childAttributes, type Html } from "foldkit/html"
+import { childAttributes, type Html, type MessageOf } from "foldkit/html"
 
 import { loginRouter, wikiArticleUrl } from "../../app/route"
 import { formatPartialDate } from "../../lib/partial-dates"
@@ -52,7 +52,7 @@ import {
 import { DateField, Message } from "./message"
 import type { Form, Model } from "./model"
 
-type ViewMessage = typeof ProfileLocationsEditorComposition.Message.Type
+type ViewMessage = MessageOf<ProfileLocationsEditorViewBuilder>
 
 const LocationPlace = ProfileLocationData.fields.place
 

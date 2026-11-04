@@ -4,13 +4,16 @@ import { WikiArticleLookup } from "@gororobas/domain/wiki/domain"
 import { Effect, Function, Layer, Option, Schema } from "effect"
 
 import { GororobasApiClient } from "../../api-client"
-import { WikiArticleDefinition } from "./definition"
+import { WikiArticleBlock } from "./definition"
 import { Message } from "./message"
+
+/** Places inside a place load this many at a time: a state can hold hundreds of municipalities. */
+export const CHILD_PLACES_PAGE_SIZE = 24
 
 /** The article page shows this many posts about it. */
 const PUBLICATIONS_IN_ARTICLE_PAGE_SIZE = 30
 
-export const LoadPage = WikiArticleDefinition.makeCommand("LoadPage", {
+export const LoadPage = WikiArticleBlock.makeCommand("LoadPage", {
   args: { lookup: WikiArticleLookup },
   messages: [Message.SucceededLoadPage, Message.FailedLoadPage],
   handler: function* () {
@@ -30,7 +33,7 @@ export const LoadPage = WikiArticleDefinition.makeCommand("LoadPage", {
   },
 })
 
-export const LoadRelated = WikiArticleDefinition.makeCommand("LoadRelated", {
+export const LoadRelated = WikiArticleBlock.makeCommand("LoadRelated", {
   args: { lookup: WikiArticleLookup },
   messages: [Message.SucceededLoadRelated, Message.FailedLoadRelated],
   handler: function* () {
@@ -46,7 +49,7 @@ export const LoadRelated = WikiArticleDefinition.makeCommand("LoadRelated", {
   },
 })
 
-export const LoadBookmarkers = WikiArticleDefinition.makeCommand("LoadBookmarkers", {
+export const LoadBookmarkers = WikiArticleBlock.makeCommand("LoadBookmarkers", {
   args: { lookup: WikiArticleLookup },
   messages: [Message.SucceededLoadBookmarkers, Message.FailedLoadBookmarkers],
   handler: function* () {
@@ -62,7 +65,7 @@ export const LoadBookmarkers = WikiArticleDefinition.makeCommand("LoadBookmarker
   },
 })
 
-export const LoadContributors = WikiArticleDefinition.makeCommand("LoadContributors", {
+export const LoadContributors = WikiArticleBlock.makeCommand("LoadContributors", {
   args: { lookup: WikiArticleLookup },
   messages: [Message.SucceededLoadContributors, Message.FailedLoadContributors],
   handler: function* () {
@@ -78,7 +81,7 @@ export const LoadContributors = WikiArticleDefinition.makeCommand("LoadContribut
   },
 })
 
-export const LoadCultivars = WikiArticleDefinition.makeCommand("LoadCultivars", {
+export const LoadCultivars = WikiArticleBlock.makeCommand("LoadCultivars", {
   args: { lookup: WikiArticleLookup },
   messages: [Message.SucceededLoadCultivars, Message.FailedLoadCultivars],
   handler: function* () {
@@ -94,7 +97,28 @@ export const LoadCultivars = WikiArticleDefinition.makeCommand("LoadCultivars", 
   },
 })
 
-export const LoadPublications = WikiArticleDefinition.makeCommand("LoadPublications", {
+export const LoadChildPlaces = WikiArticleBlock.makeCommand("LoadChildPlaces", {
+  args: { lookup: WikiArticleLookup, currentPage: Schema.Int },
+  messages: [Message.SucceededLoadChildPlaces, Message.FailedLoadChildPlaces],
+  handler: function* () {
+    const api = yield* GororobasApiClient
+
+    return ({ lookup, currentPage }) =>
+      api.wiki
+        .listWikiArticleChildPlaces({
+          params: lookup,
+          query: { language: "pt", pageSize: CHILD_PLACES_PAGE_SIZE, currentPage },
+        })
+        .pipe(
+          Effect.match({
+            onFailure: (error) => Message.FailedLoadChildPlaces({ error: { cause: error } }),
+            onSuccess: (page) => Message.SucceededLoadChildPlaces({ page }),
+          }),
+        )
+  },
+})
+
+export const LoadPublications = WikiArticleBlock.makeCommand("LoadPublications", {
   args: { wikiArticleId: WikiArticleId },
   messages: [Message.SucceededLoadPublications, Message.FailedLoadPublications],
   handler: function* () {
@@ -119,7 +143,7 @@ export const LoadPublications = WikiArticleDefinition.makeCommand("LoadPublicati
   },
 })
 
-export const SaveBookmark = WikiArticleDefinition.makeCommand("SaveBookmark", {
+export const SaveBookmark = WikiArticleBlock.makeCommand("SaveBookmark", {
   args: { lookup: WikiArticleLookup, maybeState: Schema.Option(BookmarkState) },
   messages: [Message.SucceededSaveBookmark, Message.FailedSaveBookmark],
   handler: function* () {
@@ -145,6 +169,7 @@ export const CommandsLayer = Layer.mergeAll(
   LoadBookmarkers.layer,
   LoadContributors.layer,
   LoadCultivars.layer,
+  LoadChildPlaces.layer,
   LoadPublications.layer,
   SaveBookmark.layer,
 )

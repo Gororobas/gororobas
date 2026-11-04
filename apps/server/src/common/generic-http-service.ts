@@ -2,6 +2,8 @@ import { ExternalDataFetchError, type ExternalDataProvider } from "@gororobas/do
 import { Config, DateTime, Effect, Option, Schema, Semaphore } from "effect"
 import { HttpClient, HttpClientResponse, HttpClientError } from "effect/http"
 
+const MAX_SCHEMA_ISSUE_LENGTH = 500
+
 /** One shared instance per provider layer; the permit includes a cooldown after every attempt. */
 export const makeProviderHttp = Effect.fn(function* (
   provider: typeof ExternalDataProvider.Type,
@@ -13,13 +15,13 @@ export const makeProviderHttp = Effect.fn(function* (
     Config.withDefault("Gororobas/1.0 (https://gororobas.com)"),
   )
 
-  const get = <A, I>(path: string, schema: Schema.Codec<A, I>) =>
-    Effect.gen(function* () {
-      // Query parameters can contain credentials; the path still identifies the endpoint.
-      const endpoint = new URL(`${baseUrl}${path}`)
-      endpoint.search = ""
-      const safeEndpoint = endpoint.toString()
+  const get = <A, I>(path: string, schema: Schema.Codec<A, I>) => {
+    // Query parameters can contain credentials; the path still identifies the endpoint.
+    const endpoint = new URL(`${baseUrl}${path}`)
+    endpoint.search = ""
+    const safeEndpoint = endpoint.toString()
 
+    return Effect.gen(function* () {
       const response = yield* client
         .get(`${baseUrl}${path}`, {
           headers: { "User-Agent": userAgent },
@@ -35,6 +37,8 @@ export const makeProviderHttp = Effect.fn(function* (
               }),
           ),
         )
+
+      yield* Effect.annotateCurrentSpan("http.response.status_code", response.status)
 
       if (response.status < 200 || response.status >= 300) {
         const retryable = response.status === 429 || response.status >= 500
@@ -74,12 +78,12 @@ export const makeProviderHttp = Effect.fn(function* (
 
       // oxlint-disable-next-line custom-lint-rules/no-schema-decode-unknown -- External HTTP JSON has not yet been validated against the provider schema.
       const value = yield* Schema.decodeUnknownEffect(schema)(payload).pipe(
-        Effect.tapError((error) => Effect.logError(`[${provider}] ${error.message}`, error)),
         Effect.mapError(
-          () =>
+          // Observations store this message, so it keeps the start of the decoding issue.
+          (error) =>
             new ExternalDataFetchError({
               provider,
-              message: `Response does not match provider schema for ${safeEndpoint}`,
+              message: `Response does not match provider schema for ${safeEndpoint}: ${error.message.slice(0, MAX_SCHEMA_ISSUE_LENGTH)}`,
               retryable: false,
             }),
         ),
@@ -98,10 +102,22 @@ export const makeProviderHttp = Effect.fn(function* (
         },
       }
     }).pipe(
+      Effect.tapError((error) =>
+        Effect.logWarning("External data request failed", {
+          provider,
+          endpoint: safeEndpoint,
+          message: error.message,
+          retryable: error.retryable,
+        }),
+      ),
+      Effect.withSpan("ExternalData.request", {
+        attributes: { "external_data.provider": provider, "url.full": safeEndpoint },
+      }),
       Effect.ensuring(Effect.sleep("1 second")),
       semaphore.withPermits(1),
       Effect.retry({ times: 2, while: (error) => error.retryable }),
     )
+  }
 
   return { get }
 })

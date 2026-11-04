@@ -1,6 +1,6 @@
 import type { Block } from "foldkit"
 
-import { AuthenticationDefinition } from "./definition"
+import { AuthenticationBlock } from "./definition"
 
-export const AuthenticationComposition = AuthenticationDefinition.makeComposition()
+export const AuthenticationComposition = AuthenticationBlock.makeComposition()
 export type AuthenticationViewBuilder = Block.ViewBuilderFor<typeof AuthenticationComposition>

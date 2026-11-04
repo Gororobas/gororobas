@@ -1,10 +1,10 @@
 import { Stream } from "effect"
 
 import { streamViewerBookmarks } from "../../lib/viewer-bookmarks"
-import { WikiArticleDefinition } from "./definition"
+import { WikiArticleBlock } from "./definition"
 import { Message } from "./message"
 
-export const subscriptions = WikiArticleDefinition.makeSubscriptions((entry) => ({
+export const subscriptions = WikiArticleBlock.makeSubscriptions((entry) => ({
   viewerBookmarks: entry(
     "WatchViewerBookmarks",
     {},
