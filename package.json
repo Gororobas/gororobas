@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare": "effect-tsgo patch --no-typescript --oxlint --tsrs",
+    "prepare": "effect-tsgo patch --no-typescript --oxlint --tsrs && lefthook install",
     "clean": "node scripts/clean.mjs",
     "build": "pnpm --filter @gororobas/web-app build",
     "build:foldkit": "bash scripts/build-foldkit.sh",

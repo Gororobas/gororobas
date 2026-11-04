@@ -367,10 +367,8 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         Effect.flatMap((session) => repository.listBookmarks(session.personId)),
       )
 
-      const listBookmarkers = (lookup: WikiArticleLookup) =>
-        findPage({ ...lookup, language: "pt" }).pipe(
-          Effect.flatMap((page) => repository.listBookmarkers(page.id)),
-        )
+      const listBookmarkers = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
+        findPage(lookup).pipe(Effect.flatMap((page) => repository.listBookmarkers(page.id)))
 
       const listCultivarCards = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
         findPage(lookup).pipe(
@@ -381,10 +379,8 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
           ),
         )
 
-      const listContributors = (lookup: WikiArticleLookup) =>
-        findPage({ ...lookup, language: "pt" }).pipe(
-          Effect.flatMap((page) => repository.listContributors(page.id)),
-        )
+      const listContributors = (lookup: WikiArticleLookup & { language: SupportedLanguage }) =>
+        findPage(lookup).pipe(Effect.flatMap((page) => repository.listContributors(page.id)))
 
       return {
         createWikiArticle,
@@ -398,27 +394,27 @@ export class WikiArticlesService extends Context.Service<WikiArticlesService>()(
         resolveCultivar,
         getPublishedArticle,
         listCards: (language: SupportedLanguage) => repository.listCards(language),
-        searchWikiArticles: Effect.fn("wiki.search")(function* (params: WikiSearchParams) {
+        searchWikiArticles: Effect.fn("wiki.search")(function* (
+          params: WikiSearchParams & { language: SupportedLanguage },
+        ) {
           yield* Effect.annotateCurrentSpan({
             "wiki.article.kind": params.kind ?? "all",
-            "wiki.search.language": params.language ?? "pt",
+            "wiki.search.language": params.language,
             "wiki.search.has_text": params.text !== undefined,
           })
 
           const articles = yield* repository.searchCards({
             search: params,
-            language: params.language ?? "pt",
+            language: params.language,
           })
           yield* Effect.annotateCurrentSpan("wiki.search.result_count", articles.length)
           return articles
         }),
         attachMediaToWikiArticle,
         setMainMedia,
-        listCultivars: (id: WikiArticleId) =>
+        listCultivars: (id: WikiArticleId, language: SupportedLanguage) =>
           getPublishedArticle(id).pipe(
-            Effect.andThen(
-              repository.listPublishedCultivars({ parentPlantId: id, language: "pt" }),
-            ),
+            Effect.andThen(repository.listPublishedCultivars({ parentPlantId: id, language })),
           ),
         getThumbnail: (id: WikiArticleId) =>
           getPublishedArticle(id).pipe(Effect.andThen(repository.findMainMedia(id))),

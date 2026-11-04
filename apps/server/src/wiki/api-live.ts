@@ -4,6 +4,7 @@ import { FetchHttpClient } from "effect/http"
 import { HttpApiBuilder } from "effect/http-api"
 
 import { withApiInfrastructureErrors } from "../common/api-infrastructure-errors.js"
+import { requestLocale } from "../common/request-locale.js"
 import { getWikiArticleDebug } from "./debug.js"
 import { GoogleBooks, GoogleBooksLive } from "./external-data/services/google-books.js"
 import { WikiArticlesService } from "./service.js"
@@ -31,7 +32,10 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
       .handle("getWikiRevisionHistory", ({ params }) =>
         WikiArticlesService.use((service) =>
           Effect.gen(function* () {
-            const article = yield* service.findPage({ ...params, language: "pt" })
+            const article = yield* service.findPage({
+              ...params,
+              language: (yield* requestLocale).language,
+            })
             return yield* service.listRevisionHistory({
               wikiArticleId: article.id,
               evaluation: "APPROVED",
@@ -40,20 +44,35 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
         ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "getWikiRevisionHistory" })),
       )
       .handle("searchWikiArticles", ({ query }) =>
-        WikiArticlesService.use((service) => service.searchWikiArticles(query)).pipe(
-          withApiInfrastructureErrors({ group: "wiki", endpoint: "searchWikiArticles" }),
-        ),
+        WikiArticlesService.use((service) =>
+          Effect.gen(function* () {
+            return yield* service.searchWikiArticles({
+              ...query,
+              language: query.language ?? (yield* requestLocale).language,
+            })
+          }),
+        ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "searchWikiArticles" })),
       )
       .handle("getWikiArticleByHandleAndKind", ({ params, query }) =>
         WikiArticlesService.use((service) =>
-          service.getPage({ ...params, language: query.language ?? "pt" }),
+          Effect.gen(function* () {
+            return yield* service.getPage({
+              ...params,
+              language: query.language ?? (yield* requestLocale).language,
+            })
+          }),
         ).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "getWikiArticleByHandleAndKind" }),
         ),
       )
       .handle("listRelatedWikiArticles", ({ params, query }) =>
         WikiArticlesService.use((service) =>
-          service.listRelatedWikiArticles({ ...params, language: query.language ?? "pt" }),
+          Effect.gen(function* () {
+            return yield* service.listRelatedWikiArticles({
+              ...params,
+              language: query.language ?? (yield* requestLocale).language,
+            })
+          }),
         ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "listRelatedWikiArticles" })),
       )
       .handle("createWikiArticle", ({ payload }) =>
@@ -65,7 +84,10 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
       .handle("createWikiArticleRevision", ({ params, payload }) =>
         WikiArticlesService.use((service) =>
           Effect.gen(function* () {
-            const article = yield* service.findPage({ ...params, language: "pt" })
+            const article = yield* service.findPage({
+              ...params,
+              language: (yield* requestLocale).language,
+            })
             const id = yield* service.createRevision(article.id, payload)
             return { id }
           }),
@@ -86,27 +108,45 @@ export const WikiApiLive = HttpApiBuilder.group(GororobasApi, "wiki", (handlers)
       )
       .handle("setWikiArticleBookmark", ({ params, payload }) =>
         WikiArticlesService.use((service) =>
-          service
-            .findPage({ ...params, language: "pt" })
-            .pipe(Effect.flatMap((article) => service.bookmark(article.id, payload.state))),
+          Effect.gen(function* () {
+            return yield* service
+              .findPage({ ...params, language: (yield* requestLocale).language })
+              .pipe(Effect.flatMap((article) => service.bookmark(article.id, payload.state)))
+          }),
         ).pipe(withApiInfrastructureErrors({ group: "wiki", endpoint: "setWikiArticleBookmark" })),
       )
       .handle("removeWikiArticleBookmark", ({ params }) =>
         WikiArticlesService.use((service) =>
-          service
-            .findPage({ ...params, language: "pt" })
-            .pipe(Effect.flatMap((article) => service.removeBookmark(article.id))),
+          Effect.gen(function* () {
+            return yield* service
+              .findPage({ ...params, language: (yield* requestLocale).language })
+              .pipe(Effect.flatMap((article) => service.removeBookmark(article.id)))
+          }),
         ).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "removeWikiArticleBookmark" }),
         ),
       )
       .handle("listWikiArticleBookmarkers", ({ params }) =>
-        WikiArticlesService.use((service) => service.listBookmarkers(params)).pipe(
+        WikiArticlesService.use((service) =>
+          Effect.gen(function* () {
+            return yield* service.listBookmarkers({
+              ...params,
+              language: (yield* requestLocale).language,
+            })
+          }),
+        ).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleBookmarkers" }),
         ),
       )
       .handle("listWikiArticleContributors", ({ params }) =>
-        WikiArticlesService.use((service) => service.listContributors(params)).pipe(
+        WikiArticlesService.use((service) =>
+          Effect.gen(function* () {
+            return yield* service.listContributors({
+              ...params,
+              language: (yield* requestLocale).language,
+            })
+          }),
+        ).pipe(
           withApiInfrastructureErrors({ group: "wiki", endpoint: "listWikiArticleContributors" }),
         ),
       )

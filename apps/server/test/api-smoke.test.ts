@@ -8,7 +8,7 @@
  * placeholder handlers and contract drift. Every endpoint must have a request below.
  */
 import { NodeServices } from "@effect/platform-node"
-import { describe, expect, it } from "@effect/vitest"
+import { assert, describe, expect, it } from "@effect/vitest"
 import {
   GororobasApi,
   Handle,
@@ -24,6 +24,7 @@ import {
   PublicationId,
   WikiArticleCommonNameInCrdtList,
   WikiArticleId,
+  WikiArticleEditableData,
   WikiArticleKind,
   WikiArticleRevisionId,
   WhosOnFirstId,
@@ -56,6 +57,7 @@ import {
 } from "../src/places/gazetteer-fixture.js"
 import { DEFAULT_SEED, seedDatabase } from "../src/seed/seed-database.js"
 import { AppSqlTest } from "../src/sql.js"
+import { WikiArticlesRepository } from "../src/wiki/repository.js"
 import { ApiTestClient } from "./api-test-client.js"
 import { textToRichTextDocument } from "./feature-test-helpers.js"
 
@@ -278,7 +280,7 @@ const requests = ({
     "wiki.listWikiArticleChildPlaces": () =>
       client.wiki.listWikiArticleChildPlaces({
         params: { kind: targets.article.kind, handle: targets.article.handle },
-        query: { language: "pt", pageSize: 24, currentPage: 0 },
+        query: { language: "pt", pageSize: 12, currentPage: 0 },
       }),
     "moderation.getModerationQueue": () => client.moderation.getModerationQueue(),
 
@@ -571,3 +573,70 @@ describe("API smoke", () => {
     ),
   )
 })
+
+it.live(
+  "wiki reads the request language unless the query overrides it",
+  () =>
+    Effect.gen(function* () {
+      yield* seedDatabase({ scale: "tiny", seed: DEFAULT_SEED, anchor: yield* DateTime.now })
+      const { id: personId } = yield* one(
+        Schema.Struct({ id: PersonId }),
+        "SELECT id FROM people ORDER BY id LIMIT 1",
+      )
+      const repository = yield* WikiArticlesRepository.make
+
+      const id = yield* repository.createWikiArticle({
+        createdById: personId,
+        status: "PUBLISHED",
+        wikiArticle: yield* Schema.decodeEffect(WikiArticleEditableData)({
+          kind: "CONCEPT",
+          attributes: {},
+          translations: {
+            pt: {
+              commonNames: [{ id: "localename01", name: "Teste de idioma" }],
+              content: textToRichTextDocument("Português"),
+            },
+            en: {
+              commonNames: [{ id: "localename02", name: "Locale test" }],
+              content: textToRichTextDocument("English"),
+            },
+          },
+        }),
+      })
+
+      const api = yield* ApiTestClient
+      const client = yield* api.clientWith(api.newBrowser(), {
+        "accept-language": "en-US,en;q=0.9",
+      })
+      const cards = yield* client.wiki.searchWikiArticles({ query: { kind: "CONCEPT" } })
+      const card = cards.find((article) => article.id === id)
+      expect(card).toMatchObject({ commonNames: [{ name: "Locale test" }], language: "en" })
+      assert(card !== undefined)
+      const params = { kind: card.kind, handle: card.handle }
+
+      expect(yield* client.wiki.getWikiArticleByHandleAndKind({ params, query: {} })).toMatchObject(
+        {
+          commonNames: [{ name: "Locale test" }],
+          language: "en",
+        },
+      )
+
+      expect(
+        yield* client.wiki.getWikiArticleByHandleAndKind({ params, query: { language: "pt" } }),
+      ).toMatchObject({
+        commonNames: [{ name: "Teste de idioma" }],
+        language: "pt",
+      })
+
+      const overridden = yield* client.wiki.searchWikiArticles({
+        query: { kind: "CONCEPT", language: "pt" },
+      })
+      expect(overridden.find((article) => article.id === id)).toMatchObject({
+        commonNames: [{ name: "Teste de idioma" }],
+        language: "pt",
+      })
+    }).pipe(
+      Effect.provide(ApiTestClient.layer.pipe(Layer.provideMerge(Layer.unwrap(seededEnvironment)))),
+    ),
+  { timeout: 120_000 },
+)

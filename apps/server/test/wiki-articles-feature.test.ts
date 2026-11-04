@@ -685,14 +685,14 @@ const lookupOf = (context: WikiContext, title: string) =>
 const bookmarkersOf = (context: WikiContext, title: string) =>
   lookupOf(context, title).pipe(
     Effect.flatMap((lookup) =>
-      WikiArticlesService.use((service) => service.listBookmarkers(lookup)),
+      WikiArticlesService.use((service) => service.listBookmarkers({ ...lookup, language: "pt" })),
     ),
   )
 
 const contributorsOf = (context: WikiContext, title: string) =>
   lookupOf(context, title).pipe(
     Effect.flatMap((lookup) =>
-      WikiArticlesService.use((service) => service.listContributors(lookup)),
+      WikiArticlesService.use((service) => service.listContributors({ ...lookup, language: "pt" })),
     ),
   )
 
@@ -1207,8 +1207,12 @@ await Effect.runPromise(
                 handler: (context: WikiContext, { parent }) =>
                   Effect.gen(function* () {
                     expect(
-                      yield* (yield* WikiArticlesService).listCultivars(articleId(context, parent)),
+                      yield* (yield* WikiArticlesService).listCultivars(
+                        articleId(context, parent),
+                        "pt",
+                      ),
                     ).toEqual([])
+
                     return context
                   }),
               }),
@@ -2337,18 +2341,20 @@ it.effect("plant search ORs enum selections and matches overlapping numeric rang
     const service = yield* WikiArticlesService
 
     const matchingStrata = yield* service.searchWikiArticles({
+      language: "pt",
       kind: "PLANT",
       text: undefined,
       strata: ["HIGH", "EMERGENT"],
     })
 
-    const matchingHeight = yield* service.searchWikiArticles(
-      yield* Schema.decodeEffect(WikiSearchParams)({
+    const matchingHeight = yield* service.searchWikiArticles({
+      ...(yield* Schema.decodeEffect(WikiSearchParams)({
         kind: "PLANT",
         heightMin: 150,
         heightMax: 250,
-      }),
-    )
+      })),
+      language: "pt",
+    })
 
     const englishCards = yield* service.searchWikiArticles({
       kind: "PLANT",
@@ -2427,7 +2433,7 @@ it.effect("text search ranks names above mentions, folds accents and tolerates t
 
     const service = yield* WikiArticlesService
     const search = (text: string) =>
-      Effect.map(service.searchWikiArticles({ text }), (cards) =>
+      Effect.map(service.searchWikiArticles({ text, language: "pt" }), (cards) =>
         cards.map((card) => card.commonNames[0]?.name),
       )
 
