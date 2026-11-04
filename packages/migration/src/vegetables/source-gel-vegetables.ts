@@ -17,6 +17,7 @@ import {
   gelVegetableNamesToCrdtList,
   gelVegetableToPlantEditableAttributes,
 } from "./gel-vegetable-to-wiki-plant-article.js"
+import { gelVegetableWikidataIds } from "./gel-vegetable-wikidata-ids.js"
 
 const vegetablesQuery = `
   select Vegetable {
@@ -129,7 +130,11 @@ export const sourceGelVegetables = Effect.gen(function* () {
                 ...historyEntry,
                 article: WikiPlantArticle.EditableArticle.make({
                   kind: "PLANT",
-                  attributes: gelVegetableToPlantEditableAttributes(historyEntry.state),
+                  attributes: {
+                    ...gelVegetableToPlantEditableAttributes(historyEntry.state, source.handle),
+                    // Use the current handle across history, including states before a rename.
+                    wikidataId: Record.get(gelVegetableWikidataIds, source.handle),
+                  },
                   translations: {
                     pt: {
                       commonNames: gelVegetableNamesToCrdtList(

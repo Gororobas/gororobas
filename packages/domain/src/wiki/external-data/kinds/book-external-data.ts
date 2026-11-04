@@ -25,9 +25,12 @@ export const BookResult = Schema.Struct({
   coverage: Schema.Literals(["COMPLETE", "PARTIAL"]),
 })
 
+/** Without a volume ID, the fetcher looks for a volume listing one of the ISBNs. */
 export const BookExternalDataInputs = Schema.Struct({
   kind: Schema.Literal("BOOK"),
-  ...WikiBookArticle.EditableAttributes.mapFields(Struct.pick(["googleBooksVolumeId"])).fields,
+  ...WikiBookArticle.EditableAttributes.mapFields(
+    Struct.pick(["googleBooksVolumeId", "isbn13", "isbn10"]),
+  ).fields,
 })
 
 export const BookExternalDataResult = Schema.Struct({

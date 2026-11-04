@@ -73,6 +73,11 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
           (link) => insertExternalLink({ wikiArticleId, ...link }),
           { discard: true, concurrency: 1 },
         )
+
+        yield* Effect.logInfo("Stored Wikidata data", {
+          wikipediaLinks: wikidata.success.wikipediaLinks.length,
+          gbifId: wikidata.success.gbifId,
+        })
       }
 
       if (gbif === null) return
@@ -107,5 +112,12 @@ export const persistPlant = (request: ExternalDataFetchRequest, data: PlantExter
         (media) => insertExternalMedia({ wikiArticleId, ...media }),
         { discard: true, concurrency: 1 },
       )
+
+      yield* Effect.logInfo("Stored GBIF data", {
+        gbifTaxonId: taxon.gbifTaxonId,
+        taxonomyGroup: taxon.taxonomyGroup,
+        classification: taxon.classification.length,
+        media: taxon.media.length,
+      })
     }),
   )

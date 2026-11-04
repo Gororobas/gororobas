@@ -131,7 +131,8 @@ const GbifOccurrenceMedia = Schema.StructWithRest(
     publisher: Schema.optional(Schema.String),
     license: Schema.optional(Schema.String),
     rightsHolder: Schema.optional(Schema.String),
-    identifier: Schema.String,
+    // Some publishers list media without a file, only its metadata.
+    identifier: Schema.optional(Schema.String),
   }),
   [Schema.Record(Schema.String, Schema.Json)],
 )
@@ -140,7 +141,7 @@ const GbifOccurrenceExtension = Schema.StructWithRest(Schema.Struct({}), [
   Schema.Record(Schema.String, Schema.Json),
 ])
 
-const GbifOccurrenceResult = Schema.Struct({
+export const GbifOccurrenceResult = Schema.Struct({
   key: Schema.Finite,
   datasetKey: Schema.optional(Schema.String),
   publishingOrgKey: Schema.optional(Schema.String),
@@ -201,5 +202,10 @@ export const GbifOccurrences = Schema.Struct({
 })
 
 export const SpeciesMatch = Schema.Struct({
-  usage: Schema.optional(Schema.Struct({ key: GbifTaxonId })),
+  usage: Schema.optional(
+    Schema.Struct({ key: GbifTaxonId, status: Schema.optional(Schema.String) }),
+  ),
+  /** Present when `usage` is a synonym. */
+  acceptedUsage: Schema.optional(Schema.Struct({ key: GbifTaxonId })),
+  diagnostics: Schema.optional(Schema.Struct({ matchType: Schema.optional(Schema.String) })),
 })

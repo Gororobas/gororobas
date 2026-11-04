@@ -5,21 +5,27 @@ import {
   type WikiArticleEditableData,
   type WikiArticleProjectionRow,
   ExternalDataFetchError,
+  type ExternalMedia,
   GbifIdentifier,
   GbifPlantResult,
   WikidataResult,
   PlantExternalDataResult,
   PlantExternalDataInputs,
+  UrlAsString,
 } from "@gororobas/domain"
 import { Array as EffectArray, Effect, Option, Predicate, Result, Schema } from "effect"
 import { Activity } from "effect/workflow"
 
 import { Gbif } from "../services/gbif.js"
+import type { GbifOccurrenceResult } from "../services/gbif.schema.js"
 import { Wikidata } from "../services/wikidata.js"
 
-export const fetchPlantGbif = Effect.fn(function* (identifier: GbifIdentifier) {
+export const fetchPlantGbif = Effect.fn(function* (
+  identifier: GbifIdentifier,
+  taxonName: string | null = null,
+) {
   const gbif = yield* Gbif
-  const taxonId: GbifTaxonId = yield* gbif.resolveTaxonId(identifier)
+  const taxonId: GbifTaxonId = yield* gbif.resolveTaxonId(identifier, taxonName)
   const taxonomy = yield* gbif.taxonMetadata({ kind: "taxon", id: taxonId })
 
   const images = yield* gbif.occurrences({ taxonId, limit: 20, mediaType: "StillImage" })
@@ -33,22 +39,53 @@ export const fetchPlantGbif = Effect.fn(function* (identifier: GbifIdentifier) {
       scientificName: taxon.scientificName,
       taxonRank: taxon.taxonRank,
     })),
-    media: images.value.results.flatMap((occurrence) =>
-      (occurrence.media ?? [])
-        .filter((media) => media.type === "StillImage")
-        .map((media) => ({
-          mediaUrl: media.identifier,
-          sourceUrl: `https://www.gbif.org/occurrence/${occurrence.key}`,
-          creditLine: EffectArray.dedupe(
-            [media.creator, media.rightsHolder].filter(
-              (value): value is string => value !== undefined,
-            ),
-          ).join(" · "),
-          licenseUrl: media.license ?? null,
-        })),
-    ),
+    media: images.value.results.flatMap(occurrenceImages),
   })
 })
+
+/**
+ * An occurrence's still images we may show: each needs a file URL and a license, its own or the
+ * occurrence's. Images whose rights are unknown are left out, and the credit falls back to whoever
+ * published the image or the dataset it belongs to.
+ */
+export const occurrenceImages = (
+  occurrence: typeof GbifOccurrenceResult.Type,
+): ReadonlyArray<typeof ExternalMedia.Type> =>
+  (occurrence.media ?? []).flatMap((media) => {
+    const licenseUrl = [media.license, occurrence.license].find(
+      (license) => license !== undefined && Schema.is(UrlAsString)(license),
+    )
+
+    if (
+      media.type !== "StillImage" ||
+      media.identifier === undefined ||
+      !Schema.is(UrlAsString)(media.identifier) ||
+      licenseUrl === undefined
+    ) {
+      return []
+    }
+
+    const authors = EffectArray.dedupe(
+      [media.creator, media.rightsHolder].filter(
+        (value): value is string => value !== undefined && value.trim() !== "",
+      ),
+    )
+
+    const publisher = [media.publisher, occurrence.datasetName].find(
+      (value): value is string => value !== undefined && value.trim() !== "",
+    )
+
+    return [
+      {
+        mediaUrl: media.identifier,
+        sourceUrl: `https://www.gbif.org/occurrence/${occurrence.key}`,
+        creditLine: EffectArray.isReadonlyArrayNonEmpty(authors)
+          ? authors.join(" · ")
+          : (publisher ?? ""),
+        licenseUrl,
+      },
+    ]
+  })
 
 export const fetchPlantWikidata = Effect.fn(function* (wikidataId: string) {
   const wikidata = yield* Wikidata
@@ -89,6 +126,12 @@ export const fetchPlantWikidata = Effect.fn(function* (wikidataId: string) {
           id: identifiers[0],
         }
       : null,
+    taxonName:
+      (fetched.value.claims.P225 ?? []).flatMap((claim) =>
+        claim.rank !== "deprecated" && Predicate.isString(claim.mainsnak.datavalue?.value)
+          ? [claim.mainsnak.datavalue.value]
+          : [],
+      )[0] ?? null,
     wikipediaLinks: SupportedLanguage.literals.flatMap((language) => {
       const link = fetched.value.sitelinks[`${language}wiki`]
       return link ? [{ language, url: link.url }] : []
@@ -118,7 +161,7 @@ export const fetchPlant = Effect.fn(function* (inputs: typeof PlantExternalDataI
           name: "gbif",
           success: GbifPlantResult,
           error: ExternalDataFetchError,
-          execute: fetchPlantGbif(wikidata.success.gbifId),
+          execute: fetchPlantGbif(wikidata.success.gbifId, wikidata.success.taxonName),
         }).pipe(Activity.retry({ times: 2, while: (error) => error.retryable }), Effect.result)
 
   return PlantExternalDataResult.make({ kind: "PLANT", attributes: { wikidata, gbif } })

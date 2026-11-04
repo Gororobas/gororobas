@@ -27,7 +27,11 @@ export const findArticlesDueForExternalData = SqlSchema.findAll({
       AND observation.article_crdt_frontier = article.current_crdt_frontier
     WHERE article.status = 'PUBLISHED' AND (
       (article.kind = 'PLANT' AND json_extract(article.attributes, '$.wikidataId') IS NOT NULL)
-      OR (article.kind = 'BOOK' AND json_extract(article.attributes, '$.googleBooksVolumeId') IS NOT NULL)
+      OR (article.kind = 'BOOK' AND COALESCE(
+        json_extract(article.attributes, '$.googleBooksVolumeId'),
+        json_extract(article.attributes, '$.isbn13'),
+        json_extract(article.attributes, '$.isbn10')
+      ) IS NOT NULL)
     )
     GROUP BY article.id
     HAVING COUNT(observation.provider) = 0 OR EXISTS (

@@ -15,7 +15,7 @@ import { fetchPlant } from "./kinds/plant-fetcher.js"
 import { persistPlant } from "./kinds/plant-persister.js"
 import { type ExternalDataArticle, buildExternalDataRequest } from "./persist-utils.js"
 
-export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v2", {
+export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/v3", {
   payload: ExternalDataFetchRequest.fields,
   success: Schema.Void,
   error: ExternalDataFetchError,
@@ -23,8 +23,14 @@ export const FetchArticleExternalData = Workflow.make("FetchArticleExternalData/
     `${request.wikiArticleId}:${Schema.encodeSync(Schema.fromJsonString(LoroDocFrontier))(request.articleCrdtFrontier)}:${request.refreshGeneration ?? "initial"}`,
 })
 
-const runExternalDataFetch = Effect.fn(function* (request: ExternalDataFetchRequest) {
+const runExternalDataFetch = Effect.fn("ExternalData.fetchArticle")(function* (
+  request: ExternalDataFetchRequest,
+) {
   const inputs = request.inputs
+  yield* Effect.annotateCurrentSpan({
+    "wiki_article.id": request.wikiArticleId,
+    "external_data.kind": inputs.kind,
+  })
 
   if (inputs.kind === "NONE") return
 
@@ -43,6 +49,7 @@ const runExternalDataFetch = Effect.fn(function* (request: ExternalDataFetchRequ
         PLANT: (plant) => persistPlant(request, plant),
         BOOK: (book) => persistBook(request, book),
       }),
+      Effect.tapCause((cause) => Effect.logError("Persisting external data failed", cause)),
       Effect.mapError(
         () =>
           new ExternalDataFetchError({
@@ -62,6 +69,7 @@ export const FetchArticleExternalDataLive = Layer.unwrap(
     // Cluster handlers carry the workflow storage SQL service; projections must use application SQL.
     return FetchArticleExternalData.toLayer((request) =>
       runExternalDataFetch(request).pipe(
+        Effect.annotateLogs({ wikiArticleId: request.wikiArticleId }),
         Effect.provideService(SqlClient.SqlClient, applicationSql),
       ),
     )

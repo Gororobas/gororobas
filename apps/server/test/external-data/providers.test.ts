@@ -2,6 +2,7 @@ import { describe, expect, it } from "@effect/vitest"
 import { ExternalDataFetchRequest, ExternalDataInputs, ExternalDataResult } from "@gororobas/domain"
 import { GbifTaxonId, WikidataId } from "@gororobas/domain"
 import { assertProperty } from "@gororobas/domain/testing"
+import { GoogleBooksVolume } from "@gororobas/server/wiki/external-data/services/google-books.schema"
 import { WikidataEntity } from "@gororobas/server/wiki/external-data/services/wikidata.schema"
 import { Clock, Effect, Fiber, Schema } from "effect"
 import * as Arbitrary from "effect/Arbitrary"
@@ -9,11 +10,18 @@ import { HttpClient, HttpClientResponse, HttpClientError } from "effect/http"
 
 import { makeProviderHttp } from "../../src/common/generic-http-service.js"
 import { normalizeBookLanguage } from "../../src/wiki/external-data/kinds/book-fetcher.js"
-import { fetchGoogleBooksVolume } from "../../src/wiki/external-data/kinds/book-fetcher.js"
+import {
+  fetchGoogleBooksVolume,
+  fetchGoogleBooksVolumeByIsbn,
+} from "../../src/wiki/external-data/kinds/book-fetcher.js"
 import { fetchPlantWikidata } from "../../src/wiki/external-data/kinds/plant-fetcher.js"
-import { fetchPlantGbif } from "../../src/wiki/external-data/kinds/plant-fetcher.js"
+import {
+  fetchPlantGbif,
+  occurrenceImages,
+} from "../../src/wiki/external-data/kinds/plant-fetcher.js"
 import { Gbif } from "../../src/wiki/external-data/services/gbif.js"
 import { makeGbif } from "../../src/wiki/external-data/services/gbif.js"
+import { GbifOccurrenceResult } from "../../src/wiki/external-data/services/gbif.schema.js"
 import { GoogleBooks } from "../../src/wiki/external-data/services/google-books.js"
 import { makeGoogleBooks } from "../../src/wiki/external-data/services/google-books.js"
 import { Wikidata } from "../../src/wiki/external-data/services/wikidata.js"
@@ -251,6 +259,62 @@ describe("external data providers", () => {
       ),
     ),
   )
+
+  it.live("fetches the volume that lists an ISBN, ignoring search results that don't", () => {
+    const requested: Array<string> = []
+
+    const volume = (id: string, isbn: string) => ({
+      kind: "books#volume",
+      id,
+      volumeInfo: {
+        title: "A queda do céu",
+        industryIdentifiers: [{ type: "ISBN_13", identifier: isbn }],
+      },
+    })
+
+    return Effect.gen(function* () {
+      const provider = yield* makeGoogleBooks
+      const byIsbn = (isbns: ReadonlyArray<string>) =>
+        fetchGoogleBooksVolumeByIsbn(isbns).pipe(Effect.provideService(GoogleBooks, provider))
+
+      const found = yield* byIsbn(["9780000000002", "9788535926200"])
+      expect(found.editions.map((edition) => edition.externalId)).toEqual(["listing_volume"])
+
+      expect(requested).toEqual([
+        "isbn:9780000000002",
+        "isbn:9788535926200",
+        "volumes/listing_volume",
+      ])
+
+      const missing = yield* byIsbn(["9780000000002"])
+      expect(missing).toEqual({ observations: [], editions: [], coverage: "COMPLETE" })
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        client((url) => {
+          const parsed = new URL(url)
+          const query = parsed.searchParams.get("q")
+          requested.push(query ?? parsed.pathname.split("/").slice(-2).join("/"))
+
+          if (query === null) return { body: volume("listing_volume", "978-85-359-2620-0") }
+
+          return {
+            body: {
+              kind: "books#volumes",
+              totalItems: 2,
+              items:
+                query === "isbn:9788535926200"
+                  ? [
+                      volume("other_edition", "9788535900000"),
+                      volume("listing_volume", "978-85-359-2620-0"),
+                    ]
+                  : [volume("unrelated", "9788535900000")],
+            },
+          }
+        }),
+      ),
+    )
+  })
 
   it.live("suggests exact volume IDs with enough metadata to distinguish editions", () =>
     Effect.gen(function* () {
@@ -655,4 +719,111 @@ describe("shared external data schemas", () => {
     assertRoundTrip(ExternalDataFetchRequest)
     assertRoundTrip(ExternalDataResult)
   })
+})
+
+describe("GBIF occurrence images", () => {
+  const Media = Schema.Struct({
+    type: Schema.optionalKey(Schema.Literals(["StillImage", "Sound"])),
+    identifier: Schema.optionalKey(Schema.Literals(["https://example.org/a.jpg", "not a url"])),
+    license: Schema.optionalKey(
+      Schema.Literals(["http://creativecommons.org/licenses/by/4.0/", "CC_BY_4_0"]),
+    ),
+    creator: Schema.optionalKey(Schema.Literals(["", "Photographer"])),
+  })
+
+  const isUrl = (value: string | undefined) => value !== undefined && URL.canParse(value)
+
+  it("keeps exactly the still images with a file and known rights", () => {
+    assertProperty({
+      arbitrary: Arbitrary.schema(
+        Schema.Struct({
+          occurrence: GbifOccurrenceResult,
+          media: Schema.Array(Media),
+          occurrenceLicense: Schema.optionalKey(
+            Schema.Literals(["http://creativecommons.org/licenses/by-nc/4.0/", "CC0_1_0"]),
+          ),
+        }),
+      ),
+      predicate: ({ occurrence, media, occurrenceLicense }) => {
+        const images = occurrenceImages({ ...occurrence, media, license: occurrenceLicense })
+
+        const showable = media.filter(
+          (item) =>
+            item.type === "StillImage" &&
+            isUrl(item.identifier) &&
+            (isUrl(item.license) || isUrl(occurrenceLicense)),
+        )
+
+        expect(images.map((image) => image.mediaUrl)).toEqual(
+          showable.map((item) => item.identifier),
+        )
+        images.forEach((image) => {
+          expect(URL.canParse(image.licenseUrl ?? "")).toBe(true)
+          expect(image.creditLine).not.toMatch(/^\s+$/)
+        })
+        return true
+      },
+    })
+  })
+})
+
+describe("Google Books volumes", () => {
+  it("decodes volumes that report only some dimensions", () => {
+    expect(
+      Schema.decodeSync(GoogleBooksVolume)({
+        kind: "books#volume",
+        id: "-VHf0AEACAAJ",
+        volumeInfo: {
+          title: "Manejo ecológico de pragas e doenças",
+          dimensions: { height: "23 cm" },
+        },
+      }).volumeInfo.dimensions,
+    ).toEqual({ height: "23 cm" })
+  })
+})
+
+describe("GBIF taxon matching", () => {
+  const matching = (byName: Schema.Json) =>
+    client((url) =>
+      url.includes("taxonID=")
+        ? { body: { diagnostics: { matchType: "NONE", issues: ["TAXON_ID_NOT_FOUND"] } } }
+        : { body: byName },
+    )
+
+  it.live("matches outdated GBIF IDs by Wikidata's exact taxon name, following synonyms", () =>
+    Effect.gen(function* () {
+      const gbif = yield* makeGbif
+
+      expect(
+        yield* gbif.resolveTaxonId(
+          { kind: "deprecated-species", id: "7287652" },
+          "Persea gratissima",
+        ),
+      ).toBe("4F97T")
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        matching({
+          usage: { key: "3J7P2", status: "SYNONYM" },
+          acceptedUsage: { key: "4F97T" },
+          diagnostics: { matchType: "EXACT" },
+        }),
+      ),
+    ),
+  )
+
+  it.live("rejects fuzzy name matches, which can be another species", () =>
+    Effect.gen(function* () {
+      const gbif = yield* makeGbif
+      const error = yield* gbif
+        .resolveTaxonId({ kind: "deprecated-species", id: "7287652" }, "Roupala montanna")
+        .pipe(Effect.flip)
+      expect(error.message).toContain("nor an exact match for Roupala montanna")
+    }).pipe(
+      Effect.provideService(
+        HttpClient.HttpClient,
+        matching({ usage: { key: "4TH3X" }, diagnostics: { matchType: "FUZZY" } }),
+      ),
+    ),
+  )
 })

@@ -52,6 +52,7 @@ export * from "./common/id-gen.js"
 export * from "./common/ids.js"
 export * from "./common/primitives.js"
 export * from "./common/external-identifiers.js"
+export * from "./common/book-identifiers.js"
 
 // Rich-text
 export * from "./rich-text/domain.js"

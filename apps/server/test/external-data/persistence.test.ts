@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@effect/vitest"
+import { assert, describe, expect, it } from "@effect/vitest"
 import {
   BookExternalDataResult,
   ExternalDataFetchError,
@@ -19,6 +19,7 @@ import { persistBook } from "../../src/wiki/external-data/kinds/book-persister.j
 import { persistPlant } from "../../src/wiki/external-data/kinds/plant-persister.js"
 import { buildExternalDataRequest } from "../../src/wiki/external-data/persist-utils.js"
 import { findArticlesDueForExternalData } from "../../src/wiki/external-data/refresh.js"
+import { ExternalDataReport, reportExternalData } from "../../src/wiki/external-data/report.js"
 import { GbifLive } from "../../src/wiki/external-data/services/gbif.js"
 import { GoogleBooksLive } from "../../src/wiki/external-data/services/google-books.js"
 import { WikidataLive } from "../../src/wiki/external-data/services/wikidata.js"
@@ -30,7 +31,12 @@ import { findDatabaseRowById } from "../../src/wiki/queries.js"
 import { WikiArticlesRepository } from "../../src/wiki/repository.js"
 import { seedPerson, TestLayerWithServices, withSession } from "../test-helpers.js"
 
-const createArticle = Effect.fn(function* (kind: "PLANT" | "BOOK" = "PLANT") {
+type BookIdentifiers = { googleBooksVolumeId?: string; isbn13?: string; isbn10?: string }
+
+const createArticle = Effect.fn(function* (
+  kind: "PLANT" | "BOOK" = "PLANT",
+  bookIdentifiers: BookIdentifiers = { googleBooksVolumeId: "test_volume" },
+) {
   const { person } = yield* seedPerson("ADMIN")
   const repository = yield* WikiArticlesRepository.make
   const translations = {
@@ -40,7 +46,7 @@ const createArticle = Effect.fn(function* (kind: "PLANT" | "BOOK" = "PLANT") {
   const wikiArticle = yield* Schema.decodeEffect(WikiArticleEditableData)(
     kind === "PLANT"
       ? { kind, attributes: { wikidataId: "Q23501" }, translations }
-      : { kind, attributes: { googleBooksVolumeId: "test_volume" }, translations },
+      : { kind, attributes: bookIdentifiers, translations },
   )
 
   const id = yield* repository.createWikiArticle({
@@ -67,6 +73,7 @@ const wikidata = WikidataResult.make({
     payload: {},
   },
   gbifId: { kind: "taxon", id: "4Y369" },
+  taxonName: "Solanum lycopersicum",
   wikipediaLinks: [{ language: "pt", url: "https://pt.wikipedia.org/wiki/Tomate" }],
 })
 
@@ -127,6 +134,54 @@ describe("external data persistence", () => {
       }).pipe(Effect.provide(TestLayerWithServices)),
     )
   })
+
+  it.effect("reports what each provider stored and why the latest fetch failed", () =>
+    Effect.gen(function* () {
+      const request = yield* createArticle()
+      yield* persistPlant(request, successfulPlant)
+      yield* persistPlant(request, {
+        kind: "PLANT",
+        attributes: { wikidata: Result.succeed(wikidata), gbif: Result.fail(failure) },
+      })
+
+      const [report] = yield* reportExternalData([request.wikiArticleId])
+
+      expect(report).toMatchObject({
+        kind: "PLANT",
+        externalLinks: 1,
+        externalMedia: 1,
+        taxonomyGroup: "Angiosperms",
+        taxonomyClassification: 1,
+        bookEditions: 0,
+        providers: [
+          {
+            provider: "GBIF",
+            observations: 2,
+            failures: 1,
+            lastOutcome: "Failure",
+            lastError: failure.message,
+          },
+          {
+            provider: "WIKIDATA",
+            observations: 2,
+            failures: 0,
+            lastOutcome: "Success",
+            lastError: null,
+          },
+        ],
+      })
+
+      const debug = yield* withSession(getWikiArticleDebug(request.wikiArticleId), {
+        type: "VISITOR",
+      })
+
+      expect(debug.externalDataReport).toEqual(
+        yield* Schema.encodeEffect(Schema.Array(ExternalDataReport))(
+          report === undefined ? [] : [report],
+        ),
+      )
+    }).pipe(Effect.provide(TestLayerWithServices)),
+  )
 
   it.effect("replaces successful projections, including a successful empty media response", () =>
     Effect.gen(function* () {
@@ -219,6 +274,22 @@ describe("external data persistence", () => {
     }).pipe(Effect.provide(TestLayerWithServices)),
   )
 
+  it.effect("rejects results fetched with IDs the article doesn't have", () =>
+    Effect.gen(function* () {
+      const request = yield* createArticle()
+      const sql = yield* SqlClient.SqlClient
+      assert(request.inputs.kind === "PLANT")
+
+      yield* persistPlant(
+        { ...request, inputs: { ...request.inputs, wikidataId: Option.some("Q1353278") } },
+        successfulPlant,
+      )
+
+      expect(yield* sql`SELECT * FROM wiki_article_external_data_observations`).toEqual([])
+      expect(yield* sql`SELECT * FROM wiki_article_external_links`).toEqual([])
+    }).pipe(Effect.provide(TestLayerWithServices)),
+  )
+
   it.effect(
     "refreshes expired successes and retries failures without selecting fresh attempts",
     () =>
@@ -249,6 +320,18 @@ describe("external data persistence", () => {
         yield* sql`UPDATE wiki_article_external_data_observations SET observed_at = ${DateTime.formatIso(DateTime.subtractDuration(now, Duration.hours(2)))} WHERE json_extract(outcome, '$._tag') = 'Failure'`
         expect(yield* due()).toHaveLength(1)
       }).pipe(Effect.provide(TestLayerWithServices)),
+  )
+
+  it.effect("refreshes books identified only by an ISBN", () =>
+    Effect.gen(function* () {
+      const now = yield* DateTime.now
+      const byIsbn = yield* createArticle("BOOK", { isbn13: "9788535926200" })
+      yield* createArticle("BOOK", {})
+
+      expect(
+        yield* findArticlesDueForExternalData({ refreshedBefore: now, retriedBefore: now }),
+      ).toEqual([{ wikiArticleId: byIsbn.wikiArticleId, refreshGeneration: "initial" }])
+    }).pipe(Effect.provide(TestLayerWithServices)),
   )
 
   it.effect("denies the debug payload in production", () =>

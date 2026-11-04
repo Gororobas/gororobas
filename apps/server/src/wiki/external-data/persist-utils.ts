@@ -11,7 +11,7 @@ import {
   type Observation,
   type ExternalDataFetchError,
 } from "@gororobas/domain"
-import { DateTime, Effect, Match, Option, type Result, Schema, Struct } from "effect"
+import { DateTime, Effect, Match, Option, Result, Schema, Struct } from "effect"
 import { SqlClient, SqlSchema } from "effect/sql"
 
 import { findDatabaseRowById } from "../queries.js"
@@ -83,6 +83,20 @@ export const recordProviderObservation = Effect.fn(function* ({
   provider: typeof ExternalDataProvider.Type
   outcome: Result.Result<ReadonlyArray<Observation>, ExternalDataFetchError>
 }) {
+  yield* Result.match(outcome, {
+    onSuccess: (observations) =>
+      Effect.logInfo("External data observed", {
+        provider,
+        sources: observations.map((observation) => observation.sourceUrl),
+      }),
+    onFailure: (error) =>
+      Effect.logWarning("External data fetch failed", {
+        provider,
+        message: error.message,
+        retryable: error.retryable,
+      }),
+  })
+
   yield* insertObservation({
     // @todo  can the id of the observation be the idempotencyKey of its workflow + a date? Would this even be useful?
     id: yield* IdGen.make(ExternalDataObservationId),
@@ -95,6 +109,8 @@ export const recordProviderObservation = Effect.fn(function* ({
   })
 })
 
+const inputsEquivalence = Schema.toEquivalence(ExternalDataInputs)
+
 // Cluster interruption does not roll back activities already in flight.
 export const persist = <E, R>(
   request: ExternalDataFetchRequest,
@@ -103,7 +119,9 @@ export const persist = <E, R>(
   SqlClient.SqlClient.use((sql) =>
     Effect.gen(function* () {
       const article = yield* findDatabaseRowById(request.wikiArticleId)
-      if (Option.isNone(article)) return
+      if (Option.isNone(article)) {
+        return yield* Effect.logWarning("Discarding external data: the article no longer exists")
+      }
 
       const current = buildExternalDataRequest(article.value)
 
@@ -113,7 +131,16 @@ export const persist = <E, R>(
           request.articleCrdtFrontier,
         )
       ) {
-        return
+        return yield* Effect.logInfo(
+          "Discarding external data fetched for an earlier version of the article",
+        )
+      }
+
+      // A request can carry inputs its article doesn't have (callers build requests by hand).
+      if (!inputsEquivalence(current.inputs, request.inputs)) {
+        return yield* Effect.logInfo(
+          "Discarding external data fetched with IDs the article doesn't have",
+        )
       }
 
       yield* project

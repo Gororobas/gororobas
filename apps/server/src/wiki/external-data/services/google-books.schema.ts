@@ -6,9 +6,10 @@ const IndustryIdentifier = Schema.Struct({
   identifier: Schema.String,
 })
 
+// Volumes often report only some measurements, such as a height without a width.
 const Dimensions = Schema.Struct({
-  height: Schema.String,
-  width: Schema.String,
+  height: Schema.optional(Schema.String),
+  width: Schema.optional(Schema.String),
   thickness: Schema.optional(Schema.String),
 })
 

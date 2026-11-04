@@ -89,5 +89,8 @@ export const persistBook = (request: ExternalDataFetchRequest, data: BookExterna
       if (Result.isFailure(result)) return
       yield* clearProviderExternalData(request.wikiArticleId, "GOOGLE_BOOKS")
       yield* persistEditions(request.wikiArticleId, result)
+      yield* Effect.logInfo("Stored Google Books data", {
+        editions: result.success.editions.map((edition) => edition.externalId),
+      })
     }),
   )

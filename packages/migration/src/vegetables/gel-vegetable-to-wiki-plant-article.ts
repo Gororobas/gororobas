@@ -13,7 +13,7 @@ import {
   TemperatureInCelsius,
   WikiPlantArticle,
 } from "@gororobas/domain"
-import { HashSet, Option, Schema } from "effect"
+import { Array as EffectArray, HashSet, Option, Record, Schema } from "effect"
 
 import { type GelVegetable } from "../schemas/gel/entities.js"
 import {
@@ -129,8 +129,16 @@ const toSet = <Source extends string, Target extends string>(
   map: (value: Source) => Target,
 ) => Option.map(values, (items) => HashSet.fromIterable(items.map(map)))
 
+const missingScientificNamesByHandle = Schema.decodeSync(
+  Schema.Record(Schema.String, Schema.Array(Schema.String)),
+)({
+  arroz: ["Oryza spp."],
+  cenoura: ["Daucus carota subsp. sativus"],
+})
+
 export const gelVegetableToPlantEditableAttributes = (
   vegetable: GelVegetable,
+  currentHandle = vegetable.handle,
 ): typeof WikiPlantArticle.EditableAttributes.Type =>
   WikiPlantArticle.EditableAttributes.make({
     wikidataId: Option.none(),
@@ -155,7 +163,13 @@ export const gelVegetableToPlantEditableAttributes = (
       Schema.decodeSync(TemperatureInCelsius)(value),
     ),
     scientificNames: Option.map(
-      Option.fromNullishOr(vegetable.scientific_names),
+      Option.orElse(
+        Option.filter(
+          Option.fromNullishOr(vegetable.scientific_names),
+          EffectArray.isReadonlyArrayNonEmpty,
+        ),
+        () => Record.get(missingScientificNamesByHandle, currentHandle),
+      ),
       stringsToCrdtList,
     ),
     edibleParts: toSet(

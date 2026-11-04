@@ -12,15 +12,21 @@ export const makeGoogleBooks = Effect.gen(function* () {
     onSome: (value) => `&key=${encodeURIComponent(Redacted.value(value))}`,
   })
 
-  return {
-    suggestIds: Effect.fn(function* (title: string) {
-      const query = title.trim()
-      const fetched = yield* http.get(
-        `/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10&printType=books${key}`,
-        GoogleBooksSearch,
-      )
+  /** Up to ten volumes for a query, which may use `intitle:`, `inauthor:` and `isbn:` prefixes. */
+  const searchVolumes = Effect.fn(function* (query: string) {
+    const fetched = yield* http.get(
+      `/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=10&printType=books${key}`,
+      GoogleBooksSearch,
+    )
+    return fetched.value.items ?? []
+  })
 
-      return (fetched.value.items ?? []).map((volume) =>
+  return {
+    searchVolumes,
+    suggestIds: Effect.fn(function* (title: string) {
+      const volumes = yield* searchVolumes(title.trim())
+
+      return volumes.map((volume) =>
         BookIdSuggestion.make({
           googleBooksVolumeId: volume.id,
           title: volume.volumeInfo.title,

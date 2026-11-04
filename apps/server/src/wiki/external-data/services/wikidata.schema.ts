@@ -152,3 +152,10 @@ export const WikidataEntity = Schema.Struct({
 export const WikidataResponse = Schema.Struct({
   entities: Schema.Record(Schema.String, WikidataEntity),
 })
+
+/** `action=query&list=search` with `srprop=` (no snippets): main-namespace titles are entity IDs. */
+export const WikidataSearchResponse = Schema.Struct({
+  query: Schema.Struct({
+    search: Schema.Array(Schema.Struct({ ns: Schema.Int, title: Schema.String })),
+  }),
+})

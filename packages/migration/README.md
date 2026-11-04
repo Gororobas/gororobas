@@ -25,6 +25,8 @@ Account inclusion retains the existing activity filter. Accounts without email a
 
 Each run under `debug/sqlite/migration-*` contains frozen converted data, raw Gel data, provenance, schema, database, `verification.json`, and `application.json`. These local artifacts contain private source data and are ignored by Git. Workflow submission is skipped during ingestion.
 
+Vegetables receive reviewed Wikidata IDs from a static handle map in every reconstructed revision, including creation. The [research inventory](research/gel-vegetable-wikidata.md) covers all 433 archived plants: 432 mapped and mostarda-lisa left unset for later research. It links the evidence, genus-level matches, and naming uncertainties. Migration does not look up Wikidata online. Missing rice and carrot scientific names, five packed book author credits, valid ISBNs embedded in book URLs, and the volume ID of a Google Books URL are repaired during conversion; see the [legacy corrections](research/legacy-data-corrections.md).
+
 After configuring and starting the [normal server](../../apps/server/README.md), verify the imported data over HTTP:
 
 ```sh

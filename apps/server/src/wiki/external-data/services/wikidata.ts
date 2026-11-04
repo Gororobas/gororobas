@@ -1,8 +1,8 @@
 import { WikidataId, ExternalDataFetchError } from "@gororobas/domain"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 
 import { makeProviderHttp } from "../../../common/generic-http-service.js"
-import { WikidataResponse } from "./wikidata.schema.js"
+import { WikidataResponse, WikidataSearchResponse } from "./wikidata.schema.js"
 
 export const makeWikidata = Effect.gen(function* () {
   const http = yield* makeProviderHttp("WIKIDATA", "https://www.wikidata.org")
@@ -21,6 +21,18 @@ export const makeWikidata = Effect.gen(function* () {
       }
 
       return { value: entity, observation: { ...fetched.observation, externalId: id } }
+    }),
+    /** Items with a statement whose value is exactly `value`, through CirrusSearch's `haswbstatement`. */
+    itemsWithStatement: Effect.fn(function* (property: string, value: string) {
+      const search = encodeURIComponent(`haswbstatement:"${property}=${value}"`)
+      const fetched = yield* http.get(
+        `/w/api.php?action=query&list=search&format=json&srlimit=10&srprop=&srsearch=${search}`,
+        WikidataSearchResponse,
+      )
+
+      return fetched.value.query.search.flatMap((result) =>
+        result.ns === 0 && Schema.is(WikidataId)(result.title) ? [result.title] : [],
+      )
     }),
   }
 })

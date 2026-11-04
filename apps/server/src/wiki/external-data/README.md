@@ -1,15 +1,21 @@
 # Wiki external data
 
-Approved article edits submit `FetchArticleExternalData/v2`. Provider failures are non-fatal
+Approved article edits submit `FetchArticleExternalData/v3`. Provider failures are non-fatal
 and are recorded in `wiki_article_external_data_observations`, with the article frontier,
 inputs, timestamp, provider, and typed outcome. Successful observations retain the raw provider
 responses. Only a successful provider result replaces its own projections; failures and skipped
 providers preserve existing data. A successful empty response removes that provider's old rows.
-Stale article frontiers are rejected before observations or projections are written.
+Stale article frontiers, and results fetched with IDs the article no longer has, are rejected
+before observations or projections are written.
+
+A book without a volume ID is fetched by its ISBNs (ISBN-13 first): the fetcher searches
+`isbn:` and fetches the first volume whose industry identifiers list that ISBN. When none does,
+the result is successful and empty.
 
 The refresher scans at startup and every hour. `EXTERNAL_DATA_REFRESH_TIME` defaults to `14 days`;
 failed providers are eligible again after one hour. It selects at most 25 published articles with
-an external ID per scan, oldest first. Articles without Wikidata/Google Books IDs are skipped.
+an external ID per scan, oldest first: a Wikidata ID for plants, and a Google Books volume ID or
+an ISBN for books. Other articles are skipped.
 Provider clients pace and retry requests. A scan failure does not terminate the scheduler.
 
 Effect Cluster stores completed workflow results durably, so an unchanged article/frontier key
@@ -26,5 +32,39 @@ provider errors are returned as HTTP 502 with a typed `ExternalDataFetchError`.
 
 The web app links search results to `/wiki/:wikiArticleId/debug`. Its development-only API at
 the same path returns canonical CRDT data, projections/translations/handles, revisions, media
-selections, external projections and observations, bookmarks, references, and cultivars. It is
+selections, external projections and observations, an `externalDataReport` (per provider:
+observations, failures, the latest outcome and error; and the stored row counts), bookmarks,
+references, and cultivars. It is
 denied in production. “Reload stored data” rereads the database; it does not submit a fetch.
+
+## Visibility
+
+Every provider request runs in an `ExternalData.request` span (provider, endpoint without its
+query, response status) inside the workflow's `ExternalData.fetchArticle` span; failures log a
+warning with the endpoint and message. Persistence logs each observation (provider and source
+URLs, or the error), what it stored, and why it discarded a result (article deleted, or fetched for
+an earlier frontier). Logs carry the `wikiArticleId` annotation. A response that doesn't match a
+provider schema keeps the start of the decoding issue in its stored error message.
+
+## Running over migrated data
+
+The legacy migration supplies the IDs: reviewed Wikidata IDs for plants, and ISBNs or a Google
+Books volume ID found in book URLs (see `packages/migration/README.md`). The external-data CLI
+runs fetches against the database in `APP_DB_FILENAME` (stop any API using it first):
+
+```sh
+pnpm --filter @gororobas/server external-data run --plants 40 --books 30 --output run.json
+pnpm --filter @gororobas/server external-data report --article <wikiArticleId>
+```
+
+`run` executes `FetchArticleExternalData` in process with the real providers, using each
+article's own IDs and ISBNs, and prints per article and provider what was requested, observed and
+stored. Articles aren't edited. `report` summarizes what's already stored. Spans reach Maple when
+it listens on `127.0.0.1:4318`.
+
+To try it on a disposable copy of migrated data:
+
+```sh
+APP_DB_FILENAME="$PWD/apps/server/data/migrated-enrichment/gororobas.db" MEDIA_ASSETS_DIRECTORY="$PWD/apps/server/data/migrated-enrichment/media-assets" pnpm --filter @gororobas/migration ingest
+APP_DB_FILENAME=data/migrated-enrichment/gororobas.db pnpm --filter @gororobas/server external-data run
+```

@@ -1,4 +1,6 @@
 import {
+  googleBooksVolumeIdInUrl,
+  isbnsInUrl,
   MediaAssetId,
   WikiArticleEditableTranslations,
   WikiArticleCommonNameInCrdtList,
@@ -8,7 +10,7 @@ import {
   WikiNoteworthyEntityArticle,
   WikiResourceArticle,
 } from "@gororobas/domain"
-import { Effect, Match, Schema } from "effect"
+import { Effect, Match, Option, Record, Schema } from "effect"
 
 import { migrateRichText } from "../migrate-rich-text.js"
 import { GelResourceWithRelations } from "../schemas/gel/entities.js"
@@ -60,6 +62,26 @@ const genericResourceFormatMap = {
   SOCIAL_MEDIA: "SOCIAL_MEDIA",
   VIDEO: "VIDEO",
 } as const
+
+// Exact legacy credits avoid splitting conjunctions that belong inside a person's name.
+const bookAuthorsByCreditLine = Schema.decodeSync(
+  Schema.Record(Schema.String, Schema.Array(Schema.String)),
+)({
+  "Davi Kopenawa e Bruce Albert": ["Davi Kopenawa", "Bruce Albert"],
+  "Mestre Joelson Ferreira e Erahsto Felício": ["Mestre Joelson Ferreira", "Erahsto Felício"],
+  "José Fernando dos Santos Rebello e Daniela Ghiringhello Sakamoto": [
+    "José Fernando dos Santos Rebello",
+    "Daniela Ghiringhello Sakamoto",
+  ],
+  "Alejandro Reyes & Mestre Joelson Ferreira": ["Alejandro Reyes", "Mestre Joelson Ferreira"],
+  // Publisher credits: https://papress.com/products/letters-to-a-young-farmer-on-food-farming-and-our-future
+  "Stone Barns Center e contribuintes": ["Stone Barns Center", "Martha Hodgkins"],
+})
+
+const bookAuthors = (creditLine: string) =>
+  stringsToCrdtList(
+    Option.getOrElse(Record.get(bookAuthorsByCreditLine, creditLine), () => [creditLine]),
+  )
 
 /** Entity types of the legacy organisations, by Gel resource handle; unlisted ones are OTHER. */
 interface OrganizationEntityTypesByHandle {
@@ -144,16 +166,21 @@ export const gelResourceToWikiArticle = Effect.fn("gelResourceToWikiArticle")(fu
 
   const article = yield* Match.type<GelResourceWithRelations>().pipe(
     Match.withReturnType<Effect.Effect<ResourceWikiArticle, Schema.SchemaError>>(),
-    Match.when({ format: "BOOK" }, () =>
-      Schema.decodeEffect(WikiBookArticle.EditableArticle)({
+    Match.when({ format: "BOOK" }, () => {
+      const isbns = isbnsInUrl(source.url)
+
+      return Schema.decodeEffect(WikiBookArticle.EditableArticle)({
         kind: "BOOK",
         translations: translationsEncoded,
         attributes: {
-          authors: source.credit_line ? stringsToCrdtList([source.credit_line]) : undefined,
+          authors: source.credit_line ? bookAuthors(source.credit_line) : undefined,
+          googleBooksVolumeId: Option.getOrUndefined(googleBooksVolumeIdInUrl(source.url)),
+          isbn10: isbns.find((isbn) => isbn.length === 10),
+          isbn13: isbns.find((isbn) => isbn.length === 13),
           url: source.url,
         },
-      }),
-    ),
+      })
+    }),
     Match.when({ format: "FILM" }, () =>
       Schema.decodeEffect(WikiFilmArticle.EditableArticle)({
         kind: "FILM",
