@@ -1,7 +1,7 @@
 import { Array, HashMap, Option } from 'effect'
 import { AsyncData } from 'foldkit'
 
-import * as Button from '@foldkit/ui/button'
+import { view as buttonView } from '@foldkit/ui/button'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Post, PostDetail } from '../data'
@@ -12,17 +12,14 @@ import { errorPanel, loadingPanel, toolbarButtonClassName } from './shared'
 const formatFetchedAt = (fetchedAt: number): string =>
   new Date(fetchedAt).toLocaleTimeString()
 
-export const postsTabView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-) =>
+export const postsTabView = (model: Model, h: ApplicationViewBuilder) =>
   Option.match(model.maybeSelectedPostId, {
     onNone: () =>
       h.section([h.Class('flex flex-col gap-4')], [postsListView(model, h)]),
     onSome: postId => postDetailSection({ model, postId }, h),
   })
 
-const postsListView = (model: typeof Model.Type, h: ApplicationViewBuilder) => {
+const postsListView = (model: Model, h: ApplicationViewBuilder) => {
   const isPending = AsyncData.isPending(model.posts)
 
   return h.div(
@@ -32,7 +29,7 @@ const postsListView = (model: typeof Model.Type, h: ApplicationViewBuilder) => {
         [h.Class('flex items-center justify-between')],
         [
           h.h2([h.Class('text-xl font-bold text-slate-800')], ['Posts']),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedInvalidatePosts(),
               isDisabled: isPending,
@@ -95,7 +92,7 @@ const isPostDetailCached = (
   Option.exists(HashMap.get(postDetailById, postId), AsyncData.hasData)
 
 type PostListItemsInput = Readonly<{
-  posts: ReadonlyArray<typeof Post.Type>
+  posts: ReadonlyArray<Post>
   postDetailById: HashMap.HashMap<string, typeof PostDetailData.schema.Type>
 }>
 
@@ -108,7 +105,7 @@ const postListItems = (
       post.id,
       [],
       [
-        Button.view(
+        buttonView(
           {
             onClick: Message.ClickedPost({ postId: post.id }),
             toView: attributes =>
@@ -152,7 +149,7 @@ const postListItems = (
     ),
   )
 
-type PostDetailInput = Readonly<{ model: typeof Model.Type; postId: string }>
+type PostDetailInput = Readonly<{ model: Model; postId: string }>
 
 const postDetailSection = (
   { model, postId }: PostDetailInput,
@@ -176,7 +173,7 @@ const postDetailView = (
   return h.div(
     [h.Class('flex flex-col gap-4')],
     [
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedBackToPosts(),
           toView: attributes =>
@@ -230,7 +227,7 @@ const postDetailView = (
 }
 
 type PostDetailCardInput = Readonly<{
-  detail: typeof PostDetail.Type
+  detail: PostDetail
   fetchedAt: number
 }>
 

@@ -1,6 +1,13 @@
-const PostList = Schema.Array(Post)
+import { Effect, Schema } from 'effect'
+import { Query } from 'foldkit/experimental'
 
-const fetchPosts = Effect.gen(function* () {
+export const Post = Schema.Struct({ id: Schema.String, title: Schema.String })
+export type Post = typeof Post.Type
+
+const PostList = Schema.Array(Post)
+type PostList = typeof PostList.Type
+
+export const fetchPosts = Effect.gen(function* () {
   const response = yield* Effect.tryPromise({
     try: () => fetch('/api/posts'),
     catch: () => 'Could not load posts',
@@ -20,10 +27,11 @@ const fetchPosts = Effect.gen(function* () {
   )
 })
 
-const postsQuery = Query.define({
+export const postsQuery = Query.define({
   name: 'Posts',
   data: PostList,
   error: Schema.String,
+  staleTime: '1 minute',
   handler: function* () {
     return () => fetchPosts
   },

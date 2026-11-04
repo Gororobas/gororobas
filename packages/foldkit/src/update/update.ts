@@ -3,6 +3,7 @@ import { Array, type Effect, Function, Option, pipe } from 'effect'
 import { type AsyncData } from '../asyncData/index.js'
 import { type Command, mapMessage, mapMessages } from '../command/index.js'
 import {
+  type OperationEnvironment,
   assertResolvedStep,
   isResultRecipe,
   makeResultRecipe,
@@ -182,11 +183,12 @@ export type GraphModelOf<FunctionValue> = FunctionValue extends (
 type GraphModelOfValue<Value> = GraphCapabilityModel<Value>
 
 /** @internal Carries child registration evidence without adding Effect services. */
-export declare const RegistrationEvidenceTypeId: unique symbol
+export const RegistrationEvidenceTypeId = Symbol('foldkit/RegistrationEvidence')
 
-type NoRegistrationEvidence = Readonly<{
-  [RegistrationEvidenceTypeId]?: never
-}>
+/** @internal Names results that carry no child registration evidence. */
+export interface NoRegistrationEvidence {
+  readonly [RegistrationEvidenceTypeId]?: never
+}
 
 /** Type-level proof that an update result uses a child Binding registered in its
  * owning Composition. It adds no Effect service requirement at runtime. */
@@ -269,19 +271,23 @@ type DirectResultEvidenceChannelOf<Value> = Value extends unknown
     : never
   : never
 
+type ResultCommandsOf<Value> = Value extends unknown
+  ? 'commands' extends keyof Value
+    ? Required<Value> extends Readonly<{ commands: unknown }>
+      ? NonNullable<Value['commands']>
+      : Value extends Readonly<{ commands?: infer CommandValues }>
+        ? NonNullable<CommandValues>
+        : never
+    : never
+  : never
+
 /** @internal Extracts the unfiltered graph evidence retained by an update result. */
 export type ResultEvidenceChannelOf<Value> =
   Value extends DeferredUpdateEvidence<any, any, any, infer Evidence>
     ? Evidence
     :
         | DirectResultEvidenceChannelOf<Value>
-        | (Value extends unknown
-            ? 'commands' extends keyof Value
-              ? Value extends Readonly<{ commands?: infer CommandValues }>
-                ? DirectResultEvidenceChannelOf<NonNullable<CommandValues>>
-                : never
-              : never
-            : never)
+        | DirectResultEvidenceChannelOf<ResultCommandsOf<Value>>
 
 type InvalidResultEvidence<Value> =
   ResultEvidenceChannelOf<Value> extends infer Evidence
@@ -321,15 +327,9 @@ export type RegistrationEvidenceOf<Value> =
     ? ConcreteRegistrationPart<Evidence>
     :
         | ConcreteRegistrationPart<DirectResultEvidenceChannelOf<Value>>
-        | (Value extends unknown
-            ? 'commands' extends keyof Value
-              ? Value extends Readonly<{ commands?: infer CommandValues }>
-                ? ConcreteRegistrationPart<
-                    DirectResultEvidenceChannelOf<NonNullable<CommandValues>>
-                  >
-                : never
-              : never
-            : never)
+        | ConcreteRegistrationPart<
+            DirectResultEvidenceChannelOf<ResultCommandsOf<Value>>
+          >
 
 type RegistrationModelOf<Value> =
   Value extends Readonly<{ model: infer Model }> ? Model : never
@@ -714,8 +714,12 @@ export const withOutMessage: {
     outMessage: OutMessage | undefined,
   ) => {
     if (isResultRecipe(updateReturn)) {
-      return makeResultRecipe(model => {
-        const resolved = resolveOperationOutput(updateReturn, model)
+      return makeResultRecipe((model, environment) => {
+        const resolved = resolveOperationOutput(
+          updateReturn,
+          model,
+          environment,
+        )
         return outMessage === undefined
           ? resolved
           : {
@@ -921,12 +925,12 @@ type CombinedStepRecipe<
  * ```ts
  * SucceededUpdateNote: ({ note }) =>
  *   combineSteps(model, [
- *     replaceNoteInCachesStep(note),
- *     refreshNoteStep(note.id),
- *     refreshAllNotesStep,
- *     refreshNotebookNotesStep(note.maybeNotebookId),
- *     ...Array.filter([refreshNotebookNotesStep(previousNotebookId)], () => hasMoved),
- *     showToastStep('Success', `Updated ${note.title}`),
+ *     replaceNoteInCaches(note),
+ *     refreshNote(note.id),
+ *     refreshAllNotes,
+ *     refreshNotebookNotes(note.maybeNotebookId),
+ *     ...Array.filter([refreshNotebookNotes(previousNotebookId)], () => hasMoved),
+ *     showToast('Success', `Updated ${note.title}`),
  *   ])
  * ```
  */
@@ -1097,6 +1101,7 @@ export const combineSteps: {
     steps: ReadonlyArray<AnyStep>,
     startIndex: number,
     resolvePending = false,
+    environment?: OperationEnvironment,
   ):
     | Return<Model, Message, R>
     | ResultRecipeFor<Model, Return<Model, Message, R>> => {
@@ -1111,17 +1116,18 @@ export const combineSteps: {
       const output = step(current.model)
       if (isResultRecipe(output) && !resolvePending) {
         return makeResultRecipe<Model, Return<Model, Message, R>>(
-          model =>
+          (model, environment) =>
             /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
             resolveOperationOutput(
-              continueRun({ model }, steps, 0, true),
+              continueRun({ model }, steps, 0, true, environment),
               model,
+              environment,
             ) as Return<Model, Message, R>,
         )
       }
 
       const next = resolvePending
-        ? resolveOperationOutput(output, current.model)
+        ? resolveOperationOutput(output, current.model, environment)
         : output
       if (!resolvePending) {
         assertResolvedStep(next)
@@ -1185,7 +1191,7 @@ export type Refreshable<Model, Message, A, E, R = never> = Readonly<{
  *  caches that currently hold data reload.
  *
  *  ```ts
- *  const refreshAllNotesStep = refresh({
+ *  const refreshAllNotes = refresh({
  *    read: model => Option.some(model.allNotes),
  *    revalidate: AsyncData.revalidate,
  *    write: (model, nextAllNotes) => modifyFields(model, { allNotes: () => nextAllNotes }),
@@ -1219,7 +1225,7 @@ export const refresh =
  *    collection miss); a single always-present field wraps in
  *    `Option.some`.
  *  - `write`: the setter half of the lens: writes the updated child
- *    Model back into the parent Model.
+ *    Model back into the parent Model when its identity changes.
  *  - `toParentMessage`: lifts a child Message into the parent's Message,
  *    the same contract `h.block` takes for the view half. Always the
  *    child's `Got*` wrapper: `message => GotSearchMessage({ message })`. */
@@ -1510,12 +1516,13 @@ export type FoldWithOutMessage<
  *  ```
  *
  *  The fold runs `update` against the child Model `read` returns, writes
- *  the child back, and lifts the child's Commands through
- *  `toParentMessage`. When `read` returns `None` the fold returns
+ *  the child back only when its identity changes, and lifts the child's Commands
+ *  through `toParentMessage`. When `read` returns `None` the fold returns
  *  `{ model }`: a Message for an unmounted child is a no-op. When the
  *  child's update returns an OutMessage, `foldOutMessage` runs against
  *  the Model with the child already written back, and its Commands
- *  follow the child's in the returned batch.
+ *  follow the child's in the returned batch. An unchanged child Model still
+ *  lifts Commands and runs OutMessage handling and forwarding.
  *
  *  `foldOutMessage` takes an optional second parameter, a
  *  {@link FoldContext} carrying `liftCommand` and `liftCommands` bound to
@@ -1879,6 +1886,8 @@ type AnyKeyedChildFold = Readonly<{
  * as `fold(key, input)` for {@link combineSteps}.
  *
  * When `readAt` returns `None` for the key, the fold returns `{ model }`.
+ * As with {@link foldChild}, an unchanged child skips `writeAt` while Commands,
+ * OutMessage handling, and forwarding still run.
  *
  * `foldOutMessage` takes the key and a {@link FoldContext} of lifters bound
  * to `toParentMessage`, then returns a matcher that produces a parent Step.
@@ -2087,7 +2096,9 @@ const runChildFold = (
       onNone: () => ({ model }),
       onSome: childModel => {
         const childUpdate = childFold.update(childModel, input)
-        const modelWithChild = childFold.write(model, childUpdate.model)
+        const modelWithChild = Object.is(childUpdate.model, childModel)
+          ? model
+          : childFold.write(model, childUpdate.model)
 
         return finalizeChildFold(
           childUpdate,
@@ -2305,7 +2316,8 @@ type AnyChildStepFold = Readonly<{
 
 /** Folds a child entry point that takes nothing but the child Model, and
  *  returns the {@link Step} directly. Everything else matches
- *  {@link foldChild}: the child is read, updated, and written back, its
+ *  {@link foldChild}: the child is read, updated, and written back only when
+ *  its identity changes, its
  *  Commands are lifted through `toParentMessage`, a `None` from `read` makes
  *  the Step a no-op, and `foldOutMessage` runs against the Model with the
  *  child already written back.
@@ -2315,7 +2327,7 @@ type AnyChildStepFold = Readonly<{
  *  an input the child does not take:
  *
  *  ```ts
- *  const foldMobileMenuDialogCloseStep = Update.foldChildStep({
+ *  const foldMobileMenuDialogClose = Update.foldChildStep({
  *    update: Dialog.close,
  *    read: readMobileMenuDialog,
  *    write: writeMobileMenuDialog,
@@ -2324,7 +2336,7 @@ type AnyChildStepFold = Readonly<{
  *  })
  *
  *  // in the parent update
- *  Update.combineSteps(model, [writeRouteFieldsStep, foldMobileMenuDialogCloseStep])
+ *  Update.combineSteps(model, [writeRouteFields, foldMobileMenuDialogClose])
  *  ```
  *
  *  `foldOutMessage` takes the same optional second parameter as

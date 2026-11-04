@@ -13,7 +13,7 @@ import { Block } from 'foldkit'
 import { Html } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 const TICK_INTERVAL_MS = 10
 
@@ -22,6 +22,7 @@ export const Model = Schema.Struct({
   isRunning: Schema.Boolean,
   startTime: Schema.Number,
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedStart: {},
@@ -31,20 +32,26 @@ export const Message = defineMessageUnion({
   Ticked: {},
   CompletedDetermineTickTime: { elapsedMs: Schema.Number },
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeCommandsStep } = ApplicationDefinition
+const { makeFieldsStep, makeCommandsStep } = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
 
-export const DetermineStartTime = ApplicationDefinition.makeCommand(
+export const DetermineStartTime = ApplicationBlock.makeCommand(
   'DetermineStartTime',
   {
     args: { elapsedMs: Schema.Number },
@@ -64,7 +71,7 @@ export const DetermineStartTime = ApplicationDefinition.makeCommand(
   },
 )
 
-export const DetermineTickTime = ApplicationDefinition.makeCommand(
+export const DetermineTickTime = ApplicationBlock.makeCommand(
   'DetermineTickTime',
   {
     args: { startTime: Schema.Number },
@@ -121,25 +128,18 @@ export const init = ApplicationComposition.makeInit(() => ({
   },
 }))
 
-export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
-  stopwatchTicks: entry(
-    'StopwatchTicks',
-    { isRunning: Schema.Boolean },
-    {
-      messages: [Message.Ticked],
-      modelToDependencies: model => ({ isRunning: model.isRunning }),
-      handler: function* () {
-        return ({ isRunning }) =>
-          Stream.when(
-            Stream.tick(Duration.millis(TICK_INTERVAL_MS)).pipe(
-              Stream.drop(1),
-              Stream.map(Message.Ticked),
-            ),
-            Effect.sync(() => isRunning),
-          )
-      },
+export const subscriptions = ApplicationBlock.makeSubscriptions(entry => ({
+  stopwatchTicks: entry('StopwatchTicks', {
+    messages: [Message.Ticked],
+    when: model => model.isRunning,
+    handler: function* () {
+      return () =>
+        Stream.tick(Duration.millis(TICK_INTERVAL_MS)).pipe(
+          Stream.drop(1),
+          Stream.map(Message.Ticked),
+        )
     },
-  ),
+  }),
 }))
 
 export const EffectsLayer = Layer.mergeAll(
@@ -184,7 +184,7 @@ export const view = ApplicationComposition.makeView((model, h) => ({
           h.div(
             [h.Class('flex')],
             [
-              Button.view(
+              buttonView(
                 {
                   onClick: Message.ClickedReset(),
                   toView: attributes =>
@@ -212,7 +212,7 @@ const startStopButton = (
   h: ApplicationViewBuilder,
 ): Html =>
   isRunning
-    ? Button.view(
+    ? buttonView(
         {
           onClick: Message.ClickedStop(),
           toView: attributes =>
@@ -226,7 +226,7 @@ const startStopButton = (
         },
         h,
       )
-    : Button.view(
+    : buttonView(
         {
           onClick: Message.ClickedStart(),
           toView: attributes =>
@@ -246,15 +246,15 @@ const startStopButton = (
 const buttonStyle =
   'px-6 py-4 flex-1 font-semibold text-white transition-colors'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    subscriptions,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      subscriptions,
+      EffectsLayer,
+    }
+  }),
+)

@@ -6,20 +6,30 @@ const Model = Schema.Struct({
   count: Schema.Number,
   startingCount: Schema.Option(Schema.Number),
 })
+type Model = typeof Model.Type
 
 const Flags = Schema.Struct({
   savedCount: Schema.Option(Schema.Number),
 })
+type Flags = typeof Flags.Type
 
 const Message = defineMessageUnion({
   ClickedIncrement: {},
 })
-const ApplicationComposition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+
+export const ApplicationKey = Symbol('Application')
+
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([Flags]),
   Model,
   Message,
-}).makeComposition()
+})
 
-const init = ApplicationComposition.makeInit((flags: typeof Flags.Type) => ({
+const ApplicationComposition = ApplicationBlock.makeComposition()
+
+const init = ApplicationComposition.makeInit(flags => ({
   model: {
     count: Option.getOrElse(flags.savedCount, () => 0),
     startingCount: flags.savedCount,

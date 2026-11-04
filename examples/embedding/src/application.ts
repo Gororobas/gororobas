@@ -3,12 +3,13 @@ import { Block, Port } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 export const Model = Schema.Struct({
   count: Schema.Number,
   step: Schema.Number,
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   Ticked: {},
@@ -16,15 +17,24 @@ export const Message = defineMessageUnion({
   ChangedStep: { step: Schema.Number },
   CompletedReportCount: {},
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const Flags = Schema.Struct({ initialCount: Schema.Number })
+export type Flags = typeof Flags.Type
+
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([Flags]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = ApplicationDefinition
+const { makeFieldsStep, makeNoopStep } = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 
 // PORT
 
@@ -33,15 +43,11 @@ export const ports = {
   outbound: { countChanged: Port.outbound(Schema.Number) },
 }
 
-export const Flags = Schema.Struct({ initialCount: Schema.Number })
+export const init = ApplicationComposition.makeInit((flags: Flags) => ({
+  model: Model.make({ count: flags.initialCount, step: 1 }),
+}))
 
-export const init = ApplicationComposition.makeInit(
-  (flags: typeof Flags.Type) => ({
-    model: Model.make({ count: flags.initialCount, step: 1 }),
-  }),
-)
-
-export const ReportCount = ApplicationDefinition.makeCommand('ReportCount', {
+export const ReportCount = ApplicationBlock.makeCommand('ReportCount', {
   args: { count: Schema.Number },
   messages: [Message.CompletedReportCount],
   handler: function* () {
@@ -52,7 +58,7 @@ export const ReportCount = ApplicationDefinition.makeCommand('ReportCount', {
   },
 })
 
-const advance = (model: typeof Model.Type) => {
+const advance = (model: Model) => {
   const count = model.count + model.step
   return {
     model: modifyFields(model, { count: () => count }),
@@ -71,7 +77,7 @@ export const update = ApplicationComposition.makeUpdate({
 
 const TICK_INTERVAL = Duration.seconds(1)
 
-export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
+export const subscriptions = ApplicationBlock.makeSubscriptions(entry => ({
   widgetTicks: entry('WidgetTicks', {
     messages: [Message.Ticked],
     handler: function* () {
@@ -122,7 +128,7 @@ export const view = ApplicationComposition.makeView((model, h) =>
         [h.Class('text-sm text-gray-600')],
         [`Ticking up by ${model.step} every second`],
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedAdvance(),
           toView: attributes =>
@@ -142,15 +148,15 @@ export const view = ApplicationComposition.makeView((model, h) =>
   ),
 )
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    subscriptions,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      subscriptions,
+      EffectsLayer,
+    }
+  }),
+)

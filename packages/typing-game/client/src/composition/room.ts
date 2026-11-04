@@ -1,18 +1,21 @@
-import { ApplicationDefinition } from '../definition'
-import { RoomBlock } from '../page'
+import { RoomBlock } from '../blocks'
+import { ApplicationBlock } from '../definition'
 import * as ApplicationRoute from '../route'
 
-export const RoomBinding = ApplicationDefinition.makeBinding(RoomBlock, {
-  field: 'maybeRoomInstance',
-  key: 'roomId',
-  childField: 'model',
-  delivery: {
-    when: (model, roomId) =>
-      ApplicationRoute.isRoomRouteFor(model.route, roomId),
-    toUpdateContext: (_model, roomId) => [{ roomId }],
+export const MaybeRoomInstanceBinding = ApplicationBlock.makeBinding(
+  RoomBlock,
+  {
+    field: 'maybeRoomInstance',
+    key: 'roomId',
+    childField: 'model',
+    delivery: {
+      when: (model, roomId) =>
+        ApplicationRoute.isRoomRouteFor(model.route, roomId),
+      toUpdateContext: (_model, roomId) => [{ roomId }],
+    },
+    subscriptions: {
+      when: (model, roomId) =>
+        ApplicationRoute.isRoomRouteFor(model.route, roomId),
+    },
   },
-  subscriptions: {
-    when: (model, roomId) =>
-      ApplicationRoute.isRoomRouteFor(model.route, roomId),
-  },
-})
+)

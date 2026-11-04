@@ -1,36 +1,58 @@
-// page/settings/block.ts
+// blocks/settings/definition.ts
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 
-import type { Model } from './model'
+import { InMessage } from './inMessage'
+import { Message, OutMessage } from './message'
+import { Model } from './model'
+import { SettingsStore } from './service'
 
-const requestReset = Message.RequestedReset
-const prepare = () =>
-  SettingsComposition.prepareBlock({
-    init,
-    update,
-    view,
-    operations: { requestReset },
-    EffectsLayer: SaveTheme.layer,
-  })
-export const SettingsBlock: Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const SettingsKey = Symbol('Settings')
 
-// page/settings/index.ts
-export { SettingsBlock } from './block'
+export const SettingsBlock = Block.make('Settings', {
+  key: SettingsKey,
+  Model,
+  Message,
+  InMessage,
+  OutMessage,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  inMessageOutputs: {
+    RequestedReset: {
+      outMessage: OutMessage.ChangedTheme,
+    },
+  },
+  effects: { services: [SettingsStore] },
+})
 
-// Parent model.ts
-import { Schema } from 'effect'
+// blocks/settings/block.ts
+import { Effect } from 'effect'
 
-import { SettingsBlock } from './page/settings'
+import { SettingsBlock } from './definition'
+import { inMessageUpdate } from './inMessageUpdate'
+import { init } from './init'
+import { EffectsLayer } from './layer'
+import { update } from './update'
+import { view } from './view'
 
-export const Model = Schema.Struct({ settings: SettingsBlock.Model })
+export const layer = SettingsBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      inMessageUpdate,
+      view,
+      EffectsLayer,
+    }
+  }),
+)
 
-// Parent composition.ts
-import { SettingsBlock } from './page/settings'
+// blocks/settings/index.ts
+export { SettingsBlock, SettingsKey } from './definition'
+export { layer } from './block'
+export { isDirty } from './validation'
 
-ApplicationDefinition.makeBinding(SettingsBlock, {
-  field: 'settings',
-  init: false,
-}).withOutMessagePolicy({ fold: foldSettingsOutMessage })
+// blocks/index.ts
+export { SettingsBlock } from './settings'
+export * as Settings from './settings'

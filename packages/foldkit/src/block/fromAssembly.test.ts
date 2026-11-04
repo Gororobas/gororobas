@@ -19,10 +19,13 @@ type Produced<Producer extends () => AssemblyDraft<object>> =
   ReturnType<Producer>[typeof AssemblyDraftTypeId]
 
 const Model = Schema.Struct({ count: Schema.Number })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({ CompletedObserve: {} })
+type Message = typeof Message.Type
 const OutMessage = defineMessageUnion({
   ReportedCount: { count: Schema.Number },
 })
+type OutMessage = typeof OutMessage.Type
 const Definition = makeDefinition('FromAssemblyRuntime', { Model, Message })
 const ReportingDefinition = makeDefinition('FromAssemblyReportingRuntime', {
   Model,
@@ -287,7 +290,7 @@ describe('Checked Block completion', () => {
       Reflect.apply(Program.makeElement, undefined, [
         { block: draft, container: null },
       ]),
-    ).toThrow('Block.assemble(prepare)')
+    ).toThrow('supply its makeLayer implementation as layer')
   })
 })
 
@@ -313,8 +316,8 @@ if (false) {
   draft.replaceEffectsLayer(Observe.layer)
   // @ts-expect-error Completion requires an explicit Model header.
   assemble(prepareViewed)
-  // @ts-expect-error An inline producer also requires an explicit Model header.
   assemble(() =>
+    // @ts-expect-error An inline producer also requires an explicit Model header.
     Composition.prepareBlock({
       init,
       update,

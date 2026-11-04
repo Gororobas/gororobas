@@ -33,6 +33,7 @@ import {
   makeResultRecipe,
   resolveOperationOutput,
 } from '../update/operationRecipe.js'
+import type { OperationEnvironment } from '../update/operationRecipe.js'
 import type * as PublicUpdate from '../update/public.js'
 import type { VNode } from '../vdom.js'
 import {
@@ -65,6 +66,13 @@ import {
 } from './childEnvelope.js'
 import { type MakeCommandsStep, makeCommandsStep } from './commandsStep.js'
 import {
+  type CompiledOperation,
+  type InputOperationResult,
+  assertCompiledOperationSource,
+  isCompiledOperation,
+  registerCompiledOperationSource,
+} from './compiledOperation.js'
+import {
   assertBindingParentContracts,
   descendantOwnersOf,
   registerRuntimeBindings,
@@ -85,6 +93,13 @@ import {
   makeStepFields,
   makeStepNoop,
 } from './fieldStep.js'
+import type {
+  ContextualMessageProducer,
+  FocusedMessageOf,
+  FocusedStepValidation,
+  StepContextHint,
+  ValidateMessageProducer,
+} from './focusedStep.js'
 import {
   type DefinitionIdentity,
   LocalMountsTypeId,
@@ -105,9 +120,16 @@ import type {
   ValidateUniqueInitialFields,
 } from './initialization.js'
 import { makeInit } from './initializationRuntime.js'
+import type { LayerOutputs } from './layerOutputs.js'
+import { type MakeMapBinding, makeMapBinding } from './mapBinding.js'
 import { isOperationMessageConstructor, prepareOperation } from './operation.js'
 import type { OperationEmission } from './operationEmission.js'
-import { withOperationGraph } from './operationGraph.js'
+import {
+  ExecutionEnvironmentTypeId,
+  compositionOperationGraphOf,
+  registerCompositionOperationGraph,
+  withOperationGraph,
+} from './operationGraph.js'
 import { makeOperationMessageValidator } from './operationMessage.js'
 import type { OperationOutputOf } from './operationOutputs.js'
 import {
@@ -484,11 +506,24 @@ export interface DefineView<
  * initialization recipe. The helper preserves graph obligations until the
  * matching Composition interprets them under its registered graph.
  *
- * Public parent-driven operations belong in `prepareBlock({ operations })`. Each
- * exposed producer returns a local Message and its update context instead of a
- * Model transformation.
+ * An inline `makeUpdate` entry supplies the producer's exact Message, including
+ * entries returned by `makeUpdate.withContext`. Extracted producers and other
+ * operation arguments retain their own precise parameter contracts.
+ *
+ * `InputMessage` defaults to the local Message contract. An authoring surface
+ * can supply a separate input union without permitting those inputs as Command
+ * result Messages.
+ *
+ * Declare parent requests through InMessage and Composition.makeInMessageUpdate.
+ * Definition operations remain available for local-Message adapters; their
+ * producers return a local Message and its dispatch context.
  */
-export interface DefineStep<Model, Message, OutMessage> {
+export interface DefineStep<
+  Model,
+  Message,
+  OutMessage,
+  InputMessage = Message,
+> {
   <
     const Context extends ReadonlyArray<unknown>,
     const Output extends
@@ -497,9 +532,15 @@ export interface DefineStep<Model, Message, OutMessage> {
       | AnyBindingInitRecipe
       | Update.AnyResultRecipe,
   >(
-    step: ((model: Model, ...context: Context) => Output) &
-      ValidateDeferredStepOutput<Model, Message, OutMessage, Output> &
-      ValidateAnnotatedContext<Context>,
+    step: (
+      model: Model,
+      ...context: Context
+    ) => Output &
+      NoInfer<ValidateDeferredStepOutput<Model, Message, OutMessage, Output>>,
+    ...validation: FocusedStepValidation<
+      ValidateAnnotatedContext<Context> &
+        ValidateKnownStepOutput<NoInfer<Output>>
+    >
   ): NoInfer<
     DefinedStep<
       Model,
@@ -513,8 +554,71 @@ export interface DefineStep<Model, Message, OutMessage> {
       | Update.ResultEvidenceChannelOf<DeferredStepReturn<Output>>
       | Update.GraphRequirementOf<Extract<Output, AnyFunction>>
     >
+  > &
+    StepContextHint<Context>
+
+  /**
+   * Authors a Model-first handler from a Message-only producer. In an inline
+   * `makeUpdate` entry, the callback receives that entry's exact Message.
+   * The producer runs when the handler is applied. A returned Step receives
+   * the incoming Model, preserving its requirements and graph obligations.
+   */
+  readonly fromMessage: <
+    ExactMessage extends InputMessage,
+    const Producer extends ContextualMessageProducer<
+      ExactMessage,
+      | OwnedReturn<Model, Message, OutMessage>
+      | AnyFunction
+      | AnyBindingInitRecipe
+      | Update.AnyResultRecipe
+    >,
+  >(
+    step: Producer &
+      ContextualMessageProducer<
+        ExactMessage,
+        ReturnType<Producer> &
+          NoInfer<
+            ValidateDeferredStepOutput<
+              Model,
+              Message,
+              OutMessage,
+              ReturnType<Producer>
+            >
+          >
+      >,
+    ...validation: FocusedStepValidation<
+      ValidateKnownStepOutput<ReturnType<NoInfer<Producer>>> &
+        ValidateMessageProducer<InputMessage, ExactMessage, NoInfer<Producer>> &
+        (Parameters<Producer>['length'] extends 0
+          ? unknown
+          : [Parameters<Producer>[0]] extends [never]
+            ? never
+            : unknown)
+    >
+  ) => DefinedStep<
+    Model,
+    DeferredStepMessage<Message, ReturnType<Producer>>,
+    readonly [
+      message: Parameters<Producer>['length'] extends 0
+        ? ExactMessage
+        : FocusedMessageOf<InputMessage, ExactMessage, Producer, 0>,
+    ],
+    OutMessageOfReturn<DeferredStepReturn<ReturnType<Producer>>>,
+    CommandRequirements<DeferredStepReturn<ReturnType<Producer>>>,
+    | Update.RegistrationEvidenceOf<DeferredStepReturn<ReturnType<Producer>>>
+    | Update.GraphRequirementOf<Extract<ReturnType<Producer>, AnyFunction>>,
+    DeferredStepKind<ReturnType<Producer>>,
+    | Update.ResultEvidenceChannelOf<DeferredStepReturn<ReturnType<Producer>>>
+    | Update.GraphRequirementOf<Extract<ReturnType<Producer>, AnyFunction>>
   >
 }
+
+type ValidateKnownStepOutput<Output> =
+  IsAny<Output> extends true
+    ? never
+    : [Output] extends [never]
+      ? never
+      : unknown
 
 type DeferredValueKind<Value> = Value extends
   | Update.AnyResultRecipe
@@ -541,38 +645,42 @@ type DeferredStepMessage<Message, Output> =
       : ResultMessage
     : never
 
-type ValidateResultRecipe<Model, Message, OutMessage, Value> =
-  Value extends Update.ResultRecipe<
-    infer ResultModel,
-    infer ResultMessage,
-    infer ResultOutMessage,
-    infer R,
-    infer Evidence
-  >
-    ? true extends
-        | IsAny<ResultModel>
-        | IsUnknown<ResultModel>
-        | IsAny<ResultMessage>
-        | IsUnknown<ResultMessage>
-        | IsAny<ResultOutMessage>
-        | IsUnknown<ResultOutMessage>
-        | IsAny<R>
-        | IsUnknown<R>
-        | IsAny<Evidence>
-        | IsUnknown<Evidence>
-      ? never
-      : [ResultModel, Model] extends [Model, ResultModel]
-        ? [ResultMessage] extends [
-            Message | GeneratedMessageOfRequirement<Evidence>,
-          ]
-          ? [ResultOutMessage] extends [OutMessage]
-            ? unknown
-            : never
-          : never
-        : never
-    : never
+type ResultRecipeIsValid<Model, Message, OutMessage, Value> =
+  IsAny<Value> extends true
+    ? false
+    : [Value] extends [never]
+      ? false
+      : Value extends Update.ResultRecipe<
+            infer ResultModel,
+            infer ResultMessage,
+            infer ResultOutMessage,
+            infer R,
+            infer Evidence
+          >
+        ? true extends
+            | IsAny<ResultModel>
+            | IsUnknown<ResultModel>
+            | IsAny<ResultMessage>
+            | IsUnknown<ResultMessage>
+            | IsAny<ResultOutMessage>
+            | IsUnknown<ResultOutMessage>
+            | IsAny<R>
+            | IsUnknown<R>
+            | IsAny<Evidence>
+            | IsUnknown<Evidence>
+          ? false
+          : [ResultModel, Model] extends [Model, ResultModel]
+            ? [ResultMessage] extends [
+                Message | GeneratedMessageOfRequirement<Evidence>,
+              ]
+              ? [ResultOutMessage] extends [OutMessage]
+                ? true
+                : false
+              : false
+            : false
+        : false
 
-type ValidateDeferredReturn<Model, Message, OutMessage, Value> =
+type DeferredReturnIsValid<Model, Message, OutMessage, Value> =
   DeferredValueReturn<Value> extends infer Result
     ? Result extends Readonly<{ model: infer ResultModel }>
       ? true extends
@@ -582,7 +690,7 @@ type ValidateDeferredReturn<Model, Message, OutMessage, Value> =
           | IsUnknown<CommandMessageOfReturn<Result>>
           | IsAny<OutMessageOfReturn<Result>>
           | IsUnknown<OutMessageOfReturn<Result>>
-        ? never
+        ? false
         : [ResultModel] extends [Model]
           ? [CommandMessageOfReturn<Result>] extends [
               | Message
@@ -591,48 +699,65 @@ type ValidateDeferredReturn<Model, Message, OutMessage, Value> =
                 >,
             ]
             ? [OutMessageOfReturn<Result>] extends [OutMessage]
-              ? Update.ValidateConcreteResultEvidence<Result>
-              : never
-            : never
-          : never
-      : never
-    : never
+              ? unknown extends Update.ValidateConcreteResultEvidence<Result>
+                ? true
+                : false
+              : false
+            : false
+          : false
+      : false
+    : false
 
-type ValidateDeferredValue<Model, Message, OutMessage, Value> =
-  Value extends Update.AnyResultRecipe
-    ? ValidateResultRecipe<Model, Message, OutMessage, Value>
-    : ValidateDeferredReturn<Model, Message, OutMessage, Value>
+type DeferredValueIsValid<Model, Message, OutMessage, Value> =
+  IsAny<Value> extends true
+    ? false
+    : [Value] extends [never]
+      ? false
+      : Value extends Update.AnyResultRecipe
+        ? ResultRecipeIsValid<Model, Message, OutMessage, Value>
+        : DeferredReturnIsValid<Model, Message, OutMessage, Value>
 
-type ValidateDeferredStepOutput<Model, Message, OutMessage, Output> =
+type DeferredStepOutputIsValid<Model, Message, OutMessage, Output> =
   Output extends AnyFunction
     ? Parameters<Output> extends readonly [infer Input]
       ? IsAny<Input> extends true
-        ? never
+        ? false
         : IsUnknown<Input> extends true
-          ? never
+          ? false
           : Update.GraphRequirementOf<Output> extends infer Requirement
             ? IsAny<Requirement> extends true
-              ? never
+              ? false
               : IsUnknown<Requirement> extends true
-                ? never
+                ? false
                 : [Input, Update.GraphInput<Model, Requirement>] extends [
                       Update.GraphInput<Model, Requirement>,
                       Input,
                     ]
-                  ? ValidateDeferredValue<
+                  ? DeferredValueIsValid<
                       Model,
                       Message,
                       OutMessage,
                       ReturnType<Output>
                     >
-                  : never
-            : never
-      : never
+                  : false
+            : false
+      : false
     : Output extends AnyBindingInitRecipe
-      ? ValidateDeferredReturn<Model, Message, OutMessage, Output>
+      ? DeferredReturnIsValid<Model, Message, OutMessage, Output>
       : Output extends Update.AnyResultRecipe
-        ? ValidateResultRecipe<Model, Message, OutMessage, Output>
-        : ValidateDeferredReturn<Model, Message, OutMessage, Output>
+        ? ResultRecipeIsValid<Model, Message, OutMessage, Output>
+        : DeferredReturnIsValid<Model, Message, OutMessage, Output>
+
+type ValidateDeferredStepOutput<Model, Message, OutMessage, Output> =
+  IsAny<Output> extends true
+    ? never
+    : [Output] extends [never]
+      ? never
+      : [
+            DeferredStepOutputIsValid<Model, Message, OutMessage, Output>,
+          ] extends [true]
+        ? unknown
+        : never
 
 /** @internal Validates one inferred output through the Definition Step contract. */
 export type ValidateDefinitionStepOutput<Model, Message, OutMessage, Output> =
@@ -775,6 +900,7 @@ export interface OwnedSubscriptionEntryBuilder<
       keepAliveEquivalence: Equivalence.Equivalence<
         Schema.Struct.Type<NoInfer<Fields>>
       >
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -823,6 +949,7 @@ export interface OwnedSubscriptionEntryBuilder<
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
       modelToDependencies: (model: Model) => Schema.Struct.Type<NoInfer<Fields>>
       keepAliveEquivalence?: never
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -866,6 +993,7 @@ export interface OwnedSubscriptionEntryBuilder<
       : Name,
     config: Readonly<{
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler: (() => Generator<
         Yielded,
@@ -900,6 +1028,7 @@ export interface OwnedSubscriptionEntryBuilder<
       : Name,
     config: Readonly<{
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler?: never
     }>,
@@ -925,6 +1054,7 @@ export interface OwnedSubscriptionEntryBuilder<
       keepAliveEquivalence: Equivalence.Equivalence<
         Schema.Struct.Type<NoInfer<Fields>>
       >
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler?: never
     }>,
@@ -948,6 +1078,7 @@ export interface OwnedSubscriptionEntryBuilder<
       messages: Messages & ValidateOwnedMessages<NoInfer<Messages>, Message>
       modelToDependencies: (model: Model) => Schema.Struct.Type<NoInfer<Fields>>
       keepAliveEquivalence?: never
+      when?: (model: Model) => boolean
       dependenciesToStream?: never
       handler?: never
     }>,
@@ -1198,7 +1329,8 @@ type CompleteEffectsLayer<
   EffectsLayer extends AnyLayer,
   Children extends ReadonlyArray<AnyBinding>,
 > = Layer.Layer<
-  Layer.Success<EffectsLayer | AggregatedChildren<Children>['EffectsLayer']>,
+  | LayerOutputs<EffectsLayer>
+  | Layer.Success<AggregatedChildren<Children>['EffectsLayer']>,
   Layer.Error<EffectsLayer | AggregatedChildren<Children>['EffectsLayer']>,
   Layer.Services<EffectsLayer | AggregatedChildren<Children>['EffectsLayer']>
 >
@@ -1375,9 +1507,36 @@ type ExposedUpdateInput<UpdateFunction, Message> =
     ? MessageFoldInput<Message, Context>
     : never
 
-type ValidateExposedOperation<Source, UpdateFunction, Message> =
-  unknown extends Source
-    ? never
+type ValidateExposedOperation<
+  Source,
+  UpdateFunction,
+  Message,
+  DispatchMessage,
+  OutMessage,
+> = unknown extends Source
+  ? never
+  : Source extends CompiledOperation<infer Execute, infer _Composition>
+    ? Execute extends (
+        model: infer Model,
+        ...args: ReadonlyArray<any>
+      ) => infer Output
+      ? UpdateFunction extends AnyFunction
+        ? true extends
+            | IsAny<Model>
+            | IsUnknown<Model>
+            | IsAny<Output>
+            | IsUnknown<Output>
+          ? never
+          : [Model, Parameters<UpdateFunction>[0]] extends [
+                Parameters<UpdateFunction>[0],
+                Model,
+              ]
+            ? Output extends OwnedReturn<Model, DispatchMessage, OutMessage>
+              ? ValidateKnownStepOutput<Output>
+              : never
+            : never
+        : never
+      : never
     : Source extends AnyFunction &
           Readonly<{ '~type.make.in': unknown; Type: infer Output }>
       ? unknown extends Output
@@ -1396,7 +1555,12 @@ type ValidateExposedOperation<Source, UpdateFunction, Message> =
             : never
         : never
 
-type ValidateExposedOperations<ImplementationValue, Message> =
+type ValidateExposedOperations<
+  ImplementationValue,
+  Message,
+  DispatchMessage,
+  OutMessage,
+> =
   ImplementationValue extends Readonly<{
     update: infer UpdateFunction extends AnyFunction
     operations: infer ExposedOperations extends Readonly<
@@ -1410,16 +1574,18 @@ type ValidateExposedOperations<ImplementationValue, Message> =
             [Name in keyof ExposedOperations]: ValidateExposedOperation<
               ExposedOperations[Name],
               UpdateFunction,
-              Message
+              Message,
+              DispatchMessage,
+              OutMessage
             >
           }>
         }>
     : unknown
 
 interface ExposedMessageOperations<Message> {
-  readonly [name: string]: (
-    ...args: ReadonlyArray<any>
-  ) => MessageFoldInput<Message> | Message
+  readonly [name: string]:
+    | ((...args: ReadonlyArray<any>) => MessageFoldInput<Message> | Message)
+    | InputOperationResult<unknown>
 }
 
 interface InferredExposedMessageOperations<Message> {
@@ -1430,6 +1596,7 @@ interface InferredExposedMessageOperations<Message> {
         Type: Readonly<{ _tag: string }>
       }>
     | ((...args: ReadonlyArray<any>) => MessageFoldInput<Message>)
+    | InputOperationResult<unknown>
 }
 
 type PublicProducerReturn<Output, Model, Message> = [
@@ -1527,55 +1694,58 @@ type ProjectedOperation<Args extends ReadonlyArray<unknown>, Output> = ((
   >
 
 type PublicExposedProducer<Producer, UpdateFunction, Model> =
-  Producer extends Readonly<{
-    fields: Readonly<Record<infer FieldName, unknown>>
-    '~type.make.in': infer Input
-    Type: infer Output extends Readonly<{ _tag: string }>
-  }>
-    ? UpdateFunction extends AnyFunction
-      ? Parameters<UpdateFunction> extends readonly [
-          unknown,
-          unknown,
-          ...infer Context,
-        ]
-        ? ProjectedOperation<
-            readonly [
-              model: Model,
-              ...([FieldName] extends ['_tag']
-                ? readonly []
-                : readonly [
-                    payload:
-                      | Input
-                      | (Omit<Output, '_tag'> &
-                          Readonly<{ _tag?: Output['_tag'] }>),
-                  ]),
-              ...Context,
-            ],
-            OperationOutputOf<UpdateFunction, Output>
-          >
-        : never
-      : never
-    : Producer extends AnyFunction
-      ? ReturnType<Producer> extends readonly [
-          unknown,
-          ...ReadonlyArray<unknown>,
-        ]
-        ? UpdateFunction extends AnyFunction
+  Producer extends CompiledOperation<infer Execute, infer _Composition>
+    ? ProjectedOperation<Parameters<Execute>, ReturnType<Execute>> &
+        InputOperationResult<ReturnType<Execute>>
+    : Producer extends Readonly<{
+          fields: Readonly<Record<infer FieldName, unknown>>
+          '~type.make.in': infer Input
+          Type: infer Output extends Readonly<{ _tag: string }>
+        }>
+      ? UpdateFunction extends AnyFunction
+        ? Parameters<UpdateFunction> extends readonly [
+            unknown,
+            unknown,
+            ...infer Context,
+          ]
           ? ProjectedOperation<
-              readonly [model: Model, ...ExposedProducerParameters<Producer>],
-              OperationOutputOf<
-                UpdateFunction,
-                ReturnType<Producer> extends readonly [
-                  infer Message,
-                  ...ReadonlyArray<unknown>,
-                ]
-                  ? Message
-                  : never
-              >
+              readonly [
+                model: Model,
+                ...([FieldName] extends ['_tag']
+                  ? readonly []
+                  : readonly [
+                      payload:
+                        | Input
+                        | (Omit<Output, '_tag'> &
+                            Readonly<{ _tag?: Output['_tag'] }>),
+                    ]),
+                ...Context,
+              ],
+              OperationOutputOf<UpdateFunction, Output>
             >
           : never
-        : Producer
-      : never
+        : never
+      : Producer extends AnyFunction
+        ? ReturnType<Producer> extends readonly [
+            unknown,
+            ...ReadonlyArray<unknown>,
+          ]
+          ? UpdateFunction extends AnyFunction
+            ? ProjectedOperation<
+                readonly [model: Model, ...ExposedProducerParameters<Producer>],
+                OperationOutputOf<
+                  UpdateFunction,
+                  ReturnType<Producer> extends readonly [
+                    infer Message,
+                    ...ReadonlyArray<unknown>,
+                  ]
+                    ? Message
+                    : never
+                >
+              >
+            : never
+          : Producer
+        : never
 
 type PublicImplementationValue<Model, Message, ImplementationValue> = Readonly<{
   [Key in keyof ImplementationValue]: Key extends 'init'
@@ -1844,6 +2014,7 @@ type ImplementationForValidation<
   bindings: Children
   init: ImplementationValue['init']
   update: ImplementationValue['update']
+  operations: ImplementationExposedOperations<ImplementationValue>
   subscriptions: ImplementationSubscriptions<ImplementationValue>
   managedResources: ImplementationManagedResources<ImplementationValue>
   EffectsLayer: CompleteEffectsLayer<
@@ -1854,7 +2025,7 @@ type ImplementationForValidation<
 }>
 
 type MergeLayers<Left extends Layer.Any, Right extends Layer.Any> = Layer.Layer<
-  Layer.Success<Left | Right>,
+  LayerOutputs<Left> | LayerOutputs<Right>,
   Layer.Error<Left | Right>,
   Layer.Services<Left | Right>
 >
@@ -1880,7 +2051,7 @@ type UnexpectedProvidedHandlers<ImplementationValue, HandlersLayer> = Exclude<
   HandlerOfHostDefinition<HostDefinitions<ImplementationValue>>
 >
 
-type ValidateProvidedHandlers<ImplementationValue, HandlersLayer> =
+type ValidateProvidedHandlerAlternative<ImplementationValue, HandlersLayer> =
   IsAny<ProvidedHandlerContracts<HandlersLayer>> extends true
     ? Readonly<{
         'Block provideHandlers Layer must preserve exact handler contracts': ProvidedHandlerContracts<HandlersLayer>
@@ -1895,6 +2066,26 @@ type ValidateProvidedHandlers<ImplementationValue, HandlersLayer> =
             | MissingProvidedHandlers<ImplementationValue, HandlersLayer>
             | UnexpectedProvidedHandlers<ImplementationValue, HandlersLayer>
         }>
+
+type InvalidProvidedHandlerAlternative<ImplementationValue, HandlersLayer> =
+  HandlersLayer extends unknown
+    ? unknown extends ValidateProvidedHandlerAlternative<
+        ImplementationValue,
+        HandlersLayer
+      >
+      ? never
+      : ValidateProvidedHandlerAlternative<ImplementationValue, HandlersLayer>
+    : never
+
+type ValidateProvidedHandlers<ImplementationValue, HandlersLayer> = [
+  HandlersLayer,
+] extends [never]
+  ? ValidateProvidedHandlerAlternative<ImplementationValue, HandlersLayer>
+  : [
+        InvalidProvidedHandlerAlternative<ImplementationValue, HandlersLayer>,
+      ] extends [never]
+    ? unknown
+    : InvalidProvidedHandlerAlternative<ImplementationValue, HandlersLayer>
 
 type ProvideHandlerImplementation<
   ImplementationValue extends Readonly<{ EffectsLayer: Layer.Any }>,
@@ -2612,9 +2803,11 @@ type ValidatePrepareBlockComposition<
   Mounts extends ReadonlyArray<Mount.LayeredMountDefinition>,
   Children extends ReadonlyArray<AnyBinding>,
   ImplementationValue,
+  HandlerValidation extends 'Indexed' | 'Equivalent' = 'Indexed',
 > = ValidateImplementationComposition<
   PrepareBlockDefinition<OwnerValue>,
-  PrepareBlockCompositionForValidation<Mounts, Children, ImplementationValue>
+  PrepareBlockCompositionForValidation<Mounts, Children, ImplementationValue>,
+  HandlerValidation
 > &
   ValidateBindingOperationNames<
     ImplementationExposedOperations<ImplementationValue>
@@ -2622,7 +2815,9 @@ type ValidatePrepareBlockComposition<
   ('operations' extends keyof ImplementationValue
     ? ValidateExposedOperations<
         ImplementationValue,
-        AuthoredMessage<_MessageSchema['Type'], Children>
+        AuthoredMessage<_MessageSchema['Type'], Children>,
+        _MessageSchema['Type'],
+        _OutMessageSchema extends AnySchema ? _OutMessageSchema['Type'] : never
       >
     : unknown)
 
@@ -2689,6 +2884,7 @@ type ImplementationRecipeValidation<
   Mounts extends ReadonlyArray<Mount.LayeredMountDefinition>,
   Children extends ReadonlyArray<AnyBinding>,
   ImplementationValue extends object,
+  HandlerValidation extends 'Indexed' | 'Equivalent' = 'Indexed',
 > = ImplementationInput<ModelSchema, MessageSchema, OutMessageSchema> &
   ExactImplementationKeys<ImplementationValue> &
   ValidateImplementationLayerPresence<ImplementationValue> &
@@ -2708,7 +2904,8 @@ type ImplementationRecipeValidation<
     OutMessageSchema,
     Mounts,
     Children,
-    CompletedImplementationValue<ImplementationValue>
+    CompletedImplementationValue<ImplementationValue>,
+    HandlerValidation
   >
 
 type ImplementationRecipeArguments<ImplementationValue, Validation> =
@@ -3718,8 +3915,16 @@ export type Definition<
       ? OutMessageSchema['Type']
       : never
   >
-  /** Authors a Model-only Step from a deferred field-transformation callback. */
-  makeFieldsStep: DefineStepFields<ModelSchema['Type'], MessageSchema['Type']>
+  /**
+   * Authors deferred field transformations. Plain changes return only a Model;
+   * Instance creation writes also retain child init Commands.
+   */
+  makeFieldsStep: DefineStepFields<
+    ModelSchema['Type'],
+    MessageSchema['Type'],
+    MessageSchema['Type'],
+    OwnerValue
+  >
   /** Creates a Step preserving the incoming Model, with no Commands or OutMessage. */
   makeNoopStep: DefineStepNoop<ModelSchema['Type']>
   /** Creates a Model-preserving Step whose deferred callback produces Commands.
@@ -3740,6 +3945,40 @@ export type Definition<
   /** Creates child Bindings fixed to this Definition's parent Model, Message,
    * and OutMessage contracts. */
   makeBinding: BindChild<
+    ModelSchema,
+    MessageSchema,
+    OutMessageSchema,
+    ChildInitContextSchema extends AnySchema
+      ? ChildInitContextSchema['Type']
+      : never
+  >
+  /** Creates a keyed child Binding from a parent Definition's required Record or
+   * Effect HashMap field, deriving enumeration, lookup, replacement and identity.
+   *
+   * The field's value Schema must exactly match the child Model. Add `childField`
+   * when each value is a closed Struct wrapping the exact child Model; replacement
+   * preserves the wrapper's other fields. Placement defaults to `field`.
+   *
+   * Record keys must decode to strings. HashMap keys must decode to strings or
+   * numbers, with finite numeric occurrence keys. Literal, template, refined and
+   * branded keys retain their contracts. Numeric Record and composite HashMap
+   * keys are rejected. HashMap enumeration does not promise display order.
+   *
+   * The parent owns membership. Ordinary child operations replace existing values;
+   * removing an entry ends its occurrence's lifecycle. `subscriptions` gates only
+   * Subscription Streams. Initialize and insert direct child values with
+   * `initAndInsert` from `foldkit/bindingInit`, or retain an existing child with
+   * `makeInitIfMissingStep`. Use the returned Binding's explicit
+   * `init({ key, args, toParentModel })` for wrapper metadata or mixed transitions.
+   *
+   * @example
+   * ```ts
+   * const ChildrenBinding = ParentDefinition.makeMapBinding(ChildBlock, {
+   *   field: 'children',
+   * })
+   * ```
+   */
+  makeMapBinding: MakeMapBinding<
     ModelSchema,
     MessageSchema,
     OutMessageSchema,
@@ -4083,36 +4322,13 @@ const makeDefineView = <
   return defineView
 }
 
-const makeDefineStep = <Model, Message, OutMessage>(): DefineStep<
+function makeDefineStep<
   Model,
   Message,
-  OutMessage
-> => {
-  function defineStep<
-    const Context extends ReadonlyArray<unknown>,
-    const Output extends
-      | OwnedReturn<Model, Message, OutMessage>
-      | AnyFunction
-      | AnyBindingInitRecipe
-      | Update.AnyResultRecipe,
-  >(
-    step: ((model: Model, ...context: Context) => Output) &
-      ValidateDeferredStepOutput<Model, Message, OutMessage, Output> &
-      ValidateAnnotatedContext<Context>,
-  ): NoInfer<
-    DefinedStep<
-      Model,
-      DeferredStepMessage<Message, Output>,
-      Context,
-      OutMessageOfReturn<DeferredStepReturn<Output>>,
-      CommandRequirements<DeferredStepReturn<Output>>,
-      | Update.RegistrationEvidenceOf<DeferredStepReturn<Output>>
-      | Update.GraphRequirementOf<Extract<Output, AnyFunction>>,
-      DeferredStepKind<Output>,
-      | Update.ResultEvidenceChannelOf<DeferredStepReturn<Output>>
-      | Update.GraphRequirementOf<Extract<Output, AnyFunction>>
-    >
-  >
+  OutMessage,
+  InputMessage = Message,
+>(): DefineStep<Model, Message, OutMessage, InputMessage>
+function makeDefineStep(): unknown {
   function defineStep(step: AnyFunction): AnyFunction {
     return (model: unknown, ...context: ReadonlyArray<unknown>) => {
       const output = step(model, ...context)
@@ -4125,11 +4341,16 @@ const makeDefineStep = <Model, Message, OutMessage>(): DefineStep<
         return runBindingInitRecipe(deferred)
       }
 
-      return makeResultRecipe(() => runBindingInitRecipe(deferred))
+      return makeResultRecipe((_model, environment) =>
+        runBindingInitRecipe(deferred, environment),
+      )
     }
   }
 
-  return defineStep
+  const fromMessage = (step: AnyFunction): AnyFunction =>
+    defineStep((_model: unknown, message: unknown) => step(message))
+
+  return Object.assign(defineStep, { fromMessage })
 }
 
 const isSubscriptionEntryRecord = (
@@ -4410,6 +4631,7 @@ export const makeDefinition = (
     ChildInitContext?: AnySchema
     mounts?: ReadonlyArray<Mount.LayeredMountDefinition>
     bindings?: ReadonlyArray<AnyBinding>
+    [ExecutionEnvironmentTypeId]?: OperationEnvironment
   }>,
   authoring?: Readonly<{
     makeStep: AnyFunction
@@ -4447,16 +4669,18 @@ export const makeDefinition = (
 
   const assertOperationMessage = makeOperationMessageValidator(config.Message)
   const defineView = makeDefineView(owner, localMounts, bindings)
-  const init = makeInit(config.Model, bindings)
+  const environment = config[ExecutionEnvironmentTypeId]
+  const init = makeInit(config.Model, bindings, environment)
   const update = makeCompositionUpdate(
     dispatchMessage,
     bindings,
     authoring !== undefined,
+    environment,
   )
   const defineStep = authoring?.makeStep ?? makeDefineStep()
   const defineOutMessageFold = makeOutMessageFold()
   const defineOutMessageForward = makeOutMessageForward()
-  const stepFields = authoring?.makeFieldsStep ?? makeStepFields()
+  const stepFields = authoring?.makeFieldsStep ?? makeStepFields(config.Model)
   const stepNoop = authoring?.makeNoopStep ?? makeStepNoop
   const commandsStep = authoring?.makeCommandsStep ?? makeCommandsStep()
   const defineSubscriptions =
@@ -4489,6 +4713,20 @@ export const makeDefinition = (
       [config.Message],
     )
     const completed = Record.map(source, (operation, name) => {
+      if (isCompiledOperation(operation)) {
+        assertCompiledOperationSource(operation, composition)
+
+        return (model: unknown, ...args: ReadonlyArray<unknown>) =>
+          withOperationGraph(bindings, () => {
+            const output = operation(model, ...args)
+            const resolved = resolveOperationOutput(output, model, environment)
+
+            return isBindingInitRecipe(resolved)
+              ? runBindingInitRecipe(resolved, environment)
+              : resolved
+          })
+      }
+
       if (isOperationMessageConstructor(operation)) {
         assertOperationMessage(operation)
         assertLocalOperationMessage(operation, bindings)
@@ -4518,9 +4756,9 @@ export const makeDefinition = (
           }
           assertLocalOperationTag(Reflect.get(message, '_tag'), bindings)
           const output = update(model, ...input)
-          const resolved = resolveOperationOutput(output, model)
+          const resolved = resolveOperationOutput(output, model, environment)
           return isBindingInitRecipe(resolved)
-            ? runBindingInitRecipe(resolved)
+            ? runBindingInitRecipe(resolved, environment)
             : resolved
         })
     })
@@ -4670,7 +4908,7 @@ export const makeDefinition = (
     return block
   }
 
-  return {
+  const composition = {
     owner,
     Model: config.Model,
     Message: dispatchMessage,
@@ -4698,10 +4936,15 @@ export const makeDefinition = (
     makeSubscriptions: defineSubscriptions,
     makeManagedResources: defineManagedResources,
     makeBinding: bindChild,
+    makeMapBinding: makeMapBinding(bindChild),
     prepareBlock,
   }
+
+  registerCompositionOperationGraph(composition, bindings)
+  return composition
 }
 type RuntimeCompositionGraph = Readonly<{
+  [ExecutionEnvironmentTypeId]?: OperationEnvironment
   mounts?: ReadonlyArray<Mount.LayeredMountDefinition>
   bindings?: ReadonlyArray<AnyBinding>
 }>
@@ -4798,6 +5041,11 @@ export const makeBaseDefinition = (
         makeAssemblyDraft(composition.prepareBlock(implementation)),
     }
 
+    registerCompiledOperationSource(publicComposition, composition)
+    registerCompositionOperationGraph(
+      publicComposition,
+      compositionOperationGraphOf(composition),
+    )
     compositions.add(publicComposition)
     return publicComposition
   }
@@ -4827,7 +5075,14 @@ export const makeBaseDefinition = (
     makeSubscriptions: base.makeSubscriptions,
     makeManagedResources: base.makeManagedResources,
     makeBinding: base.makeBinding,
+    makeMapBinding: base.makeMapBinding,
     makeComposition,
   }
 }
 // oxlint-enable effecttsgo/any-unknown-in-error-context
+
+export type {
+  ImplementationRecipeArguments,
+  ImplementationRecipeValidation,
+  ValidateProvidedHandlers,
+}

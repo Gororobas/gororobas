@@ -1,5 +1,5 @@
-import { Array, Effect, Fiber, Schema } from 'effect'
-import { Block, Program } from 'foldkit'
+import { Array, Effect, Fiber, Layer, Schema } from 'effect'
+import { Block, Program, Story } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,19 +8,24 @@ import * as Dialog from './block.js'
 const dialogId = 'preserved-dialog'
 
 const DialogEvent = Schema.Literals(['Opened', 'Closed'])
+type DialogEvent = typeof DialogEvent.Type
 
 const Model = Schema.Struct({
-  dialog: Dialog.Model,
+  dialog: Dialog.DialogBlock.Model,
   dialogEvents: Schema.Array(DialogEvent),
 })
 type Model = typeof Model.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+const ApplicationKey = Symbol('DialogRuntimeApplication')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message: Schema.Never,
 })
 
-const foldDialogOutMessage = ApplicationDefinition.makeOutMessageFold(
+const foldDialogOutMessage = ApplicationBlock.makeOutMessageFold(
   Dialog.DialogBlock,
   {
     Opened: () => model => ({
@@ -37,12 +42,12 @@ const foldDialogOutMessage = ApplicationDefinition.makeOutMessageFold(
   },
 )
 
-const DialogBinding = ApplicationDefinition.makeBinding(Dialog.DialogBlock, {
+const DialogBinding = ApplicationBlock.makeBinding(Dialog.DialogBlock, {
   field: 'dialog',
   init: { contextToArgs: () => [{ id: dialogId }] },
 }).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
-const ApplicationComposition = ApplicationDefinition.makeComposition({
+const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [DialogBinding],
 })
 
@@ -88,24 +93,37 @@ const preservedModel = (dialogModel: Dialog.Model): Model => ({
   dialogEvents: [],
 })
 
-const preservedOpenModel = (config: Dialog.InitConfig): Dialog.Model =>
-  Dialog.update(Dialog.init(config).model, Dialog.Message.RequestedOpen()).model
+const preservedOpenModel = (config: Dialog.InitConfig) =>
+  Story.withBlock(
+    Dialog.DialogBlock,
+    dialog =>
+      dialog.inMessageUpdate(
+        dialog.init(config).model,
+        Dialog.InMessage.RequestedOpen(),
+      ).model,
+  ).pipe(Effect.provide(Dialog.layer))
 
-const makeDialogProgram = (container: HTMLElement) => {
-  const prepare = () =>
-    ApplicationComposition.prepareBlock({
-      init,
-      update,
-      view,
-    })
-  const block: Block.FromAssemblyWithView<typeof Model, typeof prepare> =
-    Block.assemble(prepare)
+const application = {
+  block: ApplicationBlock,
+  layer: ApplicationBlock.makeLayer(
+    Effect.gen(function* () {
+      const dialog = yield* DialogBinding
 
-  return Program.makeElement({
-    block,
+      return {
+        children: [dialog],
+        init,
+        update,
+        view,
+      }
+    }),
+  ).pipe(Layer.provide(Dialog.layer)),
+}
+
+const makeDialogProgram = (container: HTMLElement) =>
+  Program.makeElement({
+    ...application,
     container,
   })
-}
 
 describe('Dialog runtime lifecycle', () => {
   beforeEach(() => {
@@ -132,7 +150,11 @@ describe('Dialog runtime lifecycle', () => {
     const program = makeDialogProgram(container)
     const encodedOpenModel = Schema.encodeUnknownSync(
       Schema.toCodecJson(Model),
-    )(preservedModel(preservedOpenModel({ id: dialogId })))
+    )(
+      preservedModel(
+        await Effect.runPromise(preservedOpenModel({ id: dialogId })),
+      ),
+    )
     const freshRuntime = Effect.runFork(program.start())
     let restoredRuntime: Fiber.Fiber<void, never> | undefined
 
@@ -190,7 +212,13 @@ describe('Dialog runtime lifecycle', () => {
     const program = makeDialogProgram(container)
     const encodedEnteringModel = Schema.encodeUnknownSync(
       Schema.toCodecJson(Model),
-    )(preservedModel(preservedOpenModel({ id: dialogId, isAnimated: true })))
+    )(
+      preservedModel(
+        await Effect.runPromise(
+          preservedOpenModel({ id: dialogId, isAnimated: true }),
+        ),
+      ),
+    )
     const runtime = Effect.runFork(program.start(encodedEnteringModel))
 
     try {
@@ -223,9 +251,13 @@ describe('Dialog runtime lifecycle', () => {
     trigger.focus()
 
     const program = makeDialogProgram(container)
-    const dialogClose = Dialog.update(
+    const openModel = await Effect.runPromise(
       preservedOpenModel({ id: dialogId, isAnimated: true }),
-      Dialog.Message.RequestedClose(),
+    )
+    const dialogClose = await Effect.runPromise(
+      Story.withBlock(Dialog.DialogBlock, dialog =>
+        dialog.inMessageUpdate(openModel, Dialog.InMessage.RequestedClose()),
+      ).pipe(Effect.provide(Dialog.layer)),
     )
     const leavingModel = modifyFields(dialogClose.model, {
       animation: animation =>

@@ -6,15 +6,24 @@ const Message = defineMessageUnion({
   TickedFrame: { deltaTime: Schema.Number },
   ClickedTogglePlay: {},
 })
+type Message = typeof Message.Type
 
 const Model = Schema.Struct({
   isPlaying: Schema.Boolean,
   angle: Schema.Number,
 })
+type Model = typeof Model.Type
 
-const SpinnerDefinition = Block.makeDefinition('Spinner', { Model, Message })
+export const SpinnerKey = Symbol('Spinner')
 
-const subscriptions = SpinnerDefinition.makeSubscriptions(entry => ({
+const SpinnerBlock = Block.make('Spinner', {
+  key: SpinnerKey,
+  Init: Schema.Tuple([]),
+  Model,
+  Message,
+})
+
+const subscriptions = SpinnerBlock.makeSubscriptions(entry => ({
   animationFrameTicks: entry(
     'AnimationFrameTicks',
     { isActive: Schema.Boolean },

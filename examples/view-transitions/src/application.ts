@@ -20,6 +20,7 @@ export const Model = Schema.Struct({
   route: ApplicationRoute,
   filterText: Schema.String,
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   CompletedNavigateInternal: {},
@@ -28,15 +29,25 @@ export const Message = defineMessageUnion({
   ChangedUrl: { url: Url },
   UpdatedFilterText: { filterText: Schema.String },
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([Url]),
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = ApplicationDefinition
+type ApplicationMessage = Block.ExecutableOf<
+  typeof ApplicationBlock
+>['Message']['Type']
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+const { makeFieldsStep, makeNoopStep } = ApplicationBlock
+
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
@@ -45,7 +56,7 @@ export const init = ApplicationComposition.makeInit((url: Url) => ({
   model: Model.make({ route: urlToApplicationRoute(url), filterText: '' }),
 }))
 
-const NavigateInternal = ApplicationDefinition.makeCommand('NavigateInternal', {
+const NavigateInternal = ApplicationBlock.makeCommand('NavigateInternal', {
   args: { url: Schema.String },
   messages: [Message.CompletedNavigateInternal],
   handler: function* () {
@@ -54,7 +65,7 @@ const NavigateInternal = ApplicationDefinition.makeCommand('NavigateInternal', {
   },
 })
 
-const LoadExternal = ApplicationDefinition.makeCommand('LoadExternal', {
+const LoadExternal = ApplicationBlock.makeCommand('LoadExternal', {
   args: { href: Schema.String },
   messages: [Message.CompletedLoadExternal],
   handler: function* () {
@@ -98,8 +109,8 @@ export const update = ApplicationComposition.makeUpdate({
 // `styles.css` is not type-scoped, so an untyped transition still cross-fades,
 // it just does not slide.
 export const viewTransition: Runtime.ViewTransitionConfig<
-  typeof Model.Type,
-  typeof Message.Type
+  Model,
+  ApplicationMessage
 > = ({ previousModel, model, message }) => {
   if (message._tag !== 'ChangedUrl') {
     return false
@@ -127,9 +138,7 @@ const artworkTransitionStyle = (artworkId: number) => ({
   viewTransitionClass: 'artwork',
 })
 
-const filteredArtworks = (
-  filterText: string,
-): ReadonlyArray<typeof Artwork.Type> => {
+const filteredArtworks = (filterText: string): ReadonlyArray<Artwork> => {
   const normalizedFilter = filterText.trim().toLowerCase()
 
   if (String.isEmpty(normalizedFilter)) {
@@ -143,10 +152,7 @@ const filteredArtworks = (
   }
 }
 
-const artworkCardView = (
-  artwork: typeof Artwork.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const artworkCardView = (artwork: Artwork, h: ApplicationViewBuilder): Html =>
   h.keyed('a')(
     `artwork-${artwork.id}`,
     [h.Href(artworkRouter({ artworkId: artwork.id })), h.Class('group block')],
@@ -166,7 +172,7 @@ const emptyGalleryView = (h: ApplicationViewBuilder): Html =>
   h.p([h.Class('text-gray-500')], ['No artworks match the filter.'])
 
 const artworkGridView = (
-  matchedArtworks: ReadonlyArray<typeof Artwork.Type>,
+  matchedArtworks: ReadonlyArray<Artwork>,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
@@ -224,10 +230,7 @@ const missingArtworkView = (
 // square growing into a wider box visibly stretches mid-flight. Matching the
 // ratio makes the morph a pure scale and translate, which is the one case the
 // browser renders cleanly.
-const foundArtworkView = (
-  artwork: typeof Artwork.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const foundArtworkView = (artwork: Artwork, h: ApplicationViewBuilder): Html =>
   h.div(
     [],
     [
@@ -303,7 +306,7 @@ const notFoundView = (path: string, h: ApplicationViewBuilder): Html =>
     ],
   )
 
-const routeTitle = (route: typeof ApplicationRoute.Type): string =>
+const routeTitle = (route: ApplicationRoute): string =>
   ApplicationRoute.match(route, {
     Gallery: () => 'View Transitions',
     Artwork: ({ artworkId }) =>
@@ -357,14 +360,14 @@ export const view = ApplicationComposition.makeView((model, h) => {
   }
 })
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      EffectsLayer,
+    }
+  }),
+)

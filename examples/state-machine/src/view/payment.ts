@@ -1,16 +1,17 @@
 import { clsx } from 'clsx'
 import type { Html } from 'foldkit/html'
 
-import { Button, Checkbox } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
+import { view as checkboxView } from '@foldkit/ui/checkbox'
 
 import * as Icon from '../icon'
 import { Message } from '../message'
-import { CheckoutState } from '../model'
+import type { PaymentState } from '../model'
 import { cancelCheckoutButton } from './cart'
 import { primaryButtonClassName, secondaryButtonClassName } from './shared'
 
 export const paymentView = (
-  state: typeof CheckoutState.Payment.Type,
+  state: PaymentState,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
@@ -39,7 +40,7 @@ export const paymentView = (
             [h.Class('text-sm font-bold text-stone-900')],
             ['Saved payment method'],
           ),
-          Checkbox.view(
+          checkboxView(
             {
               id: 'saved-card',
               isChecked: state.isPaymentMethodSelected,
@@ -131,7 +132,7 @@ export const paymentView = (
           ),
         ],
         [
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedBack(),
               toView: attributes =>
@@ -152,7 +153,7 @@ export const paymentView = (
             h,
           ),
           h.div([h.Class('sm:justify-self-center')], [cancelCheckoutButton(h)]),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedContinue(),
               isDisabled: !state.isPaymentMethodSelected,

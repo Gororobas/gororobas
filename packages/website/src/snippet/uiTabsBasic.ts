@@ -1,16 +1,17 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Tabs } from '@foldkit/ui'
-import type { RenderInfo as TabsRenderInfo } from '@foldkit/ui/tabs'
+import {
+  layer as TabsLayer,
+  type RenderInfo as TabsRenderInfo,
+  makeBlock as makeTabsBlock,
+} from '@foldkit/ui/tabs'
 
 const Framework = Schema.Literals(['Foldkit', 'React', 'Elm'])
+type Framework = typeof Framework.Type
 
-const FrameworkTabs = Tabs.create<typeof Framework.Type>()
+const FrameworkTabs = makeTabsBlock<Framework>()
 
 // Add fields to your Model for the Tabs Block and the active tab. The
 // Block keeps private keyboard-focus state; the parent owns the active
@@ -20,24 +21,26 @@ const Model = Schema.Struct({
   activeFramework: Framework,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // This excerpt has no parent-owned facts. The Composition derives delivery.
 const Message = defineMessageUnion({})
+type Message = typeof Message.Type
 
-const TabsExampleDefinition = Block.makeDefinition('TabsExample', {
+export const TabsExampleKey = Symbol('TabsExample')
+
+export const TabsExampleBlock = Block.make('TabsExample', {
+  key: TabsExampleKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = TabsExampleDefinition
+const { makeFieldsStep } = TabsExampleBlock
 
-const frameworks: ReadonlyArray<typeof Framework.Type> = [
-  'Foldkit',
-  'React',
-  'Elm',
-]
+const frameworks: ReadonlyArray<Framework> = ['Foldkit', 'React', 'Elm']
 
-const descriptions: Record<typeof Framework.Type, string> = {
+const descriptions: Record<Framework, string> = {
   Foldkit: 'Model-View-Update with Effect.',
   React: 'Component-based with hooks.',
   Elm: 'The original MVU architecture.',
@@ -47,32 +50,27 @@ const descriptions: Record<typeof Framework.Type, string> = {
 // carries the chosen value (typed as `Framework`) and its index. Fold the
 // value into your own Model so it flows back in as selectedValue. The arm
 // returns an Update.Step over the parent Model, which already has the next
-// Tabs Model written back. Passing the whole child lets the parent Definition
+// Tabs Model written back. Passing the whole child lets the parent Block
 // infer the refined `Framework` OutMessage and parent Step:
-const foldTabsOutMessage = TabsExampleDefinition.makeOutMessageFold(
-  FrameworkTabs,
-  {
-    // The child has emitted `Selected`. Store the selected value as the new
-    // active tab. In this arm the parent can also update its own state or
-    // dispatch Commands, for example route to a new URL, persist the
-    // selection, or trigger a panel content fetch.
-    Selected: ({ value }) =>
-      makeFieldsStep(() => ({
-        activeFramework: () => value,
-      })),
-  },
-)
+const foldTabsOutMessage = TabsExampleBlock.makeOutMessageFold(FrameworkTabs, {
+  // The child has emitted `Selected`. Store the selected value as the new
+  // active tab. In this arm the parent can also update its own state or
+  // dispatch Commands, for example route to a new URL, persist the
+  // selection, or trigger a panel content fetch.
+  Selected: ({ value }) =>
+    makeFieldsStep(() => ({
+      activeFramework: () => value,
+    })),
+})
 
-// The Binding wires the completed child Block into the parent: it runs
-// FrameworkTabs.update, writes the next Tabs Model back, maps the Block's
-// Commands into your Message type, and hands any OutMessage to
-// the OutMessage fold.
-const TabsBinding = TabsExampleDefinition.makeBinding(FrameworkTabs, {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const TabsBinding = TabsExampleBlock.makeBinding(FrameworkTabs, {
   field: 'tabs',
-  init: { contextToArgs: () => Tuple.make({ id: 'framework-tabs' }) },
+  init: { contextToArgs: () => [{ id: 'framework-tabs' }] },
 }).withOutMessagePolicy({ fold: foldTabsOutMessage })
 
-const TabsExampleComposition = TabsExampleDefinition.makeComposition({
+const TabsExampleComposition = TabsExampleBlock.makeComposition({
   bindings: [TabsBinding],
 })
 
@@ -94,7 +92,7 @@ const view = TabsExampleComposition.makeView((model, h) => {
     tablist,
     tabs,
     activeIndex,
-  }: TabsRenderInfo<typeof Framework.Type>) =>
+  }: TabsRenderInfo<Framework>) =>
     h.div(
       [],
       [
@@ -136,3 +134,16 @@ const view = TabsExampleComposition.makeView((model, h) => {
     }),
   )
 })
+
+export const layer = TabsExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const tabs = yield* TabsBinding
+
+    return {
+      children: [tabs],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(TabsLayer))

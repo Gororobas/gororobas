@@ -1,6 +1,8 @@
-import { Duration } from 'effect'
+import { Duration, Layer } from 'effect'
 import type * as Block from 'foldkit/block'
+import * as Story from 'foldkit/story'
 
+import * as Animation from '@foldkit/ui/animation'
 import * as DragAndDrop from '@foldkit/ui/dragAndDrop'
 import * as Slider from '@foldkit/ui/slider'
 import * as Tooltip from '@foldkit/ui/tooltip'
@@ -13,13 +15,34 @@ import {
   Picker,
   PickerBinding,
   RootSlider,
+  type RootSliderExecutable,
+  type SliderExecutable,
   ToastBlock,
-  WithOutMessageOnly,
-  WithViewAndOutMessage,
-  WithViewOnly,
-  WithoutViewOrOutMessage,
+  WithOutMessageOnlyLayer,
+  WithViewAndOutMessageLayer,
+  WithViewOnlyLayer,
+  WithoutViewOrOutMessageLayer,
   createComposition,
+  dismissAllToasts,
+  showAnimation,
+  showAnimationCurried,
 } from './generic-composition.accepted.js'
+
+export const exerciseReceivedInputs = (
+  animation: Block.ExecutableOf<typeof Animation.AnimationBlock>,
+  toast: Block.ExecutableOf<typeof ToastBlock>,
+) => {
+  const animationInit = animation.init({ id: 'relocated-animation' })
+  const toastInit = toast.init({ id: 'relocated-toast' })
+  const shown = showAnimation(animation, animationInit.model)
+  const shownByStep = showAnimationCurried(animation)(animationInit.model)
+  const dismissed = dismissAllToasts(toast, toastInit.model)
+
+  // @ts-expect-error A relocated consumer cannot construct retired local requests.
+  Animation.AnimationBlock.Message.RequestedShow()
+
+  return { shown, shownByStep, dismissed }
+}
 
 type Equal<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <
@@ -51,7 +74,7 @@ export type RelocatedAssertions = [
     Equal<
       Exclude<
         ReturnType<
-          typeof Slider.SliderBlock.operations.informRangeChanged
+          SliderExecutable['operations']['informRangeChange']
         >['outMessage'],
         undefined
       >,
@@ -62,7 +85,7 @@ export type RelocatedAssertions = [
     Equal<
       Exclude<
         ReturnType<
-          typeof RootSlider.operations.informRangeChanged
+          RootSliderExecutable['operations']['informRangeChange']
         >['outMessage'],
         undefined
       >,
@@ -98,30 +121,38 @@ DialogBinding.requestOpen('unexpected')
 
 PickerBinding.requestSelectItem('Apple', 'Apple')
 
-Slider.SliderBlock.operations.informRangeChanged(
-  Slider.SliderBlock.init({ id: 'relocated-range', min: 0, max: 100, step: 1 })
-    .model,
-  { min: 10, max: 90 },
-)
-RootSlider.operations.informRangeChanged(
-  Slider.SliderBlock.init({
-    id: 'relocated-root-range',
-    min: 0,
-    max: 100,
-    step: 1,
-  }).model,
-  { min: 20, max: 80 },
-)
-Tooltip.TooltipBlock.operations.informShowDelayChanged(
-  Tooltip.TooltipBlock.init({ id: 'relocated-tooltip' }).model,
-  Duration.millis(250),
-)
-ToastBlock.operations.requestShow(
-  ToastBlock.init({ id: 'relocated-toast' }).model,
-  {
-    payload: { kind: 'Saved' },
-    duration: '1 second',
-  },
+export const relocatedOperations = Story.withBlock(Slider.SliderBlock, slider =>
+  Story.withBlock(RootSlider, rootSlider =>
+    Story.withBlock(Tooltip.TooltipBlock, tooltip =>
+      Story.withBlock(ToastBlock, toast => {
+        slider.operations.informRangeChange(
+          slider.init({ id: 'relocated-range', min: 0, max: 100, step: 1 })
+            .model,
+          { min: 10, max: 90 },
+        )
+        rootSlider.operations.informRangeChange(
+          slider.init({
+            id: 'relocated-root-range',
+            min: 0,
+            max: 100,
+            step: 1,
+          }).model,
+          { min: 20, max: 80 },
+        )
+        tooltip.operations.informShowDelayChanged(
+          tooltip.init({ id: 'relocated-tooltip' }).model,
+          Duration.millis(250),
+        )
+        toast.operations.requestShow(
+          toast.init({ id: 'relocated-toast' }).model,
+          {
+            payload: { kind: 'Saved' },
+            duration: '1 second',
+          },
+        )
+      }),
+    ),
+  ),
 )
 
 // @ts-expect-error The emitted generic operation rejects an unrelated item.
@@ -134,12 +165,10 @@ Picker.Message.SelectedItem({
   wasSelected: false,
 })
 
-WithViewAndOutMessage.replaceEffectsLayer(WithViewAndOutMessage.EffectsLayer)
-WithOutMessageOnly.replaceEffectsLayer(WithOutMessageOnly.EffectsLayer)
-WithViewOnly.replaceEffectsLayer(WithViewOnly.EffectsLayer)
-WithoutViewOrOutMessage.replaceEffectsLayer(
-  WithoutViewOrOutMessage.EffectsLayer,
-)
+WithViewAndOutMessageLayer.pipe(Layer.provide(Layer.empty))
+WithOutMessageOnlyLayer.pipe(Layer.provide(Layer.empty))
+WithViewOnlyLayer.pipe(Layer.provide(Layer.empty))
+WithoutViewOrOutMessageLayer.pipe(Layer.provide(Layer.empty))
 
 // @ts-expect-error A keyboard pickup includes its starting position.
 DragAndDrop.DragAndDropBlock.OutMessage.StartedKeyboardDrag({

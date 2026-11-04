@@ -2,7 +2,9 @@ import clsx from 'clsx'
 import { Array, Match, Option } from 'effect'
 import { Html } from 'foldkit/html'
 
-import { Button, Checkbox, Input } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
+import { view as checkboxView } from '@foldkit/ui/checkbox'
+import { view as inputView } from '@foldkit/ui/input'
 
 import {
   ApplicationComposition,
@@ -18,7 +20,7 @@ import {
 } from './model'
 
 const editingTextFor = (
-  editing: typeof EditingState.Type,
+  editing: EditingState,
   todoId: string,
 ): Option.Option<string> =>
   EditingState.match(editing, {
@@ -27,7 +29,7 @@ const editingTextFor = (
   })
 
 const todoItemView = (
-  todo: typeof Todo.Type,
+  todo: Todo,
   maybeEditingText: Option.Option<string>,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -37,7 +39,7 @@ const todoItemView = (
   })
 
 const editingTodoView = (
-  todo: typeof Todo.Type,
+  todo: Todo,
   text: string,
   h: ApplicationViewBuilder,
 ): Html =>
@@ -45,7 +47,7 @@ const editingTodoView = (
     todo.id,
     [h.Class('flex items-center gap-3 p-3 bg-gray-50 rounded-lg')],
     [
-      Input.view(
+      inputView(
         {
           id: `edit-${todo.id}`,
           value: text,
@@ -61,7 +63,7 @@ const editingTodoView = (
         },
         h,
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.SavedEdit(),
           toView: attributes =>
@@ -77,7 +79,7 @@ const editingTodoView = (
         },
         h,
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.CancelledEdit(),
           toView: attributes =>
@@ -102,15 +104,12 @@ const checkboxBoxClassName = (isChecked: boolean): string =>
     isChecked ? 'border-blue-600 bg-blue-600' : 'border-gray-300',
   )
 
-const nonEditingTodoView = (
-  todo: typeof Todo.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const nonEditingTodoView = (todo: Todo, h: ApplicationViewBuilder): Html =>
   h.keyed('li')(
     todo.id,
     [h.Class('flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg group')],
     [
-      Checkbox.view(
+      checkboxView(
         {
           id: `todo-${todo.id}`,
           isChecked: todo.completed,
@@ -143,7 +142,7 @@ const nonEditingTodoView = (
         ],
         [todo.text],
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.DeletedTodo({ id: todo.id }),
           toView: attributes =>
@@ -164,13 +163,9 @@ const nonEditingTodoView = (
   )
 
 const filterButtonView =
-  (model: typeof Model.Type) =>
-  (
-    filter: typeof Filter.Type,
-    label: string,
-    h: ApplicationViewBuilder,
-  ): Html =>
-    Button.view(
+  (model: Model) =>
+  (filter: Filter, label: string, h: ApplicationViewBuilder): Html =>
+    buttonView(
       {
         onClick: Message.SelectedFilter({ filter }),
         toView: attributes =>
@@ -192,7 +187,7 @@ const filterButtonView =
     )
 
 const footerView = (
-  model: typeof Model.Type,
+  model: Model,
   activeCount: number,
   completedCount: number,
   h: ApplicationViewBuilder,
@@ -223,7 +218,7 @@ const footerView = (
               Array.match(model.todos, {
                 onEmpty: () => h.empty,
                 onNonEmpty: todos =>
-                  Button.view(
+                  buttonView(
                     {
                       onClick: Message.ToggledAll(),
                       toView: attributes =>
@@ -246,7 +241,7 @@ const footerView = (
               }),
 
               completedCount > 0
-                ? Button.view(
+                ? buttonView(
                     {
                       onClick: Message.ClearedCompleted(),
                       toView: attributes =>
@@ -269,10 +264,7 @@ const footerView = (
       ),
   })
 
-const filterTodos = (
-  todos: typeof Todos.Type,
-  filter: typeof Filter.Type,
-): typeof Todos.Type =>
+const filterTodos = (todos: Todos, filter: Filter): Todos =>
   Match.value(filter).pipe(
     Match.when('All', () => todos),
     Match.when('Active', () => Array.filter(todos, todo => !todo.completed)),
@@ -304,7 +296,7 @@ export const view = ApplicationComposition.makeView((model, h) => {
               h.div(
                 [h.Class('flex gap-3')],
                 [
-                  Input.view(
+                  inputView(
                     {
                       id: 'new-todo',
                       value: model.newTodoText,
@@ -321,7 +313,7 @@ export const view = ApplicationComposition.makeView((model, h) => {
                     },
                     h,
                   ),
-                  Button.view(
+                  buttonView(
                     {
                       type: 'submit',
                       toView: attributes =>

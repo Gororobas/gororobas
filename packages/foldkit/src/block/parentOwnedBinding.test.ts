@@ -37,7 +37,7 @@ const Child = makeDefinition('ParentOwnedBindingChild', {
   Message: ChildMessage,
   OutMessage: ChildOutMessage,
 })
-const selectValueStep = Child.makeStep(model => ({
+const selectValue = Child.makeStep(model => ({
   model,
   outMessage: ChildOutMessage.SelectedValue({ value: model.value }),
 }))
@@ -46,7 +46,7 @@ const prepareChildBlock = () =>
   ChildComposition.prepareBlock({
     init: () => ({ model: ChildModel.make({ value: 'initial' }) }),
     update: ChildComposition.makeUpdate({
-      RequestedSelectValue: model => selectValueStep(model),
+      RequestedSelectValue: model => selectValue(model),
       RequestedSetPrototypeValue: model => ({ model }),
       UpdatedValue: (model, { value }) => ({
         model: modifyFields(model, { value: () => value }),
@@ -66,7 +66,7 @@ const PlainChild = makeDefinition('ParentOwnedBindingPlainChild', {
   Message: ChildMessage,
 })
 const PlainChildComposition = PlainChild.makeComposition()
-const setPrototypeValueStep = PlainChild.makeStep((model, value: string) => ({
+const setPrototypeValue = PlainChild.makeStep((model, value: string) => ({
   model: modifyFields(model, { value: () => value }),
 }))
 const preparePlainChildBlock = () =>
@@ -75,7 +75,7 @@ const preparePlainChildBlock = () =>
     update: PlainChildComposition.makeUpdate({
       RequestedSelectValue: model => ({ model }),
       RequestedSetPrototypeValue: (model, { value }) =>
-        setPrototypeValueStep(model, value),
+        setPrototypeValue(model, value),
       UpdatedValue: (model, { value }) => ({
         model: modifyFields(model, { value: () => value }),
       }),
@@ -103,8 +103,11 @@ const PrototypeOperationChildBlock: Block.FromAssemblyWithoutViewOrOutMessage<
 const Entry = Schema.Struct({ id: Schema.Number, child: ChildModel })
 type Entry = typeof Entry.Type
 const ChildSlot = Schema.TaggedStruct('Child', { child: ChildModel })
+type ChildSlot = typeof ChildSlot.Type
 const EmptySlot = Schema.TaggedStruct('Empty', {})
+type EmptySlot = typeof EmptySlot.Type
 const Slot = Schema.Union([ChildSlot, EmptySlot])
+type Slot = typeof Slot.Type
 const ParentModel = Schema.Struct({
   child: ChildModel,
   maybeChild: Schema.Option(ChildModel),
@@ -415,6 +418,7 @@ if (false) {
 const SingleParentMessage = defineMessageUnion({
   RequestedInvokePrototypeOperation: { value: Schema.String },
 })
+type SingleParentMessage = typeof SingleParentMessage.Type
 const ApplicationDefinition = Block.makeDefinition('Application', {
   Model: ParentModel,
   Message: SingleParentMessage,
@@ -639,6 +643,7 @@ it('accepts shared named contracts and rejects incompatible contracts from that 
     child: ChildModel,
     unrelated: Schema.String,
   })
+  type IncompatibleParentModel = typeof IncompatibleParentModel.Type
   const IncompatibleDefinition = SharedParentNamespace.makeDefinition({
     Model: IncompatibleParentModel,
     Message: SingleParentMessage,
@@ -728,7 +733,7 @@ it('binds an exposed operation named __proto__ as an own property', () => {
   const composition = SnapshotParent.makeComposition({
     bindings: [PrototypeOperationBinding],
   })
-  const invokePrototypeOperationStep = SnapshotParent.makeStep(
+  const invokePrototypeOperation = SnapshotParent.makeStep(
     (_model, value: string) => {
       const boundOperation = Reflect.get(PrototypeOperationBinding, '__proto__')
       return Reflect.apply(boundOperation, PrototypeOperationBinding, [value])
@@ -746,7 +751,7 @@ it('binds an exposed operation named __proto__ as an own property', () => {
       })),
       update: composition.makeUpdate({
         RequestedInvokePrototypeOperation: (model, { value }) =>
-          invokePrototypeOperationStep(model, value),
+          invokePrototypeOperation(model, value),
       }),
       operations: {
         invokePrototypeOperation: (value: string) =>

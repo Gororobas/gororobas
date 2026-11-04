@@ -3,13 +3,17 @@ import { AsyncData, Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
+import { fetchPosts } from './queryDefine'
+
 const Post = Schema.Struct({ id: Schema.String, title: Schema.String })
+type Post = typeof Post.Type
 
 const PostsData = AsyncData.Schema(Schema.Array(Post), Schema.String)
-
+type PostsData = typeof PostsData.schema.Type
 const Model = Schema.Struct({
   posts: PostsData.schema,
 })
+type Model = typeof Model.Type
 
 const Message = defineMessageUnion({
   EnteredPostsRoute: {},
@@ -17,17 +21,22 @@ const Message = defineMessageUnion({
     result: Schema.Result(Schema.Array(Post), Schema.String),
   },
 })
+type Message = typeof Message.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeFieldsStep } = ApplicationDefinition
+const { makeFieldsStep } = ApplicationBlock
 
-const ApplicationComposition = ApplicationDefinition.makeComposition()
+const ApplicationComposition = ApplicationBlock.makeComposition()
 
-const FetchPosts = ApplicationDefinition.makeCommand('FetchPosts', {
+const FetchPosts = ApplicationBlock.makeCommand('FetchPosts', {
   messages: [Message.CompletedFetchPosts],
   handler: function* () {
     return () =>

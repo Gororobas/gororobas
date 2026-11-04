@@ -2,7 +2,7 @@ import { Array, Option } from 'effect'
 import { AsyncData } from 'foldkit'
 import type { Html } from 'foldkit/html'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 import type { ApplicationViewBuilder } from '../composition'
 import type { Telemetry } from '../domain'
@@ -11,10 +11,7 @@ import type { Model } from '../model'
 import * as Chart from './chart'
 import { sidebarView } from './sidebar'
 
-export const headerView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html => {
+export const headerView = (model: Model, h: ApplicationViewBuilder): Html => {
   const isRefreshing = AsyncData.isRefreshing(model.telemetry)
   const isLoading = AsyncData.isLoading(model.telemetry)
 
@@ -46,7 +43,7 @@ export const headerView = (
           ),
         ],
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedRefresh(),
           isDisabled: isRefreshing || isLoading,
@@ -68,7 +65,7 @@ export const headerView = (
 }
 
 const dashboardBanner = (
-  telemetry: (typeof Model.Type)['telemetry'],
+  telemetry: Model['telemetry'],
 ): Option.Option<string> =>
   AsyncData.match(telemetry, {
     onIdle: () => Option.none(),
@@ -84,7 +81,7 @@ const dashboardBanner = (
   })
 
 export const telemetryStateView = (
-  model: typeof Model.Type,
+  model: Model,
   h: ApplicationViewBuilder,
 ): Html =>
   AsyncData.matchData(model.telemetry, {
@@ -138,7 +135,7 @@ export const failureView = (error: string, h: ApplicationViewBuilder): Html =>
             ['Could not fetch telemetry'],
           ),
           h.p([h.Class('mt-2 text-sm text-rose-800')], [error]),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedRetry(),
               toView: attributes =>
@@ -160,8 +157,8 @@ export const failureView = (error: string, h: ApplicationViewBuilder): Html =>
   )
 
 export const dashboardShellView = (
-  model: typeof Model.Type,
-  telemetry: typeof Telemetry.Type,
+  model: Model,
+  telemetry: Telemetry,
   maybeBanner: Option.Option<string>,
   h: ApplicationViewBuilder,
 ): Html =>

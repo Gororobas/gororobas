@@ -23,32 +23,32 @@ import {
   update,
 } from './record-update.accepted.js'
 
-const quietStep = CounterDefinition.makeNoopStep()
+const keepCount = CounterDefinition.makeNoopStep()
 const validCases = {
-  RequestedQuiet: quietStep,
-  RequestedReport: quietStep,
-  RequestedSave: quietStep,
-  CompletedSave: quietStep,
+  RequestedQuiet: keepCount,
+  RequestedReport: keepCount,
+  RequestedSave: keepCount,
+  CompletedSave: keepCount,
 }
 
-const largeNoopStep = LargeContextDefinition.makeNoopStep()
+const keepLargeModel = LargeContextDefinition.makeNoopStep()
 const validLargeCases = {
-  PressedKey: largeNoopStep,
-  ChangedCount: largeNoopStep,
-  BlurredInput: largeNoopStep,
-  SubmittedSave: largeNoopStep,
-  RequestedReport: largeNoopStep,
-  UpdatedRemote: largeNoopStep,
-  FailedRemote: largeNoopStep,
-  CompletedLoad: largeNoopStep,
-  SucceededFetch: largeNoopStep,
-  FailedFetch: largeNoopStep,
-  ClickedCopy: largeNoopStep,
-  SucceededCopy: largeNoopStep,
-  CompletedWait: largeNoopStep,
-  InformedJoin: largeNoopStep,
-  SucceededJoin: largeNoopStep,
-  CompletedSave: largeNoopStep,
+  PressedKey: keepLargeModel,
+  ChangedCount: keepLargeModel,
+  BlurredInput: keepLargeModel,
+  SubmittedSave: keepLargeModel,
+  RequestedReport: keepLargeModel,
+  UpdatedRemote: keepLargeModel,
+  FailedRemote: keepLargeModel,
+  CompletedLoad: keepLargeModel,
+  SucceededFetch: keepLargeModel,
+  FailedFetch: keepLargeModel,
+  ClickedCopy: keepLargeModel,
+  SucceededCopy: keepLargeModel,
+  CompletedWait: keepLargeModel,
+  InformedJoin: keepLargeModel,
+  SucceededJoin: keepLargeModel,
+  CompletedSave: keepLargeModel,
 }
 
 // @ts-expect-error Large contextual records retain the owning Model contract.
@@ -68,12 +68,23 @@ LargeContextComposition.makeUpdate.withContext((_context: LargeContext) => ({
 }))
 
 // @ts-expect-error Every local Message needs a handler.
-CounterComposition.makeUpdate({ RequestedQuiet: quietStep })
+CounterComposition.makeUpdate({ RequestedQuiet: keepCount })
 // @ts-expect-error Extra handlers are rejected even when extracted.
-CounterComposition.makeUpdate({ ...validCases, Undeclared: quietStep })
-const extraCases = { ...validCases, Undeclared: quietStep }
+CounterComposition.makeUpdate({ ...validCases, Undeclared: keepCount })
+const extraCases = { ...validCases, Undeclared: keepCount }
 // @ts-expect-error Structural assignment cannot hide an extra handler.
 CounterComposition.makeUpdate(extraCases)
+// @ts-expect-error Every local Message needs a contextual handler.
+CounterComposition.makeUpdate.withContext((_amount: number) => ({
+  RequestedQuiet: keepCount,
+}))
+// @ts-expect-error Extra contextual handlers are rejected.
+CounterComposition.makeUpdate.withContext((_amount: number) => ({
+  ...validCases,
+  Undeclared: keepCount,
+}))
+// @ts-expect-error Structural assignment cannot hide an extra contextual handler.
+CounterComposition.makeUpdate.withContext((_amount: number) => extraCases)
 CounterComposition.makeUpdate({
   ...validCases,
   // @ts-expect-error The handler receives the owning Model.
@@ -182,6 +193,34 @@ const WrongOutMessage = Message.defineMessageUnion({
 })
 CounterComposition.makeUpdate({
   ...validCases,
+  // @ts-expect-error An invalid OutMessage branch cannot hide beside a plain result.
+  RequestedQuiet: model =>
+    model.count > 0
+      ? { model, outMessage: WrongOutMessage.ReportedCount({ count: 'bad' }) }
+      : { model },
+})
+// @ts-expect-error Contextual conditional branches preserve the OutMessage payload contract.
+CounterComposition.makeUpdate.withContext((minimum: number) => ({
+  ...validCases,
+  RequestedQuiet: model =>
+    model.count > minimum
+      ? { model, outMessage: WrongOutMessage.ReportedCount({ count: 'bad' }) }
+      : { model },
+}))
+CounterComposition.makeUpdate({
+  ...validCases,
+  // @ts-expect-error An invalid Command Message branch cannot hide beside a plain result.
+  RequestedQuiet: model =>
+    model.count > 0 ? { model, commands: [wrongCommand] } : { model },
+})
+// @ts-expect-error Contextual conditional branches preserve Command result Messages.
+CounterComposition.makeUpdate.withContext((minimum: number) => ({
+  ...validCases,
+  RequestedQuiet: model =>
+    model.count > minimum ? { model, commands: [wrongCommand] } : { model },
+}))
+CounterComposition.makeUpdate({
+  ...validCases,
   // @ts-expect-error A matching OutMessage tag does not erase its payload contract.
   RequestedQuiet: (model: typeof Model.Type) => ({
     model,
@@ -216,12 +255,12 @@ CounterComposition.makeUpdate({
   RequestedQuiet: () => erasedRegistration,
 })
 
-const parentQuietStep = ParentDefinition.makeNoopStep()
+const keepParentModel = ParentDefinition.makeNoopStep()
 const parentCases = {
-  RequestedQuiet: parentQuietStep,
-  RequestedReport: parentQuietStep,
-  RequestedSave: parentQuietStep,
-  CompletedSave: parentQuietStep,
+  RequestedQuiet: keepParentModel,
+  RequestedReport: keepParentModel,
+  RequestedSave: keepParentModel,
+  CompletedSave: keepParentModel,
 }
 ParentDefinition.makeComposition().makeUpdate({
   ...parentCases,
@@ -237,7 +276,7 @@ ParentComposition.makeUpdate({
       ParentDefinition.makeNoopStep(),
     ]),
 })
-const emittedStep = ParentDefinition.makeStep(() =>
+const emitted = ParentDefinition.makeStep(() =>
   Update.combineSteps([
     ChildBinding.report({ amount: 1 }),
     ParentDefinition.makeNoopStep(),
@@ -246,8 +285,39 @@ const emittedStep = ParentDefinition.makeStep(() =>
 ParentComposition.makeUpdate({
   ...parentCases,
   // @ts-expect-error Extracting a combination through a Definition Step preserves the obligation.
-  RequestedReport: model => emittedStep(model),
+  RequestedReport: model => emitted(model),
 })
+ParentDefinition.makeComposition().makeUpdate.withContext(
+  (_amount: number) => ({
+    ...parentCases,
+    // @ts-expect-error A contextual connected operation requires its registered child graph.
+    RequestedQuiet: model => ChildBinding.quiet()(model),
+  }),
+)
+// @ts-expect-error A contextual combination cannot discard the selected emitting operation's OutMessage.
+ParentComposition.makeUpdate.withContext((amount: number) => ({
+  ...parentCases,
+  RequestedReport: model =>
+    Update.combineSteps(model, [
+      ChildBinding.report({ amount }),
+      ParentDefinition.makeNoopStep(),
+    ]),
+  RequestedSave: ChildBinding.save(),
+}))
+// @ts-expect-error A contextual handler returning any cannot bypass validation beside a Binding operation.
+ParentComposition.makeUpdate.withContext((_amount: number) => ({
+  ...parentCases,
+  RequestedQuiet: () => erased,
+  RequestedSave: ChildBinding.save(),
+}))
+// @ts-expect-error A contextual never return does not prove a valid handler beside a Binding operation.
+ParentComposition.makeUpdate.withContext((_amount: number) => ({
+  ...parentCases,
+  RequestedQuiet: () => {
+    throw new Error('never')
+  },
+  RequestedSave: ChildBinding.save(),
+}))
 
 // @ts-expect-error Declared context is required during dispatch.
 contextualUpdate(Model.make({ count: 0 }), LocalMessage.RequestedQuiet())
@@ -269,9 +339,13 @@ CounterComposition.makeUpdate.withContext((_context: number) => ({
   }),
 }))
 // @ts-expect-error Emitting results cannot masquerade as a silent ordinary Step.
-const _silentStep: Update.Step<typeof Model.Type, typeof LocalMessage.Type> = (
-  model: typeof Model.Type,
-) => ({ model, outMessage: OutMessage.ReportedCount({ count: 1 }) })
+const _reportCountSilently: Update.Step<
+  typeof Model.Type,
+  typeof LocalMessage.Type
+> = (model: typeof Model.Type) => ({
+  model,
+  outMessage: OutMessage.ReportedCount({ count: 1 }),
+})
 // @ts-expect-error Owned result constructors do not accept foreign result Messages.
 CounterDefinition.makeCommandsStep(() => [wrongCommand])
 
@@ -283,6 +357,13 @@ ParentComposition.makeUpdate({
       ChildBinding.report({ amount: 1 }),
       ParentDefinition.makeNoopStep(),
     ]),
+})
+
+ParentComposition.makeUpdate({
+  ...parentCases,
+  // @ts-expect-error A raw local result cannot be mixed with a connected result recipe in one handler.
+  RequestedQuiet: model =>
+    model.count > 0 ? ChildBinding.report({ amount: 1 })(model) : { model },
 })
 
 import {

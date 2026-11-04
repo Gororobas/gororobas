@@ -9,7 +9,7 @@ import * as Command from '../command'
 import {
   ApiReferenceBinding,
   ExampleDetailBinding,
-  HomeBinding,
+  MaybeHomeBinding,
   MobileMenuDialogBinding,
   PlaygroundBinding,
   SearchBinding,
@@ -25,34 +25,33 @@ import {
   urlToApplicationRoute,
 } from '../route'
 
-export const handleChangedUrlStep = makeStep(
-  (model, { url }: typeof Message.ChangedUrl.Type) => {
-    const { route: previousRoute } = model
-    const nextRoute = urlToApplicationRoute(url)
-    const transition = Transition.make(previousRoute, nextRoute)
-    const isDifferentPathname = model.url.pathname !== url.pathname
+type ChangedUrlMessage = typeof Message.ChangedUrl.Type
 
-    return Update.combineSteps([
-      makeFieldsStep(stepModel => ({
-        route: () => nextRoute,
-        url: () => url,
-        sidebarGroups: () => nextSidebarGroups(stepModel, nextRoute),
-      })),
-      reconcileHomeStep(transition),
-      reconcilePlaygroundStep(transition),
-      MobileMenuDialogBinding.requestClose(),
-      ThemeMenuBinding.requestClose(),
-      SearchBinding.informRouteChanged(),
-      loadRouteDataStep(transition),
-      scrollAfterUrlChangeStep(url, isDifferentPathname),
-    ])
-  },
-)
+type ChangedUrl = ChangedUrlMessage
 
-const nextSidebarGroups = (
-  model: typeof Model.Type,
-  nextRoute: typeof ApplicationRoute.Type,
-) =>
+export const handleChangedUrl = makeStep((model, { url }: ChangedUrl) => {
+  const { route: previousRoute } = model
+  const nextRoute = urlToApplicationRoute(url)
+  const transition = Transition.make(previousRoute, nextRoute)
+  const isDifferentPathname = model.url.pathname !== url.pathname
+
+  return Update.combineSteps([
+    makeFieldsStep(stepModel => ({
+      route: () => nextRoute,
+      url: () => url,
+      sidebarGroups: () => nextSidebarGroups(stepModel, nextRoute),
+    })),
+    reconcileHome(transition),
+    reconcilePlayground(transition),
+    MobileMenuDialogBinding.requestClose(),
+    ThemeMenuBinding.requestClose(),
+    SearchBinding.informRouteChange(),
+    loadRouteData(transition),
+    scrollAfterUrlChange(url, isDifferentPathname),
+  ])
+})
+
+const nextSidebarGroups = (model: Model, nextRoute: ApplicationRoute) =>
   Option.match(findActiveSectionKeyForRoute(nextRoute), {
     onNone: () => model.sidebarGroups,
     onSome: activeSectionKey =>
@@ -61,10 +60,10 @@ const nextSidebarGroups = (
         : Record.set(model.sidebarGroups, activeSectionKey, true),
   })
 
-const reconcileHomeStep = (transition: ApplicationTransition) =>
+const reconcileHome = (transition: ApplicationTransition) =>
   makeStep(model => {
     if (Transition.isEntering(transition, 'Home')) {
-      return initAndSet(HomeBinding, model, { args: [] })
+      return initAndSet(MaybeHomeBinding, model, { args: [] })
     }
 
     if (Option.isSome(Transition.exited(transition, 'Home'))) {
@@ -76,7 +75,7 @@ const reconcileHomeStep = (transition: ApplicationTransition) =>
     return { model }
   })
 
-const reconcilePlaygroundStep = (transition: ApplicationTransition) =>
+const reconcilePlayground = (transition: ApplicationTransition) =>
   makeStep(model => {
     const { nextRoute } = transition
 
@@ -101,7 +100,7 @@ const reconcilePlaygroundStep = (transition: ApplicationTransition) =>
     })
   })
 
-const loadRouteDataStep = (transition: ApplicationTransition) =>
+const loadRouteData = (transition: ApplicationTransition) =>
   makeStep(model =>
     ApplicationRoute.matchOrElse(
       transition.nextRoute,
@@ -117,7 +116,7 @@ const loadRouteDataStep = (transition: ApplicationTransition) =>
             return { model }
           }
 
-          return ApiReferenceBinding.informRouteChanged()
+          return ApiReferenceBinding.informRouteChange()
         },
         ExampleDetail: ({ exampleSlug }) => {
           if (
@@ -130,14 +129,14 @@ const loadRouteDataStep = (transition: ApplicationTransition) =>
             return { model }
           }
 
-          return ExampleDetailBinding.informRouteChanged({ slug: exampleSlug })
+          return ExampleDetailBinding.informRouteChange({ slug: exampleSlug })
         },
       },
       () => ({ model }),
     ),
   )
 
-const scrollAfterUrlChangeStep = (url: Url, isChangingPathname: boolean) => {
+const scrollAfterUrlChange = (url: Url, isChangingPathname: boolean) => {
   if (Option.isSome(url.hash)) {
     const hash = url.hash.value
 

@@ -1,11 +1,11 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { VirtualList } from '@foldkit/ui'
+import {
+  layer as VirtualListLayer,
+  makeBlock as makeVirtualListBlock,
+} from '@foldkit/ui/virtualList'
 
 const Activity = Schema.Struct({
   id: Schema.String,
@@ -13,8 +13,9 @@ const Activity = Schema.Struct({
   label: Schema.String,
   timeAgo: Schema.String,
 })
+type Activity = typeof Activity.Type
 
-const ActivityList = VirtualList.create<typeof Activity.Type>()
+const ActivityList = makeVirtualListBlock<Activity>()
 
 // Add a field to your Model for the VirtualList Block. The list items
 // stay in your domain Model (your own `activities`, `messages`, `rows`,
@@ -23,42 +24,47 @@ const Model = Schema.Struct({
   activityList: ActivityList.Model,
   activities: Schema.Array(Activity),
 })
-
+type Model = typeof Model.Type
 // Declare only the parent-owned scrolling fact. The Composition derives
 // VirtualList delivery from the Binding.
 const Message = defineMessageUnion({
   ClickedScrollActivityListToMiddle: {},
 })
+type Message = typeof Message.Type
 
-const ActivityListExampleDefinition = Block.makeDefinition(
-  'ActivityListExample',
+export const ActivityListExampleKey = Symbol('ActivityListExample')
+
+export const ActivityListExampleBlock = Block.make('ActivityListExample', {
+  key: ActivityListExampleKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  Model,
+  Message,
+})
+
+const { makeNoopStep } = ActivityListExampleBlock
+
+const foldActivityListOutMessage = ActivityListExampleBlock.makeOutMessageFold(
+  ActivityList,
   {
-    Model,
-    Message,
+    ObservedContainerScroll: makeNoopStep,
+    ApproachedLoadedStart: makeNoopStep,
+    EndedContainerScroll: makeNoopStep,
   },
 )
 
-const { makeNoopStep } = ActivityListExampleDefinition
-
-const foldActivityListOutMessage =
-  ActivityListExampleDefinition.makeOutMessageFold(ActivityList, {
-    ObservedContainerScroll: makeNoopStep,
-  })
-
-const ActivityListBinding = ActivityListExampleDefinition.makeBinding(
-  ActivityList,
-  {
-    field: 'activityList',
-    init: {
-      contextToArgs: () => Tuple.make({ id: 'activity-list', rowHeightPx: 56 }),
-    },
+const ActivityListBinding = ActivityListExampleBlock.makeBinding(ActivityList, {
+  field: 'activityList',
+  init: {
+    contextToArgs: () => [{ id: 'activity-list', rowHeightPx: 56 }],
   },
-).withOutMessagePolicy({ fold: foldActivityListOutMessage })
+}).withOutMessagePolicy({ fold: foldActivityListOutMessage })
 
-const ActivityListExampleComposition =
-  ActivityListExampleDefinition.makeComposition({
+const ActivityListExampleComposition = ActivityListExampleBlock.makeComposition(
+  {
     bindings: [ActivityListBinding],
-  })
+  },
+)
 
 // In your init function, give the list a unique id and a row height in
 // pixels. All rows share this height:
@@ -122,3 +128,16 @@ const view = ActivityListExampleComposition.makeView(
   // component's container Mount owns scroll and resize observation, so no
   // Subscription wiring is required.
 )
+
+export const layer = ActivityListExampleBlock.makeLayer(
+  Effect.gen(function* () {
+    const activityList = yield* ActivityListBinding
+
+    return {
+      children: [activityList],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(VirtualListLayer))

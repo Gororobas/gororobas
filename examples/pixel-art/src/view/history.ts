@@ -2,7 +2,7 @@ import clsx from 'clsx'
 import { Array, Option } from 'effect'
 import type { Html } from 'foldkit/html'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 import type { ApplicationViewBuilder } from '../composition'
 import { THUMBNAIL_CELL_SIZE, VISIBLE_HISTORY_COUNT } from '../constant'
@@ -21,9 +21,9 @@ const sectionLabel = (text: string, h: ApplicationViewBuilder): Html =>
   )
 
 export const historyPanelView = (
-  undoStack: ReadonlyArray<typeof Grid.Type>,
-  redoStack: ReadonlyArray<typeof Grid.Type>,
-  grid: typeof Grid.Type,
+  undoStack: ReadonlyArray<Grid>,
+  redoStack: ReadonlyArray<Grid>,
+  grid: Grid,
   gridSize: number,
   theme: PaletteTheme,
   h: ApplicationViewBuilder,
@@ -40,7 +40,7 @@ export const historyPanelView = (
       h.div(
         [h.Class('flex flex-col gap-1.5')],
         [
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedUndo(),
               isDisabled: undoCount === 0,
@@ -68,7 +68,7 @@ export const historyPanelView = (
             },
             h,
           ),
-          Button.view(
+          buttonView(
             {
               onClick: Message.ClickedRedo(),
               isDisabled: redoCount === 0,
@@ -151,11 +151,11 @@ export const historyPanelView = (
 }
 
 const thumbnailEntry = (
-  grid: typeof Grid.Type,
+  grid: Grid,
   gridSize: number,
   isActive: boolean,
   label: string,
-  maybeOnClick: Option.Option<typeof Message.Type>,
+  maybeOnClick: Option.Option<Message>,
   theme: PaletteTheme,
   h: ApplicationViewBuilder,
 ): Html =>

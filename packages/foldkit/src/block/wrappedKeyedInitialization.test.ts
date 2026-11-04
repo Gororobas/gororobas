@@ -15,6 +15,7 @@ const ChildMessage = defineMessageUnion({
   CompletedInitialization: { count: Schema.Number },
   CompletedIncrement: {},
 })
+type ChildMessage = typeof ChildMessage.Type
 
 const Child = makeDefinition('WrappedInitializationChild', {
   Model: ChildModel,
@@ -34,7 +35,7 @@ const FinishIncrement = Child.makeCommand('FinishIncrement', {
     return () => Effect.succeed(ChildMessage.CompletedIncrement())
   },
 })
-const incrementStep = Child.makeStep(model => ({
+const increment = Child.makeStep(model => ({
   model: modifyFields(model, { count: count => count + 100 }),
   commands: [FinishIncrement()],
 }))
@@ -52,7 +53,7 @@ const prepareChildBlock = () =>
       }
     }),
     update: ChildComposition.makeUpdate({
-      RequestedIncrement: model => incrementStep(model),
+      RequestedIncrement: model => increment(model),
       CompletedInitialization: (model, { count }) => ({
         model: modifyFields(model, { count: () => count }),
       }),
@@ -76,6 +77,7 @@ const Entry = Schema.Struct({
   child: ChildModel,
   label: Schema.String,
 })
+type Entry = typeof Entry.Type
 
 const ParentModel = Schema.Struct({
   entries: Schema.Array(Entry),
@@ -86,6 +88,7 @@ type ParentModel = typeof ParentModel.Type
 const ParentMessage = defineMessageUnion({
   CompletedParentInitialization: {},
 })
+type ParentMessage = typeof ParentMessage.Type
 const Parent = makeDefinition('WrappedInitializationParent', {
   Model: ParentModel,
   Message: ParentMessage,
@@ -123,20 +126,20 @@ const ParentComposition = Parent.makeComposition({
 })
 
 it('initializes occurrences in order and orders own, child, then Step Commands', () => {
-  const markSteppedStep = Parent.makeStep(model => ({
+  const markStepped = Parent.makeStep(model => ({
     model: modifyFields(model, { status: () => 'Stepped' }),
   }))
-  const initialize = ParentComposition.makeInit(
+  const init = ParentComposition.makeInit(
     (childInitContext: ChildInitContext) => ({
       childInitContext,
       model: { status: 'Ready' },
       commands: [FinishParentInitialization()],
-      steps: [EntriesBinding.increment('first'), markSteppedStep],
+      steps: [EntriesBinding.increment('first'), markStepped],
     }),
   )
 
   initCalls.splice(0)
-  const initialized = initialize({ firstCount: 1, secondCount: 2 })
+  const initialized = init({ firstCount: 1, secondCount: 2 })
 
   expectTypeOf(initialized.model).toEqualTypeOf<ParentModel>()
   expect(initCalls).toEqual([1, 2])
@@ -184,12 +187,13 @@ const KeyedParentModel = Schema.Struct({
   entries: Schema.Array(KeyedChildModel),
   status: Schema.Literal('Ready'),
 })
+type KeyedParentModel = typeof KeyedParentModel.Type
 const KeyedParent = makeDefinition('KeyedInitializationParent', {
   Model: KeyedParentModel,
   Message: ParentMessage,
 })
 
-const initializeKeyedParent = (
+const initKeyedParent = (
   toItem: (
     occurrence: Readonly<{ key: string; args: readonly [string, number] }>,
     child: KeyedChildModel,
@@ -204,16 +208,16 @@ const initializeKeyedParent = (
     },
   })
   const composition = KeyedParent.makeComposition({ bindings: [binding] })
-  const initialize = composition.makeInit((count: number) => ({
+  const init = composition.makeInit((count: number) => ({
     childInitContext: count,
     model: { status: 'Ready' },
   }))
 
-  return initialize(3)
+  return init(3)
 }
 
 it('initializes an unwrapped keyed child array', () => {
-  const initialized = initializeKeyedParent((_occurrence, child) => child)
+  const initialized = initKeyedParent((_occurrence, child) => child)
 
   expect(initialized.model).toEqual({
     entries: [{ id: 'first', count: 3 }],
@@ -223,7 +227,7 @@ it('initializes an unwrapped keyed child array', () => {
 
 it('rejects an unwrapped keyed child that changes the planned key', () => {
   expect(() =>
-    initializeKeyedParent((_occurrence, child) =>
+    initKeyedParent((_occurrence, child) =>
       KeyedChildModel.make({ id: 'changed', count: child.count }),
     ),
   ).toThrow('init.toItem must preserve planned key "first"')
@@ -231,7 +235,7 @@ it('rejects an unwrapped keyed child that changes the planned key', () => {
 
 it('rejects an unwrapped keyed child that replaces the initialized Model', () => {
   expect(() =>
-    initializeKeyedParent(({ key }, child) =>
+    initKeyedParent(({ key }, child) =>
       KeyedChildModel.make({ id: key, count: child.count }),
     ),
   ).toThrow(
@@ -240,12 +244,12 @@ it('rejects an unwrapped keyed child that replaces the initialized Model', () =>
 })
 
 it('drops an original init Command when a Step removes its key before another Step readds it', () => {
-  const removeFirstStep = Parent.makeStep(model => ({
+  const removeFirst = Parent.makeStep(model => ({
     model: modifyFields(model, {
       entries: Array.filter(({ id }) => id !== 'first'),
     }),
   }))
-  const readdFirstStep = Parent.makeStep(model => ({
+  const readdFirst = Parent.makeStep(model => ({
     model: modifyFields(model, {
       entries: entries => [
         ...entries,
@@ -257,13 +261,13 @@ it('drops an original init Command when a Step removes its key before another St
       ],
     }),
   }))
-  const initialize = ParentComposition.makeInit(() => ({
+  const init = ParentComposition.makeInit(() => ({
     childInitContext: { firstCount: 1, secondCount: 2 },
     model: { status: 'Ready' },
-    steps: [removeFirstStep, readdFirstStep],
+    steps: [removeFirst, readdFirst],
   }))
 
-  const initialized = initialize()
+  const initialized = init()
 
   expect(initialized.model.entries).toEqual([
     { id: 'second', child: { count: 2 }, label: 'Entry second' },
@@ -342,6 +346,7 @@ it('preflights every Binding selector before calling any child init', () => {
     entries: Schema.Array(Entry),
     status: Schema.Literal('Ready'),
   })
+  type AllPlansModel = typeof AllPlansModel.Type
   const AllPlansParent = makeDefinition('WrappedInitializationAllPlansParent', {
     Model: AllPlansModel,
     Message: Schema.Never,
@@ -440,13 +445,13 @@ it('remains passive and creates fresh wrappers on every invocation', () => {
   const FreshComposition = Parent.makeComposition({
     bindings: [FreshBinding],
   })
-  const initialize = FreshComposition.makeInit(() => ({
+  const init = FreshComposition.makeInit(() => ({
     model: { status: 'Ready' },
   }))
 
   expect(occurrenceCalls.count).toBe(0)
-  const first = initialize()
-  const second = initialize()
+  const first = init()
+  const second = init()
 
   expect(occurrenceCalls.count).toBe(2)
   expect(first.model).toEqual(second.model)
@@ -481,15 +486,15 @@ it('selects one large wrapped keyed field once in each validation and survival p
   const ScalingComposition = Parent.makeComposition({
     bindings: [ScalingBinding],
   })
-  const retainEntriesStep = Parent.makeStep(model => ({ model }))
-  const initialize = ScalingComposition.makeInit(() => ({
+  const retainEntries = Parent.makeStep(model => ({ model }))
+  const init = ScalingComposition.makeInit(() => ({
     model: { status: 'Ready' },
-    steps: [retainEntriesStep],
+    steps: [retainEntries],
   }))
 
   const initialized = (() => {
     try {
-      return initialize()
+      return init()
     } finally {
       registerBinding(ScalingBinding, runtime)
     }

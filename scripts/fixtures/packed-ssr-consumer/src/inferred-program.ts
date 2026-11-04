@@ -1,24 +1,47 @@
-import { Layer, Schema } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block, Program } from 'foldkit'
 import type { Document } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 
 const Model = Schema.Struct({ count: Schema.Number })
+type Model = typeof Model.Type
 const Message = defineMessageUnion({ Ticked: {} })
-const ApplicationComposition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+export const ElementKey = Symbol('InferredElement')
+const ElementBlock = Block.make('Application', {
+  key: ElementKey,
   Model,
   Message,
-}).makeComposition()
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+})
+const ElementComposition = ElementBlock.makeComposition()
 
+const elementInit = ElementComposition.makeInit(() => ({
+  model: Model.make({ count: 0 }),
+}))
+const elementUpdate = ElementComposition.makeUpdate({
+  Ticked: model => ({ model }),
+})
+const elementView = ElementComposition.makeView((model, h) =>
+  h.div([], [String(model.count)]),
+)
+
+export const ApplicationKey = Symbol('InferredPage')
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Model,
+  Message,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
+})
+const ApplicationComposition = ApplicationBlock.makeComposition()
 const init = ApplicationComposition.makeInit(() => ({
   model: Model.make({ count: 0 }),
 }))
 const update = ApplicationComposition.makeUpdate({
   Ticked: model => ({ model }),
 })
-const elementView = ApplicationComposition.makeView((model, h) =>
-  h.div([], [String(model.count)]),
-)
 const applicationView = ApplicationComposition.makeView(
   (model, h): Document => ({
     title: `Count ${model.count}`,
@@ -28,38 +51,40 @@ const applicationView = ApplicationComposition.makeView(
 
 const EffectsLayer = Layer.empty
 
-const prepareElement = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    EffectsLayer,
-    view: elementView,
-  })
-const ElementBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepareElement
-> = Block.assemble(prepareElement)
+const elementLayer = ElementBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init: elementInit,
+      update: elementUpdate,
+      EffectsLayer,
+      view: elementView,
+    }
+  }),
+)
 
-const prepareApplication = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    EffectsLayer,
-    view: applicationView,
-  })
-const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepareApplication
-> = Block.assemble(prepareApplication)
+const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      EffectsLayer,
+      view: applicationView,
+    }
+  }),
+)
 
 export const makeInferredElement = (container: HTMLElement) =>
   Program.makeElement({
     block: ElementBlock,
+    layer: elementLayer,
     container,
   })
 
 export const makeInferredApplication = (container: HTMLElement | null) =>
   Program.make({
     block: ApplicationBlock,
+    layer,
     container,
   })

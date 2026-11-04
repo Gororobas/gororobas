@@ -1,4 +1,5 @@
-import { Crypto, Effect, Schema } from 'effect'
+import { Effect, Schema } from 'effect'
+import { SecureRandom } from 'effect/crypto'
 import { Calendar } from 'foldkit'
 
 export const Flags = Schema.Struct({
@@ -7,14 +8,15 @@ export const Flags = Schema.Struct({
   initialEducationEntryId: Schema.String,
   initialSkillsEntryId: Schema.String,
 })
+export type Flags = typeof Flags.Type
 
 export const flags = Effect.gen(function* () {
-  const crypto = yield* Crypto.Crypto
+  const secureRandom = yield* SecureRandom.SecureRandom
 
   const today = yield* Calendar.today.local
-  const initialWorkHistoryEntryId = yield* Effect.orDie(crypto.randomUUIDv4)
-  const initialEducationEntryId = yield* Effect.orDie(crypto.randomUUIDv4)
-  const initialSkillsEntryId = yield* Effect.orDie(crypto.randomUUIDv4)
+  const initialWorkHistoryEntryId = yield* secureRandom.uuidV4()
+  const initialEducationEntryId = yield* secureRandom.uuidV4()
+  const initialSkillsEntryId = yield* secureRandom.uuidV4()
 
   return {
     today,

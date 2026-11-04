@@ -1,22 +1,37 @@
-import { Array, Schema } from 'effect'
+import { Array, Effect, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const CurrentUser = Schema.Struct({ name: Schema.String })
+type CurrentUser = typeof CurrentUser.Type
+
 const Theme = Schema.Literals(['Light', 'Dark'])
+type Theme = typeof Theme.Type
 
 const AccountSettingsModel = Schema.Struct({
   theme: Theme,
   auditTrail: Schema.Array(Schema.String),
 })
+type AccountSettingsModel = typeof AccountSettingsModel.Type
+
 const AccountSettingsMessage = defineMessageUnion({
   ChangedTheme: { theme: Theme },
 })
-const AccountSettingsComposition = Block.makeDefinition('AccountSettings', {
+type AccountSettingsMessage = typeof AccountSettingsMessage.Type
+
+export const AccountSettingsKey = Symbol('AccountSettings')
+
+export const AccountSettingsBlock = Block.make('AccountSettings', {
+  key: AccountSettingsKey,
+  Init: Schema.Tuple([]),
+  Context: Schema.Tuple([CurrentUser]),
+  view: { kind: 'Element' },
   Model: AccountSettingsModel,
   Message: AccountSettingsMessage,
-}).makeComposition()
+})
+
+const AccountSettingsComposition = AccountSettingsBlock.makeComposition()
 
 const accountSettingsInit = AccountSettingsComposition.makeInit(() => ({
   model: AccountSettingsModel.make({
@@ -25,7 +40,7 @@ const accountSettingsInit = AccountSettingsComposition.makeInit(() => ({
   }),
 }))
 const accountSettingsUpdate = AccountSettingsComposition.makeUpdate.withContext(
-  (currentUser: typeof CurrentUser.Type) => ({
+  (currentUser: CurrentUser) => ({
     ChangedTheme: (model, { theme }) => ({
       model: modifyFields(model, {
         theme: () => theme,
@@ -37,25 +52,37 @@ const accountSettingsUpdate = AccountSettingsComposition.makeUpdate.withContext(
 const accountSettingsView = AccountSettingsComposition.makeView((model, h) =>
   h.p([], [`${model.theme}; audit: ${Array.join(model.auditTrail, ', ')}`]),
 )
-const prepare = () =>
-  AccountSettingsComposition.prepareBlock({
-    init: accountSettingsInit,
-    update: accountSettingsUpdate,
-    view: accountSettingsView,
-  })
-const AccountSettingsBlock = Block.assemble(prepare)
+
+const layer = AccountSettingsBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init: accountSettingsInit,
+      update: accountSettingsUpdate,
+      view: accountSettingsView,
+    }
+  }),
+)
 
 const ProfileModel = Schema.Struct({
   currentUser: CurrentUser,
   accountSettings: AccountSettingsModel,
 })
+type ProfileModel = typeof ProfileModel.Type
+
 const ProfileMessage = defineMessageUnion({})
-const ProfileDefinition = Block.makeDefinition('Profile', {
+type ProfileMessage = typeof ProfileMessage.Type
+
+export const ProfileKey = Symbol('Profile')
+
+const ProfileBlock = Block.make('Profile', {
+  key: ProfileKey,
+  Init: Schema.Tuple([]),
   Model: ProfileModel,
   Message: ProfileMessage,
 })
 
-export const AccountSettingsBinding = ProfileDefinition.makeBinding(
+export const AccountSettingsBinding = ProfileBlock.makeBinding(
   AccountSettingsBlock,
   {
     field: 'accountSettings',
@@ -65,6 +92,6 @@ export const AccountSettingsBinding = ProfileDefinition.makeBinding(
   },
 )
 
-export const ProfileComposition = ProfileDefinition.makeComposition({
+export const ProfileComposition = ProfileBlock.makeComposition({
   bindings: [AccountSettingsBinding],
 })

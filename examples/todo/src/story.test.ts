@@ -1,14 +1,16 @@
 import { Array, Option } from 'effect'
 import { Command, given, message, model, story } from 'foldkit/story'
 import { modifyFields } from 'foldkit/struct'
-import { describe, expect, test } from 'vitest'
+import { describe, expect } from 'vitest'
 
+import { it } from '@effect/vitest'
+
+import { ApplicationBlock, layer } from './block'
 import { GenerateTodo, SaveTodos } from './command'
 import { Message } from './message'
 import { EditingState, type Model } from './model'
-import { update } from './update'
 
-const emptyModel: typeof Model.Type = {
+const emptyModel: Model = {
   todos: [],
   newTodoText: '',
   filter: 'All',
@@ -36,15 +38,15 @@ const doneTask = {
   createdAt: 3000,
 }
 
-const modelWithTodos: typeof Model.Type = modifyFields(emptyModel, {
+const modelWithTodos: Model = modifyFields(emptyModel, {
   todos: () => [buyMilk, walkDog, doneTask],
 })
 
 describe('update', () => {
   describe('add todo', () => {
-    test('AddedTodo with text produces a GenerateTodo Command', () => {
+    it.effect('AddedTodo with text produces a GenerateTodo Command', () =>
       story(
-        update,
+        { block: ApplicationBlock, layer },
         given(modifyFields(emptyModel, { newTodoText: () => 'Buy milk' })),
         message(Message.AddedTodo()),
         Command.expectHas(GenerateTodo),
@@ -69,55 +71,56 @@ describe('update', () => {
             ],
           }),
         ),
+        Command.expectNone(),
         model(model => {
           expect(model.todos).toHaveLength(1)
           expect(model.todos[0]?.text).toBe('Buy milk')
           expect(model.todos[0]?.completed).toBe(false)
           expect(model.newTodoText).toBe('')
         }),
-      )
-    })
+      ),
+    )
 
-    test('AddedTodo with empty text is ignored', () => {
+    it.effect('AddedTodo with empty text is ignored', () =>
       story(
-        update,
+        { block: ApplicationBlock, layer },
         given(modifyFields(emptyModel, { newTodoText: () => '' })),
         message(Message.AddedTodo()),
         Command.expectNone(),
-      )
-    })
+      ),
+    )
 
-    test('AddedTodo with whitespace-only text is ignored', () => {
+    it.effect('AddedTodo with whitespace-only text is ignored', () =>
       story(
-        update,
+        { block: ApplicationBlock, layer },
         given(modifyFields(emptyModel, { newTodoText: () => '   ' })),
         message(Message.AddedTodo()),
         Command.expectNone(),
-      )
-    })
+      ),
+    )
 
-    test('UpdatedNewTodo updates the input text', () => {
+    it.effect('UpdatedNewTodo updates the input text', () =>
       story(
-        update,
+        { block: ApplicationBlock, layer },
         given(emptyModel),
         message(Message.UpdatedNewTodo({ text: 'Walk' })),
         model(model => {
           expect(model.newTodoText).toBe('Walk')
         }),
-      )
-    })
+      ),
+    )
   })
 
   describe('toggle and delete', () => {
-    test('ToggledTodo flips the completed state', () => {
+    it.effect('ToggledTodo flips the completed state', () => {
       const toggledTodos = modelWithTodos.todos.map(todo =>
         todo.id === 'abc'
           ? modifyFields(todo, { completed: () => true })
           : todo,
       )
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(modelWithTodos),
         message(Message.ToggledTodo({ id: 'abc' })),
         Command.resolve(
@@ -133,15 +136,15 @@ describe('update', () => {
       )
     })
 
-    test('ToggledTodo on completed todo marks it active', () => {
+    it.effect('ToggledTodo on completed todo marks it active', () => {
       const toggledTodos = modelWithTodos.todos.map(todo =>
         todo.id === 'ghi'
           ? modifyFields(todo, { completed: () => false })
           : todo,
       )
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(modelWithTodos),
         message(Message.ToggledTodo({ id: 'ghi' })),
         Command.resolve(
@@ -157,13 +160,13 @@ describe('update', () => {
       )
     })
 
-    test('DeletedTodo removes the todo and saves', () => {
+    it.effect('DeletedTodo removes the todo and saves', () => {
       const remainingTodos = modelWithTodos.todos.filter(
         ({ id }) => id !== 'abc',
       )
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(modelWithTodos),
         message(Message.DeletedTodo({ id: 'abc' })),
         Command.resolve(
@@ -181,9 +184,9 @@ describe('update', () => {
   })
 
   describe('editing', () => {
-    test('StartedEditing enters editing state with the todo text', () => {
+    it.effect('StartedEditing enters editing state with the todo text', () =>
       story(
-        update,
+        { block: ApplicationBlock, layer },
         given(modelWithTodos),
         message(Message.StartedEditing({ id: 'abc' })),
         model(model => {
@@ -191,16 +194,16 @@ describe('update', () => {
             EditingState.Editing({ id: 'abc', text: 'Buy milk' }),
           )
         }),
-      )
-    })
+      ),
+    )
 
-    test('UpdatedEditingTodo updates the editing text', () => {
-      const editingModel: typeof Model.Type = modifyFields(modelWithTodos, {
+    it.effect('UpdatedEditingTodo updates the editing text', () => {
+      const editingModel: Model = modifyFields(modelWithTodos, {
         editing: () => EditingState.Editing({ id: 'abc', text: 'Buy milk' }),
       })
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(editingModel),
         message(Message.UpdatedEditingTodo({ text: 'Buy oat milk' })),
         model(model => {
@@ -211,8 +214,8 @@ describe('update', () => {
       )
     })
 
-    test('SavedEdit updates the todo text and exits editing', () => {
-      const editingModel: typeof Model.Type = modifyFields(modelWithTodos, {
+    it.effect('SavedEdit updates the todo text and exits editing', () => {
+      const editingModel: Model = modifyFields(modelWithTodos, {
         editing: () =>
           EditingState.Editing({ id: 'abc', text: 'Buy oat milk' }),
       })
@@ -223,8 +226,8 @@ describe('update', () => {
           : todo,
       )
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(editingModel),
         message(Message.SavedEdit()),
         Command.resolve(
@@ -241,13 +244,13 @@ describe('update', () => {
       )
     })
 
-    test('SavedEdit with empty text exits editing without saving', () => {
-      const editingModel: typeof Model.Type = modifyFields(modelWithTodos, {
+    it.effect('SavedEdit with empty text exits editing without saving', () => {
+      const editingModel: Model = modifyFields(modelWithTodos, {
         editing: () => EditingState.Editing({ id: 'abc', text: '   ' }),
       })
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(editingModel),
         message(Message.SavedEdit()),
         model(model => {
@@ -261,14 +264,14 @@ describe('update', () => {
       )
     })
 
-    test('CancelledEdit exits editing without changes', () => {
-      const editingModel: typeof Model.Type = modifyFields(modelWithTodos, {
+    it.effect('CancelledEdit exits editing without changes', () => {
+      const editingModel: Model = modifyFields(modelWithTodos, {
         editing: () =>
           EditingState.Editing({ id: 'abc', text: 'Changed text' }),
       })
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(editingModel),
         message(Message.CancelledEdit()),
         model(model => {
@@ -283,62 +286,68 @@ describe('update', () => {
   })
 
   describe('bulk operations', () => {
-    test('ToggledAll marks all todos completed when some are active', () => {
-      const allCompletedTodos = modelWithTodos.todos.map(todo =>
-        modifyFields(todo, { completed: () => true }),
-      )
+    it.effect(
+      'ToggledAll marks all todos completed when some are active',
+      () => {
+        const allCompletedTodos = modelWithTodos.todos.map(todo =>
+          modifyFields(todo, { completed: () => true }),
+        )
 
-      story(
-        update,
-        given(modelWithTodos),
-        message(Message.ToggledAll()),
-        Command.resolve(
-          SaveTodos,
-          Message.SucceededSaveTodos({ todos: allCompletedTodos }),
-        ),
-        model(model => {
-          expect(Array.every(model.todos, ({ completed }) => completed)).toBe(
-            true,
-          )
-        }),
-      )
-    })
-
-    test('ToggledAll marks all todos active when all are completed', () => {
-      const allCompletedModel: typeof Model.Type = modifyFields(emptyModel, {
-        todos: () =>
-          modelWithTodos.todos.map(todo =>
-            modifyFields(todo, { completed: () => true }),
+        return story(
+          { block: ApplicationBlock, layer },
+          given(modelWithTodos),
+          message(Message.ToggledAll()),
+          Command.resolve(
+            SaveTodos,
+            Message.SucceededSaveTodos({ todos: allCompletedTodos }),
           ),
-      })
+          model(model => {
+            expect(Array.every(model.todos, ({ completed }) => completed)).toBe(
+              true,
+            )
+          }),
+        )
+      },
+    )
 
-      const allActiveTodos = allCompletedModel.todos.map(todo =>
-        modifyFields(todo, { completed: () => false }),
-      )
+    it.effect(
+      'ToggledAll marks all todos active when all are completed',
+      () => {
+        const allCompletedModel: Model = modifyFields(emptyModel, {
+          todos: () =>
+            modelWithTodos.todos.map(todo =>
+              modifyFields(todo, { completed: () => true }),
+            ),
+        })
 
-      story(
-        update,
-        given(allCompletedModel),
-        message(Message.ToggledAll()),
-        Command.resolve(
-          SaveTodos,
-          Message.SucceededSaveTodos({ todos: allActiveTodos }),
-        ),
-        model(model => {
-          expect(Array.every(model.todos, ({ completed }) => !completed)).toBe(
-            true,
-          )
-        }),
-      )
-    })
+        const allActiveTodos = allCompletedModel.todos.map(todo =>
+          modifyFields(todo, { completed: () => false }),
+        )
 
-    test('ClearedCompleted removes only completed todos', () => {
+        return story(
+          { block: ApplicationBlock, layer },
+          given(allCompletedModel),
+          message(Message.ToggledAll()),
+          Command.resolve(
+            SaveTodos,
+            Message.SucceededSaveTodos({ todos: allActiveTodos }),
+          ),
+          model(model => {
+            expect(
+              Array.every(model.todos, ({ completed }) => !completed),
+            ).toBe(true)
+          }),
+        )
+      },
+    )
+
+    it.effect('ClearedCompleted removes only completed todos', () => {
       const activeTodos = modelWithTodos.todos.filter(
         ({ completed }) => !completed,
       )
 
-      story(
-        update,
+      return story(
+        { block: ApplicationBlock, layer },
         given(modelWithTodos),
         message(Message.ClearedCompleted()),
         Command.resolve(
@@ -356,15 +365,15 @@ describe('update', () => {
   })
 
   describe('filter', () => {
-    test('SelectedFilter changes the active filter', () => {
+    it.effect('SelectedFilter changes the active filter', () =>
       story(
-        update,
+        { block: ApplicationBlock, layer },
         given(modelWithTodos),
         message(Message.SelectedFilter({ filter: 'Active' })),
         model(model => {
           expect(model.filter).toBe('Active')
         }),
-      )
-    })
+      ),
+    )
   })
 })

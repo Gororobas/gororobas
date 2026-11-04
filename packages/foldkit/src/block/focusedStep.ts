@@ -1,3 +1,9 @@
+/** @internal Carries contextual arguments without inferring result channels. */
+export type StepContextHint<Context extends ReadonlyArray<unknown>> =
+  Context extends readonly [unknown, ...ReadonlyArray<unknown>]
+    ? Readonly<{ __blockStepContext?: (...context: Context) => void }>
+    : unknown
+
 type AnyFunction = (...args: ReadonlyArray<any>) => any
 
 type IsAny<Value> = 0 extends 1 & Value ? true : false
@@ -13,7 +19,12 @@ type MessageCandidate<OwnerMessage, ExactMessage, DeclaredMessage> =
   DeclaredMessage extends Readonly<{
     _tag: infer Tag
   }>
-    ? Extract<Extract<OwnerMessage, Readonly<{ _tag: Tag }>>, ExactMessage>
+    ? IsAny<ExactMessage> extends true
+      ? Extract<OwnerMessage, Readonly<{ _tag: Tag }>>
+      : Extract<
+          Extract<Extract<OwnerMessage, Readonly<{ _tag: Tag }>>, ExactMessage>,
+          DeclaredMessage
+        >
     : never
 
 type InvalidModelCallback<

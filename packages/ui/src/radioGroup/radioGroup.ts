@@ -1,5 +1,6 @@
 import {
   Array,
+  Context,
   Effect,
   Layer,
   Match,
@@ -9,13 +10,14 @@ import {
   String,
   pipe,
 } from 'effect'
-import { type Update } from 'foldkit'
 import * as Block from 'foldkit/block'
 import * as Dom from 'foldkit/dom'
 import { type ChildAttribute, type Html, childAttributes } from 'foldkit/html'
+import * as BlockFamily from 'foldkit/internal/block'
 import { type MessageUnion, defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
+import { makeFixedFamilyLayer } from '../internal/fixedFamily.js'
 import { idSelector } from '../internal/selectors.js'
 import { keyToIndex } from '../keyboard.js'
 import { RadioGroupNamespace } from './definition.js'
@@ -35,7 +37,6 @@ export const Model = Schema.Struct({
   id: Schema.String,
   maybeFocusedIndex: Schema.Option(Schema.Number),
 })
-
 export type Model = typeof Model.Type
 
 // MESSAGE
@@ -49,11 +50,10 @@ export const Message = defineMessageUnion({
   FocusedOption: { index: Schema.Number },
   CompletedFocusOption: {},
 })
+export type Message = typeof Message.Type
 
 export type SelectedOption = typeof Message.SelectedOption.Type
 export type FocusedOption = typeof Message.FocusedOption.Type
-
-export type Message = typeof Message.Type
 
 // OUT MESSAGE
 
@@ -74,28 +74,30 @@ export const OutMessage = defineMessageUnion({
 
 /** The OutMessage union interface on a completed RadioGroup, refined to its
  * Value type. */
-type OutMessageSchema<Value extends string = string> =
+export type OutMessageSchema<Value extends string = string> =
   typeof OutMessage extends MessageUnion<infer Cases>
     ? MessageUnion<
         Omit<Cases, 'Selected'> &
           Readonly<{
             Selected: Omit<Cases['Selected'], 'value'> &
-              Readonly<{ value: Schema.Schema<Value> }>
+              Readonly<{
+                value: Schema.Codec<Value, Value> &
+                  Readonly<{ '~type.make': Value }>
+              }>
           }>
       >
     : never
 
 /** Generic over `Value extends string` so consumers using
- *  `RadioGroup.create<MyUnion>()` receive `value: MyUnion` in the
+ *  `RadioGroup.makeBlock<MyUnion>()` receive `value: MyUnion` in the
  *  `Selected` OutMessage. Defaults to `string`. */
 export type OutMessage<Value extends string = string> = Selected<Value>
 
 // INIT
 
 /** Configuration for creating a radio group model with `init`. */
-export type InitConfig = Readonly<{
-  id: string
-}>
+export const InitConfig = Schema.Struct({ id: Schema.String })
+export type InitConfig = typeof InitConfig.Type
 
 const makeInitialModel = (config: InitConfig): Model => ({
   id: config.id,
@@ -128,17 +130,22 @@ export const FocusOption = RadioGroupNamespace.makeCommand('FocusOption', {
 /** Effect providers used by the RadioGroup component. */
 export const EffectsLayer = Layer.mergeAll(FocusOption.layer)
 
-const RadioGroupDefinition = RadioGroupNamespace.makeDefinition({
+/** @internal Nominal identity of this component contract. */
+export const RadioGroupKey = Symbol('RadioGroup')
+const RadioGroupBlock = Block.make(RadioGroupNamespace, {
+  key: RadioGroupKey,
+  Init: Schema.Tuple([InitConfig]),
+  view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
   Model,
   Message,
   OutMessage,
 })
-const RadioGroupComposition = RadioGroupDefinition.makeComposition()
+const RadioGroupComposition = RadioGroupBlock.makeComposition()
 
 /** Creates an initial RadioGroup Model and Commands from a config. Focus follows the
  *  selected option until the user navigates a read-only group, so
  *  `maybeFocusedIndex` starts `None`. */
-export const init = RadioGroupComposition.makeInit((config: InitConfig) => ({
+export const init = RadioGroupComposition.makeInit(config => ({
   model: makeInitialModel(config),
 }))
 
@@ -158,7 +165,7 @@ export const update = RadioGroupComposition.makeUpdate({
     }),
     commands: [FocusOption({ id: model.id, index })],
   }),
-  CompletedFocusOption: RadioGroupDefinition.makeNoopStep(),
+  CompletedFocusOption: RadioGroupBlock.makeNoopStep(),
 })
 
 // VIEW
@@ -206,7 +213,7 @@ export type RenderInfo<Value extends string = string> = Readonly<{
 
 /** Per-render view inputs passed to `view` via `h.block`'s `viewInputs`
  *  field. Generic over `Value extends string` so consumers using
- *  `RadioGroup.create<MyUnion>()` receive `option.value: MyUnion` in `toView`
+ *  `RadioGroup.makeBlock<MyUnion>()` receive `option.value: MyUnion` in `toView`
  *  and `(value: MyUnion, index) => boolean` in `isOptionDisabled`, without
  *  casting.
  *
@@ -230,7 +237,7 @@ export type ViewInputs<Value extends string = string> = Readonly<{
   name?: string
 }>
 
-const internalView = RadioGroupComposition.makeView.withInputs<ViewInputs>(
+const internalView = RadioGroupComposition.makeView.withInputs(
   (model, viewInputs, h) => {
     const { id, maybeFocusedIndex } = model
     const {
@@ -457,96 +464,129 @@ const internalView = RadioGroupComposition.makeView.withInputs<ViewInputs>(
   },
 )
 
-const prepareRadioGroupBlock = () =>
-  RadioGroupComposition.prepareBlock({
-    init,
-    update,
-    view: internalView,
-    EffectsLayer,
-  })
-/** Complete RadioGroup Block definition. */
-export const block: Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepareRadioGroupBlock
-> = Block.assemble(prepareRadioGroupBlock)
-
-const makeBlockParts = <Value extends string>() => {
-  type GenericReturn = Update.ReturnWithOutMessage<
-    Model,
-    Message,
-    OutMessage<Value>,
-    Update.RequirementsOf<typeof update>
-  >
-
-  const castReturn = (result: ReturnType<typeof update>): GenericReturn =>
-    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-    result as unknown as GenericReturn
-  const RefinedOutMessage =
-    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-    OutMessage as unknown as OutMessageSchema<Value>
-  const RadioGroupComposition = RadioGroupNamespace.makeDefinition({
-    Model,
-    Message,
-    OutMessage: RefinedOutMessage,
-  }).makeComposition()
-  const init = RadioGroupComposition.makeInit((config: InitConfig) => ({
-    model: makeInitialModel(config),
-  }))
-  const refinedUpdate = RadioGroupComposition.makeUpdate({
-    SelectedOption: (model, message) => castReturn(update(model, message)),
-    FocusedOption: (model, message) => castReturn(update(model, message)),
-    CompletedFocusOption: (model, message) =>
-      castReturn(update(model, message)),
-  })
-  const refinedView =
-    /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-    internalView as unknown as (
-      model: Model,
-      viewInputs: ViewInputs<Value>,
-      h: Parameters<typeof internalView>[2],
-    ) => Html
-  const view = RadioGroupComposition.makeView.withInputs<ViewInputs<Value>>(
-    (model, viewInputs, h) => refinedView(model, viewInputs, h),
-  )
-
-  return {
-    composition: RadioGroupComposition,
-    implementation: {
+/** @internal Checked canonical implementation for scoped library tests. */
+const canonicalLayer = RadioGroupBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
       init,
-      update: refinedUpdate,
-      view,
+      update,
+      view: internalView,
       EffectsLayer,
-    },
-  }
+    }
+  }),
+)
+
+/** Constructs the implementation shared by all type-only RadioGroup specializations. */
+type CanonicalIdentity = Block.SelectedPublicIdentity<typeof RadioGroupBlock>
+const RadioGroupRefinementRule = Symbol('RadioGroup.Refinement')
+/** @internal Closed type-only refinement identity. */
+export interface RadioGroupRefinementKey {
+  readonly [RadioGroupRefinementRule]: true
 }
+type CanonicalImplementation = Extract<
+  Layer.Success<typeof canonicalLayer>,
+  Block.SelectedImplementationFacts<
+    CanonicalIdentity,
+    unknown,
+    unknown,
+    unknown
+  >
+>
+/** @internal Captured implementation capability for this fixed family. */
+export interface SharedRadioGroupProof extends Block.ClosedFamilyCapability<RadioGroupRefinementKey> {}
+/** @internal The shared provider's original canonical implementation facts. */
+export interface SharedRadioGroupFacts extends Block.FixedRefinementProvider<
+  RadioGroupRefinementKey,
+  CanonicalIdentity,
+  CanonicalImplementation
+> {}
+const SharedRadioGroupProof = Context.Service<
+  SharedRadioGroupProof,
+  Readonly<{ executable: object }>
+>('foldkit/ui/private/RadioGroup.SharedImplementation')
+const SharedRadioGroupFacts = Context.Service<
+  SharedRadioGroupFacts,
+  Readonly<Record<never, never>>
+>('foldkit/ui/private/RadioGroup.SharedFacts')
+/** Constructs the original shared implementation for type-only specializations. */
+export const layer = makeFixedFamilyLayer(
+  RadioGroupBlock,
+  canonicalLayer,
+  BlockFamily.readDeclaredExecutable(RadioGroupBlock),
+  SharedRadioGroupProof,
+  SharedRadioGroupFacts,
+)
 
-type BlockParts<Value extends string> = ReturnType<typeof makeBlockParts<Value>>
+Reflect.deleteProperty(RadioGroupBlock, 'makeLayer')
+Reflect.deleteProperty(RadioGroupBlock, 'provideHandlers')
+Object.freeze(RadioGroupBlock)
 
-/** A completed RadioGroup Block refined to one Value type. */
-export interface Completed<
-  Value extends string = string,
-> extends Block.CompletedWithViewAndOutMessage<
-  BlockParts<Value>['composition'],
-  BlockParts<Value>['implementation']
+/** @internal Selected implementation used by component tests. */
+export const block = { block: RadioGroupBlock, layer }
+
+type CanonicalContract = typeof RadioGroupBlock
+type CanonicalFacts = Block.FactsOf<CanonicalContract>
+type RefinedFacts<Value extends string> = Omit<
+  CanonicalFacts,
+  'view' | 'update'
+> &
+  Readonly<{
+    view: Block.ViewContract<ViewInputs<Value>, 'Element'>
+    update: Block.ResultContract<
+      OutMessage<Value>,
+      CanonicalFacts['update']['requirements']
+    >
+  }>
+type RefinedContract<Value extends string> = Block.Contract<
+  CanonicalContract['owner'],
+  CanonicalContract['Model'],
+  CanonicalContract['Message'],
+  OutMessageSchema<Value>,
+  RefinedFacts<Value>
+>
+
+type RefinedConfiguration<Value extends string> = Readonly<{
+  key: typeof RadioGroupKey
+  Init: Schema.Tuple<readonly [typeof InitConfig]>
+  view: Readonly<{
+    kind: 'Element'
+    Inputs: Block.InputContract<ViewInputs<Value>>
+  }>
+}>
+/** @internal Names the exact private reader of this fixed-family specialization. */
+export interface RadioGroupReader<
+  Value extends string,
+> extends Block.ReadableProvider<
+  RadioGroupRefinementKey,
+  Block.SelectedPublicIdentity<RefinedContract<Value>>
 > {}
 
-const makeBlock = <Value extends string>(): Completed<Value> => {
-  const { composition, implementation } = makeBlockParts<Value>()
+type RefinedBlock<Value extends string> = Omit<
+  Block.UnifiedBlock<
+    'RadioGroup',
+    CanonicalContract['Model'],
+    CanonicalContract['Message'],
+    OutMessageSchema<Value>,
+    undefined,
+    RefinedConfiguration<Value>,
+    CanonicalIdentity,
+    RadioGroupReader<Value>
+  >,
+  'makeLayer' | 'provideHandlers' | keyof RefinedContract<Value>
+> &
+  Omit<RefinedContract<Value>, 'get'>
+/** Passive RadioGroup contract retaining exact controlled inputs and result channels. */
+export interface Completed<Value extends string = string>
+  extends
+    RefinedBlock<Value>,
+    Block.FixedRefinement<
+      RadioGroupRefinementKey,
+      CanonicalIdentity,
+      Block.SelectedPublicIdentity<RefinedContract<Value>>
+    > {}
 
-  const prepare = () => composition.prepareBlock(implementation)
-  const completedBlock: Block.FromAssemblyWithViewAndOutMessage<
-    typeof Model,
-    typeof prepare
-  > = Block.assemble(prepare)
-
-  return completedBlock
-}
-
-/**
- * Creates a completed RadioGroup Block refined to one Value type. Declare
- * `RadioGroup.create<Plan>()` once at module scope, then connect that Block to
- * the parent. Its view inputs and `Selected.value` share the Value type;
- * the parent Model owns the selected option.
- */
-export const create = <Value extends string = string>(): Completed<Value> =>
-  makeBlock<Value>()
+/** Creates a typed RadioGroup contract; provide this module's layer during graph construction. */
+export const makeBlock = <Value extends string = string>(): Completed<Value> =>
+  /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+  RadioGroupBlock as unknown as Completed<Value>

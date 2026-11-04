@@ -34,15 +34,15 @@ export const Model = Schema.Struct({
   animation: Animation.AnimationBlock.Model,
   maybeLastButtonPointerType: Schema.Option(Schema.String),
 })
-
 export type Model = typeof Model.Type
 
 // MESSAGE
 
 /** Union of all messages the popover component can produce. */
 export const Message = defineMessageUnion({
-  RequestedOpen: {},
-  RequestedClose: {},
+  PressedToggleKeyOnButton: {},
+  PressedEscape: {},
+  ClickedBackdrop: {},
   BlurredPanel: {},
   PressedPointerOnButton: {
     pointerType: Schema.String,
@@ -61,9 +61,11 @@ export const Message = defineMessageUnion({
   CompletedPortalPopoverBackdrop: {},
   CompletedDetectPopoverMovementOrAnimationEnd: { generation: Schema.Number },
 })
+export type Message = typeof Message.Type
 
-export type RequestedOpen = typeof Message.RequestedOpen.Type
-export type RequestedClose = typeof Message.RequestedClose.Type
+export type PressedToggleKeyOnButton =
+  typeof Message.PressedToggleKeyOnButton.Type
+export type PressedEscape = typeof Message.PressedEscape.Type
 export type BlurredPanel = typeof Message.BlurredPanel.Type
 export type PressedPointerOnButton = typeof Message.PressedPointerOnButton.Type
 /** A click on the Popover trigger button. */
@@ -71,7 +73,15 @@ export type ClickedButton = typeof Message.ClickedButton.Type
 export type IgnoredMouseClick = typeof Message.IgnoredMouseClick.Type
 export type SuppressedSpaceScroll = typeof Message.SuppressedSpaceScroll.Type
 
-export type Message = typeof Message.Type
+/** Requests accepted from a parent independently of local Popover events. */
+export const InMessage = defineMessageUnion({
+  RequestedOpen: {},
+  RequestedClose: {},
+})
+export type InMessage = typeof InMessage.Type
+
+export type RequestedOpen = typeof InMessage.RequestedOpen.Type
+export type RequestedClose = typeof InMessage.RequestedClose.Type
 
 // OUT MESSAGE
 
@@ -81,179 +91,19 @@ export const OutMessage = defineMessageUnion({
   Opened: {},
   Closed: {},
 })
+export type OutMessage = typeof OutMessage.Type
 
 export type Opened = typeof OutMessage.Opened.Type
 export type Closed = typeof OutMessage.Closed.Type
 
-const PopoverDefinition = Block.makeDefinition('Popover', {
-  Model,
-  Message,
-  OutMessage,
-})
-
-// INIT
-
-const LEFT_MOUSE_BUTTON = 0
-
-/** Configuration for creating a Popover Model with `init`.
- *
- *  `isAnimated` enables animation coordination. `isModal` locks page scroll
- *  and marks other elements inert while the Popover is open. Both default to
- *  `false`.
- *
- *  With `contentFocus: true`, the panel has no tab stop and focus leaving
- *  it does not close the Popover. Focus a descendant when opening and
- *  handle focus leaving the content in the application. Defaults to `false`. */
-export type InitConfig = Readonly<{
-  id: string
-  isAnimated?: boolean
-  isModal?: boolean
-  contentFocus?: boolean
-}>
-
-const makeInitialModel = (config: InitConfig): Model => ({
-  id: config.id,
-  isOpen: false,
-  isAnimated: config.isAnimated ?? false,
-  isModal: config.isModal ?? false,
-  contentFocus: config.contentFocus ?? false,
-  animation: Animation.AnimationBlock.init({ id: `${config.id}-panel` }).model,
-  maybeLastButtonPointerType: Option.none(),
-})
-
-// UPDATE
-
-const closedModel = (model: Model): Model =>
-  modifyFields(model, {
-    isOpen: () => false,
-    maybeLastButtonPointerType: () => Option.none(),
-  })
-
-const buttonSelector = (id: string): string => idSelector(`${id}-button`)
-const panelSelector = (id: string): string => idSelector(`${id}-panel`)
-
-/** Returns the bare DOM id of the popover trigger button, derived from the
- *  popover's base id. Use this to associate an external label with the
- *  trigger via a native `<label for={Popover.buttonId(id)}>` or an
- *  `aria-labelledby` reference. */
-export const buttonId = (id: string): string => `${id}-button`
-
-/** Returns the bare DOM id of the popover arrow, derived from the popover's
- *  base id. The `arrow` bundle already carries this id, so reach for this when
- *  you need the id on its own, such as asserting the panel Mount's `arrowId`
- *  argument in a Scene test. */
-export const arrowId = (id: string): string => `${id}-arrow`
-
-/** Prevents page scrolling while the popover is open in modal mode. */
-export const LockPopoverScroll = PopoverDefinition.makeCommand(
-  'LockPopoverScroll',
-  {
-    messages: [Message.CompletedLockPopoverScroll],
-    handler: function* () {
-      return () =>
-        Dom.lockScroll.pipe(Effect.as(Message.CompletedLockPopoverScroll()))
-    },
-  },
-)
-/** Re-enables page scrolling after the popover closes. */
-export const UnlockPopoverScroll = PopoverDefinition.makeCommand(
-  'UnlockPopoverScroll',
-  {
-    messages: [Message.CompletedUnlockPopoverScroll],
-    handler: function* () {
-      return () =>
-        Dom.unlockScroll.pipe(Effect.as(Message.CompletedUnlockPopoverScroll()))
-    },
-  },
-)
-/** Marks all elements outside the popover as inert for modal behavior. */
-export const InertPopoverOthers = PopoverDefinition.makeCommand(
-  'InertPopoverOthers',
-  {
-    args: { id: Schema.String },
-    messages: [Message.CompletedInertPopoverOthers],
-    handler: function* () {
-      return ({ id }) =>
-        Dom.inertOthers(id, [buttonSelector(id), panelSelector(id)]).pipe(
-          Effect.as(Message.CompletedInertPopoverOthers()),
-        )
-    },
-  },
-)
-/** Removes the inert attribute from elements outside the Popover. */
-export const RestorePopoverInert = PopoverDefinition.makeCommand(
-  'RestorePopoverInert',
-  {
-    args: { id: Schema.String },
-    messages: [Message.CompletedRestorePopoverInert],
-    handler: function* () {
-      return ({ id }) =>
-        Dom.restoreInert(id).pipe(
-          Effect.as(Message.CompletedRestorePopoverInert()),
-        )
-    },
-  },
-)
-/** Moves focus to the popover panel after opening. */
-export const FocusPopoverPanel = PopoverDefinition.makeCommand(
-  'FocusPopoverPanel',
-  {
-    args: { id: Schema.String },
-    messages: [Message.CompletedFocusPopoverPanel],
-    handler: function* () {
-      return ({ id }) =>
-        Dom.focus(panelSelector(id)).pipe(
-          Effect.ignore,
-          Effect.as(Message.CompletedFocusPopoverPanel()),
-        )
-    },
-  },
-)
-/** Moves focus back to the popover button after closing. */
-export const FocusPopoverButton = PopoverDefinition.makeCommand(
-  'FocusPopoverButton',
-  {
-    args: { id: Schema.String },
-    messages: [Message.CompletedFocusPopoverButton],
-    handler: function* () {
-      return ({ id }) =>
-        Dom.focus(buttonSelector(id)).pipe(
-          Effect.ignore,
-          Effect.as(Message.CompletedFocusPopoverButton()),
-        )
-    },
-  },
-)
-/** Detects whether the popover button moved or the leave animation ended. Whichever comes first; both outcomes signal the Animation block that leave is complete. */
-export const DetectPopoverMovementOrAnimationEnd =
-  PopoverDefinition.makeCommand('DetectPopoverMovementOrAnimationEnd', {
-    args: { id: Schema.String, generation: Schema.Number },
-    messages: [Message.CompletedDetectPopoverMovementOrAnimationEnd],
-    handler: function* () {
-      return ({ id, generation }) =>
-        Effect.raceFirst(
-          Dom.detectElementMovement(buttonSelector(id)).pipe(
-            Effect.as(
-              Message.CompletedDetectPopoverMovementOrAnimationEnd({
-                generation,
-              }),
-            ),
-          ),
-          Dom.waitForAnimationSettled(panelSelector(id)).pipe(
-            Effect.as(
-              Message.CompletedDetectPopoverMovementOrAnimationEnd({
-                generation,
-              }),
-            ),
-          ),
-        )
-    },
-  })
+const PopoverNamespace = Block.makeNamespace('Popover')
+/** @internal Stable identity of the Popover contract. */
+export const PopoverKey = Symbol('Popover')
 
 /** The anchor-positioning Mount this Popover renders on its panel. Exposed so
  *  Scene tests can call `Scene.Mount.resolve(AnchorPopover, CompletedAnchorPopover())`
  *  to acknowledge the mount produced by the rendered panel. */
-export const AnchorPopover = PopoverDefinition.makeMount('AnchorPopover', {
+export const AnchorPopover = PopoverNamespace.makeMount('AnchorPopover', {
   args: {
     buttonId: Schema.String,
     anchor: AnchorConfig,
@@ -294,7 +144,7 @@ export const AnchorPopover = PopoverDefinition.makeMount('AnchorPopover', {
 /** The backdrop-portaling Mount this Popover renders. Exposed so Scene tests can
  *  call `Scene.Mount.resolve(PortalPopoverBackdrop, CompletedPortalPopoverBackdrop())` to
  *  acknowledge the mount produced by the rendered backdrop. */
-export const PortalPopoverBackdrop = PopoverDefinition.makeMount(
+export const PortalPopoverBackdrop = PopoverNamespace.makeMount(
   'PortalPopoverBackdrop',
   {
     messages: [Message.CompletedPortalPopoverBackdrop],
@@ -314,29 +164,206 @@ export const PortalPopoverBackdrop = PopoverDefinition.makeMount(
 /** Mount Definitions rendered by Popover views. */
 export const mounts = [AnchorPopover, PortalPopoverBackdrop]
 
-const detectPopoverMovementOrAnimationEndStep = (generation: number) =>
-  PopoverDefinition.makeCommandsStep(model => [
-    DetectPopoverMovementOrAnimationEnd({ id: model.id, generation }),
-  ])
+export const PopoverBlock = Block.make(PopoverNamespace, {
+  key: PopoverKey,
+  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  view: {
+    kind: 'Element',
+    Inputs: Block.makeInputContract<ViewInputs>(),
+    mounts,
+  },
+  ChildInitContext: Schema.String,
+  InMessage,
+  inMessageOutputs: {
+    RequestedOpen: { outMessage: OutMessage },
+    RequestedClose: { outMessage: OutMessage },
+  },
+  Model,
+  Message,
+  OutMessage,
+})
 
-const foldAnimationOutMessage = PopoverDefinition.makeOutMessageFold(
-  Animation.AnimationBlock,
+/** Public Popover authoring contract and passive graph identity. */
+export type PopoverBlock = typeof PopoverBlock
+
+// INIT
+
+const LEFT_MOUSE_BUTTON = 0
+
+/** Configuration for creating a Popover Model with `init`.
+ *
+ *  `isAnimated` enables animation coordination. `isModal` locks page scroll
+ *  and marks other elements inert while the Popover is open. Both default to
+ *  `false`.
+ *
+ *  With `contentFocus: true`, the panel has no tab stop and focus leaving
+ *  it does not close the Popover. Focus a descendant when opening and
+ *  handle focus leaving the content in the application. Defaults to `false`. */
+export type InitConfig = Readonly<{
+  id: string
+  isAnimated?: boolean
+  isModal?: boolean
+  contentFocus?: boolean
+}>
+
+const makeInitialModel = (config: InitConfig) => ({
+  id: config.id,
+  isOpen: false,
+  isAnimated: config.isAnimated ?? false,
+  isModal: config.isModal ?? false,
+  contentFocus: config.contentFocus ?? false,
+  maybeLastButtonPointerType: Option.none(),
+})
+
+// UPDATE
+
+const closedModel = (model: Model): Model =>
+  modifyFields(model, {
+    isOpen: () => false,
+    maybeLastButtonPointerType: () => Option.none(),
+  })
+
+const buttonSelector = (id: string): string => idSelector(`${id}-button`)
+const panelSelector = (id: string): string => idSelector(`${id}-panel`)
+
+/** Returns the bare DOM id of the popover trigger button, derived from the
+ *  popover's base id. Use this to associate an external label with the
+ *  trigger via a native `<label for={Popover.buttonId(id)}>` or an
+ *  `aria-labelledby` reference. */
+export const buttonId = (id: string): string => `${id}-button`
+
+/** Returns the bare DOM id of the popover arrow, derived from the popover's
+ *  base id. The `arrow` bundle already carries this id, so reach for this when
+ *  you need the id on its own, such as asserting the panel Mount's `arrowId`
+ *  argument in a Scene test. */
+export const arrowId = (id: string): string => `${id}-arrow`
+
+/** Prevents page scrolling while the popover is open in modal mode. */
+export const LockPopoverScroll = PopoverBlock.makeCommand('LockPopoverScroll', {
+  messages: [Message.CompletedLockPopoverScroll],
+  handler: function* () {
+    return () =>
+      Dom.lockScroll.pipe(Effect.as(Message.CompletedLockPopoverScroll()))
+  },
+})
+/** Re-enables page scrolling after the popover closes. */
+export const UnlockPopoverScroll = PopoverBlock.makeCommand(
+  'UnlockPopoverScroll',
   {
-    StartedLeaveAnimating: ({ generation }) =>
-      detectPopoverMovementOrAnimationEndStep(generation),
-    TransitionedOut: PopoverDefinition.makeNoopStep,
+    messages: [Message.CompletedUnlockPopoverScroll],
+    handler: function* () {
+      return () =>
+        Dom.unlockScroll.pipe(Effect.as(Message.CompletedUnlockPopoverScroll()))
+    },
+  },
+)
+/** Marks all elements outside the popover as inert for modal behavior. */
+export const InertPopoverOthers = PopoverBlock.makeCommand(
+  'InertPopoverOthers',
+  {
+    args: { id: Schema.String },
+    messages: [Message.CompletedInertPopoverOthers],
+    handler: function* () {
+      return ({ id }) =>
+        Dom.inertOthers(id, [buttonSelector(id), panelSelector(id)]).pipe(
+          Effect.as(Message.CompletedInertPopoverOthers()),
+        )
+    },
+  },
+)
+/** Removes the inert attribute from elements outside the Popover. */
+export const RestorePopoverInert = PopoverBlock.makeCommand(
+  'RestorePopoverInert',
+  {
+    args: { id: Schema.String },
+    messages: [Message.CompletedRestorePopoverInert],
+    handler: function* () {
+      return ({ id }) =>
+        Dom.restoreInert(id).pipe(
+          Effect.as(Message.CompletedRestorePopoverInert()),
+        )
+    },
+  },
+)
+/** Moves focus to the popover panel after opening. */
+export const FocusPopoverPanel = PopoverBlock.makeCommand('FocusPopoverPanel', {
+  args: { id: Schema.String },
+  messages: [Message.CompletedFocusPopoverPanel],
+  handler: function* () {
+    return ({ id }) =>
+      Dom.focus(panelSelector(id)).pipe(
+        Effect.ignore,
+        Effect.as(Message.CompletedFocusPopoverPanel()),
+      )
+  },
+})
+/** Moves focus back to the popover button after closing. */
+export const FocusPopoverButton = PopoverBlock.makeCommand(
+  'FocusPopoverButton',
+  {
+    args: { id: Schema.String },
+    messages: [Message.CompletedFocusPopoverButton],
+    handler: function* () {
+      return ({ id }) =>
+        Dom.focus(buttonSelector(id)).pipe(
+          Effect.ignore,
+          Effect.as(Message.CompletedFocusPopoverButton()),
+        )
+    },
+  },
+)
+/** Detects whether the popover button moved or the leave animation ended. Whichever comes first; both outcomes signal the Animation block that leave is complete. */
+export const DetectPopoverMovementOrAnimationEnd = PopoverBlock.makeCommand(
+  'DetectPopoverMovementOrAnimationEnd',
+  {
+    args: { id: Schema.String, generation: Schema.Number },
+    messages: [Message.CompletedDetectPopoverMovementOrAnimationEnd],
+    handler: function* () {
+      return ({ id, generation }) =>
+        Effect.raceFirst(
+          Dom.detectElementMovement(buttonSelector(id)).pipe(
+            Effect.as(
+              Message.CompletedDetectPopoverMovementOrAnimationEnd({
+                generation,
+              }),
+            ),
+          ),
+          Dom.waitForAnimationSettled(panelSelector(id)).pipe(
+            Effect.as(
+              Message.CompletedDetectPopoverMovementOrAnimationEnd({
+                generation,
+              }),
+            ),
+          ),
+        )
+    },
   },
 )
 
-const AnimationBinding = PopoverDefinition.makeBinding(
+const detectPopoverMovementOrAnimationEnd = (generation: number) =>
+  PopoverBlock.makeCommandsStep(model => [
+    DetectPopoverMovementOrAnimationEnd({ id: model.id, generation }),
+  ])
+
+const foldAnimationOutMessage = PopoverBlock.makeOutMessageFold(
+  Animation.AnimationBlock,
+  {
+    StartedLeaveAnimating: ({ generation }) =>
+      detectPopoverMovementOrAnimationEnd(generation),
+    TransitionedOut: PopoverBlock.makeNoopStep,
+  },
+)
+
+/** @internal Original Animation relationship used by lifecycle test delivery. */
+export const AnimationBinding = PopoverBlock.makeBinding(
   Animation.AnimationBlock,
   {
     field: 'animation',
-    init: false,
+    init: { contextToArgs: id => [{ id: `${id}-panel` }] },
   },
 ).withOutMessagePolicy({ fold: foldAnimationOutMessage })
 
-const PopoverComposition = PopoverDefinition.makeComposition({
+const PopoverComposition = PopoverBlock.makeComposition({
   mounts,
   bindings: [AnimationBinding],
 })
@@ -344,83 +371,99 @@ const PopoverComposition = PopoverDefinition.makeComposition({
 /** Creates an initial Popover Model and Commands from a config. Defaults to closed. */
 export const init = PopoverComposition.makeInit((config: InitConfig) => ({
   model: makeInitialModel(config),
+  childInitContext: config.id,
 }))
 
-type AuthoredMessage = Message
-
-const internalUpdate = (model: Model, message: AuthoredMessage) => {
-  const openCommands = Array.filter(
-    [LockPopoverScroll(), InertPopoverOthers({ id: model.id })],
-    () => model.isModal,
-  )
-
-  const closeWithoutFocusCommands = Array.filter(
+const closePopoverCommands = (model: Model, isFocusButton: boolean) => {
+  const modalCommands = Array.filter(
     [UnlockPopoverScroll(), RestorePopoverInert({ id: model.id })],
     () => model.isModal,
   )
 
-  const focusButton = FocusPopoverButton({ id: model.id })
+  return isFocusButton
+    ? [FocusPopoverButton({ id: model.id }), ...modalCommands]
+    : modalCommands
+}
 
-  const closeWithFocusCommands = [focusButton, ...closeWithoutFocusCommands]
+const openPopover = (baseModel: Model) => {
+  const openCommands = Array.filter(
+    [LockPopoverScroll(), InertPopoverOthers({ id: baseModel.id })],
+    () => baseModel.isModal,
+  )
 
-  const openPopover = (baseModel: Model) => {
-    if (baseModel.isOpen) {
-      return { model: baseModel }
-    }
-
-    if (model.isAnimated) {
-      return PopoverDefinition.makeStep(() =>
-        Function.compose(
-          Update.combineSteps([
-            PopoverDefinition.makeStep(() => ({
-              model: baseModel,
-              commands: openCommands,
-            })),
-            AnimationBinding.requestShow(),
-            PopoverDefinition.makeFieldsStep(() => ({ isOpen: () => true })),
-          ]),
-          Update.withOutMessage(OutMessage.Opened()),
-        ),
-      )
-    }
-
-    return {
-      model: modifyFields(baseModel, { isOpen: () => true }),
-      commands: openCommands,
-      outMessage: OutMessage.Opened(),
-    }
+  if (baseModel.isOpen) {
+    return { model: baseModel }
   }
 
-  const closePopover = (
-    baseModel: Model,
-    commands: typeof closeWithFocusCommands,
-  ) => {
-    if (!baseModel.isOpen) {
-      return { model: baseModel }
-    }
-
-    const closed = closedModel(baseModel)
-
-    if (model.isAnimated) {
-      return PopoverDefinition.makeStep(() =>
-        Function.compose(
-          Update.combineSteps([
-            PopoverDefinition.makeStep(() => ({ model: closed, commands })),
-            AnimationBinding.requestHide(),
-          ]),
-          Update.withOutMessage(OutMessage.Closed()),
-        ),
-      )
-    }
-
-    return { model: closed, commands, outMessage: OutMessage.Closed() }
+  if (baseModel.isAnimated) {
+    return PopoverBlock.makeStep(() =>
+      Function.compose(
+        Update.combineSteps([
+          PopoverBlock.makeStep(() => ({
+            model: baseModel,
+            commands: openCommands,
+          })),
+          AnimationBinding.requestShow(),
+          PopoverBlock.makeFieldsStep(() => ({ isOpen: () => true })),
+        ]),
+        Update.withOutMessage(OutMessage.Opened()),
+      ),
+    )
   }
+
+  return {
+    model: modifyFields(baseModel, { isOpen: () => true }),
+    commands: openCommands,
+    outMessage: OutMessage.Opened(),
+  }
+}
+
+const closePopover = (
+  baseModel: Model,
+  commands: ReturnType<typeof closePopoverCommands>,
+) => {
+  if (!baseModel.isOpen) {
+    return { model: baseModel }
+  }
+
+  const closed = closedModel(baseModel)
+
+  if (baseModel.isAnimated) {
+    return PopoverBlock.makeStep(() =>
+      Function.compose(
+        Update.combineSteps([
+          PopoverBlock.makeStep(() => ({ model: closed, commands })),
+          AnimationBinding.requestHide(),
+        ]),
+        Update.withOutMessage(OutMessage.Closed()),
+      ),
+    )
+  }
+
+  return { model: closed, commands, outMessage: OutMessage.Closed() }
+}
+
+const closePopoverWithFocus = PopoverBlock.makeStep(model =>
+  closePopover(model, closePopoverCommands(model, true)),
+)
+
+/** Processes parent requests independently from local Message dispatch. */
+export const inMessageUpdate = PopoverComposition.makeInMessageUpdate({
+  RequestedOpen: PopoverBlock.makeStep(openPopover),
+  RequestedClose: closePopoverWithFocus,
+})
+
+const internalUpdate = (model: Model, message: Message) => {
+  const closeWithoutFocusCommands = closePopoverCommands(model, false)
+  const closeWithFocusCommands = closePopoverCommands(model, true)
 
   return Match.value(message).pipe(
     Match.tagsExhaustive({
-      RequestedOpen: () => openPopover(model),
+      PressedToggleKeyOnButton: () =>
+        model.isOpen ? closePopoverWithFocus : openPopover(model),
 
-      RequestedClose: () => closePopover(model, closeWithFocusCommands),
+      PressedEscape: () => closePopoverWithFocus,
+      ClickedBackdrop: () => closePopoverWithFocus,
 
       BlurredPanel: () => {
         if (
@@ -447,10 +490,10 @@ const internalUpdate = (model: Model, message: AuthoredMessage) => {
           })
 
           if (model.isAnimated) {
-            return PopoverDefinition.makeStep(() =>
+            return PopoverBlock.makeStep(() =>
               Function.compose(
                 Update.combineSteps([
-                  PopoverDefinition.makeStep(() => ({
+                  PopoverBlock.makeStep(() => ({
                     model: closed,
                     commands: closeWithFocusCommands,
                   })),
@@ -509,7 +552,7 @@ const internalUpdate = (model: Model, message: AuthoredMessage) => {
   )
 }
 
-const authoredUpdateStep = PopoverDefinition.makeStep(
+const applyPopoverMessage = PopoverBlock.makeStep(
   (model, message: Parameters<typeof internalUpdate>[1]) =>
     internalUpdate(model, message),
 )
@@ -517,22 +560,23 @@ const authoredUpdateStep = PopoverDefinition.makeStep(
 /** Processes a Popover Message and returns the next Model, optional Commands,
  *  and an optional OutMessage. */
 export const update = PopoverComposition.makeUpdate({
-  RequestedOpen: authoredUpdateStep,
-  RequestedClose: authoredUpdateStep,
-  BlurredPanel: authoredUpdateStep,
-  PressedPointerOnButton: authoredUpdateStep,
-  CompletedFocusPopoverPanel: authoredUpdateStep,
-  CompletedFocusPopoverButton: authoredUpdateStep,
-  CompletedLockPopoverScroll: authoredUpdateStep,
-  CompletedUnlockPopoverScroll: authoredUpdateStep,
-  CompletedInertPopoverOthers: authoredUpdateStep,
-  CompletedRestorePopoverInert: authoredUpdateStep,
-  ClickedButton: authoredUpdateStep,
-  IgnoredMouseClick: authoredUpdateStep,
-  SuppressedSpaceScroll: authoredUpdateStep,
-  CompletedAnchorPopover: authoredUpdateStep,
-  CompletedPortalPopoverBackdrop: authoredUpdateStep,
-  CompletedDetectPopoverMovementOrAnimationEnd: authoredUpdateStep,
+  PressedToggleKeyOnButton: applyPopoverMessage,
+  PressedEscape: applyPopoverMessage,
+  ClickedBackdrop: applyPopoverMessage,
+  BlurredPanel: applyPopoverMessage,
+  PressedPointerOnButton: applyPopoverMessage,
+  CompletedFocusPopoverPanel: applyPopoverMessage,
+  CompletedFocusPopoverButton: applyPopoverMessage,
+  CompletedLockPopoverScroll: applyPopoverMessage,
+  CompletedUnlockPopoverScroll: applyPopoverMessage,
+  CompletedInertPopoverOthers: applyPopoverMessage,
+  CompletedRestorePopoverInert: applyPopoverMessage,
+  ClickedButton: applyPopoverMessage,
+  IgnoredMouseClick: applyPopoverMessage,
+  SuppressedSpaceScroll: applyPopoverMessage,
+  CompletedAnchorPopover: applyPopoverMessage,
+  CompletedPortalPopoverBackdrop: applyPopoverMessage,
+  CompletedDetectPopoverMovementOrAnimationEnd: applyPopoverMessage,
 })
 
 /** Provides Popover's Command and Mount handlers. */
@@ -593,7 +637,7 @@ export type ViewInputs = Readonly<{
 }>
 
 /** Renders a headless popover with a trigger button and a floating panel. */
-export const view = PopoverComposition.makeView.withInputs<ViewInputs>(
+export const view = PopoverComposition.makeView.withInputs(
   (model, viewInputs, h) => {
     const {
       id,
@@ -639,15 +683,13 @@ export const view = PopoverComposition.makeView.withInputs<ViewInputs>(
 
     const handleButtonKeyDown = (
       key: string,
-    ): Option.Option<RequestedOpen | RequestedClose> =>
+    ): Option.Option<PressedToggleKeyOnButton | PressedEscape> =>
       Match.value(key).pipe(
         Match.whenOr('Enter', ' ', 'ArrowDown', () =>
-          Option.some(
-            isOpen ? Message.RequestedClose() : Message.RequestedOpen(),
-          ),
+          Option.some(Message.PressedToggleKeyOnButton()),
         ),
         Match.when('Escape', () =>
-          OptionExt.when(isOpen, Message.RequestedClose()),
+          OptionExt.when(isOpen, Message.PressedEscape()),
         ),
         Match.orElse(() => Option.none()),
       )
@@ -663,9 +705,9 @@ export const view = PopoverComposition.makeView.withInputs<ViewInputs>(
     ): Option.Option<SuppressedSpaceScroll> =>
       OptionExt.when(key === ' ', Message.SuppressedSpaceScroll())
 
-    const handlePanelKeyDown = (key: string): Option.Option<RequestedClose> =>
+    const handlePanelKeyDown = (key: string): Option.Option<PressedEscape> =>
       Match.value(key).pipe(
-        Match.when('Escape', () => Option.some(Message.RequestedClose())),
+        Match.when('Escape', () => Option.some(Message.PressedEscape())),
         Match.orElse(() => Option.none()),
       )
 
@@ -727,7 +769,7 @@ export const view = PopoverComposition.makeView.withInputs<ViewInputs>(
 
     const backdropAttributes = [
       h.OnMount(PortalPopoverBackdrop()),
-      ...(isLeaving ? [] : [h.OnClick(Message.RequestedClose())]),
+      ...(isLeaving ? [] : [h.OnClick(Message.ClickedBackdrop())]),
     ]
 
     const arrowAttributes = [h.Id(arrowId(id)), h.AriaHidden(true)]
@@ -742,22 +784,20 @@ export const view = PopoverComposition.makeView.withInputs<ViewInputs>(
   },
 )
 
-const implementation = {
-  init,
-  update,
-  view,
-  operations: {
-    requestOpen: Message.RequestedOpen,
-    requestClose: Message.RequestedClose,
-  },
-  EffectsLayer,
-}
+export const layer = PopoverBlock.makeLayer(
+  Effect.gen(function* () {
+    const animation = yield* AnimationBinding
 
-const prepare = () => PopoverComposition.prepareBlock(implementation)
-/** Completed Popover Block contract. */
-export interface PopoverBlock extends Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepare
-> {}
-/** Complete Popover Block definition. */
-export const PopoverBlock: PopoverBlock = Block.assemble(prepare)
+    return {
+      children: [animation],
+      init,
+      update,
+      inMessageUpdate,
+      view,
+      EffectsLayer,
+    }
+  }),
+).pipe(Layer.provide(Animation.layer))
+
+/** @internal Selected implementation used by component tests. */
+export const block = { block: PopoverBlock, layer }

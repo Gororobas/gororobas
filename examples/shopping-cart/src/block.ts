@@ -1,20 +1,25 @@
-import { Block } from 'foldkit'
+import { Effect, Layer } from 'effect'
 
+import { Products } from './blocks'
 import { EffectsLayer } from './command'
-import { ApplicationComposition } from './composition'
+import { ProductsPageBinding } from './composition'
+import { ApplicationBlock } from './definition'
 import { init } from './init'
-import type { Model } from './model'
 import { update } from './update'
 import { view } from './view'
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const products = yield* ProductsPageBinding
+
+    return {
+      children: [products],
+      init,
+      update,
+      view,
+      EffectsLayer,
+    }
+  }),
+).pipe(Layer.provide(Products.layer))
+
+export { ApplicationBlock } from './definition'

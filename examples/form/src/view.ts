@@ -4,7 +4,9 @@ import { FieldValidation } from 'foldkit'
 import { Field } from 'foldkit/fieldValidation'
 import { type Attribute, Html } from 'foldkit/html'
 
-import { Button, Input, Textarea } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
+import { view as inputView } from '@foldkit/ui/input'
+import { view as textareaView } from '@foldkit/ui/textarea'
 
 import {
   ApplicationComposition,
@@ -45,7 +47,7 @@ const statusIndicator = (
 
 const descriptionView = (
   field: Field<string>,
-  descriptionAttributes: ReadonlyArray<Attribute<typeof Message.Type>>,
+  descriptionAttributes: ReadonlyArray<Attribute<Message>>,
   h: ApplicationViewBuilder,
 ): Html =>
   FieldValidation.match(field, {
@@ -73,11 +75,11 @@ const inputFieldView = (
   id: string,
   labelText: string,
   field: Field<string>,
-  onUpdate: (value: string) => typeof Message.Type,
+  onUpdate: (value: string) => Message,
   type: string,
   h: ApplicationViewBuilder,
 ): Html =>
-  Input.view(
+  inputView(
     {
       id,
       value: field.value,
@@ -111,10 +113,10 @@ const textareaFieldView = (
   id: string,
   labelText: string,
   field: Field<string>,
-  onUpdate: (value: string) => typeof Message.Type,
+  onUpdate: (value: string) => Message,
   h: ApplicationViewBuilder,
 ): Html =>
-  Textarea.view(
+  textareaView(
     {
       id,
       value: field.value,
@@ -187,7 +189,7 @@ export const view = ApplicationComposition.makeView((model, h) => {
                 h,
               ),
 
-              Button.view(
+              buttonView(
                 {
                   type: 'submit',
                   isDisabled: !canSubmit,

@@ -1,13 +1,15 @@
 import {
   Array,
   Duration,
+  Effect,
   Layer,
   Option,
   Schema,
   SchemaTransformation,
 } from 'effect'
-import { Block, Command, Message, Program, Struct, Update } from 'foldkit'
-import { childAttributes } from 'foldkit/html'
+import { Block, Message, Program, Struct, Update } from 'foldkit'
+import { type HtmlBuilder, childAttributes } from 'foldkit/html'
+import * as Story from 'foldkit/story'
 
 import * as Animation from '@foldkit/ui/animation'
 import * as Calendar from '@foldkit/ui/calendar'
@@ -29,8 +31,16 @@ type Equal<Left, Right> =
     : false
 type Expect<Value extends true> = Value
 
+export const MenuFoldFixtureKey = Symbol('MenuFoldFixture')
+export const ToastFixtureKey = Symbol('ToastFixture')
+export const KeyedToastFixtureKey = Symbol('KeyedToastFixture')
+export const DragAndDropFixtureKey = Symbol('DragAndDropFixture')
+export const KeyedDragAndDropFixtureKey = Symbol('KeyedDragAndDropFixture')
+export const KeyedAnimationFixtureKey = Symbol('KeyedAnimationFixture')
+export const ApplicationKey = Symbol('Application')
+
 export const Item = Schema.Literals(['Apple', 'Pear'])
-export const Picker = Combobox.create(Item)
+export const Picker = Combobox.makeBlock(Item)
 export const EncodedItem = Schema.Number.pipe(
   Schema.decodeTo(
     Schema.String,
@@ -40,20 +50,19 @@ export const EncodedItem = Schema.Number.pipe(
     }),
   ),
 )
-export const EncodedPicker = Combobox.create(EncodedItem)
-export const MultiPicker = Combobox.Multi.create(Item)
-export const ListPicker = Listbox.create<'Apple' | 'Pear'>()
-export const MultiListPicker = Listbox.Multi.create<'Apple' | 'Pear'>()
-export const MenuPicker = Menu.create<'Apple' | 'Pear'>()
+export const EncodedPicker = Combobox.makeBlock(EncodedItem)
+export const MultiPicker = Combobox.Multi.makeBlock(Item)
+export const ListPicker = Listbox.makeBlock<'Apple' | 'Pear'>()
+export const MultiListPicker = Listbox.Multi.makeBlock<'Apple' | 'Pear'>()
+export const MenuPicker = Menu.makeBlock<'Apple' | 'Pear'>()
 const MenuFoldModel = Schema.Struct({ selected: Item })
-export const MenuFoldFixtureDefinition = Block.makeDefinition(
-  'MenuFoldFixture',
-  {
-    Model: MenuFoldModel,
-    Message: Schema.Never,
-  },
-)
-export const foldMenuChoice = MenuFoldFixtureDefinition.makeOutMessageFold(
+export const MenuFoldFixtureBlock = Block.make('MenuFoldFixture', {
+  key: MenuFoldFixtureKey,
+  Init: Schema.Tuple([]),
+  Model: MenuFoldModel,
+  Message: Schema.Never,
+})
+export const foldMenuChoice = MenuFoldFixtureBlock.makeOutMessageFold(
   MenuPicker,
   {
     Selected:
@@ -61,7 +70,7 @@ export const foldMenuChoice = MenuFoldFixtureDefinition.makeOutMessageFold(
       model => ({
         model: Struct.modifyFields(model, { selected: () => value }),
       }),
-    Closed: () => MenuFoldFixtureDefinition.makeNoopStep(),
+    Closed: () => MenuFoldFixtureBlock.makeNoopStep(),
   },
 )
 export type FoldedMenuModel = Expect<
@@ -91,35 +100,42 @@ export const menuTestDefinitions = [
   Menu.test.AnchorMenu,
   Menu.test.PortalMenuBackdrop,
 ]
-export const menuFactoryMounts: ReadonlyArray<
-  typeof Menu.test.AnchorMenu | typeof Menu.test.PortalMenuBackdrop
-> = MenuPicker.mounts
+export const menuFactoryViewInputs = (
+  h: HtmlBuilder<typeof ParentMessage.Type>,
+): Block.FactsOf<typeof MenuPicker>['view']['inputs'] => ({
+  items: ['Apple', 'Pear'],
+  buttonContent: h.span([], ['Choose fruit']),
+  itemToConfig: item => ({ content: h.span([], [item]) }),
+  buttonAttributes: childAttributes([h.OnClick(ParentMessage.ClickedClear())]),
+})
 export const RootSlider = Slider.forRoot(() => document)
 export const ToastPayload = Schema.Struct({
   kind: Schema.Literals(['Saved', 'Failed']),
 })
-export const ToastBlock = Toast.make(ToastPayload)
-export const OtherToastBlock = Toast.make(
+export const ToastBlock = Toast.makeBlock(ToastPayload)
+export const OtherToastBlock = Toast.makeBlock(
   Schema.Struct({ count: Schema.Number }),
 )
 const ToastFixtureModel = Schema.Struct({
   toast: ToastBlock.Model,
   otherToast: OtherToastBlock.Model,
 })
-const ToastFixtureDefinition = Block.makeDefinition('ToastFixture', {
+const ToastFixtureBlock = Block.make('ToastFixture', {
+  key: ToastFixtureKey,
+  Init: Schema.Tuple([]),
   Model: ToastFixtureModel,
   Message: Schema.Never,
 })
-export const ToastBinding = ToastFixtureDefinition.makeBinding(ToastBlock, {
+export const ToastBinding = ToastFixtureBlock.makeBinding(ToastBlock, {
   placement: 'Toast',
   read: model => Option.some(model.toast),
   write: (model, toast) => Struct.modifyFields(model, { toast: () => toast }),
 }).withOutMessagePolicy({
-  fold: ToastFixtureDefinition.makeOutMessageFold(ToastBlock, {
-    DismissedToast: () => ToastFixtureDefinition.makeNoopStep(),
+  fold: ToastFixtureBlock.makeOutMessageFold(ToastBlock, {
+    DismissedToast: () => ToastFixtureBlock.makeNoopStep(),
   }),
 })
-export const OtherToastBinding = ToastFixtureDefinition.makeBinding(
+export const OtherToastBinding = ToastFixtureBlock.makeBinding(
   OtherToastBlock,
   {
     placement: 'OtherToast',
@@ -128,8 +144,8 @@ export const OtherToastBinding = ToastFixtureDefinition.makeBinding(
       Struct.modifyFields(model, { otherToast: () => otherToast }),
   },
 ).withOutMessagePolicy({
-  fold: ToastFixtureDefinition.makeOutMessageFold(OtherToastBlock, {
-    DismissedToast: () => ToastFixtureDefinition.makeNoopStep(),
+  fold: ToastFixtureBlock.makeOutMessageFold(OtherToastBlock, {
+    DismissedToast: () => ToastFixtureBlock.makeNoopStep(),
   }),
 })
 export const drainToastEntry = ToastBlock.test.drainEntry({
@@ -140,17 +156,19 @@ const ToastInstance = Schema.Struct({
   id: Schema.Literal('Primary'),
   model: ToastBlock.Model,
 })
-const KeyedToastFixtureDefinition = Block.makeDefinition('KeyedToastFixture', {
+const KeyedToastFixtureBlock = Block.make('KeyedToastFixture', {
+  key: KeyedToastFixtureKey,
+  Init: Schema.Tuple([]),
   Model: Schema.Struct({ toasts: Schema.Array(ToastInstance) }),
   Message: Schema.Never,
 })
-const foldKeyedToastOutMessage = KeyedToastFixtureDefinition.makeOutMessageFold(
+const foldKeyedToastOutMessage = KeyedToastFixtureBlock.makeOutMessageFold(
   ToastBlock,
   {
-    DismissedToast: () => KeyedToastFixtureDefinition.makeNoopStep(),
+    DismissedToast: () => KeyedToastFixtureBlock.makeNoopStep(),
   },
 )
-export const KeyedToastBinding = KeyedToastFixtureDefinition.makeBinding(
+export const KeyedToastBinding = KeyedToastFixtureBlock.makeBinding(
   ToastBlock,
   {
     field: 'toasts',
@@ -168,24 +186,22 @@ export const drainKeyedToastEntry = ToastBlock.test.drainEntry({
 const DragAndDropFixtureModel = Schema.Struct({
   dragAndDrop: DragAndDrop.DragAndDropBlock.Model,
 })
-const DragAndDropFixtureDefinition = Block.makeDefinition(
-  'DragAndDropFixture',
+const DragAndDropFixtureBlock = Block.make('DragAndDropFixture', {
+  key: DragAndDropFixtureKey,
+  Init: Schema.Tuple([]),
+  Model: DragAndDropFixtureModel,
+  Message: Schema.Never,
+})
+const foldDragAndDropOutMessage = DragAndDropFixtureBlock.makeOutMessageFold(
+  DragAndDrop.DragAndDropBlock,
   {
-    Model: DragAndDropFixtureModel,
-    Message: Schema.Never,
+    StartedKeyboardDrag: DragAndDropFixtureBlock.makeNoopStep,
+    ChangedKeyboardTarget: DragAndDropFixtureBlock.makeNoopStep,
+    Reordered: () => DragAndDropFixtureBlock.makeNoopStep(),
+    Cancelled: () => DragAndDropFixtureBlock.makeNoopStep(),
   },
 )
-const foldDragAndDropOutMessage =
-  DragAndDropFixtureDefinition.makeOutMessageFold(
-    DragAndDrop.DragAndDropBlock,
-    {
-      StartedKeyboardDrag: DragAndDropFixtureDefinition.makeNoopStep,
-      ChangedKeyboardTarget: DragAndDropFixtureDefinition.makeNoopStep,
-      Reordered: () => DragAndDropFixtureDefinition.makeNoopStep(),
-      Cancelled: () => DragAndDropFixtureDefinition.makeNoopStep(),
-    },
-  )
-export const DragAndDropBinding = DragAndDropFixtureDefinition.makeBinding(
+export const DragAndDropBinding = DragAndDropFixtureBlock.makeBinding(
   DragAndDrop.DragAndDropBlock,
   {
     placement: 'DragAndDrop',
@@ -210,27 +226,27 @@ const DragAndDropInstance = Schema.Struct({
   id: Schema.Literal('Primary'),
   model: DragAndDrop.DragAndDropBlock.Model,
 })
-const KeyedDragAndDropFixtureDefinition = Block.makeDefinition(
-  'KeyedDragAndDropFixture',
-  {
-    Model: Schema.Struct({
-      dragAndDrops: Schema.Array(DragAndDropInstance),
-    }),
-    Message: Schema.Never,
-  },
-)
+const KeyedDragAndDropFixtureBlock = Block.make('KeyedDragAndDropFixture', {
+  key: KeyedDragAndDropFixtureKey,
+  Init: Schema.Tuple([]),
+  Model: Schema.Struct({
+    dragAndDrops: Schema.Array(DragAndDropInstance),
+  }),
+  Message: Schema.Never,
+})
 const foldKeyedDragAndDropOutMessage =
-  KeyedDragAndDropFixtureDefinition.makeOutMessageFold(
+  KeyedDragAndDropFixtureBlock.makeOutMessageFold(
     DragAndDrop.DragAndDropBlock,
     {
-      StartedKeyboardDrag: KeyedDragAndDropFixtureDefinition.makeNoopStep,
-      ChangedKeyboardTarget: KeyedDragAndDropFixtureDefinition.makeNoopStep,
-      Reordered: () => KeyedDragAndDropFixtureDefinition.makeNoopStep(),
-      Cancelled: () => KeyedDragAndDropFixtureDefinition.makeNoopStep(),
+      StartedKeyboardDrag: KeyedDragAndDropFixtureBlock.makeNoopStep,
+      ChangedKeyboardTarget: KeyedDragAndDropFixtureBlock.makeNoopStep,
+      Reordered: () => KeyedDragAndDropFixtureBlock.makeNoopStep(),
+      Cancelled: () => KeyedDragAndDropFixtureBlock.makeNoopStep(),
     },
   )
-export const KeyedDragAndDropBinding =
-  KeyedDragAndDropFixtureDefinition.makeBinding(DragAndDrop.DragAndDropBlock, {
+export const KeyedDragAndDropBinding = KeyedDragAndDropFixtureBlock.makeBinding(
+  DragAndDrop.DragAndDropBlock,
+  {
     placement: 'DragAndDrops',
     keySchema: Schema.Literal('Primary'),
     readAll: model => model.dragAndDrops,
@@ -244,9 +260,10 @@ export const KeyedDragAndDropBinding =
             : instance,
         ),
       }),
-  }).withOutMessagePolicy({
-    fold: (_key, outMessage) => foldKeyedDragAndDropOutMessage(outMessage),
-  })
+  },
+).withOutMessagePolicy({
+  fold: (_key, outMessage) => foldKeyedDragAndDropOutMessage(outMessage),
+})
 export const settleKeyedDragAndDropFocus = DragAndDrop.test.settleFocus({
   binding: KeyedDragAndDropBinding,
   key: 'Primary',
@@ -266,27 +283,28 @@ const AnimationInstance = Schema.Struct({
   id: Schema.Literal('Primary'),
   model: Animation.AnimationBlock.Model,
 })
-const KeyedAnimationFixtureDefinition = Block.makeDefinition(
-  'KeyedAnimationFixture',
+const KeyedAnimationFixtureBlock = Block.make('KeyedAnimationFixture', {
+  key: KeyedAnimationFixtureKey,
+  Init: Schema.Tuple([]),
+  Model: Schema.Struct({ animations: Schema.Array(AnimationInstance) }),
+  Message: Schema.Never,
+})
+export const KeyedAnimationBinding = KeyedAnimationFixtureBlock.makeBinding(
+  Animation.AnimationBlock,
   {
-    Model: Schema.Struct({ animations: Schema.Array(AnimationInstance) }),
-    Message: Schema.Never,
-  },
-)
-export const KeyedAnimationBinding =
-  KeyedAnimationFixtureDefinition.makeBinding(Animation.AnimationBlock, {
     field: 'animations',
     key: 'id',
     childField: 'model',
-  })
+  },
+)
 const makeKeyedAnimationOutMessageFold = (key: 'Primary') =>
-  KeyedAnimationFixtureDefinition.makeOutMessageFold(Animation.AnimationBlock, {
+  KeyedAnimationFixtureBlock.makeOutMessageFold(Animation.AnimationBlock, {
     StartedLeaveAnimating: () =>
       KeyedAnimationBinding.requestWaitForLeaveSettlement(key),
-    TransitionedOut: KeyedAnimationFixtureDefinition.makeNoopStep,
+    TransitionedOut: KeyedAnimationFixtureBlock.makeNoopStep,
   })
 export const KeyedAnimationFixtureComposition =
-  KeyedAnimationFixtureDefinition.makeComposition({
+  KeyedAnimationFixtureBlock.makeComposition({
     bindings: [
       KeyedAnimationBinding.withOutMessagePolicy({
         fold: (key, outMessage) =>
@@ -294,7 +312,7 @@ export const KeyedAnimationFixtureComposition =
       }),
     ],
   })
-export const keyedAnimationLeaveWaitStep =
+export const waitForKeyedAnimationLeave =
   KeyedAnimationBinding.requestWaitForLeaveSettlement('Primary')
 export const Model = Schema.Struct({
   animation: Animation.AnimationBlock.Model,
@@ -306,56 +324,56 @@ export const Model = Schema.Struct({
 export const ParentMessage = Message.defineMessageUnion({
   ClickedClear: {},
 })
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message: ParentMessage,
 })
 
-export const AnimationBinding = ApplicationDefinition.makeBinding(
+export const AnimationBinding = ApplicationBlock.makeBinding(
   Animation.AnimationBlock,
   {
     field: 'animation',
     init: { contextToArgs: () => [{ id: 'details-animation' }] },
   },
 )
-const foldAnimationOutMessage = ApplicationDefinition.makeOutMessageFold(
+const foldAnimationOutMessage = ApplicationBlock.makeOutMessageFold(
   Animation.AnimationBlock,
   {
     StartedLeaveAnimating: () =>
       AnimationBinding.requestWaitForLeaveSettlement(),
-    TransitionedOut: ApplicationDefinition.makeNoopStep,
+    TransitionedOut: ApplicationBlock.makeNoopStep,
   },
 )
 export const AnimationBindingWithOutMessagePolicy =
   AnimationBinding.withOutMessagePolicy({ fold: foldAnimationOutMessage })
 
-export const DialogBinding = ApplicationDefinition.makeBinding(
-  Dialog.DialogBlock,
-  {
-    field: 'dialog',
-    init: { contextToArgs: () => [{ id: 'details' }] },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(Dialog.DialogBlock, {
-    Opened: () => ApplicationDefinition.makeNoopStep(),
-    Closed: () => ApplicationDefinition.makeNoopStep(),
-    CompletedClose: () => ApplicationDefinition.makeNoopStep(),
+export const DialogBinding = ApplicationBlock.makeBinding(Dialog.DialogBlock, {
+  field: 'dialog',
+  init: { contextToArgs: () => [{ id: 'details' }] },
+}).withOutMessagePolicy({
+  fold: ApplicationBlock.makeOutMessageFold(Dialog.DialogBlock, {
+    Opened: () => ApplicationBlock.makeNoopStep(),
+    Closed: () => ApplicationBlock.makeNoopStep(),
+    CompletedClose: () => ApplicationBlock.makeNoopStep(),
   }),
 })
 
-export const PickerBinding = ApplicationDefinition.makeBinding(Picker, {
+export const PickerBinding = ApplicationBlock.makeBinding(Picker, {
   field: 'picker',
   init: { contextToArgs: () => [{ id: 'fruit' }] },
 }).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(Picker, {
+  fold: ApplicationBlock.makeOutMessageFold(Picker, {
     Selected: ({ value }) =>
-      ApplicationDefinition.makeStep(model => ({
+      ApplicationBlock.makeStep(model => ({
         model: Struct.modifyFields(model, {
           maybeSelected: () => Option.some(value),
         }),
       })),
     ClearedSelection: () =>
-      ApplicationDefinition.makeStep(model => ({
+      ApplicationBlock.makeStep(model => ({
         model: Struct.modifyFields(model, {
           maybeSelected: () => Option.none(),
         }),
@@ -363,43 +381,29 @@ export const PickerBinding = ApplicationDefinition.makeBinding(Picker, {
   }),
 })
 
-export const PopoverBinding = ApplicationDefinition.makeBinding(
+export const PopoverBinding = ApplicationBlock.makeBinding(
   Popover.PopoverBlock,
   {
     field: 'popover',
     init: { contextToArgs: () => [{ id: 'help' }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(Popover.PopoverBlock, {
-    Opened: () => ApplicationDefinition.makeNoopStep(),
-    Closed: () => ApplicationDefinition.makeNoopStep(),
+  fold: ApplicationBlock.makeOutMessageFold(Popover.PopoverBlock, {
+    Opened: () => ApplicationBlock.makeNoopStep(),
+    Closed: () => ApplicationBlock.makeNoopStep(),
   }),
 })
 
-export type Composition = Block.Composition<
-  typeof ApplicationDefinition.owner,
-  typeof Model,
-  typeof ParentMessage,
-  undefined,
-  readonly [],
-  readonly [
-    typeof AnimationBindingWithOutMessagePolicy,
-    typeof DialogBinding,
-    typeof PickerBinding,
-    typeof PopoverBinding,
-  ]
->
-
-export const createComposition = (): Composition =>
-  ApplicationDefinition.makeComposition({
+export const createComposition = () =>
+  ApplicationBlock.makeComposition({
     bindings: [
       AnimationBindingWithOutMessagePolicy,
       DialogBinding,
       PickerBinding,
       PopoverBinding,
     ],
-    mounts: [],
   })
+export type Composition = ReturnType<typeof createComposition>
 export type Builder = Block.ViewBuilderFor<Composition>
 
 export const pickerView = (model: typeof Model.Type, h: Builder) =>
@@ -455,21 +459,110 @@ export const author = (composition: Composition) => {
   })
   const view = composition.makeView((model, h) => helper(model, h))
 
-  const prepare = () => composition.prepareBlock({ init, update, view })
-  const completedBlock: Block.FromAssemblyWithView<
-    typeof Model,
-    typeof prepare
-  > = Block.assemble(prepare)
-  return completedBlock
+  return ApplicationBlock.makeLayer(
+    Effect.gen(function* () {
+      const animation = yield* AnimationBindingWithOutMessagePolicy
+      const dialog = yield* DialogBinding
+      const picker = yield* PickerBinding
+      const popover = yield* PopoverBinding
+
+      return {
+        children: [animation, dialog, picker, popover],
+        init,
+        update,
+        view,
+      }
+    }),
+  ).pipe(
+    Layer.provide(
+      Layer.mergeAll(
+        Animation.layer,
+        Dialog.layer,
+        Combobox.layer,
+        Popover.layer,
+      ),
+    ),
+  )
 }
 
-export const ElementBlock = author(createComposition())
+export const ElementLayer = author(createComposition())
 export const application = Program.makeElement({
-  block: ElementBlock,
+  block: ApplicationBlock,
+  layer: ElementLayer,
   container: null,
 })
 
+export type AnimationExecutable = Block.ExecutableOf<
+  typeof Animation.AnimationBlock
+>
+export type CalendarExecutable = Block.ExecutableOf<
+  typeof Calendar.CalendarBlock
+>
+export type SliderExecutable = Block.ExecutableOf<typeof Slider.SliderBlock>
+export type RootSliderExecutable = Block.ExecutableOf<typeof RootSlider>
+export type TooltipExecutable = Block.ExecutableOf<typeof Tooltip.TooltipBlock>
+export type ToastExecutable = Block.ExecutableOf<typeof ToastBlock>
+
+export const showAnimation = (
+  animation: AnimationExecutable,
+  model: typeof Animation.AnimationBlock.Model.Type,
+) => animation.inMessageUpdate(model, Animation.InMessage.RequestedShow())
+
+export const showAnimationCurried = (animation: AnimationExecutable) =>
+  animation.inMessageUpdate(Animation.InMessage.RequestedShow())
+
+export const dismissAllToasts = (
+  toast: ToastExecutable,
+  model: typeof ToastBlock.Model.Type,
+) => toast.inMessageUpdate(model, Toast.InMessage.RequestedDismissAll())
+
+export type DirectInputAssertions = [
+  Expect<
+    Equal<
+      Exclude<ReturnType<typeof showAnimation>['outMessage'], undefined>,
+      never
+    >
+  >,
+  Expect<
+    Equal<
+      Update.RequirementsOf<typeof showAnimation>,
+      | Block.FactsOf<typeof Animation.AnimationBlock>['runtimeServices']
+      | Block.InternalExecution<(typeof Animation.AnimationBlock)['owner']>
+    >
+  >,
+  Expect<
+    Equal<
+      ReturnType<ReturnType<typeof showAnimationCurried>>,
+      ReturnType<typeof showAnimation>
+    >
+  >,
+  Expect<
+    Equal<
+      Exclude<ReturnType<typeof dismissAllToasts>['outMessage'], undefined>,
+      never
+    >
+  >,
+]
+
 export type GenericAssertions = [
+  Expect<
+    Equal<
+      Block.FactsOf<typeof MenuPicker>['view']['inputs'],
+      Menu.ViewInputs<'Apple' | 'Pear'>
+    >
+  >,
+  Expect<
+    Equal<
+      Block.FactsOf<typeof Animation.AnimationBlock>['programRequirements'],
+      never
+    >
+  >,
+  Expect<
+    Equal<
+      Block.FactsOf<typeof Calendar.CalendarBlock>['programRequirements'],
+      never
+    >
+  >,
   Expect<
     Equal<ReturnType<typeof matchMenuOutMessage>, 'Apple' | 'Pear' | 'Closed'>
   >,
@@ -480,9 +573,10 @@ export type GenericAssertions = [
   Expect<
     Equal<
       Update.RequirementsOf<
-        typeof Animation.AnimationBlock.operations.requestWaitForLeaveSettlement
+        AnimationExecutable['operations']['requestWaitForLeaveSettlement']
       >,
-      Command.HandlerOf<typeof Animation.test.WaitForAnimationSettled>
+      | Block.FactsOf<typeof Animation.AnimationBlock>['runtimeServices']
+      | Block.InternalExecution<(typeof Animation.AnimationBlock)['owner']>
     >
   >,
   Expect<
@@ -493,11 +587,9 @@ export type GenericAssertions = [
   >,
   Expect<
     Equal<
-      Update.RequirementsOf<
-        typeof Animation.AnimationBlock.operations.requestResume
-      >,
-      | Command.HandlerOf<typeof Animation.test.WaitForAnimationSettled>
-      | Command.HandlerOf<typeof Animation.test.WaitForPaint>
+      Update.RequirementsOf<AnimationExecutable['operations']['requestResume']>,
+      | Block.FactsOf<typeof Animation.AnimationBlock>['runtimeServices']
+      | Block.InternalExecution<(typeof Animation.AnimationBlock)['owner']>
     >
   >,
   Expect<
@@ -508,30 +600,30 @@ export type GenericAssertions = [
   >,
   Expect<
     Equal<
-      Parameters<typeof Slider.SliderBlock.operations.informRangeChanged>,
+      Parameters<SliderExecutable['operations']['informRangeChange']>,
       [
         model: typeof Slider.SliderBlock.Model.Type,
         payload: Block.OperationPayload<
-          typeof Slider.SliderBlock.Message.InformedOfRangeChange
+          typeof Slider.SliderBlock.InMessage.InformedOfRangeChange
         >,
       ]
     >
   >,
   Expect<
     Equal<
-      Parameters<typeof RootSlider.operations.informRangeChanged>,
-      Parameters<typeof Slider.SliderBlock.operations.informRangeChanged>
+      Parameters<RootSliderExecutable['operations']['informRangeChange']>,
+      Parameters<SliderExecutable['operations']['informRangeChange']>
     >
   >,
   Expect<
     Equal<
-      Parameters<typeof Tooltip.TooltipBlock.operations.informShowDelayChanged>,
+      Parameters<TooltipExecutable['operations']['informShowDelayChanged']>,
       [model: typeof Tooltip.TooltipBlock.Model.Type, showDelay: Duration.Input]
     >
   >,
   Expect<
     Equal<
-      Parameters<typeof ToastBlock.operations.requestShow>,
+      Parameters<ToastExecutable['operations']['requestShow']>,
       [
         model: typeof ToastBlock.Model.Type,
         input: Toast.ShowInput<typeof ToastPayload.Type>,
@@ -540,163 +632,209 @@ export type GenericAssertions = [
   >,
 ]
 
-export const sliderRangeChange =
-  Slider.SliderBlock.operations.informRangeChanged(
-    Slider.SliderBlock.init({ id: 'volume', min: 0, max: 100, step: 1 }).model,
+export const sliderRangeChange = Story.withBlock(Slider.SliderBlock, slider =>
+  slider.operations.informRangeChange(
+    slider.init({ id: 'volume', min: 0, max: 100, step: 1 }).model,
     { min: 10, max: 90 },
-  )
-export const rootSliderRangeChange = RootSlider.operations.informRangeChanged(
-  Slider.SliderBlock.init({ id: 'root-volume', min: 0, max: 100, step: 1 })
-    .model,
-  { min: 20, max: 80 },
-)
-export const tooltipDelayFromString =
-  Tooltip.TooltipBlock.operations.informShowDelayChanged(
-    Tooltip.TooltipBlock.init({ id: 'help' }).model,
-    '250 millis',
-  )
-export const tooltipDelayFromNumber =
-  Tooltip.TooltipBlock.operations.informShowDelayChanged(
-    Tooltip.TooltipBlock.init({ id: 'details' }).model,
-    300,
-  )
-export const tooltipDelayFromDuration =
-  Tooltip.TooltipBlock.operations.informShowDelayChanged(
-    Tooltip.TooltipBlock.init({ id: 'settings' }).model,
-    Duration.millis(350),
-  )
-const toastModel = ToastBlock.init({ id: 'notifications' }).model
-export const toastFromStringDuration = ToastBlock.operations.requestShow(
-  toastModel,
-  {
+  ),
+).pipe(Effect.provide(Slider.layer))
+export const rootSliderRangeChange = Story.withBlock(RootSlider, slider =>
+  slider.operations.informRangeChange(
+    slider.init({ id: 'root-volume', min: 0, max: 100, step: 1 }).model,
+    { min: 20, max: 80 },
+  ),
+).pipe(Effect.provide(Slider.layer))
+export const tooltipDelayFromString = Story.withBlock(
+  Tooltip.TooltipBlock,
+  tooltip =>
+    tooltip.operations.informShowDelayChanged(
+      tooltip.init({ id: 'help' }).model,
+      '250 millis',
+    ),
+).pipe(Effect.provide(Tooltip.layer))
+export const tooltipDelayFromNumber = Story.withBlock(
+  Tooltip.TooltipBlock,
+  tooltip =>
+    tooltip.operations.informShowDelayChanged(
+      tooltip.init({ id: 'details' }).model,
+      300,
+    ),
+).pipe(Effect.provide(Tooltip.layer))
+export const tooltipDelayFromDuration = Story.withBlock(
+  Tooltip.TooltipBlock,
+  tooltip =>
+    tooltip.operations.informShowDelayChanged(
+      tooltip.init({ id: 'settings' }).model,
+      Duration.millis(350),
+    ),
+).pipe(Effect.provide(Tooltip.layer))
+export const toastFromStringDuration = Story.withBlock(ToastBlock, toast =>
+  toast.operations.requestShow(toast.init({ id: 'notifications' }).model, {
     payload: { kind: 'Saved' },
     duration: '1 second',
-  },
-)
-export const toastFromNumberDuration = ToastBlock.operations.requestShow(
-  toastModel,
-  {
+  }),
+).pipe(Effect.provide(Toast.layer))
+export const toastFromNumberDuration = Story.withBlock(ToastBlock, toast =>
+  toast.operations.requestShow(toast.init({ id: 'notifications' }).model, {
     payload: { kind: 'Failed' },
     duration: 1_000,
-  },
-)
-export const toastFromDuration = ToastBlock.operations.requestShow(toastModel, {
-  payload: { kind: 'Saved' },
-  duration: Duration.seconds(2),
-})
+  }),
+).pipe(Effect.provide(Toast.layer))
+export const toastFromDuration = Story.withBlock(ToastBlock, toast =>
+  toast.operations.requestShow(toast.init({ id: 'notifications' }).model, {
+    payload: { kind: 'Saved' },
+    duration: Duration.seconds(2),
+  }),
+).pipe(Effect.provide(Toast.layer))
 
 const ShapeModel = Schema.Struct({ value: Schema.String })
 const ShapeMessage = Message.defineMessageUnion({ Changed: {} })
 const ShapeOutMessage = Message.defineMessageUnion({ Changed: {} })
-const DeclarationWithOutMessageDefinition = Block.makeDefinition(
-  'DeclarationWithOutMessage',
-  {
-    Model: ShapeModel,
-    Message: ShapeMessage,
-    OutMessage: ShapeOutMessage,
+type ShapeViewInputs = Readonly<{ label: string }>
+
+export const WithViewAndOutMessageKey = Symbol('WithViewAndOutMessage')
+const WithViewAndOutMessageBlock = Block.make('WithViewAndOutMessage', {
+  key: WithViewAndOutMessageKey,
+  Model: ShapeModel,
+  Message: ShapeMessage,
+  OutMessage: ShapeOutMessage,
+  Init: Schema.Tuple([]),
+  view: {
+    kind: 'Element',
+    Inputs: Block.makeInputContract<ShapeViewInputs>(),
   },
-)
-const DeclarationWithOutMessageComposition =
-  DeclarationWithOutMessageDefinition.makeComposition()
-const DeclarationWithoutOutMessageComposition = Block.makeDefinition(
-  'DeclarationWithoutOutMessage',
-  {
-    Model: ShapeModel,
-    Message: ShapeMessage,
-  },
-).makeComposition()
-const withOutMessageInit = DeclarationWithOutMessageComposition.makeInit(
-  () => ({ model: ShapeModel.make({ value: '' }) }),
-)
-const withoutOutMessageInit = DeclarationWithoutOutMessageComposition.makeInit(
-  () => ({
-    model: ShapeModel.make({ value: '' }),
+})
+const WithViewAndOutMessageComposition =
+  WithViewAndOutMessageBlock.makeComposition()
+export const WithViewAndOutMessage = WithViewAndOutMessageBlock
+export const WithViewAndOutMessageLayer = WithViewAndOutMessageBlock.makeLayer(
+  Effect.succeed({
+    children: [],
+    init: WithViewAndOutMessageComposition.makeInit(() => ({
+      model: ShapeModel.make({ value: '' }),
+    })),
+    update: WithViewAndOutMessageComposition.makeUpdate({
+      Changed: WithViewAndOutMessageBlock.makeNoopStep(),
+    }),
+    view: WithViewAndOutMessageComposition.makeView.withInputs(
+      (_model, { label }, h) => h.div([], [label]),
+    ),
+    EffectsLayer: Layer.empty,
   }),
 )
-const update = (model: typeof ShapeModel.Type) => ({ model })
-const view = DeclarationWithOutMessageComposition.makeView.withInputs<
-  Readonly<{ label: string }>
->((_model, { label }, h) => h.div([], [label]))
-const plainView = DeclarationWithoutOutMessageComposition.makeView.withInputs<
-  Readonly<{ label: string }>
->((_model, { label }, h) => h.div([], [label]))
 
-const withViewAndOutMessageImplementation = {
-  init: withOutMessageInit,
-  update,
-  view,
-  EffectsLayer: Layer.empty,
-}
-const prepareWithViewAndOutMessage = () =>
-  DeclarationWithOutMessageComposition.prepareBlock(
-    withViewAndOutMessageImplementation,
+export const WithOutMessageOnlyKey = Symbol('WithOutMessageOnly')
+const WithOutMessageOnlyBlock = Block.make('WithOutMessageOnly', {
+  key: WithOutMessageOnlyKey,
+  Model: ShapeModel,
+  Message: ShapeMessage,
+  OutMessage: ShapeOutMessage,
+  Init: Schema.Tuple([]),
+})
+const WithOutMessageOnlyComposition = WithOutMessageOnlyBlock.makeComposition()
+export const WithOutMessageOnly = WithOutMessageOnlyBlock
+export const WithOutMessageOnlyLayer = WithOutMessageOnlyBlock.makeLayer(
+  Effect.succeed({
+    children: [],
+    init: WithOutMessageOnlyComposition.makeInit(() => ({
+      model: ShapeModel.make({ value: '' }),
+    })),
+    update: WithOutMessageOnlyComposition.makeUpdate({
+      Changed: WithOutMessageOnlyBlock.makeNoopStep(),
+    }),
+    EffectsLayer: Layer.empty,
+  }),
+)
+
+export const WithViewOnlyKey = Symbol('WithViewOnly')
+const WithViewOnlyBlock = Block.make('WithViewOnly', {
+  key: WithViewOnlyKey,
+  Model: ShapeModel,
+  Message: ShapeMessage,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element', Inputs: Block.makeInputContract<ShapeViewInputs>() },
+})
+const WithViewOnlyComposition = WithViewOnlyBlock.makeComposition()
+export const WithViewOnly = WithViewOnlyBlock
+export const WithViewOnlyLayer = WithViewOnlyBlock.makeLayer(
+  Effect.succeed({
+    children: [],
+    init: WithViewOnlyComposition.makeInit(() => ({
+      model: ShapeModel.make({ value: '' }),
+    })),
+    update: WithViewOnlyComposition.makeUpdate({
+      Changed: WithViewOnlyBlock.makeNoopStep(),
+    }),
+    view: WithViewOnlyComposition.makeView.withInputs((_model, { label }, h) =>
+      h.div([], [label]),
+    ),
+    EffectsLayer: Layer.empty,
+  }),
+)
+
+export const WithoutViewOrOutMessageKey = Symbol('WithoutViewOrOutMessage')
+const WithoutViewOrOutMessageBlock = Block.make('WithoutViewOrOutMessage', {
+  key: WithoutViewOrOutMessageKey,
+  Model: ShapeModel,
+  Message: ShapeMessage,
+  Init: Schema.Tuple([]),
+})
+const WithoutViewOrOutMessageComposition =
+  WithoutViewOrOutMessageBlock.makeComposition()
+export const WithoutViewOrOutMessage = WithoutViewOrOutMessageBlock
+export const WithoutViewOrOutMessageLayer =
+  WithoutViewOrOutMessageBlock.makeLayer(
+    Effect.succeed({
+      children: [],
+      init: WithoutViewOrOutMessageComposition.makeInit(() => ({
+        model: ShapeModel.make({ value: '' }),
+      })),
+      update: WithoutViewOrOutMessageComposition.makeUpdate({
+        Changed: WithoutViewOrOutMessageBlock.makeNoopStep(),
+      }),
+      EffectsLayer: Layer.empty,
+    }),
   )
-export const WithViewAndOutMessage: Block.FromAssemblyWithViewAndOutMessage<
-  typeof ShapeModel,
-  typeof prepareWithViewAndOutMessage
-> = Block.assemble(prepareWithViewAndOutMessage)
-const prepareWithOutMessageOnly = () =>
-  DeclarationWithOutMessageComposition.prepareBlock({
-    init: withOutMessageInit,
-    update,
-    EffectsLayer: Layer.empty,
-  })
-export const WithOutMessageOnly: Block.FromAssemblyWithOutMessage<
-  typeof ShapeModel,
-  typeof prepareWithOutMessageOnly
-> = Block.assemble(prepareWithOutMessageOnly)
-const prepareWithViewOnly = () =>
-  DeclarationWithoutOutMessageComposition.prepareBlock({
-    init: withoutOutMessageInit,
-    update,
-    view: plainView,
-    EffectsLayer: Layer.empty,
-  })
-export const WithViewOnly: Block.FromAssemblyWithView<
-  typeof ShapeModel,
-  typeof prepareWithViewOnly
-> = Block.assemble(prepareWithViewOnly)
-const prepareWithoutViewOrOutMessage = () =>
-  DeclarationWithoutOutMessageComposition.prepareBlock({
-    init: withoutOutMessageInit,
-    update,
-    EffectsLayer: Layer.empty,
-  })
-export const WithoutViewOrOutMessage: Block.FromAssemblyWithoutViewOrOutMessage<
-  typeof ShapeModel,
-  typeof prepareWithoutViewOrOutMessage
-> = Block.assemble(prepareWithoutViewOrOutMessage)
 
-type BroadOutMessageBlock = Block.Block<
-  typeof DeclarationWithOutMessageDefinition.owner,
-  typeof ShapeModel,
-  typeof ShapeMessage,
-  typeof ShapeOutMessage | undefined,
-  (typeof DeclarationWithOutMessageComposition)[typeof Block.LocalMountsTypeId],
-  typeof DeclarationWithOutMessageComposition.bindings,
-  typeof withViewAndOutMessageImplementation
->
-type OutMessagePresence<BlockValue> = BlockValue extends unknown
-  ? BlockValue extends Readonly<{ OutMessage: unknown }>
-    ? 'WithOutMessage'
-    : 'WithoutOutMessage'
-  : never
+type OutMessagePresence<BlockValue> =
+  BlockValue extends Readonly<{ OutMessage: undefined }>
+    ? 'WithoutOutMessage'
+    : 'WithOutMessage'
 
 export type ShapeAssertions = [
   Expect<
     Equal<
-      OutMessagePresence<BroadOutMessageBlock>,
+      OutMessagePresence<
+        typeof WithViewAndOutMessage | typeof WithoutViewOrOutMessage
+      >,
       'WithOutMessage' | 'WithoutOutMessage'
     >
+  >,
+  Expect<
+    Equal<OutMessagePresence<typeof WithOutMessageOnly>, 'WithOutMessage'>
+  >,
+  Expect<Equal<OutMessagePresence<typeof WithViewOnly>, 'WithoutOutMessage'>>,
+  Expect<
+    Equal<
+      Block.FactsOf<typeof WithViewAndOutMessage>['view'],
+      Block.ViewContract<ShapeViewInputs, 'Element'>
+    >
+  >,
+  Expect<Equal<Block.FactsOf<typeof WithOutMessageOnly>['view'], undefined>>,
+  Expect<
+    Equal<
+      Block.FactsOf<typeof WithViewOnly>['view'],
+      Block.ViewContract<ShapeViewInputs, 'Element'>
+    >
+  >,
+  Expect<
+    Equal<Block.FactsOf<typeof WithoutViewOrOutMessage>['view'], undefined>
   >,
 ]
 
 export type ExactAnimationUpdateOutMessage = Expect<
   Equal<
-    Exclude<
-      ReturnType<typeof Animation.AnimationBlock.update>['outMessage'],
-      undefined
-    >,
+    Exclude<ReturnType<AnimationExecutable['update']>['outMessage'], undefined>,
     typeof Animation.AnimationBlock.OutMessage.Type
   >
 >
@@ -704,7 +842,7 @@ export type ExactAnimationFinishOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        typeof Animation.AnimationBlock.operations.requestFinish
+        AnimationExecutable['operations']['requestFinish']
       >['outMessage'],
       undefined
     >,
@@ -718,7 +856,7 @@ export type ExactAnimationShowOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        typeof Animation.AnimationBlock.operations.requestShow
+        AnimationExecutable['operations']['requestShow']
       >['outMessage'],
       undefined
     >,
@@ -729,7 +867,7 @@ export type ExactAnimationHideOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        typeof Animation.AnimationBlock.operations.requestHide
+        AnimationExecutable['operations']['requestHide']
       >['outMessage'],
       undefined
     >,
@@ -738,33 +876,30 @@ export type ExactAnimationHideOutMessage = Expect<
 >
 export type ExactAnimationShowRequirements = Expect<
   Equal<
-    Update.RequirementsOf<
-      typeof Animation.AnimationBlock.operations.requestShow
-    >,
-    Command.HandlerOf<typeof Animation.test.WaitForPaint>
+    Update.RequirementsOf<AnimationExecutable['operations']['requestShow']>,
+    | Block.FactsOf<typeof Animation.AnimationBlock>['runtimeServices']
+    | Block.InternalExecution<(typeof Animation.AnimationBlock)['owner']>
   >
 >
 export type ExactAnimationHideRequirements = Expect<
   Equal<
-    Update.RequirementsOf<
-      typeof Animation.AnimationBlock.operations.requestHide
-    >,
-    Command.HandlerOf<typeof Animation.test.WaitForPaint>
+    Update.RequirementsOf<AnimationExecutable['operations']['requestHide']>,
+    | Block.FactsOf<typeof Animation.AnimationBlock>['runtimeServices']
+    | Block.InternalExecution<(typeof Animation.AnimationBlock)['owner']>
   >
 >
 export type ExactAnimationFinishRequirements = Expect<
   Equal<
-    Update.RequirementsOf<
-      typeof Animation.AnimationBlock.operations.requestFinish
-    >,
-    never
+    Update.RequirementsOf<AnimationExecutable['operations']['requestFinish']>,
+    | Block.FactsOf<typeof Animation.AnimationBlock>['runtimeServices']
+    | Block.InternalExecution<(typeof Animation.AnimationBlock)['owner']>
   >
 >
 export type ExactCalendarDropOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        typeof Calendar.CalendarBlock.operations.requestDropToDays
+        CalendarExecutable['operations']['requestDropToDays']
       >['outMessage'],
       undefined
     >,
@@ -774,16 +909,17 @@ export type ExactCalendarDropOutMessage = Expect<
 export type ExactCalendarDropRequirements = Expect<
   Equal<
     Update.RequirementsOf<
-      typeof Calendar.CalendarBlock.operations.requestDropToDays
+      CalendarExecutable['operations']['requestDropToDays']
     >,
-    never
+    | Block.FactsOf<typeof Calendar.CalendarBlock>['runtimeServices']
+    | Block.InternalExecution<(typeof Calendar.CalendarBlock)['owner']>
   >
 >
 export type ExactCalendarSelectOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        typeof Calendar.CalendarBlock.operations.requestSelectDate
+        CalendarExecutable['operations']['requestSelectDate']
       >['outMessage'],
       undefined
     >,
@@ -797,7 +933,7 @@ export type ExactSliderRangeOutMessage = Expect<
   Equal<
     Exclude<
       ReturnType<
-        typeof Slider.SliderBlock.operations.informRangeChanged
+        SliderExecutable['operations']['informRangeChange']
       >['outMessage'],
       undefined
     >,
@@ -807,7 +943,9 @@ export type ExactSliderRangeOutMessage = Expect<
 export type ExactRootSliderRangeOutMessage = Expect<
   Equal<
     Exclude<
-      ReturnType<typeof RootSlider.operations.informRangeChanged>['outMessage'],
+      ReturnType<
+        RootSliderExecutable['operations']['informRangeChange']
+      >['outMessage'],
       undefined
     >,
     never

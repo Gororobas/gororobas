@@ -14,7 +14,7 @@ import { Html } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 const CANVAS_WIDTH = 600
 const CANVAS_HEIGHT = 400
@@ -45,12 +45,14 @@ const Ball = Schema.Struct({
   radius: Schema.Number,
   color: Schema.String,
 })
+type Ball = typeof Ball.Type
 
 export const Model = Schema.Struct({
   balls: Schema.Array(Ball),
   nextId: Schema.Number,
   isRunning: Schema.Boolean,
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   TickedFrame: { deltaTime: Schema.Number },
@@ -66,15 +68,21 @@ export const Message = defineMessageUnion({
   ClickedClear: {},
   ClickedTogglePlay: {},
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeCommandsStep } = ApplicationDefinition
+const { makeFieldsStep, makeCommandsStep } = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
@@ -83,7 +91,7 @@ export const init = ApplicationComposition.makeInit(() => ({
   model: Model.make({ balls: [], nextId: 0, isRunning: true }),
 }))
 
-export const GenerateBall = ApplicationDefinition.makeCommand('GenerateBall', {
+export const GenerateBall = ApplicationBlock.makeCommand('GenerateBall', {
   args: { x: Schema.Number, y: Schema.Number },
   messages: [Message.CompletedGenerateBall],
   handler: function* () {
@@ -117,7 +125,7 @@ export const GenerateBall = ApplicationDefinition.makeCommand('GenerateBall', {
 
 const advanceBall =
   (deltaSeconds: number) =>
-  (ball: typeof Ball.Type): typeof Ball.Type => {
+  (ball: Ball): Ball => {
     const nextX = ball.x + ball.vx * deltaSeconds
     const nextY = ball.y + ball.vy * deltaSeconds
     const minX = ball.radius
@@ -167,7 +175,7 @@ export const update = ApplicationComposition.makeUpdate({
   })),
 })
 
-export const subscriptions = ApplicationDefinition.makeSubscriptions(entry => ({
+export const subscriptions = ApplicationBlock.makeSubscriptions(entry => ({
   animationFrameTicks: entry(
     'AnimationFrameTicks',
     { isActive: Schema.Boolean },
@@ -199,7 +207,7 @@ const backgroundShape = Canvas.Rect({
   fill: '#0a0a0f',
 })
 
-const ballShape = (ball: typeof Ball.Type): Canvas.Shape =>
+const ballShape = (ball: Ball): Canvas.Shape =>
   Canvas.Circle({
     x: ball.x,
     y: ball.y,
@@ -207,19 +215,16 @@ const ballShape = (ball: typeof Ball.Type): Canvas.Shape =>
     fill: ball.color,
   })
 
-const sceneShapes = (model: typeof Model.Type): ReadonlyArray<Canvas.Shape> => [
+const sceneShapes = (model: Model): ReadonlyArray<Canvas.Shape> => [
   backgroundShape,
   ...Array.map(model.balls, ballShape),
 ]
 
-const controlsView = (
-  model: typeof Model.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+const controlsView = (model: Model, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('flex gap-3 mt-4')],
     [
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedTogglePlay(),
           toView: attributes =>
@@ -235,7 +240,7 @@ const controlsView = (
         },
         h,
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedClear(),
           toView: attributes =>
@@ -293,15 +298,15 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-    subscriptions,
-    EffectsLayer,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+      subscriptions,
+      EffectsLayer,
+    }
+  }),
+)

@@ -11,14 +11,17 @@ import type { BindingInitRecipe } from './initRecipe.js'
 import * as Block from './public.js'
 
 const CounterModel = Schema.Struct({ count: Schema.Number })
+type CounterModel = typeof CounterModel.Type
 const CounterMessage = defineMessageUnion({ ClickedReset: {} })
+type CounterMessage = typeof CounterMessage.Type
 const CounterOutMessage = defineMessageUnion({ Reset: {} })
+type CounterOutMessage = typeof CounterOutMessage.Type
 const ResetCounter = makeDefinition('ResetCounter', {
   Model: CounterModel,
   Message: CounterMessage,
   OutMessage: CounterOutMessage,
 })
-const resetStep = ResetCounter.makeStep(model => ({
+const reset = ResetCounter.makeStep(model => ({
   model: modifyFields(model, { count: () => 0 }),
   outMessage: CounterOutMessage.Reset(),
 }))
@@ -27,7 +30,7 @@ const prepareBlock = () =>
   ResetCounterComposition.prepareBlock({
     init: (count: number) => ({ model: CounterModel.make({ count }) }),
     update: ResetCounterComposition.makeUpdate({
-      ClickedReset: (model, _message) => resetStep(model),
+      ClickedReset: (model, _message) => reset(model),
     }),
     operations: { reset: () => Tuple.make(CounterMessage.ClickedReset()) },
     EffectsLayer: Layer.empty,
@@ -55,10 +58,8 @@ const Parent = makeDefinition('BindingContextParent', {
 })
 
 const foldCounterOutMessage = (
-  outMessage: typeof CounterOutMessage.Type,
-  {
-    modelBeforeUpdate,
-  }: Update.FoldContext<typeof CounterMessage.Type, Message, Model>,
+  outMessage: CounterOutMessage,
+  { modelBeforeUpdate }: Update.FoldContext<CounterMessage, Message, Model>,
 ) =>
   CounterOutMessage.match<Update.Step<Model, Message>>(outMessage, {
     Reset: () => model => ({
@@ -69,16 +70,14 @@ const foldCounterOutMessage = (
   })
 const BoundCounterBinding = Parent.makeBinding(block, {
   read: model => Option.some(model.counter),
-  write: (model: Model, nextCounter: typeof CounterModel.Type) =>
+  write: (model: Model, nextCounter: CounterModel) =>
     modifyFields(model, { counter: () => nextCounter }),
 }).withOutMessagePolicy({ fold: foldCounterOutMessage })
 const keyedPolicy = {
   fold: (
     id: number,
-    outMessage: typeof CounterOutMessage.Type,
-    {
-      modelBeforeUpdate,
-    }: Update.FoldContext<typeof CounterMessage.Type, Message, Model>,
+    outMessage: CounterOutMessage,
+    { modelBeforeUpdate }: Update.FoldContext<CounterMessage, Message, Model>,
   ) =>
     CounterOutMessage.match<Update.Step<Model, Message>>(outMessage, {
       Reset: () => model => ({
@@ -104,11 +103,7 @@ const keyedBaseConfig = {
   readAll: (model: Model) => model.entries,
   key: (entry: Model['entries'][number]) => entry.id,
   read: (entry: Model['entries'][number]) => entry.counter,
-  writeAt: (
-    model: Model,
-    id: number,
-    nextCounter: typeof CounterModel.Type,
-  ): Model =>
+  writeAt: (model: Model, id: number, nextCounter: CounterModel): Model =>
     modifyFields(model, {
       entries: Array.map(entry =>
         entry.id === id ? { ...entry, counter: nextCounter } : entry,
@@ -124,20 +119,20 @@ const initialModel = Model.make({
   entries: [{ id: 1, counter: { count: 5 } }],
   previousCount: 0,
 })
-const toCounterParentModel = (counter: typeof CounterModel.Type): Model =>
+const toCounterParentModel = (counter: CounterModel): Model =>
   Model.make({ ...initialModel, counter })
-const toEntryParentModel = (
-  id: number,
-  counter: typeof CounterModel.Type,
-): Model => Model.make({ ...initialModel, entries: [{ id, counter }] })
+const toEntryParentModel = (id: number, counter: CounterModel): Model =>
+  Model.make({ ...initialModel, entries: [{ id, counter }] })
 
 const SequencedCounterModel = Schema.Struct({ count: Schema.Number })
+type SequencedCounterModel = typeof SequencedCounterModel.Type
 const SequencedCounterMessage = defineMessageUnion({
   RequestedAdd: { amount: Schema.Number },
   RequestedRecord: {},
   RequestedMultiply: { factor: Schema.Number },
   CompletedRecordCount: {},
 })
+type SequencedCounterMessage = typeof SequencedCounterMessage.Type
 const SequencedCounter = makeDefinition('SequencedCounter', {
   Model: SequencedCounterModel,
   Message: SequencedCounterMessage,
@@ -146,14 +141,14 @@ const RecordCount = SequencedCounter.makeCommand('RecordCount', {
   args: { count: Schema.Number },
   messages: [SequencedCounterMessage.CompletedRecordCount],
 })
-const addStep = SequencedCounter.makeStep((model, amount: number) => ({
+const add = SequencedCounter.makeStep((model, amount: number) => ({
   model: modifyFields(model, { count: count => count + amount }),
 }))
-const recordStep = SequencedCounter.makeStep(model => ({
+const record = SequencedCounter.makeStep(model => ({
   model,
   commands: [RecordCount({ count: model.count })],
 }))
-const multiplyStep = SequencedCounter.makeStep((model, factor: number) => ({
+const multiply = SequencedCounter.makeStep((model, factor: number) => ({
   model: modifyFields(model, { count: count => count * factor }),
 }))
 const SequencedCounterComposition = SequencedCounter.makeComposition()
@@ -161,9 +156,9 @@ const prepareSequencedCounterBlock = () =>
   SequencedCounterComposition.prepareBlock({
     init: (count: number) => ({ model: { count } }),
     update: SequencedCounterComposition.makeUpdate({
-      RequestedAdd: (model, { amount }) => addStep(model, amount),
-      RequestedRecord: model => recordStep(model),
-      RequestedMultiply: (model, { factor }) => multiplyStep(model, factor),
+      RequestedAdd: (model, { amount }) => add(model, amount),
+      RequestedRecord: model => record(model),
+      RequestedMultiply: (model, { factor }) => multiply(model, factor),
       CompletedRecordCount: model => ({ model }),
     }),
     operations: {
@@ -181,9 +176,11 @@ const sequencedCounterBlock: Block.FromAssemblyWithoutViewOrOutMessage<
   typeof prepareSequencedCounterBlock
 > = Block.assemble(prepareSequencedCounterBlock)
 const SequencedParentModel = Schema.Struct({ child: SequencedCounterModel })
+type SequencedParentModel = typeof SequencedParentModel.Type
 const SequencedParentMessage = defineMessageUnion({
   RequestedSequence: {},
 })
+type SequencedParentMessage = typeof SequencedParentMessage.Type
 const SequencedParent = makeDefinition('SequencedCounterParent', {
   Model: SequencedParentModel,
   Message: SequencedParentMessage,
@@ -290,12 +287,8 @@ if (false) {
     fold:
       (
         _id: string,
-        _outMessage: typeof CounterOutMessage.Type,
-        _context: Update.FoldContext<
-          typeof CounterMessage.Type,
-          typeof CounterMessage.Type,
-          Model
-        >,
+        _outMessage: CounterOutMessage,
+        _context: Update.FoldContext<CounterMessage, CounterMessage, Model>,
       ) =>
       (model: Model) => ({ model }),
   })

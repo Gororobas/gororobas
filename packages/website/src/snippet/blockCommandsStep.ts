@@ -3,16 +3,23 @@ import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 const Model = Schema.Struct({ dismissDelayMs: Schema.Number })
-const Message = defineMessageUnion({ CompletedWaitBeforeDismissal: {} })
+type Model = typeof Model.Type
 
-const NotificationDefinition = Block.makeDefinition('Notification', {
+const Message = defineMessageUnion({ CompletedWaitBeforeDismissal: {} })
+type Message = typeof Message.Type
+
+export const NotificationKey = Symbol('Notification')
+
+const NotificationBlock = Block.make('Notification', {
+  key: NotificationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeCommandsStep } = NotificationDefinition
+const { makeCommandsStep } = NotificationBlock
 
-const WaitBeforeDismissal = NotificationDefinition.makeCommand(
+const WaitBeforeDismissal = NotificationBlock.makeCommand(
   'WaitBeforeDismissal',
   {
     args: { delayMs: Schema.Number },
@@ -26,7 +33,7 @@ const WaitBeforeDismissal = NotificationDefinition.makeCommand(
   },
 )
 
-export const waitBeforeDismissalStep = makeCommandsStep(model => [
+export const waitBeforeDismissal = makeCommandsStep(model => [
   WaitBeforeDismissal({ delayMs: model.dismissDelayMs }),
 ])
 

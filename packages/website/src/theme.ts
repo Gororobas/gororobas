@@ -1,6 +1,6 @@
 import { Effect, Match } from 'effect'
 
-import { ApplicationDefinition } from './definition'
+import { ApplicationBlock } from './definition'
 import { Message, ResolvedTheme } from './message'
 import { LocalStorage } from './storage'
 import { ThemePreference } from './themePreference'
@@ -8,11 +8,11 @@ import { ThemePreference } from './themePreference'
 export const THEME_STORAGE_KEY = 'theme-preference'
 
 export const resolveTheme = (
-  preference: typeof ThemePreference.Type,
-  systemTheme: typeof ResolvedTheme.Type,
-): typeof ResolvedTheme.Type =>
+  preference: ThemePreference,
+  systemTheme: ResolvedTheme,
+): ResolvedTheme =>
   Match.value(preference).pipe(
-    Match.withReturnType<typeof ResolvedTheme.Type>(),
+    Match.withReturnType<ResolvedTheme>(),
     Match.when('Dark', () => 'Dark'),
     Match.when('Light', () => 'Light'),
     Match.when('System', () => systemTheme),
@@ -31,7 +31,7 @@ const setThemeColorMeta = (color: string): void => {
   }
 }
 
-export const ApplyTheme = ApplicationDefinition.makeCommand('ApplyTheme', {
+export const ApplyTheme = ApplicationBlock.makeCommand('ApplyTheme', {
   args: { theme: ResolvedTheme },
   messages: [Message.CompletedApplyTheme],
   handler: function* () {
@@ -53,7 +53,7 @@ export const ApplyTheme = ApplicationDefinition.makeCommand('ApplyTheme', {
   },
 })
 
-export const SaveThemePreference = ApplicationDefinition.makeCommand(
+export const SaveThemePreference = ApplicationBlock.makeCommand(
   'SaveThemePreference',
   {
     args: { preference: ThemePreference },

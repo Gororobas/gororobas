@@ -1,0 +1,167 @@
+import { execFileSync } from 'node:child_process'
+import { readFileSync, realpathSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const [
+  expectedVersion,
+  expectedPlatformBrowserVersion,
+  expectedPlatformNodeVersion,
+  expectedPlatformNodeSharedVersion,
+] = process.argv.slice(2)
+
+if (
+  expectedVersion === undefined ||
+  expectedPlatformBrowserVersion === undefined ||
+  expectedPlatformNodeVersion === undefined ||
+  expectedPlatformNodeSharedVersion === undefined
+) {
+  throw new Error(
+    'Usage: node scripts/effect-runtime.mjs <effect-version> <platform-browser-version> <platform-node-version> <platform-node-shared-version>',
+  )
+}
+
+const lockPath = resolve(process.cwd(), 'package-lock.json')
+const lock = JSON.parse(readFileSync(lockPath, 'utf8'))
+
+if (lock.lockfileVersion !== 3) {
+  throw new Error(`Expected package-lock v3, received ${lock.lockfileVersion}`)
+}
+
+const effectEntries = Object.entries(lock.packages ?? {}).filter(
+  ([packagePath]) =>
+    packagePath === 'node_modules/effect' ||
+    packagePath.endsWith('/node_modules/effect'),
+)
+
+if (effectEntries.length !== 1) {
+  throw new Error(
+    `Expected one physical Effect install in package-lock, found ${effectEntries.length}`,
+  )
+}
+
+const [[effectPath, effectEntry]] = effectEntries
+
+if (
+  effectPath !== 'node_modules/effect' ||
+  effectEntry.version !== expectedVersion
+) {
+  throw new Error(
+    `Expected root Effect ${expectedVersion}, found ${effectPath} ${effectEntry.version}`,
+  )
+}
+
+const consumerRequire = createRequire(resolve(process.cwd(), 'package.json'))
+const rootEffectPath = realpathSync(
+  consumerRequire.resolve('effect/package.json'),
+)
+const platformVersions = Object.fromEntries(
+  Object.entries({
+    '@effect/platform-browser': expectedPlatformBrowserVersion,
+    '@effect/platform-node': expectedPlatformNodeVersion,
+    '@effect/platform-node-shared': expectedPlatformNodeSharedVersion,
+  }).map(([packageName, expectedPlatformVersion]) => {
+    const installed = JSON.parse(
+      readFileSync(
+        consumerRequire.resolve(`${packageName}/package.json`),
+        'utf8',
+      ),
+    )
+
+    if (installed.version !== expectedPlatformVersion) {
+      throw new Error(
+        `Expected installed ${packageName} ${expectedPlatformVersion}, found ${installed.version}`,
+      )
+    }
+
+    return [packageName, installed.version]
+  }),
+)
+const packages = [
+  'foldkit',
+  '@foldkit/ui',
+  '@foldkit/devtools/vite',
+  '@foldkit/devtools-mcp',
+  '@foldkit/markdown',
+  '@foldkit/node',
+  '@foldkit/vite-plugin',
+  '@effect/platform-browser',
+  '@effect/platform-node',
+  '@effect/platform-node-shared',
+]
+
+const packageResolutions = packages.map(packageName => {
+  const packageEntry = fileURLToPath(import.meta.resolve(packageName))
+  const packageRequire = createRequire(packageEntry)
+  const resolvedEffect = realpathSync(
+    packageRequire.resolve('effect/package.json'),
+  )
+
+  return { packageName, resolvedEffect }
+})
+
+const workspaceResolutions = ['application', 'shared-model'].map(directory => {
+  const workspaceRequire = createRequire(
+    resolve(process.cwd(), 'workspaces', directory, 'package.json'),
+  )
+  const resolvedEffect = realpathSync(
+    workspaceRequire.resolve('effect/package.json'),
+  )
+
+  return { packageName: `workspace:${directory}`, resolvedEffect }
+})
+
+const resolutions = [...packageResolutions, ...workspaceResolutions]
+
+const effectPaths = new Set(
+  resolutions.map(({ resolvedEffect }) => resolvedEffect),
+)
+
+if (effectPaths.size !== 1 || !effectPaths.has(rootEffectPath)) {
+  throw new Error(
+    `Packages resolve different Effect installs: ${JSON.stringify(resolutions)}`,
+  )
+}
+
+let npmTree
+
+try {
+  npmTree = execFileSync('npm', ['ls', '--all', '--json'], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+} catch (error) {
+  const detail =
+    typeof error.stdout === 'string' && error.stdout.length > 0
+      ? error.stdout
+      : String(error.stderr ?? error.message)
+  throw new Error(`npm ls reported invalid or missing peers:\n${detail}`)
+}
+
+const npmTreeResult = JSON.parse(npmTree)
+
+if (npmTreeResult.problems !== undefined && npmTreeResult.problems.length > 0) {
+  throw new Error(
+    `npm ls reported dependency problems: ${JSON.stringify(npmTreeResult.problems)}`,
+  )
+}
+
+const installedEffect = JSON.parse(readFileSync(rootEffectPath, 'utf8'))
+
+if (installedEffect.version !== expectedVersion) {
+  throw new Error(
+    `Expected installed Effect ${expectedVersion}, found ${installedEffect.version}`,
+  )
+}
+
+console.log(
+  JSON.stringify({
+    effectVersion: expectedVersion,
+    platformVersions,
+    effectPath: rootEffectPath,
+    resolvedPackages: resolutions.length,
+    npmLs: 'ok',
+  }),
+)

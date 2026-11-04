@@ -5,33 +5,44 @@ import { defineMessageUnion } from 'foldkit/message'
 import { defineTaggedUnion } from 'foldkit/schema'
 
 const User = Schema.Struct({ id: Schema.String, name: Schema.String })
+type User = typeof User.Type
 
 export const Message = defineMessageUnion({
   SucceededLoadUser: { user: User },
   FailedLoadUser: { error: Schema.String },
 })
+export type Message = typeof Message.Type
 
 export const UserState = defineTaggedUnion({
   Loading: {},
   Loaded: { user: User },
   Failed: { error: Schema.String },
 })
+export type UserState = typeof UserState.Type
 
 export const Model = Schema.Struct({ user: UserState })
-export const ApplicationDefinition = Block.makeDefinition('Application', {
-  Model,
-  Message,
-})
+export type Model = typeof Model.Type
 
 type ApiClient = Readonly<{
-  getUser: (userId: string) => Effect.Effect<typeof User.Type, unknown>
+  getUser: (userId: string) => Effect.Effect<User, unknown>
 }>
 
 class ApiClientService extends Context.Service<ApiClientService, ApiClient>()(
   'ApiClientService',
 ) {}
 
-export const LoadUser = ApplicationDefinition.makeCommand('LoadUser', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
+  effects: { services: [ApiClientService] },
+  Model,
+  Message,
+})
+
+export const LoadUser = ApplicationBlock.makeCommand('LoadUser', {
   args: { userId: Schema.String },
   messages: [Message.SucceededLoadUser, Message.FailedLoadUser],
   handler: function* () {

@@ -1,4 +1,4 @@
-import { Array, Effect, Option, Schema, Tuple } from 'effect'
+import { Array, Effect, Option, Schema } from 'effect'
 import { expect, it, vi } from 'vitest'
 
 import { defineMessageUnion } from '../message/index.js'
@@ -7,9 +7,11 @@ import { makeDefinition } from './define.js'
 import * as Block from './public.js'
 
 const ChildModel = Schema.Struct({ count: Schema.Number })
+type ChildModel = typeof ChildModel.Type
 const ChildMessage = defineMessageUnion({
   CompletedRead: { value: Schema.Number },
 })
+type ChildMessage = typeof ChildMessage.Type
 const Child = makeDefinition('NumericIdentityChild', {
   Model: ChildModel,
   Message: ChildMessage,
@@ -44,6 +46,7 @@ const Model = Schema.Struct({
     Schema.Struct({ id: Schema.Number, child: ChildModel }),
   ),
 })
+type Model = typeof Model.Type
 const Parent = makeDefinition('NumericIdentityParent', {
   Model,
   Message: Schema.Never,
@@ -119,7 +122,7 @@ it('retains automatic startup Commands when Schema storage normalizes a zero key
     key: 'id',
     childField: 'child',
     init: {
-      instances: () => [{ key: -0, args: Tuple.make() }],
+      instances: () => [{ key: -0, args: [] }],
       toItem: (_occurrence, child) => ({ id: 0, child }),
     },
   })
@@ -138,8 +141,8 @@ it('rejects duplicate signed-zero startup keys before initializing either occurr
     childField: 'child',
     init: {
       instances: () => [
-        { key: -0, args: Tuple.make() },
-        { key: 0, args: Tuple.make() },
+        { key: -0, args: [] },
+        { key: 0, args: [] },
       ],
       toItem: ({ key }, child) => ({ id: key, child }),
     },

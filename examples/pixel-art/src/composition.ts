@@ -1,8 +1,8 @@
 import { Array, Option } from 'effect'
-import { type Block, Update } from 'foldkit'
+import { type Block } from 'foldkit'
 import { modifyFields } from 'foldkit/struct'
 
-import { DialogBlock } from '@foldkit/ui'
+import { DialogBlock } from '@foldkit/ui/dialog'
 
 import { saveCanvas } from './command'
 import {
@@ -16,28 +16,20 @@ import {
 } from './components'
 import { DEFAULT_COLOR_INDEX } from './constant'
 import {
-  ApplicationDefinition,
+  ApplicationBlock,
   makeFieldsStep,
   makeNoopStep,
   makeStep,
 } from './definition'
-import { createEmptyGrid, isGridEmpty } from './grid'
-import {
-  Model,
-  type PaletteIndex,
-  type Tool,
-  paletteIndexFromValue,
-} from './model'
+import { paletteIndexFromValue } from './model'
 import { PALETTE_THEMES } from './palette'
+import { requestGridSizeChange, selectColor, selectTool } from './steps'
 
-export const ErrorDialogBinding = ApplicationDefinition.makeBinding(
-  DialogBlock,
-  {
-    field: 'errorDialog',
-    init: { contextToArgs: () => [{ id: 'export-error-dialog' }] },
-  },
-).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(DialogBlock, {
+export const ErrorDialogBinding = ApplicationBlock.makeBinding(DialogBlock, {
+  field: 'errorDialog',
+  init: { contextToArgs: () => [{ id: 'export-error-dialog' }] },
+}).withOutMessagePolicy({
+  fold: ApplicationBlock.makeOutMessageFold(DialogBlock, {
     Opened: makeNoopStep,
     Closed: () =>
       makeFieldsStep(() => ({
@@ -47,14 +39,14 @@ export const ErrorDialogBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-export const GridSizeConfirmDialogBinding = ApplicationDefinition.makeBinding(
+export const GridSizeConfirmDialogBinding = ApplicationBlock.makeBinding(
   DialogBlock,
   {
     field: 'gridSizeConfirmDialog',
     init: { contextToArgs: () => [{ id: 'grid-size-confirm-dialog' }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(DialogBlock, {
+  fold: ApplicationBlock.makeOutMessageFold(DialogBlock, {
     Opened: makeNoopStep,
     Closed: () =>
       makeFieldsStep(() => ({
@@ -64,100 +56,48 @@ export const GridSizeConfirmDialogBinding = ApplicationDefinition.makeBinding(
   }),
 })
 
-export const selectTool = (
-  model: typeof Model.Type,
-  tool: typeof Tool.Type,
-) => ({
-  model: modifyFields(model, { tool: () => tool }),
-})
-
-export const selectColor = (
-  model: typeof Model.Type,
-  colorIndex: typeof PaletteIndex.Type,
-) => {
-  const nextModel = modifyFields(model, {
-    selectedColorIndex: () => colorIndex,
-  })
-  return { model: nextModel, commands: [saveCanvas(nextModel)] }
-}
-
-export const ToolRadioGroupBinding = ApplicationDefinition.makeBinding(
+export const ToolRadioGroupBinding = ApplicationBlock.makeBinding(
   ToolRadioGroupBlock,
   {
     field: 'toolRadioGroup',
     init: { contextToArgs: () => [{ id: TOOL_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(ToolRadioGroupBlock, {
-    Selected: ({ value }) => makeStep(model => selectTool(model, value)),
+  fold: ApplicationBlock.makeOutMessageFold(ToolRadioGroupBlock, {
+    Selected: ({ value }) => selectTool(value),
   }),
 })
 
-export const applyGridSizeChange = (
-  model: typeof Model.Type,
-  size: number,
-) => ({
-  model: modifyFields(model, {
-    grid: () => createEmptyGrid(size),
-    gridSize: () => size,
-    undoStack: () => [],
-    redoStack: () => [],
-    isDrawing: () => false,
-    maybeHoveredCell: () => Option.none(),
-  }),
-})
-
-export const requestGridSizeChangeStep = (size: number) =>
-  makeStep(model => {
-    if (size === model.gridSize) {
-      return { model }
-    }
-
-    if (isGridEmpty(model.grid)) {
-      return applyGridSizeChange(model, size)
-    }
-
-    const rememberGridSizeStep = makeFieldsStep(() => ({
-      maybePendingGridSize: () => Option.some(size),
-    }))
-
-    return Update.combineSteps([
-      rememberGridSizeStep,
-      GridSizeConfirmDialogBinding.requestOpen(),
-    ])
-  })
-
-export const GridSizeRadioGroupBinding = ApplicationDefinition.makeBinding(
+export const GridSizeRadioGroupBinding = ApplicationBlock.makeBinding(
   GridSizeRadioGroupBlock,
   {
     field: 'gridSizeRadioGroup',
     init: { contextToArgs: () => [{ id: GRID_SIZE_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(GridSizeRadioGroupBlock, {
-    Selected: ({ value }) => requestGridSizeChangeStep(Number(value)),
+  fold: ApplicationBlock.makeOutMessageFold(GridSizeRadioGroupBlock, {
+    Selected: ({ value }) => requestGridSizeChange(Number(value)),
   }),
 })
 
-export const PaletteRadioGroupBinding = ApplicationDefinition.makeBinding(
+export const PaletteRadioGroupBinding = ApplicationBlock.makeBinding(
   PaletteRadioGroupBlock,
   {
     field: 'paletteRadioGroup',
     init: { contextToArgs: () => [{ id: PALETTE_RADIO_GROUP_ID }] },
   },
 ).withOutMessagePolicy({
-  fold: ApplicationDefinition.makeOutMessageFold(PaletteRadioGroupBlock, {
+  fold: ApplicationBlock.makeOutMessageFold(PaletteRadioGroupBlock, {
     Selected: ({ value }) =>
       makeStep(model =>
-        selectColor(
+        selectColor(paletteIndexFromValue(value, model.selectedColorIndex))(
           model,
-          paletteIndexFromValue(value, model.selectedColorIndex),
         ),
       ),
   }),
 })
 
-const foldThemeListboxOutMessage = ApplicationDefinition.makeOutMessageFold(
+const foldThemeListboxOutMessage = ApplicationBlock.makeOutMessageFold(
   ThemeListboxBlock,
   {
     Selected: ({ value }) =>
@@ -176,7 +116,7 @@ const foldThemeListboxOutMessage = ApplicationDefinition.makeOutMessageFold(
   },
 )
 
-export const ThemeListboxBinding = ApplicationDefinition.makeBinding(
+export const ThemeListboxBinding = ApplicationBlock.makeBinding(
   ThemeListboxBlock,
   {
     field: 'themeListbox',
@@ -184,7 +124,7 @@ export const ThemeListboxBinding = ApplicationDefinition.makeBinding(
   },
 ).withOutMessagePolicy({ fold: foldThemeListboxOutMessage })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [
     ErrorDialogBinding,
     ThemeListboxBinding,

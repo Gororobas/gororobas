@@ -4,6 +4,7 @@ import { Block, Command } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 const Model = Schema.Struct({ count: Schema.Number })
+type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedResetAfterDelay: {},
@@ -13,29 +14,31 @@ export const Message = defineMessageUnion({
     outcome: Command.Interruptible.Outcome,
   },
 })
+export type Message = typeof Message.Type
 
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeCommandsStep, makeNoopStep } = ApplicationDefinition
+const { makeFieldsStep, makeCommandsStep, makeNoopStep } = ApplicationBlock
 
-const ApplicationComposition = ApplicationDefinition.makeComposition()
+const ApplicationComposition = ApplicationBlock.makeComposition()
 
-export const WaitBeforeReset = ApplicationDefinition.makeCommand(
-  'WaitBeforeReset',
-  {
-    messages: [Message.CompletedWaitBeforeReset],
-    interrupt: true,
-    handler: function* () {
-      return () =>
-        Effect.sleep('1 second').pipe(
-          Effect.as(Message.CompletedWaitBeforeReset()),
-        )
-    },
+export const WaitBeforeReset = ApplicationBlock.makeCommand('WaitBeforeReset', {
+  messages: [Message.CompletedWaitBeforeReset],
+  interrupt: true,
+  handler: function* () {
+    return () =>
+      Effect.sleep('1 second').pipe(
+        Effect.as(Message.CompletedWaitBeforeReset()),
+      )
   },
-)
+})
 
 export const EffectsLayer = WaitBeforeReset.layer
 

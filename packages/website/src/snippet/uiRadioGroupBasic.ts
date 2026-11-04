@@ -1,16 +1,17 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Option, Schema, Tuple } from 'effect'
+import { Effect, Layer, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { RadioGroup } from '@foldkit/ui'
-import type { RenderInfo as RadioGroupRenderInfo } from '@foldkit/ui/radioGroup'
+import {
+  layer as RadioGroupLayer,
+  type RenderInfo as RadioGroupRenderInfo,
+  makeBlock as makeRadioGroupBlock,
+} from '@foldkit/ui/radioGroup'
 
 const Plan = Schema.Literals(['Startup', 'Business', 'Enterprise'])
+type Plan = typeof Plan.Type
 
-const PlanRadioGroup = RadioGroup.create<typeof Plan.Type>()
+const PlanRadioGroup = makeRadioGroupBlock<Plan>()
 
 // Add fields to your Model for the RadioGroup Block and the selected
 // value. The Block keeps private keyboard-focus state; the parent owns
@@ -20,24 +21,26 @@ const Model = Schema.Struct({
   maybePlan: Schema.Option(Plan),
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // This excerpt has no parent-owned facts. The Composition derives delivery.
 const Message = defineMessageUnion({})
+type Message = typeof Message.Type
 
-const PlanPickerDefinition = Block.makeDefinition('PlanPicker', {
+export const PlanPickerKey = Symbol('PlanPicker')
+
+export const PlanPickerBlock = Block.make('PlanPicker', {
+  key: PlanPickerKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = PlanPickerDefinition
+const { makeFieldsStep } = PlanPickerBlock
 
-const plans: ReadonlyArray<typeof Plan.Type> = [
-  'Startup',
-  'Business',
-  'Enterprise',
-]
+const plans: ReadonlyArray<Plan> = ['Startup', 'Business', 'Enterprise']
 
-const descriptions: Record<typeof Plan.Type, string> = {
+const descriptions: Record<Plan, string> = {
   Startup: '12GB / 6 CPUs. Perfect for small projects',
   Business: '16GB / 8 CPUs. For growing teams',
   Enterprise: '32GB / 12 CPUs. Dedicated infrastructure',
@@ -47,7 +50,7 @@ const descriptions: Record<typeof Plan.Type, string> = {
 // arm carries the chosen value (typed as `Plan`) and its index, and returns
 // a parent Step. This arm is also where the parent updates its own state or
 // dispatches Commands, for example to persist the choice or price the order.
-const foldPlanRadioGroupOutMessage = PlanPickerDefinition.makeOutMessageFold(
+const foldPlanRadioGroupOutMessage = PlanPickerBlock.makeOutMessageFold(
   PlanRadioGroup,
   {
     Selected: ({ value }) =>
@@ -57,15 +60,14 @@ const foldPlanRadioGroupOutMessage = PlanPickerDefinition.makeOutMessageFold(
   },
 )
 
-// The Binding wires the completed child Block into the parent: it runs the child update,
-// writes the child Model back, routes generated delivery and Command results,
-// and hands any OutMessage to the OutMessage fold.
-const PlanRadioGroupBinding = PlanPickerDefinition.makeBinding(PlanRadioGroup, {
+// The Binding declares placement, typed startup, and OutMessage policy.
+// The construction Layer below supplies the child implementation.
+const PlanRadioGroupBinding = PlanPickerBlock.makeBinding(PlanRadioGroup, {
   field: 'planRadioGroup',
-  init: { contextToArgs: () => Tuple.make({ id: 'plan' }) },
+  init: { contextToArgs: () => [{ id: 'plan' }] },
 }).withOutMessagePolicy({ fold: foldPlanRadioGroupOutMessage })
 
-const PlanPickerComposition = PlanPickerDefinition.makeComposition({
+const PlanPickerComposition = PlanPickerBlock.makeComposition({
   bindings: [PlanRadioGroupBinding],
 })
 
@@ -83,10 +85,7 @@ const update = PlanPickerComposition.makeUpdate({})
 // Inside your view function, embed the radio group via h.block and pass
 // the parent-owned selection as selectedValue:
 const view = PlanPickerComposition.makeView((model, h) => {
-  const radioGroupView = ({
-    group,
-    options,
-  }: RadioGroupRenderInfo<typeof Plan.Type>) =>
+  const radioGroupView = ({ group, options }: RadioGroupRenderInfo<Plan>) =>
     h.div(
       [...group, h.Class('flex flex-col gap-3')],
       options.map(option => {
@@ -123,3 +122,16 @@ const view = PlanPickerComposition.makeView((model, h) => {
     }),
   )
 })
+
+export const layer = PlanPickerBlock.makeLayer(
+  Effect.gen(function* () {
+    const planRadioGroup = yield* PlanRadioGroupBinding
+
+    return {
+      children: [planRadioGroup],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(RadioGroupLayer))

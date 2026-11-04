@@ -4,24 +4,37 @@ import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const PinsModel = Schema.Struct({ count: Schema.Number })
+type PinsModel = typeof PinsModel.Type
+
 const PinsMessage = defineMessageUnion({
-  RequestedReadPins: {},
   CompletedReadPins: { count: Schema.Number },
   ObservedPins: { count: Schema.Number },
 })
-const PinsDefinition = Block.makeDefinition('Pins', {
+type PinsMessage = typeof PinsMessage.Type
+
+const PinsInMessage = defineMessageUnion({ RequestedReadPins: {} })
+type PinsInMessage = typeof PinsInMessage.Type
+
+export const PinsKey = Symbol('Pins')
+
+export const PinsBlock = Block.make('Pins', {
+  key: PinsKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+
   Model: PinsModel,
   Message: PinsMessage,
+  InMessage: PinsInMessage,
 })
 
-export const ReadPins = PinsDefinition.makeCommand('ReadPins', {
+export const ReadPins = PinsBlock.makeCommand('ReadPins', {
   messages: [PinsMessage.CompletedReadPins],
   handler: function* () {
     return () => Effect.succeed(PinsMessage.CompletedReadPins({ count: 0 }))
   },
 })
 
-export const pinsSubscriptions = PinsDefinition.makeSubscriptions(entry => ({
+export const pinsSubscriptions = PinsBlock.makeSubscriptions(entry => ({
   observations: entry('Observations', {
     messages: [PinsMessage.ObservedPins],
     handler: function* () {
@@ -30,45 +43,56 @@ export const pinsSubscriptions = PinsDefinition.makeSubscriptions(entry => ({
   }),
 }))
 
-const PinsComposition = PinsDefinition.makeComposition()
-const prepare = () =>
-  PinsComposition.prepareBlock({
-    init: PinsComposition.makeInit(() => ({ model: { count: 0 } })),
-    update: PinsComposition.makeUpdate({
-      RequestedReadPins: model => ({ model, commands: [ReadPins()] }),
-      CompletedReadPins: (model, { count }) => ({
-        model: modifyFields(model, { count: () => count }),
+const PinsComposition = PinsBlock.makeComposition()
+
+export const PinsLayer = PinsBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init: PinsComposition.makeInit(() => ({ model: { count: 0 } })),
+      update: PinsComposition.makeUpdate({
+        CompletedReadPins: (model, { count }) => ({
+          model: modifyFields(model, { count: () => count }),
+        }),
+        ObservedPins: (model, { count }) => ({
+          model: modifyFields(model, { count: () => count }),
+        }),
       }),
-      ObservedPins: (model, { count }) => ({
-        model: modifyFields(model, { count: () => count }),
+      inMessageUpdate: PinsComposition.makeInMessageUpdate({
+        RequestedReadPins: model => ({ model, commands: [ReadPins()] }),
       }),
-    }),
-    view: PinsComposition.makeView((model, h) =>
-      h.output([], [globalThis.String(model.count)]),
-    ),
-    subscriptions: pinsSubscriptions,
-    operations: { requestReadPins: PinsMessage.RequestedReadPins },
-    EffectsLayer: Layer.merge(
-      ReadPins.layer,
-      pinsSubscriptions.observations.layer,
-    ),
-  })
-export const PinsBlock: Block.FromAssemblyWithView<
-  typeof PinsModel,
-  typeof prepare
-> = Block.assemble(prepare)
+      view: PinsComposition.makeView((model, h) =>
+        h.output([], [globalThis.String(model.count)]),
+      ),
+      subscriptions: pinsSubscriptions,
+      EffectsLayer: Layer.merge(
+        ReadPins.layer,
+        pinsSubscriptions.observations.layer,
+      ),
+    }
+  }),
+)
 
 const Model = Schema.Struct({ pins: PinsBlock.Model })
+type Model = typeof Model.Type
+
 export const Message = defineMessageUnion({ RequestedRefreshPins: {} })
-const ApplicationDefinition = Block.makeDefinition('Application', {
+export type Message = typeof Message.Type
+
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
 })
-const PinsBinding = ApplicationDefinition.makeBinding(PinsBlock, {
+const PinsBinding = ApplicationBlock.makeBinding(PinsBlock, {
   field: 'pins',
 })
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [PinsBinding],
 })
 export const init = ApplicationComposition.makeInit(() => ({ model: {} }))
@@ -82,3 +106,16 @@ export const view = ApplicationComposition.makeView((model, h) => ({
     [h.block(PinsBinding.embedView({ slotId: 'pins', model: model.pins }))],
   ),
 }))
+
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const pins = yield* PinsBinding
+
+    return {
+      children: [pins],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(PinsLayer))

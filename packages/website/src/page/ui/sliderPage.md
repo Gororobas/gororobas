@@ -5,7 +5,7 @@
 A numeric range input for values that sit on a continuous or stepped scale. Common uses include rating scales, volume controls, filter thresholds, and brightness settings. Follows the WAI-ARIA slider pattern with `role="slider"`, full keyboard navigation, and pointer drag.
 
 :::Info{label="See it in an app"}
-Check out how Slider is wired up in a [real Foldkit app](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/ui/view/slider.ts).
+Check out how Slider is wired up in a [real Foldkit app](https://github.com/foldkit/foldkit/blob/main/examples/ui-showcase/src/blocks/ui/view/slider.ts).
 :::
 
 ## Examples
@@ -30,7 +30,7 @@ Pass `orientation: 'Vertical'` to map pointer movement along the Y axis, with `m
 
 Pointer drag needs document-level `pointermove` / `pointerup` tracking because the cursor can leave the slider element. Slider owns that tracking and an Escape-key Subscription that cancels an in-progress drag. Bind `SliderBlock` and include the Binding in the owning Composition's `bindings`; composition carries both Subscriptions into the application.
 
-The default `Slider` uses `document` to resolve its drag target. For a Slider inside a Shadow DOM, call `Slider.forRoot(getTrackRoot)` and bind the completed Block returned by that factory. Including the Binding in the owner's `bindings` carries the named instance's Subscriptions and handler recipes automatically. Pass the same `getTrackRoot` resolver in the bound view's `viewInputs` so track presses and click-to-jump resolve the track inside that Shadow DOM too. The returned `subscriptions` registry remains available for focused Scene tests.
+The default `Slider` uses `document` to resolve its drag target. For a Slider inside a Shadow DOM, call `Slider.forRoot(getTrackRoot)`, bind its public contract, and provide `Slider.layer` to the parent's construction Layer. Including the Binding in the owner's `bindings` carries the named instance's Subscriptions and handler recipes automatically. Pass the same `getTrackRoot` resolver in the bound view's `viewInputs` so track presses and click-to-jump resolve the track inside that Shadow DOM too. The returned `subscriptions` registry remains available for focused Scene tests.
 
 ## Styling
 
@@ -92,13 +92,13 @@ The two flags are independent. Setting both emits both sets of attributes, and e
 
 ## Informing Slider about a Range Change
 
-When parent-owned configuration changes the minimum or maximum, call `SliderBinding.informRangeChanged({ min, max })`. The operation dispatches `InformedOfRangeChange` through Slider update, which keeps every child Model change inside the child. Its notification branch returns `{ model }` and emits no OutMessage.
+When parent-owned configuration changes the minimum or maximum, call `RatingDemoBinding.informRangeChange({ min, max })`. The operation delivers `InformedOfRangeChange` through Slider's `inMessageUpdate`, which keeps every child Model change inside the child. Its notification branch returns `{ model }` and emits no OutMessage.
 
 ## API Reference
 
 ### InitConfig {#init-config}
 
-Configuration passed to the Slider Binding's child initializer. Direct completed Block calls use `Slider.SliderBlock.init()`.
+Configuration passed to the Slider Binding's child initializer. Scoped tests pass the same config to `Story.init(...)` or `Scene.init(...)` and provide the component implementation Layer.
 
 | Name   | Type     | Default | Description                                                                                                                   |
 | ------ | -------- | ------- | ----------------------------------------------------------------------------------------------------------------------------- |

@@ -1,16 +1,25 @@
-import { Option, Schema, Tuple } from 'effect'
+import { Effect, Layer, Option, Schema } from 'effect'
 // Pseudocode walkthrough of the Foldkit integration points. Each labeled
 // block below is an excerpt. Fit them into your own Model, init, Message,
 // update, and view definitions.
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Combobox, Dialog } from '@foldkit/ui'
-import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
+import {
+  layer as ComboboxLayer,
+  makeBlock as makeComboboxBlock,
+} from '@foldkit/ui/combobox'
+import {
+  DialogBlock,
+  layer as DialogLayer,
+  type RenderInfo as DialogRenderInfo,
+} from '@foldkit/ui/dialog'
 
 const City = Schema.Literals(['Johannesburg', 'Kyiv', 'Oxford', 'Wellington'])
-const CityCombobox = Combobox.create(City)
-const cities: ReadonlyArray<typeof City.Type> = [
+type City = typeof City.Type
+
+const CityCombobox = makeComboboxBlock(City)
+const cities: ReadonlyArray<City> = [
   'Johannesburg',
   'Kyiv',
   'Oxford',
@@ -21,33 +30,36 @@ const cities: ReadonlyArray<typeof City.Type> = [
 // the parent-owned selection (`City` and `CityCombobox` are the
 // `Schema.Literals` Schema and typed factory from the Combobox example):
 const Model = Schema.Struct({
-  dialog: Dialog.DialogBlock.Model,
+  dialog: DialogBlock.Model,
   combobox: CityCombobox.Model,
   maybeCity: Schema.Option(City),
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // This excerpt has no parent-owned facts. The two Bindings derive distinct
 // generated delivery for Dialog and Combobox.
 const Message = defineMessageUnion({})
+type Message = typeof Message.Type
 
-const FilterDialogDefinition = Block.makeDefinition('FilterDialog', {
+export const FilterDialogKey = Symbol('FilterDialog')
+
+export const FilterDialogBlock = Block.make('FilterDialog', {
+  key: FilterDialogKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeNoopStep } = FilterDialogDefinition
+const { makeFieldsStep, makeNoopStep } = FilterDialogBlock
 
-const foldDialogOutMessage = FilterDialogDefinition.makeOutMessageFold(
-  Dialog.DialogBlock,
-  {
-    Opened: makeNoopStep,
-    Closed: makeNoopStep,
-    CompletedClose: makeNoopStep,
-  },
-)
+const foldDialogOutMessage = FilterDialogBlock.makeOutMessageFold(DialogBlock, {
+  Opened: makeNoopStep,
+  Closed: makeNoopStep,
+  CompletedClose: makeNoopStep,
+})
 
-const foldComboboxOutMessage = FilterDialogDefinition.makeOutMessageFold(
+const foldComboboxOutMessage = FilterDialogBlock.makeOutMessageFold(
   CityCombobox,
   {
     Selected: ({ value }) =>
@@ -58,17 +70,17 @@ const foldComboboxOutMessage = FilterDialogDefinition.makeOutMessageFold(
   },
 )
 
-const DialogBinding = FilterDialogDefinition.makeBinding(Dialog.DialogBlock, {
+const DialogBinding = FilterDialogBlock.makeBinding(DialogBlock, {
   field: 'dialog',
-  init: { contextToArgs: () => Tuple.make({ id: 'edit-filters' }) },
+  init: { contextToArgs: () => [{ id: 'edit-filters' }] },
 }).withOutMessagePolicy({ fold: foldDialogOutMessage })
 
-const ComboboxBinding = FilterDialogDefinition.makeBinding(CityCombobox, {
+const ComboboxBinding = FilterDialogBlock.makeBinding(CityCombobox, {
   field: 'combobox',
-  init: { contextToArgs: () => Tuple.make({ id: 'city' }) },
+  init: { contextToArgs: () => [{ id: 'city' }] },
 }).withOutMessagePolicy({ fold: foldComboboxOutMessage })
 
-const FilterDialogComposition = FilterDialogDefinition.makeComposition({
+const FilterDialogComposition = FilterDialogBlock.makeComposition({
   bindings: [DialogBinding, ComboboxBinding],
 })
 
@@ -141,3 +153,17 @@ const view = FilterDialogComposition.makeView((model, h) => {
     }),
   )
 })
+
+export const layer = FilterDialogBlock.makeLayer(
+  Effect.gen(function* () {
+    const dialog = yield* DialogBinding
+    const combobox = yield* ComboboxBinding
+
+    return {
+      children: [dialog, combobox],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Layer.mergeAll(DialogLayer, ComboboxLayer)))

@@ -3,7 +3,7 @@ import * as Block from 'foldkit/block'
 import { type ChildAttribute, type Html, childAttributes } from 'foldkit/html'
 import { modifyFields } from 'foldkit/struct'
 
-import { Message, OutMessage } from './message.js'
+import { InMessage, Message, OutMessage } from './message.js'
 
 // MODEL
 
@@ -24,13 +24,28 @@ export const Model = Schema.Struct({
 })
 export type Model = typeof Model.Type
 
-const HoverIntentDefinition = Block.makeDefinition('HoverIntent', {
+/** @internal Stable identity of the HoverIntent contract. */
+export const HoverIntentKey = Symbol('HoverIntent')
+
+export const HoverIntentBlock = Block.make('HoverIntent', {
+  key: HoverIntentKey,
   Model,
   Message,
   OutMessage,
+  Init: Block.makeInputContract<readonly [config?: InitConfig]>(),
+  view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
+  InMessage,
+  inMessageOutputs: {
+    RequestedClose: {
+      outMessage: OutMessage.Closed,
+    },
+  },
 })
 
-const HoverIntentComposition = HoverIntentDefinition.makeComposition()
+/** Public HoverIntent authoring contract and passive graph identity. */
+export type HoverIntentBlock = typeof HoverIntentBlock
+
+const HoverIntentComposition = HoverIntentBlock.makeComposition()
 
 const DEFAULT_OPEN_DELAY = Duration.millis(200)
 const DEFAULT_CLOSE_DELAY = Duration.millis(300)
@@ -67,7 +82,7 @@ export const init = HoverIntentComposition.makeInit(
 // COMMAND
 
 /** Waits before opening, then emits the version that scheduled the wait. */
-export const WaitBeforeOpening = HoverIntentDefinition.makeCommand(
+export const WaitBeforeOpening = HoverIntentBlock.makeCommand(
   'WaitBeforeOpening',
   {
     args: { delay: Schema.DurationFromMillis, version: Schema.Number },
@@ -82,7 +97,7 @@ export const WaitBeforeOpening = HoverIntentDefinition.makeCommand(
 )
 
 /** Waits before closing, then emits the version that scheduled the wait. */
-export const WaitBeforeClosing = HoverIntentDefinition.makeCommand(
+export const WaitBeforeClosing = HoverIntentBlock.makeCommand(
   'WaitBeforeClosing',
   {
     args: { delay: Schema.DurationFromMillis, version: Schema.Number },
@@ -130,7 +145,7 @@ const finishClosing = (model: Model) => {
   }
 }
 
-const scheduleOpenStep = HoverIntentDefinition.makeStep(model => {
+const scheduleOpen = HoverIntentBlock.makeStep(model => {
   const version = Number.increment(model.pendingOpenVersion)
   return {
     model: modifyFields(model, { pendingOpenVersion: () => version }),
@@ -138,8 +153,8 @@ const scheduleOpenStep = HoverIntentDefinition.makeStep(model => {
   }
 })
 
-const scheduleCloseStep = (delay: Duration.Duration) =>
-  HoverIntentDefinition.makeStep(model => {
+const scheduleClose = (delay: Duration.Duration) =>
+  HoverIntentBlock.makeStep(model => {
     const version = Number.increment(model.pendingCloseVersion)
     return {
       model: modifyFields(model, { pendingCloseVersion: () => version }),
@@ -156,7 +171,7 @@ const entered = (model: Model) => {
     return { model: enteredModel }
   }
 
-  return scheduleOpenStep(enteredModel)
+  return scheduleOpen(enteredModel)
 }
 
 const left = (model: Model) => {
@@ -176,7 +191,7 @@ const left = (model: Model) => {
     return { model: leftModel }
   }
 
-  return scheduleCloseStep(leftModel.closeDelay)(leftModel)
+  return scheduleClose(leftModel.closeDelay)(leftModel)
 }
 
 const focused = (model: Model, focusLocation: FocusLocation) => {
@@ -211,7 +226,7 @@ const blurred = (model: Model) => {
     return { model: blurredModel }
   }
 
-  return scheduleCloseStep(Duration.zero)(blurredModel)
+  return scheduleClose(Duration.zero)(blurredModel)
 }
 
 const dismiss = (model: Model, isTriggerFocused: boolean) => {
@@ -234,6 +249,19 @@ const dismiss = (model: Model, isTriggerFocused: boolean) => {
 
   return { model: dismissedModel }
 }
+
+/** Processes a parent close request without routing it through local Messages. */
+export const inMessageUpdate = HoverIntentComposition.makeInMessageUpdate({
+  RequestedClose: HoverIntentBlock.makeStep(model =>
+    dismiss(
+      model,
+      Option.exists(
+        model.maybeFocusLocation,
+        focusLocation => focusLocation === 'Trigger',
+      ),
+    ),
+  ),
+})
 
 /** Processes a HoverIntent Message and returns the next Model, optional Commands, and an optional OutMessage. */
 export const update = HoverIntentComposition.makeUpdate({
@@ -258,14 +286,6 @@ export const update = HoverIntentComposition.makeUpdate({
       )
     return dismiss(model, isTriggerFocused)
   },
-  RequestedClose: model =>
-    dismiss(
-      model,
-      Option.exists(
-        model.maybeFocusLocation,
-        focusLocation => focusLocation === 'Trigger',
-      ),
-    ),
   CompletedWaitBeforeOpening: (model, { version }) => {
     if (version !== model.pendingOpenVersion) {
       return { model }
@@ -304,7 +324,7 @@ export type ViewInputs = Readonly<{
 }>
 
 /** Renders headless HoverIntent event bundles. It owns no markup, ARIA semantics, positioning, or styling. */
-export const view = HoverIntentComposition.makeView.withInputs<ViewInputs>(
+export const view = HoverIntentComposition.makeView.withInputs(
   (model, { focusTriggerSelector, toView }, h) => {
     const toPressedEscape =
       (source: 'Trigger' | 'Panel') =>
@@ -351,20 +371,19 @@ export const view = HoverIntentComposition.makeView.withInputs<ViewInputs>(
   },
 )
 
-const prepare = () =>
-  HoverIntentComposition.prepareBlock({
-    init,
-    update,
-    view,
-    operations: {
-      requestClose: Message.RequestedClose,
-    },
-    EffectsLayer,
-  })
-/** Completed HoverIntent Block contract. */
-export interface HoverIntentBlock extends Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepare
-> {}
-/** Complete HoverIntent Block definition for connecting to a parent. */
-export const HoverIntentBlock: HoverIntentBlock = Block.assemble(prepare)
+/** Constructs the HoverIntent implementation without starting occurrence effects. */
+export const layer = HoverIntentBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      inMessageUpdate,
+      view,
+      EffectsLayer,
+    }
+  }),
+)
+
+/** @internal Selected implementation used by component tests. */
+export const block = { block: HoverIntentBlock, layer }

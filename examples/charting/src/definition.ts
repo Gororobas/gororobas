@@ -1,11 +1,21 @@
+import { Schema } from 'effect'
 import { Block } from 'foldkit'
 
+import { ChartRegistry } from './chartRegistry'
+import { GitHubApi } from './githubApi'
 import { Message } from './message'
 import { Model } from './model'
+import { NpmApi } from './npmApi'
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
+  effects: { services: [ChartRegistry, GitHubApi, NpmApi] },
   Model,
   Message,
 })
 
-export const { makeStep, makeFieldsStep } = ApplicationDefinition
+export const { makeStep, makeFieldsStep } = ApplicationBlock

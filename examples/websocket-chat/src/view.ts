@@ -1,7 +1,8 @@
 import { Array, DateTime, String } from 'effect'
 import { Html } from 'foldkit/html'
 
-import { Button, Input } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
+import { view as inputView } from '@foldkit/ui/input'
 
 import {
   ApplicationComposition,
@@ -65,7 +66,7 @@ export const view = ApplicationComposition.makeView((model, h) => ({
 }))
 
 const connectionStatusView = (
-  connection: typeof ConnectionState.Type,
+  connection: ConnectionState,
   h: ApplicationViewBuilder,
 ): Html =>
   h.div(
@@ -91,7 +92,7 @@ const connectionStatusView = (
   )
 
 const messagesView = (
-  messages: ReadonlyArray<typeof ChatMessage.Type>,
+  messages: ReadonlyArray<ChatMessage>,
   h: ApplicationViewBuilder,
 ): Html =>
   Array.match(messages, {
@@ -166,7 +167,7 @@ const connectButtonView = (h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('p-6 border-t border-gray-200 flex items-center justify-center')],
     [
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedConnect(),
           toView: attributes =>
@@ -204,7 +205,7 @@ const messageInputView = (
       h.div(
         [h.Class('flex gap-3')],
         [
-          Input.view(
+          inputView(
             {
               id: 'message',
               value: messageInput,
@@ -220,7 +221,7 @@ const messageInputView = (
             },
             h,
           ),
-          Button.view(
+          buttonView(
             {
               type: 'submit',
               isDisabled: String.isEmpty(messageInput.trim()),
@@ -256,7 +257,7 @@ const errorView = (error: string, h: ApplicationViewBuilder): Html =>
           h.p([h.Class('text-red-600 text-sm')], [error]),
         ],
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedConnect(),
           toView: attributes =>

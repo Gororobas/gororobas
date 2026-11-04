@@ -4,7 +4,7 @@ import { Url } from 'foldkit'
 import { ApplicationComposition } from './composition'
 import { makeStep } from './definition'
 import { ApplicationRoute, urlToApplicationRoute } from './route'
-import { initRoom } from './update/changeRoute'
+import { initRoom } from './steps'
 
 export const init = ApplicationComposition.makeInit((url: Url.Url) => {
   const route = urlToApplicationRoute(url)

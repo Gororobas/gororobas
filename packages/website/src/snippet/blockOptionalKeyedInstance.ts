@@ -1,59 +1,83 @@
-import { Option, Schema } from 'effect'
+import { Effect, Option, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 import { modifyFields } from 'foldkit/struct'
 
 const RoomModel = Schema.Struct({ title: Schema.String })
-const RoomMessage = defineMessageUnion({
+type RoomModel = typeof RoomModel.Type
+
+const RoomInMessage = defineMessageUnion({
   RequestedRename: { title: Schema.String },
 })
-const RoomComposition = Block.makeDefinition('Room', {
+type RoomInMessage = typeof RoomInMessage.Type
+
+export const RoomKey = Symbol('Room')
+
+export const RoomBlock = Block.make('Room', {
+  key: RoomKey,
+  Init: Schema.Tuple([Schema.String]),
+  InMessage: RoomInMessage,
+  isMessageFree: true,
+
   Model: RoomModel,
-  Message: RoomMessage,
-}).makeComposition()
-const prepare = () =>
-  RoomComposition.prepareBlock({
-    init: RoomComposition.makeInit((title: string) => ({ model: { title } })),
-    update: RoomComposition.makeUpdate({
-      RequestedRename: (model, { title }) => ({
-        model: modifyFields(model, { title: () => title }),
+  Message: Schema.Never,
+})
+
+const RoomComposition = RoomBlock.makeComposition()
+
+const layer = RoomBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init: RoomComposition.makeInit((title: string) => ({ model: { title } })),
+      update: RoomComposition.makeUpdate({}),
+      inMessageUpdate: RoomComposition.makeInMessageUpdate({
+        RequestedRename: (model, { title }) => ({
+          model: modifyFields(model, { title: () => title }),
+        }),
       }),
-    }),
-    operations: { requestRename: RoomMessage.RequestedRename },
-  })
-const RoomBlock: Block.FromAssemblyWithoutViewOrOutMessage<
-  typeof RoomModel,
-  typeof prepare
-> = Block.assemble(prepare)
+    }
+  }),
+)
 
 const RoomInstance = Schema.Struct({
   roomId: Schema.String,
   model: RoomBlock.Model,
   access: Schema.Literals(['Owner', 'Guest']),
 })
+type RoomInstance = typeof RoomInstance.Type
+
 const Model = Schema.Struct({
   maybeRoomInstance: Schema.Option(RoomInstance),
 })
+type Model = typeof Model.Type
+
 const Message = defineMessageUnion({
   RequestedOpenRoom: { roomId: Schema.String, title: Schema.String },
 })
-const ApplicationDefinition = Block.makeDefinition('Application', {
+type Message = typeof Message.Type
+
+export const ApplicationKey = Symbol('Application')
+
+const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
   Model,
   Message,
 })
 
-const RoomBinding = ApplicationDefinition.makeBinding(RoomBlock, {
+const MaybeRoomInstanceBinding = ApplicationBlock.makeBinding(RoomBlock, {
   field: 'maybeRoomInstance',
   key: 'roomId',
   childField: 'model',
 })
-const ApplicationComposition = ApplicationDefinition.makeComposition({
-  bindings: [RoomBinding],
+const ApplicationComposition = ApplicationBlock.makeComposition({
+  bindings: [MaybeRoomInstanceBinding],
 })
 
 export const update = ApplicationComposition.makeUpdate({
   RequestedOpenRoom: (model, { roomId, title }) =>
-    RoomBinding.init({
+    MaybeRoomInstanceBinding.init({
       key: roomId,
       args: [title],
       toParentModel: room =>

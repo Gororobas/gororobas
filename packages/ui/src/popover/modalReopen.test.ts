@@ -1,34 +1,35 @@
-import { Option, Schema } from 'effect'
+import { Effect, Layer, Option, Schema } from 'effect'
 import { Block, Program, Runtime } from 'foldkit'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { PopoverBlock } from './block.js'
+import { PopoverBlock, layer } from './block.js'
 
 const PORTAL_ROOT_ID = 'foldkit-portal-root'
 const POPOVER_ID = 'sort'
 
 const Model = Schema.Struct({ popover: PopoverBlock.Model })
-const PopoverModalReopenTestDefinition = Block.makeDefinition(
-  'PopoverModalReopenTest',
-  {
-    Model,
-    Message: Schema.Never,
-  },
-)
-const foldPopoverOutMessage =
-  PopoverModalReopenTestDefinition.makeOutMessageFold(PopoverBlock, {
-    Opened: () => PopoverModalReopenTestDefinition.makeNoopStep(),
-    Closed: () => PopoverModalReopenTestDefinition.makeNoopStep(),
-  })
-const PopoverBinding = PopoverModalReopenTestDefinition.makeBinding(
+type Model = typeof Model.Type
+const PopoverModalReopenTestKey = Symbol('PopoverModalReopenTest')
+const PopoverModalReopenTestBlock = Block.make('PopoverModalReopenTest', {
+  key: PopoverModalReopenTestKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
+  Model,
+  Message: Schema.Never,
+})
+const foldPopoverOutMessage = PopoverModalReopenTestBlock.makeOutMessageFold(
   PopoverBlock,
   {
-    field: 'popover',
-    init: false,
+    Opened: () => PopoverModalReopenTestBlock.makeNoopStep(),
+    Closed: () => PopoverModalReopenTestBlock.makeNoopStep(),
   },
-).withOutMessagePolicy({ fold: foldPopoverOutMessage })
+)
+const PopoverBinding = PopoverModalReopenTestBlock.makeBinding(PopoverBlock, {
+  field: 'popover',
+  init: false,
+}).withOutMessagePolicy({ fold: foldPopoverOutMessage })
 const PopoverModalReopenTestComposition =
-  PopoverModalReopenTestDefinition.makeComposition({
+  PopoverModalReopenTestBlock.makeComposition({
     bindings: [PopoverBinding],
   })
 const view = PopoverModalReopenTestComposition.makeView((model, h) =>
@@ -68,21 +69,26 @@ const view = PopoverModalReopenTestComposition.makeView((model, h) =>
     ],
   ),
 )
-const prepare = () =>
-  PopoverModalReopenTestComposition.prepareBlock({
-    init: PopoverModalReopenTestComposition.makeInit(() =>
-      PopoverBinding.init({
-        args: [{ id: POPOVER_ID, isModal: true }],
-        toParentModel: popover => ({ popover }),
-      }),
-    ),
-    update: PopoverModalReopenTestComposition.makeUpdate({}),
-    view,
-  })
-const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+const ApplicationBlock = {
+  block: PopoverModalReopenTestBlock,
+  layer: PopoverModalReopenTestBlock.makeLayer(
+    Effect.gen(function* () {
+      const popover = yield* PopoverBinding
+
+      return {
+        children: [popover],
+        init: PopoverModalReopenTestComposition.makeInit(() =>
+          PopoverBinding.init({
+            args: [{ id: POPOVER_ID, isModal: true }],
+            toParentModel: popover => ({ popover }),
+          }),
+        ),
+        update: PopoverModalReopenTestComposition.makeUpdate({}),
+        view,
+      }
+    }),
+  ).pipe(Layer.provide(layer)),
+}
 
 const findInertAncestor = (element: Element | null): Option.Option<Element> => {
   for (
@@ -108,7 +114,7 @@ it('keeps a modal Popover panel usable on the second open', async () => {
   container.id = 'app'
   document.body.append(container)
   const handle = Runtime.embed(
-    Program.makeElement({ block: ApplicationBlock, container }),
+    Program.makeElement({ ...ApplicationBlock, container }),
   )
   const button = () => document.getElementById(`${POPOVER_ID}-button`)
   const panel = () => document.getElementById(`${POPOVER_ID}-panel`)

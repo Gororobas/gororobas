@@ -1,89 +1,84 @@
-import { Array, Number, Schema, Tuple } from 'effect'
+import { Array, Effect, Layer, Number, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { Html } from 'foldkit/html'
 import { defineMessageUnion } from 'foldkit/message'
-import { modifyFields } from 'foldkit/struct'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
-import * as Counter from './counter'
+import { Counter } from './blocks'
 
 const INITIAL_COUNTER_COUNT = 3
 
-const CounterInstance = Schema.Struct({
-  id: Schema.String,
-  counter: Counter.CounterBlock.Model,
-})
+type CounterInstance = typeof Counter.CounterBlock.Instance.Type
 
 export const Model = Schema.Struct({
-  counters: Schema.Array(CounterInstance),
+  counters: Schema.Array(Counter.CounterBlock.Instance),
   nextCounterId: Schema.Number,
 })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedAddCounter: {},
   ClickedRemoveCounter: { id: Schema.String },
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep } = ApplicationDefinition
+const { makeFieldsStep } = ApplicationBlock
 
-export const CountersBinding = ApplicationDefinition.makeBinding(
+export const CountersBinding = ApplicationBlock.makeBinding(
   Counter.CounterBlock,
   {
     field: 'counters',
-    key: 'id',
-    childField: 'counter',
-    init: {
-      instances: () =>
-        Array.makeBy(INITIAL_COUNTER_COUNT, counterId => ({
-          key: `counter-${counterId}`,
-          args: Tuple.make(),
-        })),
-      toItem: ({ key }, counter) => ({ id: key, counter }),
-    },
+    key: 'key',
+    childField: 'model',
   },
 )
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition({
+export const ApplicationComposition = ApplicationBlock.makeComposition({
   bindings: [CountersBinding],
 })
 type ApplicationViewBuilder = Block.ViewBuilderFor<
   typeof ApplicationComposition
 >
 
-export const update = ApplicationComposition.makeUpdate({
-  ClickedAddCounter: model => {
-    const id = `counter-${model.nextCounterId}`
-    return CountersBinding.init({
-      key: id,
+const addCounter = makeFieldsStep(model => ({
+  counters: Array.append(
+    CountersBinding.create({
+      key: `counter-${model.nextCounterId}`,
       args: [],
-      toParentModel: counter =>
-        modifyFields(model, {
-          counters: Array.append({ id, counter }),
-          nextCounterId: Number.increment,
-        }),
-    })
-  },
+    }),
+  ),
+  nextCounterId: Number.increment,
+}))
+
+export const update = ApplicationComposition.makeUpdate({
+  ClickedAddCounter: addCounter,
   ClickedRemoveCounter: makeFieldsStep.fromMessage(({ id }) => ({
-    counters: Array.filter(counterInstance => counterInstance.id !== id),
+    counters: Array.filter(counterInstance => counterInstance.key !== id),
   })),
 })
 
 export const init = ApplicationComposition.makeInit(() => ({
-  model: { nextCounterId: INITIAL_COUNTER_COUNT },
+  model: { counters: [], nextCounterId: 0 },
+  steps: Array.makeBy(INITIAL_COUNTER_COUNT, () => addCounter),
 }))
 
 const counterInstanceView = (
-  counterInstance: typeof CounterInstance.Type,
+  counterInstance: CounterInstance,
   h: ApplicationViewBuilder,
 ): Html =>
   h.keyed('div')(
-    counterInstance.id,
+    counterInstance.key,
     [h.Class('flex items-center gap-2')],
     [
       h.div(
@@ -91,16 +86,16 @@ const counterInstanceView = (
         [
           h.block(
             CountersBinding.embedView({
-              key: counterInstance.id,
-              slotId: counterInstance.id,
-              model: counterInstance.counter,
+              key: counterInstance.key,
+              slotId: counterInstance.key,
+              model: counterInstance.model,
             }),
           ),
         ],
       ),
-      Button.view(
+      buttonView(
         {
-          onClick: Message.ClickedRemoveCounter({ id: counterInstance.id }),
+          onClick: Message.ClickedRemoveCounter({ id: counterInstance.key }),
           toView: attributes =>
             h.button(
               [
@@ -139,7 +134,7 @@ export const view = ApplicationComposition.makeView((model, h) => ({
           counterInstanceView(counterInstance, h),
         ),
       ),
-      Button.view(
+      buttonView(
         {
           onClick: Message.ClickedAddCounter(),
           toView: attributes =>
@@ -159,13 +154,15 @@ export const view = ApplicationComposition.makeView((model, h) => ({
   ),
 }))
 
-const prepare = () =>
-  ApplicationComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-export const ApplicationBlock: Block.FromAssemblyWithView<
-  typeof Model,
-  typeof prepare
-> = Block.assemble(prepare)
+export const layer = ApplicationBlock.makeLayer(
+  Effect.gen(function* () {
+    const counters = yield* CountersBinding
+
+    return {
+      children: [counters],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(Counter.layer))

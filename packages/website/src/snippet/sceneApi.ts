@@ -1,4 +1,4 @@
-import { pipe } from 'effect'
+import { Effect, pipe } from 'effect'
 import {
   Command,
   all,
@@ -32,8 +32,11 @@ import {
   text,
   title,
   type,
+  unhover,
   within,
 } from 'foldkit/scene'
+
+import { ApplicationBlock, layer } from './application'
 
 // Accessible locators — find elements like a user would.
 role('button', { name: 'Submit' })
@@ -78,6 +81,7 @@ contextMenu(role('row', { name: 'Quarterly report' }))
 pointerDown(role('button', { name: 'Toggle' }))
 pointerUp(role('button', { name: 'Toggle' }))
 hover(role('menuitem', { name: 'File' }))
+unhover(role('menuitem', { name: 'File' }))
 focus(label('Email'))
 blur(label('Email'))
 type(label('Email'), 'alice@example.com')
@@ -108,12 +112,14 @@ expect(role('button')).not.toBeDisabled()
 expectAll(all.role('row')).toHaveCount(3)
 expectAll(all.role('alert')).toBeEmpty()
 
-// Run the scene. Throws on unresolved Commands.
-scene(
-  { update, view },
-  given(model),
-  type(label('Email'), 'alice@example.com'),
-  submit(role('form')),
-  Command.resolve(Authenticate, SucceededAuthenticate({ session })),
-  expect(role('heading')).toHaveText('Welcome, alice!'),
+// Run the scoped Scene. Every pending Command must be resolved.
+await Effect.runPromise(
+  scene(
+    { block: ApplicationBlock, layer },
+    given(model),
+    type(label('Email'), 'alice@example.com'),
+    submit(role('form')),
+    Command.resolve(Authenticate, SucceededAuthenticate({ session })),
+    expect(role('heading')).toHaveText('Welcome, alice!'),
+  ),
 )

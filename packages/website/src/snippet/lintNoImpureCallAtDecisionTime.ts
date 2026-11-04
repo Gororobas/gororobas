@@ -1,4 +1,5 @@
-import { Crypto, Effect, Schema } from 'effect'
+import { Effect, Schema } from 'effect'
+import { SecureRandom } from 'effect/crypto'
 import { Command } from 'foldkit'
 
 const SaveDraftWithId = Command.define('SaveDraftWithId', {
@@ -17,16 +18,16 @@ const saveBad = (body: string) => {
   return SaveDraftWithId({ body, draftId })
 }
 
-// ✅ Good: the runtime obtains the UUID when it executes the Command.
+// ✅ Good: the runtime obtains the ID when it executes the Command.
 const SaveDraft = Command.define('SaveDraft', {
   args: { body: Schema.String },
   messages: [Message.CompletedSaveDraft],
   handler: function* () {
-    const crypto = yield* Crypto.Crypto
+    const secureRandom = yield* SecureRandom.SecureRandom
 
     return ({ body: _body }) =>
       Effect.gen(function* () {
-        const draftId = yield* Effect.orDie(crypto.randomUUIDv4)
+        const draftId = yield* secureRandom.uuidV4()
         return Message.CompletedSaveDraft({ draftId })
       })
   },

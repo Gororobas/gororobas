@@ -229,6 +229,7 @@ describe('renderToString', () => {
           }),
         ),
       )
+      type TrimmedTheme = typeof TrimmedTheme.Type
       const rendered = yield* renderToString(
         { ...routingConfig, Flags: Schema.Struct({ theme: TrimmedTheme }) },
         { url: 'https://example.com/', flags: { theme: '  dark  ' } },
@@ -261,6 +262,7 @@ describe('renderToString', () => {
             }),
           ),
         )
+        type PrefixedTheme = typeof PrefixedTheme.Type
         const error = yield* Effect.flip(
           renderToString(
             {
@@ -325,6 +327,17 @@ describe('renderToString', () => {
         )
 
         expect(error).toMatchObject({ _tag: 'MissingBuildId' })
+        expect(error.message).toContain(
+          'Hydratable rendering requires a nonempty build id',
+        )
+        expect(error.message).toContain('@foldkit/vite-plugin')
+        expect(error.message).toContain(
+          'same FOLDKIT_BUILD_ID during both builds',
+        )
+        expect(error.message).toContain(
+          'same options.buildId to renderToString and Runtime.hydrate',
+        )
+        expect(error.message).toContain('isHydratable: false')
       }),
   )
 
@@ -866,6 +879,7 @@ describe('renderToString', () => {
     () =>
       Effect.gen(function* () {
         const RatioFlags = Schema.Struct({ ratio: Schema.Number })
+        type RatioFlags = typeof RatioFlags.Type
         const RatioModel = Schema.Struct({ ratio: Schema.Number })
         type RatioModel = typeof RatioModel.Type
         const rendered = yield* renderToString(
@@ -903,6 +917,7 @@ describe('renderToString', () => {
             }),
           ),
         )
+        type AsyncTheme = typeof AsyncTheme.Type
         const error = yield* Effect.flip(
           renderToString(
             { ...routingConfig, Flags: Schema.Struct({ theme: AsyncTheme }) },

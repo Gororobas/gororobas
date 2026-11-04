@@ -1,4 +1,4 @@
-import { Array, Schema } from 'effect'
+import { Array, Effect, Schema } from 'effect'
 import * as Block from 'foldkit/block'
 import * as File from 'foldkit/file'
 import { type ChildAttribute, type Html, childAttributes } from 'foldkit/html'
@@ -40,12 +40,22 @@ export const OutMessage = defineMessageUnion({
 })
 export type OutMessage = typeof OutMessage.Type
 
-const FileDropDefinition = Block.makeDefinition('FileDrop', {
+/** @internal Stable identity of the FileDrop contract. */
+export const FileDropKey = Symbol('FileDrop')
+
+export const FileDropBlock = Block.make('FileDrop', {
+  key: FileDropKey,
   Model,
   Message,
   OutMessage,
+  Init: Block.makeInputContract<readonly [config: InitConfig]>(),
+  view: { kind: 'Element', Inputs: Block.makeInputContract<ViewInputs>() },
 })
-const FileDropComposition = FileDropDefinition.makeComposition()
+
+/** Public FileDrop authoring contract and passive graph identity. */
+export type FileDropBlock = typeof FileDropBlock
+
+const FileDropComposition = FileDropBlock.makeComposition()
 
 // INIT
 
@@ -67,10 +77,10 @@ export const init = FileDropComposition.makeInit((config: InitConfig) => ({
 /** Processes a file-drop Message and returns the next Model, optional Commands,
  *  and an optional OutMessage. */
 export const update = FileDropComposition.makeUpdate({
-  EnteredDragZone: FileDropDefinition.makeFieldsStep(() => ({
+  EnteredDragZone: FileDropBlock.makeFieldsStep(() => ({
     isDragOver: () => true,
   })),
-  LeftDragZone: FileDropDefinition.makeFieldsStep(() => ({
+  LeftDragZone: FileDropBlock.makeFieldsStep(() => ({
     isDragOver: () => false,
   })),
   DroppedFiles: (model, { files }) => ({
@@ -115,7 +125,7 @@ const dispatchDroppedFiles = (files: ReadonlyArray<File.File>) =>
 
 /** Renders an accessible file-drop zone by publishing attribute groups
  *  for a `<label>`-wrapped hidden file input. */
-export const view = FileDropComposition.makeView.withInputs<ViewInputs>(
+export const view = FileDropComposition.makeView.withInputs(
   (model, viewInputs, h) => {
     const { id, isDragOver } = model
     const { toView, accept, multiple = false, isDisabled = false } = viewInputs
@@ -155,16 +165,17 @@ export const view = FileDropComposition.makeView.withInputs<ViewInputs>(
   },
 )
 
-const prepare = () =>
-  FileDropComposition.prepareBlock({
-    init,
-    update,
-    view,
-  })
-/** Completed FileDrop Block contract. */
-export interface FileDropBlock extends Block.FromAssemblyWithViewAndOutMessage<
-  typeof Model,
-  typeof prepare
-> {}
-/** Complete FileDrop Block definition for connecting to a parent. */
-export const FileDropBlock: FileDropBlock = Block.assemble(prepare)
+/** Constructs the FileDrop implementation without starting occurrence effects. */
+export const layer = FileDropBlock.makeLayer(
+  Effect.gen(function* () {
+    return {
+      children: [],
+      init,
+      update,
+      view,
+    }
+  }),
+)
+
+/** @internal Selected implementation used by component tests. */
+export const block = { block: FileDropBlock, layer }

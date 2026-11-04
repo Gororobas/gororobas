@@ -4,25 +4,34 @@ import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
 export const Model = Schema.Struct({ count: Schema.Int })
+export type Model = typeof Model.Type
 
 export const Message = defineMessageUnion({
   ClickedFetchCount: {},
   SucceededFetchCount: { count: Schema.Int },
   FailedFetchCount: { error: Schema.String },
 })
+export type Message = typeof Message.Type
 
-export const ApplicationDefinition = Block.makeDefinition('Application', {
+export const ApplicationKey = Symbol('Application')
+
+export const ApplicationBlock = Block.make('Application', {
+  key: ApplicationKey,
+  Init: Schema.Tuple([]),
+  effects: { services: [HttpClient.HttpClient] },
+  view: { kind: 'Document' },
   Model,
   Message,
 })
 
-const { makeFieldsStep, makeCommandsStep, makeNoopStep } = ApplicationDefinition
+const { makeFieldsStep, makeCommandsStep, makeNoopStep } = ApplicationBlock
 
-export const ApplicationComposition = ApplicationDefinition.makeComposition()
+export const ApplicationComposition = ApplicationBlock.makeComposition()
 
 const CountResponse = Schema.Struct({ count: Schema.Int })
+type CountResponse = typeof CountResponse.Type
 
-export const FetchCount = ApplicationDefinition.makeCommand('FetchCount', {
+export const FetchCount = ApplicationBlock.makeCommand('FetchCount', {
   messages: [Message.SucceededFetchCount, Message.FailedFetchCount],
   handler: function* () {
     const client = yield* HttpClient.HttpClient

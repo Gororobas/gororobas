@@ -50,6 +50,7 @@ import {
   MountTracker,
   liveViewStateChanges,
 } from '../mount/index.js'
+import { cleanupMount, registerMountCleanup } from '../mountModule.js'
 import {
   attachOnUnmount,
   beginReplayUnmountRender,
@@ -548,7 +549,7 @@ type OnMountLifecycle = {
 }
 
 type OnMountState = {
-  fiber: Fiber.Fiber<void>
+  fiber: Fiber.Fiber<unknown, unknown>
   lifecycle: OnMountLifecycle
   notifyEnded: () => void
   owner: MountRenderOwner
@@ -608,16 +609,24 @@ export type FoldkitMountMarker = Readonly<{
   [MountRegistrationTypeId]?: MountRegistration
 }>
 
-/** Union of all HTML, SVG, and MathML attributes a virtual DOM element can carry.
+/** An input accepted by HTML, SVG, and MathML element builders.
  *
- *  When a Block publishes attribute groups to a consumer's `toView`
- *  slot, those attributes are wrapped via {@link childAttributes} into
- *  {@link ChildAttribute}, a distinct type that carries the Block's
- *  own dispatcher. Element constructors accept the union
- *  `ReadonlyArray<Attribute<Message> | ChildAttribute>`, so consumers
- *  can spread published bundles directly into their own attribute
- *  arrays. */
+ * Local tagged attributes use the current builder's dispatcher. A
+ * {@link ChildAttribute} carries the originating Block's dispatcher and Mount
+ * requirements, so published groups can share the same attribute array.
+ * Narrow with `'_tag' in attribute` before inspecting a local discriminator.
+ */
 export type Attribute<Message, AllowedMountRequirements = never> =
+  | TaggedAttribute<Message, AllowedMountRequirements>
+  | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
+
+/** A local tagged attribute before a Block dispatcher is attached.
+ *
+ * Use this type for raw producers passed to {@link childAttributes}. General
+ * element input collections use {@link Attribute}, which also accepts published
+ * ChildAttributes. Every TaggedAttribute has an `_tag` discriminator.
+ */
+export type TaggedAttribute<Message, AllowedMountRequirements = never> =
   | { readonly _tag: 'Key'; readonly value: string }
   | { readonly _tag: 'Class'; readonly value: string }
   | { readonly _tag: 'Id'; readonly value: string }
@@ -1049,7 +1058,7 @@ export type Attribute<Message, AllowedMountRequirements = never> =
     }
 
 interface AttributeDefinition extends Data.TaggedEnum.WithGenerics<1> {
-  readonly taggedEnum: Attribute<this['A'], any>
+  readonly taggedEnum: TaggedAttribute<this['A'], any>
 }
 
 const {
@@ -1706,12 +1715,12 @@ const sanitizeUrl = (value: string): string => {
 // their mutation to a per-VNode BuildContext directly, so applying an
 // attribute is one map lookup and one call with no per-attribute closure
 // allocation. The mapped type keeps the record exhaustive over the Attribute
-// union exactly like `Match.tagsExhaustive` did. `Attribute<unknown>` is the
+// union exactly like `Match.tagsExhaustive` did. `TaggedAttribute<unknown>` is the
 // runtime-erased shape. Message is purely a TypeScript parameter at this
 // level and DispatchSync already accepts unknown.
 type AttributeHandlers = {
-  readonly [Tag in Attribute<unknown>['_tag']]: (
-    attribute: Extract<Attribute<unknown>, Readonly<{ _tag: Tag }>>,
+  readonly [Tag in TaggedAttribute<unknown>['_tag']]: (
+    attribute: Extract<TaggedAttribute<unknown>, Readonly<{ _tag: Tag }>>,
     ctx: BuildContext,
   ) => void
 }
@@ -2641,12 +2650,7 @@ const attributeHandlers: AttributeHandlers = {
           existingDestroy(vnode)
         }
         if (vnode.elm instanceof Element) {
-          const state = onMountStates.get(vnode.elm)
-          if (state) {
-            releaseMount(state)
-            Effect.runFork(Fiber.interrupt(state.fiber))
-            onMountStates.delete(vnode.elm)
-          }
+          cleanupMount(vnode.elm)
         }
       },
     }
@@ -2663,20 +2667,17 @@ const attributeHandlers: AttributeHandlers = {
 
     function acquireMount(
       element: Element,
-      previousFiber?: Fiber.Fiber<void>,
+      previousFiber?: Fiber.Fiber<unknown, unknown>,
     ): void {
       const lifecycle: OnMountLifecycle = {
         isActive: true,
-        isStarted: startBarrier === undefined,
+        isStarted: false,
       }
       const mountDispatch = resolveMountDispatch.resolve()
       const viewStateChanges = Option.match(maybeMountRuntime, {
         onNone: () => liveViewStateChanges,
         onSome: mountRuntime => mountRuntime.captureViewStateChanges(),
       })
-      if (lifecycle.isStarted) {
-        notifyStarted()
-      }
       const startMount = Effect.suspend(() => {
         if (
           !lifecycle.isActive ||
@@ -2689,7 +2690,11 @@ const attributeHandlers: AttributeHandlers = {
           notifyStarted()
         }
         return Stream.runForEach(action.f(element, viewStateChanges), message =>
-          Effect.sync(() => mountDispatch(message)),
+          Effect.sync(() => {
+            if (lifecycle.isActive) {
+              mountDispatch(message)
+            }
+          }),
         )
       })
       const runMount = (startBarrier ?? Effect.void).pipe(
@@ -2704,26 +2709,40 @@ const attributeHandlers: AttributeHandlers = {
         previousFiber === undefined
           ? runMount
           : Fiber.interrupt(previousFiber).pipe(Effect.andThen(runMount))
-      const fiber = Effect.runForkWith(capturedContext)(
-        /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-        acquire as Effect.Effect<void>,
-      )
-      if (Option.isSome(maybeMountRuntime)) {
-        maybeMountRuntime.value.registerFiber(fiber)
-      }
-      if (instance !== undefined) {
-        instance.mounts.add(fiber)
-        fiber.addObserver(() => {
-          instance.mounts.delete(fiber)
+      const registeredAcquire = Effect.withFiber(fiber => {
+        onMountStates.set(element, {
+          fiber,
+          lifecycle,
+          notifyEnded,
+          owner: resolveMountDispatch.owner,
+          ...(instance === undefined ? {} : { instance }),
         })
-      }
-      onMountStates.set(element, {
-        fiber,
-        lifecycle,
-        notifyEnded,
-        owner: resolveMountDispatch.owner,
-        ...(instance === undefined ? {} : { instance }),
+        registerMountCleanup(element, () => {
+          const state = onMountStates.get(element)
+          if (state !== undefined) {
+            releaseMount(state)
+            Effect.runFork(Fiber.interrupt(state.fiber))
+            onMountStates.delete(element)
+          }
+        })
+
+        if (Option.isSome(maybeMountRuntime)) {
+          maybeMountRuntime.value.registerFiber(fiber)
+        }
+
+        if (instance !== undefined) {
+          instance.mounts.add(fiber)
+          fiber.addObserver(() => {
+            instance.mounts.delete(fiber)
+          })
+        }
+
+        return acquire
       })
+      Effect.runForkWith(capturedContext)(
+        /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
+        registeredAcquire as Effect.Effect<void>,
+      )
     }
   },
   OnUnmount: ({ message }, ctx: BuildContext) => {
@@ -2737,7 +2756,7 @@ const attributeHandlers: AttributeHandlers = {
 }
 
 const applyAttribute = (
-  attribute: Attribute<unknown>,
+  attribute: TaggedAttribute<unknown>,
   ctx: BuildContext,
 ): void => {
   // NOTE: the mapped record type correlates each handler's attribute
@@ -2745,7 +2764,7 @@ const applyAttribute = (
   // widened call site.
   /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
   const handler = attributeHandlers[attribute._tag] as (
-    attribute: Attribute<unknown>,
+    attribute: TaggedAttribute<unknown>,
     ctx: BuildContext,
   ) => void
   handler(attribute, ctx)
@@ -2881,10 +2900,7 @@ const attachControlledContentOwnershipHook = (data: VNodeData): void => {
 }
 
 const buildVNodeData = <Message, AllowedMountRequirements>(
-  attributes: ReadonlyArray<
-    | Attribute<Message, AllowedMountRequirements>
-    | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
-  >,
+  attributes: ReadonlyArray<Attribute<Message, AllowedMountRequirements>>,
 ): VNodeData => {
   const data: VNodeData = { [vnodeDataMaskKey]: 0 }
   if (attributes.length === 0) {
@@ -2937,7 +2953,7 @@ const buildVNodeData = <Message, AllowedMountRequirements>(
         boundaryCtxByDispatch.set(item.dispatch, ctx)
       }
       /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-      applyAttribute(item.attribute as Attribute<unknown>, ctx)
+      applyAttribute(item.attribute as TaggedAttribute<unknown>, ctx)
     } else {
       if (mainCtx === undefined) {
         mainCtx = {
@@ -2950,7 +2966,7 @@ const buildVNodeData = <Message, AllowedMountRequirements>(
         }
       }
       /* eslint-disable-next-line @typescript-eslint/consistent-type-assertions */
-      applyAttribute(item as Attribute<unknown>, mainCtx)
+      applyAttribute(item as TaggedAttribute<unknown>, mainCtx)
     }
   }
 
@@ -3343,10 +3359,7 @@ const buildElement = (
 
 const createElement = <Message, AllowedMountRequirements>(
   tagName: string,
-  attributes: ReadonlyArray<
-    | Attribute<Message, AllowedMountRequirements>
-    | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
-  > = [],
+  attributes: ReadonlyArray<Attribute<Message, AllowedMountRequirements>> = [],
   children: ReadonlyArray<Child> = [],
 ): Html => buildElement(tagName, buildVNodeData(attributes), children)
 
@@ -3355,8 +3368,7 @@ const element =
   (tagName: TagName) =>
   (
     attributes: ReadonlyArray<
-      | Attribute<Message, AllowedMountRequirements>
-      | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
+      Attribute<Message, AllowedMountRequirements>
     > = [],
     children: ReadonlyArray<Child> = [],
   ): Html =>
@@ -3367,8 +3379,7 @@ export const customElement =
   (tagName: string) =>
   (
     attributes: ReadonlyArray<
-      | Attribute<Message, AllowedMountRequirements>
-      | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
+      Attribute<Message, AllowedMountRequirements>
     > = [],
     children: ReadonlyArray<Child> = [],
   ): Html =>
@@ -3379,8 +3390,7 @@ const voidElement =
   (tagName: TagName) =>
   (
     attributes: ReadonlyArray<
-      | Attribute<Message, AllowedMountRequirements>
-      | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
+      Attribute<Message, AllowedMountRequirements>
     > = [],
   ): Html =>
     createElement(tagName, attributes, [])
@@ -3394,8 +3404,7 @@ const keyed =
   (
     key: PropertyKey,
     attributes: ReadonlyArray<
-      | Attribute<Message, AllowedMountRequirements>
-      | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
+      Attribute<Message, AllowedMountRequirements>
     > = [],
     children: ReadonlyArray<Child> = [],
   ): Html => {
@@ -3405,18 +3414,12 @@ const keyed =
   }
 
 type ElementFunction<Message, AllowedMountRequirements> = (
-  attributes: ReadonlyArray<
-    | Attribute<Message, AllowedMountRequirements>
-    | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
-  >,
+  attributes: ReadonlyArray<Attribute<Message, AllowedMountRequirements>>,
   children?: ReadonlyArray<Child>,
 ) => Html
 
 type VoidElementFunction<Message, AllowedMountRequirements> = (
-  attributes: ReadonlyArray<
-    | Attribute<Message, AllowedMountRequirements>
-    | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
-  >,
+  attributes: ReadonlyArray<Attribute<Message, AllowedMountRequirements>>,
 ) => Html
 
 /** An attribute accepted by textarea builders. Textarea content must use
@@ -3432,25 +3435,20 @@ export type TextareaAttribute<
 
 type TextValueElementFunction<Message, AllowedMountRequirements> = (
   attributes: ReadonlyArray<
-    | TextareaAttribute<Message, AllowedMountRequirements>
-    | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
+    TextareaAttribute<Message, AllowedMountRequirements>
   >,
 ) => Html
 
 type KeyedElementFunction<Message, AllowedMountRequirements> = (
   key: PropertyKey,
-  attributes?: ReadonlyArray<
-    | Attribute<Message, AllowedMountRequirements>
-    | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
-  >,
+  attributes?: ReadonlyArray<Attribute<Message, AllowedMountRequirements>>,
   children?: ReadonlyArray<Child>,
 ) => Html
 
 type KeyedTextValueElementFunction<Message, AllowedMountRequirements> = (
   key: PropertyKey,
   attributes?: ReadonlyArray<
-    | TextareaAttribute<Message, AllowedMountRequirements>
-    | ChildAttribute<ChildAttributeRequirements<AllowedMountRequirements>>
+    TextareaAttribute<Message, AllowedMountRequirements>
   >,
 ) => Html
 
@@ -5728,6 +5726,19 @@ declare const allowedMountRequirements: unique symbol
 type MessageUniverse<Message> = Readonly<{
   [messageUniverse]: (message: Message) => Message
 }>
+
+/**
+ * The exact Message union accepted by an Html builder. Derive feature-local
+ * callback attribute types from its Composition builder without importing the
+ * completed implementation or replacing generated delivery with local facts.
+ *
+ * @example
+ * ```ts
+ * type SearchMessage = MessageOf<SearchViewBuilder>
+ * ```
+ */
+export type MessageOf<Builder> =
+  Builder extends MessageUniverse<infer Message> ? Message : never
 
 type MountRequirementsUniverse<AllowedMountRequirements> = Readonly<{
   [allowedMountRequirements]: (requirements: AllowedMountRequirements) => void

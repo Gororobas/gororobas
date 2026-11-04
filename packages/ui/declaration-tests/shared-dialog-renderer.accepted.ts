@@ -1,4 +1,4 @@
-import { Schema } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import * as Block from 'foldkit/block'
 import { defineMessageUnion } from 'foldkit/message'
 
@@ -14,24 +14,28 @@ export const DeleteIssueMessage = defineMessageUnion({
   ClickedOpenDialog: {},
   ClickedDeleteIssue: { issueId: Schema.String },
 })
-export const DeleteIssueDefinition = Block.makeDefinition('DeleteIssue', {
+export const DeleteIssueKey = Symbol('SharedDialogDeleteIssue')
+export const DeleteIssueBlock = Block.make('DeleteIssue', {
+  key: DeleteIssueKey,
   Model: DeleteIssueModel,
   Message: DeleteIssueMessage,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
 })
-export const DeleteDialogBinding = DeleteIssueDefinition.makeBinding(
+export const DeleteDialogBinding = DeleteIssueBlock.makeBinding(
   Dialog.DialogBlock,
   {
     field: 'dialog',
     init: { contextToArgs: () => [{ id: 'delete-issue-dialog' }] },
   },
 ).withOutMessagePolicy({
-  fold: DeleteIssueDefinition.makeOutMessageFold(Dialog.DialogBlock, {
-    Opened: DeleteIssueDefinition.makeNoopStep,
-    Closed: DeleteIssueDefinition.makeNoopStep,
-    CompletedClose: DeleteIssueDefinition.makeNoopStep,
+  fold: DeleteIssueBlock.makeOutMessageFold(Dialog.DialogBlock, {
+    Opened: DeleteIssueBlock.makeNoopStep,
+    Closed: DeleteIssueBlock.makeNoopStep,
+    CompletedClose: DeleteIssueBlock.makeNoopStep,
   }),
 })
-export const DeleteIssueComposition = DeleteIssueDefinition.makeComposition({
+export const DeleteIssueComposition = DeleteIssueBlock.makeComposition({
   bindings: [DeleteDialogBinding],
 })
 export type DeleteIssueViewBuilder = Block.ViewBuilderFor<
@@ -69,21 +73,23 @@ const deleteIssueView = DeleteIssueComposition.makeView((model, h) =>
     ],
   ),
 )
-const prepareDeleteIssue = () =>
-  DeleteIssueComposition.prepareBlock({
-    init: DeleteIssueComposition.makeInit(() => ({
-      model: { issueId: 'issue-1' },
-    })),
-    update: DeleteIssueComposition.makeUpdate({
-      ClickedOpenDialog: DeleteDialogBinding.requestOpen(),
-      ClickedDeleteIssue: DeleteIssueDefinition.makeNoopStep(),
-    }),
-    view: deleteIssueView,
-  })
-export const DeleteIssueBlock: Block.FromAssemblyWithView<
-  typeof DeleteIssueModel,
-  typeof prepareDeleteIssue
-> = Block.assemble(prepareDeleteIssue)
+export const DeleteIssueLayer = DeleteIssueBlock.makeLayer(
+  Effect.gen(function* () {
+    const dialog = yield* DeleteDialogBinding
+
+    return {
+      children: [dialog],
+      init: DeleteIssueComposition.makeInit(() => ({
+        model: { issueId: 'issue-1' },
+      })),
+      update: DeleteIssueComposition.makeUpdate({
+        ClickedOpenDialog: DeleteDialogBinding.requestOpen(),
+        ClickedDeleteIssue: DeleteIssueBlock.makeNoopStep(),
+      }),
+      view: deleteIssueView,
+    }
+  }),
+).pipe(Layer.provide(Dialog.layer))
 
 export const InviteMemberModel = Schema.Struct({
   email: Schema.String,
@@ -93,24 +99,28 @@ export const InviteMemberMessage = defineMessageUnion({
   ClickedOpenDialog: {},
   ClickedSendInvite: { email: Schema.String },
 })
-export const InviteMemberDefinition = Block.makeDefinition('InviteMember', {
+export const InviteMemberKey = Symbol('SharedDialogInviteMember')
+export const InviteMemberBlock = Block.make('InviteMember', {
+  key: InviteMemberKey,
   Model: InviteMemberModel,
   Message: InviteMemberMessage,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
 })
-export const InviteDialogBinding = InviteMemberDefinition.makeBinding(
+export const InviteDialogBinding = InviteMemberBlock.makeBinding(
   Dialog.DialogBlock,
   {
     field: 'dialog',
     init: { contextToArgs: () => [{ id: 'invite-member-dialog' }] },
   },
 ).withOutMessagePolicy({
-  fold: InviteMemberDefinition.makeOutMessageFold(Dialog.DialogBlock, {
-    Opened: InviteMemberDefinition.makeNoopStep,
-    Closed: InviteMemberDefinition.makeNoopStep,
-    CompletedClose: InviteMemberDefinition.makeNoopStep,
+  fold: InviteMemberBlock.makeOutMessageFold(Dialog.DialogBlock, {
+    Opened: InviteMemberBlock.makeNoopStep,
+    Closed: InviteMemberBlock.makeNoopStep,
+    CompletedClose: InviteMemberBlock.makeNoopStep,
   }),
 })
-export const InviteMemberComposition = InviteMemberDefinition.makeComposition({
+export const InviteMemberComposition = InviteMemberBlock.makeComposition({
   bindings: [InviteDialogBinding],
 })
 export type InviteMemberViewBuilder = Block.ViewBuilderFor<
@@ -136,18 +146,20 @@ const inviteMemberView = InviteMemberComposition.makeView((model, h) =>
     }),
   ),
 )
-const prepareInviteMember = () =>
-  InviteMemberComposition.prepareBlock({
-    init: InviteMemberComposition.makeInit(() => ({
-      model: { email: 'member@example.com' },
-    })),
-    update: InviteMemberComposition.makeUpdate({
-      ClickedOpenDialog: InviteDialogBinding.requestOpen(),
-      ClickedSendInvite: InviteMemberDefinition.makeNoopStep(),
-    }),
-    view: inviteMemberView,
-  })
-export const InviteMemberBlock: Block.FromAssemblyWithView<
-  typeof InviteMemberModel,
-  typeof prepareInviteMember
-> = Block.assemble(prepareInviteMember)
+export const InviteMemberLayer = InviteMemberBlock.makeLayer(
+  Effect.gen(function* () {
+    const dialog = yield* InviteDialogBinding
+
+    return {
+      children: [dialog],
+      init: InviteMemberComposition.makeInit(() => ({
+        model: { email: 'member@example.com' },
+      })),
+      update: InviteMemberComposition.makeUpdate({
+        ClickedOpenDialog: InviteDialogBinding.requestOpen(),
+        ClickedSendInvite: InviteMemberBlock.makeNoopStep(),
+      }),
+      view: inviteMemberView,
+    }
+  }),
+).pipe(Layer.provide(Dialog.layer))

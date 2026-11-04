@@ -1,17 +1,14 @@
 import { Array, Option } from 'effect'
 import type { Html } from 'foldkit/html'
 
-import { Button } from '@foldkit/ui'
+import { view as buttonView } from '@foldkit/ui/button'
 
 import type { ApplicationViewBuilder } from '../composition'
 import { Cart } from '../domain'
 import { Message } from '../message'
 import { checkoutRouter, productsRouter } from '../route'
 
-export const view = (
-  cart: typeof Cart.Cart.Type,
-  h: ApplicationViewBuilder,
-): Html =>
+export const view = (cart: Cart.Cart, h: ApplicationViewBuilder): Html =>
   h.div(
     [h.Class('max-w-4xl mx-auto px-4')],
     [
@@ -73,7 +70,7 @@ export const view = (
                         h.div(
                           [h.Class('flex items-center gap-2')],
                           [
-                            Button.view(
+                            buttonView(
                               {
                                 onClick: Message.ClickedDecrementQuantity({
                                   itemId: cartItem.item.id,
@@ -95,7 +92,7 @@ export const view = (
                               [h.Class('px-3 py-1 font-medium')],
                               [String(cartItem.quantity)],
                             ),
-                            Button.view(
+                            buttonView(
                               {
                                 onClick: Message.ClickedIncrementQuantity({
                                   itemId: cartItem.item.id,
@@ -113,7 +110,7 @@ export const view = (
                               },
                               h,
                             ),
-                            Button.view(
+                            buttonView(
                               {
                                 onClick: Message.ClickedRemoveCartItem({
                                   itemId: cartItem.item.id,
@@ -169,7 +166,7 @@ export const view = (
                       ],
                       ['Continue Shopping'],
                     ),
-                    Button.view(
+                    buttonView(
                       {
                         onClick: Message.ClickedClearCart(),
                         toView: attributes =>

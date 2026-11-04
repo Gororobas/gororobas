@@ -1,36 +1,42 @@
-// Pseudocode walkthrough of the Foldkit integration points. Each labeled
-// block below is an excerpt. Fit them into your own Model, init, Message,
-// update, and view definitions.
-import { Schema, Tuple } from 'effect'
+import { Effect, Layer, Schema } from 'effect'
 import { Block } from 'foldkit'
 import { defineMessageUnion } from 'foldkit/message'
 
-import { Dialog } from '@foldkit/ui'
-import type { RenderInfo as DialogRenderInfo } from '@foldkit/ui/dialog'
+import {
+  DialogBlock,
+  layer as DialogLayer,
+  type RenderInfo as DialogRenderInfo,
+} from '@foldkit/ui/dialog'
 
 // One Model field per dialog level:
 const Model = Schema.Struct({
-  settingsDialog: Dialog.DialogBlock.Model,
-  confirmDialog: Dialog.DialogBlock.Model,
+  settingsDialog: DialogBlock.Model,
+  confirmDialog: DialogBlock.Model,
   // ...your other fields
 })
-
+type Model = typeof Model.Type
 // Declare only the parent-owned coordination fact. Each Binding derives its
 // own generated Dialog delivery.
 const Message = defineMessageUnion({
   ClickedDeleteProject: {},
   ConfirmedDeleteProject: {},
 })
+type Message = typeof Message.Type
 
-const ProjectDialogsDefinition = Block.makeDefinition('ProjectDialogs', {
+export const ProjectDialogsKey = Symbol('ProjectDialogs')
+
+export const ProjectDialogsBlock = Block.make('ProjectDialogs', {
+  key: ProjectDialogsKey,
+  Init: Schema.Tuple([]),
+  view: { kind: 'Element' },
   Model,
   Message,
 })
 
-const { makeNoopStep } = ProjectDialogsDefinition
+const { makeNoopStep } = ProjectDialogsBlock
 
-const foldConfirmDialogOutMessage = ProjectDialogsDefinition.makeOutMessageFold(
-  Dialog.DialogBlock,
+const foldConfirmDialogOutMessage = ProjectDialogsBlock.makeOutMessageFold(
+  DialogBlock,
   {
     Opened: makeNoopStep,
     Closed: makeNoopStep,
@@ -38,23 +44,17 @@ const foldConfirmDialogOutMessage = ProjectDialogsDefinition.makeOutMessageFold(
   },
 )
 
-const SettingsDialogBinding = ProjectDialogsDefinition.makeBinding(
-  Dialog.DialogBlock,
-  {
-    field: 'settingsDialog',
-    init: { contextToArgs: () => Tuple.make({ id: 'settings' }) },
-  },
-).withOutMessagePolicy({ fold: foldConfirmDialogOutMessage })
+const SettingsDialogBinding = ProjectDialogsBlock.makeBinding(DialogBlock, {
+  field: 'settingsDialog',
+  init: { contextToArgs: () => [{ id: 'settings' }] },
+}).withOutMessagePolicy({ fold: foldConfirmDialogOutMessage })
 
-const ConfirmDialogBinding = ProjectDialogsDefinition.makeBinding(
-  Dialog.DialogBlock,
-  {
-    field: 'confirmDialog',
-    init: { contextToArgs: () => Tuple.make({ id: 'confirm-delete' }) },
-  },
-).withOutMessagePolicy({ fold: foldConfirmDialogOutMessage })
+const ConfirmDialogBinding = ProjectDialogsBlock.makeBinding(DialogBlock, {
+  field: 'confirmDialog',
+  init: { contextToArgs: () => [{ id: 'confirm-delete' }] },
+}).withOutMessagePolicy({ fold: foldConfirmDialogOutMessage })
 
-const ProjectDialogsComposition = ProjectDialogsDefinition.makeComposition({
+const ProjectDialogsComposition = ProjectDialogsBlock.makeComposition({
   bindings: [SettingsDialogBinding, ConfirmDialogBinding],
 })
 
@@ -155,3 +155,17 @@ const view = ProjectDialogsComposition.makeView((model, h) => {
 
   return h.div([], [settingsDialogViewNode, confirmDialogViewNode])
 })
+
+export const layer = ProjectDialogsBlock.makeLayer(
+  Effect.gen(function* () {
+    const settingsDialog = yield* SettingsDialogBinding
+    const confirmDialog = yield* ConfirmDialogBinding
+
+    return {
+      children: [settingsDialog, confirmDialog],
+      init,
+      update,
+      view,
+    }
+  }),
+).pipe(Layer.provide(DialogLayer))
